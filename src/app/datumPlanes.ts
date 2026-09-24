@@ -11,7 +11,7 @@ export function createDatumPlanes(e: Engine): Pick<Engine, "datumPlaneDef" | "sy
    *  the engine, which re-resolves the face, while the quad drawn here would
    *  still be at the pick-time position. Two planes, one name.
    *
-   *  So the last rebuild's answer wins when there is one. It arrives with the
+   *  So the last rebuild's answer is preferred when there is one. It arrives with the
    *  offset already applied, and that is backed out rather than used directly so
    *  the offset stays a LOCAL edit: dragging a plane's offset moves the quad on
    *  the same frame instead of waiting for a rebuild, which is the property this
@@ -60,7 +60,7 @@ export function createDatumPlanes(e: Engine): Pick<Engine, "datumPlaneDef" | "sy
     e.viewport.setDatumPlanes(planes);
     // Datum points and axes ride the same visibility gate and the same rebuild
     // pass. An anchored datum (an axis following an edge) resolves in the engine
-    // and arrives in the rebuild's `datumMarks`, so that placement WINS when
+    // and arrives in the rebuild's `datumMarks`, so that placement IS PREFERRED when
     // present, exactly as a face-following sketch reads its resolved plane; a
     // baked datum has no entry and falls back to the coordinate in the document.
     const marks = e.store.buildState.result?.datumMarks;

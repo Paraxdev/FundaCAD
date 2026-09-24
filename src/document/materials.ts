@@ -13,7 +13,7 @@
 // capability owns it. A material library has neither cap nor machine, is about
 // what a part LOOKS like, and is the thing an imported assembly's own colours
 // land in. They coexist: a body can carry both, and where it does the palette
-// slot wins on screen, because a slot is a deliberate choice about a real
+// slot is preferred on screen, because a slot is a deliberate choice about a real
 // print and a material is usually whatever the file said.
 //
 // This module is the pure half: no store, no Vue, no DOM, no file system. What

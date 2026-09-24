@@ -35,7 +35,7 @@ describe("where a plane-carrying feature actually sits", () => {
     expect(planeOf(f, {}, { d1: def(35) })).toEqual(def(35));
   });
 
-  it("lets the sketch's own entry win over its datum's", () => {
+  it("lets the sketch's own entry be preferred over its datum's", () => {
     const f = { id: "s1", plane: spec(10), planeId: "d1" };
     expect(planeOf(f, { s1: def(20) }, { d1: def(35) })).toEqual(def(20));
   });

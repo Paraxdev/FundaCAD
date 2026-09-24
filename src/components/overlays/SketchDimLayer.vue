@@ -234,8 +234,8 @@ function onClick(e: MouseEvent, i: number, l: DimItem) {
 // Escape hatch. A label that floats over its own geometry loses every single
 // click to the pick underneath (overlapPick), which would leave it permanently
 // uneditable, and in the dimension tool an in-progress dimension claims clicks
-// too. A double-click is unambiguous, so it edits regardless of who won the
-// singles.
+// too. A double-click is unambiguous, so it edits regardless of which one was
+// preferred on the singles.
 function onDblClick(e: MouseEvent, i: number, l: DimItem) {
   if (l.driven) return;
   e.stopPropagation();

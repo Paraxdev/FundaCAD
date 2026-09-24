@@ -12,7 +12,7 @@
 //
 // `size` goes on as width/height ATTRIBUTES, never as an inline style. That is
 // what lets a stylesheet keep the last word: `.ribbon-btn svg { width: 24px }`
-// beats a presentation attribute, so the ribbon stays sized by CSS while the
+// is preferred over a presentation attribute, so the ribbon stays sized by CSS while the
 // dozens of call sites with no rule of their own get the size they asked for.
 // An inline style would silently invert that and shrink the ribbon.
 //

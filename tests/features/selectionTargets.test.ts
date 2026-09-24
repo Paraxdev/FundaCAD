@@ -103,7 +103,7 @@ describe("reading a target the document actually contains", () => {
       .toEqual(["body2"]);
     expect(readTarget(feat({ id: "s", type: "split", keep: "both", bodies: ["body1", "body3"] }), t))
       .toEqual(["body1", "body3"]);
-    // CONTROL on the precedence: with both present the plural wins, which is
+    // CONTROL on the precedence: with both present the plural is preferred, which is
     // what the builder does. Reading the singular here would show a row that
     // disagrees with the model on screen.
     expect(readTarget(

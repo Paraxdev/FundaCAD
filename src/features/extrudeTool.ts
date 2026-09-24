@@ -317,7 +317,7 @@ export class ExtrudeTool {
       return;
     }
     if (this.grabbing) {
-      // A deliberate drag on the arrow outranks a typed value. That is the
+      // A deliberate drag on the arrow is preferred over a typed value. That is the
       // exception DimInput.seed documents in as many words and takeOver()
       // exists for. Without it, re-opening an extrude to lengthen it by hand
       // was impossible: the seed locks the field, the lock stops cursor
@@ -351,7 +351,7 @@ export class ExtrudeTool {
       this.dim.updateFromCursor({ distance: Math.abs(d) });
     } else if (this.dim.isUserDriven("distance")) {
       const v = this.dim.getValue("distance");
-      if (v != null) this.distance = v; // the field is the truth: typed sign wins
+      if (v != null) this.distance = v; // the field is the truth: typed sign is preferred
     }
     // else hovering a handle: the depth holds so the handle can be grabbed.
     this.positionDim(anchor);
@@ -564,7 +564,7 @@ export class ExtrudeTool {
       // onMove free-tracks the cursor and would clobber the seed on the first
       // move otherwise. So FREE tracking is off in edit mode, a hand that
       // happens to be moving must not rewrite a saved depth. Dragging the arrow
-      // still works and outranks the seed, see onMove's grab branch: that is a
+      // still works and is preferred over the seed, see onMove's grab branch: that is a
       // deliberate gesture on the handle that owns the field, which is the
       // exception DimInput.seed promises and takeOver() performs. (Seeding the
       // abs value would silently drop a cut's sign the moment getValue is read
@@ -617,7 +617,7 @@ export class ExtrudeTool {
   private updatePreview() {
     if (!this.selected.length) return;
     this.refreshPrompt();
-    // A typed ∠ wins over the last dragged taper, the same way a typed depth does.
+    // A typed ∠ is preferred over the last dragged taper, the same way a typed depth is.
     if (this.dim.isUserDriven("taper")) {
       const tv = this.dim.getValue("taper");
       if (tv != null) this.taper = Math.max(-MAX_TAPER_DEG, Math.min(MAX_TAPER_DEG, tv));
@@ -1014,7 +1014,7 @@ export class ExtrudeTool {
     // GATE on isUserDriven: while dragging, the field displays |distance|,
     // reading it back unconditionally strips the drag's sign and sends the
     // extrude the wrong way ("Cut removed nothing" on cut-toward-body).
-    // Typed values (userDriven) carry their own sign and win.
+    // Typed values (userDriven) carry their own sign and are preferred.
     if (v != null && this.dim.isUserDriven("distance")) this.distance = v;
     if (Math.abs(this.distance) < 1e-3) return; // ignore zero
     // A typed ∠ is the truth for the taper, the same rule the depth follows.

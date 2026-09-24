@@ -212,7 +212,7 @@ describe("nodeColors", () => {
       undefined,   // the root says nothing
       "#d23b30",   // its own
       "#d23b30",   // inherited from Arm
-      "#2244cc",   // its own beats the ancestor's
+      "#2244cc",   // its own is preferred over the ancestor's
       undefined,   // nothing above it either
     ]);
   });
@@ -384,7 +384,7 @@ describe("finishLabel", () => {
     expect(finishLabel({
       id: "a", name: "A", color: "#888", metalness: 0.9, opacity: 0.3, roughness: 0.05,
     })).toBe("Glossy, transparent");
-    // ...unless it is also giving off light, which beats everything.
+    // ...unless it is also giving off light, which is preferred over everything.
     expect(finishLabel({
       id: "a", name: "A", color: "#888", metalness: 0.9, opacity: 0.3, emissive: 1, roughness: 0.05,
     })).toBe("Glossy, lit");

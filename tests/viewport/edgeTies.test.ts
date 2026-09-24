@@ -16,7 +16,7 @@ describe("ambiguousCandidates", () => {
 
   it("offers two edges that land on the same pixels", () => {
     // The defect. Two bodies that meet each keep their own edge along the shared
-    // boundary, so the two are the same distance from the cursor and the winner
+    // boundary, so the two are the same distance from the cursor and the pick
     // was whichever the raycaster happened to report first.
     const out = ambiguousCandidates([c(1.2, "Edge · Body 02"), c(1.2, "Edge · Body 03")]);
     expect(out.map((x) => x.label)).toEqual(["Edge · Body 02", "Edge · Body 03"]);

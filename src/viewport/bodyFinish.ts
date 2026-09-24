@@ -106,7 +106,7 @@ export class BodyFinishLayer {
 
   constructor(private host: FinishHost) {}
 
-  /** Opacity takes the faintest of what applies, and stale wins over x-ray
+  /** Opacity takes the faintest of what applies, and stale is preferred over x-ray
    *  because stale carries a warning. Runs again after every rebuild, which
    *  hands back materials wearing the default finish. */
   apply(o: FinishOverlays) {

@@ -68,7 +68,7 @@ export interface DimItem extends DimLabel {
 }
 
 export class SketchDimensions {
-  /** Geometry-beats-label: a badge can sit ON the entity it labels (low zoom),
+  /** Geometry is preferred over label: a badge can sit ON the entity it labels (low zoom),
    *  and since it's a DOM element above the canvas it would swallow the click
    *  meant to SELECT that entity. The owner installs this hook; return true =
    *  "geometry under the cursor claimed the click", the label then skips its

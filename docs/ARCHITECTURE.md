@@ -92,7 +92,7 @@ reason, not a quick patch.
    to one that never had any. Materials (`src/document/materials.ts`) are the
    same bargain in the other direction: they are appearance only, a colour and a
    finish, never a physical property, and they are deliberately NOT the filament
-   `palette`, which means "make this part from filament N". Where a body carries both, the palette slot wins on
+   `palette`, which means "make this part from filament N". Where a body carries both, the palette slot is preferred on
    screen; the render bridge is the one place that decides.
 6. **Pattern expansion and region detection are mirrored TS <-> Rust.** Both sides
    independently expand associative patterns and detect split regions for direct

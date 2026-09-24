@@ -280,7 +280,7 @@ export class JointTool {
     return (angleInFrame(at, this.anchor, rotationFrame(this.dir)) * 180) / Math.PI;
   }
 
-  /** Which handle the cursor is over, by ray distance so the nearer surface wins
+  /** Which handle the cursor is over, by ray distance so the nearer surface is preferred
    *  wherever the two overlap on screen. */
   private pick(x: number, y: number): "offset" | "angle" | null {
     const rc = this.viewport.rayFrom(x, y);

@@ -37,7 +37,7 @@ describe("sketchEscapeAction", () => {
 
   it("cancels the innermost thing when several are true at once", () => {
     // State overlaps constantly, a drag of a selected entity while a tool is
-    // armed is three of these at the same time. Most local wins, every time.
+    // armed is three of these at the same time. Most local is preferred, every time.
     expect(
       sketchEscapeAction({
         offsetPick: true,

@@ -3,7 +3,7 @@
 // pickEdge ranks candidates by screen distance and takes the nearest. That is
 // the right rule right up until two of them are the SAME distance, which happens
 // whenever two bodies meet: their shared boundary is two edges, one per body,
-// lying exactly on top of each other. The winner was then whichever the
+// lying exactly on top of each other. The pick was then whichever the
 // raycaster happened to report first, stable within a session, arbitrary
 // between them, and impossible to override from the keyboard or the mouse. Click
 // the seam between two extrusions and you got one of them, with no way to say
@@ -61,7 +61,7 @@ export function ambiguousCandidates<T extends Candidate>(
   const out: T[] = [];
   for (const c of sorted) {
     if (c.screenDist > best.screenDist + band) break;
-    // Nearest of each label wins, so the entry the user picks is the one they
+    // Nearest of each label is preferred, so the entry the user picks is the one they
     // were closest to among the ones that call themselves that.
     if (seen.has(c.label)) continue;
     seen.add(c.label);

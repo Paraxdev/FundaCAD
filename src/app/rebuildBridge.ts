@@ -57,7 +57,7 @@ export function installRebuildBridge(e: Engine): void {
       faceFinish: faceMaterialFinishes(onFaces),
       // A face can only be one colour, so the two sources of per-face colour are
       // ordered rather than merged: a texture inlay is something the user put
-      // there in THIS document and wins over what an imported file said the
+      // there in THIS document and is preferred over what an imported file said the
       // face was. Import colours are sparse against `bodies` (see
       // importedFacePaint), so an assembly whose parts are each one colour adds
       // nothing here at all.
@@ -71,7 +71,7 @@ export function installRebuildBridge(e: Engine): void {
             (id) => e.store.importColorSource(id),
           ),
         ),
-        // A material somebody dropped on this face beats what the file said it
+        // A material somebody dropped on this face is preferred over what the file said it
         // was, for the same reason a texture inlay does: it was chosen here.
         ...faceMaterialPaint(onFaces),
         ...c.faces,

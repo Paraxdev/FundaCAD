@@ -3,7 +3,7 @@
 // so a theme is a repaint and never a relayout.
 //
 // An uploaded palette is written as inline custom properties on the document
-// element, which outranks any stylesheet rule regardless of source order. The
+// element, which takes precedence over any stylesheet rule regardless of source order. The
 // built-in theme is the absence of those, so a failure here still looks right.
 
 import { readSetting } from "./storedSetting";

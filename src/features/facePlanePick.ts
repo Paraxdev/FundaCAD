@@ -107,9 +107,9 @@ export type PlanePickTarget =
   | null;
 
 /** Resolve the plane under the cursor. While a tool asks for a plane the
- *  construction quads are drawn over the model, so a quad under the cursor wins
+ *  construction quads are drawn over the model, so a quad under the cursor is preferred
  *  over the face behind it: what is drawn in front is what the click takes. With
- *  the quads drawn normally a body face wins, as the part is what is in front.
+ *  the quads drawn normally a body face is preferred, as the part is what is in front.
  *
  *  A DATUM PLANE IS ONE OF THOSE QUADS. It used not to be, and the omission was
  *  the whole of a bug: a plane through three points appeared in the browser,

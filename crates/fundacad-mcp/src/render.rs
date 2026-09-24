@@ -138,7 +138,7 @@ fn unit(a: Vec3) -> Vec3 {
 
 /// The unit vector to look FROM, from either a name or a pair of angles.
 ///
-/// Angles win when both are given, so a caller can nudge a named view without
+/// Angles are preferred when both are given, so a caller can nudge a named view without
 /// working out the vector. Azimuth runs anticlockwise from +X in the XY plane
 /// and elevation up from it, which is how every CAD turntable states it.
 pub fn direction_for(view: Option<&str>, azimuth: Option<f64>, elevation: Option<f64>) -> Vec3 {

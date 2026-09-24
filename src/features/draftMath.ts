@@ -35,7 +35,7 @@ const MIN_LEVER = 1e-3;
 
 /** The world axis to pull along for a face with this normal: the one the normal
  *  is LEAST aligned with. Ties break X, Y, Z, a 45° face has no better answer
- *  and a stable one beats a prettier one that moves when the mesh does. */
+ *  and a stable one is preferred over a prettier one that moves when the mesh does. */
 export function pullAxisFor(normal: readonly [number, number, number]): Axis3 {
   const [nx, ny, nz] = normal;
   const ax = Math.abs(nx), ay = Math.abs(ny), az = Math.abs(nz);

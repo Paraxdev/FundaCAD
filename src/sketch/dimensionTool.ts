@@ -191,8 +191,8 @@ export function isRoundTarget(t: DimTarget): boolean {
 
 // --- picking -----------------------------------------------------------------
 
-/** THE dimension-tool pick. Reference points win over curve bodies, EXCEPT that
- *  a circle/arc RIM beats its own centre when the cursor is within tolerance of
+/** THE dimension-tool pick. Reference points are preferred over curve bodies, EXCEPT that
+ *  a circle/arc RIM is preferred over its own centre when the cursor is within tolerance of
  *  both (a small circle would otherwise always resolve to its centre and lose
  *  its diameter dim, and for a pair dim the outcome is identical, since an
  *  entity pick reduces to the centre anyway).

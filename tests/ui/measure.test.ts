@@ -35,7 +35,7 @@ describe("a bare number takes the unit the field is showing", () => {
   });
 });
 
-describe("a written unit always wins over the field's", () => {
+describe("a written unit is always preferred over the field's", () => {
   it("overrides a field showing something else", () => {
     // The whole point of being unit agnostic: the field says mm, you say inch.
     expect(val("1 inch")).toBeCloseTo(25.4);

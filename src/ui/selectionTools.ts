@@ -26,7 +26,7 @@ import {
 import { contributedToolOwner } from "../plugins/contrib";
 import { keyHint } from "../input/shortcuts";
 
-/** Which kind wins when a selection holds several. See the header, this is
+/** Which kind is preferred when a selection holds several. See the header, this is
  *  app/viewportWiring.ts's drag-handle ranking, and it may not drift from it.
  *
  *  Bodies come last rather than not at all: body selection is a separate mode
@@ -120,7 +120,7 @@ const ACTIONLESS: ReadonlySet<string> = new Set<string>(["delete-face"]);
 /** The mark for a tool: the app's own table first, then whatever the tool
  *  itself declared.
  *
- *  The table wins for the app's own tools because two of them have a name that
+ *  The table is preferred for the app's own tools because two of them have a name that
  *  is not their id, and it is the exceptions the table exists for. A
  *  contributed tool is not in it and answers from its own capability row, which
  *  is where a plugin put its icon name. Falling back to the id would draw a
@@ -214,7 +214,7 @@ export interface AppearanceOffer {
 
 /** What the appearance half of the bar shows for this selection.
  *
- *  Bodies only, and only when the body kind is the one that WINS: a selection
+ *  Bodies only, and only when the body kind is the one that IS PREFERRED: a selection
  *  of faces belongs to whatever solid is under them, and "Hide" next to a
  *  picked face would be ambiguous about which of the two it meant. Empty
  *  otherwise, which is what lets the bar decide whether to draw a divider by

@@ -22,7 +22,7 @@ const AMBIGUOUS_MENU_OFFSET = 16;
 /** Viewport callbacks and the two Escape listeners that clear its selections.
  *
  *  The Viewport publishes through public callback FIELDS rather than events, so
- *  each of these is a single-slot assignment, last writer wins, and there is
+ *  each of these is a single-slot assignment, the last writer applies, and there is
  *  exactly one writer for each. */
 export function installViewportWiring(e: Engine): void {
   // clicking a construction plane in the viewport selects it (so it can be cut by)
@@ -74,7 +74,7 @@ export function installViewportWiring(e: Engine): void {
   //
   // Two bodies that meet share a boundary, and each keeps its own edge there,
   // same curve, same pixels. The picker ranks by distance from the cursor, which
-  // is a tie, so the winner was whichever the raycaster reported first: stable
+  // is a tie, so the pick was whichever the raycaster reported first: stable
   // within a session, arbitrary between them, and impossible to override. Click
   // the seam between two extrusions and you got one of them with no way to say
   // which.

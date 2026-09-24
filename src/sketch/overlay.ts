@@ -393,7 +393,7 @@ export class SketchOverlay {
   }
   /** The text entity id whose glyph group's bounding box contains `p`, a GENEROUS
    *  hit (the whole text block, not just glyph ink) so double-click-to-edit lands
-   *  even in the gaps between letters. Smallest text wins when several overlap.
+   *  even in the gaps between letters. Smallest text is preferred when several overlap.
    *  `p` is a 2D sketch-plane point; returns null when no text is under it. */
   activeTextIdAt(p: THREE.Vector2): string | null {
     type B = { id: string; minx: number; miny: number; maxx: number; maxy: number };
@@ -601,7 +601,7 @@ export function curveObjects(
   ents: ReturnType<typeof resolveEntities>,
   plane: SketchPlane,
   color: number,
-  highlight = false, // emphasis pass (selection / modify hover): color wins even on projected
+  highlight = false, // emphasis pass (selection / modify hover): color is preferred even on projected
 ): THREE.Object3D[] {
   warmText(ents); // fetch glyph outlines for any text entities; repaints when they land
   const out: THREE.Object3D[] = [];
@@ -624,7 +624,7 @@ export function curveObjects(
     const pts = entityPolyline(e).map((p) => plane.to3D(p.x, p.y));
     // projected geometry keeps its link color (purple; amber when stale) even
     // as construction, the link state is the more important signal. Emphasis
-    // passes (selection, modify hover) set `highlight` so their color wins:
+    // passes (selection, modify hover) set `highlight` so their color is preferred:
     // Delete works on projected entities, so selection must be visible.
     const projected = e.type === "projected" ? e : null;
     const drawColor =

@@ -214,7 +214,7 @@ This file starts on 2026-08-03. For anything before that, see the
 
 - **A zoomed out assembly no longer z-fights.** The near clipping plane stayed at 0.1 mm however far the camera went, which left a printer seen from two metres with depth steps of 2.4 mm. It now moves out with the camera's distance from the model, never past the model's nearest point.
 
-- **Imported STEP colours come in as the part was coloured.** A colour a STEP file gives a whole solid now wins over the face colours SolidWorks leaves behind from features, which turned black and cyan printer parts red. Right-click an imported assembly, Imported colors, to take the face colours instead.
+- **Imported STEP colours come in as the part was coloured.** A colour a STEP file gives a whole solid is now preferred over the face colours SolidWorks leaves behind from features, which turned black and cyan printer parts red. Right-click an imported assembly, Imported colors, to take the face colours instead.
 
 - Hovering a dragged material over the model no longer stutters: the target is picked once per frame and the view redraws only when it changes.
 
@@ -1143,7 +1143,7 @@ This file starts on 2026-08-03. For anything before that, see the
   labels and constraint glyphs only accepted clicks in the select tool. Anyone
   who finished dimensioning and tried to correct a value found every label inert,
   with no cursor change to explain why. Labels and glyphs are now live in the
-  dimension tool as well, and dimensioning still wins the clicks it needs: a
+  dimension tool as well, and dimensioning still gets the clicks it needs: a
   click that lands on geometry, or one made while a dimension is part-placed,
   goes to the tool rather than the label.
 - **Double-clicking a dimension always opens its editor.** A label that sits on

@@ -2,7 +2,7 @@
 // owns which badges exist, the rAF loop owns where they are. The projection
 // itself is not reachable here (no layout, no WebGL camera), so what is pinned
 // is the store's shape, the rawness of what lands in it, and the click
-// arbitration that lets the dimension tool win a click on a badge.
+// arbitration that lets the dimension tool take a click on a badge.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
@@ -89,7 +89,7 @@ describe("SketchGlyphLayer", () => {
     expect(onDelete).toHaveBeenCalledWith(3);
   });
 
-  // Geometry-beats-glyph: in the dimension tool a badge sitting on the entity it
+  // Geometry is preferred over glyph: in the dimension tool a badge sitting on the entity it
   // describes would otherwise swallow the click that names an operand.
   it("skips its delete when the tool underneath claimed the pointerdown", async () => {
     mount(SketchGlyphLayer, { attachTo: document.body });

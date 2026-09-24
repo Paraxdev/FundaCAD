@@ -241,7 +241,7 @@ export function localClearance(req: ClearanceRequest): number | null {
     const box = polylineBox(other.points);
     if (!box) continue;
     for (const t of targets) {
-      // Cheap reject first, then the only-if-it-could-win reject. Note this
+      // Cheap reject first, then the only-if-it-could-be-chosen reject. Note this
       // cannot skip a TOUCHING neighbour early, touching pairs have box
       // distance 0, which never rejects, so the tolerance test below still
       // runs on exactly the pairs that need it.

@@ -7,7 +7,7 @@
 // gets the whole perimeter. So a pick carries a SCOPE, from two things the user
 // already told us:
 //
-//   SHIFT, "exactly what I clicked". Explicit, so it beats everything else, and
+//   SHIFT, "exactly what I clicked". Explicit, so it is preferred over everything else, and
 //   additive: shift-click builds the member set one edge at a time.
 //   ZOOM, nobody flies in to fill the screen with one corner and means the whole
 //   rim. A guess, so it is only ever the DEFAULT; members stay click-toggleable.
@@ -117,7 +117,7 @@ export function pickScope(req: { shift: boolean; view: ScopeView }): ScopeDecisi
 }
 
 /** Fold a new pick's scope into the one the selection already carries: SINGLE
- *  WINS, and keeps winning until a plain click replaces the selection outright.
+ *  IS PREFERRED, and stays preferred until a plain click replaces the selection outright.
  *
  *  Once any pick in a selection has asked for exactly-that-edge, mixing it with
  *  a chain expansion would build a member set whose shape the user cannot see

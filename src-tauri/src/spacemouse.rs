@@ -503,7 +503,7 @@ mod tests {
     const UNKNOWN: u16 = 0x3367;
 
     #[test]
-    fn multi_axis_outranks_everything() {
+    fn multi_axis_is_preferred_over_everything() {
         let spacenav = rank(SPACENAV, 0x01, 0x08).unwrap();
         assert!(spacenav > rank(LOGI, 0x00, 0x00).unwrap());
         assert!(spacenav > UNPROVEN, "a declared 6DOF device needs no further proof");

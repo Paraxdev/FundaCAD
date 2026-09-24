@@ -218,7 +218,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     window.addEventListener("keydown", onEsc, true);
   }
 
-  /** Sketch. A SELECTED planar face wins outright: it is already an answer to
+  /** Sketch. A SELECTED planar face is preferred outright: it is already an answer to
    *  "which plane?", so asking again, with the whole model greyed out and the
    *  base-plane quads back on screen, is a step that can only be got wrong.
    *  Click the face, press S, draw. (Curved faces and empty selections fall
@@ -968,7 +968,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       "Click an axis arrow at the origin, or a straight edge on the model, to spin around. Esc cancels.",
     );
     const onMove = (e: PointerEvent) => {
-      // An arrow wins over an edge behind it. The arrows are small, deliberately
+      // An arrow is preferred over an edge behind it. The arrows are small, deliberately
       // aimed at, and drawn in front of everything; an edge that happens to lie
       // under one is not what the cursor is on.
       const axis = axisAt(e.clientX, e.clientY);
@@ -1295,14 +1295,14 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
 
   function startExtrude() {
     if (toolBusy()) return;
-    // A SELECTED FACE wins: extrude-a-face = Press/Pull it (drag out to join, in to
+    // A SELECTED FACE is preferred: extrude-a-face = Press/Pull it (drag out to join, in to
     // cut). This takes priority over region extrude so a visible sketch never hijacks
     // "extrude this face" (was: a shown sketch forced region-extrude, so face cut did
     // nothing).
     const sel = viewport.selectedFacesForPressPull();
     if (sel) {
       // …EXCEPT when the selected face sits ON or BEHIND a visible sketch's
-      // plane (same-direction normals): faces win general picks, so a click
+      // plane (same-direction normals): faces are preferred on general picks, so a click
       // aimed at a sketch profile lying on that face selects the face instead,
       // and hijacking to Press/Pull forced users to hide the body to extrude a
       // sketch. The sketch has priority when it's on or above the face.

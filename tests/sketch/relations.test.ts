@@ -161,6 +161,6 @@ describe("dofSummary", () => {
 
   it("says so when the sketch cannot be solved at all", () => {
     expect(dofSummary(3, true)).toBe("Conflicting constraints");
-    expect(dofSummary(0, true)).toBe("Conflicting constraints"); // conflict beats a zero count
+    expect(dofSummary(0, true)).toBe("Conflicting constraints"); // conflict is preferred over a zero count
   });
 });

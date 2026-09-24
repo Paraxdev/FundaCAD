@@ -3,7 +3,7 @@
 // Two lists arrive from a build and they overlap: `featureErrors` says what
 // went wrong, `diagnostics` says everything the engine noticed on the way,
 // including entries for features that then failed for an unrelated reason. One
-// chip, one tooltip, so exactly one of them has to win.
+// chip, one tooltip, so exactly one of them has to be chosen.
 //
 // The case that matters is the third one. A cut that seals a void AND fails is
 // red, not amber: an advisory about a result that was thrown away, stacked on

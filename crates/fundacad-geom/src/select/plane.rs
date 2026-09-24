@@ -123,7 +123,7 @@ pub(super) fn resolve_face_on_plane(
     super::stable_sort_by_cost(&mut scored);
     let (mut best_d, mut best_i) = scored[0];
 
-    // A winner that contains the point but left the saved plane is either the
+    // A pick that contains the point but left the saved plane is either the
     // anchored face moved there or the floor of a cut under the point; an
     // unmoved face nearer in-plane than that travel is the better story.
     let win_travel = travel(cands[best_i]);

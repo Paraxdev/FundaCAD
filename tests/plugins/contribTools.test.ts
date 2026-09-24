@@ -117,7 +117,7 @@ describe("features", () => {
     expect(contributedFeatureTypes()).toEqual(["texture"]);
   });
 
-  // First claim wins, the same rule contributedAction uses. Two plugins
+  // The first claim is used, the same rule contributedAction uses. Two plugins
   // describing one type is a mistake here and a confusing properties panel
   // elsewhere, and the second is not improved by throwing mid-render.
   it("gives a contested type to whoever claimed it first", () => {

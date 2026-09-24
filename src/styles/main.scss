@@ -2,9 +2,9 @@
 //
 // This is src/styles.css split by section, a pure byte-move, nothing was
 // rewritten. The load order below IS the old file's top-to-bottom order and
-// must stay that way: several rules depend on later-wins cascade (most visibly
+// must stay that way: several rules depend on a later-is-preferred cascade (most visibly
 // `.hidden { display: none !important }` in _utilities, which has to be able to
-// beat the display rules declared above it).
+// take precedence over the display rules declared above it).
 //
 // Two deliberate non-decisions:
 //

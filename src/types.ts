@@ -642,7 +642,7 @@ export interface ResolveDiag {
   // cavity inside the body (legal, so not an error; the other fields are neutral).
   kind: "edge" | "face" | "boolean" | "edgeOpFailed" | "sealedVoid";
   resolved: number; // how many entities matched (0 for a skipped boolean)
-  confidence: number; // 0..1, margin to the runner-up candidate (1 = lone clear winner)
+  confidence: number; // 0..1, margin to the runner-up candidate (1 = lone clear pick)
   lossy: boolean; // a marginal / drift-path match was taken (or a feature was skipped)
   reason?: string;
   failed?: { mid: [number, number, number] }[]; // edgeOpFailed only: failed edges' midpoints

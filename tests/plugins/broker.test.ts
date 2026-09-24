@@ -22,7 +22,7 @@ import { GRANTS, type Grant } from "../../src/plugins/manifest";
 
 // Read through vite rather than the filesystem: `*.test.ts` runs in the node
 // environment but the rest of the suite reads sources this way, and one habit
-// beats two.
+// is preferred over two.
 import serverRs from "../../crates/fundacad-mcp/src/server.rs?raw";
 
 /** The tools the MCP server actually registers, off its source. */

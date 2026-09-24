@@ -43,7 +43,7 @@ describe("handlePlacement", () => {
 
   it("takes the first edge's tangent for a multi-edge selection", () => {
     // There is no single right perpendicular for several edges; one that lies
-    // across a real member beats the camera-right fallback.
+    // across a real member is preferred over the camera-right fallback.
     const acrossY: Vec3[] = [
       [0, 0, 0],
       [0, 6, 0],

@@ -237,7 +237,7 @@ export class PatternFlow {
 
   /** Live sizing: cursor offset/distance from the start point drives the spatial
    *  param (bolt dia / spacing / grid-step / circular sweep); typed fields drive
-   *  counts, and a typed value always outranks the cursor. */
+   *  counts, and a typed value is always preferred over the cursor. */
   move(p: THREE.Vector2, e: PointerEvent) {
     if (!this.patternCenter || !this.pendingPattern) return;
     const pat = this.pendingPattern;

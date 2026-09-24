@@ -295,7 +295,7 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
   scene.add(key.target);
   key.shadow.mapSize.set(2048, 2048);
   key.shadow.bias = -0.0006;
-  key.shadow.normalBias = 0.6; // CAD faces are flat and large; a world-space nudge beats acne
+  key.shadow.normalBias = 0.6; // CAD faces are flat and large; a world-space nudge avoids acne
   key.shadow.radius = 3;
   const fill = new THREE.DirectionalLight(0xffffff, FILL_INTENSITY);
   fill.position.set(-50, 40, 20);
@@ -687,7 +687,7 @@ const SLEEVE_RADIUS_FRACTION = 0.075;
 const OCCLUDED_OPACITY = 0.28;
 
 /** Drawn after the model (which sits at 0) so the ghost pass can paint over it,
- *  and the solid pass after the ghost so it wins wherever it is really visible.
+ *  and the solid pass after the ghost so it shows through wherever it is really visible.
  *  Below the manipulators at 998-999: an origin marker must never cover the
  *  handle the user is dragging. */
 const GHOST_ORDER = 1;

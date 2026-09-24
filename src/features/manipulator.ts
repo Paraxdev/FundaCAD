@@ -125,7 +125,7 @@ export function screenPlaneOrientation(
   const right = axis.clone().projectOnPlane(fwd);
   if (right.lengthSq() < 1e-9) right.copy(fallbackRight).projectOnPlane(fwd);
   // Only reachable if the caller's "right" was itself along the view direction;
-  // any perpendicular beats returning a basis that isn't one.
+  // any perpendicular is preferred over returning a basis that isn't one.
   if (right.lengthSq() < 1e-9) right.set(1, 0, 0).projectOnPlane(fwd);
   if (right.lengthSq() < 1e-9) right.set(0, 1, 0).projectOnPlane(fwd);
   right.normalize();

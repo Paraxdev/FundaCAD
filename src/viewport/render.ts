@@ -215,7 +215,7 @@ export function buildBodyMesh(
     owned = Int32Array.from(scan);
   }
 
-  // global vertex index -> local (dense); a flat typed array beats a Map here,
+  // global vertex index -> local (dense); a flat typed array is preferred over a Map here,
   // this runs per changed body on every live-preview drag tick, and Map<number,
   // number> pays hashing/boxing on 3 lookups per triangle.
   const remap = shared ? partition!.remap : new Int32Array(positions.length / 3).fill(-1);

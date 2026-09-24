@@ -801,7 +801,7 @@ export class EdgeFeatureTool {
     const typed = this.dim.isUserDriven(prevName);
     if (typed) {
       const v = this.dim.getValue(prevName);
-      if (v != null) this.value = v; // a typed number outranks the drag's
+      if (v != null) this.value = v; // a typed number is preferred over the drag's
     }
     // A typed number is the user's, not the drag's: hold it to the absolute
     // floor only. Re-clamping it to the DRAG bounds would round a deliberate

@@ -88,7 +88,7 @@ export interface ToolCapability {
   label: string;
   /** Entity kinds this tool can act on, MOST SPECIFIC FIRST. The order is the
    *  tool's own preference when a selection holds several kinds at once: Extrude
-   *  lists the profile before the face because a visible sketch outranks the
+   *  lists the profile before the face because a visible sketch is preferred over the
    *  solid under it (see featureStarters.startExtrude, which arbitrates exactly
    *  that way). */
   consumes: readonly EntityKind[];

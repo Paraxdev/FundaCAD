@@ -273,7 +273,7 @@
    }
   },
   {
-   "name": "a recorded fresh id beats inheriting",
+   "name": "a recorded fresh id is preferred over inheriting",
    "recorded": {
     "a:0": "body1",
     "j:0": "body7"

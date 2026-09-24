@@ -253,7 +253,7 @@ export function normalise(raw: string): Normalised {
 /** Read typed text as a measurement.
  *
  *  `displayUnit` is what a BARE number means, the unit the field is currently
- *  showing. A written unit always wins over it, which is the whole point: the
+ *  showing. A written unit is always preferred over it, which is the whole point: the
  *  field shows mm, you type "1 inch", you get an inch.
  *
  *  `params` is the document's parameter scope, so "width/2" resolves. Pass {}

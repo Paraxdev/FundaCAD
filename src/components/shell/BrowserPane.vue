@@ -607,8 +607,8 @@ const nodes = useDocValue((doc): TreeNode[] => {
     // nobody chose and nobody can undo. The assignment stays in the document
     // either way.
     const slot = paintedBodies ? store.bodyColorSlot(b.id) : undefined;
-    // The palette slot wins the chip when there is one, for the same reason it
-    // wins on the model: a slot is a deliberate choice about a real print and a
+    // The palette slot is preferred for the chip when there is one, for the same reason it
+    // is preferred on the model: a slot is a deliberate choice about a real print and a
     // material is usually whatever the imported file said. With no slot the
     // chip is the material, so a row says what the body is made of.
     const chip = (slot != null ? store.colorPalette[slot]?.color : undefined)

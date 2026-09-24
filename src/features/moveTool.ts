@@ -802,14 +802,14 @@ export class MoveTool {
 
   /** Which handle is under the cursor.
    *
-   *  Arrows are tested FIRST and win outright. The two families overlap where
+   *  Arrows are tested FIRST and are preferred outright. The two families overlap where
    *  an arrow crosses its neighbours' rings, and an arrow is the smaller target
    *  of the two, losing it to a ring drawn over it would make the commonest
    *  gesture the hard one. */
   private hitHandle(x: number, y: number): Grab {
     if (!this.gizmo) return null;
     const ray = this.viewport.rayFrom(x, y);
-    // The origin is tested first and wins outright: it sits where all three
+    // The origin is tested first and is preferred outright: it sits where all three
     // arrows meet, so anything else tested before it would take every press
     // aimed at the middle of the gizmo.
     if (this.origin && ray.intersectObject(this.origin.mesh, false).length) {

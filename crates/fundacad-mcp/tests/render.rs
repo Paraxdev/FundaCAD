@@ -219,7 +219,7 @@ fn the_control_for_the_depth_test() {
     let mid = canvas.pixel(100, 100);
     assert!(
         mid[0] > mid[2],
-        "the near body (reddish) did not win: {mid:?}"
+        "the near body (reddish) was not chosen: {mid:?}"
     );
 }
 

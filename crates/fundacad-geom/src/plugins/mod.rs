@@ -538,7 +538,7 @@ fn pass_owner(reg: &mut Registry, pass: &str) -> Option<usize> {
     None
 }
 
-/// One face a mesh pass claimed: the spec that won it and the pass's tag.
+/// One face a mesh pass claimed: the spec that claimed it and the pass's tag.
 #[derive(Clone)]
 pub struct PassClaim {
     pub spec: Value,
@@ -546,7 +546,7 @@ pub struct PassClaim {
 }
 
 /// `plugin_geometry.resolve` over every spec on a body, as face index in
-/// `faces` order to the claim on it. A later spec wins a face an earlier one
+/// `faces` order to the claim on it. A later spec is preferred over a face an earlier one
 /// also claimed, timeline order whichever plugins the two come from.
 pub fn claim_faces(
     shape: &opencascade::primitives::Shape,

@@ -132,7 +132,7 @@ const MAJOR = 0x44505c;
 
 /** How far off the plane the lattice floats, in PIXELS. A sketch on a face is
  *  coplanar with that face, and coplanar geometry z-fights; half a pixel toward
- *  the viewer wins the depth test without ever being visible as a gap. */
+ *  the viewer clears the depth test without ever being visible as a gap. */
 const LIFT_PX = 0.75;
 
 /** The scene object, rebuilt only when the lattice it should be drawing actually

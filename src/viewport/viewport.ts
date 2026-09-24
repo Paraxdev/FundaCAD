@@ -708,12 +708,12 @@ export class Viewport {
       this.setSelectionMode("faces");
     }
     const e = { clientX, clientY, ctrlKey: ctrl, metaKey: false, shiftKey: shift };
-    // A visible sketch's area wins over the face it lies on (with the exceptions in
-    // sketch/regionOverSurface.ts); an edge still wins over both.
+    // A visible sketch's area is preferred over the face it lies on (with the exceptions in
+    // sketch/regionOverSurface.ts); an edge is still preferred over both.
     if (hit?.kind !== "edge" && this.regionPickAt?.(e.clientX, e.clientY, e.ctrlKey || e.metaKey || e.shiftKey)) return;
     // a click on a construction plane, datum point or datum axis (where it does
     // not overlap the body) selects it. Markers are raycast alongside the quads,
-    // so the nearest reference geometry under the cursor wins by depth.
+    // so the nearest reference geometry under the cursor is preferred by depth.
     if (!hit && (this.datumQuads.length || this.datumMarkers.length)) {
       const dh = this.rayFrom(e.clientX, e.clientY)
         .intersectObjects([...this.datumQuads, ...this.datumMarkers], false)[0];
@@ -1275,7 +1275,7 @@ export class Viewport {
         return beta < this.draftThreshold ? OVERHANG : WALL;
       }, only);
     } else {
-      // A face's own colour wins over its body's.
+      // A face's own colour is preferred over its body's.
       this.highlighter.setBase((fid) => {
         const own = this.finish.facePaint[fid];
         if (own) return new THREE.Color(own);
@@ -1688,14 +1688,14 @@ export class Viewport {
   private edgeScope: ScopeDecision = { scope: "chain", reason: "tangent" };
 
   /** Record what a fresh edge pick means. `additive` folds into what the
-   *  selection already carried (single wins); a replacing click starts over. */
+   *  selection already carried (single is preferred); a replacing click starts over. */
   private noteEdgePickScope(edge: EdgeRef, shift: boolean, additive: boolean) {
     const decided = pickScope({ shift, view: this.edgeScopeView(edge) });
     if (!additive) {
       this.edgeScope = decided;
       return;
     }
-    // Keep the REASON belonging to whichever pick won the merge, so the prompt
+    // Keep the REASON belonging to whichever pick was preferred in the merge, so the prompt
     // explains the set the user is looking at rather than their last click.
     const scope = mergeScope(this.edgeScope.scope, decided.scope);
     if (scope === decided.scope) this.edgeScope = decided;

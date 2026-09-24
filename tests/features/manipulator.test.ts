@@ -280,7 +280,7 @@ describe("arrow handle paint", () => {
     h.paint({ tone: "cut" });
     expect(m.color.getHex()).toBe(HANDLE_CUT);
     h.paint({ hot: true });
-    expect(m.color.getHex()).toBe(HANDLE_HOT); // hover still wins
+    expect(m.color.getHex()).toBe(HANDLE_HOT); // hover is still preferred
     h.paint({ hot: false });
     expect(m.color.getHex()).toBe(HANDLE_CUT); // ...and hands the tone back
     h.dispose();
