@@ -67,11 +67,24 @@ fn ellipse(center: V, t: V, a: V, b: V, seam: V) -> Result<Shape, String> {
     kernel::ellipse_edge(math::tuple(center), math::tuple(t), math::tuple(x), ra, rb, start)
 }
 
-/// Sections between two nodes, so the loft follows the spine rather than
-/// swinging wide across a long gap, spaced about this many times the mean
-/// section radius apart.
-const STEP_PER_RADIUS: f64 = 0.5;
-const MAX_BETWEEN: usize = 12;
+/// How a limb is lofted. Sections go between nodes about `step` times the
+/// mean section radius apart, at most `max_between` per span, so the surface
+/// follows the spine instead of swinging wide across a long gap.
+struct Plan {
+    step: f64,
+    max_between: usize,
+    smooth: bool,
+    degree: u32,
+}
+
+/// Many sections with the kernel's smoothing is preferred over the rest: an
+/// unsmoothed loft through that many sections folds its surface back on
+/// itself along a long span, which shows as a pinched limb. Should the
+/// smoothed loft be refused, a few sections at a low degree still build.
+const PLANS: [Plan; 2] = [
+    Plan { step: 0.5, max_between: 12, smooth: true, degree: 0 },
+    Plan { step: 1.2, max_between: 3, smooth: false, degree: 5 },
+];
 
 struct Station {
     center: V,
@@ -82,7 +95,7 @@ struct Station {
 
 /// Where along the spine each section goes: every node, and points on the
 /// cubic through each pair of neighbours with the spine direction at both.
-fn stations(nodes: &[Node], chain: &[usize], t: &[V]) -> Vec<Station> {
+fn stations(nodes: &[Node], chain: &[usize], t: &[V], plan: &Plan) -> Vec<Station> {
     let mut out = Vec::new();
     for k in 0..chain.len() {
         let (p0, t0) = (nodes[chain[k]].center, t[k]);
@@ -97,7 +110,7 @@ fn stations(nodes: &[Node], chain: &[usize], t: &[V]) -> Vec<Station> {
             0.5 * (math::norm(a) + math::norm(b))
         };
         let r = 0.5 * (mean_r(&nodes[chain[k]], t0) + mean_r(&nodes[chain[k + 1]], t1));
-        let between = ((len / (STEP_PER_RADIUS * r)).round() as usize).saturating_sub(1).min(MAX_BETWEEN);
+        let between = ((len / (plan.step * r)).round() as usize).saturating_sub(1).min(plan.max_between);
         for j in 1..=between {
             let s = j as f64 / (between + 1) as f64;
             let (s2, s3) = (s * s, s * s * s);
@@ -140,9 +153,20 @@ fn nearest(e: (f64, f64, f64), near: f64) -> (f64, f64, f64) {
 
 /// A limb through `chain`, indices into `nodes`.
 pub fn limb(nodes: &[Node], chain: &[usize]) -> Result<Shape, String> {
+    let mut last = Err(String::new());
+    for plan in &PLANS {
+        last = limb_with(nodes, chain, plan);
+        if last.is_ok() {
+            break;
+        }
+    }
+    last
+}
+
+fn limb_with(nodes: &[Node], chain: &[usize], plan: &Plan) -> Result<Shape, String> {
     let p: Vec<V> = chain.iter().map(|&i| nodes[i].center).collect();
     let t = tangents(&p);
-    let st = stations(nodes, chain, &t);
+    let st = stations(nodes, chain, &t, plan);
     let sp: Vec<V> = st.iter().map(|s| s.center).collect();
     let stt: Vec<V> = st.iter().map(|s| s.t).collect();
     let r = seams(&sp, &stt);
@@ -199,6 +223,6 @@ pub fn limb(nodes: &[Node], chain: &[usize]) -> Result<Shape, String> {
     let (head, start_tip) = cap(0, 0, math::mul(st[0].t, -1.0), true)?;
     let (tail, end_tip) = cap(last, chain.len() - 1, st[last].t, false)?;
     let all: Vec<&Shape> = head.iter().chain(sections.iter()).chain(tail.iter()).collect();
-    let options = LoftOptions { ruled: false, smooth: false, match_seams: false };
+    let options = LoftOptions { ruled: false, smooth: plan.smooth, match_seams: false, max_degree: plan.degree };
     kernel::loft(&all, Some(math::tuple(start_tip)), Some(math::tuple(end_tip)), options)
 }
