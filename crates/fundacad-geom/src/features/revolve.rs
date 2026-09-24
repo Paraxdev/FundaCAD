@@ -92,9 +92,14 @@ pub fn handle(ctx: &mut Ctx, f: &Revolve) -> FResult {
     )
 }
 
+/// How far off the axis an arc's centre may sit and still be revolved as the
+/// sphere it was meant to be, in mm.
+const AXIS_ARC_SNAP: f64 = 1e-4;
+
 fn revolve_faces(sk: &Shape, origin: [f64; 3], dir: [f64; 3], arc: f64) -> Result<Shape, String> {
     let mut solids = Vec::new();
     for face in kernel::subshapes(sk, Kind::Face) {
+        let face = kernel::snap_axis_arcs(&face, origin, dir, AXIS_ARC_SNAP).unwrap_or(face);
         solids.push(kernel::revolve(&face, origin, dir, arc).map_err(|e| e.0)?);
     }
     let c = kernel::compound(&solids);

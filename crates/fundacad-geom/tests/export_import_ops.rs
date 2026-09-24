@@ -219,3 +219,25 @@ fn a_3mf_body_is_one_closed_shell() {
     }
 }
 
+#[test]
+fn a_revolved_tip_ending_on_the_axis_exports_as_a_sphere() {
+    // The profile an agent wrote, rounded to five places, which puts the tip
+    // arc's centre 1.9e-6 mm off the axis.
+    let doc = json!({"features": [
+        {"id": "sk", "type": "sketch", "plane": "XZ", "entities": [
+            {"type": "line", "id": "base", "x1": 0, "y1": 3, "x2": 19, "y2": 3},
+            {"type": "line", "id": "foot", "x1": 19, "y1": 3, "x2": 19, "y2": 5},
+            {"type": "line", "id": "flank", "x1": 19, "y1": 5, "x2": 0.4326, "y2": 43.324},
+            {"type": "arc", "id": "tip", "x1": 0.4326, "y1": 43.324, "x2": 0, "y2": 43.65, "mx": 0.27082, "my": 43.55939},
+            {"type": "line", "id": "axis", "x1": 0, "y1": 43.65, "x2": 0, "y2": 3}]},
+        {"id": "rv", "type": "revolve", "sketch": "sk", "axis": "Z", "angle": 360, "operation": "new"},
+    ]});
+    let c = Client::new();
+    let dir = scratch("tip");
+    let path = p(&dir, "tip.step");
+    let r = c.call(json!({"id": 1, "op": "export", "document": doc, "format": "step", "path": path}));
+    assert_eq!(r["ok"], true, "{r}");
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert!(!text.contains("SURFACE_OF_REVOLUTION"), "the tip is still a generic surface of revolution");
+    assert!(text.contains("SPHERICAL_SURFACE"));
+}
