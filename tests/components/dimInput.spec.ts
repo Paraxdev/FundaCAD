@@ -257,3 +257,21 @@ describe("DimInput confirm and cancel", () => {
     canvas.remove();
   });
 });
+
+describe("DimInput hidden fields", () => {
+  it("hides a field in place, keeps what was typed and Tab skips it", () => {
+    dim.show([{ name: "distance", label: "D" }, { name: "taper", label: "Angle" }, { name: "depth", label: "H" }], () => {});
+    const inputs = [...root().querySelectorAll<HTMLInputElement>("input")];
+    inputs[0]!.value = "4.7";
+    dim.setFieldHidden("taper", true);
+    expect(inputs[1]!.closest("label")!.style.display).toBe("none");
+    expect(dim.getRaw("distance")).toBe("4.7");
+
+    inputs[0]!.focus();
+    inputs[0]!.dispatchEvent(new KeyboardEvent("keydown", { key: "Tab", bubbles: true }));
+    expect(document.activeElement).toBe(inputs[2]);
+
+    dim.setFieldHidden("taper", false);
+    expect(inputs[1]!.closest("label")!.style.display).toBe("");
+  });
+});
