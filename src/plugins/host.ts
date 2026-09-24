@@ -83,6 +83,15 @@ export type { Viewport } from "../viewport/viewport";
 export type { CtxItem, MenuDef, MenuItem } from "../ui/menu";
 export type { CadDocument, Feature, Num, PlaneSpec, RebuildResult, Selector } from "../types";
 
+// --- moving something with the app's own gizmo -------------------------------
+//
+// `engine.tools.move.startTarget(target, done)` puts the arrows, rings, planar
+// squares and resize cubes on whatever a MoveTarget describes. A plugin that
+// has its own things to move (points, handles) describes them here instead of
+// drawing a second gizmo with different habits.
+export { ALL_HANDLES, IN_PLANE_HANDLES, WORLD_FRAME } from "../features/moveTarget";
+export type { Frame, MoveCommit, MoveHandleSet, MoveResult, MoveTarget } from "../features/moveTarget";
+
 // --- telling somebody something ---------------------------------------------
 export { toast } from "../ui/toast";
 /** The line under the viewport that says what a running tool wants next.
