@@ -44,7 +44,7 @@ import { commonUnits, toUnit, tryParseMeasure, unitById, type Dim, type Measured
 import { contextMenu } from "../../ui/menu";
 import { resolveEntities, toSketchEntity } from "../../sketch/resolve";
 import { entityDims } from "../../sketch/entityDims";
-import { featureNumFields, featureWithTarget, type FieldKind } from "../../document/numFields";
+import { featureNumFields, featureWithTarget, readField, type FieldKind } from "../../document/numFields";
 import {
   choiceFieldsFor,
   choiceValue,
@@ -255,7 +255,7 @@ const featureRows = useDocValue(() => {
   // and nothing says why. The rule lives with the field inventory so the tool
   // that creates the feature and the rows that edit it hide the same ones.
   return fields.filter(([field]) => fieldApplies(f.type, field, values)).map(([field, label, kind]) => {
-    const cur = (f as unknown as Record<string, Num | undefined>)[field];
+    const cur = readField(values, field) as Num | undefined;
     const target: ParamTarget = { kind: "feature", feature: f.id, field };
     const bound = store.boundExpr(target);
     const u = unitOf(field, kind);

@@ -344,6 +344,18 @@ function eachBareNameRef(doc: CadDocument, name: string, hit: (label: string, se
       if (v === name && !NON_NUM_STRING_FIELDS.has(k)) {
         hit(`${f.type} ${f.id} · ${k}`, (nv) => ((f as unknown as Record<string, unknown>)[k] = nv));
       }
+      // A list of entries with ids of their own, a plugin feature's nodes say,
+      // holds values the same way the feature does.
+      if (!Array.isArray(v)) continue;
+      for (const e of v) {
+        if (typeof e !== "object" || e === null || typeof e.id !== "string") continue;
+        const entry = e as Record<string, unknown>;
+        for (const [ek, ev] of Object.entries(entry)) {
+          if (ev === name && !NON_NUM_STRING_FIELDS.has(ek)) {
+            hit(`${f.type} ${f.id} · ${k}.${entry["id"]}.${ek}`, (nv) => (entry[ek] = nv));
+          }
+        }
+      }
     }
     const sketch = asFeature(f, "sketch");
     if (!sketch) continue;

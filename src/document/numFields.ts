@@ -97,8 +97,45 @@ function typeNumFields(type: string, values?: Record<string, unknown>): readonly
   const own = FEATURE_NUM_FIELDS[type as Feature["type"]];
   if (own) return own;
   const contributed = contributedFeature(type)?.numFields;
-  if (contributed) return contributed;
+  if (contributed) return typeof contributed === "function" ? contributed(values ?? {}) : contributed;
   return values ? rawNumFields(values) : [];
+}
+
+/** Where a field path lands in a feature. A path is a key, or keys joined by
+ *  dots where the segment after a list names the list's entry by its `id`:
+ *  `nodes.n3.sx` is the `sx` of the node whose id is `n3`, which stays the
+ *  same node however the list is reordered. */
+export function fieldHolder(
+  root: Record<string, unknown>,
+  path: string,
+): { holder: Record<string, unknown>; key: string } | null {
+  const parts = path.split(".");
+  let holder: Record<string, unknown> = root;
+  for (let i = 0; i < parts.length - 1; i++) {
+    const next = holder[parts[i]!];
+    if (Array.isArray(next)) {
+      const id = parts[++i];
+      const entry = next.find((e) => isRecord(e) && e["id"] === id);
+      if (!isRecord(entry)) return null;
+      holder = entry;
+    } else if (isRecord(next)) {
+      holder = next;
+    } else {
+      return null;
+    }
+    if (i === parts.length - 1) return null;
+  }
+  return { holder, key: parts[parts.length - 1]! };
+}
+
+/** The value at a field path, see `fieldHolder`. */
+export function readField(root: Record<string, unknown>, path: string): unknown {
+  const at = fieldHolder(root, path);
+  return at ? at.holder[at.key] : undefined;
+}
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
 /** Rows any feature may carry whatever its type. The build leaves a feature out
@@ -124,6 +161,15 @@ export function rawNumFields(
   for (const [k, v] of Object.entries(values)) {
     if (k === "id" || k === "type" || COMMON_NUM_FIELDS.some(([field]) => field === k)) continue;
     if (typeof v === "number") out.push([k, k, "count"]);
+    // A list of entries that carry their own ids is addressable by path, so a
+    // parameter bound inside one keeps resolving with its plugin gone.
+    if (Array.isArray(v) && v.length && v.every((e) => isRecord(e) && typeof e["id"] === "string")) {
+      for (const e of v as Record<string, unknown>[]) {
+        for (const [ek, ev] of Object.entries(e)) {
+          if (ek !== "id" && typeof ev === "number") out.push([`${k}.${e["id"]}.${ek}`, `${k} ${e["id"]} ${ek}`, "count"]);
+        }
+      }
+    }
   }
   return out;
 }
@@ -199,8 +245,9 @@ export function resolveTarget(doc: CadDocument, target: ParamTarget): ResolvedTa
       const row = f
         && featureNumFields(f.type, f as Record<string, unknown>)
           .find(([field]) => field === target.field);
-      if (!f || !row) return null;
-      return { holder: f as unknown as Record<string, unknown>, field: target.field, kind: row[2] };
+      const at = f && row && fieldHolder(f as unknown as Record<string, unknown>, target.field);
+      if (!at) return null;
+      return { holder: at.holder, field: at.key, kind: row![2] };
     }
     case "constraint": {
       const f = sketchOf(target.sketch);
