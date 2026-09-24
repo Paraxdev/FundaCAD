@@ -6,8 +6,10 @@
 // the model; Top then an orbit off it is smooth and level; projection cycling,
 // sketch entry and exit, fit and reset all leave a finite pose with the target
 // near the model; a jittery right click opens the menu without turning the
-// view, and a two finger pinch zooms about its midpoint. Screenshots after
-// every step.
+// view, and a two finger pinch zooms about its midpoint; standard views while
+// zoomed in deep keep the detail centred at its size, and a 2 mm or a 500 mm
+// part zoomed all the way out is still several pixels across. Screenshots
+// after every step.
 //
 // Usage (from the repo root, with vite + engine running):
 //   SC_TOKEN=<engine token> SC_CHROME=<chrome.exe> [SC_URL=http://localhost:5173/]
@@ -289,6 +291,63 @@ const check = (name, ok, detail) => {
   const mq = await screenOf(under);
   check("about their midpoint", Math.hypot(mq.x - m.x, mq.y - m.y) < 1, mq);
   await shot("14_pinch.png");
+
+  // --- 10. a standard view while zoomed in deep keeps the detail and its size ---------
+  await page.keyboard.press("Escape");
+  await page.evaluate(() => window.viewport.setStandardView("iso"));
+  await settle();
+  await page.evaluate(() => window.viewport.fitView());
+  await settle();
+  // just inside the top face's front right corner, so the corner is in view
+  const detail = [19.95, -14.95, 20];
+  await page.evaluate((q) => {
+    const V = window.viewport.rig.getTarget().constructor;
+    window.viewport.rig.moveTo(new V(...q), false);
+  }, detail);
+  await settle();
+  await page.mouse.move(mid.x, mid.y);
+  for (let i = 0; i < 40; i++) { await page.mouse.wheel(0, -100); await page.waitForTimeout(20); }
+  await settle();
+  const deep = await pose();
+  await shot("15_deep_iso.png");
+  for (const [i, view] of ["top", "front", "iso"].entries()) {
+    await page.evaluate((v) => window.viewport.setStandardView(v), view);
+    await settle();
+    const p = await pose();
+    const at = await screenOf(detail);
+    check(`${view} while zoomed in deep keeps the scale`, Math.abs(p.scale / deep.scale - 1) < 0.01, { before: deep.scale, after: p.scale });
+    check(`${view} keeps the detail at the centre`, Math.hypot(at.x - mid.x, at.y - mid.y) < 2, at);
+    await shot(`${16 + i}_deep_${view}.png`);
+  }
+
+  // --- 11. zooming all the way out keeps a small or a large part visible -------------
+  for (const [i, size] of [2, 500].entries()) {
+    await page.evaluate(async (w) => {
+      window.store.loadDocument({ parameters: {}, features: [
+        { id: "s1", type: "sketch", plane: "XY", entities: [{ type: "rectangle", width: w, height: w, x: 0, y: 0 }] },
+        { id: "e1", type: "extrude", sketch: "s1", distance: w, operation: "new" },
+      ] });
+      await window.store.rebuildNow();
+    }, size);
+    await idle();
+    await page.evaluate(() => window.viewport.fitView());
+    await settle();
+    await page.mouse.move(mid.x, mid.y);
+    for (let k = 0; k < 80; k++) { await page.mouse.wheel(0, 240); await page.waitForTimeout(10); }
+    await settle();
+    const span = await page.evaluate(() => {
+      const b = window.viewport.model.box;
+      const V = b.min.constructor;
+      const xs = [], ys = [];
+      for (let k = 0; k < 8; k++) {
+        const s = window.viewport.projectToScreen(new V(k & 1 ? b.max.x : b.min.x, k & 2 ? b.max.y : b.min.y, k & 4 ? b.max.z : b.min.z));
+        xs.push(s.x); ys.push(s.y);
+      }
+      return Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys));
+    });
+    check(`a ${size} mm part zoomed all the way out is still at least 8 px`, span >= 8, { span });
+    await shot(`${19 + i}_zoomed_out_${size}mm.png`);
+  }
 
   await browser.close();
   console.log(failures ? `\n${failures} FAILED` : "\nALL PASS");
