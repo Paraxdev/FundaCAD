@@ -31,6 +31,8 @@
             { "type": "spline", "id": "e7", "points": [{ "x": 0, "y": 0 }, { "x": 5, "y": 2.5 }, { "x": 10, "y": 0 }] },
             { "type": "point", "id": "e8", "x": 1, "y": 1 },
             { "type": "ellipse", "id": "e9", "rx": 8, "ry": 4, "x": 0, "y": 0, "angle": 10 },
+            { "type": "bspline", "id": "e15", "poles": [{ "x": 0, "y": 0 }, { "x": "half", "y": 6 }, { "x": 12, "y": -3 }, { "x": 18, "y": 2 }, { "x": 24, "y": 0 }], "degree": 3, "knots": [0, 0.5, 1, 2], "construction": true },
+            { "type": "bspline", "id": "e16", "poles": [{ "x": 0, "y": 0 }, { "x": 5, "y": 0 }, { "x": 5, "y": 5 }], "closed": true },
             { "type": "text", "id": "e10", "text": "Funda", "x": 0, "y": -10, "height": 5, "font": "Arial", "style": "bolditalic", "align": "center", "angle": 0, "pathRef": "e7", "positionOnPath": 0.5, "boxWidth": 30 },
             { "type": "projected", "id": "e11", "source": { "kind": "edge", "body": "body1", "sel": { "kind": "edge", "by": "nearest", "point": [1, 2, 3], "body": "body1" }, "group": "g" }, "curve": { "kind": "line", "x1": 0, "y1": 0, "x2": 1, "y2": 1 } },
             { "type": "projected", "id": "e12", "source": { "kind": "faceBoundary", "body": "body1", "sel": { "kind": "face", "by": "normal", "dir": [0, 0, 1] } }, "curve": { "kind": "circle", "x": 0, "y": 0, "r": 2 }, "stale": true },
