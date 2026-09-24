@@ -69,7 +69,7 @@ export function unit(v: Vec3): Vec3 | null {
  *  press S" route where this serves "press S, click a face". Both are stable and
  *  both are recorded IN the plane they produce, so the only symptom is the same
  *  face opening a quarter turn apart depending on route, never a plane in the
- *  wrong place. Unifying is safe; picking the winner is a decision about feel.
+ *  wrong place. Unifying is safe; picking which one to prefer is a decision about feel.
  *
  *  World +Z projected into the plane, or world +X when the plane is nearly
  *  horizontal and +Z has almost nothing to project. */

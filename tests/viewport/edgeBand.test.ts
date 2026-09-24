@@ -26,7 +26,7 @@ describe("edgeBandPx", () => {
   it("leaves every comfortably clickable face exactly as it was", () => {
     // The safety property. At or above the cap extent the band is the same
     // constant it always was, so ordinary parts do not shift under the cursor
-    // and edges keep winning wherever they win today.
+    // and edges stay preferred wherever they are preferred today.
     for (const px of [BAND_CAP_EXTENT_PX, 20, 87, 362, 4000]) {
       expect(edgeBandPx(px), `a ${px}px face`).toBe(EDGE_NEAR_PX);
     }

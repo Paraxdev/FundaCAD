@@ -164,7 +164,7 @@ export class DimFlow {
    *  expect the other one to stay put. Pre-setting the first-picked radius makes
    *  the system already satisfied, so the solver has nothing to redistribute and
    *  the second circle keeps its size. If other constraints disagree the solver
-   *  still wins, this only chooses WHERE the slack is taken from.
+   *  still decides, this only chooses WHERE the slack is taken from.
    *  defer: the same treatment for c2cDistance rim clearance, whose branch
    *  depends on the centre distance too; revisit when a user reports it. */
   private seedFirstPicked(c: SketchConstraint, firstPicked: string | null) {

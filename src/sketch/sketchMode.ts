@@ -334,7 +334,7 @@ export class SketchMode {
     this.dims.onLabelMenu = (e, del) => {
       // Disabled rather than absent on an entity dim: a circle's diameter is a
       // property of the circle, so there is no constraint to remove, and saying
-      // so beats a right-click that appears to do nothing.
+      // so is preferred over a right-click that appears to do nothing.
       contextMenu(e.clientX, e.clientY, [
         { label: "Delete dimension", danger: true, disabled: !del, shortcut: "Del", onClick: () => del?.() },
       ]);
@@ -1284,7 +1284,7 @@ export class SketchMode {
     return this.store.boundExpr(SketchMode.targetOf(key, this.editingId));
   }
 
-  /** the driving expression for a bound dim key, pending wins over the doc. */
+  /** the driving expression for a bound dim key, pending is preferred over the doc. */
   private exprFor(key: string): string | undefined {
     return this.pendingBindings.get(key)?.expr ?? this.docBinding(key)?.expr;
   }
@@ -2610,7 +2610,7 @@ export class SketchMode {
       // clicked back on the start point → close the loop and end the chain
       const closing = this.chainStart != null && end.distanceTo(this.chainStart) < 1e-3;
       // Infer horizontal or vertical. The closing segment was not aimed, so it gets
-      // exact axes only, without the three degree guess. A typed angle wins.
+      // exact axes only, without the three degree guess. A typed angle is preferred.
       if (!this.dim.isUserDriven("angle")) {
         this.inferLineConstraint(entity, closing ? 0 : INFER_TOL_DEG);
       }
@@ -2782,7 +2782,7 @@ export class SketchMode {
     const lit = this.relHover;
     if (this.selected.size || lit.size) {
       // Three layers, and the hover is on top: it is transient and answers a
-      // question being asked right now, so it wins over a selection that may
+      // question being asked right now, so it is preferred over a selection that may
       // have been sitting there since before the panel was opened.
       const normal = this.entities.filter((e) => !this.selected.has(e.id) && !lit.has(e.id));
       const chosen = this.entities.filter((e) => this.selected.has(e.id) && !lit.has(e.id));
@@ -3299,7 +3299,7 @@ export class SketchMode {
     return res?.point ?? raw;
   }
 
-  /** Queue a drag target; pump serializes solves (latest target wins). */
+  /** Queue a drag target; pump serializes solves (the latest target is used). */
   private queueDrag(to: THREE.Vector2) {
     if (!this.dragFrom) return;
     this.pendingDrag = { fromX: this.dragFrom.x, fromY: this.dragFrom.y, toX: to.x, toY: to.y };

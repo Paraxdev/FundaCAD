@@ -384,7 +384,7 @@ export function contributedBrowserSections(): { key: string; section: BrowserSec
 
 /** The handler for an action id, or null when nobody claimed it.
  *
- *  First claim wins, and a second claim is not an error worth throwing over: two
+ *  The first claim is used, and a second claim is not an error worth throwing over: two
  *  capabilities that both answer to "print-send" is a mistake in this repository
  *  and a broken button in somebody else's, and the second is not improved by an
  *  exception thrown out of a click handler. */
@@ -440,7 +440,7 @@ export function anyToolBusy(): boolean {
 
 /** What a plugin says about one feature type, or null.
  *
- *  First claim wins, for the same reason `contributedAction` gives it to the
+ *  The first claim is used, for the same reason `contributedAction` gives it to the
  *  first: two plugins describing the same feature type is a mistake in this
  *  repository and a confusing properties panel in somebody else's, and the
  *  second is not improved by an exception thrown mid-render. */
@@ -458,7 +458,7 @@ export function contributedFeatureTypes(): string[] {
   return out;
 }
 
-/** Icon name -> markup, merged. First contribution of a name wins, so a plugin
+/** Icon name -> markup, merged. The first contribution of a name is used, so a plugin
  *  cannot quietly redraw another plugin's mark by loading second. */
 export function contributedIcons(): Record<string, string> {
   const out: Record<string, string> = {};
@@ -472,7 +472,7 @@ export function contributedIcons(): Record<string, string> {
 
 /** Every contributed colour, merged.
  *
- *  Later contributions win a collision, which is arbitrary and has to be:
+ *  Later contributions are preferred on a collision, which is arbitrary and has to be:
  *  nothing here can tell which of two capabilities is more entitled to paint a
  *  body. Today exactly one contributes paint at all. */
 export function contributedPaint(): Paint {

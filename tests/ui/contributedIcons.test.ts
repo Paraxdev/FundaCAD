@@ -40,7 +40,7 @@ describe("resolveIconPaths, over a registry it is handed", () => {
 
   // The order rule, stated as a test. A plugin cannot restyle a mark the user's
   // chosen pack already draws.
-  it("lets a pack the user chose win over a plugin", () => {
+  it("lets a pack the user chose be preferred over a plugin", () => {
     const extra = { fillet: "<plugin-fillet/>" };
     expect(resolveIconPaths(packs, "anvil", "fillet", "forge", extra)).toBe("<anvil-fillet/>");
     expect(resolveIconPaths(packs, "forge", "fillet", "anvil", extra)).toBe("<forge-fillet/>");

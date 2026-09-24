@@ -30,7 +30,7 @@ export class SketchGlyphs {
   /** delete the constraint at this index (wired by SketchMode) */
   onDelete: ((cIndex: number) => void) | null = null;
   onEditPattern: ((patternId: string) => void) | null = null;
-  /** Geometry-beats-glyph, mirroring SketchDimensions.onOverlapPick. A glyph is
+  /** Geometry is preferred over glyph, mirroring SketchDimensions.onOverlapPick. A glyph is
    *  a DOM badge above the canvas, so in the dimension tool it would swallow the
    *  click that names an operand. Return true = "the click belonged to the tool
    *  underneath" and the glyph skips its delete for that click. */

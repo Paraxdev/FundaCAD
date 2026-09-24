@@ -20,7 +20,7 @@ export type SnapKind =
 export interface SnapCandidate {
   p: THREE.Vector2;
   kind: SnapKind;
-  priority: number; // higher wins
+  priority: number; // higher is preferred
   /** What the anchor is, named beside the marker ("Face Center"). */
   label?: string | undefined;
   /** Names for the lines through this anchor along the sketch's own x and y, for

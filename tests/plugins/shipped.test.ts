@@ -11,7 +11,7 @@
 // The shipped manifests were JSON literals inside registry.ts and index.ts, and
 // the plugin's own directory carried a second copy for the bundle. Two copies
 // of a permission list is two lists that can disagree, and the copy that would
-// have won an argument is the one the consent screen never showed.
+// have taken precedence is the one the consent screen never showed.
 
 import { describe, expect, it } from "vitest";
 

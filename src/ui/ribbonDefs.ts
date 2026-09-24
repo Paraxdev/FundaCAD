@@ -18,7 +18,7 @@ interface ToolItem {
 }
 // Split button: the FULL dropdown list lives in `children` (children[0] is the
 // initial one-click primary; `label` names the family for the arrow tooltip).
-// Picking a child runs it and makes it the primary, last-used-wins, mainstream MCAD
+// Picking a child runs it and makes it the primary, last-used-is-preferred, mainstream MCAD
 // convention. Each tool is defined exactly once, in `children`.
 interface SplitItem {
   label: string;

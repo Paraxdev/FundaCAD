@@ -116,7 +116,7 @@ describe("AreaFilterChip", () => {
   });
 
   it("stays on screen even when the cursor is at the very edge", async () => {
-    // CONTROL on the rule above: keeping clear of the box must not win over
+    // CONTROL on the rule above: keeping clear of the box must not be preferred over
     // being visible, or the chip is pushed off the screen exactly when the box
     // is being dragged to the far corner.
     box([100, 100], [window.innerWidth - 1, window.innerHeight - 1]);

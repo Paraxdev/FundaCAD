@@ -92,7 +92,7 @@ export class Picker {
     return edgeObjects(view).flatMap((d) => d.visibleRefs());
   }
 
-  /** General selection: a face wins over an edge unless the cursor is right on
+  /** General selection: a face is preferred over an edge unless the cursor is right on
    *  the edge line (within EDGE_NEAR_PX). The dedicated edge tools call
    *  pickEdgeAt() directly and keep the generous EDGE_PICK_THRESHOLD radius. */
   pick(
@@ -103,7 +103,7 @@ export class Picker {
     view: ModelView,
   ): Hit | null {
     // Body BVHs are built after the first paint, not during setModel (see
-    // raycastIndex.ts). If a pick beats that, build them now: three-mesh-bvh
+    // raycastIndex.ts). If a pick arrives before that, build them now: three-mesh-bvh
     // would otherwise fall back to a brute-force scan of every triangle. Free
     // once the queue has drained, which is the normal case.
     flushRaycastIndex();
@@ -247,7 +247,7 @@ export const EDGE_DEPTH_FRACTION = 0.002;
 /** Is the best edge candidate round the BACK of the body?
  *
  *  pickEdge deliberately ranks edges by screen distance rather than by depth, so
- *  that a fat line the cursor is visually nearest wins over one that merely
+ *  that a fat line the cursor is visually nearest is preferred over one that merely
  *  happens to be closer to the camera. That is right among edges you can see and
  *  wrong the moment an edge you cannot see projects near the cursor: hovering
  *  anywhere near the silhouette, an edge on the far side of the solid lands a

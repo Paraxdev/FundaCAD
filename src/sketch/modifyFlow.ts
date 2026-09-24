@@ -458,7 +458,7 @@ export class ModifyFlow {
     if (typed !== null) {
       // Once a value is typed, the SIGN the user wrote owns the side, that is
       // what the minus is FOR, and the old tool worked that way. Previously the
-      // cursor always won, so typing -1 silently offset outward and the minus
+      // cursor always took precedence, so typing -1 silently offset outward and the minus
       // looked ignored. Clear the field to hand the side back to the cursor.
       pick.mag = Math.abs(typed);
       if (typed !== 0) pick.side = typed < 0 ? -1 : 1;

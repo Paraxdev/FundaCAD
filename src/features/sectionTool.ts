@@ -201,7 +201,7 @@ export class SectionTool {
     done?.();
   }
 
-  /** A construction plane wins over the body behind it: it is a thing the user
+  /** A construction plane is preferred over the body behind it: it is a thing the user
    *  placed deliberately, so clicking it means it. */
   private planeAt(x: number, y: number): PlaneDef | null {
     const datum = this.viewport.pickDatumAt(x, y);
@@ -352,7 +352,7 @@ export class SectionTool {
     this.dim.position(s.x, s.y);
     if (!this.grabbing && this.dim.isUserDriven("offset")) {
       const v = this.dim.getValue("offset");
-      // typed sign wins; only read back through isUserDriven, never the |value|
+      // typed sign is preferred; only read back through isUserDriven, never the |value|
       // the box shows while dragging (the abs-display trap)
       if (v != null && Math.abs(v - this.offset) > 1e-6) {
         this.offset = v;

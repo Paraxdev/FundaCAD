@@ -132,11 +132,11 @@ export function importedFacePaint(
 // on a boss and red on a cut, which nobody meant as the look of the part.
 // Reading the faces there turns a black frame red. The reference PN532 board
 // is the opposite case: its faces are the real colours and its products wear a
-// default. So which one wins is a choice per import (the store's
+// default. So which one is preferred is a choice per import (the store's
 // importColorSource), and "bodies" is the default.
 
 /** Colours a CAD system writes when nobody picked one, which say nothing about
- *  the part and must not beat a face that was painted. #cad1ee is SolidWorks'
+ *  the part and must not be preferred over a face that was painted. #cad1ee is SolidWorks'
  *  default part colour, the pale lavender on fifteen of the board's products. */
 const UNCHOSEN_COLORS = new Set(["#cad1ee"]);
 
@@ -155,7 +155,7 @@ export interface BodyColorPick {
  *
  *  `partColor` is the style on the body's solid, `ownColor` the style on its
  *  product, `inheritedColor` its nearest coloured ancestor's. With "bodies" a
- *  chosen body or product colour wins outright; everything else falls back to
+ *  chosen body or product colour is preferred outright; everything else falls back to
  *  the faces, which is also the whole rule with "faces". */
 export function pickBodyColor(
   input: {

@@ -125,7 +125,7 @@ as a `.funda` file. This is what it does when no window is open.
 | `standalone` | private, always, even with a window open |
 
 An explicit `FUNDACAD_ENGINE_TOKEN` (with `FUNDACAD_ENGINE_PORT`) in the
-environment beats all three: someone who sets it is pointing this at a specific
+environment is preferred over all three: someone who sets it is pointing this at a specific
 engine on purpose, and it is how the probe scripts in this repository drive a
 session they can watch. (The retired `FUNDACAD_SIDECAR_` names and the `SINDRI_`
 and `SINDRICAD_` spellings still answer, for a shell profile no rename in here

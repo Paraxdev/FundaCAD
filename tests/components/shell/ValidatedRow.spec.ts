@@ -80,7 +80,7 @@ describe("ValidatedRow", () => {
     const input = await type(w, "7");
 
     await w.setProps({ value: "7.00" }); // the store's canonical spelling
-    expect(input.element.value).toBe("7"); // still mid-edit, draft wins
+    expect(input.element.value).toBe("7"); // still mid-edit, draft is preferred
 
     await input.trigger("change");
     expect(input.element.value).toBe("7.00");
@@ -106,7 +106,7 @@ describe("ValidatedRow", () => {
     const w = mountRow({ value: "10", commit: () => null });
     const input = await type(w, "7");
     await input.trigger("change");
-    await type(w, "8"); // moved on: this outranks the previous edit's answer
+    await type(w, "8"); // moved on: this is preferred over the previous edit's answer
 
     await w.setProps({ value: "7" });
     expect(input.element.value).toBe("8");

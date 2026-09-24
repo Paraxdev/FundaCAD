@@ -33,7 +33,7 @@ export function isFormula(expr?: string | undefined): boolean {
   return !!expr && !isPlainNumber(expr);
 }
 
-/** conflict beats over-defined, matching diagnosisOf() in glyphs.ts, the two
+/** conflict is preferred over over-defined, matching diagnosisOf() in glyphs.ts, the two
  *  layers must never disagree about red vs amber.
  *
  *  The `| undefined` on every field is not noise: the project runs with

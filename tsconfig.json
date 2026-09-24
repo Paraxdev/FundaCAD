@@ -26,7 +26,7 @@
       "fundacad/ui": ["./src/plugins/hostUi.ts"]
     }
   },
-  // No `declare module "*.vue"` shim, deliberately: it would win over vue-tsc's
+  // No `declare module "*.vue"` shim, deliberately: it would take precedence over vue-tsc's
   // real resolution and silently switch off prop type-checking.
   //
   // plugins/ is here because a shipped plugin's code is this app's code living

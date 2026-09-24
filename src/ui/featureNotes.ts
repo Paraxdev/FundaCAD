@@ -8,7 +8,7 @@
 //
 // Pure and here rather than inline in the chip builder, because the RULE is the
 // interesting part and a component test can only see that a chip is amber. The
-// rule is: an error wins, always. A feature that failed is red and its own
+// rule is: an error is always preferred. A feature that failed is red and its own
 // message is the useful one; an advisory about a cut that was then thrown away
 // is noise stacked on top of a failure.
 //
@@ -36,7 +36,7 @@ export interface NoteSources {
  *  tooltip, and a chip that turned amber with an empty explanation would be
  *  worse than one that stayed quiet.
  *
- *  First reason wins per feature. The chip is 28px and this is its tooltip. */
+ *  The first reason is used per feature. The chip is 28px and this is its tooltip. */
 export function featureNotes(src: NoteSources): Map<string, string> {
   const failed = new Set<string>();
   for (const e of src.featureErrors ?? []) if (e.feature_id) failed.add(e.feature_id);

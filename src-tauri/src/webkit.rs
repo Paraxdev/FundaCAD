@@ -35,7 +35,7 @@ const OPT_OUT_LEGACY: &str = "SINDRICAD_NO_GPU_WORKAROUND";
 /// widget. It is not free, though. Without it, GTK3 (which is what
 /// webkit2gtk-4.1 gives us) downloads each buffer to the CPU and paints it with
 /// Cairo, so GPU-heavy content pays a per-frame cost. For the viewport that is a
-/// smoothness cost, not a correctness one, and it beats not launching.
+/// smoothness cost, not a correctness one, and it is preferred over not launching.
 ///
 /// WebKit documents the variable as a transitional debugging escape hatch that
 /// will eventually be removed. When it goes, this module has to be revisited
@@ -71,7 +71,7 @@ const SKIP_NO_NVIDIA: &str = "no Nvidia driver";
 /// minority the entire application. The size of that cost is documented by
 /// WebKit, not measured by me, there is no Nvidia hardware here to measure on.
 fn decide(nvidia_present: bool, dmabuf_already_set: bool, opted_out: bool) -> Decision {
-    // Precedence: an explicit human beats our guess, both ways round. Someone
+    // Precedence: an explicit human is preferred over our guess, both ways round. Someone
     // running with the variable already set is mid-workaround (the issue #6
     // reporter is, right now) and must not have it changed under them.
     if opted_out {
@@ -148,7 +148,7 @@ mod tests {
     }
 
     /// A human who has already set the variable, like the #6 reporter running
-    /// his workaround today, outranks the probe, on Nvidia and off it. Changing
+    /// his workaround today, is preferred over the probe, on Nvidia and off it. Changing
     /// it under him would silently swap the configuration he reported against.
     #[test]
     fn an_existing_setting_is_never_overridden() {
@@ -156,12 +156,12 @@ mod tests {
         assert!(matches!(decide(false, true, false), Decision::Skip(_)));
     }
 
-    /// And the escape hatch has to beat the probe, or a machine the workaround
+    /// And the escape hatch has to be preferred over the probe, or a machine the workaround
     /// harms has no way out.
     #[test]
-    fn the_opt_out_beats_detection() {
+    fn the_opt_out_is_preferred_over_detection() {
         assert_eq!(decide(true, false, true), Decision::Skip(SKIP_OPT_OUT));
-        // …and beats an existing setting too, so one variable always wins.
+        // …and is preferred over an existing setting too, so one variable always applies.
         assert_eq!(decide(true, true, true), Decision::Skip(SKIP_OPT_OUT));
     }
 

@@ -1,5 +1,5 @@
 /* Animations switched off in Preferences (ui/motion.ts). Last in the cascade so
-   no component rule can outrank it. 0.01ms rather than 0: an animation that
+   no component rule can be preferred over it. 0.01ms rather than 0: an animation that
    never runs never fires animationend, and a few components wait on it. */
 :root[data-motion="off"] *,
 :root[data-motion="off"] *::before,

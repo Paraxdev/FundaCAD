@@ -544,7 +544,7 @@ The manifest in the directory is the only copy. Three programs read it:
 
 It used to be two copies: a JSON literal in `registry.ts` or `index.ts`, and the
 plugin's own file for the bundle to carry. Two copies of a permission list is
-two lists that can disagree, and the copy that would have won an argument is the
+two lists that can disagree, and the copy that would have taken precedence is the
 one the consent screen never showed. `tests/plugins/offered.test.ts` now asserts
 that the offered entry and the file on disk are the same value, with a control
 that the comparison can still fail.
@@ -1125,7 +1125,7 @@ Where the checks are:
 | --- | --- |
 | `tests/plugins/contribTools.test.ts` | the three points at the table: order, collisions, and that everything goes away with the plugin |
 | `tests/features/toolCapabilities.test.ts` | the rules, pure over a table the test wrote; then the merge, precedence and lifetime |
-| `tests/ui/contributedIcons.test.ts` | resolution order, and that a pack the user chose beats a plugin |
+| `tests/ui/contributedIcons.test.ts` | resolution order, and that a pack the user chose is preferred over a plugin |
 | `tests/ui/featureMeta.test.ts` | every type in the document format is drawn by the app or by a named plugin |
 | `tests/plugins/textureTool.spec.ts` | the gesture, against a viewport and a store the test controls |
 | `tests/plugins/texturePlugin.spec.ts` | the real `activate()`, then every surface asked twice: once running, once switched off |

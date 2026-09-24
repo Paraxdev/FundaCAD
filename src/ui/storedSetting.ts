@@ -24,7 +24,7 @@
  *  their theme under the oldest key and nothing at all under the newer two, and
  *  a single fallback would look one step behind and give up. Tried newest
  *  first, which is also the order they should be passed in, the first one that
- *  holds anything wins, so a stale value from three names ago cannot outrank a
+ *  holds anything is used, so a stale value from three names ago cannot be preferred over a
  *  fresher one.
  *
  *  Returns null when no name holds anything, which every caller already treats

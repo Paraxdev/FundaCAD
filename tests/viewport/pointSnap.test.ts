@@ -1,7 +1,7 @@
 // Aiming at a point on the model.
 //
 // The thing worth pinning is the ORDER: under a 10px reach several candidates
-// are usually available at once, and which one wins is the whole behaviour. The
+// are usually available at once, and which one is preferred is the whole behaviour. The
 // control for each rule is the same case with the rule's own candidate removed.
 
 import { describe, expect, it } from "vitest";

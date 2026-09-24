@@ -133,7 +133,7 @@ const linear = linearDim;
 
 /** A badge dim's stored placement, as a vector, `null` when the user hasn't
  *  placed this one and there's no staggered default to fall back on. THE one
- *  reader of `entity.dimPlace`; an explicit user placement always wins. */
+ *  reader of `entity.dimPlace`; an explicit user placement is always preferred. */
 function placeOf(e: ResolvedEntity, field: DimField, defaults?: DimPlace): V | null {
   const p = dimPlaceOf(e)?.[field] ?? defaults?.[field];
   return p ? v(p.ox, p.oy) : null;
@@ -194,7 +194,7 @@ export function diameterDim(
  *  badge on geometry hands its clicks to that geometry. A lone circle keeps the
  *  historical straight-above default.
  *
- *  These are DEFAULTS; a user placement (entity.dimPlace) always wins, see placeOf.
+ *  These are DEFAULTS; a user placement (entity.dimPlace) is always preferred, see placeOf.
  *
  *  "Concentric" is judged with the same screen-space clearance the badges use, so
  *  near-concentric circles fan out too; with no zoom context it falls back to

@@ -337,7 +337,7 @@ export function classifyExprInput(doc: CadDocument, raw: string, kind: FieldKind
  *  value is exactly `name`, calling `hit` with a label and a setter. Scans ALL
  *  string fields minus a denylist (rather than the numFields allowlists) on
  *  purpose: legacy pre-engine files could hold a bare param name on any
- *  numeric field, so over-catching beats missing a reference. */
+ *  numeric field, so over-catching is preferred over missing a reference. */
 function eachBareNameRef(doc: CadDocument, name: string, hit: (label: string, set: (v: string) => void) => void): void {
   for (const f of doc.features) {
     for (const [k, v] of Object.entries(f)) {

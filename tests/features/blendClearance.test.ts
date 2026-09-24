@@ -78,7 +78,7 @@ describe("boxDistanceSq", () => {
 
   it("never exceeds the true distance between the contents", () => {
     // The whole point of the box test is that it is a LOWER bound: reject on it
-    // and you can never discard a pair that would have won. A box distance that
+    // and you can never discard a pair that would have been the nearest. A box distance that
     // overshot would silently drop the nearest neighbour.
     const a: Pt3[] = [p(0, 0, 0), p(1, 1, 0)];
     const b: Pt3[] = [p(4, 0, 0), p(5, 1, 0)];
@@ -211,7 +211,7 @@ describe("localClearance on a cylinder", () => {
 
   it("still lets a neighbour tighten the bound below that radius", () => {
     // A wide flat disc: r = 40 but only 2mm thick. The cap no longer decides,
-    // the far face does, and the tighter of the two has to win.
+    // the far face does, and the tighter of the two has to be preferred.
     const top = { id: "top", points: circle(40, 2) };
     const bottom = { id: "bottom", points: circle(40, 0) };
     const c = localClearance({ selected: [top], all: [top, bottom], modelScale: 80 })!;

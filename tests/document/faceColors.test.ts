@@ -151,7 +151,7 @@ describe("importedFacePaint", () => {
     expect(importedFacePaint(undefined, {})).toEqual({});
   });
 
-  it("paints no faces of a body whose own colour won", () => {
+  it("paints no faces of a body whose own colour was preferred", () => {
     const paint = importedFacePaint(
       [{ id: "body1", faceStart: 0, faceCount: 4, faceColors: board }],
       { body1: GREY },
@@ -176,12 +176,12 @@ describe("pickBodyColor", () => {
   // Cut-Extrude red.
   const stale = [RED, RED, RED, null];
 
-  it("lets the body's own colour win with bodies", () => {
+  it("lets the body's own colour be preferred with bodies", () => {
     expect(pickBodyColor({ partColor: GREY, faceColors: stale }, "bodies")).toEqual({ color: GREY, bodyWins: true });
     expect(pickBodyColor({ ownColor: GREY, faceColors: stale }, "bodies")).toEqual({ color: GREY, bodyWins: true });
   });
 
-  it("lets the faces win with faces", () => {
+  it("lets the faces be preferred with faces", () => {
     expect(pickBodyColor({ partColor: GREY, faceColors: stale }, "faces")).toEqual({ color: RED, bodyWins: false });
   });
 

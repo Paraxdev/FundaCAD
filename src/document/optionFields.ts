@@ -234,7 +234,7 @@ export const FEATURE_TOGGLE_FIELDS: Partial<Record<FeatureType, ToggleField[]>> 
  *  hid a row it had no reason to hide would lose the user a value they could
  *  otherwise have edited. A feature type nobody has a rule for is that case, and
  *  so is one whose plugin is not installed, which is right: with nothing left
- *  to say which rows a knurl reads, showing all of them beats hiding some on a
+ *  to say which rows a knurl reads, showing all of them is preferred over hiding some on a
  *  guess.
  */
 export function fieldApplies(

@@ -407,7 +407,7 @@ impl EngineLink {
     /// which of the two worlds it is in without inferring it from `attached`,
     /// which the environment override also sets.
     ///
-    /// An explicit token in the environment wins over everything here. Someone
+    /// An explicit token in the environment is preferred over everything here. Someone
     /// who set it is pointing this at a specific engine on purpose, and a
     /// discovery step that overrode them would make a debugging session
     /// unexplainable.

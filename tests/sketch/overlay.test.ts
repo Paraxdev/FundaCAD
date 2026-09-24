@@ -33,7 +33,7 @@ describe("curveObjects, projected link colors", () => {
     expect(matColor(objs[1]!)).toBe(PROJECTED_STALE_COLOR);
   });
 
-  it("selection/hover emphasis (highlight) wins over the link color", () => {
+  it("selection/hover emphasis (highlight) is preferred over the link color", () => {
     const objs = curveObjects([stale], plane, 0x33aaff, true);
     expect(matColor(objs[0]!)).toBe(0x33aaff);
   });

@@ -109,7 +109,7 @@ export function midMatchTol(bboxDiag: number): number {
  *
  *  EVERY site that mints an edge selector from a rendered edge must go through
  *  here. Without the body, the engine falls back to the active (last-created)
- *  body, and because `by:"nearest"` always returns SOME winner it then blends an
+ *  body, and because `by:"nearest"` always returns SOME pick it then blends an
  *  edge of the wrong body with no error at all, the ring/hexagon bug.
  *
  *  `body` is omitted rather than set to undefined when the edge has none, so a

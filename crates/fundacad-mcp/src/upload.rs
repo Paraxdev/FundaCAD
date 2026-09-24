@@ -361,7 +361,7 @@ impl Upload {
                 ));
             }
             if !packed.is_ascii() {
-                // Not base64 at all, and saying so beats a codec error naming a
+                // Not base64 at all, and saying so is preferred over a codec error naming a
                 // character offset in something the caller never sees as text.
                 return fail(
                     "content is not valid base64. A text format (STEP, OBJ, ASCII STL) can be \

@@ -24,7 +24,7 @@ describe("fmtDim", () => {
     expect(fmtDim(40, "length", false, true)).toBe("fx: 40 mm");
   });
 
-  it("lets driven win over fx, a reference dim is not editable either way", () => {
+  it("lets driven be preferred over fx, a reference dim is not editable either way", () => {
     expect(fmtDim(40, "length", true, true)).toBe("(40 mm)");
   });
 });
@@ -55,7 +55,7 @@ describe("dimClass", () => {
 
   // Same precedence as diagnosisOf() in glyphs.ts. If these two ever disagree,
   // a constraint shows red on its glyph and amber on its dimension.
-  it("lets conflict win over over-defined", () => {
+  it("lets conflict be preferred over over-defined", () => {
     expect(dimClass({ conflict: true, over: true })).toBe("sketch-dim conflict");
     expect(dimClass({ over: true })).toBe("sketch-dim over");
   });

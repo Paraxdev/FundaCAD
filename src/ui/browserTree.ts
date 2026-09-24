@@ -183,7 +183,7 @@ function fromAsm(g: AsmGroup): TreeGroup {
 /** The Browser's whole body tree: the user's elements first, then whatever
  *  assembly structure the imports brought with them, then the rest.
  *
- *  AN ELEMENT ASSIGNMENT WINS. A body the user has filed shows in that folder
+ *  AN ELEMENT ASSIGNMENT IS PREFERRED. A body the user has filed shows in that folder
  *  and nowhere else, including when the file it came from had an opinion about
  *  where it belonged. That is the entire point of the feature: an imported tree
  *  is a record of how somebody else's CAD system organised the part, and it is

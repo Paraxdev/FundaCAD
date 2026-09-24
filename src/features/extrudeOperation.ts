@@ -32,7 +32,7 @@ export interface ExtrudeSituation {
 
 /** The operation an extrude will be committed with.
  *
- *  Four rules, in the order they win:
+ *  Four rules, in the order they apply:
  *
  *  1. An EDIT keeps what it was committed with. Re-guessing would let re-dragging
  *     the depth of a Cut turn it silently into a Join, and the guess is read off

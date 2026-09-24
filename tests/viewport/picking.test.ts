@@ -29,7 +29,7 @@ describe("occludedEdge", () => {
     expect(occludedEdge(50 + sagitta, 50, PLATE_DIAG)).toBe(false);
   });
 
-  it("lets an edge win when there is no face under the cursor", () => {
+  it("lets an edge be preferred when there is no face under the cursor", () => {
     // Picking an edge against empty space, the silhouette grab. Nothing is in
     // front of it, so nothing can occlude it, and this must keep working or the
     // fillet tool loses its main gesture.

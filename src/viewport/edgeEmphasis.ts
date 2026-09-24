@@ -65,7 +65,7 @@ export class EdgeEmphasis {
       worldUnits: false,
       // The whole reason this exists as a second object: an edge lies exactly ON
       // the surface it bounds, so a depth-tested wide line z-fights with it and
-      // comes out dashed. Off, it is simply drawn last and wins.
+      // comes out dashed. Off, it is simply drawn last and shows through.
       depthTest: false,
       depthWrite: false,
       transparent: true,

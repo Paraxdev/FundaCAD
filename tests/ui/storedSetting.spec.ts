@@ -73,7 +73,7 @@ describe("readSetting", () => {
       expect(readSetting(NEW, MID, OLD)).toBe("slate");
     });
 
-    it("still lets the current name win over every old one", () => {
+    it("still lets the current name be preferred over every old one", () => {
       localStorage.setItem(NEW, "moss");
       localStorage.setItem(MID, "slate");
       localStorage.setItem(OLD, "paper");

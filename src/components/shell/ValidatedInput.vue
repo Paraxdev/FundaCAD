@@ -61,7 +61,7 @@ const error = ref<string | null>(null);
 
 /** A commit succeeded and the field is waiting to be told how the panel spells
  *  the result. Cleared by the next keystroke, which means the user has moved on
- *  and their text outranks the answer to the previous edit. */
+ *  and their text is preferred over the answer to the previous edit. */
 let settling = false;
 
 let previewTimer = 0;

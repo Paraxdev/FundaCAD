@@ -148,7 +148,7 @@ describe("modal depth gate", () => {
     //
     // One Escape dismisses ONE of them: every trap calls
     // stopImmediatePropagation, and capture listeners on window fire in
-    // registration order, so the dialog that opened first wins. That is the
+    // registration order, so the dialog that opened first catches it. That is the
     // imperative behaviour too, and it is why the count is per-dialog.
     const dialogs = useDialogStore();
     dialogs.bindWelcome(fakeWelcomeCallbacks());

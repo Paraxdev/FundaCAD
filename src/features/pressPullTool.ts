@@ -421,7 +421,7 @@ export class PressPullTool {
       if (!this.grabbing && this.dim.isUserDriven("distance")) {
         const v = this.dim.getValue("distance");
         if (v != null) {
-          // the field is the truth: typed sign wins (out = +, cut = −). The old
+          // the field is the truth: typed sign is preferred (out = +, cut = −). The old
           // code re-applied the drag's sign onto |v|, so a typed "-2" after an
           // outward drag silently JOINED 2 instead of cutting.
           const want = this.fromReadout(v);
@@ -601,7 +601,7 @@ export class PressPullTool {
       setPrompt("That number can't be read · Esc");
       return;
     }
-    // Typed sign wins (out = +, cut = −), but ONLY when the user actually
+    // Typed sign is preferred (out = +, cut = −), but ONLY when the user actually
     // typed. While dragging, the field displays |value| (line ~106), so reading
     // it back unguarded strips a dragged cut's sign and commits a JOIN, the
     // mirror image of the typed-"-2"-after-outward-drag bug this line fixed.

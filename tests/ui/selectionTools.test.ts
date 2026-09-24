@@ -140,7 +140,7 @@ describe("shown versus live", () => {
   it("keeps Loft in the offer with one profile, and marks it not runnable", () => {
     // The offer is what CAN act on this kind of thing, which is the honest
     // answer for a menu: "Loft is here and it is grey because you have picked
-    // one profile" beats silence. The bar filters on `enabled` itself.
+    // one profile" is preferred over silence. The bar filters on `enabled` itself.
     const one = selectionOffers({ "sketch-region": 1 });
     const loft = one.find((o) => o.tool === "loft");
     expect(loft).toBeDefined();
@@ -227,7 +227,7 @@ describe("the appearance half", () => {
     expect(appearanceOffers({ body: 1 }).map((o) => o.label)).toEqual(["Material", "Hide body", "Isolate body"]);
   });
 
-  it("offers nothing for a selection a body does not win", () => {
+  it("offers nothing for a selection a body is not preferred on", () => {
     // "Hide" beside a picked face would be ambiguous about which of the two it
     // meant, and there is no such thing as hiding one face.
     for (const sel of [{}, { face: 3 }, { edge: 1 }, { "sketch-region": 2 }, { face: 2, body: 1 }]) {

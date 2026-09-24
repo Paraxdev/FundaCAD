@@ -89,7 +89,7 @@ export function keyHint(action: string): string | undefined {
   return s ? formatShortcut(s) : undefined;
 }
 
-/** Resolve a keydown to an action for the current context (sketch keys win
+/** Resolve a keydown to an action for the current context (sketch keys are preferred
  *  while sketching; model keys otherwise; global always). */
 export function resolveShortcut(
   key: string,

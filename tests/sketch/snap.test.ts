@@ -220,7 +220,7 @@ describe("snap alignment guides", () => {
     expect(r.guides.map((g) => g.axis).sort()).toEqual(["x", "y"]);
   });
 
-  it("beats the grid", () => {
+  it("is preferred over the grid", () => {
     // On the anchor's column AND within reach of a lattice line. Without the
     // ordering the lattice would answer, and the guide the user was following
     // would vanish the moment it crossed one.
@@ -305,7 +305,7 @@ describe("snap alignment composed with the grid", () => {
     expect(r.point.y).toBe(5.05);
   });
 
-  it("still lets the guide win the axis they both answer", () => {
+  it("still lets the guide be preferred on the axis they both answer", () => {
     // The anchor's column is 20; the nearest grid line is 20 too, but the guide
     // is what the user is following and what the drawn line reports.
     const r = snap(v(20.03, 5.05), [anchor], at, 1, 10);

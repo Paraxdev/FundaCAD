@@ -135,7 +135,7 @@ export class PlaneOffsetTool {
     if (!this.grabbing && this.dim.isUserDriven("offset")) {
       const v = this.dim.getValue("offset");
       if (v != null) {
-        // the field is the truth: typed sign wins (the old code re-applied the
+        // the field is the truth: typed sign is preferred (the old code re-applied the
         // drag's sign onto |v|, so a typed negative offset went positive)
         if (Math.abs(v - this.value) > 1e-6) {
           this.value = v;

@@ -167,7 +167,7 @@ const noBtn: CSSProperties = { ...btn, background: "var(--raised, #555)", color:
     <!-- `data-panel` is the one thing an e2e script can hold on to. Everything
          here is inline-styled with no class names, and the application's own
          Icon component makes the same argument for `data-icon`: a marker put
-         there on purpose beats a script matching on visible text, which changes
+         there on purpose is preferred over a script matching on visible text, which changes
          the first time a word does. -->
     <div data-panel="texture" :style="root">
       <div :style="title">Texture</div>

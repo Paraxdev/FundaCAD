@@ -97,7 +97,7 @@
    "fields": {
     "plane": "PlaneSpec",
     "entities": "the curves, see the `sketchEntities` section of this schema",
-    "planeId": "optional; the id of a datumPlane feature, which WINS over `plane`",
+    "planeId": "optional; the id of a datumPlane feature, which is preferred over `plane`",
     "face": "optional Selector; makes the sketch follow a body face",
     "constraints": "optional; solved by the frontend, not needed for an authored sketch",
     "name": "optional label"
@@ -172,7 +172,7 @@
     "operation": "How the new material joins what is already there (default \"new\"): \"new\" makes a separate body, \"join\" fuses into the target, \"cut\" subtracts from it, \"intersect\" keeps only the overlap.\nWithout `targets`, a join/cut/intersect acts on EVERY visible body the new shape overlaps, not just the nearest one. That is what someone dragging a face across two parts means; it is not what building a second part beside a first one means. Set `targets` whenever more than one body exists.",
     "targets": "Optional list of body ids [\"body1\", ...] that a join/cut/intersect is allowed to touch. Bodies not named are left alone even where the new shape passes straight through them. Ignored when `operation` is \"new\". A join that names targets and reaches none of them is an error rather than a quietly-created extra body.\nBody ids are handed out AT BUILD TIME, so read them back from `build` or `inspect` rather than assuming them. Once built, a body keeps its id when other features are added, removed or switched off, and a join keeps the id of the body it merges into.",
     "pitch": "optional Num, mm of climb per full turn. With a pitch, an `angle` over 360 means more than one turn: a 2mm pitch at 1080 degrees climbs 6mm over three turns. The SIGN is the direction of climb along the axis, and a thread that cuts nothing is usually a thread climbing away from the body: try the other sign. A field takes a number or a parameter NAME, so write -2 directly, or define a parameter whose expression is -pitch and name that. \"-pitch\" in the field itself is an expression and is refused.",
-    "axisEdge": "optional Selector naming a model edge to spin about; wins over `axis`",
+    "axisEdge": "optional Selector naming a model edge to spin about; is preferred over `axis`",
     "regions": "optional; A 3D point INSIDE the closed sketch area you mean, in world mm. A sketch with several closed areas (a ring, a plate with holes, two separate outlines) needs one point per area you want. Omit `regions` entirely to use the whole sketch."
    },
    "example": {

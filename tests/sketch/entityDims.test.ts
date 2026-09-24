@@ -353,7 +353,7 @@ describe("badge label placement", () => {
     }
   });
 
-  it("a lone circle is not staggered, and a user placement beats the default", () => {
+  it("a lone circle is not staggered, and a user placement is preferred over the default", () => {
     const lone: ResolvedEntity = { type: "circle", id: "c", radius: 10, x: 0, y: 0 };
     expect(staggeredDefaults([lone]).size).toBe(0);
     const ents: ResolvedEntity[] = [

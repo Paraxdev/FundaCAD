@@ -65,7 +65,7 @@ export interface TargetField {
   whenEmpty?: string;
   /** A second field this target also reads, for the features that grew a plural
    *  form beside a singular one. Normalised to `field` on write: both are live
-   *  in the builder, `field` wins there, and keeping the pair in step through an
+   *  in the builder, `field` is preferred there, and keeping the pair in step through an
    *  edit is not worth the fifth reader it would need. */
   alsoReads?: string;
 }
@@ -201,7 +201,7 @@ export function writeTarget(
   } else {
     patch[t.field] = entries.length ? [...entries] : undefined;
   }
-  // Normalise the pair: `bodies` wins in the builder, so a split edited here
+  // Normalise the pair: `bodies` is preferred in the builder, so a split edited here
   // must not leave a stale `body` behind to be resolved on some later read.
   if (t.alsoReads) patch[t.alsoReads] = undefined;
   return patch as Partial<Feature>;

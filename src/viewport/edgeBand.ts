@@ -18,7 +18,7 @@
 //
 // The cap is the safety property. At a minimum screen extent of 15px or more
 // (EDGE_NEAR_PX / BAND_FRACTION) the band is 3px again, so every face that picks
-// well now picks identically, and edges keep winning everywhere they win now.
+// well now picks identically, and edges stay preferred everywhere they are preferred now.
 // It is the MINIMUM dimension that decides, not the area or the diagonal: the
 // 6mm row above is 22px along its long side and is still changed, because its
 // short side is 11px and that sliver is the whole problem.
@@ -36,7 +36,7 @@
 // the two screen axes, which is a rotating-calipers pass over the projected
 // hull; worth doing, and worth doing only with that measurement in hand.
 
-/** Screen-space radius, in px, within which an edge beats a face. The band
+/** Screen-space radius, in px, within which an edge is preferred over a face. The band
  *  never exceeds this, so it is still the answer for any ordinary face. */
 export const EDGE_NEAR_PX = 3;
 

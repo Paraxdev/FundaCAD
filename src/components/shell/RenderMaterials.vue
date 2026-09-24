@@ -261,7 +261,7 @@ function setSurfaceColor(raw: string) {
 }
 
 // The full node graph: opens the canvas editor over the app. A material with a
-// graph ignores the single-generator picker above it (the graph wins).
+// graph ignores the single-generator picker above it (the graph is preferred).
 const editingGraph = ref(false);
 
 /** The faces the viewport has selected, as the store addresses them. Goes

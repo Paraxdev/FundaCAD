@@ -93,7 +93,7 @@ describe("pickDimTarget", () => {
     expect(pickDimTarget([big], v(20, 20), TOL)).toBeNull();
   });
 
-  it("rim beats centre on a circle small enough for both to be in tolerance", () => {
+  it("rim is preferred over centre on a circle small enough for both to be in tolerance", () => {
     const tiny = circle("tiny", 0, 0, 0.5);
     const t = pickDimTarget([tiny], v(0.5, 0), 1); // within tol of the centre AND the rim
     expect(t?.kind).toBe("entity"); // → keeps its diameter dim reachable

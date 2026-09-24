@@ -21,7 +21,7 @@ describe("expression evaluator", () => {
   it("parameter references and PI", () => {
     expect(ev("width / 2 + 5", { width: 40 })).toBe(25);
     expect(ev("PI * d", { d: 2 })).toBeCloseTo(6.2832, 3);
-    expect(ev("PI", { PI: 999 })).toBe(999); // a scope entry wins over the constant
+    expect(ev("PI", { PI: 999 })).toBe(999); // a scope entry is preferred over the constant
     expect(() => ev("wdith", { width: 40 })).toThrow(/unknown parameter "wdith"/);
   });
 

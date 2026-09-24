@@ -3,7 +3,7 @@
 //
 // The sketcher has had this since it was written (sketch/snap.ts): candidates
 // compared in SCREEN PIXELS so the reach is the same at every zoom, ranked by
-// what kind of point they are so the specific beats the vague where two land on
+// what kind of point they are so the specific is preferred over the vague where two land on
 // the same pixel. Nothing in 3D had it, which is why the transform gizmo's
 // origin could sit anywhere except somewhere meaningful.
 //
@@ -21,14 +21,14 @@ export interface PointCandidate {
   kind: ModelPointKind;
 }
 
-/** Higher wins where two candidates are both in reach. */
+/** Higher is preferred where two candidates are both in reach. */
 export const POINT_PRIORITY: Record<ModelPointKind, number> = {
   vertex: 100,
   midpoint: 80,
   center: 70,
   // Not a snap at all: the bare surface under the cursor, offered so that
   // aiming at the middle of a big face still lands ON the model rather than
-  // nowhere. Anything else in reach beats it.
+  // nowhere. Anything else in reach is preferred over it.
   surface: 10,
 };
 
@@ -59,7 +59,7 @@ export function pickPoint(
     const rank = POINT_PRIORITY[c.kind];
     // Priority first, then distance. Two candidates of the same kind on the
     // same pixel is a genuine tie and the nearer one is as good an answer as
-    // there is; a vertex 9px away still beats a surface point under the cursor,
+    // there is; a vertex 9px away is still preferred over a surface point under the cursor,
     // because the surface point is not a point anyone chose.
     if (rank > bestRank || (rank === bestRank && d < bestDist)) {
       best = c;

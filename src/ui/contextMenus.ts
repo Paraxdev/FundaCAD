@@ -283,7 +283,7 @@ export function createContextMenus(deps: ContextMenusDeps) {
 
   function openCanvasMenu(x: number, y: number) {
     if (toolOwnsScreen()) return;
-    // a construction plane wins where its quad is exposed (same order as click-select)
+    // a construction plane is preferred where its quad is exposed (same order as click-select)
     const datumId = viewport.pickDatumAt(x, y);
     if (datumId) return openDatumMenu(x, y, datumId);
     if (viewport.selecting === "bodies" || viewport.bodyClickAt(x, y)) {
