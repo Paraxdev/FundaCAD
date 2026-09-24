@@ -311,62 +311,88 @@ pub fn min_distance(a: &Shape, b: &Shape) -> Option<(f64, [f64; 3], [f64; 3])> {
     Some((d.value, s.on_first.point.to_array(), s.on_second.point.to_array()))
 }
 
-/// The pairwise sweep of `_interference_job`, `max_ops` candidate pairs at most.
+/// What one candidate pair of the sweep found.
+enum Clash {
+    Overlap(Value),
+    Near(Value),
+    Clear,
+}
+
+/// One pair of the sweep. Common runs on copies: BOPAlgo may raise the
+/// tolerances of its arguments in place and meshing the result writes into
+/// faces it kept from them, so two pairs sharing a body cannot run at once on
+/// the originals, and the live bodies stay untouched.
+fn clash(a: &BuiltBody, b: &BuiltBody, threshold: Option<f64>) -> Clash {
+    let common = kernel::copy(&a.shape)
+        .and_then(|ca| kernel::copy(&b.shape).and_then(|cb| kernel::boolean_op(&ca, &[&cb], BoolKind::Common)))
+        .ok();
+    let vol = common.as_ref().map_or(0.0, |c| kernel::volume(c).abs());
+    match common {
+        Some(c) if vol > 1e-6 => {
+            let bb = bbox(&c);
+            let mut entry = json!({
+                "a": a.id, "b": b.id, "aName": a.name, "bName": b.name,
+                "volume": vol,
+                "bbox": {"min": [bb[0], bb[1], bb[2]], "max": [bb[3], bb[4], bb[5]]},
+            });
+            let access = MeshAccess::new(&c);
+            let t = tessellate(
+                &c,
+                &access,
+                MeshParams { linear: 0.25, angular: 0.6, relative: false, display: false, force_remesh: false },
+            );
+            if let Value::Object(m) = &mut entry {
+                m.insert("positions".into(), json!(t.positions));
+                m.insert("indices".into(), json!(t.indices));
+            }
+            Clash::Overlap(entry)
+        }
+        _ => match threshold.and_then(|t| min_distance(&a.shape, &b.shape).filter(|(d, _, _)| *d <= t)) {
+            Some((d, pa, pb)) => Clash::Near(json!({
+                "a": a.id, "b": b.id, "aName": a.name, "bName": b.name,
+                "distance": d, "pointA": pa, "pointB": pb,
+            })),
+            None => Clash::Clear,
+        },
+    }
+}
+
+/// The pairwise sweep of `_interference_job`, `max_ops` candidate pairs at most,
+/// the pairs checked on the engine's threads and reported in row order.
 pub fn interference(bodies: &[BuiltBody], clearance: Option<f64>, max_ops: usize, watch: &dyn Watch) -> Map<String, Value> {
     let boxes: Vec<[f64; 6]> = bodies.iter().map(|b| bbox(&b.shape)).collect();
     let threshold = clearance.filter(|t| *t > 0.0);
     let reject = threshold.unwrap_or(1e-6);
-    let (mut pairs, mut clearances) = (Vec::new(), Vec::new());
-    let (mut ops, mut truncated) = (0usize, false);
+    let mut candidates = Vec::new();
+    let mut truncated = false;
     'rows: for i in 0..bodies.len() {
-        if watch.cancelled() {
-            break;
-        }
         for j in i + 1..bodies.len() {
-            let (a, b) = (&bodies[i], &bodies[j]);
             if !overlap(&boxes[i], &boxes[j], reject) {
                 continue;
             }
-            if ops >= max_ops {
+            if candidates.len() >= max_ops {
                 truncated = true;
                 break 'rows;
             }
-            ops += 1;
-            let common = kernel::boolean_op(&a.shape, &[&b.shape], BoolKind::Common).ok();
-            let vol = common.as_ref().map_or(0.0, |c| kernel::volume(c).abs());
-            match common {
-                Some(c) if vol > 1e-6 => {
-                    let bb = bbox(&c);
-                    let mut entry = json!({
-                        "a": a.id, "b": b.id, "aName": a.name, "bName": b.name,
-                        "volume": vol,
-                        "bbox": {"min": [bb[0], bb[1], bb[2]], "max": [bb[3], bb[4], bb[5]]},
-                    });
-                    let access = MeshAccess::new(&c);
-                    let t = tessellate(
-                        &c,
-                        &access,
-                        MeshParams { linear: 0.25, angular: 0.6, relative: false, display: false, force_remesh: false },
-                    );
-                    if let Value::Object(m) = &mut entry {
-                        m.insert("positions".into(), json!(t.positions));
-                        m.insert("indices".into(), json!(t.indices));
-                    }
-                    pairs.push(entry);
-                }
-                _ => {
-                    if let Some(t) = threshold {
-                        if let Some((d, pa, pb)) = min_distance(&a.shape, &b.shape) {
-                            if d <= t {
-                                clearances.push(json!({
-                                    "a": a.id, "b": b.id, "aName": a.name, "bName": b.name,
-                                    "distance": d, "pointA": pa, "pointB": pb,
-                                }));
-                            }
-                        }
-                    }
-                }
-            }
+            candidates.push((i, j));
+        }
+    }
+    let cancel = watch.cancel_token();
+    let work = crate::par::Shared((bodies, &candidates));
+    let found = crate::par::map_indexed(candidates.len(), move |k| {
+        if cancel.as_ref().is_some_and(|c| c.is_cancelled()) {
+            return Clash::Clear;
+        }
+        let (bodies, candidates) = *work.get();
+        let (i, j) = candidates[k];
+        clash(&bodies[i], &bodies[j], threshold)
+    });
+    let (mut pairs, mut clearances) = (Vec::new(), Vec::new());
+    for c in found {
+        match c {
+            Clash::Overlap(v) => pairs.push(v),
+            Clash::Near(v) => clearances.push(v),
+            Clash::Clear => {}
         }
     }
     let mut res = Map::new();
