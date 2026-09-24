@@ -55,6 +55,18 @@ describe("flights", () => {
     expect(nav.pose.target.equals(origin)).toBe(true);
   });
 
+  it("restoreUp abandons a sketch entry still in the air, its arrival never runs", () => {
+    const { nav } = setup({ tau: 0 });
+    let arrived = 0;
+    nav.lookAtPlane(new THREE.Vector3(0, 0, 20), new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 1, 0), true, () => arrived++);
+    nav.update(1 / 60);
+    nav.restoreUp(false);
+    settle(nav);
+    expect(nav.isFlying()).toBe(false);
+    expect(arrived).toBe(0);
+    expect(nav.pose.level).toBe(true);
+  });
+
   it("entering a sketch keeps the current scale", () => {
     const { nav } = setup();
     const s = nav.pose.scale;
