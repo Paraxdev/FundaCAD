@@ -90,6 +90,7 @@ const CAPABILITIES: Record<string, (path: string) => boolean> = {
   "the extra parameter panels": (p) => p.includes("/plugins/FundaCAD.ExtraParameters/"),
   "the 3D printing toolbox": (p) => p.includes("/plugins/FundaCAD.PrintToolbox/"),
   "the fastener library": (p) => p.includes("/plugins/FundaCAD.Screws/"),
+  "node bodies": (p) => p.includes("/plugins/FundaCAD.Organic/"),
 };
 
 /** Static import specifiers in a file, skipping `import type` (erased) and
@@ -277,6 +278,35 @@ describe("the core does not depend on the capabilities it can turn off", () => {
     expect(WORDS.test("mod printer;")).toBe(true);
     expect(WORDS.test('invoke("slicer_open")')).toBe(true);
     expect(WORDS.test("a filament estimate")).toBe(false);
+  });
+
+  it("knows no node body exists, in the window, the shell or the engine", () => {
+    // Node bodies are a plugin feature: its schema, rows, tool and geometry
+    // are under plugins/FundaCAD.Organic/. The engine offers it a loft, an
+    // ellipse, an affine map and a combine, named for what they do. The word
+    // "organic" alone is not refused: the mesh importer uses it about scans.
+    const core = {
+      ...(import.meta.glob(["../../src/**/*.{ts,vue,scss}"], {
+        query: "?raw",
+        import: "default",
+        eager: true,
+      }) as Record<string, string>),
+      ...(import.meta.glob(["../../crates/*/src/**/*.rs", "../../crates/*/wit/*.wit"], {
+        query: "?raw",
+        import: "default",
+        eager: true,
+      }) as Record<string, string>),
+    };
+    const WORDS = /\bnode ?bod(y|ies)\b|nodeBody|FundaCAD\.Organic|["']organic["']/i;
+    const offenders: string[] = [];
+    for (const [file, src] of Object.entries(core)) {
+      src.split("\n").forEach((line, i) => {
+        if (WORDS.test(line)) offenders.push(`${file}:${i + 1}: ${line.trim()}`);
+      });
+    }
+    expect(offenders).toEqual([]);
+    expect(WORDS.test('if f.type === "organic"')).toBe(true);
+    expect(WORDS.test("an organic/scanned model")).toBe(false);
   });
 
   it("leaves no capability code in the app's own tree", () => {
