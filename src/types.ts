@@ -291,6 +291,7 @@ export interface MateConnector {
 }
 
 export type PressPullMode = "auto" | "join" | "cut" | "new" | "intersect";
+export type PressPullDirection = "normal" | "axis";
 
 export type HoleType = "simple" | "counterbore" | "countersink" | "insert";
 export type HoleStandard = "clearance" | "tap" | "custom";
@@ -327,8 +328,9 @@ export type CoreFeature =
   // Signed `distance` along each face's normal, or `upTo` a face. Curved faces offset
   // the surface. `taper` applies to planar pushes by distance only.
   // `mode` other than auto extrudes the face straight out and combines it like an
-  // extrude; auto leaves `operation` to the sign of `distance`.
-  | { id: string; type: "press-pull"; face: Selector | Selector[]; distance: Num; operation: "join" | "cut"; body?: string; upTo?: Selector; taper?: Num; mode?: PressPullMode }
+  // extrude; auto leaves `operation` to the sign of `distance`. `direction: "axis"`
+  // moves the face along the axis its walls run along (a hole's end), absent is "normal".
+  | { id: string; type: "press-pull"; face: Selector | Selector[]; distance: Num; operation: "join" | "cut"; body?: string; upTo?: Selector; taper?: Num; mode?: PressPullMode; direction?: PressPullDirection }
   | { id: string; type: "deleteFace"; face: Selector | Selector[]; body?: string }
   | { id: string; type: "mirror"; plane: Plane3 }
   // `operation` defaults to "new". `regions` are the areas to spin, as for extrude.

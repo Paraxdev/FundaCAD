@@ -330,6 +330,7 @@ impl Jobs for GeomJobs {
             "migrateGeometry" => crate::import::migrate_result(req),
             "inspect" => crate::inspect::inspect_result(req, &EngineWatch(ctx)),
             "interference" => crate::inspect::interference_result(req, &EngineWatch(ctx)),
+            "faceAxis" => crate::features::axis_push::face_axis_result(req, &EngineWatch(ctx)),
             "projectGeometry" => crate::projection::project_geometry_result(req, &EngineWatch(ctx)),
             #[cfg(feature = "plugins")]
             "generateShape" => {

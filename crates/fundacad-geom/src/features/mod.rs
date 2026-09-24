@@ -1,5 +1,6 @@
 //! Feature handlers, one module per family, each naming the Python it replaces.
 
+pub mod axis_push;
 pub mod blend;
 pub(crate) mod boolean;
 mod cleanup;

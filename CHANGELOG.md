@@ -25,6 +25,15 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **Press/pull can move the end of a hole along the hole.** Picking the cone,
+  cap or floor at the end of a hole offers "Along axis" beside the value, and
+  a round end starts on it: the hole gets deeper or shallower and its end keeps
+  its shape, where pushing along the normal widened a drilled channel's cone
+  until it broke out of a thin wall. Any face whose neighbours are all walls
+  along one line qualifies, a cylinder parallel to it or a flat wall containing
+  it; anything else is refused with a clear error. The feature stores
+  `direction: "axis"`, so documents saved before build along the normal as
+  they always did.
 - **Datum planes tilt and spin, and stay parametric.** Creating a datum plane
   now shows an offset arrow and a slim ring for each tilt and the spin at the
   plane's pivot, snapping in 5° steps (Shift 1°, Alt free), with every value

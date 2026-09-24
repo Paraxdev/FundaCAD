@@ -48,6 +48,10 @@ open_enum! {
     pub enum PressPullMode { Auto = "auto", Join = "join", Cut = "cut", New = "new", Intersect = "intersect" }
 }
 open_enum! {
+    /// `axis` moves the face along the axis its walls run along, so a hole deepens.
+    pub enum PressPullDirection { Normal = "normal", Axis = "axis" }
+}
+open_enum! {
     pub enum JointMode { Rigid = "rigid", Revolute = "revolute", Slider = "slider" }
 }
 open_enum! {
@@ -147,6 +151,8 @@ feature_struct!(PressPull {
     #[serde(default, skip_serializing_if = "Option::is_none")] up_to: Option<Selector>,
     #[serde(default, skip_serializing_if = "Option::is_none")] taper: Option<Num>,
     #[serde(default, skip_serializing_if = "Option::is_none")] mode: Option<PressPullMode>,
+    /// Absent means `normal`.
+    #[serde(default, skip_serializing_if = "Option::is_none")] direction: Option<PressPullDirection>,
 });
 
 feature_struct!(DeleteFace {

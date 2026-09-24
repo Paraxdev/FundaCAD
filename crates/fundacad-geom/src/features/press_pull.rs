@@ -21,6 +21,7 @@ use opencascade::shape_io::BrepWriteOptions;
 use opencascade_sys as ffi;
 use serde_json::Value;
 
+use super::axis_push;
 use super::boolean::combine;
 use super::extrude::prisms;
 use super::solid_ops::{
@@ -344,10 +345,9 @@ fn up_to_plane(ctx: &mut Ctx, f: &PressPull, act: usize, up: &Value) -> FResult<
     Ok((centre(&target), normal(&target)))
 }
 
-/// `_distance_to_target`.
-fn distance_to_target(face: &Shape, point: DVec3, n: DVec3) -> FResult<f64> {
-    let (c, fnorm) = (centre(face), normal(face));
-    let denom = fnorm.dot(n);
+/// `_distance_to_target`, travelling along `dir` from `c`.
+fn distance_to_target(c: DVec3, dir: DVec3, point: DVec3, n: DVec3) -> FResult<f64> {
+    let denom = dir.dot(n);
     if denom.abs() < 1e-6 {
         return Err(Fail::msg(
             "Press/Pull: the face is parallel to the 'up to' surface, can't reach it",
@@ -393,6 +393,7 @@ pub fn press_pull(ctx: &mut Ctx, f: &PressPull) -> FResult {
         .filter(|m| !m.is_empty())
         .unwrap_or("auto")
         .to_owned();
+    let along_axis = f.direction.as_ref().is_some_and(|d| d.as_str() == "axis");
     let targets: Option<Vec<String>> = f
         .extra
         .get("targets")
@@ -416,21 +417,33 @@ pub fn press_pull(ctx: &mut Ctx, f: &PressPull) -> FResult {
             return Err(Fail::msg("no face found to press/pull"));
         };
         let d = match target {
-            Some((p, n)) => distance_to_target(&src, p, n)?,
+            Some((p, n)) if along_axis => {
+                let axis = axis_push::axis_of(&act_shape, &src)?;
+                distance_to_target(centre(&src), axis.dir, p, n)?
+            }
+            Some((p, n)) => distance_to_target(centre(&src), normal(&src), p, n)?,
             None => dist,
         };
         if mode != "auto" {
             if d.abs() < 1e-9 {
                 continue;
             }
-            let prism = face_prism(&src, d, taper)?;
+            let prism = if along_axis {
+                axis_push::axis_prism(&act_shape, &src, d)?
+            } else {
+                face_prism(&src, d, taper)?
+            };
             let op = Operation::from(mode.as_str());
             combine(ctx, &f.id, prism, Some(&op), targets.as_deref(), None, None)?;
             continue;
         }
-        let out = press_pull_shape(&act_shape, &src, d, false, taper)?;
-        let curved = surface_type(&src) != Some(SurfaceType::Plane);
-        if !warned && d < 0.0 && curved && broke_through(&act_shape, &out, &src) {
+        let out = if along_axis {
+            axis_push::push_along_axis(&act_shape, &src, d)?
+        } else {
+            press_pull_shape(&act_shape, &src, d, false, taper)?
+        };
+        let may_break_out = along_axis || surface_type(&src) != Some(SurfaceType::Plane);
+        if !warned && d < 0.0 && may_break_out && broke_through(&act_shape, &out, &src) {
             warned = true;
             let name = ctx.bodies[act].name.clone();
             ctx.advise(&f.id, "brokeThrough", format!("the offset broke through the outside of {name}"));

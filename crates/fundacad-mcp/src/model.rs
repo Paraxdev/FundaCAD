@@ -672,7 +672,7 @@ const NOT_NUMERIC: &[&str] = &[
     "id", "type", "name", "operation", "sketch", "profile", "path", "body", "target", "keep",
     "axis", "text", "planeId", "plane", "format", "geom", "source", "moving", "mode", "color",
     "continuity", "sizeType", "chamferType", "datum", "brep", "plugin", "stamp", "holeType",
-    "standard", "size", "fit", "extent",
+    "standard", "size", "fit", "extent", "direction",
 ];
 
 /// Whether the schema documents `field` of `kind` as something other than a

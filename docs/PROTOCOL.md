@@ -331,6 +331,25 @@ reports `truncated`/`message` rather than running unbounded on a dense
 assembly. `clearance` omitted or 0 skips the near-miss pass entirely, callers
 that never asked for it pay nothing extra.
 
+### `faceAxis`
+
+The axis a press/pull with `direction: "axis"` would move one face along, so the
+press/pull tool can offer that direction and draw its arrow. Rebuilds through the
+same warm cache as `inspect`.
+
+```jsonc
+{ "op": "faceAxis", "id": "...", "document": { /* CadDocument */ },
+  "face": { /* a face Selector */ }, "body": "body1" }   // body optional
+```
+
+Reply, either the axis or why the face has none:
+```jsonc
+{ "axis": { "origin": [x,y,z], "dir": [x,y,z] },   // dir points out of the material
+  "hole": true,    // a round end coaxial with a bore's walls: the tool starts on the axis
+  "sameAsNormal": false }   // a flat face square to the axis moves the same either way
+{ "reason": "the walls around the face do not all run along one axis" }
+```
+
 ### `inspect`
 
 Exact B-rep measurements of the document's live bodies. Rebuilds through the same

@@ -406,6 +406,40 @@ fn inspect_hands_back_a_selector_that_addresses_the_face_it_names() {
 }
 
 #[test]
+fn a_press_pull_along_the_axis_deepens_a_drilled_hole() {
+    let drill = [[0.0, -11.0], [2.0, -11.0], [2.0, 4.0], [0.0, 6.0]];
+    let entities: Vec<Value> = (0..4)
+        .map(|i| {
+            let (a, b) = (drill[i], drill[(i + 1) % 4]);
+            json!({"type": "line", "id": format!("l{i}"), "x1": a[0], "y1": a[1], "x2": b[0], "y2": b[1]})
+        })
+        .collect();
+    let rs = drive(&[
+        ("param_set", json!({"name": "deeper", "expr": -2})),
+        ("feature_add", json!({"feature": {"id": "bx1", "type": "box", "length": 20, "width": 20, "height": 20}})),
+        ("feature_add", json!({"feature": {"id": "sk1", "type": "sketch", "plane": "XZ", "entities": entities}})),
+        (
+            "feature_add",
+            json!({"feature": {"id": "drill", "type": "revolve", "sketch": "sk1", "axis": "Z", "angle": 360,
+                               "operation": "cut", "targets": ["body1"]}}),
+        ),
+        (
+            "feature_add",
+            json!({"feature": {"id": "pp1", "type": "press-pull", "direction": "axis",
+                               "face": {"kind": "face", "by": "nearest", "point": [0.7071, 0.7071, 5.0], "body": "body1"},
+                               "distance": "deeper", "operation": "cut", "body": "body1"}}),
+        ),
+        ("build", json!({})),
+    ]);
+    for r in &rs {
+        assert!(!r.is_error, "{}", r.text);
+    }
+    assert!(!rs[4].text.to_lowercase().contains("problem"), "{}", rs[4].text);
+    assert!(!rs[5].text.contains("FEATURE FAILED"), "{}", rs[5].text);
+    assert!(rs[5].text.contains("vol 7790.56 mm3, 8 faces"), "{}", rs[5].text);
+}
+
+#[test]
 fn the_schema_is_also_a_resource() {
     // `fundacad://schema` is what a host reads without spending a tool call.
     let mut mcp = Mcp::start(&env(&[]), &std::env::temp_dir());

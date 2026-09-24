@@ -15,10 +15,10 @@ import {
   type VersionDiff,
   type VersionRepo,
 } from "./versions";
-import type { CadDocument, Feature, ImportColorSource, ParamControl, ParamExtras, ParamTarget, PlaneSpec, ProjectedSource, ProjectionUpdate, RebuildReply, RebuildResult, ResolveDiag, ViewCubeSide, ViewOverride } from "../types";
+import type { CadDocument, Feature, ImportColorSource, ParamControl, ParamExtras, ParamTarget, PlaneSpec, ProjectedSource, ProjectionUpdate, RebuildReply, RebuildResult, ResolveDiag, Selector, ViewCubeSide, ViewOverride } from "../types";
 import { asFeature } from "../types";
 import { applyProjectionUpdate } from "../types";
-import type { GeometryBackend, ProjectionResult } from "../geometry/client";
+import type { FaceAxisReply, GeometryBackend, ProjectionResult } from "../geometry/client";
 import { FORMAT_VERSION, migrateDocument } from "./migrate";
 import {
   ancestryOf, descendantsOf, type ElementDef, freshElementName, reparented,
@@ -1788,6 +1788,12 @@ export class DocumentStore {
       ...(this.doc.bodyIds ? { bodyIds: this.doc.bodyIds } : {}),
     };
     return this.geometry.projectGeometry(doc, plane, sources);
+  }
+
+  /** The axis a press/pull along the axis would move `face` along, asked of the
+   *  document as it is built on screen. Null when the backend cannot answer. */
+  async faceAxis(face: Selector, body: string | null): Promise<FaceAxisReply | null> {
+    return (await this.geometry.faceAxis?.(this.effectiveDoc(), face, body)) ?? null;
   }
 
   /** Publish "a rebuild round-trip has started": keep whatever is on screen,
