@@ -199,6 +199,19 @@ inline double volume(const TopoDS_Shape &s) {
 
 inline TopoDS_Shape copy(const TopoDS_Shape &s) { return BRepBuilderAPI_Copy(s, false).Shape(); }
 
+// A section that leaves the plane of its frame, as it does on a surface curving
+// along the edge, gets no cap. A boolean with the open shell left is garbage, a
+// 1.1 mm3 tool had nothing in common with the body and still cut 15 mm3 from
+// it, and the retries around it spent 15 s before giving up.
+inline bool closed_solid(const TopoDS_Shape &s) {
+  if (solid_count(s) == 0) return false;
+  TopTools_IndexedDataMapOfShapeListOfShape m;
+  TopExp::MapShapesAndAncestors(s, TopAbs_EDGE, TopAbs_FACE, m);
+  for (int i = 1; i <= m.Extent(); ++i)
+    if (m(i).Extent() < 2 && !BRep_Tool::Degenerated(TopoDS::Edge(m.FindKey(i)))) return false;
+  return true;
+}
+
 struct Side {
   TopoDS_Face face;
   BRepGProp_Face props;
@@ -1326,6 +1339,7 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
     check_cancel();
     mk.Build();
     if (!mk.IsDone()) throw err("the blend sections would not loft");
+    if (!closed_solid(mk.Shape())) throw err("the blend sections would not close into a solid");
     return mk.Shape();
   };
   auto slice = [](const std::vector<TopoDS_Wire> &ws, size_t a, size_t b) {
