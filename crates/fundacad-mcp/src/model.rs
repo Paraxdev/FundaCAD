@@ -510,6 +510,9 @@ pub fn remove_parameter(doc: &mut Doc, name: &str) -> Result<(), DocumentError> 
         })
         .map(|(n, _)| n.clone())
         .collect();
+    for u in feature_users_of_param(doc, name) {
+        users.push(u);
+    }
     let extras = doc.get("paramExtras").cloned().unwrap_or(Value::Null);
     for c in extras.get("checks").and_then(Value::as_array).into_iter().flatten() {
         if safe_refs(c.get("expr")).contains(&name.to_string()) {
@@ -555,6 +558,32 @@ pub fn remove_parameter(doc: &mut Doc, name: &str) -> Result<(), DocumentError> 
     }
     recompute_parameters(doc);
     Ok(())
+}
+
+/// Feature fields that name parameter `name`, bare or inside an expression.
+/// Mirrors the numeric-field detection `validate` uses, so a field that is
+/// never a number (an id, a body name that happens to match) is never
+/// mistaken for a usage.
+fn feature_users_of_param(doc: &Doc, name: &str) -> Vec<String> {
+    let mut users = Vec::new();
+    for f in features(doc) {
+        let Some(obj) = f.as_object() else { continue };
+        let fid = str_field(f, "id").unwrap_or_default();
+        let kind = str_field(f, "type").unwrap_or_default();
+        for (k, v) in obj {
+            if v.as_str().is_none() {
+                continue;
+            }
+            if NOT_NUMERIC.contains(&k.as_str()) || documented_not_numeric(kind, k) {
+                continue;
+            }
+            if safe_refs(Some(v)).contains(name) {
+                users.push(format!("{fid}.{k}"));
+                break;
+            }
+        }
+    }
+    users
 }
 
 fn safe_refs(src: Option<&Value>) -> BTreeSet<String> {
