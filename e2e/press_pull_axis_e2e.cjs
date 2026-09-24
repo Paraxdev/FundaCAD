@@ -104,6 +104,11 @@ const polygon = (pts) => pts.map((p, i) => line(`l${i}`, p, pts[(i + 1) % pts.le
   check("the arrow stands on the hole's axis and points up it",
     t.direction === "axis" && Math.abs(t.anchor[0]) < 1e-3 && Math.abs(t.anchor[1]) < 1e-3 &&
     Math.abs(t.axis[2] - 1) < 1e-3, t);
+  const angleShown = () => page.evaluate(() => {
+    const i = [...document.querySelectorAll(".dim-input label.dim-field")].find((l) => l.querySelector(".dim-name")?.title === "Angle");
+    return !!i && i.style.display !== "none";
+  });
+  check("the Angle field is hidden along the axis, where it does nothing", !(await angleShown()));
   const modeToggle = await page.$(".dim-input .dim-toggle");
   check("the operation button is still the box's toggle", !!modeToggle && (await modeToggle.textContent()) === "Auto");
   await shot("01_picked");
@@ -117,6 +122,7 @@ const polygon = (pts) => pts.map((p, i) => line(`l${i}`, p, pts[(i + 1) % pts.le
   t = await tool();
   b = await button();
   check("the switch goes to Along normal", b && !b.on && b.text === "Along normal" && t.direction === "normal", { b, t });
+  check("and the Angle field comes back", await angleShown());
   await settle();
   await shot("02_along_normal");
   await flip();

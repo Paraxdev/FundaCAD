@@ -49,6 +49,7 @@ interface Field {
   chip: HTMLButtonElement | null;
   // false = follows the cursor; true = holds the user's typed/locked value
   userDriven: boolean;
+  hidden?: boolean;
 }
 
 /** The unit a field opens in. */
@@ -327,6 +328,16 @@ export class DimInput {
   /** Focus + select the first field. show() calls it; tools whose flow keeps
    *  clicking the canvas while the box stays open must call it again after each
    *  click (the click blurs the input, and typing would silently go nowhere). */
+  /** Takes a field out of the box without rebuilding it, so what the user has
+   *  typed in the others survives. */
+  setFieldHidden(name: string, hidden: boolean) {
+    const f = this.fields.find((x) => x.def.name === name);
+    if (!f) return;
+    f.hidden = hidden;
+    const wrap = f.input.closest("label");
+    if (wrap) wrap.style.display = hidden ? "none" : "";
+  }
+
   focus() {
     const f = this.fields[0];
     if (f && this.active) { f.input.focus(); f.input.select(); }
@@ -336,8 +347,8 @@ export class DimInput {
     if (e.key === "Tab") {
       e.preventDefault();
       field.userDriven = true; // Tab locks the current field
-      const i = this.fields.indexOf(field);
-      const next = this.fields[(i + 1) % this.fields.length];
+      const shown = this.fields.filter((f) => !f.hidden || f === field);
+      const next = shown[(shown.indexOf(field) + 1) % shown.length];
       if (next) {
         next.input.focus();
         next.input.select();

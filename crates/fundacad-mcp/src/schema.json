@@ -262,7 +262,7 @@
     "face": "Selector or list of Selectors",
     "distance": "Num, signed: positive grows the body, negative cuts in",
     "operation": "optional \"join\" or \"cut\", a label that must match the sign of `distance`. It does not change what the push does, `mode` does",
-    "mode": "optional \"auto\" (the default: move the face itself, as described in the notes), or \"join\", \"cut\", \"new\" or \"intersect\": sweep the face into a prism along its normal by `distance` and combine that prism with the body, or with `targets`",
+    "mode": "optional \"auto\" (the default: move the face itself, as described in the notes), or \"join\", \"cut\", \"new\" or \"intersect\": sweep the face into a prism along its normal (along the axis with `direction` \"axis\") by `distance` and combine that prism with the body, or with `targets`",
     "body": "optional body id",
     "upTo": "optional Selector naming a target face to stop at, instead of using `distance`",
     "taper": "optional Num, degrees. Leans a PLANAR push's walls as they travel (a moulded boss, an angled pocket); positive narrows the far end. Must be between -89 and 89. Ignored on a curved face and on an `upTo` push. Absent or 0 is a straight push",

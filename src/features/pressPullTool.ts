@@ -626,6 +626,7 @@ export class PressPullTool {
       this.directionBtn.textContent = DIRECTION_LABEL[this.direction];
       this.directionBtn.classList.toggle("on", this.direction === "axis");
     }
+    this.dim.setFieldHidden("taper", this.direction === "axis");
     if (this.direction === "axis" && axis) {
       const [x, y, z] = anchorOnAxis([this.faceAnchor.x, this.faceAnchor.y, this.faceAnchor.z], axis);
       this.anchor.set(x, y, z);
