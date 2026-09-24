@@ -31,6 +31,7 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
   let active: THREE.Camera = persp;
   const r0 = dom.getBoundingClientRect?.();
   nav.setFrame(r0?.width || 800 * aspect, r0?.height || 800);
+  nav.resetView(null, 0, false);
 
   const applyPrefs = () => {
     const p = getNavPrefs();
