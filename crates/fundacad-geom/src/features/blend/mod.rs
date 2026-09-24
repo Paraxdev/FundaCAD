@@ -518,7 +518,7 @@ pub(crate) fn sequential_blend(
         ka.partial_cmp(&kb).unwrap_or(std::cmp::Ordering::Equal)
     });
     let t = Tuning::shipped();
-    let base = t.pos_drift + t.rel_drift * opencascade::select_access::bbox_diagonal(shape);
+    let base = t.pos_drift + t.rel_drift * crate::kernel::bbox_diagonal(shape);
     let max_mid_dist = 1.5 * blend_size + base;
     let tol_pos = base.max(blend_size);
     let on_curve = 0.01_f64.max(0.01 * blend_size);
@@ -558,7 +558,7 @@ fn size_probe(shape: &Shape, blend_size: f64) -> Option<f64> {
         return None;
     }
     let small = (blend_size * SIZE_PROBE_FRACTION)
-        .min(opencascade::select_access::bbox_diagonal(shape) * SIZE_PROBE_BODY_FRACTION);
+        .min(crate::kernel::bbox_diagonal(shape) * SIZE_PROBE_BODY_FRACTION);
     (small > 0.0).then_some(small)
 }
 

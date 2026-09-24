@@ -41,7 +41,7 @@ pub fn describe(s: &Shape) -> String {
         count(s, Kind::Face),
         count(s, Kind::Edge)
     );
-    if let Some(b) = bbox(s) {
+    if let Some(b) = bbox_remembered(s) {
         let r = |v: f64| (v * 1e4).round() / 1e4;
         out.push_str(&format!(
             ", bbox=[{}, {}, {}]..[{}, {}, {}]",
@@ -149,6 +149,46 @@ pub fn area(s: &Shape) -> f64 {
 pub fn bbox(s: &Shape) -> Option<[f64; 6]> {
     let mut out = [0.0; 6];
     ffi::bo_bbox(s.raw(), true, &mut out).then_some(out)
+}
+
+type Remembered<T> = std::cell::RefCell<Vec<(Shape, T)>>;
+
+thread_local! {
+    static BOXES: Remembered<Option<[f64; 6]>> = const { std::cell::RefCell::new(Vec::new()) };
+    static DIAGONALS: Remembered<f64> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// An exact box of a B-spline body takes 200 ms, and a blend asks for the same
+/// body's again with every selector it matches and every retry that fails. The
+/// shapes are held, so a freed one's address is never read as another's.
+fn remembered<T: Copy>(
+    memo: &'static std::thread::LocalKey<Remembered<T>>,
+    s: &Shape,
+    measure: impl FnOnce() -> T,
+) -> T {
+    const KEEP: usize = 4;
+    if let Some(v) = memo.with(|m| m.borrow().iter().find(|(k, _)| k.is_same(s)).map(|e| e.1)) {
+        return v;
+    }
+    let v = measure();
+    memo.with(|m| {
+        let mut m = m.borrow_mut();
+        if m.len() >= KEEP {
+            m.remove(0);
+        }
+        m.push((s.clone(), v));
+    });
+    v
+}
+
+/// `bbox`, remembered for the last few shapes.
+fn bbox_remembered(s: &Shape) -> Option<[f64; 6]> {
+    remembered(&BOXES, s, || bbox(s))
+}
+
+/// The exact box's diagonal, what selector drift allowances scale by.
+pub fn bbox_diagonal(s: &Shape) -> f64 {
+    remembered(&DIAGONALS, s, || opencascade::select_access::bbox_diagonal(s))
 }
 
 /// The coarse control point box's largest |coordinate|.
