@@ -100,15 +100,19 @@ export function bsplinePoint(def: BsplineDef, x: number): Pt {
   return d[p]!;
 }
 
-/** The curve as a polyline, `segsPerSpan` samples in each knot span; a closed
- *  curve repeats its first point at the end. */
+/** The curve as a polyline, at least `segsPerSpan` samples per knot span and per
+ *  control polygon leg; a closed curve repeats its first point at the end. */
 export function bsplinePolyline(def: BsplineDef, segsPerSpan = 16): Pt[] {
   if (!bsplineValid(def)) return def.poles.map((q) => ({ x: q.x, y: q.y }));
   const u = bsplineKnots(def);
+  const spans = Math.max(1, u.length - 1);
+  const legs = def.closed ? def.poles.length : def.poles.length - 1;
+  // at least segsPerSpan per polygon leg too, or a high degree on few spans is faceted
+  const per = Math.max(segsPerSpan, Math.ceil((segsPerSpan * legs) / spans));
   const out: Pt[] = [];
   for (let k = 0; k + 1 < u.length; k++) {
     const a = u[k]!, b = u[k + 1]!;
-    for (let s = 0; s < segsPerSpan; s++) out.push(bsplinePoint(def, a + ((b - a) * s) / segsPerSpan));
+    for (let s = 0; s < per; s++) out.push(bsplinePoint(def, a + ((b - a) * s) / per));
   }
   out.push(def.closed ? { ...out[0]! } : bsplinePoint(def, u[u.length - 1]!));
   return out;
