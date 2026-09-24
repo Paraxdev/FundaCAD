@@ -44,11 +44,11 @@ export function onHoverDwellChange(fn: () => void): () => void {
 
 // --- navigation ----------------------------------------------------------------
 
-/** Which camera rig the viewport runs: the navigator, or the camera-controls
+/** Which camera rig the viewport runs: the navigator (the default), or the camera-controls
  *  one kept for a release behind `?nav=legacy` or this setting. */
 export type NavigatorChoice = "v2" | "legacy";
 const NAV_KEY = "fundacad.navigator";
-const DEFAULT_NAVIGATOR: NavigatorChoice = "legacy";
+const DEFAULT_NAVIGATOR: NavigatorChoice = "v2";
 
 export function navigatorChoice(): NavigatorChoice {
   const q = typeof location !== "undefined" ? new URLSearchParams(location.search).get("nav") : null;
