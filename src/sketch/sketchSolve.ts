@@ -245,12 +245,20 @@ export async function compileAndSolve(
 
   const isLine = (id: string) => ends.has(id);
   // resolve an entity endpoint (0 = start, 1 = end) to its solver point id.
-  // lines + arcs have two endpoints; a point entity has just one (index ignored).
+  // lines + arcs have two endpoints (arc center at index 2); a point entity has
+  // just one (index ignored); a rectangle's 4 corners by index; a circle's
+  // center regardless of index. Mirrors dimPoint's rect/center/arc-center
+  // checks, so coincident/symmetric/midpoint can target the same points
+  // fix/p2pDistance already can; without these, the constraint compiles away
+  // silently, entity + p both resolve fine, it's just never handed to the solver.
   const endpointPoint = (entId: string, idx: number): string | undefined => {
+    const rc = rectMap.get(entId);
+    if (rc) return rc[idx];
+    if (centers.has(entId)) return centers.get(entId);
     const ln = ends.get(entId);
     if (ln) return idx === 0 ? ln[0] : ln[1];
     const ar = arcMap.get(entId);
-    if (ar) return idx === 0 ? ar.ourS : ar.ourE;
+    if (ar) return idx === 2 ? ar.center : idx === 0 ? ar.ourS : ar.ourE;
     const pt = pointMap.get(entId);
     if (pt) return pt;
     const sp = splineMap.get(entId);
