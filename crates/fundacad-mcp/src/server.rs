@@ -129,18 +129,33 @@ fn is_error(result: &CallToolResult) -> bool {
     result.is_error.unwrap_or(false)
 }
 
-/// Every text block of a result, joined. `view` reads a `build` reply with
-/// this to carry a partial build's `FEATURE FAILED` lines into its own text.
-fn text_of(result: &CallToolResult) -> String {
-    result
-        .content
+/// The feature failures in a job's reply, as the same "FEATURE FAILED (id):
+/// message" line wherever they show up: `rebuild`'s own `featureErrors`,
+/// `inspect`'s `errors`, or the entries `export`'s `warnings` carries a
+/// `feature_id` for. `build`, `inspect`, `export` and `view` (through
+/// `build`) all read a partial build through this one place, so it reads the
+/// same way everywhere instead of each tool re-deciding what counts.
+fn feature_failure_lines(errors: &[Value]) -> Vec<String> {
+    errors
         .iter()
-        .filter_map(|c| match c {
-            ContentBlock::Text(t) => Some(t.text.as_str()),
-            _ => None,
+        .filter_map(|e| {
+            let m = e.get("message").and_then(Value::as_str)?;
+            Some(format!(
+                "FEATURE FAILED ({}): {m}",
+                e.get("feature_id").and_then(Value::as_str).unwrap_or("None")
+            ))
         })
-        .collect::<Vec<_>>()
-        .join("\n")
+        .collect()
+}
+
+/// What `rebuild` gave back, plus what every caller of it needs to keep
+/// working with the engine.
+struct Rebuilt {
+    link: Arc<EngineLink>,
+    document: Map<String, Value>,
+    result: Value,
+    mesh: Vec<Value>,
+    problems: Vec<String>,
 }
 
 /// What the user sees beside the indicator that an assistant is editing: the
@@ -1018,7 +1033,7 @@ The format comes from the extension unless given. A large STEP can take minutes:
 
     #[tool(
         name = "export",
-        description = "Write the model to STEP, STL or 3MF.",
+        description = "Write the model to STEP, STL or 3MF. Refused if a feature failed to build, naming which, unless allowPartial:true is passed, in which case it writes the file anyway and still names the failures.",
         input_schema = crate::tools::export()
     )]
     pub async fn t_export(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
@@ -1056,8 +1071,37 @@ The format comes from the extension unless given. A large STEP can take minutes:
         if reply.get("ok") != Some(&json!(true)) {
             return Ok(failure(format!("Export failed: {}", error_message(&reply))));
         }
+        let result = reply.get("result").cloned().unwrap_or_else(|| json!({}));
+        // `warnings` mixes a feature failure in with an ordinary export
+        // advisory (like a plugin's displacement not surviving STEP); only
+        // the entries that carry a `feature_id` (even a null one, `wire`
+        // always writes the key) are a build failure, so filter on that
+        // rather than on wording.
+        let failed: Vec<Value> = result
+            .get("warnings")
+            .and_then(Value::as_array)
+            .map(|a| a.iter().filter(|w| w.get("feature_id").is_some()).cloned().collect())
+            .unwrap_or_default();
+        let failures = feature_failure_lines(&failed);
+        if !failures.is_empty() && !truthy(args.get("allowPartial")) {
+            // The engine already wrote the file as part of building it; an
+            // export that refuses must not leave an incomplete one behind at
+            // the path it was asked for.
+            let _ = std::fs::remove_file(&path);
+            return Ok(failure(format!(
+                "Export refused: {} failed to build, the {format} would be incomplete. Pass \
+                 allowPartial:true to write it anyway.\n{}",
+                if failures.len() == 1 { "a feature" } else { "features" },
+                failures.join("\n")
+            )));
+        }
         let size = std::fs::metadata(&path).map_or(0, |m| m.len());
-        Ok(text(format!("Wrote {} ({size} bytes).", path.display())))
+        let mut out = format!("Wrote {} ({size} bytes).", path.display());
+        if !failures.is_empty() {
+            out.push('\n');
+            out.push_str(&failures.join("\n"));
+        }
+        Ok(text(out))
     }
 }
 
@@ -1106,7 +1150,12 @@ fn pretty(v: &Value, indent: usize) -> String {
 // --- the tools that need more than a few lines --------------------------------
 
 impl FundaCad {
-    async fn build(&self) -> CallToolResult {
+    /// One call to the engine's `rebuild`, plus the state update every caller
+    /// needs (mesh, bodyIds, built_for). `Err` only for a total engine-level
+    /// failure (a document the engine could not even attempt), never for a
+    /// feature that failed mid-build: that is `ok:true` with `featureErrors`
+    /// in `result`, which callers read with `feature_failure_lines`.
+    async fn rebuild(&self) -> Result<Rebuilt, CallToolResult> {
         let (link, doc) = {
             let mut st = self.state.lock().await;
             let problems = model::validate(&mut st.doc);
@@ -1125,7 +1174,7 @@ impl FundaCad {
             .await
         {
             Ok(r) => r,
-            Err(e) => return engine_gone(&e),
+            Err(e) => return Err(engine_gone(&e)),
         };
         if reply.get("ok") != Some(&json!(true)) {
             let where_ = reply
@@ -1139,7 +1188,7 @@ impl FundaCad {
                 .and_then(|e| e.get("message"))
                 .and_then(Value::as_str)
                 .unwrap_or("unknown error");
-            return failure(format!("Build failed{where_}: {err}"));
+            return Err(failure(format!("Build failed{where_}: {err}")));
         }
         let result = reply.get("result").cloned().unwrap_or_else(|| json!({}));
         let mesh: Vec<Value> = result
@@ -1155,6 +1204,14 @@ impl FundaCad {
             st.mesh = mesh.clone();
             st.built_for = Some(signature(&st.doc));
         }
+        Ok(Rebuilt { link, document, result, mesh, problems })
+    }
+
+    async fn build(&self) -> CallToolResult {
+        let Rebuilt { link, document, result, mesh, problems } = match self.rebuild().await {
+            Ok(r) => r,
+            Err(e) => return e,
+        };
         // Sizes come from a second call, not from the mesh bbox in this reply.
         // The mesh bbox is over the triangulation plus the shape's own gap
         // tolerance, and after an offset or a thicken that tolerance is large:
@@ -1233,22 +1290,11 @@ impl FundaCad {
         // carrying the failures beside the geometry that did build. Reading the
         // wrong key made a failed press/pull look like a press/pull that did
         // nothing, which is the single most misleading thing this tool could say.
-        let mut any_feature_failed = false;
-        for e in result
-            .get("featureErrors")
-            .and_then(Value::as_array)
-            .map_or(&[][..], Vec::as_slice)
-        {
-            if let Some(m) = e.get("message").and_then(Value::as_str) {
-                any_feature_failed = true;
-                lines.push(format!(
-                    "FEATURE FAILED ({}): {m}",
-                    e.get("feature_id")
-                        .and_then(Value::as_str)
-                        .unwrap_or("None")
-                ));
-            }
-        }
+        let failures = feature_failure_lines(
+            result.get("featureErrors").and_then(Value::as_array).map_or(&[][..], Vec::as_slice),
+        );
+        let any_feature_failed = !failures.is_empty();
+        lines.extend(failures);
         for d in result
             .get("diagnostics")
             .and_then(Value::as_array)
@@ -1303,6 +1349,12 @@ impl FundaCad {
             return failure(format!("Inspect failed: {}", error_message(&reply)));
         }
         let mut report = reply.get("result").cloned().unwrap_or_else(|| json!({}));
+        // `errors`, inspect's own name for the same thing `rebuild` calls
+        // `featureErrors`: a feature that failed mid-build, reported beside
+        // the bodies that did build rather than refusing the inspection.
+        let failures = feature_failure_lines(
+            report.get("errors").and_then(Value::as_array).map_or(&[][..], Vec::as_slice),
+        );
         let want_faces = index_set(args.get("faces"));
         let want_edges = index_set(args.get("edges"));
         if want_faces.is_some() || want_edges.is_some() {
@@ -1357,6 +1409,10 @@ impl FundaCad {
             out.push_str("\n\nselectors:\n");
             out.push_str(&pretty(&Value::Object(sel), 1));
         }
+        if !failures.is_empty() {
+            out.push('\n');
+            out.push_str(&failures.join("\n"));
+        }
         text(out)
     }
 
@@ -1367,24 +1423,21 @@ impl FundaCad {
         };
         let mut build_failures = String::new();
         if stale {
-            let built = self.build().await;
-            if is_error(&built) {
-                let still_nothing = self.state.lock().await.mesh.is_empty();
-                if still_nothing {
-                    // Nothing built at all: pass the build's own refusal
-                    // through, there is nothing to draw.
-                    return built;
-                }
-                // A PARTIAL build: some bodies built beside a feature that
-                // failed. Looking at what DID build is the main way an agent
-                // checks its work, so draw it and name what did not, rather
-                // than refusing the whole view over one failed feature.
-                build_failures = text_of(&built)
-                    .lines()
-                    .filter(|l| l.starts_with("FEATURE FAILED"))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-            }
+            // A total engine-level failure refuses here; a feature that
+            // failed mid-rebuild does not, `rebuild` still returns `Ok` with
+            // the failure named in `featureErrors`. Looking at what DID
+            // build is the main way an agent checks its work, so draw it and
+            // name what did not, rather than refusing the whole view over
+            // one failed feature (the empty-mesh case below still refuses
+            // when nothing built at all).
+            let r = match self.rebuild().await {
+                Ok(r) => r,
+                Err(e) => return e,
+            };
+            build_failures = feature_failure_lines(
+                r.result.get("featureErrors").and_then(Value::as_array).map_or(&[][..], Vec::as_slice),
+            )
+            .join("\n");
         }
         let mesh = {
             let st = self.state.lock().await;

@@ -334,6 +334,63 @@ fn view_still_draws_a_partial_build() {
     assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n");
 }
 
+fn box_and_broken_fillet() -> Vec<(&'static str, Value)> {
+    vec![
+        (
+            "feature_add",
+            json!({"feature": {"id": "bx1", "type": "box", "length": 20, "width": 20,
+                               "height": 20}}),
+        ),
+        (
+            "feature_add",
+            json!({"feature": {"id": "fil1", "type": "fillet",
+                               "edges": {"kind": "edge", "by": "all", "body": "body1"},
+                               "radius": 500}}),
+        ),
+    ]
+}
+
+#[test]
+fn inspect_names_a_failed_feature_without_refusing() {
+    // Unlike `build`, an inspection of a partial build stays isError:false
+    // (it is a measurement, not a build attempt), but it must not go silent
+    // about the failure either.
+    let mut steps = box_and_broken_fillet();
+    steps.push(("inspect", json!({})));
+    let rs = drive(&steps);
+    assert!(!rs[2].is_error, "{}", rs[2].text);
+    assert!(rs[2].text.contains("FEATURE FAILED"), "{}", rs[2].text);
+    assert!(rs[2].text.contains("fil1"), "{}", rs[2].text);
+    assert!(rs[2].text.contains("body1"), "{}", rs[2].text);
+}
+
+#[test]
+fn export_refuses_a_partial_build_unless_told_to_write_it_anyway() {
+    let tmp = tempfile::tempdir().expect("a temp dir");
+    let path = tmp.path().join("partial.step");
+    let path_text = path.to_string_lossy().replace('\\', "/");
+
+    let mut refused = box_and_broken_fillet();
+    refused.push(("export", json!({"path": path_text, "format": "step"})));
+    let rs = drive(&refused);
+    assert!(rs[2].is_error, "{}", rs[2].text);
+    assert!(rs[2].text.contains("fil1"), "{}", rs[2].text);
+    assert!(rs[2].text.contains("allowPartial"), "{}", rs[2].text);
+    assert!(!path.exists(), "a refused export left a file behind");
+
+    let mut allowed = box_and_broken_fillet();
+    allowed.push((
+        "export",
+        json!({"path": path_text, "format": "step", "allowPartial": true}),
+    ));
+    let rs2 = drive(&allowed);
+    assert!(!rs2[2].is_error, "{}", rs2[2].text);
+    assert!(rs2[2].text.contains("Wrote"), "{}", rs2[2].text);
+    assert!(rs2[2].text.contains("FEATURE FAILED"), "{}", rs2[2].text);
+    assert!(rs2[2].text.contains("fil1"), "{}", rs2[2].text);
+    assert!(path.exists(), "allowPartial:true did not write the file");
+}
+
 #[test]
 fn a_fillet_patched_into_a_chamfer_builds_as_a_chamfer() {
     let rs = drive(&[
