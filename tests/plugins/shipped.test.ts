@@ -86,6 +86,7 @@ describe("the plugins in this repository", () => {
     expect(shippedPlugins().map((p) => p.manifest.id)).toEqual([
       "FundaCAD.ExtraParameters",
       "FundaCAD.MultiColor",
+      "FundaCAD.Organic",
       "FundaCAD.PrintToolbox",
       "FundaCAD.Printing",
       "FundaCAD.Screws",
@@ -129,9 +130,12 @@ describe("the plugins in this repository", () => {
       "FundaCAD.Printing": "2.0.0",
     };
     const withComponent = shippedPlugins().filter((p) => p.manifest.geometryWasm);
-    expect(withComponent.map((p) => p.dir).sort()).toEqual(Object.keys(withoutComponent).sort());
+    const dirs = withComponent.map((p) => p.dir);
+    for (const id of Object.keys(withoutComponent)) expect(dirs, id).toContain(id);
     for (const { manifest } of withComponent) {
-      expect(compareVersions(manifest.version, withoutComponent[manifest.id]!), manifest.id).toBe(1);
+      // A plugin born with its component was never published without one.
+      const old = withoutComponent[manifest.id];
+      if (old) expect(compareVersions(manifest.version, old), manifest.id).toBe(1);
     }
   });
 

@@ -45,6 +45,7 @@ describe("the plugins this build offers", () => {
     expect(offered).toEqual([
       "FundaCAD.ExtraParameters",
       "FundaCAD.MultiColor",
+      "FundaCAD.Organic",
       "FundaCAD.PrintToolbox",
       "FundaCAD.Printing",
       "FundaCAD.Screws",

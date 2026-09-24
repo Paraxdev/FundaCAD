@@ -93,7 +93,7 @@ table, so the reassuring half cannot go stale while the alarming half stays
 current. Hand-written reassurance goes stale silently and in the direction that
 hurts.
 
-## The seven plugins this project publishes
+## The eight plugins this project publishes
 
 | id | what it is | asks for | kind |
 | --- | --- | --- | --- |
@@ -103,6 +103,7 @@ hurts.
 | `FundaCAD.Printing` | printers on your network, and opening a model in a slicer | `document.read`, `files.read`, `files.write`, `network.local`, `process.spawn` | `builtin` |
 | `FundaCAD.SpaceMouse` | navigating and moving with a 3D mouse | `device.input`, `document.read`, `document.write` | `builtin` |
 | `FundaCAD.MultiColor` | filament slots, per body and per texture colour | `document.read`, `document.write` | `builtin` |
+| `FundaCAD.Organic` | node bodies: rounded solids from sized nodes linked into smooth limbs | `document.read`, `document.write` | `builtin` |
 | `FundaCAD.Texture` | a printed surface texture on picked faces or a whole body | `document.read`, `document.write`, `files.read` | `builtin` |
 
 **THE APP SHIPS NONE OF THEM.** Every one is a zip on a release, installed like
@@ -426,6 +427,8 @@ folder.
   Screws, Printing and Texture. Each was held to the sidecar half it replaced on
   its own corpus, and the sidecar half's answers are frozen in `tests/golden/`
   (`plugins`, `screws_ops`, `printing_ops`, `texture`), checked on every push.
+  Organic was born a component and has no sidecar half; its node bodies are
+  checked against analytic volumes in `crates/fundacad-geom/tests/plugin_node_body.rs`.
 
 On the window side the plugin contributes `numFields` and `targets` alongside
 the dropdowns it already contributed, because `document/numFields.ts` and
@@ -492,6 +495,8 @@ packaged into something that cannot be installed.
 plugins/
   FundaCAD.ExtraParameters/ manifest.json, README.md, main.ts, view.ts, state.ts,
                            ParametersSection.vue, SetupPanel.vue
+  FundaCAD.Organic/        manifest.json, README.md, main.ts, nodeForm.ts, nodeTool.ts,
+                           panel.ts, NodePanel.vue, geometry-rs/
   FundaCAD.MultiColor/     manifest.json, README.md, main.ts, palette.ts,
                            PaletteSection.vue
   FundaCAD.PrintToolbox/   manifest.json, README.md, main.ts, printForm.ts,
