@@ -1393,6 +1393,18 @@ impl FundaCad {
                     .filter_map(|v| v.as_str().map(str::to_string))
                     .collect::<Vec<_>>()
             });
+        if let Some(list) = &bodies {
+            let known: Vec<&str> =
+                mesh.iter().filter_map(|b| b.get("id").and_then(Value::as_str)).collect();
+            let unknown: Vec<&String> = list.iter().filter(|id| !known.contains(&id.as_str())).collect();
+            if !unknown.is_empty() {
+                return failure(format!(
+                    "no body {} in this build, have [{}]",
+                    unknown.iter().map(|s| format!("'{s}'")).collect::<Vec<_>>().join(", "),
+                    known.iter().map(|s| format!("'{s}'")).collect::<Vec<_>>().join(", ")
+                ));
+            }
+        }
         let section = args
             .get("section")
             .filter(|s| truthy(Some(s)))
