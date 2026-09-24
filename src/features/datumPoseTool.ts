@@ -38,10 +38,15 @@ export function foldDegrees(deg: number): number {
   return d + 0;
 }
 
-/** The arcs are drawn at this multiple of their glyph size, which puts their
- *  radius near the Move gizmo's rings so the two read as one family. */
-const ARC_SCALE = 2.2;
-const ARC_RADIUS_PX = 21 * ARC_SCALE;
+/** How far out the arcs stand, in screen pixels: clear of the offset arrow and
+ *  of each other, since each is a piece of the circle it turns the plane along. */
+const ARC_RADIUS_PX = 64;
+const SPIN_RADIUS_PX = 92;
+const ARC_SWEEP = 1.4;
+const radiusOf = (t: Turn) => (t === "spin" ? SPIN_RADIUS_PX : ARC_RADIUS_PX);
+/** How much better, in pixels, the other side of the pivot has to be before an
+ *  arc moves there, so it does not flicker as the view turns. */
+const SIDE_HYSTERESIS_PX = 8;
 
 type Turn = "tiltX" | "tiltY" | "spin";
 type Grab = "offset" | Turn;
@@ -126,7 +131,7 @@ export class DatumPoseTool {
     if (opts.turns) {
       for (const t of TURNS) {
         if (this.isLocked(t)) continue;
-        const arc = createRotationArc();
+        const arc = createRotationArc("idle", { radius: radiusOf(t), sweep: ARC_SWEEP });
         this.arcs.set(t, arc);
         this.viewport.addToScene(arc.group);
       }
@@ -221,8 +226,8 @@ export class DatumPoseTool {
       // Edge-on: the arc is a line on screen, so read the drag along it.
       this.grabScreen = { x: e.clientX, y: e.clientY };
       const k = this.viewport.pixelWorldSize(this.grabPivot);
-      const at = this.grabPivot.clone().addScaledVector(mid, ARC_RADIUS_PX * k);
-      const tan = this.grabAxis.clone().cross(mid).multiplyScalar(ARC_RADIUS_PX * k);
+      const at = this.grabPivot.clone().addScaledVector(mid, radiusOf(h) * k);
+      const tan = this.grabAxis.clone().cross(mid).multiplyScalar(radiusOf(h) * k);
       const a = this.viewport.projectToScreen(at);
       const b = this.viewport.projectToScreen(at.clone().add(tan));
       this.tangentPx.set(b.x - a.x, b.y - a.y);
@@ -261,7 +266,7 @@ export class DatumPoseTool {
     const len = this.tangentPx.length();
     if (len < 1e-6) return null;
     const along = ((x - this.grabScreen.x) * this.tangentPx.x + (y - this.grabScreen.y) * this.tangentPx.y) / len;
-    return (along / ARC_RADIUS_PX) * (180 / Math.PI);
+    return (along / radiusOf(this.grab as Turn)) * (180 / Math.PI);
   }
 
   private ringAngle(x: number, y: number): number | null {
@@ -298,16 +303,46 @@ export class DatumPoseTool {
     this.viewport.requestRender();
   }
 
-  /** In-plane direction from the pivot to the middle of an arc: the tilt arcs
-   *  stand on the plane's edges, the spin arc on the far diagonal, so none of
-   *  the three crosses another. */
-  private arcMid(t: Turn): THREE.Vector3 {
-    const axes = turnAxes(this.src.spec, this.pose);
+  /** Which side of the pivot each arc stands on: the X tilt to the left on
+   *  screen, the Y tilt to the right and the spin below, so the three never
+   *  stack up whichever way the view is turned. Held still during a drag. */
+  private sides: Record<Turn, number> = { tiltX: 1, tiltY: 1, spin: 0 };
+
+  /** In-plane directions an arc may stand on: either way along the in-plane
+   *  line square to a tilt's axis, or one of the four diagonals for the spin. */
+  private candidates(t: Turn): THREE.Vector3[] {
     const p = new SketchPlane(this.placed);
-    if (t === "spin") return p.u.clone().add(p.v).multiplyScalar(-Math.SQRT1_2);
-    const a = axes[t];
-    const mid = t === "tiltX" ? p.n.clone().cross(a) : a.clone().cross(p.n);
-    return mid.lengthSq() > 1e-9 ? mid.normalize() : (t === "tiltX" ? p.v.clone() : p.u.clone());
+    if (t === "spin") {
+      return [[1, 1], [-1, 1], [-1, -1], [1, -1]].map(([a, b]) =>
+        p.u.clone().multiplyScalar(a!).addScaledVector(p.v, b!).normalize());
+    }
+    const a = turnAxes(this.src.spec, this.pose)[t];
+    const line = p.n.clone().cross(a);
+    if (line.lengthSq() < 1e-9) line.copy(t === "tiltX" ? p.v : p.u);
+    line.normalize();
+    return [line, line.clone().negate()];
+  }
+
+  private arcMid(t: Turn): THREE.Vector3 {
+    const c = this.candidates(t);
+    return c[t === "spin" ? this.sides.spin : this.sides[t] > 0 ? 0 : 1]!.clone();
+  }
+
+  private chooseSides(pivot: THREE.Vector3, k: number) {
+    const s0 = this.viewport.projectToScreen(pivot);
+    const onScreen = (t: Turn, d: THREE.Vector3) => {
+      const q = this.viewport.projectToScreen(pivot.clone().addScaledVector(d, radiusOf(t) * k));
+      return { x: q.x - s0.x, y: q.y - s0.y };
+    };
+    const pick = (t: Turn, score: (p: { x: number; y: number }) => number, current: number) => {
+      const scores = this.candidates(t).map((d) => score(onScreen(t, d)));
+      let best = current;
+      for (let i = 0; i < scores.length; i++) if (scores[i]! > scores[best]! + SIDE_HYSTERESIS_PX) best = i;
+      return best;
+    };
+    this.sides.tiltX = pick("tiltX", (p) => -p.x, this.sides.tiltX > 0 ? 0 : 1) === 0 ? 1 : -1;
+    this.sides.tiltY = pick("tiltY", (p) => p.x, this.sides.tiltY > 0 ? 0 : 1) === 0 ? 1 : -1;
+    this.sides.spin = pick("spin", (p) => p.y, this.sides.spin);
   }
 
   private tick() {
@@ -321,6 +356,7 @@ export class DatumPoseTool {
       this.arrow.group.scale.setScalar(k);
       this.arrow.paint({ hot: this.grab === "offset" || (!this.grab && this.hover === "offset") });
     }
+    if (!this.grab) this.chooseSides(pivot, k);
     const axes = turnAxes(this.src.spec, this.pose);
     for (const [t, arc] of this.arcs) {
       const z = axes[t].clone().normalize();
@@ -328,7 +364,7 @@ export class DatumPoseTool {
       const x = y.clone().cross(z).normalize();
       arc.group.position.copy(pivot);
       arc.group.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z));
-      arc.group.scale.setScalar(k * ARC_SCALE);
+      arc.group.scale.setScalar(k);
       arc.paint({ hot: this.grab === t || (!this.grab && this.hover === t) });
     }
     this.dialGroup.position.copy(this.grab && this.grab !== "offset" ? this.grabPivot : pivot);
@@ -338,7 +374,7 @@ export class DatumPoseTool {
       this.dial.placeLabel((w) => this.viewport.projectToScreen(w));
     }
     const s = this.viewport.projectToScreen(pivot);
-    this.dim.position(s.x + 70, s.y);
+    this.dim.position(s.x + SPIN_RADIUS_PX, s.y);
     if (!this.grab) this.readTyped();
     this.gesture.frame();
   }
