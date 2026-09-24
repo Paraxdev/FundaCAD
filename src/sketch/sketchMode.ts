@@ -2295,8 +2295,9 @@ export class SketchMode {
     const end = this.circle2End(a, p);
     const center = a.clone().add(end).multiplyScalar(0.5);
     const r = a.distanceTo(end) / 2;
+    const diameterTyped = this.dim.isUserDriven("diameter");
     this.dim.hide();
-    this.commitCircle(center, r);
+    this.commitCircle(center, r, diameterTyped);
   }
 
   // --- circle through 3 points ------------------------------------------
@@ -2312,10 +2313,11 @@ export class SketchMode {
     this.commitCircle(cc, cc.distanceTo(a));
   }
 
-  private commitCircle(center: THREE.Vector2, r: number) {
+  private commitCircle(center: THREE.Vector2, r: number, diameterTyped = false) {
     if (r < 1e-4) return;
     const ent: ResolvedEntity = { type: "circle", id: newEntityId(), radius: r, x: center.x, y: center.y };
     this.addDrawn(ent);
+    this.lockTypedDims(ent, { diameter: diameterTyped });
   }
 
   // --- center rectangle: click center, then a corner --------------------
@@ -2331,9 +2333,11 @@ export class SketchMode {
     if (!center) return;
     const { w, h } = this.centerRectSize(center, p);
     if (w < 1e-4 || h < 1e-4) return;
+    const typed = { width: this.dim.isUserDriven("width"), height: this.dim.isUserDriven("height") };
     this.dim.hide();
     const ent: ResolvedEntity = { type: "rectangle", id: newEntityId(), width: w, height: h, x: center.x, y: center.y };
     this.addDrawn(ent);
+    this.lockTypedDims(ent, typed);
   }
 
   // --- three-point rectangle: click one full EDGE, then its thickness -----
@@ -2379,6 +2383,7 @@ export class SketchMode {
     if (!a || !b) return;
     const r = this.rect3From(a, b, p);
     if (!r) return; // no edge, or the third click landed on it
+    const typed = { width: this.dim.isUserDriven("width"), height: this.dim.isUserDriven("height") };
     this.dim.hide();
     const ent: ResolvedEntity = {
       type: "rectangle", id: newEntityId(),
@@ -2388,6 +2393,7 @@ export class SketchMode {
       ...(r.angle ? { angle: r.angle } : {}),
     };
     this.addDrawn(ent);
+    this.lockTypedDims(ent, typed);
   }
 
   // --- mirror: click a line; reflect the multi-selection across it -------
@@ -2760,12 +2766,33 @@ export class SketchMode {
     return { dims, preview: this.entityCurve(ent), entity: ent };
   }
 
+  /** A same-spot second click (or a typed 0) leaves nothing to draw. Refused
+   *  rather than creating a hidden zero-size entity, which used to surface only
+   *  as an unexplained red badge in History (SK-5). The other click-built
+   *  shapes (circle2/3, slot, centerRectangle, rectangle3) already guard this
+   *  at their own commit point; this is the one the two-corner drag tools share. */
+  private isDegenerate(e: ResolvedEntity): boolean {
+    if (e.type === "rectangle") return e.width < 1e-4 || e.height < 1e-4;
+    if (e.type === "circle") return e.radius < 1e-4;
+    if (e.type === "line") return Math.hypot(e.x2 - e.x1, e.y2 - e.y1) < 1e-4;
+    return false;
+  }
+
   private commitFromCursor(cursor: THREE.Vector2) {
     if (!this.base) return;
     const { entity } = this.computeGeometry(this.base, cursor);
+    if (this.isDegenerate(entity)) {
+      toast("Too small to draw, click somewhere else to set its size");
+      return;
+    }
     if (this.constructionMode) entity.construction = true;
     entity.id = newEntityId(); // stamp a stable id (computeGeometry left it "")
     this.entities.push(entity);
+    if (entity.type === "rectangle") {
+      this.lockTypedDims(entity, { width: this.dim.isUserDriven("width"), height: this.dim.isUserDriven("height") });
+    } else if (entity.type === "circle") {
+      this.lockTypedDims(entity, { diameter: this.dim.isUserDriven("diameter") });
+    }
     if (this.tool === "line" && entity.type === "line") {
       const end = new THREE.Vector2(entity.x2, entity.y2);
       // clicked back on the start point → close the loop and end the chain
@@ -2810,6 +2837,28 @@ export class SketchMode {
     } else if (dir === "vertical") {
       e.x2 = e.x1; // exactly vertical
       this.constraints.push({ type: "vertical", line: e.id });
+    }
+  }
+
+  /** A typed size during creation (the live W/H/⌀ fields) becomes the same
+   *  constraint the Dimension tool would create by picking that geometry, so it
+   *  is genuinely locked rather than a cosmetic label: a rectangle's typed width
+   *  is a p2pDistance across its edge, exactly what picking that edge with the
+   *  Dimension tool makes (see dimensionTool.ts resolveSingle's edge case), and
+   *  a typed diameter is a `diameter` constraint on the circle. Without this, a
+   *  later unrelated dimension elsewhere in the sketch could silently resize the
+   *  "50 mm" the user just typed, with no conflict warning (SK-2).
+   *
+   *  Slot and polygon have no such equivalent: the Dimension tool itself cannot
+   *  pick a slot's length/width or a polygon's radius (dimRefPoints/resolveSingle
+   *  expose no operand for them), so there is no real constraint to switch their
+   *  typed values to; they keep their existing cosmetic-only behaviour. */
+  private lockTypedDims(e: ResolvedEntity, typed: { width?: boolean; height?: boolean; diameter?: boolean }) {
+    if (e.type === "rectangle") {
+      if (typed.width) this.constraints.push({ type: "p2pDistance", e1: e.id, p1: 0, e2: e.id, p2: 1, value: e.width });
+      if (typed.height) this.constraints.push({ type: "p2pDistance", e1: e.id, p1: 1, e2: e.id, p2: 2, value: e.height });
+    } else if (e.type === "circle" && typed.diameter) {
+      this.constraints.push({ type: "diameter", circle: e.id, value: e.radius * 2 });
     }
   }
 
