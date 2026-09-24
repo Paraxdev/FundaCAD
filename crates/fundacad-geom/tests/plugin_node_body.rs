@@ -131,6 +131,52 @@ fn turned_nodes_turn_their_sections() {
     assert!((b90[3] - b90[0] - 4.0).abs() < 0.3 && (b90[5] - b90[2] - 8.0).abs() < 0.3, "{b90:?}");
 }
 
+/// The viewport mesh's area at `tolerance`, meshed from scratch.
+fn mesh_area(r: &Rebuild, tolerance: f64) -> f64 {
+    let b = &r.bodies[0];
+    let mb = fundacad_geom::mesh::MeshBody {
+        id: b.id.clone(),
+        name: b.name.clone(),
+        shape: Some(&b.shape),
+        ..Default::default()
+    };
+    let out = fundacad_geom::mesh::mesh_result(&[mb], tolerance, &Default::default());
+    let Some(fundacad_protocol::WireBody::Full(m)) = out.bodies.into_iter().next() else {
+        panic!("a full body");
+    };
+    let p = |i: u32| {
+        let k = i as usize * 3;
+        [m.positions[k] as f64, m.positions[k + 1] as f64, m.positions[k + 2] as f64]
+    };
+    m.indices
+        .chunks_exact(3)
+        .map(|t| {
+            let (a, b, c) = (p(t[0]), p(t[1]), p(t[2]));
+            let u = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+            let v = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+            let n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+            0.5 * (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt()
+        })
+        .sum()
+}
+
+#[test]
+fn a_long_span_meshes_whole() {
+    if !built() {
+        return;
+    }
+    // Two spans ten radii long. Unsmoothed, the loft through this many
+    // sections came out a surface the mesher left a sixth of uncovered at
+    // 0.05 mm, a limb with a gap through its middle.
+    let spine = [[0.0, 0.0, 0.0], [32.23, -36.79, 12.0], [62.35, -47.77, 12.0]];
+    let nodes = spine.iter().enumerate().map(|(i, c)| node(&format!("n{i}"), *c, [5.0; 3])).collect();
+    let r = build(vec![body(nodes, json!([["n0", "n1", "n2"]]))]);
+    one_solid(&r);
+    let brep = kernel::area(&r.bodies[0].shape);
+    let mesh = mesh_area(&r, 0.05);
+    assert!((mesh - brep).abs() < 0.01 * brep, "mesh {mesh} vs {brep}");
+}
+
 fn y_shape(blend: Option<f64>) -> Value {
     let mut f = body(
         vec![
