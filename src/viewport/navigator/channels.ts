@@ -64,6 +64,8 @@ export class OrbitChannel {
   readonly roll0: number;
   /** Pixels dragged so far, which retire the roll a 3D mouse left. */
   travelled = 0;
+  /** The angles the pose was last turned to. */
+  shown: { yaw: number; elev: number; roll: number };
   private yaw = new Spring();
   private elev = new Spring();
   private roll = new Spring();
@@ -74,6 +76,7 @@ export class OrbitChannel {
     this.goalElev = elev;
     this.goalRoll = roll;
     this.roll0 = roll;
+    this.shown = { yaw, elev, roll };
     this.yaw.reset(yaw);
     this.elev.reset(elev);
     this.roll.reset(roll);
