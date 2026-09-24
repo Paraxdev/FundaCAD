@@ -6144,7 +6144,26 @@
     "b:0": "body2"
    },
    "datumPlanes": {},
-   "diagnostics": [],
+   "diagnostics": [
+    {
+     "code": "bodySplit",
+     "confidence": 1.0,
+     "feature_id": "e",
+     "kind": "bodySplit",
+     "lossy": false,
+     "reason": "the cut split Box into 2 pieces",
+     "resolved": 1
+    },
+    {
+     "code": "bodySplit",
+     "confidence": 1.0,
+     "feature_id": "e",
+     "kind": "bodySplit",
+     "lossy": false,
+     "reason": "the cut split Box into 2 pieces",
+     "resolved": 1
+    }
+   ],
    "errors": []
   }
  },

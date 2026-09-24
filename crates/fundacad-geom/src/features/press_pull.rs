@@ -15,6 +15,7 @@ use glam::{dvec3, DVec3};
 use opencascade::modify::{OffsetJoin, OffsetOptions};
 use opencascade::primitives::{Shape, ShapeType, SurfaceType};
 use opencascade::progress::ProgressRange;
+use opencascade::query::PointState;
 use opencascade::select_access as sa;
 use opencascade::shape_io::BrepWriteOptions;
 use opencascade_sys as ffi;
@@ -397,6 +398,7 @@ pub fn press_pull(ctx: &mut Ctx, f: &PressPull) -> FResult {
         .get("targets")
         .and_then(|t| serde_json::from_value(t.clone()).ok());
     let mut act_shape = ctx.bodies[act].shape().clone();
+    let mut warned = false;
     for sel in &sels {
         if mode != "auto" {
             if let Some(i) = named.and_then(|id| ctx.find_body(id)) {
@@ -426,10 +428,67 @@ pub fn press_pull(ctx: &mut Ctx, f: &PressPull) -> FResult {
             combine(ctx, &f.id, prism, Some(&op), targets.as_deref(), None, None)?;
             continue;
         }
-        act_shape = press_pull_shape(&act_shape, &src, d, false, taper)?;
+        let out = press_pull_shape(&act_shape, &src, d, false, taper)?;
+        let curved = surface_type(&src) != Some(SurfaceType::Plane);
+        if !warned && d < 0.0 && curved && broke_through(&act_shape, &out, &src) {
+            warned = true;
+            let name = ctx.bodies[act].name.clone();
+            ctx.advise(&f.id, "brokeThrough", format!("the offset broke through the outside of {name}"));
+        }
+        act_shape = out;
         ctx.set_shape(act, act_shape.clone());
     }
     Ok(())
+}
+
+/// A point inside the face's trimmed boundary.
+fn inner_point(face: &Shape) -> Option<DVec3> {
+    let f = face.as_face()?;
+    let b = f.uv_bounds().ok()?;
+    let at = |s: f64, t: f64| (b.u_min + s * (b.u_max - b.u_min), b.v_min + t * (b.v_max - b.v_min));
+    let grid = (0..5).flat_map(|i| (0..5).map(move |j| ((f64::from(i) + 0.5) / 5.0, (f64::from(j) + 0.5) / 5.0)));
+    std::iter::once((0.5, 0.5)).chain(grid).find_map(|(s, t)| {
+        let (u, v) = at(s, t);
+        (f.classify_uv(u, v, 1e-7).ok()? == PointState::In)
+            .then(|| f.point_and_normal(u, v).ok().map(|(p, _)| p))
+            .flatten()
+    })
+}
+
+/// Did pushing `pushed` in eat into a face it does not touch? An offset curved
+/// face grows or shrinks as it moves, so it can run out through the far side
+/// of a thin wall. What it removed is bounded by the pushed face, its
+/// neighbours, which it legitimately trims, and the faces it made; any other
+/// face of the body on that boundary is where it broke out.
+fn broke_through(before: &Shape, after: &Shape, pushed: &Shape) -> bool {
+    const TOL: f64 = 1e-3;
+    let Ok(removed) = kernel::boolean_op(before, &[after], BoolKind::Cut) else {
+        return false;
+    };
+    let Some(rb) = kernel::bbox(&removed) else {
+        return false;
+    };
+    let corners = kernel::subshapes(pushed, Kind::Vertex);
+    let near = |p: [f64; 3], b: [f64; 6]| (0..3).all(|i| b[i] - TOL <= p[i] && p[i] <= b[i + 3] + TOL);
+    let others: Vec<(Shape, [f64; 6])> = faces_of(before)
+        .into_iter()
+        .filter(|fc| !fc.is_same(pushed))
+        .filter(|fc| {
+            let vs = kernel::subshapes(fc, Kind::Vertex);
+            !vs.iter().any(|v| corners.iter().any(|c| c.is_same(v)))
+        })
+        .filter_map(|fc| kernel::bbox(&fc).map(|b| (fc, b)))
+        .filter(|(_, b)| (0..3).all(|i| b[i] <= rb[i + 3] + TOL && b[i + 3] >= rb[i] - TOL))
+        .collect();
+    if others.is_empty() {
+        return false;
+    }
+    kernel::subshapes(&removed, Kind::Face).iter().filter_map(inner_point).any(|p| {
+        let p = p.to_array();
+        others
+            .iter()
+            .any(|(fc, b)| near(p, *b) && kernel::distance_to_point(fc, p).is_some_and(|d| d < TOL))
+    })
 }
 
 pub fn offset_face(ctx: &mut Ctx, f: &OffsetFace) -> FResult {

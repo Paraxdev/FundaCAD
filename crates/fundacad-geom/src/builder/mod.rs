@@ -307,9 +307,76 @@ impl Ctx {
         }));
     }
 
+    /// A note about a feature that built: the timeline chip's tooltip, and a
+    /// warning line in the MCP build reply.
+    pub fn advise(&mut self, feature_id: &str, kind: &str, reason: String) {
+        self.diagnostics.push(advisory(feature_id, kind, reason));
+    }
+
     pub fn shapes(&self) -> Vec<&Shape> {
         self.bodies.iter().map(|b| &b.shape).collect()
     }
+}
+
+fn advisory(feature_id: &str, kind: &str, reason: String) -> Value {
+    json!({
+        "feature_id": feature_id,
+        "kind": kind,
+        "resolved": 1,
+        "confidence": 1.0,
+        "lossy": false,
+        "reason": reason,
+        "code": kind,
+    })
+}
+
+/// Solids a body holds once `drop_debris` has had its say.
+fn pieces(shape: &Shape) -> usize {
+    let n = kernel::count(shape, kernel::Kind::Solid);
+    if n < 2 {
+        return n;
+    }
+    kernel::count(&kernel::drop_debris(shape), kernel::Kind::Solid)
+}
+
+/// Says so when a feature that removed material left a body in more pieces
+/// than it found it. The pieces stay in the body, and without this nothing
+/// would tell the user a tip fell off. Split exists to do this, so it is quiet.
+fn note_splits(ctx: &mut Ctx, fid: &str, rawf: &Value, pre: &[(u64, u64, Shape)]) {
+    if rawf.get("type").and_then(Value::as_str) == Some("split") {
+        return;
+    }
+    let noun = match rawf.get("operation").and_then(Value::as_str) {
+        Some("intersect") => "the intersect",
+        _ => "the cut",
+    };
+    let mut notes = Vec::new();
+    for b in &ctx.bodies {
+        let Some((_, _, old)) = pre
+            .iter()
+            .find(|(uid, generation, _)| *uid == b.uid && *generation != b.generation)
+        else {
+            continue;
+        };
+        if kernel::count(&b.shape, kernel::Kind::Solid) < 2 {
+            continue;
+        }
+        let now = pieces(&b.shape);
+        if now > pieces(old) && kernel::volume(&b.shape).abs() < kernel::volume(old).abs() {
+            notes.push(advisory(
+                fid,
+                "bodySplit",
+                format!("{noun} split {} into {now} pieces", b.name),
+            ));
+        }
+    }
+    // First, since a chip shows one note and a lost piece matters most.
+    let at = ctx
+        .diagnostics
+        .iter()
+        .position(|d| d.get("feature_id").and_then(Value::as_str) == Some(fid))
+        .unwrap_or(ctx.diagnostics.len());
+    ctx.diagnostics.splice(at..at, notes);
 }
 
 /// A body as the build leaves it, debris dropped.
@@ -738,6 +805,14 @@ pub fn rebuild_from(
         } else {
             Vec::new()
         };
+        let pre_shapes: Vec<(u64, u64, Shape)> = if prov {
+            ctx.bodies
+                .iter()
+                .map(|b| (b.uid, b.generation, b.shape.clone()))
+                .collect()
+        } else {
+            Vec::new()
+        };
 
         let outcome = run_feature(&mut ctx, f, type_name, watch);
         // A feature a cancel cut short failed for no reason of its own, and
@@ -752,6 +827,7 @@ pub fn rebuild_from(
             Ok(Ran::Built) => {
                 if prov {
                     owners::update(&mut ctx, f, fid.unwrap_or(""), &pre, &pre_owners);
+                    note_splits(&mut ctx, fid.unwrap_or(""), rawf, &pre_shapes);
                 }
                 if type_name == Some("sketch") {
                     crate::projection::refresh(&mut ctx, rawf, &raw_features[..i]);

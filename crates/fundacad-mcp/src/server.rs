@@ -1238,8 +1238,16 @@ impl FundaCad {
             .and_then(Value::as_array)
             .map_or(&[][..], Vec::as_slice)
         {
-            if let Some(m) = d.get("message").and_then(Value::as_str) {
-                lines.push(format!("warning: {m}"));
+            // The engine's advisories carry their text as `reason`, the lossy
+            // entries are selector match notes an agent cannot act on.
+            let advisory = d.get("lossy") == Some(&json!(false));
+            let note = d
+                .get("message")
+                .or_else(|| d.get("reason").filter(|_| advisory))
+                .and_then(Value::as_str);
+            if let Some(m) = note {
+                let at = d.get("feature_id").and_then(Value::as_str).map_or(String::new(), |id| format!(" ({id})"));
+                lines.push(format!("warning{at}: {m}"));
             }
         }
         if mesh.is_empty() {

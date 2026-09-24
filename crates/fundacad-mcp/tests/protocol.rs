@@ -334,6 +334,33 @@ fn a_fillet_patched_into_a_chamfer_builds_as_a_chamfer() {
 }
 
 #[test]
+fn a_cut_that_splits_a_body_is_reported() {
+    let rs = drive(&[
+        (
+            "feature_add",
+            json!({"feature": {"id": "bx1", "type": "box", "length": 200, "width": 200,
+                               "height": 10}}),
+        ),
+        (
+            "feature_add",
+            json!({"feature": {"id": "sk1", "type": "sketch", "plane": "XY", "entities": [
+                {"type": "rectangle", "id": "r", "x": 99.8, "y": 0, "width": 0.2, "height": 220}]}}),
+        ),
+        (
+            "feature_add",
+            json!({"feature": {"id": "cut1", "type": "extrude", "sketch": "sk1", "distance": 20,
+                               "symmetric": true, "operation": "cut", "targets": ["body1"]}}),
+        ),
+        ("build", json!({})),
+    ]);
+    assert!(
+        rs[3].text.contains("warning (cut1): the cut split Box into 2 pieces"),
+        "{}",
+        rs[3].text
+    );
+}
+
+#[test]
 fn inspect_hands_back_a_selector_that_addresses_the_face_it_names() {
     // The whole point of inspect: an agent that has never clicked on anything
     // can still write the next feature. The proof is using one of the selectors
