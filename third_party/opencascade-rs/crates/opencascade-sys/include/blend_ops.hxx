@@ -41,7 +41,8 @@ inline std::vector<TopoDS_Shape> bl_children(const TopoDS_Shape &s) {
   return out;
 }
 
-// status: 0 built, 1 not done, 2 built but BRepCheck calls it invalid.
+// status: 0 built, 1 not done, 2 built but BRepCheck calls it invalid. Not
+// done hands back a compound of the vertices the kernel gave up at.
 inline BlShape blend_fillet(const TopoDS_Shape &shape, const TopoDS_Shape &edges,
                             rust::Slice<const double> radii, int32_t &status) {
   BRepFilletAPI_MakeFillet mk(shape);
@@ -50,7 +51,11 @@ inline BlShape blend_fillet(const TopoDS_Shape &shape, const TopoDS_Shape &edges
   mk.Build();
   if (!mk.IsDone()) {
     status = 1;
-    return BlShape(new TopoDS_Shape());
+    TopoDS_Compound at;
+    BRep_Builder b;
+    b.MakeCompound(at);
+    for (int i = 1; i <= mk.NbFaultyVertices(); ++i) b.Add(at, mk.FaultyVertex(i));
+    return BlShape(new TopoDS_Shape(at));
   }
   TopoDS_Shape out = mk.Shape();
   status = BRepCheck_Analyzer(out).IsValid() ? 0 : 2;

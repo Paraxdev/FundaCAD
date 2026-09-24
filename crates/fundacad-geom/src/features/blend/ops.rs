@@ -21,6 +21,7 @@ fn exception_text(e: &cxx::Exception) -> String {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Built {
     Done,
+    /// A fillet's shape is then a compound of the vertices the kernel gave up at.
     NotDone,
     Invalid,
 }
