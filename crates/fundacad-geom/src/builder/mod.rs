@@ -60,7 +60,22 @@ impl From<UnresolvedNum> for Fail {
 
 impl From<KernelError> for Fail {
     fn from(e: KernelError) -> Fail {
-        Fail::Internal(e.0)
+        translate_kernel_error(e.0)
+    }
+}
+
+/// The handful of raw OCCT exception names worth turning into a sentence a
+/// caller can act on, the same way `require_positive` already reads for a
+/// negative dimension. Everything else stays `Internal`, named by its
+/// exception class rather than guessed at, because a name not on this list
+/// has not been checked to mean the same thing in every feature that can
+/// raise it.
+fn translate_kernel_error(name: String) -> Fail {
+    match name.as_str() {
+        "Standard_DomainError" => Fail::msg(
+            "that dimension is too small for the kernel to represent, use a larger value",
+        ),
+        _ => Fail::Internal(name),
     }
 }
 
