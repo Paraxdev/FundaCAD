@@ -15,6 +15,7 @@ import {
   type RailEntry, type RailFamily, type RailTool,
 } from "../../ui/railDefs";
 import { HOLD_MS, IDLE, holdStep, type HoldEvent, type HoldPhase } from "../../ui/holdGesture";
+import { contextMenu } from "../../ui/menu";
 import { useSelectionOffers } from "../../composables/useSelectionOffers";
 import { runningTool } from "../../ui/runningTool";
 import RailButton from "../ui/RailButton.vue";
@@ -170,6 +171,25 @@ function openFlyout(f: RailFamily) {
   if (anchor) flyout.value = { id: f.id, anchor, items: f.items };
 }
 
+// sketchRail() names the Constrain family `fam:constrain` (RailFamily.id is
+// always `fam:${slot.id}`, see railDefs.ts's sketchRail).
+const CONSTRAIN_FAMILY_ID = "fam:constrain";
+
+/** The Constrain family's face click, with something already selected in the
+ *  sketch: offer the constraint types that apply to that selection instead of
+ *  always arming Horizontal (SK-3). Returns false (caller falls through to the
+ *  normal default-tool click) when there's no sketch selection or nothing in
+ *  it is constrainable, so an empty selection behaves exactly as before. */
+function offerConstraintPopup(f: RailFamily): boolean {
+  const sk = engine.sketch;
+  if (!sk.active) return false;
+  const items = sk.constraintOptions();
+  if (!items.length) return false;
+  const r = tiles.get(f.id)?.getBoundingClientRect();
+  contextMenu(r ? r.right + 8 : 0, r ? r.top : 0, items.map((o) => ({ label: o.label, onClick: o.apply })));
+  return true;
+}
+
 function sendHold(ev: HoldEvent) {
   const { next, effect } = holdStep(hold.value, ev);
   hold.value = next;
@@ -184,7 +204,10 @@ function sendHold(ev: HoldEvent) {
       flyout.value = null;
       break;
     case "runDefault":
-      if (f) run(faceOf(f, chosen.value[f.id]).action);
+      if (f) {
+        if (f.id === CONSTRAIN_FAMILY_ID && offerConstraintPopup(f)) break;
+        run(faceOf(f, chosen.value[f.id]).action);
+      }
       break;
     case "pick":
       chosen.value = { ...chosen.value, [effect.groupId]: effect.action };
