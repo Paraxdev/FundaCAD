@@ -1004,19 +1004,21 @@ export class DocumentStore {
 
   // --- edit preview ---
   /** While editing a feature, builds stop just before it plus the live edit: the
-   *  committed mesh has already consumed e.g. a fillet's edges. */
-  private editPreview: { id: string; feature: Feature | null } | null = null;
+   *  committed mesh has already consumed e.g. a fillet's edges. `inPlace` keeps
+   *  everything after it instead, for a feature that consumes nothing and whose
+   *  point is what follows it (a datum plane under a sketch). */
+  private editPreview: { id: string; feature: Feature | null; inPlace?: boolean } | null = null;
   /** Omit `feature` to see the model before it (extrude picks profiles there); pass it
    *  to open on the model as it looks, without a flash. */
-  beginEditPreview(id: string, feature: Feature | null = null) {
-    this.editPreview = { id, feature };
+  beginEditPreview(id: string, feature: Feature | null = null, opts?: { inPlace?: boolean }) {
+    this.editPreview = { id, feature, ...(opts?.inPlace ? { inPlace: true } : {}) };
     this.previewHold = false;
     this.emitEditPreview();
     this.scheduleRebuild(true);
   }
   setEditPreview(feature: Feature | null, opts?: { hold?: boolean }) {
     if (!this.editPreview) return;
-    this.editPreview = { id: this.editPreview.id, feature };
+    this.editPreview = { ...this.editPreview, feature };
     this.previewHold = feature !== null && !!opts?.hold;
     this.emitEditPreview();
     this.scheduleRebuild(true);
@@ -1754,8 +1756,13 @@ export class DocumentStore {
       // roll to the edited feature's position (never past the rollback marker),
       // then append the live edited version if the tool has produced one.
       const idx = features.findIndex((f) => f.id === this.editPreview!.id);
-      if (idx >= 0) features = features.slice(0, idx);
-      if (this.editPreview.feature) features.push(this.editPreview.feature);
+      const live = this.editPreview.feature;
+      if (this.editPreview.inPlace && idx >= 0) {
+        if (live) features = features.map((f, i) => (i === idx ? live : f));
+      } else {
+        if (idx >= 0) features = features.slice(0, idx);
+        if (live) features.push(live);
+      }
     }
     if (this.preview) features.push(...this.preview);
     features = features.map(withoutDisplayName);
