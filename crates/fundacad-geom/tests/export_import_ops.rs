@@ -184,3 +184,38 @@ fn step_round_trips_through_export_and_import() {
     let r = c.call(json!({"id": 4, "op": "import", "format": "iges", "path": fixture}));
     assert_eq!(r, json!({"id": 4, "ok": false, "error": {"message": "unsupported import format: iges"}}));
 }
+
+/// Every undirected edge of the model's triangles, with how many use it.
+fn edge_uses(model: &str) -> std::collections::HashMap<(u32, u32), usize> {
+    let mut uses = std::collections::HashMap::new();
+    for tri in model.split("<triangle ").skip(1) {
+        let v: Vec<u32> = ["v1=\"", "v2=\"", "v3=\""]
+            .iter()
+            .map(|k| {
+                let at = tri.find(k).unwrap() + k.len();
+                tri[at..at + tri[at..].find('"').unwrap()].parse().unwrap()
+            })
+            .collect();
+        for (a, b) in [(v[0], v[1]), (v[1], v[2]), (v[2], v[0])] {
+            *uses.entry((a.min(b), a.max(b))).or_insert(0) += 1;
+        }
+    }
+    uses
+}
+
+#[test]
+fn a_3mf_body_is_one_closed_shell() {
+    let c = Client::new();
+    let dir = scratch("closed3mf");
+    for (i, mesh) in [json!({}), json!({"maxEdgeLength": 2})].into_iter().enumerate() {
+        let path = p(&dir, &format!("part{i}.3mf"));
+        let r = c.call(json!({"id": i, "op": "export", "document": two_bodies(), "format": "3mf", "path": path, "mesh": mesh}));
+        assert_eq!(r["ok"], true, "{r}");
+        let mut z = zip::ZipArchive::new(std::fs::File::open(&path).unwrap()).unwrap();
+        let mut model = String::new();
+        io::Read::read_to_string(&mut z.by_name("3D/3dmodel.model").unwrap(), &mut model).unwrap();
+        let open: Vec<_> = edge_uses(&model).into_iter().filter(|(_, n)| *n != 2).collect();
+        assert!(open.is_empty(), "{mesh}: {} edges not shared by exactly two triangles", open.len());
+    }
+}
+
