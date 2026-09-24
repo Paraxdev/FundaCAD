@@ -7,7 +7,7 @@ import { entitySegments, polygonPoints } from "./region";
 import { newEntityId } from "./id";
 import { arcCenterRadius } from "./arc";
 import { coincKey } from "./sketchSolve";
-import { bsplineFit, bsplinePolyline, bsplineShape, bsplineValid, DEFAULT_BSPLINE_DEGREE } from "./bspline";
+import { bsplineDegree, bsplineFit, bsplinePolyline, bsplineShape, bsplineValid, DEFAULT_BSPLINE_DEGREE } from "./bspline";
 import {
   segIntersect,
   segCircleIntersect,
@@ -430,9 +430,11 @@ export function offsetEntity(
         const len = Math.hypot(dx, dy) || 1;
         return { x: p.x + (-dy / len) * dist, y: p.y + (dx / len) * dist };
       });
-      const fit = bsplineFit(moved, Math.min(60, e.poles.length * 2), !!e.closed, e.degree ?? DEFAULT_BSPLINE_DEGREE);
+      const deg = bsplineDegree(e);
+      const fit = bsplineFit(moved, Math.min(60, e.poles.length * 2), !!e.closed, deg);
       if (fit) {
-        copy = { type: "bspline", id, poles: fit.poles, ...bsplineShape({ ...e, knots: undefined }), ...constr(e) };
+        const degree = e.degree === undefined && deg === DEFAULT_BSPLINE_DEGREE ? undefined : deg;
+        copy = { type: "bspline", id, poles: fit.poles, ...bsplineShape({ ...e, degree, knots: undefined }), ...constr(e) };
         linked = false;
       }
     }
