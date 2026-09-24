@@ -977,7 +977,7 @@ The format comes from the extension unless given. A large STEP can take minutes:
 
     #[tool(
         name = "build",
-        description = "Rebuild the document and report what came out: the bodies, their sizes, and any feature that failed. Build often, an error names the feature that caused it.",
+        description = "Rebuild the document and report what came out: the bodies, their sizes, and any feature that failed. Build often, an error names the feature that caused it. isError is true if ANY feature failed, even when other features still produced bodies; the text still lists everything that did build, so check isError rather than scanning for \"FEATURE FAILED\".",
         input_schema = crate::tools::build()
     )]
     pub async fn t_build(&self, _args: JsonObject) -> Result<CallToolResult, McpError> {
@@ -1219,12 +1219,14 @@ impl FundaCad {
         // carrying the failures beside the geometry that did build. Reading the
         // wrong key made a failed press/pull look like a press/pull that did
         // nothing, which is the single most misleading thing this tool could say.
+        let mut any_feature_failed = false;
         for e in result
             .get("featureErrors")
             .and_then(Value::as_array)
             .map_or(&[][..], Vec::as_slice)
         {
             if let Some(m) = e.get("message").and_then(Value::as_str) {
+                any_feature_failed = true;
                 lines.push(format!(
                     "FEATURE FAILED ({}): {m}",
                     e.get("feature_id")
@@ -1256,7 +1258,16 @@ impl FundaCad {
         if !problems.is_empty() {
             lines.push(format!("document problems: {}", problems.join("; ")));
         }
-        text(lines.join("\n"))
+        // isError has to reflect a partial build, not just a total one: a body
+        // that built beside a feature that failed is still a wrong document, and
+        // an agent gating on isError alone must see that without string-matching
+        // "FEATURE FAILED" in the text.
+        let full = lines.join("\n");
+        if any_feature_failed {
+            failure(full)
+        } else {
+            text(full)
+        }
     }
 
     async fn inspect(&self, args: &JsonObject) -> CallToolResult {

@@ -277,9 +277,14 @@ fn an_empty_document_can_be_taken_all_the_way_to_a_solid() {
 #[test]
 fn a_failed_feature_is_reported_and_not_passed_off_as_a_no_op() {
     // The one that bit hardest while this was being written: a rebuild whose
-    // feature fails still returns ok, with the failures in `featureErrors`
-    // beside the geometry that did build. Reading the wrong key made a refused
+    // feature fails carries the failure in `featureErrors` beside the geometry
+    // that did build, not under `errors`. Reading the wrong key made a refused
     // press/pull look like a press/pull that did nothing at all.
+    //
+    // isError is also true here, on purpose: a body that built beside a
+    // feature that failed is still a wrong document, and an agent gating on
+    // isError alone (rather than string-matching "FEATURE FAILED") has to see
+    // that. The full text, bodies included, still comes back.
     let rs = drive(&[
         (
             "feature_add",
@@ -294,8 +299,10 @@ fn a_failed_feature_is_reported_and_not_passed_off_as_a_no_op() {
         ),
         ("build", json!({})),
     ]);
+    assert!(rs[2].is_error, "{}", rs[2].text);
     assert!(rs[2].text.contains("FEATURE FAILED"), "{}", rs[2].text);
     assert!(rs[2].text.contains("fil1"), "{}", rs[2].text);
+    assert!(rs[2].text.contains("body1"), "{}", rs[2].text);
 }
 
 #[test]
