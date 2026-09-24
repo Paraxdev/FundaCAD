@@ -26,7 +26,7 @@ This file starts on 2026-08-03. For anything before that, see the
 ### Added
 
 - **Datum planes tilt and spin, and stay parametric.** Creating a datum plane
-  now shows an offset arrow, an arc for each tilt and one for the spin at the
+  now shows an offset arrow and a slim ring for each tilt and the spin at the
   plane's pivot, snapping in 5° steps (Shift 1°, Alt free), with every value
   typeable. Double-click a datum plane to bring the same handles back. The
   plane stores `tiltX`, `tiltY`, `spin`, `shiftX` and `shiftY` relative to its
@@ -34,6 +34,14 @@ This file starts on 2026-08-03. For anything before that, see the
   so moving the parent or changing a parameter bound to a tilt moves the plane
   and the sketches and bodies built on it. Move on a selected datum plane
   writes the same relative fields.
+- **One ring look for every rotation handle.** The datum plane's rings and the
+  Move gizmo's rings are thin and faint until the cursor is on one; that ring
+  lights and thickens and the others step back, so three rings read as one
+  ball rather than a tangle. The grab band is as wide as before.
+- **Aim the key light in Render.** Environment, Key light, Aim puts a sun on a
+  stalk over the model; drag it to swing the light that casts the shadows, in
+  5° steps (Shift 1°, Alt free), or type the azimuth and elevation. Reset puts
+  it back over the right shoulder.
 - **A plugin's tools fold under its own heading in the selection rail.** Pick a
   face and the app's own verbs (Fillet, Press/Pull, Shell, …) stay flat at the
   top, while a plugin's tools sit under a collapsible section named after the
