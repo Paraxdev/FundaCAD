@@ -509,9 +509,11 @@ pub(crate) fn sequential_blend(
     apply_one: &dyn Fn(&Shape, &Shape) -> Result<Shape, BlendErr>,
     blend_size: f64,
 ) -> (Shape, Vec<Shape>) {
-    let mut pending: Vec<(Shape, Map<String, Value>)> = edges
+    // The body each edge last failed on: the kernel answers the same body the
+    // same way, so the next pass skips an edge until a neighbour has changed it.
+    let mut pending: Vec<(Shape, Map<String, Value>, Option<Shape>)> = edges
         .iter()
-        .map(|e| (e.clone(), edge_identity(e).unwrap_or_default()))
+        .map(|e| (e.clone(), edge_identity(e).unwrap_or_default(), None))
         .collect();
     pending.sort_by(|a, b| {
         let (ka, kb) = (canonical_key(&a.1), canonical_key(&b.1));
@@ -528,16 +530,16 @@ pub(crate) fn sequential_blend(
     while !pending.is_empty() && progressed {
         progressed = false;
         let mut still = Vec::new();
-        for (orig, fp) in pending {
-            if crate::cancel::requested() {
-                still.push((orig, fp));
+        for (orig, fp, failed_on) in pending {
+            if crate::cancel::requested() || failed_on.as_ref().is_some_and(|f| f.is_same(&current)) {
+                still.push((orig, fp, failed_on));
                 continue;
             }
             let Some(target) = crate::bench::phase("blend_rematch", || {
                 rematch_edge(&current, &fp, max_mid_dist, tol_pos)
                     .filter(|t| still_on(&orig, t, on_curve))
             }) else {
-                still.push((orig, fp));
+                still.push((orig, fp, failed_on));
                 continue;
             };
             match apply_one(&current, &target) {
@@ -545,7 +547,7 @@ pub(crate) fn sequential_blend(
                     current = next;
                     progressed = true;
                 }
-                Err(_) => still.push((orig, fp)),
+                Err(_) => still.push((orig, fp, Some(current.clone()))),
             }
         }
         pending = still;
