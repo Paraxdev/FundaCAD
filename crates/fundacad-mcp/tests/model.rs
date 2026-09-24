@@ -324,6 +324,23 @@ fn a_string_in_a_numeric_field_must_name_a_parameter() {
 }
 
 #[test]
+fn a_plugin_features_text_options_are_not_mistaken_for_parameters() {
+    let mut d = m::new_document();
+    let face = json!({"kind": "face", "by": "nearest", "point": [0, 0, 13], "body": "body1"});
+    m::add_feature(
+        &mut d,
+        &json!({"id": "td1", "type": "teardropHole", "faces": face, "angle": 45,
+                "roof": "pointed", "buildDir": "+Z"}),
+        None,
+    )
+    .unwrap();
+    assert_eq!(m::validate(&mut d), Vec::<String>::new());
+    m::update_feature(&mut d, "td1", &json!({"angle": "lean"}), false).unwrap();
+    let problems = m::validate(&mut d);
+    assert!(problems.iter().any(|p| p.contains("'lean'")), "{problems:?}");
+}
+
+#[test]
 fn a_joints_body_id_and_mode_are_not_mistaken_for_parameters() {
     // `moving` names a body and `mode` is an enum, neither is a numeric field,
     // so a healthy joint reports nothing. The control: `offset` IS numeric, so
@@ -402,3 +419,4 @@ fn hole_enum_fields_are_not_mistaken_for_parameters() {
     .unwrap();
     assert_eq!(m::validate(&mut d), Vec::<String>::new());
 }
+

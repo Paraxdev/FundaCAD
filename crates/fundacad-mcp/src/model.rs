@@ -568,6 +568,18 @@ const NOT_NUMERIC: &[&str] = &[
     "standard", "size", "fit", "extent",
 ];
 
+/// Whether the schema documents `field` of `kind` as something other than a
+/// `Num`, as a plugin's text options (`roof: "pointed"`) are. A field the schema
+/// does not describe is still checked.
+fn documented_not_numeric(kind: &str, field: &str) -> bool {
+    crate::schema::features()
+        .get(kind)
+        .and_then(|t| t.get("fields"))
+        .and_then(|f| f.get(field))
+        .and_then(Value::as_str)
+        .is_some_and(|doc| !doc.split(|c: char| !c.is_ascii_alphanumeric()).any(|w| w == "Num"))
+}
+
 /// Everything wrong with the document that can be seen without building it.
 ///
 /// Not a gate: the caller may build a document with problems and see what the
@@ -654,6 +666,7 @@ pub fn validate(doc: &mut Doc) -> Vec<String> {
     for f in &feats {
         let fid = str_field(f, "id").unwrap_or_default();
         let Some(obj) = f.as_object() else { continue };
+        let kind = str_field(f, "type").unwrap_or_default();
         for (k, v) in obj {
             let Some(text) = v.as_str() else { continue };
             // `geom` and `source` are an import's, and neither is ever a
@@ -661,7 +674,10 @@ pub fn validate(doc: &mut Doc) -> Vec<String> {
             // is the file it was read from. Without them here, every imported
             // body reports two problems that say a build WILL fail, on a
             // document that builds.
-            if NOT_NUMERIC.contains(&k.as_str()) || params.contains(text) {
+            if NOT_NUMERIC.contains(&k.as_str())
+                || params.contains(text)
+                || documented_not_numeric(kind, k)
+            {
                 continue;
             }
             // An EXPRESSION in a feature field is the mistake worth naming
