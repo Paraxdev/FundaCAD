@@ -1,12 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { readFileSync, writeFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
 import {
   bsplineDegree, bsplineFit, bsplineInsertKnot, bsplineKnots, bsplineMinPoles, bsplineNearestParam,
   bsplinePoint, bsplinePolyline, bsplineRange, bsplineRemovePole, poleOfRef, poleRef, type BsplineDef,
 } from "../../src/sketch/bspline";
 
-const VECTORS = fileURLToPath(new URL("../vectors/bspline.json", import.meta.url));
+import VECTORS from "../vectors/bspline.json";
 
 const wave: BsplineDef["poles"] = [
   { x: 0, y: 0 }, { x: 10, y: 25 }, { x: 30, y: -5 }, { x: 45, y: 30 }, { x: 60, y: 10 }, { x: 80, y: 40 }, { x: 95, y: 0 },
@@ -164,7 +162,7 @@ describe("bspline fit", () => {
 });
 
 // The engine samples OCCT's curve for the same cases in
-// crates/fundacad-geom/tests/bspline_vectors.rs. FUNDACAD_RECORD_VECTORS=1 rewrites the file.
+// crates/fundacad-geom/tests/bspline_sketch.rs.
 describe("shared vectors", () => {
   const cases: { name: string; def: BsplineDef }[] = [
     { name: "open cubic", def: { poles: wave } },
@@ -190,8 +188,7 @@ describe("shared vectors", () => {
 
   it("match the recorded file", () => {
     const fresh = record();
-    if (process.env.FUNDACAD_RECORD_VECTORS) writeFileSync(VECTORS, JSON.stringify({ cases: fresh }, null, 1).replace(/\[\s+([-\d.e+,\s]+?)\s+\]/g, (_, xs: string) => `[${xs.split(/,\s*/).join(", ")}]`) + "\n");
-    const saved = JSON.parse(readFileSync(VECTORS, "utf8")) as { cases: ReturnType<typeof record> };
+    const saved = VECTORS as unknown as { cases: ReturnType<typeof record> };
     expect(saved.cases.map((c) => c.name)).toEqual(fresh.map((c) => c.name));
     saved.cases.forEach((c, i) => {
       const def: BsplineDef = { poles: c.poles.map(([x, y]) => ({ x: x!, y: y! })), degree: c.degree, closed: c.closed, knots: c.knots };
