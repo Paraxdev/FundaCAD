@@ -16,6 +16,7 @@
 #include <BRepAlgoAPI_Fuse.hxx>
 #include <BRepBndLib.hxx>
 #include <BRepBuilderAPI_Copy.hxx>
+#include <BRepBuilderAPI_FindPlane.hxx>
 #include <BRepBuilderAPI_GTransform.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
@@ -210,6 +211,16 @@ inline bool closed_solid(const TopoDS_Shape &s) {
   for (int i = 1; i <= m.Extent(); ++i)
     if (m(i).Extent() < 2 && !BRep_Tool::Degenerated(TopoDS::Edge(m.FindKey(i)))) return false;
   return true;
+}
+
+constexpr double LOFT_PLANE_TOL = 1e-6;
+
+// ThruSections caps each end of a loft with a plane through the end wire, else
+// with a face the wire alone makes (its PerformPlan). A section with neither
+// leaves the loft open, and every section on a surface curving along the edge
+// is like that, so the first one is checked before sampling the rest.
+inline bool cappable(const TopoDS_Wire &w) {
+  return BRepBuilderAPI_FindPlane(w, LOFT_PLANE_TOL).Found() || BRepBuilderAPI_MakeFace(w).IsDone();
 }
 
 struct Side {
@@ -1323,6 +1334,7 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
       }
     }
     Section sec = section(f.P, f.T, sides, s, chamfer, size, size2, g2, profile, nullptr, margin);
+    if (wires.empty() && !cappable(sec.wire)) throw err("the blend sections would not close into a solid");
     if (have_prev && (sec.inner - prev_inner).Dot(prev_T) <= 1e-3 * f.P.Distance(prev_P))
       throw err("at this size the blend is tighter than the edge's own curve");
     have_prev = true;
@@ -1333,7 +1345,7 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
   }
 
   auto loft = [](const std::vector<TopoDS_Wire> &ws) {
-    BRepOffsetAPI_ThruSections mk(true, ws.size() == 2, 1e-6);
+    BRepOffsetAPI_ThruSections mk(true, ws.size() == 2, LOFT_PLANE_TOL);
     mk.CheckCompatibility(false);
     for (const TopoDS_Wire &w : ws) mk.AddWire(w);
     check_cancel();
