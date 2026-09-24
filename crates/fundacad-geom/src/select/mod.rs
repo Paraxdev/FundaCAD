@@ -284,7 +284,17 @@ impl<'a> Resolver<'a> {
                 Ok(best.map(|i| take(edges, &[i])).unwrap_or_default())
             }
             Some("ofFace") => {
-                let faces = self.faces_matching(part, need(m, "face")?, (false, None))?;
+                let face = need(m, "face")?;
+                let faces = if face.get("by").is_some() {
+                    if face.get("kind").and_then(Value::as_str) != Some("face") {
+                        return Err(Fail::msg(
+                            "an ofFace edge selector takes a face selector or a face fingerprint as its `face`",
+                        ));
+                    }
+                    self.face_ents(part, face)?
+                } else {
+                    self.faces_matching(part, face, (false, None))?
+                };
                 union_face_edges(&faces)
             }
             Some("tangentChain") => {
