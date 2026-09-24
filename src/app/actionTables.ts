@@ -4,7 +4,7 @@ import type { SketchTool } from "../sketch/sketchMode";
  *  switch the active tool; outside one they start a sketch with that tool. */
 export const SKETCH_TOOLS = new Set([
   "line", "rectangle", "centerRectangle", "rectangle3", "circle", "circle2", "circle3",
-  "arc", "polygon", "slot", "spline", "point", "text", "project",
+  "arc", "polygon", "slot", "spline", "bspline", "point", "text", "project",
   "boltCircle", "hexHoles", "gridHoles", "patternRect", "patternCircular", "honeycomb",
 ]);
 
@@ -57,6 +57,7 @@ export const SKETCH_PROMPTS: Record<string, string> = {
   circle: "Click centre, then radius · type ⌀ · Enter · Esc",
   arc: "Click start, end, then a point on the arc · Esc",
   spline: "Click fit points · Enter to finish · Esc",
+  bspline: "Click control points · click the first to close · Enter to finish · Esc",
   point: "Click to place a point · Esc",
   polygon: "Click the centre, then a vertex · Esc",
   slot: "Click the two arc centres, then the width · Esc",

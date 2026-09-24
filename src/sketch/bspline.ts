@@ -311,6 +311,23 @@ export function bsplineFit(samples: Pt[], nPoles: number, closed: boolean, degre
   return fit;
 }
 
+/** Each pole's Greville abscissa, the parameter the pole pulls on most; a closed
+ *  curve's are wrapped into its range. */
+export function bsplineGreville(def: BsplineDef): number[] {
+  const { t, p } = flat(def);
+  const [a, b] = bsplineRange(def);
+  return def.poles.map((_, i) => {
+    let g = 0;
+    for (let j = 1; j <= p; j++) g += t[i + j]!;
+    g /= p;
+    if (def.closed) {
+      const T = b - a;
+      g = a + ((((g - a) % T) + T) % T);
+    }
+    return g;
+  });
+}
+
 /** The curve's own settings, only the ones set, for copying onto transformed poles. */
 export function bsplineShape(e: { degree?: number | undefined; closed?: boolean | undefined; knots?: number[] | undefined }): { degree?: number; closed?: boolean; knots?: number[] } {
   return {

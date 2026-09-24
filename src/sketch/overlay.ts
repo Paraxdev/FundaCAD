@@ -79,6 +79,19 @@ const GUIDE_MAT = new THREE.LineDashedMaterial({
   opacity: 0.55,
   depthTest: true,
 });
+// a control-point spline's polygon: thin, dashed, and quieter than any curve
+export const POLE_COLOR = 0x9fb3cc;
+const POLYGON_DASH_PX = 4;
+const POLYGON_GAP_PX = 3;
+const POLE_HALF_PX = 3.5;
+const POLYGON_MAT = new THREE.LineDashedMaterial({
+  color: POLE_COLOR,
+  dashSize: 1,
+  gapSize: 1,
+  transparent: true,
+  opacity: 0.8,
+  depthTest: true,
+});
 // projected reference geometry: purple (linked/fixed, Fusion-style); a stale
 // projection (source no longer resolves, last shape kept) tints amber
 const PROJECTED_COLOR = 0xb07fe8;
@@ -649,6 +662,44 @@ export function curveObjects(
     }
   }
   return out;
+}
+
+/** A control-point spline's control polygon (dashed) and a square on each pole,
+ *  `active` being the pole to mark as picked. Sized in pixels through `mmPerPx`. */
+export function controlPolygonObjects(
+  e: Extract<ResolvedEntity, { type: "bspline" }>,
+  plane: SketchPlane,
+  mmPerPx: number,
+  active = -1,
+): THREE.Object3D {
+  const g = new THREE.Group();
+  if (!e.poles.length) return g;
+  const px = Number.isFinite(mmPerPx) && mmPerPx > 0 ? mmPerPx : 0.1;
+  POLYGON_MAT.dashSize = px * POLYGON_DASH_PX;
+  POLYGON_MAT.gapSize = px * POLYGON_GAP_PX;
+  const ring = e.closed ? [...e.poles, e.poles[0]!] : e.poles;
+  const poly = new THREE.Line(new THREE.BufferGeometry().setFromPoints(ring.map((q) => plane.to3D(q.x, q.y))), POLYGON_MAT);
+  poly.computeLineDistances();
+  poly.renderOrder = 12;
+  g.add(poly);
+  const s = px * POLE_HALF_PX;
+  const sq: THREE.Vector3[] = [];
+  e.poles.forEach((q, k) => {
+    if (k === active) return;
+    const c = [plane.to3D(q.x - s, q.y - s), plane.to3D(q.x + s, q.y - s), plane.to3D(q.x + s, q.y + s), plane.to3D(q.x - s, q.y + s)];
+    for (let i = 0; i < 4; i++) sq.push(c[i]!, c[(i + 1) % 4]!);
+  });
+  const squares = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(sq), lineMat(POLE_COLOR));
+  squares.renderOrder = 13;
+  g.add(squares);
+  const a = e.poles[active];
+  if (a) {
+    const dot = new THREE.Points(new THREE.BufferGeometry().setFromPoints([plane.to3D(a.x, a.y)]), dotMat(SELECT_COLOR));
+    dot.renderOrder = 14;
+    g.add(dot);
+  }
+  g.renderOrder = 12;
+  return g;
 }
 
 /** One THREE.Group for a text entity: an outline THREE.Line per glyph contour plus a
