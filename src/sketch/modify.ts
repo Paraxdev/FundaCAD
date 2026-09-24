@@ -7,6 +7,7 @@ import { entitySegments, polygonPoints } from "./region";
 import { newEntityId } from "./id";
 import { arcCenterRadius } from "./arc";
 import { coincKey } from "./sketchSolve";
+import { bsplineFit, bsplinePolyline, bsplineShape, bsplineValid, DEFAULT_BSPLINE_DEGREE } from "./bspline";
 import {
   segIntersect,
   segCircleIntersect,
@@ -321,12 +322,13 @@ export function signedOffsetAt(e: ResolvedEntity, p: THREE.Vector2): number | nu
     return Number.isFinite(best) ? best : null;
   }
   if (e.type === "slot") return distToSeg(v(e.x1, e.y1), v(e.x2, e.y2), p) - e.width / 2;
-  if (e.type === "spline") {
+  if (e.type === "spline" || e.type === "bspline") {
     // nearest segment decides both distance and side (same left-normal
     // convention offsetEntity pushes the points along)
+    const line = e.type === "spline" ? e.points : bsplinePolyline(e);
     let best: number | null = null;
-    for (let i = 0; i + 1 < e.points.length; i++) {
-      const a = v(e.points[i]!.x, e.points[i]!.y), b = v(e.points[i + 1]!.x, e.points[i + 1]!.y);
+    for (let i = 0; i + 1 < line.length; i++) {
+      const a = v(line[i]!.x, line[i]!.y), b = v(line[i + 1]!.x, line[i + 1]!.y);
       const d = distToSeg(a, b, p);
       if (best === null || d < Math.abs(best)) best = Math.sign(leftOf(a, b) || 1) * d;
     }
@@ -413,6 +415,26 @@ export function offsetEntity(
         }),
       };
       linked = false;
+    }
+  } else if (e.type === "bspline") {
+    // An offset of a B-spline is not one, so the copy is a least-squares fit
+    // through the offset samples, and like a spline it is not linked.
+    if (bsplineValid(e)) {
+      const line = bsplinePolyline(e);
+      if (e.closed) line.pop();
+      const n = line.length;
+      const moved = line.map((p, i) => {
+        const prev = line[i - 1] ?? (e.closed ? line[n - 1]! : p);
+        const next = line[i + 1] ?? (e.closed ? line[0]! : p);
+        const dx = next.x - prev.x, dy = next.y - prev.y;
+        const len = Math.hypot(dx, dy) || 1;
+        return { x: p.x + (-dy / len) * dist, y: p.y + (dx / len) * dist };
+      });
+      const fit = bsplineFit(moved, Math.min(60, e.poles.length * 2), !!e.closed, e.degree ?? DEFAULT_BSPLINE_DEGREE);
+      if (fit) {
+        copy = { type: "bspline", id, poles: fit.poles, ...bsplineShape({ ...e, knots: undefined }), ...constr(e) };
+        linked = false;
+      }
     }
   } else if (e.type === "polygon") {
     // Fusion keeps a polygon a polygon. `radius` is the CIRCUMradius while the

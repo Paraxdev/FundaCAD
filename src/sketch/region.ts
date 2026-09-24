@@ -7,6 +7,7 @@ import * as THREE from "three";
 import type { ResolvedEntity } from "./snap";
 import { arcPolyline } from "./arc";
 import { splinePolyline } from "./spline";
+import { bsplinePolyline } from "./bspline";
 
 export interface Region {
   sketchId: string;
@@ -55,6 +56,8 @@ export function entityPolyline(e: ResolvedEntity): THREE.Vector2[] {
       return arcPolyline(v(e.x1, e.y1), v(e.x2, e.y2), v(e.mx, e.my), ARC_SEGS);
     case "spline":
       return splinePolyline(e.points, SPLINE_SEGS);
+    case "bspline":
+      return bsplinePolyline(e, SPLINE_SEGS).map((p) => v(p.x, p.y));
     case "point":
       return [v(e.x, e.y)]; // a point has no extent: a single vertex, no segments
     case "polygon":

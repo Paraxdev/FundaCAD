@@ -114,6 +114,8 @@ export type SketchEntity =
   | { type: "arc"; id?: string; x1: Num; y1: Num; x2: Num; y2: Num; mx: Num; my: Num; construction?: boolean }
   // fit-point spline: interpolates a smooth curve through its points (≥2)
   | { type: "spline"; id?: string; points: { x: Num; y: Num }[]; construction?: boolean }
+  // control-point B-spline, degree default 3; `knots` see src/sketch/bspline.ts
+  | { type: "bspline"; id?: string; poles: { x: Num; y: Num }[]; degree?: number; closed?: boolean; knots?: number[]; construction?: boolean }
   // a sketch point: reference/snap geometry only, never forms a profile
   | { type: "point"; id?: string; x: Num; y: Num; construction?: boolean }
   // Rigid shapes the solver holds fixed. Polygon `angle` is in degrees.

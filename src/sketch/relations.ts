@@ -60,7 +60,7 @@ const isAngle = (c: SketchConstraint) => c.type === "angle";
 
 const KIND_NAME: Record<string, string> = {
   line: "Line", rectangle: "Rectangle", circle: "Circle", arc: "Arc",
-  spline: "Spline", point: "Point", polygon: "Polygon", slot: "Slot",
+  spline: "Spline", bspline: "Control point spline", point: "Point", polygon: "Polygon", slot: "Slot",
   text: "Text", projected: "Reference",
 };
 
@@ -105,6 +105,10 @@ export function impliedJoins(ents: ResolvedEntity[]): RelationRow[] {
       add(e.x2, e.y2, e.id);
     } else if (e.type === "spline") {
       const a = e.points[0], b = e.points[e.points.length - 1];
+      if (a) add(a.x, a.y, e.id);
+      if (b) add(b.x, b.y, e.id);
+    } else if (e.type === "bspline" && !e.closed) {
+      const a = e.poles[0], b = e.poles[e.poles.length - 1];
       if (a) add(a.x, a.y, e.id);
       if (b) add(b.x, b.y, e.id);
     } else if (e.type === "point") {

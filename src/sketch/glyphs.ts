@@ -7,6 +7,7 @@ import * as THREE from "three";
 import type { ResolvedEntity } from "./snap";
 import type { SketchConstraint, SketchPattern } from "../types";
 import { refPoint } from "./entityDims";
+import { bsplinePoint, bsplineRange, bsplineValid } from "./bspline";
 
 const V = (x: number, y: number) => new THREE.Vector2(x, y);
 
@@ -76,6 +77,12 @@ function entCenter(e: ResolvedEntity): THREE.Vector2 {
     case "polygon": return V(e.x, e.y);
     case "slot": return V((e.x1 + e.x2) / 2, (e.y1 + e.y2) / 2);
     case "spline": { const p = e.points[Math.floor(e.points.length / 2)] ?? e.points[0]; return p ? V(p.x, p.y) : V(0, 0); }
+    case "bspline": {
+      if (!bsplineValid(e)) return e.poles[0] ? V(e.poles[0].x, e.poles[0].y) : V(0, 0);
+      const [a, b] = bsplineRange(e);
+      const p = bsplinePoint(e, (a + b) / 2);
+      return V(p.x, p.y);
+    }
     case "projected": {
       const cv = e.curve;
       if (cv.kind === "line") return V((cv.x1 + cv.x2) / 2, (cv.y1 + cv.y2) / 2);

@@ -11,6 +11,7 @@ import { isDriven, dimPlaceOf, projEndSamples } from "../types";
 import { circumcenter, arcCenterRadius } from "./arc";
 import { rectCorners } from "./region";
 import { paramOnSeg, signedAngleDeg } from "./geom2d";
+import { poleRef } from "./bspline";
 
 export type { DimField };
 type V = THREE.Vector2;
@@ -255,6 +256,7 @@ export function entityDims(e: ResolvedEntity, defaults?: DimPlace): EntityDim[] 
   }
   if (e.type === "arc") return []; // radius dim editing comes with the solver
   if (e.type === "spline") return []; // splines are defined by their fit points
+  if (e.type === "bspline") return []; // shaped by its poles, which take point dimensions
   if (e.type === "point") return []; // a point carries no dimension
   if (e.type === "text") return []; // text has no editable linear dimension
   if (e.type === "projected") return []; // fixed reference geometry, nothing to edit
@@ -500,6 +502,7 @@ export function dimRefPoints(e: ResolvedEntity): { p: number; pos: V }[] {
     if (b && e.points.length > 1) out.push({ p: 1, pos: v(b.x, b.y) });
     return out;
   }
+  if (e.type === "bspline") return e.poles.map((q, k) => ({ p: poleRef(k, e.poles.length), pos: v(q.x, q.y) }));
   if (e.type === "projected") {
     // fixed reference points user dims/constraints can target, same indices
     // the solver registers (sketchSolve projected branch): line/arc endpoints
