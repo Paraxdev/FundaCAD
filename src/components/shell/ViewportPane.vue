@@ -3,6 +3,7 @@ import { onMounted, ref, useTemplateRef } from "vue";
 import { useEngine } from "../../app/engineKey";
 import PromptBanner from "./PromptBanner.vue";
 import FpsReadout from "./FpsReadout.vue";
+import RoundTripReadout from "./RoundTripReadout.vue";
 import SelectionReadout from "./SelectionReadout.vue";
 import NormalToSketch from "./NormalToSketch.vue";
 import {
@@ -140,6 +141,7 @@ function onDrop(e: DragEvent) {
   >
     <PromptBanner />
     <FpsReadout />
+    <RoundTripReadout />
     <SelectionReadout />
     <NormalToSketch />
   </div>

@@ -34,6 +34,7 @@ import * as params from "../params/engine";
 import { extrasEmpty, trialConfiguration } from "../params/extras";
 import type { FieldKind } from "./numFields";
 import { writeTarget } from "./numFields";
+import { markReceived, markSent } from "../diagnostics/rebuildTiming";
 
 /** An expression typed on a sketch dimension while the sketch was OPEN, the
  *  dim isn't in the document until the sketch commits, so the binding travels
@@ -1911,7 +1912,9 @@ export class DocumentStore {
             const key = previewing ? null : buildKey(effective);
             const flight = { gen: ++this.sendGen, id: null as string | null, cancelled: false };
             this.inflight = flight;
+            markSent();
             const reply = await this.geometry.rebuild(effective, undefined, (id) => { flight.id = id; });
+            markReceived();
             this.inflight = null;
             if (flight.gen <= this.staleThrough) continue;
             // Superseded and stopped, so there is nothing to show: the newer
