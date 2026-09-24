@@ -191,6 +191,17 @@ fn remembered<T: Copy>(
     v
 }
 
+/// A copy has the same geometry and tolerances, so the same exact box.
+pub fn remember_copy(from: &Shape, to: &Shape) {
+    fn share<T: Copy>(memo: &'static std::thread::LocalKey<Remembered<T>>, from: &Shape, to: &Shape) {
+        if let Some(v) = memo.with(|m| m.borrow().iter().find(|(k, _)| k.is_same(from)).map(|e| e.1)) {
+            remembered(memo, to, || v);
+        }
+    }
+    share(&BOXES, from, to);
+    share(&DIAGONALS, from, to);
+}
+
 /// `bbox`, remembered for the last few shapes.
 fn bbox_remembered(s: &Shape) -> Option<[f64; 6]> {
     remembered(&BOXES, s, || bbox(s))

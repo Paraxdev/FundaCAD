@@ -93,7 +93,9 @@ pub fn copy(shape: &Shape, edges: &[Shape]) -> Option<(Shape, Vec<Shape>)> {
         return None;
     }
     let copied = all.split_off(1);
-    Some((all.remove(0), copied))
+    let body = all.remove(0);
+    kernel::remember_copy(shape, &body);
+    Some((body, copied))
 }
 
 /// blends.py `_edge_dihedral_deg`.
