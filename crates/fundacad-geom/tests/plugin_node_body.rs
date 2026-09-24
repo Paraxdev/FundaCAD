@@ -165,8 +165,8 @@ fn a_long_span_meshes_whole() {
     if !built() {
         return;
     }
-    // Two spans ten radii long. Unsmoothed, the loft through this many
-    // sections came out a surface the mesher left a sixth of uncovered at
+    // Two spans ten radii long. Lofted at the kernel's degree 8 through a
+    // section every half radius, the mesher left a sixth of it uncovered at
     // 0.05 mm, a limb with a gap through its middle.
     let spine = [[0.0, 0.0, 0.0], [32.23, -36.79, 12.0], [62.35, -47.77, 12.0]];
     let nodes = spine.iter().enumerate().map(|(i, c)| node(&format!("n{i}"), *c, [5.0; 3])).collect();
@@ -175,6 +175,34 @@ fn a_long_span_meshes_whole() {
     let brep = kernel::area(&r.bodies[0].shape);
     let mesh = mesh_area(&r, 0.05);
     assert!((mesh - brep).abs() < 0.01 * brep, "mesh {mesh} vs {brep}");
+}
+
+#[test]
+fn a_box_cutting_a_limb_in_two_keeps_both_pieces() {
+    if !built() {
+        return;
+    }
+    // Placed in the app by clicking. The smoothed loft this once used came
+    // out of the cut with only the small piece left.
+    let limb = body(
+        vec![
+            node("n1", [-0.000003, 0.0, 0.0], [16.0, 5.0, 5.0]),
+            node("n2", [32.234547, -36.786047, 12.0], [5.0; 3]),
+            node("n3", [62.353181, -47.767785, 12.0], [5.0; 3]),
+            node("n4", [71.702167, -38.645596, 17.831926], [5.0; 3]),
+        ],
+        json!([["n1", "n2", "n3", "n4"]]),
+    );
+    let whole = one_solid(&build(vec![limb.clone()]));
+    let slab = json!({"id": "k", "type": "box", "length": 16, "width": 60, "height": 60});
+    let mut cut = slab.clone();
+    cut["operation"] = json!("cut");
+    let mut common = slab;
+    common["operation"] = json!("intersect");
+    let kept = one_solid(&build(vec![limb.clone(), cut]));
+    let inside = one_solid(&build(vec![limb, common]));
+    assert!((kept + inside - whole).abs() < 0.01 * whole, "{kept} + {inside} vs {whole}");
+    assert!(kept > 0.5 * whole, "{kept} of {whole}");
 }
 
 fn y_shape(blend: Option<f64>) -> Value {
