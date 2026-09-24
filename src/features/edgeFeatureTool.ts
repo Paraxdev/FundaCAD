@@ -25,7 +25,7 @@ import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore, RebuildState } from "../document/store";
-import type { Feature, Selector } from "../types";
+import type { Feature, ParamTarget, Selector } from "../types";
 import { midMatchTol, polylineMid, edgeSelectorFrom } from "../viewport/edgeMatch";
 import { pickScope, type PickScope } from "../viewport/pickScope";
 import { canConsume } from "./toolCapabilities";
@@ -145,6 +145,14 @@ export class EdgeFeatureTool {
   private editId: string | null = null; // committed feature id being edited
   private awaitingRollback = false; // waiting for the rolled-back model build
   private unsubBuild: (() => void) | null = null;
+  /** Set when the edited field is a bare reference to this OTHER parameter
+   *  (store.bareParamRef): the handle stays live, but commit writes the drag's
+   *  value into this parameter instead of the field, which stays bound to it. */
+  private paramRef: string | null = null;
+  /** questionOf() of the feature as opened, only kept while paramRef is set:
+   *  what commit compares against to tell "only the value moved" from "edges
+   *  or options changed too", see commit(). */
+  private originalQuestion: string | null = null;
 
   private gizmo: THREE.Group | null = null;
   private handle: DragHandle | null = null;
@@ -425,8 +433,12 @@ export class EdgeFeatureTool {
     if (!f) return false;
     const value = f.type === "fillet" ? f.radius : f.distance;
     const field = f.type === "fillet" ? "radius" : "distance";
-    if (typeof value !== "number" || this.store.isParamBound({ kind: "feature", feature: f.id, field }))
-      return false; // parameter-driven value, the value rows' job
+    if (typeof value !== "number") return false;
+    const target: ParamTarget = { kind: "feature", feature: f.id, field };
+    const bareRef = this.store.bareParamRef(target);
+    // A real expression (not just a bare reference) stays refused: a drag
+    // writes a plain number, which is exactly what a "wall_blend_r * 2" is not.
+    if (this.store.isParamBound(target) && !bareRef) return false;
     const sels = Array.isArray(f.edges) ? f.edges : [f.edges];
     if (!sels.length || !sels.every((s) => "point" in s)) return false; // structural selectors, can't re-anchor
 
@@ -436,6 +448,8 @@ export class EdgeFeatureTool {
     this.onDone = onDone;
     this.tangent = null;
     this.editId = featureId;
+    this.paramRef = bareRef;
+    this.originalQuestion = bareRef ? this.questionOf(f) : null;
     this.previewId = featureId; // keep the SAME id through preview and commit
     this.positiveKind = f.type; // the saved treatment keeps the arrow's own side
     this.value = value;
@@ -757,7 +771,10 @@ export class EdgeFeatureTool {
             this.promptForPhase();
           })
         : null;
-    this.dim.show([{ ...this.field, kind: "length" }], () => this.commit(), () => this.cancel(),
+    // The label names the bound parameter, not just the field, so dragging
+    // doesn't look like an ordinary literal edit it silently isn't.
+    const field = this.paramRef ? { ...this.field, label: `${this.field.label}·${this.paramRef}` } : this.field;
+    this.dim.show([{ ...field, kind: "length" }], () => this.commit(), () => this.cancel(),
       this.kind === "fillet"
         ? {
             label: this.continuity,
@@ -792,6 +809,9 @@ export class EdgeFeatureTool {
    *  same refusal for the field the user is about to switch INTO. */
   private paramBlocked(k: Kind): boolean {
     if (!this.editId) return false;
+    // The CURRENT field is a bare parameter reference: flipping would need a
+    // field that parameter isn't bound to, so it stays off for this edit too.
+    if (this.paramRef) return true;
     return this.store.isParamBound({
       kind: "feature",
       feature: this.editId,
@@ -881,8 +901,9 @@ export class EdgeFeatureTool {
       this.kind === "fillet" && !isPlainProfile(this.profile)
         ? ` · profile ${formatProfile(this.profile)}`
         : "";
+    const param = this.paramRef ? ` · sets parameter "${this.paramRef}"` : "";
     setPrompt(
-      `${treatmentLabel(this.kind)}, ${n} edge${n === 1 ? "" : "s"} · drag or type a ${this.field.name}${prof} · Tab · Enter · Esc`,
+      `${treatmentLabel(this.kind)}, ${n} edge${n === 1 ? "" : "s"} · drag or type a ${this.field.name}${prof}${param} · Tab · Enter · Esc`,
     );
   }
 
@@ -1363,8 +1384,16 @@ export class EdgeFeatureTool {
     const feature = this.buildFeature();
     if (this.editId) {
       const id = this.editId;
-      this.store.endEditPreview(false); // replaceFeature triggers the rebuild
-      this.store.replaceFeature(id, feature);
+      this.store.endEditPreview(false); // replaceFeature/setParam trigger the rebuild
+      if (this.paramRef) {
+        // The field stays bound to this parameter (its own literal is about to
+        // be overwritten by recompute anyway), so only touch replaceFeature
+        // when something ELSE about the feature (edges, profile…) changed.
+        if (this.questionOf(feature) !== this.originalQuestion) this.store.replaceFeature(id, feature);
+        this.store.setParam(this.paramRef, this.size());
+      } else {
+        this.store.replaceFeature(id, feature);
+      }
     } else {
       this.store.setPreview(null);
       this.store.addFeature(feature);
@@ -1404,6 +1433,8 @@ export class EdgeFeatureTool {
     this.unsubBuild?.();
     this.unsubBuild = null;
     this.editId = null;
+    this.paramRef = null;
+    this.originalQuestion = null;
     this.awaitingRollback = false;
     this.viewport.emphasizeEdges(false);
     this.viewport.clearHover();
