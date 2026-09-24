@@ -181,20 +181,14 @@ export interface ToolContribution {
  *  in the tree, a missing `numFields` is a feature whose numbers cannot be
  *  edited, and neither throws.
  *
- *  WHAT THIS IS NOT. It does not add a feature type to the document, and it
- *  cannot: the document's schema and the geometry that builds it stay in the
- *  app, because a file must open and rebuild on a machine where the plugin was
- *  never installed. Uninstalling may cost you the ability to CREATE and EDIT
- *  one of these features. It may not cost you the ones you already made.
- *
- *  NOR DOES IT OWN THE NUMERIC ROWS, which is the same rule read twice.
- *  `document/numFields.ts` is not a list of labels, it is the inventory of what
- *  a PARAMETER can drive, and `resolveTarget` reads it to answer what
- *  `texture1.depth` refers to. A parameter has to keep meaning the same thing
- *  on a machine where the plugin is switched off, so that table stays in the
- *  app. What a plugin owns is which of those rows are worth showing and what
- *  they are called, `fieldApplies` and `fieldLabel` below, which is
- *  presentation, and changes nothing about what the document means. */
+ *  WHAT IT OWNS. A plugin that declares a feature type in its manifest owns
+ *  it outright: the fields and their rows here, and the geometry that builds
+ *  it, in the plugin's own component (docs/PLUGINS.md, "Owning a feature
+ *  type"). What the app keeps is the promise underneath: a feature whose
+ *  plugin is gone still opens, saves and keeps its numbers, and a parameter
+ *  bound to one of them keeps resolving, because `document/numFields.ts` falls
+ *  back to the raw fields when nobody describes the type. Uninstalling costs
+ *  you the building and the editing, never the values you typed. */
 export interface FeatureTypeContribution {
   /** The `type` field of the feature in the document. */
   type: string;
@@ -230,8 +224,15 @@ export interface FeatureTypeContribution {
    *  guarantee underneath, a feature type nobody describes still round-trips
    *  with its values intact and its parameter bindings unbroken (see
    *  document/numFields.ts), so uninstalling a plugin cannot cost you the
-   *  numbers you typed. */
-  numFields?: readonly [string, string, FieldKind][];
+   *  numbers you typed.
+   *
+   *  A function when the rows depend on the feature's own values, a list of
+   *  nodes each with its own sizes, say. A field may then be a path into a
+   *  list, `nodes.n3.sx`, the entry named by its `id` and never by its index
+   *  (see `fieldHolder`), so a binding follows the node and not its place. */
+  numFields?:
+    | readonly [string, string, FieldKind][]
+    | ((values: Record<string, unknown>) => readonly [string, string, FieldKind][]);
   /** The feature's editable geometry selections (the Faces/Edges/Bodies rows).
    *  Owned by the plugin for the same reason as `numFields`. */
   targets?: readonly TargetField[];
