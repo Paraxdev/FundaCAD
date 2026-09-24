@@ -165,4 +165,63 @@ describe("move gizmo lifecycle", () => {
     expect(tool.active).toBe(true);
     expect(gizmoArrows(scene)).toHaveLength(3);
   });
+
+  it("a drag waiting on its rebuild does not come back once the owner cancelled", () => {
+    const { vp, scene, canvas } = fakeViewport();
+    const { store, build } = fakeStore();
+    const tool = new MoveTool(vp, store);
+    tool.startTarget(probe([0, 0, 0], { rebuild: true }).target, () => {});
+    dragZ(canvas, scene);
+    expect(tool.active).toBe(false);
+
+    tool.cancel();
+    build();
+
+    expect(tool.active).toBe(false);
+    expect(gizmoArrows(scene)).toHaveLength(0);
+  });
+
+  it("a drag waiting on its rebuild asks its target again only once the rebuild lands", () => {
+    const { vp, scene, canvas } = fakeViewport();
+    const { store, build } = fakeStore();
+    const tool = new MoveTool(vp, store);
+    let ownerOpen = true;
+    const reopen = () => (ownerOpen ? probe([0, 0, 0]).target : null);
+    tool.startTarget(probe([0, 0, 0], { rebuild: true, reopen }).target, () => {});
+    dragZ(canvas, scene);
+
+    ownerOpen = false;
+    build();
+
+    expect(tool.active).toBe(false);
+    expect(gizmoArrows(scene)).toHaveLength(0);
+  });
+
+  it("a new target started while a drag waits on its rebuild is not replaced by the old one", () => {
+    const { vp, scene, canvas } = fakeViewport();
+    const { store, build } = fakeStore();
+    const tool = new MoveTool(vp, store);
+    tool.startTarget(probe([0, 0, 0], { rebuild: true }).target, () => {});
+    dragZ(canvas, scene);
+    const b = probe([50, 0, 0]);
+    tool.startTarget(b.target, () => {});
+    tool.cancel();
+    build();
+
+    expect(tool.active).toBe(false);
+    expect(gizmoArrows(scene)).toHaveLength(0);
+  });
+
+  it("cancel with nothing up does not tell the last session it ended a second time", () => {
+    const { vp } = fakeViewport();
+    const tool = new MoveTool(vp, fakeStore().store);
+    const done = vi.fn();
+    tool.startTarget(probe([0, 0, 0]).target, done);
+    tool.cancel();
+    vp.suspendPicking = true;
+    tool.cancel();
+
+    expect(done).toHaveBeenCalledTimes(1);
+    expect(vp.suspendPicking).toBe(true);
+  });
 });
