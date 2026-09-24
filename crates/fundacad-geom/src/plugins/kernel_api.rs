@@ -514,6 +514,7 @@ pub fn export_with(
     let mut ntri = 0;
     for b in &r.bodies {
         let (positions, indices) = export::export_mesh_with(&b.shape, &opts, &b.mesh_passes);
+        let (positions, indices) = export::weld(&positions, &indices);
         if indices.is_empty() {
             continue;
         }

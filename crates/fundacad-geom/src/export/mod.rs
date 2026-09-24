@@ -117,6 +117,37 @@ pub fn export_mesh_with(shape: &Shape, opts: &MeshOptions, passes: &[Value]) -> 
     }
 }
 
+/// Positions closer than this in every coordinate, in mm, are one vertex to `weld`.
+const WELD_QUANTUM: f64 = 1e-6;
+
+/// One vertex per position, so faces that meet share the nodes along their
+/// common edge. `export_mesh` gives every face its own copy of them, and a 3MF
+/// reader connects triangles through shared vertices only, so an unwelded
+/// solid reads as one open patch per face. Triangles the weld collapses are
+/// dropped.
+pub fn weld(positions: &[f64], indices: &[u32]) -> (Vec<f64>, Vec<u32>) {
+    let mut first: std::collections::HashMap<[i64; 3], u32> = std::collections::HashMap::new();
+    let mut out_pos = Vec::with_capacity(positions.len());
+    let remap: Vec<u32> = positions
+        .chunks_exact(3)
+        .map(|p| {
+            let key = [0, 1, 2].map(|k| (p[k] / WELD_QUANTUM).round() as i64);
+            *first.entry(key).or_insert_with(|| {
+                out_pos.extend_from_slice(p);
+                (out_pos.len() / 3 - 1) as u32
+            })
+        })
+        .collect();
+    let mut out_idx = Vec::with_capacity(indices.len());
+    for t in indices.chunks_exact(3) {
+        let [a, b, c] = [0, 1, 2].map(|k| remap[t[k] as usize]);
+        if a != b && b != c && a != c {
+            out_idx.extend_from_slice(&[a, b, c]);
+        }
+    }
+    (out_pos, out_idx)
+}
+
 /// Which group each index belongs to, the inverse of `par::share_groups`.
 fn group_index(groups: &[Vec<usize>], n: usize) -> Vec<usize> {
     let mut out = vec![0; n];
@@ -200,7 +231,10 @@ impl Exporter<'_> {
     fn merged(&mut self, bodies: &[ExportBody<'_>], path: &Path) -> Result<(), Failure> {
         let mut positions = Vec::new();
         let mut indices = Vec::new();
+        // Per body, so two bodies that touch stay two shells.
+        let welded = self.format == "3mf";
         self.meshes(bodies, |_, pos, idx| {
+            let (pos, idx) = if welded { weld(&pos, &idx) } else { (pos, idx) };
             let base = (positions.len() / 3) as u32;
             positions.extend_from_slice(&pos);
             indices.extend(idx.iter().map(|i| i + base));
