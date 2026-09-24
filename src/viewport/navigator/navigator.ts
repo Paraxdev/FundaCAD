@@ -432,9 +432,15 @@ export class Navigator {
     const o = this.orbit;
     if (!o) return;
     const a = o.step(tau, dt);
-    turntableAbout(this.pose, o.pivot, a.yaw, a.elev, Math.abs(a.roll) < 1e-12 ? 0 : a.roll);
-    this.moved();
-    this.unsettled = true;
+    const roll = Math.abs(a.roll) < 1e-12 ? 0 : a.roll;
+    // A button held still (a right click on its way to the menu) turns nothing.
+    const same = a.yaw === o.shown.yaw && a.elev === o.shown.elev && roll === o.shown.roll;
+    if (!same) {
+      turntableAbout(this.pose, o.pivot, a.yaw, a.elev, roll);
+      o.shown = { yaw: a.yaw, elev: a.elev, roll };
+      this.moved();
+      this.unsettled = true;
+    }
     if (!this.gesture && o.settled()) this.orbit = null;
   }
 

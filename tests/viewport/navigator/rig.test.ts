@@ -146,6 +146,31 @@ describe("navigator rig input", () => {
     expect(Math.abs(a - b)).toBeLessThan(1e-9);
   });
 
+  it("a right button held still moves nothing (a click on its way to the menu)", () => {
+    const { rig, fire } = rigWithBox();
+    steady(rig);
+    const v0 = rig.poseVersion();
+    fire("pointerdown", { button: 2, buttons: 2, clientX: 400, clientY: 300 });
+    for (let i = 0; i < 30; i++) rig.update(1 / 60);
+    fire("pointerup", {});
+    steady(rig);
+    expect(rig.poseVersion()).toBe(v0);
+  });
+
+  it("getState and setState round trip, JSON included", () => {
+    const { rig } = rigWithBox();
+    rig.orbitBy(0.7, -0.3);
+    rig.setViewScale(9);
+    const saved = JSON.parse(JSON.stringify(rig.getState()));
+    const eye = rig.getPosition();
+    rig.resetView(null);
+    steady(rig);
+    rig.setState(saved);
+    steady(rig);
+    expect(rig.getPosition().distanceTo(eye)).toBeLessThan(1e-9);
+    expect(rig.viewScale()).toBeCloseTo(9, 9);
+  });
+
   it("poseVersion moves with the pose and with the viewport size", () => {
     const { rig } = rigWithBox();
     const v0 = rig.poseVersion();
