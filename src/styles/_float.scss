@@ -979,12 +979,10 @@
   white-space: nowrap;
 }
 
-/* The prompt and the frame-rate readout sit along the bottom middle, clear of
-   both columns. */
+/* The prompt and the frame-rate readout sit along the bottom middle. */
 #viewport .prompt {
   top: auto;
   bottom: calc(var(--float-gap) + 36px);
-  max-width: max(320px, calc(100% - 940px));
 }
 #viewport .fps {
   left: 50%;

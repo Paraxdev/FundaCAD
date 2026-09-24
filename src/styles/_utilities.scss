@@ -25,9 +25,13 @@ button.finish:hover {
 .prompt {
   position: absolute;
   top: var(--s-5);
-  left: 50%;
-  transform: translateX(-50%);
-  display: inline-flex;
+  /* Centred in the span the floating cards leave free on its row, which
+     PromptBanner measures (ui/promptPlacement.ts). */
+  left: var(--prompt-left, 0px);
+  right: var(--prompt-right, 0px);
+  margin-inline: auto;
+  width: max-content;
+  display: flex;
   align-items: center;
   gap: var(--s-3);
   background: rgba(18, 20, 25, 0.88);
@@ -45,7 +49,7 @@ button.finish:hover {
   letter-spacing: 0.1px;
   box-shadow: var(--shadow-2);
   z-index: 20;
-  max-width: min(80%, 720px);
+  max-width: min(720px, calc(100% - var(--prompt-left, 0px) - var(--prompt-right, 0px)));
   animation: prompt-in var(--t-med) var(--ease);
 }
 .prompt::before {
@@ -58,8 +62,8 @@ button.finish:hover {
   box-shadow: 0 0 8px var(--accent-glow);
 }
 @keyframes prompt-in {
-  from { opacity: 0; transform: translateX(-50%) translateY(-6px); }
-  to   { opacity: 1; transform: translateX(-50%); }
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: none; }
 }
 
 /* ---- on-canvas dimension input ----
