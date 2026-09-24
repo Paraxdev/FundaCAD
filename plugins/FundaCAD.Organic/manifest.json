@@ -1,0 +1,16 @@
+{
+  "id": "FundaCAD.Organic",
+  "name": "Node Bodies",
+  "version": "1.0.0",
+  "kind": "builtin",
+  "summary": "Rounded, organic solids from sized nodes: place nodes in 3D, link them into chains, and each chain becomes a smooth limb that fuses with the rest. Every size and position is a value you can bind to a parameter.",
+  "enabledByDefault": true,
+  "grants": [
+    "document.read",
+    "document.write"
+  ],
+  "featureTypes": [
+    "organic"
+  ],
+  "geometryWasm": "geometry.wasm"
+}
