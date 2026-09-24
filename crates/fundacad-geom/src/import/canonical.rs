@@ -54,10 +54,16 @@ pub fn realign_face_colors<T: Clone>(before: &Shape, after: &Shape, colors: &[Op
         return None;
     }
     let mut lookup: HashMap<Option<String>, T> = HashMap::new();
-    for (face, c) in src.iter().zip(colors) {
+    for (key, c) in face_keys(&src).into_iter().zip(colors) {
         if let Some(c) = c {
-            lookup.entry(face_key(face)).or_insert_with(|| c.clone());
+            lookup.entry(key).or_insert_with(|| c.clone());
         }
     }
-    Some(kernel::subshapes(after, Kind::Face).iter().map(|f| lookup.get(&face_key(f)).cloned()).collect())
+    let dst = kernel::subshapes(after, Kind::Face);
+    Some(face_keys(&dst).iter().map(|k| lookup.get(k).cloned()).collect())
+}
+
+fn face_keys(faces: &[Shape]) -> Vec<Option<String>> {
+    let work = crate::par::Shared(faces);
+    crate::par::map_indexed(faces.len(), move |i| face_key(&work.get()[i]))
 }

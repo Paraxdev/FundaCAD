@@ -131,16 +131,14 @@ fn body_payload_for(
     );
     let lines = crate::bench::phase("edges", || edge_polylines(&access));
     let from_map: Vec<Value> = match body.owner_map {
-        Some(owners) if body.face_owners.is_empty() => {
-            crate::kernel::subshapes(shape, crate::kernel::Kind::Face)
-                .iter()
-                .map(|f| {
-                    crate::builder::owners::face_key(f)
-                        .and_then(|k| owners.get(&k))
-                        .map_or(Value::Null, |o| Value::String(o.clone()))
-                })
+        Some(owners) if body.face_owners.is_empty() => crate::bench::phase("owner_keys", || {
+            let faces = crate::kernel::subshapes(shape, crate::kernel::Kind::Face);
+            let work = crate::par::Shared(&faces);
+            crate::par::map_indexed(faces.len(), move |i| crate::builder::owners::face_key(&work.get()[i]))
+                .into_iter()
+                .map(|k| k.and_then(|k| owners.get(&k)).map_or(Value::Null, |o| Value::String(o.clone())))
                 .collect()
-        }
+        }),
         _ => Vec::new(),
     };
     let listed = if from_map.is_empty() { &body.face_owners } else { &from_map };
