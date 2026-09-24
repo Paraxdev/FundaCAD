@@ -205,6 +205,9 @@ export class Navigator {
   private takeInput(): boolean {
     if (this.flight?.hard) return false;
     this.flight = null;
+    // An orbit still easing (or coasting) after its release stops where it is
+    // shown, or it would carry a new gesture's anchor away from the cursor.
+    if (!this.gesture) this.orbit?.freeze();
     return true;
   }
 
