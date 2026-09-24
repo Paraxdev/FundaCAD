@@ -40,6 +40,7 @@ pub fn tessellate(shape: &Shape, access: &MeshAccess, params: MeshParams) -> Tes
 }
 
 /// A mesh pass's triangles for face `fid`, or `None` to mesh it plainly.
+/// Called for several faces at once, from the engine's threads.
 pub type Displacer<'a> = &'a dyn Fn(usize) -> Option<super::passes::FaceMesh>;
 
 /// `tessellate`, with every face `displace` answers for replaced in place by
@@ -59,13 +60,20 @@ pub fn tessellate_with(
             params.force_remesh,
         )
     });
+    let mut displaced: Vec<Option<super::passes::FaceMesh>> = match displace {
+        Some(d) => {
+            let work = crate::par::Shared(d);
+            crate::par::map_indexed(access.face_count(), move |fid| (work.get())(fid))
+        }
+        None => Vec::new(),
+    };
     let mut out = Tessellation::default();
     let mut normals: Option<Vec<f64>> = None;
     for fid in 0..access.face_count() {
         let Some(tri) = access.face_triangulation(fid, params.display) else {
             continue;
         };
-        if let Some(m) = displace.and_then(|d| d(fid)) {
+        if let Some(m) = displaced.get_mut(fid).and_then(Option::take) {
             out.normals = normals.take();
             super::passes::append(&mut out, fid as u32, &m, params.display);
             normals = out.normals.take();
