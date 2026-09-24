@@ -28,12 +28,15 @@ export interface SketchEscapeState {
   selection: boolean;
   /** the armed tool; "select" is the resting state a sketch idles in */
   tool: string;
+  /** a menu or popover is open and closes on this press itself */
+  overlay: boolean;
 }
 
 /** What the press does. One rung of the stack per value, so the caller cannot
  *  accidentally perform two of them (which is the bug: cancelling the tool AND
  *  closing the sketch on the same key). */
 export type SketchEscapeAction =
+  | "none"
   | "cancel-offset"
   | "cancel-drag"
   | "cancel-geometry"
@@ -49,6 +52,7 @@ export type SketchEscapeAction =
  *  one Escape away from every other state, so leaving still costs at most two
  *  presses however deep you were. */
 export function sketchEscapeAction(s: SketchEscapeState): SketchEscapeAction {
+  if (s.overlay) return "none";
   if (s.offsetPick) return "cancel-offset";
   if (s.dragging) return "cancel-drag";
   if (s.pendingGeometry) return "cancel-geometry";
