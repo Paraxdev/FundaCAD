@@ -29,11 +29,18 @@ export function createSelection(
     configurable: true, // tests re-install onto the same object
   });
 
-  const selectFeature = (id: string | null) => {
+  Object.defineProperty(e, "selectedFeatureExplicit", {
+    get: () => useSelectionStore().featureExplicit,
+    enumerable: true,
+    configurable: true,
+  });
+
+  const selectFeature = (id: string | null, explicit = true) => {
     // Writing the store is what opens the feature's values in the history AND
     // marks it in the browser tree, both render from it rather than being
     // pushed at.
     useSelectionStore().featureId = id;
+    useSelectionStore().featureExplicit = explicit;
     e.viewport.highlightDatum(id); // brighten the matching construction plane (if any)
   };
 

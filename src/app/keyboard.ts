@@ -42,13 +42,16 @@ export function installKeyboard(e: Engine): void {
 
   // delete: a selected FACE → remove it and heal the solid (defeature, works on
   // imported geometry, where there's no feature to delete); otherwise delete the
-  // selected timeline feature.
+  // selected timeline feature, but only one the user actually picked. Exiting a
+  // sketch auto-selects its profile for extrude (selectFeature(id, false)), and
+  // that auto-selection is not something the user can see as "selected" the way
+  // a click or a tree row is, so a stray Delete must not act on it.
   window.addEventListener("keydown", (ev) => {
     if (isEditableTarget(ev.target)) return; // typing in a field, not a shortcut
     if (e.toolBusy()) return;
     if (ev.key !== "Delete" && ev.key !== "Backspace") return;
     if (e.deleteSelectedFace()) return;
-    if (e.selectedFeature) {
+    if (e.selectedFeature && e.selectedFeatureExplicit) {
       e.store.removeFeature(e.selectedFeature);
       e.selectFeature(null);
     }

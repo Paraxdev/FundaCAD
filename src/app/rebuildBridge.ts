@@ -221,7 +221,7 @@ export function installRebuildBridge(e: Engine): void {
             diagnostics: (s.result?.diagnostics ?? []).filter((d) => d.feature_id === id),
           });
           toast(`${label} failed: ${err.message}`, { kind: "error", action, detail, source: id });
-          if (id === lastCommittedId) e.selectFeature(id);
+          if (id === lastCommittedId) e.selectFeature(id, false); // toast auto-select, not a user pick
         }
         prevErrorIds = ids;
         lastCommittedId = null;
