@@ -181,7 +181,31 @@ const BAR_EXCLUDED: ReadonlySet<string> = new Set<string>(["delete-face"]);
  *  without it a capped bar would put a verb behind a right-click and nothing
  *  else. */
 export function toolbarOffers(sel: SelectionCounts): ToolOffer[] {
-  return selectionOffers(sel).filter((o) => o.enabled && !BAR_EXCLUDED.has(o.tool));
+  const base = selectionOffers(sel).filter((o) => o.enabled && !BAR_EXCLUDED.has(o.tool));
+  return primaryKind(sel) === "body" ? [...bodyEdgeToolOffers(), ...base] : base;
+}
+
+/** Fillet and Chamfer stay reachable with a whole BODY selected, not just an
+ *  edge or face: opening either enters the tool and asks the user to pick an
+ *  edge (edgeFeatureTool.start's empty-seed path already does this for a
+ *  keyboard/menu launch), so hiding the buttons here would be turning off a
+ *  working entry point rather than an inapplicable one. Kept out of the
+ *  capability table on purpose: selectionOffers()'s "body" answer stays the
+ *  honest one for the context menu and the drag-handle ranking. */
+function bodyEdgeToolOffers(): ToolOffer[] {
+  const caps = capabilities();
+  return (["fillet", "chamfer"] as const).map((tool) => {
+    const cap = caps.get(tool)!;
+    return {
+      tool,
+      label: cap.label,
+      iconName: iconFor(tool, cap.icon),
+      action: tool,
+      hint: keyHint(tool),
+      enabled: true,
+      pluginId: undefined,
+    };
+  });
 }
 
 // --- appearance -------------------------------------------------------------

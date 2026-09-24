@@ -80,7 +80,16 @@ export function useSelectionOffers(engine: Engine) {
     });
   };
   const summary = computed(() => describe(false));
-  const readout = computed(() => describe(true));
+  // A body selection alone gives no hint that a second click, or a pause,
+  // reaches the face/edge under the cursor (see viewport/clickIntent.ts), so
+  // spell it out here where the selection is already being read back.
+  const readout = computed(() => {
+    const base = describe(true);
+    if (base && kind.value === "body" && engine.viewport.policy === "auto") {
+      return `${base} · click again for a face, or pause over it`;
+    }
+    return base;
+  });
 
   function refresh(): boolean {
     const next = readCounts(engine);
@@ -150,9 +159,7 @@ export function useSelectionOffers(engine: Engine) {
       engine.viewport.setSelectedBodies([]);
       return;
     }
-    const all = store.buildState.result?.bodies ?? [];
-    const keep = new Set(ids);
-    store.setBodiesVisibility(new Map(all.map((b) => [b.id, keep.has(b.id)])));
+    store.isolateBodies(ids);
   }
 
   function clear() {
