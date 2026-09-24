@@ -73,6 +73,13 @@ impl FaceAdjacency {
             .collect()
     }
 
+    /// Both sides of the edge are one face, the line where a wrapping face
+    /// closes on itself.
+    pub fn is_seam(&self, edge: &Shape) -> bool {
+        let faces = self.faces_of_edge(edge);
+        faces.len() == 2 && faces[0] == faces[1] && faces[0] != 0
+    }
+
     pub fn neighbors(&self, i: usize) -> BTreeSet<usize> {
         self.walk(i).into_iter().map(|(j, _)| j).collect()
     }

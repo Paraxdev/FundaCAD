@@ -254,7 +254,7 @@ impl<'a> Resolver<'a> {
                 let band = self.tuning.nearest_tie_band;
                 let pick = match &on_curve {
                     Some(d) => self.nearest_one(Kind::Edge, m, d, &keys, described, |tied: &[usize]| {
-                        nearest_midpoint(&to_mid, tied, band)
+                        nearest_midpoint(&to_mid, &real_edges(part, &edges, tied), band)
                     })?,
                     None => self.nearest_one(Kind::Edge, m, &to_mid, &keys, described, |_: &[usize]| None)?,
                 };
@@ -683,6 +683,23 @@ fn slid_out_pick(faces: &[FaceEnt], tied: &[usize], p: DVec3, band: f64) -> Opti
         return None;
     }
     Some((best, margin))
+}
+
+/// The tied edges that are not seams, or all of them when that leaves none.
+/// A point where a wrapping wall's seam meets its rim is on both, and the
+/// seam's midpoint is the nearer one, but a seam is no edge to blend or
+/// measure from: the rim is preferred over it.
+fn real_edges(part: &Shape, edges: &[EdgeEnt], tied: &[usize]) -> Vec<usize> {
+    if tied.len() < 2 {
+        return tied.to_vec();
+    }
+    let adj = crate::topo::FaceAdjacency::new(part);
+    let real: Vec<usize> = tied.iter().copied().filter(|&i| !adj.is_seam(&edges[i].shape)).collect();
+    if real.is_empty() {
+        tied.to_vec()
+    } else {
+        real
+    }
 }
 
 /// An edge `nearest` tie, every candidate on the pick point, settled by
