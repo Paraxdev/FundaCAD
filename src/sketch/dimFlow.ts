@@ -28,7 +28,8 @@ import {
   targetIdentity, targetKey, unsupportedMessage,
   type DimOptions, type DimPlan, type DimTarget,
 } from "./dimensionTool";
-import { isDimConstraint } from "./id";
+import { isDimConstraint, newEntityId } from "./id";
+import { originCandidate } from "./snap";
 import type { FieldKind } from "../document/numFields";
 import type { ResolvedEntity } from "./snap";
 import { setPrompt } from "../ui/prompt";
@@ -238,7 +239,7 @@ export class DimFlow {
    *  The candidate is recomputed HERE, never read from hover state, a
    *  synthetic pointerdown arrives with no preceding pointermove. */
   dimensionClick(p: THREE.Vector2, ev: PointerEvent) {
-    const cand = pickDimTarget(this.host.entities(), p, this.host.pickTol());
+    const cand = this.pickOrigin(p) ?? pickDimTarget(this.host.entities(), p, this.host.pickTol());
     // Text has no entitySegments, so pickDimTarget can never return it, without
     // this its "can't be dimensioned yet" message would be unreachable and a
     // click on the glyphs would be a total no-op.
@@ -247,8 +248,59 @@ export class DimFlow {
       return;
     }
     const fresh = cand != null && !this.dimPicks.some((t) => targetKey(t) === targetKey(cand));
-    if (cand && fresh && this.dimPicks.length < 2) this.dimPick(cand, ev);
+    if (cand && fresh && this.dimPicks.length < 2) this.dimPick(this.commitOriginPick(cand), ev);
     else this.dimPlaceClick(p, ev);
+  }
+
+  /** The Origin marker's sketch-space position, or null off a plane that
+   *  doesn't pass through the world origin (see snap.ts originCandidate, the
+   *  same gate the drawing tools' own origin-snap uses). */
+  private originAnchorPos(): THREE.Vector2 | null {
+    return originCandidate(this.host.plane())[0]?.p ?? null;
+  }
+
+  /** An already-fixed construction point sitting exactly on the origin, if the
+   *  sketch has one (read-only, so repeat dimensioning to the origin reuses it
+   *  instead of piling up duplicate points). */
+  private existingOriginPoint(pos: THREE.Vector2): Extract<ResolvedEntity, { type: "point" }> | null {
+    const fixed = new Set(
+      this.host.constraints().filter((c) => c.type === "fix").map((c) => (c as Extract<SketchConstraint, { type: "fix" }>).e),
+    );
+    for (const e of this.host.entities()) {
+      if (e.type === "point" && fixed.has(e.id) && Math.hypot(e.x - pos.x, e.y - pos.y) < 1e-6) return e;
+    }
+    return null;
+  }
+
+  /** SK-4: the Origin gets pick priority within its own hover radius, the same
+   *  rule pickDimTarget already gives a real point over an edge (its own
+   *  comment: "reference points are preferred over curve bodies"); checked
+   *  BEFORE the ordinary entity pick, so a click near the Origin never falls
+   *  through to whatever edge happens to be nearby. Read-only, safe to call
+   *  from hover: an existing origin point is reused as-is, otherwise this
+   *  previews against a placeholder id that commitOriginPick() turns into a
+   *  real point the moment it is actually picked, never on a hover alone. */
+  private pickOrigin(p: THREE.Vector2): DimTarget | null {
+    const pos = this.originAnchorPos();
+    if (!pos || pos.distanceTo(p) > this.host.pickTol()) return null;
+    const e: ResolvedEntity = this.existingOriginPoint(pos) ?? { type: "point", id: "__origin__", x: pos.x, y: pos.y, construction: true };
+    return { kind: "point", e, p: 0, pos: pos.clone() };
+  }
+
+  /** Turns a pickOrigin() placeholder into a permanent, fixed construction
+   *  point the first time the Origin is genuinely picked (a click, never a
+   *  hover): exactly what a user placing a point and fixing it by hand would
+   *  produce, so the dimension it feeds is the same p2pDistance/p2lDistance
+   *  the pair matrix already builds for any other point, no new constraint
+   *  kind and no solver change needed. A no-op when the pick already resolved
+   *  to a real, existing point. */
+  private commitOriginPick(t: DimTarget): DimTarget {
+    if (t.kind !== "point" || t.e.id !== "__origin__") return t;
+    const id = newEntityId();
+    const ent: ResolvedEntity = { type: "point", id, x: t.pos.x, y: t.pos.y, construction: true };
+    this.host.entities().push(ent);
+    this.host.constraints().push({ type: "fix", e: id, p: 0 });
+    return { kind: "point", e: ent, p: 0, pos: t.pos.clone() };
   }
 
   private dimPick(t: DimTarget, ev: PointerEvent) {
@@ -474,7 +526,9 @@ export class DimFlow {
     this.host.lastCursor().copy(p);
     const preview: THREE.Object3D[] = [];
     for (const t of this.dimPicks) preview.push(...this.dimTargetObjects(t, 0x33aaff));
-    const cand = this.dimPicks.length < 2 ? pickDimTarget(this.host.entities(), p, this.host.pickTol()) : null;
+    const cand = this.dimPicks.length < 2
+      ? this.pickOrigin(p) ?? pickDimTarget(this.host.entities(), p, this.host.pickTol())
+      : null;
     if (cand && !this.dimPicks.some((t) => targetKey(t) === targetKey(cand))) {
       preview.push(...this.dimTargetObjects(cand, 0xff5555));
     }
