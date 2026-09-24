@@ -107,6 +107,16 @@ const selectionCount = computed(() => {
   return browser.selectedBodyIds.length;
 });
 const faceCount = ref(0);
+/** The material actually WORN by the current selection right now, or null.
+ *  Only asked of a single face or a single lone body: several faces (or a
+ *  face plus a body) rarely share one material and a tile "wearing" a mixed
+ *  selection would be a guess dressed up as a fact.
+ *
+ *  FI-6: a single click only picks a tile to LOOK at, it never applies
+ *  anything, and picked used to look exactly like worn (`.is-selected` on
+ *  both). This is the other half of that state, so the tile that is actually
+ *  on the model can be told apart from the one merely under the cursor. */
+const wornId = ref<string | null>(null);
 let facePoll: number | null = null;
 onMounted(() => {
   // Polled rather than subscribed, because the face selection lives on the
@@ -115,6 +125,14 @@ onMounted(() => {
   // imperceptible for a button label and is one array length.
   facePoll = window.setInterval(() => {
     faceCount.value = engine.viewport.getSelectedFaceIds().length;
+    const faces = selectedFaceTargets();
+    if (faces.length === 1) {
+      wornId.value = store.faceMaterialId(faces[0]!.body, faces[0]!.face) ?? null;
+    } else if (!faces.length && browser.selectedBodyIds.length === 1) {
+      wornId.value = store.bodyMaterialId(browser.selectedBodyIds[0]!) ?? null;
+    } else {
+      wornId.value = null;
+    }
   }, 250);
 });
 onUnmounted(() => { if (facePoll !== null) window.clearInterval(facePoll); });
@@ -379,18 +397,23 @@ async function doImport() {
           v-for="m in all"
           :key="m.id"
           class="rd-tile"
-          :class="{ 'is-selected': selectedSet.has(m.id) }"
+          :class="{ 'is-selected': selectedSet.has(m.id), 'is-worn': wornId === m.id }"
           role="option"
           :aria-selected="selectedSet.has(m.id)"
           draggable="true"
           :data-material="m.id"
-          :title="`${m.name}, ${finishLabel(m)}. Drag onto a face, hold Shift for the whole body. Ctrl or Shift click picks several, right-click for Delete.`"
+          :title="wornId === m.id
+            ? `${m.name}, ${finishLabel(m)}. Already applied to the selection.`
+            : `${m.name}, ${finishLabel(m)}. Click to preview here, double-click or Apply below to use it. Drag onto a face, hold Shift for the whole body.`"
           @click="pick(m.id, $event, all)"
           @dblclick="selectOnly(m.id); applyToSelection()"
           @contextmenu="openMenu($event, m)"
           @dragstart="onDragStart($event, m)"
           @dragend="endMaterialDrag()"
         >
+          <span v-if="wornId === m.id" class="rd-worn" title="Applied to the current selection">
+            <Icon name="check" :size="11" />
+          </span>
           <img v-if="preview(m)" class="rd-ball" :src="preview(m)!" alt="" />
           <span v-else class="rd-ball flat" :style="{ background: m.color }"></span>
           <span class="rd-sub">{{ finishLabel(m) }}</span>
@@ -401,8 +424,10 @@ async function doImport() {
         {{ search ? "Nothing here matches that." : "This document has no materials." }}
       </div>
       <p class="sm-hint rd-howto">
-        Drag a material onto a face to dress just that face. Hold Shift while you
-        drop to dress the whole body.
+        Click a tile to preview it below; it is not applied until you
+        double-click, drag it onto the model, or press Apply. Drag onto a face
+        to dress just that face, hold Shift while you drop to dress the whole
+        body.
       </p>
     </section>
 
