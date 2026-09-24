@@ -56,6 +56,21 @@ export const NEAR_FLOOR = 1e-4;
  *  user would be looking at the storage format rather than at their part. */
 export const MIN_PERSP_DIST = 0.02;
 
+/** Closest approach whatever the coordinates, two microns. */
+export const MIN_DISTANCE_FLOOR = 2e-3;
+
+/** Closest the camera may come to what it looks at, for a model whose
+ *  coordinates reach `maxCoord`: one pixel has to span at least ten float32
+ *  steps of those coordinates (MIN_PERSP_DIST is this for a part within 30mm
+ *  of the origin on a 1000px view). */
+export function minDistanceFor(maxCoord: number, fovDeg = 45, heightPx = 1000): number {
+  const m = Number.isFinite(maxCoord) && maxCoord > 0 ? maxCoord : 0;
+  const h = Number.isFinite(heightPx) && heightPx > 0 ? heightPx : 1000;
+  const t = Math.tan(((Number.isFinite(fovDeg) && fovDeg > 0 ? fovDeg : 45) * Math.PI) / 360);
+  const quantum = m * 2 ** -24;
+  return Math.max(MIN_DISTANCE_FLOOR, (10 * quantum * h) / (2 * t));
+}
+
 /** Farthest zoom-out, as half the visible view height in multiples of the
  *  model's bounding radius. At 100 the whole model still spans several pixels,
  *  past it the part shrinks below one and the user is left with an empty grid
@@ -147,4 +162,30 @@ export const ORTHO_DEPTH_FACTOR = 30;
 export function orthoDepth(halfHeight: number): number {
   if (!(halfHeight > 0) || !Number.isFinite(halfHeight)) return FAR_AT_REST;
   return Math.max(FAR_AT_REST, halfHeight * ORTHO_DEPTH_FACTOR);
+}
+
+export interface Clip {
+  near: number;
+  far: number;
+}
+
+/** Perspective clip planes for an eye `distance` from its target, with the
+ *  content box spanning depths [zmin, zmax] along the view axis (NaN when there
+ *  is no content). Nothing of the box is ever cut by far, and near moves out
+ *  toward the box only as far as the gap in front of it allows. */
+export function perspClip(distance: number, zmin: number, zmax: number): Clip {
+  const gap = Number.isFinite(zmin) && zmin > 0 ? zmin : 0;
+  const near = perspNear(distance, gap);
+  const reach = Number.isFinite(zmax) && zmax > 0 ? zmax * 1.05 : 0;
+  return { near, far: Math.max(perspFar(distance), reach, near * 2) };
+}
+
+/** Orthographic clip planes about the eye: the usual depth either side, widened
+ *  to hold the whole content box, which can lie behind the eye. */
+export function orthoClip(halfHeight: number, zmin: number, zmax: number): Clip {
+  const depth = orthoDepth(halfHeight);
+  const pad = depth * 0.01;
+  const near = Number.isFinite(zmin) ? Math.min(-depth, zmin - pad) : -depth;
+  const far = Number.isFinite(zmax) ? Math.max(depth, zmax + pad) : depth;
+  return { near, far };
 }
