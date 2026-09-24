@@ -161,6 +161,9 @@ pub fn add_feature(
     if kind.is_empty() {
         return err("a feature needs a `type`");
     }
+    if !crate::schema::features().contains_key(kind) {
+        return err(format!("unknown feature type: {kind}"));
+    }
     let mut f = obj.clone();
     let fid = match f.get("id") {
         None | Some(Value::Null) => {
@@ -182,6 +185,9 @@ pub fn add_feature(
             text
         }
     };
+    if let Some(msg) = missing_fields_message(kind, &f) {
+        return err(msg);
+    }
     let f = Value::Object(f);
     forget_stale_join(doc, None, &f);
     let feats = features_mut(doc);
@@ -282,6 +288,28 @@ fn check_new_type(fid: &str, was: &str, now: &str, f: &Map<String, Value>) -> Re
         return err(format!("{fid}: as a {now} this feature is malformed: {why}"));
     }
     Ok(())
+}
+
+/// What `build` would refuse this feature for, if anything: a required field it
+/// does not have, or (for a documented plugin type) a malformed shape. Checked
+/// at `feature_add` time so the refusal comes back on the call that caused it,
+/// the same way a dangling `sketch` reference already does, rather than one
+/// unrelated `build` later.
+fn missing_fields_message(kind: &str, f: &Map<String, Value>) -> Option<String> {
+    let (missing, other) = if Feature::is_core_type(kind) {
+        core_missing_fields(f)
+    } else {
+        (documented_missing_fields(kind, f), None)
+    };
+    let label = f.get("name").and_then(Value::as_str).filter(|s| !s.is_empty()).unwrap_or(kind);
+    match missing.as_slice() {
+        [] => other.map(|why| format!("{label} is malformed: {why}")),
+        [one] => Some(format!("{label} is missing the field \"{one}\"")),
+        many => Some(format!(
+            "{label} is missing the fields {}",
+            many.iter().map(|k| format!("\"{k}\"")).collect::<Vec<_>>().join(", ")
+        )),
+    }
 }
 
 /// Every field serde says a core feature is missing, found by filling each in
