@@ -211,6 +211,7 @@ pub struct Ctx {
     /// Every feature of the document in order, for naming one in a message.
     pub timeline: Vec<Step>,
     ids: BodyIds,
+    face_fps: owners::FaceFps,
 }
 
 /// One boolean a feature applied: the tool solid and the bodies it changed.
@@ -248,6 +249,7 @@ impl Ctx {
             patterned: HashSet::new(),
             timeline: Vec::new(),
             ids: BodyIds::new(None),
+            face_fps: owners::FaceFps::default(),
         }
     }
 
@@ -275,6 +277,7 @@ impl Ctx {
             patterned: HashSet::new(),
             timeline: Vec::new(),
             ids: BodyIds::new(None),
+            face_fps: owners::FaceFps::default(),
         }
     }
 
@@ -812,6 +815,7 @@ pub fn rebuild_from(
         patterned: HashSet::new(),
         timeline: Vec::new(),
         ids: BodyIds::new(recorded.clone()),
+        face_fps: owners::FaceFps::default(),
     };
     let raw_features: Vec<Value> = raw
         .get("features")

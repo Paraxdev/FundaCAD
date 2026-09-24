@@ -13,6 +13,12 @@ use crate::kernel::{self, Kind};
 /// Fingerprint key to owning feature id.
 pub type Owners = HashMap<String, String>;
 
+/// Each body's faces with their unrounded fingerprints, by body uid, so a
+/// face a feature left alone is not integrated again. Holding the face keeps
+/// its TShape alive, so its address cannot be reused by another face.
+#[derive(Default)]
+pub struct FaceFps(HashMap<u64, Vec<(Shape, Option<[f64; 4]>)>>);
+
 /// Python `round(x, n)` for the fingerprint: correctly rounded, ties to even,
 /// negative zero folded into zero as a tuple key compares it.
 fn round_key(v: f64, digits: usize) -> String {
@@ -71,14 +77,54 @@ pub fn update(
         _ => None,
     };
     let all: Vec<&Owners> = pre_owners.iter().map(|(_, o)| o).collect();
+    let changed: Vec<usize> = ctx
+        .bodies
+        .iter()
+        .enumerate()
+        .filter(|(_, b)| !pre.iter().any(|(uid, gen)| *uid == b.uid && *gen == b.generation))
+        .map(|(i, _)| i)
+        .collect();
+    let faces: Vec<Vec<Shape>> = changed
+        .iter()
+        .map(|&i| kernel::subshapes(ctx.bodies[i].shape(), Kind::Face))
+        .collect();
+    let mut known: HashMap<u64, Vec<&(Shape, Option<[f64; 4]>)>> = HashMap::new();
+    for entry in ctx.face_fps.0.values().flatten() {
+        known.entry(kernel::tshape_id(&entry.0)).or_default().push(entry);
+    }
+    let mut raws: Vec<Vec<Option<Option<[f64; 4]>>>> = faces
+        .iter()
+        .map(|fs| {
+            fs.iter()
+                .map(|face| {
+                    known
+                        .get(&kernel::tshape_id(face))
+                        .and_then(|c| c.iter().find(|(f, _)| kernel::is_equal(f, face)))
+                        .map(|(_, raw)| *raw)
+                })
+                .collect()
+        })
+        .collect();
+    drop(known);
+    let misses: Vec<(usize, usize)> = raws
+        .iter()
+        .enumerate()
+        .flat_map(|(b, rs)| rs.iter().enumerate().filter(|(_, r)| r.is_none()).map(move |(f, _)| (b, f)))
+        .collect();
+    let work = crate::par::Shared((&faces, &misses));
+    let fresh = crate::par::map_indexed(misses.len(), move |m| {
+        let (faces, misses) = *work.get();
+        let (b, f) = misses[m];
+        face_raw(&faces[b][f])
+    });
+    for (&(b, f), raw) in misses.iter().zip(fresh) {
+        raws[b][f] = Some(raw);
+    }
+
     let mut updates: Vec<(usize, Owners)> = Vec::new();
-    for (index, b) in ctx.bodies.iter().enumerate() {
-        let unchanged = pre
-            .iter()
-            .any(|(uid, gen)| *uid == b.uid && *gen == b.generation);
-        if unchanged {
-            continue;
-        }
+    let mut measured: Vec<(u64, Vec<(Shape, Option<[f64; 4]>)>)> = Vec::new();
+    for ((&index, fs), rs) in changed.iter().zip(faces).zip(raws) {
+        let b = &ctx.bodies[index];
         let empty = Owners::new();
         let prior_src = pre_owners
             .iter()
@@ -94,8 +140,11 @@ pub fn update(
             }
         }
         let mut owners = Owners::new();
-        for face in kernel::subshapes(b.shape(), Kind::Face) {
-            let Some(raw) = face_raw(&face) else { continue };
+        let mut fps = Vec::with_capacity(fs.len());
+        for (face, raw) in fs.into_iter().zip(rs) {
+            let raw = raw.flatten();
+            fps.push((face, raw));
+            let Some(raw) = raw else { continue };
             let fp = key(raw[0], [raw[1], raw[2], raw[3]]);
             let owner = prior
                 .get(&fp)
@@ -105,7 +154,11 @@ pub fn update(
             owners.insert(fp, owner);
         }
         updates.push((index, owners));
+        measured.push((b.uid, fps));
     }
+    let live: std::collections::HashSet<u64> = ctx.bodies.iter().map(|b| b.uid).collect();
+    ctx.face_fps.0.retain(|uid, _| live.contains(uid));
+    ctx.face_fps.0.extend(measured);
     for (index, owners) in updates {
         if let Some(b) = ctx.bodies.get_mut(index) {
             b.owners = owners;

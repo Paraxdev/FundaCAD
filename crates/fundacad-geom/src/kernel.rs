@@ -113,6 +113,16 @@ pub fn is_null(s: &Shape) -> bool {
     ffi::bo_is_null(s.raw())
 }
 
+/// Same TShape, location and orientation.
+pub fn is_equal(a: &Shape, b: &Shape) -> bool {
+    ffi::bo_is_equal(a.raw(), b.raw())
+}
+
+/// The address of the shape's TShape, what faces sharing one have in common.
+pub fn tshape_id(s: &Shape) -> u64 {
+    opencascade_sys::face_query::FQ_tshape(s.raw())
+}
+
 pub fn compound<'a>(parts: impl IntoIterator<Item = &'a Shape>) -> Shape {
     let mut c = ffi::bo_compound_new();
     for p in parts {
