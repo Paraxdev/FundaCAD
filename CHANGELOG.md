@@ -206,6 +206,8 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Changed
 
+- **The origin marker no longer looks like a Move gizmo.** It was three shaded arrows in the Move gizmo's own colours and was easy to take for one left behind. It is now three thin, muted axis lines that fade out towards their ends, with a small neutral dot at the origin, drawn faintly and below every handle. Revolve still takes an axis by clicking one of them.
+
 - **The printer connection lives entirely in its plugin.** Sending jobs, print status, the camera, the slicer hand-off and the colored 3MF project all run from the Printer connection plugin now, and with it off or uninstalled nothing about printers is left in the app. Your printer list and slicer location move into the plugin the first time they are used, so nothing needs setting up again. Update the plugin together with the app: it now asks to talk to devices on your local network, where it used to ask to control your printer.
 
 - **One finish across the whole app.** Dialogs, the command palette, the menu bar's menus, toasts, the console, the parameters and shortcut sheets, the welcome screen, the render dock and the surface graph editor now wear the same glass as the floating shell: squircle corners, a blurred tinted fill and a lit rim, with buttons, fields and selects to match.
@@ -224,6 +226,8 @@ This file starts on 2026-08-03. For anything before that, see the
 - Each drag of the move gizmo is its own row in the timeline, so an undo takes back the last nudge instead of the whole sitting, and the next drag starts from the pose the last one produced.
 
 ### Fixed
+
+- **A tool's hint no longer slides under the tool rail.** With the Render panel open, or in a narrow window, the hint along the bottom of the view sat partly beneath Section View. It now centres in the space the floating cards leave free on its row and wraps when that space is narrow.
 
 - **Opening a document no longer claims its booleans, imports or lofts need a missing plugin.** The check for feature types this build cannot make only recognised types with a number to edit, so every boolean, import, loft, sweep, mirror, split and press/pull set off a "features of a kind this build does not know" notice. Those were never at risk and built as normal.
 
