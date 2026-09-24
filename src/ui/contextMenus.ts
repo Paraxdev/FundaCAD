@@ -198,6 +198,11 @@ export function createContextMenus(deps: ContextMenusDeps) {
     contextMenu(x, y, [
       // routed through handleAction so "Repeat <command>" records them
       { label: "Move", shortcut: keyHint("move"), onClick: unlessBusy(() => handleAction("move")) },
+      // Neither needs an edge pre-picked, opening either enters the tool and
+      // asks for one (edgeFeatureTool.start), so both stay reachable from a
+      // plain body selection, not just from an edge or face.
+      { label: "Fillet…", shortcut: keyHint("fillet"), onClick: unlessBusy(() => handleAction("fillet")) },
+      { label: "Chamfer…", shortcut: keyHint("chamfer"), onClick: unlessBusy(() => handleAction("chamfer")) },
       // All three, not one entry that opens a dialog: the whole point of
       // splitting Combine up is that a body you have right-clicked is one click
       // from the boolean you want.
@@ -278,7 +283,7 @@ export function createContextMenus(deps: ContextMenusDeps) {
   /** Show only this body (Onshape "Isolate"): hide every other body, one batched
    *  store update, ONE re-render. Undo is "Show all bodies" (Shift+H / the menus). */
   function isolateBody(id: string) {
-    store.setBodiesVisibility(new Map((store.buildState.result?.bodies ?? []).map((b) => [b.id, b.id === id])));
+    store.isolateBodies([id]);
   }
 
   function openCanvasMenu(x: number, y: number) {

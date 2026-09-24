@@ -127,7 +127,8 @@ onUnmounted(() => {
   if (pulseRaf) cancelAnimationFrame(pulseRaf);
 });
 
-const anyHidden = useBuildValue((b) => (b.result?.bodies ?? []).some((x) => !engine.store.isBodyVisible(x.id)));
+// Isolate/solo only, not any manual body hide (store.isolateActive tracks which).
+const isolateActive = useBuildValue(() => engine.store.isolateActive);
 const sectionOn = computed(() => { pulse.value; return engine.tools.section.active || engine.tools.section.picking; });
 const measureOn = computed(() => { pulse.value; return engine.tools.measure.active; });
 
@@ -285,7 +286,7 @@ function isActive(action: string): boolean {
 }
 
 function toggleIsolate() {
-  if (anyHidden.value) {
+  if (isolateActive.value) {
     engine.handleAction("show-all-bodies");
     return;
   }
@@ -294,9 +295,7 @@ function toggleIsolate() {
     engine.setStatus("Isolate: select the bodies to keep", "");
     return;
   }
-  const all = engine.store.buildState.result?.bodies ?? [];
-  const keep = new Set(ids);
-  engine.store.setBodiesVisibility(new Map(all.map((b) => [b.id, keep.has(b.id)])));
+  engine.store.isolateBodies(ids);
 }
 </script>
 
@@ -410,8 +409,8 @@ function toggleIsolate() {
         <RailButton
           icon="isolate"
           label="Isolate"
-          :sub="anyHidden ? 'On' : 'Off'"
-          :active="anyHidden"
+          :sub="isolateActive ? 'On' : 'Off'"
+          :active="isolateActive"
           data-action="isolate"
           @click="toggleIsolate()"
         />
