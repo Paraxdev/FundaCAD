@@ -18,10 +18,24 @@ fn noop_eps(reference: f64) -> f64 {
 }
 
 fn vol(s: &Shape) -> f64 {
+    signed_vol(s).abs()
+}
+
+fn signed_vol(s: &Shape) -> f64 {
     if kernel::is_null(s) {
         return 0.0;
     }
-    crate::bench::phase("volume", || kernel::volume(s).abs())
+    crate::bench::phase("volume", || kernel::volume(s))
+}
+
+/// The operand volumes `serial_bool_known` takes for the first of a run of
+/// booleans; after that the base is an intermediate nobody measured.
+fn first_known(step: usize, base: f64, tool: f64) -> Vec<f64> {
+    if step == 0 {
+        vec![base, tool]
+    } else {
+        Vec::new()
+    }
 }
 
 fn overlap(a: Option<[f64; 6]>, b: Option<[f64; 6]>) -> bool {
@@ -182,7 +196,8 @@ pub fn combine(
             })
             .collect()
     });
-    let prism_vol = vol(&solid);
+    let prism_signed = signed_vol(&solid);
+    let prism_vol = prism_signed.abs();
 
     match op {
         "join" => {
@@ -196,12 +211,18 @@ pub fn combine(
                 ctx.new_body(solid, name, None);
                 return Ok(());
             }
+            let hit_signed: Vec<f64> = hits.iter().map(|&i| signed_vol(ctx.bodies[i].shape())).collect();
             let mut merged = solid.clone();
-            for &i in &hits {
-                merged = kernel::serial_bool(&merged, &[ctx.bodies[i].shape()], BoolKind::Fuse)?;
+            let mut measured = None;
+            for (step, &i) in hits.iter().enumerate() {
+                let known = first_known(step, prism_signed, hit_signed[0]);
+                (merged, measured) =
+                    kernel::serial_bool_known(&merged, &[ctx.bodies[i].shape()], BoolKind::Fuse, &known)?;
             }
-            let merged_vol = vol(&merged);
-            let hit_vol: f64 = hits.iter().map(|&i| vol(ctx.bodies[i].shape())).sum();
+            let signed = measured.unwrap_or_else(|| signed_vol(&merged));
+            let merged_vol = signed.abs();
+            let mut merged_signed = Some(signed);
+            let hit_vol: f64 = hit_signed.iter().map(|v| v.abs()).sum();
             // What a fuse that really merged looks like: more material than the
             // bodies held on their own, and less than those bodies plus the
             // whole tool, because the overlap gets counted once instead of
@@ -226,7 +247,10 @@ pub fn combine(
                 // the usual reason is that the two shapes meet along a surface
                 // rather than crossing one another.
                 match repair(ctx) {
-                    Some(fixed) => merged = fixed,
+                    Some(fixed) => {
+                        merged = fixed;
+                        merged_signed = None;
+                    }
                     None => return Err(Fail::msg(
                         "Join failed: the result came out smaller than the body it started from. That usually means the two shapes touch along a surface instead of overlapping. Move the profile so it reaches a little way into the body.",
                     )),
@@ -243,6 +267,7 @@ pub fn combine(
                 // original result when the slices agree they do not meet.
                 if let Some(fixed) = repair(ctx) {
                     merged = fixed;
+                    merged_signed = None;
                 }
             }
             let first_name = ctx.bodies[hits[0]].name.clone();
@@ -250,8 +275,12 @@ pub fn combine(
             let consumed: HashSet<String> =
                 hits.iter().map(|&i| ctx.bodies[i].id.clone()).collect();
             ctx.remove_bodies(&consumed);
+            let unified = crate::bench::phase("unify_body", || match merged_signed {
+                Some(v) => kernel::unify_body_known(&merged, v),
+                None => kernel::unify_body(&merged),
+            });
             ctx.new_body(
-                crate::bench::phase("unify_body", || kernel::unify_body(&merged)),
+                unified,
                 Some(first_name),
                 Some(&first_id),
             );
@@ -265,10 +294,16 @@ pub fn combine(
             let mut sealed = false;
             for &i in &hits {
                 let b = &ctx.bodies[i];
-                let before = vol(b.shape());
+                let before_signed = signed_vol(b.shape());
+                let before = before_signed.abs();
                 let voids_before = kernel::void_count(b.shape());
-                let newshape = kernel::serial_bool(b.shape(), &[&solid], BoolKind::Cut)?;
-                let after = vol(&newshape);
+                let (newshape, after_signed) = kernel::serial_bool_known(
+                    b.shape(),
+                    &[&solid],
+                    BoolKind::Cut,
+                    &[before_signed, prism_signed],
+                )?;
+                let after = after_signed.map_or_else(|| vol(&newshape), f64::abs);
                 if kernel::void_count(&newshape) > voids_before {
                     sealed = true;
                 }
@@ -337,8 +372,15 @@ pub fn combine(
             let mut results: Vec<(usize, Shape)> = Vec::new();
             for &i in &hits {
                 let b = &ctx.bodies[i];
-                let newshape = kernel::serial_bool(b.shape(), &[&solid], BoolKind::Common)?;
-                if vol(&newshape) < noop_eps(vol(b.shape())) {
+                let before_signed = signed_vol(b.shape());
+                let (newshape, after_signed) = kernel::serial_bool_known(
+                    b.shape(),
+                    &[&solid],
+                    BoolKind::Common,
+                    &[before_signed, prism_signed],
+                )?;
+                let after = after_signed.map_or_else(|| vol(&newshape), f64::abs);
+                if after < noop_eps(before_signed.abs()) {
                     return Err(Fail::msg(
                         "Intersect would leave the body empty, the profile doesn't overlap it.",
                     ));
@@ -395,14 +437,19 @@ pub fn do_boolean(ctx: &mut Ctx, f: &BooleanFeature) -> FResult {
         ctx.skip_feature(&f.id, "boolean", "tool bodies already consumed or missing");
         return Ok(());
     }
-    let before = vol(ctx.bodies[target].shape());
+    let before_signed = signed_vol(ctx.bodies[target].shape());
+    let before = before_signed.abs();
+    let tool_signed: Vec<f64> = tools.iter().map(|&t| signed_vol(ctx.bodies[t].shape())).collect();
     let mut shape = ctx.bodies[target].shape().clone();
-    for &t in &tools {
-        shape = kernel::serial_bool(&shape, &[ctx.bodies[t].shape()], kind)?;
+    let mut measured = None;
+    for (step, &t) in tools.iter().enumerate() {
+        let known = first_known(step, before_signed, tool_signed[0]);
+        (shape, measured) = kernel::serial_bool_known(&shape, &[ctx.bodies[t].shape()], kind, &known)?;
     }
-    let after = vol(&shape);
+    let shape_signed = measured.unwrap_or_else(|| signed_vol(&shape));
+    let after = shape_signed.abs();
     let eps = noop_eps(before);
-    let tool_vol: f64 = tools.iter().map(|&t| vol(ctx.bodies[t].shape())).sum();
+    let tool_vol: f64 = tool_signed.iter().map(|v| v.abs()).sum();
     if kind == BoolKind::Cut && after >= before - noop_eps(tool_vol.min(before)) {
         return Err(Fail::msg(format!(
             "{label} removed nothing, no tool body overlaps the one being kept."
@@ -419,7 +466,7 @@ pub fn do_boolean(ctx: &mut Ctx, f: &BooleanFeature) -> FResult {
         )));
     }
     let shape = if kind == BoolKind::Fuse {
-        kernel::unify_body(&shape)
+        kernel::unify_body_known(&shape, shape_signed)
     } else {
         shape
     };

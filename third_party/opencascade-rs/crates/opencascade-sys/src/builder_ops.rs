@@ -15,6 +15,7 @@ mod inner {
         pub fn bo_is_null(s: &TopoDS_Shape) -> bool;
         pub fn bo_shape_type(s: &TopoDS_Shape) -> i32;
         pub fn bo_is_same(a: &TopoDS_Shape, b: &TopoDS_Shape) -> bool;
+        pub fn bo_is_equal(a: &TopoDS_Shape, b: &TopoDS_Shape) -> bool;
         pub fn bo_compound_new() -> UniquePtr<TopoDS_Shape>;
         pub fn bo_compound_add(compound: Pin<&mut TopoDS_Shape>, s: &TopoDS_Shape);
         pub fn bo_children(s: &TopoDS_Shape) -> UniquePtr<CxxVector<TopoDS_Shape>>;
@@ -91,11 +92,13 @@ mod inner {
             parallel: bool,
             fuzzy: f64,
             vols: &[f64],
+            out_vol: &mut f64,
         ) -> Result<UniquePtr<TopoDS_Shape>>;
         pub fn bo_clean(s: &TopoDS_Shape) -> Result<UniquePtr<TopoDS_Shape>>;
         pub fn bo_unwrap_compound(s: &TopoDS_Shape) -> UniquePtr<TopoDS_Shape>;
         pub fn bo_drop_debris(s: &TopoDS_Shape) -> UniquePtr<TopoDS_Shape>;
         pub fn bo_unify_body(s: &TopoDS_Shape) -> UniquePtr<TopoDS_Shape>;
+        pub fn bo_unify_body_known(s: &TopoDS_Shape, known: f64) -> UniquePtr<TopoDS_Shape>;
 
         pub fn bo_edge_line(x1: f64, y1: f64, x2: f64, y2: f64) -> Result<UniquePtr<TopoDS_Shape>>;
         pub fn bo_edge_arc3(

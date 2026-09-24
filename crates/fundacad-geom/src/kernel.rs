@@ -350,13 +350,19 @@ pub fn boolean_op(base: &Shape, tools: &[&Shape], kind: BoolKind) -> KResult<Sha
 
 /// booleans.py `_serial_bool`: serial, with the pick fuzz, cleaned.
 pub fn serial_bool(base: &Shape, tools: &[&Shape], kind: BoolKind) -> KResult<Shape> {
-    serial_bool_known(base, tools, kind, &[])
+    serial_bool_known(base, tools, kind, &[]).map(|(s, _)| s)
 }
 
 /// `serial_bool` handed the operands' signed volumes, the base's then each
-/// tool's, so the plausibility check does not integrate them again. Empty
-/// measures them.
-pub fn serial_bool_known(base: &Shape, tools: &[&Shape], kind: BoolKind, vols: &[f64]) -> KResult<Shape> {
+/// tool's, so the plausibility check does not integrate them again; empty
+/// measures them. Also gives the result's signed volume when the clean left
+/// the checked result exactly as it was.
+pub fn serial_bool_known(
+    base: &Shape,
+    tools: &[&Shape],
+    kind: BoolKind,
+    vols: &[f64],
+) -> KResult<(Shape, Option<f64>)> {
     let t = compound(tools.iter().copied());
     let mut ext: Option<f64> = extent(base);
     for tool in tools {
@@ -366,13 +372,18 @@ pub fn serial_bool_known(base: &Shape, tools: &[&Shape], kind: BoolKind, vols: &
     }
     let fuzz = pick_fuzz(ext);
     let k = kind as i32;
-    run(kind.occt(), || bool_args(base, tools, fuzz), || {
+    let mut checked_vol = f64::NAN;
+    let mut unchanged = false;
+    let out = run(kind.occt(), || bool_args(base, tools, fuzz), || {
         let raw = crate::bench::phase("bool_build", || ffi::bo_bool_build(base.raw(), t.raw(), k, false, fuzz))?;
         let checked = crate::bench::phase("bool_check", || {
-            ffi::bo_bool_check(&raw, base.raw(), t.raw(), k, false, fuzz, vols)
+            ffi::bo_bool_check(&raw, base.raw(), t.raw(), k, false, fuzz, vols, &mut checked_vol)
         })?;
-        crate::bench::phase("bool_unify", || ffi::bo_clean(&checked))
-    })
+        let out = crate::bench::phase("bool_unify", || ffi::bo_clean(&checked))?;
+        unchanged = ffi::bo_is_equal(&checked, &out);
+        Ok(out)
+    })?;
+    Ok((out, unchanged.then_some(checked_vol)))
 }
 
 /// the Python engine's `pick_fuzz.py`.
@@ -402,6 +413,11 @@ pub fn drop_debris(s: &Shape) -> Shape {
 
 pub fn unify_body(s: &Shape) -> Shape {
     own(ffi::bo_unify_body(s.raw()))
+}
+
+/// `unify_body` of a shape whose signed volume the caller has measured.
+pub fn unify_body_known(s: &Shape, volume: f64) -> Shape {
+    own(ffi::bo_unify_body_known(s.raw(), volume))
 }
 
 pub fn edge_line(a: [f64; 2], b: [f64; 2]) -> KResult<Shape> {
