@@ -12,6 +12,7 @@ vi.mock("@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url", () => ({
 
 import { compileAndSolve, constraintIndexOf } from "../../src/sketch/sketchSolve";
 import { breakLink } from "../../src/sketch/modify";
+import { rectCorners } from "../../src/sketch/region";
 import type { ResolvedEntity } from "../../src/sketch/snap";
 import type { ProjectedCurve, SketchConstraint } from "../../src/types";
 
@@ -419,5 +420,66 @@ describe("a rotated rectangle survives the solver", () => {
     const out = await solved(rect(), [{ type: "distance", id: "k0", line: "r1~1", value: 9 }]);
     expect(out.height).toBeCloseTo(9, 4);
     expect(out.width).toBeCloseTo(10, 4);
+  });
+});
+
+describe("SK-3: coincident reaches a circle centre and a rectangle corner", () => {
+  // endpointPoint (coincident/symmetric/midpoint's point resolver) used to
+  // only know lines/arcs/points/splines/bsplines: a circle centre or a
+  // rectangle corner operand resolved to undefined, so the constraint was
+  // silently dropped from the compiled solver input, added to the document
+  // but never actually pulling anything. dimPoint (p2pDistance/fix) already
+  // handled both; this mirrors that.
+  const circ = (id: string, x: number, y: number, r: number): ResolvedEntity => ({ type: "circle", id, x, y, radius: r });
+  const rect = (id: string, x: number, y: number, width: number, height: number): ResolvedEntity =>
+    ({ type: "rectangle", id, x, y, width, height }) as ResolvedEntity;
+  const arc = (id: string, x1: number, y1: number, x2: number, y2: number, mx: number, my: number): ResolvedEntity =>
+    ({ type: "arc", id, x1, y1, x2, y2, mx, my }) as ResolvedEntity;
+
+  it("pulls a circle's centre onto a rectangle corner", async () => {
+    const r1 = rect("r1", 0, 0, 20, 10);
+    const c1 = circ("c1", 50, 50, 5);
+    const corner3 = rectCorners(0, 0, 20, 10)[3]!; // pin the rect rigid (2 opposite corners) so the only freedom left is the circle's centre
+    const cons: SketchConstraint[] = [
+      { type: "fix", e: "r1", p: 1 },
+      { type: "fix", e: "r1", p: 3 },
+      { type: "diameter", circle: "c1", value: 10 },
+      { type: "coincident", e1: "c1", p1: 0, e2: "r1", p2: 3 },
+    ];
+    const r = await compileAndSolve([r1, c1], cons);
+    expect(r.ok).toBe(true);
+    expect(r.conflicts).toEqual([]);
+    expect(r.dof).toBe(0);
+    const outCirc = r.entities.find((e) => e.id === "c1") as { x: number; y: number };
+    expect(outCirc.x).toBeCloseTo(corner3.x, 6);
+    expect(outCirc.y).toBeCloseTo(corner3.y, 6);
+  });
+
+  it("pulls two circles' centres together (plain circle-centre coincident, not concentric)", async () => {
+    const c1 = circ("c1", 0, 0, 5);
+    const c2 = circ("c2", 30, 30, 3);
+    const cons: SketchConstraint[] = [{ type: "coincident", e1: "c1", p1: 0, e2: "c2", p2: 0 }];
+    const r = await compileAndSolve([c1, c2], cons);
+    expect(r.ok).toBe(true);
+    const a = r.entities.find((e) => e.id === "c1") as { x: number; y: number };
+    const b = r.entities.find((e) => e.id === "c2") as { x: number; y: number };
+    expect(a.x).toBeCloseTo(b.x, 6);
+    expect(a.y).toBeCloseTo(b.y, 6);
+  });
+
+  it("pulls a point onto an arc's centre (index 2, not the arc's end)", async () => {
+    const a1 = arc("a1", 10, 0, 0, 10, 7.071, 7.071); // quarter circle, centre (0,0), r=10
+    const p1: ResolvedEntity = { type: "point", id: "p1", x: 40, y: 40 };
+    // pin the arc's centre itself, so the only freedom left is the point
+    const cons: SketchConstraint[] = [
+      { type: "fix", e: "a1", p: 2 },
+      { type: "coincident", e1: "p1", p1: 0, e2: "a1", p2: 2 },
+    ];
+    const r = await compileAndSolve([a1, p1], cons);
+    expect(r.ok).toBe(true);
+    expect(r.conflicts).toEqual([]);
+    const outPt = r.entities.find((e) => e.id === "p1") as { x: number; y: number };
+    expect(outPt.x).toBeCloseTo(0, 3);
+    expect(outPt.y).toBeCloseTo(0, 3);
   });
 });
