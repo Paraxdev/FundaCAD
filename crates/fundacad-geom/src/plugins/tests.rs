@@ -147,7 +147,7 @@ fn ellipses_lofts_curves_and_an_affine_map() {
     assert!(kx::ellipse_edge((0.0, 0.0, 0.0), n, n, 2.0, 5.0, 0.0).is_err());
     assert!(kx::ellipse_edge((0.0, 0.0, 0.0), n, (1.0, 0.0, 0.0), 0.0, 5.0, 0.0).is_err());
 
-    let options = host::kernel::LoftOptions { ruled: true, smooth: false, match_seams: false };
+    let options = host::kernel::LoftOptions { ruled: true, smooth: false, match_seams: false, max_degree: 0 };
     let lower = kx::circle_edge((0.0, 0.0, 0.0), n, 3.0).unwrap();
     let upper = kx::circle_edge((0.0, 0.0, 10.0), n, 3.0).unwrap();
     let tube = kx::loft(&[&lower, &upper], None, None, &options).unwrap();
@@ -155,6 +155,14 @@ fn ellipses_lofts_curves_and_an_affine_map() {
     let cone = kx::loft(&[&lower], None, Some((0.0, 0.0, 10.0)), &options).unwrap();
     assert!(close(kernel::volume(&cone), PI * 30.0, 1e-3), "{}", kernel::volume(&cone));
     assert!(kx::loft(&[&lower], None, None, &options).is_err());
+    let waist = kx::circle_edge((0.0, 0.0, 5.0), n, 2.0).unwrap();
+    let low = host::kernel::LoftOptions { ruled: false, smooth: false, match_seams: false, max_degree: 3 };
+    let smooth = host::kernel::LoftOptions { smooth: true, max_degree: 0, ..low };
+    for o in [low, smooth] {
+        let vase = kx::loft(&[&lower, &waist, &upper], None, None, &o).unwrap();
+        let v = kernel::volume(&vase);
+        assert!(v > PI * 4.0 * 10.0 && v < PI * 90.0, "{v}");
+    }
 
     let curve = kx::interpolate_edge(&[(0.0, 0.0, 0.0), (5.0, 5.0, 1.0), (10.0, 0.0, 2.0)], false).unwrap();
     let mid = k::point_at(&curve, 0.5).unwrap();

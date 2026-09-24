@@ -233,7 +233,7 @@ pub fn loft(sections: &[&Shape], start: Option<Vec3>, end: Option<Vec3>, o: &Lof
     }
     let c = kernel::compound(sections.iter().copied());
     let out = nonnull(
-        ffi::po_loft(c.raw(), &caps, o.ruled, o.smooth, o.match_seams),
+        ffi::po_loft(c.raw(), &caps, o.ruled, o.smooth, o.match_seams, o.max_degree.min(25) as i32),
         "a loft through these sections",
     )?;
     if kernel::volume(&out).abs() < 1e-9 {
