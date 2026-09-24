@@ -1,12 +1,13 @@
 // Tilting a datum plane on the canvas, the two ways the app offers, on the same
 // six tasks in a real browser, counting what each costs the hand.
 //
-//   arcs: the plane's own offset arrow, tilt arcs and spin arc (create and edit)
+//   rings: the plane's own offset arrow and slim tilt and spin rings (create and edit)
 //   move: an offset-only create, then the Move command on the selected plane
 //
-// They were an A/B of two designs; the arcs shipped as the default and the Move
-// command on a plane stayed, since it is the one that shifts a plane in its
-// own plane or turns it about a snapped point.
+// They were an A/B of two designs; the plane's own handles shipped as the
+// default (first as arcs, now as slim rings) and the Move command on a plane
+// stayed, since it is the one that shifts a plane in its own plane or turns it
+// about a snapped point.
 //
 // Tasks, on a parent datum P0 10 mm above XY:
 //   1. a plane 10 mm above P0 (20 above XY) tilted 30 degrees about X
@@ -18,7 +19,7 @@
 //
 // Usage (vite + engine running):
 //   SC_TOKEN=<t> SC_CHROME=<exe> SC_URL=http://localhost:5947/ SC_ENGINE_PORT=8947 \
-//     node e2e/datum_tilt_ab_e2e.cjs <arcs|move> [outDir]
+//     node e2e/datum_tilt_ab_e2e.cjs <rings|move> [outDir]
 const { chromium } = require("playwright-core");
 const fs = require("fs");
 const path = require("path");
@@ -27,7 +28,7 @@ const TOKEN = process.env.SC_TOKEN || "";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const URL = process.env.SC_URL || "http://localhost:5173/";
 const ENGINE_PORT = process.env.SC_ENGINE_PORT || "8765";
-const VARIANT = process.argv[2] === "move" ? "move" : "arcs";
+const VARIANT = process.argv[2] === "move" ? "move" : "rings";
 const OUT = path.resolve(process.argv[3] || `datum_tilt_${VARIANT}_shots`);
 if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
 
@@ -103,31 +104,27 @@ const note = (s) => { tally("clicks", 0); cost[task].notes.push(s); console.log(
 
   // --- handle geometry, read off the live gizmo ----------------------------------
 
-  /** Screen path that turns an arc (arcs) about its axis through the pivot by
-   *  `degTurn`, starting on the arc's middle. */
-  const arcPath = (which, degTurn) => page.evaluate(({ which, degTurn }) => {
+  /** Screen path that turns a ring (rings) about its axis through the pivot by
+   *  `degTurn`, starting where a press on it lands clear of the others. */
+  const ringPathOf = (which, degTurn) => page.evaluate(({ which, degTurn }) => {
     const T = window.__fundacad.datumPose;
-    const arc = T.arcs.get(which);
-    if (!arc) return null;
-    const g = arc.group;
-    g.updateMatrixWorld();
-    const pivot = g.position.clone();
-    const mid = g.localToWorld(g.position.clone().set(0, which === "spin" ? 92 : 64, 0));
-    const axis = g.localToWorld(g.position.clone().set(0, 0, 1)).sub(pivot).normalize();
+    const s = T.scene();
+    const pr = T.handles.probe(which, s);
+    if (!pr) return null;
+    const axis = s.axes[which].clone().normalize();
     const out = [];
     const n = Math.max(2, Math.ceil(Math.abs(degTurn) / 5));
     for (let i = 0; i <= n; i++) {
       const a = (degTurn * Math.PI / 180) * (i / n);
-      const p = mid.clone().sub(pivot).applyAxisAngle(axis, a).add(pivot);
-      out.push(window.viewport.projectToScreen(p));
+      out.push(window.viewport.projectToScreen(pr.grabAt.clone().sub(s.pivot).applyAxisAngle(axis, a).add(s.pivot)));
     }
     return out;
   }, { which, degTurn });
 
-  /** Screen path for the offset arrow (arcs), `mm` along the reference normal. */
+  /** Screen path for the offset arrow (rings), `mm` along the reference normal. */
   const arrowPath = (mm) => page.evaluate((mm) => {
     const T = window.__fundacad.datumPose;
-    const g = T.arrow.group;
+    const g = T.handles.arrow.group;
     g.updateMatrixWorld();
     const grab = g.localToWorld(g.position.clone().set(0, 30, 0));
     const n = T.src.n.clone();
@@ -176,10 +173,10 @@ const note = (s) => { tally("clicks", 0); cost[task].notes.push(s); console.log(
     return [0, 0.5, 1].map((t) => window.viewport.projectToScreen(grab.clone().lerp(to, t)));
   }, { i, mm });
 
-  const arcDrag = async (which, degTurn) => {
-    const pts = await arcPath(which, degTurn);
+  const ringTurn = async (which, degTurn) => {
+    const pts = await ringPathOf(which, degTurn);
     const h = pts && await page.evaluate((p) => window.__fundacad.datumPose.hit(p.x, p.y), pts[0]);
-    check(`the press lands on the ${which} arc`, h === which, String(h));
+    check(`the press lands on the ${which} ring`, h === which, String(h));
     if (pts) await drag(pts);
   };
   const ringDrag = async (i, degTurn) => {
@@ -203,16 +200,15 @@ const note = (s) => { tally("clicks", 0); cost[task].notes.push(s); console.log(
       }
       return { px: Math.round(len), aimablePx: Math.round(good), share: len ? Math.round((good / len) * 100) : 0 };
     };
-    if (variant === "arcs") {
+    if (variant === "rings") {
       const T = window.__fundacad.datumPose;
-      for (const [t, arc] of T.arcs) {
-        const g = arc.group;
+      for (const [t, ring] of T.handles.rings) {
+        const g = ring.group;
         g.updateMatrixWorld();
-        const r = t === "spin" ? 92 : 64;
         const pts = [];
-        for (let i = 0; i <= 40; i++) {
-          const a = Math.PI / 2 - 0.7 + 1.4 * (i / 40);
-          pts.push(vp.projectToScreen(g.localToWorld(g.position.clone().set(Math.cos(a) * r, Math.sin(a) * r, 0))));
+        for (let i = 0; i <= 120; i++) {
+          const a = Math.PI * 2 * (i / 120);
+          pts.push(vp.projectToScreen(g.localToWorld(g.position.clone().set(Math.cos(a) * 62, Math.sin(a) * 62, 0))));
         }
         out[t] = walk(pts, t, (p) => T.hit(p.x, p.y));
       }
@@ -311,7 +307,7 @@ const note = (s) => { tally("clicks", 0); cost[task].notes.push(s); console.log(
   await click(await grabDatum("P0", true));
   await page.waitForTimeout(400);
   let P1 = null;
-  if (VARIANT === "arcs") {
+  if (VARIANT === "rings") {
     const active = await page.evaluate(() => window.__fundacad.datumPose.active);
     check("the pose handles open on the picked datum", active);
     await drag(await arrowPath(10));
@@ -319,9 +315,9 @@ const note = (s) => { tally("clicks", 0); cost[task].notes.push(s); console.log(
     if (Math.abs(off - 10) > 1e-6) { note(`arrow drag landed on ${off}, typed 10`); await typeField("Offset", 10); }
     await shot("1a-offset");
     console.log(`    aimable: ${JSON.stringify(await aimable())}`);
-    await arcDrag("tiltX", 30);
+    await ringTurn("tiltX", 30);
     const tilt = await page.evaluate(() => window.__fundacad.datumPose.pose.tiltX);
-    check("the tilt arc snapped to 30", Math.abs(tilt - 30) < 1e-9, `tiltX ${tilt}`);
+    check("the tilt ring snapped to 30", Math.abs(tilt - 30) < 1e-9, `tiltX ${tilt}`);
     await shot("1b-tilted");
     await key("Enter");
     await settle();
@@ -352,11 +348,11 @@ const note = (s) => { tally("clicks", 0); cost[task].notes.push(s); console.log(
   // --- 2. tilt to 45 ------------------------------------------------------------
   task = "2 tilt to exactly 45";
   console.log(`\n[${VARIANT}] ${task}`);
-  if (VARIANT === "arcs") {
+  if (VARIANT === "rings") {
     await dblclick(await grabDatum(P1));
     const active = await page.evaluate(() => window.__fundacad.datumPose.active);
     check("double-clicking the plane opens its handles", active);
-    await arcDrag("tiltX", 15);
+    await ringTurn("tiltX", 15);
     await settle();
   } else {
     const up = await page.evaluate(() => window.__fundacad.move.active);
@@ -371,8 +367,8 @@ const note = (s) => { tally("clicks", 0); cost[task].notes.push(s); console.log(
   // --- 3. spin 90 ---------------------------------------------------------------
   task = "3 spin 90";
   console.log(`\n[${VARIANT}] ${task}`);
-  if (VARIANT === "arcs") {
-    await arcDrag("spin", 90);
+  if (VARIANT === "rings") {
+    await ringTurn("spin", 90);
     await settle();
     await key("Enter");
   } else {
@@ -460,7 +456,7 @@ const note = (s) => { tally("clicks", 0); cost[task].notes.push(s); console.log(
   // --- 6. move the parent ------------------------------------------------------------
   task = "6 move parent up 15";
   console.log(`\n[${VARIANT}] ${task}`);
-  if (VARIANT === "arcs") {
+  if (VARIANT === "rings") {
     await dblclick(await grabDatum("P0"));
     const on = await page.evaluate(() => window.__fundacad.datumPose.active);
     check("double-clicking P0 opens its handles", on);
@@ -527,14 +523,14 @@ const note = (s) => { tally("clicks", 0); cost[task].notes.push(s); console.log(
     await page.waitForTimeout(250);
     return { moved, got };
   };
-  if (VARIANT === "arcs") {
+  if (VARIANT === "rings") {
     await dblclick(await grabDatum(P1));
     check("double-clicking the plane opens its handles", await page.evaluate(() => window.__fundacad.datumPose.active));
-    const pts = await arcPath("tiltX", -15);
+    const pts = await ringPathOf("tiltX", -15);
     const h = await page.evaluate((p) => window.__fundacad.datumPose.hit(p.x, p.y), pts[0]);
-    check("the press lands on the tiltX arc", h === "tiltX", String(h));
+    check("the press lands on the tiltX ring", h === "tiltX", String(h));
     const r = await dragUntil(pts, () => page.evaluate(() => window.__fundacad.datumPose.pose.tiltX), 45);
-    note(`dragged ${r.moved}px along the side-on arc, read ${r.got}`);
+    note(`dragged ${r.moved}px along the side-on ring, read ${r.got}`);
     await settle();
     await shot("7-top-edge-on");
     await key("Enter");
@@ -555,7 +551,7 @@ const note = (s) => { tally("clicks", 0); cost[task].notes.push(s); console.log(
   f1 = await feature(P1);
   const lean = await page.evaluate((id) => window.store.boundExpr({ kind: "feature", feature: id, field: "tiltX" }), P1);
   const fields = JSON.stringify({ tiltX: f1?.tiltX, tiltY: f1?.tiltY, spin: f1?.spin, shiftX: f1?.shiftX, shiftY: f1?.shiftY, offset: f1?.offset });
-  if (VARIANT === "arcs") {
+  if (VARIANT === "rings") {
     check("the edge-on drag took the tilt to 45", f1?.tiltX === 45, fields);
     check("and the parameter kept driving it, now 45", lean?.name === "lean" && lean?.value === 45, JSON.stringify(lean));
   } else {
