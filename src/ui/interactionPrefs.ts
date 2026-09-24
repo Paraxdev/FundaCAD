@@ -115,18 +115,3 @@ export function onNavPrefsChange(fn: () => void): () => void {
   navListeners.add(fn);
   return () => navListeners.delete(fn);
 }
-
-// --- datum plane handles -------------------------------------------------------
-
-/** How a datum plane is tilted and turned: its own arcs while creating and on
- *  edit ("arcs"), or the Move gizmo on the selected plane ("move"). */
-export type PlaneGizmoChoice = "arcs" | "move";
-const PLANE_GIZMO_KEY = "fundacad.planeGizmo";
-
-export function planeGizmoChoice(): PlaneGizmoChoice {
-  const q = typeof location !== "undefined" ? new URLSearchParams(location.search).get("planeGizmo") : null;
-  if (q === "arcs" || q === "move") return q;
-  const s = readSetting(PLANE_GIZMO_KEY);
-  if (s === "arcs" || s === "move") return s;
-  return "arcs";
-}

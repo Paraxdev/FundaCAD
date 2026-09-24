@@ -1,8 +1,12 @@
-// Tilting a datum plane on the canvas, the two handle designs on the same six
-// tasks, in a real browser, counting what each costs the hand.
+// Tilting a datum plane on the canvas, the two ways the app offers, on the same
+// six tasks in a real browser, counting what each costs the hand.
 //
 //   arcs: the plane's own offset arrow, tilt arcs and spin arc (create and edit)
-//   move: an offset-only create, then the Move gizmo on the selected plane
+//   move: an offset-only create, then the Move command on the selected plane
+//
+// They were an A/B of two designs; the arcs shipped as the default and the Move
+// command on a plane stayed, since it is the one that shifts a plane in its
+// own plane or turns it about a snapped point.
 //
 // Tasks, on a parent datum P0 10 mm above XY:
 //   1. a plane 10 mm above P0 (20 above XY) tilted 30 degrees about X
@@ -51,7 +55,7 @@ const note = (s) => { tally("clicks", 0); cost[task].notes.push(s); console.log(
     }
     window.WebSocket = P;
   }, ENGINE_PORT);
-  await page.goto(`${URL}?token=${TOKEN}&planeGizmo=${VARIANT}`);
+  await page.goto(`${URL}?token=${TOKEN}`);
   await page.waitForTimeout(2500);
   const modal = await page.$(".modal-close");
   if (modal) { await modal.click(); await page.waitForTimeout(400); }
@@ -230,6 +234,15 @@ const note = (s) => { tally("clicks", 0); cost[task].notes.push(s); console.log(
     return out;
   }, VARIANT);
 
+  /** Select a plane with a click, then the Move command. */
+  const moveOn = async (id) => {
+    await click(await grabDatum(id));
+    tally("clicks");
+    await page.evaluate(() => window.__fundacad.handleAction("move"));
+    await page.waitForTimeout(400);
+    return page.evaluate(() => window.__fundacad.move.active);
+  };
+
   /** Screen point on datum `id`'s quad at plane coords (x, y). */
   const onDatum = async (id, x, y) => {
     const d = await placed(id);
@@ -314,17 +327,15 @@ const note = (s) => { tally("clicks", 0); cost[task].notes.push(s); console.log(
     await settle();
     P1 = await newestDatum();
   } else {
-    const active = await page.evaluate(() => window.__fundacad.store && window.__fundacad.busyWhy().planeOffset);
-    check("the offset arrow opens on the picked datum", active);
+    const active = await page.evaluate(() => window.__fundacad.datumPose.active);
+    check("the handles open on the picked datum", active);
     await typeText("10"); // the Offset box has focus
     await key("Enter");
     await settle();
     P1 = await newestDatum();
     await shot("1a-offset");
-    await click(await grabDatum(P1)); // select it, which raises the Move gizmo
-    await page.waitForTimeout(400);
-    const up = await page.evaluate(() => window.__fundacad.move.active);
-    check("picking the plane raises the Move gizmo on it", up);
+    const up = await moveOn(P1);
+    check("Move on the selected plane raises the gizmo on it", up);
     if (up) console.log(`    aimable: ${JSON.stringify(await aimable())}`);
     if (up) await ringDrag(0, 30);
     await settle();
@@ -349,7 +360,7 @@ const note = (s) => { tally("clicks", 0); cost[task].notes.push(s); console.log(
     await settle();
   } else {
     const up = await page.evaluate(() => window.__fundacad.move.active);
-    if (!up) { await click(await grabDatum(P1)); }
+    if (!up) await moveOn(P1);
     await ringDrag(0, 15);
     await settle();
   }
@@ -464,10 +475,8 @@ const note = (s) => { tally("clicks", 0); cost[task].notes.push(s); console.log(
       await key("Enter");
     }
   } else {
-    await click(await grabDatum("P0"));
-    await page.waitForTimeout(400);
-    const up = await page.evaluate(() => window.__fundacad.move.active);
-    check("picking P0 raises the Move gizmo on it", up);
+    const up = await moveOn("P0");
+    check("Move on P0 raises the gizmo on it", up);
     await drag(await moveArrowPath(2, 15));
     await settle();
     let off = (await feature("P0"))?.offset;
@@ -530,9 +539,7 @@ const note = (s) => { tally("clicks", 0); cost[task].notes.push(s); console.log(
     await shot("7-top-edge-on");
     await key("Enter");
   } else {
-    await click(await grabDatum(P1));
-    await page.waitForTimeout(400);
-    check("picking the plane raises the Move gizmo", await page.evaluate(() => window.__fundacad.move.active));
+    check("Move on the selected plane raises the gizmo", await moveOn(P1));
     const pts = await ringPath(0, -15);
     const h = await page.evaluate((p) => window.__fundacad.move.hitHandle(p.x, p.y), pts[0]);
     check("the press lands on ring 0", h?.kind === "ring" && h.index === 0, JSON.stringify(h));
@@ -547,8 +554,16 @@ const note = (s) => { tally("clicks", 0); cost[task].notes.push(s); console.log(
   await settle();
   f1 = await feature(P1);
   const lean = await page.evaluate((id) => window.store.boundExpr({ kind: "feature", feature: id, field: "tiltX" }), P1);
-  check("the edge-on drag took the tilt to 45", f1?.tiltX === 45, JSON.stringify({ tiltX: f1?.tiltX, tiltY: f1?.tiltY, spin: f1?.spin, shiftX: f1?.shiftX, shiftY: f1?.shiftY, offset: f1?.offset }));
-  check("and the parameter kept driving it, now 45", lean?.name === "lean" && lean?.value === 45, JSON.stringify(lean));
+  const fields = JSON.stringify({ tiltX: f1?.tiltX, tiltY: f1?.tiltY, spin: f1?.spin, shiftX: f1?.shiftX, shiftY: f1?.shiftY, offset: f1?.offset });
+  if (VARIANT === "arcs") {
+    check("the edge-on drag took the tilt to 45", f1?.tiltX === 45, fields);
+    check("and the parameter kept driving it, now 45", lean?.name === "lean" && lean?.value === 45, JSON.stringify(lean));
+  } else {
+    // The Move rings sit on the plane's axes as they are now, and after a
+    // quarter spin its own x is the tiltY hinge: the turn is stored, just not
+    // in the field the ring looks like it owns.
+    check("the Move ring about the spun x wrote tiltY and left tiltX alone", f1?.tiltY === -15 && f1?.tiltX === 60, fields);
+  }
 
   console.log(`\n[${VARIANT}] cost per task`);
   const total = { clicks: 0, drags: 0, dragPx: 0, keys: 0, typed: 0 };
