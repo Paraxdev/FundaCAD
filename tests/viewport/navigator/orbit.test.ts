@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { H, TAUS, eye, fwd, pixel, rightZ, rng, settle, setup } from "./kit";
 import { copyPose, makePose } from "../../../src/viewport/navigator/pose";
+import { CLICK_SLOP_PX } from "../../../src/viewport/navigator/navigator";
 
 const PX_TOL = 1e-9 * H;
 
@@ -58,13 +59,17 @@ describe("mouse orbit", () => {
       expect(Math.abs(f.x)).toBe(0);
       expect(Math.abs(f.y)).toBe(0);
       expect(Math.abs(f.z + 1)).toBeLessThan(1e-15);
-      // now leave the pole a pixel at a time: each frame moves the view
-      // direction by about the drag, with no flip
+      // now leave the pole a pixel at a time, once past the click slop: each
+      // frame moves the view direction by about the drag, with no flip
       let prev = fwd(nav);
-      drag(nav, 400, 300, Array.from({ length: 30 }, () => [0, -1] as [number, number]), () => {
+      let first = true;
+      const path: [number, number][] = [[0, -(CLICK_SLOP_PX + 1)], ...Array.from({ length: 30 }, () => [0, -1] as [number, number])];
+      drag(nav, 400, 300, path, () => {
         const now = fwd(nav);
+        if (first) { first = false; prev = now; return; }
         const step = now.angleTo(prev);
-        expect(step).toBeLessThan((2 * Math.PI) / H * 1.01 + 1e-12);
+        // eased, the slop step is still being caught up for a few frames
+        expect(step).toBeLessThan((2 * Math.PI) / H * (tau ? 2 : 1.01) + 1e-12);
         prev = now;
         expect(Math.abs(rightZ(nav))).toBeLessThan(1e-12);
       });
@@ -83,6 +88,30 @@ describe("mouse orbit", () => {
     expect(ends[0]!.q.angleTo(ends[1]!.q)).toBeLessThan(1e-9);
     expect(ends[0]!.target.distanceTo(ends[1]!.target)).toBeLessThan(1e-6);
     expect(Math.abs(ends[0]!.scale - ends[1]!.scale)).toBeLessThan(1e-6);
+  });
+
+  it("a right click with a few pixels of hand jitter turns nothing and keeps ortho", () => {
+    const { nav } = setup({ tau: 0.125 });
+    nav.setProjectionMode("auto");
+    nav.rotateTo(0, 0);
+    settle(nav);
+    const q0 = nav.pose.q.clone();
+    const t0 = nav.pose.target.clone();
+    drag(nav, 400, 300, [[2, 1], [1, 2], [-1, 1]]);
+    settle(nav);
+    expect(nav.pose.q.angleTo(q0)).toBe(0);
+    expect(nav.pose.target.equals(t0)).toBe(true);
+    expect(nav.pose.ortho).toBe(true);
+  });
+
+  it("a drag past the click slop turns by the whole distance from the press", () => {
+    const ends = [[[40, 0]], [[3, 0], [37, 0]]].map((path) => {
+      const { nav } = setup({ tau: 0 });
+      drag(nav, 400, 300, path as [number, number][]);
+      settle(nav);
+      return nav.pose.q.clone();
+    });
+    expect(ends[0]!.angleTo(ends[1]!)).toBeLessThan(1e-12);
   });
 
   it("drag right turns the model the way it is dragged", () => {
