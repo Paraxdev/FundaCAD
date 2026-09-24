@@ -11,6 +11,7 @@ import type { SketchConstraint } from "../types";
 import { projEndSamples } from "../types";
 import { pickEntity, PROJECTED_FIXED_MSG } from "./modify";
 import { curveKind, dimRefPoints } from "./entityDims";
+import { poleRef } from "./bspline";
 import type { SketchTool } from "./sketchMode";
 
 export const CONSTRAINT_TOOLS = new Set<SketchTool>([
@@ -112,7 +113,7 @@ export class ConstraintTools {
     }
   }
 
-  /** nearest addressable endpoint (line/arc/spline end, or a point entity) to p */
+  /** nearest addressable endpoint (line/arc/spline end, a bspline pole, or a point entity) to p */
   private pickEndpoint(p: THREE.Vector2): { id: string; idx: number } | null {
     const tol = this.host.pickTol();
     let best: { id: string; idx: number } | null = null;
@@ -129,6 +130,8 @@ export class ConstraintTools {
         const first = e.points[0], last = e.points[e.points.length - 1];
         if (first) consider(e.id, 0, first.x, first.y);
         if (last) consider(e.id, 1, last.x, last.y);
+      } else if (e.type === "bspline") {
+        e.poles.forEach((q, k) => consider(e.id, poleRef(k, e.poles.length), q.x, q.y));
       } else if (e.type === "projected") {
         // projected endpoints are addressable anchors (coincident-to-reference
         // is the sticks-to-projection behavior); poly exposes first/last samples
