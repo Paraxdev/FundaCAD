@@ -418,7 +418,8 @@ export class Navigator {
       }
       if (got !== want) ch.stopAt(got, want);
     }
-    this.zooms = this.zooms.filter((c) => !c.settled());
+    // A pinch's channel stays while the fingers are down, even at rest.
+    this.zooms = this.zooms.filter((c) => c === this.pinchZoom || !c.settled());
     this.unsettled = true;
   }
 
