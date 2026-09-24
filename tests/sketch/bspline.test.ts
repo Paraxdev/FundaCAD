@@ -75,6 +75,26 @@ describe("bspline evaluation", () => {
     expect(line.at(-1)).toEqual(line[0]);
   });
 
+  it("draws a curve with few knot spans as finely as one with many", () => {
+    // A degree 5 curve on six poles is a single span; sampled per span it was
+    // sixteen visible facets.
+    const def: BsplineDef = { poles: wave.slice(0, 6), degree: 5 };
+    const line = bsplinePolyline(def, 16);
+    let worst = 0;
+    for (const t of samplesOf(def, 2001)) {
+      const c = bsplinePoint(def, t);
+      let best = Infinity;
+      for (let i = 0; i + 1 < line.length; i++) {
+        const A = line[i]!, B = line[i + 1]!;
+        const dx = B.x - A.x, dy = B.y - A.y;
+        const u = Math.max(0, Math.min(1, ((c.x - A.x) * dx + (c.y - A.y) * dy) / (dx * dx + dy * dy || 1)));
+        best = Math.min(best, Math.hypot(A.x + u * dx - c.x, A.y + u * dy - c.y));
+      }
+      worst = Math.max(worst, best);
+    }
+    expect(worst).toBeLessThan(0.02);
+  });
+
   it("finds the parameter nearest a point", () => {
     const def = { poles: wave };
     const t = 2.3;
