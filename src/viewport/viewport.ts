@@ -48,7 +48,8 @@ import {
 import { Picker, occludedEdge, type EdgeCandidate, type Hit, type EdgeHit, type PickMods } from "./picking";
 import { bandIndex, expandToBand, type BandIndex } from "./faceBands";
 import { flushRaycastIndex } from "./raycastIndex";
-import { GhostLayer } from "./ghosts";
+import { GhostLayer, type BlendGhostEdge } from "./ghosts";
+import type { BlendKind } from "../features/blendGhost";
 import { hideFlushSeams } from "./flushSeams";
 import { EdgeEmphasis } from "./edgeEmphasis";
 import { ViewCube, FACE_VIEWS } from "./viewCube";
@@ -3031,6 +3032,12 @@ export class Viewport {
   }
   clearPressPullGhost() {
     this.ghosts.clearPressPullGhost();
+  }
+  setBlendGhost(edges: readonly BlendGhostEdge[], size: number, kind: BlendKind) {
+    this.ghosts.setBlendGhost(edges, size, kind);
+  }
+  clearBlendGhost() {
+    this.ghosts.clearBlendGhost();
   }
   beginBodyMoveGhost(bodyIds: string[]) {
     this.ghosts.beginBodyMoveGhost(bodyIds);
