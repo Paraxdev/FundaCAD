@@ -59,6 +59,7 @@ export function installDevGlobals(e: Engine): void {
     extrude: e.tools.extrude,
     move: e.tools.move,
     datumPose: e.tools.datumPose,
+    lightAim: e.tools.lightAim,
     targetEdit: e.tools.targetEdit,
     pattern: e.tools.pattern,
     revolvePitch: e.tools.revolvePitch,
