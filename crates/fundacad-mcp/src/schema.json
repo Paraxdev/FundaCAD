@@ -845,18 +845,25 @@
   "datumPlane": {
    "summary": "A construction plane other features can sit on.",
    "fields": {
-    "plane": "PlaneSpec",
-    "offset": "optional mm along its normal",
-    "name": "optional label",
+    "plane": "PlaneSpec, the reference; with `planeId` or `face` it is only the cache used when that reference stops resolving",
+    "planeId": "optional id of another datumPlane feature above this one, which is preferred over `plane`: this plane then follows it",
     "face": "optional Selector to follow a body face",
-    "at": "optional [x,y,z] pick point, needed on a round face"
+    "at": "optional [x,y,z] pick point, needed on a round face",
+    "offset": "optional Num, mm along the reference normal",
+    "shiftX": "optional Num, mm along the reference x axis, moves the point the tilts turn about",
+    "shiftY": "optional Num, mm along the reference y axis",
+    "tiltX": "optional Num, degrees about the reference x axis through the shifted point, right handed",
+    "tiltY": "optional Num, degrees about the y axis as tiltX left it",
+    "spin": "optional Num, degrees about the normal as both tilts left it, turns the plane's own x and y",
+    "name": "optional label"
    },
    "example": {
     "id": "pl1",
     "type": "datumPlane",
     "plane": "XY",
     "offset": 25
-   }
+   },
+   "notes": "Placement is reference frame, then shiftX/shiftY/offset along the reference's own axes, then tiltX, tiltY and spin in that order about the resulting point. Every number is relative to the reference, so the plane follows its parent datum or face and every value can be a parameter name. A plane 20 mm above XY leaning 30 degrees: {\"plane\":\"XY\", \"offset\":20, \"tiltX\":30}."
   },
   "datumPoint": {
    "summary": "A reference point in space, a marker with no geometry that other features and the user can snap to.",

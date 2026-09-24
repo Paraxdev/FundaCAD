@@ -190,13 +190,25 @@ feature_struct!(Sweep {
     #[serde(default, skip_serializing_if = "Option::is_none")] targets: Option<Vec<String>>,
 });
 
-feature_struct!(DatumPlane {
-    plane: PlaneSpec,
-    #[serde(default, skip_serializing_if = "Option::is_none")] offset: Option<Num>,
-    #[serde(default, skip_serializing_if = "Option::is_none")] name: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")] face: Option<Selector>,
-    #[serde(default, skip_serializing_if = "Option::is_none")] at: Option<Vec3>,
-});
+feature_struct!(
+    /// The reference (`planeId`, else `face`, else `plane`), shifted by
+    /// `shiftX`/`shiftY`/`offset` along its own axes, then turned about that
+    /// point: `tiltX` about the reference x, `tiltY` about the y that leaves,
+    /// `spin` about the normal that leaves. Angles in degrees.
+    DatumPlane {
+        plane: PlaneSpec,
+        #[serde(default, skip_serializing_if = "Option::is_none")] offset: Option<Num>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] name: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] face: Option<Selector>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] at: Option<Vec3>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] plane_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] tilt_x: Option<Num>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] tilt_y: Option<Num>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] spin: Option<Num>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] shift_x: Option<Num>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] shift_y: Option<Num>,
+    }
+);
 
 feature_struct!(DatumPoint {
     point: Vec3,
