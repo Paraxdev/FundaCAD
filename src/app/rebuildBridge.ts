@@ -7,6 +7,7 @@ import { importedBodyColors, importedFacePaint } from "../document/faceColors";
 import { faceMaterialFinishes, faceMaterialPaint, resolveFaceMaterials } from "../document/faceMaterials";
 import type { Engine } from "./engine";
 import { setPreviewError } from "../ui/previewError";
+import { markDrawn } from "../diagnostics/rebuildTiming";
 
 /** Rebuild pipeline -> viewport. The one place a build result becomes pixels. */
 export function installRebuildBridge(e: Engine): void {
@@ -151,6 +152,7 @@ export function installRebuildBridge(e: Engine): void {
       } else {
         e.viewport.clearModel();
       }
+      markDrawn(); // the viewport just applied this reply, the round trip's last leg
       // Re-split the committed profiles against the model that just landed.
       //
       // A profile drawn across the edge of its face picks as two areas, and the
