@@ -58,6 +58,15 @@ export function navigatorChoice(): NavigatorChoice {
   return DEFAULT_NAVIGATOR;
 }
 
+/** Stored for the next start: the rig is chosen once, when the viewport is made. */
+export function setNavigatorChoice(choice: NavigatorChoice) {
+  try {
+    localStorage.setItem(NAV_KEY, choice);
+  } catch {
+    /* ignore */
+  }
+}
+
 export interface NavPrefs {
   /** An orbit keeps turning a moment after release, about the same pivot. */
   inertia: boolean;

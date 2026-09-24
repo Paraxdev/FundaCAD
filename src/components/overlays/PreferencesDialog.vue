@@ -40,10 +40,15 @@ import { asUnit, getUnit, onUnitChange, setUnit } from "../../ui/units";
 import { motionOn, onMotionChange, setMotion } from "../../ui/motion";
 import {
   getHoverDwellMs,
+  getNavPrefs,
   MAX_DWELL_MS,
   MIN_DWELL_MS,
+  navigatorChoice,
   onHoverDwellChange,
+  onNavPrefsChange,
   setHoverDwellMs,
+  setNavigatorChoice,
+  setNavPrefs,
 } from "../../ui/interactionPrefs";
 import {
   asBackground,
@@ -81,6 +86,8 @@ const unit = ref(getUnit());
 const render = ref(renderPrefs());
 const dwell = ref(getHoverDwellMs());
 const motion = ref(motionOn());
+const nav = ref(getNavPrefs());
+const classicCamera = ref(navigatorChoice() === "legacy");
 
 const sections = shallowRef(contributedSettings());
 
@@ -93,6 +100,7 @@ onMounted(() => {
     onRenderPrefsChange(() => { render.value = renderPrefs(); }),
     onHoverDwellChange(() => { dwell.value = getHoverDwellMs(); }),
     onMotionChange(() => { motion.value = motionOn(); }),
+    onNavPrefsChange(() => { nav.value = getNavPrefs(); }),
     onContribChange(() => { sections.value = contributedSettings(); }),
   );
 });
@@ -103,6 +111,7 @@ onUnmounted(() => { for (const stop of stops) stop(); });
 const categories = computed(() => [
   { id: "appearance", label: "Appearance" },
   { id: "viewport", label: "Viewport" },
+  { id: "navigation", label: "Navigation" },
   { id: "access", label: "Accessibility" },
   { id: "mcp", label: "AI assistants" },
   ...sections.value.map((x) => ({ id: `plugin:${x.key}`, label: x.section.title })),
@@ -187,6 +196,14 @@ function onBloom(ev: Event) { const v = asBloom(value(ev)); if (v !== null) setR
 function pickTangent(id: string) { const v = asTangentEdges(id); if (v) setRenderPref("tangentEdges", v); }
 function onPerformanceMode(ev: Event) { setRenderPref("performanceMode", (ev.target as HTMLInputElement).checked); }
 function onMotion(ev: Event) { setMotion((ev.target as HTMLInputElement).checked); }
+const checked = (ev: Event) => (ev.target as HTMLInputElement).checked;
+function onInertia(ev: Event) { setNavPrefs({ inertia: checked(ev) }); }
+function onScrollPans(ev: Event) { setNavPrefs({ scrollPans: checked(ev) }); }
+function onSmoothing(ev: Event) { setNavPrefs({ smoothTime: Number.parseFloat(value(ev)) }); }
+function onClassicCamera(ev: Event) {
+  classicCamera.value = checked(ev);
+  setNavigatorChoice(classicCamera.value ? "legacy" : "v2");
+}
 </script>
 
 <template>
@@ -362,6 +379,64 @@ function onMotion(ev: Event) { setMotion((ev.target as HTMLInputElement).checked
                 Drops glass refraction, the high pixel ratio and the emitter shadows for a
                 lighter render. Weak GPUs get it automatically; turn it on if the viewport
                 stutters or a laptop runs hot.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section v-show="category === 'navigation'" class="prefs-pane">
+          <h3 class="prefs-pane-title">Navigation</h3>
+          <div class="prefs-grid">
+            <div class="pref-card">
+              <div class="pref-head">
+                <label class="pref-title" for="prefs-smoothing">Smoothing</label>
+                <span class="prefs-readout">{{ nav.smoothTime.toFixed(3) }} s</span>
+              </div>
+              <input id="prefs-smoothing" class="sm-slider pref-slider" type="range" min="0"
+                max="0.3" step="0.005" :value="nav.smoothTime" @input="onSmoothing" />
+              <p class="pref-hint">
+                How long a zoom or a drag takes to catch up with the hand. 0 follows the
+                mouse exactly; whatever it is set to, the point under the cursor stays
+                under it on every frame.
+              </p>
+            </div>
+            <div class="pref-card">
+              <label class="pref-head">
+                <span class="pref-title">Orbit inertia</span>
+                <span class="param-switch">
+                  <input id="prefs-inertia" type="checkbox" :checked="nav.inertia" @change="onInertia" />
+                  <span class="track"><span class="knob"></span></span>
+                </span>
+              </label>
+              <p class="pref-hint">
+                A flicked orbit keeps turning for a moment after the button comes up,
+                about the same point.
+              </p>
+            </div>
+            <div class="pref-card">
+              <label class="pref-head">
+                <span class="pref-title">Scroll pans</span>
+                <span class="param-switch">
+                  <input id="prefs-scroll-pans" type="checkbox" :checked="nav.scrollPans" @change="onScrollPans" />
+                  <span class="track"><span class="knob"></span></span>
+                </span>
+              </label>
+              <p class="pref-hint">
+                For trackpads: two fingers scrolling move the view, and a pinch (or Ctrl
+                with the wheel) zooms.
+              </p>
+            </div>
+            <div class="pref-card">
+              <label class="pref-head">
+                <span class="pref-title">Classic camera</span>
+                <span class="param-switch">
+                  <input id="prefs-classic-camera" type="checkbox" :checked="classicCamera" @change="onClassicCamera" />
+                  <span class="track"><span class="knob"></span></span>
+                </span>
+              </label>
+              <p class="pref-hint">
+                The camera from before this release, kept for one release in case the new
+                one gets in your way. Takes effect after a restart.
               </p>
             </div>
           </div>
