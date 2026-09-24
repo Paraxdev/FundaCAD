@@ -87,6 +87,10 @@
 
 #include <algorithm>
 #include <atomic>
+#include <chrono>
+#include <list>
+#include <mutex>
+#include <unordered_map>
 #include <cmath>
 #include <memory>
 #include <stdexcept>
@@ -195,6 +199,48 @@ inline double bo_area(const TopoDS_Shape &s) {
   return p.Mass();
 }
 
+// Exact boxes of faces that were slow to bound, so the next feature's box of
+// the same body skips them. A face is its TShape, location and orientation;
+// holding it keeps its TShape's address from going to another face.
+class BoFaceBoxes {
+ public:
+  bool find(const TopoDS_Shape &face, Bnd_Box &out) {
+    std::lock_guard<std::mutex> lock(m_);
+    auto range = idx_.equal_range(face.TShape().get());
+    for (auto it = range.first; it != range.second; ++it)
+      if (it->second->first.IsEqual(face)) {
+        out = it->second->second;
+        return true;
+      }
+    return false;
+  }
+  void put(const TopoDS_Shape &face, const Bnd_Box &box) {
+    std::lock_guard<std::mutex> lock(m_);
+    fifo_.emplace_back(face, box);
+    idx_.emplace(face.TShape().get(), std::prev(fifo_.end()));
+    if (fifo_.size() <= 1024) return;
+    auto oldest = fifo_.begin();
+    auto range = idx_.equal_range(oldest->first.TShape().get());
+    for (auto it = range.first; it != range.second; ++it)
+      if (it->second == oldest) {
+        idx_.erase(it);
+        break;
+      }
+    fifo_.pop_front();
+  }
+
+ private:
+  using Entry = std::pair<TopoDS_Shape, Bnd_Box>;
+  std::mutex m_;
+  std::list<Entry> fifo_;
+  std::unordered_multimap<const void *, std::list<Entry>::iterator> idx_;
+};
+
+inline BoFaceBoxes &bo_face_boxes() {
+  static BoFaceBoxes cache;
+  return cache;
+}
+
 // BRepBndLib::AddOptimal(s, box, true, false) with its face loop spread over
 // OCCT's pool. The serial loop unions each face's own box by min and max,
 // which is order free, so this is the serial box to the bit.
@@ -209,7 +255,11 @@ inline void bo_add_optimal(const TopoDS_Shape &s, Bnd_Box &box) {
   std::atomic<bool> failed{false};
   OSD_Parallel::For(0, (int)faces.size(), [&](int i) {
     try {
+      if (bo_face_boxes().find(faces[i], boxes[i])) return;
+      auto began = std::chrono::steady_clock::now();
       BRepBndLib::AddOptimal(faces[i], boxes[i], true, false);
+      if (std::chrono::steady_clock::now() - began > std::chrono::microseconds(500))
+        bo_face_boxes().put(faces[i], boxes[i]);
     } catch (...) {
       failed = true;
     }
