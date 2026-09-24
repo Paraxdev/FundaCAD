@@ -40,6 +40,8 @@ const PROFILE_EPS: f64 = 1e-6;
 #[derive(Debug, Clone)]
 pub enum BlendErr {
     Kernel(String),
+    /// A kernel failure that names the vertices it gave up at.
+    Stuck(String, Vec<[f64; 3]>),
     /// conic_blend.py `ConicNotApplicable`: the profile, not the blend, refused.
     Conic(String),
 }
@@ -47,7 +49,7 @@ pub enum BlendErr {
 impl BlendErr {
     fn text(&self) -> &str {
         match self {
-            BlendErr::Kernel(s) | BlendErr::Conic(s) => s,
+            BlendErr::Kernel(s) | BlendErr::Stuck(s, _) | BlendErr::Conic(s) => s,
         }
     }
 }
@@ -280,6 +282,7 @@ fn native_fillet(s: &Shape, es: &[Shape], radii: &[f64]) -> Result<Shape, BlendE
     const MSG: &str = "Failed creating a fillet, try a smaller value";
     match ops::fillet(s, es, radii) {
         Ok((out, Built::Done)) => Ok(out),
+        Ok((at, Built::NotDone)) => Err(BlendErr::Stuck(MSG.into(), vertex_points(&at))),
         Ok(_) => Err(BlendErr::Kernel(MSG.into())),
         Err(e) => Err(BlendErr::Kernel(e)),
     }
@@ -404,6 +407,14 @@ fn refuse_smooth_edges(shape: &Shape, edges: &[Shape], label: &str) -> FResult {
         ),
         Some(EDGE_ALREADY_SMOOTH),
     ))
+}
+
+fn vertex_points(s: &Shape) -> Vec<[f64; 3]> {
+    crate::kernel::subshapes(s, crate::kernel::Kind::Vertex)
+        .iter()
+        .filter_map(crate::kernel::bbox)
+        .map(|b| [0.5 * (b[0] + b[3]), 0.5 * (b[1] + b[4]), 0.5 * (b[2] + b[5])])
+        .collect()
 }
 
 fn edge_mid(e: &Shape) -> Option<DVec3> {
@@ -608,6 +619,25 @@ fn blend_failure(
         _ => None,
     };
     if helps != Some(false) {
+        let stuck = match (err, helps, probed) {
+            (BlendErr::Stuck(_, at), Some(true), Some(small)) => {
+                short_edge_at(body.shape, unresolved, at, blend_size).map(|(len, p)| (len, p, small))
+            }
+            _ => None,
+        };
+        if let Some((len, p, small)) = stuck {
+            let [x, y, z] = p.map(|c| py_g(py_round(c, 3)));
+            return value_err(
+                format!(
+                    "{label} failed on {}: at {}mm the blend cannot end at ({x}, {y}, {z}), where the selected edge runs on into a {}mm edge. At {}mm it builds, so try a smaller value, or change the model so the edge does not end in such a short one.",
+                    body.name,
+                    py_g(blend_size),
+                    py_g(py_round(len, 2)),
+                    py_g(small)
+                ),
+                Some(BLEND_TOO_LARGE),
+            );
+        }
         return value_err(
             format!(
                 "{label} failed on {}: {}",
@@ -632,6 +662,40 @@ fn blend_failure(
         ),
         Some(BLEND_HAS_NO_END),
     )
+}
+
+/// An edge shorter than the blend that runs on from one of `edges` to a vertex
+/// the kernel gave up at: its length and that vertex. The kernel carries a blend
+/// on along a tangent sliver like that and then has to end it in the corner past it.
+fn short_edge_at(body: &Shape, edges: &[Shape], at: &[[f64; 3]], blend_size: f64) -> Option<(f64, [f64; 3])> {
+    use crate::kernel::{subshapes, Kind};
+    const SAME: f64 = 1e-4;
+    let near = |a: &[f64; 3], b: &[f64; 3]| DVec3::from_array(*a).distance(DVec3::from_array(*b)) <= SAME;
+    let ends: Vec<[f64; 3]> = edges.iter().flat_map(vertex_points).collect();
+    subshapes(body, Kind::Edge)
+        .iter()
+        .filter_map(|e| {
+            let vs = vertex_points(e);
+            let [a, b] = vs.as_slice() else {
+                return None;
+            };
+            let stuck = at.iter().find_map(|p| {
+                if near(a, p) {
+                    Some((*p, b))
+                } else if near(b, p) {
+                    Some((*p, a))
+                } else {
+                    None
+                }
+            });
+            let (p, other) = stuck?;
+            if !ends.iter().any(|v| near(v, other)) {
+                return None;
+            }
+            let len = crate::kernel::length(e);
+            (len < blend_size).then_some((len, p))
+        })
+        .min_by(|x, y| x.0.total_cmp(&y.0))
 }
 
 /// `_report_edge_failures`.
