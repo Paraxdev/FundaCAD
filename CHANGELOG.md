@@ -25,6 +25,15 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **Datum planes tilt and spin, and stay parametric.** Creating a datum plane
+  now shows an offset arrow, an arc for each tilt and one for the spin at the
+  plane's pivot, snapping in 5° steps (Shift 1°, Alt free), with every value
+  typeable. Double-click a datum plane to bring the same handles back. The
+  plane stores `tiltX`, `tiltY`, `spin`, `shiftX` and `shiftY` relative to its
+  reference, and a plane made on another datum plane follows it (`planeId`),
+  so moving the parent or changing a parameter bound to a tilt moves the plane
+  and the sketches and bodies built on it. Move on a selected datum plane
+  writes the same relative fields.
 - **A plugin's tools fold under its own heading in the selection rail.** Pick a
   face and the app's own verbs (Fillet, Press/Pull, Shell, …) stay flat at the
   top, while a plugin's tools sit under a collapsible section named after the
