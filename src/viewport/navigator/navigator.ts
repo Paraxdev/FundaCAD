@@ -70,6 +70,8 @@ export class Navigator {
   private gesture: Gesture = null;
   private wheelAt: { x: number; y: number; log: number } | null = null;
   private pinchZoom: ZoomChannel | null = null;
+  /** The pan channel is a two-finger scroll's rather than a drag's. */
+  private scrolling = false;
   /** A gesture moved the view and its re-seat has not run yet. */
   private unsettled = false;
   private good: Pose = makePose();
@@ -213,10 +215,6 @@ export class Navigator {
     }
     if (!this.takeInput()) return;
     this.endGesture(true);
-    if (this.mode === "auto" && this.pose.ortho) {
-      this.pose.ortho = false;
-      this.moved();
-    }
     const pivot = this.pivotAt(x, y);
     const t = this.pose.level ? { yaw: this.pose.yaw, elev: this.pose.elev, roll: 0 } : decompose(this.pose.q);
     this.orbit = new OrbitChannel(pivot, t.yaw, t.elev, t.roll);
@@ -229,6 +227,7 @@ export class Navigator {
     this.endGesture(true);
     const grab = zoomAnchor(this.pose, this.ctx(), x, y).point;
     this.pan = new PanChannel(grab, x, y);
+    this.scrolling = false;
     this.gesture = { kind: "pan" };
     this.emit("inputstart");
   }
@@ -251,6 +250,13 @@ export class Navigator {
     const dy = y - g.y;
     g.x = x;
     g.y = y;
+    if (dx === 0 && dy === 0) return;
+    // Auto leaves orthographic when the turn starts (not at the press, which
+    // may only be a right click for the menu), and never mid-drag.
+    if (this.mode === "auto" && this.pose.ortho) {
+      this.pose.ortho = false;
+      this.moved();
+    }
     this.orbitGoal(o, dx, dy);
     if (dt > 0) {
       const k = Math.min(1, dt / 0.05);
@@ -307,6 +313,7 @@ export class Navigator {
     const a = zoomAnchor(this.pose, this.ctx(), mx, my);
     if (a.kind !== "target" && this.canReseat(a.depth)) reseat(this.pose, a.depth);
     this.pan = new PanChannel(a.point, mx, my);
+    this.scrolling = false;
     this.pinchZoom = new ZoomChannel(a.point, mx, my);
     this.zooms.push(this.pinchZoom);
     this.gesture = { kind: "pan" };
@@ -318,6 +325,20 @@ export class Navigator {
     this.pan.cx = mx;
     this.pan.cy = my;
     this.pinchZoom?.add(logFactor);
+  }
+
+  /** Two-finger scroll as a pan: the content follows the fingers 1:1. */
+  scrollPan(x: number, y: number, dx: number, dy: number) {
+    if (!this.takeInput() || !Number.isFinite(dx) || !Number.isFinite(dy)) return;
+    if (!this.pan || !this.scrolling || this.gesture) {
+      this.endGesture(true);
+      const grab = zoomAnchor(this.pose, this.ctx(), x, y).point;
+      this.pan = new PanChannel(grab, x, y);
+      this.scrolling = true;
+    }
+    this.pan.cx -= dx;
+    this.pan.cy -= dy;
+    this.emit("inputstart");
   }
 
   private flushWheel() {
@@ -430,7 +451,10 @@ export class Navigator {
     this.unsettled = true;
     if (this.gesture?.kind !== "pan") {
       const now = project(this.pose, this.frame, c.grab);
-      if (c.settled(now.x, now.y)) this.pan = null;
+      if (c.settled(now.x, now.y)) {
+        this.pan = null;
+        this.scrolling = false;
+      }
     }
   }
 

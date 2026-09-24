@@ -106,16 +106,19 @@ describe("mouse orbit", () => {
     expect(eye(nav).distanceTo(e0)).toBeGreaterThan(0);
   });
 
-  it("switches auto ortho to perspective at the press, never mid-drag", () => {
+  it("switches auto ortho to perspective when the turn starts, never mid-drag", () => {
     const { nav } = setup({ tau: 0.125 });
     nav.setProjectionMode("auto");
     nav.rotateTo(0, 0);
     settle(nav);
     expect(nav.pose.ortho).toBe(true);
+    // a press alone may be a right click for the menu
     nav.beginOrbit(400, 300);
-    expect(nav.pose.ortho).toBe(false);
+    nav.update(1 / 60);
+    expect(nav.pose.ortho).toBe(true);
     // drag straight back up to the pole: still perspective while held
     nav.dragTo(400, 280);
+    expect(nav.pose.ortho).toBe(false);
     nav.update(1 / 60);
     nav.dragTo(400, 320);
     for (let i = 0; i < 120; i++) nav.update(1 / 60);
