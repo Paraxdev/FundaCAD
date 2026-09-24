@@ -8,10 +8,11 @@
 // double-clicking a face on the model open that feature's edit, and does a
 // single click, or a double-click on empty space, deliberately NOT.
 //
-// The signal is toolBusy(): editing an extrude opens the interactive extrude
-// tool, which a plain selection never does. Extrude, not a box primitive,
-// precisely because a box has no draggable edit and so would not move the
-// signal either way.
+// The signal is the extrude tool itself: editing an extrude opens it, which a
+// plain selection never does. Not toolBusy(), which a body selection sets by
+// raising the Move gizmo, and that gizmo is also what used to refuse the edit.
+// Extrude, not a box primitive, precisely because a box has no draggable edit
+// and so would not move the signal either way.
 //
 // Usage (from the repo root, with vite on 5173 + engine on 8765 (`fundacad-engine --ws`)):
 //   SC_TOKEN=<engine token> SC_CHROME=<chrome.exe> node e2e/dblclick_edit_e2e.cjs [outDir]
@@ -101,7 +102,7 @@ const check = (name, ok, detail) => {
   check("found an empty canvas point", !!empty, JSON.stringify(empty));
   if (!empty) { await browser.close(); process.exit(1); }
 
-  const busy = () => page.evaluate(() => window.__fundacad.toolBusy());
+  const busy = () => page.evaluate(() => window.__fundacad.extrude.active);
   const clearSel = async () => { await page.keyboard.press("Escape"); await page.waitForTimeout(300); };
 
   // CONTROL 1: a single click selects the face, it does not edit anything.
@@ -125,10 +126,18 @@ const check = (name, ok, detail) => {
   // And Escape leaves it cleanly: the tool ends and the body is still there.
   await clearSel();
   const after = await page.evaluate(() => ({
-    busy: window.__fundacad.toolBusy(),
+    busy: window.__fundacad.extrude.active,
     bodies: (window.store.buildState.result?.bodies ?? []).length,
   }));
   check("Escape ends the edit and keeps the body", after.busy === false && after.bodies > 0, JSON.stringify(after));
+
+  // With the body selected (its Move gizmo up), double-clicking the sketch in
+  // the Items tree still opens it.
+  await page.mouse.click(spot.x, spot.y);
+  await page.waitForTimeout(500);
+  await page.getByText("Sketch1", { exact: true }).first().dblclick();
+  await page.waitForTimeout(1500);
+  check("with a body selected, double-clicking a sketch in the tree opens it", await page.evaluate(() => !!window.__fundacad.sketch.active));
 
   await browser.close();
   console.log(failures ? `\n${failures} FAILED` : "\nall checks passed");
