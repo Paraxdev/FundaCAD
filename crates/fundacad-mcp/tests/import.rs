@@ -174,16 +174,21 @@ async fn a_plain_part_carries_no_colour_and_no_tree() {
 #[tokio::test(flavor = "multi_thread")]
 async fn an_assembly_keeps_its_tree_and_a_glb_its_colour() {
     let _serial = serial();
+    // `color` and `parts` as the real engine actually sends them (a hex
+    // string, `{node, faces}` per part), not the shape they had before
+    // `feature_add` started checking a feature against the schema it will
+    // build with: that check is what caught this fixture drifting from it.
     let (srv, _engine) = server_with(json!({"ok": true, "result": {
         "geom": "def456", "solid": true, "faces": 40, "name": "asm",
-        "color": [0.2, 0.4, 0.6], "nodes": [{"name": "Plate"}], "parts": ["a", "b"]}}));
+        "color": "#336699", "nodes": [{"name": "Plate"}],
+        "parts": [{"node": 0, "faces": 20}, {"node": 1, "faces": 20}]}}));
     let path = a_file(".glb");
     let out = run(&srv, json!({"path": path.to_string_lossy()})).await;
     let _ = std::fs::remove_file(&path);
     let f = features(&srv).await[0].clone();
-    assert_eq!(f["color"], json!([0.2, 0.4, 0.6]));
+    assert_eq!(f["color"], json!("#336699"));
     assert_eq!(f["nodes"], json!([{"name": "Plate"}]));
-    assert_eq!(f["parts"], json!(["a", "b"]));
+    assert_eq!(f["parts"], json!([{"node": 0, "faces": 20}, {"node": 1, "faces": 20}]));
     assert!(text_of(&out).contains("2 parts"), "{}", text_of(&out));
 }
 

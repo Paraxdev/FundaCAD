@@ -456,8 +456,8 @@ fn text_fields_are_not_mistaken_for_parameters() {
     let mut d = m::new_document();
     m::add_feature(
         &mut d,
-        &json!({"id": "f1", "type": "import", "format": "step", "geom": "abc", "source": "a.step",
-                "solid": true, "color": "#3f0276"}),
+        &json!({"id": "f1", "type": "import", "format": "step", "name": "Imported", "geom": "abc",
+                "source": "a.step", "solid": true, "color": "#3f0276"}),
         None,
     )
     .unwrap();
