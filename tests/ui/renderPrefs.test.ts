@@ -60,6 +60,8 @@ describe("asRenderPrefs", () => {
       performanceMode: true,
       shadows: DEFAULT_RENDER.shadows,
       tangentEdges: DEFAULT_RENDER.tangentEdges,
+      keyAzimuth: DEFAULT_RENDER.keyAzimuth,
+      keyElevation: DEFAULT_RENDER.keyElevation,
     });
   });
 
