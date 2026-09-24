@@ -72,17 +72,31 @@ export function minDistanceFor(maxCoord: number, fovDeg = 45, heightPx = 1000): 
 }
 
 /** Farthest zoom-out, as half the visible view height in multiples of the
- *  model's bounding radius. At 100 the whole model still spans several pixels,
- *  past it the part shrinks below one and the user is left with an empty grid
- *  and no way to tell which way it went. */
-export const ZOOM_OUT_FACTOR = 100;
+ *  model's bounding radius. The ball then spans a 25th of the view height
+ *  whatever its size, about 30 px on an ordinary window; past that the part
+ *  shrinks to a speck and the user is left with a grid and no way to tell
+ *  which way it went. */
+export const ZOOM_OUT_FACTOR = 25;
 
-/** Zoom-out ceiling that applies however small the model is, or with none. */
-export const ZOOM_OUT_FLOOR = 5000;
+/** Zoom-out limit with nothing built, room sized so the grid still reads. */
+export const ZOOM_OUT_EMPTY = 5000;
+
+/** The limit never goes under this with a model, so a sketch drawn around a
+ *  tiny part can still be seen whole. A 2 mm cube is 12 px across here on a
+ *  600 px tall view. */
+export const ZOOM_OUT_MIN = 50;
+
+/** Nor over this, a kilometre either side of the view centre. */
+export const ZOOM_OUT_CEILING = 1e6;
+
+/** Multiples of the radius a fit may need (a tall narrow window), which the
+ *  ceiling never cuts under. */
+const FIT_ROOM = 12;
 
 export function maxViewHalfHeight(contentRadius: number): number {
-  const r = Number.isFinite(contentRadius) && contentRadius > 0 ? contentRadius : 0;
-  return Math.max(ZOOM_OUT_FLOOR, r * ZOOM_OUT_FACTOR);
+  if (!(contentRadius > 0) || !Number.isFinite(contentRadius)) return ZOOM_OUT_EMPTY;
+  const r = contentRadius;
+  return Math.max(ZOOM_OUT_MIN, Math.min(ZOOM_OUT_CEILING, r * ZOOM_OUT_FACTOR), r * FIT_ROOM);
 }
 
 // Zoomed out, a 0.1mm near plane is what z-fights. A 24-bit depth buffer
