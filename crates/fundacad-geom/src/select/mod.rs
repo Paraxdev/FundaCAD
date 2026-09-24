@@ -398,7 +398,7 @@ impl<'a> Resolver<'a> {
         fp: &Map<String, Value>,
         nth: (bool, Option<i64>),
     ) -> FResult<(Option<usize>, f64, bool, Option<&'static str>)> {
-        let tol_pos = self.tuning.pos_tol(sa::bbox_diagonal(part));
+        let tol_pos = self.tuning.pos_tol(crate::kernel::bbox_diagonal(part));
         let ranks = circle_groups(edges, tol_pos);
         let costs = edges
             .iter()
@@ -417,7 +417,7 @@ impl<'a> Resolver<'a> {
         nth: (bool, Option<i64>),
     ) -> FResult<Vec<FaceEnt>> {
         let fp = as_object(fp)?;
-        let tol_pos = self.tuning.pos_tol(sa::bbox_diagonal(part));
+        let tol_pos = self.tuning.pos_tol(crate::kernel::bbox_diagonal(part));
         let faces = faces_of(part)?;
         let costs = faces
             .iter()
@@ -813,7 +813,7 @@ impl<'a> PartEdges<'a> {
 
     fn get(&mut self) -> FResult<&(Vec<EdgeEnt>, f64)> {
         if self.measured.is_none() {
-            self.measured = Some((edges_of(self.part)?, sa::bbox_diagonal(self.part)));
+            self.measured = Some((edges_of(self.part)?, crate::kernel::bbox_diagonal(self.part)));
         }
         Ok(self.measured.as_ref().expect("just measured"))
     }
