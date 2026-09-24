@@ -1008,7 +1008,13 @@
    "width": "Num"
   },
   "spline": {
-   "points": "[{x, y}, ...]"
+   "points": "[{x, y}, ...], the curve passes through every point"
+  },
+  "bspline": {
+   "poles": "[{x, y}, ...] control points: the curve is pulled toward them and passes only through the two end poles of an open curve",
+   "degree": "2, 3 or 5 (default 3), lowered to one less than the pole count when there are fewer poles",
+   "closed": "true for a smooth closed loop (3 or more poles), which is a profile on its own",
+   "knots": "optional, written by the app when a pole is inserted; leave it out for evenly spaced knots"
   },
   "point": {
    "x": "Num",
