@@ -339,9 +339,25 @@ export type CoreFeature =
   | { id: string; type: "loft"; profiles?: { sketch: string; region: [number, number, number] }[]; sketches?: string[]; operation?: "new" | "join" | "cut" | "intersect"; targets?: string[] }
   // Sweep a closed profile sketch along an open path sketch (a line/arc/spline).
   | { id: string; type: "sweep"; profile: string; path: string; operation: "new" | "join" | "cut"; targets?: string[] }
-  // A datum plane: `plane` offset along its normal. `face` makes it follow a face, with
-  // `plane` as the cache; `at` is where a round face was touched (its tangent plane).
-  | { id: string; type: "datumPlane"; plane: PlaneSpec; offset?: number; name?: string; face?: Selector; at?: Vec3 }
+  // A datum plane: its reference moved by shiftX/shiftY/offset along the reference's own
+  // axes, then turned about that point by tiltX, tiltY, spin (degrees, in that order,
+  // see document/datumPose.ts). `planeId` (a parent datum) or `face` make the reference
+  // follow, with `plane` as the cache; `at` is where a round face was touched.
+  | {
+      id: string;
+      type: "datumPlane";
+      plane: PlaneSpec;
+      planeId?: string;
+      offset?: number;
+      shiftX?: number;
+      shiftY?: number;
+      tiltX?: number;
+      tiltY?: number;
+      spin?: number;
+      name?: string;
+      face?: Selector;
+      at?: Vec3;
+    }
   // A baked point, not re-resolved on rebuild; drawn client-side.
   | { id: string; type: "datumPoint"; point: Vec3; name?: string }
   // An infinite line (`dir` need not be unit). `axisEdge` makes it follow an edge.

@@ -48,7 +48,7 @@ export interface ContextMenusDeps {
   getLastAction: () => string | null;
   setLastAction: (action: string) => void;
   startCutByPlane: (planeId: string) => void | Promise<void>;
-  offsetPlaneFromFace: (face: PlaneDef) => void;
+  offsetPlaneFromFace: (face: PlaneDef, parentId?: string) => void;
 }
 
 export function createContextMenus(deps: ContextMenusDeps) {
@@ -104,7 +104,7 @@ export function createContextMenus(deps: ContextMenusDeps) {
       // enter BY ID: the def is only the cached placement, so passing the datum
       // id too is what makes the sketch follow later edits to its offset
       { label: "Sketch on plane", disabled: !f, onClick: unlessBusy(() => { if (f) sketch.enter(datumPlaneDef(f), store, undefined, f.id); }) },
-      { label: "Offset plane", disabled: !f, onClick: unlessBusy(() => { if (f) offsetPlaneFromFace(datumPlaneDef(f)); }) },
+      { label: "Offset plane", disabled: !f, onClick: unlessBusy(() => { if (f) offsetPlaneFromFace(datumPlaneDef(f), f.id); }) },
       { separator: true, label: "" },
       // setPlaneVisibility deliberately emits nothing (a plane toggle costs no
       // rebuild), so the browser is told by hand, see stores/browser.ts.

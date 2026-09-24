@@ -18,7 +18,7 @@ export function installKeyboard(e: Engine): void {
       if (e.sketch.active && SKETCH_TOOLS.has(a)) return;
       if (a === "escape") {
         const t = e.tools;
-        if (!e.sketch.active && !t.extrude.active && !t.edgeFeature.active && !t.pressPull.active && !t.loft.active && !t.planeOffset.active) {
+        if (!e.sketch.active && !t.extrude.active && !t.edgeFeature.active && !t.pressPull.active && !t.loft.active && !t.planeOffset.active && !t.datumPose.active) {
           e.viewport.clearSelection();
           e.selectFeature(null);
         }

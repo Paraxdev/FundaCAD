@@ -164,7 +164,7 @@ type TreeNode = FolderNode | RowNode | EmptyNode | PluginNode;
 
 function sketchOnPlane(plane: Plane3) {
   const t = engine.tools;
-  if (engine.sketch.active || t.extrude.active || t.edgeFeature.active || t.pressPull.active || t.loft.active || t.planeOffset.active) return;
+  if (engine.sketch.active || t.extrude.active || t.edgeFeature.active || t.pressPull.active || t.loft.active || t.planeOffset.active || t.datumPose.active) return;
   // Answering "select a plane" from the Browser instead of the viewport: end the
   // interactive pick, or its planePick flag stays set and toolBusy() is true
   // forever, silently disabling every tool from here on with no error at all.

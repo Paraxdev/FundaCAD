@@ -36,7 +36,7 @@ function fakeEngine(over: {
       extrude: { active: over.extrude ?? false },
       move: { active: over.move ?? false, cancel: () => { cancelled++; } },
       edgeFeature: off, pressPull: off, faceOffset: off, draft: off, thread: off, hole: off,
-      loft: off, planeOffset: off, pattern: off, measure: off, targetEdit: off,
+      loft: off, planeOffset: off, datumPose: off, pattern: off, measure: off, targetEdit: off,
       revolvePitch: off, joint: off, section: { picking: false },
     },
   } as unknown as Engine;

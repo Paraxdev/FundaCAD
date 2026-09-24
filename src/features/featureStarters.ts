@@ -16,9 +16,13 @@ import type { EdgeFeatureTool } from "./edgeFeatureTool";
 import type { PressPullTool } from "./pressPullTool";
 import type { LoftTool } from "./loftTool";
 import type { MoveTool } from "./moveTool";
+import type { MoveTarget } from "./moveTarget";
 import { sketchFeatureTarget } from "./sketchMoveTarget";
 import type { PatternKind, PatternTool } from "./patternTool";
 import type { PlaneOffsetTool } from "./planeOffsetTool";
+import type { DatumPoseTool } from "./datumPoseTool";
+import { placeDatum, poseFields, ZERO_POSE, type DatumPose } from "../document/datumPose";
+import { planeGizmoChoice } from "../ui/interactionPrefs";
 import { pickPlaneTarget, planeSpecOf, type FacePlanePick } from "./facePlanePick";
 import { choose } from "../ui/choice";
 import { pointInRegion } from "../sketch/region";
@@ -38,6 +42,7 @@ export interface FeatureStartersDeps {
   moveTool: MoveTool;
   patternTool: PatternTool;
   planeOffset: PlaneOffsetTool;
+  datumPose: DatumPoseTool;
   canvas: HTMLCanvasElement;
   toolBusy: () => boolean;
   hasBody: () => boolean;
@@ -47,6 +52,8 @@ export interface FeatureStartersDeps {
   isSketchConsumed: (id: string) => boolean;
   getSelectedFeature: () => string | null;
   setPlanePick: (v: boolean) => void;
+  /** the Move gizmo's target for a selected datum plane */
+  datumMoveTarget: (id: string) => MoveTarget | null;
 }
 
 export function createFeatureStarters(deps: FeatureStartersDeps) {
@@ -62,6 +69,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     moveTool,
     patternTool,
     planeOffset,
+    datumPose,
     canvas,
     toolBusy,
     hasBody,
@@ -70,6 +78,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     noteCommitted,
     getSelectedFeature,
     setPlanePick,
+    datumMoveTarget,
   } = deps;
 
   // Interactive Fillet / Chamfer: pick an edge (or use a Ctrl-click pre-selection),
@@ -282,23 +291,40 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
         return;
       }
     }
-    pickPlaneInteractive("Select a plane or face to offset from", (spec, face) => {
-      startOffsetFrom(spec, faceRef(face));
+    pickPlaneInteractive("Select a plane or face to offset from", (spec, face, datumId) => {
+      startOffsetFrom(spec, { ...faceRef(face), ...(datumId ? { planeId: datumId } : {}) });
     });
   }
 
   /** Offset from a resolved source plane, save the parametric datum, sketch on
    *  it. Shared by the pick route and the selected-face shortcut so both build
    *  the same feature. */
-  function startOffsetFrom(spec: PlaneSpec, ref: { face?: Selector; at?: Vec3 }) {
-    const src = new SketchPlane(spec);
-    planeOffset.start(src, (def) => {
-      if (!def) return;
+  function startOffsetFrom(spec: PlaneSpec, ref: DatumRef) {
+    placeNewDatum(spec, ref, (id, def) => sketch.enter(def, store, undefined, id));
+  }
+
+  /** Where a new datum hangs from: a face it follows, or a parent datum. */
+  type DatumRef = { face?: Selector; at?: Vec3; planeId?: string };
+
+  /** Position a new datum off `spec` with the handles, then save it. The pose
+   *  is stored relative to the reference, so the plane stays parametric. */
+  function placeNewDatum(spec: PlaneSpec, ref: DatumRef, then: (id: string, def: PlaneDef) => void) {
+    const make = (pose: DatumPose) => {
       const id = store.nextId();
       store.addFeature({
-        id, type: "datumPlane", plane: spec, offset: offsetAlong(def, src), ...ref,
+        id, type: "datumPlane", plane: spec, offset: pose.offset, ...poseFields(pose), ...ref,
       } as Feature);
-      sketch.enter(def, store, undefined, id);
+      then(id, placeDatum(spec, pose));
+    };
+    if (planeGizmoChoice() === "arcs") {
+      datumPose.start({ src: spec, pose: ZERO_POSE, turns: true, ghost: true }, (pose) => {
+        if (pose) make(pose);
+      });
+      return;
+    }
+    const src = new SketchPlane(spec);
+    planeOffset.start(src, (def) => {
+      if (def) make({ ...ZERO_POSE, offset: offsetAlong(def, src) });
     });
   }
 
@@ -314,16 +340,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   // flat on or offset away from the shaft. The offset then runs radially, which
   // is what makes "a plane 5 mm off this boss" one gesture.
   function createDatumPlane() {
-    pickPlaneInteractive("Select a plane or face for the datum plane · a round face gives its tangent plane", (spec, face) => {
-      const src = new SketchPlane(spec);
-      planeOffset.start(src, (def) => {
-        if (!def) return;
-        const id = store.nextId();
-        store.addFeature({
-          id, type: "datumPlane", plane: spec, offset: offsetAlong(def, src), ...faceRef(face),
-        } as Feature);
-        selectFeature(id);
-      });
+    pickPlaneInteractive("Select a plane or face for the datum plane · a round face gives its tangent plane", (spec, face, datumId) => {
+      placeNewDatum(spec, { ...faceRef(face), ...(datumId ? { planeId: datumId } : {}) }, (id) => selectFeature(id));
     });
   }
 
@@ -502,15 +520,9 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
 
   // Right-click → "Offset plane from face": same as Datum Plane but the source is
   // the right-clicked face (no separate pick step).
-  function offsetPlaneFromFace(face: PlaneDef) {
+  function offsetPlaneFromFace(face: PlaneDef, parentId?: string) {
     if (toolBusy()) return;
-    const src = new SketchPlane(face);
-    planeOffset.start(src, (def) => {
-      if (!def) return;
-      const id = store.nextId();
-      store.addFeature({ id, type: "datumPlane", plane: face, offset: offsetAlong(def, src) } as Feature);
-      selectFeature(id);
-    });
+    placeNewDatum(face, parentId ? { planeId: parentId } : {}, (id) => selectFeature(id));
   }
 
   /** The face reference a datum keeps, or nothing when the source was a
@@ -773,8 +785,16 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     let ids = viewport.getSelectedBodies();
     const sketches = new Set(overlay.selectedRegions().map((r) => r.sketchId));
     const picked = getSelectedFeature();
-    if (!ids.length && !sketches.size && picked && store.document.features.find((f) => f.id === picked)?.type === "sketch") {
+    const pickedType = picked ? store.document.features.find((f) => f.id === picked)?.type : undefined;
+    if (!ids.length && !sketches.size && picked && pickedType === "sketch") {
       sketches.add(picked);
+    }
+    if (!ids.length && !sketches.size && picked && pickedType === "datumPlane") {
+      const target = datumMoveTarget(picked);
+      if (target) {
+        moveTool.startTarget(target, done);
+        return;
+      }
     }
     if (sketches.size) {
       const target = sketchFeatureTarget(viewport, store, overlay, [...sketches], ids);
