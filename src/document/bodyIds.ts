@@ -26,6 +26,16 @@ export function isFeatureKey(key: string, featureId: string): boolean {
   return /^\d+#*$/.test(key.slice(featureId.length + 1));
 }
 
+/** A document handed over whole, not opened from a file, gets an empty map when it has
+ *  none, or it would be numbered like a file saved before the map existed, where a join
+ *  took a fresh id. The Rust twin is `ensure_map`, held to tests/vectors/handed_over.json. */
+export function ensureBodyIds(doc: { bodyIds?: unknown }): boolean {
+  const m = doc.bodyIds;
+  if (m && typeof m === "object" && !Array.isArray(m)) return false;
+  doc.bodyIds = {};
+  return true;
+}
+
 export function forgetFeature(map: Record<string, string>, featureId: string): boolean {
   let gone = false;
   for (const key of Object.keys(map)) {

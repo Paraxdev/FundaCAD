@@ -2,14 +2,24 @@ import { describe, it, expect, vi } from "vitest";
 import { DocumentStore } from "../../src/document/store";
 import type { CadDocument, Feature, RebuildResult } from "../../src/types";
 import type { GeometryBackend } from "../../src/geometry/client";
-import { forgetFeature, joinSignature, joinWentStale } from "../../src/document/bodyIds";
+import { ensureBodyIds, forgetFeature, joinSignature, joinWentStale } from "../../src/document/bodyIds";
+import { appHost } from "../../src/plugins/broker/appHost";
+import { testHost } from "../../src/plugins/broker/testing";
+import { createBroker } from "../../src/plugins/broker/broker";
+import { allOpGrants } from "../../src/plugins/broker/ops";
 import RAW from "../vectors/join_edits.json";
+import HANDED from "../vectors/handed_over.json";
 
 interface JoinVectors {
   stale: { name: string; before: Feature | null; after: Feature; stale: boolean }[];
   forget: { feature: string; map: Record<string, string>; left: Record<string, string> };
 }
 const JOINS = RAW as unknown as JoinVectors;
+
+interface HandedVectors {
+  cases: { name: string; document: { bodyIds?: unknown }; bodyIds: Record<string, string>; filled: boolean }[];
+}
+const HANDED_OVER = HANDED as unknown as HandedVectors;
 
 vi.stubGlobal("window", globalThis);
 
@@ -104,5 +114,46 @@ describe("a feature that becomes a join (vectors shared with fundacad-core)", ()
     store.document.bodyIds!["rv:0"] = "body1";
     store.updateFeature("rv", { angle: 90 } as Partial<Feature>);
     expect(store.document.bodyIds).toEqual({ "a:0": "body1", "rv:0": "body1" });
+  });
+});
+
+describe("a document handed over whole (vectors shared with fundacad-core)", () => {
+  it("gets the map the engine's twin gives it", () => {
+    for (const c of HANDED_OVER.cases) {
+      const doc = structuredClone(c.document);
+      expect(ensureBodyIds(doc), c.name).toBe(c.filled);
+      expect(doc.bodyIds, c.name).toEqual(c.bodyIds);
+    }
+  });
+
+  it("is built with a map through a plugin's doc_set, and keeps the one doc_get handed out", async () => {
+    const h = backend(() => undefined);
+    const store = new DocumentStore(h.be, { parameters: {}, features: [], bodyIds: {} });
+    const b = createBroker({ plugin: "under-test", grants: allOpGrants(), host: appHost({ store }) });
+    await b.call("doc_set", { document: { parameters: {}, features: [box("a")] } });
+    await store.rebuildNow();
+    expect(h.sent.at(-1)!.bodyIds).toEqual({});
+
+    store.document.bodyIds = { "a:0": "body1" };
+    const got = await b.call("doc_get");
+    await b.call("doc_set", { document: got.ok ? got.value : null });
+    await store.rebuildNow();
+    expect(h.sent.at(-1)!.bodyIds).toEqual({ "a:0": "body1" });
+  });
+
+  it("gets the same map from the test double", async () => {
+    const fake = testHost();
+    await createBroker({ plugin: "under-test", grants: allOpGrants(), host: fake }).call("doc_set", {
+      document: { parameters: {}, features: [box("a")] },
+    });
+    expect(fake.document().bodyIds).toEqual({});
+  });
+
+  it("stays unmapped when opened as a file, which may predate the map", async () => {
+    const h = backend(() => undefined);
+    const store = new DocumentStore(h.be, { parameters: {}, features: [] });
+    store.load(JSON.stringify({ version: 9, parameters: {}, features: [box("a")] }));
+    await store.rebuildNow();
+    expect(h.sent.at(-1)!.bodyIds).toBeUndefined();
   });
 });

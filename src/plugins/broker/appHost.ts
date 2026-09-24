@@ -34,6 +34,7 @@
 
 import type { CadDocument, Feature } from "../../types";
 import type { DocumentStore } from "../../document/store";
+import { ensureBodyIds } from "../../document/bodyIds";
 import type { BrokerHost } from "./broker";
 import type { NativeBridge } from "./native";
 import type { Op } from "./ops";
@@ -200,6 +201,7 @@ export function appHost(opts: AppHostOptions): BrokerHost {
           const next = clone(obj(args.document, "document")) as unknown as CadDocument;
           next.parameters ??= {};
           next.features ??= [];
+          ensureBodyIds(next);
           store.loadDocument(next);
           return { ok: true };
         }
