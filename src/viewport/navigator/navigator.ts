@@ -19,7 +19,7 @@ import {
   rotateAbout, rotateWorldAbout, reseat, scaleAbout, truck, turntableAbout,
 } from "./motions";
 import {
-  clonePose, copyPose, depthOf, distanceOf, eyeOf, forwardOf, halfTan, makePose,
+  boxOffScreen, clonePose, copyPose, depthOf, distanceOf, eyeOf, forwardOf, halfTan, makePose,
   poseFinite, project, rightOf, setOrientation, setTurntable, upOf, worldPerPixel,
   type Frame, type Pose,
 } from "./pose";
@@ -732,20 +732,21 @@ export class Navigator {
     this.flyTo(p, { animate });
   }
 
-  /** Turn to an orientation about the point of the view axis nearest the
-   *  content's centre (the target when there is none), keeping the scale there. */
+  /** Turn to an orientation about what is being looked at, the target, keeping
+   *  the scale, so a detail zoomed in on stays centred and the same size. When
+   *  that would leave the model wholly off screen the turn frames it instead. */
   turnTo(q: THREE.Quaternion, animate = true) {
-    const p = this.destination();
-    let pivot = p.target.clone();
-    if (this.box) {
-      const c = this.box.getCenter(new THREE.Vector3());
-      const d = depthOf(p, c);
-      if (p.ortho || d > this.limits.minDistance) {
-        pivot = eyeOf(p, new THREE.Vector3()).addScaledVector(forwardOf(p, new THREE.Vector3()), d);
-      }
+    if (!this.flight && this.unsettled) {
+      this.unsettled = false;
+      this.reseatAndContain();
     }
-    const scaleThere = p.ortho ? p.scale : depthOf(p, pivot) * halfTan(p.fov);
-    this.flyTo(this.poseWith(q, pivot, scaleThere), { animate });
+    const p = this.poseWith(q);
+    if (this.box && boxOffScreen(p, this.frame, this.box)) {
+      const s = this.box.getBoundingSphere(new THREE.Sphere());
+      p.target.copy(s.center);
+      p.scale = frameScale(p, this.frame, s.radius * 1.15);
+    }
+    this.flyTo(p, { animate });
   }
 
   lookAtPlane(origin: THREE.Vector3, normal: THREE.Vector3, up: THREE.Vector3, animate: boolean, onArrive?: () => void) {
