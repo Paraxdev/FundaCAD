@@ -66,6 +66,7 @@ export function createSelection(
 
   const editFeature = (id: string) => {
     selectFeature(id);
+    e.dropBodyGizmo(); // a body selection raises it by itself, see Engine.dropBodyGizmo
     if (e.toolBusy()) return; // never open a second interactive tool on top of one
     const f = e.store.document.features.find((x) => x.id === id);
     if (!f) return;
