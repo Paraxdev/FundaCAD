@@ -120,4 +120,23 @@ describe("wheel zoom", () => {
     const t = nav.pose.target;
     expect(Math.abs(t.y + 15) < 1e-6 || Math.abs(t.z - 20) < 1e-6 || Math.abs(t.x - 20) < 1e-6).toBe(true);
   });
+
+  for (const inertia of [false, true]) {
+    it(`a wheel right after an orbit release stops the turn, so its anchor stays pinned (inertia ${inertia})`, () => {
+      const { nav } = setup({ tau: 0.125 });
+      nav.opts.inertia = inertia;
+      const x = 380, y = 320;
+      nav.beginOrbit(x, y);
+      for (let i = 1; i <= 8; i++) { nav.dragTo(x + i * 25, y, 0.008); nav.update(1 / 120); }
+      nav.endGesture();
+      nav.wheel(x + 200, y, -100);
+      nav.update(1 / 60);
+      const anchor = (nav as unknown as { zooms: { anchor: THREE.Vector3 }[] }).zooms[0]!.anchor.clone();
+      for (let f = 0; f < 200 && nav.isBusy(); f++) {
+        const s = pixel(nav, anchor);
+        expect(Math.hypot(s.x - (x + 200), s.y - y)).toBeLessThan(PX_TOL);
+        nav.update(1 / 60);
+      }
+    });
+  }
 });
