@@ -444,10 +444,10 @@ export function createDragHandle(tone: HandleTone = "idle"): DragHandle {
 
 /** Radius of the rotation arc, in pixels (its own units). Sized to read clearly
  *  as a rotation control capping the straight handle, not a faint hair above it. */
-const ARC_R = 21;
+const ARC_RADIUS = 21;
 /** How far the arc sweeps, in radians. Just over a third of a turn: enough curve
  *  to read as a rotation, short enough to sit as a cap above a straight handle. */
-const ARC_SWEEP = 2.3;
+const ARC_SWEEP_RAD = 2.3;
 /** Tube radius and cone size of the arc, in pixels. */
 const ARC_TUBE = 2.4;
 const ARC_HEAD_R = 5.2;
@@ -463,18 +463,23 @@ const ARC_HEAD_LEN = 10;
  *  the plane it should swing in) and scales it by pixelWorldSize, exactly as the
  *  straight handle is scaled. Drawn THROUGH the model (depthTest off) like every
  *  other manipulator, so a control over a cut is never buried in the material. */
-export function createRotationArc(tone: HandleTone = "idle"): DragHandle {
+export function createRotationArc(
+  tone: HandleTone = "idle",
+  shape: { radius?: number; sweep?: number } = {},
+): DragHandle {
+  const r = shape.radius ?? ARC_RADIUS;
+  const sweep = shape.sweep ?? ARC_SWEEP_RAD;
   const group = new THREE.Group();
   group.renderOrder = 999;
   // TorusGeometry sweeps its arc from local +X; rotate the meshes so the sweep is
   // centred on local +Y instead, which is the axis a caller aims.
-  const start = Math.PI / 2 - ARC_SWEEP / 2;
+  const start = Math.PI / 2 - sweep / 2;
 
   const body = new THREE.MeshLambertMaterial({
     color: idleColor(), emissive: idleColor(), emissiveIntensity: 0.5,
     depthTest: false, depthWrite: false, transparent: true, opacity: 1,
   });
-  const arcGeo = new THREE.TorusGeometry(ARC_R, ARC_TUBE, 10, 40, ARC_SWEEP);
+  const arcGeo = new THREE.TorusGeometry(r, ARC_TUBE, 10, 40, sweep);
   const arc = new THREE.Mesh(arcGeo, body);
   arc.rotation.z = start;
   arc.renderOrder = 999;
@@ -486,19 +491,19 @@ export function createRotationArc(tone: HandleTone = "idle"): DragHandle {
     const g = new THREE.ConeGeometry(ARC_HEAD_R, ARC_HEAD_LEN, 12);
     headGeos.push(g);
     const m = new THREE.Mesh(g, body);
-    m.position.set(Math.cos(angle) * ARC_R, Math.sin(angle) * ARC_R, 0);
+    m.position.set(Math.cos(angle) * r, Math.sin(angle) * r, 0);
     const tan = new THREE.Vector3(-Math.sin(angle), Math.cos(angle), 0).multiplyScalar(sign);
     m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tan);
     m.renderOrder = 999;
     return m;
   };
   const head1 = makeHead(start, -1);
-  const head2 = makeHead(start + ARC_SWEEP, 1);
+  const head2 = makeHead(start + sweep, 1);
 
   // A fat invisible arc, the grab target, a direct child so a caller hit-tests
   // group.children exactly as it does the straight handle's volumes.
   const hidden = new THREE.MeshBasicMaterial({ visible: false, depthTest: false });
-  const grabGeo = new THREE.TorusGeometry(ARC_R, 9, 6, 32, ARC_SWEEP);
+  const grabGeo = new THREE.TorusGeometry(r, 9, 6, 32, sweep);
   const grab = new THREE.Mesh(grabGeo, hidden);
   grab.rotation.z = start;
 
