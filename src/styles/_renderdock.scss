@@ -163,6 +163,7 @@
   gap: var(--s-2);
 }
 .rd-tile {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -187,8 +188,30 @@
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent-tint-2);
 }
+/* FI-6: a picked tile (.is-selected, above) and one already worn by the
+   selection used to look identical, so a single click read as "applied" even
+   though nothing had happened yet. Worn gets its own solid fill and a check
+   badge; picked keeps the lighter outline. Both can be true at once (you
+   clicked the one that is already on the model), and the badge still shows. */
+.rd-tile.is-worn {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+}
 .rd-tile:active {
   cursor: grabbing;
+}
+.rd-worn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+  color: var(--panel-2);
 }
 .rd-ball {
   display: block;
