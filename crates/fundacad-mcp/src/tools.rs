@@ -186,7 +186,10 @@ pub fn export() -> JsonObject {
     object(
         json!({
             "path": {"type": "string"},
-            "format": {"type": "string", "enum": ["step", "stl", "3mf"]}
+            "format": {"type": "string", "enum": ["step", "stl", "3mf"]},
+            "allowPartial": {"type": "boolean",
+                             "description": "write the file even if a feature failed to build \
+                                             (default: refuse and name the failures)"}
         }),
         &["path", "format"],
     )
