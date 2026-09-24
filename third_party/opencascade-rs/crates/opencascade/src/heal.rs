@@ -49,9 +49,10 @@ impl Shape {
         Ok(Shape { inner })
     }
 
-    /// `BRepCheck_Analyzer::IsValid` with geometric checks on.
+    /// `BRepCheck_Analyzer::IsValid` with geometric checks on, the sub-shapes
+    /// checked on OpenCASCADE's thread pool.
     pub fn is_valid(&self) -> Result<bool, Error> {
-        Ok(ffi::b_rep_check::BRepCheck_Analyzer_is_valid(&self.inner, true, false, false)?)
+        Ok(ffi::b_rep_check::BRepCheck_Analyzer_is_valid(&self.inner, true, true, false)?)
     }
 
     #[must_use]
