@@ -176,7 +176,10 @@ export interface Engine {
 
   /** Read-only accessor over the selection store, write it with selectFeature. */
   readonly selectedFeature: string | null;
-  selectFeature(id: string | null): void;
+  /** True when selectedFeature was picked by the user rather than set by the
+   *  engine on its own (see stores/selection.ts featureExplicit). */
+  readonly selectedFeatureExplicit: boolean;
+  selectFeature(id: string | null, explicit?: boolean): void;
   editFeature(id: string): void;
   featureForFace(faceId: number): string | null;
   deleteSelectedFace(): boolean;

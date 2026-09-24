@@ -13,7 +13,9 @@ export function installSketchStateBridge(e: Engine): void {
   const palette = useSketchPaletteStore();
   const ribbon = useRibbonStore();
 
-  e.sketch.onCommitted = (id) => e.selectFeature(id);
+  // Auto-select on exit (so the extrude tool has a profile ready without another
+  // click), not a user pick: Delete must not treat this like the user chose it.
+  e.sketch.onCommitted = (id) => e.selectFeature(id, false);
   e.sketch.onViewSquare = (square) => { palette.offNormal = !square; };
 
   let sketchWasActive = false;

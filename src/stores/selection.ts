@@ -13,5 +13,10 @@ import { ref } from "vue";
  *  render time rather than being handed it. */
 export const useSelectionStore = defineStore("selection", () => {
   const featureId = ref<string | null>(null);
-  return { featureId };
+  // True when featureId was set by the user picking it (a click, a tree row, an
+  // active edit); false when the engine set it on its own, such as auto-selecting
+  // a just-committed sketch's profile for extrude. Delete reads this so a
+  // keystroke never removes a feature the user never actually chose.
+  const featureExplicit = ref(true);
+  return { featureId, featureExplicit };
 });
