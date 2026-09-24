@@ -8,6 +8,7 @@
 use std::collections::HashSet;
 
 use indexmap::IndexMap;
+use serde_json::Value;
 
 /// `n` for `bodyN`, 0 for anything else.
 pub fn number(bid: &str) -> u64 {
@@ -126,4 +127,40 @@ impl BodyIds {
         }
         out
     }
+}
+
+fn join_targets(f: &Value) -> Option<&Value> {
+    (f.get("operation").and_then(Value::as_str) == Some("join"))
+        .then(|| f.get("targets").unwrap_or(&Value::Null))
+}
+
+/// Whether `key` is one `BodyIds::key` gave a body of `feature_id`.
+pub fn is_feature_key(key: &str, feature_id: &str) -> bool {
+    key.strip_prefix(feature_id)
+        .and_then(|rest| rest.strip_prefix(':'))
+        .map(|n| n.trim_end_matches('#'))
+        .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+}
+
+/// Whether an edit from `before` (None for a feature that was not there) to
+/// `after` leaves the map's record of `after` stale: it joins now, and did not
+/// join the same targets before.
+///
+/// `assign` prefers a join's own record over the id it inherits, so a file
+/// numbered before the map existed keeps the fresh id its join was given. The
+/// same rule would keep the id a feature had as a new body after it became a
+/// join, and the merged body would not take its target's id, so the record has
+/// to go when the edit is made.
+pub fn join_went_stale(before: Option<&Value>, after: &Value) -> bool {
+    match join_targets(after) {
+        Some(now) => before.and_then(join_targets) != Some(now),
+        None => false,
+    }
+}
+
+/// Drops every record of `feature_id` from a `bodyIds` map, true when any went.
+pub fn forget_feature(map: &mut serde_json::Map<String, Value>, feature_id: &str) -> bool {
+    let n = map.len();
+    map.retain(|k, _| !is_feature_key(k, feature_id));
+    map.len() != n
 }

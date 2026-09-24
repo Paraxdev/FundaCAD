@@ -420,3 +420,16 @@ fn hole_enum_fields_are_not_mistaken_for_parameters() {
     assert_eq!(m::validate(&mut d), Vec::<String>::new());
 }
 
+#[test]
+fn a_feature_turned_into_a_join_forgets_the_id_it_had_as_a_new_body() {
+    let mut d = m::new_document();
+    m::add_feature(&mut d, &json!({"id": "rv", "type": "revolve", "sketch": "s", "axis": "Z",
+                                   "angle": 360, "operation": "new"}), None)
+        .unwrap();
+    d.insert("bodyIds".into(), json!({"bx:0": "body1", "rv:0": "body3"}));
+    m::update_feature(&mut d, "rv", &json!({"angle": 180}), false).unwrap();
+    assert_eq!(d["bodyIds"], json!({"bx:0": "body1", "rv:0": "body3"}));
+    m::update_feature(&mut d, "rv", &json!({"operation": "join", "targets": ["body1"]}), false)
+        .unwrap();
+    assert_eq!(d["bodyIds"], json!({"bx:0": "body1"}));
+}

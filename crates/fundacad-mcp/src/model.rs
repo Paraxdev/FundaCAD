@@ -18,6 +18,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use fundacad_core::body_ids::{forget_feature, join_went_stale};
 use fundacad_core::params::{eval_node, is_reserved_name, parse_expr, refs_of, Expr};
 use serde_json::{json, Map, Value};
 
@@ -180,14 +181,27 @@ pub fn add_feature(
             text
         }
     };
+    let f = Value::Object(f);
+    forget_stale_join(doc, None, &f);
     let feats = features_mut(doc);
     match at {
         Some(at) if (at as usize) < feats.len() => {
-            feats.insert(at.max(0) as usize, Value::Object(f));
+            feats.insert(at.max(0) as usize, f);
         }
-        _ => feats.push(Value::Object(f)),
+        _ => feats.push(f),
     }
     Ok(fid)
+}
+
+/// A feature that became a join, or joins other targets now, loses its
+/// `bodyIds` records so the merged body takes its target's id.
+fn forget_stale_join(doc: &mut Doc, before: Option<&Value>, after: &Value) {
+    if !join_went_stale(before, after) {
+        return;
+    }
+    if let (Some(fid), Some(Value::Object(map))) = (str_field(after, "id"), doc.get_mut("bodyIds")) {
+        forget_feature(map, fid);
+    }
 }
 
 /// Merge `patch` into a feature (or replace its body wholesale).
@@ -233,6 +247,7 @@ pub fn update_feature(
     };
     out.entry("id").or_insert_with(|| json!(fid));
     let value = Value::Object(out);
+    forget_stale_join(doc, Some(&existing), &value);
     features_mut(doc)[i] = value.clone();
     Ok(value)
 }

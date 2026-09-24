@@ -1,6 +1,7 @@
 //! tests/vectors/body_ids.json, face_colors.json and hole_standards.json, recorded
 //! from the Python engine before it was retired and also replayed by
-//! tests/document/faceColorVectors.test.ts and tests/features/holeStandards.test.ts.
+//! tests/document/faceColorVectors.test.ts and tests/features/holeStandards.test.ts,
+//! and join_edits.json, replayed by tests/document/bodyIds.test.ts.
 
 use std::path::Path;
 
@@ -166,4 +167,19 @@ fn hole_standards() {
         assert_eq!(countersink(size).map(|r| vec![r]), row("COUNTERSINK", size), "COUNTERSINK {size}");
         assert_eq!(insert(size).map(|r| r.to_vec()), row("INSERT", size), "INSERT {size}");
     }
+}
+
+#[test]
+fn join_edits() {
+    use fundacad_core::body_ids::{forget_feature, join_went_stale};
+    let v = vectors("join_edits.json");
+    for c in v["stale"].as_array().expect("stale") {
+        let before = (!c["before"].is_null()).then_some(&c["before"]);
+        assert_eq!(join_went_stale(before, &c["after"]), c["stale"] == true, "{}", c["name"]);
+    }
+    let f = &v["forget"];
+    let mut map = f["map"].as_object().expect("map").clone();
+    assert!(forget_feature(&mut map, f["feature"].as_str().expect("feature")));
+    assert_eq!(Value::Object(map.clone()), f["left"]);
+    assert!(!forget_feature(&mut map, f["feature"].as_str().expect("feature")));
 }
