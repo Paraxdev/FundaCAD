@@ -22,6 +22,7 @@ import Icon from "./Icon.vue";
 import { toast } from "../../ui/toast";
 import { exportMaterialLibrary, importMaterialLibrary } from "../../io/files";
 import { finishLabel, finishOf, type MaterialDef, type SurfaceSpec } from "../../document/materials";
+import { materialApplyTarget } from "../../document/faceMaterials";
 import { materialPreview, onPreviewsChanged } from "../../viewport/materialPreview";
 import { beginMaterialDrag, endMaterialDrag, MATERIAL_MIME } from "../../ui/materialDrag";
 import { onRenderPrefsChange, renderPrefs } from "../../ui/renderPrefs";
@@ -281,21 +282,23 @@ function selectedFaceTargets(): { body: string; face: number }[] {
 function applyToSelection() {
   const m = selected.value;
   if (!m) return;
-  const faces = selectedFaceTargets();
-  if (faces.length) {
-    store.setFacesMaterial(faces, m.id);
-    return;
-  }
-  if (browser.selectedBodyIds.length) store.setBodiesMaterial([...browser.selectedBodyIds], m.id);
+  const target = materialApplyTarget(
+    engine.viewport.getSelectedFaceIds().length,
+    selectedFaceTargets(),
+    browser.selectedBodyIds,
+  );
+  if (target.kind === "faces") store.setFacesMaterial(target.faces, m.id);
+  else if (target.kind === "bodies") store.setBodiesMaterial(target.bodyIds, m.id);
 }
 
 function clearOnSelection() {
-  const faces = selectedFaceTargets();
-  if (faces.length) {
-    store.setFacesMaterial(faces, null);
-    return;
-  }
-  if (browser.selectedBodyIds.length) store.setBodiesMaterial([...browser.selectedBodyIds], null);
+  const target = materialApplyTarget(
+    engine.viewport.getSelectedFaceIds().length,
+    selectedFaceTargets(),
+    browser.selectedBodyIds,
+  );
+  if (target.kind === "faces") store.setFacesMaterial(target.faces, null);
+  else if (target.kind === "bodies") store.setBodiesMaterial(target.bodyIds, null);
 }
 
 function onDragStart(e: DragEvent, m: MaterialDef) {
