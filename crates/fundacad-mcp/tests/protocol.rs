@@ -299,6 +299,41 @@ fn a_failed_feature_is_reported_and_not_passed_off_as_a_no_op() {
 }
 
 #[test]
+fn a_fillet_patched_into_a_chamfer_builds_as_a_chamfer() {
+    let rs = drive(&[
+        (
+            "feature_add",
+            json!({"feature": {"id": "bx1", "type": "box", "length": 20, "width": 20,
+                               "height": 20}}),
+        ),
+        (
+            "feature_add",
+            json!({"feature": {"id": "chute_edges", "type": "fillet",
+                               "edges": {"kind": "edge", "by": "all", "body": "body1"},
+                               "radius": 2}}),
+        ),
+        (
+            "feature_update",
+            json!({"id": "chute_edges",
+                   "patch": {"type": "chamfer", "distance": 0.8, "radius": null}}),
+        ),
+        (
+            "feature_update",
+            json!({"id": "chute_edges", "patch": {"type": "fillet"}}),
+        ),
+        ("build", json!({})),
+        ("doc_get", json!({"features_only": true})),
+    ]);
+    assert!(!rs[2].is_error, "{}", rs[2].text);
+    assert!(rs[3].is_error, "a fillet with no radius was accepted: {}", rs[3].text);
+    assert!(rs[3].text.contains("radius"), "{}", rs[3].text);
+    assert!(!rs[4].is_error, "{}", rs[4].text);
+    assert!(!rs[4].text.contains("FEATURE FAILED"), "{}", rs[4].text);
+    let doc: Value = serde_json::from_str(&rs[5].text).expect("doc_get is JSON");
+    assert_eq!(doc["features"][1]["type"], json!("chamfer"));
+}
+
+#[test]
 fn inspect_hands_back_a_selector_that_addresses_the_face_it_names() {
     // The whole point of inspect: an agent that has never clicked on anything
     // can still write the next feature. The proof is using one of the selectors

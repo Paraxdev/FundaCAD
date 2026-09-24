@@ -903,7 +903,7 @@ The format comes from the extension unless given. A large STEP can take minutes:
 
     #[tool(
         name = "feature_update",
-        description = "Merge `patch` into a feature. A null value in the patch REMOVES that field. Pass replace=true to swap the whole body instead.",
+        description = "Merge `patch` into a feature. A null value in the patch REMOVES that field. A new `type` is checked as that type, so send the fields it needs in the same patch. Pass replace=true to swap the whole body instead.",
         input_schema = crate::tools::feature_update()
     )]
     pub async fn t_feature_update(&self, args: JsonObject) -> Result<CallToolResult, McpError> {

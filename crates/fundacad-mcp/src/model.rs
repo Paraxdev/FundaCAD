@@ -20,6 +20,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use fundacad_core::body_ids::{forget_feature, join_went_stale};
 use fundacad_core::params::{eval_node, is_reserved_name, parse_expr, refs_of, Expr};
+use fundacad_core::schema::Feature;
 use serde_json::{json, Map, Value};
 
 pub type Doc = Map<String, Value>;
@@ -233,8 +234,11 @@ pub fn update_feature(
     } else {
         let mut out = existing.as_object().cloned().unwrap_or_default();
         for (k, v) in patch {
-            if k == "id" || k == "type" {
+            if k == "id" {
                 continue;
+            }
+            if k == "type" && !v.as_str().is_some_and(|t| !t.is_empty()) {
+                return err("a feature needs a `type`");
             }
             if v.is_null() {
                 out.remove(&k);
@@ -246,10 +250,98 @@ pub fn update_feature(
         out
     };
     out.entry("id").or_insert_with(|| json!(fid));
+    let was = str_field(&existing, "type").unwrap_or_default();
+    let now = out.get("type").and_then(Value::as_str).unwrap_or_default();
+    if now != was {
+        check_new_type(fid, was, now, &out)?;
+    }
     let value = Value::Object(out);
     forget_stale_join(doc, Some(&existing), &value);
     features_mut(doc)[i] = value.clone();
     Ok(value)
+}
+
+/// A feature whose type changes is checked as the new type straight away, since
+/// a field the new type needs and does not have only fails at the next build.
+fn check_new_type(fid: &str, was: &str, now: &str, f: &Map<String, Value>) -> Result<(), DocumentError> {
+    let (missing, other) = if Feature::is_core_type(now) {
+        core_missing_fields(f)
+    } else {
+        (documented_missing_fields(now, f), None)
+    };
+    if !missing.is_empty() {
+        let list: Vec<String> = missing.iter().map(|k| format!("`{k}`")).collect();
+        return err(format!(
+            "{fid}: as a {now} it would be missing {}. Send the fields a {now} needs in the \
+             same patch as the new `type` (a null removes a field the {was} had), or \
+             feature_remove it and feature_add a {now} instead.",
+            list.join(", ")
+        ));
+    }
+    if let Some(why) = other {
+        return err(format!("{fid}: as a {now} this feature is malformed: {why}"));
+    }
+    Ok(())
+}
+
+/// Every field serde says a core feature is missing, found by filling each in
+/// with a stand-in until the next complaint is about something else.
+fn core_missing_fields(f: &Map<String, Value>) -> (Vec<String>, Option<String>) {
+    let stand_ins = || {
+        [json!(0), json!(""), json!([]), json!({}), json!([0, 0, 0]), json!("XY"), json!(false)]
+    };
+    let complaint = |probe: &Map<String, Value>| {
+        match serde_json::from_value::<Feature>(Value::Object(probe.clone())) {
+            Ok(Feature::Invalid(inv)) => Some(inv.error),
+            Ok(_) => None,
+            Err(e) => Some(e.to_string()),
+        }
+    };
+    let mut probe = f.clone();
+    let mut missing: Vec<String> = Vec::new();
+    let mut why = complaint(&probe);
+    while let Some(key) = why.as_deref().and_then(missing_field) {
+        if missing.contains(&key) {
+            break;
+        }
+        missing.push(key.clone());
+        why = None;
+        for v in stand_ins() {
+            probe.insert(key.clone(), v);
+            let next = complaint(&probe);
+            if next.as_deref().and_then(missing_field).is_some() || next.is_none() {
+                why = next;
+                break;
+            }
+        }
+    }
+    let other = if missing.is_empty() { why } else { None };
+    (missing, other)
+}
+
+fn missing_field(error: &str) -> Option<String> {
+    let rest = error.split("missing field `").nth(1)?;
+    Some(rest[..rest.find('`')?].to_owned())
+}
+
+/// A plugin feature's fields the schema documents without `optional`.
+fn documented_missing_fields(kind: &str, f: &Map<String, Value>) -> Vec<String> {
+    let Some(fields) = crate::schema::features()
+        .get(kind)
+        .and_then(|t| t.get("fields"))
+        .and_then(Value::as_object)
+    else {
+        return Vec::new();
+    };
+    fields
+        .iter()
+        .filter(|(k, doc)| {
+            *k != "see"
+                && !doc.as_str().unwrap_or_default().starts_with("optional")
+                && f.get(k.as_str()).map_or(true, Value::is_null)
+        })
+        .map(|(k, _)| k.clone())
+        .collect()
 }
 
 pub fn remove_feature(doc: &mut Doc, fid: &str) -> Result<Value, DocumentError> {
