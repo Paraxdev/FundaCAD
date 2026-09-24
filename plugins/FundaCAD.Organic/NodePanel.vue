@@ -175,7 +175,7 @@ const tag: CSSProperties = {
         Link new nodes to the picked one
       </label>
       <div :style="[row, { justifyContent: 'flex-end', marginTop: '6px' }]">
-        <button :style="noBtn" @click="panel.act()?.cancel()">Cancel</button>
+        <button :style="noBtn" data-action="cancel" @click="panel.act()?.cancel()">Cancel</button>
         <button :style="okBtn" data-action="commit" @click="panel.act()?.commit()">{{ v.editing ? "Update" : "Add" }}</button>
       </div>
     </div>
