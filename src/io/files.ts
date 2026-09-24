@@ -100,7 +100,17 @@ export async function saveDocumentAs(store: DocumentStore) {
     // Plain dev browser: no Tauri, so no container. Geometry lives in the
     // engine's blob store either way, so this download is the document only,
     // useful for inspecting a feature tree, NOT a portable file.
-    downloadText(`${store.fileName}.${DOC_EXT}`, store.toJSON());
+    //
+    // Reuse the name already settled on (mirrors the Tauri defaultPath logic
+    // above), so a SECOND Save As in the same session downloads "Untitled.funda"
+    // again rather than "Untitled.funda.funda": markSaved below makes fileName
+    // return the downloaded name from here on.
+    const name = store.filePath ? store.fileName : `${store.fileName}.${DOC_EXT}`;
+    downloadText(name, store.toJSON());
+    // No real path to save to, but the title bar reads store.fileName the same
+    // way for both builds, and "Untitled*" forever after a successful download
+    // read as the save having silently failed.
+    store.markSaved(name);
   }
 }
 
@@ -125,10 +135,14 @@ export async function openDocument(store: DocumentStore, geometry: GeometryBacke
       await importPath(store, geometry, path); // a mesh / CAD file → import as a body
     }
   } else {
-    const text = await uploadText();
-    if (text) {
+    const picked = await uploadText();
+    if (picked) {
       try {
-        store.load(text);
+        store.load(picked.text);
+        // No real path in a plain browser (this came from a file input, not a
+        // filesystem), but the picked name is enough for the title bar to show
+        // what is open and drop the unsaved marker, same as a Tauri Open does.
+        store.markSaved(picked.name);
         await warnAboutMissingPlugins(store);
       } catch (e) {
         await reportError(`Couldn't open document: ${errMsg(e)}`);
@@ -811,7 +825,9 @@ function uploadJson(accept = ".json,application/json"): Promise<string | null> {
   });
 }
 
-function uploadText(): Promise<string | null> {
+/** The picked file's name alongside its text, so the browser Open path can set
+ *  the title bar the way a Tauri Open sets it from the chosen path. */
+function uploadText(): Promise<{ text: string; name: string } | null> {
   return new Promise((resolve) => {
     const input = document.createElement("input");
     input.type = "file";
@@ -820,7 +836,7 @@ function uploadText(): Promise<string | null> {
       const file = input.files?.[0];
       if (!file) return resolve(null);
       const reader = new FileReader();
-      reader.onload = () => resolve(String(reader.result));
+      reader.onload = () => resolve({ text: String(reader.result), name: file.name });
       reader.onerror = () => resolve(null);
       reader.readAsText(file);
     };
