@@ -105,6 +105,22 @@ describe("navigator rig input", () => {
     expect(rig.viewScale()).toBeLessThan(s0);
   });
 
+  it("ctrl+wheel in small steps is a trackpad pinch; a Ctrl held mouse notch zooms like a notch", () => {
+    const wheel = (deltaY: number, ctrlKey: boolean) => {
+      const { rig } = rigWithBox();
+      // At the centre, with the target already on the model there, so the scale
+      // change is the zoom alone.
+      const e = { clientX: W / 2, clientY: H / 2, deltaY, deltaX: 0, deltaMode: 0, ctrlKey, preventDefault() {} };
+      rig.navigator.reseatAndContain();
+      const s1 = rig.viewScale();
+      rig.wheel(e as unknown as WheelEvent);
+      steady(rig);
+      return rig.viewScale() / s1;
+    };
+    expect(wheel(-100, true)).toBeCloseTo(wheel(-100, false), 9);
+    expect(wheel(-5, true)).toBeCloseTo(Math.exp(-0.05), 9);
+  });
+
   it("two touches pinch, and lifting one goes back to a one finger orbit", () => {
     const { rig, fire } = rigWithBox();
     const s0 = rig.viewScale();

@@ -135,12 +135,17 @@ export function bindInput(dom: HTMLElement, nav: Navigator, prefs: InputPrefs): 
     e.preventDefault();
     const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 100 : 1; // lines/pages -> px
     const [x, y] = local(e);
-    if (e.ctrlKey) {
-      nav.wheel(x, y, e.deltaY * unit, true);
+    const dy = e.deltaY * unit;
+    // A trackpad pinch arrives as ctrl+wheel in small steps; a mouse wheel
+    // turned with Ctrl held arrives the same way but a whole notch at a time.
+    if (e.ctrlKey && Math.abs(dy) < 50) {
+      nav.wheel(x, y, dy, true);
+    } else if (e.ctrlKey) {
+      nav.wheel(x, y, dy);
     } else if (prefs.scrollPans()) {
-      nav.scrollPan(x, y, e.deltaX * unit, e.deltaY * unit);
+      nav.scrollPan(x, y, e.deltaX * unit, dy);
     } else {
-      nav.wheel(x, y, e.deltaY * unit);
+      nav.wheel(x, y, dy);
     }
   };
 
