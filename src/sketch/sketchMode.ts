@@ -48,7 +48,7 @@ import { setPrompt } from "../ui/prompt";
 import { tooEdgeOn } from "./planeGraze";
 import { toast } from "../ui/toast";
 import { contextMenu, dismissContextMenu, type CtxItem } from "../ui/menu";
-import { ConstraintTools, CONSTRAINT_TOOLS, type ConstraintHost } from "./constraintTools";
+import { ConstraintTools, CONSTRAINT_TOOLS, type ConstraintHost, type ConstraintOption } from "./constraintTools";
 import { PatternFlow, PATTERN_TOOLS, ENTITY_PATTERNS, type PatternHost } from "./patternFlow";
 import { DimFlow, type DimHost } from "./dimFlow";
 import { ProjectPanel } from "./projectPanel";
@@ -3113,6 +3113,7 @@ export class SketchMode {
     const linked = this.modifyFlow.selectedProjectedIds().size;
     const chosen = this.entities.filter((x) => this.selected.has(x.id));
     const bsplines = chosen.filter((x): x is BsplineEntity => x.type === "bspline");
+    const constraintItems = this.constraintOptions(raw);
     const items: CtxItem[] = [
       ...(linked
         ? [{ label: linked > 1 ? `Break Link (${linked})` : "Break Link", onClick: () => this.modifyFlow.breakSelectedLinks() }]
@@ -3131,6 +3132,9 @@ export class SketchMode {
               : []),
             { separator: true, label: "" },
           ]
+        : []),
+      ...(constraintItems.length
+        ? [...constraintItems.map((o) => ({ label: o.label, onClick: o.apply })), { separator: true, label: "" }]
         : []),
       { label: n > 1 ? `Delete ${n} entities` : "Delete", danger: true, onClick: () => this.deleteSelected() },
     ];
@@ -3186,6 +3190,22 @@ export class SketchMode {
    *  ConstraintTools (see constraintTools.ts), which owns the 9 click flows. */
   private constraintClick(p: THREE.Vector2) {
     this.constraintTools.click(p);
+  }
+
+  /** Constraint options for the CURRENT canvas selection (1-2 entities), each
+   *  already wired to add its constraint and re-solve. `at`, a click position,
+   *  resolves to the SPECIFIC point nearest it and pins that point to whichever
+   *  selected entity owns it, so a right-click on one corner of a selected
+   *  rectangle can offer Coincident for THAT corner instead of refusing for
+   *  ambiguity (see ConstraintTools.applicable). Shared by ToolRail's Constrain
+   *  popup (no `at`) and onContextMenu (`at` = the click), so the two lists can
+   *  never drift apart (SK-3). */
+  constraintOptions(at?: THREE.Vector2 | null): ConstraintOption[] {
+    const ids = [...this.selected];
+    if (!ids.length || ids.length > 2) return [];
+    const gp = at ? this.constraintTools.resolvePoint(at) : null;
+    const picks = ids.map((id) => (gp && gp.id === id ? { id, p: gp.idx } : { id }));
+    return this.constraintTools.applicable(picks);
   }
 
   /** Drop constraints on entities that are gone or the wrong type. The switch is
