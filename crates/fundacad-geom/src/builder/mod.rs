@@ -73,7 +73,8 @@ impl From<KernelError> for Fail {
 fn translate_kernel_error(name: String) -> Fail {
     match name.as_str() {
         "Standard_DomainError" => Fail::msg(
-            "that dimension is too small for the kernel to represent, use a larger value",
+            "the kernel refused a degenerate value, a size, distance or direction is zero or \
+             too small to represent (Standard_DomainError)",
         ),
         _ => Fail::Internal(name),
     }
