@@ -57,6 +57,7 @@ import { ModifyFlow, type ModifyHost, type ModelEdge } from "./modifyFlow";
 import type { MoveTarget } from "../features/moveTarget";
 import { sketchEntityTarget, type SketchGizmoHost } from "../features/sketchMoveTarget";
 import { sketchEscapeAction } from "./escapeLayers";
+import { escapeClaimed } from "../ui/escapeClaim";
 import { gridReach, gridStep, SketchPlaneGrid, snapLatticeStep } from "./planeGrid";
 import { INFER_TOL_DEG, inferLineDirection } from "./inferLine";
 import { sketchLockHolds, viewSquareToPlane } from "./sketchView";
@@ -2633,7 +2634,9 @@ export class SketchMode {
           this.constraintTools.hasPending(),
         selection: this.selected.size > 0,
         tool: this.tool,
+        overlay: escapeClaimed(),
       });
+      if (action === "none") return;
       if (action === "cancel-offset") { this.modifyFlow.cancelOffset(); return; }
       if (action === "cancel-drag") {
         // cancel an in-progress drag: revert geometry to its pre-drag positions

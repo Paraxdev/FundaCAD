@@ -7,6 +7,7 @@ const idle: SketchEscapeState = {
   pendingGeometry: false,
   selection: false,
   tool: "select",
+  overlay: false,
 };
 
 describe("sketchEscapeAction", () => {
@@ -35,6 +36,14 @@ describe("sketchEscapeAction", () => {
     expect(sketchEscapeAction({ ...idle, selection: true, tool: "line" })).toBe("clear-selection");
   });
 
+  it("leaves the press to an open menu", () => {
+    // Escape that dismisses the right-click menu must not also clear the
+    // selection the menu was opened on, or close an idle sketch behind it.
+    expect(sketchEscapeAction({ ...idle, overlay: true })).toBe("none");
+    expect(sketchEscapeAction({ ...idle, overlay: true, selection: true })).toBe("none");
+    expect(sketchEscapeAction({ ...idle, overlay: true, tool: "offset", offsetPick: true })).toBe("none");
+  });
+
   it("cancels the innermost thing when several are true at once", () => {
     // State overlaps constantly, a drag of a selected entity while a tool is
     // armed is three of these at the same time. Most local is preferred, every time.
@@ -45,6 +54,7 @@ describe("sketchEscapeAction", () => {
         pendingGeometry: true,
         selection: true,
         tool: "line",
+        overlay: false,
       }),
     ).toBe("cancel-offset");
     expect(
