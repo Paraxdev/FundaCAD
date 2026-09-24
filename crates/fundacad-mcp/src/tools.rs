@@ -186,7 +186,7 @@ pub fn export() -> JsonObject {
     object(
         json!({
             "path": {"type": "string"},
-            "format": {"type": "string", "enum": ["step", "stl", "3mf", "obj", "brep"]}
+            "format": {"type": "string", "enum": ["step", "stl", "3mf"]}
         }),
         &["path", "format"],
     )
