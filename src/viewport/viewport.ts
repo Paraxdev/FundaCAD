@@ -289,6 +289,7 @@ export class Viewport {
       // Explicit, so the result does not depend on which subscriber ran first.
       invalidateThemeColors();
       this.scene.grid.applyTheme();
+      this.scene.triad.applyTheme();
       this.scene.applyRenderPrefs();
       this.cube.applyTheme();
       this.requestRender();

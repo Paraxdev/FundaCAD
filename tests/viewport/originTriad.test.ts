@@ -1,10 +1,12 @@
-// The origin arrows as a CONTROL, not just a marker: Revolve asks which axis to
-// spin about by having you click one of them, so a raycast has to be able to say
-// which arm it hit and a hover has to be able to light it.
+// The origin marker is passive everywhere but Revolve's axis pick, which asks
+// which axis to spin about by having you click one of its arms, so a raycast
+// has to be able to say which arm it hit and a hover has to be able to light it.
 
 import { describe, it, expect } from "vitest";
 import * as THREE from "three";
-import { OriginTriad } from "../../src/viewport/scene";
+import {
+  AXIS_COLOR, OriginTriad, TRIAD_OPACITY, mutedAxisColor,
+} from "../../src/viewport/originTriad";
 import { EDGE_HOVER_COLOR } from "../../src/viewport/highlight";
 
 /** Every material the arm paints with, drawn and occluded pass alike. */
@@ -24,6 +26,33 @@ describe("OriginTriad", () => {
     triad.dispose();
   });
 
+  it("draws nothing a hand would reach for: no heads, nothing opaque", () => {
+    const triad = new OriginTriad(new THREE.Scene());
+    triad.group.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      expect(mesh.geometry?.type).not.toBe("ConeGeometry");
+      const m = mesh.material as THREE.MeshBasicMaterial | undefined;
+      if (m && m.visible) {
+        expect(m.transparent).toBe(true);
+        expect(m.opacity).toBeLessThanOrEqual(TRIAD_OPACITY);
+      }
+    });
+    triad.dispose();
+  });
+
+  it("mutes the axis colours but keeps each one's hue", () => {
+    const channels = (h: number) => [(h >> 16) & 0xff, (h >> 8) & 0xff, h & 0xff];
+    for (const [c, top] of [[AXIS_COLOR.x, 0], [AXIS_COLOR.y, 1], [AXIS_COLOR.z, 2]] as const) {
+      const before = channels(c);
+      const after = channels(mutedAxisColor(c));
+      const spread = (v: number[]) => Math.max(...v) - Math.min(...v);
+      expect(spread(after)).toBeLessThan(spread(before));
+      expect(after.indexOf(Math.max(...after))).toBe(top);
+    }
+    expect(mutedAxisColor(0x808080)).toBe(0x808080);
+    expect(mutedAxisColor(AXIS_COLOR.x, 0)).toBe(AXIS_COLOR.x);
+  });
+
   it("points each arm down its own axis", () => {
     const triad = new OriginTriad(new THREE.Scene());
     // Built along +Y and turned onto the axis, so the arm's local up is the axis.
@@ -40,8 +69,8 @@ describe("OriginTriad", () => {
     triad.group.updateMatrixWorld(true);
     const ray = new THREE.Raycaster(
       // Aimed a little to the SIDE of the X arm's centre line: on the sleeve,
-      // off the shaft. A shaft a pixel and a half wide is not an aimable target.
-      new THREE.Vector3(44, 3, 40),
+      // off the drawn line.
+      new THREE.Vector3(32, 3, 40),
       new THREE.Vector3(0, 0, -1),
     );
     const hit = ray.intersectObjects(triad.arms, true)[0];
@@ -54,22 +83,15 @@ describe("OriginTriad", () => {
     triad.dispose();
   });
 
-  it("must fail without the sleeve: the drawn shaft alone is not that wide", () => {
-    // The control for the test above. The shaft's radius is 0.017 of an 88-unit
-    // arm, about 1.5 units, so a ray 3 units off the axis misses it, which is
-    // exactly why the sleeve exists.
-    const shaft = new THREE.Mesh(
-      new THREE.CylinderGeometry(88 * 0.017, 88 * 0.017, 88, 10),
-      new THREE.MeshBasicMaterial(),
+  it("must fail without the sleeve: the drawn line alone is not that wide", () => {
+    const triad = new OriginTriad(new THREE.Scene());
+    triad.group.updateMatrixWorld(true);
+    const drawn = triad.arms[0]!.children.filter(
+      (o) => ((o as THREE.Mesh).material as THREE.Material).visible,
     );
-    shaft.position.set(44, 0, 0);
-    shaft.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(1, 0, 0));
-    shaft.updateMatrixWorld(true);
-    const ray = new THREE.Raycaster(
-      new THREE.Vector3(44, 3, 40),
-      new THREE.Vector3(0, 0, -1),
-    );
-    expect(ray.intersectObject(shaft, false)).toHaveLength(0);
+    const ray = new THREE.Raycaster(new THREE.Vector3(32, 3, 40), new THREE.Vector3(0, 0, -1));
+    expect(ray.intersectObjects(drawn, false)).toHaveLength(0);
+    triad.dispose();
   });
 
   it("lights only the hovered arm, and puts it back", () => {
