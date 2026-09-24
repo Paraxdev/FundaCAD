@@ -13,6 +13,7 @@
 #include <BRepAlgoAPI_Cut.hxx>
 #include <BRepAlgoAPI_Fuse.hxx>
 #include <BRepBndLib.hxx>
+#include <OSD_Parallel.hxx>
 #include <BRepBuilderAPI_Copy.hxx>
 #include <BRepBuilderAPI_GTransform.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
@@ -85,6 +86,7 @@
 #include <gp_Trsf.hxx>
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 #include <memory>
 #include <stdexcept>
@@ -193,13 +195,51 @@ inline double bo_area(const TopoDS_Shape &s) {
   return p.Mass();
 }
 
+// BRepBndLib::AddOptimal(s, box, true, false) with its face loop spread over
+// OCCT's pool. The serial loop unions each face's own box by min and max,
+// which is order free, so this is the serial box to the bit.
+inline void bo_add_optimal(const TopoDS_Shape &s, Bnd_Box &box) {
+  std::vector<TopoDS_Shape> faces;
+  for (TopExp_Explorer ex(s, TopAbs_FACE); ex.More(); ex.Next()) faces.push_back(ex.Current());
+  if (faces.size() < 8) {
+    BRepBndLib::AddOptimal(s, box, true, false);
+    return;
+  }
+  std::vector<Bnd_Box> boxes(faces.size());
+  std::atomic<bool> failed{false};
+  OSD_Parallel::For(0, (int)faces.size(), [&](int i) {
+    try {
+      BRepBndLib::AddOptimal(faces[i], boxes[i], true, false);
+    } catch (...) {
+      failed = true;
+    }
+  });
+  if (failed) {
+    BRepBndLib::AddOptimal(s, box, true, false);
+    return;
+  }
+  for (const Bnd_Box &b : boxes) {
+    if (b.IsVoid()) continue;
+    double x0, y0, z0, x1, y1, z1;
+    b.Get(x0, y0, z0, x1, y1, z1);
+    box.Update(x0, y0, z0, x1, y1, z1);
+  }
+  TopoDS_Compound rest;
+  BRep_Builder bb;
+  bb.MakeCompound(rest);
+  bool any = false;
+  for (TopExp_Explorer ex(s, TopAbs_EDGE, TopAbs_FACE); ex.More(); ex.Next(), any = true) bb.Add(rest, ex.Current());
+  for (TopExp_Explorer ex(s, TopAbs_VERTEX, TopAbs_EDGE); ex.More(); ex.Next(), any = true) bb.Add(rest, ex.Current());
+  if (any) BRepBndLib::AddOptimal(rest, box, true, false);
+}
+
 // build123d's `bounding_box()`: AddOptimal with triangulation, no shape tolerance.
 inline bool bo_bbox(const TopoDS_Shape &s, bool optimal, rust::Slice<double> out) {
   if (s.IsNull() || out.size() < 6) return false;
   Bnd_Box box;
   try {
     if (optimal)
-      BRepBndLib::AddOptimal(s, box, true, false);
+      bo_add_optimal(s, box);
     else
       BRepBndLib::Add(s, box, true);
   } catch (...) {
