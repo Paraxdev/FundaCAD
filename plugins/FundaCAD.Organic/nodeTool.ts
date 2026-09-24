@@ -354,7 +354,12 @@ export class NodeTool {
     const view = vp.viewDirection();
     const sel = this.node(this.selected);
     if (sel) {
-      const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(view, centerOf(sel));
+      // The picked node's own level whenever the view looks down on it at all,
+      // so a limb drawn in an angled view stays where it looks like it goes;
+      // from nearly level, the upright world plane facing the view.
+      const axis = Math.abs(view.z) > 0.35 ? 2 : Math.abs(view.x) > Math.abs(view.y) ? 0 : 1;
+      const normal = new THREE.Vector3().setComponent(axis, 1);
+      const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(normal, centerOf(sel));
       return ray.intersectPlane(plane, new THREE.Vector3());
     }
     const ground = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
@@ -460,7 +465,11 @@ export class NodeTool {
       this.cancel();
       return;
     }
-    if (typing) return;
+    // The gizmo's own value box holds the focus while it is up. Left at 0 it
+    // has nothing to say, so Enter finishes the body and Delete removes the
+    // node, as they do with nothing focused.
+    const idleGizmoBox = typing && !!t?.closest(".dim-input") && Number((t as HTMLInputElement).value || 0) === 0;
+    if (typing && !(idleGizmoBox && (e.key === "Enter" || e.key === "Delete"))) return;
     if (e.key === "Enter") {
       e.preventDefault();
       e.stopImmediatePropagation();
