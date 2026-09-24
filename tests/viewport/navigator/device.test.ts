@@ -94,4 +94,22 @@ describe("touch", () => {
     const s = pixel(nav, mid);
     expect(Math.hypot(s.x - (m.x + 30), s.y - m.y)).toBeLessThan(1e-6);
   });
+
+  it("a pinch still zooms when frames pass between the fingers landing and spreading", () => {
+    const { nav } = setup({ tau: 0.125 });
+    const mid = new THREE.Vector3(3, -15, 12);
+    const m = pixel(nav, mid);
+    const d0 = eye(nav).distanceTo(mid);
+    nav.beginPinch(m.x, m.y);
+    for (let i = 0; i < 3; i++) nav.update(1 / 60);
+    for (let i = 1; i <= 10; i++) {
+      nav.pinchTo(m.x, m.y, Math.log(1 / 1.05));
+      nav.update(1 / 60);
+    }
+    nav.endGesture();
+    settle(nav);
+    expect(eye(nav).distanceTo(mid) / d0).toBeCloseTo(1 / 1.05 ** 10, 6);
+    const s = pixel(nav, mid);
+    expect(Math.hypot(s.x - m.x, s.y - m.y)).toBeLessThan(1e-6);
+  });
 });
