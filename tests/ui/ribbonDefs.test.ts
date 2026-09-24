@@ -55,7 +55,7 @@ describe("ribbon tool tables", () => {
     // user reaching for a tool that is no longer anywhere.
     expect(new Set(actionsOf(SKETCH))).toEqual(new Set([
       "line", "rectangle", "centerRectangle", "rectangle3",
-      "circle", "circle2", "circle3", "arc", "polygon", "slot", "spline",
+      "circle", "circle2", "circle3", "arc", "polygon", "slot", "spline", "bspline",
       "point", "text", "project",
       "fillet-sketch", "chamfer-sketch", "trim", "extend", "offset", "break",
       "mirror-sketch", "move-sketch", "copy-sketch", "rotate-sketch", "scale-sketch", "dimension",
@@ -65,7 +65,7 @@ describe("ribbon tool tables", () => {
     ]));
   });
 
-  it("puts the three rectangles and the three circles on one button each", () => {
+  it("puts the rectangles, the circles and the splines on one button each", () => {
     // The point of the fold, stated as a fact about the table rather than about
     // the rendering: a family is a single item carrying children, which is what
     // makes it one button with one remembered default.
@@ -75,9 +75,10 @@ describe("ribbon tool tables", () => {
     );
     expect(families["Rectangle"]).toEqual(["rectangle", "centerRectangle", "rectangle3"]);
     expect(families["Circle"]).toEqual(["circle", "circle2", "circle3"]);
+    expect(families["Spline"]).toEqual(["spline", "bspline"]);
     // The first child is what the button does before anyone has held it, so the
     // plainest member of each family has to lead.
-    expect(create.items.filter((it) => "children" in it)).toHaveLength(2);
+    expect(create.items.filter((it) => "children" in it)).toHaveLength(3);
   });
 
   it("keeps the shortcut key with the tool it belongs to, not with the family", () => {

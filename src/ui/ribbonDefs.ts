@@ -244,7 +244,13 @@ export const SKETCH: Group[] = [
       { action: "arc", label: "Arc", iconName: "arc", key: "A" },
       { action: "polygon", label: "Polygon", iconName: "polygon" },
       { action: "slot", label: "Slot", iconName: "slot" },
-      { action: "spline", label: "Spline", iconName: "spline" },
+      {
+        label: "Spline",
+        children: [
+          { action: "spline", label: "Spline", iconName: "spline" },
+          { action: "bspline", label: "Control Point Spline", iconName: "bspline" },
+        ],
+      },
       { action: "point", label: "Point", iconName: "point" },
       { action: "text", label: "Text", iconName: "text" },
       { action: "project", label: "Project", iconName: "project", key: "P" },

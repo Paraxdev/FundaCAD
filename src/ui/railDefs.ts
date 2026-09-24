@@ -96,7 +96,7 @@ type SketchSlot = string | { id: string; label: string; actions: readonly string
 const SKETCH_SLOTS: readonly SketchSlot[] = [
   "line",
   "arc",
-  "spline",
+  { id: "spline", label: "Spline", actions: ["spline", "bspline"] },
   { id: "rectangle", label: "Rectangle", actions: ["rectangle", "centerRectangle", "rectangle3"] },
   { id: "circle", label: "Circle", actions: ["circle", "circle2", "circle3"] },
   "polygon",

@@ -9,7 +9,9 @@ import type { DocumentStore } from "../document/store";
 import type { Feature, ParamTarget, PlaneSpec, ProjectionUpdate, Selector, SketchConstraint, SketchPattern } from "../types";
 import { applyProjectionUpdate, dimPlaceOf, isBadgeEntity, isPlacedDim } from "../types";
 import { SketchPlane } from "./plane";
-import { SketchOverlay, type WorldRegion, curveObjects, dimensionLineObjects, CURVE_COLOR, PREVIEW_COLOR, SELECT_COLOR } from "./overlay";
+import { SketchOverlay, type WorldRegion, controlPolygonObjects, curveObjects, dimensionLineObjects, CURVE_COLOR, PREVIEW_COLOR, SELECT_COLOR } from "./overlay";
+import { deletePole, insertPole, splineToBspline, type BsplineEntity } from "./bsplineEdit";
+import { BSPLINE_DEGREES, bsplineMinPoles, poleOfRef } from "./bspline";
 import { DimInput } from "./dimInput";
 import { TextPanel } from "./textPanel";
 import type { TextValues } from "./textPanel";
@@ -71,6 +73,7 @@ export type SketchTool =
   | "circle3"
   | "arc"
   | "spline"
+  | "bspline"
   | "polygon"
   | "slot"
   | "point"
@@ -210,6 +213,9 @@ export class SketchMode {
   private dragStartClient = { x: 0, y: 0 };
   private dragMoved = false;
   private dragShift = false;
+  private dragPole = -1; // the grabbed point's pole index when it is a bspline pole
+  /** The pole last clicked on a selected control-point spline, what Delete removes. */
+  private selectedPole: { id: string; k: number } | null = null;
   private dragSnapshot: ResolvedEntity[] | null = null; // entities at drag start (Esc reverts)
   /** What a dragged point can land on, taken at the grab so nothing that moves with it is offered. */
   private dragAnchors: SnapCandidate[] = [];
@@ -851,7 +857,7 @@ export class SketchMode {
    * dimension labels wait for refreshActive() on end. */
   private refreshDragGeometry() {
     this.entityVersion++;
-    this.overlay.setActiveSketch(curveObjects(this.entities, this.plane, this.activeColor()));
+    this.overlay.setActiveSketch([...curveObjects(this.entities, this.plane, this.activeColor()), ...this.polygonObjects()]);
     // Glyphs are a store push the layer projects anyway, so they ride along with the drag.
     if (this.glyphsVisible) this.glyphs.show(this.allGlyphs(), this.plane, this.conflictIdx, this.overIdx);
   }
@@ -1504,11 +1510,13 @@ export class SketchMode {
     const p = hit.p;
 
     if (this.tool === "select") {
+      this.selectedPole = null; // a release on a pole picks it again
       // grab a point to drag it, connected/constrained geometry follows
       const gp = this.pickPoint(p);
       if (gp) {
         this.dragFrom = gp.p.clone();
         this.dragEntIdx = gp.idx;
+        this.dragPole = gp.pole;
         this.dragStartClient = { x: e.clientX, y: e.clientY };
         this.dragMoved = false;
         this.dragShift = e.shiftKey;
@@ -1537,6 +1545,7 @@ export class SketchMode {
           this.editText(te, e);
           return;
         }
+        if (this.insertPoleAt(raw)) return;
       }
       // a real (hand-drawn) entity's body under the cursor → arm a body drag;
       // a plain click (no movement) falls through to selection in endDrag()
@@ -1593,6 +1602,7 @@ export class SketchMode {
     }
     if (this.tool === "arc") return this.arcClick(p);
     if (this.tool === "spline") return this.splineClick(p);
+    if (this.tool === "bspline") return this.bsplineClick(p);
     if (this.tool === "point") return this.pointClick(p);
     if (this.tool === "text") {
       // click on existing text → edit it (discoverable: the text tool also edits);
@@ -1695,6 +1705,119 @@ export class SketchMode {
     if (!this.splinePts.length) return this.overlay.setPreview([]);
     const pts = [...this.splinePts.map((q) => ({ x: q.x, y: q.y })), { x: cursor.x, y: cursor.y }];
     this.overlay.setPreview([this.entityCurve({ type: "spline", id: "", points: pts })]);
+  }
+
+  // Control point spline: click poles; clicking the first again closes the
+  // curve, clicking the last again (or Enter) finishes it open.
+  private bsplineClick(p: THREE.Vector2) {
+    const pts = this.splinePts;
+    const tol = this.pickTol();
+    const first = pts[0], last = pts[pts.length - 1];
+    if (first && pts.length >= 3 && first.distanceTo(p) <= tol) return this.finishBspline(true);
+    if (last && last.distanceTo(p) <= tol) return this.finishBspline(false);
+    pts.push(p.clone());
+  }
+
+  private finishBspline(closed: boolean) {
+    if (this.splinePts.length >= (closed ? 3 : 2)) {
+      const ent: ResolvedEntity = {
+        type: "bspline",
+        id: newEntityId(),
+        poles: this.splinePts.map((q) => ({ x: q.x, y: q.y })),
+        ...(closed ? { closed: true } : {}),
+      };
+      if (this.constructionMode) ent.construction = true;
+      this.entities.push(ent);
+      this.selected = new Set([ent.id]);
+      this.refreshActive();
+      this.requestSolve();
+    }
+    this.splinePts = [];
+    this.overlay.setPreview([]);
+    this.onState?.();
+  }
+
+  private bsplinePreview(cursor: THREE.Vector2) {
+    const pts = this.splinePts;
+    if (!pts.length) return this.overlay.setPreview([]);
+    const closing = pts.length >= 3 && pts[0]!.distanceTo(cursor) <= this.pickTol();
+    const draft: BsplineEntity = {
+      type: "bspline", id: "",
+      poles: [...pts, ...(closing ? [] : [cursor])].map((q) => ({ x: q.x, y: q.y })),
+      ...(closing ? { closed: true } : {}),
+    };
+    this.overlay.setPreview([this.entityCurve(draft), controlPolygonObjects(draft, this.plane, this.planeMmPerPx())]);
+  }
+
+  /** The control polygons of the selected control-point splines. */
+  private polygonObjects(): THREE.Object3D[] {
+    const out: THREE.Object3D[] = [];
+    for (const e of this.entities) {
+      if (e.type !== "bspline" || !this.selected.has(e.id)) continue;
+      const active = this.selectedPole?.id === e.id ? this.selectedPole.k : -1;
+      out.push(controlPolygonObjects(e, this.plane, this.planeMmPerPx(), active));
+    }
+    return out;
+  }
+
+  /** Double-click on a selected control-point spline's polygon, or on any one's
+   *  curve, adds a pole there without moving the curve. */
+  private insertPoleAt(p: THREE.Vector2): boolean {
+    const tol = this.pickTol();
+    const order = [...this.entities].sort((a, b) => Number(this.selected.has(b.id)) - Number(this.selected.has(a.id)));
+    for (const e of order) {
+      if (e.type !== "bspline") continue;
+      const r = insertPole(e, p, tol, this.constraints, this.selected.has(e.id));
+      if (!r) continue;
+      this.entities = this.entities.map((x) => (x.id === e.id ? r.entity : x));
+      this.constraints = r.constraints;
+      this.selected = new Set([e.id]);
+      this.selectedPole = { id: e.id, k: r.pole };
+      this.afterModify();
+      return true;
+    }
+    return false;
+  }
+
+  /** Delete the selected pole, down to the fewest its degree allows. */
+  private deleteSelectedPole(): boolean {
+    const sp = this.selectedPole;
+    const e = sp ? this.entities.find((x) => x.id === sp.id) : undefined;
+    if (!sp || e?.type !== "bspline" || !this.selected.has(e.id)) return false;
+    const r = deletePole(e, sp.k, this.constraints);
+    this.selectedPole = null;
+    if (!r) {
+      toast(`A degree ${e.degree ?? 3} spline keeps at least ${bsplineMinPoles(e)} control points`);
+      return true;
+    }
+    this.entities = this.entities.map((x) => (x.id === e.id ? r.entity : x));
+    this.constraints = r.constraints;
+    this.afterModify();
+    return true;
+  }
+
+  /** Change the selected control-point splines' degree or closure; the knots go
+   *  back to uniform, as their count depends on both. */
+  private reshapeSelectedBsplines(change: { degree?: number; closed?: boolean }) {
+    this.entities = this.entities.map((e) => {
+      if (e.type !== "bspline" || !this.selected.has(e.id)) return e;
+      const { knots: _uniform, closed: _c, ...rest } = e;
+      const closed = change.closed ?? e.closed;
+      return { ...rest, ...(change.degree ? { degree: change.degree } : {}), ...(closed ? { closed: true } : {}) };
+    });
+    this.afterModify();
+  }
+
+  /** "Edit as Control Points": the selected fit-point splines become control-point ones. */
+  private convertSelectedSplines() {
+    for (const e of [...this.entities]) {
+      if (e.type !== "spline" || !this.selected.has(e.id)) continue;
+      const r = splineToBspline(e, this.constraints);
+      if (!r) continue;
+      this.entities = this.entities.map((x) => (x.id === e.id ? r.entity : x));
+      this.constraints = r.constraints;
+    }
+    this.afterModify();
   }
 
   /** rubber-band preview for the multi-click primitive tools */
@@ -2298,6 +2421,9 @@ export class SketchMode {
     if (e.type === "spline") {
       return { type: "spline", id, points: e.points.map((q) => rp(q.x, q.y)), ...c };
     }
+    if (e.type === "bspline") {
+      return { ...e, id, poles: e.poles.map((q) => rp(q.x, q.y)) };
+    }
     if (e.type === "text") {
       const at = rp(e.x, e.y); // reflect the anchor; keep the string/style (glyphs aren't mirrored)
       return { ...e, id, x: at.x, y: at.y };
@@ -2396,6 +2522,10 @@ export class SketchMode {
       this.splinePreview(hit.p);
       return;
     }
+    if (this.tool === "bspline") {
+      this.bsplinePreview(hit.p);
+      return;
+    }
     if (this.tool === "polygon" || this.tool === "slot" || this.tool === "circle2" ||
         this.tool === "circle3" || this.tool === "centerRectangle" || this.tool === "rectangle3") {
       this.multiClickPreview(hit.p, e);
@@ -2464,6 +2594,10 @@ export class SketchMode {
     if (e.key === "Delete" || e.key === "Backspace") {
       // A selected dimension is more specific than the entity selection.
       if (this.dims.deleteSelected()) {
+        e.preventDefault();
+        return;
+      }
+      if (this.tool === "select" && this.deleteSelectedPole()) {
         e.preventDefault();
         return;
       }
@@ -2539,6 +2673,11 @@ export class SketchMode {
       if (this.tool === "spline" && this.splinePts.length) {
         e.preventDefault();
         this.finishSpline();
+        return;
+      }
+      if (this.tool === "bspline" && this.splinePts.length) {
+        e.preventDefault();
+        this.finishBspline(false);
         return;
       }
       if (this.base) {
@@ -2793,6 +2932,7 @@ export class SketchMode {
     } else {
       objs.push(...curveObjects(this.entities, this.plane, this.activeColor()));
     }
+    objs.push(...this.polygonObjects());
     if (this.dimsVisible) {
       this.cdims = constraintDims(this.entities, this.constraints);
       objs.push(...dimensionLineObjects(this.entities, this.plane, this.cdims.flatMap((d) => d.lines)));
@@ -2894,9 +3034,27 @@ export class SketchMode {
     e.preventDefault();
     const n = this.selected.size;
     const linked = this.modifyFlow.selectedProjectedIds().size;
+    const chosen = this.entities.filter((x) => this.selected.has(x.id));
+    const bsplines = chosen.filter((x): x is BsplineEntity => x.type === "bspline");
+    const degreeNow = bsplines.length === 1 ? (bsplines[0]!.degree ?? 3) : null;
     const items: CtxItem[] = [
       ...(linked
         ? [{ label: linked > 1 ? `Break Link (${linked})` : "Break Link", onClick: () => this.modifyFlow.breakSelectedLinks() }]
+        : []),
+      ...(chosen.some((x) => x.type === "spline")
+        ? [{ label: "Edit as Control Points", onClick: () => this.convertSelectedSplines() }]
+        : []),
+      ...(bsplines.length
+        ? [
+            ...BSPLINE_DEGREES.map((d) => ({ label: `Degree ${d}`, checked: degreeNow === d, onClick: () => this.reshapeSelectedBsplines({ degree: d }) })),
+            bsplines.every((x) => x.closed)
+              ? { label: "Open Curve", onClick: () => this.reshapeSelectedBsplines({ closed: false }) }
+              : { label: "Close Curve", onClick: () => this.reshapeSelectedBsplines({ closed: true }) },
+            ...(this.selectedPole && bsplines.some((x) => x.id === this.selectedPole?.id)
+              ? [{ label: "Delete Control Point", onClick: () => { this.deleteSelectedPole(); } }]
+              : []),
+            { separator: true, label: "" },
+          ]
         : []),
       { label: n > 1 ? `Delete ${n} entities` : "Delete", danger: true, onClick: () => this.deleteSelected() },
     ];
@@ -2967,9 +3125,12 @@ export class SketchMode {
     // entities that own an addressable endpoint (line/arc/spline/point; projected line/arc/poly)
     const endIds = ids(
       (e) =>
-        e.type === "line" || e.type === "arc" || e.type === "spline" || e.type === "point" ||
+        e.type === "line" || e.type === "arc" || e.type === "spline" || e.type === "bspline" || e.type === "point" ||
         (e.type === "projected" && e.curve.kind !== "circle"),
     );
+    // a pole index beyond a control-point spline's poles names nothing
+    const polesOf = new Map(this.entities.flatMap((e) => (e.type === "bspline" ? [[e.id, e.poles.length] as const] : [])));
+    const at = (id: string, p: number) => { const n = polesOf.get(id); return n === undefined || poleOfRef(p, n) >= 0; };
     // entities exposing at least one dimensionable reference point (p2p/p2l/fix targets)
     const refIds = ids((e) => dimRefPoints(e).length > 0);
     const rectIds = ids((e) => e.type === "rectangle");
@@ -2989,19 +3150,19 @@ export class SketchMode {
         case "tangent": return hasLineOperand(c.line) && circleIds.has(c.circle);
         case "tangent2": return curveIds.has(c.a) && curveIds.has(c.b);
         case "equalRadius": return roundIds.has(c.a) && roundIds.has(c.b);
-        case "coincident": return endIds.has(c.e1) && endIds.has(c.e2);
+        case "coincident": return endIds.has(c.e1) && endIds.has(c.e2) && at(c.e1, c.p1) && at(c.e2, c.p2);
         case "concentric": return roundIds.has(c.c1) && roundIds.has(c.c2);
-        case "midpoint": return endIds.has(c.e) && hasLineOperand(c.line);
-        case "symmetric": return endIds.has(c.e1) && endIds.has(c.e2) && hasLineOperand(c.line);
+        case "midpoint": return endIds.has(c.e) && at(c.e, c.p) && hasLineOperand(c.line);
+        case "symmetric": return endIds.has(c.e1) && endIds.has(c.e2) && at(c.e1, c.p1) && at(c.e2, c.p2) && hasLineOperand(c.line);
         case "radius": return roundIds.has(c.e);
-        case "p2pDistance": return refIds.has(c.e1) && refIds.has(c.e2);
-        case "p2lDistance": return refIds.has(c.e) && hasLineOperand(c.line);
+        case "p2pDistance": return refIds.has(c.e1) && refIds.has(c.e2) && at(c.e1, c.p1) && at(c.e2, c.p2);
+        case "p2lDistance": return refIds.has(c.e) && at(c.e, c.p) && hasLineOperand(c.line);
         // rim (edge-to-edge) dims, a round operand is a circle OR an arc
         case "radialGap": return roundIds.has(c.inner) && roundIds.has(c.outer);
         case "c2cDistance": return roundIds.has(c.c1) && roundIds.has(c.c2);
         case "c2lDistance": return roundIds.has(c.circle) && hasLineOperand(c.line);
-        case "p2cDistance": return refIds.has(c.e) && roundIds.has(c.circle);
-        case "fix": return refIds.has(c.e);
+        case "p2cDistance": return refIds.has(c.e) && at(c.e, c.p) && roundIds.has(c.circle);
+        case "fix": return refIds.has(c.e) && at(c.e, c.p);
         // Shrink the pairs; drop the offset only when none remain.
         case "offset": {
           c.pairs = c.pairs.filter(
@@ -3224,6 +3385,10 @@ export class SketchMode {
       const a = e.points[0], b = e.points[last];
       return a && b ? [new THREE.Vector2(a.x, a.y), new THREE.Vector2(b.x, b.y)] : [];
     }
+    if (e.type === "bspline" && !e.closed) {
+      const a = e.poles[0], b = e.poles[e.poles.length - 1];
+      return a && b ? [new THREE.Vector2(a.x, a.y), new THREE.Vector2(b.x, b.y)] : [];
+    }
     if (e.type === "circle" || e.type === "point") return [new THREE.Vector2(e.x, e.y)];
     return [];
   }
@@ -3238,10 +3403,11 @@ export class SketchMode {
       if (e.type === "line" || e.type === "arc") {
         if (near(e.x1, e.y1)) out.push((dx, dy) => { e.x1 += dx; e.y1 += dy; });
         if (near(e.x2, e.y2)) out.push((dx, dy) => { e.x2 += dx; e.y2 += dy; });
-      } else if (e.type === "spline") {
-        const last = e.points.length - 1;
+      } else if (e.type === "spline" || (e.type === "bspline" && !e.closed)) {
+        const pts = e.type === "spline" ? e.points : e.poles;
+        const last = pts.length - 1;
         for (const k of [0, last]) {
-          const q = e.points[k];
+          const q = pts[k];
           if (q && near(q.x, q.y)) out.push((dx, dy) => { q.x += dx; q.y += dy; });
         }
       } else if (e.type === "point") {
@@ -3254,16 +3420,17 @@ export class SketchMode {
   /** Find the nearest solver-controlled point (line endpoint or circle centre)
    *  within pick tolerance of p. Rigid shapes (polygon/slot) are intentionally
    *  excluded, they don't expand to solver points. */
-  private pickPoint(p: THREE.Vector2): { p: THREE.Vector2; idx: number } | null {
+  private pickPoint(p: THREE.Vector2): { p: THREE.Vector2; idx: number; pole: number } | null {
     const tol = this.pickTol();
     let best: THREE.Vector2 | null = null;
     let bestIdx = -1;
+    let bestPole = -1;
     let bestD = tol * tol;
     let cur = -1;
-    const consider = (x: number, y: number) => {
+    const consider = (x: number, y: number, pole = -1) => {
       const dx = x - p.x, dy = y - p.y;
       const d = dx * dx + dy * dy;
-      if (d <= bestD) { bestD = d; best = new THREE.Vector2(x, y); bestIdx = cur; }
+      if (d <= bestD) { bestD = d; best = new THREE.Vector2(x, y); bestIdx = cur; bestPole = pole; }
     };
     this.entities.forEach((e, i) => {
       cur = i;
@@ -3271,6 +3438,12 @@ export class SketchMode {
       else if (e.type === "circle") consider(e.x, e.y);
       else if (e.type === "arc") { consider(e.x1, e.y1); consider(e.x2, e.y2); }
       else if (e.type === "spline") for (const q of e.points) consider(q.x, q.y);
+      else if (e.type === "bspline") {
+        // off-curve poles are only grabbable while their polygon is on screen
+        const shown = this.selected.has(e.id);
+        const last = e.poles.length - 1;
+        e.poles.forEach((q, k) => { if (shown || (!e.closed && (k === 0 || k === last))) consider(q.x, q.y, k); });
+      }
       else if (e.type === "point") consider(e.x, e.y);
       else if (e.type === "rectangle") {
         const hw = e.width / 2, hh = e.height / 2;
@@ -3278,7 +3451,7 @@ export class SketchMode {
         consider(e.x + hw, e.y + hh); consider(e.x - hw, e.y + hh);
       }
     });
-    return best ? { p: best, idx: bestIdx } : null;
+    return best ? { p: best, idx: bestIdx, pole: bestPole } : null;
   }
 
   /** Snap anchors minus the grabbed entity and anything joined to the grabbed point, which move with it. */
@@ -3426,6 +3599,7 @@ export class SketchMode {
           this.selected = new Set([ent.id]);
         }
       }
+      this.selectedPole = ent?.type === "bspline" && this.dragPole >= 0 && this.selected.has(ent.id) ? { id: ent.id, k: this.dragPole } : null;
       this.refreshActive();
       return;
     }
