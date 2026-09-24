@@ -25,6 +25,7 @@ pub const BLEND_HAS_NO_END: &str = "blendHasNoEnd";
 pub const EDGE_ALREADY_SMOOTH: &str = "edgeAlreadySmooth";
 pub const EDGE_IS_SEAM: &str = "edgeIsSeam";
 pub const BLEND_FOLDS_OVER: &str = "blendFoldsOver";
+pub const BLEND_CHANGED_NOTHING: &str = "blendChangedNothing";
 
 const SMOOTH_EDGE_DEG: f64 = 1.0;
 const SIZE_PROBE_FRACTION: f64 = 0.05;
@@ -320,14 +321,29 @@ pub fn chord_radius(shape: &Shape, edge: &Shape, chord: f64) -> f64 {
     }
 }
 
-fn refuse_seam_edges(shape: &Shape, edges: &[Shape], label: &str) -> FResult {
-    if edges.is_empty() || !edges.iter().all(|e| ops::is_seam(shape, e)) {
-        return Ok(());
+/// Seams out of the set. One an edge pick named is refused, the kernel would
+/// skip it and call the blend done. One a broad selector swept in (every edge,
+/// a face's edges) is no edge anyone sees and is left out quietly.
+fn drop_seams(shape: &Shape, sels: &[Value], edges: Vec<Shape>, label: &str) -> FResult<Vec<Shape>> {
+    let adj = crate::topo::FaceAdjacency::new(shape);
+    let (seams, real): (Vec<Shape>, Vec<Shape>) = edges.into_iter().partition(|e| adj.is_seam(e));
+    if seams.is_empty() {
+        return Ok(real);
     }
-    let which = if edges.len() == 1 {
-        "that edge is a seam".to_owned()
-    } else {
-        format!("all {} selected edges are seams", edges.len())
+    let mut picked: Vec<Shape> = Vec::new();
+    for sel in sels.iter().filter(|s| names_one_edge(s)) {
+        for e in Resolver::new(None, None).edges(shape, sel).unwrap_or_default() {
+            if seams.iter().any(|s| s.is_same(&e)) && !picked.iter().any(|p| p.is_same(&e)) {
+                picked.push(e);
+            }
+        }
+    }
+    let which = match (real.is_empty(), picked.len()) {
+        (true, _) if seams.len() == 1 => "that edge is a seam".to_owned(),
+        (true, _) => format!("all {} selected edges are seams", seams.len()),
+        (false, 0) => return Ok(real),
+        (false, 1) => "one of the selected edges is a seam".to_owned(),
+        (false, n) => format!("{n} of the selected edges are seams"),
     };
     Err(value_err(
         format!(
@@ -335,6 +351,31 @@ fn refuse_seam_edges(shape: &Shape, edges: &[Shape], label: &str) -> FResult {
             label.to_lowercase()
         ),
         Some(EDGE_IS_SEAM),
+    ))
+}
+
+fn names_one_edge(sel: &Value) -> bool {
+    sel.get("kind").and_then(Value::as_str) == Some("edge")
+        && matches!(sel.get("by").and_then(Value::as_str), Some("nearest" | "match"))
+}
+
+/// The kernel can hand a blend back with nothing cut, and that must not pass
+/// as done.
+fn refuse_unchanged(before: &Shape, after: &Shape, label: &str, body: &str) -> FResult {
+    use crate::kernel::{count, volume, Kind};
+    let same = before.is_same(after)
+        || (count(before, Kind::Face) == count(after, Kind::Face)
+            && count(before, Kind::Edge) == count(after, Kind::Edge)
+            && (volume(before) - volume(after)).abs() <= 1e-9 * volume(before).abs().max(1.0));
+    if !same {
+        return Ok(());
+    }
+    let done = if label == "Chamfer" { "chamfered" } else { "filleted" };
+    Err(value_err(
+        format!(
+            "{label} changed nothing on {body}, none of the selected edges could be {done}. Pick the edges again, with the point on the edge itself rather than on a corner where it meets another."
+        ),
+        Some(BLEND_CHANGED_NOTHING),
     ))
 }
 
@@ -675,7 +716,8 @@ fn blend_edges(
                 label.to_lowercase()
             )));
         }
-        refuse_seam_edges(&body_shape, &edges, label)?;
+        let sels = sel_value.as_array().map_or(&[][..], Vec::as_slice);
+        let edges = drop_seams(&body_shape, sels, edges, label)?;
         refuse_smooth_edges(&body_shape, &edges, label)?;
         let try_section = |shape: &Shape, es: &[Shape]| -> Option<Shape> {
             section
@@ -769,6 +811,10 @@ fn blend_edges(
         };
         staged.push((index, new_shape));
     }
+    for (index, shape) in &staged {
+        let body = &ctx.bodies[*index];
+        refuse_unchanged(body.shape(), shape, label, &body.name)?;
+    }
     for (index, shape) in staged {
         ctx.set_shape(index, shape);
     }
@@ -778,6 +824,15 @@ fn blend_edges(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_blend_that_hands_the_body_back_is_refused() {
+        let body = crate::kernel::make_box(10.0, 10.0, 10.0).unwrap();
+        let err = refuse_unchanged(&body, &body.clone(), "Fillet", "Box").unwrap_err();
+        assert!(matches!(err, Fail::Value { code: Some(BLEND_CHANGED_NOTHING), .. }));
+        let other = crate::kernel::make_box(10.0, 10.0, 9.0).unwrap();
+        assert!(refuse_unchanged(&body, &other, "Fillet", "Box").is_ok());
+    }
 
     #[test]
     fn a_drag_that_fell_back_asks_the_kernel_again_below_that_size() {

@@ -94,10 +94,6 @@ pub fn copy(shape: &Shape, edges: &[Shape]) -> Option<(Shape, Vec<Shape>)> {
     Some((all.remove(0), copied))
 }
 
-pub fn is_seam(shape: &Shape, edge: &Shape) -> bool {
-    crate::bench::phase("blend_is_seam", || ffi::blend_is_seam(shape.raw(), edge.raw()))
-}
-
 /// blends.py `_edge_dihedral_deg`.
 pub fn dihedral_deg(shape: &Shape, edge: &Shape) -> Option<f64> {
     let mid = EdgeEnt::new(edge.clone()).ok()?.mid;
