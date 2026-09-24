@@ -5,8 +5,7 @@ import { useSelectionStore } from "../stores/selection";
 import type { Engine } from "./engine";
 import type { Feature } from "../types";
 import type { DatumPose } from "../document/datumPose";
-import { datumMoveTarget, startDatumPoseEdit } from "../features/datumPlaneEdit";
-import { planeGizmoChoice } from "../ui/interactionPrefs";
+import { startDatumPoseEdit } from "../features/datumPlaneEdit";
 
 /** Said when a feature's value cannot be dragged and has to be typed. One
  *  constant because three feature types say it and they used to say three
@@ -120,15 +119,11 @@ export function createSelection(
       case "datumPlane": {
         const deps = {
           store: e.store,
+          tool: e.tools.datumPose,
           sourceOf: (d: Extract<Feature, { type: "datumPlane" }>) => e.datumSourceOf(d),
           previewPose: (pid: string, p: DatumPose | null) => e.previewDatumPose(pid, p),
         };
-        if (planeGizmoChoice() === "move") {
-          const target = datumMoveTarget(deps, id);
-          if (target) e.tools.move.startTarget(target, done);
-          break;
-        }
-        if (!startDatumPoseEdit({ ...deps, tool: e.tools.datumPose }, id, done)) e.setStatus(VALUES_IN_HISTORY, "");
+        if (!startDatumPoseEdit(deps, id, done)) e.setStatus(VALUES_IN_HISTORY, "");
         break;
       }
       case "joint":

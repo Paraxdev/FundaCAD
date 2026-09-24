@@ -22,7 +22,6 @@ import type { PatternKind, PatternTool } from "./patternTool";
 import type { PlaneOffsetTool } from "./planeOffsetTool";
 import type { DatumPoseTool } from "./datumPoseTool";
 import { placeDatum, poseFields, ZERO_POSE, type DatumPose } from "../document/datumPose";
-import { planeGizmoChoice } from "../ui/interactionPrefs";
 import { pickPlaneTarget, planeSpecOf, type FacePlanePick } from "./facePlanePick";
 import { choose } from "../ui/choice";
 import { pointInRegion } from "../sketch/region";
@@ -309,22 +308,13 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   /** Position a new datum off `spec` with the handles, then save it. The pose
    *  is stored relative to the reference, so the plane stays parametric. */
   function placeNewDatum(spec: PlaneSpec, ref: DatumRef, then: (id: string, def: PlaneDef) => void) {
-    const make = (pose: DatumPose) => {
+    datumPose.start({ src: spec, pose: ZERO_POSE, turns: true, ghost: true }, (pose: DatumPose | null) => {
+      if (!pose) return;
       const id = store.nextId();
       store.addFeature({
         id, type: "datumPlane", plane: spec, offset: pose.offset, ...poseFields(pose), ...ref,
       } as Feature);
       then(id, placeDatum(spec, pose));
-    };
-    if (planeGizmoChoice() === "arcs") {
-      datumPose.start({ src: spec, pose: ZERO_POSE, turns: true, ghost: true }, (pose) => {
-        if (pose) make(pose);
-      });
-      return;
-    }
-    const src = new SketchPlane(spec);
-    planeOffset.start(src, (def) => {
-      if (def) make({ ...ZERO_POSE, offset: offsetAlong(def, src) });
     });
   }
 
@@ -534,16 +524,6 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   function faceRef(face: FacePlanePick | null): { face?: Selector; at?: Vec3 } {
     if (!face) return {};
     return { face: face.selector, ...(face.kind === "tangent" ? { at: face.at } : {}) };
-  }
-
-  // signed distance of an offset-tool result from its source plane, along the
-  // source normal (mm), the editable `offset` we store on the datum.
-  function offsetAlong(def: PlaneDef, src: SketchPlane): number {
-    return (
-      (def.origin[0] - src.origin.x) * src.n.x +
-      (def.origin[1] - src.origin.y) * src.n.y +
-      (def.origin[2] - src.origin.z) * src.n.z
-    );
   }
 
   // Split Body: choose which side(s) to keep, then pick + position a cutting plane.
