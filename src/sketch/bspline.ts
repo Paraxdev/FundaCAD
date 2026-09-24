@@ -20,11 +20,15 @@ export interface BsplineDef {
 export const BSPLINE_DEGREES = [2, 3, 5] as const;
 export const DEFAULT_BSPLINE_DEGREE = 3;
 
-/** The degree the curve is built with: the requested one, lowered to fit the pole count. */
-export function bsplineDegree(def: BsplineDef): number {
+function requestedDegree(def: BsplineDef): number {
   const want = def.degree ?? DEFAULT_BSPLINE_DEGREE;
-  const d = Number.isFinite(want) ? Math.max(1, Math.round(want)) : DEFAULT_BSPLINE_DEGREE;
-  return Math.max(1, Math.min(d, def.poles.length - 1));
+  return Number.isFinite(want) ? Math.max(1, Math.round(want)) : DEFAULT_BSPLINE_DEGREE;
+}
+
+/** The degree the curve is built with: the requested one, lowered to fit the
+ *  pole count, as the engine's kernel::bspline_knots does. */
+export function bsplineDegree(def: BsplineDef): number {
+  return Math.max(1, Math.min(requestedDegree(def), def.poles.length - 1));
 }
 
 /** Whether the definition builds a curve at all. */
@@ -152,7 +156,9 @@ export function bsplineInsertKnot(def: BsplineDef, x: number): BsplineDef | null
   const k = u.findIndex((v, i) => v <= x && x < u[i + 1]!);
   const lerp = (A: Pt, B: Pt, a: number): Pt => ({ x: (1 - a) * A.x + a * B.x, y: (1 - a) * A.y + a * B.y });
   const knots = [...u.slice(0, k + 1), x, ...u.slice(k + 1)];
-  const base = { ...def, knots };
+  // A degree the pole count lowered stays lowered, or the extra pole would raise
+  // it and the curve would move.
+  const base = { ...def, knots, ...(p !== requestedDegree(def) ? { degree: p } : {}) };
   if (!def.closed) {
     const { t, P } = flat(def);
     const m = k + p; // the flat span holding x
@@ -183,10 +189,15 @@ export function bsplineInsertKnot(def: BsplineDef, x: number): BsplineDef | null
   return { ...base, poles: Q };
 }
 
-/** The fewest poles a curve of this degree keeps, what pole deletion stops at. */
+/** The fewest poles the curve keeps at the degree it is built with, what pole
+ *  deletion stops at. */
 export function bsplineMinPoles(def: BsplineDef): number {
-  const want = def.degree ?? DEFAULT_BSPLINE_DEGREE;
-  return Math.max(def.closed ? 3 : 2, want + 1);
+  return Math.max(def.closed ? 3 : 2, bsplineDegree(def) + 1);
+}
+
+/** The highest degree the pole count carries. */
+export function bsplineMaxDegree(def: BsplineDef): number {
+  return Math.max(1, def.poles.length - 1);
 }
 
 /** Remove pole `k`. Stored knots lose the interior knot nearest that pole's

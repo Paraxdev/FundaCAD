@@ -9,9 +9,9 @@ import type { DocumentStore } from "../document/store";
 import type { Feature, ParamTarget, PlaneSpec, ProjectionUpdate, Selector, SketchConstraint, SketchPattern } from "../types";
 import { applyProjectionUpdate, dimPlaceOf, isBadgeEntity, isPlacedDim } from "../types";
 import { SketchPlane } from "./plane";
-import { BSPLINE_DEGREES, bsplineMinPoles, poleOfRef } from "./bspline";
 import { SketchOverlay, type WorldRegion, controlPolygonObjects, curveObjects, poleMarkerObjects, dimensionLineObjects, CURVE_COLOR, PREVIEW_COLOR, SELECT_COLOR } from "./overlay";
-import { constrainedPoles, deletePole, insertPole, polygonParam, splineToBspline, type BsplineEntity } from "./bsplineEdit";
+import { constrainedPoles, degreeChoices, deletePole, insertPole, polygonParam, splineToBspline, type BsplineEntity } from "./bsplineEdit";
+import { bsplineDegree, bsplineMinPoles, poleOfRef } from "./bspline";
 import { DimInput } from "./dimInput";
 import { TextPanel } from "./textPanel";
 import type { TextValues } from "./textPanel";
@@ -1807,7 +1807,7 @@ export class SketchMode {
     const r = deletePole(e, sp.k, this.constraints);
     this.selectedPole = null;
     if (!r) {
-      toast(`A degree ${e.degree ?? 3} spline keeps at least ${bsplineMinPoles(e)} control points`);
+      toast(`A degree ${bsplineDegree(e)} spline keeps at least ${bsplineMinPoles(e)} control points`);
       return true;
     }
     this.entities = this.entities.map((x) => (x.id === e.id ? r.entity : x));
@@ -3064,7 +3064,6 @@ export class SketchMode {
     const linked = this.modifyFlow.selectedProjectedIds().size;
     const chosen = this.entities.filter((x) => this.selected.has(x.id));
     const bsplines = chosen.filter((x): x is BsplineEntity => x.type === "bspline");
-    const degreeNow = bsplines.length === 1 ? (bsplines[0]!.degree ?? 3) : null;
     const items: CtxItem[] = [
       ...(linked
         ? [{ label: linked > 1 ? `Break Link (${linked})` : "Break Link", onClick: () => this.modifyFlow.breakSelectedLinks() }]
@@ -3074,7 +3073,7 @@ export class SketchMode {
         : []),
       ...(bsplines.length
         ? [
-            ...BSPLINE_DEGREES.map((d) => ({ label: `Degree ${d}`, checked: degreeNow === d, onClick: () => this.reshapeSelectedBsplines({ degree: d }) })),
+            ...degreeChoices(bsplines).map((c) => ({ ...c, onClick: () => this.reshapeSelectedBsplines({ degree: c.degree }) })),
             bsplines.every((x) => x.closed)
               ? { label: "Open Curve", onClick: () => this.reshapeSelectedBsplines({ closed: false }) }
               : { label: "Close Curve", disabled: bsplines.some((x) => x.poles.length < 3), onClick: () => this.reshapeSelectedBsplines({ closed: true }) },

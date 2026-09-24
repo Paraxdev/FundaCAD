@@ -6,8 +6,8 @@ import * as THREE from "three";
 import type { SketchConstraint } from "../types";
 import type { ResolvedEntity } from "./snap";
 import {
-  bsplineFit, bsplineGreville, bsplineInsertKnot, bsplineNearestParam, bsplinePoint,
-  bsplineRange, bsplineRemovePole, bsplineValid, poleOfRef, poleRef, type Pt,
+  BSPLINE_DEGREES, bsplineDegree, bsplineFit, bsplineGreville, bsplineInsertKnot, bsplineMaxDegree,
+  bsplineNearestParam, bsplinePoint, bsplineRange, bsplineRemovePole, bsplineValid, poleOfRef, poleRef, type Pt,
 } from "./bspline";
 import { splinePolyline } from "./spline";
 import { distToSeg } from "./geom2d";
@@ -124,7 +124,9 @@ export function insertPole(
   }
   const next = bsplineInsertKnot(e, t);
   if (!next) return null;
-  const entity: BsplineEntity = { ...e, poles: next.poles, ...(next.knots ? { knots: next.knots } : {}) };
+  const entity: BsplineEntity = {
+    ...e, poles: next.poles, ...(next.knots ? { knots: next.knots } : {}), ...(next.degree !== undefined ? { degree: next.degree } : {}),
+  };
   let pole = 0, pd = Infinity;
   entity.poles.forEach((q, k) => {
     const d = Math.hypot(q.x - click.x, q.y - click.y);
@@ -132,6 +134,20 @@ export function insertPole(
   });
   const map = copiedPoles(e.poles, entity.poles);
   return { entity, constraints: remapPoleRefs(constraints, e.id, e.poles.length, entity.poles.length, map), pole };
+}
+
+/** The Degree entries of the splines' menu: the degree one spline is built with
+ *  checked, and those a spline's pole count cannot carry disabled, saying how
+ *  many poles they need. */
+export function degreeChoices(es: BsplineEntity[]): { degree: number; label: string; checked: boolean; disabled: boolean }[] {
+  const now = es.length === 1 ? bsplineDegree(es[0]!) : null;
+  const carried = Math.min(...es.map(bsplineMaxDegree));
+  return BSPLINE_DEGREES.map((d) => ({
+    degree: d,
+    label: d > carried ? `Degree ${d}, needs ${d + 1} control points` : `Degree ${d}`,
+    checked: now === d,
+    disabled: d > carried,
+  }));
 }
 
 /** Remove pole `k`, or null at the fewest poles the degree allows. */
