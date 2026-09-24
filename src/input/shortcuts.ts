@@ -129,6 +129,16 @@ export function shortcutHudGroups(): HudGroup[] {
     { name: "Sketch", rows: byContext("sketch") },
     { name: "Global", rows: byContext("global") },
     {
+      name: "Mouse",
+      rows: [
+        { key: "Right drag", label: "Orbit" },
+        { key: "Middle drag", label: "Pan" },
+        { key: "Wheel", label: "Zoom" },
+        { key: "Left drag", label: "Box select (see Always, below)" },
+        { key: "Left click", label: "Select a body, then a face on it (pause over it to light the face up first)" },
+      ],
+    },
+    {
       name: "Always",
       rows: [
         { key: "Ctrl+K", label: "Command palette" },
@@ -138,8 +148,9 @@ export function shortcutHudGroups(): HudGroup[] {
         { key: "Del", label: "Delete face (heal) / feature" },
         { key: "Esc", label: "Cancel / clear selection" },
         // A gesture rather than a key, and the only place anyone would look
-        // for it is here.
-        { key: "Drag", label: "Box select: right takes what is inside, left takes what it touches" },
+        // for it is here. "right"/"left" name the drag direction, not a mouse
+        // button, everything here is a left-button drag.
+        { key: "Drag", label: "Box select: dragging to the right takes what is fully inside, dragging to the left takes what it touches" },
         { key: "Shift+Drag", label: "Box select, adding to what is selected" },
         { key: "Tab", label: "While boxing: take everything / faces / edges" },
       ],
