@@ -17,9 +17,12 @@ import {
   BAND_FRACTION,
   BAND_MIN_PX,
   EDGE_NEAR_PX,
+  EDGE_SHORT_BOOST_PX,
+  EDGE_SHORT_MAX_PX,
   ScreenExtent,
   edgeBandPx,
   sampleIndices,
+  shortEdgeBoostPx,
 } from "../../src/viewport/edgeBand";
 
 describe("edgeBandPx", () => {
@@ -77,6 +80,41 @@ describe("edgeBandPx", () => {
 
   it("caps exactly where the constant takes over", () => {
     expect(BAND_CAP_EXTENT_PX * BAND_FRACTION).toBeCloseTo(EDGE_NEAR_PX, 12);
+  });
+});
+
+describe("shortEdgeBoostPx", () => {
+  it("leaves an ordinary edge's band untouched", () => {
+    // The field case this exists for is the OPPOSITE of edgeBandPx's: a
+    // vertical box edge nearly edge-on at an isometric angle projects to a
+    // couple of px, not a face's border. Anything long enough to click
+    // normally must not change.
+    for (const px of [EDGE_SHORT_MAX_PX, 20, 87, 362]) {
+      expect(shortEdgeBoostPx(px), `a ${px}px edge`).toBe(0);
+    }
+  });
+
+  it("gives a foreshortened edge a wider band, growing toward zero length", () => {
+    let prev = -1;
+    for (let px = EDGE_SHORT_MAX_PX; px >= 0; px -= 0.5) {
+      const boost = shortEdgeBoostPx(px);
+      // Shrinking the edge must never make it HARDER to hit.
+      expect(boost).toBeGreaterThanOrEqual(prev);
+      prev = boost;
+    }
+    expect(shortEdgeBoostPx(0)).toBe(EDGE_SHORT_BOOST_PX);
+  });
+
+  it("falls back to no boost when there is nothing to measure", () => {
+    // No edge under the cursor, or one whose geometry had no points: the same
+    // "leave it alone" default edgeBandPx uses for an unmeasured face.
+    expect(shortEdgeBoostPx(null)).toBe(0);
+    expect(shortEdgeBoostPx(NaN)).toBe(0);
+    expect(shortEdgeBoostPx(Infinity)).toBe(0);
+  });
+
+  it("does not turn a negative measurement into a negative boost", () => {
+    expect(shortEdgeBoostPx(-5)).toBe(EDGE_SHORT_BOOST_PX);
   });
 });
 
