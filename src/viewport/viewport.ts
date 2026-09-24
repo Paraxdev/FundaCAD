@@ -115,6 +115,7 @@ import {
   type ScreenRect,
 } from "./areaSelect";
 import { collectInBox, projectForArea, type AreaProjection } from "./areaProjection";
+import { isEditableTarget } from "../ui/focus";
 
 /** One box drag. The box previews by selecting every frame, so each frame starts
  *  from the selection as it was when the drag began. */
@@ -325,6 +326,14 @@ export class Viewport {
   private installPointer() {
     const c = this.canvas;
     c.addEventListener("pointerdown", (e) => {
+      // A click on the canvas means "I want the viewport now": reclaim
+      // keyboard focus from wherever a field left it (this handler goes on to
+      // preventDefault below, which would otherwise suppress the browser's
+      // own default focus-shift and leave a stray field eating every
+      // shortcut, FI-2's bug). A field the user is legitimately mid-edit in
+      // gets the same treatment a click on any other part of the page would.
+      const active = document.activeElement;
+      if (active instanceof HTMLElement && isEditableTarget(active)) active.blur();
       if (e.button !== 0) return;
       this.dragMoved = false;
       this.downPos = { x: e.clientX, y: e.clientY };
