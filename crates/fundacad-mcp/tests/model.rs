@@ -506,3 +506,27 @@ fn a_feature_turned_into_a_join_forgets_the_id_it_had_as_a_new_body() {
         .unwrap();
     assert_eq!(d["bodyIds"], json!({"bx:0": "body1"}));
 }
+
+#[test]
+fn a_press_pull_label_that_contradicts_its_sign_is_named() {
+    fn push(id: &str, distance: Value, op: &str) -> Value {
+        json!({"id": id, "type": "press-pull", "distance": distance, "operation": op,
+               "face": {"kind": "face", "by": "nearest", "point": [0, 0, 10]}})
+    }
+    let mut d = doc_with(&[
+        json!({"id": "bx", "type": "box", "length": 20, "width": 20, "height": 20}),
+        push("deeper", json!(-5.85), "cut"),
+        push("taller", json!(2), "join"),
+    ]);
+    m::set_parameter(&mut d, "depth", &json!(-3), "mm", None).unwrap();
+    m::add_feature(&mut d, &push("named", json!("depth"), "cut"), None).unwrap();
+    assert_eq!(m::validate(&mut d), Vec::<String>::new());
+
+    m::add_feature(&mut d, &push("wrong", json!(4), "cut"), None).unwrap();
+    m::add_feature(&mut d, &push("wrong_named", json!("depth"), "join"), None).unwrap();
+    let problems = m::validate(&mut d);
+    assert_eq!(problems.len(), 2, "{problems:?}");
+    assert!(problems[0].starts_with("wrong: operation is 'cut' but distance 4"), "{problems:?}");
+    assert!(problems[0].contains("`mode`"), "{problems:?}");
+    assert!(problems[1].starts_with("wrong_named: operation is 'join'"), "{problems:?}");
+}
