@@ -55,8 +55,6 @@ const TURNS: readonly Turn[] = ["tiltX", "tiltY", "spin"];
 export interface PoseToolOptions {
   src: PlaneSpec;
   pose: DatumPose;
-  /** false shows the offset arrow alone */
-  turns: boolean;
   /** fields a parameter expression drives, which get no handle and no box */
   locked?: ReadonlySet<PoseField>;
   /** set: each release is handed here and the handles stay up (editing) */
@@ -128,31 +126,24 @@ export class DatumPoseTool {
       this.arrow = createDragHandle();
       this.viewport.addToScene(this.arrow.group);
     }
-    if (opts.turns) {
-      for (const t of TURNS) {
-        if (this.isLocked(t)) continue;
-        const arc = createRotationArc("idle", { radius: radiusOf(t), sweep: ARC_SWEEP });
-        this.arcs.set(t, arc);
-        this.viewport.addToScene(arc.group);
-      }
+    for (const t of TURNS) {
+      if (this.isLocked(t)) continue;
+      const arc = createRotationArc("idle", { radius: radiusOf(t), sweep: ARC_SWEEP });
+      this.arcs.set(t, arc);
+      this.viewport.addToScene(arc.group);
     }
     this.viewport.addToScene(this.dialGroup);
     if (opts.ghost) this.buildGhost();
 
-    const fields: DimFieldDef[] = [];
-    if (!this.isLocked("offset")) fields.push({ name: "offset", label: "Offset", kind: "length" });
-    if (opts.turns) {
-      if (!this.isLocked("tiltX")) fields.push({ name: "tiltX", label: "Tilt X", kind: "angle" });
-      if (!this.isLocked("tiltY")) fields.push({ name: "tiltY", label: "Tilt Y", kind: "angle" });
-      if (!this.isLocked("spin")) fields.push({ name: "spin", label: "Spin", kind: "angle" });
-    }
+    const fields: DimFieldDef[] = ([
+      { name: "offset", label: "Offset", kind: "length" },
+      { name: "tiltX", label: "Tilt X", kind: "angle" },
+      { name: "tiltY", label: "Tilt Y", kind: "angle" },
+      { name: "spin", label: "Spin", kind: "angle" },
+    ] as const).filter((f) => !this.isLocked(f.name)).map((f) => ({ ...f }));
     this.dim.show(fields, () => this.finish(), () => this.cancel());
     this.dim.updateFromCursor({ ...this.pose });
-    setPrompt(
-      opts.turns
-        ? "Drag the arrow to offset, an arc to tilt or spin · 5° steps, Shift 1°, Alt free · type exact values · Enter · Esc"
-        : "Drag or type an offset · Enter · Esc",
-    );
+    setPrompt("Drag the arrow to offset, an arc to tilt or spin · 5° steps, Shift 1°, Alt free · type exact values · Enter · Esc");
     this.refresh();
     this.gesture.frame();
   }

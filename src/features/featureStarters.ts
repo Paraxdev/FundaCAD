@@ -308,7 +308,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   /** Position a new datum off `spec` with the handles, then save it. The pose
    *  is stored relative to the reference, so the plane stays parametric. */
   function placeNewDatum(spec: PlaneSpec, ref: DatumRef, then: (id: string, def: PlaneDef) => void) {
-    datumPose.start({ src: spec, pose: ZERO_POSE, turns: true, ghost: true }, (pose: DatumPose | null) => {
+    datumPose.start({ src: spec, pose: ZERO_POSE, ghost: true }, (pose: DatumPose | null) => {
       if (!pose) return;
       const id = store.nextId();
       store.addFeature({
