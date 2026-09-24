@@ -32,7 +32,10 @@ export const FEATURE_NUM_FIELDS: Partial<Record<Feature["type"], [string, string
   // so a thread's pitch is typed straight off its spec and stays right however
   // many turns are wound on. Empty means no climb: the flat revolve.
   revolve: [["angle", "Angle", "angle"], ["pitch", "Pitch", "length"]],
-  datumPlane: [["offset", "Offset", "length"]],
+  datumPlane: [
+    ["offset", "Offset", "length"], ["tiltX", "Tilt X", "angle"], ["tiltY", "Tilt Y", "angle"],
+    ["spin", "Spin", "angle"], ["shiftX", "Shift X", "length"], ["shiftY", "Shift Y", "length"],
+  ],
   box: [["length", "Length", "length"], ["width", "Width", "length"], ["height", "Height", "length"]],
   cylinder: [["radius", "Radius", "length"], ["height", "Height", "length"]],
   cone: [["bottomRadius", "Bottom radius", "length"], ["topRadius", "Top radius", "length"], ["height", "Height", "length"]],

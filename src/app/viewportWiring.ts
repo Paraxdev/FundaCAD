@@ -15,6 +15,7 @@ import type { NudgePlacement } from "../features/selectionNudge";
 import { regionBeatsSurface } from "../sketch/regionOverSurface";
 import { regionArea } from "../sketch/region";
 import type { Engine } from "./engine";
+import { planeGizmoChoice } from "../ui/interactionPrefs";
 
 /** How far the ambiguous-edge menu sits off the click, px. */
 const AMBIGUOUS_MENU_OFFSET = 16;
@@ -26,7 +27,15 @@ const AMBIGUOUS_MENU_OFFSET = 16;
  *  exactly one writer for each. */
 export function installViewportWiring(e: Engine): void {
   // clicking a construction plane in the viewport selects it (so it can be cut by)
-  e.viewport.onPickDatum = (id) => e.selectFeature(id);
+  e.viewport.onPickDatum = (id) => {
+    e.selectFeature(id);
+    // With the Move handles a plane is reached for like a body: picking it is
+    // what raises the gizmo on it.
+    if (planeGizmoChoice() !== "move" || e.toolBusy()) return;
+    if (e.store.document.features.find((f) => f.id === id)?.type !== "datumPlane") return;
+    e.tools.move.onClickThrough = (x, y, additive) => e.viewport.clickThrough(x, y, additive);
+    e.editFeature(id);
+  };
 
   e.viewport.onHit = (hit) => {
     if (e.toolBusy()) return;
@@ -56,7 +65,11 @@ export function installViewportWiring(e: Engine): void {
       return;
     }
     const faceId = e.viewport.faceIdAt(x, y);
-    if (faceId == null) return;
+    if (faceId == null) {
+      const datum = e.viewport.pickDatumAt(x, y);
+      if (datum) e.editFeature(datum);
+      return;
+    }
     const owner = e.featureForFace(faceId);
     if (owner) e.editFeature(owner);
   };

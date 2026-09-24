@@ -38,6 +38,8 @@ import { PatternTool } from "../features/patternTool";
 import { MeasureTool } from "../features/measureTool";
 import { SectionTool } from "../features/sectionTool";
 import { PlaneOffsetTool } from "../features/planeOffsetTool";
+import { DatumPoseTool } from "../features/datumPoseTool";
+import { datumMoveTarget } from "../features/datumPlaneEdit";
 import { RevolvePitchTool } from "../features/revolvePitchTool";
 import { JointTool } from "../features/jointTool";
 import { createFeatureStarters } from "../features/featureStarters";
@@ -74,7 +76,8 @@ import { createDocBridge, type DocBridge } from "./docBridge";
 import { LiveSessionHost } from "../live/liveSession";
 import { liveEditsAllowed, liveSharingEnabled, onLiveEditingChange } from "../ui/liveEditing";
 
-import type { Feature, PlaneDef } from "../types";
+import type { Feature, PlaneDef, PlaneSpec } from "../types";
+import type { DatumPose } from "../document/datumPose";
 
 export interface EngineTools {
   extrude: ExtrudeTool;
@@ -91,6 +94,7 @@ export interface EngineTools {
   measure: MeasureTool;
   section: SectionTool;
   planeOffset: PlaneOffsetTool;
+  datumPose: DatumPoseTool;
   revolvePitch: RevolvePitchTool;
   joint: JointTool;
 }
@@ -179,6 +183,10 @@ export interface Engine {
   isSketchConsumed(id: string): boolean;
   isSketchVisible(id: string): boolean;
   datumPlaneDef(f: Extract<Feature, { type: "datumPlane" }>): PlaneDef;
+  /** The reference a datum's pose is measured from, as it stands now. */
+  datumSourceOf(f: Extract<Feature, { type: "datumPlane" }>): PlaneSpec;
+  /** Draw a datum (and what hangs off it) at a pose not yet written; null drops it. */
+  previewDatumPose(id: string, pose: DatumPose | null): void;
   syncDatumPlanes(): void;
 
   newDocument(): Promise<void>;
@@ -323,6 +331,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
       },
     }),
     planeOffset: new PlaneOffsetTool(e.viewport),
+    datumPose: new DatumPoseTool(e.viewport),
     revolvePitch: new RevolvePitchTool(e.viewport, e.store, e.overlay),
     joint: new JointTool(e.viewport, e.store),
   };
@@ -422,6 +431,12 @@ export function mountUi(e: Engine): void {
     moveTool: e.tools.move,
     patternTool: e.tools.pattern,
     planeOffset: e.tools.planeOffset,
+    datumPose: e.tools.datumPose,
+    datumMoveTarget: (id) => datumMoveTarget({
+      store: e.store,
+      sourceOf: (f) => e.datumSourceOf(f),
+      previewPose: (pid, p) => e.previewDatumPose(pid, p),
+    }, id),
     canvas: e.canvas,
     toolBusy: () => e.toolBusy(),
     hasBody: () => e.hasBody(),

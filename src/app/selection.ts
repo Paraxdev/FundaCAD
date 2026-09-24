@@ -4,6 +4,9 @@ import { contributedFeature } from "../plugins/contrib";
 import { useSelectionStore } from "../stores/selection";
 import type { Engine } from "./engine";
 import type { Feature } from "../types";
+import type { DatumPose } from "../document/datumPose";
+import { datumMoveTarget, startDatumPoseEdit } from "../features/datumPlaneEdit";
+import { planeGizmoChoice } from "../ui/interactionPrefs";
 
 /** Said when a feature's value cannot be dragged and has to be typed. One
  *  constant because three feature types say it and they used to say three
@@ -114,6 +117,20 @@ export function createSelection(
       case "hole":
         if (!e.tools.hole.startEdit(id, done)) e.setStatus(VALUES_IN_HISTORY, "");
         break;
+      case "datumPlane": {
+        const deps = {
+          store: e.store,
+          sourceOf: (d: Extract<Feature, { type: "datumPlane" }>) => e.datumSourceOf(d),
+          previewPose: (pid: string, p: DatumPose | null) => e.previewDatumPose(pid, p),
+        };
+        if (planeGizmoChoice() === "move") {
+          const target = datumMoveTarget(deps, id);
+          if (target) e.tools.move.startTarget(target, done);
+          break;
+        }
+        if (!startDatumPoseEdit({ ...deps, tool: e.tools.datumPose }, id, done)) e.setStatus(VALUES_IN_HISTORY, "");
+        break;
+      }
       case "joint":
         // The arrow slides the joined body along the mate axis (its offset). It
         // stands down when a parameter drives the offset or the engine could not
