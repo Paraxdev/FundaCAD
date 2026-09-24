@@ -229,6 +229,8 @@ This file starts on 2026-08-03. For anything before that, see the
 
 - Changing a feature's `type` with the MCP `feature_update` now takes effect. The new type was dropped from the patch, so a fillet patched into a chamfer stayed a fillet and failed at the next build for want of its radius. The update is now checked as the new type straight away, and one missing a field the new type needs is refused with those fields named.
 
+- An `ofFace` edge selector now takes any face selector as its face, such as a face picked by a point, as well as a fingerprint. A fillet early in the timeline has no fingerprint yet for a face that later cuts reshape.
+
 - **A tool's hint no longer slides under the tool rail.** With the Render panel open, or in a narrow window, the hint along the bottom of the view sat partly beneath Section View. It now centres in the space the floating cards leave free on its row and wraps when that space is narrow.
 
 - **Opening a document no longer claims its booleans, imports or lofts need a missing plugin.** The check for feature types this build cannot make only recognised types with a number to edit, so every boolean, import, loft, sweep, mirror, split and press/pull set off a "features of a kind this build does not know" notice. Those were never at risk and built as normal.

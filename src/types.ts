@@ -53,7 +53,7 @@ export type Selector = (
   | { kind: "face"; by: "match"; fp: FaceFingerprint; nth?: number }
   // structural forms, encode intent instead of N independent point-picks:
   | { kind: "edge"; by: "tangentChain"; seed: EdgeFingerprint } // an edge + its tangent-continuous chain
-  | { kind: "edge"; by: "ofFace"; face: FaceFingerprint } // all edges bounding a face
+  | { kind: "edge"; by: "ofFace"; face: FaceFingerprint | Extract<Selector, { kind: "face" }> } // all edges bounding a face
 ) &
   SelectorBody;
 

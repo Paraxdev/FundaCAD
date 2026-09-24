@@ -54,6 +54,44 @@ pub struct FaceFingerprint {
     pub extra: Extra,
 }
 
+/// The face an `ofFace` edge selector takes the edges of: a fingerprint, or any
+/// face selector resolved against the same body.
+#[derive(Debug, Clone, PartialEq)]
+pub enum FaceRef {
+    Fingerprint(FaceFingerprint),
+    Selector(Box<Selector>),
+}
+
+impl<'de> Deserialize<'de> for FaceRef {
+    fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        use serde::de::Error as _;
+        let v = Value::deserialize(d)?;
+        if v.get("by").is_none() {
+            return serde_json::from_value(v)
+                .map(FaceRef::Fingerprint)
+                .map_err(D::Error::custom);
+        }
+        let s: Selector = serde_json::from_value(v).map_err(D::Error::custom)?;
+        match (&s, s.kind()) {
+            (Selector::Invalid(inv), _) => Err(D::Error::custom(&inv.error)),
+            (_, Some("face")) => Ok(FaceRef::Selector(Box::new(s))),
+            (_, kind) => Err(D::Error::custom(format!(
+                "`face` takes a face selector, not a {} selector",
+                kind.unwrap_or("kindless")
+            ))),
+        }
+    }
+}
+
+impl Serialize for FaceRef {
+    fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        match self {
+            FaceRef::Fingerprint(fp) => fp.serialize(s),
+            FaceRef::Selector(sel) => sel.serialize(s),
+        }
+    }
+}
+
 /// The shape of a selector past its `kind` and `by`.
 #[derive(Debug, Clone, PartialEq)]
 pub enum SelectorBy {
@@ -82,7 +120,7 @@ pub enum SelectorBy {
         seed: EdgeFingerprint,
     },
     EdgeOfFace {
-        face: FaceFingerprint,
+        face: FaceRef,
     },
 }
 
