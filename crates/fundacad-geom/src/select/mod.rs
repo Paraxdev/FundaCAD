@@ -72,6 +72,13 @@ struct Nearest {
     index: usize,
 }
 
+/// A `nearest` tie settled by a second measure. `reported` is the margin to
+/// record as a diagnostic, None for a settling not worth telling anyone about.
+struct TieBreak {
+    index: usize,
+    reported: Option<f64>,
+}
+
 fn as_object<'v>(sel: &'v Value) -> FResult<&'v Map<String, Value>> {
     sel.as_object()
         .ok_or_else(|| Fail::Internal("AttributeError".into()))
@@ -231,11 +238,26 @@ impl<'a> Resolver<'a> {
             Some("nearest") => {
                 let p = vector(need(m, "point")?)?;
                 let edges = edges_of(part)?;
-                let dists: Vec<f64> = edges.iter().map(|e| (e.mid - p).length()).collect();
+                // To the curve itself, since a full circle's midpoint sits at one
+                // fixed spot and a point elsewhere on it can be nearer another
+                // edge's midpoint. Within ON_SURFACE_TOL counts as on the edge, so
+                // a point on a shared vertex is an honest tie and not a pick
+                // decided by float noise, and the midpoint distance then settles it as it
+                // always did.
+                let on_curve: Option<Vec<f64>> = edges
+                    .iter()
+                    .map(|e| sa::distance_to_point(&e.shape, p.to_array()).map(|d| d.0.max(ON_SURFACE_TOL)))
+                    .collect();
+                let to_mid: Vec<f64> = edges.iter().map(|e| (e.mid - p).length()).collect();
                 let keys: Vec<Key> = edges.iter().map(EdgeEnt::canonical_key).collect();
                 let described = |i: usize| Ok(edges[i].describe());
-                let pick =
-                    self.nearest_one(Kind::Edge, m, &dists, &keys, described, |_: &[usize]| None)?;
+                let band = self.tuning.nearest_tie_band;
+                let pick = match &on_curve {
+                    Some(d) => self.nearest_one(Kind::Edge, m, d, &keys, described, |tied: &[usize]| {
+                        nearest_midpoint(&to_mid, tied, band)
+                    })?,
+                    None => self.nearest_one(Kind::Edge, m, &to_mid, &keys, described, |_: &[usize]| None)?,
+                };
                 Ok(take(edges, &[pick.index]))
             }
             Some("match") => {
@@ -342,7 +364,10 @@ impl<'a> Resolver<'a> {
                     &dists,
                     &keys,
                     described,
-                    |tied: &[usize]| slid_out_winner(&faces, tied, p, tie_band),
+                    |tied: &[usize]| {
+                        slid_out_pick(&faces, tied, p, tie_band)
+                            .map(|(index, margin)| TieBreak { index, reported: Some(margin) })
+                    },
                 )?;
                 Ok(take(faces, &[pick.index]))
             }
@@ -414,7 +439,7 @@ impl<'a> Resolver<'a> {
         dists: &[f64],
         keys: &[Key],
         describe: impl Fn(usize) -> FResult<String>,
-        tie_breaker: impl Fn(&[usize]) -> Option<(usize, f64)>,
+        tie_breaker: impl Fn(&[usize]) -> Option<TieBreak>,
     ) -> FResult<Nearest> {
         let name = kind.name();
         if dists.is_empty() {
@@ -435,7 +460,7 @@ impl<'a> Resolver<'a> {
         let runner = scored.get(1).map_or(f64::INFINITY, |s| s.0);
         let margin = margin_of(best_d, runner);
         let band = self.tuning.nearest_tie_band;
-        // A clear winner records nothing, however slim: `confidence` here would
+        // A clear nearest records nothing, however slim: `confidence` here would
         // be a distance margin, and a consumer reads anything under 0.5 as a
         // poor fingerprint match.
         if margin >= band {
@@ -463,18 +488,21 @@ impl<'a> Resolver<'a> {
         }
 
         let pt = sel.get("point").filter(|p| entity::truthy(Some(p)));
-        if let Some((won, won_margin)) = tie_breaker(&tied) {
+        if let Some(TieBreak { index: pick, reported }) = tie_breaker(&tied) {
+            let Some(margin) = reported else {
+                return Ok(Nearest { index: pick });
+            };
             self.push(
                 name,
                 1,
-                won_margin,
+                margin,
                 true,
                 Some(REASON_SLID_OUT.into()),
                 pt,
                 None,
                 Some(AMBIGUOUS_REFERENCE),
             );
-            return Ok(Nearest { index: won });
+            return Ok(Nearest { index: pick });
         }
 
         let where_ = pt
@@ -622,10 +650,10 @@ fn resolve_one(
     (Some(best), margin, lossy, lossy.then_some("marginal match"))
 }
 
-/// `_slid_out_winner`: a `nearest` face tie at a shared edge, re-scored on the
+/// `_slid_out_winner` in the Python engine: a `nearest` face tie at a shared edge, re-scored on the
 /// untrimmed surfaces, which do separate a face the point still lies in from
 /// the wall it merely touches. Narrower than the refusal it replaces.
-fn slid_out_winner(faces: &[FaceEnt], tied: &[usize], p: DVec3, band: f64) -> Option<(usize, f64)> {
+fn slid_out_pick(faces: &[FaceEnt], tied: &[usize], p: DVec3, band: f64) -> Option<(usize, f64)> {
     if tied.len() < 2 {
         return None;
     }
@@ -655,6 +683,16 @@ fn slid_out_winner(faces: &[FaceEnt], tied: &[usize], p: DVec3, band: f64) -> Op
         return None;
     }
     Some((best, margin))
+}
+
+/// An edge `nearest` tie, every candidate on the pick point, settled by
+/// midpoint distance when that is not a tie as well.
+fn nearest_midpoint(to_mid: &[f64], tied: &[usize], band: f64) -> Option<TieBreak> {
+    let mut scored: Vec<(f64, usize)> = tied.iter().map(|&i| (to_mid[i], i)).collect();
+    stable_sort_by_cost(&mut scored);
+    let (best_d, best) = *scored.first()?;
+    let runner = scored.get(1).map_or(f64::INFINITY, |s| s.0);
+    (margin_of(best_d, runner) >= band).then_some(TieBreak { index: best, reported: None })
 }
 
 /// `_tangent_chain`: the seed and every edge reached through a shared vertex
