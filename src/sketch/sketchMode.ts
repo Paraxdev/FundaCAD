@@ -10,7 +10,7 @@ import type { Feature, ParamTarget, PlaneSpec, ProjectionUpdate, Selector, Sketc
 import { applyProjectionUpdate, dimPlaceOf, isBadgeEntity, isPlacedDim } from "../types";
 import { SketchPlane } from "./plane";
 import { SketchOverlay, type WorldRegion, controlPolygonObjects, curveObjects, dimensionLineObjects, CURVE_COLOR, PREVIEW_COLOR, SELECT_COLOR } from "./overlay";
-import { deletePole, insertPole, splineToBspline, type BsplineEntity } from "./bsplineEdit";
+import { deletePole, insertPole, polygonParam, splineToBspline, type BsplineEntity } from "./bsplineEdit";
 import { BSPLINE_DEGREES, bsplineMinPoles, poleOfRef } from "./bspline";
 import { DimInput } from "./dimInput";
 import { TextPanel } from "./textPanel";
@@ -214,6 +214,7 @@ export class SketchMode {
   private dragMoved = false;
   private dragShift = false;
   private dragPole = -1; // the grabbed point's pole index when it is a bspline pole
+  private lastPress = { t: 0, x: 0, y: 0 };
   /** The pole last clicked on a selected control-point spline, what Delete removes. */
   private selectedPole: { id: string; k: number } | null = null;
   private dragSnapshot: ResolvedEntity[] | null = null; // entities at drag start (Esc reverts)
@@ -1510,6 +1511,11 @@ export class SketchMode {
     const p = hit.p;
 
     if (this.tool === "select") {
+      // Note: Chromium reports detail 0 on pointerdown, so a double press is timed here
+      const now = performance.now();
+      const last = this.lastPress;
+      const secondPress = e.detail >= 2 || (now - last.t < 450 && Math.hypot(e.clientX - last.x, e.clientY - last.y) < 6);
+      this.lastPress = secondPress ? { t: 0, x: 0, y: 0 } : { t: now, x: e.clientX, y: e.clientY };
       this.selectedPole = null; // a release on a pole picks it again
       // grab a point to drag it, connected/constrained geometry follows
       const gp = this.pickPoint(p);
@@ -1545,8 +1551,11 @@ export class SketchMode {
           this.editText(te, e);
           return;
         }
-        if (this.insertPoleAt(raw)) return;
       }
+      if (secondPress && this.insertPoleAt(raw)) return;
+      // a press on a shown control polygon keeps it shown, the first half of
+      // the double-click that inserts a pole
+      if (this.polygonLegAt(raw)) return;
       // a real (hand-drawn) entity's body under the cursor → arm a body drag;
       // a plain click (no movement) falls through to selection in endDrag()
       const idx = pickEntity(this.entities, raw, this.pickTol());
@@ -1758,6 +1767,11 @@ export class SketchMode {
       out.push(controlPolygonObjects(e, this.plane, this.planeMmPerPx(), active));
     }
     return out;
+  }
+
+  private polygonLegAt(p: THREE.Vector2): boolean {
+    const tol = this.pickTol();
+    return this.entities.some((e) => e.type === "bspline" && this.selected.has(e.id) && polygonParam(e, p, tol) !== null);
   }
 
   /** Double-click on a selected control-point spline's polygon, or on any one's
