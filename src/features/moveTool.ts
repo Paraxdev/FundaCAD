@@ -68,17 +68,9 @@ const AXES = [
 // YZ plane, which the X arrow passes through at its centre, so the crossings
 // are two per arrow and both are near the tips, where an arrow is thick enough
 // to read over a ring drawn behind it.
-/** The arrow, and its head at the size every other arrowhead in the app is.
- *
- *  The origin triad's head is 18.5px long and 9.7px across (scene.ts: 0.21 and
- *  0.055 of its 88px arm) and the edge handle's is 9px long and 9px across.
- *  This one was 20 long and 14 ACROSS, wider than either while sitting on a
- *  shorter arrow, and it is the only one of the three drawn on top of the model
- *  rather than off at the world origin, so it was the one that read as
- *  oversized. Matched to the triad's head in absolute pixels rather than in
- *  proportion: these are two arrows a user sees side by side, and what has to
- *  agree between them is how big the heads LOOK, not how each relates to its
- *  own shaft. */
+/** The arrow. Its head was once 20px long and 14 ACROSS, wider than the edge
+ *  handle's while sitting on a shorter arrow, and drawn on top of the model it
+ *  read as oversized. */
 const ARROW_LENGTH = 68;
 const ARROW_HEAD = 16;
 const ARROW_HEAD_R = 4.6;
