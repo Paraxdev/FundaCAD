@@ -162,6 +162,11 @@ export class GhostLayer {
       opacity: 0.45,
       side: THREE.DoubleSide,
       depthWrite: false,
+      // The wedge previews material about to be CUT AWAY, so it always sits
+      // behind the sharp corner it is replacing, depth-tested against the
+      // solid it is still part of. Normal depth testing would hide it
+      // completely rather than show it through, so it is off here.
+      depthTest: false,
     });
     this.blendGhostMesh = new THREE.Mesh(geom, mat);
     this.blendGhostMesh.renderOrder = 998;
@@ -491,6 +496,17 @@ function sampleCount(polylineLen: number): number {
  *  dropped instead (sweepBlendGhost also refuses fewer than 2). */
 const MIN_VALID_SAMPLES = 4;
 
+/** A picked edge's own resolved samples, by identity of its `points` array
+ *  (stable for the edge's whole gesture, see edgeFaceSamples). The ghost
+ *  redraws on every drag tick, but the model it reads doesn't stay the sharp,
+ *  pre-feature one: the FIRST accepted preview already shows the blend
+ *  applied, and the edge this ghost is meant to sweep no longer exists as a
+ *  sharp corner in it. The two faces and their normals are a property of the
+ *  ORIGINAL edge though, not of whatever size is currently previewed, so once
+ *  resolved they're locked in and reused rather than re-derived against a
+ *  model that has moved on. */
+const edgeSampleCache = new WeakMap<readonly Pt3[], EdgeSample[]>();
+
 /** Every EdgeSample along one picked edge, `normal1` pinned to the SAME
  *  physical face (by faceId) across every sample, or null when the edge's
  *  body is gone, it has fewer than 2 points, or too few samples resolve to
@@ -499,6 +515,8 @@ const MIN_VALID_SAMPLES = 4;
  *  the whole edge, as long as enough of the others come through.
  *  Tangent is a central difference of the (evenly resampled) polyline. */
 function edgeFaceSamples(model: ModelView, edge: BlendGhostEdge): EdgeSample[] | null {
+  const cached = edgeSampleCache.get(edge.points);
+  if (cached) return cached;
   const body = model.bodies.find((b) => b.id === edge.body);
   if (!body || edge.points.length < 2) return null;
   const resampled = resampleEdge(edge.points, sampleCount(edge.points.length));
@@ -533,7 +551,9 @@ function edgeFaceSamples(model: ModelView, edge: BlendGhostEdge): EdgeSample[] |
       normal2: [n2.x, n2.y, n2.z],
     });
   }
-  return out.length >= MIN_VALID_SAMPLES ? out : null;
+  if (out.length < MIN_VALID_SAMPLES) return null;
+  edgeSampleCache.set(edge.points, out);
+  return out;
 }
 
 export { resampleEdge, facesAtPoint, edgeFaceSamples };
