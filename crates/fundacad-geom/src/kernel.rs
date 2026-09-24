@@ -358,7 +358,10 @@ pub fn boolean_op(base: &Shape, tools: &[&Shape], kind: BoolKind) -> KResult<Sha
     ))
 }
 
-/// booleans.py `_serial_bool`: serial, with the pick fuzz, cleaned.
+/// booleans.py `_serial_bool`: with the pick fuzz, cleaned. Python forced it
+/// serial because OCP's parallel BOP was 5x slower on many glyph tools; OCCT
+/// 7.8.1 here is 3x faster in parallel on those, and gives the same bytes on
+/// the golden corpus.
 pub fn serial_bool(base: &Shape, tools: &[&Shape], kind: BoolKind) -> KResult<Shape> {
     serial_bool_known(base, tools, kind, &[]).map(|(s, _)| s)
 }
@@ -385,9 +388,9 @@ pub fn serial_bool_known(
     let mut checked_vol = f64::NAN;
     let mut unchanged = false;
     let out = run(kind.occt(), || bool_args(base, tools, fuzz), || {
-        let raw = crate::bench::phase("bool_build", || ffi::bo_bool_build(base.raw(), t.raw(), k, false, fuzz))?;
+        let raw = crate::bench::phase("bool_build", || ffi::bo_bool_build(base.raw(), t.raw(), k, true, fuzz))?;
         let checked = crate::bench::phase("bool_check", || {
-            ffi::bo_bool_check(&raw, base.raw(), t.raw(), k, false, fuzz, vols, &mut checked_vol)
+            ffi::bo_bool_check(&raw, base.raw(), t.raw(), k, true, fuzz, vols, &mut checked_vol)
         })?;
         let out = crate::bench::phase("bool_unify", || ffi::bo_clean(&checked))?;
         unchanged = ffi::bo_is_equal(&checked, &out);
