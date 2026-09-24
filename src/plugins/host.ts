@@ -88,7 +88,8 @@ export type { CadDocument, Feature, Num, PlaneSpec, RebuildResult, Selector } fr
 // `engine.tools.move.startTarget(target, done)` puts the arrows, rings, planar
 // squares and resize cubes on whatever a MoveTarget describes. A plugin that
 // has its own things to move (points, handles) describes them here instead of
-// drawing a second gizmo with different habits.
+// drawing a second gizmo with different habits. A second startTarget replaces
+// the first, and `move.cancel()` in a tool's teardown is safe with nothing up.
 export { ALL_HANDLES, IN_PLANE_HANDLES, WORLD_FRAME } from "../features/moveTarget";
 export type { Frame, MoveCommit, MoveHandleSet, MoveResult, MoveTarget } from "../features/moveTarget";
 

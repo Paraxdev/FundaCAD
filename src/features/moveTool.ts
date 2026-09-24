@@ -194,6 +194,8 @@ export class MoveTool {
 
   private dim = new DimInput();
   private onDone: ((id: string | null) => void) | null = null;
+  /** unsubscribes a settled drag's wait for its rebuild */
+  private pendingReopen: (() => void) | null = null;
   /** Where a plain click that stood the tool down landed, so the caller can let
    *  that same click do its ordinary work, usually picking the next body. */
   onClickThrough: ((x: number, y: number, additive: boolean) => void) | null = null;
@@ -220,6 +222,7 @@ export class MoveTool {
   /** A session already up is cancelled first, so its gizmo never stays drawn
    *  on the old target. */
   startTarget(target: MoveTarget, onDone: (id: string | null) => void) {
+    this.dropPendingReopen();
     if (this.active) this.cancel();
     this.copy = false;
     this.open(target, onDone);
@@ -521,10 +524,14 @@ export class MoveTool {
     const done = this.onDone;
     const through = this.onClickThrough;
     const res = this.commit();
-    const next = target?.reopen();
-    if (!next) return;
+    if (!target) return;
+    // Asked only once the rebuild has landed, so an owner that has closed by
+    // then can answer null.
     const reopen = () => {
+      this.pendingReopen = null;
       if (this.active) return; // something else claimed the tool meanwhile
+      const next = target.reopen();
+      if (!next) return;
       this.open(next, done ?? (() => {}));
       this.onClickThrough = through;
     };
@@ -543,6 +550,12 @@ export class MoveTool {
       off();
       reopen();
     });
+    this.pendingReopen = () => { off(); };
+  }
+
+  private dropPendingReopen() {
+    this.pendingReopen?.();
+    this.pendingReopen = null;
   }
 
   /** Where the cursor meets the drag plane of the planar handle for `axis`: the
@@ -869,7 +882,11 @@ export class MoveTool {
     return res;
   }
 
+  /** Safe with nothing up, where it only drops a gizmo still waiting to come
+   *  back after a drag's rebuild. */
   cancel() {
+    this.dropPendingReopen();
+    if (!this.active) return;
     this.target?.end(true);
     const done = this.onDone;
     this.cleanup();
