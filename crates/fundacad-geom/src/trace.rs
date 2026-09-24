@@ -41,8 +41,11 @@ impl Call {
     }
 }
 
+/// Arguments worded only when the trail is read.
+type Later = Box<dyn FnOnce() -> String>;
+
 thread_local! {
-    static CALLS: RefCell<Vec<Call>> = const { RefCell::new(Vec::new()) };
+    static CALLS: RefCell<Vec<(Call, Option<Later>)>> = const { RefCell::new(Vec::new()) };
 }
 
 pub fn begin() {
@@ -50,20 +53,48 @@ pub fn begin() {
 }
 
 pub fn take() -> Vec<Call> {
-    CALLS.with(|c| std::mem::take(&mut *c.borrow_mut()))
+    let calls = CALLS.with(|c| std::mem::take(&mut *c.borrow_mut()));
+    calls
+        .into_iter()
+        .map(|(mut call, later)| {
+            if let Some(later) = later {
+                call.args = Some(later());
+            }
+            call
+        })
+        .collect()
 }
 
 fn push(call: Call) {
+    push_with(call, None);
+}
+
+fn push_with(call: Call, later: Option<Later>) {
     CALLS.with(|c| {
         let mut v = c.borrow_mut();
         if v.len() >= KEEP {
             // A failure is the one entry the report exists for, so passing calls
             // make room first.
-            let at = v.iter().position(|x| x.error.is_none()).unwrap_or(0);
+            let at = v.iter().position(|x| x.0.error.is_none()).unwrap_or(0);
             v.remove(at);
         }
-        v.push(call);
+        v.push((call, later));
     });
+}
+
+/// `failed`, with arguments worded only if the feature fails in the end: a
+/// blend that recovers from a refused kernel call never reads them, and
+/// describing a B-spline body costs a fifth of a second.
+pub fn failed_later(op: &'static str, args: impl FnOnce() -> String + 'static, error: impl Into<String>, ms: Option<f64>) {
+    push_with(
+        Call {
+            op,
+            args: None,
+            error: Some(error.into()),
+            ms,
+        },
+        Some(Box::new(args)),
+    );
 }
 
 /// Record a failure that did not come through `call`, such as an error value
@@ -117,5 +148,22 @@ mod tests {
             .iter()
             .all(|c| c.error.is_none() && c.args.is_none()));
         assert!(take().is_empty());
+    }
+
+    #[test]
+    fn words_later_arguments_only_when_read() {
+        use std::cell::Cell;
+        use std::rc::Rc;
+        let worded = Rc::new(Cell::new(0));
+        let w = worded.clone();
+        begin();
+        failed_later("Dropped", move || { w.set(w.get() + 1); "a".into() }, "NotDone", None);
+        begin();
+        assert_eq!(worded.get(), 0);
+        let w = worded.clone();
+        failed_later("Read", move || { w.set(w.get() + 1); "b".into() }, "NotDone", None);
+        let calls = take();
+        assert_eq!(worded.get(), 1);
+        assert_eq!(calls[0].args.as_deref(), Some("b"));
     }
 }

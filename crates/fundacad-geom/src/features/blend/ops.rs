@@ -43,8 +43,9 @@ pub fn fillet(shape: &Shape, edges: &[Shape], radii: &[f64]) -> Result<(Shape, B
     let mut status = 0;
     let began = std::time::Instant::now();
     let r = crate::bench::phase("blend_fillet", || ffi::blend_fillet(shape.raw(), es.raw(), radii, &mut status));
-    traced("BRepFilletAPI_MakeFillet", began, built(r, status), || {
-        format!("shape={}, {} edges, radii={radii:?}", kernel::describe(shape), edges.len())
+    let (shape, n, radii) = (shape.clone(), edges.len(), radii.to_vec());
+    traced("BRepFilletAPI_MakeFillet", began, built(r, status), move || {
+        format!("shape={}, {n} edges, radii={radii:?}", kernel::describe(&shape))
     })
 }
 
@@ -58,8 +59,9 @@ pub fn chamfer(
     let mut status = 0;
     let began = std::time::Instant::now();
     let r = crate::bench::phase("blend_chamfer", || ffi::blend_chamfer(shape.raw(), es.raw(), d1, d2, &mut status));
-    traced("BRepFilletAPI_MakeChamfer", began, built(r, status), || {
-        format!("shape={}, {} edges, d1={d1:?}, d2={d2:?}", kernel::describe(shape), edges.len())
+    let (shape, n, d1, d2) = (shape.clone(), edges.len(), d1.to_vec(), d2.to_vec());
+    traced("BRepFilletAPI_MakeChamfer", began, built(r, status), move || {
+        format!("shape={}, {n} edges, d1={d1:?}, d2={d2:?}", kernel::describe(&shape))
     })
 }
 
@@ -69,7 +71,7 @@ fn traced(
     op: &'static str,
     began: std::time::Instant,
     r: Result<(Shape, Built), String>,
-    args: impl FnOnce() -> String,
+    args: impl FnOnce() -> String + 'static,
 ) -> Result<(Shape, Built), String> {
     let ms = Some(began.elapsed().as_secs_f64() * 1000.0);
     let error = match &r {
@@ -78,7 +80,7 @@ fn traced(
         Ok((_, Built::Invalid)) => "result fails BRepCheck_Analyzer".into(),
         Ok((_, Built::Done)) => return r,
     };
-    crate::trace::failed(op, Some(args()), error, ms);
+    crate::trace::failed_later(op, args, error, ms);
     r
 }
 
