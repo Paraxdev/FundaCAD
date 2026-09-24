@@ -5,8 +5,11 @@
 import * as THREE from "three";
 import { Spring } from "./math";
 
-const EPS_LOG = 1e-9;
-const EPS_ANGLE = 1e-9;
+// A channel snaps to its goal once what is left is a ten-thousandth of a pixel
+// or so; the snap is the same exact transform, so nothing it pins moves.
+const EPS_LOG = 1e-7;
+const EPS_ANGLE = 1e-6;
+const EPS_PX = 1e-3;
 
 /** Wheel or pinch zoom about one anchor, in log scale units. */
 export class ZoomChannel {
@@ -32,7 +35,7 @@ export class ZoomChannel {
   step(tau: number, dt: number): number {
     const before = this.spring.x;
     this.spring.step(this.goal, tau, dt);
-    if (Math.abs(this.goal - this.spring.x) < EPS_LOG && Math.abs(this.spring.v) < 1e-6) {
+    if (Math.abs(this.goal - this.spring.x) < EPS_LOG && Math.abs(this.spring.v) < EPS_LOG * 100) {
       this.spring.reset(this.goal);
     }
     return this.spring.x - before;
@@ -79,7 +82,7 @@ export class OrbitChannel {
   step(tau: number, dt: number): { yaw: number; elev: number; roll: number } {
     const settle = (s: Spring, goal: number) => {
       s.step(goal, tau, dt);
-      if (Math.abs(goal - s.x) < EPS_ANGLE && Math.abs(s.v) < 1e-7) s.reset(goal);
+      if (Math.abs(goal - s.x) < EPS_ANGLE && Math.abs(s.v) < EPS_ANGLE * 100) s.reset(goal);
       return s.x;
     };
     return {
@@ -129,8 +132,8 @@ export class PanChannel {
     this.sy.step(0, tau, dt);
     let mx = ex + this.sx.x;
     let my = ey + this.sy.x;
-    if (Math.abs(this.sx.x) < 1e-6 && Math.abs(this.sy.x) < 1e-6
-      && Math.abs(this.sx.v) < 1e-4 && Math.abs(this.sy.v) < 1e-4) {
+    if (Math.abs(this.sx.x) < EPS_PX && Math.abs(this.sy.x) < EPS_PX
+      && Math.abs(this.sx.v) < EPS_PX * 100 && Math.abs(this.sy.v) < EPS_PX * 100) {
       mx = ex;
       my = ey;
       this.sx.reset();
