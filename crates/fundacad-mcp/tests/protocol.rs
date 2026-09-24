@@ -392,6 +392,40 @@ fn export_refuses_a_partial_build_unless_told_to_write_it_anyway() {
 }
 
 #[test]
+fn a_refused_export_leaves_an_existing_file_untouched() {
+    // export writes to a temporary sibling and only renames it over `path`
+    // once accepted, so a refusal (which removes the temporary file) must
+    // never touch a good export already sitting at that path.
+    let tmp = tempfile::tempdir().expect("a temp dir");
+    let path = tmp.path().join("existing.step");
+    let path_text = path.to_string_lossy().replace('\\', "/");
+
+    let mut good = vec![(
+        "feature_add",
+        json!({"feature": {"id": "bx1", "type": "box", "length": 20, "width": 20,
+                           "height": 20}}),
+    )];
+    good.push(("export", json!({"path": path_text, "format": "step"})));
+    let rs = drive(&good);
+    assert!(!rs[1].is_error, "{}", rs[1].text);
+    let before = std::fs::read(&path).expect("the good export wrote a file");
+
+    let mut refused = box_and_broken_fillet();
+    refused.push(("export", json!({"path": path_text, "format": "step"})));
+    let rs2 = drive(&refused);
+    assert!(rs2[2].is_error, "{}", rs2[2].text);
+
+    let after = std::fs::read(&path).expect("the existing file is still there");
+    assert_eq!(before, after, "a refused export changed the existing file");
+    let leftovers: Vec<_> = std::fs::read_dir(tmp.path())
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_name().to_string_lossy().contains(".partial-"))
+        .collect();
+    assert!(leftovers.is_empty(), "a temporary export file was left behind: {leftovers:?}");
+}
+
+#[test]
 fn a_fillet_patched_into_a_chamfer_builds_as_a_chamfer() {
     let rs = drive(&[
         (
