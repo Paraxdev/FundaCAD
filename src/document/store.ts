@@ -111,6 +111,13 @@ type BuildListener = (state: RebuildState) => void;
 type BusyListener = (state: BusyState) => void;
 type MetaListener = () => void;
 
+/** One undo-stack slot: either a full document snapshot (a real edit) or a
+ *  small reversible overlay change (visibility and the like). Both share one
+ *  stack in chronological order, so Ctrl+Z undoes whichever happened last
+ *  instead of silently skipping display-only changes and eating a feature
+ *  edit that came before them. */
+type UndoEntry = { kind: "doc"; doc: CadDocument } | { kind: "overlay"; undo: () => void; redo: () => void };
+
 // Safe for `"hiddenBodies" in f` checks: no mutator writes an explicit undefined.
 const clone = (d: CadDocument): CadDocument => structuredClone(d);
 
@@ -194,8 +201,8 @@ export function withoutDisplayName(f: Feature): Feature {
 
 export class DocumentStore {
   private doc: CadDocument;
-  private undoStack: CadDocument[] = [];
-  private redoStack: CadDocument[] = [];
+  private undoStack: UndoEntry[] = [];
+  private redoStack: UndoEntry[] = [];
   private docListeners = new Set<DocListener>();
   private buildListeners = new Set<BuildListener>();
   private busyListeners = new Set<BusyListener>();
@@ -206,6 +213,11 @@ export class DocumentStore {
   private suppressed = new Set<string>(); // feature ids skipped on rebuild (suppress)
   private sketchVis = new Overlay<boolean>("sketchVisibility"); // explicit per-sketch show/hide overrides
   private bodyVis = new Overlay<boolean>("bodyVisibility"); // explicit per-body show/hide overrides (id → visible)
+  /** True only while the CURRENT hidden set is exactly an isolate/solo (hide
+   *  everything but a kept set), so the Isolate indicator doesn't light up for
+   *  an ordinary manual body hide. Cleared by any other visibility write. Pure
+   *  session state: not persisted, not undo-tracked. */
+  private isolate = false;
   private planeVis = new Overlay<boolean>("planeVisibility"); // explicit per-construction-plane show/hide overrides
   private bodyNames = new Overlay<string>("bodyNames"); // explicit per-body display-name overrides (id → name)
   private palette: { name: string; color: string; material?: string }[] = DEFAULT_PALETTE.map((s) => ({ ...s }));
@@ -486,13 +498,53 @@ export class DocumentStore {
   }
 
   // --- mutation (records undo, triggers rebuild) ---
-  // Undo entries are FULL document clones (imports embed multi-MB BREPs), so an
-  // uncapped stack grows without bound over a long session, cap it.
+  // A "doc" undo entry is a FULL document clone (imports embed multi-MB BREPs), so an
+  // uncapped stack grows without bound over a long session, cap it. Overlay entries are
+  // cheap closures and share the same cap for simplicity.
   private static readonly UNDO_CAP = 50;
 
   private pushUndo() {
-    this.undoStack.push(clone(this.doc));
+    this.undoStack.push({ kind: "doc", doc: clone(this.doc) });
     if (this.undoStack.length > DocumentStore.UNDO_CAP) this.undoStack.shift();
+  }
+
+  /** Push a reversible overlay-only change (visibility and the like) onto the
+   *  same stack as feature edits, in its true chronological place. */
+  private pushOverlayUndo(entry: { undo: () => void; redo: () => void }) {
+    this.undoStack.push({ kind: "overlay", ...entry });
+    if (this.undoStack.length > DocumentStore.UNDO_CAP) this.undoStack.shift();
+    this.redoStack = [];
+  }
+
+  /** Write `value` (null clears) into `overlay` for every id, as one undo step,
+   *  the shared machinery behind setBodyName, setBodiesMaterial,
+   *  setFacesMaterial and setBodyColorSlot (setBodiesVisibility has its own:
+   *  a visible id is always SET, never deleted, unlike these). False when
+   *  nothing actually changed, so the caller can skip its own emit/dirty. */
+  private writeOverlayBatch<T>(overlay: Overlay<T>, ids: Iterable<string>, value: T | null): boolean {
+    const prior = new Map<string, T | undefined>();
+    for (const id of ids) {
+      const was = overlay.get(id);
+      if ((was ?? null) === value) continue;
+      prior.set(id, was);
+      if (value === null) overlay.delete(id); else overlay.set(id, value);
+    }
+    if (!prior.size) return false;
+    this.markDirty();
+    this.emitBuild();
+    this.pushOverlayUndo({
+      undo: () => {
+        for (const [id, was] of prior) { if (was === undefined) overlay.delete(id); else overlay.set(id, was); }
+        this.markDirty();
+        this.emitBuild();
+      },
+      redo: () => {
+        for (const [id] of prior) { if (value === null) overlay.delete(id); else overlay.set(id, value); }
+        this.markDirty();
+        this.emitBuild();
+      },
+    });
+    return true;
   }
 
   mutate(fn: (doc: CadDocument) => void, immediate = false) {
@@ -844,6 +896,12 @@ export class DocumentStore {
     return params.isBound(this.doc, target);
   }
 
+  /** The parameter `target` is a bare reference to (see params/engine.ts), or
+   *  null. A drag tool that gets a name back may edit that parameter directly. */
+  bareParamRef(target: ParamTarget): string | null {
+    return params.bareParamRef(this.doc, target);
+  }
+
   /** Applied in the same mutate as the sketch commit; an invalid binding is dropped with a warning. */
   private applyBindings(d: CadDocument, bindings?: SketchBinding[]) {
     for (const b of bindings ?? []) {
@@ -1066,8 +1124,13 @@ export class DocumentStore {
   undo() {
     const prev = this.undoStack.pop();
     if (!prev) return;
-    this.redoStack.push(clone(this.doc));
-    this.doc = prev;
+    if (prev.kind === "overlay") {
+      this.redoStack.push(prev);
+      prev.undo();
+      return;
+    }
+    this.redoStack.push({ kind: "doc", doc: clone(this.doc) });
+    this.doc = prev.doc;
     this.rearmProjectionValve();
     this.markDirty();
     this.emitDoc();
@@ -1076,8 +1139,13 @@ export class DocumentStore {
   redo() {
     const next = this.redoStack.pop();
     if (!next) return;
+    if (next.kind === "overlay") {
+      this.undoStack.push(next);
+      next.redo();
+      return;
+    }
     this.pushUndo();
-    this.doc = next;
+    this.doc = next.doc;
     this.rearmProjectionValve();
     this.markDirty();
     this.emitDoc();
@@ -1118,8 +1186,20 @@ export class DocumentStore {
   }
   /** set an explicit show/hide override for a sketch (persisted with the document). */
   setSketchVisibility(id: string, visible: boolean) {
+    const was = this.sketchVis.get(id);
     this.sketchVis.set(id, visible);
     this.markDirty();
+    if (was === visible) return;
+    this.pushOverlayUndo({
+      undo: () => {
+        if (was === undefined) this.sketchVis.delete(id); else this.sketchVis.set(id, was);
+        this.markDirty();
+      },
+      redo: () => {
+        this.sketchVis.set(id, visible);
+        this.markDirty();
+      },
+    });
   }
 
   // --- body visibility overrides (explicit show/hide; no geometry effect, just a
@@ -1139,15 +1219,38 @@ export class DocumentStore {
 
   /** Show or hide several bodies with one emit. */
   setBodiesVisibility(vis: Map<string, boolean>) {
-    let changed = false;
+    // Unconditional and ahead of the no-op check below: an isolate/solo is
+    // exactly the CURRENT hidden set, so even a call that changes nothing
+    // (re-isolating the same body) must not leave a stale isolate=true from
+    // before it. isolateBodies() re-asserts true right after this returns.
+    this.isolate = false;
+    const prior = new Map<string, boolean | undefined>();
     for (const [id, visible] of vis) {
-      if ((this.bodyVis.get(id) ?? true) === visible) continue;
+      const was = this.bodyVis.get(id);
+      if ((was ?? true) === visible) continue;
+      prior.set(id, was);
       this.bodyVis.set(id, visible);
-      changed = true;
     }
-    if (!changed) return;
+    if (!prior.size) {
+      this.emitBuild(); // isolate may just have flipped even though no id's visibility did
+      return;
+    }
     this.markDirty();
     this.emitBuild();
+    this.pushOverlayUndo({
+      undo: () => {
+        for (const [id, was] of prior) {
+          if (was === undefined) this.bodyVis.delete(id); else this.bodyVis.set(id, was);
+        }
+        this.markDirty();
+        this.emitBuild();
+      },
+      redo: () => {
+        for (const [id] of prior) this.bodyVis.set(id, vis.get(id)!);
+        this.markDirty();
+        this.emitBuild();
+      },
+    });
     // Display only, unless a legacy extrude without hiddenBodies still reads the live map.
     const legacy = this.doc.features.some(
       (f) => f.type === "extrude" && !("hiddenBodies" in f),
@@ -1161,6 +1264,21 @@ export class DocumentStore {
     return [...this.bodyVis.entries()].filter(([, v]) => v === false).map(([k]) => k);
   }
 
+  /** Hide every body except `keepIds`, one batched update, and mark it as an
+   *  isolate/solo so isolateActive reflects it (a plain hide never sets it). */
+  isolateBodies(keepIds: Iterable<string>) {
+    const keep = new Set(keepIds);
+    const all = this.build.result?.bodies ?? [];
+    this.setBodiesVisibility(new Map(all.map((b) => [b.id, keep.has(b.id)])));
+    this.isolate = true;
+    this.emitBuild();
+  }
+
+  /** True only right after isolateBodies, not after an ordinary manual hide. */
+  get isolateActive(): boolean {
+    return this.isolate;
+  }
+
   // --- construction-plane visibility (the caller re-syncs the quads) ---
   /** true unless the user has hidden this construction plane (planes default to visible). */
   isPlaneVisible(id: string): boolean {
@@ -1168,8 +1286,20 @@ export class DocumentStore {
   }
   /** show/hide a construction plane (persisted with the document). */
   setPlaneVisibility(id: string, visible: boolean) {
+    const was = this.planeVis.get(id);
     this.planeVis.set(id, visible);
     this.markDirty();
+    if (was === visible) return;
+    this.pushOverlayUndo({
+      undo: () => {
+        if (was === undefined) this.planeVis.delete(id); else this.planeVis.set(id, was);
+        this.markDirty();
+      },
+      redo: () => {
+        this.planeVis.set(id, visible);
+        this.markDirty();
+      },
+    });
   }
 
   // --- body name overrides (display-only; no geometry effect) -----------------
@@ -1180,14 +1310,12 @@ export class DocumentStore {
   /** rename a body (display-only override; blank clears it). Re-emits the build so
    *  the tree updates without a geometry rebuild, names don't affect geometry. */
   setBodyName(id: string, name: string) {
-    const n = name.trim();
-    if (n) this.bodyNames.set(id, n);
-    else this.bodyNames.delete(id);
-    this.markDirty();
-    this.emitBuild();
+    this.writeOverlayBatch(this.bodyNames, [id], name.trim() || null);
   }
   // --- elements: the user's own folders over the bodies ---------------------
-  // Display only and off the undo stack, like every overlay: undo is the timeline.
+  // Display only and off the undo stack. Visibility, name, material and colour
+  // moved onto it (writeOverlayBatch), a folder move has not: it could use the
+  // same machinery, it simply hasn't been asked for yet.
 
   /** the document's elements, in list order. */
   get bodyElements(): readonly ElementDef[] {
@@ -1293,7 +1421,10 @@ export class DocumentStore {
     this.emitBuild();
   }
 
-  // --- materials (document/materials.ts), display only, off the undo stack ----
+  // --- materials (document/materials.ts) --------------------------------------
+  // The library itself (add/edit/remove a MaterialDef below) is display-only and
+  // off the undo stack; assigning one to a body or a face (setBodiesMaterial,
+  // setFacesMaterial) is now ON it, through writeOverlayBatch.
 
   /** the document's material library, in list order. */
   get materialLibrary(): readonly MaterialDef[] {
@@ -1369,33 +1500,18 @@ export class DocumentStore {
    *  for the reason setBodiesMaterial is: a drop can land on a run of faces. */
   setFacesMaterial(faces: Iterable<{ body: string; face: number }>, material: string | null) {
     const target = material !== null && this.materials.some((m) => m.id === material) ? material : null;
-    let changed = false;
-    for (const { body, face } of faces) {
-      const key = faceKey(body, face);
-      if ((this.faceMaterial.get(key) ?? null) === target) continue;
-      if (target === null) this.faceMaterial.delete(key);
-      else this.faceMaterial.set(key, target);
-      changed = true;
-    }
-    if (!changed) return;
-    this.markDirty();
-    this.emitBuild();
+    const keys = [...faces].map(({ body, face }) => faceKey(body, face));
+    this.writeOverlayBatch(this.faceMaterial, keys, target);
   }
 
   /** Drop every per-face assignment on these bodies, so a part that has been
    *  fiddled with can be put back to one material in one gesture. */
   clearFaceMaterials(bodyIds: Iterable<string>) {
     const want = new Set(bodyIds);
-    let changed = false;
-    for (const [k] of [...this.faceMaterial.entries()]) {
-      const p = parseFaceKey(k);
-      if (!p || !want.has(p.body)) continue;
-      this.faceMaterial.delete(k);
-      changed = true;
-    }
-    if (!changed) return;
-    this.markDirty();
-    this.emitBuild();
+    const keys = [...this.faceMaterial.entries()]
+      .map(([k]) => k)
+      .filter((k) => { const p = parseFaceKey(k); return p && want.has(p.body); });
+    this.writeOverlayBatch(this.faceMaterial, keys, null);
   }
 
   /** Add a material and return its id. */
@@ -1490,21 +1606,12 @@ export class DocumentStore {
    *  for the same reason setBodiesElement is: this is applied to a selection. */
   setBodiesMaterial(bodyIds: Iterable<string>, material: string | null) {
     const target = material !== null && this.materials.some((m) => m.id === material) ? material : null;
-    let changed = false;
-    for (const id of bodyIds) {
-      if ((this.bodyMaterial.get(id) ?? null) === target) continue;
-      if (target === null) this.bodyMaterial.delete(id);
-      else this.bodyMaterial.set(id, target);
-      changed = true;
-    }
-    if (!changed) return;
-    this.markDirty();
-    this.emitBuild();
+    this.writeOverlayBatch(this.bodyMaterial, bodyIds, target);
   }
 
   /** Whether an import's parts wear their body colours or their face colours
-   *  where the file gave both. Display-only and off the undo stack, like the
-   *  material assignments it steers. */
+   *  where the file gave both. Display-only and off the undo stack (unlike the
+   *  material assignments it steers, which moved onto it, see writeOverlayBatch). */
   importColorSource(featureId: string): ImportColorSource {
     return this.importColors.get(featureId) === "faces" ? "faces" : "bodies";
   }
@@ -1583,10 +1690,7 @@ export class DocumentStore {
   }
   /** assign a body to a palette slot (null clears it); display-only re-emit. */
   setBodyColorSlot(id: string, slot: number | null) {
-    if (slot == null) this.bodyColors.delete(id);
-    else this.bodyColors.set(id, slot);
-    this.markDirty();
-    this.emitBuild();
+    this.writeOverlayBatch(this.bodyColors, [id], slot);
   }
   /** body id → palette-slot index, as a plain object. For the colored-3MF export
    *  call, which must thread these side-maps explicitly (they never travel inside

@@ -293,6 +293,169 @@ describe("rebuildNow resolves when the RESULT is published", () => {
   });
 });
 
+describe("undo does not skip a visibility change and eat a feature instead (NV-1)", () => {
+  let store: DocumentStore;
+  beforeEach(() => {
+    vi.useFakeTimers();
+    store = new DocumentStore(stubBackend([]), doc());
+  });
+  afterEach(() => void vi.useRealTimers());
+
+  it("one undo right after a hide reverses the hide, not the last feature", () => {
+    const before = store.document.features.length;
+    store.addFeature({ id: "nb1", type: "box", length: 1, width: 1, height: 1 } as Feature);
+    expect(store.document.features.length).toBe(before + 1);
+
+    store.setBodyVisibility("body1", false);
+    expect(store.isBodyVisible("body1")).toBe(false);
+
+    store.undo();
+    expect(store.isBodyVisible("body1")).toBe(true); // the hide itself is undone
+    expect(store.document.features.length).toBe(before + 1); // the feature survives
+
+    // a SECOND undo now reaches the feature that came before the hide
+    store.undo();
+    expect(store.document.features.length).toBe(before);
+  });
+
+  it("redo re-applies the hide, then the feature, in the same chronological order", () => {
+    const before = store.document.features.length;
+    store.addFeature({ id: "nb2", type: "box", length: 1, width: 1, height: 1 } as Feature);
+    store.setBodyVisibility("body1", false);
+
+    store.undo(); // undoes the hide
+    store.undo(); // undoes the feature
+    expect(store.document.features.length).toBe(before);
+    expect(store.isBodyVisible("body1")).toBe(true);
+
+    store.redo(); // re-adds the feature
+    expect(store.document.features.length).toBe(before + 1);
+    store.redo(); // re-hides the body
+    expect(store.isBodyVisible("body1")).toBe(false);
+  });
+
+  it("setBodiesVisibility batches several ids as one undo step", () => {
+    store.setBodiesVisibility(new Map([["body1", false], ["body2", false]]));
+    expect(store.isBodyVisible("body1")).toBe(false);
+    expect(store.isBodyVisible("body2")).toBe(false);
+    store.undo();
+    expect(store.isBodyVisible("body1")).toBe(true);
+    expect(store.isBodyVisible("body2")).toBe(true);
+  });
+
+  it("a no-op visibility write pushes nothing to undo", () => {
+    const before = store.document.features.length;
+    store.setBodyVisibility("body1", true); // already visible by default
+    store.addFeature({ id: "nb3", type: "box", length: 1, width: 1, height: 1 } as Feature);
+    store.undo();
+    expect(store.document.features.length).toBe(before); // straight to the feature, nothing to skip
+  });
+});
+
+describe("isolateActive reflects isolate/solo only, not a plain hide (NV-6)", () => {
+  it("a manual hide never lights it, isolateBodies does, and any other visibility write clears it", () => {
+    const store = new DocumentStore(stubBackend([]), doc());
+    expect(store.isolateActive).toBe(false);
+
+    store.setBodyVisibility("body1", false); // an ordinary manual hide
+    expect(store.isolateActive).toBe(false);
+
+    store.isolateBodies(["body2"]); // the actual isolate/solo command
+    expect(store.isolateActive).toBe(true);
+
+    store.setBodyVisibility("body2", true); // any other visibility write clears it
+    expect(store.isolateActive).toBe(false);
+  });
+});
+
+describe("undo covers material, rename and colour too, not just visibility (FI-5)", () => {
+  let store: DocumentStore;
+  beforeEach(() => {
+    vi.useFakeTimers();
+    store = new DocumentStore(stubBackend([]), doc());
+  });
+  afterEach(() => void vi.useRealTimers());
+
+  it("one undo right after a rename reverses the rename, not the last feature", () => {
+    const before = store.document.features.length;
+    store.addFeature({ id: "nb4", type: "box", length: 1, width: 1, height: 1 } as Feature);
+    store.setBodyName("body1", "MyPart");
+    expect(store.bodyName("body1")).toBe("MyPart");
+    store.undo();
+    expect(store.bodyName("body1")).toBeUndefined();
+    expect(store.document.features.length).toBe(before + 1);
+    store.undo();
+    expect(store.document.features.length).toBe(before);
+  });
+
+  it("one undo right after a body material change reverses it, not the last feature", () => {
+    const before = store.document.features.length;
+    store.addFeature({ id: "nb5", type: "box", length: 1, width: 1, height: 1 } as Feature);
+    store.setBodiesMaterial(["body1"], "m-brass");
+    expect(store.bodyMaterialId("body1")).toBe("m-brass");
+    store.undo();
+    expect(store.bodyMaterialId("body1")).toBeUndefined();
+    expect(store.document.features.length).toBe(before + 1);
+  });
+
+  it("one undo right after a colour change reverses it, not the last feature", () => {
+    const before = store.document.features.length;
+    store.addFeature({ id: "nb6", type: "box", length: 1, width: 1, height: 1 } as Feature);
+    store.setBodyColorSlot("body1", 2);
+    expect(store.bodyColorSlot("body1")).toBe(2);
+    store.undo();
+    expect(store.bodyColorSlot("body1")).toBeUndefined();
+    expect(store.document.features.length).toBe(before + 1);
+  });
+
+  it("walks back through a whole material/rename/material/colour session, in order, to the feature under it", () => {
+    const before = store.document.features.length;
+    store.addFeature({ id: "nb7", type: "box", length: 1, width: 1, height: 1 } as Feature);
+    store.setBodiesMaterial(["body1"], "m-brass");
+    store.setBodyName("body1", "MyPart");
+    store.setBodiesMaterial(["body1"], "m-steel");
+    store.setBodyColorSlot("body1", 1);
+
+    store.undo(); // colour
+    expect(store.bodyColorSlot("body1")).toBeUndefined();
+    expect(store.bodyMaterialId("body1")).toBe("m-steel");
+    store.undo(); // material back to brass
+    expect(store.bodyMaterialId("body1")).toBe("m-brass");
+    store.undo(); // rename
+    expect(store.bodyName("body1")).toBeUndefined();
+    store.undo(); // material (brass) itself
+    expect(store.bodyMaterialId("body1")).toBeUndefined();
+    expect(store.document.features.length).toBe(before + 1); // the box feature still there
+    store.undo(); // finally the feature
+    expect(store.document.features.length).toBe(before);
+
+    // redo replays the same session forward again
+    store.redo();
+    store.redo();
+    store.redo();
+    store.redo();
+    store.redo();
+    expect(store.document.features.length).toBe(before + 1);
+    expect(store.bodyMaterialId("body1")).toBe("m-steel");
+    expect(store.bodyName("body1")).toBe("MyPart");
+    expect(store.bodyColorSlot("body1")).toBe(1);
+  });
+
+  it("setFacesMaterial and clearFaceMaterials are undo steps too", () => {
+    store.setFacesMaterial([{ body: "body1", face: 0 }], "m-brass");
+    expect(store.faceMaterialId("body1", 0)).toBe("m-brass");
+    store.undo();
+    expect(store.faceMaterialId("body1", 0)).toBeUndefined();
+
+    store.redo();
+    expect(store.faceMaterialId("body1", 0)).toBe("m-brass");
+    store.clearFaceMaterials(["body1"]);
+    expect(store.faceMaterialId("body1", 0)).toBeUndefined();
+    store.undo();
+    expect(store.faceMaterialId("body1", 0)).toBe("m-brass"); // clear itself undoes
+  });
+});
+
 describe("materials (what a body is made of, on screen)", () => {
   let store: DocumentStore;
   beforeEach(() => {
