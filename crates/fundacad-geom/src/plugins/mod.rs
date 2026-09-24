@@ -16,7 +16,7 @@ mod kernel_ext;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, MutexGuard, OnceLock};
+use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
 use std::time::{Duration, Instant, SystemTime};
 
 use fundacad_engine::error_result;
@@ -58,7 +58,7 @@ struct Declared {
 
 enum Loaded {
     NotYet,
-    Ready(Box<host::Component>),
+    Ready(Arc<host::Component>),
     Broken(String),
 }
 
@@ -342,7 +342,7 @@ fn compile(d: &Declared) -> Loaded {
                 path.display(),
                 started.elapsed().as_millis()
             );
-            Loaded::Ready(Box::new(c))
+            Loaded::Ready(Arc::new(c))
         }
         Err(e) => {
             eprintln!("[plugin-geometry] {}: geometry did not load: {e}", d.id);
@@ -593,10 +593,14 @@ pub fn displace_face(
     split_creases: bool,
 ) -> Option<FaceMesh> {
     let name = claim.spec.get("pass").and_then(Value::as_str).unwrap_or("");
-    let mut reg = registry();
-    let i = pass_owner(&mut reg, name)?;
-    let Loaded::Ready(c) = &reg.entries[i].loaded else {
-        return None;
+    // Out of the lock, so the faces of a body displace on several threads.
+    let c = {
+        let mut reg = registry();
+        let i = pass_owner(&mut reg, name)?;
+        let Loaded::Ready(c) = &reg.entries[i].loaded else {
+            return None;
+        };
+        c.clone()
     };
     match c.displace(name, face, &claim.spec, &claim.tag, density_cap, split_creases) {
         Ok(m) => Some(FaceMesh {
