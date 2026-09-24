@@ -61,9 +61,32 @@ const check = (name, ok, detail) => {
     return v.projectToScreen(world);
   }, p);
 
+  // What of the move gizmo is in the scene. Its arrows carry a numeric
+  // userData.axis, the origin triad's arms a letter, so the two never mix up
+  // even with n1 sitting on the origin.
+  const census = async (label) => {
+    const out = await page.evaluate(() => {
+      let gizmoArrows = 0;
+      let triadArms = 0;
+      window.viewport.scene.scene.traverse((o) => {
+        if (typeof o.userData.axis === "number") gizmoArrows++;
+        if (typeof o.userData.axis === "string") triadArms++;
+      });
+      return { gizmoArrows, triadArms, moveActive: window.__fundacad.move.active };
+    });
+    console.log(`  census ${label}: ${JSON.stringify(out)}`);
+    return out;
+  };
+  const noStrayGizmo = async (label) => {
+    const c = await census(label);
+    check(`no move gizmo left ${label}`, c.gizmoArrows === 0 && !c.moveActive, JSON.stringify(c));
+  };
+
   // A view with room: iso, framed on a 60 mm span around the origin.
   const lookAt = () => page.evaluate(() => {
-    window.viewport.rig.controls.setLookAt(110, -150, 120, 36, 0, 4, false);
+    const v = window.viewport;
+    const at = (x, y, z) => v.cameraTarget().clone().set(x, y, z);
+    v.rig.setLookAt(at(110, -150, 120), at(36, 0, 4), false);
     window.viewport.requestRender();
   });
   await lookAt();
@@ -73,6 +96,7 @@ const check = (name, ok, detail) => {
   await page.evaluate(() => window.__fundacad.handleAction("nodeBody"));
   await page.waitForSelector('[data-panel="node-body"]', { timeout: 10000 });
   check("the node body panel opens", true);
+  await census("with the tool open");
 
   // 2. Three clicks: the first lands on the ground, the next two extend the
   // chain. Below the last node, clear of the gizmo's value
@@ -92,6 +116,7 @@ const check = (name, ok, detail) => {
   check("three nodes are listed", /n1/.test(panelText) && /n2/.test(panelText) && /n3/.test(panelText), panelText.slice(0, 120));
   check("they form one chain", /n1 → n2 → n3/.test(panelText));
   await shot("01_three_nodes.png");
+  await census("with n3 picked");
 
   // 3. Lift n2 through the panel, then drag the gizmo's Z arrow on n3.
   await page.click('[data-node="n2"]');
@@ -130,6 +155,7 @@ const check = (name, ok, detail) => {
   });
   check("the gizmo's Z arrow lifts n3", n3After > n3.z + 1, `${n3.z} -> ${n3After}`);
   await shot("02_moved.png");
+  await census("after the Z arrow drag");
 
   // 4. Alt-drag a linked node out of n3.
   const s3 = await page.evaluate(() => {
@@ -152,6 +178,7 @@ const check = (name, ok, detail) => {
   const text2 = await page.$eval('[data-panel="node-body"]', (el) => el.textContent);
   check("Alt-drag pulled a linked n4 out", /n1 → n2 → n3 → n4/.test(text2), text2.slice(0, 160));
   await shot("03_pulled.png");
+  await census("after the Alt-drag");
 
   // 5. Add it.
   await page.click('[data-panel="node-body"] [data-action="commit"]');
@@ -164,6 +191,7 @@ const check = (name, ok, detail) => {
   await lookAt();
   await page.waitForTimeout(600);
   await shot("04_added.png");
+  await noStrayGizmo("after Add");
 
   // 6. Bind n1's X radius to a parameter, the way the properties row does.
   const err = await page.evaluate((id) => window.store.setTargetExpr(
@@ -205,8 +233,29 @@ const check = (name, ok, detail) => {
   const reopened = await page.waitForSelector('[data-panel="node-body"]', { timeout: 10000 }).then(() => true, () => false);
   check("editing the feature re-opens the node panel", reopened);
   await shot("07_edit.png");
+
+  // 9. Pick a node so the gizmo is up, then Cancel from the panel.
+  await page.click('[data-node="n2"]');
+  await page.waitForTimeout(300);
+  const up = await census("with n2 picked in the edit");
+  check("picking a node in the edit puts the gizmo up", up.gizmoArrows > 0 && up.moveActive, JSON.stringify(up));
+  await page.click('[data-panel="node-body"] [data-action="cancel"]');
+  await page.waitForTimeout(400);
+  await idle();
+  await noStrayGizmo("after Cancel");
+  await shot("08_cancelled.png");
+
+  // 10. And once more, left with Escape.
+  await page.evaluate((id) => window.__fundacad.editFeature(id), f.id);
+  await page.waitForSelector('[data-panel="node-body"]', { timeout: 10000 });
+  await page.click('[data-node="n3"]');
+  await page.waitForTimeout(300);
+  await page.keyboard.press("Escape");
   await page.keyboard.press("Escape");
   await page.waitForTimeout(400);
+  const gone = await page.$('[data-panel="node-body"]');
+  check("Escape twice closes the edit", !gone);
+  await noStrayGizmo("after Escape");
 
   await browser.close();
   console.log(failures ? `${failures} FAILED` : "all passed");
