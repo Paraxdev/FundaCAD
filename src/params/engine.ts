@@ -277,6 +277,19 @@ export function isBound(doc: CadDocument, target: ParamTarget): boolean {
   return name !== null && !isNumericLiteral(defsOf(doc)[name]!.expr);
 }
 
+/** The OTHER parameter `target`'s own binding is nothing but a bare reference
+ *  to, e.g. a fillet radius whose auto-created dN has `expr: "wall_blend_r"`.
+ *  Null for an unbound target, a plain literal, or a real expression
+ *  ("wall_blend_r * 2"): only a bare name is safe for a drag tool to edit in
+ *  place, by writing the REFERENCED parameter's own value rather than this
+ *  field's wrapper (which recompute would just overwrite right back). */
+export function bareParamRef(doc: CadDocument, target: ParamTarget): string | null {
+  const name = boundParam(doc, target);
+  if (!name) return null;
+  const expr = defsOf(doc)[name]!.expr.trim();
+  return isIdentName(expr) && expr in defsOf(doc) ? expr : null;
+}
+
 /** Bind an expression to a field: updates the existing model param for that
  *  target or mints the next dN. Validate with validateExpr first (pass the
  *  bound name from boundParam, or null for a fresh binding). Evaluation and

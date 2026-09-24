@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { CadDocument, ParamDef } from "../../src/types";
 import {
-  boundParam, classifyExprInput, commitDeleteParam, commitFieldExpr, commitNamedFieldExpr, commitRenameParam,
+  bareParamRef, boundParam, classifyExprInput, commitDeleteParam, commitFieldExpr, commitNamedFieldExpr, commitRenameParam,
   deleteBlockers, defsOf, isBound, nextDName, recompute, referencesTo, splitNameValue, validateExpr, validateName,
 } from "../../src/params/engine";
 
@@ -99,6 +99,24 @@ describe("params engine", () => {
     expect(defsOf(doc)["d2"]).toBeUndefined();
     expect(isBound(doc, target)).toBe(false); // literal ⇒ not fx
     expect(nextDName(defsOf(doc))).toBe("d2");
+  });
+
+  it("bareParamRef: a wrapper whose own expr is just a name, not an expression", () => {
+    const doc = fixture({ wall_blend_r: { expr: "4", value: 4, unit: "mm" } });
+    const target = { kind: "feature", feature: "f2", field: "distance" } as const;
+    expect(bareParamRef(doc, target)).toBeNull(); // unbound yet
+    commitFieldExpr(doc, target, "wall_blend_r", "length");
+    recompute(doc);
+    expect(bareParamRef(doc, target)).toBe("wall_blend_r");
+    expect(isBound(doc, target)).toBe(true); // still an fx: field
+    commitFieldExpr(doc, target, "wall_blend_r * 2", "length"); // a real expression now
+    recompute(doc);
+    expect(bareParamRef(doc, target)).toBeNull();
+    expect(isBound(doc, target)).toBe(true);
+    commitFieldExpr(doc, target, "12", "length"); // back to a plain literal
+    recompute(doc);
+    expect(bareParamRef(doc, target)).toBeNull();
+    expect(isBound(doc, target)).toBe(false);
   });
 
   it("rename rewrites expressions and legacy bare-name fields", () => {
