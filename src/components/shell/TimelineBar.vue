@@ -398,8 +398,13 @@ function openMenu(e: MouseEvent, id: string, i: number) {
               timeline.select(id);
             },
           }]),
-    { label: "Roll to here", onClick: () => store.setRollback(i) },
-    { label: "Roll past here", onClick: () => store.setRollback(i + 1) },
+    // setRollback(k) builds features[0..k-1], so k = i excludes this step (the
+    // model as it was right BEFORE it ran) and k = i + 1 includes it (right
+    // after it ran). "Roll to here" now means what it says: the state this step
+    // produced. FI-7: it used to sit on setRollback(i), so rolling to a step
+    // showed the model with that step itself missing.
+    { label: "Roll back before this", onClick: () => store.setRollback(i) },
+    { label: "Roll to here", onClick: () => store.setRollback(i + 1) },
     { separator: true, label: "" },
     { label: "Delete", danger: true, onClick: () => store.removeFeature(id) },
   ]);
