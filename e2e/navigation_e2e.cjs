@@ -5,7 +5,9 @@
 // pixel; an orbit keeps its pivot on its pixel; zooming out keeps the target by
 // the model; Top then an orbit off it is smooth and level; projection cycling,
 // sketch entry and exit, fit and reset all leave a finite pose with the target
-// near the model. Screenshots after every step.
+// near the model; a jittery right click opens the menu without turning the
+// view, and a two finger pinch zooms about its midpoint. Screenshots after
+// every step.
 //
 // Usage (from the repo root, with vite + engine running):
 //   SC_TOKEN=<engine token> SC_CHROME=<chrome.exe> [SC_URL=http://localhost:5173/]
@@ -267,6 +269,26 @@ const check = (name, ok, detail) => {
   check("a jittery right click opens the menu", await page.evaluate(() => document.querySelectorAll(".ctx-item").length > 0));
   check("and does not turn the view", (await page.evaluate(() => window.viewport.rig.poseVersion())) === v0);
   await shot("13_jitter_menu.png");
+  await page.keyboard.press("Escape");
+
+  // --- 9. a two finger pinch, with frames between the fingers landing and spreading ----
+  const cdp = await page.context().newCDPSession(page);
+  const touch = (type, pts) => cdp.send("Input.dispatchTouchEvent", { type, touchPoints: pts.map(([x, y], id) => ({ x, y, id })) });
+  const m = await pixelOf([0, 0, 20]);
+  const d0 = (await pose()).e;
+  const mid9 = [0, 0, 20];
+  const dist = (e) => Math.hypot(e[0] - mid9[0], e[1] - mid9[1], e[2] - mid9[2]);
+  const under = await page.evaluate(([x, y]) => window.viewport.orbitPivotAt(x, y)?.toArray(), [m.x, m.y]);
+  await touch("touchStart", [[m.x - 40, m.y], [m.x + 40, m.y]]);
+  await page.waitForTimeout(100);
+  for (let i = 1; i <= 10; i++) { await touch("touchMove", [[m.x - 40 - i * 8, m.y], [m.x + 40 + i * 8, m.y]]); await page.waitForTimeout(16); }
+  await touch("touchEnd", []);
+  await settle();
+  const pinched = await sane("after a pinch");
+  check("spreading two fingers zooms in", dist(pinched.e) < 0.6 * dist(d0), { before: dist(d0), after: dist(pinched.e) });
+  const mq = await screenOf(under);
+  check("about their midpoint", Math.hypot(mq.x - m.x, mq.y - m.y) < 1, mq);
+  await shot("14_pinch.png");
 
   await browser.close();
   console.log(failures ? `\n${failures} FAILED` : "\nALL PASS");
