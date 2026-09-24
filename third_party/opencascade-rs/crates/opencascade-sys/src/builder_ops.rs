@@ -122,6 +122,13 @@ mod inner {
             dprism: bool,
         ) -> Result<UniquePtr<TopoDS_Shape>>;
         #[allow(clippy::too_many_arguments)]
+        pub fn bo_snap_axis_arcs(
+            s: &TopoDS_Shape,
+            ox: f64, oy: f64, oz: f64,
+            dx: f64, dy: f64, dz: f64,
+            tol: f64,
+        ) -> Result<UniquePtr<TopoDS_Shape>>;
+        #[allow(clippy::too_many_arguments)]
         pub fn bo_revolve(
             s: &TopoDS_Shape,
             ox: f64, oy: f64, oz: f64,

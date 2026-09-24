@@ -489,6 +489,15 @@ pub fn prism_taper(
     ))
 }
 
+/// `s` with every arc centred within `tol` of the axis rebuilt centred on it,
+/// None when no arc needed that. See `bo_snap_axis_arcs`.
+pub fn snap_axis_arcs(s: &Shape, origin: [f64; 3], dir: [f64; 3], tol: f64) -> Option<Shape> {
+    let [ox, oy, oz] = origin;
+    let [dx, dy, dz] = dir;
+    let inner = ffi::bo_snap_axis_arcs(s.raw(), ox, oy, oz, dx, dy, dz, tol).ok()?;
+    (!inner.is_null()).then(|| Shape::from_raw(inner))
+}
+
 pub fn revolve(s: &Shape, origin: [f64; 3], dir: [f64; 3], angle_deg: f64) -> KResult<Shape> {
     run("BRepPrimAPI_MakeRevol", || format!("shape={}, axis_origin={origin:?}, axis_dir={dir:?}, angle_deg={angle_deg}", describe(s)), || ffi::bo_revolve(
         s.raw(),
