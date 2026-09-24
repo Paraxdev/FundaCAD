@@ -216,6 +216,16 @@ export class DatumPoseTool {
       const a = this.viewport.projectToScreen(p);
       const b = this.viewport.projectToScreen(p.clone().add(tan));
       this.tangentPx.set(b.x - a.x, b.y - a.y);
+      if (this.tangentPx.length() < 6) {
+        // The handle moves straight at the viewer (a tilt seen from above),
+        // where its picture only shortens towards the pivot: read a drag
+        // towards the pivot as towards the viewer.
+        const o = this.viewport.projectToScreen(s.pivot);
+        const view = this.viewport.camera.getWorldDirection(new THREE.Vector3());
+        const inward = new THREE.Vector2(o.x - a.x, o.y - a.y);
+        if (inward.lengthSq() < 1e-6) inward.set(0, -1);
+        this.tangentPx.copy(inward.normalize().multiplyScalar(tan.dot(view) < 0 ? 1 : -1));
+      }
     }
     this.dial = new RotateDial(this.grabAxis, HANDLE_IDLE);
     this.dial.update(this.grabDialStart, 0, tiltStep(e) || 1);
