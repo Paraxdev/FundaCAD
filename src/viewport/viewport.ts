@@ -1538,10 +1538,16 @@ export class Viewport {
       });
       const m = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), mat);
       m.position.set(p.origin[0], p.origin[1], p.origin[2]);
-      m.quaternion.setFromUnitVectors(
-        up,
-        new THREE.Vector3(p.normal[0], p.normal[1], p.normal[2]).normalize(),
-      );
+      // The plane's own x lines the square up, so a spin shows on the quad.
+      const n = new THREE.Vector3(p.normal[0], p.normal[1], p.normal[2]).normalize();
+      const x = new THREE.Vector3(p.xdir[0], p.xdir[1], p.xdir[2]);
+      x.addScaledVector(n, -x.dot(n));
+      if (x.lengthSq() > 1e-12) {
+        x.normalize();
+        m.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, n.clone().cross(x), n));
+      } else {
+        m.quaternion.setFromUnitVectors(up, n);
+      }
       m.renderOrder = -1;
       m.userData.datumId = p.id;
       // Kept on the quad so a hit carries its plane (features/facePlanePick.ts cannot ask).
