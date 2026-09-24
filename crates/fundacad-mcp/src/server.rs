@@ -129,6 +129,20 @@ fn is_error(result: &CallToolResult) -> bool {
     result.is_error.unwrap_or(false)
 }
 
+/// Every text block of a result, joined. `view` reads a `build` reply with
+/// this to carry a partial build's `FEATURE FAILED` lines into its own text.
+fn text_of(result: &CallToolResult) -> String {
+    result
+        .content
+        .iter()
+        .filter_map(|c| match c {
+            ContentBlock::Text(t) => Some(t.text.as_str()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// What the user sees beside the indicator that an assistant is editing: the
 /// tool name plus the one argument that identifies what it touched, enough to
 /// recognise an edit in a list and short enough for a line of UI.
@@ -1351,10 +1365,25 @@ impl FundaCad {
             let st = self.state.lock().await;
             st.mesh.is_empty() || st.built_for.as_deref() != Some(&signature(&st.doc))
         };
+        let mut build_failures = String::new();
         if stale {
             let built = self.build().await;
             if is_error(&built) {
-                return built;
+                let still_nothing = self.state.lock().await.mesh.is_empty();
+                if still_nothing {
+                    // Nothing built at all: pass the build's own refusal
+                    // through, there is nothing to draw.
+                    return built;
+                }
+                // A PARTIAL build: some bodies built beside a feature that
+                // failed. Looking at what DID build is the main way an agent
+                // checks its work, so draw it and name what did not, rather
+                // than refusing the whole view over one failed feature.
+                build_failures = text_of(&built)
+                    .lines()
+                    .filter(|l| l.starts_with("FEATURE FAILED"))
+                    .collect::<Vec<_>>()
+                    .join("\n");
             }
         }
         let mesh = {
@@ -1490,11 +1519,13 @@ impl FundaCad {
                     .map_or("the middle".to_string(), |a| py_num(Some(a)))
             )
         };
+        let mut caption = format!("{where_} view of {}, {w}x{h}{cut}", shown.join(", "));
+        if !build_failures.is_empty() {
+            caption.push('\n');
+            caption.push_str(&build_failures);
+        }
         CallToolResult::success(vec![
-            ContentBlock::text(format!(
-                "{where_} view of {}, {w}x{h}{cut}",
-                shown.join(", ")
-            )),
+            ContentBlock::text(caption),
             ContentBlock::image(
                 base64::engine::general_purpose::STANDARD.encode(&png),
                 "image/png",
