@@ -2,7 +2,7 @@
 //
 // The Tauri native side reads the device and streams 6DOF motion + button
 // events (see src-tauri/src/spacemouse.rs). Here we map motion onto the camera
-// (orbit / pan / zoom via camera-controls) and rising-edge button presses to an
+// (orbit / pan / zoom through the camera rig) and rising-edge button presses to an
 // action callback. Browser/dev (no Tauri) is a no-op.
 //
 // The axis→action mapping is DATA-DRIVEN and user-configurable (each camera
@@ -237,7 +237,7 @@ export function onSpaceMouseMotion(fn: (m: Motion) => void): () => void {
  *  Returns a teardown. It has one, and the teardown has to actually stop the
  *  frame loop, because the 3D mouse is a capability that can be turned off
  *  while the app is running: a loop still reading a stale motion vector and
- *  calling controls.truck() every frame is not "off", it is a view that drifts
+ *  calling rig.panScreen() every frame is not "off", it is a view that drifts
  *  for reasons nobody can find. Calling it twice is safe. */
 export async function initSpaceMouse(
   viewport: Viewport,
@@ -288,21 +288,18 @@ export async function initSpaceMouse(
     // condition the whole frame ONCE, not per binding: two actions bound to the
     // same axis must never disagree about whether that axis moved
     const m = filterMotion(raw, CONFIG);
-    const controls = viewport.rig.controls;
     // object mode manipulates the model → inverse of camera mode on pan + orbit
     const modeSign = CONFIG.mode === "object" ? -1 : 1;
     const b = CONFIG.bind;
 
+    // Pan and zoom are proportional to the view (panScreen works in half view
+    // heights, zoomBy multiplies), so the puck moves the view by the same
+    // FRACTION of the screen at any zoom level.
     const px = val(b.panX, m), py = val(b.panY, m);
-    // zoom-proportional: scale pan by the visible view height and zoom
-    // multiplicatively (via the same rig.zoomBy the wheel uses), so the puck
-    // moves the view by the same FRACTION of the screen at any zoom level
-    const scale = viewport.rig.viewScale();
     if (px || py) {
-      controls.truck(
-        modeSign * px * CONFIG.panSens * dt * scale,
-        modeSign * py * CONFIG.panSens * dt * scale,
-        false,
+      viewport.rig.panScreen(
+        modeSign * px * CONFIG.panSens * dt,
+        modeSign * py * CONFIG.panSens * dt,
       );
     }
     const z = val(b.zoom, m); // direction is its own preference, not mode-dependent
@@ -312,10 +309,8 @@ export async function initSpaceMouse(
     const locked = viewport.rig.orbitLocked();
     const az = val(b.orbitAz, m), pol = val(b.orbitPolar, m);
     if (!locked && (az || pol)) {
-      // rig.tumble, NOT controls.rotate: camera-controls clamps vertical orbit
-      // just short of the poles every frame, so rotate() hard-stops at the top.
-      // tumble() rotates the orbit up-vector along with the camera, free
-      // rotation over the poles, matching the 3Dconnexion driver feel.
+      // tumble, not the mouse's turntable orbit: the puck rotates freely over
+      // the poles, matching the 3Dconnexion driver feel.
       viewport.rig.tumble(modeSign * az * CONFIG.orbitSens * dt, modeSign * pol * CONFIG.orbitSens * dt);
     }
 

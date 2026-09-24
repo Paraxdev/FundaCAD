@@ -22,7 +22,6 @@
 
 import * as THREE from "three";
 import { nextTick, onUnmounted, ref, watch } from "vue";
-import { camHash } from "../../viewport/camHash";
 import { screenTransform } from "../../sketch/annotationFormat";
 import { useSketchAnnotationStore } from "../../stores/sketchAnnotations";
 import type { DimItem } from "../../sketch/sketchDimensions";
@@ -33,7 +32,7 @@ const s = useSketchAnnotationStore();
 // --- position: deliberately outside reactivity ----------------------------
 const els: (HTMLElement | null)[] = [];
 const scratch = new THREE.Vector3();
-let lastCamHash = "";
+let lastPose = -1;
 let raf = 0;
 
 function loop() {
@@ -42,9 +41,9 @@ function loop() {
   const vp = s.dimViewport;
   if (!plane || !vp) return;
   // skip the per-label projection + DOM writes when the camera hasn't moved
-  const hash = camHash(vp.camera);
-  if (hash === lastCamHash) return;
-  lastCamHash = hash;
+  const pose = vp.rig.poseVersion();
+  if (pose === lastPose) return;
+  lastPose = pose;
   const items = s.dimItems;
   for (let i = 0; i < items.length; i++) {
     const el = els[i];
@@ -76,9 +75,9 @@ watch(
     // A rebuild replaces the label a drag is riding on, drop the drag so its
     // move/up handlers can't write a placement against stale geometry.
     drag = null;
-    // The new set is at the same camera as the old one, so the hash check would
+    // The new set is at the same camera as the old one, so the pose check would
     // otherwise skip it forever.
-    lastCamHash = "";
+    lastPose = -1;
     // A rebuild is also what ends an edit (the class wiped its innerHTML here).
     editing.value = null;
     editError.value = null;
@@ -181,9 +180,9 @@ function onDragMove(e: PointerEvent) {
   const anchor = d.item.placeCommit!(p.x, p.y, false);
   if (anchor) {
     // anchor is a raw THREE.Vector2 mutated in place; the rAF loop reads it next
-    // frame, which is why the camera hash has to be invalidated by hand here
+    // frame, which is why the pose version has to be invalidated by hand here
     d.item.anchor.copy(anchor);
-    lastCamHash = "";
+    lastPose = -1;
   }
 }
 

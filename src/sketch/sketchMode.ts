@@ -893,12 +893,11 @@ export class SketchMode {
     if (drifted) this.releaseView();
   }
 
+  private viewDirScratch = new THREE.Vector3();
   /** Which way the camera is pointing, as a plain tuple for sketchView. */
   private viewDir(): [number, number, number] {
-    const c = this.viewport.rig.controls;
-    const eye = c.getPosition(new THREE.Vector3());
-    const at = c.getTarget(new THREE.Vector3());
-    return [at.x - eye.x, at.y - eye.y, at.z - eye.z];
+    const d = this.viewport.rig.viewDirection(this.viewDirScratch);
+    return [d.x, d.y, d.z];
   }
 
   private focusPoint(): THREE.Vector3 {

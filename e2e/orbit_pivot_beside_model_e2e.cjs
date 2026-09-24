@@ -44,8 +44,8 @@ const check = (name, ok, detail) => {
   await page.waitForFunction(() => !window.store.buildState.building, null, { timeout: 60000 });
   await page.waitForTimeout(800);
   await page.evaluate(() => {
-    const c = window.viewport.rig.controls;
-    c.setLookAt(-40, -60, 45, 0, 0, 5, false);
+    const V = window.viewport.camera.position.constructor;
+    window.viewport.rig.setLookAt(new V(-40, -60, 45), new V(0, 0, 5));
     window.viewport.requestRender();
   });
   await page.waitForTimeout(800);
