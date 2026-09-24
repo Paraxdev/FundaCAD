@@ -17,8 +17,13 @@ import {
   onRenderPrefsChange, renderPrefs, setRenderPref,
   type Background, type Environment,
 } from "../../ui/renderPrefs";
+import { DEFAULT_KEY } from "../../viewport/keyLight";
+import { formatTurn } from "../../viewport/rotateDial";
+import { useEngine } from "../../app/engineKey";
 
+const engine = useEngine();
 const prefs = ref({ ...renderPrefs() });
+const aiming = ref(false);
 let off: (() => void) | null = null;
 onMounted(() => { off = onRenderPrefsChange(() => { prefs.value = { ...renderPrefs() }; }); });
 onUnmounted(() => off?.());
@@ -31,6 +36,19 @@ const BACKGROUNDS: { id: Background; label: string }[] = [
 ];
 
 const pickEnv = (id: Environment) => setRenderPref("environment", id);
+const aimKey = () => {
+  const tool = engine.tools.lightAim;
+  if (tool.active) {
+    tool.cancel();
+    return;
+  }
+  aiming.value = true;
+  tool.start(() => { aiming.value = false; });
+};
+const resetKey = () => {
+  setRenderPref("keyAzimuth", DEFAULT_KEY.azimuth);
+  setRenderPref("keyElevation", DEFAULT_KEY.elevation);
+};
 const onBrightness = (e: Event) =>
   setRenderPref("brightness", Number.parseFloat((e.target as HTMLInputElement).value));
 const onBloom = (e: Event) =>
@@ -89,6 +107,24 @@ const onBloom = (e: Event) =>
         />
       </label>
       <div class="sm-hint">Lights and reflections together, so the two stay in step.</div>
+    </section>
+
+    <section class="rd-section">
+      <h3 class="rd-head">Key light</h3>
+      <div class="rd-chips" role="group" aria-label="Key light">
+        <button
+          class="rd-chip"
+          :class="{ active: aiming }"
+          data-key-light="aim"
+          :aria-pressed="aiming"
+          @click="aimKey"
+        >Aim</button>
+        <button class="rd-chip" data-key-light="reset" @click="resetKey">Reset</button>
+      </div>
+      <div class="sm-hint" data-key-light="angles">
+        From {{ formatTurn(prefs.keyAzimuth) }} round, {{ formatTurn(prefs.keyElevation) }} up.
+        Aim drags a sun on the model to swing the light that casts the shadows.
+      </div>
     </section>
 
     <section class="rd-section">

@@ -39,6 +39,7 @@ import { MeasureTool } from "../features/measureTool";
 import { SectionTool } from "../features/sectionTool";
 import { PlaneOffsetTool } from "../features/planeOffsetTool";
 import { DatumPoseTool } from "../features/datumPoseTool";
+import { LightAimTool } from "../features/lightAimTool";
 import { datumMoveTarget } from "../features/datumPlaneEdit";
 import { RevolvePitchTool } from "../features/revolvePitchTool";
 import { JointTool } from "../features/jointTool";
@@ -95,6 +96,7 @@ export interface EngineTools {
   section: SectionTool;
   planeOffset: PlaneOffsetTool;
   datumPose: DatumPoseTool;
+  lightAim: LightAimTool;
   revolvePitch: RevolvePitchTool;
   joint: JointTool;
 }
@@ -332,6 +334,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
     }),
     planeOffset: new PlaneOffsetTool(e.viewport),
     datumPose: new DatumPoseTool(e.viewport),
+    lightAim: new LightAimTool(e.viewport),
     revolvePitch: new RevolvePitchTool(e.viewport, e.store, e.overlay),
     joint: new JointTool(e.viewport, e.store),
   };
