@@ -58,6 +58,27 @@ export function edgeBandPx(minExtentPx: number | null): number {
   return Math.max(BAND_MIN_PX, Math.min(EDGE_NEAR_PX, minExtentPx * BAND_FRACTION));
 }
 
+// The opposite problem, and the other end of an isometric box: a vertical
+// edge foreshortens toward a point as the view approaches edge-on, so its own
+// projected length, not the face beside it, is what makes it hard to click. A
+// 3px band around a segment that is itself only a couple of px long leaves
+// almost no forgiveness; a short edge gets some back.
+
+/** An edge projecting shorter than this on screen counts as foreshortened. */
+export const EDGE_SHORT_MAX_PX = 15;
+
+/** The most a foreshortened edge's band may grow by, at (or near) zero length. */
+export const EDGE_SHORT_BOOST_PX = 6;
+
+/** Extra radius (added to edgeBandPx's result) for a short edge, 0 once its own
+ *  projected length reaches EDGE_SHORT_MAX_PX so an ordinary edge is untouched.
+ *  `edgeLengthPx` of null (not measured) also gives 0, the prior behaviour. */
+export function shortEdgeBoostPx(edgeLengthPx: number | null): number {
+  if (edgeLengthPx == null || !Number.isFinite(edgeLengthPx) || edgeLengthPx >= EDGE_SHORT_MAX_PX) return 0;
+  const t = 1 - Math.max(0, edgeLengthPx) / EDGE_SHORT_MAX_PX;
+  return t * EDGE_SHORT_BOOST_PX;
+}
+
 /** Above this on-screen extent the band is capped, so measuring more precisely
  *  cannot change the answer. Lets the walk below stop early. */
 export const BAND_CAP_EXTENT_PX = EDGE_NEAR_PX / BAND_FRACTION;

@@ -9,7 +9,7 @@ import { bodyOfFace, edgeObjects, faceIdOfHit, visibleBodyMeshes } from "./rende
 import type { BodyEdges, EdgeRef } from "./edgeLines";
 import { edgeSelectorFrom } from "./edgeMatch";
 import { flushRaycastIndex } from "./raycastIndex";
-import { BAND_CAP_EXTENT_PX, ScreenExtent, edgeBandPx, sampleIndices } from "./edgeBand";
+import { BAND_CAP_EXTENT_PX, ScreenExtent, edgeBandPx, sampleIndices, shortEdgeBoostPx } from "./edgeBand";
 
 export interface EdgeHit {
   kind: "edge";
@@ -65,6 +65,9 @@ export class Picker {
   // screen-space distance (px) of the best edge hit from the last pickEdge(),
   // lets pick() prefer a face over an edge unless the cursor is on the edge line.
   private edgeScreenDist = Infinity;
+  // on-screen extent (px) of that same edge's own geometry, so pick() can widen
+  // the band for one foreshortened almost to a point (see shortEdgeBoostPx).
+  private edgeExtentPx: number | null = null;
   // ray distance of that same edge hit, so pick() can tell whether it is on the
   // surface the cursor is over or on the far side of the body. See occludedEdge.
   private edgeDepth = Infinity;
@@ -128,10 +131,12 @@ export class Picker {
     // and never when that line is round the back of the body
     const through = occludedEdge(this.edgeDepth, fHit?.distance ?? null, modelScale(view));
     // The band shrinks with the face under the cursor, so a small or
-    // shallowly-angled face keeps an interior to click. See edgeBand.ts.
+    // shallowly-angled face keeps an interior to click, and widens again for an
+    // edge foreshortened toward a point (a vertical box edge near an isometric
+    // angle), which needs the opposite forgiveness. See edgeBand.ts.
     const band = edgeBandPx(
       face && fHit ? faceScreenExtentPx(view, face.faceId, camera, rect) : null,
-    );
+    ) + shortEdgeBoostPx(this.edgeExtentPx);
     if (edge && !through && (this.edgeScreenDist <= band || !face)) return edge;
     return face;
   }
@@ -202,6 +207,7 @@ export class Picker {
     const eHits = this.raycaster.intersectObjects(this.edgeTargets(view), false);
     this.edgeScreenDist = Infinity;
     this.edgeDepth = Infinity;
+    this.edgeExtentPx = null;
     if (!eHits.length) return [];
 
     const byEdge = new Map<EdgeRef, EdgeCandidate>();
@@ -227,6 +233,7 @@ export class Picker {
     if (best) {
       this.edgeScreenDist = best.screenDist; // used by pick() to decide edge vs face
       this.edgeDepth = best.depth; //  "     "     "  to reject an edge behind it
+      this.edgeExtentPx = edgeScreenExtentPx(best.edge, camera, rect); //  "  "  to widen a short one's band
     }
     return out;
   }
@@ -311,6 +318,26 @@ function faceScreenExtentPx(
     // Past the cap the band is the plain constant whatever else this face does,
     // so more measurement cannot change the answer.
     if (box.min >= BAND_CAP_EXTENT_PX) return box.min;
+  }
+  return box.measured ? box.min : null;
+}
+
+/** The smaller on-screen side of one edge's own bounding box, in px, or null if
+ *  it has no points. An edge foreshortened toward a point, viewed nearly
+ *  end-on, projects to a tiny box in both directions; an ordinary one does not,
+ *  so this stays large and shortEdgeBoostPx leaves it alone. Transformed
+ *  through the drawing object's own matrixWorld, the same one the raycast that
+ *  found it was tested against, rather than assuming edge.points is world-space. */
+function edgeScreenExtentPx(edge: EdgeRef, camera: THREE.Camera, rect: DOMRect): number | null {
+  if (!edge.points.length) return null;
+  const world = edge.draw.object.matrixWorld;
+  const box = new ScreenExtent();
+  const p = new THREE.Vector3();
+  const halfW = rect.width / 2;
+  const halfH = rect.height / 2;
+  for (const pt of edge.points) {
+    p.set(pt[0], pt[1], pt[2]).applyMatrix4(world).project(camera);
+    box.add((p.x + 1) * halfW, (1 - p.y) * halfH);
   }
   return box.measured ? box.min : null;
 }
