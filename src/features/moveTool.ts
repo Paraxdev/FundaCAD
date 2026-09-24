@@ -50,6 +50,7 @@ import {
 } from "./transformGizmo";
 import { CanvasGesture } from "./canvasGesture";
 import { RotateDial } from "../viewport/rotateDial";
+import { createSlimRing, ringLook, type SlimRing } from "./slimRing";
 
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 const HOT = 0xffe9a8; // hovered / grabbed handle
@@ -84,17 +85,13 @@ const ARROW_HEAD_R = 4.6;
 const ARROW_SHAFT = ARROW_LENGTH - ARROW_HEAD;
 const ARROW_SHAFT_R = 1.6;
 /** How wide the invisible cylinder an arrow is grabbed by is. Same reasoning as
- *  RING_GRAB below and as the edge handle's own proxies: how big a handle is
+ *  the slim rings' RING_BAND and as the edge handle's own proxies: how big a handle is
  *  DRAWN and how big it is to aim at are two questions, and slimming the arrow
  *  must not spend the aiming margin. A uniform cylinder, so the tip is as easy
  *  to hit as the root, the drawn cone tapers to nothing and used to be the
  *  hardest part of the arrow to press. */
 const ARROW_GRAB_R = 6.5;
 const RING_RADIUS = 46;
-const RING_TUBE = 2.4;
-/** How wide the invisible band a ring is grabbed by is, in gizmo units. The
- *  drawn tube is 2.4 and nobody can reliably hit a 2px torus in 3D. */
-const RING_GRAB = 8;
 /** The draggable origin, in gizmo units. Small enough that it never covers the
  *  arrows' own root and large enough to grab. */
 const ORIGIN_R = 5.5;
@@ -156,7 +153,7 @@ export class MoveTool {
 
   private gizmo: THREE.Group | null = null;
   private arrows: { group: THREE.Group; mat: THREE.MeshBasicMaterial; axis: number }[] = [];
-  private rings: { mesh: THREE.Mesh; grab: THREE.Mesh; mat: THREE.MeshBasicMaterial; axis: number }[] = [];
+  private rings: { ring: SlimRing; axis: number }[] = [];
   private cubes: { mesh: THREE.Mesh; mat: THREE.MeshBasicMaterial; axis: number }[] = [];
   private planes: { mesh: THREE.Mesh; hit: THREE.Mesh; mat: THREE.MeshBasicMaterial; axis: number }[] = [];
   /** where the cursor met the drag plane when a planar handle was grabbed, and
@@ -611,9 +608,11 @@ export class MoveTool {
       const ax = AXES[a.axis];
       if (ax) a.mat.color.set(lit("axis", a.axis) ? HOT : ax.color);
     }
+    const ringAt = (h: Grab) => (h?.kind === "ring" ? h.index : null);
+    const ringAxes = this.rings.map((r) => r.axis);
     for (const r of this.rings) {
       const ax = AXES[r.axis];
-      if (ax) r.mat.color.set(lit("ring", r.axis) ? HOT : ax.color);
+      if (ax) r.ring.paint(ringLook(r.axis, ringAt(this.hover), this.grab ? ringAt(this.grab) ?? -1 : null, ringAxes), ax.color);
     }
     for (const c of this.cubes) {
       const ax = AXES[c.axis];
@@ -737,23 +736,12 @@ export class MoveTool {
       // is red, like the arrow you slide along X, so the two families read as
       // one gizmo rather than as two stacked ones.
       if (hs.rings.includes(i)) {
-        const rmat = new THREE.MeshBasicMaterial({
-          color: a.color, depthTest: false, depthWrite: false, side: THREE.DoubleSide,
-        });
-        const ring = new THREE.Mesh(new THREE.TorusGeometry(RING_RADIUS, RING_TUBE, 8, 96), rmat);
+        const ring = createSlimRing(RING_RADIUS);
         // A torus is built in the XY plane, so its own axis is +Z.
-        ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
-        ring.renderOrder = 999;
-        // The grab band is invisible and fat. Hit-testing the drawn 2px tube
-        // means aiming at a two-pixel line in perspective, which is not a target.
-        const grab = new THREE.Mesh(
-          new THREE.TorusGeometry(RING_RADIUS, RING_GRAB, 6, 48),
-          new THREE.MeshBasicMaterial({ visible: false }),
-        );
-        grab.quaternion.copy(ring.quaternion);
-        grab.userData.ring = i;
-        g.add(ring, grab);
-        this.rings.push({ mesh: ring, grab, mat: rmat, axis: i });
+        ring.group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
+        ring.band.userData.ring = i;
+        g.add(ring.group);
+        this.rings.push({ ring, axis: i });
       }
 
       if (hs.cubes.includes(i)) {
@@ -846,7 +834,7 @@ export class MoveTool {
     if (onPlane) return { kind: "plane", index: onPlane.object.userData.plane as number };
     const onCube = ray.intersectObjects(this.cubes.map((c) => c.mesh), false)[0];
     if (onCube) return { kind: "size", index: onCube.object.userData.size as number };
-    const onRing = ray.intersectObjects(this.rings.map((r) => r.grab), false)[0];
+    const onRing = ray.intersectObjects(this.rings.map((r) => r.ring.band), false)[0];
     if (onRing) return { kind: "ring", index: onRing.object.userData.ring as number };
     return null;
   }
@@ -912,12 +900,7 @@ export class MoveTool {
         for (const c of a.group.children) if (c instanceof THREE.Mesh) c.geometry.dispose();
         a.mat.dispose();
       }
-      for (const r of this.rings) {
-        r.mesh.geometry.dispose();
-        r.grab.geometry.dispose();
-        (r.grab.material as THREE.Material).dispose();
-        r.mat.dispose();
-      }
+      for (const r of this.rings) r.ring.dispose();
       if (this.origin) {
         this.origin.mesh.geometry.dispose();
         this.origin.mat.dispose();
