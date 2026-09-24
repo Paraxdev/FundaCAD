@@ -83,6 +83,12 @@ const Y_AXIS = HANDLE_UP;
 const GHOST_SELECT = 0xff7a3c;
 const GHOST_ERROR = 0xe23b3b;
 
+/** How long a radius/distance drag has to hold still before the real engine
+ *  preview is asked for. A drag tick still redraws the instant client-side
+ *  ghost (viewport.setBlendGhost) every frame; this only delays the OCCT round
+ *  trip, so a fast drag draws instead of queuing a rebuild per pixel moved. */
+const PREVIEW_DEBOUNCE_MS = 150;
+
 /** One member edge: its selector, the sharp-model polyline snapshot it was
  *  matched to (for drawing + screen-space hit tests), its ghost line, and the
  *  tangent-chain gesture it arrived with (chain members select/deselect as one
@@ -162,6 +168,8 @@ export class EdgeFeatureTool {
   private grabProj = 0; // axis projection at grab start
   private downPos = { x: 0, y: 0 };
   private downOnGizmo = false;
+  /** pending debounced engine preview, see schedulePreviewDuringDrag */
+  private previewTimer: number | null = null;
 
   private dim = new DimInput();
   private onDone: ((id: string | null) => void) | null = null;
@@ -467,6 +475,7 @@ export class EdgeFeatureTool {
         this.awaitingRollback = false;
         this.seedGhosts(rollbackSels);
         this.enterEditUI();
+        this.refreshGhost();
         this.pushPreview();
         return;
       }
@@ -490,6 +499,14 @@ export class EdgeFeatureTool {
       if (held) this.refusal = { code: held.code, message: held.message };
     }
     if (current) this.recolorGhostsFromDiagnostics(held?.diagnostics);
+    // The ghost's job ends the moment the real geometry for THIS size is on
+    // screen, whether that's the built mesh or a held refusal (the refusal
+    // painting takes over from there, see refreshRefusal). A reply for an
+    // older size mid-debounce is `current` too (questionOf ignores the size
+    // itself) but doesn't match `this.size()`, so the ghost stays up.
+    if (current && (held || (size !== null && Math.abs(size - this.size()) < 1e-9))) {
+      this.viewport.clearBlendGhost();
+    }
   }
 
   /** Match each saved selector to a rendered sharp edge and build its ghost.
@@ -820,6 +837,7 @@ export class EdgeFeatureTool {
     // a gesture deliberately sitting on "none".
     this.setValue(this.value < MIN_EDGE_VALUE ? 0 : next.value);
     this.mountInput(typed);
+    this.refreshGhost(); // the ghost's SHAPE flips fillet <-> chamfer here too
     this.pushPreview();
     this.promptForPhase();
   }
@@ -896,6 +914,49 @@ export class EdgeFeatureTool {
     this.refreshRefusal();
   }
 
+  /** Instant client-side approximation of the current blend, redrawn every
+   *  drag tick from the picked edges' own polylines and the mesh's real
+   *  face normals around them (features/blendGhost.ts has the geometry,
+   *  viewport/ghosts.ts derives the normals). Cleared under the same
+   *  conditions pushPreview drops back to the bare model. Replaced by the
+   *  exact preview mesh the moment a matching reply lands, see
+   *  noteBuildOutcome, which is what makes this safe to leave slightly wrong
+   *  (an approximate arc, no profile, no clearance check) rather than exact. */
+  private refreshGhost() {
+    if (this.neutral || !this.ghosts.length) {
+      this.viewport.clearBlendGhost();
+      return;
+    }
+    this.viewport.setBlendGhost(
+      this.ghosts.map((g) => ({ body: g.sel.body, points: g.points })),
+      this.size(),
+      this.kind,
+    );
+  }
+
+  /** A drag tick or a scrubbed numeric field: the ghost updates now (see
+   *  refreshGhost), but the real engine round trip waits until the size holds
+   *  still for PREVIEW_DEBOUNCE_MS, or flushPreviewNow forces it (release, a
+   *  commit). Discrete actions (Tab, adding/removing a member) call
+   *  pushPreview directly, they don't repeat fast enough to need this. */
+  private schedulePreviewDuringDrag() {
+    this.refreshGhost();
+    if (this.previewTimer != null) window.clearTimeout(this.previewTimer);
+    this.previewTimer = window.setTimeout(() => {
+      this.previewTimer = null;
+      this.pushPreview();
+    }, PREVIEW_DEBOUNCE_MS);
+  }
+
+  /** Ask the engine right away, dropping any pending debounce. A no-op when
+   *  nothing is pending, so it's safe to call on every release. */
+  private flushPreviewNow() {
+    if (this.previewTimer == null) return;
+    window.clearTimeout(this.previewTimer);
+    this.previewTimer = null;
+    this.pushPreview();
+  }
+
   /** Paint ghosts red when the engine's failure probe names their edge (the
    *  edgeOpFailed diagnostic carries the failed edges' midpoints). */
   private recolorGhostsFromDiagnostics(diags: import("../types").ResolveDiag[] | undefined) {
@@ -955,7 +1016,7 @@ export class EdgeFeatureTool {
       } else {
         this.dim.updateFromCursor({ [this.field.name]: this.value });
       }
-      this.pushPreview();
+      this.schedulePreviewDuringDrag();
       // The prompt names the treatment, so it has to keep up with both, and a
       // fast enough pointermove can land on the far side without ever reporting
       // a frame at the origin.
@@ -1030,6 +1091,10 @@ export class EdgeFeatureTool {
       const moved =
         Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
       this.grabbing = false;
+      // The release is one of the moments the real preview isn't allowed to
+      // wait out the debounce (see schedulePreviewDuringDrag): commit and
+      // cancel both want the kernel already chasing the size the drag ended on.
+      this.flushPreviewNow();
       // Shared with Press/Pull, which offers the same handle over faces, see
       // fluentRelease for what each outcome is protecting against.
       const release = fluentRelease({
@@ -1053,6 +1118,7 @@ export class EdgeFeatureTool {
         if (this.neutral) {
           this.setValue(seedValue(this.kind, this.bounds(), this.clearanceLimitMm));
           this.dim.updateFromCursor({ [this.field.name]: this.value });
+          this.refreshGhost();
           this.pushPreview();
         }
         this.promptForPhase();
@@ -1129,6 +1195,7 @@ export class EdgeFeatureTool {
     this.buildGizmo();
     this.mountInput();
     this.promptForPhase();
+    this.refreshGhost();
     this.pushPreview();
     if (!this.unsubBuild) this.watchBuilds(null); // create mode: failure feedback only
     this.gesture.frame();
@@ -1188,7 +1255,7 @@ export class EdgeFeatureTool {
           // the handle afterwards carries on from there rather than from
           // wherever the drag last left off.
           this.setValue(clampValue(v, { min: MIN_EDGE_VALUE, max: Infinity }));
-          this.pushPreview();
+          this.schedulePreviewDuringDrag();
           if (this.neutral !== wasNeutral) this.promptForPhase();
         }
       }
@@ -1237,6 +1304,7 @@ export class EdgeFeatureTool {
     // would be applied to (see measureClearance).
     this.measureClearance();
     this.forgetBuildRange(); // a different set of edges is a different limit
+    this.refreshGhost(); // clears itself back to nothing at zero members, same as pushPreview
     this.pushPreview(); // clears itself back to the bare model at zero members
     this.promptForPhase();
   }
@@ -1268,6 +1336,7 @@ export class EdgeFeatureTool {
 
   private commit() {
     if (this.phase !== "drag") return this.cancel();
+    this.flushPreviewNow(); // settle any pending debounce before reading this.shown below
     const v = this.dim.getValue(this.field.name);
     if (v != null && Math.abs(v - this.value) > 1e-6) {
       // Typed and confirmed inside one frame, before tick() previewed it.
@@ -1318,6 +1387,11 @@ export class EdgeFeatureTool {
     const el = this.viewport.domElement;
     this.gesture.detach();
     el.style.cursor = "default";
+    if (this.previewTimer != null) {
+      window.clearTimeout(this.previewTimer);
+      this.previewTimer = null;
+    }
+    this.viewport.clearBlendGhost();
     this.dim.hide();
     this.chip?.dispose();
     this.chip = null;
