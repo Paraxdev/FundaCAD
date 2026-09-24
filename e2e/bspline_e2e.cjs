@@ -5,7 +5,10 @@
 //   2. Dragging an interior pole reshapes the curve.
 //   3. Double-clicking a polygon leg inserts a pole and the curve does not move.
 //   4. Delete removes the picked pole.
-//   5. The closed profile extrudes into one body.
+//   5. The closed profile extrudes into one body; poles a dimension holds stay
+//      drawn on a deselected curve.
+//   6. A fit-point spline converts to a control point one.
+//   7. Degree 5 on four poles shows as the cubic it builds, and cannot be picked.
 //
 // Usage (from the repo root, with vite on 5173 + engine on 8765 (`fundacad-engine --ws`)):
 //   SC_TOKEN=<engine token> SC_CHROME=<chrome.exe> node e2e/bspline_e2e.cjs [outDir]
@@ -174,6 +177,27 @@ const check = (name, ok, detail) => {
   check("Delete Control Point removes the right-clicked pole", !!del2 && del2.poles.length === 5
     && del2.poles.every((q) => Math.hypot(q.x - r2.x, q.y - r2.y) > 1e-6), del2 ? `${del2.poles.length} poles` : "curve gone");
 
+  // 4c. a dimension on two interior poles keeps them drawn once the curve is deselected
+  await page.evaluate(() => {
+    const e = window.sketch.entities.find((x) => x.type === "bspline");
+    const n = e.poles.length;
+    const [p, q] = [e.poles[1], e.poles[3]];
+    window.sketch.constraints = [...window.sketch.constraints,
+      { type: "p2pDistance", id: "dpole", e1: e.id, p1: 2, e2: e.id, p2: 4, value: Math.hypot(p.x - q.x, p.y - q.y), driven: true }];
+    window.sketch.selected = new Set();
+    window.sketch.selectedPole = null;
+    window.sketch.refreshActive();
+    return n;
+  });
+  await page.waitForTimeout(500);
+  const held = await page.evaluate(() => window.sketch.polygonObjects().map((o) => o.geometry?.getAttribute("position")?.count ?? -1));
+  check("a deselected curve still draws the two dimensioned poles, and no polygon", held.length === 1 && held[0] === 16, JSON.stringify(held));
+  await page.screenshot({ path: path.join(OUT, "bs-5b-dimensioned-poles.png") });
+  await page.evaluate(() => {
+    window.sketch.constraints = window.sketch.constraints.filter((c) => c.id !== "dpole");
+    window.sketch.refreshActive();
+  });
+
   // 5. finish and extrude
   await page.evaluate(() => window.sketch.finish(true));
   await page.waitForTimeout(1500);
@@ -212,6 +236,43 @@ const check = (name, ok, detail) => {
   check("Edit as Control Points turns the spline into a bspline with the same id", conv.type === "bspline" && conv.poles.length >= 5, `${conv.type}, ${conv.poles?.length} poles`);
   check("its ends stay where they were", Math.hypot(conv.poles[0].x + 40, conv.poles[0].y - 40) < 1e-9 && Math.hypot(conv.poles.at(-1).x - 40, conv.poles.at(-1).y - 45) < 1e-9);
   await page.screenshot({ path: path.join(OUT, "bs-8-converted.png") });
+
+  // 7. degree 5 stored on four poles is built, shown and deleted as the cubic it is
+  await page.evaluate(() => {
+    window.sketch.entities = [...window.sketch.entities,
+      { type: "bspline", id: "b4", degree: 5, poles: [{ x: -40, y: -20 }, { x: -15, y: 5 }, { x: 15, y: -35 }, { x: 40, y: -10 }] }];
+    window.sketch.selected = new Set(["b4"]);
+    window.sketch.refreshActive();
+  });
+  await page.waitForTimeout(400);
+  const mid4 = await page.evaluate(async () => {
+    const m = await import("/src/sketch/bspline.ts");
+    const e = window.sketch.entities.find((x) => x.id === "b4");
+    const [a, b] = m.bsplineRange(e);
+    return m.bsplinePoint(e, (a + b) / 2);
+  });
+  const on4 = await scr(mid4.x, mid4.y);
+  await page.mouse.click(on4.x, on4.y, { button: "right" });
+  await page.waitForTimeout(400);
+  const degItems = await page.evaluate(() => [...document.querySelectorAll(".ctx-item")]
+    .filter((x) => x.textContent.includes("Degree"))
+    .map((x) => ({ text: x.textContent.trim(), disabled: x.classList.contains("disabled"), checked: !!x.querySelector(".ctx-check *") })));
+  await page.screenshot({ path: path.join(OUT, "bs-9-degree-menu.png") });
+  const d5 = degItems.find((x) => x.text.startsWith("Degree 5"));
+  check("Degree 5 is disabled on four poles and says it needs six", !!d5 && d5.disabled && d5.text.includes("needs 6 control points"), JSON.stringify(degItems));
+  const checkedNow = degItems.filter((x) => x.checked).map((x) => x.text);
+  check("and the menu checks Degree 3, the degree it is built with", checkedNow.length === 1 && checkedNow[0] === "Degree 3", JSON.stringify(checkedNow));
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+  const p1 = await page.evaluate(() => window.sketch.entities.find((x) => x.id === "b4").poles[1]);
+  const p1s = await scr(p1.x, p1.y);
+  await page.mouse.click(p1s.x, p1s.y);
+  await page.waitForTimeout(300);
+  await page.keyboard.press("Delete");
+  await page.waitForTimeout(500);
+  const msg = await page.evaluate(() => document.body.innerText);
+  check("Delete on its four poles explains a cubic keeps four", msg.includes("A degree 3 spline keeps at least 4 control points"));
+  await page.screenshot({ path: path.join(OUT, "bs-10-degree-delete.png") });
 
   await browser.close();
   console.log(failures ? `${failures} FAILED` : "all passed");
