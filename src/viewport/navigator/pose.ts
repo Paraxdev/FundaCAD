@@ -140,6 +140,32 @@ export function project(p: Pose, v: Frame, point: THREE.Vector3): { x: number; y
 }
 const f3 = new THREE.Vector3();
 
+/** Whether a box lies wholly outside the view: every corner beyond the same
+ *  side of the frustum, or behind a perspective eye. */
+export function boxOffScreen(p: Pose, v: Frame, box: THREE.Box3): boolean {
+  const e = eyeOf(p, new THREE.Vector3());
+  const fwd = forwardOf(p, new THREE.Vector3());
+  const right = rightOf(p, new THREE.Vector3());
+  const up = upOf(p, new THREE.Vector3());
+  const a = aspectOf(v);
+  const h = halfTan(p.fov);
+  const c = new THREE.Vector3();
+  let left = 0, rightOut = 0, below = 0, above = 0, behind = 0;
+  for (let i = 0; i < 8; i++) {
+    c.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).sub(e);
+    const z = c.dot(fwd);
+    const hy = p.ortho ? p.scale : z * h;
+    const x = c.dot(right);
+    const y = c.dot(up);
+    if (x < -hy * a) left++;
+    if (x > hy * a) rightOut++;
+    if (y < -hy) below++;
+    if (y > hy) above++;
+    if (!p.ortho && z <= 0) behind++;
+  }
+  return left === 8 || rightOut === 8 || below === 8 || above === 8 || behind === 8;
+}
+
 export interface Ray {
   origin: THREE.Vector3;
   dir: THREE.Vector3;
