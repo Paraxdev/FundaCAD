@@ -199,7 +199,8 @@
   border-color: color-mix(in srgb, var(--accent) 70%, transparent);
   box-shadow: var(--glass-inset), 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent), var(--float-shadow);
 }
-.dim-btn.dim-toggle.on {
+.dim-btn.dim-toggle.on,
+.dim-btn.dim-direction.on {
   /* Mixed into an opaque dark, not transparency: over a pale model a see-through
      tint washed the label out. */
   background: color-mix(in srgb, var(--accent) 20%, rgb(22, 24, 29));

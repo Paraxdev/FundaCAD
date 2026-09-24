@@ -232,17 +232,20 @@ button.finish:hover {
    word. Off is the same quiet box as the rest of the cluster; on is the accent,
    because the whole reason it is here is to be readable at a glance while the
    eye is on the number beside it. */
-.dim-btn.dim-toggle {
+.dim-btn.dim-toggle,
+.dim-btn.dim-direction {
   width: auto;
   padding: 0 var(--s-3);
   font-size: 11px;
   font-weight: 600;
   color: var(--text-dim);
 }
-.dim-btn.dim-toggle:hover {
+.dim-btn.dim-toggle:hover,
+.dim-btn.dim-direction:hover {
   color: var(--text);
 }
-.dim-btn.dim-toggle.on {
+.dim-btn.dim-toggle.on,
+.dim-btn.dim-direction.on {
   color: var(--accent-hot);
   border-color: var(--accent);
   background: var(--accent-tint);

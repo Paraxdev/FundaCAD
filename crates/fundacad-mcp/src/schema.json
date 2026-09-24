@@ -257,7 +257,7 @@
    }
   },
   "press-pull": {
-   "summary": "Push one or more faces along their own normals.",
+   "summary": "Push one or more faces along their own normals, or along the axis of the hole they end.",
    "fields": {
     "face": "Selector or list of Selectors",
     "distance": "Num, signed: positive grows the body, negative cuts in",
@@ -265,7 +265,8 @@
     "mode": "optional \"auto\" (the default: move the face itself, as described in the notes), or \"join\", \"cut\", \"new\" or \"intersect\": sweep the face into a prism along its normal by `distance` and combine that prism with the body, or with `targets`",
     "body": "optional body id",
     "upTo": "optional Selector naming a target face to stop at, instead of using `distance`",
-    "taper": "optional Num, degrees. Leans a PLANAR push's walls as they travel (a moulded boss, an angled pocket); positive narrows the far end. Must be between -89 and 89. Ignored on a curved face and on an `upTo` push. Absent or 0 is a straight push"
+    "taper": "optional Num, degrees. Leans a PLANAR push's walls as they travel (a moulded boss, an angled pocket); positive narrows the far end. Must be between -89 and 89. Ignored on a curved face and on an `upTo` push. Absent or 0 is a straight push",
+    "direction": "optional, \"normal\" (the default) or \"axis\". \"axis\" moves the face along the line the faces around it run along instead of along its own normal, so the cone, cap or flat floor at the end of a hole slides down the hole: negative makes the hole deeper, positive shallower, and the end keeps its shape where an offset along the normal would widen it. Every face bordering the pushed one must be a wall along that line, a cylinder parallel to it or a flat wall containing it, or the feature is refused. The line is a round wall's axis, else the face's own axis, else where two flat walls meet. `taper` is ignored with \"axis\""
    },
    "example": {
     "id": "pp1",

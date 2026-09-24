@@ -8,11 +8,14 @@
 // a real surface offset needs OCCT, so the preview is engine-driven:
 // the un-committed feature is appended via store.setPreview() and the normal
 // rebuild pipeline renders it. Commit promotes it (records undo); Esc reverts.
+//
+// The end of a hole (its cone, cap or floor) can instead move along the hole's
+// axis, which deepens the hole rather than widening its end (pressPullAxis.ts).
 
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore } from "../document/store";
-import type { Feature, PressPullMode, Selector } from "../types";
+import type { Feature, PressPullDirection, PressPullMode, Selector } from "../types";
 import { DimInput, type DimToggleDef } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
 import { snap } from "../ui/units";
@@ -28,6 +31,7 @@ import { draftAngle, draftDelta } from "./draftMath";
 import { collapseDiameter, deltaForDiameter, radialDrag, type RoundFace } from "./radialDrag";
 import { CanvasGesture } from "./canvasGesture";
 import { previewVerdict } from "./previewVerdict";
+import { anchorOnAxis, DIRECTION_LABEL, initialDirection, offeredAxis, type HoleAxis } from "./pressPullAxis";
 
 /** Steepest taper the tool offers, degrees, just under the engine's 89 fold limit. */
 const MAX_PP_TAPER = 88;
@@ -74,6 +78,16 @@ export class PressPullTool {
    *  diameters. Null for every other face, where nothing changes. */
   private round: RoundFace | null = null;
   private mode: PressPullMode = "auto";
+  /** Along the axis only once the engine has said the face has one worth
+   *  offering (`holeAxis`); the button stays hidden until then. */
+  private direction: PressPullDirection = "normal";
+  private holeAxis: HoleAxis | null = null;
+  private axisAsk = 0; // bumped per question, so a late answer for another face is dropped
+  private directionBtn: HTMLButtonElement | null = null;
+  // Where the arrow stands and points along the normal, restored on switching back.
+  private faceAnchor = new THREE.Vector3();
+  private faceNormal = new THREE.Vector3(0, 0, 1);
+  private lastPointer = { x: 0, y: 0 };
   private previewId = ""; // id shared by the live preview and the committed feature
 
   private gizmo: THREE.Group | null = null;
@@ -162,12 +176,14 @@ export class PressPullTool {
     this.fluentGrab = true;
     this.downOnGizmo = true;
     this.downPos = { x: clientX, y: clientY };
+    this.lastPointer = { x: clientX, y: clientY };
     this.grabValue = this.value;
     this.grabProj = axisDragDistance(this.viewport, clientX, clientY, this.anchor, this.axis);
     this.viewport.domElement.style.cursor = "grabbing";
   }
 
   private onMove(e: PointerEvent) {
+    this.lastPointer = { x: e.clientX, y: e.clientY };
     if (this.phase === "pick") {
       const faceId = this.viewport.hoverFaceAt(e.clientX, e.clientY);
       this.viewport.domElement.style.cursor = faceId != null ? "pointer" : "default";
@@ -239,6 +255,11 @@ export class PressPullTool {
         e.stopImmediatePropagation();
         this.faces.push(hit.selector);
         this.faceIds.push(hit.faceId);
+        // The axis was the first face's; the faces share one arrow from here.
+        this.axisAsk++;
+        this.holeAxis = null;
+        if (this.directionBtn) this.directionBtn.style.display = "none";
+        if (this.direction === "axis") this.setDirection("normal");
         this.refreshPreview();
         setPrompt(`${this.faces.length} faces · drag or type a distance · click to commit · Esc`);
       }
@@ -258,6 +279,7 @@ export class PressPullTool {
     }
     // grabbing the handle scrubs; a clean click elsewhere commits
     this.downPos = { x: e.clientX, y: e.clientY };
+    this.lastPointer = { x: e.clientX, y: e.clientY };
     this.downOnGizmo = this.hitGizmo(e.clientX, e.clientY);
     if (this.downOnGizmo) {
       e.preventDefault();
@@ -329,7 +351,7 @@ export class PressPullTool {
         // restore the distance field T-mode hid (audit bug #2: leaving it
         // active let Enter commit a plain distance mid-target-pick)
         this.dim.show([{ name: "distance", label: "D", kind: "length" }], () => this.commit(), () => this.cancel(),
-          this.round ? undefined : this.modeToggle());
+          this.round ? undefined : this.modeToggle(), this.directionButton());
         this.dim.updateFromCursor({ distance: Math.abs(this.value) });
         setPrompt("Drag or type a value · click a face to stop at it · click to commit · Esc");
         return;
@@ -355,6 +377,10 @@ export class PressPullTool {
     this.round = round;
     this.anchor.copy(anchor);
     this.axis.copy(round?.radial ?? normal).normalize();
+    this.faceAnchor.copy(anchor);
+    this.faceNormal.copy(normal).normalize();
+    this.direction = "normal";
+    this.holeAxis = null;
     this.phase = "drag";
     this.value = 0;
     this.taper = 0;
@@ -370,8 +396,11 @@ export class PressPullTool {
         : [{ name: "distance", label: "D", kind: "length" }, { name: "taper", label: "Angle", icon: "angle", kind: "angle" }],
       () => this.commit(), () => this.cancel(),
       round ? undefined : this.modeToggle(),
+      this.directionButton(),
     );
     if (!round) this.dim.updateFromCursor({ taper: 0 });
+    const lone = faces[0];
+    if (!round && faces.length === 1 && lone) this.askAxis(lone, bodyId);
     const s = this.viewport.projectToScreen(this.anchor);
     this.dim.position(s.x, s.y);
     // A round face opens showing the size it ALREADY is, not a zero, the field
@@ -453,8 +482,10 @@ export class PressPullTool {
     // A leaning wall is not a prism, and the instant ghost cannot draw one, so a
     // tapered push previews the EXACT solid through the engine, the way the
     // extrude tool does. So does a push with an explicit operation, whose effect on
-    // the bodies it reaches no ghost can show. Plain straight pushes keep the ghost.
-    if ((this.canTaper() && Math.abs(this.taper) >= 0.05) || (this.mode !== "auto" && !this.round)) {
+    // the bodies it reaches no ghost can show, and one along an axis, which the
+    // ghost would draw along the normal. Plain straight pushes keep the ghost.
+    const exact = (this.mode !== "auto" || this.direction === "axis") && !this.round;
+    if ((this.canTaper() && Math.abs(this.taper) >= 0.05) || exact) {
       this.viewport.clearPressPullGhost();
       this.store.setPreview(this.buildFeature());
       this.taperPreviewOn = true;
@@ -503,7 +534,7 @@ export class PressPullTool {
    *  push with real travel. A round resize has no wall, an up-to push lands on a
    *  chosen surface that a lean would miss, and a target-pick is mid-question. */
   private canTaper(): boolean {
-    return !this.round && !this.upTo && !this.pickingTarget && Math.abs(this.value) >= PP_TAPER_MIN;
+    return !this.round && !this.upTo && !this.pickingTarget && this.direction === "normal" && Math.abs(this.value) >= PP_TAPER_MIN;
   }
 
   /** Float the curved taper arc above the pushed face, swinging in the plane the
@@ -558,6 +589,59 @@ export class PressPullTool {
     };
   }
 
+  /** The "Along normal / Along axis" switch, hidden until the engine says the
+   *  face has an axis. A fresh one per showing of the box, which clears its own. */
+  private directionButton(): HTMLButtonElement {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "dim-btn dim-direction";
+    btn.title = "Along axis slides the end of a hole down the hole, so the hole gets deeper and its end keeps its shape; Along normal offsets the face";
+    btn.textContent = DIRECTION_LABEL[this.direction];
+    btn.classList.toggle("on", this.direction === "axis");
+    btn.style.display = this.holeAxis ? "" : "none";
+    btn.addEventListener("pointerdown", (e) => {
+      e.preventDefault(); // never blur the input to press it
+      e.stopPropagation();
+      this.setDirection(this.direction === "axis" ? "normal" : "axis");
+    });
+    this.directionBtn = btn;
+    return btn;
+  }
+
+  private askAxis(face: Selector, bodyId: string | null) {
+    const ask = ++this.axisAsk;
+    void this.store.faceAxis(face, bodyId).then((reply) => {
+      if (ask !== this.axisAsk || !this.active || this.phase !== "drag") return;
+      this.holeAxis = offeredAxis(reply);
+      if (!this.holeAxis) return;
+      if (this.directionBtn) this.directionBtn.style.display = "";
+      if (initialDirection(this.holeAxis) === "axis") this.setDirection("axis");
+    });
+  }
+
+  private setDirection(d: PressPullDirection) {
+    const axis = this.holeAxis;
+    this.direction = d === "axis" && axis ? "axis" : "normal";
+    if (this.directionBtn) {
+      this.directionBtn.textContent = DIRECTION_LABEL[this.direction];
+      this.directionBtn.classList.toggle("on", this.direction === "axis");
+    }
+    if (this.direction === "axis" && axis) {
+      const [x, y, z] = anchorOnAxis([this.faceAnchor.x, this.faceAnchor.y, this.faceAnchor.z], axis);
+      this.anchor.set(x, y, z);
+      this.axis.set(axis.dir[0], axis.dir[1], axis.dir[2]);
+    } else {
+      this.anchor.copy(this.faceAnchor);
+      this.axis.copy(this.faceNormal);
+    }
+    // A switch mid-drag must not jump the value: measure on from here along the new arrow.
+    if (this.grabbing) {
+      this.grabValue = this.value;
+      this.grabProj = axisDragDistance(this.viewport, this.lastPointer.x, this.lastPointer.y, this.anchor, this.axis);
+    }
+    this.refreshPreview();
+  }
+
   private buildFeature(): Feature {
     const face = this.faces.length === 1 ? (this.faces[0] ?? this.faces) : this.faces;
     // A round face dragged past the smallest size the kernel will build is a
@@ -582,11 +666,12 @@ export class PressPullTool {
       distance: v,
       operation: v >= 0 ? "join" : "cut",
       ...(this.mode !== "auto" && !this.round ? { mode: this.mode } : {}),
+      ...(this.direction === "axis" && !this.round ? { direction: "axis" as const } : {}),
       ...(this.bodyId != null ? { body: this.bodyId } : {}),
       ...(this.upTo ? { upTo: this.upTo } : {}),
       // Taper rides a planar by-distance push only; the engine ignores it on a
       // curved face and on an up-to push, and it is written only when it bites.
-      ...(!this.round && !this.upTo && Math.abs(this.taper) >= 0.05
+      ...(!this.round && !this.upTo && this.direction === "normal" && Math.abs(this.taper) >= 0.05
         ? { taper: Math.round(this.taper * 1000) / 1000 }
         : {}),
     };
@@ -672,6 +757,10 @@ export class PressPullTool {
     this.hovering = false;
     this.value = 0;
     this.round = null;
+    this.axisAsk++;
+    this.holeAxis = null;
+    this.direction = "normal";
+    this.directionBtn = null;
     setPrompt(null);
   }
 

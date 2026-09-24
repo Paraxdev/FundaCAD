@@ -153,6 +153,10 @@ export const FEATURE_CHOICE_FIELDS: Partial<Record<FeatureType, ChoiceField[]>> 
     field: "mode", label: "Operation", fallback: "auto",
     options: [{ value: "auto", label: "Auto" }, ...BOOLEAN_OPS],
     title: "Auto grows or shrinks the face by the sign of the distance; the others extrude it and combine like an extrude",
+  }, {
+    field: "direction", label: "Direction", fallback: "normal",
+    options: [{ value: "normal", label: "Along normal" }, { value: "axis", label: "Along axis" }],
+    title: "Along axis slides the end of a hole down the hole, so the hole gets deeper or shallower and the end keeps its shape",
   }],
   fillet: [
     {

@@ -2,7 +2,7 @@
 // One request/response per message, matched by `id`. Calls made before the
 // transport opens are queued and flushed on open; the transport reconnects.
 
-import type { CadDocument, EdgeFingerprint, ExportFormat, F32Wire, MeshExportOptions, Feature, ImportFormat, ImportReply, PlaneSpec, ProjectedCurve, ProjectedSource, RebuildReply, RebuildResult, U32Wire } from "../types";
+import type { CadDocument, EdgeFingerprint, ExportFormat, F32Wire, MeshExportOptions, Feature, ImportFormat, ImportReply, PlaneSpec, ProjectedCurve, ProjectedSource, RebuildReply, RebuildResult, Selector, U32Wire } from "../types";
 import { RebuildAssembly, manifestFromBodies } from "./assembly";
 import { pipe, pipeFault } from "../diagnostics/pipelineLog";
 import { EngineTransport, type GeometryTransport } from "./transport";
@@ -91,6 +91,13 @@ export interface GeneratedShape {
 
 export type GeneratedShapeReply = { ok: true; shape: GeneratedShape } | { ok: false; message: string };
 
+/** The `faceAxis` op: `dir` points out of the material, `hole` marks the round
+ *  end of a bore on the bore's own axis, `sameAsNormal` a flat face square to
+ *  the axis, which moves the same either way. */
+export type FaceAxisReply =
+  | { axis: { origin: [number, number, number]; dir: [number, number, number] }; hole: boolean; sameAsNormal?: boolean }
+  | { reason: string };
+
 // The surface the rest of the app depends on. `Geometry` implements it over
 // either engine's transport, and tests stub it by hand.
 export interface GeometryBackend {
@@ -166,6 +173,10 @@ export interface GeometryBackend {
     doc: CadDocument,
     clearance?: number,
   ): Promise<{ ok: boolean; pairs?: ClashPair[]; clearances?: ClearancePair[]; truncated?: boolean; message?: string }>;
+  /** The axis a press/pull with `direction: "axis"` would move this face along,
+   *  or why it has none. Null when the engine could not be asked. Optional, a
+   *  test backend may not answer it. */
+  faceAxis?(doc: CadDocument, face: Selector, body: string | null): Promise<FaceAxisReply | null>;
   /** Export through a format a plugin's geometry component registered with the
    *  engine. The engine rebuilds and meshes; `options` reach the plugin's
    *  exporter untouched, and `info` is whatever it reports back. Optional, a
@@ -1135,6 +1146,11 @@ export class Geometry implements GeometryBackend {
       };
     }
     return { ok: false, message: msg.error?.message };
+  }
+
+  async faceAxis(doc: CadDocument, face: Selector, body: string | null): Promise<FaceAxisReply | null> {
+    const msg = await this.call<FaceAxisReply>("faceAxis", { document: doc, face, ...(body ? { body } : {}) });
+    return msg.ok ? msg.result : null;
   }
 
   async tessellateText(entity: object, pathEntity?: object): Promise<TextFace[]> {
