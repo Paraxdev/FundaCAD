@@ -10,6 +10,16 @@
 #include "builder_ops.hxx"
 
 #include <BRepAdaptor_Curve.hxx>
+#include <BRepBuilderAPI_GTransform.hxx>
+#include <BRepBuilderAPI_MakeVertex.hxx>
+#include <BRepOffsetAPI_ThruSections.hxx>
+#include <GeomAPI_Interpolate.hxx>
+#include <Geom_Circle.hxx>
+#include <Geom_Ellipse.hxx>
+#include <TColgp_HArray1OfPnt.hxx>
+#include <gp_Elips.hxx>
+#include <gp_GTrsf.hxx>
+#include <gp_Mat.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepLProp_SLProps.hxx>
@@ -754,6 +764,127 @@ inline PoShape po_boolean_with(int kind, const TopoDS_Shape &base, const TopoDS_
     return po_own(out);
   } catch (...) {
     status = 1;
+    return po_null();
+  }
+}
+
+// A closed ellipse edge: semi-axis rx along x (made perpendicular to n), ry
+// along n x x, starting at `start` radians from x and running counterclockwise
+// about n. The start is kept whichever radius is larger, so a run of sections
+// built with one seam direction lofts without a twist.
+// p: cx cy cz nx ny nz xx xy xz rx ry start.
+inline PoShape po_ellipse_edge(rust::Slice<const double> p) {
+  try {
+    if (p.size() < 12) return po_null();
+    gp_Pnt c(p[0], p[1], p[2]);
+    gp_Dir n(p[3], p[4], p[5]);
+    gp_Vec xv(p[6], p[7], p[8]);
+    gp_Vec nv(n);
+    xv -= nv * xv.Dot(nv);
+    gp_Dir x(xv);
+    double rx = p[9], ry = p[10], t0 = p[11];
+    Handle(Geom_Curve) curve;
+    double a0 = t0;
+    if (std::abs(rx - ry) <= 1e-12 * std::max(rx, ry)) {
+      curve = new Geom_Circle(gp_Circ(gp_Ax2(c, n, x), rx));
+    } else if (rx > ry) {
+      curve = new Geom_Ellipse(gp_Elips(gp_Ax2(c, n, x), rx, ry));
+    } else {
+      curve = new Geom_Ellipse(gp_Elips(gp_Ax2(c, n, n.Crossed(x)), ry, rx));
+      a0 = t0 - M_PI / 2;
+    }
+    BRepBuilderAPI_MakeEdge mk(curve, a0, a0 + 2 * M_PI);
+    if (!mk.IsDone()) return po_null();
+    return po_own(mk.Edge());
+  } catch (...) {
+    return po_null();
+  }
+}
+
+inline TopoDS_Wire po_section_wire(const TopoDS_Shape &s) {
+  if (s.ShapeType() == TopAbs_WIRE) return TopoDS::Wire(s);
+  if (s.ShapeType() == TopAbs_EDGE) return BRepBuilderAPI_MakeWire(TopoDS::Edge(s)).Wire();
+  if (s.ShapeType() == TopAbs_FACE) return BRepTools::OuterWire(TopoDS::Face(s));
+  return TopoDS_Wire();
+}
+
+// A solid through the children of `sections` in order (wires, edges or
+// faces' outer wires), optionally closed to a point at either end. caps:
+// has-start sx sy sz has-end ex ey ez. `smooth` asks ThruSections for its
+// energy smoothing, `match_seams` for its own seam and orientation matching;
+// without it the sections loft exactly as given.
+inline PoShape po_loft(const TopoDS_Shape &sections, rust::Slice<const double> caps, bool ruled,
+                       bool smooth, bool match_seams) {
+  try {
+    if (caps.size() < 8) return po_null();
+    BRepOffsetAPI_ThruSections mk(true, ruled, 1e-6);
+    mk.CheckCompatibility(match_seams);
+    mk.SetSmoothing(smooth);
+    int n = 0;
+    if (caps[0] > 0.5) {
+      mk.AddVertex(BRepBuilderAPI_MakeVertex(gp_Pnt(caps[1], caps[2], caps[3])).Vertex());
+      ++n;
+    }
+    for (TopoDS_Iterator it(sections); it.More(); it.Next()) {
+      TopoDS_Wire w = po_section_wire(it.Value());
+      if (w.IsNull()) return po_null();
+      mk.AddWire(w);
+      ++n;
+    }
+    if (caps[4] > 0.5) {
+      mk.AddVertex(BRepBuilderAPI_MakeVertex(gp_Pnt(caps[5], caps[6], caps[7])).Vertex());
+      ++n;
+    }
+    if (n < 2) return po_null();
+    mk.Build();
+    if (!mk.IsDone()) return po_null();
+    TopoDS_Shape out = mk.Shape();
+    if (out.IsNull()) return po_null();
+    if (out.ShapeType() == TopAbs_SOLID) {
+      TopoDS_Solid solid = TopoDS::Solid(out);
+      BRepLib::OrientClosedSolid(solid);
+      out = solid;
+    }
+    return po_own(out);
+  } catch (...) {
+    return po_null();
+  }
+}
+
+// A B-spline edge interpolating 3D points (x y z each), closed back through
+// the first point when `periodic`.
+inline PoShape po_interpolate_edge(rust::Slice<const double> xyz, bool periodic) {
+  try {
+    int n = (int)(xyz.size() / 3);
+    if (n < 2) return po_null();
+    Handle(TColgp_HArray1OfPnt) pts = new TColgp_HArray1OfPnt(1, n);
+    for (int i = 0; i < n; ++i) pts->SetValue(i + 1, gp_Pnt(xyz[3 * i], xyz[3 * i + 1], xyz[3 * i + 2]));
+    GeomAPI_Interpolate ip(pts, periodic, 1e-7);
+    ip.Perform();
+    if (!ip.IsDone()) return po_null();
+    BRepBuilderAPI_MakeEdge mk(ip.Curve());
+    if (!mk.IsDone()) return po_null();
+    return po_own(mk.Edge());
+  } catch (...) {
+    return po_null();
+  }
+}
+
+// The shape under an affine map, row major [a b c tx; d e f ty; g h i tz].
+// A map that is not a similarity turns the surfaces into B-splines; a
+// mirroring map is refused, since the solid would come out inside out.
+inline PoShape po_gtransform(const TopoDS_Shape &s, rust::Slice<const double> m) {
+  try {
+    if (m.size() < 12) return po_null();
+    gp_Mat mat(m[0], m[1], m[2], m[4], m[5], m[6], m[8], m[9], m[10]);
+    if (mat.Determinant() < 1e-18) return po_null();
+    gp_GTrsf g(mat, gp_XYZ(m[3], m[7], m[11]));
+    BRepBuilderAPI_GTransform tr(s, g, true);
+    if (!tr.IsDone()) return po_null();
+    TopoDS_Shape out = tr.Shape();
+    if (out.IsNull()) return po_null();
+    return po_own(out);
+  } catch (...) {
     return po_null();
   }
 }

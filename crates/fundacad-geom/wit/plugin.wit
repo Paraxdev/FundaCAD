@@ -192,6 +192,28 @@ interface kernel {
   fillet: func(shape: borrow<shape>, edges: list<borrow<shape>>, radius: f64, one-by-one: bool) -> result<blended, string>;
   chamfer: func(shape: borrow<shape>, edges: list<borrow<shape>>, distance: f64, distance2: f64, one-by-one: bool) -> result<blended, string>;
 
+  // A closed ellipse edge centred on `center` in the plane normal to
+  // `normal`: semi-axis `rx` along `x-dir` (made perpendicular to the normal),
+  // `ry` along normal x x-dir. It starts `start` radians from x-dir and runs
+  // counterclockwise about the normal, whichever radius is larger.
+  ellipse-edge: func(center: vec3, normal: vec3, x-dir: vec3, rx: f64, ry: f64, start: f64) -> result<shape, string>;
+
+  // `ruled` joins the sections with straight lines instead of a smooth
+  // surface, `smooth` asks for the kernel's energy smoothing on top, and
+  // `match-seams` lets the kernel realign each section's start point and
+  // direction; without it the sections are lofted exactly as given.
+  record loft-options { ruled: bool, smooth: bool, match-seams: bool }
+  // A solid through closed sections (wires, edges or faces' outer wires) in
+  // order, closed to a point at either end when one is given.
+  loft: func(sections: list<borrow<shape>>, start-point: option<vec3>, end-point: option<vec3>, options: loft-options) -> result<shape, string>;
+  // A B-spline edge through the points in order, back through the first
+  // when `closed`.
+  interpolate-edge: func(points: list<vec3>, closed: bool) -> result<shape, string>;
+  // The shape under an affine map, twelve numbers row major
+  // [a b c tx, d e f ty, g h i tz]. A map that is not a similarity turns
+  // the surfaces into B-splines; a mirroring one is refused.
+  gtransform: func(shape: borrow<shape>, matrix: list<f64>) -> result<shape, string>;
+
   // The content-addressed blob store: a shape by its id, and a shape stored.
   read-blob: func(id: string) -> result<shape, string>;
   write-blob: func(shape: borrow<shape>) -> result<string, string>;
@@ -217,6 +239,11 @@ interface feature {
   body-name: func(body: u32) -> result<string, string>;
   set-body-shape: func(body: u32, shape: borrow<shape>) -> result<_, string>;
   add-body: func(shape: borrow<shape>, name: option<string>) -> u32;
+  // A solid merged into the bodies the way the app's own features merge
+  // theirs: `operation` is new, join, cut or intersect, `targets` the body
+  // ids it may touch (empty for every visible body it reaches), and `name`
+  // labels a new body.
+  combine: func(solid: borrow<shape>, operation: string, targets: list<string>, name: option<string>) -> result<_, string>;
   // One entry of the rebuild's diagnostics, JSON; `feature_id` is filled in.
   diagnostic: func(entry: string);
   // Attach a mesh pass spec (JSON with a "pass" key) to a body, for

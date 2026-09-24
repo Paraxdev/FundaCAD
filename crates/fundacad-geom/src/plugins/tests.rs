@@ -133,6 +133,45 @@ fn a_boolean_with_options_cuts_and_cleans() {
 }
 
 #[test]
+fn ellipses_lofts_curves_and_an_affine_map() {
+    let n = (0.0, 0.0, 1.0);
+    let e = kx::ellipse_edge((0.0, 0.0, 0.0), n, (1.0, 0.0, 0.0), 2.0, 5.0, 0.0).unwrap();
+    let disc = k::face_from_wire(&kx::wire_from_edges(&[&e]).unwrap()).unwrap();
+    assert!(close(kernel::area(&disc), PI * 10.0, 1e-9));
+    // The start is kept when the radius across is the larger one.
+    let start = k::point_at(&e, 0.0).unwrap();
+    assert!((start.0 - 2.0).abs() < 1e-9 && start.1.abs() < 1e-9, "{start:?}");
+    let turned = kx::ellipse_edge((0.0, 0.0, 0.0), n, (1.0, 0.0, 0.0), 2.0, 5.0, PI / 2.0).unwrap();
+    let start = k::point_at(&turned, 0.0).unwrap();
+    assert!(start.0.abs() < 1e-9 && (start.1 - 5.0).abs() < 1e-9, "{start:?}");
+    assert!(kx::ellipse_edge((0.0, 0.0, 0.0), n, n, 2.0, 5.0, 0.0).is_err());
+    assert!(kx::ellipse_edge((0.0, 0.0, 0.0), n, (1.0, 0.0, 0.0), 0.0, 5.0, 0.0).is_err());
+
+    let options = host::kernel::LoftOptions { ruled: true, smooth: false, match_seams: false };
+    let lower = kx::circle_edge((0.0, 0.0, 0.0), n, 3.0).unwrap();
+    let upper = kx::circle_edge((0.0, 0.0, 10.0), n, 3.0).unwrap();
+    let tube = kx::loft(&[&lower, &upper], None, None, &options).unwrap();
+    assert!(close(kernel::volume(&tube), PI * 90.0, 1e-6), "{}", kernel::volume(&tube));
+    let cone = kx::loft(&[&lower], None, Some((0.0, 0.0, 10.0)), &options).unwrap();
+    assert!(close(kernel::volume(&cone), PI * 30.0, 1e-3), "{}", kernel::volume(&cone));
+    assert!(kx::loft(&[&lower], None, None, &options).is_err());
+
+    let curve = kx::interpolate_edge(&[(0.0, 0.0, 0.0), (5.0, 5.0, 1.0), (10.0, 0.0, 2.0)], false).unwrap();
+    let mid = k::point_at(&curve, 0.5).unwrap();
+    assert!((mid.0 - 5.0).abs() < 0.1 && mid.1 > 4.9, "{mid:?}");
+    assert!(kx::interpolate_edge(&[(0.0, 0.0, 0.0)], false).is_err());
+
+    let ball = k::make_sphere((0.0, 0.0, 0.0), 1.0).unwrap();
+    let squashed = kx::gtransform(&ball, &[3.0, 0.0, 0.0, 1.0, 0.0, 2.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]).unwrap();
+    assert!(close(kernel::volume(&squashed), 4.0 / 3.0 * PI * 6.0, 1e-3), "{}", kernel::volume(&squashed));
+    let bb = kernel::bbox(&squashed).unwrap();
+    assert!((bb[0] + 2.0).abs() < 0.05 && (bb[3] - 4.0).abs() < 0.05, "{bb:?}");
+    let mirror = [-1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0];
+    assert!(kx::gtransform(&ball, &mirror).is_err());
+    assert!(kx::gtransform(&ball, &[1.0; 3]).is_err());
+}
+
+#[test]
 fn edges_wires_and_a_rotation() {
     let arc = kx::arc_edge((-2.0, 0.0, 0.0), (0.0, 2.0, 0.0), (2.0, 0.0, 0.0)).unwrap();
     let line = kx::line_edge((2.0, 0.0, 0.0), (-2.0, 0.0, 0.0)).unwrap();

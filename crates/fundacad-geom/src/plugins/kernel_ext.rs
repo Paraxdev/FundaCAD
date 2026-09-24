@@ -1,6 +1,8 @@
 //! The kernel calls a ported plugin needed beyond the first set: surface
 //! frames and samples, a face's stored triangulation, edges and wires, a
-//! rotation, a helical sweep, a boolean with options and face selectors.
+//! rotation, a helical sweep, a boolean with options and face selectors, and
+//! the smooth-surface set: ellipse edges, lofts, interpolated edges and an
+//! affine map.
 
 use opencascade::primitives::Shape;
 use opencascade_sys::plugin_ops as ffi;
@@ -9,6 +11,7 @@ use serde_json::Value;
 use super::host::types::{
     BooleanOp, BooleanOptions, FaceTriangulation, Fuzzy, SurfaceFrame, SurfaceSample, Vec3,
 };
+use super::host::kernel::LoftOptions;
 use super::kernel_api::{finite, nonnull, unit};
 use crate::kernel;
 
@@ -199,4 +202,59 @@ pub fn select_faces(shape: &Shape, selectors: &str) -> Result<Vec<Shape>, crate:
     let sel: Value = serde_json::from_str(selectors)
         .map_err(|e| crate::builder::Fail::msg(format!("the selector does not parse: {e}")))?;
     crate::select::Resolver::new(None, None).faces(shape, &sel)
+}
+
+pub fn ellipse_edge(c: Vec3, n: Vec3, x: Vec3, rx: f64, ry: f64, start: f64) -> Result<Shape, String> {
+    finite(&[c.0, c.1, c.2, rx, ry, start])?;
+    let n = unit(n)?;
+    let x = unit(x)?;
+    let along = x.0 * n.0 + x.1 * n.1 + x.2 * n.2;
+    if along.abs() > 1.0 - 1e-9 {
+        return Err("an ellipse's x direction must not lie along its normal".into());
+    }
+    if !(rx > 0.0 && ry > 0.0) {
+        return Err("an ellipse needs both radii greater than 0".into());
+    }
+    let p = [c.0, c.1, c.2, n.0, n.1, n.2, x.0, x.1, x.2, rx, ry, start];
+    nonnull(ffi::po_ellipse_edge(&p), "an ellipse")
+}
+
+pub fn loft(sections: &[&Shape], start: Option<Vec3>, end: Option<Vec3>, o: &LoftOptions) -> Result<Shape, String> {
+    let ends = usize::from(start.is_some()) + usize::from(end.is_some());
+    if sections.is_empty() || sections.len() + ends < 2 {
+        return Err("a loft needs at least two sections, or one and a point".into());
+    }
+    let mut caps = [0.0; 8];
+    for (i, p) in [start, end].into_iter().enumerate() {
+        if let Some(p) = p {
+            finite(&[p.0, p.1, p.2])?;
+            caps[i * 4..i * 4 + 4].copy_from_slice(&[1.0, p.0, p.1, p.2]);
+        }
+    }
+    let c = kernel::compound(sections.iter().copied());
+    let out = nonnull(
+        ffi::po_loft(c.raw(), &caps, o.ruled, o.smooth, o.match_seams),
+        "a loft through these sections",
+    )?;
+    if kernel::volume(&out).abs() < 1e-9 {
+        return Err("the loft through these sections is empty".into());
+    }
+    Ok(out)
+}
+
+pub fn interpolate_edge(points: &[Vec3], closed: bool) -> Result<Shape, String> {
+    let flat: Vec<f64> = points.iter().flat_map(|p| [p.0, p.1, p.2]).collect();
+    finite(&flat)?;
+    if points.len() < 2 || (closed && points.len() < 3) {
+        return Err("an interpolated edge needs at least two points, three when closed".into());
+    }
+    nonnull(ffi::po_interpolate_edge(&flat, closed), "a curve through these points")
+}
+
+pub fn gtransform(s: &Shape, m: &[f64]) -> Result<Shape, String> {
+    if m.len() != 12 {
+        return Err("an affine map is twelve numbers, three rows of four".into());
+    }
+    finite(m)?;
+    nonnull(ffi::po_gtransform(s.raw(), m), "the shape under this map (it must not mirror or flatten)")
 }

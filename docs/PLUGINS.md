@@ -401,10 +401,14 @@ folder.
   claims, and every name in it must be declared in the manifest, or the plugin
   does not load.
 - It imports a generic kernel: solids from primitives, sketches, edges and
-  wires, prisms, revolves and a helical sweep, booleans with their options,
-  fillet and chamfer, face selectors, a face's surface and its stored
-  triangulation to displace, a planar Delaunay triangulation, blobs, and one
-  `output.write` for an exporter's bytes. Shapes stay in the engine, a plugin
+  wires (lines, arcs, circles, ellipses and curves through points), prisms,
+  revolves and a helical sweep, a loft through closed sections that may end in
+  a point, an affine map (a sphere stretched into an ellipsoid), booleans with
+  their options, fillet and chamfer, face selectors, a face's surface and its
+  stored triangulation to displace, a planar Delaunay triangulation, blobs, and
+  one `output.write` for an exporter's bytes. A feature that makes a solid of
+  its own hands it to `feature.combine` with its operation and targets, and it
+  joins, cuts or intersects exactly as the app's own features do. Shapes stay in the engine, a plugin
   holds handles to them; nothing crosses as BREP bytes per call. A mesh pass
   claims faces with a tag of its own that comes back with each face it
   displaces, because nothing a component holds survives from one call to the

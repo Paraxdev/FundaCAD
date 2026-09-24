@@ -131,5 +131,15 @@ mod inner {
             zy: f64,
             zz: f64,
         ) -> UniquePtr<TopoDS_Shape>;
+        pub fn po_ellipse_edge(p: &[f64]) -> UniquePtr<TopoDS_Shape>;
+        pub fn po_loft(
+            sections: &TopoDS_Shape,
+            caps: &[f64],
+            ruled: bool,
+            smooth: bool,
+            match_seams: bool,
+        ) -> UniquePtr<TopoDS_Shape>;
+        pub fn po_interpolate_edge(xyz: &[f64], periodic: bool) -> UniquePtr<TopoDS_Shape>;
+        pub fn po_gtransform(s: &TopoDS_Shape, m: &[f64]) -> UniquePtr<TopoDS_Shape>;
     }
 }
