@@ -212,6 +212,7 @@ pub struct Ctx {
     pub timeline: Vec<Step>,
     ids: BodyIds,
     face_fps: owners::FaceFps,
+    volumes: HashMap<(u64, u64), f64>,
 }
 
 /// One boolean a feature applied: the tool solid and the bodies it changed.
@@ -250,6 +251,7 @@ impl Ctx {
             timeline: Vec::new(),
             ids: BodyIds::new(None),
             face_fps: owners::FaceFps::default(),
+            volumes: HashMap::new(),
         }
     }
 
@@ -278,6 +280,7 @@ impl Ctx {
             timeline: Vec::new(),
             ids: BodyIds::new(None),
             face_fps: owners::FaceFps::default(),
+            volumes: HashMap::new(),
         }
     }
 
@@ -346,6 +349,18 @@ impl Ctx {
             .entry(feature_id.to_owned())
             .or_default()
             .push(ToolRecord { kind, bodies, tool });
+    }
+
+    /// The signed volume a feature measured for this body's current shape.
+    pub fn known_volume(&self, index: usize) -> Option<f64> {
+        self.bodies.get(index).and_then(|b| self.volumes.get(&b.identity()).copied())
+    }
+
+    pub fn note_volume(&mut self, index: usize, volume: f64) {
+        let Some(key) = self.bodies.get(index).map(Body::identity) else { return };
+        let live: HashSet<(u64, u64)> = self.bodies.iter().map(Body::identity).collect();
+        self.volumes.retain(|k, _| live.contains(k));
+        self.volumes.insert(key, volume);
     }
 
     pub fn remove_bodies(&mut self, ids: &HashSet<String>) {
@@ -816,6 +831,7 @@ pub fn rebuild_from(
         timeline: Vec::new(),
         ids: BodyIds::new(recorded.clone()),
         face_fps: owners::FaceFps::default(),
+        volumes: HashMap::new(),
     };
     let raw_features: Vec<Value> = raw
         .get("features")
