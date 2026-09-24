@@ -48,6 +48,10 @@
 #include <GC_MakeArcOfCircle.hxx>
 #include <GProp_GProps.hxx>
 #include <GeomAPI_Interpolate.hxx>
+#include <Geom_BSplineCurve.hxx>
+#include <TColStd_Array1OfInteger.hxx>
+#include <TColStd_Array1OfReal.hxx>
+#include <TColgp_Array1OfPnt.hxx>
 #include <GeomAPI_ProjectPointOnSurf.hxx>
 #include <GeomLib_IsPlanarSurface.hxx>
 #include <Geom_Surface.hxx>
@@ -677,6 +681,44 @@ inline BoShape bo_edge_spline(rust::Slice<const double> xy) {
       if (!ip.IsDone()) throw std::runtime_error("B-spline interpolation failed");
       BRepBuilderAPI_MakeEdge mk(ip.Curve());
       return bo_own(mk.Edge());)
+}
+
+// Poles, distinct knots and their multiplicities come from Rust, which owns the
+// knot rule (fundacad-geom kernel::edge_bspline).
+inline TopoDS_Edge bo_bspline_edge_(rust::Slice<const double> xy, rust::Slice<const double> knots,
+                                    rust::Slice<const int32_t> mults, int32_t degree, bool periodic) {
+  const int n = (int)(xy.size() / 2);
+  const int m = (int)knots.size();
+  if (n < 2 || m < 2 || (int)mults.size() != m) throw std::runtime_error("B-spline needs poles and knots");
+  TColgp_Array1OfPnt poles(1, n);
+  for (int i = 0; i < n; ++i) poles.SetValue(i + 1, gp_Pnt(xy[2 * i], xy[2 * i + 1], 0));
+  TColStd_Array1OfReal k(1, m);
+  TColStd_Array1OfInteger mu(1, m);
+  for (int i = 0; i < m; ++i) {
+    k.SetValue(i + 1, knots[i]);
+    mu.SetValue(i + 1, mults[i]);
+  }
+  Handle(Geom_BSplineCurve) c = new Geom_BSplineCurve(poles, k, mu, degree, periodic);
+  BRepBuilderAPI_MakeEdge mk(c);
+  return mk.Edge();
+}
+
+inline BoShape bo_edge_bspline(rust::Slice<const double> xy, rust::Slice<const double> knots,
+                               rust::Slice<const int32_t> mults, int32_t degree, bool periodic) {
+  BO_GUARD(return bo_own(bo_bspline_edge_(xy, knots, mults, degree, periodic));)
+}
+
+// The point at parameter `t` of an edge's curve, and its parameter range.
+inline bool bo_edge_eval(const TopoDS_Shape &e, double t, rust::Slice<double> out) {
+  if (e.IsNull() || e.ShapeType() != TopAbs_EDGE || out.size() < 5) return false;
+  BRepAdaptor_Curve c(TopoDS::Edge(e));
+  const gp_Pnt p = c.Value(t);
+  out[0] = p.X();
+  out[1] = p.Y();
+  out[2] = p.Z();
+  out[3] = c.FirstParameter();
+  out[4] = c.LastParameter();
+  return true;
 }
 
 // Face.make_rect, rotated by `angle` degrees about Z, then moved to (x, y).

@@ -49,6 +49,12 @@ enum Ent {
         m: [f64; 2],
     },
     Spline(Vec<[f64; 2]>),
+    Bspline {
+        poles: Vec<[f64; 2]>,
+        degree: Option<f64>,
+        closed: bool,
+        knots: Option<Vec<f64>>,
+    },
     Point {
         x: f64,
         y: f64,
@@ -129,6 +135,21 @@ fn resolve(ctx: &Ctx, e: &SketchEntity) -> FResult<Item> {
                 pts.push([v(&p.x)?, v(&p.y)?]);
             }
             (s.construction, Ent::Spline(pts))
+        }
+        SketchEntity::Bspline(b) => {
+            let mut poles = Vec::with_capacity(b.poles.len());
+            for p in &b.poles {
+                poles.push([v(&p.x)?, v(&p.y)?]);
+            }
+            (
+                b.construction,
+                Ent::Bspline {
+                    poles,
+                    degree: b.degree.as_ref().map(|d| d.get()),
+                    closed: b.closed.unwrap_or(false),
+                    knots: b.knots.as_ref().map(|k| k.iter().map(|x| x.get()).collect()),
+                },
+            )
         }
         SketchEntity::Point(p) => (
             p.construction,
@@ -250,6 +271,12 @@ fn translate(ctx: &Ctx, e: &Item, dx: f64, dy: f64, id: String) -> FResult<Item>
             m: [m[0] + dx, m[1] + dy],
         },
         Ent::Spline(p) => Ent::Spline(p.iter().map(|q| [q[0] + dx, q[1] + dy]).collect()),
+        Ent::Bspline { poles, degree, closed, knots } => Ent::Bspline {
+            poles: poles.iter().map(|q| [q[0] + dx, q[1] + dy]).collect(),
+            degree: *degree,
+            closed: *closed,
+            knots: knots.clone(),
+        },
         Ent::Point { x, y } | Ent::Polygon { x, y, .. } => Ent::Point {
             x: x + dx,
             y: y + dy,
@@ -316,6 +343,12 @@ fn rotate(e: &Item, cx: f64, cy: f64, ang: f64, id: &str) -> FResult<Vec<Item>> 
             m: rot(m[0], m[1]),
         }),
         Ent::Spline(p) => one(Ent::Spline(p.iter().map(|q| rot(q[0], q[1])).collect())),
+        Ent::Bspline { poles, degree, closed, knots } => one(Ent::Bspline {
+            poles: poles.iter().map(|q| rot(q[0], q[1])).collect(),
+            degree: *degree,
+            closed: *closed,
+            knots: knots.clone(),
+        }),
         Ent::Rect { w, h, x, y, angle } => {
             let c = rect_corners(*w, *h, *x, *y, *angle).map(|p| rot(p[0], p[1]));
             Ok((0..4)
@@ -517,6 +550,13 @@ fn entity_edges(e: &Ent) -> FResult<Vec<Shape>> {
                 Vec::new()
             }
         }
+        Ent::Bspline { poles, degree, closed, knots } => {
+            if poles.len() >= if *closed { 3 } else { 2 } {
+                vec![kernel::edge_bspline(poles, *degree, *closed, knots.as_deref())?]
+            } else {
+                Vec::new()
+            }
+        }
         Ent::Rect { w, h, x, y, angle } => {
             let c = rect_corners(*w, *h, *x, *y, *angle);
             (0..4)
@@ -609,7 +649,7 @@ fn entity_edges(e: &Ent) -> FResult<Vec<Shape>> {
 /// `_entity_edge`: the one edge of a line, arc, circle or spline a text follows.
 fn path_edge(e: &Ent) -> Option<Shape> {
     match e {
-        Ent::Line { .. } | Ent::Arc { .. } | Ent::Circle { .. } | Ent::Spline(_) => {
+        Ent::Line { .. } | Ent::Arc { .. } | Ent::Circle { .. } | Ent::Spline(_) | Ent::Bspline { .. } => {
             entity_edges(e).ok()?.into_iter().next()
         }
         _ => None,
@@ -645,6 +685,23 @@ pub fn path_edge_json(e: &serde_json::Value) -> Option<Shape> {
                 })
                 .unwrap_or(Some(Vec::new()))?,
         ),
+        "bspline" => Ent::Bspline {
+            poles: e
+                .get("poles")
+                .and_then(serde_json::Value::as_array)
+                .map(|pts| {
+                    pts.iter()
+                        .map(|p| Some([crate::text::num_or_zero(p.get("x")), crate::text::num_or_zero(p.get("y"))]))
+                        .collect::<Option<Vec<_>>>()
+                })
+                .unwrap_or(Some(Vec::new()))?,
+            degree: e.get("degree").and_then(serde_json::Value::as_f64),
+            closed: e.get("closed").and_then(serde_json::Value::as_bool).unwrap_or(false),
+            knots: e
+                .get("knots")
+                .and_then(serde_json::Value::as_array)
+                .map(|k| k.iter().filter_map(serde_json::Value::as_f64).collect()),
+        },
         _ => return None,
     };
     path_edge(&ent)
@@ -790,6 +847,7 @@ pub fn build(ctx: &Ctx, f: &SketchFeature, followed: Option<Placement>) -> FResu
             Ent::Line { .. }
             | Ent::Arc { .. }
             | Ent::Spline(_)
+            | Ent::Bspline { .. }
             | Ent::Polygon { .. }
             | Ent::Slot { .. } => {
                 for e in entity_edges(&it.ent)? {
