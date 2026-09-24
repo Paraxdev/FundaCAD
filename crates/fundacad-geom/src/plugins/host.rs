@@ -625,6 +625,25 @@ impl kernel::Host for State {
         self.blended(r)
     }
 
+    fn ellipse_edge(&mut self, center: types::Vec3, normal: types::Vec3, x_dir: types::Vec3, rx: f64, ry: f64, start: f64) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
+        self.made(kx::ellipse_edge(center, normal, x_dir, rx, ry, start))
+    }
+
+    fn loft(&mut self, sections: Vec<Resource<HostShape>>, start_point: Option<types::Vec3>, end_point: Option<types::Vec3>, options: kernel::LoftOptions) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
+        let ss: Vec<&Shape> = sections.iter().map(|t| self.shape(t)).collect::<wasmtime::Result<_>>()?;
+        let r = kx::loft(&ss, start_point, end_point, &options);
+        self.made(r)
+    }
+
+    fn interpolate_edge(&mut self, points: Vec<types::Vec3>, closed: bool) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
+        self.made(kx::interpolate_edge(&points, closed))
+    }
+
+    fn gtransform(&mut self, s: Resource<HostShape>, matrix: Vec<f64>) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
+        let r = kx::gtransform(self.shape(&s)?, &matrix);
+        self.made(r)
+    }
+
     fn read_blob(&mut self, id: String) -> wasmtime::Result<Result<Resource<HostShape>, String>> {
         self.made(k::read_blob(&id))
     }
@@ -806,6 +825,17 @@ impl feature::Host for State {
             Ok((ctx, _, _)) => Ok(ctx.new_body(shape, name, None) as u32),
             Err(e) => Err(wasmtime::Error::msg(e)),
         }
+    }
+
+    fn combine(&mut self, solid: Resource<HostShape>, operation: String, targets: Vec<String>, name: Option<String>) -> wasmtime::Result<Result<(), String>> {
+        let shape = self.shape(&solid)?.clone();
+        let op = fundacad_core::schema::Operation::from(operation.as_str());
+        let r = self.feature().and_then(|(ctx, _, fid)| {
+            let fid = fid.unwrap_or("").to_owned();
+            crate::features::boolean::combine(ctx, &fid, shape, Some(&op), Some(&targets), None, name.as_deref())
+                .map_err(fail_text)
+        });
+        Ok(r)
     }
 
     fn diagnostic(&mut self, entry: String) -> wasmtime::Result<()> {

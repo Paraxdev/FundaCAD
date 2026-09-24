@@ -1,7 +1,7 @@
 //! Feature handlers, one module per family, each naming the Python it replaces.
 
 pub mod blend;
-mod boolean;
+pub(crate) mod boolean;
 mod cleanup;
 mod datum;
 mod defeature;
