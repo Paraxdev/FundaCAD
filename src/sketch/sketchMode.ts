@@ -3063,7 +3063,7 @@ export class SketchMode {
             ...BSPLINE_DEGREES.map((d) => ({ label: `Degree ${d}`, checked: degreeNow === d, onClick: () => this.reshapeSelectedBsplines({ degree: d }) })),
             bsplines.every((x) => x.closed)
               ? { label: "Open Curve", onClick: () => this.reshapeSelectedBsplines({ closed: false }) }
-              : { label: "Close Curve", onClick: () => this.reshapeSelectedBsplines({ closed: true }) },
+              : { label: "Close Curve", disabled: bsplines.some((x) => x.poles.length < 3), onClick: () => this.reshapeSelectedBsplines({ closed: true }) },
             ...(this.selectedPole && bsplines.some((x) => x.id === this.selectedPole?.id)
               ? [{ label: "Delete Control Point", onClick: () => { this.deleteSelectedPole(); } }]
               : []),
