@@ -1050,6 +1050,13 @@ The format comes from the extension unless given. A large STEP can take minutes:
                 return Ok(failure(format!("No such directory: {}", parent.display())));
             }
         }
+        // The engine writes as part of building, before this side even knows
+        // whether a feature failed, so it writes to a TEMPORARY sibling and
+        // only this side puts it at the requested path, and only once the
+        // export is accepted. A refusal then removes the temporary file
+        // alone: whatever was already at `path` (a previous good export) is
+        // never touched, let alone overwritten and then deleted.
+        let tmp_path = temp_sibling(&path);
         let (link, doc) = {
             let st = self.state.lock().await;
             (st.link.clone(), st.doc.clone())
@@ -1060,15 +1067,19 @@ The format comes from the extension unless given. A large STEP can take minutes:
                 call_args([
                     ("document", Value::Object(doc)),
                     ("format", json!(format)),
-                    ("path", json!(path.to_string_lossy())),
+                    ("path", json!(tmp_path.to_string_lossy())),
                 ]),
             )
             .await
         {
             Ok(r) => r,
-            Err(e) => return Ok(engine_gone(&e)),
+            Err(e) => {
+                let _ = std::fs::remove_file(&tmp_path);
+                return Ok(engine_gone(&e));
+            }
         };
         if reply.get("ok") != Some(&json!(true)) {
+            let _ = std::fs::remove_file(&tmp_path);
             return Ok(failure(format!("Export failed: {}", error_message(&reply))));
         }
         let result = reply.get("result").cloned().unwrap_or_else(|| json!({}));
@@ -1084,16 +1095,17 @@ The format comes from the extension unless given. A large STEP can take minutes:
             .unwrap_or_default();
         let failures = feature_failure_lines(&failed);
         if !failures.is_empty() && !truthy(args.get("allowPartial")) {
-            // The engine already wrote the file as part of building it; an
-            // export that refuses must not leave an incomplete one behind at
-            // the path it was asked for.
-            let _ = std::fs::remove_file(&path);
+            let _ = std::fs::remove_file(&tmp_path);
             return Ok(failure(format!(
                 "Export refused: {} failed to build, the {format} would be incomplete. Pass \
                  allowPartial:true to write it anyway.\n{}",
                 if failures.len() == 1 { "a feature" } else { "features" },
                 failures.join("\n")
             )));
+        }
+        if let Err(e) = std::fs::rename(&tmp_path, &path) {
+            let _ = std::fs::remove_file(&tmp_path);
+            return Ok(failure(format!("Could not write {}: {e}", path.display())));
         }
         let size = std::fs::metadata(&path).map_or(0, |m| m.len());
         let mut out = format!("Wrote {} ({size} bytes).", path.display());
@@ -1102,6 +1114,20 @@ The format comes from the extension unless given. A large STEP can take minutes:
             out.push_str(&failures.join("\n"));
         }
         Ok(text(out))
+    }
+}
+
+/// A same-directory temporary name for `path`, so writing to it and then
+/// renaming over `path` never crosses a filesystem, and a refusal that
+/// removes it never touches `path` itself. Includes this process's id, since
+/// two agents (or two calls before the first finishes) could target the same
+/// export path at once.
+fn temp_sibling(path: &Path) -> PathBuf {
+    let pid = std::process::id();
+    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("export");
+    match path.extension().and_then(|s| s.to_str()) {
+        Some(ext) => path.with_file_name(format!("{stem}.partial-{pid}.{ext}")),
+        None => path.with_file_name(format!("{stem}.partial-{pid}")),
     }
 }
 
