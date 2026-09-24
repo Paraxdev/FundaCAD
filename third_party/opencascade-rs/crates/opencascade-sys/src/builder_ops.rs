@@ -90,6 +90,14 @@ mod inner {
         pub fn bo_edge_circle(cx: f64, cy: f64, r: f64) -> Result<UniquePtr<TopoDS_Shape>>;
         pub fn bo_edge_ellipse(cx: f64, cy: f64, rx: f64, ry: f64, angle: f64) -> Result<UniquePtr<TopoDS_Shape>>;
         pub fn bo_edge_spline(xy: &[f64]) -> Result<UniquePtr<TopoDS_Shape>>;
+        pub fn bo_edge_bspline(
+            xy: &[f64],
+            knots: &[f64],
+            mults: &[i32],
+            degree: i32,
+            periodic: bool,
+        ) -> Result<UniquePtr<TopoDS_Shape>>;
+        pub fn bo_edge_eval(e: &TopoDS_Shape, t: f64, out: &mut [f64]) -> bool;
         pub fn bo_face_rect(x: f64, y: f64, w: f64, h: f64, angle: f64) -> Result<UniquePtr<TopoDS_Shape>>;
         pub fn bo_wires_from_edges(edges: &TopoDS_Shape, tol: f64) -> Result<UniquePtr<CxxVector<TopoDS_Shape>>>;
         pub fn bo_wire_closed(w: &TopoDS_Shape) -> bool;

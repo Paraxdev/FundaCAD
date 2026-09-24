@@ -378,6 +378,45 @@ pub fn edge_spline(points: &[[f64; 2]]) -> KResult<Shape> {
     run("GeomAPI_Interpolate", || format!("{} points {points:?}", points.len()), || ffi::bo_edge_spline(&flat))
 }
 
+/// The degree and distinct knots a control-point B-spline is built with, the rule
+/// src/sketch/bspline.ts evaluates: the degree lowered to fit the poles, stored
+/// knots when they are well formed, else uniform 0, 1, 2, ...
+pub fn bspline_knots(n: usize, degree: Option<f64>, closed: bool, stored: Option<&[f64]>) -> (usize, Vec<f64>) {
+    let want = degree.filter(|d| d.is_finite()).map_or(3.0, |d| d.round().max(1.0));
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let p = (want as usize).min(n.saturating_sub(1)).max(1);
+    let m = if closed { n + 1 } else { (n + 1).saturating_sub(p) };
+    if let Some(k) = stored {
+        if k.len() == m && k.iter().all(|v| v.is_finite()) && k.windows(2).all(|w| w[1] > w[0]) {
+            return (p, k.to_vec());
+        }
+    }
+    #[allow(clippy::cast_precision_loss)]
+    (p, (0..m).map(|i| i as f64).collect())
+}
+
+pub fn edge_bspline(poles: &[[f64; 2]], degree: Option<f64>, closed: bool, knots: Option<&[f64]>) -> KResult<Shape> {
+    let (p, k) = bspline_knots(poles.len(), degree, closed, knots);
+    let last = k.len().saturating_sub(1);
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    let end = if closed { 1 } else { p as i32 + 1 };
+    let mults: Vec<i32> = (0..k.len()).map(|i| if i == 0 || i == last { end } else { 1 }).collect();
+    let flat: Vec<f64> = poles.iter().flatten().copied().collect();
+    #[allow(clippy::cast_possible_truncation, clippy::cast_possible_wrap)]
+    let deg = p as i32;
+    run(
+        "Geom_BSplineCurve",
+        || format!("{} poles, degree {p}, closed {closed}, knots {k:?}", poles.len()),
+        || ffi::bo_edge_bspline(&flat, &k, &mults, deg, closed),
+    )
+}
+
+/// The point at parameter `t` on an edge's curve, with the curve's parameter range.
+pub fn edge_eval(e: &Shape, t: f64) -> Option<([f64; 3], [f64; 2])> {
+    let mut o = [0.0; 5];
+    ffi::bo_edge_eval(e.raw(), t, &mut o).then_some(([o[0], o[1], o[2]], [o[3], o[4]]))
+}
+
 pub fn face_rect(x: f64, y: f64, w: f64, h: f64, angle: f64) -> KResult<Shape> {
     run("BRepBuilderAPI_MakeFace (rectangle)", || format!("x={x}, y={y}, w={w}, h={h}, angle={angle}"), || ffi::bo_face_rect(x, y, w, h, angle))
 }

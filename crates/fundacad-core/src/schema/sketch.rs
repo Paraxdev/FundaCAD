@@ -82,6 +82,16 @@ pub struct SplinePoint {
 }
 
 entity_struct!(Spline { points: Vec<SplinePoint> });
+entity_struct!(
+    /// A control-point B-spline; `knots` are the distinct knot values, absent meaning
+    /// uniform (see src/sketch/bspline.ts).
+    Bspline {
+        poles: Vec<SplinePoint>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] degree: Option<Real>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] closed: Option<bool>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] knots: Option<Vec<Real>>,
+    }
+);
 entity_struct!(Point { x: Num, y: Num });
 entity_struct!(
     /// `angle` in degrees (radians before format v2).
@@ -216,6 +226,7 @@ tagged_enum! {
         Arc(Arc) = "arc",
         Ellipse(Ellipse) = "ellipse",
         Spline(Spline) = "spline",
+        Bspline(Bspline) = "bspline",
         Point(Point) = "point",
         Polygon(Polygon) = "polygon",
         Slot(Slot) = "slot",
@@ -233,6 +244,7 @@ impl SketchEntity {
             SketchEntity::Arc(e) => e.id.as_deref(),
             SketchEntity::Ellipse(e) => e.id.as_deref(),
             SketchEntity::Spline(e) => e.id.as_deref(),
+            SketchEntity::Bspline(e) => e.id.as_deref(),
             SketchEntity::Point(e) => e.id.as_deref(),
             SketchEntity::Polygon(e) => e.id.as_deref(),
             SketchEntity::Slot(e) => e.id.as_deref(),
