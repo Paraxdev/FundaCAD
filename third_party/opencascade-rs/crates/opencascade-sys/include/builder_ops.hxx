@@ -122,6 +122,8 @@ inline bool bo_is_same(const TopoDS_Shape &a, const TopoDS_Shape &b) {
          a.Orientation() == b.Orientation();
 }
 
+inline bool bo_is_equal(const TopoDS_Shape &a, const TopoDS_Shape &b) { return a.IsEqual(b); }
+
 inline BoShape bo_compound_new() {
   TopoDS_Compound c;
   BRep_Builder b;
@@ -449,9 +451,10 @@ inline bool bo_volume_plausible(int kind, double a, const std::vector<double> &t
 // and right the other (a cut that grows the body, a common of negative
 // volume), so an impossible result is redone with the operands swapped.
 // `vols` is the base's signed volume then each tool's, when the caller has
-// them already; empty means measure here.
+// them already; empty means measure here. `out_vol` gets the answer's.
 inline TopoDS_Shape bo_checked(const TopoDS_Shape &result, const TopoDS_Shape &base, const TopTools_ListOfShape &tools,
-                               int kind, bool parallel, double fuzzy, const std::vector<double> &vols = {}) {
+                               int kind, bool parallel, double fuzzy, const std::vector<double> &vols = {},
+                               double *out_vol = nullptr) {
   bool known = vols.size() == (size_t)tools.Extent() + 1;
   double a = known ? vols[0] : bo_volume(base);
   std::vector<double> tv;
@@ -460,6 +463,7 @@ inline TopoDS_Shape bo_checked(const TopoDS_Shape &result, const TopoDS_Shape &b
   else
     for (TopTools_ListOfShape::Iterator it(tools); it.More(); it.Next()) tv.push_back(bo_volume(it.Value()));
   double r = bo_volume(result);
+  if (out_vol) *out_vol = r;
   double sum = 0;
   for (double v : tv) sum += v;
   bool ok = bo_volume_plausible(kind, a, tv, r);
@@ -486,6 +490,7 @@ inline TopoDS_Shape bo_checked(const TopoDS_Shape &result, const TopoDS_Shape &b
   if (bop.HasErrors()) return result;
   double r2 = bo_volume(bop.Shape());
   if (!bo_volume_plausible(kind, a, tv, r2) || (kind == 0 && r2 <= r)) return result;
+  if (out_vol) *out_vol = r2;
   return bop.Shape();
 }
 
@@ -533,9 +538,10 @@ inline BoShape bo_bool_build(const TopoDS_Shape &base, const TopoDS_Shape &tools
 }
 
 inline BoShape bo_bool_check(const TopoDS_Shape &result, const TopoDS_Shape &base, const TopoDS_Shape &tools,
-                             int kind, bool parallel, double fuzzy, rust::Slice<const double> vols) {
+                             int kind, bool parallel, double fuzzy, rust::Slice<const double> vols,
+                             double &out_vol) {
   BO_GUARD(std::vector<double> v(vols.begin(), vols.end());
-           return bo_own(bo_checked(result, base, bo_tool_list(tools), kind, parallel, fuzzy, v));)
+           return bo_own(bo_checked(result, base, bo_tool_list(tools), kind, parallel, fuzzy, v, &out_vol));)
 }
 
 inline BoShape bo_clean(const TopoDS_Shape &s) { BO_GUARD(return bo_own(bo_unify(s));) }
@@ -602,13 +608,17 @@ inline bool bo_box_covers(const TopoDS_Shape &outer, const TopoDS_Shape &inner) 
 
 // shape_util.py `_unify_body`: right inside-out solids, fuse the glued pieces
 // into one, keep the result only when it is valid and its volume plausible.
-inline BoShape bo_unify_body(const TopoDS_Shape &shape) {
+// `known` is the shape's signed volume when the caller has it, NaN when not.
+inline BoShape bo_unify_body_known(const TopoDS_Shape &shape, double known) {
   try {
     TopTools_IndexedMapOfShape map;
     TopExp::MapShapes(shape, TopAbs_SOLID, map);
     if (map.Extent() == 0) return bo_own(shape);
     std::vector<TopoDS_Shape> solids;
     std::vector<double> vols;
+    // One solid's volume is the whole shape's, so a positive one the caller
+    // measured already answers the only question asked of it.
+    if (map.Extent() == 1 && known > 1e-6) return bo_own(shape);
     for (int i = 1; i <= map.Extent(); ++i) {
       solids.push_back(map.FindKey(i));
       vols.push_back(bo_volume(map.FindKey(i)));
@@ -664,6 +674,8 @@ inline BoShape bo_unify_body(const TopoDS_Shape &shape) {
     return bo_own(shape);
   }
 }
+
+inline BoShape bo_unify_body(const TopoDS_Shape &shape) { return bo_unify_body_known(shape, std::nan("")); }
 
 // --- sketch curves and faces, in the sketch's local XY ----------------------
 
