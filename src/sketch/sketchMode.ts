@@ -3046,6 +3046,12 @@ export class SketchMode {
       const id = hit.id;
       if (!this.selected.has(id)) { this.selected = new Set([id]); this.refreshActive(); }
     }
+    const gp = raw ? this.pickPoint(raw) : null;
+    const poleOf = gp && gp.pole >= 0 ? this.entities[gp.idx] : undefined;
+    if (gp && poleOf?.type === "bspline" && this.selected.has(poleOf.id)) {
+      this.selectedPole = { id: poleOf.id, k: gp.pole };
+      this.refreshActive();
+    }
     if (!this.selected.size) return; // nothing to act on → let nav handle it
     e.preventDefault();
     const n = this.selected.size;

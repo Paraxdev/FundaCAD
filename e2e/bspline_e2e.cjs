@@ -155,6 +155,25 @@ const check = (name, ok, detail) => {
   const del = await bs();
   check("Delete removes the picked pole, not the curve", !!del && del.poles.length === 6, del ? `${del.poles.length} poles` : "curve gone");
 
+  // 4b. right-click straight on a pole: its menu deletes that pole, and the
+  // Escape that closes a menu leaves the selection alone
+  const r2 = del.poles[2];
+  const r2s = await scr(r2.x, r2.y);
+  await page.mouse.click(r2s.x, r2s.y, { button: "right" });
+  await page.waitForTimeout(400);
+  const poleItems = await page.evaluate(() => [...document.querySelectorAll(".ctx-item")].map((x) => x.textContent.trim()));
+  check("right-clicking a pole offers Delete Control Point", poleItems.includes("Delete Control Point"), JSON.stringify(poleItems));
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+  check("Escape closes the menu and keeps the curve selected", await page.evaluate(() => window.sketch.active && window.sketch.selected.size === 1));
+  await page.mouse.click(r2s.x, r2s.y, { button: "right" });
+  await page.waitForTimeout(400);
+  await page.locator(".ctx-item", { hasText: "Delete Control Point" }).click();
+  await page.waitForTimeout(800);
+  const del2 = await bs();
+  check("Delete Control Point removes the right-clicked pole", !!del2 && del2.poles.length === 5
+    && del2.poles.every((q) => Math.hypot(q.x - r2.x, q.y - r2.y) > 1e-6), del2 ? `${del2.poles.length} poles` : "curve gone");
+
   // 5. finish and extrude
   await page.evaluate(() => window.sketch.finish(true));
   await page.waitForTimeout(1500);
