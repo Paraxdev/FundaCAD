@@ -202,7 +202,10 @@ interface kernel {
   // surface, `smooth` asks for the kernel's energy smoothing on top, and
   // `match-seams` lets the kernel realign each section's start point and
   // direction; without it the sections are lofted exactly as given.
-  record loft-options { ruled: bool, smooth: bool, match-seams: bool }
+  // `max-degree` caps the surface's degree across the sections (0 keeps the
+  // kernel's 8): a low one follows many unevenly spaced sections without
+  // swinging between them.
+  record loft-options { ruled: bool, smooth: bool, match-seams: bool, max-degree: u32 }
   // A solid through closed sections (wires, edges or faces' outer wires) in
   // order, closed to a point at either end when one is given.
   loft: func(sections: list<borrow<shape>>, start-point: option<vec3>, end-point: option<vec3>, options: loft-options) -> result<shape, string>;

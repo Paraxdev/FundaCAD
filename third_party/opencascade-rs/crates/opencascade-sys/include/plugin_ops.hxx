@@ -812,14 +812,15 @@ inline TopoDS_Wire po_section_wire(const TopoDS_Shape &s) {
 // faces' outer wires), optionally closed to a point at either end. caps:
 // has-start sx sy sz has-end ex ey ez. `smooth` asks ThruSections for its
 // energy smoothing, `match_seams` for its own seam and orientation matching;
-// without it the sections loft exactly as given.
+// without it the sections loft exactly as given. `max_degree` 0 keeps 8.
 inline PoShape po_loft(const TopoDS_Shape &sections, rust::Slice<const double> caps, bool ruled,
-                       bool smooth, bool match_seams) {
+                       bool smooth, bool match_seams, int32_t max_degree) {
   try {
     if (caps.size() < 8) return po_null();
     BRepOffsetAPI_ThruSections mk(true, ruled, 1e-6);
     mk.CheckCompatibility(match_seams);
     mk.SetSmoothing(smooth);
+    if (max_degree > 0) mk.SetMaxDegree(max_degree);
     int n = 0;
     if (caps[0] > 0.5) {
       mk.AddVertex(BRepBuilderAPI_MakeVertex(gp_Pnt(caps[1], caps[2], caps[3])).Vertex());

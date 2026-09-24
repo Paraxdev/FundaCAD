@@ -138,6 +138,7 @@ mod inner {
             ruled: bool,
             smooth: bool,
             match_seams: bool,
+            max_degree: i32,
         ) -> UniquePtr<TopoDS_Shape>;
         pub fn po_interpolate_edge(xyz: &[f64], periodic: bool) -> UniquePtr<TopoDS_Shape>;
         pub fn po_gtransform(s: &TopoDS_Shape, m: &[f64]) -> UniquePtr<TopoDS_Shape>;
