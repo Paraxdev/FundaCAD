@@ -77,13 +77,14 @@ struct Plan {
     degree: u32,
 }
 
-/// Many sections with the kernel's smoothing is preferred over the rest: an
-/// unsmoothed loft through that many sections folds its surface back on
-/// itself along a long span, which shows as a pinched limb. Should the
-/// smoothed loft be refused, a few sections at a low degree still build.
+/// A few sections at degree 5 is preferred over the rest. Through many
+/// sections the kernel's own degree 8 surface meshes with a gap along a long
+/// span, and its smoothed loft, which meshes whole, loses pieces in later
+/// booleans. The smoothed loft stays as the fallback for a limb the first
+/// is refused on.
 const PLANS: [Plan; 2] = [
-    Plan { step: 0.5, max_between: 12, smooth: true, degree: 0 },
     Plan { step: 1.2, max_between: 3, smooth: false, degree: 5 },
+    Plan { step: 0.5, max_between: 12, smooth: true, degree: 0 },
 ];
 
 struct Station {
