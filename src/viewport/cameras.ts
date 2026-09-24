@@ -7,74 +7,139 @@
 // sketch the pan IS moving the sketch under the cursor, and the orbit is off.
 
 import type * as THREE from "three";
-import type CameraControls from "camera-controls";
 import { createLegacyRig } from "./legacyRig";
 
+/** What the rig may ask of the scene it looks at. The viewport provides it; the
+ *  headless tests provide analytic stand-ins. */
+export interface NavScene {
+  /** Distance along a world ray (unit `dir`) to the first visible model surface,
+   *  or null for a miss. */
+  raycast(origin: THREE.Vector3, dir: THREE.Vector3): number | null;
+  /** Height of the ground plane while it is drawn, else null. */
+  groundZ(): number | null;
+}
+
+/** A saved view, plain data so it survives JSON. */
+export interface CameraState {
+  target: [number, number, number];
+  quaternion: [number, number, number, number];
+  /** Half the visible view height at the target, in world units. */
+  scale: number;
+  fov: number;
+  mode: ProjectionMode;
+}
+
+export interface FitOptions {
+  animate?: boolean;
+  /** Multiple of the bounding radius that is framed, 1.15 by default. */
+  padding?: number;
+}
+
+export interface NavLimits {
+  /** Closest the eye may come to what it zooms toward, in world units. */
+  minDistance: number;
+  /** Largest half view height, in world units. */
+  maxScale: number;
+  /** Pitch range in degrees, -90 looking straight down, +90 straight up. */
+  minPitch: number;
+  maxPitch: number;
+}
+
+export type NavEvent = "inputstart" | "inputend" | "change" | "rest";
+
 export interface CameraRig {
-  controls: CameraControls;
   get active(): THREE.Camera;
   isOrtho(): boolean;
-  /** 'auto' = Fusion's "Perspective with Ortho Faces": perspective while orbiting,
-   *  orthographic whenever the view axis is world-axis-aligned, so straight-on
-   *  views are truly flat (no parallax skew between bodies). */
+  /** 'auto' = perspective while orbiting, orthographic whenever the view axis
+   *  is world-axis-aligned, so straight-on views are truly flat (no parallax
+   *  skew between bodies). */
   projectionMode(): ProjectionMode;
   setProjectionMode(mode: ProjectionMode): void;
   resize(w: number, h: number): void;
+  /** Advance one frame. True when the pose on screen changed. */
   update(dt: number): boolean;
-  /** Zoom by a multiplicative factor (>1 = zoom out, <1 = zoom in). Works in BOTH
-   *  projections via absolute dolly/zoom, so it's immune to the wheel-action
-   *  ambiguity that left perspective unable to zoom in WebKitGTK. When `pivot`
-   *  (a world point, usually under the cursor) is given, zooms TOWARD it
-   *  (MCAD-style dolly-to-cursor) instead of toward the orbit target. */
-  zoomBy(factor: number, pivot?: THREE.Vector3): void;
-  /** The model's bounds, which set how far zoomBy may zoom out. */
-  setContentBox(box: THREE.Box3): void;
-  /** Half the visible view height at the orbit target, in world units, the
-   *  natural scale for making input steps (SpaceMouse pan) zoom-proportional
-   *  in BOTH projections, like wheel zoom already is. */
+
+  // --- reading the pose ------------------------------------------------------
+  /** The point at the centre of the screen that the view turns and scales about. */
+  getTarget(out?: THREE.Vector3): THREE.Vector3;
+  getPosition(out?: THREE.Vector3): THREE.Vector3;
+  /** Unit vector the camera looks along. */
+  viewDirection(out?: THREE.Vector3): THREE.Vector3;
+  /** Bumped whenever anything that moves a projected pixel changes (pose,
+   *  lens, viewport size), so overlays can reproject on change alone. */
+  poseVersion(): number;
+  /** Half the visible view height at the target, in world units. */
   viewScale(): number;
-  /** The perspective field of view in degrees, and the setter behind the Render
-   *  workspace's lens control. Orthographic views have no fov at all and are
-   *  unaffected; the value is kept so switching back to perspective keeps the
-   *  lens that was chosen. */
+  getState(): CameraState;
+  setState(state: CameraState, animate?: boolean): void;
+
+  // --- the scene -------------------------------------------------------------
+  setScene(scene: NavScene | null): void;
+  /** The model's bounds, which set the zoom-out limit and the clip planes. */
+  setContentBox(box: THREE.Box3): void;
+  /** A plane the zoom may anchor on over empty space (the open sketch's). */
+  setAnchorPlane(plane: THREE.Plane | null): void;
+  setLimits(limits: Partial<NavLimits>): void;
+
+  // --- input -----------------------------------------------------------------
+  on(event: NavEvent, fn: () => void): () => void;
+  /** Shorthand for on("inputstart"): the user has taken the camera. */
+  onInputStart(fn: () => void): () => void;
+  /** A wheel event caught somewhere else (an overlay that takes pointer
+   *  events), handed over so the view still zooms under it. */
+  wheel(e: WheelEvent): void;
+  /** The point a right drag starting at these client coords would orbit about. */
+  pivotAt(clientX: number, clientY: number): THREE.Vector3 | null;
+  /** Lock out mouse orbit (sketch "lock to plane"); right-drag pans instead. */
+  setOrbitLocked(locked: boolean): void;
+  /** Whether that lock is on. The 3D mouse obeys it too, so it reads it here. */
+  orbitLocked(): boolean;
+
+  // --- motions ---------------------------------------------------------------
+  /** Zoom by a multiplicative factor (>1 out, <1 in) toward `pivot`, else
+   *  toward the surface at the centre of the screen. */
+  zoomBy(factor: number, pivot?: THREE.Vector3): void;
+  /** Move the view by (dx, dy) half view heights: +dx moves the camera right,
+   *  +dy moves it down, the same sense as a truck. */
+  panScreen(dx: number, dy: number): void;
+  /** Turntable orbit about the target by az (about world Z) and pol (tilt)
+   *  radians. Positive pol tips the camera up over the top. */
+  orbitBy(az: number, pol: number): void;
+  /** Free rotation about the screen axes (3D mouse tumble), over the poles. */
+  tumble(az: number, pol: number): void;
+  /** Bank the view about the view axis by `angle` radians. */
+  roll(angle: number): void;
+  /** Turntable angles, radians: azimuth 0 looks from -Y (front), polar 0 from +Z. */
+  rotateTo(azimuth: number, polar: number, animate?: boolean): void;
+  /** Move the target to a point, keeping the orientation and scale. */
+  moveTo(point: THREE.Vector3, animate?: boolean): void;
+  setLookAt(eye: THREE.Vector3, target: THREE.Vector3, animate?: boolean): void;
+  /** The pose `t` of the way from one look-at to another, set at once. */
+  lerpLookAt(
+    eyeA: THREE.Vector3, targetA: THREE.Vector3,
+    eyeB: THREE.Vector3, targetB: THREE.Vector3,
+    t: number, animate?: boolean,
+  ): void;
+  /** Set the half view height at the target (the zoom), in world units. */
+  setViewScale(scale: number, animate?: boolean): void;
+  /** Turn and zoom about this point from now on, until null. The screen does
+   *  not move when it is set. */
+  setOrbitPoint(point: THREE.Vector3 | null): void;
+  /** The perspective field of view in degrees. Orthographic views are
+   *  unaffected; the value is kept for the next perspective view. */
   fov(): number;
-  setFov(deg: number): void;
-  fit(box: THREE.Box3, enableTransition?: boolean): void;
+  /** `keepScale` keeps what sits at the target the same size on screen while
+   *  the lens changes (a dolly zoom); without it the eye stays put. */
+  setFov(deg: number, opts?: { keepScale?: boolean; animate?: boolean }): void;
+  fit(box: THREE.Box3, opts?: boolean | FitOptions): void;
+  fitSphere(sphere: THREE.Sphere, opts?: boolean | FitOptions): void;
   /** Back to the view a fresh window opens on: no roll, Z up, looking in from
    *  the front right corner, framed on `box`, or on the origin when there is none. */
   resetView(box: THREE.Box3 | null): void;
   setStandardView(view: StandardView): void;
-  /** orient to an arbitrary view direction (eye = target + dir·d), with a chosen
-   *  world up. Used by the ViewCube for corners/edges and for redefined sides. */
+  /** Orient to an arbitrary view direction (eye = target + dir·d) with a chosen
+   *  world up. Used by the ViewCube for corners, edges and redefined sides. */
   setViewDir(dir: THREE.Vector3, up: THREE.Vector3): void;
-  /** Roll (bank) the view around the forward / screen-into-monitor axis by
-   *  `angle` radians. camera-controls has no native roll, so we rotate the
-   *  camera up-vector about the view direction and re-apply it. */
-  roll(angle: number): void;
-  /** Free-orbit by az/pol radians about the SCREEN axes (SpaceMouse tumble).
-   *  Unlike controls.rotate(), which camera-controls clamps just short of the
-   *  poles every frame (Spherical.makeSafe), this rotates the orbit up-vector
-   *  along with the camera, so vertical orbit passes straight over the top,
-   *  3Dconnexion-style free rotation, upside down included. */
-  tumble(az: number, pol: number): void;
-  /** Lock out mouse orbit (sketch "lock to plane"); right-drag pans instead. */
-  setOrbitLocked(locked: boolean): void;
-  /** Whether that lock is on.
-   *
-   *  Readable because the mouse is not the only thing that can orbit. A 3D
-   *  mouse has to obey the same lock, and it used to be told separately, which
-   *  made sketch mode import the 3D-mouse module to say something the rig
-   *  already knew. Two places holding one fact is two places to forget to
-   *  update; this is the one that was set first. */
-  orbitLocked(): boolean;
-  /** Orbit about this world point rather than about the orbit target, until it
-   *  is cleared with null. The library still aims the camera at its own target,
-   *  so the target is still what sits at the centre of the screen; what this
-   *  changes is which point the view TURNS about, and a pivot on the model is
-   *  what stops the model swinging out of frame once a pan or an orthographic
-   *  zoom-to-cursor has left the target sitting well off it. See
-   *  viewport/orbitPivot.ts for why a shift is all it takes. */
-  setOrbitPivot(pivot: THREE.Vector3 | null): void;
   /** Square the camera to a plane: up = `up`, looking down -`normal`.
    *
    *  `opts.animate` flies there over a few hundred milliseconds instead of
@@ -87,10 +152,10 @@ export interface CameraRig {
     up: THREE.Vector3,
     opts?: { animate?: boolean; onArrive?: () => void },
   ): void;
-  /** True while a lookAtPlane flight is in the air. Input is off for the
-   *  duration, and anything measuring the framing (the sketch lock's baseline)
-   *  has to wait for it, mid-flight the camera is nowhere in particular. */
+  /** True while a flight is in the air. Anything measuring the framing (the
+   *  sketch lock's baseline) has to wait for it. */
   isFlying(): boolean;
+  /** Level the horizon again (Z up) after a sketch or a 3D mouse roll. */
   restoreUp(): void;
 }
 

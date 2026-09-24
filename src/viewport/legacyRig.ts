@@ -4,11 +4,13 @@
 
 import * as THREE from "three";
 import CameraControls from "camera-controls";
-import { frameRotation, pivotShift, viewQuaternion } from "./orbitPivot";
-import { anchorDolly, orthoZoomStep } from "./zoomAnchor";
+import { frameRotation, pivotProbes, pivotShift, viewQuaternion } from "./orbitPivot";
+import { anchorDolly, groundAnchor, orthoZoomStep } from "./zoomAnchor";
 import { ease, flightSeconds, worthFlying } from "./viewFlight";
 import { motionOn } from "../ui/motion";
-import type { CameraRig, ProjectionMode, StandardView } from "./cameras";
+import type {
+  CameraRig, CameraState, FitOptions, NavEvent, NavLimits, NavScene, ProjectionMode, StandardView,
+} from "./cameras";
 import {
   MIN_PERSP_DIST, NEAR_AT_REST, maxViewHalfHeight, orthoDepth, perspFar, perspNear,
 } from "./clipPlanes";
@@ -32,7 +34,7 @@ const HOME_EYE = new THREE.Vector3(80, -120, 90);
 export function createLegacyRig(
   dom: HTMLElement,
   aspect: number,
-): CameraRig {
+): CameraRig & { controls: CameraControls } {
   const persp = new THREE.PerspectiveCamera(FOV, aspect, NEAR_AT_REST, 10000);
   persp.up.set(0, 0, 1); // Z-up
   persp.position.copy(HOME_EYE);
@@ -265,7 +267,121 @@ export function createLegacyRig(
     return true;
   }
 
-  const rig: CameraRig = {
+  // --- the scene, input and events ------------------------------------------
+
+  let navScene: NavScene | null = null;
+  const listeners: Record<NavEvent, Set<() => void>> = {
+    inputstart: new Set(), inputend: new Set(), change: new Set(), rest: new Set(),
+  };
+  const emit = (ev: NavEvent) => { for (const fn of listeners[ev]) fn(); };
+  controls.addEventListener("controlstart", () => emit("inputstart"));
+  controls.addEventListener("controlend", () => emit("inputend"));
+  controls.addEventListener("update", () => emit("change"));
+  controls.addEventListener("rest", () => emit("rest"));
+
+  const raycaster = new THREE.Raycaster();
+  const ndc = new THREE.Vector2();
+  function rayAt(clientX: number, clientY: number): THREE.Ray {
+    const r = dom.getBoundingClientRect();
+    ndc.set(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
+    active.updateMatrixWorld();
+    raycaster.setFromCamera(ndc, active);
+    return raycaster.ray;
+  }
+  function surfaceAt(clientX: number, clientY: number): THREE.Vector3 | null {
+    if (!navScene) return null;
+    const ray = rayAt(clientX, clientY);
+    const t = navScene.raycast(ray.origin, ray.direction);
+    return t === null ? null : ray.at(t, new THREE.Vector3());
+  }
+
+  /** Zoom anchor: the model under the cursor, else the ground plane, else a point
+   *  at the target distance. Without the ground case, zooming over empty space
+   *  walked the camera through the grid. */
+  function cursorWorldPoint(clientX: number, clientY: number): THREE.Vector3 {
+    const hit = surfaceAt(clientX, clientY);
+    if (hit) return hit;
+    const ray = rayAt(clientX, clientY);
+    const dist = controls.distance;
+    const gz = navScene?.groundZ() ?? null;
+    if (gz !== null) {
+      const ground = groundAnchor(ray.origin, ray.direction, gz, dist);
+      if (ground) return ground.clone();
+    }
+    return ray.at(dist, new THREE.Vector3());
+  }
+
+  function wheel(e: WheelEvent) {
+    e.preventDefault();
+    const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 100 : 1; // lines/pages -> px
+    const dy = Math.max(-240, Math.min(240, e.deltaY * unit));
+    emit("inputstart");
+    rig.zoomBy(Math.pow(1.0016, dy), cursorWorldPoint(e.clientX, e.clientY));
+  }
+  dom.addEventListener("wheel", wheel, { passive: false });
+
+  // Right-drag orbits about what is under the cursor now, not wherever a pan left
+  // the target. Released on the window, since a drag can end off the canvas.
+  dom.addEventListener("pointerdown", (e) => {
+    if (e.button === 2) rig.setOrbitPoint(rig.pivotAt(e.clientX, e.clientY));
+  });
+  const endPivot = (e: PointerEvent) => { if (e.button === 2 || e.type === "pointercancel") rig.setOrbitPoint(null); };
+  window.addEventListener("pointerup", endPivot);
+  window.addEventListener("pointercancel", endPivot);
+
+  let version = 0;
+  let poseKey = "";
+  const keyScratch = new THREE.Vector3();
+  function notePose() {
+    const c = active as THREE.PerspectiveCamera;
+    const p = c.position;
+    const q = c.quaternion;
+    const key = `${p.x},${p.y},${p.z},${q.x},${q.y},${q.z},${q.w},${c.projectionMatrix.elements.join(",")},${controls.getTarget(keyScratch).toArray().join(",")}`;
+    if (key !== poseKey) {
+      poseKey = key;
+      version++;
+    }
+  }
+
+  function fitSphere(center: THREE.Vector3, radius: number, opts?: boolean | FitOptions) {
+    const o: FitOptions = typeof opts === "boolean" ? { animate: opts } : (opts ?? { animate: true });
+    const c = center.clone();
+    // An EMPTY document has an empty box, and three.js answers that with
+    // Sphere.makeEmpty(), radius -1, which placed the camera behind its target.
+    let r = radius * (o.padding ?? 1.15);
+    if (!Number.isFinite(r) || r <= 0) {
+      r = EMPTY_VIEW_MM;
+      c.set(0, 0, 0);
+    }
+    const dir = controls
+      .getPosition(new THREE.Vector3())
+      .sub(controls.getTarget(new THREE.Vector3()))
+      .normalize();
+    if (dir.lengthSq() < 1e-6) dir.set(1, -1, 0.8).normalize();
+    let dist: number;
+    if (usingOrtho) {
+      const aspect2 = (ortho.right - ortho.left) / (ortho.top - ortho.bottom);
+      const halfH = Math.max(r, r / Math.max(aspect2, 1e-3));
+      ortho.top = halfH;
+      ortho.bottom = -halfH;
+      ortho.left = -halfH * aspect2;
+      ortho.right = halfH * aspect2;
+      ortho.updateProjectionMatrix();
+      controls.zoomTo(1, false);
+      dist = Math.max(controls.distance, r * 2);
+    } else {
+      dist = r / Math.sin((persp.fov * Math.PI) / 180 / 2);
+    }
+    const animate = o.animate ?? true;
+    controls.setTarget(c.x, c.y, c.z, animate);
+    controls.setPosition(c.x + dir.x * dist, c.y + dir.y * dist, c.z + dir.z * dist, animate);
+  }
+
+  function orthoHalfHeight(): number {
+    return (ortho.top - ortho.bottom) / 2;
+  }
+
+  const rig: CameraRig & { controls: CameraControls } = {
     controls,
     get active() {
       return active;
@@ -289,6 +405,7 @@ export function createLegacyRig(
       ortho.left = -halfH * aspect2;
       ortho.right = halfH * aspect2;
       ortho.updateProjectionMatrix();
+      version++;
     },
     update(dt: number) {
       pendingOrthoZoom = null; // camera.zoom is authoritative again after this update
@@ -335,16 +452,22 @@ export function createLegacyRig(
         active.rotateZ(rollAngle); // camera local +Z is the view axis → banks in place
         active.updateMatrixWorld();
       }
+      active.updateMatrixWorld();
+      notePose();
       return moved || swapped || rollAngle !== 0;
     },
     fov() {
       return persp.fov;
     },
-    setFov(deg: number) {
+    setFov(deg: number, opts?: { keepScale?: boolean; animate?: boolean }) {
       const want = Math.min(90, Math.max(10, deg));
       if (persp.fov === want) return;
+      const scale = rig.viewScale();
       persp.fov = want;
       persp.updateProjectionMatrix();
+      if (opts?.keepScale && !usingOrtho) {
+        controls.dollyTo(scale / Math.tan((want * Math.PI) / 360), opts.animate ?? false);
+      }
     },
     viewScale() {
       if (usingOrtho) {
@@ -429,49 +552,14 @@ export function createLegacyRig(
       const r = box.isEmpty() ? 0 : box.getBoundingSphere(new THREE.Sphere()).radius;
       maxHalfH = maxViewHalfHeight(r);
     },
-    fit(box: THREE.Box3, enableTransition = true) {
-      // Manual fit that PRESERVES the current view direction. (camera-controls'
-      // fitToBox resets the orbit to an axis view under a Z-up camera.)
-      const center = box.getCenter(new THREE.Vector3());
-      const sphere = box.getBoundingSphere(new THREE.Sphere(center.clone()));
-      // An EMPTY document has an empty box, and three.js answers that with
-      // Sphere.makeEmpty(), radius -1, not 0. Multiplied through, `dist` came
-      // out NEGATIVE and the camera was placed behind its own target, looking
-      // away from the scene: an empty viewport with no grid and no way to tell
-      // why. It never showed while startup always loaded an example part with a
-      // real box. Fall back to a human-scale view of the origin instead.
-      let r = sphere.radius * 1.15; // padding
-      if (!Number.isFinite(r) || r <= 0) {
-        r = EMPTY_VIEW_MM;
-        center.set(0, 0, 0);
-      }
-      const dir = controls
-        .getPosition(new THREE.Vector3())
-        .sub(controls.getTarget(new THREE.Vector3()))
-        .normalize();
-      if (dir.lengthSq() < 1e-6) dir.set(1, -1, 0.8).normalize();
-
-      let dist: number;
-      if (usingOrtho) {
-        // frame the sphere by setting the ortho zoom via frustum height
-        const aspect2 = (ortho.right - ortho.left) / (ortho.top - ortho.bottom);
-        const halfH = Math.max(r, r / Math.max(aspect2, 1e-3));
-        ortho.top = halfH;
-        ortho.bottom = -halfH;
-        ortho.left = -halfH * aspect2;
-        ortho.right = halfH * aspect2;
-        ortho.updateProjectionMatrix();
-        dist = Math.max(controls.distance, r * 2);
-      } else {
-        dist = r / Math.sin((persp.fov * Math.PI) / 180 / 2);
-      }
-      controls.setTarget(center.x, center.y, center.z, enableTransition);
-      controls.setPosition(
-        center.x + dir.x * dist,
-        center.y + dir.y * dist,
-        center.z + dir.z * dist,
-        enableTransition,
-      );
+    fit(box: THREE.Box3, opts?: boolean | FitOptions) {
+      // Keeps the current view direction; camera-controls' own fitToBox resets
+      // the orbit to an axis view under a Z-up camera.
+      const sphere = box.getBoundingSphere(new THREE.Sphere());
+      fitSphere(box.isEmpty() ? new THREE.Vector3() : sphere.center, box.isEmpty() ? -1 : sphere.radius, opts);
+    },
+    fitSphere(sphere: THREE.Sphere, opts?: boolean | FitOptions) {
+      fitSphere(sphere.center, sphere.radius, opts);
     },
     resetView(box: THREE.Box3 | null) {
       rollAngle = 0;
@@ -485,7 +573,7 @@ export function createLegacyRig(
       }
       const c = box.getCenter(new THREE.Vector3());
       controls.setLookAt(c.x + home.x, c.y + home.y, c.z + home.z, c.x, c.y, c.z, false);
-      rig.fit(box, true);
+      rig.fit(box, { animate: true });
     },
     setStandardView(view: StandardView) {
       rollAngle = 0;
@@ -641,6 +729,111 @@ export function createLegacyRig(
         false,
       );
     },
+    getTarget(out = new THREE.Vector3()) {
+      return controls.getTarget(out);
+    },
+    getPosition(out = new THREE.Vector3()) {
+      return controls.getPosition(out);
+    },
+    viewDirection(out = new THREE.Vector3()) {
+      active.updateMatrixWorld();
+      return active.getWorldDirection(out);
+    },
+    poseVersion() {
+      return version;
+    },
+    getState(): CameraState {
+      const t = controls.getTarget(new THREE.Vector3());
+      const q = active.quaternion;
+      return {
+        target: [t.x, t.y, t.z],
+        quaternion: [q.x, q.y, q.z, q.w],
+        scale: rig.viewScale(),
+        fov: persp.fov,
+        mode,
+      };
+    },
+    setState(st: CameraState, animate = false) {
+      rollAngle = 0;
+      const q = new THREE.Quaternion(...st.quaternion).normalize();
+      const up = new THREE.Vector3(0, 1, 0).applyQuaternion(q);
+      const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
+      rig.setFov(st.fov);
+      rig.setProjectionMode(st.mode);
+      const d = usingOrtho ? controls.distance : st.scale / Math.tan((persp.fov * Math.PI) / 360);
+      const t = new THREE.Vector3(...st.target);
+      const eye = t.clone().addScaledVector(fwd, -d);
+      persp.up.copy(up);
+      ortho.up.copy(up);
+      controls.updateCameraUp();
+      controls.setLookAt(eye.x, eye.y, eye.z, t.x, t.y, t.z, animate);
+      if (usingOrtho) controls.zoomTo(orthoHalfHeight() / st.scale, animate);
+    },
+    setScene(s) {
+      navScene = s;
+    },
+    setAnchorPlane() {
+      // The legacy rig anchors on the ground alone.
+    },
+    setLimits(l: Partial<NavLimits>) {
+      if (l.minDistance !== undefined) controls.minDistance = l.minDistance;
+      if (l.maxScale !== undefined) maxHalfH = l.maxScale;
+      if (l.minPitch !== undefined) controls.minPolarAngle = ((l.minPitch + 90) * Math.PI) / 180;
+      if (l.maxPitch !== undefined) controls.maxPolarAngle = ((l.maxPitch + 90) * Math.PI) / 180;
+    },
+    on(ev, fn) {
+      listeners[ev].add(fn);
+      return () => listeners[ev].delete(fn);
+    },
+    onInputStart(fn) {
+      return rig.on("inputstart", fn);
+    },
+    wheel,
+    pivotAt(clientX, clientY) {
+      if (contentBox.isEmpty()) return null;
+      const hit = surfaceAt(clientX, clientY);
+      if (hit) return hit;
+      // Pressed beside the model: the whole scene's centre can sit hundreds of mm
+      // off when zoomed in on one part, and a small drag then flings the view
+      // around it. The nearest surface on screen keeps the orbit local.
+      for (const p of pivotProbes(clientX, clientY, dom.getBoundingClientRect(), 32)) {
+        const near = surfaceAt(p.x, p.y);
+        if (near) return near;
+      }
+      return contentBox.getCenter(new THREE.Vector3());
+    },
+    panScreen(dx, dy) {
+      const s = rig.viewScale();
+      controls.truck(dx * s, dy * s, false);
+    },
+    orbitBy(az, pol) {
+      controls.rotate(az, pol, false);
+    },
+    rotateTo(azimuth, polar, animate = false) {
+      controls.rotateTo(azimuth, polar, animate);
+    },
+    moveTo(p, animate = false) {
+      controls.moveTo(p.x, p.y, p.z, animate);
+    },
+    setLookAt(eye, target, animate = false) {
+      rollAngle = 0;
+      persp.up.set(0, 0, 1);
+      ortho.up.set(0, 0, 1);
+      controls.updateCameraUp();
+      controls.setLookAt(eye.x, eye.y, eye.z, target.x, target.y, target.z, animate);
+    },
+    lerpLookAt(eyeA, targetA, eyeB, targetB, t, animate = false) {
+      controls.lerpLookAt(
+        eyeA.x, eyeA.y, eyeA.z, targetA.x, targetA.y, targetA.z,
+        eyeB.x, eyeB.y, eyeB.z, targetB.x, targetB.y, targetB.z,
+        t, animate,
+      );
+    },
+    setViewScale(scale, animate = false) {
+      if (!(scale > 0)) return;
+      if (usingOrtho) controls.zoomTo(orthoHalfHeight() / scale, animate);
+      else controls.dollyTo(scale / Math.tan((persp.fov * Math.PI) / 360), animate);
+    },
     orbitLocked() {
       return orbitLocked;
     },
@@ -651,7 +844,7 @@ export function createLegacyRig(
       // rather than one button that changed meaning.
       controls.mouseButtons.right = locked ? A.TRUCK : A.ROTATE;
     },
-    setOrbitPivot(p) {
+    setOrbitPoint(p) {
       orbitPivot = p ? p.clone() : null;
       // Drop the remembered basis with it: the gap between one gesture and the
       // next holds every camera move that is not this drag (a ViewCube flight, a

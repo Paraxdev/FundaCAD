@@ -1021,7 +1021,7 @@ export class EdgeFeatureTool {
       this.downOnGizmo = true;
       return;
     }
-    // empty-space press: leave it to camera-controls; commit decided on pointerup
+    // empty-space press: leave it to the camera rig; commit decided on pointerup
   }
 
   private onUp(e: PointerEvent) {

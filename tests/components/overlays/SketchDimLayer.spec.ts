@@ -39,6 +39,7 @@ const plane = {
 const forwardWheel = vi.fn();
 const viewport = {
   camera: new THREE.PerspectiveCamera(),
+  rig: { poseVersion: () => 0 },
   projectToScreen: () => ({ x: 0, y: 0 }),
   forwardWheel,
 } as unknown as Viewport;

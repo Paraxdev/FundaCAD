@@ -102,14 +102,12 @@ const check = (name, ok, detail) => {
 
   // --- reset camera ---------------------------------------------------------------
   const dirOf = () => page.evaluate(() => {
-    const c = window.viewport.rig.controls;
-    const p = c.getPosition(new window.viewport.rig.active.position.constructor());
-    const t = c.getTarget(new window.viewport.rig.active.position.constructor());
-    const d = p.sub(t).normalize();
+    const rig = window.viewport.rig;
+    const d = rig.getPosition().sub(rig.getTarget()).normalize();
     return [d.x, d.y, d.z].map((v) => Math.round(v * 100) / 100);
   });
   const home = await dirOf();
-  await page.evaluate(() => { window.viewport.rig.controls.rotate(1.3, -0.4, false); window.viewport.setStandardView("top"); });
+  await page.evaluate(() => { window.viewport.rig.orbitBy(1.3, -0.4); window.viewport.setStandardView("top"); });
   await page.waitForTimeout(1200);
   const moved = await dirOf();
   const btn = await page.$('button[title^="Reset camera"]');
@@ -125,13 +123,12 @@ const check = (name, ok, detail) => {
   check("Reset camera looks in from the home corner", near(reset, want), `${JSON.stringify(reset)} want ${JSON.stringify(want)} (start ${JSON.stringify(home)})`);
 
   // --- new document ----------------------------------------------------------------
-  await page.evaluate(() => { window.viewport.setStandardView("front"); window.viewport.rig.controls.dolly(200, false); });
+  await page.evaluate(() => { window.viewport.setStandardView("front"); window.viewport.rig.zoomBy(0.5); });
   await page.waitForTimeout(1200);
   await page.evaluate(() => { window.store.markSaved("x.funda"); window.__fundacad.handleAction("new"); });
   await page.waitForTimeout(1500);
   const fresh = await page.evaluate(() => {
-    const c = window.viewport.rig.controls;
-    const t = c.getTarget(new window.viewport.rig.active.position.constructor());
+    const t = window.viewport.rig.getTarget();
     return { target: [t.x, t.y, t.z].map((v) => Math.round(v)), features: window.store.document.features.length };
   });
   const freshDir = await dirOf();

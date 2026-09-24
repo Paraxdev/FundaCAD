@@ -10,7 +10,6 @@
 import Icon from "../shell/Icon.vue";
 import * as THREE from "three";
 import { onUnmounted, watch } from "vue";
-import { camHash } from "../../viewport/camHash";
 import { screenTransform } from "../../sketch/annotationFormat";
 import { useSketchAnnotationStore } from "../../stores/sketchAnnotations";
 import type { GlyphItem } from "../../sketch/sketchGlyphs";
@@ -19,12 +18,12 @@ const s = useSketchAnnotationStore();
 
 // --- position: deliberately outside reactivity ----------------------------
 // A plain array, not a ref and not reactive(), filled by the :ref function on
-// each badge. `scratch`, `lastCamHash` and `raf` are plain locals for the same
+// each badge. `scratch`, `lastPose` and `raf` are plain locals for the same
 // reason: this loop runs on every frame the camera moves and writes one style
 // property per glyph, and nothing about that benefits from being tracked.
 const els: (HTMLElement | null)[] = [];
 const scratch = new THREE.Vector3();
-let lastCamHash = "";
+let lastPose = -1;
 let raf = 0;
 
 function loop() {
@@ -33,9 +32,9 @@ function loop() {
   const vp = s.glyphViewport;
   if (!plane || !vp) return;
   // skip the per-glyph projection + DOM writes when the camera hasn't moved
-  const hash = camHash(vp.camera);
-  if (hash === lastCamHash) return;
-  lastCamHash = hash;
+  const pose = vp.rig.poseVersion();
+  if (pose === lastPose) return;
+  lastPose = pose;
   const items = s.glyphItems;
   for (let i = 0; i < items.length; i++) {
     const el = els[i];
@@ -63,9 +62,9 @@ watch(
   { immediate: true },
 );
 
-// A new glyph set is at the same camera as the old one, so the hash check would
+// A new glyph set is at the same camera as the old one, so the pose check would
 // skip it forever. flush: "post" so the :ref functions have run.
-watch(() => s.glyphItems, () => { lastCamHash = ""; }, { flush: "post" });
+watch(() => s.glyphItems, () => { lastPose = -1; }, { flush: "post" });
 
 onUnmounted(stop);
 

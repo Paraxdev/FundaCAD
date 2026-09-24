@@ -90,8 +90,6 @@ import { cylinderFromFace, radialAt, solidInsideCylinder } from "../features/pla
 import type { RoundFace } from "../features/radialDrag";
 import type { Plane3, PlaneDef, RebuildResult, Selector, Vec3 } from "../types";
 import { dragStep } from "./dragStep";
-import { groundAnchor } from "./zoomAnchor";
-import { pivotProbes } from "./orbitPivot";
 import { faceSketchPlane } from "../sketch/sketchView";
 import { viewSideNormal } from "./viewFlight";
 import { themeColor } from "./themeColors";
@@ -255,9 +253,19 @@ export class Viewport {
     // The canvas often settles after construction, which a window resize alone misses.
     new ResizeObserver(() => this.resize()).observe(this.canvas);
     // once the user drives the camera (orbit/pan/zoom), stop auto-framing.
-    this.rig.controls.addEventListener("controlstart", () => {
+    this.rig.onInputStart(() => {
       this.userMovedCamera = true;
       this.requestRender();
+    });
+    this.rig.setScene({
+      raycast: (origin, dir) => {
+        if (!this.model) return null;
+        if (!this.streaming) flushRaycastIndex();
+        this.surfaceRaycaster.ray.set(origin, dir);
+        const hit = this.surfaceRaycaster.intersectObjects(visibleBodyMeshes(this.model), false)[0];
+        return hit ? hit.distance : null;
+      },
+      groundZ: () => (this.scene.grid.group.visible ? this.targetGridZ : null),
     });
     this.installPointer();
     // Re-applied on theme changes too: the default ground is a theme token.
@@ -329,14 +337,6 @@ export class Viewport {
             bodies: this.highlighter?.getSelectedBodies() ?? [],
           }
         : null;
-    });
-    // Right-drag orbits about what is under the cursor now, not wherever a pan left
-    // the target. Released on the window, since a drag can end off the canvas.
-    c.addEventListener("pointerdown", (e) => {
-      if (e.button === 2) this.rig.setOrbitPivot(this.orbitPivotAt(e.clientX, e.clientY));
-    });
-    window.addEventListener("pointerup", (e) => {
-      if (e.button === 2) this.rig.setOrbitPivot(null);
     });
     c.addEventListener("pointermove", (e) => {
       if (
@@ -434,73 +434,21 @@ export class Viewport {
       if (e.buttons & 2) menuPending = true; // fired on press → wait for the release
       else if (!rightDrag) this.onContextClick(e.clientX, e.clientY); // fired on release
     });
-    // Explicit wheel zoom for BOTH projections (camera-controls' built-in wheel
-    // DOLLY didn't zoom in perspective under WebKitGTK). deltaMode-normalized so
-    // line/page-mode wheels (some webviews) still produce a sensible step.
-    c.addEventListener("wheel", (e) => this.wheelZoom(e), { passive: false });
     c.addEventListener("dblclick", (e) => {
       if (this.cubeHitsRegion(e.clientX, e.clientY)) return;
       this.onDoubleClick?.(e.clientX, e.clientY);
     });
   }
 
-  /** One wheel notch, wherever it was caught. */
-  private wheelZoom(e: WheelEvent) {
-    e.preventDefault();
-    const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 100 : 1; // lines/pages -> px
-    const dy = Math.max(-240, Math.min(240, e.deltaY * unit));
-    this.userMovedCamera = true;
-    // zoom toward what's under the cursor (MCAD-style), not the orbit centre
-    this.rig.zoomBy(Math.pow(1.0016, dy), this.cursorWorldPoint(e.clientX, e.clientY));
-    this.requestRender();
-  }
-
   /** A wheel notch an overlay swallowed (a dimension badge takes pointer events),
    *  handed back so the view still zooms under it. */
   forwardWheel(e: WheelEvent) {
-    this.wheelZoom(e);
+    this.rig.wheel(e);
   }
 
-  /** The model surface under the cursor, else the model's centre. Not the orbit
-   *  target, which pans and zooms push well off the model. */
-  private orbitPivotAt(clientX: number, clientY: number): THREE.Vector3 | null {
-    if (!this.model || this.model.box.isEmpty()) return null;
-    flushRaycastIndex();
-    const meshes = visibleBodyMeshes(this.model);
-    const hitAt = (x: number, y: number) => {
-      this.surfaceRaycaster.ray.copy(this.rayFrom(x, y).ray);
-      return this.surfaceRaycaster.intersectObjects(meshes, false)[0];
-    };
-    const hit = hitAt(clientX, clientY);
-    if (hit) return hit.point.clone();
-    // Pressed beside the model: the whole scene's centre can sit hundreds of mm
-    // off when zoomed in on one part, and a small drag then flings the view
-    // around it. The nearest surface on screen keeps the orbit local.
-    for (const p of pivotProbes(clientX, clientY, this.canvas.getBoundingClientRect(), 32)) {
-      const near = hitAt(p.x, p.y);
-      if (near) return near.point.clone();
-    }
-    return this.model.box.getCenter(new THREE.Vector3());
-  }
-
-  /** Zoom anchor: the model under the cursor, else the ground plane, else a point
-   *  at the target distance. Without the ground case, zooming over empty space
-   *  walked the camera through the grid. */
-  private cursorWorldPoint(clientX: number, clientY: number): THREE.Vector3 {
-    const rc = this.rayFrom(clientX, clientY);
-    if (this.model) {
-      const hit = rc.intersectObjects(visibleBodyMeshes(this.model), false)[0];
-      if (hit) return hit.point.clone();
-    }
-    const cam = this.rig.controls.getPosition(new THREE.Vector3());
-    const target = this.rig.controls.getTarget(new THREE.Vector3());
-    const dist = cam.distanceTo(target);
-    // Only while the ground grid is drawn; a sketch's lattice may be vertical.
-    if (this.scene.grid.group.visible) {
-      const ground = groundAnchor(rc.ray.origin, rc.ray.direction, this.targetGridZ, dist);
-      if (ground) return ground.clone();
-    }
-    return rc.ray.origin.clone().add(rc.ray.direction.clone().multiplyScalar(dist));
+  /** The point a right drag starting here would orbit about. */
+  orbitPivotAt(clientX: number, clientY: number): THREE.Vector3 | null {
+    return this.rig.pivotAt(clientX, clientY);
   }
 
   // Hover picks once per animation frame with the newest pointer position.
@@ -3129,7 +3077,7 @@ export class Viewport {
 
   enterSketchView(origin: THREE.Vector3, normal: THREE.Vector3, up: THREE.Vector3) {
     // Stay on the side of the plane the camera is already on (viewFlight.viewSideNormal).
-    const eye = this.rig.controls.getPosition(new THREE.Vector3());
+    const eye = this.rig.getPosition();
     const side = viewSideNormal(
       [normal.x, normal.y, normal.z],
       [eye.x, eye.y, eye.z],
@@ -3152,6 +3100,7 @@ export class Viewport {
       animate: true,
       onArrive: () => this.setSketchFlat(true),
     });
+    this.rig.setAnchorPlane(new THREE.Plane().setFromNormalAndCoplanarPoint(n, origin));
     this.scene.grid.group.visible = false; // hide the world ground grid; only the sketch grid shows
     this.setModelDimmed(true);
     this.sketchDimmed = true;
@@ -3175,6 +3124,7 @@ export class Viewport {
     this.showSketchFace(null);
     this.setSketchFlat(false);
     this.scene.grid.group.visible = true;
+    this.rig.setAnchorPlane(null);
     this.rig.restoreUp();
     this.setModelDimmed(false);
     this.sketchDimmed = false;
@@ -3240,7 +3190,7 @@ export class Viewport {
   /** Where the camera is pointed, in world space, the centre of what is on
    *  screen, and so the centre anything view-sized should be built around. */
   cameraTarget(out = new THREE.Vector3()): THREE.Vector3 {
-    return this.rig.controls.getTarget(out);
+    return this.rig.getTarget(out);
   }
 
   /** A clean drag snap step (nice 1/2/5 mm) for the current zoom at a world
@@ -3380,7 +3330,7 @@ export class Viewport {
       // flagged requestRender(), and we've drained the post-mutation linger.
       if (moved || this.needsRender || this.lingerFrames > 0) {
         // keep the ground grid spacing/extent matched to the current zoom + pan
-        const t = this.rig.controls.getTarget(this.scratchTarget);
+        const t = this.rig.getTarget(this.scratchTarget);
         this.scene.grid.update(t.x, t.y, this.pixelWorldSize(t), this.viewDiagonalPx(), this.targetGridZ);
         // Only while the ground grid is the one being drawn: inside a sketch it
         // is hidden and SketchMode reports the plane lattice instead.

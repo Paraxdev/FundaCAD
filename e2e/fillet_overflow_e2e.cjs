@@ -91,7 +91,7 @@ const check = (name, ok, detail) => {
   await page.waitForTimeout(600);
   await page.evaluate(() => window.__fundacad.handleAction("fit"));
   await page.waitForTimeout(1000);
-  await page.evaluate(() => { const v = window.viewport; v.rig.controls.zoomTo?.(4, false); v.rig.controls.setTarget?.(4, -50, 10, false); v.requestRender(); });
+  await page.evaluate(() => { const v = window.viewport; const V = v.camera.position.constructor; v.rig.setViewScale(v.rig.viewScale() / 4); v.rig.moveTo(new V(4, -50, 10)); v.requestRender(); });
   await page.waitForTimeout(800);
   const junction = "Math.abs(p[0] - 4.242) < 0.3 && Math.abs(p[1] + 49.82) < 0.3 && p[2] > -0.1 && p[2] < 20.1";
   const ok1 = await filletTyped([4.242, -49.82, 10], junction, 2, false);
@@ -121,7 +121,7 @@ const check = (name, ok, detail) => {
     await s.rebuildNow();
   });
   await settle();
-  await page.evaluate(() => { const v = window.viewport; const V = v.camera.position.constructor; v.rig.lookAtPlane(new V(350, 0, 30), new V(0.7, -0.4, 0.6).normalize(), new V(0, 0, 1)); v.rig.controls.setTarget?.(350, 0, 30, false); v.requestRender(); });
+  await page.evaluate(() => { const v = window.viewport; const V = v.camera.position.constructor; v.rig.lookAtPlane(new V(350, 0, 30), new V(0.7, -0.4, 0.6).normalize(), new V(0, 0, 1)); v.requestRender(); });
   await page.waitForTimeout(800);
   const rim = "Math.abs(Math.hypot(p[0] - 300, p[1]) - 50) < 0.3 && Math.abs(p[2] - 30) < 0.3";
   const ok3 = await filletTyped([350, 0, 30], rim, 10, false);
