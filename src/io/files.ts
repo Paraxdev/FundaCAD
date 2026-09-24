@@ -319,7 +319,11 @@ export async function exportModel(store: DocumentStore, geometry: GeometryBacken
   const { settings, scope } = choice;
   saveExportSettings(settings);
   if (!isTauri()) {
-    console.warn("export needs the native app (a real filesystem path)");
+    // The engine writes an export straight to a path on disk (see the file
+    // header), a plain browser has no such path to hand it and no protocol for
+    // getting the bytes back instead, so this needs the desktop app rather than
+    // a fallback that would quietly produce nothing, as it did before.
+    await reportError("Export needs the desktop app: a browser tab has no filesystem path to give the engine to write to.");
     return;
   }
   const opts: { body?: string; separate?: boolean } = {};
@@ -396,7 +400,12 @@ export function extToFormat(path: string): ExportFormat {
  *  this needs the native app (a real filesystem path), like export. */
 export async function importModel(store: DocumentStore, geometry: GeometryBackend) {
   if (!isTauri()) {
-    console.warn("import needs the native app (a real filesystem path)");
+    // The engine's import op takes a path on disk and reads the file itself
+    // (see import.rs: "a request needs a path and a format"), there is no
+    // inline-bytes protocol for it the way the MCP server's upload spools one to
+    // a temp file first. A browser file input hands us bytes, not a path, so a
+    // real fallback here would need an engine change, not a UI one.
+    await reportError("Import needs the desktop app: a browser tab has no filesystem path to give the engine to read.");
     return;
   }
   const { open } = await import("@tauri-apps/plugin-dialog");
@@ -631,7 +640,12 @@ export async function reportError(msg: string) {
     const { message } = await import("@tauri-apps/plugin-dialog");
     await message(msg, { title: "FundaCAD", kind: "error" });
   } else {
+    // No native dialog here, so this goes through the same title bar error
+    // notice every other error in the app uses (ui/toast.ts -> ui/errorNotice.ts),
+    // instead of a console.error nobody but a developer would ever see.
     console.error(msg);
+    const { toast } = await import("../ui/toast");
+    toast(msg, { kind: "error" });
   }
 }
 
