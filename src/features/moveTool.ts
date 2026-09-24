@@ -217,7 +217,10 @@ export class MoveTool {
     this.startTarget(bodyMoveTarget(this.viewport, this.store, bodies), onDone);
   }
 
+  /** A session already up is cancelled first, so its gizmo never stays drawn
+   *  on the old target. */
   startTarget(target: MoveTarget, onDone: (id: string | null) => void) {
+    if (this.active) this.cancel();
     this.copy = false;
     this.open(target, onDone);
   }
