@@ -8,6 +8,8 @@
 
 import type * as THREE from "three";
 import { createLegacyRig } from "./legacyRig";
+import { createNavigatorRig } from "./navigator/rig";
+import { navigatorChoice } from "../ui/interactionPrefs";
 
 /** What the rig may ask of the scene it looks at. The viewport provides it; the
  *  headless tests provide analytic stand-ins. */
@@ -171,5 +173,5 @@ export type StandardView =
 export type ProjectionMode = "persp" | "ortho" | "auto";
 
 export function createCameraRig(dom: HTMLElement, aspect: number): CameraRig {
-  return createLegacyRig(dom, aspect);
+  return navigatorChoice() === "v2" ? createNavigatorRig(dom, aspect) : createLegacyRig(dom, aspect);
 }
