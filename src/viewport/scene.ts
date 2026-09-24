@@ -12,6 +12,7 @@ import { BACKGROUND_COLOR, bloomSettings, renderPrefs } from "../ui/renderPrefs"
 import { buildRoom, disposeRoom } from "./environments";
 import type { Environment } from "../ui/renderPrefs";
 import { themeColor } from "./themeColors";
+import { keyDirection } from "./keyLight";
 import type { Axis3 } from "../types";
 
 export interface SceneBundle {
@@ -353,7 +354,9 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
  *  lighting. Cheap: it reads each body's cached bounding box, not its vertices. */
 const _shadowBox = new THREE.Box3();
 const _shadowSphere = new THREE.Sphere();
+/** The key light's direction, from renderPrefs, set by applyRenderPrefs. */
 const _shadowDir = new THREE.Vector3(40, -60, 80).normalize();
+const KEY_DISTANCE = Math.hypot(40, -60, 80);
 function frameKeyShadow(key: THREE.DirectionalLight, modelGroup: THREE.Group): void {
   _shadowBox.setFromObject(modelGroup);
   if (_shadowBox.isEmpty()) return;
@@ -615,6 +618,8 @@ function applyRenderPrefs(
   lights: { key: THREE.DirectionalLight; fill: THREE.DirectionalLight; hemi: THREE.HemisphereLight },
 ) {
   const p = renderPrefs();
+  _shadowDir.set(...keyDirection(p.keyAzimuth, p.keyElevation));
+  lights.key.position.copy(lights.key.target.position).addScaledVector(_shadowDir, KEY_DISTANCE);
   lights.key.intensity = KEY_INTENSITY * p.brightness;
   lights.fill.intensity = FILL_INTENSITY * p.brightness;
   lights.hemi.intensity = HEMI_INTENSITY * p.brightness;

@@ -19,6 +19,7 @@
 // mostly for.
 
 import { readSetting } from "./storedSetting";
+import { DEFAULT_KEY } from "../viewport/keyLight";
 
 /** What the model reflects, and therefore most of what a metal LOOKS like.
  *
@@ -160,6 +161,10 @@ export interface RenderPrefs {
    *  near-sharp profiled corner's patch borders ran across its flat top and
    *  read as a curve that was not there. */
   tangentEdges: TangentEdges;
+  /** Where the key light shines from, degrees round the up axis from +X and
+   *  above the ground (viewport/keyLight.ts). Aimed on the canvas in Render. */
+  keyAzimuth: number;
+  keyElevation: number;
 }
 
 /** What the f-stop numbers mean to the blur pass, and the range the control
@@ -194,6 +199,8 @@ export const DEFAULT_RENDER: RenderPrefs = {
   // OFF: opt-in grounded shadows, see the field comment.
   shadows: false,
   tangentEdges: "faint",
+  keyAzimuth: DEFAULT_KEY.azimuth,
+  keyElevation: DEFAULT_KEY.elevation,
 };
 
 export const MIN_BRIGHTNESS = 0.4;
@@ -253,6 +260,19 @@ export function asFocusBlur(v: unknown): number | null {
   return asClamped(v, 0, 1);
 }
 
+/** An azimuth folded into (-180, 180]. */
+export function asAzimuth(v: unknown): number | null {
+  if (typeof v !== "number" || !Number.isFinite(v)) return null;
+  let d = v % 360;
+  if (d > 180) d -= 360;
+  if (d <= -180) d += 360;
+  return d + 0;
+}
+
+export function asElevation(v: unknown): number | null {
+  return asClamped(v, -90, 90);
+}
+
 /** Clamp a brightness into range, or null when it is not a number at all.
  *  Clamped rather than refused: a value out of range is a value somebody meant,
  *  and the nearest legal one is closer to it than the default is. */
@@ -276,6 +296,8 @@ export function asRenderPrefs(v: unknown): RenderPrefs {
     performanceMode: typeof o["performanceMode"] === "boolean" ? o["performanceMode"] : DEFAULT_RENDER.performanceMode,
     shadows: typeof o["shadows"] === "boolean" ? o["shadows"] : DEFAULT_RENDER.shadows,
     tangentEdges: asTangentEdges(o["tangentEdges"]) ?? DEFAULT_RENDER.tangentEdges,
+    keyAzimuth: asAzimuth(o["keyAzimuth"]) ?? DEFAULT_RENDER.keyAzimuth,
+    keyElevation: asElevation(o["keyElevation"]) ?? DEFAULT_RENDER.keyElevation,
   };
 }
 
@@ -310,7 +332,9 @@ export function setRenderPref<K extends keyof RenderPrefs>(key: K, value: Render
                 : key === "performanceMode" ? (typeof value === "boolean" ? value : null)
                   : key === "shadows" ? (typeof value === "boolean" ? value : null)
                     : key === "tangentEdges" ? asTangentEdges(value)
-                      : asBrightness(value);
+                      : key === "keyAzimuth" ? asAzimuth(value)
+                        : key === "keyElevation" ? asElevation(value)
+                          : asBrightness(value);
   if (ok === null || current[key] === ok) return;
   // A fresh object rather than a mutation, so a subscriber may hold the result
   // of renderPrefs() and compare identity to decide it must redraw.
