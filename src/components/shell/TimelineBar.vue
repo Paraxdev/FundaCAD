@@ -86,7 +86,7 @@ const docRollback = useDocValue(() => store.rollbackIndex);
 const editTick = ref(0);
 const editing = computed(() => {
   editTick.value;
-  return store.editPreviewId !== null;
+  return store.editPreviewId !== null && !store.editPreviewInPlace;
 });
 // The marker AS DRAWN. While a feature is being edited it drops onto that
 // feature, since the preview shows the model as of that step with everything

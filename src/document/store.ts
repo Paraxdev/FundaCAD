@@ -1033,6 +1033,10 @@ export class DocumentStore {
   get editPreviewId(): string | null {
     return this.editPreview?.id ?? null;
   }
+  /** The edit rebuilds in place, so nothing after it is rolled away. */
+  get editPreviewInPlace(): boolean {
+    return !!this.editPreview?.inPlace;
+  }
 
   /** The kernel's refusal of the previewed feature only, and null mid-build so a drag does not strobe. */
   get previewError(): string | null {
