@@ -25,6 +25,7 @@ import { allOpGrants, type Op } from "./ops";
 import type { Grant } from "../manifest";
 import { createBroker, type Broker, type BrokerHost } from "./broker";
 import { UNSERVED } from "./appHost";
+import { ensureBodyIds } from "../../document/bodyIds";
 
 /** How the app names a new feature, mirroring `DocumentStore.nextId()`.
  *
@@ -200,6 +201,7 @@ export function testHost(opts: TestHostOptions = {}): TestHost {
           doc = clone(obj(args.document, "document")) as unknown as CadDocument;
           doc.parameters ??= {};
           doc.features ??= [];
+          ensureBodyIds(doc);
           return { ok: true };
         }
 

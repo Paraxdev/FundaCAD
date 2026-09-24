@@ -158,6 +158,18 @@ pub fn join_went_stale(before: Option<&Value>, after: &Value) -> bool {
     }
 }
 
+/// Gives a document handed over whole, rather than opened from a file, an
+/// empty `bodyIds` map when it has none, true when it did. Without one it would
+/// be numbered like a file saved before the map existed, where a join took a
+/// fresh id instead of its target's.
+pub fn ensure_map(doc: &mut serde_json::Map<String, Value>) -> bool {
+    if doc.get("bodyIds").is_some_and(Value::is_object) {
+        return false;
+    }
+    doc.insert("bodyIds".into(), Value::Object(serde_json::Map::new()));
+    true
+}
+
 /// Drops every record of `feature_id` from a `bodyIds` map, true when any went.
 pub fn forget_feature(map: &mut serde_json::Map<String, Value>, feature_id: &str) -> bool {
     let n = map.len();

@@ -770,7 +770,7 @@ The format comes from the extension unless given. A large STEP can take minutes:
 
     #[tool(
         name = "doc_get",
-        description = "The whole document as JSON: parameters and the feature timeline in order.",
+        description = "The whole document as JSON: parameters, the feature timeline in order, and `bodyIds`, the record that keeps every body's id. Pass all of it back to `doc_set` and the same ids come out.",
         input_schema = crate::tools::doc_get()
     )]
     pub async fn t_doc_get(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
@@ -793,13 +793,18 @@ The format comes from the extension unless given. A large STEP can take minutes:
                 "paramDefs".into(),
                 st.doc.get("paramDefs").cloned().unwrap_or_else(|| json!({})),
             );
+            for key in ["bodyIds", "version"] {
+                if let Some(v) = st.doc.get(key) {
+                    out.insert(key.into(), v.clone());
+                }
+            }
         }
         Ok(text(pretty(&Value::Object(out), 1)))
     }
 
     #[tool(
         name = "doc_set",
-        description = "Replace the whole document with the given JSON. For wholesale rewrites; prefer the feature_* tools for edits.",
+        description = "Replace the whole document with the given JSON. For wholesale rewrites; prefer the feature_* tools for edits. Keep the `bodyIds` that `doc_get` gave; without it the document is numbered as a new one, where a join keeps the id of the body it merges into.",
         input_schema = crate::tools::doc_set()
     )]
     pub async fn t_doc_set(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
@@ -816,6 +821,7 @@ The format comes from the extension unless given. A large STEP can take minutes:
         let mut st = self.state.lock().await;
         st.doc = doc.as_object().cloned().unwrap_or_default();
         model::fill_defaults(&mut st.doc);
+        fundacad_core::body_ids::ensure_map(&mut st.doc);
         st.doc
             .entry("version")
             .or_insert_with(|| json!(model::FORMAT_VERSION));

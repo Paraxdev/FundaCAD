@@ -1,0 +1,11 @@
+{
+  "about": "The bodyIds a document handed over whole (MCP doc_set, a plugin's doc_set) is built with. A missing or malformed map becomes an empty one, so a join keeps its target's id as it does in any new document; a map that is there is kept as it is, partial or not. Opening a file does not do this: a file without the map was saved before it existed. Replayed by crates/fundacad-core/tests/shared_vectors.rs and tests/document/bodyIds.test.ts.",
+  "cases": [
+    {"name": "no map is numbered as a new document", "document": {"features": []}, "bodyIds": {}, "filled": true},
+    {"name": "null is no map", "document": {"features": [], "bodyIds": null}, "bodyIds": {}, "filled": true},
+    {"name": "a list is no map", "document": {"features": [], "bodyIds": ["body1"]}, "bodyIds": {}, "filled": true},
+    {"name": "an empty map stays", "document": {"features": [], "bodyIds": {}}, "bodyIds": {}, "filled": false},
+    {"name": "a full map is kept", "document": {"features": [], "bodyIds": {"floor:0": "body1", "wall:0": "body1", "bowl_ell:0": "body2"}}, "bodyIds": {"floor:0": "body1", "wall:0": "body1", "bowl_ell:0": "body2"}, "filled": false},
+    {"name": "a partial map is kept as it is", "document": {"features": [], "bodyIds": {"bowl_clip:0": "body3"}}, "bodyIds": {"bowl_clip:0": "body3"}, "filled": false}
+  ]
+}

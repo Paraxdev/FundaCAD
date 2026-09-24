@@ -529,6 +529,302 @@
     "y:0": "body03",
     "q:0": "body4"
    }
+  },
+  {
+   "name": "a new document numbers new bodies in order and every join keeps its target id",
+   "recorded": {},
+   "steps": [
+    [
+     "start",
+     "floor"
+    ],
+    [
+     "key"
+    ],
+    [
+     "start",
+     "wall"
+    ],
+    [
+     "keyInherit",
+     "body1"
+    ],
+    [
+     "start",
+     "core_fill"
+    ],
+    [
+     "keyInherit",
+     "body1"
+    ],
+    [
+     "start",
+     "bowl_ell"
+    ],
+    [
+     "key"
+    ],
+    [
+     "start",
+     "bowl_clip"
+    ],
+    [
+     "key"
+    ]
+   ],
+   "results": [
+    null,
+    [
+     "floor:0",
+     "body1"
+    ],
+    null,
+    [
+     "wall:0",
+     "body1"
+    ],
+    null,
+    [
+     "core_fill:0",
+     "body1"
+    ],
+    null,
+    [
+     "bowl_ell:0",
+     "body2"
+    ],
+    null,
+    [
+     "bowl_clip:0",
+     "body3"
+    ]
+   ],
+   "events": [
+    [
+     "floor:0",
+     null,
+     "body1"
+    ],
+    [
+     "wall:0",
+     "body1",
+     "body1"
+    ],
+    [
+     "core_fill:0",
+     "body1",
+     "body1"
+    ],
+    [
+     "bowl_ell:0",
+     null,
+     "body2"
+    ],
+    [
+     "bowl_clip:0",
+     null,
+     "body3"
+    ]
+   ],
+   "resultingMap": {
+    "floor:0": "body1",
+    "wall:0": "body1",
+    "core_fill:0": "body1",
+    "bowl_ell:0": "body2",
+    "bowl_clip:0": "body3"
+   }
+  },
+  {
+   "name": "without a map each join takes a fresh id, as files saved before the map did",
+   "recorded": null,
+   "steps": [
+    [
+     "start",
+     "floor"
+    ],
+    [
+     "key"
+    ],
+    [
+     "start",
+     "wall"
+    ],
+    [
+     "keyInherit",
+     "body1"
+    ],
+    [
+     "start",
+     "bowl_ell"
+    ],
+    [
+     "key"
+    ],
+    [
+     "start",
+     "bowl_clip"
+    ],
+    [
+     "key"
+    ]
+   ],
+   "results": [
+    null,
+    [
+     "floor:0",
+     "body1"
+    ],
+    null,
+    [
+     "wall:0",
+     "body2"
+    ],
+    null,
+    [
+     "bowl_ell:0",
+     "body3"
+    ],
+    null,
+    [
+     "bowl_clip:0",
+     "body4"
+    ]
+   ],
+   "events": [
+    [
+     "floor:0",
+     null,
+     "body1"
+    ],
+    [
+     "wall:0",
+     "body1",
+     "body2"
+    ],
+    [
+     "bowl_ell:0",
+     null,
+     "body3"
+    ],
+    [
+     "bowl_clip:0",
+     null,
+     "body4"
+    ]
+   ],
+   "resultingMap": {
+    "floor:0": "body1",
+    "wall:0": "body2",
+    "bowl_ell:0": "body3",
+    "bowl_clip:0": "body4"
+   }
+  },
+  {
+   "name": "a partial map numbers what it lacks above every id it holds",
+   "recorded": {
+    "floor:0": "body1",
+    "bowl_clip:0": "body3"
+   },
+   "steps": [
+    [
+     "start",
+     "floor"
+    ],
+    [
+     "key"
+    ],
+    [
+     "start",
+     "wall"
+    ],
+    [
+     "keyInherit",
+     "body1"
+    ],
+    [
+     "start",
+     "core_fill"
+    ],
+    [
+     "keyInherit",
+     "body1"
+    ],
+    [
+     "start",
+     "bowl_ell"
+    ],
+    [
+     "key"
+    ],
+    [
+     "start",
+     "bowl_clip"
+    ],
+    [
+     "key"
+    ]
+   ],
+   "results": [
+    null,
+    [
+     "floor:0",
+     "body1"
+    ],
+    null,
+    [
+     "wall:0",
+     "body1"
+    ],
+    null,
+    [
+     "core_fill:0",
+     "body1"
+    ],
+    null,
+    [
+     "bowl_ell:0",
+     "body4"
+    ],
+    null,
+    [
+     "bowl_clip:0",
+     "body3"
+    ]
+   ],
+   "events": [
+    [
+     "floor:0",
+     null,
+     "body1"
+    ],
+    [
+     "wall:0",
+     "body1",
+     "body1"
+    ],
+    [
+     "core_fill:0",
+     "body1",
+     "body1"
+    ],
+    [
+     "bowl_ell:0",
+     null,
+     "body4"
+    ],
+    [
+     "bowl_clip:0",
+     null,
+     "body3"
+    ]
+   ],
+   "resultingMap": {
+    "floor:0": "body1",
+    "bowl_clip:0": "body3",
+    "wall:0": "body1",
+    "core_fill:0": "body1",
+    "bowl_ell:0": "body4"
+   }
   }
  ],
  "restore": [

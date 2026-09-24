@@ -1,7 +1,7 @@
 //! tests/vectors/body_ids.json, face_colors.json and hole_standards.json, recorded
 //! from the Python engine before it was retired and also replayed by
 //! tests/document/faceColorVectors.test.ts and tests/features/holeStandards.test.ts,
-//! and join_edits.json, replayed by tests/document/bodyIds.test.ts.
+//! and join_edits.json and handed_over.json, replayed by tests/document/bodyIds.test.ts.
 
 use std::path::Path;
 
@@ -182,4 +182,15 @@ fn join_edits() {
     assert!(forget_feature(&mut map, f["feature"].as_str().expect("feature")));
     assert_eq!(Value::Object(map.clone()), f["left"]);
     assert!(!forget_feature(&mut map, f["feature"].as_str().expect("feature")));
+}
+
+#[test]
+fn handed_over() {
+    use fundacad_core::body_ids::ensure_map;
+    let v = vectors("handed_over.json");
+    for c in v["cases"].as_array().expect("cases") {
+        let mut doc = c["document"].as_object().expect("document").clone();
+        assert_eq!(ensure_map(&mut doc), c["filled"] == true, "{}", c["name"]);
+        assert_eq!(doc["bodyIds"], c["bodyIds"], "{}", c["name"]);
+    }
 }

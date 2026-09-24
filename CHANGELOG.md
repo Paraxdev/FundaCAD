@@ -231,6 +231,8 @@ This file starts on 2026-08-03. For anything before that, see the
 
 - An `ofFace` edge selector now takes any face selector as its face, such as a face picked by a point, as well as a fingerprint. A fillet early in the timeline has no fingerprint yet for a face that later cuts reshape.
 
+- **A document an assistant fetched and sent back builds with the same body ids.** The MCP `doc_get` left out the `bodyIds` map, so a document passed to `doc_set` in another session was numbered like a file saved before the map existed, where a join took a fresh id: the floor became body2, a join naming body1 failed, and a scale meant for the sphere stretched the floor. `doc_get` now hands out the map, and a document sent to `doc_set` without one, by an assistant or a plugin, is numbered as a new document, where a join keeps its target's id. Opening a file is unchanged.
+
 - **A tool's hint no longer slides under the tool rail.** With the Render panel open, or in a narrow window, the hint along the bottom of the view sat partly beneath Section View. It now centres in the space the floating cards leave free on its row and wraps when that space is narrow.
 
 - **Opening a document no longer claims its booleans, imports or lofts need a missing plugin.** The check for feature types this build cannot make only recognised types with a number to edit, so every boolean, import, loft, sweep, mirror, split and press/pull set off a "features of a kind this build does not know" notice. Those were never at risk and built as normal.
