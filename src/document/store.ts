@@ -29,6 +29,7 @@ import {
   normalizeMaterial, slugId, STARTER_LIBRARY, uniqueId,
 } from "./materials";
 import { faceKey, parseFaceKey } from "./faceMaterials";
+import { forgetStaleJoins, joinSignatures } from "./bodyIds";
 import * as params from "../params/engine";
 import { extrasEmpty, trialConfiguration } from "../params/extras";
 import type { FieldKind } from "./numFields";
@@ -694,7 +695,9 @@ export class DocumentStore {
   /** The commit tail: apply `fn`, recompute parameters, then dirty, emit and rebuild.
    *  Derived commits call this directly to stay out of undo. */
   private applyDerived(fn: (doc: CadDocument) => void, immediate = true) {
+    const joins = joinSignatures(this.doc);
     fn(this.doc);
+    forgetStaleJoins(joins, this.doc);
     if (this.doc.paramDefs) this.applyRecompute(params.recompute(this.doc));
     this.markDirty();
     this.emitDoc();

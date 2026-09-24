@@ -2,6 +2,14 @@ import { describe, it, expect, vi } from "vitest";
 import { DocumentStore } from "../../src/document/store";
 import type { CadDocument, Feature, RebuildResult } from "../../src/types";
 import type { GeometryBackend } from "../../src/geometry/client";
+import { forgetFeature, joinSignature, joinWentStale } from "../../src/document/bodyIds";
+import RAW from "../vectors/join_edits.json";
+
+interface JoinVectors {
+  stale: { name: string; before: Feature | null; after: Feature; stale: boolean }[];
+  forget: { feature: string; map: Record<string, string>; left: Record<string, string> };
+}
+const JOINS = RAW as unknown as JoinVectors;
 
 vi.stubGlobal("window", globalThis);
 
@@ -68,5 +76,33 @@ describe("the body id map", () => {
     release();
     await building;
     expect(store.document.bodyIds).toEqual({ "other:0": "body1" });
+  });
+});
+
+describe("a feature that becomes a join (vectors shared with fundacad-core)", () => {
+  it("is stale exactly when the engine's twin says so", () => {
+    for (const c of JOINS.stale) {
+      const before = c.before ? joinSignature(c.before) : undefined;
+      expect(joinWentStale(before, c.after), c.name).toBe(c.stale);
+    }
+  });
+
+  it("forgets only that feature's keys", () => {
+    const map = { ...JOINS.forget.map };
+    expect(forgetFeature(map, JOINS.forget.feature)).toBe(true);
+    expect(map).toEqual(JOINS.forget.left);
+    expect(forgetFeature(map, JOINS.forget.feature)).toBe(false);
+  });
+
+  it("loses the id it had as a new body when an edit turns it into a join", async () => {
+    const h = backend(() => undefined);
+    const rv = { id: "rv", type: "revolve", sketch: "s", axis: "Z", angle: 360, operation: "new" } as unknown as Feature;
+    const store = new DocumentStore(h.be, { parameters: {}, features: [box("a"), rv], bodyIds: { "a:0": "body1", "rv:0": "body3" } });
+    store.updateFeature("rv", { operation: "join", targets: ["body1"] } as Partial<Feature>);
+    expect(store.document.bodyIds).toEqual({ "a:0": "body1" });
+    store.updateFeature("rv", { angle: 180 } as Partial<Feature>);
+    store.document.bodyIds!["rv:0"] = "body1";
+    store.updateFeature("rv", { angle: 90 } as Partial<Feature>);
+    expect(store.document.bodyIds).toEqual({ "a:0": "body1", "rv:0": "body1" });
   });
 });

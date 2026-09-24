@@ -1,0 +1,18 @@
+{
+  "about": "When an edit leaves a feature's bodyIds records stale (it joins now, and did not join the same targets before), and which keys forgetting that feature removes. Replayed by crates/fundacad-core/tests/shared_vectors.rs and tests/document/bodyIds.test.ts.",
+  "stale": [
+    {"name": "a new body becomes a join", "before": {"id": "rv", "type": "revolve", "operation": "new"}, "after": {"id": "rv", "type": "revolve", "operation": "join", "targets": ["body1"]}, "stale": true},
+    {"name": "a join changes target", "before": {"id": "rv", "type": "revolve", "operation": "join", "targets": ["body1"]}, "after": {"id": "rv", "type": "revolve", "operation": "join", "targets": ["body2"]}, "stale": true},
+    {"name": "a join gains its targets", "before": {"id": "rv", "type": "revolve", "operation": "join"}, "after": {"id": "rv", "type": "revolve", "operation": "join", "targets": ["body1"]}, "stale": true},
+    {"name": "a feature added as a join", "before": null, "after": {"id": "rv", "type": "revolve", "operation": "join", "targets": ["body1"]}, "stale": true},
+    {"name": "a join edited elsewhere", "before": {"id": "rv", "type": "revolve", "operation": "join", "targets": ["body1"], "angle": 90}, "after": {"id": "rv", "type": "revolve", "operation": "join", "targets": ["body1"], "angle": 180}, "stale": false},
+    {"name": "a join becomes a new body", "before": {"id": "rv", "type": "revolve", "operation": "join", "targets": ["body1"]}, "after": {"id": "rv", "type": "revolve", "operation": "new"}, "stale": false},
+    {"name": "a cut changes target", "before": {"id": "ex", "type": "extrude", "operation": "cut", "targets": ["body1"]}, "after": {"id": "ex", "type": "extrude", "operation": "cut", "targets": ["body2"]}, "stale": false},
+    {"name": "no operation", "before": null, "after": {"id": "bx", "type": "box"}, "stale": false}
+  ],
+  "forget": {
+    "feature": "f1",
+    "map": {"f1:0": "body3", "f1:1": "body4", "f1:0#": "body5", "f10:0": "body6", "f1": "body7", "f1:x": "body8", "imp/0": "body9", "f2:0": "body1"},
+    "left": {"f10:0": "body6", "f1": "body7", "f1:x": "body8", "imp/0": "body9", "f2:0": "body1"}
+  }
+}
