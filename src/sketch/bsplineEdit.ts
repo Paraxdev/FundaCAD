@@ -45,6 +45,26 @@ export function remapPoleRefs(
   return out;
 }
 
+/** The poles of entity `id` (with `n` poles) that a constraint or dimension
+ *  holds, in pole order. */
+export function constrainedPoles(constraints: SketchConstraint[], id: string, n: number): number[] {
+  const out = new Set<number>();
+  const take = (e: string, p: number) => {
+    if (e !== id) return;
+    const k = poleOfRef(p, n);
+    if (k >= 0) out.add(k);
+  };
+  for (const c of constraints) {
+    if (c.type === "coincident" || c.type === "p2pDistance" || c.type === "symmetric") {
+      take(c.e1, c.p1);
+      take(c.e2, c.p2);
+    } else if (c.type === "midpoint" || c.type === "p2lDistance" || c.type === "p2cDistance" || c.type === "fix") {
+      take(c.e, c.p);
+    }
+  }
+  return [...out].sort((a, b) => a - b);
+}
+
 const same = (a: Pt, b: Pt) => a.x === b.x && a.y === b.y;
 
 /** Old pole index to new one after an insertion, by the poles it copied unchanged. */

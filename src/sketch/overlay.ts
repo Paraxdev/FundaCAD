@@ -682,16 +682,7 @@ export function controlPolygonObjects(
   poly.computeLineDistances();
   poly.renderOrder = 12;
   g.add(poly);
-  const s = px * POLE_HALF_PX;
-  const sq: THREE.Vector3[] = [];
-  e.poles.forEach((q, k) => {
-    if (k === active) return;
-    const c = [plane.to3D(q.x - s, q.y - s), plane.to3D(q.x + s, q.y - s), plane.to3D(q.x + s, q.y + s), plane.to3D(q.x - s, q.y + s)];
-    for (let i = 0; i < 4; i++) sq.push(c[i]!, c[(i + 1) % 4]!);
-  });
-  const squares = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(sq), lineMat(POLE_COLOR));
-  squares.renderOrder = 13;
-  g.add(squares);
+  g.add(poleSquares(e.poles.filter((_, k) => k !== active), plane, px));
   const a = e.poles[active];
   if (a) {
     const dot = new THREE.Points(new THREE.BufferGeometry().setFromPoints([plane.to3D(a.x, a.y)]), dotMat(SELECT_COLOR));
@@ -700,6 +691,32 @@ export function controlPolygonObjects(
   }
   g.renderOrder = 12;
   return g;
+}
+
+/** Just the squares on poles `ks` of a control-point spline that is not
+ *  selected, the ones a constraint or dimension holds, so what they attach to
+ *  can be seen. */
+export function poleMarkerObjects(
+  e: Extract<ResolvedEntity, { type: "bspline" }>,
+  plane: SketchPlane,
+  mmPerPx: number,
+  ks: number[],
+): THREE.Object3D {
+  const px = Number.isFinite(mmPerPx) && mmPerPx > 0 ? mmPerPx : 0.1;
+  const poles = ks.map((k) => e.poles[k]).filter((q): q is { x: number; y: number } => !!q);
+  return poleSquares(poles, plane, px);
+}
+
+function poleSquares(poles: { x: number; y: number }[], plane: SketchPlane, px: number): THREE.LineSegments {
+  const s = px * POLE_HALF_PX;
+  const sq: THREE.Vector3[] = [];
+  for (const q of poles) {
+    const c = [plane.to3D(q.x - s, q.y - s), plane.to3D(q.x + s, q.y - s), plane.to3D(q.x + s, q.y + s), plane.to3D(q.x - s, q.y + s)];
+    for (let i = 0; i < 4; i++) sq.push(c[i]!, c[(i + 1) % 4]!);
+  }
+  const squares = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(sq), lineMat(POLE_COLOR));
+  squares.renderOrder = 13;
+  return squares;
 }
 
 /** One THREE.Group for a text entity: an outline THREE.Line per glyph contour plus a
