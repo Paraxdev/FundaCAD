@@ -4,18 +4,18 @@
 // handled centrally in main.ts).
 
 import { resolveShortcut } from "./shortcuts";
+import { isEditableTarget, isLiveFocusTarget } from "../ui/focus";
 
 export function installKeymap(
   onAction: (a: string) => void,
   context: () => "model" | "sketch",
 ) {
   window.addEventListener("keydown", (e) => {
-    if (
-      e.target instanceof HTMLInputElement ||
-      e.target instanceof HTMLTextAreaElement ||
-      (e.target instanceof HTMLElement && e.target.isContentEditable)
-    ) {
-      return;
+    if (isEditableTarget(e.target)) {
+      // A ghost field (see ui/focus.ts): free it and fall through to the
+      // shortcut below instead of swallowing it, and every one after it.
+      if (e.target instanceof HTMLElement && !isLiveFocusTarget(e.target)) e.target.blur();
+      else return;
     }
     const k = e.key.toLowerCase();
 

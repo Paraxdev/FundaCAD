@@ -1,4 +1,5 @@
 import { openDocument } from "../io/files";
+import { releaseStaleFocus } from "../ui/focus";
 import type { Engine } from "./engine";
 
 export function createDocumentActions(
@@ -32,7 +33,10 @@ export function createDocumentActions(
     // which is why Ctrl+Z used to vaporise it. Hand the request to the sketch, which
     // swallows it whenever it is active (an empty sketch history says so rather than
     // falling through and eating the sketch).
-    doUndo() { if (!e.sketch.undoEdit()) e.store.undo(); },
-    doRedo() { if (!e.sketch.redoEdit()) e.store.redo(); },
+    // releaseStaleFocus: an undo/redo can roll back the very tool whose field
+    // is focused (FI-2), so check right after rather than waiting for the
+    // NEXT keystroke to notice (input/keymap.ts checks too, belt and braces).
+    doUndo() { if (!e.sketch.undoEdit()) e.store.undo(); releaseStaleFocus(); },
+    doRedo() { if (!e.sketch.redoEdit()) e.store.redo(); releaseStaleFocus(); },
   };
 }
