@@ -103,6 +103,79 @@ fn replace_swaps_the_body_but_keeps_the_id() {
     assert_eq!(f["operation"], json!("cut"));
 }
 
+fn chute() -> m::Doc {
+    doc_with(&[
+        json!({"id": "bx", "type": "box", "length": 20, "width": 20, "height": 10}),
+        json!({"id": "chute_edges", "type": "fillet", "radius": 1,
+               "edges": {"kind": "edge", "by": "all", "body": "body1"}}),
+    ])
+}
+
+#[test]
+fn a_patch_can_change_the_type_when_the_new_fields_come_with_it() {
+    let mut d = chute();
+    m::update_feature(
+        &mut d,
+        "chute_edges",
+        &json!({"type": "chamfer", "distance": 0.8, "radius": null}),
+        false,
+    )
+    .unwrap();
+    let f = &m::features(&d)[1];
+    assert_eq!(f["type"], json!("chamfer"));
+    assert_eq!(f["distance"], json!(0.8));
+    assert!(f.get("radius").is_none(), "the null had to remove radius");
+    assert_eq!(f["edges"]["by"], json!("all"), "the edges carry over");
+}
+
+#[test]
+fn a_type_change_missing_the_new_types_fields_is_refused_and_changes_nothing() {
+    let mut d = chute();
+    let before = m::features(&d).to_vec();
+    let e = m::update_feature(
+        &mut d,
+        "chute_edges",
+        &json!({"type": "chamfer", "radius": null}),
+        false,
+    )
+    .expect_err("a chamfer with no distance was accepted");
+    assert!(e.0.contains("distance"), "{e}");
+    assert!(e.0.contains("chamfer"), "{e}");
+    assert_eq!(m::features(&d), &before[..], "the refused update still changed the document");
+
+    let e = m::update_feature(
+        &mut d,
+        "chute_edges",
+        &json!({"type": "press-pull"}),
+        false,
+    )
+    .expect_err("a press-pull with no face or distance was accepted");
+    assert!(e.0.contains("face") && e.0.contains("distance"), "{e}");
+    assert_eq!(m::features(&d), &before[..]);
+}
+
+#[test]
+fn a_replace_that_changes_the_type_is_checked_against_the_new_type() {
+    let mut d = chute();
+    let e = m::update_feature(
+        &mut d,
+        "chute_edges",
+        &json!({"type": "chamfer", "edges": {"kind": "edge", "by": "all", "body": "body1"}}),
+        true,
+    )
+    .expect_err("a chamfer with no distance was accepted");
+    assert!(e.0.contains("distance"), "{e}");
+    m::update_feature(
+        &mut d,
+        "chute_edges",
+        &json!({"type": "chamfer", "distance": 1,
+                "edges": {"kind": "edge", "by": "all", "body": "body1"}}),
+        true,
+    )
+    .unwrap();
+    assert_eq!(m::features(&d)[1]["type"], json!("chamfer"));
+}
+
 // --- parameters --------------------------------------------------------------
 
 #[test]
