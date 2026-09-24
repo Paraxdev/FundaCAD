@@ -19,6 +19,7 @@
 // faked is the viewport/overlay/solver around them, never the round-trip.
 
 import { describe, it, expect, beforeEach } from "vitest";
+import * as THREE from "three";
 import { SketchMode } from "../../src/sketch/sketchMode";
 import { SketchPlane } from "../../src/sketch/plane";
 import type { CadDocument, Feature, PlaneDef, Selector } from "../../src/types";
@@ -65,10 +66,20 @@ function makeSketch(doc: CadDocument) {
     viewport: {
       suspendPicking: false,
       enterSketchView() {},
+      exitSketchView() {},
       visibleEdgeLines: () => [],
       modelDiagonal: () => 0,
       domElement: { addEventListener() {}, removeEventListener() {} },
       onZoomScale: null,
+      // enter() captures the pre-sketch view so a normal exit can restore it
+      // (viewport/viewport.ts's sketch-flow fix); cleanup()'s own call is what
+      // uses setViewDir, not exercised by this round-trip.
+      rig: {
+        viewDirection: () => new THREE.Vector3(0, -1, 0),
+        active: { matrixWorld: new THREE.Matrix4() },
+        onInputStart: () => () => {},
+        setViewDir() {},
+      },
     },
     // prototype methods that touch three.js / the solver, stubbed as own props
     addGrid() {},
