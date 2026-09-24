@@ -513,8 +513,9 @@ inline BoShape bo_clean(const TopoDS_Shape &s) { BO_GUARD(return bo_own(bo_unify
 
 inline BoShape bo_unwrap_compound(const TopoDS_Shape &s) { return bo_own(bo_unwrap(s)); }
 
-// shape_util.py `_drop_debris`: a solid under 0.1% of the largest one that
-// does not touch it is boolean residue.
+// A solid under a millionth of the largest one that does not touch it is
+// boolean residue. shape_util.py `_drop_debris` used 0.1%, which also threw
+// away real pieces a cut severed, like the tip of a thin spike on a big body.
 inline BoShape bo_drop_debris(const TopoDS_Shape &shape) {
   try {
     TopTools_IndexedMapOfShape map;
@@ -529,7 +530,7 @@ inline BoShape bo_drop_debris(const TopoDS_Shape &shape) {
     double mainVol = parts[0].first;
     std::vector<TopoDS_Shape> kept{main};
     for (size_t i = 1; i < parts.size(); ++i) {
-      bool tiny = parts[i].first < 1e-3 * mainVol;
+      bool tiny = parts[i].first < 1e-6 * mainVol;
       if (tiny) {
         BRepExtrema_DistShapeShape d(parts[i].second, main);
         if (d.Value() > 1e-7) continue;
