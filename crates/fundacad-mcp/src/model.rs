@@ -761,6 +761,7 @@ pub fn validate(doc: &mut Doc) -> Vec<String> {
     for (name, why) in recompute_parameters(doc) {
         problems.push(format!("parameter {name}: {why}"));
     }
+    problems.extend(press_pull_label_problems(doc, &feats));
 
     // A string in a numeric field must name a parameter: the engine resolves
     // names against `parameters` and refuses anything else, which arrives as a
@@ -819,6 +820,35 @@ pub fn validate(doc: &mut Doc) -> Vec<String> {
                      parameters are {known}"
                 ));
             }
+        }
+    }
+    problems
+}
+
+/// A press-pull's `operation` is only a label for the sign of `distance`, so one
+/// that disagrees with the sign reads as a request the build never acts on.
+fn press_pull_label_problems(doc: &Doc, feats: &[Value]) -> Vec<String> {
+    let params = doc.get("parameters").and_then(Value::as_object);
+    let mut problems = Vec::new();
+    for f in feats {
+        if str_field(f, "type") != Some("press-pull") {
+            continue;
+        }
+        let Some(op) = str_field(f, "operation") else { continue };
+        let dist = match f.get("distance") {
+            Some(Value::String(name)) => params.and_then(|p| p.get(name)).and_then(Value::as_f64),
+            Some(v) => v.as_f64(),
+            None => None,
+        };
+        let Some(d) = dist.filter(|d| *d != 0.0) else { continue };
+        let signed = if d > 0.0 { "join" } else { "cut" };
+        if op != signed {
+            let fid = str_field(f, "id").unwrap_or_default();
+            problems.push(format!(
+                "{fid}: operation is '{op}' but distance {d} makes this push a {signed}. On a \
+                 press-pull `operation` is only a label for the sign of `distance`: flip the \
+                 sign, or set `mode` to '{op}' to sweep the face into a prism and combine it that way"
+            ));
         }
     }
     problems
