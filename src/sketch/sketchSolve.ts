@@ -22,6 +22,7 @@ import { rectCorners, rectFromThreePoints } from "./region";
 import { asRound, lineOperand, refPoint, rimNesting, type Round } from "./entityDims";
 import type { SketchConstraint } from "../types";
 import { isDriven, projEndSamples } from "../types";
+import { poleOfRef } from "./bspline";
 
 export interface SolvePass {
   entities: ResolvedEntity[];
@@ -92,6 +93,7 @@ export async function compileAndSolve(
   // arc entity id -> our endpoints (entity x1y1/x2y2), solved center, sweep start
   const arcMap = new Map<string, { ourS: string; ourE: string; center: string; startIsOurS: boolean }>();
   const splineMap = new Map<string, string[]>(); // spline entity id -> fit-point ids
+  const poleMap = new Map<string, string[]>(); // bspline entity id -> pole ids
   const rectMap = new Map<string, string[]>(); // rectangle entity id -> 4 corner points
   const pointMap = new Map<string, string>(); // point entity id -> its solver point
   const fixedPts = new Set<string>(); // solver point ids pinned by a `fix` constraint / projected geometry
@@ -188,6 +190,11 @@ export async function compileAndSolve(
       // endpoints are mergeable (chain with lines); interior points are unique
       const last = e.points.length - 1;
       splineMap.set(e.id, e.points.map((p, k) => getPoint(p.x, p.y, k === 0 || k === last)));
+    } else if (e.type === "bspline") {
+      // an open curve's end poles are on the curve and chain like endpoints;
+      // every other pole is off it and keeps its own identity
+      const last = e.poles.length - 1;
+      poleMap.set(e.id, e.poles.map((p, k) => getPoint(p.x, p.y, !e.closed && (k === 0 || k === last))));
     } else if (e.type === "point") {
       // a sketch point is mergeable so it can snap onto / coincide with geometry
       pointMap.set(e.id, getPoint(e.x, e.y, true));
@@ -248,6 +255,8 @@ export async function compileAndSolve(
     if (pt) return pt;
     const sp = splineMap.get(entId);
     if (sp) return idx === 0 ? sp[0] : sp[sp.length - 1];
+    const poles = poleMap.get(entId);
+    if (poles) return poles[poleOfRef(idx, poles.length)];
     return undefined;
   };
   // resolve a circle/arc center to its solver point id
@@ -596,6 +605,14 @@ export async function compileAndSolve(
       // originals: `orig` is always defined and is the fallback when the solver
       // didn't return a position for that fit point.
       return { ...e, points: e.points.map((orig, k) => {
+        const id = ids[k];
+        return (id !== undefined ? r.points[id] : undefined) ?? orig;
+      }) };
+    }
+    if (e.type === "bspline") {
+      const ids = poleMap.get(e.id);
+      if (!ids) return e;
+      return { ...e, poles: e.poles.map((orig, k) => {
         const id = ids[k];
         return (id !== undefined ? r.points[id] : undefined) ?? orig;
       }) };
