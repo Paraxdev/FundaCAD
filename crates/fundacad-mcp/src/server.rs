@@ -1004,7 +1004,7 @@ The format comes from the extension unless given. A large STEP can take minutes:
 
     #[tool(
         name = "export",
-        description = "Write the model to STEP, STL, 3MF or OBJ.",
+        description = "Write the model to STEP, STL or 3MF.",
         input_schema = crate::tools::export()
     )]
     pub async fn t_export(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
