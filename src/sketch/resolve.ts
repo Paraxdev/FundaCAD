@@ -6,6 +6,7 @@ import { dimPlaceOf } from "../types";
 import type { ResolvedEntity } from "./snap";
 import { newEntityId, noteEntityId } from "./id";
 import { expandPattern } from "./pattern";
+import { bsplineShape } from "./bspline";
 
 export function resolveNum(x: Num, params: Params): number {
   if (typeof x === "number") return x;
@@ -78,6 +79,13 @@ export function resolveRealEntities(
         points: e.points.map((p) => ({ x: resolveNum(p.x, params), y: resolveNum(p.y, params) })),
         ...c,
       });
+    } else if (e.type === "bspline") {
+      out.push({
+        type: "bspline", id,
+        poles: e.poles.map((p) => ({ x: resolveNum(p.x, params), y: resolveNum(p.y, params) })),
+        ...bsplineShape(e),
+        ...c,
+      });
     } else if (e.type === "point") {
       out.push({
         type: "point", id,
@@ -145,6 +153,8 @@ export function toSketchEntity(e: ResolvedEntity): SketchEntity {
     return { type: "arc", id: e.id, x1: e.x1, y1: e.y1, x2: e.x2, y2: e.y2, mx: e.mx, my: e.my, ...c };
   if (e.type === "spline")
     return { type: "spline", id: e.id, points: e.points.map((p) => ({ x: p.x, y: p.y })), ...c };
+  if (e.type === "bspline")
+    return { type: "bspline", id: e.id, poles: e.poles.map((p) => ({ x: p.x, y: p.y })), ...bsplineShape(e), ...c };
   if (e.type === "point") return { type: "point", id: e.id, x: e.x, y: e.y, ...c };
   if (e.type === "polygon") return { type: "polygon", id: e.id, x: e.x, y: e.y, radius: e.radius, sides: e.sides, angle: e.angle, ...c, ...dp };
   if (e.type === "slot") return { type: "slot", id: e.id, x1: e.x1, y1: e.y1, x2: e.x2, y2: e.y2, width: e.width, ...c, ...dp };

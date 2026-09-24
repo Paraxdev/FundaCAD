@@ -15,6 +15,7 @@ export type SnapKind =
   | "endpoint"
   | "midpoint"
   | "center"
+  | "control"
   | "align";
 
 export interface SnapCandidate {
@@ -178,6 +179,7 @@ const KIND_LABEL: Partial<Record<SnapKind, string>> = {
   endpoint: "Endpoint",
   midpoint: "Midpoint",
   center: "Center",
+  control: "Control Point",
 };
 
 /** The name shown beside a snapped anchor: its own, or its kind's. */
@@ -200,7 +202,7 @@ export function snapLabel(c: Pick<SnapCandidate, "kind" | "label">): string | un
 export function showsSnapMarker(tool: string, kind: SnapKind, label?: string): boolean {
   if (kind === "free") return false;
   if (tool !== "select") return true;
-  return kind === "endpoint" || kind === "midpoint" || kind === "center" || (kind === "align" && !!label);
+  return kind === "endpoint" || kind === "midpoint" || kind === "center" || kind === "control" || (kind === "align" && !!label);
 }
 
 /** The world origin as a snap anchor, when the sketch plane passes through it. */
@@ -233,7 +235,7 @@ export function dragSnap(
   const res = snap(raw, candidates, toScreen, 0, pixelTol);
   // A named line (an axis through the origin) is a real place to drop a point.
   if (res.kind === "align" && res.label) return res;
-  return res.kind === "endpoint" || res.kind === "midpoint" || res.kind === "center" ? res : null;
+  return res.kind === "endpoint" || res.kind === "midpoint" || res.kind === "center" || res.kind === "control" ? res : null;
 }
 
 /** snap candidates from resolved sketch entities (numbers, not params) */
@@ -270,6 +272,12 @@ export function candidatesFromEntities(
       add(e.mx, e.my, "midpoint", 80);
     } else if (e.type === "spline") {
       for (const p of e.points) add(p.x, p.y, "endpoint", 100); // fit points snap
+    } else if (e.type === "bspline") {
+      const last = e.poles.length - 1;
+      e.poles.forEach((p, k) => {
+        const end = !e.closed && (k === 0 || k === last);
+        add(p.x, p.y, end ? "endpoint" : "control", end ? 100 : 60);
+      });
     } else if (e.type === "point") {
       add(e.x, e.y, "endpoint", 110); // a placed point is a strong snap target
     } else if (e.type === "projected") {
@@ -309,6 +317,7 @@ export type ResolvedEntity =
   | { type: "circle"; id: string; radius: number; x: number; y: number; construction?: boolean; dimPlace?: DimPlace }
   | { type: "arc"; id: string; x1: number; y1: number; x2: number; y2: number; mx: number; my: number; construction?: boolean }
   | { type: "spline"; id: string; points: { x: number; y: number }[]; construction?: boolean }
+  | { type: "bspline"; id: string; poles: { x: number; y: number }[]; degree?: number; closed?: boolean; knots?: number[]; construction?: boolean }
   | { type: "point"; id: string; x: number; y: number; construction?: boolean }
   // parametric shapes (rigid: the solver skips them; edited via their params)
   | { type: "polygon"; id: string; x: number; y: number; radius: number; sides: number; angle: number; construction?: boolean; dimPlace?: DimPlace }
