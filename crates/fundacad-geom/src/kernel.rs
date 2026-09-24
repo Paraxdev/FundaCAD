@@ -350,6 +350,13 @@ pub fn boolean_op(base: &Shape, tools: &[&Shape], kind: BoolKind) -> KResult<Sha
 
 /// booleans.py `_serial_bool`: serial, with the pick fuzz, cleaned.
 pub fn serial_bool(base: &Shape, tools: &[&Shape], kind: BoolKind) -> KResult<Shape> {
+    serial_bool_known(base, tools, kind, &[])
+}
+
+/// `serial_bool` handed the operands' signed volumes, the base's then each
+/// tool's, so the plausibility check does not integrate them again. Empty
+/// measures them.
+pub fn serial_bool_known(base: &Shape, tools: &[&Shape], kind: BoolKind, vols: &[f64]) -> KResult<Shape> {
     let t = compound(tools.iter().copied());
     let mut ext: Option<f64> = extent(base);
     for tool in tools {
@@ -358,14 +365,14 @@ pub fn serial_bool(base: &Shape, tools: &[&Shape], kind: BoolKind) -> KResult<Sh
         }
     }
     let fuzz = pick_fuzz(ext);
-    run(kind.occt(), || bool_args(base, tools, fuzz), || ffi::bo_boolean(
-        base.raw(),
-        t.raw(),
-        kind as i32,
-        false,
-        fuzz,
-        false,
-    ))
+    let k = kind as i32;
+    run(kind.occt(), || bool_args(base, tools, fuzz), || {
+        let raw = crate::bench::phase("bool_build", || ffi::bo_bool_build(base.raw(), t.raw(), k, false, fuzz))?;
+        let checked = crate::bench::phase("bool_check", || {
+            ffi::bo_bool_check(&raw, base.raw(), t.raw(), k, false, fuzz, vols)
+        })?;
+        crate::bench::phase("bool_unify", || ffi::bo_clean(&checked))
+    })
 }
 
 /// the Python engine's `pick_fuzz.py`.

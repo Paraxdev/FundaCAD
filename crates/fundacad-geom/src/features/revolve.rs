@@ -100,10 +100,10 @@ fn revolve_faces(sk: &Shape, origin: [f64; 3], dir: [f64; 3], arc: f64) -> Resul
     let mut solids = Vec::new();
     for face in kernel::subshapes(sk, Kind::Face) {
         let face = kernel::snap_axis_arcs(&face, origin, dir, AXIS_ARC_SNAP).unwrap_or(face);
-        solids.push(kernel::revolve(&face, origin, dir, arc).map_err(|e| e.0)?);
+        solids.push(crate::bench::phase("revolve_make", || kernel::revolve(&face, origin, dir, arc)).map_err(|e| e.0)?);
     }
     let c = kernel::compound(&solids);
-    kernel::clean(&c).map_err(|e| e.0)
+    crate::bench::phase("revolve_clean", || kernel::clean(&c)).map_err(|e| e.0)
 }
 
 fn turn_clearance(tall: f64) -> f64 {

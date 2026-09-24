@@ -21,7 +21,7 @@ fn vol(s: &Shape) -> f64 {
     if kernel::is_null(s) {
         return 0.0;
     }
-    kernel::volume(s).abs()
+    crate::bench::phase("volume", || kernel::volume(s).abs())
 }
 
 fn overlap(a: Option<[f64; 6]>, b: Option<[f64; 6]>) -> bool {
@@ -172,14 +172,16 @@ pub fn combine(
         }
         candidates.retain(|&i| targets.contains(&ctx.bodies[i].id));
     }
-    let solid_box = kernel::bbox(&solid);
-    let hits: Vec<usize> = candidates
-        .into_iter()
-        .filter(|&i| {
-            let b = &ctx.bodies[i];
-            !hidden.contains(&b.id) && overlap(kernel::bbox(b.shape()), solid_box)
-        })
-        .collect();
+    let hits: Vec<usize> = crate::bench::phase("combine_bbox", || {
+        let solid_box = kernel::bbox(&solid);
+        candidates
+            .into_iter()
+            .filter(|&i| {
+                let b = &ctx.bodies[i];
+                !hidden.contains(&b.id) && overlap(kernel::bbox(b.shape()), solid_box)
+            })
+            .collect()
+    });
     let prism_vol = vol(&solid);
 
     match op {
@@ -249,7 +251,7 @@ pub fn combine(
                 hits.iter().map(|&i| ctx.bodies[i].id.clone()).collect();
             ctx.remove_bodies(&consumed);
             ctx.new_body(
-                kernel::unify_body(&merged),
+                crate::bench::phase("unify_body", || kernel::unify_body(&merged)),
                 Some(first_name),
                 Some(&first_id),
             );
