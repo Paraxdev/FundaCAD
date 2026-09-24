@@ -449,7 +449,8 @@ export class Navigator {
       this.moved();
     }
     this.unsettled = true;
-    if (this.gesture?.kind !== "pan") {
+    // Kept while a zoom is still easing, whose last step can nudge the grab.
+    if (this.gesture?.kind !== "pan" && this.zooms.length === 0) {
       const now = project(this.pose, this.frame, c.grab);
       if (c.settled(now.x, now.y)) {
         this.pan = null;
