@@ -916,8 +916,12 @@ pub fn rebuild_from(
             Ok(Ran::Inactive) => {}
             Ok(Ran::Built) => {
                 if prov {
-                    owners::update(&mut ctx, f, fid.unwrap_or(""), &pre, &pre_owners);
-                    note_splits(&mut ctx, fid.unwrap_or(""), rawf, &pre_shapes);
+                    crate::bench::phase("owners", || {
+                        owners::update(&mut ctx, f, fid.unwrap_or(""), &pre, &pre_owners);
+                    });
+                    crate::bench::phase("note_splits", || {
+                        note_splits(&mut ctx, fid.unwrap_or(""), rawf, &pre_shapes);
+                    });
                 }
                 if type_name == Some("sketch") {
                     crate::projection::refresh(&mut ctx, rawf, &raw_features[..i]);
@@ -945,14 +949,16 @@ pub fn rebuild_from(
                 });
             }
         }
-        tap.after_feature(
-            i,
-            &State {
-                ctx: &ctx,
-                errors: &errors,
-            },
-            began.elapsed(),
-        );
+        crate::bench::phase("after_feature", || {
+            tap.after_feature(
+                i,
+                &State {
+                    ctx: &ctx,
+                    errors: &errors,
+                },
+                began.elapsed(),
+            );
+        });
         watch.feature(i);
     }
 

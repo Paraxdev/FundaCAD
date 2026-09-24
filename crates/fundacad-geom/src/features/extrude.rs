@@ -94,7 +94,7 @@ pub fn handle(ctx: &mut Ctx, f: &Extrude) -> FResult {
             py_g(taper)
         )));
     }
-    let solid = prisms(&target, distance, both, taper)?;
+    let solid = crate::bench::phase("prisms", || prisms(&target, distance, both, taper))?;
     let hidden: Option<HashSet<String>> = f
         .hidden_bodies
         .as_ref()
