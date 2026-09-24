@@ -2855,6 +2855,32 @@ export class Viewport {
     return acc.applyMatrix4(body.mesh.matrixWorld);
   }
 
+  /** True area-weighted centroid of a B-rep face (world space): each triangle's
+   *  own centroid, weighted by its area. Unlike faceCentroidWorld, a stable
+   *  ON-SURFACE anchor built for by:"nearest" selectors (a snap onto one
+   *  triangle's centroid, which for a two-triangle quad sits well off centre),
+   *  this is the geometric middle a person means by "centre of the face", so
+   *  it seeds the Hole tool's default position and its Center action. */
+  faceAreaCentroidWorld(faceId: number): THREE.Vector3 {
+    const tris = this.faceTriangles(faceId);
+    const acc = new THREE.Vector3();
+    let area = 0;
+    const cent = new THREE.Vector3();
+    const eA = new THREE.Vector3();
+    const eB = new THREE.Vector3();
+    for (const t of tris) {
+      cent.copy(t.a).add(t.b).add(t.c).divideScalar(3);
+      eA.subVectors(t.b, t.a);
+      eB.subVectors(t.c, t.a);
+      const a = eA.cross(eB).length() / 2;
+      acc.addScaledVector(cent, a);
+      area += a;
+    }
+    if (area > 1e-12) acc.divideScalar(area);
+    else if (tris[0]) acc.copy(tris[0].a);
+    return acc;
+  }
+
   /** Area-weighted average normal of a B-rep face (world space), averaging its
    *  triangles' normals. For a planar face this is the exact normal; for a curved
    *  face it's a representative outward direction. */

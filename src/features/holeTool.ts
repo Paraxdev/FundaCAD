@@ -17,6 +17,7 @@ import { setPrompt } from "../ui/prompt";
 import { CanvasGesture } from "./canvasGesture";
 import { previewVerdict } from "./previewVerdict";
 import { featureNumFields } from "../document/numFields";
+import { planeXDir } from "./planeMath";
 import {
   CLEARANCE, HOLE_TYPES, INSERT, isHoleSize, newHoleFields, parseHoleSize, type HoleSize,
 } from "./holeStandards";
@@ -38,7 +39,20 @@ export class HoleTool {
   private bodyId: string | null = null;
   private origin = new THREE.Vector3();
   private normal = new THREE.Vector3(0, 0, 1);
+  /** The face's true geometric centre (viewport.faceAreaCentroidWorld), the
+   *  origin for the X/Y offset fields and what Center snaps to. Distinct from
+   *  `origin`, an arbitrary in-plane point only used for the pick plane. */
+  private center = new THREE.Vector3();
+  // In-plane axes for the X/Y offset fields.
+  private xdir = new THREE.Vector3(1, 0, 0);
+  private ydir = new THREE.Vector3(0, 1, 0);
+  private lastXText = "";
+  private lastYText = "";
   private points: Vec3[] = [];
+  // Set while a placed hole's marker is being dragged (index into `points`);
+  // null the rest of the time, including for a plain click that adds one.
+  private dragIndex: number | null = null;
+  private dragMoved = false;
   // Kept across uses, the next hole is usually the same as the last one.
   private holeType: HoleType = "simple";
   private size: HoleSize = "M3";
@@ -84,8 +98,11 @@ export class HoleTool {
     const pre = this.viewport.selectedFacesForPressPull();
     const fid = pre?.faceIds.length === 1 ? pre.faceIds[0] : undefined;
     const plane = fid !== undefined ? this.viewport.planarFace(fid) : null;
-    if (pre && plane) {
-      this.begin(pre.anchor, plane.normal, plane.origin, pre.bodyId);
+    if (pre && plane && fid !== undefined) {
+      // No click landed on the face this time (it was already selected), so the
+      // sensible default is its true centre, not pre.anchor's by:"nearest" point.
+      const at = this.viewport.faceAreaCentroidWorld(fid);
+      this.begin(at, plane.normal, plane.origin, pre.bodyId, fid);
       return;
     }
     setPrompt("Click a flat face where the hole goes · Esc");
@@ -115,7 +132,7 @@ export class HoleTool {
     this.through = f.extent === "through" && this.holeType !== "insert";
     this.depth = typeof f.depth === "number" ? f.depth : null;
     this.store.beginEditPreview(id, f);
-    this.begin(at, plane.normal, plane.origin, f.body ?? null, f.face, f.points);
+    this.begin(at, plane.normal, plane.origin, f.body ?? null, plane.faceId, f.face, f.points);
     return true;
   }
 
@@ -129,14 +146,50 @@ export class HoleTool {
   }
 
   private onMove(e: PointerEvent) {
+    if (this.dragIndex != null) {
+      if (Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3) this.dragMoved = true;
+      if (this.dragMoved) {
+        const p = this.pointOnPlane(e.clientX, e.clientY);
+        if (p) {
+          this.points[this.dragIndex] = round3(p);
+          if (this.dragIndex === 0) this.seedOffset();
+          this.valueChanged();
+        }
+      }
+      this.viewport.domElement.style.cursor = "grabbing";
+      return;
+    }
     const faceId = this.viewport.hoverFaceAt(e.clientX, e.clientY);
     this.viewport.domElement.style.cursor = faceId != null ? "crosshair" : "default";
+  }
+
+  private pointOnPlane(clientX: number, clientY: number): THREE.Vector3 | null {
+    return this.viewport.rayFrom(clientX, clientY).ray.intersectPlane(
+      new THREE.Plane().setFromNormalAndCoplanarPoint(this.normal, this.origin), new THREE.Vector3());
+  }
+
+  /** The index of the placed hole nearest `p`, within its own pick radius, or -1. */
+  private pointNear(p: THREE.Vector3): number {
+    const reach = Math.max(this.currentDiameter() / 2, this.viewport.pixelWorldSize(p) * 8);
+    return this.points.findIndex((q) => p.distanceTo(new THREE.Vector3(q[0], q[1], q[2])) <= reach);
   }
 
   private onDown(e: PointerEvent) {
     if (e.button !== 0) return;
     this.downPos = { x: e.clientX, y: e.clientY };
     if (this.phase !== "pick") {
+      // A press starting on an already-placed hole grabs it (drag to move); a
+      // press elsewhere on the face falls through to onUp's add/remove-on-tap.
+      const p = this.pointOnPlane(e.clientX, e.clientY);
+      const idx = p ? this.pointNear(p) : -1;
+      if (idx >= 0) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        this.dragIndex = idx;
+        this.dragMoved = false;
+      } else {
+        this.dragIndex = null;
+      }
       this.armed = true;
       return;
     }
@@ -149,23 +202,35 @@ export class HoleTool {
       setPrompt("That face is curved, a hole needs a flat face · Esc");
       return;
     }
-    this.begin(hit.anchor, plane.normal, plane.origin, hit.bodyId);
+    this.begin(hit.anchor, plane.normal, plane.origin, hit.bodyId, hit.faceId);
   }
 
   private onUp(e: PointerEvent) {
     if (e.button !== 0 || this.phase !== "place" || !this.armed) return;
+    if (this.dragIndex != null) {
+      const moved = this.dragMoved;
+      this.dragIndex = null;
+      this.dragMoved = false;
+      this.viewport.domElement.style.cursor = "crosshair";
+      if (moved) {
+        this.armed = false;
+        this.dim.focus();
+        return; // the drag already committed the new position live
+      }
+      // A tap with no drag: fall through to the ordinary remove-on-click below.
+    }
     if (Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3) return;
-    const p = this.viewport.rayFrom(e.clientX, e.clientY).ray.intersectPlane(
-      new THREE.Plane().setFromNormalAndCoplanarPoint(this.normal, this.origin), new THREE.Vector3());
+    const p = this.pointOnPlane(e.clientX, e.clientY);
     if (!p) return;
-    const reach = Math.max(this.currentDiameter() / 2, this.viewport.pixelWorldSize(p) * 8);
-    const near = this.points.findIndex((q) => p.distanceTo(new THREE.Vector3(q[0], q[1], q[2])) <= reach);
+    const near = this.pointNear(p);
     if (near >= 0) {
       this.points.splice(near, 1);
+      if (near === 0) this.seedOffset();
     } else {
       const hit = this.viewport.pickFaceForPressPull(e.clientX, e.clientY);
       if (!hit || hit.normal.dot(this.normal) < 0.99) return;
       this.points.push(round3(p));
+      if (this.points.length === 1) this.seedOffset();
     }
     this.valueChanged();
     this.dim.focus();
@@ -173,13 +238,20 @@ export class HoleTool {
 
   private begin(
     at: THREE.Vector3, normal: THREE.Vector3, origin: THREE.Vector3, bodyId: string | null,
-    face?: Selector, points?: Vec3[],
+    faceId: number | null, face?: Selector, points?: Vec3[],
   ) {
     this.phase = "place";
     this.armed = false;
     this.normal.copy(normal).normalize();
     this.origin.copy(origin);
     this.bodyId = bodyId;
+    // The true geometric middle, not faceCentroidWorld's by:"nearest" anchor
+    // (origin, above): that one snaps onto a single triangle's centroid, which
+    // for a two-triangle quad sits well off the middle a person means.
+    this.center.copy(faceId != null ? this.viewport.faceAreaCentroidWorld(faceId) : origin);
+    const xd = planeXDir([this.normal.x, this.normal.y, this.normal.z]) ?? [1, 0, 0];
+    this.xdir.set(xd[0], xd[1], xd[2]);
+    this.ydir.crossVectors(this.normal, this.xdir).normalize();
     const onPlane = at.clone().addScaledVector(this.normal, -this.normal.dot(at.clone().sub(origin)));
     this.face = face ?? {
       kind: "face", by: "nearest", point: round3(onPlane), ...(bodyId ? { body: bodyId } : {}),
@@ -187,10 +259,24 @@ export class HoleTool {
     this.points = points ? points.map((q) => [...q] as Vec3) : [round3(onPlane)];
     this.previewId = this.editId ?? this.store.nextId();
     this.viewport.clearHover();
+    const centerBtn = document.createElement("button");
+    centerBtn.type = "button";
+    centerBtn.className = "dim-btn";
+    centerBtn.title = "Move the hole to the centre of the face";
+    centerBtn.textContent = "Center";
+    centerBtn.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.centerFirstPoint();
+    });
     this.dim.show(
       [
         { name: "size", label: "Size", kind: "count" },
         { name: "depth", label: "Depth", kind: "length" },
+        // Offset from the face centre (this.center) along its own xdir/ydir, so
+        // a hole can be placed exactly without pixel-hunting for the click spot.
+        { name: "x", label: "X", kind: "length" },
+        { name: "y", label: "Y", kind: "length" },
       ],
       () => this.commit(),
       () => this.cancel(),
@@ -200,12 +286,44 @@ export class HoleTool {
         initial: false,
         onChange: () => this.nextType(),
       },
+      centerBtn,
     );
     this.lastSizeText = this.sizeText();
     this.dim.seedText("size", this.lastSizeText);
     this.seedDepth();
+    this.seedOffset();
     this.valueChanged();
     this.gesture.frame();
+  }
+
+  /** X/Y offset fields track `points[0]` only: the common case is one hole, and
+   *  a bolt circle's other spots are placed by clicking, not typed. */
+  private seedOffset() {
+    const p0 = this.points[0];
+    if (!p0) return;
+    const rel = new THREE.Vector3(p0[0], p0[1], p0[2]).sub(this.center);
+    this.dim.seed("x", rel.dot(this.xdir));
+    this.dim.seed("y", rel.dot(this.ydir));
+    this.lastXText = this.dim.getRaw("x");
+    this.lastYText = this.dim.getRaw("y");
+  }
+
+  private applyOffset() {
+    if (!this.points.length) return;
+    const xv = this.dim.getValue("x");
+    const yv = this.dim.getValue("y");
+    if (xv == null || yv == null) return;
+    const p = this.center.clone().addScaledVector(this.xdir, xv).addScaledVector(this.ydir, yv);
+    this.points[0] = round3(p);
+    this.valueChanged();
+  }
+
+  private centerFirstPoint() {
+    if (!this.points.length) return;
+    this.points[0] = round3(this.center.clone());
+    this.seedOffset();
+    this.valueChanged();
+    this.dim.focus();
   }
 
   private nextType() {
@@ -287,6 +405,13 @@ export class HoleTool {
       }
     }
     if (changed) this.valueChanged();
+    const xText = this.dim.getRaw("x");
+    const yText = this.dim.getRaw("y");
+    if (xText !== this.lastXText || yText !== this.lastYText) {
+      this.lastXText = xText;
+      this.lastYText = yText;
+      this.applyOffset(); // valueChanged() runs inside, redraws + reschedules the preview
+    }
     this.gesture.frame();
   }
 
@@ -440,6 +565,8 @@ export class HoleTool {
     this.viewport.suspendPicking = false;
     this.active = false;
     this.phase = "pick";
+    this.dragIndex = null;
+    this.dragMoved = false;
     setPrompt(null);
   }
 }
