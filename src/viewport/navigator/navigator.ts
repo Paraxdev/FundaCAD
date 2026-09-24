@@ -573,9 +573,16 @@ export class Navigator {
     this.flight = f;
   }
 
-  /** The pose with an orientation, keeping T and s unless given. */
+  /** Where the view is going: a flight's destination while one is in the air,
+   *  so a programmatic change asked for mid-flight builds on it rather than on
+   *  the frame it happened to be at. */
+  private destination(): Pose {
+    return clonePose(this.flight?.to ?? this.pose);
+  }
+
+  /** The destination with an orientation, keeping T and s unless given. */
   poseWith(q: THREE.Quaternion, target?: THREE.Vector3, scale?: number): Pose {
-    const p = clonePose(this.pose);
+    const p = this.destination();
     setOrientation(p, q);
     if (target) p.target.copy(target);
     if (scale !== undefined) p.scale = scale;
@@ -591,20 +598,20 @@ export class Navigator {
 
   rotateTo(azimuth: number, polar: number, animate = false) {
     const [lo, hi] = elevRange(this.limits);
-    const p = clonePose(this.pose);
+    const p = this.destination();
     setTurntable(p, azimuth, Math.min(hi, Math.max(lo, polar)));
     this.flyTo(p, { animate });
   }
 
   moveTo(point: THREE.Vector3, animate = false) {
-    const p = clonePose(this.pose);
+    const p = this.destination();
     p.target.copy(point);
     this.flyTo(p, { animate });
   }
 
   setViewScale(scale: number, animate = false) {
     if (!(scale > 0) || !Number.isFinite(scale)) return;
-    const p = clonePose(this.pose);
+    const p = this.destination();
     p.scale = clampScale(this.limits, p.fov, scale);
     this.flyTo(p, { animate });
   }
@@ -697,7 +704,7 @@ export class Navigator {
       r = EMPTY_VIEW_MM;
       c = new THREE.Vector3();
     }
-    const p = clonePose(this.pose);
+    const p = this.destination();
     p.target.copy(c);
     p.scale = frameScale(p, this.frame, r);
     this.flyTo(p, { animate: opts.animate });
@@ -722,7 +729,7 @@ export class Navigator {
   /** Turn to an orientation about the point of the view axis nearest the
    *  content's centre (the target when there is none), keeping the scale there. */
   turnTo(q: THREE.Quaternion, animate = true) {
-    const p = this.pose;
+    const p = this.destination();
     let pivot = p.target.clone();
     if (this.box) {
       const c = this.box.getCenter(new THREE.Vector3());
