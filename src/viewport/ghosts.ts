@@ -5,7 +5,7 @@
 // so the frontend draws what the result is going to be and the real feature is
 // committed on release. Nothing here ever reaches the document.
 //
-// Three of them, and they are different KINDS of cheat:
+// Four of them, and they are different KINDS of cheat:
 //
 //   - press/pull builds new geometry (a prism raised off the picked faces), so
 //     it is a mesh of its own that is thrown away on commit;
@@ -13,6 +13,11 @@
 //     body objects, zero vertex writes, and picking follows it because raycasts
 //     read matrixWorld;
 //   - a pattern is the move trick N times over, drawn as cloned meshes.
+//   - a fillet/chamfer sweeps an approximate wedge along the picked edges from
+//     the mesh's own triangles, since (unlike press/pull) the real result isn't
+//     a simple offset of anything already on screen; features/blendGhost.ts has
+//     the geometry, this only supplies the edges' points and adjacent-face
+//     normals it needs and turns the answer into a mesh.
 //
 // The move ghost is the one with a real hand-off: on commit the offset STAYS
 // until the rebuilt body arrives, because dropping it would snap the part back
@@ -21,6 +26,7 @@
 import * as THREE from "three";
 import { radialAt } from "../features/planeMath";
 import type { RoundFace } from "../features/radialDrag";
+import { sweepBlendGhost, type BlendKind, type EdgeSample, type Pt3 } from "../features/blendGhost";
 import { bodyOfFace, type BodyEdges, type BodyMesh, type ModelView } from "./render";
 import { themeColor } from "./themeColors";
 
@@ -33,6 +39,14 @@ export interface GhostHost {
   requestRender(): void;
   /** a picked face's outward normal in world space, for the flat press/pull */
   faceNormalWorld(faceId: number): THREE.Vector3;
+}
+
+/** One picked edge as the blend ghost needs it: structural, like
+ *  blendClearance.ts's ClearanceEdge, so a caller can hand over its own
+ *  EdgeRef/GhostEdge without importing viewport/edgeLines.ts here. */
+export interface BlendGhostEdge {
+  readonly body: string | undefined;
+  readonly points: readonly Pt3[];
 }
 
 export class GhostLayer {
@@ -114,6 +128,52 @@ export class GhostLayer {
     this.ppGhost.geometry.dispose();
     (this.ppGhost.material as THREE.Material).dispose();
     this.ppGhost = null;
+    this.host.requestRender();
+  }
+
+  // --- Fillet/chamfer ghost: an instant approximation of the blend so a radius/
+  // distance drag reads live instead of waiting on OCCT. Unlike press/pull, a
+  // blend isn't a simple offset of a picked face, it depends on the two faces
+  // that meet at the edge, so this samples the ALREADY-DISPLAYED mesh around
+  // each picked edge for those two faces' normals and hands the geometry to
+  // features/blendGhost.ts, which sweeps the wedge. An edge whose normals can't
+  // be pinned down (a seam, a T-junction, two faces meeting almost flat) is
+  // simply left out rather than drawn wrong, see edgeFaceSamples.
+  private blendGhostMesh: THREE.Mesh | null = null;
+
+  setBlendGhost(edges: readonly BlendGhostEdge[], size: number, kind: BlendKind) {
+    this.clearBlendGhost();
+    const model = this.host.model();
+    if (!model || !edges.length || size < 1e-4) return;
+    const positions: number[] = [];
+    for (const edge of edges) {
+      const samples = edgeFaceSamples(model, edge);
+      if (!samples) continue; // can't tell the two faces apart here, skip THIS edge
+      const geo = sweepBlendGhost(samples, size, kind);
+      if (geo) positions.push(...geo.positions);
+    }
+    if (!positions.length) return;
+    const geom = new THREE.BufferGeometry();
+    geom.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    geom.computeVertexNormals();
+    const mat = new THREE.MeshBasicMaterial({
+      color: themeColor("--accent", 0xff7a3c),
+      transparent: true,
+      opacity: 0.45,
+      side: THREE.DoubleSide,
+      depthWrite: false,
+    });
+    this.blendGhostMesh = new THREE.Mesh(geom, mat);
+    this.blendGhostMesh.renderOrder = 998;
+    this.host.addToScene(this.blendGhostMesh);
+    this.host.requestRender();
+  }
+  clearBlendGhost() {
+    if (!this.blendGhostMesh) return;
+    this.host.removeFromScene(this.blendGhostMesh);
+    this.blendGhostMesh.geometry.dispose();
+    (this.blendGhostMesh.material as THREE.Material).dispose();
+    this.blendGhostMesh = null;
     this.host.requestRender();
   }
 
@@ -262,4 +322,113 @@ export class GhostLayer {
     }
     this.moveGhost = null;
   }
+}
+
+// --- blend ghost support: which two faces meet an edge, read off the mesh ---
+//
+// The wire protocol never says which faces border an edge, so this asks the
+// already-tessellated mesh instead: every one of an edge's polyline points is
+// also a mesh vertex (both come from the same tessellation pass), so the
+// triangles TOUCHING that vertex are exactly the triangles of the faces
+// meeting there. A manifold edge sample touches triangles from precisely two
+// faceIds; anything else (a seam left un-welded, a T-junction, a stray corner)
+// can't be read as "the two faces of this edge" and is refused rather than
+// guessed at (edgeFaceSamples below skips the whole edge when any sample does).
+
+/** vertex position (quantized) -> local triangle indices touching it, one body
+ *  at a time and cached by mesh identity: a fresh BodyMesh only ever comes from
+ *  a rebuild, so there's nothing to invalidate the cache against. Same 0.1µm
+ *  bucket buildBodyMesh's own vertex weld uses (render.ts), which is exactly
+ *  the precision an edge point can be expected to match a mesh vertex at. */
+const vertexTriCache = new WeakMap<BodyMesh, Map<string, number[]>>();
+const POS_QUANT = 1e4;
+
+function posKey(x: number, y: number, z: number): string {
+  return `${Math.round(x * POS_QUANT)},${Math.round(y * POS_QUANT)},${Math.round(z * POS_QUANT)}`;
+}
+
+function vertexTriangles(body: BodyMesh): Map<string, number[]> {
+  let idx = vertexTriCache.get(body);
+  if (idx) return idx;
+  idx = new Map();
+  const pos = body.mesh.geometry.getAttribute("position");
+  const index = body.mesh.geometry.getIndex();
+  if (pos && index) {
+    for (let t = 0; t * 3 < index.count; t++) {
+      for (let c = 0; c < 3; c++) {
+        const vi = index.getX(t * 3 + c);
+        const key = posKey(pos.getX(vi), pos.getY(vi), pos.getZ(vi));
+        let list = idx.get(key);
+        if (!list) idx.set(key, (list = []));
+        list.push(t);
+      }
+    }
+  }
+  vertexTriCache.set(body, idx);
+  return idx;
+}
+
+/** The two faces' outward normals at one point on an edge, or null when the
+ *  mesh there doesn't resolve to exactly two. Each normal is the area-weighted
+ *  sum of that face's own triangles AT this vertex (not the whole face, a
+ *  curved face's normal turns along the edge, see faceNormalWorld for the
+ *  whole-face version used elsewhere). */
+function facesAtPoint(body: BodyMesh, p: Pt3): { faceIds: [number, number]; normals: [THREE.Vector3, THREE.Vector3] } | null {
+  const tris = vertexTriangles(body).get(posKey(p[0], p[1], p[2]));
+  if (!tris || !tris.length) return null;
+  const pos = body.mesh.geometry.getAttribute("position");
+  const index = body.mesh.geometry.getIndex()!;
+  const byFace = new Map<number, THREE.Vector3>();
+  const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), n = new THREE.Vector3();
+  for (const t of tris) {
+    const fid = body.faceIds[t];
+    if (fid === undefined) continue;
+    a.fromBufferAttribute(pos, index.getX(t * 3));
+    b.fromBufferAttribute(pos, index.getX(t * 3 + 1));
+    c.fromBufferAttribute(pos, index.getX(t * 3 + 2));
+    n.copy(b).sub(a).cross(c.clone().sub(a)); // area-weighted, see faceNormalWorld
+    const acc = byFace.get(fid);
+    if (acc) acc.add(n);
+    else byFace.set(fid, n.clone());
+  }
+  if (byFace.size !== 2) return null;
+  const faceIds = [...byFace.keys()] as [number, number];
+  const vecs = faceIds.map((fid) => byFace.get(fid)!);
+  if (vecs.some((v) => v.lengthSq() < 1e-12)) return null;
+  const normals = vecs.map((v) => v.normalize()) as [THREE.Vector3, THREE.Vector3];
+  return { faceIds, normals };
+}
+
+/** Every EdgeSample along one picked edge, `normal1` pinned to the SAME
+ *  physical face (by faceId) across every sample, or null when the edge's
+ *  body is gone, it has fewer than 2 points, or any sample can't be resolved.
+ *  Tangent is a central difference of the polyline, which is all the fidelity
+ *  a straight-line-segment edge has to offer anyway. */
+function edgeFaceSamples(model: ModelView, edge: BlendGhostEdge): EdgeSample[] | null {
+  const body = model.bodies.find((b) => b.id === edge.body);
+  const pts = edge.points;
+  if (!body || pts.length < 2) return null;
+  let primaryFace: number | null = null;
+  const out: EdgeSample[] = [];
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i]!;
+    const found = facesAtPoint(body, p);
+    if (!found) return null;
+    if (primaryFace === null) primaryFace = found.faceIds[0];
+    const flip = found.faceIds[0] !== primaryFace;
+    const n1 = flip ? found.normals[1] : found.normals[0];
+    const n2 = flip ? found.normals[0] : found.normals[1];
+    const prev = pts[Math.max(0, i - 1)]!;
+    const next = pts[Math.min(pts.length - 1, i + 1)]!;
+    const tangent = new THREE.Vector3(next[0] - prev[0], next[1] - prev[1], next[2] - prev[2]);
+    if (tangent.lengthSq() < 1e-12) return null;
+    tangent.normalize();
+    out.push({
+      point: p,
+      tangent: [tangent.x, tangent.y, tangent.z],
+      normal1: [n1.x, n1.y, n1.z],
+      normal2: [n2.x, n2.y, n2.z],
+    });
+  }
+  return out;
 }
