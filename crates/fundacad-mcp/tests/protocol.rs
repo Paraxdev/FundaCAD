@@ -306,6 +306,35 @@ fn a_failed_feature_is_reported_and_not_passed_off_as_a_no_op() {
 }
 
 #[test]
+fn view_still_draws_a_partial_build() {
+    // build's isError going true on a partial build (the test above) must not
+    // make `view` refuse the whole picture: looking at what DID build is the
+    // main way an agent checks its work, and a model whose fillet failed
+    // (the debowler's chute_blend, in the field) is exactly when a picture
+    // matters most. `view` triggers its own rebuild when stale, so this never
+    // calls `build` directly.
+    let rs = drive(&[
+        (
+            "feature_add",
+            json!({"feature": {"id": "bx1", "type": "box", "length": 20, "width": 20,
+                               "height": 20}}),
+        ),
+        (
+            "feature_add",
+            json!({"feature": {"id": "fil1", "type": "fillet",
+                               "edges": {"kind": "edge", "by": "all", "body": "body1"},
+                               "radius": 500}}),
+        ),
+        ("view", json!({"view": "iso", "width": 96, "height": 96})),
+    ]);
+    assert!(!rs[2].is_error, "{}", rs[2].text);
+    assert!(rs[2].text.contains("FEATURE FAILED"), "{}", rs[2].text);
+    assert!(rs[2].text.contains("fil1"), "{}", rs[2].text);
+    let png = rs[2].images.first().expect("a render came back");
+    assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n");
+}
+
+#[test]
 fn a_fillet_patched_into_a_chamfer_builds_as_a_chamfer() {
     let rs = drive(&[
         (
