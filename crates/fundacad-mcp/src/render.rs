@@ -258,10 +258,16 @@ pub fn section_plane(spec: &Value, bounds: Option<(Vec3, Vec3)>) -> Result<Optio
     let n = match &axis {
         Value::String(name) => {
             let key = name.to_ascii_lowercase();
-            SECTION_AXES
-                .iter()
-                .find(|(a, _)| *a == key)
-                .map_or(SECTION_AXES[0].1, |(_, v)| *v)
+            let Some((_, v)) = SECTION_AXES.iter().find(|(a, _)| *a == key) else {
+                let names: Vec<String> =
+                    SECTION_AXES.iter().map(|(a, _)| a.to_ascii_uppercase()).collect();
+                return Err(format!(
+                    "section axis='{name}' is not one of {}. Use one of those, or a [x,y,z] \
+                     direction vector.",
+                    names.join(", ")
+                ));
+            };
+            *v
         }
         Value::Array(items) => {
             let mut v = [0.0; 3];
@@ -270,7 +276,11 @@ pub fn section_plane(spec: &Value, bounds: Option<(Vec3, Vec3)>) -> Result<Optio
             }
             v
         }
-        _ => SECTION_AXES[0].1,
+        other => {
+            return Err(format!(
+                "section axis={other} is not a side name (X, Y, Z) or a [x,y,z] direction vector."
+            ));
+        }
     };
     if norm(n) < 1e-12 {
         return Ok(None);
