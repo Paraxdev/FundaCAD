@@ -9,9 +9,9 @@ import type { DocumentStore } from "../document/store";
 import type { Feature, ParamTarget, PlaneSpec, ProjectionUpdate, Selector, SketchConstraint, SketchPattern } from "../types";
 import { applyProjectionUpdate, dimPlaceOf, isBadgeEntity, isPlacedDim } from "../types";
 import { SketchPlane } from "./plane";
-import { SketchOverlay, type WorldRegion, controlPolygonObjects, curveObjects, dimensionLineObjects, CURVE_COLOR, PREVIEW_COLOR, SELECT_COLOR } from "./overlay";
-import { deletePole, insertPole, polygonParam, splineToBspline, type BsplineEntity } from "./bsplineEdit";
 import { BSPLINE_DEGREES, bsplineMinPoles, poleOfRef } from "./bspline";
+import { SketchOverlay, type WorldRegion, controlPolygonObjects, curveObjects, poleMarkerObjects, dimensionLineObjects, CURVE_COLOR, PREVIEW_COLOR, SELECT_COLOR } from "./overlay";
+import { constrainedPoles, deletePole, insertPole, polygonParam, splineToBspline, type BsplineEntity } from "./bsplineEdit";
 import { DimInput } from "./dimInput";
 import { TextPanel } from "./textPanel";
 import type { TextValues } from "./textPanel";
@@ -1758,11 +1758,17 @@ export class SketchMode {
     this.overlay.setPreview([this.entityCurve(draft), controlPolygonObjects(draft, this.plane, this.planeMmPerPx())]);
   }
 
-  /** The control polygons of the selected control-point splines. */
+  /** The control polygons of the selected control-point splines, and on the
+   *  others the poles a constraint or dimension holds. */
   private polygonObjects(): THREE.Object3D[] {
     const out: THREE.Object3D[] = [];
     for (const e of this.entities) {
-      if (e.type !== "bspline" || !this.selected.has(e.id)) continue;
+      if (e.type !== "bspline") continue;
+      if (!this.selected.has(e.id)) {
+        const held = constrainedPoles(this.constraints, e.id, e.poles.length);
+        if (held.length) out.push(poleMarkerObjects(e, this.plane, this.planeMmPerPx(), held));
+        continue;
+      }
       const active = this.selectedPole?.id === e.id ? this.selectedPole.k : -1;
       out.push(controlPolygonObjects(e, this.plane, this.planeMmPerPx(), active));
     }
