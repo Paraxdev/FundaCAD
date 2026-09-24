@@ -986,7 +986,7 @@ The format comes from the extension unless given. A large STEP can take minutes:
 
     #[tool(
         name = "inspect",
-        description = "Exact measurements of the built bodies: volume, area, bounding box, and, the part that matters, every face and edge with a ready-made SELECTOR you can paste into the next feature. Also flags seam edges and wrapping faces, which are what fillet and press/pull refuse.",
+        description = "Exact measurements of the built bodies. A bare call returns a one-line summary per body (volume, area, bounding box); pass detail:true and selectors:true to also list every face and edge with a ready-made SELECTOR you can paste into the next feature. Also flags seam edges and wrapping faces, which are what fillet and press/pull refuse.",
         input_schema = crate::tools::inspect()
     )]
     pub async fn t_inspect(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
