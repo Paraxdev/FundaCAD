@@ -30,6 +30,9 @@ export const WHEEL_LOG_PER_PX = Math.log(1.0016);
 export const PINCH_LOG_PER_PX = 0.01;
 /** Mouse orbit speed, radians per viewport height. */
 export const ORBIT_PER_HEIGHT = 2 * Math.PI;
+/** An orbit press that stays within this many pixels is a right click (the
+ *  viewport's menu threshold), so it turns nothing. */
+export const CLICK_SLOP_PX = 5;
 /** Drag distance over which a banked view (3D mouse roll) comes back level. */
 export const RELEVEL_PX = 80;
 /** 'auto' projection is orthographic within this of a world axis. */
@@ -47,7 +50,7 @@ export interface NavigatorOptions {
   inertia: boolean;
 }
 
-type Gesture = { kind: "orbit"; x: number; y: number; vx: number; vy: number } | { kind: "pan" } | null;
+type Gesture = { kind: "orbit"; x: number; y: number; vx: number; vy: number; started: boolean } | { kind: "pan" } | null;
 
 export class Navigator {
   readonly pose: Pose = makePose();
@@ -221,7 +224,7 @@ export class Navigator {
     const pivot = this.pivotAt(x, y);
     const t = this.pose.level ? { yaw: this.pose.yaw, elev: this.pose.elev, roll: 0 } : decompose(this.pose.q);
     this.orbit = new OrbitChannel(pivot, t.yaw, t.elev, t.roll);
-    this.gesture = { kind: "orbit", x, y, vx: 0, vy: 0 };
+    this.gesture = { kind: "orbit", x, y, vx: 0, vy: 0, started: false };
     this.emit("inputstart");
   }
 
@@ -251,6 +254,8 @@ export class Navigator {
     if (!o) return;
     const dx = x - g.x;
     const dy = y - g.y;
+    if (!g.started && Math.hypot(dx, dy) <= CLICK_SLOP_PX) return;
+    g.started = true;
     g.x = x;
     g.y = y;
     if (dx === 0 && dy === 0) return;

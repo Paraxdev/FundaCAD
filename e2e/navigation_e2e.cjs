@@ -255,6 +255,19 @@ const check = (name, ok, detail) => {
   check("reset looks in from the home corner", home.d.every((v, i) => Math.abs(v - want[i]) < 1e-3), { d: home.d, want });
   await shot("12_reset.png");
 
+  // --- 8. a right click with a few pixels of hand jitter --------------------------------
+  const onTop = await pixelOf([0, 0, 20]);
+  const v0 = await page.evaluate(() => window.viewport.rig.poseVersion());
+  await page.mouse.move(onTop.x, onTop.y);
+  await page.mouse.down({ button: "right" });
+  await page.mouse.move(onTop.x + 2, onTop.y + 1);
+  await page.mouse.move(onTop.x + 3, onTop.y + 3);
+  await page.mouse.up({ button: "right" });
+  await settle();
+  check("a jittery right click opens the menu", await page.evaluate(() => document.querySelectorAll(".ctx-item").length > 0));
+  check("and does not turn the view", (await page.evaluate(() => window.viewport.rig.poseVersion())) === v0);
+  await shot("13_jitter_menu.png");
+
   await browser.close();
   console.log(failures ? `\n${failures} FAILED` : "\nALL PASS");
   process.exit(failures ? 1 : 0);
