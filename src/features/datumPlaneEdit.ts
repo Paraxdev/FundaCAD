@@ -108,7 +108,6 @@ export function startDatumPoseEdit(
     {
       src: deps.sourceOf(f),
       pose: poseOf(f),
-      turns: true,
       ghost: false,
       locked,
       onLive: (pose) => {
