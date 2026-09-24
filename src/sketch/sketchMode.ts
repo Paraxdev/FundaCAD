@@ -303,6 +303,17 @@ export class SketchMode {
   private entryScale: number | null = null;
   private lockReleased = false;
   private releaseAnnounced = false; // say it once per session, not once per frame
+  // The view direction/up from just before entering, and whether the user
+  // orbited during the session. enterSketchView forces the camera square onto
+  // the plane and nothing ever turns it back afterwards, so a sketch drawn
+  // without touching the camera left it pinned there for good: Fit View can
+  // still frame the model, but only from that flat, close-up angle, which
+  // reads as broken. Restored on a normal exit, unless the user orbited their
+  // own way out already (an explicit choice, not left for us to override).
+  private preSketchDir: THREE.Vector3 | null = null;
+  private preSketchUp: THREE.Vector3 | null = null;
+  private navigatedDuringSketch = false;
+  private unsubInputStart: (() => void) | null = null;
   private raf = 0;
   private dim: DimInput;
   private dims: SketchDimensions;
@@ -529,6 +540,9 @@ export class SketchMode {
 
     this.viewport.suspendPicking = true;
     this.viewFocus = this.focusPoint();
+    this.preSketchDir = this.viewport.rig.viewDirection(new THREE.Vector3());
+    this.preSketchUp = new THREE.Vector3().setFromMatrixColumn(this.viewport.rig.active.matrixWorld, 1);
+    this.navigatedDuringSketch = false;
     this.viewport.enterSketchView(this.viewFocus, this.plane.n, this.plane.v);
     this.entryScale = null; // re-baselined on the first tick, once the camera lands
     this.lockReleased = false;
@@ -550,6 +564,8 @@ export class SketchMode {
       if (this.raf) cancelAnimationFrame(this.raf);
       this.raf = 0;
     });
+    this.unsubInputStart = this.viewport.rig.onInputStart(() => { this.navigatedDuringSketch = true; });
+    session.add(() => { this.unsubInputStart?.(); this.unsubInputStart = null; });
 
     this.overlay.update(store.document, this.editingId ?? "__active__");
     this.refreshActive();
@@ -653,6 +669,15 @@ export class SketchMode {
     this.snapWorld = null;
     this.removeGrid();
     this.viewport.exitSketchView();
+    // The camera is still exactly square-on to the plane enterSketchView put it
+    // on: turn back to how it looked before, unless the user already orbited
+    // their own way out (an explicit choice we leave alone). Direction only,
+    // turnTo keeps the current scale/target, so this doesn't fight a zoom.
+    if (!this.navigatedDuringSketch && this.preSketchDir) {
+      this.viewport.rig.setViewDir(this.preSketchDir, this.preSketchUp ?? new THREE.Vector3(0, 1, 0));
+    }
+    this.preSketchDir = null;
+    this.preSketchUp = null;
     this.viewport.rig.setOrbitLocked(false); // restore free orbit in model mode
     this.viewport.suspendPicking = false;
     this.active = false;
