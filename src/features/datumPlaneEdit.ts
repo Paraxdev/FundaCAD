@@ -16,7 +16,6 @@ import {
   type PoseField,
 } from "../document/datumPose";
 import type { DatumPoseTool } from "./datumPoseTool";
-import { planeAfter } from "./sketchMoveTarget";
 import type { MoveTarget } from "./moveTarget";
 import { toast } from "../ui/toast";
 
@@ -143,7 +142,15 @@ export function datumMoveTarget(deps: DatumEditDeps, id: string): MoveTarget | n
   const u = new THREE.Vector3(...def.xdir).normalize();
   const v = n.clone().cross(u);
   const preview = livePreview(deps.store, id);
-  const poseAfter = (m: THREE.Matrix4) => poseFromPlaced(src, planeAfter(def, m));
+  // Unrounded, unlike a sketch's planeAfter: the pose is read back out of this and
+  // a millionth of a millimetre there is a 44.99999 degree tilt here.
+  const poseAfter = (m: THREE.Matrix4) => {
+    const rot = new THREE.Matrix3().setFromMatrix4(m);
+    const o = origin.clone().applyMatrix4(m);
+    const nn = n.clone().applyMatrix3(rot).normalize();
+    const uu = u.clone().applyMatrix3(rot).normalize();
+    return poseFromPlaced(src, { origin: [o.x, o.y, o.z], normal: [nn.x, nn.y, nn.z], xdir: [uu.x, uu.y, uu.z] });
+  };
   return {
     frame: [u, v, n],
     handles: { axes: [0, 1, 2], rings: [0, 1, 2], planes: [0, 1, 2], cubes: [] },
