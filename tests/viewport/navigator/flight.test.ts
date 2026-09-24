@@ -152,4 +152,25 @@ describe("programmatic API", () => {
     expect(nav.pose.q.angleTo(saved.q)).toBe(0);
     expect(nav.pose.target.equals(saved.target)).toBe(true);
   });
+
+  it("a fit or a zoom asked for during a view flight keeps the view it was flying to", () => {
+    const iso = lookQuatUp(new THREE.Vector3(1, -1, 0.8).normalize(), new THREE.Vector3(0, 0, 1));
+    const top = lookQuatUp(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 1, 0));
+    const { nav } = setup();
+    nav.turnTo(top, false);
+    nav.turnTo(iso, true);
+    for (let i = 0; i < 3; i++) nav.update(1 / 60);
+    expect(nav.isFlying()).toBe(true);
+    nav.fitSphere(new THREE.Vector3(0, 0, 10), 25, { animate: true });
+    settle(nav);
+    expect(nav.pose.q.angleTo(iso)).toBeLessThan(1e-9);
+    expect(nav.pose.target.distanceTo(new THREE.Vector3(0, 0, 10))).toBeLessThan(1e-9);
+
+    nav.turnTo(top, true);
+    nav.update(1 / 60);
+    nav.setViewScale(7, true);
+    settle(nav);
+    expect(nav.pose.q.angleTo(top)).toBeLessThan(1e-9);
+    expect(nav.pose.scale).toBeCloseTo(7, 9);
+  });
 });
