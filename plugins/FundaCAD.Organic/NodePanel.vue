@@ -8,6 +8,17 @@ import { computed, ref, type CSSProperties } from "vue";
 import * as panel from "./panel";
 import { NODE_FIELDS, numOf, type NodeValues, type Operation } from "./nodeForm";
 
+type NodeField = keyof NodeValues & string;
+const GROUPS: { label: string; title: string; fields: NodeField[] }[] = [
+  { label: "Centre", title: "Where the node sits, mm", fields: ["x", "y", "z"] },
+  { label: "Radius", title: "Half the node's size along each of its own axes, mm", fields: ["sx", "sy", "sz"] },
+  { label: "Turn", title: "Degrees about X, then Y, then Z", fields: ["rx", "ry", "rz"] },
+];
+
+function fieldTitle(f: string): string {
+  return NODE_FIELDS.find(([k]) => k === f)?.[1] ?? f;
+}
+
 const v = computed(() => panel.view.value);
 const picked = computed<NodeValues | null>(() => {
   const s = v.value;
@@ -69,7 +80,8 @@ const muted: CSSProperties = { color: "var(--text-mute, #8b93a3)", marginBottom:
 const errorStyle: CSSProperties = { color: "var(--error, #ff5c5c)", marginBottom: "6px" };
 const section: CSSProperties = { color: "var(--text-mute, #8b93a3)", margin: "8px 0 4px", textTransform: "uppercase", fontSize: "10px", letterSpacing: "0.06em" };
 const row: CSSProperties = { display: "flex", gap: "6px", alignItems: "center", marginBottom: "4px" };
-const grid: CSSProperties = { display: "grid", gridTemplateColumns: "auto 1fr auto 1fr auto 1fr", gap: "4px 6px", alignItems: "center" };
+const grid: CSSProperties = { display: "grid", gridTemplateColumns: "56px 1fr 1fr 1fr", gap: "4px 6px", alignItems: "center" };
+const axisHead: CSSProperties = { color: "var(--text-mute, #8b93a3)", textAlign: "center", fontSize: "10px" };
 const field: CSSProperties = {
   background: "var(--panel-2, #161a20)", color: "var(--text, #dce3ee)",
   border: "1px solid var(--line-strong, #3a4150)", borderRadius: "var(--r-sm, 3px)",
@@ -119,14 +131,18 @@ const tag: CSSProperties = {
       <template v-if="picked">
         <div :style="section">{{ picked.id }}</div>
         <div :style="grid">
-          <template v-for="[f, label] in NODE_FIELDS" :key="f">
-            <label :title="label">{{ label.replace("Radius ", "R").replace("Turn ", "T") }}</label>
+          <span />
+          <span v-for="axis in ['X', 'Y', 'Z']" :key="axis" :style="axisHead">{{ axis }}</span>
+          <template v-for="group in GROUPS" :key="group.label">
+            <label :title="group.title">{{ group.label }}</label>
             <input
+              v-for="f in group.fields"
+              :key="f"
               :data-field="f"
               :style="isBound(f) ? lockedField : field"
               :value="shown(picked[f])"
               :readonly="isBound(f)"
-              :title="isBound(f) ? 'A parameter drives this value' : label"
+              :title="isBound(f) ? 'A parameter drives this value' : fieldTitle(f)"
               @change="commitValue(f, $event)"
             />
           </template>
