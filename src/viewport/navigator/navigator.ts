@@ -666,6 +666,9 @@ export class Navigator {
 
   /** Back to level, softly: the same view direction with Z up. */
   restoreUp(animate = true) {
+    // A flight still in the air (sketch entry) is abandoned where it stands:
+    // landing it would run its arrival for a sketch that has already closed.
+    this.flight = null;
     if (this.pose.level) return;
     const t = decompose(this.pose.q);
     const p = clonePose(this.pose);
@@ -746,17 +749,6 @@ export class Navigator {
     this.flyTo(p, { animate });
   }
 
-  cancelFlight() {
-    if (this.flight?.hard) {
-      const f = this.flight;
-      stepFlight(f, f.dur, this.pose);
-      this.flight = null;
-      this.moved();
-      f.onArrive?.();
-      return;
-    }
-    this.flight = null;
-  }
 }
 
 /** Where a fresh window's camera sits, relative to what it looks at. */
