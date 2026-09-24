@@ -1,15 +1,9 @@
 <script setup lang="ts">
-// Last rebuild round trip, sent -> reply received -> meshes drawn, stacked
-// above the frame-rate readout (FpsReadout.vue) it shares a corner with. A
-// diagnostic you glance at, same as that one: this renders its own text
-// straight from diagnostics/rebuildTiming's ring rather than touching a
-// store, since nothing else in the app needs to react to it.
-
 import { onMounted, onUnmounted, ref } from "vue";
 import { lastRoundTripMs, onRoundTrip, type RoundTrip } from "../../diagnostics/rebuildTiming";
 
 function label(ms: number | null): string {
-  return ms == null ? "rebuild –" : `rebuild ${ms.toFixed(0)}ms`;
+  return ms == null ? "rebuild ..." : `rebuild ${ms.toFixed(0)}ms`;
 }
 
 const text = ref(label(lastRoundTripMs()));
