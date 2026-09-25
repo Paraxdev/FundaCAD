@@ -160,8 +160,14 @@ pub fn view() -> JsonObject {
         json!({
             "view": {"type": "string",
                      "enum": ["iso", "front", "back", "left", "right", "top", "bottom"]},
-            "azimuth": {"type": "number", "description": "degrees anticlockwise from +X"},
-            "elevation": {"type": "number", "description": "degrees above the XY plane"},
+            "azimuth": {"type": "number",
+                        "description": "degrees anticlockwise from +X, the side the camera looks \
+                                        from: 0 is from +X, -90 from the front (-Y). Given with \
+                                        or without elevation, it is used instead of `view`"},
+            "elevation": {"type": "number",
+                          "description": "degrees above the XY plane: 90 looks straight down"},
+            "az": {"type": "number", "description": "short for azimuth"},
+            "el": {"type": "number", "description": "short for elevation"},
             "width": {"type": "integer"},
             "height": {"type": "integer"},
             "bodies": {"type": "array", "items": {"type": "string"},
