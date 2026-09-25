@@ -606,7 +606,7 @@ export class DocumentStore {
   /** Injected (main.ts): headless planegcs re-solve of one sketch feature,
    *  kept out of the store so the document layer doesn't depend on the WASM
    *  solver (and tests don't need it). */
-  headlessSolve?: (sketch: Extract<Feature, { type: "sketch" }>, parameters: CadDocument["parameters"]) => Promise<{ entities: Extract<Feature, { type: "sketch" }>["entities"] } | null>;
+  headlessSolve?: (sketch: Extract<Feature, { type: "sketch" }>, parameters: CadDocument["parameters"], anchor?: { x: number; y: number }) => Promise<{ entities: Extract<Feature, { type: "sketch" }>["entities"] } | null>;
   /** Injected: the sketch feature id currently OPEN in the sketch editor (it
    *  re-solves itself live and must not be overwritten headlessly). */
   openSketchId?: () => string | null;

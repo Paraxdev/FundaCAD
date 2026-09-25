@@ -45,7 +45,7 @@ import { commonUnits, toUnit, tryParseMeasure, unitById, type Dim, type Measured
 import { contextMenu } from "../../ui/menu";
 import { resolveEntities, resolveRealEntities, toSketchEntity } from "../../sketch/resolve";
 import { entityDims } from "../../sketch/entityDims";
-import { applyDrivingDimsDirect, upsertDrivingDim } from "../../sketch/directDims";
+import { applyDrivingDimsDirect, dimAnchor, upsertDrivingDim } from "../../sketch/directDims";
 import { toast } from "../../ui/toast";
 import {
   featureNumFields,
@@ -252,7 +252,7 @@ function commitSketchDim(row: { key: string; index: number; field: string }, raw
       return null;
     }
     void (async () => {
-      const solved = await solve({ ...f, constraints: driven }, store.document.parameters);
+      const solved = await solve({ ...f, constraints: driven }, store.document.parameters, dimAnchor([copy], driven[driven.length - 1]!));
       if (!solved) { toast(`Could not satisfy this ${row.field} with the sketch's other constraints`); return; }
       store.updateFeature(f.id, { entities: solved.entities, constraints: driven } as Partial<Feature>);
     })();
