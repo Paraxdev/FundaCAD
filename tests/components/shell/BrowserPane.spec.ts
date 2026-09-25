@@ -794,7 +794,7 @@ describe("a row click while a tool waits for a pick", () => {
     const w = render(fake);
     await nextTick();
     const got: TreePick[] = [];
-    awaitTreePick((p) => { got.push(p); return true; });
+    awaitTreePick((p) => { got.push(p); return true; }, () => {});
     await rowNamed(w, "YZ plane").trigger("click");
     expect(got).toEqual([{ kind: "basePlane", plane: "YZ" }]);
     expect(eng(fake).sketch.enter).not.toHaveBeenCalled();
@@ -805,7 +805,7 @@ describe("a row click while a tool waits for a pick", () => {
     const w = render(fake);
     await nextTick();
     const got: TreePick[] = [];
-    awaitTreePick((p) => { got.push(p); return true; });
+    awaitTreePick((p) => { got.push(p); return true; }, () => {});
     await rowNamed(w, "Plane1").trigger("click");
     await rowNamed(w, "Axis1").trigger("click");
     expect(got).toEqual([
@@ -818,7 +818,7 @@ describe("a row click while a tool waits for a pick", () => {
     const fake = makeEngine(docWithDatums(), [{ id: "b1", name: "Body1" }]);
     const w = render(fake);
     await nextTick();
-    awaitTreePick(() => "That row is a base plane, this step needs one body");
+    awaitTreePick(() => "That row is a base plane, this step needs one body", () => {});
     await rowNamed(w, "YZ plane").trigger("click");
     await rowNamed(w, "Body1").trigger("click");
     expect(eng(fake).sketch.enter).not.toHaveBeenCalled();
@@ -843,7 +843,7 @@ describe("a row click while a tool waits for a pick", () => {
     (fake.engine as unknown as { editFeature: () => void }).editFeature = edit;
     const w = render(fake);
     await nextTick();
-    awaitTreePick(() => "no");
+    awaitTreePick(() => "no", () => {});
     await rowNamed(w, "Sketch1").trigger("dblclick");
     expect(edit).not.toHaveBeenCalled();
   });

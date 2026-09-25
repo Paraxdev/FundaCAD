@@ -169,7 +169,7 @@ export class SectionTool {
       this.endPick();
       this.armOn(def);
       return true;
-    });
+    }, () => this.stop());
     setPrompt("Click a face or plane to cut along · Esc");
   }
 

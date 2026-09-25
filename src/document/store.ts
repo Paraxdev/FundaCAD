@@ -214,6 +214,7 @@ export class DocumentStore {
   private undoStack: UndoEntry[] = [];
   private redoStack: UndoEntry[] = [];
   private docListeners = new Set<DocListener>();
+  private rewindListeners = new Set<() => void>();
   private buildListeners = new Set<BuildListener>();
   private busyListeners = new Set<BusyListener>();
   private metaListeners = new Set<MetaListener>();
@@ -351,6 +352,15 @@ export class DocumentStore {
     fn(this.doc);
     return () => this.docListeners.delete(fn);
   }
+  /** The document was swapped or stepped back or forward whole: undo, redo, a
+   *  load, a new document. Anything half picked against the old one is stale. */
+  onRewind(fn: () => void): () => void {
+    this.rewindListeners.add(fn);
+    return () => this.rewindListeners.delete(fn);
+  }
+  private emitRewind() {
+    for (const fn of this.rewindListeners) fn();
+  }
   get busyState(): BusyState {
     return this.busy;
   }
@@ -470,6 +480,7 @@ export class DocumentStore {
   }
 
   newDocument() {
+    this.emitRewind();
     this.undoStack = [];
     this.redoStack = [];
     this.doc = clone(EMPTY_DOCUMENT);
@@ -1173,6 +1184,7 @@ export class DocumentStore {
   undo() {
     const prev = this.undoStack.pop();
     if (!prev) return;
+    this.emitRewind();
     if (prev.kind === "overlay") {
       this.redoStack.push(prev);
       prev.undo();
@@ -1188,6 +1200,7 @@ export class DocumentStore {
   redo() {
     const next = this.redoStack.pop();
     if (!next) return;
+    this.emitRewind();
     if (next.kind === "overlay") {
       this.undoStack.push(next);
       next.redo();
@@ -1851,6 +1864,7 @@ export class DocumentStore {
     if (problem) throw new UnreadableDocumentError(problem.reason, problem.detail);
     const parsed = raw as CadDocument;
     for (const w of migrateDocument(parsed)) this.onWarning?.(w);
+    this.emitRewind();
     this.pushUndo();
     this.redoStack = [];
     this.rearmProjectionValve(); // valve state must never cross documents

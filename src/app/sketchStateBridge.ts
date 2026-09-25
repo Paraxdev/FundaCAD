@@ -1,4 +1,5 @@
 import { setPrompt } from "../ui/prompt";
+import { endPickSession } from "../ui/treePick";
 import { setWorkspace } from "../ui/workspace";
 import { SKETCH_PROMPTS } from "./actionTables";
 import { useUiStore } from "../stores/ui";
@@ -20,6 +21,7 @@ export function installSketchStateBridge(e: Engine): void {
 
   let sketchWasActive = false;
   e.sketch.onState = () => {
+    if (e.sketch.active !== sketchWasActive) endPickSession();
     if (e.sketch.active && !sketchWasActive) {
       palette.emitAll(); // apply palette opts
       // Out of the Render workspace, whichever one was up. A sketch is a mode

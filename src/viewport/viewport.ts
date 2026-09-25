@@ -3045,25 +3045,26 @@ export class Viewport {
 
   /** Enter "pick a model face to redefine this cube side" mode. */
   private beginSetOverride(side: ViewCubeSide) {
+    this.releaseTreePick = awaitTreePick(
+      (pick) => treePickRefusal(pick, "a model face, pick it in the view"),
+      () => this.cancelSetOverride(),
+    );
     this.setOverrideSide = side;
-    this.releaseTreePick?.();
-    this.releaseTreePick = awaitTreePick((pick) => treePickRefusal(pick, "a model face, pick it in the view"));
     setPrompt(`Click a model face to set as "${FACE_VIEWS[side].label}" (Esc to cancel)`);
-    // listen once for Escape to cancel
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        this.cancelSetOverride();
-        window.removeEventListener("keydown", onKey);
-      }
+    this.overrideKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") this.cancelSetOverride();
     };
-    window.addEventListener("keydown", onKey);
+    window.addEventListener("keydown", this.overrideKey);
   }
 
   private releaseTreePick: (() => void) | null = null;
+  private overrideKey: ((e: KeyboardEvent) => void) | null = null;
 
   private cancelSetOverride() {
     this.releaseTreePick?.();
     this.releaseTreePick = null;
+    if (this.overrideKey) window.removeEventListener("keydown", this.overrideKey);
+    this.overrideKey = null;
     this.setOverrideSide = null;
     this.clearHover();
     setPrompt(null);

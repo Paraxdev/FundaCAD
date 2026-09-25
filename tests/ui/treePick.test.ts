@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { awaitTreePick, resetTreePicks, routeTreeClick, treePickRefusal, treePickWaiting } from "../../src/ui/treePick";
+import { awaitTreePick, endPickSession, resetTreePicks, routeTreeClick, treePickRefusal, treePickWaiting } from "../../src/ui/treePick";
 
 const YZ = { kind: "basePlane", plane: "YZ" } as const;
 
@@ -19,13 +19,13 @@ describe("routing a row click", () => {
 
   it("offers the row to the waiting pick first", () => {
     let got: unknown = null;
-    awaitTreePick((p) => { got = p; return true; });
+    awaitTreePick((p) => { got = p; return true; }, () => {});
     expect(routeTreeClick(YZ, deps("busy"))).toBe("taken");
     expect(got).toEqual(YZ);
   });
 
   it("says why a refused row was refused, and keeps waiting", () => {
-    awaitTreePick((p) => treePickRefusal(p, "one body"));
+    awaitTreePick((p) => treePickRefusal(p, "one body"), () => {});
     const d = deps();
     expect(routeTreeClick(YZ, d)).toBe("refused");
     expect(d.hints).toEqual(["That row is a base plane, this step needs one body"]);
@@ -38,14 +38,28 @@ describe("routing a row click", () => {
     expect(d.hints).toEqual(["finish it first"]);
   });
 
-  it("the latest wait answers, and releasing it hands back to the one before", () => {
+  it("one session at a time: a new wait ends the old one through its own cleanup", () => {
     const seen: string[] = [];
-    awaitTreePick(() => { seen.push("outer"); return true; });
-    const release = awaitTreePick(() => { seen.push("inner"); return true; });
+    let firstEnded = 0;
+    awaitTreePick(() => { seen.push("first"); return true; }, () => { firstEnded++; });
+    awaitTreePick(() => { seen.push("second"); return true; }, () => {});
+    expect(firstEnded).toBe(1);
     routeTreeClick(YZ, deps());
-    release();
-    release();
-    routeTreeClick(YZ, deps());
-    expect(seen).toEqual(["inner", "outer"]);
+    expect(seen).toEqual(["second"]);
+  });
+
+  it("ending the session runs its cleanup once, and a released session is not ended again", () => {
+    let ended = 0;
+    let release = () => {};
+    release = awaitTreePick(() => true, () => { ended++; release(); });
+    endPickSession();
+    endPickSession();
+    expect(ended).toBe(1);
+    expect(treePickWaiting()).toBe(false);
+    expect(routeTreeClick(YZ, deps())).toBe("row");
+    const r2 = awaitTreePick(() => true, () => { ended++; });
+    r2();
+    endPickSession();
+    expect(ended).toBe(1);
   });
 });
