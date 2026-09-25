@@ -194,6 +194,12 @@ export function installViewportWiring(e: Engine): void {
   const faceAreas = new Map<number, number>();
   e.store.onBuild(() => faceAreas.clear());
   const regionAt = (x: number, y: number) => {
+    // A cut answer that landed under a tool or dialog is applied at the first
+    // hover or pick after it, before an area can be offered from the old split.
+    if (e.overlay.splitStale) {
+      e.overlay.update(e.store.document);
+      e.viewport.requestRender();
+    }
     const ray = e.viewport.rayFrom(x, y).ray;
     const wr = e.overlay.committedRegionAtRay(ray);
     if (!wr) return null;

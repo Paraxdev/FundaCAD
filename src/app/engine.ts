@@ -299,7 +299,8 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
     epoch: () => e.store.buildState.result,
     landed: () => {
       if (e.sketch.active) e.sketch.redraw();
-      else if (!e.toolBusy() && e.overlay.regions.length) e.overlay.update(e.store.document);
+      else if (e.toolBusy()) e.overlay.splitStale = true;
+      else if (e.overlay.regions.length) e.overlay.update(e.store.document);
     },
   });
   // params engine ↔ sketcher plumbing: closed sketches re-solve headlessly after
