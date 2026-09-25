@@ -653,15 +653,10 @@
     ]
    },
    "bodies": 1,
-   "errors": [
-    [
-     "f2",
-     "Fillet failed on Box: # of the edges could not be blended at this size"
-    ]
-   ],
+   "errors": [],
    "fatal": false,
    "volumes": {
-    "body1": 3922.384601
+    "body1": 3919.366224
    }
   },
   "hole_counterbore_m3_through": {

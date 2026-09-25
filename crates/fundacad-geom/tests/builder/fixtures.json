@@ -8269,14 +8269,17 @@
       "f",
       "f",
       "f",
-      "f",
-      "f"
+      "f2",
+      "f2",
+      "f2",
+      "f2",
+      "f2"
      ],
-     "faces": 10,
+     "faces": 13,
      "id": "body1",
      "name": "Box",
      "solids": 1,
-     "volume": 3922.7433388230806
+     "volume": 3919.7389131106456
     }
    ],
    "bodyIds": {
@@ -8284,12 +8287,7 @@
    },
    "datumPlanes": {},
    "diagnostics": [],
-   "errors": [
-    {
-     "feature_id": "f2",
-     "message": "Fillet failed on Box: 1 of the edges could not be blended at this size"
-    }
-   ]
+   "errors": []
   }
  },
  "fillet_smooth_edge": {
