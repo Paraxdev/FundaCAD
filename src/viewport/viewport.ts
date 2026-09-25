@@ -81,7 +81,7 @@ const SKETCH_DIM_EDGE_OPACITY = 0.5;
 
 import { Highlighter, EDGE_HOVER_COLOR } from "./highlight";
 import { ProgressiveModel } from "./progressive";
-import { nearestEdgeByMid, midMatchTol, edgeSelectorFrom, polylineMid } from "./edgeMatch";
+import { nearestEdgeByMid, nearestEdgeByCurve, midMatchTol, edgeSelectorFrom, polylineMid } from "./edgeMatch";
 import { mergeScope, pickScope, type ScopeDecision, type ScopeView } from "./pickScope";
 import { clickTakes, DwellIntent, type SelectPolicy } from "./clickIntent";
 import { getHoverDwellMs } from "../ui/interactionPrefs";
@@ -1810,6 +1810,18 @@ export class Viewport {
     const edges = this.model.edges.map((e) => ({ points: e.points }));
     const i = nearestEdgeByMid(edges, mid, midMatchTol(this.model.box.getSize(this.projScratch).length()));
     return i == null ? null : (this.model.edges[i] ?? null);
+  }
+
+  /** The rendered edge a saved `by:"nearest"` selector resolves to: its own
+   *  midpoint first, else the edge of `body` passing nearest the point, the
+   *  engine's rule, within a few percent of the model size. */
+  edgeLineForSelector(point: [number, number, number], body?: string): EdgeRef | null {
+    const byMid = this.edgeLineByMid(point);
+    if (byMid || !this.model) return byMid;
+    const diag = this.model.box.getSize(this.projScratch).length();
+    const pool = body ? this.model.edges.filter((e) => e.body === body) : this.model.edges;
+    const i = nearestEdgeByCurve(pool.map((e) => ({ points: e.points })), point, Math.max(midMatchTol(diag), 0.02 * diag));
+    return i == null ? null : (pool[i] ?? null);
   }
 
   /** Paint these edges as selected (used to pre-highlight a feature's saved

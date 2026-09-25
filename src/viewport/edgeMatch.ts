@@ -81,6 +81,38 @@ export function nearestEdgeByMid(
   return best >= 0 ? best : null;
 }
 
+/** Index of the edge whose polyline passes nearest `point`, or null when none
+ *  comes within `tol`. This is how the engine resolves `by:"nearest"`, so it is
+ *  the fallback for a selector whose point is not its edge's midpoint: one
+ *  written by hand or by MCP, or one picked anywhere along a closed loop. */
+export function nearestEdgeByCurve(
+  edges: { points: Vec3[] }[],
+  point: Vec3,
+  tol: number,
+): number | null {
+  let best = -1;
+  let bestD = tol * tol;
+  for (let i = 0; i < edges.length; i++) {
+    const pts = edges[i]?.points;
+    if (!pts?.length) continue;
+    const n = Math.max(1, pts.length - 1);
+    for (let k = 0; k < n; k++) {
+      const dd = segD2(pts[k]!, pts[Math.min(k + 1, pts.length - 1)]!, point);
+      if (dd < bestD) { bestD = dd; best = i; }
+    }
+  }
+  return best >= 0 ? best : null;
+}
+
+function segD2(a: Vec3, b: Vec3, p: Vec3): number {
+  const ab: Vec3 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+  const len2 = ab[0] * ab[0] + ab[1] * ab[1] + ab[2] * ab[2];
+  const t = len2 > 0
+    ? Math.max(0, Math.min(1, ((p[0] - a[0]) * ab[0] + (p[1] - a[1]) * ab[1] + (p[2] - a[2]) * ab[2]) / len2))
+    : 0;
+  return d2([a[0] + ab[0] * t, a[1] + ab[1] * t, a[2] + ab[2] * t], p);
+}
+
 /** Toggle membership of a nearest-point edge selector in a selector list:
  *  a selector whose point lies within `tol` of `mid` is removed; otherwise a
  *  fresh `{kind:"edge", by:"nearest", point: mid}` is appended. Returns a new

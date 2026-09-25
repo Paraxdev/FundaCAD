@@ -71,6 +71,8 @@ import {
   type ValueBounds,
 } from "./edgeDragMath";
 import { CanvasGesture } from "./canvasGesture";
+import { blendEditCommit } from "./blendEdit";
+import { pointOnEdge } from "./edgeNudge";
 
 type Phase = "pick" | "drag";
 type Kind = EdgeTreatment;
@@ -89,7 +91,7 @@ const GHOST_ERROR = 0xe23b3b;
  *  trip, so a fast drag draws instead of queuing a rebuild per pixel moved. */
 const PREVIEW_DEBOUNCE_MS = 150;
 
-/** One member edge: its selector, the sharp-model polyline snapshot it was
+/** One member edge: its selectors, the sharp-model polyline snapshot it was
  *  matched to (for drawing + screen-space hit tests), its ghost line, and the
  *  tangent-chain gesture it arrived with (chain members select/deselect as one
  *  unit, recorded at add time because the preview may consume the edges,
@@ -97,7 +99,9 @@ const PREVIEW_DEBOUNCE_MS = 150;
 interface GhostEdge {
   /** stable per-member id, the key the member panel removes a row by */
   id: number;
-  sel: Selector;
+  /** Usually one. A saved feature can name the same edge twice, e.g. two
+   *  points on one closed loop; both are kept so the commit writes them back. */
+  sels: Selector[];
   mid: Vec3;
   points: Vec3[];
   line: Line2;
@@ -149,10 +153,11 @@ export class EdgeFeatureTool {
    *  (store.bareParamRef): the handle stays live, but commit writes the drag's
    *  value into this parameter instead of the field, which stays bound to it. */
   private paramRef: string | null = null;
-  /** questionOf() of the feature as opened, only kept while paramRef is set:
-   *  what commit compares against to tell "only the value moved" from "edges
-   *  or options changed too", see commit(). */
-  private originalQuestion: string | null = null;
+  /** The feature as committed, and what buildFeature() made of it the moment
+   *  the edit opened. Commit takes from the tool only what differs from
+   *  `opened`, see features/blendEdit.ts. */
+  private original: Feature | null = null;
+  private opened: Feature | null = null;
 
   private gizmo: THREE.Group | null = null;
   private handle: DragHandle | null = null;
@@ -317,7 +322,7 @@ export class EdgeFeatureTool {
    *  prompt. Cheap enough to run on every change of value. */
   private refreshRefusal() {
     const reason = this.refusedNow && this.refusal
-      ? blendRefusalReason(this.kind, this.currentSelectors().length, this.refusal)
+      ? blendRefusalReason(this.kind, this.memberCount(), this.refusal)
       : null;
     if (reason === this.refusalShown) return;
     this.refusalShown = reason;
@@ -422,8 +427,8 @@ export class EdgeFeatureTool {
   /** Re-open a committed fillet/chamfer for editing: the model rolls back to
    *  just before the feature (its member edges exist again), the saved edges
    *  show as orange ghost lines (click one to remove it, click any other edge
-   *  to add it), the saved value seeds the input, and commit REPLACES the
-   *  feature in place (same id, one undo step). Returns false when this
+   *  to add it), the saved value seeds the input, and commit writes back only what
+   *  changed (same id, name and binding, one undo step). Returns false when this
    *  feature can't be tool-edited (parameter-driven value, or selectors
    *  without a point), the caller falls back to the value rows. */
   startEdit(featureId: string, onDone: (id: string | null) => void): boolean {
@@ -449,7 +454,8 @@ export class EdgeFeatureTool {
     this.tangent = null;
     this.editId = featureId;
     this.paramRef = bareRef;
-    this.originalQuestion = bareRef ? this.questionOf(f) : null;
+    this.original = structuredClone(f) as Feature;
+    this.opened = null;
     this.previewId = featureId; // keep the SAME id through preview and commit
     this.positiveKind = f.type; // the saved treatment keeps the arrow's own side
     this.value = value;
@@ -486,8 +492,12 @@ export class EdgeFeatureTool {
     this.unsubBuild = this.store.onBuild((s) => {
       if (s.building || !s.result) return;
       if (this.awaitingRollback && rollbackSels) {
+        // A build already in flight when the edit opened lands first, and it is
+        // the full model, where the blend has already consumed its own edges.
+        if (!s.previewBuilt) return;
         this.awaitingRollback = false;
         this.seedGhosts(rollbackSels);
+        this.opened = this.buildFeature();
         this.enterEditUI();
         this.refreshGhost();
         this.pushPreview();
@@ -524,17 +534,18 @@ export class EdgeFeatureTool {
   }
 
   /** Match each saved selector to a rendered sharp edge and build its ghost.
-   *  Selectors that don't match (stale midpoint) are kept for commit but have
-   *  no visual, the engine still resolves them by nearest at build time. */
+   *  Selectors that don't match are kept for commit but have no visual, the
+   *  engine still resolves them by nearest at build time. */
   private seedGhosts(sels: Selector[]) {
     for (const sel of sels) {
       if (!("point" in sel)) {
         this.unmatchedSels.push(sel);
         continue;
       }
-      const mid = sel.point as Vec3;
-      const line = this.viewport.edgeLineByMid(mid);
-      if (line) this.addGhost(sel, line.points as Vec3[]);
+      const line = this.viewport.edgeLineForSelector(sel.point as Vec3, sel.body);
+      const same = line && this.ghosts.find((g) => g.points === line.points);
+      if (same) same.sels.push(sel);
+      else if (line) this.addGhost(sel, line.points as Vec3[]);
       else this.unmatchedSels.push(sel);
     }
   }
@@ -561,7 +572,7 @@ export class EdgeFeatureTool {
     const line = new Line2(geo, mat);
     line.renderOrder = 998;
     this.viewport.addToScene(line);
-    this.ghosts.push({ id: ++this.memberSeq, sel, mid, points, line, chain: chain ?? ++this.chainCounter });
+    this.ghosts.push({ id: ++this.memberSeq, sels: [sel], mid, points, line, chain: chain ?? ++this.chainCounter });
   }
 
   // --- member panel (ui/FilletMembers.vue) ----------------------------------
@@ -740,8 +751,7 @@ export class EdgeFeatureTool {
   /** Mount the drag-phase UI (gizmo + value input) anchored to the current
    *  member set, seeded with the saved value. */
   private enterEditUI() {
-    const sels = this.currentSelectors();
-    this.anchor.copy(this.anchorFromSelectors(sels));
+    this.placeOnMembers();
     this.axis.copy(this.computeAxis());
     this.quat.setFromUnitVectors(Y_AXIS, this.axis);
     // Reached only once the rollback build has landed, so the displayed model is
@@ -821,7 +831,13 @@ export class EdgeFeatureTool {
 
   /** The full member selector set (ghosted + unmatched saved selectors). */
   private currentSelectors(): Selector[] {
-    return [...this.unmatchedSels, ...this.ghosts.map((g) => g.sel)];
+    return [...this.unmatchedSels, ...this.ghosts.flatMap((g) => g.sels)];
+  }
+
+  /** Distinct member edges, what the prompt counts: two selectors on one edge
+   *  are one edge. */
+  private memberCount(): number {
+    return this.unmatchedSels.length + this.ghosts.length;
   }
 
   /** Fillet ↔ chamfer without moving the pointer, what Tab does.
@@ -876,7 +892,7 @@ export class EdgeFeatureTool {
    *  replaced had already drifted apart on which keys they bothered to
    *  mention. */
   private promptForPhase() {
-    const n = this.currentSelectors().length;
+    const n = this.memberCount();
     if (!n) {
       setPrompt("Click an edge · Esc");
       return;
@@ -949,7 +965,7 @@ export class EdgeFeatureTool {
       return;
     }
     this.viewport.setBlendGhost(
-      this.ghosts.map((g) => ({ body: g.sel.body, points: g.points })),
+      this.ghosts.map((g) => ({ body: g.sels[0]?.body, points: g.points })),
       this.size(),
       this.kind,
     );
@@ -1317,7 +1333,8 @@ export class EdgeFeatureTool {
   private afterMembershipChange() {
     const sels = this.currentSelectors();
     if (sels.length) {
-      this.anchor.copy(this.anchorFromSelectors(sels));
+      if (this.editId) this.placeOnMembers();
+      else this.anchor.copy(this.anchorFromSelectors(sels));
       this.axis.copy(this.computeAxis());
       this.quat.setFromUnitVectors(Y_AXIS, this.axis);
     }
@@ -1382,18 +1399,20 @@ export class EdgeFeatureTool {
     if (decision.action === "cancel") return this.cancel();
     this.setValue(decision.value);
     const feature = this.buildFeature();
-    if (this.editId) {
-      const id = this.editId;
-      this.store.endEditPreview(false); // replaceFeature/setParam trigger the rebuild
-      if (this.paramRef) {
-        // The field stays bound to this parameter (its own literal is about to
-        // be overwritten by recompute anyway), so only touch replaceFeature
-        // when something ELSE about the feature (edges, profile…) changed.
-        if (this.questionOf(feature) !== this.originalQuestion) this.store.replaceFeature(id, feature);
-        this.store.setParam(this.paramRef, this.size());
-      } else {
-        this.store.replaceFeature(id, feature);
+    if (this.editId && this.original && this.opened) {
+      const edit = blendEditCommit({
+        original: this.original,
+        opened: this.opened,
+        built: feature,
+        paramRef: this.paramRef,
+      });
+      const changed = edit.feature !== null || edit.param !== null;
+      this.store.endEditPreview(!changed); // the commit's own mutate rebuilds
+      if (changed && this.store.commitFeatureEdit(this.editId, edit.feature, edit.param)) {
+        this.store.endEditPreview();
       }
+    } else if (this.editId) {
+      this.store.endEditPreview();
     } else {
       this.store.setPreview(null);
       this.store.addFeature(feature);
@@ -1434,7 +1453,8 @@ export class EdgeFeatureTool {
     this.unsubBuild = null;
     this.editId = null;
     this.paramRef = null;
-    this.originalQuestion = null;
+    this.original = null;
+    this.opened = null;
     this.awaitingRollback = false;
     this.viewport.emphasizeEdges(false);
     this.viewport.clearHover();
@@ -1457,6 +1477,24 @@ export class EdgeFeatureTool {
     this.handle.dispose();
     this.gizmo = null;
     this.handle = null;
+  }
+
+  /** Edit mode: stand the handle on the first member edge, at the point its
+   *  saved selector names, with that edge's tangent. Averaging the selector
+   *  points instead can land in mid air, two picks on opposite sides of one
+   *  loop average to its centre. */
+  private placeOnMembers() {
+    const g = this.ghosts[0];
+    const first = g?.sels[0];
+    const at = first && "point" in first ? (first.point as Vec3) : g?.mid;
+    const place = g && at ? pointOnEdge(g.points, at) : null;
+    if (!place) {
+      this.anchor.copy(this.anchorFromSelectors(this.currentSelectors()));
+      this.tangent = null;
+      return;
+    }
+    this.anchor.set(...place.anchor);
+    this.tangent = place.tangent ? new THREE.Vector3(...place.tangent) : null;
   }
 
   /** Anchor for a pre-selection: average the selector points (nearest selectors
