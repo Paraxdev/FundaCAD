@@ -7,6 +7,7 @@
 // fields are shown/parsed in the user's display unit, angles always in degrees.
 
 import { iconElement } from "../ui/icons";
+import { isHistoryKey } from "../ui/focus";
 import { onPreviewError } from "../ui/previewError";
 import { getUnit, parseField } from "../ui/units";
 import { commonUnits, toUnit, tryParseMeasure, unitById, type UnitDef } from "../ui/measure";
@@ -352,6 +353,14 @@ export class DimInput {
   }
 
   private onKey(e: KeyboardEvent, field: Field) {
+    if (isHistoryKey(e)) {
+      // Undo and redo are the document's, not this box's text: the tool is put
+      // away and the key goes on to the window keymap. Stopped here, a box a
+      // tool had focused swallowed every Ctrl+Z and Ctrl+Y after it (FI-2).
+      this.onCancel?.();
+      field.input.blur();
+      return;
+    }
     if (e.key === "Tab") {
       e.preventDefault();
       field.userDriven = true; // Tab locks the current field

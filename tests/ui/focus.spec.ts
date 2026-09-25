@@ -1,10 +1,9 @@
-// FI-2: undo/redo (or any global shortcut) must not stay swallowed forever by
-// a field that lost its reason to hold focus, hidden or removed but still
-// document.activeElement for one more frame.
+// FI-2: undo/redo (or any global shortcut) must not stay swallowed by a field
+// that no longer holds the typing: hidden, removed, or put away mid-keystroke.
 import { describe, expect, it, afterEach } from "vitest";
-import { isLiveFocusTarget, releaseStaleFocus } from "../../src/ui/focus";
+import { isLiveFocusTarget } from "../../src/ui/focus";
 
-describe("isLiveFocusTarget / releaseStaleFocus", () => {
+describe("isLiveFocusTarget", () => {
   afterEach(() => {
     document.body.innerHTML = "";
     (document.activeElement as HTMLElement | null)?.blur?.();
@@ -15,18 +14,22 @@ describe("isLiveFocusTarget / releaseStaleFocus", () => {
     document.body.appendChild(input);
     input.focus();
     expect(isLiveFocusTarget(input)).toBe(true);
-    releaseStaleFocus();
-    expect(document.activeElement).toBe(input); // untouched
   });
 
-  it("a hidden (display:none) but still-focused input is not live, and gets released", () => {
+  it("an input that let go of focus is not live", () => {
+    const input = document.createElement("input");
+    document.body.appendChild(input);
+    input.focus();
+    input.blur();
+    expect(isLiveFocusTarget(input)).toBe(false);
+  });
+
+  it("a hidden (display:none) but still-focused input is not live", () => {
     const input = document.createElement("input");
     document.body.appendChild(input);
     input.focus();
     input.style.display = "none";
     expect(isLiveFocusTarget(input)).toBe(false);
-    releaseStaleFocus();
-    expect(document.activeElement).not.toBe(input);
   });
 
   it("visibility:hidden is treated the same as display:none", () => {
@@ -43,12 +46,5 @@ describe("isLiveFocusTarget / releaseStaleFocus", () => {
     input.focus();
     input.remove();
     expect(isLiveFocusTarget(input)).toBe(false);
-  });
-
-  it("releaseStaleFocus is a no-op with nothing focused, or focus already on body", () => {
-    expect(() => releaseStaleFocus()).not.toThrow();
-    document.body.focus();
-    releaseStaleFocus();
-    expect(document.activeElement).toBe(document.body);
   });
 });

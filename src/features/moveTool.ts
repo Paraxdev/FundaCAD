@@ -243,7 +243,7 @@ export class MoveTool {
         { name: "turn", label: "Angle", kind: "angle" },
         ...(target.handles.cubes.length ? [{ name: "size", label: "Scale", kind: "count" as const }] : []),
       ],
-      () => this.commit(),
+      () => this.settleTyped(),
       () => this.cancel(),
       target.canCopy
         ? {
@@ -510,11 +510,21 @@ export class MoveTool {
    *  one. Re-opening against that would put the gizmo back where the body used
    *  to be and the next drag would double the move. */
   private settleDrag() {
+    this.commitAndReopen(true);
+  }
+
+  /** Enter in the value box. Re-opens like a drag once something was written,
+   *  and closes when nothing was. */
+  private settleTyped() {
+    this.commitAndReopen(false);
+  }
+
+  private commitAndReopen(evenUnchanged: boolean) {
     const target = this.target;
     const done = this.onDone;
     const through = this.onClickThrough;
     const res = this.commit();
-    if (!target) return;
+    if (!target || (!res && !evenUnchanged)) return;
     // Asked only once the rebuild has landed, so an owner that has closed by
     // then can answer null.
     const reopen = () => {
