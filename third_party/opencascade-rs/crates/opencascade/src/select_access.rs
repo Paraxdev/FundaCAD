@@ -2,6 +2,7 @@
 //! build123d's order and the per-entity measurements its fingerprints use.
 
 use crate::primitives::Shape;
+use opencascade_sys::face_query as fq;
 use opencascade_sys::select_access as ffi;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -110,6 +111,18 @@ pub enum SurfaceType {
 }
 
 impl SurfaceType {
+    fn from_code(code: i32) -> SurfaceType {
+        match code {
+            0 => SurfaceType::Plane,
+            1 => SurfaceType::Cylinder,
+            2 => SurfaceType::Cone,
+            3 => SurfaceType::Sphere,
+            4 => SurfaceType::Torus,
+            5 => SurfaceType::Bspline,
+            _ => SurfaceType::Other,
+        }
+    }
+
     pub fn name(self) -> &'static str {
         match self {
             SurfaceType::Plane => "plane",
@@ -121,6 +134,22 @@ impl SurfaceType {
             SurfaceType::Other => "other",
         }
     }
+}
+
+/// The surface type alone, what `face_probe` reports without measuring.
+pub fn surface_type(face: &Shape) -> SurfaceType {
+    SurfaceType::from_code(fq::FQ_surface_code(&face.inner))
+}
+
+/// The same TShape and orientation with the placement dropped.
+pub fn unlocated(shape: &Shape) -> Shape {
+    Shape { inner: fq::FQ_unlocated(&shape.inner) }
+}
+
+/// The placement as a row-major 3x4 matrix, `None` for the identity.
+pub fn placement(shape: &Shape) -> Option<[f64; 12]> {
+    let mut m = [0.0; 12];
+    matches!(fq::FQ_location(&shape.inner, &mut m), Ok(true)).then_some(m)
 }
 
 /// A face as build123d measures it; `None` where the Python call raises.
@@ -146,15 +175,7 @@ pub fn face_probe(face: &Shape) -> Option<FaceProbe> {
         centre: flag(0).then(|| v3(&o[1..4])),
         normal: flag(4).then(|| v3(&o[5..8])),
         area: flag(8).then_some(o[9]),
-        surface: match o[10] as i32 {
-            0 => SurfaceType::Plane,
-            1 => SurfaceType::Cylinder,
-            2 => SurfaceType::Cone,
-            3 => SurfaceType::Sphere,
-            4 => SurfaceType::Torus,
-            5 => SurfaceType::Bspline,
-            _ => SurfaceType::Other,
-        },
+        surface: SurfaceType::from_code(o[10] as i32),
         radius: flag(11).then_some(o[12]),
     })
 }

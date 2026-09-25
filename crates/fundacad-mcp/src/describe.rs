@@ -100,6 +100,12 @@ fn index(v: &Value) -> i64 {
 /// line: "6 plane" is a box, "1 cylinder, 2 plane" is a rod, and anything with
 /// a bspline in it came from a loft or an import.
 pub fn surface_census(body: &Value) -> Vec<(String, usize)> {
+    if let Some(Value::Array(rows)) = body.get("surfaces") {
+        return rows
+            .iter()
+            .filter_map(|r| Some((r.get(0)?.as_str()?.to_string(), r.get(1)?.as_u64()? as usize)))
+            .collect();
+    }
     let mut counts: Vec<(String, usize)> = Vec::new();
     for f in list_of(body, "faces") {
         let name = match f.get("surface") {
@@ -155,12 +161,8 @@ pub fn body_line(body: &Value) -> String {
     bits.join(" | ")
 }
 
-fn few(items: &[&Value], prefix: char) -> String {
-    let shown: Vec<String> = items
-        .iter()
-        .take(6)
-        .map(|e| format!("{prefix}{}", index(e)))
-        .collect();
+fn few(items: &[i64], prefix: char) -> String {
+    let shown: Vec<String> = items.iter().take(6).map(|i| format!("{prefix}{i}")).collect();
     format!(
         "{}{}",
         shown.join(", "),
@@ -173,13 +175,19 @@ fn few(items: &[&Value], prefix: char) -> String {
 /// happen.
 pub fn warnings_for(body: &Value) -> Vec<String> {
     let mut out = Vec::new();
-    let flagged = |key: &str, list: &str| -> Vec<&Value> {
+    // A summary carries each flag as a list of indices, a detailed report
+    // as a key on each face or edge.
+    let flagged = |key: &str, list: &str, summary: &str| -> Vec<i64> {
+        if let Some(Value::Array(ix)) = body.get(summary) {
+            return ix.iter().filter_map(Value::as_i64).collect();
+        }
         list_of(body, list)
             .iter()
             .filter(|e| e.get(key).and_then(Value::as_bool).unwrap_or(false))
+            .map(index)
             .collect()
     };
-    let seams = flagged("seam", "edges");
+    let seams = flagged("seam", "edges", "seams");
     if !seams.is_empty() {
         out.push(format!(
             "{} seam edge(s) ({}), a fillet or chamfer on one of these will be refused: both \
@@ -188,7 +196,7 @@ pub fn warnings_for(body: &Value) -> Vec<String> {
             few(&seams, 'E')
         ));
     }
-    let wrapping = flagged("wraps", "faces");
+    let wrapping = flagged("wraps", "faces", "wraps");
     if !wrapping.is_empty() {
         out.push(format!(
             "{} face(s) wrap all the way round ({}), press/pull thickens these along the \
@@ -197,7 +205,7 @@ pub fn warnings_for(body: &Value) -> Vec<String> {
             few(&wrapping, 'F')
         ));
     }
-    let open = flagged("openBoundary", "edges");
+    let open = flagged("openBoundary", "edges", "openEdges");
     if !open.is_empty() {
         out.push(format!(
             "{} edge(s) bound only ONE face, this body is a surface, not a closed solid",

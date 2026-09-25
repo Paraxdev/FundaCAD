@@ -2,7 +2,8 @@
 //! op (the Python engine's `inspect_model.py`, server.py `_inspect_job`) and the
 //! `interference` op (server.py `_interference_job`, `_min_distance`).
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use fundacad_core::CadDocument;
 use fundacad_engine::error_result;
@@ -64,24 +65,6 @@ fn mass(shape: &Shape, kind: i32) -> Option<(f64, [f64; 3])> {
     let mut o = [0.0; 4];
     fq::FQ_mass(shape.raw(), kind, &mut o).ok()?;
     Some((o[0], [o[1], o[2], o[3]]))
-}
-
-/// `_mass_props`: volume, area and centre of mass, each independently absent.
-fn mass_props(shape: &Shape) -> (Value, Value, Value) {
-    let (mut vol, mut area, mut com) = (Value::Null, Value::Null, Value::Null);
-    if let Some((v, c)) = mass(shape, 3) {
-        if v.abs() > 1e-12 {
-            vol = r6(v.abs());
-            com = r3(c);
-        }
-    }
-    if let Some((a, c)) = mass(shape, 2) {
-        area = r6(a);
-        if com.is_null() {
-            com = r3(c);
-        }
-    }
-    (vol, area, com)
 }
 
 /// `_axis_of`: the axis of a cylinder, cone, torus or surface of revolution.
@@ -174,6 +157,270 @@ pub struct InspectBody<'a> {
     pub shape: Option<&'a Shape>,
 }
 
+/// How much `inspect_bodies` reports per body.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Level {
+    /// Sizes, mass properties and counts.
+    Plain,
+    /// Plain, and the surface census and the seam, wrapping and open lists a
+    /// one line summary reads, without measuring any face or edge.
+    Summary,
+    /// Plain, and every face and edge with its selector.
+    Detail,
+}
+
+/// What inspect reports of a shape that its placement does not change.
+struct Local {
+    volume: Option<(f64, [f64; 3])>,
+    area: Option<(f64, [f64; 3])>,
+    bbox: Option<[f64; 6]>,
+    faces: usize,
+    edges: usize,
+    solids: usize,
+    surfaces: Vec<(&'static str, usize)>,
+    wraps: Vec<usize>,
+    seams: Vec<usize>,
+    open: Vec<usize>,
+}
+
+fn union(boxes: impl IntoIterator<Item = Option<[f64; 6]>>) -> Option<[f64; 6]> {
+    boxes.into_iter().flatten().reduce(|a, b| {
+        [a[0].min(b[0]), a[1].min(b[1]), a[2].min(b[2]), a[3].max(b[3]), a[4].max(b[4]), a[5].max(b[5])]
+    })
+}
+
+fn face_box(face: &Shape) -> Option<[f64; 6]> {
+    let mut o = [0.0; 6];
+    matches!(fq::FQ_face_bbox(face.raw(), &mut o), Ok(true)).then_some(o)
+}
+
+/// `bbox` face by face on the engine's threads. AddOptimal is the union of the
+/// same per face boxes, so the result is the same to the bit.
+fn optimal_bbox(shape: &Shape, faces: &[Shape]) -> Option<[f64; 6]> {
+    if faces.len() < 2 || fq::FQ_free_parts(shape.raw()) {
+        let mut o = [0.0; 6];
+        return matches!(fq::FQ_bbox(shape.raw(), true, &mut o), Ok(true)).then_some(o);
+    }
+    let work = crate::par::Shared(faces);
+    union(crate::par::map_indexed(faces.len(), move |k| face_box(&work.get()[k])))
+}
+
+fn measure(shape: &Shape) -> Local {
+    let faces = sa::items(shape, ItemKind::Face);
+    let edges = sa::items(shape, ItemKind::Edge);
+    let mut surfaces: Vec<(&'static str, usize)> = Vec::new();
+    let mut wraps = Vec::new();
+    for (k, f) in faces.iter().enumerate() {
+        let name = sa::surface_type(f).name();
+        match surfaces.iter_mut().find(|(n, _)| *n == name) {
+            Some((_, c)) => *c += 1,
+            None => surfaces.push((name, 1)),
+        }
+        if face_wraps(f) {
+            wraps.push(k);
+        }
+    }
+    surfaces.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(b.0)));
+    let adj = FaceAdjacency::new(shape);
+    let (mut seams, mut open) = (Vec::new(), Vec::new());
+    for (k, e) in edges.iter().enumerate() {
+        let on = adj.faces_of_edge(e);
+        if on.len() == 2 && on[0] == on[1] {
+            seams.push(k);
+        } else if on.len() < 2 {
+            open.push(k);
+        }
+    }
+    Local {
+        volume: mass(shape, 3),
+        area: mass(shape, 2),
+        bbox: optimal_bbox(shape, &faces),
+        faces: faces.len(),
+        edges: edges.len(),
+        solids: shape.shape_map(ShapeType::Solid).len(),
+        surfaces,
+        wraps,
+        seams,
+        open,
+    }
+}
+
+type LocalKey = (u64, i32);
+
+struct Cached {
+    // Holds the TShape, so its address cannot be reused while it is a key.
+    _keep: Shape,
+    local: Arc<Local>,
+    /// Boxes under placements no axis swap reaches, by the matrix's bits.
+    placed: HashMap<[u64; 12], Option<[f64; 6]>>,
+    used: u64,
+}
+
+#[derive(Default)]
+struct LocalCache {
+    calls: u64,
+    entries: HashMap<LocalKey, Cached>,
+}
+
+/// Calls an entry survives unused, so a few one body inspects between two
+/// whole document ones do not throw the document's measurements away.
+const KEEP_FOR: u64 = 16;
+
+fn local_cache() -> &'static Mutex<LocalCache> {
+    static CACHE: OnceLock<Mutex<LocalCache>> = OnceLock::new();
+    CACHE.get_or_init(Mutex::default)
+}
+
+fn local_key(shape: &Shape) -> LocalKey {
+    (fq::FQ_tshape(shape.raw()), fq::FQ_orientation(shape.raw()))
+}
+
+/// Each shape's [`Local`], measured once per TShape: an assembly places one
+/// screw many times, and a measurement outlives the call for the next one.
+fn locals_of(shapes: &[Option<&Shape>]) -> Vec<Option<Arc<Local>>> {
+    let keys: Vec<Option<LocalKey>> = shapes.iter().map(|s| s.map(local_key)).collect();
+    let mut missing: Vec<(LocalKey, Shape)> = Vec::new();
+    {
+        let cache = local_cache().lock().unwrap_or_else(|p| p.into_inner());
+        let mut queued = HashSet::new();
+        for (k, s) in keys.iter().zip(shapes) {
+            if let (Some(k), Some(s)) = (k, s) {
+                if !cache.entries.contains_key(k) && queued.insert(*k) {
+                    missing.push((*k, sa::unlocated(s)));
+                }
+            }
+        }
+    }
+    let reps: Vec<&Shape> = missing.iter().map(|(_, s)| s).collect();
+    let groups = crate::par::share_groups(&reps);
+    let work = crate::par::Shared((&reps, crate::heartbeat::current()));
+    let measured = crate::par::map_grouped(&groups, move |i| {
+        let (reps, beat) = work.get();
+        if let Some(b) = beat {
+            b();
+        }
+        measure(reps[i])
+    });
+    let mut cache = local_cache().lock().unwrap_or_else(|p| p.into_inner());
+    cache.calls += 1;
+    let now = cache.calls;
+    for ((k, s), (_, local)) in missing.into_iter().zip(measured) {
+        cache.entries.insert(k, Cached { _keep: s, local: Arc::new(local), placed: HashMap::new(), used: now });
+    }
+    let out = keys
+        .iter()
+        .map(|k| {
+            let e = cache.entries.get_mut(k.as_ref()?)?;
+            e.used = now;
+            Some(e.local.clone())
+        })
+        .collect();
+    cache.entries.retain(|_, e| e.used + KEEP_FOR > now);
+    out
+}
+
+/// `b` placed by `m` when `m` only swaps and flips axes and translates, which
+/// carries an axis aligned box onto the placed shape's own.
+fn permuted_box(m: &[f64; 12], b: &[f64; 6]) -> Option<[f64; 6]> {
+    let mut out = [0.0; 6];
+    let mut taken = [false; 3];
+    for r in 0..3 {
+        let row = &m[r * 4..r * 4 + 3];
+        let j = (0..3).find(|&j| (row[j].abs() - 1.0).abs() <= 1e-12)?;
+        if taken[j] || (0..3).any(|k| k != j && row[k].abs() > 1e-12) {
+            return None;
+        }
+        taken[j] = true;
+        let t = m[r * 4 + 3];
+        (out[r], out[r + 3]) = if row[j] > 0.0 { (t + b[j], t + b[j + 3]) } else { (t - b[j + 3], t - b[j]) };
+    }
+    Some(out)
+}
+
+fn place_point(m: &Option<[f64; 12]>, p: [f64; 3]) -> [f64; 3] {
+    match m {
+        None => p,
+        Some(m) => std::array::from_fn(|r| m[r * 4] * p[0] + m[r * 4 + 1] * p[1] + m[r * 4 + 2] * p[2] + m[r * 4 + 3]),
+    }
+}
+
+/// Each placed shape's box: its TShape's own box carried over where the
+/// placement allows it exactly, measured again where it does not.
+fn placed_boxes(
+    shapes: &[Option<&Shape>],
+    locals: &[Option<Arc<Local>>],
+    placements: &[Option<[f64; 12]>],
+) -> Vec<Option<[f64; 6]>> {
+    let bits = |m: &[f64; 12]| m.map(f64::to_bits);
+    let mut out: Vec<Option<[f64; 6]>> = Vec::with_capacity(shapes.len());
+    let mut again: Vec<usize> = Vec::new();
+    {
+        let cache = local_cache().lock().unwrap_or_else(|p| p.into_inner());
+        for (i, (l, m)) in locals.iter().zip(placements).enumerate() {
+            let bb = l.as_ref().and_then(|l| l.bbox);
+            out.push(match (m, bb) {
+                (_, None) => None,
+                (None, b) => b,
+                (Some(m), Some(b)) => permuted_box(m, &b).or_else(|| {
+                    let known = shapes[i]
+                        .and_then(|s| cache.entries.get(&local_key(s)))
+                        .and_then(|e| e.placed.get(&bits(m)));
+                    if known.is_none() {
+                        again.push(i);
+                    }
+                    known.copied().flatten()
+                }),
+            });
+        }
+    }
+    let shapes_again: Vec<&Shape> = again.iter().filter_map(|&i| shapes[i]).collect();
+    let groups = crate::par::share_groups(&shapes_again);
+    let work = crate::par::Shared(&shapes_again);
+    let measured = crate::par::map_grouped(&groups, move |k| {
+        let s = work.get()[k];
+        optimal_bbox(s, &sa::items(s, ItemKind::Face))
+    });
+    let mut cache = local_cache().lock().unwrap_or_else(|p| p.into_inner());
+    for (k, b) in measured {
+        let i = again[k];
+        out[i] = b;
+        if let (Some(s), Some(m)) = (shapes[i], &placements[i]) {
+            if let Some(e) = cache.entries.get_mut(&local_key(s)) {
+                e.placed.insert(bits(m), b);
+            }
+        }
+    }
+    out
+}
+
+type Lists = (Vec<Value>, Vec<Value>);
+
+fn detail_lists(comp: &Shape, body_id: &Value, max_faces: usize, max_edges: usize) -> builder::FResult<Lists> {
+    let faces = sa::items(comp, ItemKind::Face);
+    let edges = sa::items(comp, ItemKind::Edge);
+    let adj = FaceAdjacency::new(comp);
+    let mut renum_map = HashMap::new();
+    for (k, f) in faces.iter().enumerate() {
+        renum_map.insert(adj.index_of(f), k);
+    }
+    let renum = |j: usize| renum_map.get(&j).copied();
+    let fs = &faces[..faces.len().min(max_faces)];
+    let es = &edges[..edges.len().min(max_edges)];
+    let face_list = fs
+        .iter()
+        .enumerate()
+        .map(|(k, f)| face_entry(k, f, &adj, &renum, body_id))
+        .collect::<Result<Vec<_>, _>>()?;
+    let fps = edge_fingerprints(es, comp)?;
+    let edge_list = es
+        .iter()
+        .zip(fps)
+        .enumerate()
+        .map(|(k, (e, fp))| edge_entry(k, e, fp, &adj, &renum, body_id))
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok((face_list, edge_list))
+}
+
 /// `inspect_bodies`.
 pub fn inspect_bodies(
     bodies: &[InspectBody<'_>],
@@ -181,15 +428,60 @@ pub fn inspect_bodies(
     max_faces: usize,
     max_edges: usize,
 ) -> builder::FResult<Vec<Value>> {
-    let mut out = Vec::new();
-    for b in bodies {
-        crate::heartbeat::beat();
-        let Some(comp) = b.shape else {
+    inspect_bodies_at(bodies, if detail { Level::Detail } else { Level::Plain }, max_faces, max_edges)
+}
+
+pub fn inspect_bodies_at(
+    bodies: &[InspectBody<'_>],
+    level: Level,
+    max_faces: usize,
+    max_edges: usize,
+) -> builder::FResult<Vec<Value>> {
+    let shapes: Vec<Option<&Shape>> = bodies.iter().map(|b| b.shape).collect();
+    let locals = crate::bench::phase("inspect_locals", || locals_of(&shapes));
+    let placements: Vec<Option<[f64; 12]>> = shapes.iter().map(|s| s.and_then(sa::placement)).collect();
+    let boxes = crate::bench::phase("inspect_boxes", || placed_boxes(&shapes, &locals, &placements));
+    let mut lists: Vec<Option<builder::FResult<Lists>>> = (0..bodies.len()).map(|_| None).collect();
+    if level == Level::Detail {
+        let live: Vec<usize> = (0..bodies.len()).filter(|&i| shapes[i].is_some()).collect();
+        let live_shapes: Vec<&Shape> = live.iter().filter_map(|&i| shapes[i]).collect();
+        let groups = crate::par::share_groups(&live_shapes);
+        let work = crate::par::Shared((bodies, &live, crate::heartbeat::current()));
+        let found = crate::bench::phase("inspect_detail", || {
+            crate::par::map_grouped(&groups, move |k| {
+                let (bodies, live, beat) = work.get();
+                if let Some(b) = beat {
+                    b();
+                }
+                let b = &bodies[live[k]];
+                b.shape.map(|s| detail_lists(s, &b.id, max_faces, max_edges))
+            })
+        });
+        for (k, l) in found {
+            lists[live[k]] = l;
+        }
+    }
+    let mut out = Vec::with_capacity(bodies.len());
+    for (i, b) in bodies.iter().enumerate() {
+        let Some(local) = &locals[i] else {
             out.push(json!({"id": b.id, "name": b.name, "empty": true}));
             continue;
         };
-        let (vol, area, com) = mass_props(comp);
-        let bb = bbox(comp);
+        let m = &placements[i];
+        let (mut vol, mut area, mut com) = (Value::Null, Value::Null, Value::Null);
+        if let Some((v, c)) = local.volume {
+            if v.abs() > 1e-12 {
+                vol = r6(v.abs());
+                com = r3(place_point(m, c));
+            }
+        }
+        if let Some((a, c)) = local.area {
+            area = r6(a);
+            if com.is_null() {
+                com = r3(place_point(m, c));
+            }
+        }
+        let bb = boxes[i].unwrap_or([0.0; 6]);
         let mut entry = Map::new();
         entry.insert("id".into(), b.id.clone());
         entry.insert("name".into(), b.name.clone());
@@ -204,39 +496,31 @@ pub fn inspect_bodies(
         entry.insert("volume".into(), vol);
         entry.insert("area".into(), area);
         entry.insert("centerOfMass".into(), com);
-        let faces = sa::items(comp, ItemKind::Face);
-        let edges = sa::items(comp, ItemKind::Edge);
-        entry.insert("faceCount".into(), json!(faces.len()));
-        entry.insert("edgeCount".into(), json!(edges.len()));
-        entry.insert("solidCount".into(), json!(comp.shape_map(ShapeType::Solid).len()));
-        if detail {
-            let adj = FaceAdjacency::new(comp);
-            let mut renum_map = std::collections::HashMap::new();
-            for (k, f) in faces.iter().enumerate() {
-                renum_map.insert(adj.index_of(f), k);
+        entry.insert("faceCount".into(), json!(local.faces));
+        entry.insert("edgeCount".into(), json!(local.edges));
+        entry.insert("solidCount".into(), json!(local.solids));
+        match level {
+            Level::Plain => {}
+            Level::Summary => {
+                let census: Vec<Value> = local.surfaces.iter().map(|(n, c)| json!([n, c])).collect();
+                entry.insert("surfaces".into(), Value::Array(census));
+                entry.insert("wraps".into(), json!(local.wraps));
+                entry.insert("seams".into(), json!(local.seams));
+                entry.insert("openEdges".into(), json!(local.open));
             }
-            let renum = |j: usize| renum_map.get(&j).copied();
-            let fs = &faces[..faces.len().min(max_faces)];
-            let es = &edges[..edges.len().min(max_edges)];
-            let face_list = fs
-                .iter()
-                .enumerate()
-                .map(|(k, f)| face_entry(k, f, &adj, &renum, &b.id))
-                .collect::<Result<Vec<_>, _>>()?;
-            let fps = edge_fingerprints(es, comp)?;
-            let edge_list = es
-                .iter()
-                .zip(fps)
-                .enumerate()
-                .map(|(k, (e, fp))| edge_entry(k, e, fp, &adj, &renum, &b.id))
-                .collect::<Result<Vec<_>, _>>()?;
-            entry.insert("faces".into(), Value::Array(face_list));
-            entry.insert("edges".into(), Value::Array(edge_list));
-            if faces.len() > fs.len() || edges.len() > es.len() {
-                entry.insert(
-                    "truncated".into(),
-                    json!({"faces": faces.len() - fs.len(), "edges": edges.len() - es.len()}),
-                );
+            Level::Detail => {
+                if let Some(l) = lists[i].take() {
+                    let (face_list, edge_list) = l?;
+                    let (nf, ne) = (face_list.len(), edge_list.len());
+                    entry.insert("faces".into(), Value::Array(face_list));
+                    entry.insert("edges".into(), Value::Array(edge_list));
+                    if local.faces > nf || local.edges > ne {
+                        entry.insert(
+                            "truncated".into(),
+                            json!({"faces": local.faces - nf, "edges": local.edges - ne}),
+                        );
+                    }
+                }
             }
         }
         out.push(Value::Object(entry));
@@ -261,6 +545,13 @@ pub fn inspect_result(req: &Map<String, Value>, watch: &dyn Watch) -> JobResult 
         Err(e) => return e,
     };
     let detail = req.get("detail").map_or(true, |v| fundacad_protocol::pyjson::truthy(Some(v)));
+    let level = if detail {
+        Level::Detail
+    } else if fundacad_protocol::pyjson::truthy(req.get("summary")) {
+        Level::Summary
+    } else {
+        Level::Plain
+    };
     let want: Option<HashSet<String>> = req
         .get("bodies")
         .and_then(Value::as_array)
@@ -272,9 +563,9 @@ pub fn inspect_result(req: &Map<String, Value>, watch: &dyn Watch) -> JobResult 
         .filter(|b| want.as_ref().map_or(true, |w| w.contains(&b.id) || w.contains(&b.name)))
         .map(|b| InspectBody { id: json!(b.id), name: json!(b.name), shape: Some(&b.shape) })
         .collect();
-    let bodies = match inspect_bodies(
+    let bodies = match inspect_bodies_at(
         &live,
-        detail,
+        level,
         cap(req, "maxFaces", MAX_FACES),
         cap(req, "maxEdges", MAX_EDGES),
     ) {

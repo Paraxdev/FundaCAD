@@ -1400,9 +1400,18 @@ impl FundaCad {
             let st = self.state.lock().await;
             (st.link.clone(), st.doc.clone())
         };
+        let want_faces = index_set(args.get("faces"));
+        let want_edges = index_set(args.get("edges"));
+        let selectors = args.get("selectors").and_then(Value::as_bool).unwrap_or(false);
+        let detail = args.get("detail").and_then(Value::as_bool).unwrap_or(false)
+            || want_faces.is_some()
+            || want_edges.is_some();
         let mut payload = Map::new();
         payload.insert("document".into(), Value::Object(doc));
-        payload.insert("detail".into(), json!(true));
+        // The summary is counts and flags the engine keeps per body, where
+        // detail measures and fingerprints every face and edge of every body.
+        payload.insert("detail".into(), json!(detail || selectors));
+        payload.insert("summary".into(), json!(true));
         if let Some(body) = args.get("body").and_then(Value::as_str) {
             payload.insert("bodies".into(), json!([body]));
         }
@@ -1420,8 +1429,6 @@ impl FundaCad {
         let failures = feature_failure_lines(
             report.get("errors").and_then(Value::as_array).map_or(&[][..], Vec::as_slice),
         );
-        let want_faces = index_set(args.get("faces"));
-        let want_edges = index_set(args.get("edges"));
         if want_faces.is_some() || want_edges.is_some() {
             if let Some(bodies) = report.get_mut("bodies").and_then(Value::as_array_mut) {
                 for b in bodies {
@@ -1434,15 +1441,8 @@ impl FundaCad {
                 }
             }
         }
-        let detail = args.get("detail").and_then(Value::as_bool).unwrap_or(false)
-            || want_faces.is_some()
-            || want_edges.is_some();
         let mut out = describe::describe(&report, detail);
-        if args
-            .get("selectors")
-            .and_then(Value::as_bool)
-            .unwrap_or(false)
-        {
+        if selectors {
             let mut sel = Map::new();
             for b in report
                 .get("bodies")
