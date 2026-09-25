@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { applyDrivingDimsDirect, drivenBadges, drivingDimFor, upsertDrivingDim } from "../../src/sketch/directDims";
 import type { ResolvedEntity } from "../../src/sketch/snap";
+import { rectCorners } from "../../src/sketch/region";
 import type { SketchConstraint } from "../../src/types";
 
 const circle = (id: string, radius: number): ResolvedEntity => ({ type: "circle", id, radius, x: 0, y: 0 });
@@ -184,10 +185,39 @@ describe("drivenBadges", () => {
 });
 
 describe("applyDrivingDimsDirect on a rectangle", () => {
-  it("resizes the side and holds corner 0 where it was", () => {
-    const ents = [rect("r1", 20, 10)];
-    const cons: SketchConstraint[] = [{ type: "p2pDistance", e1: "r1", p1: 1, e2: "r1", p2: 0, value: 42 }];
+  // Drawn from an origin pin in each direction: the pin lands on a different
+  // corner each time, and that corner is the one that has to stay put.
+  const fromOrigin = (sx: number, sy: number): ResolvedEntity[] => [
+    { type: "rectangle", id: "r1", x: 10 * sx, y: 10 * sy, width: 20, height: 20 },
+    { type: "point", id: "o", x: 0, y: 0, construction: true },
+  ];
+  const fix: SketchConstraint = { type: "fix", e: "o", p: 0 };
+  const originCornerOf = (e: ResolvedEntity) => {
+    const r = e as Extract<ResolvedEntity, { type: "rectangle" }>;
+    return rectCorners(r.x, r.y, r.width, r.height).some((q) => Math.hypot(q.x, q.y) < 1e-9);
+  };
+
+  for (const [name, sx, sy] of [["up-right", 1, 1], ["down-right", 1, -1], ["up-left", -1, 1], ["down-left", -1, -1]] as const) {
+    it(`keeps the pinned corner on the origin when drawn ${name}`, () => {
+      const ents = fromOrigin(sx, sy);
+      const cons: SketchConstraint[] = [
+        fix,
+        { type: "p2pDistance", e1: "r1", p1: 1, e2: "r1", p2: 0, value: 30 },
+        { type: "p2pDistance", e1: "r1", p1: 0, e2: "r1", p2: 3, value: 40 },
+      ];
+      expect(applyDrivingDimsDirect(ents, cons)).toBe(true);
+      expect(ents[0]).toMatchObject({ width: 30, height: 40 });
+      expect(originCornerOf(ents[0]!)).toBe(true);
+      const r = ents[0] as Extract<ResolvedEntity, { type: "rectangle" }>;
+      expect(r.x).toBeCloseTo(15 * sx, 9);
+      expect(r.y).toBeCloseTo(20 * sy, 9);
+    });
+  }
+
+  it("with nothing pinned, holds the second corner of the constraint's own pair", () => {
+    const ents: ResolvedEntity[] = [{ type: "rectangle", id: "r1", x: 50, y: 50, width: 20, height: 10 }];
+    const cons: SketchConstraint[] = [{ type: "p2pDistance", e1: "r1", p1: 0, e2: "r1", p2: 1, value: 42 }];
     expect(applyDrivingDimsDirect(ents, cons)).toBe(true);
-    expect(ents[0]).toMatchObject({ width: 42, height: 10, x: 21, y: 5 });
+    expect(ents[0]).toMatchObject({ width: 42, height: 10, x: 39, y: 50 }); // corner 1 stays at (60, 45)
   });
 });
