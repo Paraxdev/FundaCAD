@@ -6,6 +6,7 @@ use fundacad_core::hole_standards::{self as std_holes, DRILL_POINT_DEG, HOLE_TYP
 use fundacad_core::schema::{Hole, HoleExtent, Num};
 use opencascade::primitives::Shape;
 use opencascade::select_access::SurfaceType;
+use glam::DVec3;
 use serde_json::{json, Value};
 
 use crate::builder::{py_g, Ctx, FResult, Fail, BAD_REQUEST};
@@ -14,6 +15,7 @@ use crate::select::entity::{py_round, FaceEnt};
 use crate::select::{tracked, Resolver};
 
 const REFERENCE_NOT_FOUND: &str = "referenceNotFound";
+const MISSED_ON_TRACKED: &str = "every hole misses the body where its face now puts it, re-pick the face";
 
 fn bad(message: impl Into<String>) -> Fail {
     Fail::Value {
@@ -327,10 +329,24 @@ pub fn handle(ctx: &mut Ctx, f: &Hole) -> FResult {
         .transpose()
         .map_err(|_| Fail::Internal("TypeError".into()))?
         .filter(truthy);
+    let mut repick_at = None;
     let (body, origin, normal) = if let Some(sel) = sel {
-        let (body, origin, normal, shift) = face_anchor(ctx, f, &sel)?;
-        for p in points.iter_mut().take(f.points.iter().flatten().count()) {
-            *p = [p[0] + shift[0], p[1] + shift[1], p[2] + shift[2]];
+        let (body, origin, normal, tracked) = face_anchor(ctx, f, &sel)?;
+        if let Some((onto, pick)) = tracked {
+            let own = f.points.iter().flatten().count();
+            for p in points.iter_mut().take(own) {
+                *p = onto.carry(DVec3::from_array(*p)).to_array();
+            }
+            let round = |p: [f64; 3]| p.map(|x| py_round(x, 6));
+            let mut record = json!({
+                "point": round(onto.carry(DVec3::from_array(pick)).to_array()),
+                "points": points[..own].iter().map(|p| round(*p)).collect::<Vec<_>>(),
+            });
+            if let Some(e) = onto.extent {
+                record["extent"] = json!(e.map(|x| py_round(x, 6)));
+            }
+            ctx.tracked_faces.insert(f.id.clone(), record);
+            repick_at = Some(pick);
         }
         (body, origin, normal)
     } else if let Some(plane) = sk_plane {
@@ -339,7 +355,7 @@ pub fn handle(ctx: &mut Ctx, f: &Hole) -> FResult {
     } else {
         return Err(bad("Hole: pick a flat face to drill into"));
     };
-    drill(ctx, f, &d, body, origin, normal, &points)
+    drill(ctx, f, &d, body, origin, normal, &points, repick_at)
 }
 
 fn truthy(v: &Value) -> bool {
@@ -353,9 +369,11 @@ fn truthy(v: &Value) -> bool {
     }
 }
 
+type Tracked = Option<(tracked::Onto, [f64; 3])>;
+
 /// The body, centre and normal of the one flat face a `face` selector names,
-/// and how far a tracked face moved since its positions were written.
-fn face_anchor(ctx: &mut Ctx, f: &Hole, sel: &Value) -> FResult<(usize, [f64; 3], [f64; 3], [f64; 3])> {
+/// and for a tracked face, how to carry its positions onto it and its pick point.
+fn face_anchor(ctx: &mut Ctx, f: &Hole, sel: &Value) -> FResult<(usize, [f64; 3], [f64; 3], Tracked)> {
     let Some(m) = sel.as_object() else {
         return Err(bad("Hole: `face` must be one face selector"));
     };
@@ -395,14 +413,11 @@ fn face_anchor(ctx: &mut Ctx, f: &Hole, sel: &Value) -> FResult<(usize, [f64; 3]
             "Hole: the face must be flat, a hole is drilled along a flat face's normal",
         ));
     }
-    let mut shift = [0.0; 3];
-    if by == Some("tracked") {
-        shift = tracked::shift(&face.shape, m)?.to_array();
-        if let Some(c) = tracked::outline_center(&face.shape) {
-            ctx.face_centers.insert(f.id.clone(), json!(c.to_array().map(|x| py_round(x, 6))));
-        }
-    }
-    Ok((body, face.centroid().to_array(), face.normal().to_array(), shift))
+    let tracked = match (by, anchor) {
+        (Some("tracked"), Some(pick)) => tracked::Tracking::of(m)?.onto(&face).map(|o| (o, pick)),
+        _ => None,
+    };
+    Ok((body, face.centroid().to_array(), face.normal().to_array(), tracked))
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -414,6 +429,7 @@ fn drill(
     origin: [f64; 3],
     normal: [f64; 3],
     points: &[[f64; 3]],
+    repick_at: Option<[f64; 3]>,
 ) -> FResult {
     if dot(normal, normal).sqrt() < 1e-9 {
         return Err(bad("Hole: the face has no usable normal"));
@@ -451,10 +467,24 @@ fn drill(
         return Err(bad("Hole: the holes removed the whole body"));
     }
     let after = kernel::volume(&cut);
+    let missed = (before - after).abs() < 1e-9;
+    if let (true, Some(at)) = (missed, repick_at) {
+        ctx.diagnostics.push(json!({
+            "feature_id": f.id,
+            "kind": "face",
+            "resolved": 0,
+            "confidence": 0.0,
+            "lossy": true,
+            "reason": MISSED_ON_TRACKED,
+            "at": at,
+            "code": REFERENCE_NOT_FOUND,
+        }));
+        return Err(missing_ref(format!("Hole: {MISSED_ON_TRACKED}")));
+    }
     ctx.set_shape(body, cut);
     let body_id = ctx.bodies[body].id.clone();
     ctx.record_tool(&f.id, BoolKind::Cut, vec![body_id], kernel::compound(&tools));
-    if (before - after).abs() < 1e-9 {
+    if missed {
         ctx.diagnostics.push(json!({
             "feature_id": f.id,
             "kind": "hole",
