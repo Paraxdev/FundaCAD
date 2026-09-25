@@ -253,6 +253,8 @@ pub fn combine(
                 Some(first_name),
                 Some(&first_id),
             );
+            let joined = ctx.bodies.last().map(|b| b.id.clone()).into_iter().collect();
+            ctx.record_tool(feature_id, BoolKind::Fuse, joined, solid);
             Ok(())
         }
         "cut" => {
@@ -301,9 +303,11 @@ pub fn combine(
                     ));
                 }
             }
+            let cut_ids = results.iter().map(|(i, _)| ctx.bodies[*i].id.clone()).collect();
             for (i, shape) in results {
                 ctx.set_shape(i, shape);
             }
+            ctx.record_tool(feature_id, BoolKind::Cut, cut_ids, solid.clone());
             if sealed {
                 let mut entry = json!({
                     "feature_id": feature_id,
