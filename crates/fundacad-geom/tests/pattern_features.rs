@@ -246,6 +246,12 @@ fn around(axis: Value, axis_ref: Option<Value>) -> Value {
     corner_box(pc)
 }
 
+/// The cache a picked axis is stored with, set to world Z through the origin
+/// so a test that turns about the part's middle proves the reference won.
+fn world_z() -> Value {
+    json!({"origin": [0, 0, 0], "dir": [0, 0, 1]})
+}
+
 fn notes(r: &Rebuild) -> Vec<String> {
     r.diagnostics
         .iter()
@@ -272,14 +278,14 @@ fn a_hole_turns_about_a_line_through_a_point() {
 
 #[test]
 fn a_hole_turns_about_a_datum_axis_by_id() {
-    let r = build(&around(json!("ax"), None));
+    let r = build(&around(json!({"datum": "ax"}), None));
     close(kernel::volume(&only_body(&r).shape), corner_holes(6.0));
 }
 
 #[test]
 fn a_hole_turns_about_a_picked_cylindrical_face() {
     let wall = json!({"kind": "face", "by": "nearest", "point": [35, 30, 5], "body": "body1"});
-    let r = build(&around(json!("Z"), Some(wall)));
+    let r = build(&around(world_z(), Some(wall)));
     close(kernel::volume(&only_body(&r).shape), corner_holes(6.0));
     assert!(notes(&r).is_empty(), "{:?}", notes(&r));
 }
@@ -287,13 +293,13 @@ fn a_hole_turns_about_a_picked_cylindrical_face() {
 #[test]
 fn a_hole_turns_about_a_picked_round_edge() {
     let rim = json!({"kind": "edge", "by": "nearest", "point": [35, 30, 10], "body": "body1"});
-    close(volume_of(&around(json!("Z"), Some(rim))), corner_holes(6.0));
+    close(volume_of(&around(world_z(), Some(rim))), corner_holes(6.0));
 }
 
 #[test]
 fn a_hole_turns_about_the_middle_of_a_picked_flat_face() {
     let top = json!({"kind": "face", "by": "nearest", "point": [10, 10, 10], "body": "body1"});
-    close(volume_of(&around(json!("Z"), Some(top))), corner_holes(6.0));
+    close(volume_of(&around(world_z(), Some(top))), corner_holes(6.0));
 }
 
 /// The corner edge of the pin at (1, 1) is the axis: the six copies land on
@@ -306,7 +312,7 @@ fn a_hole_turns_about_a_picked_straight_edge_of_another_body() {
         {"id": "h", "type": "hole", "diameter": 6, "extent": "through",
          "face": {"kind": "face", "by": "nearest", "point": [26, 1, 5], "body": "body1"},
          "points": [[26, 1, 5]]},
-        {"id": "pc", "type": "patternCircular", "count": 6, "angle": 360, "axis": "Z",
+        {"id": "pc", "type": "patternCircular", "count": 6, "angle": 360, "axis": world_z(),
          "axisRef": {"kind": "edge", "by": "nearest", "point": [1, 1, 0], "body": "body2"},
          "features": ["h"]},
     ]});
@@ -328,11 +334,24 @@ fn an_axis_reference_that_stops_resolving_keeps_the_cached_line_and_says_so() {
 }
 
 #[test]
+fn an_axis_reference_over_a_bare_world_axis_is_refused() {
+    let wall = json!({"kind": "face", "by": "nearest", "point": [35, 30, 5], "body": "body1"});
+    let e = errors(&build(&around(json!("Z"), Some(wall))));
+    assert!(e.iter().any(|m| m.contains("with axisRef, axis must be the line")), "{e:?}");
+}
+
+#[test]
 fn an_unknown_axis_name_or_a_datum_below_is_refused() {
     let e = errors(&build(&around(json!("nope"), None)));
-    assert!(e.iter().any(|m| m.contains("not X, Y, Z")), "{e:?}");
+    assert!(e.iter().any(|m| m.contains("not X, Y or Z") && m.contains(r#"{"datum": "nope"}"#)), "{e:?}");
+    let e = errors(&build(&around(json!("ax"), None)));
+    assert!(e.iter().any(|m| m.contains("not X, Y or Z")), "a bare datum id is refused: {e:?}");
+    let e = errors(&build(&around(json!({"datum": "nope"}), None)));
+    assert!(e.iter().any(|m| m.contains("names no datum axis")), "{e:?}");
+    let e = errors(&build(&around(json!({"datum": "sk"}), None)));
+    assert!(e.iter().any(|m| m.contains("names no datum axis")), "a sketch is not a datum axis: {e:?}");
 
-    let mut doc = around(json!("late"), None);
+    let mut doc = around(json!({"datum": "late"}), None);
     doc["features"]
         .as_array_mut()
         .unwrap()

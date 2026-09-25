@@ -818,18 +818,32 @@ pub fn validate(doc: &mut Doc) -> Vec<String> {
         }
     }
 
-    // A circular pattern's axis is X, Y, Z, a line, or the id of a datum axis.
+    // A circular pattern's axis is X, Y, Z, a line, or {datum} naming a datum
+    // axis. Never a bare id, which a build from before datum axes reads as Z.
     for (i, f) in feats.iter().enumerate() {
         if str_field(f, "type") != Some("patternCircular") {
             continue;
         }
-        let Some(name) = f.get("axis").and_then(Value::as_str).filter(|a| !["X", "Y", "Z"].contains(a)) else {
+        let fid = str_field(f, "id").unwrap_or_default();
+        let axis = f.get("axis");
+        if let Some(name) = axis.and_then(Value::as_str) {
+            if f.get("axisRef").is_some_and(|r| !r.is_null()) {
+                problems.push(format!(
+                    "{fid}: with axisRef, axis must be the line it resolves to, {{\"origin\": [x, y, z], \"dir\": [x, y, z]}}, not '{name}'"
+                ));
+            } else if !["X", "Y", "Z"].contains(&name) {
+                problems.push(format!(
+                    "{fid}: axis '{name}' is not X, Y or Z; a datum axis is {{\"datum\": \"{name}\"}}, a placed line {{\"origin\": [x, y, z], \"dir\": [x, y, z]}}"
+                ));
+            }
+            continue;
+        }
+        let Some(name) = axis.and_then(|a| a.get("datum")).and_then(Value::as_str) else {
             continue;
         };
-        let fid = str_field(f, "id").unwrap_or_default();
         match by_id.get(name) {
             None => problems.push(format!(
-                "{fid}: axis '{name}' is not X, Y, Z, a line {{origin, dir}} or the id of a datumAxis in the document"
+                "{fid}: axis {{\"datum\": \"{name}\"}} names no datumAxis in the document"
             )),
             Some(&j) if j > i => problems.push(format!(
                 "{fid}: axis names '{name}', which comes AFTER it in the timeline (a feature can only use what is above it)"

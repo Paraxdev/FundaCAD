@@ -8,7 +8,7 @@
 //! same body again.
 
 use fundacad_core::schema::{
-    Axis3, AxisLine, AxisSpec, Feature, OneOrMany, PatternCircular, PatternLinear, PatternRect,
+    Axis3, AxisLine, Feature, OneOrMany, PatternAxis, PatternCircular, PatternLinear, PatternRect,
     Real, Selector,
 };
 use glam::DVec3;
@@ -273,7 +273,7 @@ fn datum_axis(ctx: &Ctx, own: &str, name: &str) -> FResult<Turn> {
     let above = at(name).filter(|&k| at(own).map_or(true, |me| k < me));
     let Some(k) = above.filter(|&k| ctx.timeline[k].kind == "datumAxis") else {
         return Err(missing_reference(format!(
-            "Pattern: axis \"{name}\" is not X, Y, Z, a line {{origin, dir}} or the id of a datum axis above this pattern."
+            "Pattern: axis {{\"datum\": \"{name}\"}} names no datum axis above this pattern."
         )));
     };
     let step = &ctx.timeline[k];
@@ -292,20 +292,32 @@ fn datum_axis(ctx: &Ctx, own: &str, name: &str) -> FResult<Turn> {
         .ok_or_else(|| Fail::msg(format!("Pattern: the datum axis {} has no direction.", step.label)))
 }
 
-fn stored_axis(ctx: &Ctx, own: &str, axis: &AxisSpec) -> FResult<Turn> {
+fn stored_axis(ctx: &Ctx, own: &str, axis: &PatternAxis) -> FResult<Turn> {
     match axis {
-        AxisSpec::Named(Axis3::Other(name)) => datum_axis(ctx, own, name),
-        AxisSpec::Named(a) => Ok(Turn::World(a.clone())),
-        AxisSpec::Line(AxisLine { origin, dir, .. }) => {
+        PatternAxis::Named(a @ (Axis3::X | Axis3::Y | Axis3::Z)) => Ok(Turn::World(a.clone())),
+        PatternAxis::Named(other) => Err(Fail::msg(format!(
+            "Pattern: axis \"{}\" is not X, Y or Z. A datum axis is {{\"datum\": \"{}\"}}, a placed line {{\"origin\": [x, y, z], \"dir\": [x, y, z]}}.",
+            other.as_str(),
+            other.as_str()
+        ))),
+        PatternAxis::Datum(d) => datum_axis(ctx, own, &d.datum),
+        PatternAxis::Line(AxisLine { origin, dir, .. }) => {
             let v = |r: &[Real; 3]| DVec3::new(r[0].get(), r[1].get(), r[2].get());
             line(v(origin), v(dir)).ok_or_else(|| Fail::msg("Pattern: the axis line has no direction."))
         }
     }
 }
 
+/// A build that predates `axisRef` ignores it and would turn about a bare X, Y
+/// or Z without a word, where a line in `axis` makes it refuse the pattern.
+const AXIS_REF_NEEDS_A_LINE: &str = "Pattern: with axisRef, axis must be the line it resolves to, {\"origin\": [x, y, z], \"dir\": [x, y, z]}, kept as the fallback for when the reference is lost, not X, Y or Z.";
+
 /// `axisRef` resolved against the bodies now, else the stored `axis`.
 pub fn circular_axis(ctx: &mut Ctx, f: &PatternCircular) -> FResult<Turn> {
     if let Some(sel) = &f.axis_ref {
+        if matches!(f.axis, PatternAxis::Named(_)) {
+            return Err(Fail::msg(AXIS_REF_NEEDS_A_LINE));
+        }
         if let Some(t) = referenced_axis(ctx, &f.id, sel) {
             return Ok(t);
         }

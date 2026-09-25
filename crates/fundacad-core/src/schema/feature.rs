@@ -37,6 +37,18 @@ pub enum AxisSpec {
     Line(AxisLine),
 }
 
+plain_struct!(DatumAxisRef { datum: String });
+
+/// A circular pattern's `axis`. Every form but X, Y and Z is an object, which a
+/// build from before them refuses; a bare datum id it would turn about world Z.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum PatternAxis {
+    Named(Axis3),
+    Line(AxisLine),
+    Datum(DatumAxisRef),
+}
+
 open_enum! {
     /// `new | join | cut | intersect`, the extrude family's boolean.
     pub enum Operation { New = "new", Join = "join", Cut = "cut", Intersect = "intersect" }
@@ -387,10 +399,11 @@ feature_struct!(PatternLinear {
     #[serde(default, skip_serializing_if = "Option::is_none")] features: Option<Vec<String>>,
 });
 feature_struct!(
-    /// `axis` is X, Y, Z, a line, or the id of a datum axis above the pattern.
-    /// `axisRef` makes the axis follow an edge or face, with `axis` as the cache.
+    /// `axis` is X, Y, Z, a line, or `{datum}` naming a datum axis above the
+    /// pattern. `axisRef` makes the axis follow an edge or face, with the line
+    /// in `axis` as the cache.
     PatternCircular {
-        count: Num, angle: Num, axis: AxisSpec,
+        count: Num, angle: Num, axis: PatternAxis,
         #[serde(default, skip_serializing_if = "Option::is_none")] axis_ref: Option<Selector>,
         #[serde(default, skip_serializing_if = "Option::is_none")] bodies: Option<Vec<String>>,
         #[serde(default, skip_serializing_if = "Option::is_none")] features: Option<Vec<String>>,

@@ -163,6 +163,7 @@ fn a_circular_pattern_says_how_to_place_its_axis() {
     let body = s::schema_text(Some("patternCircular"));
     assert!(body.contains("  axisRef: optional Selector"), "{body}");
     assert!(body.contains("\"origin\"") && body.contains("datumAxis"), "{body}");
+    assert!(body.contains("{\"datum\": \"<id>\"}") && body.contains("never the bare id"), "{body}");
     assert!(body.contains("drawn from a corner"), "{body}");
 }
 

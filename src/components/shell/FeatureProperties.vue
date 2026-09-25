@@ -56,7 +56,7 @@ import {
   fileFieldsFor,
   fileValue,
   patternAxisChoice,
-  PLACED_AXIS,
+  patternAxisPatch,
   toggleFieldsFor,
   toggleValue,
 } from "../../document/optionFields";
@@ -312,8 +312,9 @@ function setOption(field: string, value: string | boolean) {
   let patch: Record<string, unknown> = { [field]: value };
   const f = store.document.features.find((x) => x.id === props.featureId);
   if (f?.type === "patternCircular" && field === "axis") {
-    if (value === PLACED_AXIS) return;
-    patch = { axis: value, axisRef: undefined };
+    const axis = patternAxisPatch(String(value));
+    if (!axis) return;
+    patch = axis;
   }
   const hole = asFeature(f, "hole");
   if (hole) {

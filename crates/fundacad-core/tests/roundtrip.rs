@@ -350,13 +350,13 @@ fn a_pattern_carries_the_features_it_repeats() {
 }
 
 #[test]
-fn a_circular_pattern_axis_is_a_name_a_line_or_a_reference() {
-    use fundacad_core::schema::{Axis3, AxisSpec};
+fn a_circular_pattern_axis_is_a_name_a_line_a_datum_or_a_reference() {
+    use fundacad_core::schema::{Axis3, PatternAxis};
     let raw = serde_json::json!({"parameters": {}, "features": [
         {"id": "old", "type": "patternCircular", "count": 6, "angle": 360, "axis": "Z", "features": ["h"]},
         {"id": "line", "type": "patternCircular", "count": 6, "angle": 360,
          "axis": {"origin": [30, 30, 0], "dir": [0, 0, 1]}, "features": ["h"]},
-        {"id": "datum", "type": "patternCircular", "count": 6, "angle": 360, "axis": "ax1", "features": ["h"]},
+        {"id": "datum", "type": "patternCircular", "count": 6, "angle": 360, "axis": {"datum": "ax1"}, "features": ["h"]},
         {"id": "picked", "type": "patternCircular", "count": 6, "angle": 360,
          "axis": {"origin": [30, 30, 0], "dir": [0, 0, 1]},
          "axisRef": {"kind": "face", "by": "nearest", "point": [35, 30, 5], "body": "body1"},
@@ -369,10 +369,10 @@ fn a_circular_pattern_axis_is_a_name_a_line_or_a_reference() {
         Some(Feature::PatternCircular(p)) => p.clone(),
         other => panic!("{id} is a circular pattern, got {other:?}"),
     };
-    assert_eq!(pc("old").axis, AxisSpec::Named(Axis3::Z));
+    assert_eq!(pc("old").axis, PatternAxis::Named(Axis3::Z));
     assert!(pc("old").axis_ref.is_none() && pc("old").extra.is_empty());
-    assert!(matches!(pc("line").axis, AxisSpec::Line(_)));
-    assert_eq!(pc("datum").axis, AxisSpec::Named(Axis3::Other("ax1".into())));
+    assert!(matches!(pc("line").axis, PatternAxis::Line(_)));
+    assert!(matches!(&pc("datum").axis, PatternAxis::Datum(d) if d.datum == "ax1" && d.extra.is_empty()));
     let picked = pc("picked");
     assert_eq!(picked.axis_ref.as_ref().and_then(|s| s.kind()), Some("face"));
     assert!(picked.extra.is_empty());
@@ -382,4 +382,49 @@ fn a_circular_pattern_axis_is_a_name_a_line_or_a_reference() {
     assert_eq!(pr.bodies.as_deref(), Some(&["body1".to_owned()][..]));
     assert!(pr.extra.is_empty());
     assert_eq!(serde_json::to_value(&doc).expect("save"), raw);
+}
+
+/// What a build from before placed axes (main at 286c7c8e) makes of each form.
+/// Its `patternCircular` was this struct; a known type that does not fit its
+/// struct loads as `Feature::Invalid` and builds as an error naming the
+/// feature, so every form but X, Y and Z is refused there, never turned about
+/// world Z. A bare datum id is what it would misread, which is why a datum
+/// axis is `{datum}`.
+#[test]
+fn a_build_before_placed_axes_refuses_every_new_axis_form() {
+    use fundacad_core::schema::{Axis3, Extra, Num};
+    #[derive(Debug, serde::Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    #[allow(dead_code)]
+    struct BeforePlacedAxes {
+        id: String,
+        count: Num,
+        angle: Num,
+        axis: Axis3,
+        #[serde(default)]
+        bodies: Option<Vec<String>>,
+        #[serde(default)]
+        features: Option<Vec<String>>,
+        #[serde(default)]
+        active_when: Option<Num>,
+        #[serde(flatten)]
+        extra: Extra,
+    }
+    let with = |axis: Value| {
+        serde_json::json!({"id": "pc", "type": "patternCircular", "count": 6, "angle": 360, "axis": axis})
+    };
+    let before = |axis: Value| serde_json::from_value::<BeforePlacedAxes>(with(axis));
+    assert_eq!(before(serde_json::json!("Z")).expect("X, Y, Z as ever").axis, Axis3::Z);
+    for axis in [
+        serde_json::json!({"origin": [30, 30, 0], "dir": [0, 0, 1]}),
+        serde_json::json!({"datum": "ax1"}),
+    ] {
+        assert!(before(axis.clone()).is_err(), "{axis} is refused");
+    }
+    let mut picked = with(serde_json::json!({"origin": [30, 30, 0], "dir": [0, 0, 1]}));
+    picked["axisRef"] = serde_json::json!({"kind": "edge", "by": "nearest", "point": [0, 0, 0]});
+    assert!(serde_json::from_value::<BeforePlacedAxes>(picked).is_err(), "axisRef rides on a line");
+    assert_eq!(before(serde_json::json!("ax1")).expect("a bare id loads").axis, Axis3::Other("ax1".into()));
+    let unfit: Feature = serde_json::from_value(with(serde_json::json!(5))).expect("load");
+    assert!(matches!(unfit, Feature::Invalid(_)), "{unfit:?}");
 }
