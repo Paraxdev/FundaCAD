@@ -176,9 +176,9 @@ export class SketchMode {
 
   private plane = new SketchPlane("XY");
 
-  /** The model's outline on this sketch's plane, in sketch 2D, what makes a
-
-   *  profile that runs off the face split there. Empty on a datum plane. */
+  /** The model's outline on this sketch's plane, in sketch 2D, for aiming the
+   *  view and snapping to the face. Areas split along the engine's cut lines
+   *  instead (overlay.footprintFor). Empty on a datum plane. */
 
   private footprint: THREE.Vector2[][] = [];
   /** The same edges, UN-chained, one polyline each, which is what tells a
@@ -836,6 +836,7 @@ export class SketchMode {
     // from the geometry they label (they're click targets in the select tool)
     setDimPixelScale(this.planeMmPerPx());
     const derived = this.derivedEntities(); // computed once, shared below
+    const regionFootprint = this.overlay.footprintFor(this.plane);
     this.overlay.setActiveSketch(this.activeCurves(derived));
     // profile-area fills for the active sketch (hidden from overlay.update),
     // so areas are visible + selectable while drawing
@@ -846,7 +847,7 @@ export class SketchMode {
         // Empty means "no model in this plane", a datum-plane sketch, and must
         // reach detectRegions as absent, not as an empty face, or every profile
         // there would be marked unsupported.
-        this.footprint.length ? this.footprint : undefined,
+        regionFootprint.length ? regionFootprint : undefined,
       ),
       this.plane,
       this.editingId ?? "__active__",

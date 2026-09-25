@@ -190,13 +190,13 @@ export class SketchOverlay {
     datumPlanes?: Record<string, PlaneDef>;
   } = () => ({});
 
-  /** The model's outline on a sketch plane, so a committed profile that runs off
-   *  its face splits there instead of picking as one region, the same cut the
-   *  active sketch gets in sketchMode.
+  /** Where the model cuts a profile on a sketch plane, as loops, so a profile
+   *  that runs off its face splits there instead of picking as one region. The
+   *  active sketch in sketchMode reads the same answer.
    *
-   *  Injected because the overlay has no viewport. The default answers "no
+   *  Injected because the overlay has no engine. The default answers "no
    *  footprint", which is both the safe fallback and the literal truth for a
-   *  sketch on a datum plane. See faceFootprint.footprintCache. */
+   *  sketch on a datum plane. See faceFootprint.profileCutCache. */
   footprintFor: (plane: SketchPlane) => THREE.Vector2[][] = () => [];
 
   /** Rebuild committed sketch curves + region fills from the document. */

@@ -4,7 +4,7 @@ import { SketchPlane } from "../../src/sketch/plane";
 import {
   faceFocus,
   edgeLiesInPlane,
-  footprintCache,
+  profileCutCache,
   planeFootprint,
   planeTolerance,
   type FootprintEdge,
@@ -128,77 +128,77 @@ describe("planeFootprint", () => {
   });
 });
 
-describe("footprintCache", () => {
-  const source = (edges: FootprintEdge[], epoch: object) => {
-    let walks = 0;
+describe("profileCutCache", () => {
+  type Line = [number, number, number][];
+  const rim: Line[] = topRim().map((e) => e.points.map((p) => [...p] as [number, number, number]));
+  const source = (epoch: object, answer: Line[] | null = rim) => {
+    let asks = 0;
+    let landed = 0;
+    let now = epoch;
+    const pending: (() => void)[] = [];
     const src = {
-      edges: () => (walks++, edges),
-      modelScale: () => 28,
-      epoch: () => epoch,
+      cuts: () => {
+        asks++;
+        return new Promise<Line[] | null>((res) => pending.push(() => res(answer)));
+      },
+      epoch: () => now,
+      landed: () => void landed++,
     };
-    return { src, walks: () => walks, retarget: (e: object) => (epoch = e) };
+    const flush = async () => {
+      for (const p of pending.splice(0)) p();
+      await Promise.resolve();
+      await Promise.resolve();
+    };
+    return { src, asks: () => asks, landed: () => landed, flush, retarget: (e: object) => (now = e) };
   };
 
-  it("walks the model once per plane, not once per sketch", () => {
-    // The committed overlay rebuilds every sketch on every document edit. Four
-    // sketches on one plane over a 100k-edge assembly must not be four walks.
-    const model = {};
-    const { src, walks } = source(topRim(), model);
-    const cache = footprintCache(src);
-    const plane = topPlane();
-    const a = cache(plane);
-    const b = cache(plane);
-    expect(walks()).toBe(1);
-    expect(b).toBe(a); // the same array, not an equal one
-  });
-
-  it("walks each distinct plane separately", () => {
-    const { src, walks } = source(topRim(), {});
-    const cache = footprintCache(src);
-    cache(topPlane());
-    cache(topPlane()); // a different SketchPlane INSTANCE, same geometry
-    expect(walks()).toBe(2);
-  });
-
-  it("re-walks when the model changes", () => {
-    // The failure this guards is silent: a stale footprint keeps cutting a
-    // profile along an edge the rebuild moved, and nothing looks wrong.
-    const { src, walks, retarget } = source(topRim(), {});
-    const cache = footprintCache(src);
-    const plane = topPlane();
-    cache(plane);
-    expect(walks()).toBe(1);
-    retarget({});
-    cache(plane);
-    expect(walks()).toBe(2);
-  });
-
-  it("does not re-walk when the model object is re-emitted unchanged", () => {
-    // A visibility toggle re-emits the SAME result object. Keying on identity is
-    // what makes hiding a body free here, as it already is in setModel.
-    const model = {};
-    const { src, walks } = source(topRim(), model);
-    const cache = footprintCache(src);
-    cache(topPlane());
-    cache(topPlane());
-    cache(topPlane());
-    expect(walks()).toBe(3); // three planes
-    const plane = topPlane();
-    cache(plane);
-    cache(plane);
-    expect(walks()).toBe(4); // the fourth plane, walked once
-  });
-
-  it("serves an empty footprint from cache without re-walking", () => {
-    // A datum-plane sketch has no model in its plane. That answer is as cacheable
-    // as any other, and re-deriving it every edit is the expensive way to learn
-    // nothing.
-    const { src, walks } = source(verticals(), {});
-    const cache = footprintCache(src);
+  it("asks the engine once per plane per model and chains its lines into loops", async () => {
+    const s = source({});
+    const cache = profileCutCache(s.src);
     const plane = topPlane();
     expect(cache(plane)).toEqual([]);
     expect(cache(plane)).toEqual([]);
-    expect(walks()).toBe(1);
+    expect(s.asks()).toBe(1);
+    await s.flush();
+    expect(s.landed()).toBe(1);
+    const loops = cache(plane);
+    expect(loops).toHaveLength(1);
+    expect(loops[0]).toHaveLength(4);
+    expect(s.asks()).toBe(1);
+  });
+
+  it("asks again when the model changes, serving the last answer meanwhile", async () => {
+    // A rebuild must not flash every split profile whole while the answer for
+    // the new model is on its way.
+    const s = source({});
+    const cache = profileCutCache(s.src);
+    const plane = topPlane();
+    cache(plane);
+    await s.flush();
+    s.retarget({});
+    expect(cache(plane)).toHaveLength(1);
+    expect(s.asks()).toBe(2);
+  });
+
+  it("drops an answer for a model that is no longer on screen", async () => {
+    const s = source({});
+    const cache = profileCutCache(s.src);
+    const plane = topPlane();
+    cache(plane);
+    s.retarget({});
+    await s.flush();
+    expect(s.landed()).toBe(0);
+    expect(cache(plane)).toEqual([]);
+  });
+
+  it("reads no answer as no footprint", async () => {
+    const s = source({}, null);
+    const cache = profileCutCache(s.src);
+    const plane = topPlane();
+    cache(plane);
+    await s.flush();
+    expect(cache(plane)).toEqual([]);
+    expect(s.asks()).toBe(1);
   });
 });
 
