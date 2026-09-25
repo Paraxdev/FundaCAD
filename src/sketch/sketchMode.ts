@@ -1285,7 +1285,7 @@ export class SketchMode {
     });
     if (isDimConstraint(c) && !c.id) c.id = replacedId ?? newConstraintId();
     this.constraints.push(c);
-    this.dimSolve = { anchor: dimAnchor(this.entities, c) };
+    this.dimSolve = { anchor: dimAnchor(this.entities, this.constraints, c) };
     this.requestSolve();
     if (this.solverDead) this.applyDrivingDimsDirectly();
   }
