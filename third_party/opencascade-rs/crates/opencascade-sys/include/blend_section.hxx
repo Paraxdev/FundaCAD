@@ -1340,8 +1340,11 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
   std::unique_ptr<BRepClass3d_SolidClassifier> body;
   const bool meridian[2] = {sides[0]->planar, sides[1]->planar};
   // A cut's ball may run on past a face along that face's surface, carving what
-  // lies above it, but not into the body beyond, which is no corner of this
-  // edge. A fill's is clamped to its faces instead (face_limits). A curved
+  // lies above it. Sunk in the body, a ball whose contact runs past a face's
+  // end into material digs into another part (a boss rim into the plate under
+  // it); one whose centre is out in the air is cutting the corner from outside,
+  // a thin rim carved deeper, whatever its contact passes through. A fill's is
+  // clamped to its faces instead (face_limits). A curved
   // meridian keeps its surface while the ball rests on the face, past it the
   // blend follows its tangent plane at the edge, like a flat face whose
   // contact runs past its end; on the far side of the tube the ball would land
@@ -1369,9 +1372,16 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
     for (const Frame &f : probes) {
       set_frame(f);
       Contacts c = contacts(f.P, f.T, sides, s, chamfer, sz, sz2, g2);
+      Opt<bool> sunk;
       for (int j = 0; j < 2; ++j) {
         if (sides[j]->contains(c.Q[j], fuzz)) continue;
         if (!body) body.reset(new BRepClass3d_SolidClassifier(shape));
+        if (!sunk) {
+          gp_Pnt centre = c.C ? P(*c.C) : P((V(c.Q[0]) + V(c.Q[1])).Multiplied(0.5));
+          body->Perform(centre, fuzz);
+          sunk = body->State() == TopAbs_IN;
+        }
+        if (!*sunk) break;
         body->Perform(c.Q[j], fuzz);
         if (body->State() == TopAbs_IN) return Misfit::IntoBody;
       }
