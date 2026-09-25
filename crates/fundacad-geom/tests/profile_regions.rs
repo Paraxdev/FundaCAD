@@ -222,6 +222,48 @@ fn the_overlay_cuts_are_the_outline_of_the_coplanar_material() {
     assert_eq!(top.len(), cuts.len());
 }
 
+fn built_volumes(features: Vec<Value>) -> Vec<f64> {
+    let raw = json!({ "features": features });
+    let typed: CadDocument = serde_json::from_value(raw.clone()).unwrap();
+    let r = builder::rebuild(&typed, &raw, &NoWatch).unwrap_or_else(|_| panic!("cancelled"));
+    sizes(&r);
+    r.bodies.iter().map(|b| kernel::volume(&b.shape)).collect()
+}
+
+/// A block's top lying wholly inside the profile, touching none of its sides,
+/// still cuts it: the top and the ring round it are two areas.
+#[test]
+fn a_face_wholly_inside_a_profile_cuts_it_into_the_face_and_the_ring() {
+    let pick = |seed: [f64; 3]| {
+        let mut f = block("a", "sa", (0.0, 0.0), (20.0, 20.0));
+        f.push(rect("s", "XY", (json!(-3), json!(-3)), (json!(23), json!(23))));
+        f.push(extrude("e", "s", json!(5), seed));
+        built_volumes(f)[1] / 5.0
+    };
+    assert!((pick([10.0, 10.0, 0.0]) - 400.0).abs() < 1e-6, "the block's top");
+    assert!((pick([21.5, 10.0, 0.0]) - 276.0).abs() < 1e-6, "the ring round it");
+}
+
+/// A bore under part of the profile cuts it along the bore; the block's outline,
+/// nowhere near the profile, is no area of it.
+#[test]
+fn a_bore_under_a_profile_cuts_it_along_the_bore() {
+    let pick = |seed: [f64; 3]| {
+        let mut f = vec![json!({"id": "sa", "type": "sketch", "plane": "XY", "constraints": [], "entities": [
+            {"id": "r", "type": "rectangle", "x": 20, "y": 20, "width": 40, "height": 40},
+            {"id": "c", "type": "circle", "x": 20, "y": 20, "radius": 8},
+        ]})];
+        f.push(extrude("a", "sa", json!(10), [2.0, 2.0, 0.0]));
+        f.push(rect("s", "XY", (json!(16), json!(16)), (json!(36), json!(36))));
+        f.push(extrude("e", "s", json!(5), seed));
+        built_volumes(f)[1] / 5.0
+    };
+    let lens = pick([18.0, 18.0, 0.0]);
+    let rest = pick([30.0, 30.0, 0.0]);
+    assert!((lens + rest - 400.0).abs() < 1e-6, "{lens} + {rest}");
+    assert!((lens - 127.4887).abs() < 0.01, "over the bore {lens}");
+}
+
 /// Bounded to a box, the cut lines are the whole plane's that reach it.
 #[test]
 fn bounded_cut_lines_are_the_ones_reaching_the_box() {
