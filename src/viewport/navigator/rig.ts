@@ -6,7 +6,7 @@ import * as THREE from "three";
 import type {
   CameraRig, CameraState, FitOptions, NavLimits, ProjectionMode, StandardView,
 } from "../cameras";
-import { motionOn } from "../../ui/motion";
+import { cameraFlightsOn } from "../../ui/motion";
 import { orthoClip, perspClip, NEAR_AT_REST } from "../clipPlanes";
 import { boxDepthRange } from "./anchor";
 import { bindInput } from "./input";
@@ -86,7 +86,7 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
     const r = dom.getBoundingClientRect();
     return [clientX - r.left, clientY - r.top];
   };
-  const animate = (want: boolean | undefined) => (want ?? true) && motionOn();
+  const animate = (want: boolean | undefined) => (want ?? true) && cameraFlightsOn();
   const fitOpts = (o?: boolean | FitOptions): FitOptions => (typeof o === "boolean" ? { animate: o } : (o ?? {}));
 
   const rig: CameraRig & { navigator: Navigator } = {
@@ -146,7 +146,7 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
       setOrientation(p, new THREE.Quaternion(...st.quaternion));
       p.scale = st.scale;
       p.fov = st.fov;
-      nav.flyTo(p, { animate: anim && motionOn() });
+      nav.flyTo(p, { animate: anim && cameraFlightsOn() });
     },
     setScene(s) {
       nav.setScene(s);
@@ -196,19 +196,19 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
       nav.roll(angle);
     },
     rotateTo(az, polar, anim = false) {
-      nav.rotateTo(az, polar, anim && motionOn());
+      nav.rotateTo(az, polar, anim && cameraFlightsOn());
     },
     moveTo(p, anim = false) {
-      nav.moveTo(p, anim && motionOn());
+      nav.moveTo(p, anim && cameraFlightsOn());
     },
     setLookAt(e, t, anim = false) {
-      nav.setLookAt(e, t, anim && motionOn());
+      nav.setLookAt(e, t, anim && cameraFlightsOn());
     },
     lerpLookAt(eA, tA, eB, tB, t, anim = false) {
-      nav.setLookAt(eA.clone().lerp(eB, t), tA.clone().lerp(tB, t), anim && motionOn());
+      nav.setLookAt(eA.clone().lerp(eB, t), tA.clone().lerp(tB, t), anim && cameraFlightsOn());
     },
     setViewScale(s, anim = false) {
-      nav.setViewScale(s, anim && motionOn());
+      nav.setViewScale(s, anim && cameraFlightsOn());
     },
     setOrbitPoint(p) {
       nav.setOrbitPoint(p);
@@ -217,7 +217,7 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
       return nav.pose.fov;
     },
     setFov(deg, opts) {
-      nav.setFov(deg, opts?.keepScale ?? false, (opts?.animate ?? false) && motionOn());
+      nav.setFov(deg, opts?.keepScale ?? false, (opts?.animate ?? false) && cameraFlightsOn());
     },
     fit(box, opts) {
       const o = fitOpts(opts);
@@ -236,27 +236,27 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
       });
     },
     resetView(box) {
-      if (!box || box.isEmpty()) nav.resetView(null, 0, motionOn());
+      if (!box || box.isEmpty()) nav.resetView(null, 0, cameraFlightsOn());
       else {
         const s = box.getBoundingSphere(new THREE.Sphere());
-        nav.resetView(s.center, s.radius, motionOn());
+        nav.resetView(s.center, s.radius, cameraFlightsOn());
       }
     },
     setStandardView(view) {
       const v = STANDARD[view];
-      nav.turnTo(lookQuatUp(new THREE.Vector3(...v.dir).normalize(), new THREE.Vector3(...v.up)), motionOn());
+      nav.turnTo(lookQuatUp(new THREE.Vector3(...v.dir).normalize(), new THREE.Vector3(...v.up)), cameraFlightsOn());
     },
     setViewDir(dir, up) {
-      nav.turnTo(lookQuatUp(dir.clone().normalize(), up), motionOn());
+      nav.turnTo(lookQuatUp(dir.clone().normalize(), up), cameraFlightsOn());
     },
     lookAtPlane(origin, normal, up, opts) {
-      nav.lookAtPlane(origin, normal, up, !!opts?.animate && motionOn(), opts?.onArrive);
+      nav.lookAtPlane(origin, normal, up, !!opts?.animate && cameraFlightsOn(), opts?.onArrive);
     },
     isFlying() {
       return nav.isFlying();
     },
     restoreUp() {
-      nav.restoreUp(motionOn());
+      nav.restoreUp(cameraFlightsOn());
     },
   };
   return rig;

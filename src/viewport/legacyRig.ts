@@ -7,7 +7,7 @@ import CameraControls from "camera-controls";
 import { frameRotation, pivotProbes, pivotShift, viewQuaternion } from "./orbitPivot";
 import { anchorDolly, groundAnchor, orthoZoomStep } from "./zoomAnchor";
 import { ease, flightSeconds, worthFlying } from "./viewFlight";
-import { motionOn } from "../ui/motion";
+import { cameraFlightsOn } from "../ui/motion";
 import type {
   CameraRig, CameraState, FitOptions, NavEvent, NavLimits, NavScene, ProjectionMode, StandardView,
 } from "./cameras";
@@ -568,7 +568,7 @@ export function createLegacyRig(
       controls.updateCameraUp();
       const home = HOME_EYE.clone();
       if (!box || box.isEmpty()) {
-        controls.setLookAt(home.x, home.y, home.z, 0, 0, 0, motionOn());
+        controls.setLookAt(home.x, home.y, home.z, 0, 0, 0, cameraFlightsOn());
         return;
       }
       const c = box.getCenter(new THREE.Vector3());
@@ -645,7 +645,7 @@ export function createLegacyRig(
         controls.setLookAt(eye.x, eye.y, eye.z, origin.x, origin.y, origin.z, false);
         opts?.onArrive?.();
       };
-      if (!opts?.animate || !motionOn() || !worthFlying(turn, zoomRatio)) {
+      if (!opts?.animate || !cameraFlightsOn() || !worthFlying(turn, zoomRatio)) {
         land();
         return;
       }
