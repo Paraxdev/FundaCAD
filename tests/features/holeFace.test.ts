@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rebaseHole, trackedFace, upgradeFace, withCenter } from "../../src/features/holeFace";
+import { rebaseHole, trackedFace, upgradeFace, withExtent } from "../../src/features/holeFace";
 import type { Selector, Vec3 } from "../../src/types";
 
 const top = (center?: Vec3): Selector =>
@@ -11,12 +11,15 @@ describe("a hole's tracked face", () => {
     expect(trackedFace([1, 1, 1], [0, 1, 0], null)).toEqual({ kind: "face", by: "tracked", point: [1, 1, 1], normal: [0, 1, 0] });
   });
 
-  it("takes the build's centre once, and never over one it has", () => {
-    expect(withCenter(top(), [0, 0, 5])).toEqual(top([0, 0, 5]));
-    expect(withCenter(top([1, 1, 1]), [0, 0, 5])).toEqual(top([1, 1, 1]));
-    expect(withCenter(top(), undefined)).toEqual(top());
+  it("takes the build's extent once, and never over an extent or a centre it has", () => {
+    const rec = { extent: [-20, 20, -10, 10] as [number, number, number, number], point: [3, 2, 5] as Vec3, points: [[3, 2, 5]] as Vec3[] };
+    expect(withExtent(top(), rec)).toEqual({ ...top(), extent: [-20, 20, -10, 10] });
+    expect(withExtent({ ...top(), extent: [0, 1, 0, 1] } as Selector, rec)).toEqual({ ...top(), extent: [0, 1, 0, 1] });
+    expect(withExtent(top([0, 0, 5]), rec)).toEqual(top([0, 0, 5]));
+    expect(withExtent(top(), undefined)).toEqual(top());
+    expect(withExtent(top(), { point: [3, 2, 5], points: [] })).toEqual(top());
     const near = { kind: "face", by: "nearest", point: [3, 2, 5] } as Selector;
-    expect(withCenter(near, [0, 0, 5])).toBe(near);
+    expect(withExtent(near, rec)).toBe(near);
   });
 
   it("upgrades a point-only face to a tracked one on the same spot", () => {
@@ -25,17 +28,26 @@ describe("a hole's tracked face", () => {
     expect(upgradeFace(top([0, 0, 5]), [0, 0, 1])).toEqual(top([0, 0, 5]));
   });
 
-  // The face went up 15 and across 25 since the hole was placed: the edit opens
-  // on the holes where the build drilled them, with a centre that is current.
+  // The plate grew from 60 to 120 since the hole was placed: the edit opens on
+  // the holes where the build drilled them, with an extent that is current and
+  // the older centre dropped.
   it("rebases an edit onto where the face is now", () => {
-    const { face, points } = rebaseHole(top([0, 0, 5]), [[3, 2, 5], [-4, 0, 5]], [25, 0, 20]);
-    expect(points).toEqual([[28, 2, 20], [21, 0, 20]]);
-    expect(face).toEqual({ ...top([25, 0, 20]), point: [28, 2, 20] });
+    const rec = { extent: [0, 120, 0, 40] as [number, number, number, number], point: [5, 5, 6] as Vec3, points: [[5, 5, 6], [115, 35, 6]] as Vec3[] };
+    const { face, points } = rebaseHole(top([30, 20, 6]), [[5, 5, 6], [55, 35, 6]], rec);
+    expect(points).toEqual([[5, 5, 6], [115, 35, 6]]);
+    expect(face).toEqual({ ...top(), point: [5, 5, 6], extent: [0, 120, 0, 40] });
   });
 
-  it("leaves a face it cannot measure the move of alone", () => {
+  it("drops the extent of a face the build could not measure, its positions are already carried", () => {
+    const { face } = rebaseHole({ ...top(), extent: [0, 60, 0, 40] } as Selector, [[3, 2, 5]], { point: [3, 2, 9], points: [[3, 2, 9]] });
+    expect(face).toEqual({ ...top(), point: [3, 2, 9] });
+  });
+
+  it("leaves a face with no build record alone", () => {
     const pts: Vec3[] = [[3, 2, 5]];
-    expect(rebaseHole(top(), pts, [25, 0, 20])).toEqual({ face: top(), points: pts });
     expect(rebaseHole(top([0, 0, 5]), pts, undefined)).toEqual({ face: top([0, 0, 5]), points: pts });
+    expect(rebaseHole(top(), pts, { point: [3, 2, 5], points: [] })).toEqual({ face: top(), points: pts });
+    const near = { kind: "face", by: "nearest", point: [3, 2, 5] } as Selector;
+    expect(rebaseHole(near, pts, { point: [0, 0, 0], points: [[0, 0, 0]] })).toEqual({ face: near, points: pts });
   });
 });

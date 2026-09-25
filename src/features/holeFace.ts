@@ -1,13 +1,14 @@
 // The face a hole sits on, written as a `tracked` selector so the hole follows
 // the face through a parameter change instead of staying where it was drawn.
 //
-// `center` is the face outline's centre as the engine measured it, taken from
-// a build's `faceCenters`: a hole's positions move by however far that centre
-// has moved since, which only the engine can say exactly.
+// `extent` is the face outline's extent in the engine's own face frame, taken
+// from a build's `trackedFaces`: only the engine measures it, so it is written
+// back from a build rather than worked out here.
 
-import type { Selector, Vec3 } from "../types";
+import type { Selector, TrackedFaceRecord, Vec3 } from "../types";
 
 type Tracked = Extract<Selector, { by: "tracked" }>;
+type Extent = [number, number, number, number];
 
 const round6 = (x: number) => Math.round(x * 1e6) / 1e6;
 
@@ -26,19 +27,21 @@ export function upgradeFace(face: Selector, normal: Vec3): Selector {
   return trackedFace(face.point, normal, face.body ?? null);
 }
 
-/** The build's outline centre written into a tracked face that has none yet. */
-export function withCenter(face: Selector, now: Vec3 | undefined): Selector {
-  if (face.by !== "tracked" || face.center || !now) return face;
-  return { ...face, center: [...now] as Vec3 };
+/** The build's extent written into a tracked face that has neither an extent nor a centre yet. */
+export function withExtent(face: Selector, rec: TrackedFaceRecord | undefined): Selector {
+  if (face.by !== "tracked" || face.extent || face.center || !rec?.extent) return face;
+  return { ...face, extent: [...rec.extent] as Extent };
 }
 
 /** A hole's face and positions moved to where the last build put them, so an
- *  edit starts from the holes on screen and writes a centre that is current. */
-export function rebaseHole(face: Selector, points: Vec3[], now: Vec3 | undefined): { face: Selector; points: Vec3[] } {
-  if (face.by !== "tracked" || !face.center || !now) return { face, points };
-  const c = face.center;
-  const d: Vec3 = [now[0] - c[0], now[1] - c[1], now[2] - c[2]];
-  const move = (p: Vec3): Vec3 => [round6(p[0] + d[0]), round6(p[1] + d[1]), round6(p[2] + d[2])];
-  const moved: Tracked = { ...face, point: move(face.point), center: [...now] as Vec3 };
-  return { face: moved, points: points.map(move) };
+ *  edit starts from the holes on screen and writes an extent that is current. */
+export function rebaseHole(face: Selector, points: Vec3[], rec: TrackedFaceRecord | undefined): { face: Selector; points: Vec3[] } {
+  if (face.by !== "tracked" || !rec || rec.points.length !== points.length) return { face, points };
+  const { center: _was, extent: _then, ...rest } = face;
+  const moved: Tracked = {
+    ...rest,
+    point: [...rec.point] as Vec3,
+    ...(rec.extent ? { extent: [...rec.extent] as Extent } : {}),
+  };
+  return { face: moved, points: rec.points.map((p) => [...p] as Vec3) };
 }

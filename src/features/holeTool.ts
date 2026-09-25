@@ -21,7 +21,7 @@ import { planeXDir } from "./planeMath";
 import {
   CLEARANCE, HOLE_TYPES, INSERT, isHoleSize, newHoleFields, parseHoleSize, type HoleSize,
 } from "./holeStandards";
-import { rebaseHole, trackedFace, upgradeFace, withCenter } from "./holeFace";
+import { rebaseHole, trackedFace, upgradeFace, withExtent } from "./holeFace";
 
 type HoleFeature = Extract<Feature, { type: "hole" }>;
 
@@ -120,7 +120,7 @@ export class HoleTool {
     for (const [field] of featureNumFields("hole", values)) {
       if (typeof values[field] === "string" || this.store.isParamBound({ kind: "feature", feature: id, field })) return false;
     }
-    const placed = rebaseHole(f.face, f.points, this.store.buildState.result?.faceCenters?.[id]);
+    const placed = rebaseHole(f.face, f.points, this.store.buildState.result?.trackedFaces?.[id]);
     const first = placed.points[0]!;
     const at = new THREE.Vector3(first[0], first[1], first[2]);
     const plane = this.viewport.planarFaceThrough(at, f.body ?? null);
@@ -541,8 +541,8 @@ export class HoleTool {
       setPrompt(`Hole refused: ${verdict.reason} · change it or Esc`);
       return;
     }
-    // The preview built this very face, so its centre is the one to keep.
-    this.face = withCenter(this.face!, this.store.buildState.result?.faceCenters?.[this.previewId]);
+    // The preview built this very face, so its extent is the one to keep.
+    this.face = withExtent(this.face!, this.store.buildState.result?.trackedFaces?.[this.previewId]);
     const feature = this.buildFeature();
     const editId = this.editId;
     this.cleanup(false);
