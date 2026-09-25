@@ -13,7 +13,7 @@
 // the profile can sit on it, and its edge is also where support stops.
 
 import * as THREE from "three";
-import { chainLoops, pointInLoop } from "./region";
+import { chainLoops, pointInLoop, type Box } from "./region";
 import type { SketchPlane } from "./plane";
 
 /** The shape of an edge as the viewport stores it (viewport/edgeLines.EdgeRef).
@@ -127,8 +127,9 @@ export function loopsFromEdgePolys(flat: readonly THREE.Vector2[][]): THREE.Vect
  *  cuts every consuming feature's profile along the same lines, so an area
  *  highlighted here is the area that builds. */
 export interface CutSource {
-  /** World polylines, null when the engine could not be asked. */
-  cuts(plane: SketchPlane): Promise<readonly (readonly [number, number, number])[][] | null>;
+  /** World polylines, null when the engine could not be asked. Only lines
+   *  reaching `reach`, a sketch-2D box, need come back. */
+  cuts(plane: SketchPlane, reach: Box): Promise<readonly (readonly [number, number, number])[][] | null>;
   /** Any value whose IDENTITY changes exactly when the model does, the build
    *  result object itself is the natural one. */
   epoch(): unknown;
@@ -137,36 +138,56 @@ export interface CutSource {
   landed(): void;
 }
 
-/** The engine's cut lines on a plane chained into loops, per plane per model.
+const covers = (outer: Box, inner: Box) =>
+  outer.minx <= inner.minx && outer.miny <= inner.miny && outer.maxx >= inner.maxx && outer.maxy >= inner.maxy;
+
+/** The box asked for: what is needed, joined to what was already asked for on
+ *  this model, with room to draw on before the next ask. */
+function askReach(need: Box, had: Box | null): Box {
+  const b = had
+    ? { minx: Math.min(need.minx, had.minx), miny: Math.min(need.miny, had.miny), maxx: Math.max(need.maxx, had.maxx), maxy: Math.max(need.maxy, had.maxy) }
+    : need;
+  const m = Math.max(b.maxx - b.minx, b.maxy - b.miny) * 0.5 + 1;
+  return { minx: b.minx - m, miny: b.miny - m, maxx: b.maxx + m, maxy: b.maxy + m };
+}
+
+/** The engine's cut lines on a plane as sketch-2D polylines, per plane per model,
+ *  covering the box each caller needs.
  *
  *  Keyed on the SketchPlane OBJECT, which the overlay hands out once per plane
  *  spec, so sketches sharing a plane share one request. Until the answer for
- *  the current model lands, the previous model's is served, so a rebuild does
- *  not flash every split profile whole. */
-export function profileCutCache(src: CutSource): (plane: SketchPlane) => THREE.Vector2[][] {
-  interface Entry { epoch: unknown; loops: THREE.Vector2[][]; asked: unknown }
+ *  the current model and box lands, the previous one is served, so a rebuild
+ *  does not flash every split profile whole. */
+export function profileCutCache(src: CutSource): (plane: SketchPlane, need: Box | null) => THREE.Vector2[][] {
+  interface Entry { epoch: unknown; reach: Box | null; lines: THREE.Vector2[][]; askedEpoch: unknown; asked: Box | null }
   const NONE = Symbol("never asked");
   const byPlane = new WeakMap<SketchPlane, Entry>();
-  return (plane) => {
-    const now = src.epoch();
+  return (plane, need) => {
     let e = byPlane.get(plane);
     if (!e) {
-      e = { epoch: NONE, loops: [], asked: NONE };
+      e = { epoch: NONE, reach: null, lines: [], askedEpoch: NONE, asked: null };
       byPlane.set(plane, e);
     }
-    if (e.epoch !== now && e.asked !== now) {
-      e.asked = now;
+    if (!need) return e.lines;
+    const now = src.epoch();
+    const answered = e.epoch === now && !!e.reach && covers(e.reach, need);
+    const inFlight = e.askedEpoch === now && !!e.asked && covers(e.asked, need);
+    if (!answered && !inFlight) {
+      const reach = askReach(need, e.askedEpoch === now ? e.asked : null);
+      e.askedEpoch = now;
+      e.asked = reach;
       const entry = e;
-      void src.cuts(plane).then((lines) => {
+      void src.cuts(plane, reach).then((lines) => {
         if (src.epoch() !== now) return;
+        if (entry.epoch === now && entry.reach && covers(entry.reach, reach)) return;
         const v = new THREE.Vector3();
-        const polys = (lines ?? []).map((l) => l.map((p) => plane.to2D(v.set(p[0], p[1], p[2]), new THREE.Vector2())));
         entry.epoch = now;
-        entry.loops = loopsFromEdgePolys(polys);
+        entry.reach = reach;
+        entry.lines = (lines ?? []).map((l) => l.map((p) => plane.to2D(v.set(p[0], p[1], p[2]), new THREE.Vector2())));
         src.landed();
       }).catch(() => undefined);
     }
-    return e.loops;
+    return e.lines;
   };
 }
 

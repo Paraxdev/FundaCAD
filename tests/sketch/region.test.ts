@@ -2,7 +2,7 @@
 // detectRegions, pointInLoop/pointInRegion.
 import { describe, it, expect } from "vitest";
 import * as THREE from "three";
-import { detectRegions, entityPolyline, glyphRegion, pointInRegion, rectCorners, rectFromThreePoints } from "../../src/sketch/region";
+import { detectRegions, entityPolyline, glyphRegion, pointInRegion, rectCorners, rectFromThreePoints, regionArea } from "../../src/sketch/region";
 import type { ResolvedEntity } from "../../src/sketch/snap";
 
 const line = (id: string, x1: number, y1: number, x2: number, y2: number): ResolvedEntity =>
@@ -211,7 +211,7 @@ describe("detectRegions, splitting a profile at the edge of the face it sits on"
 
   it("cuts a profile that hangs off the edge into an on-face part and an overhang", () => {
     // A circle centred on the face's right edge: half on the part, half in air.
-    const regions = detectRegions("s1", [circle("c", 10, 0, 6)], face);
+    const regions = detectRegions("s1", [circle("c", 10, 0, 6)], lines(face));
     expect(regions.length).toBe(2);
     const kinds = regions.map((r) => r.support).sort();
     expect(kinds).toEqual(["on-face", "overhang"]);
@@ -221,7 +221,7 @@ describe("detectRegions, splitting a profile at the edge of the face it sits on"
     // The support flag is what a tool will branch on, so it has to agree with
     // the geometry rather than merely be present. The anchor is the point the
     // selection is stored as, so it is the one that must be on the right side.
-    const regions = detectRegions("s1", [circle("c", 10, 0, 6)], face);
+    const regions = detectRegions("s1", [circle("c", 10, 0, 6)], lines(face));
     for (const r of regions) {
       const inside = r.interior.x < 10;
       expect(r.support).toBe(inside ? "on-face" : "overhang");
@@ -233,7 +233,7 @@ describe("detectRegions, splitting a profile at the edge of the face it sits on"
     // cell leaves the user with a profile smaller than the one they drew, and
     // nothing on screen says so until the extrude comes out wrong.
     const whole = detectRegions("s1", [circle("c", 10, 0, 6)]);
-    const split = detectRegions("s1", [circle("c", 10, 0, 6)], face);
+    const split = detectRegions("s1", [circle("c", 10, 0, 6)], lines(face));
     const before = whole.reduce((s, r) => s + area(r.loop), 0);
     const after = split.reduce((s, r) => s + area(r.loop), 0);
     expect(after).toBeCloseTo(before, 3);
@@ -244,13 +244,13 @@ describe("detectRegions, splitting a profile at the edge of the face it sits on"
     // perturbing loops that were already right, so that path is skipped, but
     // the region must still be MARKED, because a tool needs to know it is
     // supported, not merely that it was not split.
-    const regions = detectRegions("s1", [circle("c", 0, 0, 4)], face);
+    const regions = detectRegions("s1", [circle("c", 0, 0, 4)], lines(face));
     expect(regions).toHaveLength(1);
     expect(regions[0]!.support).toBe("on-face");
   });
 
   it("marks a profile wholly off the face as overhanging, without splitting it", () => {
-    const regions = detectRegions("s1", [circle("c", 40, 0, 4)], face);
+    const regions = detectRegions("s1", [circle("c", 40, 0, 4)], lines(face));
     expect(regions).toHaveLength(1);
     expect(regions[0]!.support).toBe("overhang");
   });
@@ -268,7 +268,7 @@ describe("detectRegions, splitting a profile at the edge of the face it sits on"
     // FACE as well, most obviously "the face minus the profile", which is
     // bounded by the outline and the profile and looks just like a legitimate
     // mixed cell. The user drew a circle, not a plate with a hole in it.
-    const regions = detectRegions("s1", [circle("c", 10, 0, 6)], face);
+    const regions = detectRegions("s1", [circle("c", 10, 0, 6)], lines(face));
     const faceArea = 20 * 20;
     for (const r of regions) expect(area(r.loop)).toBeLessThan(faceArea / 2);
   });
@@ -277,7 +277,7 @@ describe("detectRegions, splitting a profile at the edge of the face it sits on"
     // Even-odd, so a profile over the bore of a washer-shaped face is
     // overhanging: there is no material under it to cut into or add flush to.
     const washer: THREE.Vector2[][] = [face[0]!, circleLoopFor(0, 0, 5)];
-    const regions = detectRegions("s1", [circle("c", 0, 0, 2)], washer);
+    const regions = detectRegions("s1", [circle("c", 0, 0, 2)], lines(washer));
     expect(regions).toHaveLength(1);
     expect(regions[0]!.support).toBe("overhang");
   });
@@ -457,5 +457,45 @@ describe("detectRegions, every closed primitive is a profile, not just the two",
     // profile, or every centreline turns into an extrudable area.
     const c: ResolvedEntity = { ...slot("s", -10, 0, 10, 0, 8), construction: true } as ResolvedEntity;
     expect(detectRegions("s1", [c])).toHaveLength(0);
+  });
+});
+
+/** Loops as the engine sends cut lines: polylines, a closed one ending where it began. */
+function lines(loops: THREE.Vector2[][]): THREE.Vector2[][] {
+  return loops.map((l) => [...l, l[0]!]);
+}
+
+describe("detectRegions, the areas are the engine's cells whatever the cut lines' layout", () => {
+  const seg = (x1: number, y1: number, x2: number, y2: number) => [new THREE.Vector2(x1, y1), new THREE.Vector2(x2, y2)];
+  const boxLines = (x0: number, y0: number, x1: number, y1: number) => [
+    seg(x0, y0, x1, y0), seg(x1, y0, x1, y1), seg(x1, y1, x0, y1), seg(x0, y1, x0, y0),
+  ];
+  const areas = (rs: ReturnType<typeof detectRegions>) => rs.map(regionArea).sort((a, b) => a - b);
+
+  it("splits a profile around a block top lying wholly inside it into the top and the ring", () => {
+    // Block [0,20]², sketch 26x26 overhanging 3 mm all round, never touching the block's edges.
+    const rs = detectRegions("s", [rect("r", 10, 10, 26, 26)], boxLines(0, 0, 20, 20));
+    expect(areas(rs).map((a) => Math.round(a))).toEqual([276, 400]);
+    const ring = rs.find((r) => r.holes.length === 1)!;
+    expect(ring.support).toBe("overhang");
+    expect(rs.find((r) => r.holes.length === 0)!.support).toBe("on-face");
+  });
+
+  it("offers no area for a face outline the sketch does not cross, beside a hole it does", () => {
+    // Block [0,40]² with an r8 bore at (20,20), sketch (16,16)-(36,36) straddling the bore.
+    const bore = circleLoopFor(20, 20, 8);
+    const rs = detectRegions("s", [rect("r", 26, 26, 20, 20)], [...boxLines(0, 0, 40, 40), [...bore, bore[0]!]]);
+    expect(rs).toHaveLength(2);
+    const a = areas(rs);
+    expect(a[0]! + a[1]!).toBeCloseTo(400, 3);
+    expect(Math.abs(a[0]! - 127.49)).toBeLessThan(0.5);
+    for (const r of rs) expect(r.loop.every((p) => p.x >= 16 - 1e-6 && p.y >= 16 - 1e-6)).toBe(true);
+  });
+
+  it("splits the same with only the cut lines near the sketch, open ones included", () => {
+    // Rails [0,20]x[0,460] and [0,480]x[0,20]: the union outline, far ends left out.
+    const cuts = [seg(0, 0, 0, 100), seg(0, 0, 100, 0), seg(20, 20, 20, 100), seg(20, 20, 100, 20)];
+    const rs = detectRegions("s", [rect("r", 10, 10, 60, 60)], cuts);
+    expect(areas(rs).map((a) => Math.round(a))).toEqual([400, 1200, 2000]);
   });
 });

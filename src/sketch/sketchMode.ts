@@ -37,7 +37,7 @@ import { applyDrivingDimsDirect, dimAnchor, drivenBadges, drivingDimFor, findDri
 import { expandPattern, reflectedRect, translated } from "./pattern";
 import { candidatesFromEntities, dragSnap, originCandidate, settleOriginPin, showsSnapMarker, snap, type OriginPinRequest, type SnapGuide, type SnapKind, type SnapCandidate } from "./snap";
 import type { ResolvedEntity } from "./snap";
-import { detectRegions, entityPolyline, rectCorners, rectFromThreePoints } from "./region";
+import { detectRegions, entityPolyline, profileBounds, rectCorners, rectFromThreePoints } from "./region";
 import { AreaBox } from "../viewport/areaBox";
 import { Disposer } from "../lib/disposer";
 import { allInsideRect, convexTouchesRect, dragBox, isAreaDrag, pointInRect, type AreaMode, type ScreenRect } from "../viewport/areaSelect";
@@ -836,7 +836,7 @@ export class SketchMode {
     // from the geometry they label (they're click targets in the select tool)
     setDimPixelScale(this.planeMmPerPx());
     const derived = this.derivedEntities(); // computed once, shared below
-    const regionFootprint = this.overlay.footprintFor(this.plane);
+    const regionFootprint = this.overlay.footprintFor(this.plane, profileBounds([...this.entities, ...derived]));
     this.overlay.setActiveSketch(this.activeCurves(derived));
     // profile-area fills for the active sketch (hidden from overlay.update),
     // so areas are visible + selectable while drawing

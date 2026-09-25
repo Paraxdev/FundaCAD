@@ -79,7 +79,7 @@ import { createDocBridge, type DocBridge } from "./docBridge";
 import { LiveSessionHost } from "../live/liveSession";
 import { liveEditsAllowed, liveSharingEnabled, onLiveEditingChange } from "../ui/liveEditing";
 
-import type { Feature, PlaneDef, PlaneSpec } from "../types";
+import type { Feature, PlaneDef, PlaneSpec, Vec3 } from "../types";
 import type { DatumPose } from "../document/datumPose";
 
 export interface EngineTools {
@@ -295,7 +295,14 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   // feature's profile with, so a highlighted area is the area that builds. The
   // build RESULT is the epoch: a visibility toggle re-emits the same one.
   e.overlay.footprintFor = profileCutCache({
-    cuts: (plane) => e.store.profileCuts([plane.origin.x, plane.origin.y, plane.origin.z], [plane.n.x, plane.n.y, plane.n.z]),
+    cuts: (plane, r) => e.store.profileCuts(
+      [plane.origin.x, plane.origin.y, plane.origin.z],
+      [plane.n.x, plane.n.y, plane.n.z],
+      ([[r.minx, r.miny], [r.maxx, r.miny], [r.maxx, r.maxy], [r.minx, r.maxy]] as const).map(([x, y]) => {
+        const p = plane.to3D(x, y);
+        return [p.x, p.y, p.z] as Vec3;
+      }),
+    ),
     epoch: () => e.store.buildState.result,
     landed: () => {
       if (e.sketch.active) e.sketch.redraw();

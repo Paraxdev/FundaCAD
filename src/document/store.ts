@@ -2017,9 +2017,10 @@ export class DocumentStore {
   }
 
   /** The lines a feature added now would cut a sketch's areas along on this
-   *  plane: the model before any preview or live-edited feature, which is what
-   *  that feature's own build sees. Null when the backend cannot answer. */
-  async profileCuts(origin: Vec3, normal: Vec3): Promise<Vec3[][] | null> {
+   *  plane, only those reaching the box of the `reach` points when given: the
+   *  model before any preview or live-edited feature, which is what that
+   *  feature's own build sees. Null when the backend cannot answer. */
+  async profileCuts(origin: Vec3, normal: Vec3, reach?: Vec3[]): Promise<Vec3[][] | null> {
     let features = prefixFeatures(this.doc.features, this.rollbackIndex, this.suppressed);
     const edit = this.editPreview;
     if (edit && !edit.inPlace) {
@@ -2032,7 +2033,7 @@ export class DocumentStore {
       ...(this.bodyVis.size ? { bodyVisibility: Object.fromEntries(this.bodyVis.entries()) } : {}),
       ...(this.doc.bodyIds ? { bodyIds: this.doc.bodyIds } : {}),
     };
-    return (await this.geometry.profileCuts?.(doc, origin, normal)) ?? null;
+    return (await this.geometry.profileCuts?.(doc, origin, normal, reach)) ?? null;
   }
 
   async patternAxis(ref: Selector): Promise<PatternAxisReply | null> {
