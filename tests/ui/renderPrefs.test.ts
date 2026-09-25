@@ -20,7 +20,12 @@ import {
   asEnvironment,
   asRenderPrefs,
   asTangentEdges,
+  onRenderPrefsChange,
+  performanceModeOn,
+  renderPrefs,
+  setRenderPref,
 } from "../../src/ui/renderPrefs";
+import { cameraFlightsOn, motionOn } from "../../src/ui/motion";
 
 describe("the field gates", () => {
   it("take what they know and refuse the rest", () => {
@@ -58,6 +63,7 @@ describe("asRenderPrefs", () => {
       aperture: DEFAULT_RENDER.aperture,
       focusBlur: DEFAULT_RENDER.focusBlur,
       performanceMode: true,
+      potatoMode: DEFAULT_RENDER.potatoMode,
       shadows: DEFAULT_RENDER.shadows,
       tangentEdges: DEFAULT_RENDER.tangentEdges,
       keyAzimuth: DEFAULT_RENDER.keyAzimuth,
@@ -139,5 +145,55 @@ describe("bloom", () => {
     // and an emissive material would never bloom at all, which is the only thing
     // bloom is for.
     expect(MAX_EMISSIVE_INTENSITY).toBeGreaterThan(bloomSettings(DEFAULT_BLOOM).threshold);
+  });
+});
+
+describe("potato mode", () => {
+  it("is off by default and kept only as a real boolean", () => {
+    expect(DEFAULT_RENDER.potatoMode).toBe(false);
+    expect(asRenderPrefs({ potatoMode: "yes" }).potatoMode).toBe(false);
+    expect(asRenderPrefs({ potatoMode: true }).potatoMode).toBe(true);
+    expect(asRenderPrefs({ performanceMode: true }).potatoMode).toBe(false);
+  });
+
+  it("implies performance mode without writing it", () => {
+    expect(performanceModeOn({ ...DEFAULT_RENDER, potatoMode: true })).toBe(true);
+    expect(performanceModeOn({ ...DEFAULT_RENDER, performanceMode: true })).toBe(true);
+    expect(performanceModeOn(DEFAULT_RENDER)).toBe(false);
+  });
+
+  it("restores performance mode as it was when turned off", () => {
+    for (const before of [false, true]) {
+      setRenderPref("performanceMode", before);
+      setRenderPref("potatoMode", true);
+      expect(renderPrefs().potatoMode).toBe(true);
+      expect(performanceModeOn()).toBe(true);
+      expect(renderPrefs().performanceMode).toBe(before);
+      setRenderPref("potatoMode", false);
+      expect(performanceModeOn()).toBe(before);
+      expect(renderPrefs()).toEqual({ ...DEFAULT_RENDER, performanceMode: before });
+    }
+    setRenderPref("performanceMode", false);
+    expect(renderPrefs()).toEqual(DEFAULT_RENDER);
+  });
+
+  it("tells the viewport on every flip and refuses a non-boolean", () => {
+    let calls = 0;
+    const off = onRenderPrefsChange(() => { calls++; });
+    setRenderPref("potatoMode", true);
+    setRenderPref("potatoMode", true);
+    setRenderPref("potatoMode", "on" as unknown as boolean);
+    expect(renderPrefs().potatoMode).toBe(true);
+    setRenderPref("potatoMode", false);
+    off();
+    expect(calls).toBe(2);
+  });
+
+  it("makes the camera jump instead of fly", () => {
+    const flights = motionOn();
+    setRenderPref("potatoMode", true);
+    expect(cameraFlightsOn()).toBe(false);
+    setRenderPref("potatoMode", false);
+    expect(cameraFlightsOn()).toBe(flights);
   });
 });

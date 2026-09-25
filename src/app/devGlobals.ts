@@ -4,6 +4,7 @@ import { isChoiceOpen, choose } from "../ui/choice";
 import { toast } from "../ui/toast";
 import { contextMenu, dismissContextMenu } from "../ui/menu";
 import { useBrowserStore } from "../stores/browser";
+import { renderPrefs, setRenderPref } from "../ui/renderPrefs";
 import type { Engine } from "./engine";
 
 /** Debug handles for console + headless frontend-logic tests. Gated to DEV so
@@ -44,6 +45,10 @@ export function installDevGlobals(e: Engine): void {
     viewport: e.viewport,
     sketch: e.sketch,
     handleAction: (a: string) => e.handleAction(a),
+    // The app's own module instance: a harness importing /src/ui/renderPrefs.ts
+    // after an HMR update gets a second copy whose listeners reach nothing.
+    renderPrefs,
+    setRenderPref,
     // Which feature the panels are showing. A harness that wants to open a
     // feature's Properties has to say WHICH, and the timeline chip that normally
     // does it is a click on a scrolling strip.

@@ -152,6 +152,10 @@ export interface RenderPrefs {
    *  dedicated GPU that reports a real name (so `detectLowPower` passes it) but
    *  still stutters on the heavy effects, this is the manual escape hatch. */
   performanceMode: boolean;
+  /** The lowest render, for software rendering in a virtual machine. Implies
+   *  performance mode without writing it, so turning this off leaves
+   *  performanceMode as the user last set it. */
+  potatoMode: boolean;
   /** Ground the model with real cast shadows from the key light, not just the
    *  soft occlusion an emissive part throws. OFF by default: a shadow under every
    *  part is a look, and the app has always drawn a clean, shadowless product
@@ -196,6 +200,7 @@ export const DEFAULT_RENDER: RenderPrefs = {
   // OFF: the auto-detect already spares the machines that genuinely cannot cope,
   // so this stays off until someone whose GPU slipped past it turns it on.
   performanceMode: false,
+  potatoMode: false,
   // OFF: opt-in grounded shadows, see the field comment.
   shadows: false,
   tangentEdges: "faint",
@@ -294,6 +299,7 @@ export function asRenderPrefs(v: unknown): RenderPrefs {
     aperture: asAperture(o["aperture"]) ?? DEFAULT_RENDER.aperture,
     focusBlur: asFocusBlur(o["focusBlur"]) ?? DEFAULT_RENDER.focusBlur,
     performanceMode: typeof o["performanceMode"] === "boolean" ? o["performanceMode"] : DEFAULT_RENDER.performanceMode,
+    potatoMode: typeof o["potatoMode"] === "boolean" ? o["potatoMode"] : DEFAULT_RENDER.potatoMode,
     shadows: typeof o["shadows"] === "boolean" ? o["shadows"] : DEFAULT_RENDER.shadows,
     tangentEdges: asTangentEdges(o["tangentEdges"]) ?? DEFAULT_RENDER.tangentEdges,
     keyAzimuth: asAzimuth(o["keyAzimuth"]) ?? DEFAULT_RENDER.keyAzimuth,
@@ -329,7 +335,7 @@ export function setRenderPref<K extends keyof RenderPrefs>(key: K, value: Render
           : key === "fov" ? asFov(value)
             : key === "aperture" ? asAperture(value)
               : key === "focusBlur" ? asFocusBlur(value)
-                : key === "performanceMode" ? (typeof value === "boolean" ? value : null)
+                : key === "performanceMode" || key === "potatoMode" ? (typeof value === "boolean" ? value : null)
                   : key === "shadows" ? (typeof value === "boolean" ? value : null)
                     : key === "tangentEdges" ? asTangentEdges(value)
                       : key === "keyAzimuth" ? asAzimuth(value)
@@ -345,6 +351,11 @@ export function setRenderPref<K extends keyof RenderPrefs>(key: K, value: Render
     /* private mode / no storage: the choice just doesn't survive the session */
   }
   for (const fn of listeners) fn();
+}
+
+/** Performance mode as the renderer applies it: set by hand, or implied by potato mode. */
+export function performanceModeOn(p: Readonly<RenderPrefs> = current): boolean {
+  return p.performanceMode || p.potatoMode;
 }
 
 /** Subscribe to changes; returns the unsubscribe. */
