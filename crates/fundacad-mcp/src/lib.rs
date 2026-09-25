@@ -19,6 +19,7 @@
 //! FundaCAD has open. `server` is what knows which.
 
 pub mod app_session;
+pub mod blobs;
 pub mod describe;
 pub mod docfile;
 pub mod link;

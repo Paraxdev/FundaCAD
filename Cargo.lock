@@ -858,6 +858,7 @@ dependencies = [
 name = "fundacad-geom"
 version = "0.2.0"
 dependencies = [
+ "base64 0.22.1",
  "blake2",
  "cc",
  "cxx",

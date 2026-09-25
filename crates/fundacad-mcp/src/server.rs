@@ -715,10 +715,24 @@ impl FundaCad {
             Ok(p) => abspath(&p),
             Err(e) => return Ok(e),
         };
-        let (doc, _blobs) = match docfile::read(&path, None) {
+        let (doc, blobs) = match docfile::read_document(&path) {
             Ok(v) => v,
             Err(e) => return Ok(failure(e.to_string())),
         };
+        let root = docfile::blob_dir();
+        let published = docfile::publish_all(&root, &blobs);
+        let link = self.engine_link().await;
+        if let Err(e) = crate::blobs::push(&link, &blobs).await {
+            if !published {
+                return Ok(failure(format!(
+                    "the geometry of {}'s imported bodies reached neither the engine ({e}) nor {}, \
+                     so it was not opened.",
+                    path.display(),
+                    root.display()
+                )));
+            }
+            log(&format!("[mcp] blobs not pushed to the engine, relying on {}: {e}", root.display()));
+        }
         let mut st = self.state.lock().await;
         st.doc = doc;
         model::fill_defaults(&mut st.doc);
@@ -780,7 +794,22 @@ The format comes from the extension unless given. A large STEP can take minutes:
                 return Ok(failure(format!("No such directory: {}", parent.display())));
             }
         }
-        let embedded = match docfile::write(&path, &st.doc, None) {
+        let root = docfile::blob_dir();
+        let mut fetched = std::collections::HashMap::new();
+        let link = st.link.clone();
+        for digest in docfile::referenced_geometry(&st.doc) {
+            if docfile::local_blob(&root, &digest).is_some() {
+                continue;
+            }
+            match crate::blobs::fetch(&link, &digest).await {
+                Ok(Some(data)) => {
+                    fetched.insert(digest, data);
+                }
+                Ok(None) => {}
+                Err(e) => log(&format!("[mcp] could not ask the engine for {digest}: {e}")),
+            }
+        }
+        let embedded = match docfile::write_with(&path, &st.doc, Some(&root), &fetched) {
             Ok(n) => n,
             Err(e) => return Ok(failure(e.to_string())),
         };

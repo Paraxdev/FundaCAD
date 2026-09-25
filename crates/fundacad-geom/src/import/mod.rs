@@ -260,6 +260,16 @@ pub fn import_result(req: &Map<String, Value>) -> JobResult {
     }
 }
 
+pub fn blob_result(op: &str, req: &Map<String, Value>) -> JobResult {
+    let result = BlobStore::open(blobstore::default_root())
+        .map_err(|e| format!("the geometry store cannot be opened ({e})"))
+        .and_then(|store| blobstore::blob_op(op, req, &store));
+    match result {
+        Ok(m) => JobResult::Json(m),
+        Err(message) => error_result(&message),
+    }
+}
+
 /// The `migrateGeometry` op.
 pub fn migrate_result(req: &Map<String, Value>) -> JobResult {
     let items = req.get("items").and_then(Value::as_array).cloned().unwrap_or_default();
