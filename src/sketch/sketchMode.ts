@@ -30,10 +30,10 @@ import { isPlainNumber, parseField } from "../ui/units";
 import { RIGID_ENTITY_NUM_FIELDS, coerceForField, type FieldKind } from "../document/numFields";
 import type { SketchBinding } from "../document/store";
 import { circumcenter } from "./arc";
-import { compileAndSolve, coincKey, constraintIndexOf } from "./sketchSolve";
+import { compileAndSolve, coincKey, constraintIndexOf, solveKeepingAxes } from "./sketchSolve";
 import { SolverUnavailable } from "./solver";
 import { resolveRealEntities, toSketchEntity } from "./resolve";
-import { applyDrivingDimsDirect, drivenBadges, drivingDimFor, findDrivingDim, type DrivingDim } from "./directDims";
+import { applyDrivingDimsDirect, dimAnchor, drivenBadges, drivingDimFor, findDrivingDim, type DrivingDim } from "./directDims";
 import { expandPattern, translated } from "./pattern";
 import { candidatesFromEntities, dragSnap, originCandidate, settleOriginPin, showsSnapMarker, snap, type OriginPinRequest, type SnapGuide, type SnapKind, type SnapCandidate } from "./snap";
 import type { ResolvedEntity } from "./snap";
@@ -248,6 +248,8 @@ export class SketchMode {
   private solverDeadToast = false;
   private directDimToast = false; // said once: dims are being written straight to geometry
   private solveDirty = false; // a constraint/dimension solve is pending
+  /** The pending solve follows a typed dimension, see solveKeepingAxes. */
+  private dimSolve: { anchor: { x: number; y: number } | undefined } | null = null;
   private entityVersion = 0; // bumped on every entity change; guards stale solves
   private conflict = false; // last solve reported conflicting (over-)constraints
   private lastCursor = new THREE.Vector2();
@@ -1283,6 +1285,7 @@ export class SketchMode {
     });
     if (isDimConstraint(c) && !c.id) c.id = replacedId ?? newConstraintId();
     this.constraints.push(c);
+    this.dimSolve = { anchor: dimAnchor(this.entities, c) };
     this.requestSolve();
     if (this.solverDead) this.applyDrivingDimsDirectly();
   }
@@ -3492,10 +3495,14 @@ export class SketchMode {
           this.solveDirty = false;
           if (this.constraints.length === 0) { this.lastDof = -1; this.conflict = false; continue; }
           const ver = this.entityVersion;
-          const r = await compileAndSolve(this.entities, this.constraints);
+          const dim = this.dimSolve;
+          this.dimSolve = null;
+          const r = dim
+            ? await solveKeepingAxes(this.entities, this.constraints, dim.anchor)
+            : await compileAndSolve(this.entities, this.constraints);
           if (!this.active) break;
           // geometry changed mid-solve (a draw committed): discard, re-solve
-          if (this.entityVersion !== ver) { this.solveDirty = true; continue; }
+          if (this.entityVersion !== ver) { this.dimSolve ??= dim; this.solveDirty = true; continue; }
           this.conflict = r.conflicts.length > 0;
           this.conflictIdx = parseConflictIdx(r.conflicts);
           this.overIdx = parseConflictIdx(r.overDefined);

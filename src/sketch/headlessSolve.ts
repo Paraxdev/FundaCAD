@@ -8,16 +8,17 @@
 // the sketch id so the user hears about it (never blocks the edit).
 
 import type { Feature, Params, SketchEntity } from "../types";
-import { compileAndSolve } from "./sketchSolve";
+import { solveKeepingAxes } from "./sketchSolve";
 import { resolveRealEntities, toSketchEntity } from "./resolve";
 
 export async function solveSketchFeature(
   sketch: Extract<Feature, { type: "sketch" }>,
   params: Params,
+  anchor?: { x: number; y: number },
 ): Promise<{ entities: SketchEntity[] } | null> {
   try {
     const entities = resolveRealEntities(sketch, params);
-    const r = await compileAndSolve(entities, sketch.constraints ?? []);
+    const r = await solveKeepingAxes(entities, sketch.constraints ?? [], anchor);
     if (!r.ok || r.conflicts.length > 0) return null;
     return { entities: r.entities.map(toSketchEntity) };
   } catch {

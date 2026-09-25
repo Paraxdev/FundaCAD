@@ -140,6 +140,14 @@ export function drivingDimFor(entity: ResolvedEntity, field: DimField, mm: numbe
   return null;
 }
 
+/** Where a typed dimension keeps its geometry still (see solveKeepingAxes): a
+ *  line's start, so its length is taken up at the far end. */
+export function dimAnchor(entities: ResolvedEntity[], c: SketchConstraint): { x: number; y: number } | undefined {
+  if (c.type !== "distance") return undefined;
+  const e = entities.find((k) => k.id === c.line);
+  return e?.type === "line" ? { x: e.x1, y: e.y1 } : undefined;
+}
+
 /** The driving constraint already holding `entity`'s `field`, if any. */
 export function findDrivingDim(
   constraints: SketchConstraint[],

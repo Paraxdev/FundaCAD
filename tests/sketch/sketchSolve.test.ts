@@ -10,7 +10,7 @@ vi.mock("@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url", () => ({
   default: process.cwd() + "/node_modules/@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm",
 }));
 
-import { compileAndSolve, constraintIndexOf } from "../../src/sketch/sketchSolve";
+import { compileAndSolve, constraintIndexOf, solveKeepingAxes } from "../../src/sketch/sketchSolve";
 import { drivingDimFor } from "../../src/sketch/directDims";
 import { breakLink } from "../../src/sketch/modify";
 import { rectCorners } from "../../src/sketch/region";
@@ -556,5 +556,43 @@ describe("a rectangle's typed width and height hold its free corner (MO-1)", () 
     expect(r.ok).toBe(true);
     expect(r.dof).toBe(0);
     expect(r.entities[0]).toMatchObject({ x: 21, y: 21, width: 42, height: 42 });
+  });
+});
+
+describe("FR-4: a typed line length keeps a rectangle drawn as four lines square", () => {
+  const frame = () => [line("e1", 0, 0, 20, 0), line("e2", 20, 0, 20, 40), line("e3", 20, 40, 0, 40), line("e4", 0, 40, 0, 0)];
+  const lengths = (ents: ResolvedEntity[]) =>
+    ents.map((e) => (e.type === "line" ? Math.hypot(e.x2 - e.x1, e.y2 - e.y1) : NaN));
+  const e2Length: SketchConstraint[] = [{ id: "d", type: "distance", line: "e2", value: 45 }];
+
+  it("a plain solve skews the two neighbours, which is what the held solve is for", async () => {
+    const r = await compileAndSolve(frame(), e2Length);
+    const [a, , c] = lengths(r.entities);
+    expect(Math.abs(a! - 20) + Math.abs(c! - 20)).toBeGreaterThan(0.01);
+  });
+
+  it("moves only the far side, the neighbours stay 20 and the start stays put", async () => {
+    const r = await solveKeepingAxes(frame(), e2Length, { x: 20, y: 0 });
+    expect(r.ok).toBe(true);
+    expect(r.conflicts).toEqual([]);
+    const [a, b, c, d] = lengths(r.entities);
+    expect(a).toBeCloseTo(20, 9);
+    expect(b).toBeCloseTo(45, 9);
+    expect(c).toBeCloseTo(20, 9);
+    expect(d).toBeCloseTo(45, 9);
+    expect(r.entities[1]).toMatchObject({ x1: 20, y1: 0, x2: 20 });
+    expect((r.entities[1] as { y2: number }).y2).toBeCloseTo(45, 9);
+    expect(r.dof).toBe(7);
+  });
+
+  it("falls back to the plain solve when a line has to turn", async () => {
+    const two = [line("a", 0, 0, 10, 0), line("b", 20, 0, 20, 10)];
+    const cs: SketchConstraint[] = [{ type: "parallel", l1: "a", l2: "b" }, { id: "d", type: "distance", line: "a", value: 12 }];
+    const r = await solveKeepingAxes(two, cs, { x: 0, y: 0 });
+    expect(r.ok).toBe(true);
+    expect(r.conflicts).toEqual([]);
+    const [a, b] = r.entities as Extract<ResolvedEntity, { type: "line" }>[];
+    expect(Math.abs((a!.x2 - a!.x1) * (b!.y2 - b!.y1) - (a!.y2 - a!.y1) * (b!.x2 - b!.x1))).toBeLessThan(1e-6);
+    expect(lengths([a!])[0]).toBeCloseTo(12, 6);
   });
 });

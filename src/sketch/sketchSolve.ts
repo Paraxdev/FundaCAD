@@ -63,10 +63,36 @@ export function constraintIndexOf(id: string): number | null {
   return m && m[1] !== undefined ? Number(m[1]) : null;
 }
 
+/** The solve after a dimension is typed or changed. Lines drawn exactly
+ *  horizontal or vertical keep that direction where the constraints allow, and
+ *  `anchor` (the start of a line whose length was typed) stays put, so
+ *  lengthening one side of four lines drawn as a rectangle moves only the far
+ *  side instead of skewing the two beside it. A held pass only places the
+ *  geometry: a plain pass from there reports dof and diagnostics against the
+ *  user's constraints alone, and whatever the holds cannot satisfy gets the
+ *  plain solve it always had. */
+export async function solveKeepingAxes(
+  entities: ResolvedEntity[],
+  constraints: SketchConstraint[],
+  anchor?: { x: number; y: number },
+): Promise<SolvePass> {
+  const tries = anchor ? [{ holdAxes: true, pin: anchor }, { holdAxes: true }] : [{ holdAxes: true }];
+  for (const opts of tries) {
+    const held = await compileAndSolve(entities, constraints, undefined, opts);
+    if (!held.ok || held.conflicts.length) continue;
+    const settled = await compileAndSolve(held.entities, constraints);
+    if (settled.ok && !settled.conflicts.length) return settled;
+  }
+  return compileAndSolve(entities, constraints);
+}
+
+const AXIS_TOL = 1e-6;
+
 export async function compileAndSolve(
   entities: ResolvedEntity[],
   constraints: SketchConstraint[],
   drag?: { fromX: number; fromY: number; toX: number; toY: number },
+  opts?: { holdAxes?: boolean; pin?: { x: number; y: number } },
 ): Promise<SolvePass> {
   const points: SPoint[] = [];
   const pointByKey = new Map<string, string>();
@@ -137,6 +163,10 @@ export async function compileAndSolve(
       const p2 = getPoint(e.x2, e.y2);
       lines.push({ id: e.id, p1, p2 });
       ends.set(e.id, [p1, p2]);
+      if (opts?.holdAxes && p1 !== p2) {
+        if (Math.abs(e.y2 - e.y1) <= AXIS_TOL) cons.push({ id: `${e.id}~holdH`, type: "horizontal", line: e.id });
+        else if (Math.abs(e.x2 - e.x1) <= AXIS_TOL) cons.push({ id: `${e.id}~holdV`, type: "vertical", line: e.id });
+      }
     } else if (e.type === "circle") {
       const c = getPoint(e.x, e.y, false); // center is not an endpoint
       circles.push({ id: e.id, center: c, radius: e.radius });
@@ -424,6 +454,8 @@ export async function compileAndSolve(
     }
   });
 
+  const pinned = opts?.pin ? pointByKey.get(key(opts.pin.x, opts.pin.y)) : undefined;
+  if (pinned) fixedPts.add(pinned);
   for (const p of points) if (fixedPts.has(p.id)) p.fixed = true;
 
   let dragInput: { point: string; x: number; y: number } | undefined;
