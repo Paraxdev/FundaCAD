@@ -289,3 +289,17 @@ fn saving_with_missing_geometry_is_refused() {
     );
     assert!(!path.exists());
 }
+
+#[test]
+fn a_local_blob_that_no_longer_matches_its_hash_is_not_embedded() {
+    let tmp = tempfile::tempdir().unwrap();
+    let data = geometry();
+    let d = digest(&data);
+    let store = tmp.path().join("blobs");
+    std::fs::create_dir_all(&store).unwrap();
+    std::fs::write(store.join(format!("{d}.bbrep")), b"torn").unwrap();
+    let path = tmp.path().join("part.funda");
+    assert!(docfile::write(&path, &doc(&d), Some(&store)).is_err());
+    let fetched = std::collections::HashMap::from([(d.clone(), data)]);
+    assert_eq!(docfile::write_with(&path, &doc(&d), Some(&store), &fetched).unwrap(), 1);
+}

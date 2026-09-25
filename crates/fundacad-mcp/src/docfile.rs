@@ -57,7 +57,7 @@ pub fn is_binary_path(path: &Path) -> bool {
         .is_some_and(|e| e.to_string_lossy().to_ascii_lowercase() == BINARY_EXT)
 }
 
-fn hash(data: &[u8]) -> String {
+pub fn hash(data: &[u8]) -> String {
     let mut h = blake2::Blake2bVar::new(16).expect("16 is a legal blake2b length");
     h.update(data);
     let mut out = [0u8; 16];
@@ -93,6 +93,16 @@ fn publish(root: &Path, digest: &str, data: &[u8]) -> Result<(), DocumentFileErr
 /// The document object, and how many geometry blobs were published.
 pub fn read(path: &Path, root: Option<&Path>) -> Result<(Map<String, Value>, usize), DocumentFileError> {
     let root = root.map_or_else(blob_dir, Path::to_path_buf);
+    let (doc, blobs) = read_document(path)?;
+    for (digest, data) in &blobs {
+        publish(&root, digest, data)?;
+    }
+    Ok((doc, blobs.len()))
+}
+
+/// The document object and its embedded geometry, each blob checked against
+/// its hash, and nothing written anywhere.
+pub fn read_document(path: &Path) -> Result<(Map<String, Value>, Vec<(String, Vec<u8>)>), DocumentFileError> {
     let Ok(raw) = std::fs::read(path) else {
         return fail(format!("No such file: {}", path.display()));
     };
@@ -116,10 +126,25 @@ pub fn read(path: &Path, root: Option<&Path>) -> Result<(Map<String, Value>, usi
             path.display()
         ));
     }
-    for (digest, data) in &blobs {
-        publish(&root, digest, data)?;
+    if blobs.iter().any(|(digest, data)| hash(data) != *digest) {
+        return fail(
+            "this document's geometry does not match its hash, the file is damaged or was modified",
+        );
     }
-    Ok((doc, blobs.len()))
+    Ok((doc, blobs))
+}
+
+/// Best effort: a store this process cannot write is no reason to refuse a
+/// file whose geometry the engine took directly.
+pub fn publish_all(root: &Path, blobs: &[(String, Vec<u8>)]) -> bool {
+    blobs.iter().all(|(digest, data)| publish(root, digest, data).is_ok())
+}
+
+/// A blob from the local store, only when its bytes still hash to its name.
+pub fn local_blob(root: &Path, digest: &str) -> Option<Vec<u8>> {
+    std::fs::read(root.join(format!("{digest}.bbrep")))
+        .ok()
+        .filter(|data| hash(data) == digest)
 }
 
 fn read_json(path: &Path, raw: &[u8]) -> Result<(Value, Vec<(String, Vec<u8>)>), DocumentFileError> {
@@ -185,12 +210,44 @@ pub fn referenced_geometry(doc: &Map<String, Value>) -> Vec<String> {
     out
 }
 
+fn importing_features(doc: &Map<String, Value>, digests: &[String]) -> String {
+    doc.get("features")
+        .and_then(Value::as_array)
+        .map_or(&[][..], Vec::as_slice)
+        .iter()
+        .filter(|f| {
+            f.get("geom")
+                .and_then(Value::as_str)
+                .is_some_and(|g| digests.iter().any(|d| d == g))
+        })
+        .map(|f| {
+            let id = f.get("id").and_then(Value::as_str).unwrap_or("?");
+            match f.get("name").and_then(Value::as_str) {
+                Some(n) => format!("{id} '{n}'"),
+                None => id.to_string(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 /// Write `doc` as JSON with its referenced geometry embedded. Returns the
 /// number of blobs embedded.
 pub fn write(
     path: &Path,
     doc: &Map<String, Value>,
     root: Option<&Path>,
+) -> Result<usize, DocumentFileError> {
+    write_with(path, doc, root, &std::collections::HashMap::new())
+}
+
+/// `write`, with `fetched` holding geometry that came from somewhere other than
+/// the local store, the engine's socket as a rule.
+pub fn write_with(
+    path: &Path,
+    doc: &Map<String, Value>,
+    root: Option<&Path>,
+    fetched: &std::collections::HashMap<String, Vec<u8>>,
 ) -> Result<usize, DocumentFileError> {
     if is_binary_path(path) {
         return fail(
@@ -205,23 +262,28 @@ pub fn write(
         .map(|(k, v)| (k.clone(), v.clone()))
         .collect();
     let mut geometry = Map::new();
-    let mut missing = 0;
+    let mut missing = Vec::new();
     for digest in referenced_geometry(&body) {
-        let p = root.join(format!("{digest}.bbrep"));
-        match std::fs::read(&p) {
-            Ok(data) => {
+        let data = fetched.get(&digest).cloned().or_else(|| local_blob(&root, &digest));
+        match data {
+            Some(data) => {
                 geometry.insert(
                     digest,
                     Value::String(base64::engine::general_purpose::STANDARD.encode(data)),
                 );
             }
-            Err(_) => missing += 1,
+            None => missing.push(digest),
         }
     }
-    if missing > 0 {
+    if !missing.is_empty() {
+        let names = importing_features(&body, &missing);
         return fail(format!(
-            "{missing} imported bodies have no geometry in the blob store ({}), so saving was \
-             stopped rather than writing a file that opens without them.",
+            "{} imported {} ({names}) {} no geometry left, neither in the engine nor in {}, so \
+             nothing was written. doc_import the original file again (or doc_open the .funda \
+             it was saved in), build, then save.",
+            missing.len(),
+            if missing.len() == 1 { "body" } else { "bodies" },
+            if missing.len() == 1 { "has" } else { "have" },
             root.display()
         ));
     }

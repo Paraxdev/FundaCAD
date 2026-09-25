@@ -328,6 +328,7 @@ impl Jobs for GeomJobs {
             "listFonts" => crate::text::list_fonts_result(),
             "tessellateText" => crate::text::tessellate_result(req),
             "migrateGeometry" => crate::import::migrate_result(req),
+            "blobHas" | "blobRead" | "blobWrite" => crate::import::blob_result(op, req),
             "inspect" => crate::inspect::inspect_result(req, &EngineWatch(ctx)),
             "interference" => crate::inspect::interference_result(req, &EngineWatch(ctx)),
             "faceAxis" => crate::features::axis_push::face_axis_result(req, &EngineWatch(ctx)),
