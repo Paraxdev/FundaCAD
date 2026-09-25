@@ -18,7 +18,7 @@ import {
 import type { CadDocument, Feature, ImportColorSource, ParamControl, ParamExtras, ParamTarget, PlaneSpec, ProjectedSource, ProjectionUpdate, RebuildReply, RebuildResult, ResolveDiag, Selector, ViewCubeSide, ViewOverride } from "../types";
 import { asFeature } from "../types";
 import { applyProjectionUpdate } from "../types";
-import type { FaceAxisReply, GeometryBackend, ProjectionResult } from "../geometry/client";
+import type { FaceAxisReply, GeometryBackend, PatternAxisReply, ProjectionResult } from "../geometry/client";
 import { FORMAT_VERSION, migrateDocument } from "./migrate";
 import {
   ancestryOf, descendantsOf, type ElementDef, freshElementName, reparented,
@@ -1968,6 +1968,10 @@ export class DocumentStore {
    *  document as it is built on screen. Null when the backend cannot answer. */
   async faceAxis(face: Selector, body: string | null): Promise<FaceAxisReply | null> {
     return (await this.geometry.faceAxis?.(this.effectiveDoc(), face, body)) ?? null;
+  }
+
+  async patternAxis(ref: Selector): Promise<PatternAxisReply | null> {
+    return (await this.geometry.patternAxis?.(this.effectiveDoc(), ref)) ?? null;
   }
 
   /** Publish "a rebuild round-trip has started": keep whatever is on screen,

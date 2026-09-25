@@ -25,11 +25,16 @@
 // start()). The gizmo, ghosts and starting spacing all key off that face set
 // rather than the body's; committing writes `features` and no `bodies`, the
 // engine repeats the feature's cut/join instead of copying the body outright.
+//
+// WHERE a circular pattern turns is features/patternAxis: through the origin,
+// through the middle of the body (the start for a feature, whose part is rarely
+// centred on the origin), or about an edge or face clicked on the model, which
+// the pattern then follows. C switches origin and middle; the axis is drawn.
 
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore } from "../document/store";
-import type { Axis3, Feature } from "../types";
+import type { Axis3, Feature, Selector, Vec3 } from "../types";
 import { DimInput } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
 import { snap } from "../ui/units";
@@ -42,6 +47,14 @@ import {
   MIN_COUNT,
 } from "./patternMath";
 import { facesOwnedByFeatures, featureLabel, spansBody } from "./patternSources";
+import {
+  axisLine,
+  canonicalDir,
+  circularAxisFields,
+  defaultAxisPlace,
+  type AxisPlace,
+  type PickedAxis,
+} from "./patternAxis";
 import { CanvasGesture } from "./canvasGesture";
 
 export type PatternKind = "linear" | "circular";
@@ -70,6 +83,12 @@ export class PatternTool {
   private centroid = new THREE.Vector3(); // where the bodies (or the patterned faces) are
   private anchor = new THREE.Vector3(); // where the gizmo sits (see placeGizmo)
   private axis = 0; // index into AXES
+  private place: AxisPlace = "origin"; // circular only, see patternAxis.ts
+  private picked: PickedAxis | null = null;
+  private middle = new THREE.Vector3(); // the patterned body's box centre
+  private pickNote = ""; // why the last click did not give an axis
+  private pickSeq = 0; // a pick answered after a newer one, or after the tool closed, is dropped
+  private axisLineObj: THREE.Line | null = null;
   private count = START_COUNT;
   private value = 0; // mm between copies (linear) or degrees swept (circular)
 
@@ -120,6 +139,12 @@ export class PatternTool {
         ? this.viewport.facesCentroid(this.faceIds)
         : this.viewport.bodiesCentroid(bodies),
     );
+    const box = this.viewport.bodiesBox(this.features.length ? this.bodiesOfFaces() : bodies);
+    if (box) box.getCenter(this.middle);
+    else this.middle.copy(this.centroid);
+    this.place = defaultAxisPlace(this.features.length > 0);
+    this.picked = null;
+    this.pickNote = "";
     if (kind === "linear") {
       this.axis = 0; // X
       // One span apart, so the opening state is a row of copies that touch
@@ -153,6 +178,27 @@ export class PatternTool {
     this.refreshPrompt();
     this.updateGhosts();
     this.gesture.frame();
+  }
+
+  /** The bodies the patterned faces lie on. */
+  private bodiesOfFaces(): string[] {
+    const bodies = this.store.buildState.result?.bodies ?? [];
+    const out = new Set<string>();
+    for (const id of this.faceIds) {
+      const b = bodies.find((x) => id >= x.faceStart && id < x.faceStart + x.faceCount);
+      if (b) out.add(b.id);
+    }
+    return [...out];
+  }
+
+  /** The line a circular pattern turns about, as three.js vectors. */
+  private turnLine(): { origin: THREE.Vector3; dir: THREE.Vector3 } {
+    const m = this.middle;
+    const l = axisLine(this.place, this.axisName(), [m.x, m.y, m.z], this.picked);
+    return {
+      origin: new THREE.Vector3(...l.origin),
+      dir: new THREE.Vector3(...l.dir).normalize(),
+    };
   }
 
   /** The faces the features made, less the ones they only changed. */
@@ -202,8 +248,28 @@ export class PatternTool {
       this.anchor.copy(this.centroid);
       return;
     }
-    const dir = this.axisDir();
-    this.anchor.copy(dir).multiplyScalar(this.centroid.dot(dir));
+    const { origin, dir } = this.turnLine();
+    this.anchor.copy(origin).addScaledVector(dir, this.centroid.clone().sub(origin).dot(dir));
+    this.drawAxis();
+  }
+
+  /** The axis itself, a line through the part, so where the copies turn is
+   *  seen rather than inferred from the ghosts. */
+  private drawAxis() {
+    if (this.kind !== "circular") return;
+    const { origin, dir } = this.turnLine();
+    const box = this.viewport.bodiesBox((this.store.buildState.result?.bodies ?? []).map((b) => b.id));
+    const reach = Math.max(box ? box.getSize(new THREE.Vector3()).length() : 0, 50);
+    const a = origin.clone().addScaledVector(dir, -reach);
+    const b = origin.clone().addScaledVector(dir, reach);
+    if (!this.axisLineObj) {
+      const mat = new THREE.LineBasicMaterial({ color: HOT, depthTest: false, transparent: true, opacity: 0.9 });
+      this.axisLineObj = new THREE.Line(new THREE.BufferGeometry(), mat);
+      this.axisLineObj.renderOrder = 998;
+      this.viewport.addToScene(this.axisLineObj);
+    }
+    this.axisLineObj.geometry.setFromPoints([a, b]);
+    this.axisLineObj.geometry.computeBoundingSphere();
   }
 
   private axisDir(): THREE.Vector3 {
@@ -226,11 +292,12 @@ export class PatternTool {
         new THREE.Matrix4().makeTranslation(dir.x * d, dir.y * d, dir.z * d),
       );
     }
-    // Circular turns about the WORLD axis through the origin, which is what the
-    // kernel does (_rot_for is a global rotation). Turning about the bodies' own
-    // centroid instead would preview a pattern nobody is going to get.
+    // Turned about the same line the engine will turn about, see patternAxis.
+    const { origin, dir: about } = this.turnLine();
+    const to = new THREE.Matrix4().makeTranslation(origin.x, origin.y, origin.z);
+    const from = new THREE.Matrix4().makeTranslation(-origin.x, -origin.y, -origin.z);
     return circularAngles(this.count, this.value).map((deg) =>
-      new THREE.Matrix4().makeRotationAxis(dir, (deg * Math.PI) / 180),
+      to.clone().multiply(new THREE.Matrix4().makeRotationAxis(about, (deg * Math.PI) / 180)).multiply(from),
     );
   }
 
@@ -257,6 +324,9 @@ export class PatternTool {
     }
     this.hoverAxis = this.hitAxis(e.clientX, e.clientY);
     this.viewport.domElement.style.cursor = this.hoverAxis >= 0 ? "grab" : "default";
+    if (this.kind === "circular") {
+      this.viewport.hoverEntity(this.hoverAxis >= 0 ? null : this.viewport.pickEntity(e.clientX, e.clientY));
+    }
   }
 
   /** The drag's scalar for the current kind: a distance along the axis, or an
@@ -291,8 +361,9 @@ export class PatternTool {
     // Pressing an arrow that is not the current one CHANGES the axis and starts
     // dragging in the same gesture, the axis is a choice you make by pulling
     // the direction you want, not a mode you enter first.
-    if (hit !== this.axis) {
+    if (hit !== this.axis || this.place === "picked") {
       this.axis = hit;
+      if (this.place === "picked") this.place = "centre";
       if (this.kind === "linear") this.value = this.span(this.axisDir()) || this.value;
       this.placeGizmo(); // a circular pattern's gizmo lives on the axis it turns about
       this.pushFields();
@@ -314,12 +385,56 @@ export class PatternTool {
     }
     const moved =
       Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
-    if (!this.downOnGizmo && !moved) this.commit();
+    if (this.downOnGizmo || moved) return;
+    // A circular pattern's click on the model picks the axis; off the model it
+    // applies, as it always did.
+    const hit = this.kind === "circular" ? this.viewport.pickEntity(e.clientX, e.clientY) : null;
+    if (hit) void this.pickAxis(hit, e.clientX, e.clientY);
+    else this.commit();
+  }
+
+  /** The axis an edge or face names, asked of the engine so the preview turns
+   *  about exactly the line the rebuild will. */
+  private async pickAxis(hit: import("../viewport/picking").Hit, x: number, y: number) {
+    let ref: Selector | null = null;
+    if (hit.kind === "edge") {
+      ref = hit.selector;
+    } else {
+      const f = this.viewport.pickFaceForPressPull(x, y);
+      if (f) ref = f.bodyId ? ({ ...f.selector, body: f.bodyId } as Selector) : f.selector;
+    }
+    if (!ref) return;
+    const seq = ++this.pickSeq;
+    const reply = await this.store.patternAxis(ref);
+    if (!this.active || seq !== this.pickSeq) return;
+    if (!reply || !("axis" in reply)) {
+      this.pickNote = reply && "reason" in reply ? `${reply.reason}. ` : "";
+      this.promptKey = "";
+      this.refreshPrompt();
+      return;
+    }
+    this.picked = { origin: reply.axis.origin, dir: canonicalDir(reply.axis.dir as Vec3), ref };
+    this.place = "picked";
+    this.pickNote = "";
+    this.placeGizmo();
+    this.promptKey = "";
+    this.refreshPrompt();
+    this.updateGhosts();
   }
 
   private onKey(e: KeyboardEvent) {
     if (e.key === "Escape") {
       this.cancel();
+      return;
+    }
+    if (this.kind === "circular" && (e.key === "c" || e.key === "C") && !e.ctrlKey && !e.metaKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      this.place = this.place === "origin" ? "centre" : "origin";
+      this.placeGizmo();
+      this.promptKey = "";
+      this.refreshPrompt();
+      this.updateGhosts();
       return;
     }
     // The count, without leaving the viewport for a number field. Both spellings,
@@ -354,7 +469,15 @@ export class PatternTool {
     const body = describePattern(this.kind, this.count, this.value, this.axisName());
     if (body === this.promptKey) return;
     this.promptKey = body;
-    setPrompt(`${this.promptPrefix}${body} · drag an arrow · [ and ] change the count · click to apply · Esc`);
+    if (this.kind === "linear") {
+      setPrompt(`${this.promptPrefix}${body} · drag an arrow · [ and ] change the count · click to apply · Esc`);
+      return;
+    }
+    const where =
+      this.place === "picked" ? "the picked axis" : this.place === "centre" ? "through the part's middle" : "through the origin";
+    setPrompt(
+      `${this.promptPrefix}${this.pickNote}${body}, ${where} · click an edge or face to turn about it · C origin or middle · [ ] count · Enter or click off the part to apply · Esc`,
+    );
   }
 
   // --- gizmo -----------------------------------------------------------------
@@ -459,6 +582,8 @@ export class PatternTool {
     this.readFields();
     const count = Math.max(MIN_COUNT, Math.round(this.count));
     const axis = this.axisName();
+    const m = this.middle;
+    const placed = circularAxisFields(this.place, axis, [m.x, m.y, m.z], this.picked);
     const value = this.value;
     // features and bodies are mutually exclusive on the feature itself, the
     // engine refuses both together, so never write more than one.
@@ -478,7 +603,7 @@ export class PatternTool {
     this.store.addFeature(
       kind === "linear"
         ? ({ id, type: "patternLinear", count, spacing: value, axis, ...target } as Feature)
-        : ({ id, type: "patternCircular", count, angle: value, axis, ...target } as Feature),
+        : ({ id, type: "patternCircular", count, angle: value, ...placed, ...target } as Feature),
     );
     done?.(id);
   }
@@ -496,6 +621,16 @@ export class PatternTool {
     this.dim.hide();
     this.viewport.clearPatternGhost();
     this.viewport.clearPatternFeatureGhost();
+    this.viewport.hoverEntity(null);
+    this.pickSeq++;
+    if (this.axisLineObj) {
+      this.viewport.removeFromScene(this.axisLineObj);
+      this.axisLineObj.geometry.dispose();
+      (this.axisLineObj.material as THREE.Material).dispose();
+      this.axisLineObj = null;
+    }
+    this.picked = null;
+    this.pickNote = "";
     if (this.gizmo) {
       this.viewport.removeFromScene(this.gizmo);
       for (const a of this.arrows) {
@@ -517,10 +652,6 @@ export class PatternTool {
   }
 }
 
-// Deliberately not here: an arbitrary direction. The axis is one of the three
-// global axes, which is what the kernel's rotation and offset helpers take and
-// what the value row you edit afterwards can offer as a choice. A pattern
-// running along a picked EDGE is the obvious next thing and is a different
-// feature, it needs a stored reference to the edge so it FOLLOWS that edge when
-// the model changes, which is the whole reason to pick one rather than type a
-// vector.
+// Deliberately not here yet: a LINEAR pattern along a picked edge. The circular
+// one takes a picked axis (patternAxis.ts); the linear one still runs along X, Y
+// or Z.

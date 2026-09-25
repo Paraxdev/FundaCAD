@@ -320,3 +320,32 @@ export function toggleValue(feature: Feature, f: ToggleField): boolean {
   const v = (feature as unknown as Record<string, unknown>)[f.field];
   return typeof v === "boolean" ? v : f.fallback;
 }
+
+/** The value the axis row shows for an axis that is not one of its choices: a
+ *  line or a picked edge or face. Choosing it again changes nothing. */
+export const PLACED_AXIS = "placed";
+
+/** A circular pattern's Axis row: the world axes, every datum axis above the
+ *  pattern, and the placed axis it already has, so the row never shows "Z" for
+ *  a pattern that turns about something else. Picking a world axis or a datum
+ *  drops the placed one. */
+export function patternAxisChoice(
+  feature: Feature,
+  features: readonly Feature[],
+): { options: ChoiceOption[]; current: string } {
+  const raw = feature as unknown as { axis?: unknown; axisRef?: unknown };
+  const at = features.findIndex((f) => f.id === feature.id);
+  const datums = features
+    .slice(0, at < 0 ? features.length : at)
+    .filter((f) => f.type === "datumAxis")
+    .map((f) => ({ value: f.id, label: (f as { name?: string }).name?.trim() || f.id }));
+  const options = [...AXES, ...datums];
+  const placed = raw.axisRef != null || (raw.axis != null && typeof raw.axis !== "string");
+  if (placed) {
+    options.push({ value: PLACED_AXIS, label: raw.axisRef != null ? "Picked" : "Line" });
+    return { options, current: PLACED_AXIS };
+  }
+  const name = typeof raw.axis === "string" ? raw.axis : "Z";
+  if (!options.some((o) => o.value === name)) options.push({ value: name, label: name });
+  return { options, current: name };
+}

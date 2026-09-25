@@ -32,7 +32,8 @@
 
 import { onUnmounted, ref } from "vue";
 import { useEngine } from "../../app/engineKey";
-import { useDocValue } from "../../app/useDoc";
+import { useBuildValue, useDocValue } from "../../app/useDoc";
+import { featureNotes } from "../../ui/featureNotes";
 import ValidatedRow from "./ValidatedRow.vue";
 import ChoiceRow from "./ChoiceRow.vue";
 import ToggleRow from "./ToggleRow.vue";
@@ -54,6 +55,8 @@ import {
   fieldLabel,
   fileFieldsFor,
   fileValue,
+  patternAxisChoice,
+  PLACED_AXIS,
   toggleFieldsFor,
   toggleValue,
 } from "../../document/optionFields";
@@ -80,6 +83,18 @@ const targetRows = useDocValue((doc) => {
 
 // The features a pattern repeats, by name. Read only: which features is chosen
 // by pointing at them before Pattern starts.
+// What the build had to say about this feature, the same note its history chip
+// carries, written out where the feature's values are read.
+const buildNote = useBuildValue((b) =>
+  b
+    ? featureNotes({
+        featureErrors: b.result?.featureErrors,
+        errorFeatureId: b.errorFeatureId,
+        diagnostics: b.result?.diagnostics,
+      }).get(props.featureId) ?? null
+    : null,
+);
+
 const repeatedLabels = useDocValue((doc) => {
   const f = doc.features.find((x) => x.id === props.featureId);
   const ids = (f as { features?: string[] } | undefined)?.features ?? [];
@@ -268,7 +283,11 @@ const choiceRows = useDocValue(() => {
   const values = f as unknown as Record<string, unknown>;
   return choiceFieldsFor(f.type)
     .filter((c) => fieldApplies(f.type, c.field, values))
-    .map((c) => ({ ...c, current: choiceValue(f, c) }));
+    .map((c) =>
+      f.type === "patternCircular" && c.field === "axis"
+        ? { ...c, ...patternAxisChoice(f, store.document.features) }
+        : { ...c, current: choiceValue(f, c) },
+    );
 });
 
 const fileRows = useDocValue((doc) => {
@@ -292,6 +311,10 @@ const toggleRows = useDocValue(() => {
 function setOption(field: string, value: string | boolean) {
   let patch: Record<string, unknown> = { [field]: value };
   const f = store.document.features.find((x) => x.id === props.featureId);
+  if (f?.type === "patternCircular" && field === "axis") {
+    if (value === PLACED_AXIS) return;
+    patch = { axis: value, axisRef: undefined };
+  }
   const hole = asFeature(f, "hole");
   if (hole) {
     patch = holeChoicePatch(hole, field, value, (k) =>
@@ -478,6 +501,7 @@ function commitField(
 </script>
 
 <template>
+  <div v-if="buildNote" class="param-note" role="note">{{ buildNote }}</div>
   <div v-if="repeatedLabels.length" class="param-row">
     <label>Features</label>
     <div class="param-value">{{ repeatedLabels.join(", ") }}</div>
