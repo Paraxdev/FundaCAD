@@ -369,12 +369,14 @@ export function offsetEntity(
   if (e.type === "rectangle") {
     const w = e.width + 2 * dist, h = e.height + 2 * dist;
     if (w > 1e-3 && h > 1e-3) {
-      copy = { type: "rectangle", id, width: w, height: h, x: e.x, y: e.y, ...constr(e) };
-      // Both rectangles are axis-aligned about a shared centre, so edge k of the
+      copy = { type: "rectangle", id, width: w, height: h, x: e.x, y: e.y, ...(e.angle ? { angle: e.angle } : {}), ...constr(e) };
+      // Both rectangles share a centre and an angle, so edge k of the
       // copy IS edge k of the source (rectCorners' CCW order), the pairing is
       // positional. Four edge pairs, one distance each, is exactly a
       // rectangle's 4 DOF.
       pairs = [0, 1, 2, 3].map((k) => ({ src: `${e.id}~${k}`, cpy: `${id}~${k}` }));
+      // A rotated rectangle is rigid in the solver, the same as a polygon.
+      if (e.angle) { pairs = []; linked = false; }
     }
   } else if (e.type === "circle") {
     const r = e.radius + dist;
