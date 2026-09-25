@@ -383,3 +383,79 @@ fn a_face_already_drawn_measures_the_same_extent_as_one_built_fresh() {
     assert!(opencascade::mesh_access::mesh(shape, 0.5, false, 0.5, true));
     assert_eq!(tracked::outline_extent(&top().shape, DVec3::Z), Some([-20.0, 20.0, -10.0, 10.0]));
 }
+
+/// A cylinder of radius `r` standing 10 high, its top at z 5, bored through by
+/// `inner` when there is one.
+fn disc(inner: Option<f64>) -> Vec<Value> {
+    let mut feats = vec![json!({"id": "cy", "type": "cylinder", "radius": "r", "height": 10})];
+    if let Some(ri) = inner {
+        feats.extend([
+            json!({"id": "bo", "type": "cylinder", "radius": ri, "height": 30}),
+            json!({"id": "cu", "type": "boolean", "operation": "subtract", "target": "body1", "tools": ["body2"]}),
+        ]);
+    }
+    feats
+}
+
+fn small_hole(face: Value, at: [f64; 3]) -> Value {
+    json!({"id": "ho", "type": "hole", "face": face, "points": [at],
+           "diameter": 1, "extent": "blind", "depth": 3})
+}
+
+fn near(a: &Value, b: [f64; 3]) -> bool {
+    (0..3).all(|i| (a[i].as_f64().unwrap() - b[i]).abs() < 1e-4)
+}
+
+/// The radius walk the app makes: each build's record rebased into the next.
+fn walk_the_radius(inner: Option<f64>, at: [f64; 3], want: impl Fn(f64) -> [f64; 3]) {
+    let mut face = tracked(at, [0.0, 0.0, 1.0], Some([-7.0, 7.0, -7.0, 7.0]));
+    let mut point = at;
+    for r in [7.0, 15.0, 4.0] {
+        let mut feats = disc(inner);
+        feats.push(small_hole(face.clone(), point));
+        let b = build(json!({"r": r}), feats);
+        assert!(errors(&b).is_empty(), "r={r}: {:?}", errors(&b));
+        let rec = &b.tracked_faces["ho"];
+        assert_eq!(rec["extent"], json!([-r, r, -r, r]), "r={r}");
+        assert!(near(&rec["points"][0], want(r)), "r={r}: {} not {:?}", rec["points"][0], want(r));
+        assert!(near(&rec["point"], want(r)), "r={r}: {} not {:?}", rec["point"], want(r));
+        face["point"] = rec["point"].clone();
+        face["extent"] = rec["extent"].clone();
+        point = [0, 1, 2].map(|i| rec["points"][0][i].as_f64().unwrap());
+    }
+    // The first placement carried straight to each radius lands the same way.
+    for r in [15.0, 4.0] {
+        let mut feats = disc(inner);
+        feats.push(small_hole(tracked(at, [0.0, 0.0, 1.0], Some([-7.0, 7.0, -7.0, 7.0])), at));
+        let b = build(json!({"r": r}), feats);
+        assert!(errors(&b).is_empty(), "r={r}: {:?}", errors(&b));
+        assert!(near(&b.tracked_faces["ho"]["points"][0], want(r)), "r={r}");
+    }
+}
+
+// 6 out at (0.6, 0.8), 1 in from the r 7 rim. Anchored per axis both
+// coordinates took their max edge and carried it off an r 15 top.
+#[test]
+fn a_hole_by_the_rim_of_a_round_top_stays_by_the_rim_as_the_radius_changes() {
+    walk_the_radius(None, [3.6, 4.8, 5.0], |r| [0.6 * (r - 1.0), 0.8 * (r - 1.0), 5.0]);
+}
+
+#[test]
+fn a_hole_near_the_centre_of_a_round_top_keeps_its_offset_from_the_centre() {
+    walk_the_radius(None, [1.2, 1.6, 5.0], |_| [1.2, 1.6, 5.0]);
+}
+
+#[test]
+fn a_hole_by_the_rim_of_a_tube_end_stays_by_its_outer_rim() {
+    walk_the_radius(Some(2.0), [3.6, 4.8, 5.0], |r| [0.6 * (r - 1.0), 0.8 * (r - 1.0), 5.0]);
+}
+
+#[test]
+fn a_rectangular_top_with_a_square_extent_still_anchors_per_axis() {
+    let face = tracked([5.0, 5.0, 6.0], [0.0, 0.0, 1.0], Some([0.0, 40.0, 0.0, 40.0]));
+    let mut feats = plate();
+    feats.push(holes(face, &[[5.0, 5.0, 6.0], [35.0, 35.0, 6.0]]));
+    let r = build(json!({"L": 80.0, "half": 40.0}), feats);
+    assert!(errors(&r).is_empty(), "{:?}", errors(&r));
+    assert_eq!(sorted(bores(&r)), vec![[5.0, 5.0, 4.5], [75.0, 35.0, 4.5]]);
+}

@@ -10,15 +10,20 @@
 //! How a point is carried: with an `extent`, each in-plane coordinate keeps its
 //! offset from whichever of that axis's min, middle or max it was nearest when
 //! written, so a hole by a corner stays by that corner as the face grows and a
-//! centred one stays centred. With only a `center`, the older form, everything
-//! moves with the outline's centre. With neither, only along the normal.
+//! centred one stays centred. A face whose outline is a circle, and was a
+//! circle when written (a square extent), anchors in polar terms about its
+//! centre instead: a point keeps its angle, and its offset from whichever of
+//! the centre or the rim it was nearer, so a hole by the rim stays by the rim
+//! where two independent axes would carry it off the face. With only a
+//! `center`, the older form, everything moves with the outline's centre. With
+//! neither, only along the normal.
 
-use glam::DVec3;
+use glam::{DVec2, DVec3};
 use opencascade::primitives::Shape;
-use opencascade::select_access::{self as sa, SurfaceType};
+use opencascade::select_access::{self as sa, CurveType, SurfaceType};
 use serde_json::{Map, Value};
 
-use super::entity::{faces_of, need, num, unit, vector, FaceEnt, Key};
+use super::entity::{edges_of, faces_of, need, num, unit, vector, FaceEnt, Key};
 use super::{Kind, Resolver, REFERENCE_NOT_FOUND};
 use crate::builder::{FResult, Fail};
 use crate::kernel;
@@ -68,6 +73,7 @@ pub struct Onto {
 
 enum Step {
     Anchored { was: [f64; 4], now: [f64; 4] },
+    Polar { was: [f64; 4], now: [f64; 4] },
     Shift(DVec3),
     Normal,
 }
@@ -100,6 +106,38 @@ fn anchored(c: f64, lo: f64, hi: f64, lo2: f64, hi2: f64) -> f64 {
     best.1 + (c - best.0)
 }
 
+/// `p`, in the plane of the circle whose extent was `was`, kept at its angle
+/// and at its offset from the nearer of that circle's centre and rim, moved
+/// onto the circle whose extent is `now`. A tie prefers the centre.
+fn polar(p: DVec2, was: [f64; 4], now: [f64; 4]) -> DVec2 {
+    let circle = |e: [f64; 4]| (DVec2::new(e[0] + e[1], e[2] + e[3]) / 2.0, (e[1] - e[0]) / 2.0);
+    let ((c0, r0), (c1, r1)) = (circle(was), circle(now));
+    let d = p - c0;
+    let rho = d.length();
+    let moved = if rho <= r0 - rho { rho } else { (r1 - (r0 - rho)).max(0.0) };
+    c1 + d.normalize_or_zero() * moved
+}
+
+fn square(e: [f64; 4]) -> bool {
+    ((e[1] - e[0]) - (e[3] - e[2])).abs() <= ON_FACE_TOL
+}
+
+/// Whether the face's outer boundary is one whole circle, however many arcs
+/// it is cut into.
+fn round(face: &Shape) -> bool {
+    let Some(edges) = kernel::outer_wire(face).and_then(|w| edges_of(&w).ok()) else {
+        return false;
+    };
+    let Some((r0, c0)) = edges.first().and_then(|e| Some((e.radius()?, e.centre()?))) else {
+        return false;
+    };
+    edges.iter().all(|e| {
+        e.curve == CurveType::Circle
+            && e.radius().is_some_and(|r| (r - r0).abs() <= ON_FACE_TOL)
+            && e.centre().is_some_and(|c| c.distance(c0) <= ON_FACE_TOL)
+    })
+}
+
 impl Tracking {
     pub fn of(m: &Map<String, Value>) -> FResult<Tracking> {
         let n = unit(vector(need(m, "normal")?)?);
@@ -118,7 +156,14 @@ impl Tracking {
     pub fn onto(&self, face: &FaceEnt) -> Option<Onto> {
         let extent = outline_extent(&face.shape, self.n);
         let step = match &self.written {
-            Written::Extent(was) => Step::Anchored { was: *was, now: extent? },
+            Written::Extent(was) => {
+                let now = extent?;
+                if square(*was) && square(now) && round(&face.shape) {
+                    Step::Polar { was: *was, now }
+                } else {
+                    Step::Anchored { was: *was, now }
+                }
+            }
             Written::Center(c) => Step::Shift(
                 kernel::outline_center(&face.shape).map_or(face.centroid(), DVec3::from_array) - *c,
             ),
@@ -143,6 +188,11 @@ impl Onto {
                 u * anchored(p.dot(u), was[0], was[1], now[0], now[1])
                     + v * anchored(p.dot(v), was[2], was[3], now[2], now[3])
                     + self.n * self.n.dot(p)
+            }
+            Step::Polar { was, now } => {
+                let (u, v) = frame(self.n);
+                let q = polar(DVec2::new(p.dot(u), p.dot(v)), *was, *now);
+                u * q.x + v * q.y + self.n * self.n.dot(p)
             }
             Step::Shift(d) => p + *d,
             Step::Normal => p,
