@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { findSelectorAt, replaceSelectorAt, repairableDiagFor } from "../../src/features/repickReference";
+import { findSelectorAt, replaceSelectorAt, repairableDiagFor, repickedExtent, repickedSelector } from "../../src/features/repickReference";
 import type { Feature, Selector } from "../../src/types";
 
 const near = (p: [number, number, number]): Selector =>
@@ -68,5 +68,38 @@ describe("repairableDiagFor", () => {
     expect(repairableDiagFor(diags, "f73")?.at).toEqual([1, 2, 3]);
     expect(repairableDiagFor(diags, "f1")).toBeUndefined();
     expect(repairableDiagFor(undefined, "f73")).toBeUndefined();
+  });
+});
+
+describe("re-picking a hole's face", () => {
+  const split = { kind: "face", by: "tracked", point: [20, 2, 5], normal: [0, 0, 1], center: [0, 0, 5], body: "body1" } as Selector;
+  const hole = (face: Selector): Feature => ({ id: "ho", type: "hole", face, points: [[20, 2, 5]] }) as unknown as Feature;
+  const site = { field: "face", index: null } as const;
+  const picked = { kind: "face", by: "nearest", point: [22, 3, 5], body: "body1" } as Selector;
+  const written = { kind: "face", by: "tracked", point: [22, 3, 5], normal: [0, 0, 1], body: "body1" } as Selector;
+  const rec = (point: [number, number, number]) => ({ extent: [15, 30, -10, 10] as [number, number, number, number], point, points: [[20, 2, 5]] as [number, number, number][] });
+
+  it("writes a tracked face on the face picked, which a hole follows from then on", () => {
+    expect(repickedSelector(hole(split), site, picked, [0, 0, 2])).toEqual(written);
+    const patched = { ...hole(split), ...replaceSelectorAt(hole(split), site, written) } as Feature;
+    expect(findSelectorAt(patched, [22, 3, 5])).toEqual(site);
+  });
+
+  it("leaves every other re-pick as the plain pick", () => {
+    expect(repickedSelector(hole(split), site, picked, null)).toBe(picked);
+    expect(repickedSelector(pressPull(split), site, picked, [0, 0, 1])).toBe(picked);
+  });
+
+  it("takes the extent from the first build of the face it wrote", () => {
+    expect(repickedExtent(hole(written), written, rec([22, 3, 5]))).toEqual({ face: { ...written, extent: [15, 30, -10, 10] } });
+  });
+
+  it("waits out a build of the face picked before, and gives up on a face edited since", () => {
+    expect(repickedExtent(hole(written), written, rec([20, 2, 5]))).toBeNull();
+    expect(repickedExtent(hole(written), written, undefined)).toBeNull();
+    expect(repickedExtent(hole(split), written, rec([22, 3, 5]))).toBeNull();
+    expect(repickedExtent(undefined, written, rec([22, 3, 5]))).toBeNull();
+    const filled = { ...written, extent: [15, 30, -10, 10] } as Selector;
+    expect(repickedExtent(hole(filled), filled, rec([22, 3, 5]))).toBeNull();
   });
 });

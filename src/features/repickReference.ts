@@ -12,7 +12,8 @@
 // stable across the engine's own grouping (see _group_sels_by_body). Matching
 // on the point is what keeps the two sides from having to agree on an ordering.
 
-import type { Feature, Selector } from "../types";
+import type { Feature, Selector, TrackedFaceRecord, Vec3 } from "../types";
+import { trackedFace, withExtent } from "./holeFace";
 
 // Every feature field that can carry selectors, each `Selector | Selector[]`.
 // fillet/chamfer use `edges`; press-pull/deleteFace use `face` (+ `upTo`);
@@ -72,6 +73,27 @@ export function replaceSelectorAt(
   const arr = Array.isArray(cur) ? [...(cur as Selector[])] : [];
   arr[site.index] = next;
   return { [site.field]: arr } as Partial<Feature>;
+}
+
+/** What a re-pick writes at `site`. A hole's face is written tracked, as the
+ *  Hole tool writes it, so the hole follows the re-picked face from then on. */
+export function repickedSelector(feature: Feature, site: SelectorSite, picked: Selector, normal: Vec3 | null): Selector {
+  if (feature.type !== "hole" || site.field !== "face" || site.index !== null || !normal) return picked;
+  if (picked.kind !== "face" || picked.by !== "nearest") return picked;
+  return trackedFace(picked.point, normal, picked.body ?? null);
+}
+
+/** The extent a build measured for a re-picked hole face, as a patch, or null
+ *  while the build is not of that face: the feature's face must still be the
+ *  one written, and the build must have put the pick point where it was
+ *  written, which a build of the face picked before the re-pick does not. */
+export function repickedExtent(feature: Feature | undefined, written: Selector, rec: TrackedFaceRecord | undefined): Partial<Feature> | null {
+  if (!feature || feature.type !== "hole" || written.by !== "tracked" || !rec) return null;
+  const face = (feature as { face?: Selector }).face;
+  if (!face || JSON.stringify(face) !== JSON.stringify(written)) return null;
+  if (rec.point.some((v, i) => Math.abs(v - written.point[i]!) > MATCH_TOL)) return null;
+  const next = withExtent(face, rec);
+  return next === face ? null : ({ face: next } as Partial<Feature>);
 }
 
 // The diagnostic codes a face pick can actually clear (geom_select's

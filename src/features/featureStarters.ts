@@ -28,7 +28,7 @@ import { choose } from "../ui/choice";
 import { pointInRegion } from "../sketch/region";
 import { setPrompt } from "../ui/prompt";
 import type { Axis3, AxisSpec, Feature, PlaneDef, PlaneSpec, Selector, Vec3 } from "../types";
-import { findSelectorAt, replaceSelectorAt } from "./repickReference";
+import { findSelectorAt, repickedExtent, repickedSelector, replaceSelectorAt } from "./repickReference";
 import { awaitTreePick, treePickRefusal } from "../ui/treePick";
 import { deferPick } from "./deferPick";
 
@@ -1146,7 +1146,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
 
   // One-shot face picker: highlight the face under the cursor, return its selector
   // on click (Esc cancels). Reused by Shell (open face) and Draft (taper face).
-  function pickFaceInteractive(promptText: string, onPick: (sel: Selector) => void) {
+  function pickFaceInteractive(promptText: string, onPick: (sel: Selector, normal: Vec3 | null) => void) {
     if (toolBusy()) return;
     if (!hasBody()) {
       setStatus("Create or import a body first", "");
@@ -1168,7 +1168,9 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       // against the wrong shape, so on a multi-body model the shell/draft would
       // land on a body the user never touched (same fault as the texture bug).
       const sel: Selector = hit.bodyId ? { ...hit.selector, body: hit.bodyId } : hit.selector;
-      requestAnimationFrame(() => onPick(sel));
+      const n = viewport.planarFace(hit.faceId)?.normal;
+      const normal: Vec3 | null = n ? [n.x, n.y, n.z] : null;
+      requestAnimationFrame(() => onPick(sel, normal));
     };
     const onEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape") cleanup();
@@ -1260,8 +1262,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       return;
     }
     const wantsEdge = kind === "edge";
-    const pick = wantsEdge ? pickEdgeInteractive : pickFaceInteractive;
-    pick(`Pick the ${wantsEdge ? "edge" : "face"} to use · Esc`, (sel) => {
+    const apply = (sel: Selector, normal: Vec3 | null) => {
       // Re-read the feature: the pick is async, and the doc may have moved under
       // us (undo, another edit). Re-locating also re-validates the site.
       const cur = store.document.features.find((f) => f.id === featureId);
@@ -1271,8 +1272,40 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
         setStatus("That reference has already changed, nothing to re-pick", "");
         return;
       }
-      store.updateFeature(featureId, replaceSelectorAt(cur, site2, sel));
+      const next = repickedSelector(cur, site2, sel, normal);
+      store.updateFeature(featureId, replaceSelectorAt(cur, site2, next));
+      if (next !== sel) settleRepickedExtent(featureId, next);
+    };
+    if (wantsEdge) pickEdgeInteractive("Pick the edge to use · Esc", (sel) => apply(sel, null));
+    else pickFaceInteractive("Pick the face to use · Esc", apply);
+  }
+
+  // Only the engine measures a tracked face's extent, so a re-picked hole face
+  // takes it from the first build of that face.
+  function settleRepickedExtent(featureId: string, written: Selector) {
+    let started = false;
+    let done = false;
+    let off: (() => void) | null = null;
+    const stop = () => {
+      done = true;
+      off?.();
+    };
+    off = store.onBuild((s) => {
+      if (done) return;
+      if (s.building) {
+        started = true;
+        return;
+      }
+      const cur = store.document.features.find((f) => f.id === featureId);
+      const patch = repickedExtent(cur, written, s.result?.trackedFaces?.[featureId]);
+      if (patch) {
+        stop();
+        store.deriveFeature(featureId, patch);
+      } else if (started) {
+        stop();
+      }
     });
+    if (done) off();
   }
 
   // Shell: pick a face to open, hollow the body to a 2mm wall (edit thickness in
