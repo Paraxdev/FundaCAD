@@ -1277,15 +1277,15 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
    *  selected body means body-pattern regardless of what the history still
    *  happens to have highlighted, that selection is stale for this purpose the
    *  moment a body is picked instead. */
-  function patternFeatureCandidates(): string[] {
-    if (viewport.getSelectedBodies().length) return [];
+  function patternFeatureCandidates(): { ids: string[]; picked: boolean } {
+    if (viewport.getSelectedBodies().length) return { ids: [], picked: false };
     const faceIds = viewport.getSelectedFaceIds();
     if (faceIds.length) {
       const owners = featureOwnersOfFaces(store.buildState.result?.bodies, faceIds);
-      if (owners.length) return owners;
+      if (owners.length) return { ids: owners, picked: true };
     }
-    const picked = getSelectedFeature();
-    return picked ? [picked] : [];
+    const selected = getSelectedFeature();
+    return { ids: selected ? [selected] : [], picked: false };
   }
 
   function startPattern(kind: PatternKind) {
@@ -1296,16 +1296,17 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     }
     const patternDone = (id: string | null) => { noteCommitted(id); if (id) selectFeature(id); };
     const candidates = patternFeatureCandidates();
-    if (candidates.length) {
-      const { ids, refused } = patternSources(store.document.features, candidates);
+    if (candidates.ids.length) {
+      const { ids, refused } = patternSources(store.document.features, candidates.ids);
       if (ids.length) {
         patternTool.start(kind, [], patternDone, ids);
         return;
       }
-      // Every candidate was refused: say why (naming the one the user pointed
-      // at) rather than silently falling back to a body pattern nobody asked for.
+      // A face clicked on the model is a deliberate pick, so its refusal is
+      // said. The timeline keeps the last committed feature selected, so a
+      // refused one there falls through to the body pattern it always gave.
       const reason = refused[0]?.reason;
-      if (reason) {
+      if (reason && candidates.picked) {
         setStatus(reason, "");
         return;
       }
