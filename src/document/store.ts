@@ -15,7 +15,7 @@ import {
   type VersionDiff,
   type VersionRepo,
 } from "./versions";
-import type { CadDocument, Feature, ImportColorSource, ParamControl, ParamExtras, ParamTarget, PlaneSpec, ProjectedSource, ProjectionUpdate, RebuildReply, RebuildResult, ResolveDiag, Selector, ViewCubeSide, ViewOverride } from "../types";
+import type { CadDocument, Feature, ImportColorSource, ParamControl, ParamExtras, ParamTarget, PlaneSpec, ProjectedSource, ProjectionUpdate, RebuildReply, RebuildResult, ResolveDiag, Selector, Vec3, ViewCubeSide, ViewOverride } from "../types";
 import { asFeature } from "../types";
 import { applyProjectionUpdate } from "../types";
 import type { EngineWait, FaceAxisReply, GeometryBackend, PatternAxisReply, ProjectionResult } from "../geometry/client";
@@ -2014,6 +2014,25 @@ export class DocumentStore {
    *  document as it is built on screen. Null when the backend cannot answer. */
   async faceAxis(face: Selector, body: string | null): Promise<FaceAxisReply | null> {
     return (await this.geometry.faceAxis?.(this.effectiveDoc(), face, body)) ?? null;
+  }
+
+  /** The lines a feature added now would cut a sketch's areas along on this
+   *  plane: the model before any preview or live-edited feature, which is what
+   *  that feature's own build sees. Null when the backend cannot answer. */
+  async profileCuts(origin: Vec3, normal: Vec3): Promise<Vec3[][] | null> {
+    let features = prefixFeatures(this.doc.features, this.rollbackIndex, this.suppressed);
+    const edit = this.editPreview;
+    if (edit && !edit.inPlace) {
+      const idx = features.findIndex((f) => f.id === edit.id);
+      if (idx >= 0) features = features.slice(0, idx);
+    }
+    const doc: CadDocument = {
+      parameters: this.doc.parameters,
+      features: features.map(withoutDisplayName),
+      ...(this.bodyVis.size ? { bodyVisibility: Object.fromEntries(this.bodyVis.entries()) } : {}),
+      ...(this.doc.bodyIds ? { bodyIds: this.doc.bodyIds } : {}),
+    };
+    return (await this.geometry.profileCuts?.(doc, origin, normal)) ?? null;
   }
 
   async patternAxis(ref: Selector): Promise<PatternAxisReply | null> {

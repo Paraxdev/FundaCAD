@@ -123,45 +123,50 @@ export function loopsFromEdgePolys(flat: readonly THREE.Vector2[][]): THREE.Vect
   return chainLoops(flat as THREE.Vector2[][]);
 }
 
-/** Where a cache gets the model from. Supplier functions rather than a viewport,
- *  so this file stays camera-free and vitest can drive it. */
-export interface FootprintSource {
-  edges(): readonly FootprintEdge[];
-  modelScale(): number;
+/** Where the region split gets the model's cut lines from: the engine, which
+ *  cuts every consuming feature's profile along the same lines, so an area
+ *  highlighted here is the area that builds. */
+export interface CutSource {
+  /** World polylines, null when the engine could not be asked. */
+  cuts(plane: SketchPlane): Promise<readonly (readonly [number, number, number])[][] | null>;
   /** Any value whose IDENTITY changes exactly when the model does, the build
-   *  result object itself is the natural one, and is what setModel already keys
-   *  its own fast path on. */
+   *  result object itself is the natural one. */
   epoch(): unknown;
+  /** An answer for the current model arrived, so whatever split against the
+   *  previous one should split again. */
+  landed(): void;
 }
 
-/** A memoised planeFootprint, per plane, thrown away whenever the model changes.
+/** The engine's cut lines on a plane chained into loops, per plane per model.
  *
- *  The committed-sketch overlay rebuilds every sketch on every document edit, and
- *  a footprint walk is a distance test per sample per edge. Without this, four
- *  sketches over a 100k-edge assembly would re-walk it four times per keystroke.
- *  With it, a plane is walked once per model.
- *
- *  Keyed on the SketchPlane OBJECT, which is sound because the overlay hands out
- *  cached instances per plane spec, two sketches on one plane share the entry
- *  and the walk. */
-export function footprintCache(
-  src: FootprintSource,
-): (plane: SketchPlane) => THREE.Vector2[][] {
-  const NONE = Symbol("no model yet");
-  let epoch: unknown = NONE;
-  let byPlane = new WeakMap<SketchPlane, THREE.Vector2[][]>();
+ *  Keyed on the SketchPlane OBJECT, which the overlay hands out once per plane
+ *  spec, so sketches sharing a plane share one request. Until the answer for
+ *  the current model lands, the previous model's is served, so a rebuild does
+ *  not flash every split profile whole. */
+export function profileCutCache(src: CutSource): (plane: SketchPlane) => THREE.Vector2[][] {
+  interface Entry { epoch: unknown; loops: THREE.Vector2[][]; asked: unknown }
+  const NONE = Symbol("never asked");
+  const byPlane = new WeakMap<SketchPlane, Entry>();
   return (plane) => {
     const now = src.epoch();
-    if (now !== epoch) {
-      byPlane = new WeakMap();
-      epoch = now;
+    let e = byPlane.get(plane);
+    if (!e) {
+      e = { epoch: NONE, loops: [], asked: NONE };
+      byPlane.set(plane, e);
     }
-    let hit = byPlane.get(plane);
-    if (!hit) {
-      hit = planeFootprint(src.edges(), plane, src.modelScale());
-      byPlane.set(plane, hit);
+    if (e.epoch !== now && e.asked !== now) {
+      e.asked = now;
+      const entry = e;
+      void src.cuts(plane).then((lines) => {
+        if (src.epoch() !== now) return;
+        const v = new THREE.Vector3();
+        const polys = (lines ?? []).map((l) => l.map((p) => plane.to2D(v.set(p[0], p[1], p[2]), new THREE.Vector2())));
+        entry.epoch = now;
+        entry.loops = loopsFromEdgePolys(polys);
+        src.landed();
+      }).catch(() => undefined);
     }
-    return hit;
+    return e.loops;
   };
 }
 

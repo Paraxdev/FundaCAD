@@ -16,7 +16,7 @@ import { asFeature } from "../types";
 import { Geometry, type GeometryBackend } from "../geometry/client";
 import { DocumentStore, EMPTY_DOCUMENT } from "../document/store";
 import { SketchOverlay } from "../sketch/overlay";
-import { footprintCache } from "../sketch/faceFootprint";
+import { profileCutCache } from "../sketch/faceFootprint";
 import { SketchMode } from "../sketch/sketchMode";
 import { setTextBackend } from "../sketch/textCache";
 import { solveSketchFeature } from "../sketch/headlessSolve";
@@ -291,14 +291,16 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   e.overlay = new SketchOverlay();
   e.viewport.addToScene(e.overlay.group);
   e.sketch = new SketchMode(e.viewport, e.overlay);
-  // Committed sketches get the same cut at the model's edge the open one gets.
-  // The build RESULT is the cache epoch: its identity changes on a real rebuild
-  // and stays put across a visibility toggle, which is exactly when the footprint
-  // does and does not have to be re-walked.
-  e.overlay.footprintFor = footprintCache({
-    edges: () => e.viewport.visibleEdgeLines(),
-    modelScale: () => e.viewport.modelDiagonal() ?? 0,
+  // Every sketch's areas split along the lines the engine cuts a consuming
+  // feature's profile with, so a highlighted area is the area that builds. The
+  // build RESULT is the epoch: a visibility toggle re-emits the same one.
+  e.overlay.footprintFor = profileCutCache({
+    cuts: (plane) => e.store.profileCuts([plane.origin.x, plane.origin.y, plane.origin.z], [plane.n.x, plane.n.y, plane.n.z]),
     epoch: () => e.store.buildState.result,
+    landed: () => {
+      if (e.sketch.active) e.sketch.redraw();
+      else if (!e.toolBusy() && e.overlay.regions.length) e.overlay.update(e.store.document);
+    },
   });
   // params engine ↔ sketcher plumbing: closed sketches re-solve headlessly after
   // a parameter edit; the open one refreshes its live dim values itself.

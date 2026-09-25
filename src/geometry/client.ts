@@ -2,7 +2,7 @@
 // One request/response per message, matched by `id`. Calls made before the
 // transport opens are queued and flushed on open; the transport reconnects.
 
-import type { CadDocument, EdgeFingerprint, ExportFormat, F32Wire, MeshExportOptions, Feature, ImportFormat, ImportReply, PlaneSpec, ProjectedCurve, ProjectedSource, RebuildReply, RebuildResult, Selector, U32Wire } from "../types";
+import type { CadDocument, EdgeFingerprint, ExportFormat, F32Wire, MeshExportOptions, Feature, ImportFormat, ImportReply, PlaneSpec, ProjectedCurve, ProjectedSource, RebuildReply, RebuildResult, Selector, U32Wire, Vec3 } from "../types";
 import { RebuildAssembly, manifestFromBodies } from "./assembly";
 import { pipe, pipeFault } from "../diagnostics/pipelineLog";
 import { EngineTransport, type GeometryTransport } from "./transport";
@@ -183,6 +183,10 @@ export interface GeometryBackend {
    *  test backend may not answer it. */
   faceAxis?(doc: CadDocument, face: Selector, body: string | null): Promise<FaceAxisReply | null>;
   patternAxis?(doc: CadDocument, ref: Selector): Promise<PatternAxisReply | null>;
+  /** The lines the built model cuts a sketch's areas along on one plane, as
+   *  world polylines, the ones every consuming feature cuts with. Null when the
+   *  engine could not be asked. */
+  profileCuts?(doc: CadDocument, origin: Vec3, normal: Vec3): Promise<Vec3[][] | null>;
   /** Export through a format a plugin's geometry component registered with the
    *  engine. The engine rebuilds and meshes; `options` reach the plugin's
    *  exporter untouched, and `info` is whatever it reports back. Optional, a
@@ -1195,6 +1199,11 @@ export class Geometry implements GeometryBackend {
   async faceAxis(doc: CadDocument, face: Selector, body: string | null): Promise<FaceAxisReply | null> {
     const msg = await this.call<FaceAxisReply>("faceAxis", { document: doc, face, ...(body ? { body } : {}) });
     return msg.ok ? msg.result : null;
+  }
+
+  async profileCuts(doc: CadDocument, origin: Vec3, normal: Vec3): Promise<Vec3[][] | null> {
+    const msg = await this.call<{ cuts: Vec3[][] }>("profileCuts", { document: doc, origin, normal });
+    return msg.ok ? msg.result.cuts : null;
   }
 
   async patternAxis(doc: CadDocument, ref: Selector): Promise<PatternAxisReply | null> {
