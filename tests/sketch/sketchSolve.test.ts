@@ -11,7 +11,7 @@ vi.mock("@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url", () => ({
 }));
 
 import { compileAndSolve, constraintIndexOf, solveKeepingAxes } from "../../src/sketch/sketchSolve";
-import { drivingDimFor } from "../../src/sketch/directDims";
+import { dimAnchor, drivingDimFor } from "../../src/sketch/directDims";
 import { breakLink } from "../../src/sketch/modify";
 import { rectCorners } from "../../src/sketch/region";
 import type { ResolvedEntity } from "../../src/sketch/snap";
@@ -583,6 +583,23 @@ describe("FR-4: a typed line length keeps a rectangle drawn as four lines square
     expect(r.entities[1]).toMatchObject({ x1: 20, y1: 0, x2: 20 });
     expect((r.entities[1] as { y2: number }).y2).toBeCloseTo(45, 9);
     expect(r.dof).toBe(7);
+  });
+
+  it("grows the same frame from the same corner whichever way it was drawn", async () => {
+    const seg = (id: string, x1: number, y1: number, x2: number, y2: number) => line(id, x1, y1, x2, y2);
+    const ccw = [seg("a", 10, 10, 30, 10), seg("b", 30, 10, 30, 50), seg("c", 30, 50, 10, 50), seg("d", 10, 50, 10, 10)];
+    const cw = [seg("a", 10, 10, 10, 50), seg("b", 10, 50, 30, 50), seg("c", 30, 50, 30, 10), seg("d", 30, 10, 10, 10)];
+    const box = (ents: ResolvedEntity[]) => {
+      const xs = ents.flatMap((e) => (e.type === "line" ? [e.x1, e.x2] : []));
+      const ys = ents.flatMap((e) => (e.type === "line" ? [e.y1, e.y2] : []));
+      return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)].map((v) => +v.toFixed(6));
+    };
+    for (const [ents, right] of [[ccw, "b"], [cw, "c"]] as const) {
+      const cs: SketchConstraint[] = [{ id: "d", type: "distance", line: right, value: 60 }];
+      const r = await solveKeepingAxes(ents, cs, dimAnchor(ents, cs, cs[0]!));
+      expect(r.conflicts).toEqual([]);
+      expect(box(r.entities)).toEqual([10, 10, 30, 70]);
+    }
   });
 
   it("falls back to the plain solve when a line has to turn", async () => {

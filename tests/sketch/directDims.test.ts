@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyDrivingDimsDirect, drivenBadges, drivingDimFor, upsertDrivingDim } from "../../src/sketch/directDims";
+import { applyDrivingDimsDirect, dimAnchor, drivenBadges, drivingDimFor, upsertDrivingDim } from "../../src/sketch/directDims";
 import type { ResolvedEntity } from "../../src/sketch/snap";
 import { rectCorners } from "../../src/sketch/region";
 import type { SketchConstraint } from "../../src/types";
@@ -219,5 +219,72 @@ describe("applyDrivingDimsDirect on a rectangle", () => {
     const cons: SketchConstraint[] = [{ type: "p2pDistance", e1: "r1", p1: 0, e2: "r1", p2: 1, value: 42 }];
     expect(applyDrivingDimsDirect(ents, cons)).toBe(true);
     expect(ents[0]).toMatchObject({ width: 42, height: 10, x: 39, y: 50 }); // corner 1 stays at (60, 45)
+  });
+});
+
+describe("dimAnchor: which end of a line a typed length holds", () => {
+  const seg = (id: string, x1: number, y1: number, x2: number, y2: number): ResolvedEntity => ({ type: "line", id, x1, y1, x2, y2 });
+  // The same 20 x 40 frame at (10,10), drawn counter-clockwise and clockwise.
+  const ccw = [seg("a", 10, 10, 30, 10), seg("b", 30, 10, 30, 50), seg("c", 30, 50, 10, 50), seg("d", 10, 50, 10, 10)];
+  const cw = [seg("a", 10, 10, 10, 50), seg("b", 10, 50, 30, 50), seg("c", 30, 50, 30, 10), seg("d", 30, 10, 10, 10)];
+  const len = (l: string): SketchConstraint => ({ type: "distance", line: l, value: 60 });
+
+  it("holds the lower end of an upright side, whichever way it was drawn", () => {
+    expect(dimAnchor(ccw, [len("b")], len("b"))).toEqual({ x: 30, y: 10 });
+    expect(dimAnchor(cw, [len("c")], len("c"))).toEqual({ x: 30, y: 10 });
+  });
+
+  it("holds the left end of a level side, whichever way it was drawn", () => {
+    expect(dimAnchor(ccw, [len("c")], len("c"))).toEqual({ x: 10, y: 50 });
+    expect(dimAnchor(cw, [len("b")], len("b"))).toEqual({ x: 10, y: 50 });
+  });
+
+  it("holds the end on the origin", () => {
+    const l = seg("l", 20, 0, 0, 0);
+    expect(dimAnchor([l], [len("l")], len("l"))).toEqual({ x: 0, y: 0 });
+  });
+
+  it("holds the end on a fixed point, even the right hand one", () => {
+    const l = seg("l", 5, 5, 25, 5);
+    const pin: ResolvedEntity = { type: "point", id: "p", x: 25, y: 5 };
+    const cs: SketchConstraint[] = [{ type: "fix", e: "p", p: 0 }, len("l")];
+    expect(dimAnchor([l, pin], cs, len("l"))).toEqual({ x: 25, y: 5 });
+  });
+
+  it("holds the end fixed by its own fix constraint", () => {
+    const l = seg("l", 5, 5, 25, 5);
+    const cs: SketchConstraint[] = [{ type: "fix", e: "l", p: 1 }, len("l")];
+    expect(dimAnchor([l], cs, len("l"))).toEqual({ x: 25, y: 5 });
+  });
+
+  it("holds the end on a projected edge", () => {
+    const l = seg("l", 5, 5, 25, 5);
+    const edge: ResolvedEntity = {
+      type: "projected", id: "pe",
+      source: { kind: "sketchCurve", sketch: "s0", entity: "e0" },
+      curve: { kind: "line", x1: 25, y1: 5, x2: 25, y2: 40 },
+    };
+    expect(dimAnchor([l, edge], [len("l")], len("l"))).toEqual({ x: 25, y: 5 });
+  });
+
+  it("holds the end coincident with a fixed point that has not been solved onto it yet", () => {
+    const l = seg("l", 5, 5, 25, 5);
+    const pin: ResolvedEntity = { type: "point", id: "p", x: 26, y: 6 };
+    const cs: SketchConstraint[] = [{ type: "fix", e: "p", p: 0 }, { type: "coincident", e1: "l", p1: 1, e2: "p", p2: 0 }, len("l")];
+    expect(dimAnchor([l, pin], cs, len("l"))).toEqual({ x: 25, y: 5 });
+  });
+
+  it("falls back to the left end when both ends are fixed", () => {
+    const l = seg("l", 25, 5, 5, 5);
+    const cs: SketchConstraint[] = [{ type: "fix", e: "l", p: 0 }, { type: "fix", e: "l", p: 1 }, len("l")];
+    expect(dimAnchor([l], cs, len("l"))).toEqual({ x: 5, y: 5 });
+  });
+
+  it("the no-solver path holds the same end", () => {
+    const l = seg("l", 25, 5, 5, 5);
+    const ents = [l];
+    expect(applyDrivingDimsDirect(ents, [{ type: "distance", line: "l", value: 30 }])).toBe(true);
+    expect(ents[0]).toMatchObject({ x2: 5, y2: 5 });
+    expect((ents[0] as { x1: number }).x1).toBeCloseTo(35, 9);
   });
 });

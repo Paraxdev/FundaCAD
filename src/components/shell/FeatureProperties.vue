@@ -252,7 +252,7 @@ function commitSketchDim(row: { key: string; index: number; field: string }, raw
       return null;
     }
     void (async () => {
-      const solved = await solve({ ...f, constraints: driven }, store.document.parameters, dimAnchor([copy], driven[driven.length - 1]!));
+      const solved = await solve({ ...f, constraints: driven }, store.document.parameters, dimAnchor(resolved, driven, driven[driven.length - 1]!));
       if (!solved) { toast(`Could not satisfy this ${row.field} with the sketch's other constraints`); return; }
       store.updateFeature(f.id, { entities: solved.entities, constraints: driven } as Partial<Feature>);
     })();

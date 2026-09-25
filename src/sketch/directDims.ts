@@ -17,9 +17,10 @@
 
 import type { ResolvedEntity } from "./snap";
 import type { DimField, SketchConstraint } from "../types";
-import { dimPlaceOf } from "../types";
+import { dimPlaceOf, projEndSamples } from "../types";
 import { newConstraintId } from "./id";
 import { rectCorners } from "./region";
+import { circumcenter } from "./arc";
 
 const EPS = 1e-9;
 
@@ -68,11 +69,14 @@ export function applyDrivingDimsDirect(
       const len = Math.hypot(dx, dy);
       // a zero-length line has no direction to grow along; leave it alone
       if (len <= EPS || Math.abs(len - c.value) <= EPS) continue;
-      // Hold the start and slide the end along the existing direction. With no
-      // solver there is nothing to say the other end should move, and this is
-      // the least surprising of the two.
-      e.x2 = e.x1 + (dx / len) * c.value;
-      e.y2 = e.y1 + (dy / len) * c.value;
+      // The same end a solve would hold, the other slides along the line.
+      if (lineHeldEnd(e, entities, constraints) === 0) {
+        e.x2 = e.x1 + (dx / len) * c.value;
+        e.y2 = e.y1 + (dy / len) * c.value;
+      } else {
+        e.x1 = e.x2 - (dx / len) * c.value;
+        e.y1 = e.y2 - (dy / len) * c.value;
+      }
       changed = true;
     }
   }
@@ -140,12 +144,78 @@ export function drivingDimFor(entity: ResolvedEntity, field: DimField, mm: numbe
   return null;
 }
 
-/** Where a typed dimension keeps its geometry still (see solveKeepingAxes): a
- *  line's start, so its length is taken up at the far end. */
-export function dimAnchor(entities: ResolvedEntity[], c: SketchConstraint): { x: number; y: number } | undefined {
+/** Where a typed dimension keeps its geometry still (see solveKeepingAxes): the
+ *  held end of a line, so its length is taken up at the other one. */
+export function dimAnchor(
+  entities: ResolvedEntity[],
+  constraints: SketchConstraint[],
+  c: SketchConstraint,
+): { x: number; y: number } | undefined {
   if (c.type !== "distance") return undefined;
   const e = entities.find((k) => k.id === c.line);
-  return e?.type === "line" ? { x: e.x1, y: e.y1 } : undefined;
+  if (e?.type !== "line") return undefined;
+  return lineHeldEnd(e, entities, constraints) === 0 ? { x: e.x1, y: e.y1 } : { x: e.x2, y: e.y2 };
+}
+
+/** The end of a line a length change keeps still. The one on fixed geometry
+ *  when exactly one is, else the one with the smaller x, then the smaller y, so
+ *  a shape grows right and up whichever way its lines were drawn. */
+export function lineHeldEnd(
+  e: Extract<ResolvedEntity, { type: "line" }>,
+  entities: ResolvedEntity[],
+  constraints: SketchConstraint[],
+): 0 | 1 {
+  const a = { x: e.x1, y: e.y1 }, b = { x: e.x2, y: e.y2 };
+  const fixed = fixedPositions(entities, constraints);
+  const onFixed = (q: { x: number; y: number }, end: number) =>
+    fixed.some((f) => Math.hypot(f.x - q.x, f.y - q.y) <= 1e-6) ||
+    constraints.some((k) =>
+      k.type === "coincident" &&
+      ((k.e1 === e.id && k.p1 === end && isFixedOperand(k.e2, k.p2, entities, constraints)) ||
+        (k.e2 === e.id && k.p2 === end && isFixedOperand(k.e1, k.p1, entities, constraints))));
+  const fa = onFixed(a, 0), fb = onFixed(b, 1);
+  if (fa !== fb) return fa ? 0 : 1;
+  if (Math.abs(a.x - b.x) > EPS) return a.x < b.x ? 0 : 1;
+  return a.y <= b.y ? 0 : 1;
+}
+
+/** Positions the solver holds still: the origin, every fixed point, projected
+ *  reference geometry, and the corners of a rotated rectangle, which is rigid. */
+function fixedPositions(entities: ResolvedEntity[], constraints: SketchConstraint[]): { x: number; y: number }[] {
+  const out: { x: number; y: number }[] = [{ x: 0, y: 0 }];
+  for (const k of constraints) {
+    if (k.type !== "fix") continue;
+    const q = entityPoint(entities.find((x) => x.id === k.e), k.p);
+    if (q) out.push(q);
+  }
+  for (const e of entities) {
+    if (e.type === "rectangle" && e.angle) out.push(...rectCorners(e.x, e.y, e.width, e.height, e.angle));
+    if (e.type !== "projected") continue;
+    const cv = e.curve;
+    if (cv.kind === "line" || cv.kind === "arc") out.push({ x: cv.x1, y: cv.y1 }, { x: cv.x2, y: cv.y2 });
+    else if (cv.kind === "circle") out.push({ x: cv.x, y: cv.y });
+    else out.push(...projEndSamples(cv).map(([x, y]) => ({ x, y })));
+  }
+  return out;
+}
+
+function isFixedOperand(id: string, p: number, entities: ResolvedEntity[], constraints: SketchConstraint[]): boolean {
+  const e = entities.find((x) => x.id === id);
+  return e?.type === "projected" || constraints.some((k) => k.type === "fix" && k.e === id && (e?.type === "point" || e?.type === "circle" || k.p === p));
+}
+
+/** An entity point by the `fix` constraint's index semantics (see types.ts). */
+function entityPoint(e: ResolvedEntity | undefined, p: number): { x: number; y: number } | null {
+  if (!e) return null;
+  switch (e.type) {
+    case "point": case "circle": case "polygon": case "text": return { x: e.x, y: e.y };
+    case "rectangle": return rectCorners(e.x, e.y, e.width, e.height, e.angle)[p] ?? null;
+    case "line": case "slot": return p === 0 ? { x: e.x1, y: e.y1 } : { x: e.x2, y: e.y2 };
+    case "arc":
+      if (p !== 2) return p === 0 ? { x: e.x1, y: e.y1 } : { x: e.x2, y: e.y2 };
+      return circumcenter({ x: e.x1, y: e.y1 }, { x: e.x2, y: e.y2 }, { x: e.mx, y: e.my });
+    default: return null;
+  }
 }
 
 /** The driving constraint already holding `entity`'s `field`, if any. */
