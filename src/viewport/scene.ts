@@ -9,6 +9,7 @@ import { gridStep } from "../sketch/planeGrid";
 import { setRenderLowPower } from "./render";
 import { BACKGROUND_COLOR, bloomSettings, renderPrefs } from "../ui/renderPrefs";
 import { POTATO_PIXEL_RATIO, PotatoDraw } from "./potato";
+import { isSoftwareRendererName, setSoftwareRenderer } from "../ui/glassBlur";
 import { buildRoom, disposeRoom } from "./environments";
 import type { Environment } from "../ui/renderPrefs";
 import { themeColor } from "./themeColors";
@@ -231,28 +232,33 @@ const KEY_INTENSITY = 2.0;
 const FILL_INTENSITY = 0.6;
 const HEMI_INTENSITY = 0.6;
 
+function unmaskedRendererName(renderer: THREE.WebGLRenderer): string {
+  try {
+    const gl = renderer.getContext();
+    const dbg = gl.getExtension("WEBGL_debug_renderer_info");
+    return dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)) : "";
+  } catch {
+    return "";
+  }
+}
+
 /** A machine that must not be asked for the expensive effects (transmission, a
  *  high pixel ratio, a pile of lights): a software rasteriser or the basic
  *  fallback adapter, or a device reporting very little RAM. Deliberately narrow,
  *  it only fires on the machines that genuinely can't cope, so a normal
  *  integrated GPU keeps the full look; the cost of guessing WRONG here is a
  *  plainer picture, not a crash. */
-function detectLowPower(renderer: THREE.WebGLRenderer): boolean {
-  try {
-    const gl = renderer.getContext();
-    const dbg = gl.getExtension("WEBGL_debug_renderer_info");
-    const name = dbg ? String(gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL)) : "";
-    if (/swiftshader|llvmpipe|software|basic render|microsoft basic/i.test(name)) return true;
-  } catch {
-    /* no debug-info extension: fall through to the RAM check */
-  }
+function detectLowPower(rendererName: string): boolean {
+  if (isSoftwareRendererName(rendererName)) return true;
   const mem = (navigator as { deviceMemory?: number }).deviceMemory;
   return typeof mem === "number" && mem <= 2;
 }
 
 export function createScene(canvas: HTMLCanvasElement): SceneBundle {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, stencil: true });
-  const autoLowPower = detectLowPower(renderer);
+  const name = unmaskedRendererName(renderer);
+  const autoLowPower = detectLowPower(name);
+  setSoftwareRenderer(isSoftwareRendererName(name));
   // The effective tier is the auto detection OR the manual "performance mode"
   // pref, re-applied on every pref change (the bundle's applyRenderPrefs below):
   // glass falls back to alpha (no transmission pass), and the pixel ratio is
