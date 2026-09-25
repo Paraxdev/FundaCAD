@@ -596,3 +596,17 @@ describe("FR-4: a typed line length keeps a rectangle drawn as four lines square
     expect(lengths([a!])[0]).toBeCloseTo(12, 6);
   });
 });
+
+describe("a closed sketch's rotated rectangle through the headless solve", () => {
+  it("keeps its angle, which the build reads to extrude it turned", async () => {
+    const { solveSketchFeature } = await import("../../src/sketch/headlessSolve");
+    const out = await solveSketchFeature(
+      { id: "s1", type: "sketch", plane: "XY", entities: [{ type: "rectangle", id: "r1", width: 10, height: 4, x: 3, y: -2, angle: 30 }] },
+      {},
+    );
+    const r = out?.entities[0] as { angle?: number; width: number; height: number } | undefined;
+    expect(r?.angle).toBeCloseTo(30, 6);
+    expect(r?.width).toBeCloseTo(10, 6);
+    expect(r?.height).toBeCloseTo(4, 6);
+  });
+});

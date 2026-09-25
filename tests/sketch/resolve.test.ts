@@ -119,3 +119,26 @@ describe("enter/finish round trip (regression: pattern copies must never be bake
     expect(after).toHaveLength(before.length);
   });
 });
+
+describe("a rotated rectangle", () => {
+  const rotated: SketchEntity = { type: "rectangle", id: "r1", width: 10, height: 4, x: 3, y: -2, angle: 30 };
+  const sketch = (entities: SketchEntity[]): SketchFeature => ({ id: "f1", type: "sketch", plane: "XY", entities });
+
+  it("keeps its angle through resolve and back to the persisted form", () => {
+    const [r] = resolveRealEntities(sketch([rotated]), params);
+    expect(r).toMatchObject({ type: "rectangle", angle: 30 });
+    expect(toSketchEntity(r!)).toEqual(rotated);
+  });
+
+  it("resolves a parameter driven angle", () => {
+    const [r] = resolveRealEntities(sketch([{ ...rotated, angle: "tilt" }]), { ...params, tilt: 30 });
+    expect(r).toMatchObject({ angle: 30 });
+  });
+
+  it("writes no angle field into an axis-aligned rectangle", () => {
+    const plain: SketchEntity = { type: "rectangle", id: "r2", width: 10, height: 4, x: 0, y: 0 };
+    const [r] = resolveRealEntities(sketch([plain]), params);
+    expect("angle" in r!).toBe(false);
+    expect(toSketchEntity(r!)).toEqual(plain);
+  });
+});
