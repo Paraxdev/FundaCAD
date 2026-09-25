@@ -157,4 +157,37 @@ describe("nearestEdgeByCurve", () => {
   it("returns null when nothing is within tolerance", () => {
     expect(nearestEdgeByCurve([line([0, 0, 0], [10, 0, 0])], [5, 3, 0], 1)).toBeNull();
   });
+
+  // NV3R-3: a 1.5 m panel with 8 mm holes at 20 mm pitch. 2% of the model
+  // diagonal is 36 mm, which reached the neighbouring hole.
+  describe("on a large panel with a row of small holes", () => {
+    const hole = (cx: number) => ({
+      points: Array.from({ length: 33 }, (_, i): Vec3 => {
+        const a = (2 * Math.PI * i) / 32;
+        return [cx + 4 * Math.cos(a), 4 * Math.sin(a), 0];
+      }),
+    });
+    const outline = [
+      line([-750, -500, 0], [750, -500, 0], 2), line([750, -500, 0], [750, 500, 0], 2),
+      line([750, 500, 0], [-750, 500, 0], 2), line([-750, 500, 0], [-750, -500, 0], 2),
+    ];
+    const cap = 0.02 * Math.hypot(1500, 1000);
+    const holes = [0, 20, 40, 80, 100].map(hole); // no hole at 60
+    const edges = [...outline, ...holes];
+
+    it("still finds a hole from a point just off its edge", () => {
+      expect(nearestEdgeByCurve(edges, [20, -4.2, 0], cap)).toBe(outline.length + 1);
+    });
+
+    it("leaves a point between two holes unresolved rather than guess", () => {
+      expect(nearestEdgeByCurve(edges, [10, 0, 0], cap)).toBeNull();
+      expect(nearestEdgeByCurve(edges, [9, 0, 0], cap)).toBeNull();
+    });
+
+    it("does not reach the neighbour when the named hole is gone", () => {
+      expect(nearestEdgeByCurve(edges, [60, -4, 0], cap)).toBeNull();
+      // clear of every other edge, yet 10 mm from the nearest hole, well past its size
+      expect(nearestEdgeByCurve(edges, [114, 0, 0], cap)).toBeNull();
+    });
+  });
 });
