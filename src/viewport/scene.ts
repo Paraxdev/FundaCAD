@@ -6,7 +6,8 @@ import * as THREE from "three";
 import { stickyFact } from "../diagnostics/breadcrumbs";
 import { gridStep } from "../sketch/planeGrid";
 import { setRenderLowPower } from "./render";
-import { BACKGROUND_COLOR, bloomSettings, renderPrefs } from "../ui/renderPrefs";
+import { BACKGROUND_COLOR, bloomSettings, performanceModeOn, renderPrefs } from "../ui/renderPrefs";
+import { POTATO_PIXEL_RATIO, PotatoDraw } from "./potato";
 import { buildRoom, disposeRoom } from "./environments";
 import type { Environment } from "../ui/renderPrefs";
 import { themeColor } from "./themeColors";
@@ -256,9 +257,10 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
   // first pref-apply lands.
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   const applyPowerTier = () => {
-    const low = autoLowPower || renderPrefs().performanceMode;
+    const low = autoLowPower || performanceModeOn();
     setRenderLowPower(low);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, low ? 1 : 2));
+    const cap = renderPrefs().potatoMode ? POTATO_PIXEL_RATIO : low ? 1 : 2;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, cap));
     // Emitter shadows are the one expensive lighting extra; a weak machine drops
     // them (the emitter still lights, it just does not occlude). Flipping this
     // makes the lights and materials recompile, which the pref-apply already does.
@@ -395,6 +397,7 @@ export class PostChain {
   private bloom: import("three/examples/jsm/postprocessing/UnrealBloomPass.js").UnrealBloomPass | null = null;
   private bokeh: import("three/examples/jsm/postprocessing/BokehPass.js").BokehPass | null = null;
   private loading = false;
+  private potato: PotatoDraw | null = null;
   private size = new THREE.Vector2(1, 1);
   private camera: THREE.Camera | null = null;
   /** How far in front of the camera is sharp, in world units. Written by the
@@ -448,6 +451,14 @@ export class PostChain {
   }
 
   render(camera: THREE.Camera) {
+    if (renderPrefs().potatoMode) {
+      (this.potato ??= new PotatoDraw()).render(this.renderer, this.scene, camera);
+      return;
+    }
+    if (this.potato) {
+      this.potato.dispose();
+      this.potato = null;
+    }
     const want = this.wanted();
     if (!want.bloom && !want.blur) {
       this.renderer.render(this.scene, camera);
@@ -629,7 +640,7 @@ function applyRenderPrefs(
     p.background === "theme" ? themeColor("--viewport-bg", 0x1a1d21) : BACKGROUND_COLOR[p.background],
     1,
   );
-  if (p.environment === "none") {
+  if (p.environment === "none" || p.potatoMode) {
     scene.environment = null;
     return;
   }
@@ -639,7 +650,7 @@ function applyRenderPrefs(
     // Re-checked, not assumed: the setting may have been changed again while the
     // cubemap was being generated, and writing it then would put back the
     // environment the user has just moved on from.
-    if (renderPrefs().environment === want) scene.environment = tex;
+    if (renderPrefs().environment === want && !renderPrefs().potatoMode) scene.environment = tex;
   });
 }
 
