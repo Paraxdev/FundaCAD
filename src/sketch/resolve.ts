@@ -43,6 +43,7 @@ export function resolveRealEntities(
         height: resolveNum(e.height, params),
         x: resolveNum(e.x ?? 0, params),
         y: resolveNum(e.y ?? 0, params),
+        ...(e.angle !== undefined ? { angle: resolveNum(e.angle, params) } : {}),
         ...c, ...dp,
       });
     } else if (e.type === "circle") {
@@ -147,7 +148,11 @@ export function toSketchEntity(e: ResolvedEntity): SketchEntity {
   const place = dimPlaceOf(e);
   const dp = place ? { dimPlace: place } : {};
   if (e.type === "rectangle")
-    return { type: "rectangle", id: e.id, width: e.width, height: e.height, x: e.x, y: e.y, ...c, ...dp };
+    return {
+      type: "rectangle", id: e.id, width: e.width, height: e.height, x: e.x, y: e.y,
+      ...(e.angle !== undefined ? { angle: e.angle } : {}),
+      ...c, ...dp,
+    };
   if (e.type === "circle") return { type: "circle", id: e.id, radius: e.radius, x: e.x, y: e.y, ...c, ...dp };
   if (e.type === "arc")
     return { type: "arc", id: e.id, x1: e.x1, y1: e.y1, x2: e.x2, y2: e.y2, mx: e.mx, my: e.my, ...c };
