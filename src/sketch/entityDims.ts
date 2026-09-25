@@ -319,13 +319,16 @@ export function entityDims(e: ResolvedEntity, defaults?: DimPlace): EntityDim[] 
   ];
 }
 
-/** every dimension's annotation segments for a set of entities (skips construction) */
-export function dimensionSegments(ents: ResolvedEntity[]): [V, V][] {
+/** every dimension's annotation segments for a set of entities (skips
+ *  construction, and the `<id>:<field>` badges in `skip`) */
+export function dimensionSegments(ents: ResolvedEntity[], skip?: ReadonlySet<string>): [V, V][] {
   const out: [V, V][] = [];
   const defaults = staggeredDefaults(ents); // labels and their lines must agree
   for (const e of ents) {
     if (e.construction) continue;
-    for (const d of entityDims(e, defaults.get(e.id))) out.push(...d.lines);
+    for (const d of entityDims(e, defaults.get(e.id))) {
+      if (!skip?.has(`${e.id}:${d.field}`)) out.push(...d.lines);
+    }
   }
   return out;
 }

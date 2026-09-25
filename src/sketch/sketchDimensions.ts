@@ -111,7 +111,8 @@ export class SketchDimensions {
     private entityExprOf?: (index: number, field: DimField) => string | undefined,
   ) {}
 
-  show(entities: ResolvedEntity[], plane: SketchPlane, extras: ExtraDim[] = []) {
+  /** `skip` holds `<entityId>:<field>` badges a constraint label stands in for. */
+  show(entities: ResolvedEntity[], plane: SketchPlane, extras: ExtraDim[] = [], skip?: ReadonlySet<string>) {
     const items: DimItem[] = [];
     // neighbour-aware default placements (concentric circles fan their diameter
     // badges out instead of stacking), the same call dimensionSegments makes,
@@ -119,6 +120,7 @@ export class SketchDimensions {
     const defaults = staggeredDefaults(entities);
     entities.forEach((e, i) => {
       for (const d of entityDims(e, defaults.get(e.id))) {
+        if (skip?.has(`${e.id}:${d.field}`)) continue;
         const expr = this.entityExprOf?.(i, d.field);
         const field = d.field;
         items.push(present({

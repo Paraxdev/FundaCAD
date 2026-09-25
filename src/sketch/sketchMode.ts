@@ -33,7 +33,7 @@ import { circumcenter } from "./arc";
 import { compileAndSolve, coincKey, constraintIndexOf } from "./sketchSolve";
 import { SolverUnavailable } from "./solver";
 import { resolveRealEntities, toSketchEntity } from "./resolve";
-import { applyDrivingDimsDirect } from "./directDims";
+import { applyDrivingDimsDirect, drivenBadges, drivingDimFor, findDrivingDim, type DrivingDim } from "./directDims";
 import { expandPattern, translated } from "./pattern";
 import { candidatesFromEntities, dragSnap, originCandidate, settleOriginPin, showsSnapMarker, snap, type OriginPinRequest, type SnapGuide, type SnapKind, type SnapCandidate } from "./snap";
 import type { ResolvedEntity } from "./snap";
@@ -858,7 +858,7 @@ export class SketchMode {
     // an in-progress dimension holds entity REFERENCES, and a solve replaces
     // every entity object, re-read the picks off the fresh list
     if (this.dimFlow.picking) this.dimFlow.refreshDimPlan();
-    if (this.dimsVisible) this.dims.show(this.entities, this.plane, this.constraintDimExtras());
+    if (this.dimsVisible) this.dims.show(this.entities, this.plane, this.constraintDimExtras(), drivenBadges(this.entities, this.constraints));
     else this.dims.hide();
     if (this.glyphsVisible) this.glyphs.show(this.allGlyphs(), this.plane, this.conflictIdx, this.overIdx);
     else this.glyphs.hide();
@@ -979,7 +979,7 @@ export class SketchMode {
     // in-flight constraint solve) and re-derives regions and snap candidates,
     // none of which depend on the zoom. Only the annotation geometry does.
     this.overlay.setActiveSketch(this.activeCurves(this.derivedEntities()));
-    if (this.dimsVisible) this.dims.show(this.entities, this.plane, this.constraintDimExtras());
+    if (this.dimsVisible) this.dims.show(this.entities, this.plane, this.constraintDimExtras(), drivenBadges(this.entities, this.constraints));
     this.viewport.requestRender();
   }
 
@@ -1103,18 +1103,17 @@ export class SketchMode {
     // Flat comes back when the flight lands (enterSketchView's onArrive).
   }
 
-  /** Apply an edited dimension value (mm) to an entity. Line length and circle
-   *  diameter become driving solver constraints (so other constraints are kept);
-   *  everything else (rectangle W/H, line angle) edits coordinates directly. */
+  /** Apply an edited dimension value (mm) to an entity. Line length, circle
+   *  diameter and rectangle width/height become driving solver constraints, the
+   *  same ones typing them while drawing makes (lockTypedDims), so the value
+   *  holds against a later drag and counts toward the degrees of freedom (MO-1).
+   *  The rest (slot, polygon) edits coordinates directly. */
   private editDimension(index: number, field: DimField, mm: number) {
     const e = this.entities[index];
     if (!e) return;
-    if (e.type === "line" && field === "length") {
-      this.setDrivingDimension({ type: "distance", line: e.id, value: mm });
-      return;
-    }
-    if (e.type === "circle" && field === "diameter") {
-      this.setDrivingDimension({ type: "diameter", circle: e.id, value: mm });
+    const c = drivingDimFor(e, field, mm);
+    if (c) {
+      this.setDrivingDimension(c);
       return;
     }
     entityDims(e).find((d) => d.field === field)?.write(mm);
@@ -1369,13 +1368,13 @@ export class SketchMode {
     return null;
   }
 
-  /** Line length and circle diameter bind through their driving constraint; rigid
-   *  fields bind as entity targets. Rectangle W/H and derived dims take numbers only. */
+  /** Line length, circle diameter and rectangle W/H bind through their driving
+   *  constraint; rigid fields bind as entity targets. Derived dims take numbers only. */
   private commitEntityDimExpr(index: number, field: DimField, raw: string): string | null {
     const e = this.entities[index];
     if (!e) return "no entity";
-    if (e.type === "line" && field === "length") return this.commitConvertedDim({ type: "distance", line: e.id, value: 0 }, raw);
-    if (e.type === "circle" && field === "diameter") return this.commitConvertedDim({ type: "diameter", circle: e.id, value: 0 }, raw);
+    const driving = drivingDimFor(e, field, 0);
+    if (driving) return this.commitConvertedDim(e, field, driving, raw);
     const bindable = RIGID_ENTITY_NUM_FIELDS[e.type]?.some(([f]) => f === field);
     if (!bindable) return "this dimension can't hold an expression yet";
     return this.commitExprInput(`e:${e.id}:${field}`, "length", raw, (v) => {
@@ -1385,18 +1384,16 @@ export class SketchMode {
     });
   }
 
-  /** Entity length/⌀ input that must live on a driving constraint: evaluate
-   *  first, place the constraint (id carries over on replace), then bind. */
-  private commitConvertedDim(base: Extract<SketchConstraint, { type: "distance" } | { type: "diameter" }>, raw: string): string | null {
-    const prior =
-      base.type === "distance"
-        ? this.constraints.find((k): k is Extract<SketchConstraint, { type: "distance" }> => k.type === "distance" && k.line === base.line)
-        : this.constraints.find((k): k is Extract<SketchConstraint, { type: "diameter" }> => k.type === "diameter" && k.circle === base.circle);
-    const r = this.evalDimInput(raw, "length", prior?.id ? `c:${prior.id}` : null);
+  /** Entity input that must live on a driving constraint: evaluate first, place
+   *  the constraint (id carries over on replace), then bind. */
+  private commitConvertedDim(e: ResolvedEntity, field: DimField, base: DrivingDim, raw: string): string | null {
+    const prior = findDrivingDim(this.constraints, e, field);
+    const priorId = prior && isDimConstraint(prior) ? prior.id : undefined;
+    const r = this.evalDimInput(raw, "length", priorId ? `c:${priorId}` : null);
     if ("error" in r) return r.error;
-    const c = { ...base, value: r.value };
+    const c: DrivingDim = { ...base, value: r.value };
     this.setDrivingDimension(c); // stamps a fresh id or inherits the replaced dim's
-    this.recordBinding(`c:${(c as { id?: string }).id!}`, r, "length");
+    this.recordBinding(`c:${c.id!}`, r, "length");
     this.onState?.();
     return null;
   }
@@ -1405,13 +1402,9 @@ export class SketchMode {
   private entityDimExpr(index: number, field: DimField): string | undefined {
     const e = this.entities[index];
     if (!e) return undefined;
-    if (e.type === "line" && field === "length") {
-      const c = this.constraints.find((k): k is Extract<SketchConstraint, { type: "distance" }> => k.type === "distance" && k.line === e.id);
-      return c?.id ? this.exprFor(`c:${c.id}`) : undefined;
-    }
-    if (e.type === "circle" && field === "diameter") {
-      const c = this.constraints.find((k): k is Extract<SketchConstraint, { type: "diameter" }> => k.type === "diameter" && k.circle === e.id);
-      return c?.id ? this.exprFor(`c:${c.id}`) : undefined;
+    if (drivingDimFor(e, field, 0)) {
+      const c = findDrivingDim(this.constraints, e, field);
+      return c && isDimConstraint(c) && c.id ? this.exprFor(`c:${c.id}`) : undefined;
     }
     if (RIGID_ENTITY_NUM_FIELDS[e.type]?.some(([f]) => f === field)) return this.exprFor(`e:${e.id}:${field}`);
     return undefined;
@@ -2905,11 +2898,15 @@ export class SketchMode {
    *  expose no operand for them), so there is no real constraint to switch their
    *  typed values to; they keep their existing cosmetic-only behaviour. */
   private lockTypedDims(e: ResolvedEntity, typed: { width?: boolean; height?: boolean; diameter?: boolean }) {
+    const lock = (field: DimField, mm: number) => {
+      const c = drivingDimFor(e, field, mm);
+      if (c) this.constraints.push({ ...c, id: newConstraintId() });
+    };
     if (e.type === "rectangle") {
-      if (typed.width) this.constraints.push({ type: "p2pDistance", e1: e.id, p1: 0, e2: e.id, p2: 1, value: e.width });
-      if (typed.height) this.constraints.push({ type: "p2pDistance", e1: e.id, p1: 1, e2: e.id, p2: 2, value: e.height });
+      if (typed.width) lock("width", e.width);
+      if (typed.height) lock("height", e.height);
     } else if (e.type === "circle" && typed.diameter) {
-      this.constraints.push({ type: "diameter", circle: e.id, value: e.radius * 2 });
+      lock("diameter", e.radius * 2);
     }
   }
 
@@ -3057,7 +3054,9 @@ export class SketchMode {
     objs.push(...this.polygonObjects());
     if (this.dimsVisible) {
       this.cdims = constraintDims(this.entities, this.constraints);
-      objs.push(...dimensionLineObjects(this.entities, this.plane, this.cdims.flatMap((d) => d.lines)));
+      objs.push(...dimensionLineObjects(
+        this.entities, this.plane, this.cdims.flatMap((d) => d.lines), undefined, drivenBadges(this.entities, this.constraints),
+      ));
     } else {
       this.cdims = [];
     }
