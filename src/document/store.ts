@@ -988,7 +988,9 @@ export class DocumentStore {
   /** A tool's edit of feature `id`: the replacement feature, a parameter to set,
    *  or both, as ONE undo step. With a parameter it goes through the cascade
    *  queue like setParam, so the feature and the parameter land in one mutate.
-   *  Returns an error for an invalid parameter value, and writes nothing then. */
+   *  Ends an open edit preview without a rebuild of its own, the commit's is the
+   *  one that counts. Returns an error for an invalid parameter value, and then
+   *  writes nothing and leaves the preview as it was. */
   commitFeatureEdit(id: string, feature: Feature | null, param: { name: string; value: number } | null): string | null {
     const put = (d: CadDocument) => {
       if (!feature) return;
@@ -996,12 +998,14 @@ export class DocumentStore {
       if (i >= 0) d.features[i] = feature;
     };
     if (!param) {
+      this.endEditPreview(false);
       if (feature) this.mutate(put, true);
       return null;
     }
     const expr = String(param.value);
     const v = params.validateExpr(this.doc, param.name, expr);
     if (!v.ok) return v.error;
+    this.endEditPreview(false);
     this.queueParamCommit((d) => {
       put(d);
       params.commitParamExpr(d, param.name, expr);
