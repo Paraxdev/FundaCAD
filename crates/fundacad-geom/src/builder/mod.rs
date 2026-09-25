@@ -204,8 +204,10 @@ pub struct Ctx {
     /// Projected sketch entity refresh entries, the Python engine's `projection_refresh.py`.
     pub projections: Vec<Value>,
     /// The cut or join each feature applied so far, by feature id, which is
-    /// what a feature pattern repeats.
+    /// what a feature pattern repeats. Kept only for the features in
+    /// `patterned`, so a document without feature patterns holds no tools.
     pub tools: HashMap<String, Vec<ToolRecord>>,
+    pub patterned: HashSet<String>,
     /// Every feature of the document in order, for naming one in a message.
     pub timeline: Vec<Step>,
     ids: BodyIds,
@@ -243,6 +245,7 @@ impl Ctx {
             datum_marks: IndexMap::new(),
             projections: Vec::new(),
             tools: HashMap::new(),
+            patterned: HashSet::new(),
             timeline: Vec::new(),
             ids: BodyIds::new(None),
         }
@@ -269,6 +272,7 @@ impl Ctx {
             datum_marks: IndexMap::new(),
             projections: Vec::new(),
             tools: HashMap::new(),
+            patterned: HashSet::new(),
             timeline: Vec::new(),
             ids: BodyIds::new(None),
         }
@@ -332,6 +336,9 @@ impl Ctx {
     }
 
     pub fn record_tool(&mut self, feature_id: &str, kind: kernel::BoolKind, bodies: Vec<String>, tool: Shape) {
+        if !self.patterned.contains(feature_id) {
+            return;
+        }
         self.tools
             .entry(feature_id.to_owned())
             .or_default()
@@ -802,6 +809,7 @@ pub fn rebuild_from(
         datum_marks: IndexMap::new(),
         projections: Vec::new(),
         tools: HashMap::new(),
+        patterned: HashSet::new(),
         timeline: Vec::new(),
         ids: BodyIds::new(recorded.clone()),
     };
@@ -811,6 +819,12 @@ pub fn rebuild_from(
         .cloned()
         .unwrap_or_default();
     let features: Vec<Feature> = raw_features.iter().map(typed).collect();
+    ctx.patterned = features
+        .iter()
+        .filter_map(features::pattern_sources)
+        .flatten()
+        .cloned()
+        .collect();
     ctx.timeline = raw_features
         .iter()
         .map(|r| Step {

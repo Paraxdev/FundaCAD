@@ -142,6 +142,15 @@ fn one_type_returns_its_own_detail() {
 }
 
 #[test]
+fn every_pattern_says_it_can_repeat_features() {
+    for kind in ["patternLinear", "patternCircular", "patternRect"] {
+        let body = s::schema_text(Some(kind));
+        assert!(body.contains("  features: optional list of feature ids"), "{kind}: {body}");
+        assert!(body.contains("hole") && body.contains("cannot be patterned"), "{kind}: {body}");
+    }
+}
+
+#[test]
 fn an_unknown_type_is_answered_with_the_list_rather_than_nothing() {
     let body = s::schema_text(Some("extrood"));
     assert!(body.contains("extrude") && body.contains("No feature type"));

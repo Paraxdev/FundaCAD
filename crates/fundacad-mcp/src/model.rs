@@ -716,12 +716,15 @@ pub fn recompute_parameters(doc: &mut Doc) -> BTreeMap<String, String> {
 
 // --- validation --------------------------------------------------------------
 
-/// A feature field naming another feature, and what it must name.
+/// A feature field naming another feature, and what it must name, "" for any type.
 const REFERENCE_FIELDS: &[(&str, &[(&str, &str)])] = &[
     ("extrude", &[("sketch", "sketch")]),
     ("revolve", &[("sketch", "sketch")]),
     ("sweep", &[("profile", "sketch"), ("path", "sketch")]),
     ("loft", &[("sketches", "sketch")]),
+    ("patternLinear", &[("features", "")]),
+    ("patternCircular", &[("features", "")]),
+    ("patternRect", &[("features", "")]),
 ];
 
 /// Fields that hold a string which is never a number: an id, a mode, a hash.
@@ -804,7 +807,7 @@ pub fn validate(doc: &mut Doc) -> Vec<String> {
                     )),
                     Some(&j) => {
                         let got = str_field(&feats[j], "type").unwrap_or_default();
-                        if got != *want {
+                        if !want.is_empty() && got != *want {
                             problems.push(format!(
                                 "{fid}: {field} names '{name}', which is a {got} and not a {want}"
                             ));
