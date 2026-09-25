@@ -196,9 +196,18 @@ class Overlay<T> {
  *  geometry cache for it and everything after it. */
 export function withoutDisplayName(f: Feature): Feature {
   if (f.type === "import" || !("name" in f)) return f;
-  const { name: _name, ...rest } = f as Feature & { name?: string };
-  return rest as Feature;
+  // Same object back for the same feature: the rebuild wire ships a feature
+  // whenever its object changed, and a fresh copy every build made a named step
+  // look edited, so any document with enough of them was resent in full.
+  let out = unnamed.get(f);
+  if (!out) {
+    const { name: _name, ...rest } = f as Feature & { name?: string };
+    out = rest as Feature;
+    unnamed.set(f, out);
+  }
+  return out;
 }
+const unnamed = new WeakMap<Feature, Feature>();
 
 export class DocumentStore {
   private doc: CadDocument;
@@ -586,15 +595,19 @@ export class DocumentStore {
   /** Parameter commits run in series: recompute a draft, re-solve affected sketches,
    *  land it all as one undo step and one rebuild. */
   private paramChain: Promise<void> = Promise.resolve();
+  private paramPending = 0;
   private queueParamCommit(fn: (d: CadDocument) => void) {
+    this.paramPending++;
     this.paramChain = this.paramChain
-      .then(() => this.commitWithCascade(fn))
+      // Only the last of a burst rebuilds at once, the rest keep the debounce, so
+      // a plugin setting ten parameters does not start and supersede nine builds.
+      .then(() => this.commitWithCascade(fn, --this.paramPending === 0))
       .catch((e) => {
         console.error("param commit failed:", e);
         this.onWarning?.("Parameter change failed to apply, see the console for details.");
       });
   }
-  private async commitWithCascade(fn: (d: CadDocument) => void): Promise<void> {
+  private async commitWithCascade(fn: (d: CadDocument) => void, immediate: boolean): Promise<void> {
     const draft = clone(this.doc);
     fn(draft);
     const r = params.recompute(draft);
@@ -612,8 +625,15 @@ export class DocumentStore {
       else delete d.paramDefs;
       if (draft.paramExtras) d.paramExtras = draft.paramExtras;
       else delete d.paramExtras;
-      d.features = draft.features;
-    });
+      // The draft is a clone, so every feature in it is a new object, and the
+      // rebuild wire ships every feature whose object changed: one parameter
+      // resent the whole document, imported BREPs and all. Keep the ones the
+      // parameter did not touch.
+      d.features = draft.features.map((f, i) => {
+        const was = d.features[i];
+        return was && was.id === f.id && JSON.stringify(was) === JSON.stringify(f) ? was : f;
+      });
+    }, immediate);
     this.onParamsApplied?.();
   }
 
