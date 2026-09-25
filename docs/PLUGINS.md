@@ -434,12 +434,12 @@ On the window side the plugin contributes `numFields` and `targets` alongside
 the dropdowns it already contributed, because `document/numFields.ts` and
 `features/selectionTargets.ts` no longer name a type they do not own.
 
-A feature of a plugin with no `geometryWasm` fails by name. The beta on
-`legacy` uses its own manifest key instead, and the app offers the alpha's
-bundle of the same plugin in its place.
+A feature of a plugin with no `geometryWasm` fails by name. The retired
+sidecar build on `legacy` used its own manifest key instead, and the app
+offers its own bundle of the same plugin in its place.
 
-The app installs its plugins from the `alpha` release (`RELEASE_TAG` in
-`src/plugins/index.ts`). `build-alpha` packs those bundles with their
+The app installs its plugins from the `beta` release (`RELEASE_TAG` in
+`src/plugins/index.ts`). `build-beta` packs those bundles with their
 components, from the same commit as the host that runs them. The app tells its
 worker where installed plugins are with `FUNDACAD_PLUGIN_DIR`
 (`<app data>/plugins`), and MCP mode tells a private engine the same directory.

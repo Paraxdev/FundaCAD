@@ -28,7 +28,7 @@ fn put_manifest(root: &Path, id: &str, man: Value) {
     std::fs::write(dir.join("manifest.json"), man.to_string()).unwrap();
 }
 
-/// A bundle built for the Python engine, as the beta publishes it: it declares
+/// A bundle built for the retired Python engine: it declares
 /// what it owns and names no component. It owns those names all the same, so
 /// every sentence names the plugin and says an update fixes it.
 #[test]

@@ -45,13 +45,12 @@ the goal is it to make this a personalized version of a CAD with features I like
 ## Install
 
 Prebuilt installers for Windows, macOS (Apple Silicon) and Linux are on the
-[alpha release](https://github.com/Paraxdev/fundacad/releases/tag/alpha),
+[beta release](https://github.com/Paraxdev/fundacad/releases/tag/beta),
 FundaCAD 1.0 on the Funda Engine, rebuilt from `main` on every green
-build. It is less tested than the
-[beta release](https://github.com/Paraxdev/fundacad/releases/tag/beta), the
-beta built from the `legacy` branch and running the sidecar, so anything that
-builds differently in the alpha is worth a report. Files open in both. These
-builds do not update themselves, so come back to those pages for a newer one.
+build. The Python engine is retired, and its last build stays on the
+[legacy-final release](https://github.com/Paraxdev/fundacad/releases/tag/legacy-final).
+Files open in both. These builds do not update themselves yet, so come back to
+the beta page for a newer one.
 
 To let an AI assistant (Claude Code, Claude Desktop or any MCP host) build and
 edit models in the app, open **Preferences, AI assistants (MCP)**: the MCP
@@ -125,7 +124,7 @@ is refused, and silently never builds anything. `FUNDACAD_ENGINE_TOKEN` and
 ## Docs
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), how the processes fit together
-- [`docs/ENGINE.md`](docs/ENGINE.md), the Funda Engine: its target architecture, test strategy and golden files, the alpha rolling release, and its performance work
+- [`docs/ENGINE.md`](docs/ENGINE.md), the Funda Engine: its target architecture, test strategy and golden files, the beta rolling release, and its performance work
 - [`docs/PROTOCOL.md`](docs/PROTOCOL.md), the messages the frontend and the engine exchange
 - [`docs/FUNDA-FORMAT.md`](docs/FUNDA-FORMAT.md), the readable `.funda` JSON document and the self-repairing binary `.fundab`
 - [`docs/PACKAGING.md`](docs/PACKAGING.md), how a desktop bundle is built

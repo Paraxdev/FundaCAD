@@ -95,7 +95,7 @@ so the two worlds are one code path and an OpenCASCADE abort takes the engine
 rather than the conversation. The binary to spawn is named by
 `FUNDACAD_ENGINE_CMD`, or found next to this one: `fundacad-engine`, then the
 app itself (`fundacad --engine --ws`, recognised by the `engine_attach` command in
-its bytes, so a beta window running the sidecar is never started by mistake), then the
+its bytes, so a legacy window running the sidecar is never started by mistake), then the
 workspace `target/` directories. The spawned engine is told the app's plugin
 directory unless `FUNDACAD_PLUGIN_DIR` is already set.
 

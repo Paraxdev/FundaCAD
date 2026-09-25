@@ -26,7 +26,7 @@ import { describe, expect, it } from "vitest";
 // Loaded through vite rather than node:fs, the way tests/components/vHtmlPolicy
 // does, so this file needs no node type declarations and no __dirname.
 import confRaw from "../../src-tauri/tauri.conf.json?raw";
-import alphaRaw from "../../src-tauri/tauri.alpha.conf.json?raw";
+import releaseRaw from "../../src-tauri/tauri.beta.conf.json?raw";
 // The glue the app actually loads: src/sketch/solver.ts imports
 // `@salusoft89/planegcs`, which resolves to this file.
 import glue from "../../node_modules/@salusoft89/planegcs/dist/planegcs_dist/planegcs.js?raw";
@@ -39,7 +39,7 @@ const conf = JSON.parse(confRaw) as {
   app: { security: { csp: string; devCsp: string } };
 };
 
-const alpha = JSON.parse(alphaRaw) as { app?: unknown };
+const release = JSON.parse(releaseRaw) as { app?: unknown };
 
 /** One CSP directive's source list. */
 function directive(csp: string, name: string): string[] {
@@ -164,6 +164,6 @@ describe("the engine's reach", () => {
   });
 
   it("leaves the policy to the base config, so the release build ships this one", () => {
-    expect(alpha.app).toBeUndefined();
+    expect(release.app).toBeUndefined();
   });
 });

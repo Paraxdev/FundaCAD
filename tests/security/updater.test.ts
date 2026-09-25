@@ -33,13 +33,13 @@
 import { describe, expect, it } from "vitest";
 
 import confRaw from "../../src-tauri/tauri.conf.json?raw";
-import alphaRaw from "../../src-tauri/tauri.alpha.conf.json?raw";
+import releaseRaw from "../../src-tauri/tauri.beta.conf.json?raw";
 
 const conf = JSON.parse(confRaw) as {
   plugins: { updater: { pubkey: string; endpoints: string[] } };
 };
 
-const alpha = JSON.parse(alphaRaw) as {
+const release = JSON.parse(releaseRaw) as {
   plugins?: unknown;
 };
 
@@ -73,29 +73,26 @@ describe("updater", () => {
     ).toMatch(/minisign public key/);
   });
 
-  // The two rolling releases are two feeds, and this is what keeps them apart.
-  //
   // The endpoint is baked into the binary at build time, so which feed a copy
   // reads is decided by the config it was built with and can never change
-  // afterwards. This branch builds the alpha, which reads alpha/latest.json;
-  // the Python beta is built on the legacy branch and reads beta/latest.json.
-  // Nothing else separates them, and nothing else could: the alpha version is
-  // 1.0.x, which is NEWER than the beta's 0.2.x, so a beta install offered the
-  // alpha manifest would take it.
+  // afterwards. This branch builds the rolling beta, which reads
+  // beta/latest.json. The retired alpha feed is only a mirror the release job
+  // writes so old alpha installs move over, and nothing built now may read it,
+  // or dropping the mirror would strand every copy built in the meantime.
   //
   // docs/ENGINE.md section 6 has the decision and why it is not "publish no
-  // manifest at all": an alpha that cannot update itself is an alpha
-  // nobody re-downloads, and the point of a rolling build is the next one.
-  it("reads the alpha feed and never the beta one", () => {
+  // manifest at all": a rolling build that cannot update itself is one nobody
+  // re-downloads.
+  it("reads the beta feed and never the retired alpha one", () => {
     const path = (urls: string[]) => urls.map((u) => new URL(u).pathname);
     expect(path(conf.plugins.updater.endpoints)).toEqual([
-      "/Paraxdev/fundacad/releases/download/alpha/latest.json",
+      "/Paraxdev/fundacad/releases/download/beta/latest.json",
     ]);
-    expect(confRaw + alphaRaw).not.toContain("/beta/latest.json");
+    expect(confRaw + releaseRaw).not.toContain("/alpha/latest.json");
   });
 
   it("leaves the feed to the base config, so the release build cannot diverge from it", () => {
-    expect(alpha.plugins).toBeUndefined();
+    expect(release.plugins).toBeUndefined();
   });
 
   it("still carries UPSTREAM's key, which the release job must refuse", () => {

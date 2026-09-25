@@ -215,6 +215,15 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Changed
 
+- **The Rust engine is the rolling beta now, and the Python engine is
+  retired.** Builds of `main` publish to the
+  [beta release](https://github.com/Paraxdev/fundacad/releases/tag/beta),
+  titled FundaCAD 1.0 beta, and read `beta/latest.json`; it was the `alpha`
+  release before. The `legacy` branch publishes nothing more, and its last
+  build stays on the permanent `legacy-final` release. The `alpha` release is
+  kept for a while and gets a copy of the beta's update manifest, so alpha
+  installs move over once self-update is switched on.
+
 - **The origin marker no longer looks like a Move gizmo.** It was three shaded arrows in the Move gizmo's own colours and was easy to take for one left behind. It is now three thin, muted axis lines that fade out towards their ends, with a small neutral dot at the origin, drawn faintly and below every handle. Revolve still takes an axis by clicking one of them.
 
 - **The printer connection lives entirely in its plugin.** Sending jobs, print status, the camera, the slicer hand-off and the colored 3MF project all run from the Printer connection plugin now, and with it off or uninstalled nothing about printers is left in the app. Your printer list and slicer location move into the plugin the first time they are used, so nothing needs setting up again. Update the plugin together with the app: it now asks to talk to devices on your local network, where it used to ask to control your printer.

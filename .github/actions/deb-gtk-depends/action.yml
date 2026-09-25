@@ -1,7 +1,7 @@
 name: Depend on the renamed GTK package (deb)
 description: >
-  Rewrite the .deb control member's Depends line. Shared by the beta build and
-  the alpha Rust build; the payload differs, the dependency does not.
+  Rewrite the .deb control member's Depends line for the Tauri bundle, whose CLI
+  always writes the pre time_t transition GTK package name.
 
 runs:
   using: composite

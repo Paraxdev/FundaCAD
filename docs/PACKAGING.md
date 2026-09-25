@@ -13,26 +13,24 @@ engine compiled in:
   `fundacad --mcp` (docs/MCP.md).
 
 CI: [`.github/workflows/build.yml`](../.github/workflows/build.yml) builds
-Linux x86_64, macOS arm64 and Windows x64 and publishes the rolling `alpha`
-release from `main`. The beta, built from the `legacy` branch, runs the
-sidecar and is built by that branch's own copy of the workflow, and publishes the `beta`
-release; the two never meet: separate branches, jobs, tags, update feeds and
-artifact names.
+Linux x86_64, macOS arm64 and Windows x64 and publishes the rolling `beta`
+release from `main`. The sidecar build on the `legacy` branch is retired and
+publishes nothing; its last build is the `legacy-final` release.
 
 ## Building a bundle
 
 ```sh
 npm ci
-npx tauri build --config src-tauri/tauri.alpha.conf.json
+npx tauri build --config src-tauri/tauri.beta.conf.json
 ```
 
 What the pieces are:
 
 - **`tauri.conf.json`** is the whole app: the window, the Content-Security-Policy
   (no loopback origin, the engine is reached over Tauri IPC), the updater's
-  feed (`alpha/latest.json`) and the bundle targets. It declares no
+  feed (`beta/latest.json`) and the bundle targets. It declares no
   `resources`, so nothing but the executable and the MCP server is bundled.
-- **`tauri.alpha.conf.json`** adds what only a release bundle needs: updater
+- **`tauri.beta.conf.json`** adds what only a release bundle needs: updater
   artifacts and the rpm and NSIS compression settings. `fundacad-mcp` is a
   library dependency of the app, so every bundled `fundacad` also serves MCP
   over stdio when started with `--mcp`. Its private engine is the same app,
@@ -66,9 +64,9 @@ portable Windows download.
 
 ## Sizes
 
-Measured on Windows, 2026-09-17, against the last beta build of the sidecar:
+Measured on Windows, 2026-09-17, against a sidecar build from `legacy`:
 
-| | beta (0.2.125) | alpha |
+| | sidecar (0.2.125) | Funda Engine |
 |---|---|---|
 | `.msi` | 162.7 MB | **23.3 MB** |
 | `-setup.exe` (NSIS) | 157.3 MB | **23.1 MB** |
