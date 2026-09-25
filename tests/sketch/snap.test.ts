@@ -1,7 +1,11 @@
 import { describe, it, expect } from "vitest";
 import * as THREE from "three";
-import { snap, candidatesFromEntities, dragSnap, originCandidate, showsSnapMarker, type SnapCandidate } from "../../src/sketch/snap";
+import {
+  snap, candidatesFromEntities, dragSnap, existingFixedPoint, originCandidate, pinOriginPoint, showsSnapMarker,
+  type ResolvedEntity, type SnapCandidate,
+} from "../../src/sketch/snap";
 import { SketchPlane } from "../../src/sketch/plane";
+import type { SketchConstraint } from "../../src/types";
 
 describe("originCandidate", () => {
   it("offers the origin on a base plane", () => {
@@ -371,5 +375,39 @@ describe("axis line labels", () => {
     expect([snap(new THREE.Vector2(40, 2), cands, toScreen, 0).label, snap(new THREE.Vector2(1, -35), cands, toScreen, 0).label])
       .toEqual([`${["X", "Y", "Z"][[plane.u.x, plane.u.y, plane.u.z].findIndex((v) => Math.abs(v) === 1)]} Axis`,
         `${["X", "Y", "Z"][[plane.v.x, plane.v.y, plane.v.z].findIndex((v) => Math.abs(v) === 1)]} Axis`]);
+  });
+});
+
+describe("pinOriginPoint (SK-6)", () => {
+  let n = 0;
+  const newId = () => `pin${n++}`;
+
+  it("creates a fixed construction point the first time something lands on the origin", () => {
+    const entities: ResolvedEntity[] = [];
+    const constraints: SketchConstraint[] = [];
+    const point = pinOriginPoint(entities, constraints, new THREE.Vector2(0, 0), newId);
+    expect(point).toMatchObject({ type: "point", x: 0, y: 0, construction: true });
+    expect(entities).toHaveLength(1);
+    expect(constraints).toEqual([{ type: "fix", e: point.id, p: 0 }]);
+  });
+
+  it("reuses the existing point instead of stacking a second one at the same spot", () => {
+    const entities: ResolvedEntity[] = [];
+    const constraints: SketchConstraint[] = [];
+    const first = pinOriginPoint(entities, constraints, new THREE.Vector2(0, 0), newId);
+    const second = pinOriginPoint(entities, constraints, new THREE.Vector2(0, 0), newId);
+    expect(second.id).toBe(first.id);
+    expect(entities).toHaveLength(1);
+    expect(constraints).toHaveLength(1);
+  });
+
+  it("does not reuse a point at the same spot that isn't actually fixed", () => {
+    const loose: ResolvedEntity = { type: "point", id: "loose", x: 0, y: 0, construction: true };
+    const entities: ResolvedEntity[] = [loose];
+    const constraints: SketchConstraint[] = [];
+    expect(existingFixedPoint(entities, constraints, new THREE.Vector2(0, 0))).toBeNull();
+    const point = pinOriginPoint(entities, constraints, new THREE.Vector2(0, 0), newId);
+    expect(point.id).not.toBe("loose");
+    expect(entities).toHaveLength(2);
   });
 });
