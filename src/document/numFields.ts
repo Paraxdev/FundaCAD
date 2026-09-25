@@ -214,6 +214,41 @@ export const INT_FIELDS: Record<string, number> = {
   seed: -Infinity,
 };
 
+/** What a typed value must be before a field takes it. Checked by the heads-up
+ *  value box and by the feature rows alike, so the two refuse the same number
+ *  in the same words. */
+export interface ValueRule {
+  /** Only a value above zero means anything, a radius or a scale. */
+  positive?: boolean;
+  atLeast?: number;
+  integer?: boolean;
+}
+
+const POSITIVE_FIELDS: Partial<Record<Feature["type"], readonly string[]>> = {
+  fillet: ["radius"],
+  chamfer: ["distance", "distance2"],
+  scale: ["factor", "sx", "sy", "sz"],
+};
+
+/** The rule for a feature field, empty when any number will do. */
+export function featureValueRule(type: string, field: string): ValueRule {
+  const rule: ValueRule = {};
+  if (POSITIVE_FIELDS[type as Feature["type"]]?.includes(field)) rule.positive = true;
+  const min = INT_FIELDS[field];
+  if (min !== undefined) {
+    rule.integer = true;
+    if (Number.isFinite(min)) rule.atLeast = min;
+  }
+  return rule;
+}
+
+export function valueProblem(label: string, rule: ValueRule, v: number): string | null {
+  if (rule.integer && Math.abs(v - Math.round(v)) > 1e-9) return `${label} must be a whole number`;
+  if (rule.positive && !(v > 0)) return `${label} must be more than 0`;
+  if (rule.atLeast !== undefined && v < rule.atLeast) return `${label} must be at least ${rule.atLeast}`;
+  return null;
+}
+
 /** String-typed Feature/SketchEntity fields that can NEVER hold a bare
  *  parameter name, the skip-set for the legacy bare-name scans in the params
  *  engine. Keep in sync when a new string field lands on either union. */

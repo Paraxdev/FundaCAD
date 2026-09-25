@@ -31,6 +31,7 @@
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore } from "../document/store";
+import { featureValueRule } from "../document/numFields";
 import { DimInput } from "../sketch/dimInput";
 import { WORLD_FRAME, bodyMoveTarget, type Frame, type MoveCommit, type MoveTarget } from "./moveTarget";
 import { setPrompt } from "../ui/prompt";
@@ -241,7 +242,7 @@ export class MoveTool {
       [
         { name: "move", label: "Move", kind: "length" },
         { name: "turn", label: "Angle", kind: "angle" },
-        ...(target.handles.cubes.length ? [{ name: "size", label: "Scale", kind: "count" as const, positive: true }] : []),
+        ...(target.handles.cubes.length ? [{ name: "size", label: "Scale", kind: "count" as const, ...featureValueRule("scale", "factor") }] : []),
       ],
       () => this.settleTyped(),
       () => this.cancel(),
@@ -532,7 +533,8 @@ export class MoveTool {
       return v !== null && Math.abs(v - (name === "size" ? 1 : 0)) > 1e-9;
     };
     const kind = this.last?.kind;
-    if (typed("move") && kind !== "axis" && kind !== "size") return "Click an arrow for the distance to run along";
+    if (typed("move") && kind === "size") return "A cube scales, type its factor in Scale";
+    if (typed("move") && kind !== "axis") return "Click an arrow for the distance to run along";
     if (typed("turn") && kind !== "ring") return "Click a ring for the angle to turn about";
     if (typed("size") && kind !== "size") return "Click a cube for the scale to stretch along";
     return null;
@@ -558,6 +560,8 @@ export class MoveTool {
       this.open(next, done ?? (() => {}));
       this.onClickThrough = through;
       if (chosen?.kind !== "origin") this.last = chosen;
+      if (chosen?.kind === "size") this.dim.focusField("size");
+      else if (chosen?.kind === "ring") this.dim.focusField("turn");
     };
     // A drag that ended back where it started writes nothing (commit() falls
     // through to cancel()), so there is no rebuild to wait for.
@@ -683,15 +687,13 @@ export class MoveTool {
   private applyTyped() {
     const l = this.last;
     if (this.grab || !l) return;
-    // A resize cube sits on the same axis as its arrow, so a distance typed
-    // after picking one slides along that axis rather than going nowhere.
-    if ((l.kind === "axis" || l.kind === "size") && this.dim.isUserDriven("move")) {
+    if (l.kind === "axis" && this.dim.isUserDriven("move")) {
       const v = this.dim.getValue("move");
       if (v != null && Math.abs(v - this.comp(l.index)) > 1e-6) {
         this.setComp(l.index, v);
         this.refreshPreview();
       }
-      if (l.kind === "axis") return;
+      return;
     }
     if (l.kind === "ring" && this.dim.isUserDriven("turn")) {
       const v = this.dim.getValue("turn");
