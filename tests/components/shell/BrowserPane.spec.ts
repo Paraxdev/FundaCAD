@@ -27,6 +27,7 @@ import { contribute, resetContributions } from "../../../src/plugins/contrib";
 import { setBrowserFilter } from "../../../src/ui/browserFilter";
 import { contextMenu, type CtxItem } from "../../../src/ui/menu";
 import { useBrowserStore } from "../../../src/stores/browser";
+import { awaitTreePick, resetTreePicks, treePickWaiting, type TreePick } from "../../../src/ui/treePick";
 import {
   descendantsOf, type ElementDef, freshElementName, reparented, withElementRemoved,
 } from "../../../src/document/elements";
@@ -39,6 +40,8 @@ vi.mock("../../../src/ui/menu", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../src/ui/menu")>()),
   contextMenu: vi.fn(),
 }));
+
+const DATUM_DEF = { origin: [0, 0, 5], normal: [0, 0, 1], xdir: [1, 0, 0] } as const;
 
 /** The narrowest engine BrowserPane actually touches. The document is a plain
  *  raw object mutated in place, exactly as DocumentStore.mutate() leaves it. */
@@ -157,7 +160,10 @@ function makeEngine(doc: CadDocument, bodies: { id: string; name: string; nodeRe
       store,
       bridge: { docVersion, buildVersion },
       isSketchVisible: (id: string) => !hiddenSketches.has(id),
-      sketch: { active: false },
+      sketch: { active: false, enter: vi.fn() },
+      toolOwnsScreen: () => false,
+      setStatus: vi.fn(),
+      datumPlaneDef: () => DATUM_DEF,
       overlay: { update: () => {} },
       viewport: {
         getSelectedBodies: () => [...selectedBodies],
@@ -197,6 +203,7 @@ afterEach(() => {
   // every case after it. That was survivable while the cases that changed it
   // happened to end on a wide filter; it is not something to keep relying on.
   setBrowserFilter("all");
+  resetTreePicks();
   vi.useRealTimers();
 });
 
@@ -755,5 +762,89 @@ describe("BrowserPane", () => {
     await rowNamed(w, "C").trigger("click", { shiftKey: true });
     const viewport = (fake.engine as unknown as { viewport: { getSelectedBodies(): string[] } }).viewport;
     expect(viewport.getSelectedBodies()).toEqual(["b1", "b2", "b3"]);
+  });
+});
+
+// MO-3: Offset Plane waiting for "a plane or face", the YZ row clicked. The row
+// used to run its own "sketch on it" and abandon the tool.
+describe("a row click while a tool waits for a pick", () => {
+  beforeEach(() => { setActivePinia(createPinia()); });
+
+  const docWithDatums = (): CadDocument => ({
+    parameters: {},
+    features: [
+      sketch("s1"),
+      { id: "dp", type: "datumPlane", plane: "XY", offset: 5 } as Feature,
+      { id: "ax", type: "datumAxis", origin: [1, 2, 3], dir: [0, 0, 1], name: "Axis1" } as Feature,
+    ],
+  });
+  const eng = (fake: ReturnType<typeof makeEngine>) =>
+    fake.engine as unknown as { sketch: { enter: ReturnType<typeof vi.fn> }; setStatus: ReturnType<typeof vi.fn>; toolOwnsScreen: () => boolean };
+
+  it("with no tool waiting, an Origin plane row still starts a sketch on it", async () => {
+    const fake = makeEngine(docWithDatums());
+    const w = render(fake);
+    await nextTick();
+    await rowNamed(w, "YZ plane").trigger("click");
+    expect(eng(fake).sketch.enter).toHaveBeenCalledWith("YZ", fake.store);
+  });
+
+  it("a waiting plane pick takes the Origin row instead of the sketch shortcut", async () => {
+    const fake = makeEngine(docWithDatums());
+    const w = render(fake);
+    await nextTick();
+    const got: TreePick[] = [];
+    awaitTreePick((p) => { got.push(p); return true; });
+    await rowNamed(w, "YZ plane").trigger("click");
+    expect(got).toEqual([{ kind: "basePlane", plane: "YZ" }]);
+    expect(eng(fake).sketch.enter).not.toHaveBeenCalled();
+  });
+
+  it("a datum row reaches the tool resolved, where the viewport draws it", async () => {
+    const fake = makeEngine(docWithDatums());
+    const w = render(fake);
+    await nextTick();
+    const got: TreePick[] = [];
+    awaitTreePick((p) => { got.push(p); return true; });
+    await rowNamed(w, "Plane1").trigger("click");
+    await rowNamed(w, "Axis1").trigger("click");
+    expect(got).toEqual([
+      { kind: "datumPlane", id: "dp", def: DATUM_DEF },
+      { kind: "datumAxis", id: "ax", origin: [1, 2, 3], dir: [0, 0, 1] },
+    ]);
+  });
+
+  it("a row the tool refuses gives its hint, runs nothing and keeps the tool waiting", async () => {
+    const fake = makeEngine(docWithDatums(), [{ id: "b1", name: "Body1" }]);
+    const w = render(fake);
+    await nextTick();
+    awaitTreePick(() => "That row is a base plane, this step needs one body");
+    await rowNamed(w, "YZ plane").trigger("click");
+    await rowNamed(w, "Body1").trigger("click");
+    expect(eng(fake).sketch.enter).not.toHaveBeenCalled();
+    expect(fake.engine.viewport.getSelectedBodies()).toEqual([]);
+    expect(eng(fake).setStatus).toHaveBeenCalledWith("That row is a base plane, this step needs one body", "");
+    expect(treePickWaiting()).toBe(true);
+  });
+
+  it("a tool that takes no rows refuses them with a hint rather than being abandoned", async () => {
+    const fake = makeEngine(docWithDatums());
+    eng(fake).toolOwnsScreen = () => true;
+    const w = render(fake);
+    await nextTick();
+    await rowNamed(w, "YZ plane").trigger("click");
+    expect(eng(fake).sketch.enter).not.toHaveBeenCalled();
+    expect(eng(fake).setStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it("a double-click cannot open a sketch for editing under a waiting tool", async () => {
+    const fake = makeEngine(docWithDatums());
+    const edit = vi.fn();
+    (fake.engine as unknown as { editFeature: () => void }).editFeature = edit;
+    const w = render(fake);
+    await nextTick();
+    awaitTreePick(() => "no");
+    await rowNamed(w, "Sketch1").trigger("dblclick");
+    expect(edit).not.toHaveBeenCalled();
   });
 });

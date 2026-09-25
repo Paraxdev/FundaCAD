@@ -54,6 +54,7 @@ import { hideFlushSeams } from "./flushSeams";
 import { EdgeEmphasis } from "./edgeEmphasis";
 import { ViewCube, FACE_VIEWS } from "./viewCube";
 import { setPrompt } from "../ui/prompt";
+import { awaitTreePick, treePickRefusal } from "../ui/treePick";
 import type { DocumentStore } from "../document/store";
 import type { BodyFinish } from "../document/materials";
 import { BodyFinishLayer, sameFinishMap, sameStringMap } from "./bodyFinish";
@@ -3045,6 +3046,8 @@ export class Viewport {
   /** Enter "pick a model face to redefine this cube side" mode. */
   private beginSetOverride(side: ViewCubeSide) {
     this.setOverrideSide = side;
+    this.releaseTreePick?.();
+    this.releaseTreePick = awaitTreePick((pick) => treePickRefusal(pick, "a model face, pick it in the view"));
     setPrompt(`Click a model face to set as "${FACE_VIEWS[side].label}" (Esc to cancel)`);
     // listen once for Escape to cancel
     const onKey = (e: KeyboardEvent) => {
@@ -3056,7 +3059,11 @@ export class Viewport {
     window.addEventListener("keydown", onKey);
   }
 
+  private releaseTreePick: (() => void) | null = null;
+
   private cancelSetOverride() {
+    this.releaseTreePick?.();
+    this.releaseTreePick = null;
     this.setOverrideSide = null;
     this.clearHover();
     setPrompt(null);

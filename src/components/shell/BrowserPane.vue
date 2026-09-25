@@ -48,6 +48,8 @@ import {
 import type { CtxItem } from "../../ui/menu";
 import { actOn as actOnSelection, EMPTY_SELECTION, modsOf, selectGroup, selectRow } from "../../ui/rowSelection";
 import { VisibilityPaint } from "../../ui/visibilityPaint";
+import { routeTreeClick, treePickWaiting, type TreePick } from "../../ui/treePick";
+import { featurePick } from "../../app/featurePick";
 import { contributedBrowserSections, contributedPalette, onContribChange } from "../../plugins/contrib";
 import type { Component } from "vue";
 import { featuresOf } from "../../types";
@@ -163,13 +165,38 @@ type TreeNode = FolderNode | RowNode | EmptyNode | PluginNode;
 // which is why several of these consult the viewport or a tool.
 
 function sketchOnPlane(plane: Plane3) {
-  const t = engine.tools;
-  if (engine.sketch.active || t.extrude.active || t.edgeFeature.active || t.pressPull.active || t.loft.active || t.planeOffset.active || t.datumPose.active) return;
-  // Answering "select a plane" from the Browser instead of the viewport: end the
-  // interactive pick, or its planePick flag stays set and toolBusy() is true
-  // forever, silently disabling every tool from here on with no error at all.
-  engine.starters.cancelPlanePick();
+  if (engine.sketch.active) {
+    engine.setStatus("Finish this sketch before starting another", "");
+    return;
+  }
   engine.sketch.enter(plane, store);
+}
+
+// --- a tool waiting for a pick takes the row first --------------------------
+
+/** A tool holds the screen but takes no rows (Extrude aiming, a gizmo up, a
+ *  plugin's pick). A sketch is left out: the rows keep working inside one. */
+function busyHint(): string | null {
+  if (!engine.toolOwnsScreen() || engine.sketch.active) return null;
+  return "The active tool takes its pick in the view, finish it or press Esc";
+}
+
+const treeClick = { busyHint, hint: (text: string) => engine.setStatus(text, "") };
+
+/** The row's own action, unless a waiting tool takes the click or refuses it.
+ *  `pick` is a thunk so a datum is resolved where it stands at click time. */
+function viaTool(pick: () => TreePick, own: (e: MouseEvent) => void) {
+  return (e: MouseEvent) => {
+    if (routeTreeClick(pick(), treeClick) === "row") own(e);
+  };
+}
+
+/** Double-click: the click before it already went to the tool, or said why not. */
+function unlessWaiting(own: () => void) {
+  return () => {
+    if (treePickWaiting() || busyHint()) return;
+    own();
+  };
 }
 
 // --- showing and hiding ----------------------------------------------------
@@ -534,7 +561,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
     label: `${p} plane`,
     icon: "plane",
     dim: true,
-    activate: () => sketchOnPlane(p),
+    activate: viaTool(() => ({ kind: "basePlane", plane: p }), () => sketchOnPlane(p)),
     title: `Start a sketch on the ${p} plane`,
   })));
 
@@ -549,7 +576,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
       selected: selection.featureId === f.id,
       error: errId === f.id,
       ...eye({ category: "planes", key: f.id }, store.isPlaneVisible(f.id)),
-      activate: () => engine.selectFeature(f.id),
+      activate: viaTool(() => featurePick(engine, f), () => engine.selectFeature(f.id)),
       extraMenu: [
         { label: "Cut all bodies", onClick: () => void engine.starters.startCutByPlane(f.id) },
         visibilityMenu("planes", [f.id], "planes"),
@@ -578,7 +605,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
       selected: selection.featureId === f.id,
       error: errId === f.id,
       ...eye({ category: "datums", key: f.id }, store.isPlaneVisible(f.id)),
-      activate: () => engine.selectFeature(f.id),
+      activate: viaTool(() => featurePick(engine, f), () => engine.selectFeature(f.id)),
       extraMenu: [visibilityMenu("datums", [f.id], "datums")],
       rename: (name: string) => store.updateFeature(f.id, { name } as Partial<Feature>),
       remove: () => store.removeFeature(f.id),
@@ -623,7 +650,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
       ...(chip ? { swatch: chip } : {}),
       selected: selectedIds.has(b.id),
       ...eye({ category: "bodies", key: b.id }, store.isBodyVisible(b.id)),
-      activate: (e: MouseEvent) => selectBody(b.id, e),
+      activate: viaTool(() => ({ kind: "body", id: b.id }), (e) => selectBody(b.id, e)),
       extraMenu: [
         moveBodiesMenu(actOn(b.id), store.bodyElementOf(b.id)),
         materialMenu(store.materialLibrary, actOn(b.id), store.bodyMaterialId(b.id),
@@ -661,7 +688,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
       kind: "folder", k: g.key, key: g.key, label: g.label,
       icon: g.kind === "element" ? "element" : "assembly",
       count: g.total, depth, collapsed,
-      activate: (e: MouseEvent) => selectFolder(ids, e),
+      activate: viaTool(() => ({ kind: "bodies", ids }), (e) => selectFolder(ids, e)),
       selected: ids.length > 0 && ids.every((id) => selectedIds.has(id)),
       // The head's eye stands for every body under it, see setVisibility.
       ...eye({ category: "bodies", key: `g:${g.key}`, ids }, anyVisible),
@@ -729,8 +756,8 @@ const nodes = useDocValue((doc): TreeNode[] => {
       icon: "assembly",
       selected: selection.featureId === f.id,
       error: errId === f.id,
-      activate: () => engine.selectFeature(f.id),
-      edit: () => engine.editFeature(f.id),
+      activate: viaTool(() => ({ kind: "feature", id: f.id }), () => engine.selectFeature(f.id)),
+      edit: unlessWaiting(() => engine.editFeature(f.id)),
       rename: (name: string) => store.updateFeature(f.id, { name } as Partial<Feature>),
       remove: () => store.removeFeature(f.id),
       title: `Joint ${i + 1} · select or double-click to adjust its offset/angle handles · right-click to Rename / Delete`,
@@ -748,8 +775,8 @@ const nodes = useDocValue((doc): TreeNode[] => {
     selected: pickedSketches.includes(f.id) || selection.featureId === f.id,
     error: errId === f.id,
     ...eye({ category: "sketches", key: f.id }, engine.isSketchVisible(f.id)),
-    activate: (e: MouseEvent) => selectSketch(f.id, e),
-    edit: () => engine.editFeature(f.id),
+    activate: viaTool(() => ({ kind: "sketch", id: f.id }), (e) => selectSketch(f.id, e)),
+    edit: unlessWaiting(() => engine.editFeature(f.id)),
     extraMenu: [visibilityMenu("sketches", actOnSelection(pickedSketches, f.id), "sketches")],
     rename: (name: string) => store.updateFeature(f.id, { name } as Partial<Feature>),
     remove: () => store.removeFeature(f.id),

@@ -15,13 +15,14 @@
 
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
-import type { PlaneDef, Vec3 } from "../types";
+import type { Plane3, PlaneDef, Vec3 } from "../types";
 import { DimInput } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
 import { isEditableTarget } from "../ui/focus";
 import { snap } from "../ui/units";
 import { axisDragDistance, createDragHandle, HANDLE_UP, type DragHandle } from "./manipulator";
 import { pickPlaneTarget } from "./facePlanePick";
+import { awaitTreePick, treePickRefusal } from "../ui/treePick";
 import { SketchPlane } from "../sketch/plane";
 import {
   GHOST_DEFAULT,
@@ -40,6 +41,11 @@ const AXES: Record<string, Vec3> = {
   Y: [0, 1, 0],
   Z: [0, 0, 1],
 };
+
+function baseDef(plane: Plane3): PlaneDef {
+  const p = new SketchPlane(plane);
+  return { origin: p.origin.toArray(), normal: p.n.toArray(), xdir: p.u.toArray() };
+}
 
 /** What defines the cut. `pick` defers the answer to the user's next click on a
  *  face or a construction plane, the tool owns that pick rather than the
@@ -82,6 +88,7 @@ export class SectionTool {
   /** true while the handle + offset box are stood down for another tool */
   private standing = false;
   private onDone: (() => void) | null = null;
+  private releaseTree: (() => void) | null = null;
 
   private dim = new DimInput();
   private pointV = new THREE.Vector3();
@@ -156,12 +163,21 @@ export class SectionTool {
     this.viewport.suspendPicking = true;
     this.viewport.showAllPlanes(true);
     this.pickGesture.attach();
+    this.releaseTree = awaitTreePick((pick) => {
+      const def = pick.kind === "datumPlane" ? pick.def : pick.kind === "basePlane" ? baseDef(pick.plane) : null;
+      if (!def) return treePickRefusal(pick, "a plane, or a face picked in the view");
+      this.endPick();
+      this.armOn(def);
+      return true;
+    });
     setPrompt("Click a face or plane to cut along · Esc");
   }
 
   private endPick() {
     if (!this.picking) return;
     this.picking = false;
+    this.releaseTree?.();
+    this.releaseTree = null;
     this.viewport.suspendPicking = false;
     this.viewport.showAllPlanes(false);
     this.pickGesture.detach();
@@ -211,10 +227,7 @@ export class SectionTool {
     }
     const target = pickPlaneTarget(this.viewport, x, y);
     if (!target || target.kind === "unusable") return null;
-    if (target.kind === "base") {
-      const p = new SketchPlane(target.spec);
-      return { origin: p.origin.toArray(), normal: p.n.toArray(), xdir: p.u.toArray() };
-    }
+    if (target.kind === "base") return baseDef(target.spec);
     return target.spec;
   }
 
