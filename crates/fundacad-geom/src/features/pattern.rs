@@ -7,12 +7,20 @@
 //! or join each one recorded is copied to every other place and applied to the
 //! same body again.
 
-use fundacad_core::schema::{Axis3, Feature, PatternCircular, PatternLinear, PatternRect};
+use fundacad_core::schema::{
+    Axis3, AxisLine, AxisSpec, Feature, OneOrMany, PatternCircular, PatternLinear, PatternRect,
+    Real, Selector,
+};
+use glam::DVec3;
 use opencascade::primitives::Shape;
+use opencascade::select_access::CurveType;
+use opencascade_sys::face_query as fq;
 
 use super::primitives::require_positive;
-use crate::builder::{Ctx, FResult, Fail, ToolRecord};
+use crate::builder::{missing_reference, Ctx, FResult, Fail, ToolRecord};
 use crate::kernel::{self, BoolKind, Kind};
+use crate::select::entity::EdgeEnt;
+use crate::select::Resolver;
 
 const MAX_PATTERN_COUNT: usize = 10_000;
 
@@ -55,6 +63,11 @@ fn fuse_cells(mut cells: Vec<Shape>) -> FResult<Shape> {
     let mut result = it.next().expect("more than one cell");
     for cell in it {
         result = kernel::boolean_op(&result, &[&cell], BoolKind::Fuse)?;
+    }
+    if !result.is_valid().unwrap_or(false) {
+        return Err(Fail::msg(
+            "Pattern: the copies overlap and could not be fused into one valid solid. Space them apart, or pattern the feature that made the detail instead of the whole body.",
+        ));
     }
     Ok(result)
 }
@@ -113,17 +126,207 @@ fn circular_step(n: usize, total: f64) -> f64 {
     }
 }
 
-pub fn pattern_circular_shape(shape: &Shape, count: f64, total: f64, axis: &Axis3) -> FResult<Shape> {
+fn turned_cells(shape: &Shape, count: f64, total: f64, turn: &Turn) -> FResult<Shape> {
     let n = copies(count);
     let step = circular_step(n, total);
     let cells = (0..n)
-        .map(|k| kernel::rotated(shape, axis_rotation(axis, k as f64 * step)))
+        .map(|k| turn.place(k as f64 * step).apply(shape))
         .collect::<Result<Vec<_>, _>>()?;
     fuse_cells(cells)
 }
 
+/// What a circular pattern turns about: a world axis through the origin, or a
+/// placed line.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Turn {
+    World(Axis3),
+    Line { origin: [f64; 3], dir: [f64; 3] },
+}
+
+impl Turn {
+    fn place(&self, deg: f64) -> Place {
+        match self {
+            Turn::World(a) => Place::Turn(axis_rotation(a, deg)),
+            Turn::Line { origin, dir } => Place::Spin(*origin, *dir, deg),
+        }
+    }
+
+    fn describe(&self) -> String {
+        match self {
+            Turn::World(a) => format!("the world {} axis through the origin", a.as_str()),
+            Turn::Line { origin, dir } => {
+                let r = |v: [f64; 3]| v.map(|x| (x * 1000.0).round() / 1000.0 + 0.0);
+                format!("the line through {:?} along {:?}", r(*origin), r(*dir))
+            }
+        }
+    }
+}
+
+fn line(origin: DVec3, dir: DVec3) -> Option<Turn> {
+    let d = dir.normalize_or_zero();
+    (d != DVec3::ZERO && origin.is_finite()).then(|| Turn::Line {
+        origin: origin.to_array(),
+        dir: d.to_array(),
+    })
+}
+
+/// The direction of a line found on the model points the way its largest
+/// component is positive, so the same edge or face always turns the same way
+/// (src/features/patternAxis.ts `canonicalDir` is the same rule).
+fn canonical(d: DVec3) -> DVec3 {
+    let a = d.abs();
+    let big = if a.x >= a.y && a.x >= a.z { d.x } else if a.y >= a.z { d.y } else { d.z };
+    if big < 0.0 { -d } else { d }
+}
+
+fn found_line(origin: DVec3, dir: DVec3) -> Option<Turn> {
+    line(origin, canonical(dir.normalize_or_zero()))
+}
+
+/// The axis `axisRef` names now: a straight edge's line, a round edge's
+/// centre line, a round face's axis, or a flat face's normal through the
+/// middle of its box.
+fn referenced_axis(ctx: &Ctx, id: &str, sel: &Selector) -> Option<Turn> {
+    let pool: Vec<&Shape> = match sel.body().and_then(|b| ctx.find_body(b)) {
+        Some(i) => vec![ctx.bodies[i].shape()],
+        None => ctx.shapes(),
+    };
+    axis_on(&pool, id, sel)
+}
+
+fn axis_on(pool: &[&Shape], id: &str, sel: &Selector) -> Option<Turn> {
+    let one = OneOrMany::One(sel.clone());
+    for shape in pool {
+        let mut scratch = Vec::new();
+        let mut r = Resolver::new(Some(&mut scratch), Some(id));
+        if sel.kind() == Some("edge") {
+            let Ok(edges) = r.edge_selectors(shape, &one) else { continue };
+            if let Some(t) = edges.into_iter().find_map(edge_axis) {
+                return Some(t);
+            }
+        } else {
+            let Ok(faces) = r.face_selectors(shape, &one) else { continue };
+            if let Some(t) = faces.into_iter().find_map(face_axis) {
+                return Some(t);
+            }
+        }
+    }
+    None
+}
+
+fn edge_axis(edge: Shape) -> Option<Turn> {
+    let mut o = [0.0; 7];
+    if let Ok(true) = fq::FQ_edge_circle(edge.raw(), &mut o) {
+        return found_line(DVec3::new(o[3], o[4], o[5]), DVec3::new(o[0], o[1], o[2]));
+    }
+    let ent = EdgeEnt::new(edge).ok()?;
+    (ent.curve == CurveType::Line).then(|| found_line(ent.mid, ent.dir())).flatten()
+}
+
+fn face_axis(face: Shape) -> Option<Turn> {
+    let mut o = [0.0; 13];
+    let kind = fq::FQ_surface(face.raw(), &mut o).ok()?;
+    let dir = DVec3::new(o[1], o[2], o[3]);
+    let at = DVec3::new(o[4], o[5], o[6]);
+    match kind {
+        0 => {
+            // The middle of the face's box rather than its area centroid, which
+            // the holes in it pull off centre.
+            let b = kernel::bbox(&face)?;
+            let mid = DVec3::new(b[0] + b[3], b[1] + b[4], b[2] + b[5]) / 2.0;
+            let n = dir.normalize_or_zero();
+            found_line(mid - n * (mid - at).dot(n), n)
+        }
+        1 | 2 | 4 | 5 => found_line(at, dir),
+        _ => None,
+    }
+}
+
+/// The `patternAxis` op: the line `ref` names on the built model, for the
+/// pattern tool's preview, `{axis: {origin, dir}}` or `{reason}`.
+pub fn pattern_axis_result(req: &serde_json::Map<String, serde_json::Value>, watch: &dyn crate::builder::Watch) -> fundacad_protocol::JobResult {
+    use serde_json::json;
+    let (_, built) = match crate::inspect::rebuild_request(req, watch) {
+        Ok(r) => r,
+        Err(e) => return e,
+    };
+    let Some(sel) = req.get("ref").and_then(|v| serde_json::from_value::<Selector>(v.clone()).ok()) else {
+        return fundacad_engine::error_result("'ref'");
+    };
+    let wanted = sel.body().map(str::to_owned);
+    let pool: Vec<&Shape> = built
+        .bodies
+        .iter()
+        .filter(|b| wanted.as_deref().map_or(true, |w| b.id == w))
+        .map(|b| &b.shape)
+        .collect();
+    let reply = match axis_on(&pool, "", &sel) {
+        Some(Turn::Line { origin, dir }) => json!({"axis": {"origin": origin, "dir": dir}}),
+        _ => json!({"reason": "an axis is a straight or round edge, or a flat, cylindrical or conical face"}),
+    };
+    fundacad_protocol::JobResult::Json(reply.as_object().cloned().unwrap_or_default())
+}
+
+/// The datum axis `name`, above `own`, where it resolved this rebuild.
+fn datum_axis(ctx: &Ctx, own: &str, name: &str) -> FResult<Turn> {
+    let at = |id: &str| ctx.timeline.iter().position(|s| s.id == id);
+    let above = at(name).filter(|&k| at(own).map_or(true, |me| k < me));
+    let Some(k) = above.filter(|&k| ctx.timeline[k].kind == "datumAxis") else {
+        return Err(missing_reference(format!(
+            "Pattern: axis \"{name}\" is not X, Y, Z, a line {{origin, dir}} or the id of a datum axis above this pattern."
+        )));
+    };
+    let step = &ctx.timeline[k];
+    let v = |x: &serde_json::Value| -> Option<DVec3> {
+        let a = x.as_array()?;
+        Some(DVec3::new(a.first()?.as_f64()?, a.get(1)?.as_f64()?, a.get(2)?.as_f64()?))
+    };
+    let followed = ctx
+        .datum_marks
+        .get(name)
+        .and_then(|m| Some((v(m.get("origin")?)?, v(m.get("dir")?)?)));
+    let stored = step.line.map(|[o, d]| (DVec3::from_array(o), DVec3::from_array(d)));
+    followed
+        .or(stored)
+        .and_then(|(o, d)| line(o, d))
+        .ok_or_else(|| Fail::msg(format!("Pattern: the datum axis {} has no direction.", step.label)))
+}
+
+fn stored_axis(ctx: &Ctx, own: &str, axis: &AxisSpec) -> FResult<Turn> {
+    match axis {
+        AxisSpec::Named(Axis3::Other(name)) => datum_axis(ctx, own, name),
+        AxisSpec::Named(a) => Ok(Turn::World(a.clone())),
+        AxisSpec::Line(AxisLine { origin, dir, .. }) => {
+            let v = |r: &[Real; 3]| DVec3::new(r[0].get(), r[1].get(), r[2].get());
+            line(v(origin), v(dir)).ok_or_else(|| Fail::msg("Pattern: the axis line has no direction."))
+        }
+    }
+}
+
+/// `axisRef` resolved against the bodies now, else the stored `axis`.
+pub fn circular_axis(ctx: &mut Ctx, f: &PatternCircular) -> FResult<Turn> {
+    if let Some(sel) = &f.axis_ref {
+        if let Some(t) = referenced_axis(ctx, &f.id, sel) {
+            return Ok(t);
+        }
+        let cached = stored_axis(ctx, &f.id, &f.axis)?;
+        ctx.advise(
+            &f.id,
+            "axisRefLost",
+            format!(
+                "the edge or face this pattern turns about no longer resolves, it turned about {} as last time",
+                cached.describe()
+            ),
+        );
+        return Ok(cached);
+    }
+    stored_axis(ctx, &f.id, &f.axis)
+}
+
 pub fn pattern_rect(ctx: &mut Ctx, f: &PatternRect) -> FResult {
-    let act = ctx.require_active("Pattern")?;
+    if listed(f.bodies.as_ref()).is_none() {
+        ctx.require_active("Pattern")?;
+    }
     let (cx, cy) = (ctx.val(&f.count_x)?, ctx.val(&f.count_y)?);
     require_positive("Pattern", &[("countX", cx), ("countY", cy)])?;
     for (name, n) in [("countX", cx), ("countY", cy)] {
@@ -135,16 +338,23 @@ pub fn pattern_rect(ctx: &mut Ctx, f: &PatternRect) -> FResult {
     }
     let (dx, dy) = (ctx.val(&f.spacing_x)?, ctx.val(&f.spacing_y)?);
     if let Some(sources) = listed(f.features.as_ref()) {
+        exclusive(f.bodies.as_ref())?;
         let (nx, ny) = (copies(cx), copies(cy));
         let places = (0..nx)
             .flat_map(|i| (0..ny).map(move |j| (i, j)))
             .skip(1)
             .map(|(i, j)| Place::Shift([i as f64 * dx, j as f64 * dy, 0.0]))
             .collect::<Vec<_>>();
-        return pattern_features(ctx, &f.id, "patternRect", sources, &places);
+        let missed = pattern_features(ctx, &f.id, "patternRect", sources, &places)?;
+        if let Some(note) = missed {
+            ctx.advise(&f.id, "copiesMissed", format!("{note}, check the spacing"));
+        }
+        return Ok(());
     }
-    let out = pattern_rect_shape(ctx.bodies[act].shape(), cx, cy, dx, dy)?;
-    ctx.set_shape(act, out);
+    for i in targets(ctx, &f.id, "patternRect", f.bodies.as_ref())? {
+        let out = pattern_rect_shape(ctx.bodies[i].shape(), cx, cy, dx, dy)?;
+        ctx.set_shape(i, out);
+    }
     Ok(())
 }
 
@@ -181,7 +391,11 @@ pub fn pattern_linear(ctx: &mut Ctx, f: &PatternLinear) -> FResult {
                 Place::Shift([d * off[0], d * off[1], d * off[2]])
             })
             .collect::<Vec<_>>();
-        return pattern_features(ctx, &f.id, "patternLinear", sources, &places);
+        let missed = pattern_features(ctx, &f.id, "patternLinear", sources, &places)?;
+        if let Some(note) = missed {
+            ctx.advise(&f.id, "copiesMissed", format!("{note}, check the spacing and direction"));
+        }
+        return Ok(());
     }
     for i in targets(ctx, &f.id, "patternLinear", f.bodies.as_ref())? {
         let out = pattern_linear_shape(ctx.bodies[i].shape(), n, spacing, &f.axis)?;
@@ -201,15 +415,21 @@ pub fn pattern_circular(ctx: &mut Ctx, f: &PatternCircular) -> FResult {
     let angle = ctx.val(&f.angle)?;
     if let Some(sources) = listed(f.features.as_ref()) {
         exclusive(f.bodies.as_ref())?;
+        let turn = circular_axis(ctx, f)?;
         let n = copies(n);
         let step = circular_step(n, angle);
-        let places = (1..n)
-            .map(|k| Place::Turn(axis_rotation(&f.axis, k as f64 * step)))
-            .collect::<Vec<_>>();
-        return pattern_features(ctx, &f.id, "patternCircular", sources, &places);
+        let places = (1..n).map(|k| turn.place(k as f64 * step)).collect::<Vec<_>>();
+        let missed = pattern_features(ctx, &f.id, "patternCircular", sources, &places)?;
+        if let Some(note) = missed {
+            let about = turn.describe();
+            ctx.advise(&f.id, "copiesMissed", format!("{note}, the pattern turns about {about}, check its axis"));
+        }
+        return Ok(());
     }
-    for i in targets(ctx, &f.id, "patternCircular", f.bodies.as_ref())? {
-        let out = pattern_circular_shape(ctx.bodies[i].shape(), n, angle, &f.axis)?;
+    let ids = targets(ctx, &f.id, "patternCircular", f.bodies.as_ref())?;
+    let turn = circular_axis(ctx, f)?;
+    for i in ids {
+        let out = turned_cells(ctx.bodies[i].shape(), n, angle, &turn)?;
         ctx.set_shape(i, out);
     }
     Ok(())
@@ -241,6 +461,7 @@ fn exclusive(bodies: Option<&Vec<String>>) -> FResult {
 enum Place {
     Shift([f64; 3]),
     Turn([f64; 3]),
+    Spin([f64; 3], [f64; 3], f64),
 }
 
 impl Place {
@@ -248,6 +469,7 @@ impl Place {
         Ok(match self {
             Place::Shift(d) => kernel::translated(s, *d)?,
             Place::Turn(r) => kernel::rotated(s, *r)?,
+            Place::Spin(o, d, deg) => kernel::rotated_about(s, *o, *d, *deg)?,
         })
     }
 }
@@ -260,18 +482,15 @@ fn recorded(ctx: &Ctx, own: &str, src: &str) -> FResult<Vec<ToolRecord>> {
         return Ok(records.clone());
     }
     let at = |id: &str| ctx.timeline.iter().position(|s| s.id == id);
-    let Some(k) = at(src) else {
-        return Err(Fail::msg(format!(
+    // Only what is above this pattern may shape the message, a rebuild resumed
+    // from a checkpoint keeps it while later features come and go.
+    let above = at(src).filter(|&k| at(own).map_or(true, |me| k < me));
+    let Some(k) = above else {
+        return Err(missing_reference(format!(
             "Pattern: there is no feature called {src} to repeat."
         )));
     };
     let step = &ctx.timeline[k];
-    if at(own).is_some_and(|me| k >= me) {
-        return Err(Fail::msg(format!(
-            "Pattern: {} comes after this pattern in the timeline, a pattern can only repeat features above it.",
-            step.label
-        )));
-    }
     let why = match step.kind.as_str() {
         "hole" | "extrude" | "revolve" | "sweep" | "loft" | "press-pull" | "patternRect"
         | "patternLinear" | "patternCircular" => format!(
@@ -284,18 +503,21 @@ fn recorded(ctx: &Ctx, own: &str, src: &str) -> FResult<Vec<ToolRecord>> {
 }
 
 /// Copies of each listed feature's tool at every place, applied to the body it
-/// changed in one boolean. A copy whose box misses that body is left out.
+/// changed in one boolean. A copy whose box misses that body is left out, and
+/// saying how many were is the note this returns.
 fn pattern_features(
     ctx: &mut Ctx,
     id: &str,
     kind: &str,
     sources: &[String],
     places: &[Place],
-) -> FResult {
+) -> FResult<Option<String>> {
     let mut records = Vec::new();
     for src in sources {
         records.extend(recorded(ctx, id, src)?);
     }
+    let (mut missed, mut total) = (0usize, 0usize);
+    let mut missed_bodies: Vec<String> = Vec::new();
     for rec in records {
         for bid in &rec.bodies {
             let Some(i) = ctx.find_body(bid) else {
@@ -304,10 +526,16 @@ fn pattern_features(
             };
             let body_box = kernel::bbox(ctx.bodies[i].shape());
             let mut tools = Vec::with_capacity(places.len());
+            total += places.len() + 1;
             for p in places {
                 let copy = p.apply(&rec.tool)?;
                 if boxes_meet(kernel::bbox(&copy), body_box) {
                     tools.push(copy);
+                } else {
+                    missed += 1;
+                    if !missed_bodies.contains(bid) {
+                        missed_bodies.push(bid.clone());
+                    }
                 }
             }
             if tools.is_empty() {
@@ -318,7 +546,9 @@ fn pattern_features(
             ctx.record_tool(id, rec.kind, vec![bid.clone()], kernel::compound(&tools));
         }
     }
-    Ok(())
+    Ok((missed > 0).then(|| {
+        format!("{missed} of {total} copies miss {} and change nothing", missed_bodies.join(", "))
+    }))
 }
 
 fn boxes_meet(a: Option<[f64; 6]>, b: Option<[f64; 6]>) -> bool {

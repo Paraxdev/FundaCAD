@@ -35,6 +35,13 @@ mod inner {
         pub fn bo_location_translation(s: &TopoDS_Shape, out: &mut [f64]);
 
         pub fn bo_rotated(s: &TopoDS_Shape, rx: f64, ry: f64, rz: f64) -> Result<UniquePtr<TopoDS_Shape>>;
+        #[allow(clippy::too_many_arguments)]
+        pub fn bo_rotated_about(
+            s: &TopoDS_Shape,
+            ox: f64, oy: f64, oz: f64,
+            dx: f64, dy: f64, dz: f64,
+            deg: f64,
+        ) -> Result<UniquePtr<TopoDS_Shape>>;
         pub fn bo_translated(s: &TopoDS_Shape, dx: f64, dy: f64, dz: f64) -> Result<UniquePtr<TopoDS_Shape>>;
         #[allow(clippy::too_many_arguments)]
         pub fn bo_on_plane(

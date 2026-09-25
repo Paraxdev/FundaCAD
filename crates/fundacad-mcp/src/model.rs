@@ -818,6 +818,31 @@ pub fn validate(doc: &mut Doc) -> Vec<String> {
         }
     }
 
+    // A circular pattern's axis is X, Y, Z, a line, or the id of a datum axis.
+    for (i, f) in feats.iter().enumerate() {
+        if str_field(f, "type") != Some("patternCircular") {
+            continue;
+        }
+        let Some(name) = f.get("axis").and_then(Value::as_str).filter(|a| !["X", "Y", "Z"].contains(a)) else {
+            continue;
+        };
+        let fid = str_field(f, "id").unwrap_or_default();
+        match by_id.get(name) {
+            None => problems.push(format!(
+                "{fid}: axis '{name}' is not X, Y, Z, a line {{origin, dir}} or the id of a datumAxis in the document"
+            )),
+            Some(&j) if j > i => problems.push(format!(
+                "{fid}: axis names '{name}', which comes AFTER it in the timeline (a feature can only use what is above it)"
+            )),
+            Some(&j) => {
+                let got = str_field(&feats[j], "type").unwrap_or_default();
+                if got != "datumAxis" {
+                    problems.push(format!("{fid}: axis names '{name}', which is a {got} and not a datumAxis"));
+                }
+            }
+        }
+    }
+
     for (name, why) in recompute_parameters(doc) {
         problems.push(format!("parameter {name}: {why}"));
     }

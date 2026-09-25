@@ -348,3 +348,38 @@ fn a_pattern_carries_the_features_it_repeats() {
     assert!(pb.features.is_none());
     assert_eq!(serde_json::to_value(&doc).expect("save"), raw);
 }
+
+#[test]
+fn a_circular_pattern_axis_is_a_name_a_line_or_a_reference() {
+    use fundacad_core::schema::{Axis3, AxisSpec};
+    let raw = serde_json::json!({"parameters": {}, "features": [
+        {"id": "old", "type": "patternCircular", "count": 6, "angle": 360, "axis": "Z", "features": ["h"]},
+        {"id": "line", "type": "patternCircular", "count": 6, "angle": 360,
+         "axis": {"origin": [30, 30, 0], "dir": [0, 0, 1]}, "features": ["h"]},
+        {"id": "datum", "type": "patternCircular", "count": 6, "angle": 360, "axis": "ax1", "features": ["h"]},
+        {"id": "picked", "type": "patternCircular", "count": 6, "angle": 360,
+         "axis": {"origin": [30, 30, 0], "dir": [0, 0, 1]},
+         "axisRef": {"kind": "face", "by": "nearest", "point": [35, 30, 5], "body": "body1"},
+         "features": ["h"]},
+        {"id": "rect", "type": "patternRect", "countX": 2, "countY": 1, "spacingX": 20, "spacingY": 0,
+         "bodies": ["body1"]}
+    ]});
+    let doc: CadDocument = serde_json::from_value(raw.clone()).expect("load");
+    let pc = |id: &str| match doc.feature(id) {
+        Some(Feature::PatternCircular(p)) => p.clone(),
+        other => panic!("{id} is a circular pattern, got {other:?}"),
+    };
+    assert_eq!(pc("old").axis, AxisSpec::Named(Axis3::Z));
+    assert!(pc("old").axis_ref.is_none() && pc("old").extra.is_empty());
+    assert!(matches!(pc("line").axis, AxisSpec::Line(_)));
+    assert_eq!(pc("datum").axis, AxisSpec::Named(Axis3::Other("ax1".into())));
+    let picked = pc("picked");
+    assert_eq!(picked.axis_ref.as_ref().and_then(|s| s.kind()), Some("face"));
+    assert!(picked.extra.is_empty());
+    let Some(Feature::PatternRect(pr)) = doc.feature("rect") else {
+        panic!("rect is a rect pattern")
+    };
+    assert_eq!(pr.bodies.as_deref(), Some(&["body1".to_owned()][..]));
+    assert!(pr.extra.is_empty());
+    assert_eq!(serde_json::to_value(&doc).expect("save"), raw);
+}

@@ -400,6 +400,13 @@ inline BoShape bo_rotated(const TopoDS_Shape &s, double rx, double ry, double rz
   BO_GUARD(return bo_own(s.Moved(TopLoc_Location(bo_euler(rx, ry, rz))));)
 }
 
+// Turned `deg` degrees about the line through (ox, oy, oz) along (dx, dy, dz).
+inline BoShape bo_rotated_about(const TopoDS_Shape &s, double ox, double oy, double oz, double dx,
+                                double dy, double dz, double deg) {
+  BO_GUARD(gp_Trsf t; t.SetRotation(gp_Ax1(gp_Pnt(ox, oy, oz), gp_Dir(dx, dy, dz)), deg * M_PI / 180.0);
+           return bo_own(s.Moved(TopLoc_Location(t)));)
+}
+
 inline BoShape bo_translated(const TopoDS_Shape &s, double dx, double dy, double dz) {
   BO_GUARD(gp_Trsf t; t.SetTranslation(gp_Vec(dx, dy, dz));
            return bo_own(s.Moved(TopLoc_Location(t)));)
