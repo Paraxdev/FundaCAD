@@ -37,6 +37,7 @@ import { pickFacePlaneAt } from "../features/facePlanePick";
 import { FpsMeter } from "./fpsMeter";
 import { StutterWatch } from "./stutterWatch";
 import { MotionQuality } from "./motionQuality";
+import { GpuFence } from "./gpuFence";
 import { sceneStats } from "../diagnostics/sceneStats";
 import {
   makeZebraMaterial,
@@ -133,8 +134,14 @@ export interface AreaDrag {
 /** (0,0,0), kept once. Read every frame to size the origin arrows, and a fresh
  *  Vector3 per frame for a constant is litter in the hot path. Never written. */
 const WORLD_ORIGIN = new THREE.Vector3(0, 0, 0);
-/** How long the camera has to stay still before a reduced motion frame is redrawn in full. */
-const MOTION_SETTLE_MS = 250;
+/** How long the camera has to stay still for a gesture to count as over. */
+const MOTION_SETTLE_MS = 300;
+/** How long a gesture from a full size canvas runs before the canvas may shrink. */
+const MOTION_MIN_GESTURE_MS = 300;
+/** How long the camera and the pointer stay still before a reduced canvas grows back. */
+const MOTION_RESTORE_MS = 1000;
+/** The longest a canvas resize waits for the GPU to drain before it goes ahead anyway. */
+const MAX_RESIZE_WAIT_MS = 250;
 
 export class Viewport {
   readonly scene: SceneBundle;
@@ -382,6 +389,7 @@ export class Viewport {
       // that only moved the camera can keep its shadow maps. A plain move with no
       // tool up draws only if the hover below or the ViewCube lit something new;
       // a tool or a left drag (the area box) may repaint off any move.
+      this.lastPointerAt = performance.now();
       const camera = (e.buttons & 6) !== 0;
       if (!camera && (e.buttons !== 0 || !(this.quietPointer?.() ?? false))) this.requestRender();
       this.queueHover(e);
@@ -3487,18 +3495,53 @@ export class Viewport {
   private motionScale = 1;
   private motionActive = false;
   private lastMovedAt = -Infinity;
+  private fenceRef: GpuFence | null = null;
+  private get fence(): GpuFence {
+    return (this.fenceRef ??= new GpuFence(this.scene.renderer.getContext() as WebGL2RenderingContext));
+  }
+  private resizeWaitSince = 0;
 
-  /** The pixel ratio multiplier this tick draws with. True when it changed. */
-  private applyMotionScale(moved: boolean, now: number): boolean {
-    if (moved) this.lastMovedAt = now;
+  private gestureStart = 0;
+  private lastPointerAt = -Infinity;
+
+  /** Bring the canvas to the size this tick draws at. "wait" while a resize is
+   *  held back for the GPU to drain.
+   *
+   *  Note: a resize blocks until the GPU has finished everything queued, a third
+   *  of a second under SwiftShader while frames are in flight and milliseconds
+   *  when idle. So a short nudge from full size stays full size, the canvas stays
+   *  reduced between gestures while the pointer is busy, and it grows back only
+   *  once everything has been still long enough for the GPU to be idle. */
+  private applyMotionScale(moved: boolean, now: number): "same" | "changed" | "wait" {
+    if (moved) {
+      if (!this.motionActive) this.gestureStart = now;
+      this.lastMovedAt = now;
+    }
     const moving = now - this.lastMovedAt < MOTION_SETTLE_MS;
-    if (this.motionActive && !moving) this.motion.settle(now);
+    if (this.motionActive && !moving) {
+      this.motion.settle(now);
+      // Redrawn with its full look at the reduced size until the canvas grows back.
+      if (this.motionScale < 1) this.requestRender();
+    }
     this.motionActive = moving;
-    const want = moving ? this.motion.scale : 1;
-    if (want === this.motionScale) return false;
+    let want = this.motionScale;
+    if (moving) {
+      if (this.motionScale < 1 || now - this.gestureStart >= MOTION_MIN_GESTURE_MS) want = this.motion.scale;
+    } else if (now - Math.max(this.lastMovedAt, this.lastPointerAt) >= MOTION_RESTORE_MS) {
+      want = 1;
+    }
+    if (want === this.motionScale) {
+      this.resizeWaitSince = 0;
+      return "same";
+    }
+    if (!this.fence.idle()) {
+      if (!this.resizeWaitSince) this.resizeWaitSince = now;
+      if (now - this.resizeWaitSince < MAX_RESIZE_WAIT_MS) return "wait";
+    }
+    this.resizeWaitSince = 0;
     this.motionScale = want;
     if (this.scene.setMotionScale(want)) this.motion.skipNext();
-    return true;
+    return "changed";
   }
 
   private scratchTarget = new THREE.Vector3();
@@ -3512,11 +3555,12 @@ export class Viewport {
       const dt = this.clock.getDelta();
       // Always advanced so damping and transitions progress; returns whether it moved.
       const moved = this.rig.update(dt);
-      if (this.applyMotionScale(moved, now) && !moved) this.requestRender();
+      const resized = this.applyMotionScale(moved, now);
+      if (resized === "changed" || (resized === "wait" && moved)) this.requestRender();
       // Render-on-demand: skip the (relatively expensive) grid rebuild + GPU
       // draw entirely when nothing changed, camera didn't move, no mutation
       // flagged requestRender(), and we've drained the post-mutation linger.
-      if (moved || this.needsRender || this.lingerFrames > 0) {
+      if (resized !== "wait" && (moved || this.needsRender || this.lingerFrames > 0)) {
         // Shadows depend on the lights and the model, never on the camera.
         const cameraOnly = moved && !this.needsRender && this.lingerFrames === 0;
         // keep the ground grid spacing/extent matched to the current zoom + pan
@@ -3536,11 +3580,12 @@ export class Viewport {
         const shadows = this.scene.renderer.shadowMap;
         shadows.autoUpdate = !cameraOnly;
         try {
-          this.scene.post.render(this.rig.active, this.motionScale < 1);
+          this.scene.post.render(this.rig.active, this.motionActive && this.motionScale < 1);
         } finally {
           shadows.autoUpdate = true;
         }
         this.cube.render(this.rig.active); // draw the ViewCube overlay in the corner
+        this.fence.mark();
         this.fps.frame();
         if (moved) this.movedDrawAt = now;
         this.needsRender = false;
