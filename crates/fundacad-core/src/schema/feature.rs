@@ -172,7 +172,31 @@ feature_struct!(DeleteFace {
     #[serde(default, skip_serializing_if = "Option::is_none")] body: Option<String>,
 });
 
-feature_struct!(Mirror { plane: Plane3 });
+plain_struct!(PlaneName { name: Plane3 });
+
+/// A mirror's `plane`, a world plane or datum plane by name. A mirror that
+/// names `bodies` writes it as `{name}`, which a build from before targeted
+/// mirrors refuses; a bare name it would read and reflect the active body.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum MirrorPlane {
+    Named(Plane3),
+    Ref(PlaneName),
+}
+
+impl MirrorPlane {
+    pub fn name(&self) -> &str {
+        match self {
+            MirrorPlane::Named(n) => n.as_str(),
+            MirrorPlane::Ref(r) => r.name.as_str(),
+        }
+    }
+}
+
+feature_struct!(Mirror {
+    plane: MirrorPlane,
+    #[serde(default, skip_serializing_if = "Option::is_none")] bodies: Option<Vec<String>>,
+});
 
 feature_struct!(
     /// `axisEdge` makes the axis follow a model edge, with `axis` as the cache.
