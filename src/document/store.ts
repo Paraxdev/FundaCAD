@@ -29,6 +29,7 @@ import {
   normalizeMaterial, slugId, STARTER_LIBRARY, uniqueId,
 } from "./materials";
 import { faceKey, parseFaceKey } from "./faceMaterials";
+import { documentShapeProblem, UnreadableDocumentError } from "./documentShape";
 import { forgetStaleJoins, joinSignatures } from "./bodyIds";
 import * as params from "../params/engine";
 import { extrasEmpty, trialConfiguration } from "../params/extras";
@@ -1789,12 +1790,18 @@ export class DocumentStore {
     return JSON.stringify(this.toObject(), null, 2);
   }
   load(json: string) {
-    let parsed: CadDocument;
+    let raw: unknown;
     try {
-      parsed = JSON.parse(json) as CadDocument;
+      raw = JSON.parse(json);
     } catch (e) {
-      throw new Error(`could not read document: ${e instanceof Error ? e.message : String(e)}`);
+      throw new UnreadableDocumentError(
+        "its contents are garbled or cut short",
+        `could not read document: ${e instanceof Error ? e.message : String(e)}`,
+      );
     }
+    const problem = documentShapeProblem(raw);
+    if (problem) throw new UnreadableDocumentError(problem.reason, problem.detail);
+    const parsed = raw as CadDocument;
     for (const w of migrateDocument(parsed)) this.onWarning?.(w);
     this.pushUndo();
     this.redoStack = [];

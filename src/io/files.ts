@@ -11,6 +11,7 @@ import type { CadDocument, ExportFormat, Feature, ImportFormat } from "../types"
 import { clearRecovery } from "./recovery";
 import { FORMATS, isMeshFormat, meshWire, saveExportSettings } from "./exportSettings";
 import { referencedGeometry } from "../document/versions";
+import { UnreadableDocumentError } from "../document/documentShape";
 import { noteRecent } from "./recentFiles";
 import { BINARY_DOC_EXT, DOC_EXT, LEGACY_DOC_EXTS, isDocumentExt } from "./documentExt";
 import { announceImportedBody } from "../plugins/contrib";
@@ -145,7 +146,7 @@ export async function openDocument(store: DocumentStore, geometry: GeometryBacke
         store.markSaved(picked.name);
         await warnAboutMissingPlugins(store);
       } catch (e) {
-        await reportError(`Couldn't open document: ${errMsg(e)}`);
+        await reportUnreadable(e);
       }
     }
   }
@@ -288,7 +289,7 @@ export async function openDocumentAtPath(
       );
       return "newerFormat";
     }
-    await reportError(`Couldn't open ${base}: ${errMsg(e)}`);
+    await reportUnreadable(e);
     return "unreadable";
   }
   store.markSaved(path); // freshly opened == clean, with a known path
@@ -635,17 +636,25 @@ export async function adoptImportedColors(
  *  this is where such a helper belongs, but because a plugin re-implementing it
  *  would be a second answer to "what does a failed write look like", and two
  *  answers is how one of them ends up being a console warning nobody sees. */
-export async function reportError(msg: string) {
+/** A document load() refused, in words for people. The technical reason goes
+ *  with the notice's log entry rather than into the sentence. */
+async function reportUnreadable(e: unknown) {
+  const reason = e instanceof UnreadableDocumentError ? e.reason : "part of it could not be read";
+  await reportError(`This file is not a FundaCAD document, or it is damaged: ${reason}.`, errMsg(e));
+}
+
+export async function reportError(msg: string, detail?: string) {
   if (isTauri()) {
+    if (detail) console.error(detail);
     const { message } = await import("@tauri-apps/plugin-dialog");
     await message(msg, { title: "FundaCAD", kind: "error" });
   } else {
     // No native dialog here, so this goes through the same title bar error
     // notice every other error in the app uses (ui/toast.ts -> ui/errorNotice.ts),
     // instead of a console.error nobody but a developer would ever see.
-    console.error(msg);
+    console.error(detail ? `${msg} (${detail})` : msg);
     const { toast } = await import("../ui/toast");
-    toast(msg, { kind: "error" });
+    toast(msg, { kind: "error", detail });
   }
 }
 
