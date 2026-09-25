@@ -8,6 +8,9 @@ import { dimPlaceOf } from "../types";
 import type { ResolvedEntity } from "./snap";
 import { resolveNum } from "./resolve";
 import { bsplineShape } from "./bspline";
+import { rectCorners } from "./region";
+
+const rectAngle = (angle: number | undefined) => (angle ? { angle } : {});
 
 /** an entity translated by (dx,dy) as a fresh object, shared by pattern
  *  expansion (derived copies) and the select tool's whole-entity body drag */
@@ -22,7 +25,7 @@ export function translated(e: ResolvedEntity, dx: number, dy: number, id: string
     case "line":
       return { type: "line", id, x1: e.x1 + dx, y1: e.y1 + dy, x2: e.x2 + dx, y2: e.y2 + dy, ...c, ...dp };
     case "rectangle":
-      return { type: "rectangle", id, width: e.width, height: e.height, x: e.x + dx, y: e.y + dy, ...c, ...dp };
+      return { type: "rectangle", id, width: e.width, height: e.height, x: e.x + dx, y: e.y + dy, ...rectAngle(e.angle), ...c, ...dp };
     case "circle":
       return { type: "circle", id, radius: e.radius, x: e.x + dx, y: e.y + dy, ...c, ...dp };
     case "arc":
@@ -59,7 +62,7 @@ export function scaled(e: ResolvedEntity, cx: number, cy: number, f: number, id:
   switch (e.type) {
     case "line": { const [x1, y1] = S(e.x1, e.y1), [x2, y2] = S(e.x2, e.y2); return { type: "line", id, x1, y1, x2, y2, ...c }; }
     case "circle": { const [x, y] = S(e.x, e.y); return { type: "circle", id, radius: e.radius * a, x, y, ...c }; }
-    case "rectangle": { const [x, y] = S(e.x, e.y); return { type: "rectangle", id, width: e.width * a, height: e.height * a, x, y, ...c }; }
+    case "rectangle": { const [x, y] = S(e.x, e.y); return { type: "rectangle", id, width: e.width * a, height: e.height * a, x, y, ...rectAngle(e.angle), ...c }; }
     case "arc": { const [x1, y1] = S(e.x1, e.y1), [x2, y2] = S(e.x2, e.y2), [mx, my] = S(e.mx, e.my); return { type: "arc", id, x1, y1, x2, y2, mx, my, ...c }; }
     case "spline": return { type: "spline", id, points: e.points.map((p) => { const [x, y] = S(p.x, p.y); return { x, y }; }), ...c };
     case "bspline": return { type: "bspline", id, poles: e.poles.map((p) => { const [x, y] = S(p.x, p.y); return { x, y }; }), ...bsplineShape(e), ...c };
@@ -71,8 +74,24 @@ export function scaled(e: ResolvedEntity, cx: number, cy: number, f: number, id:
   }
 }
 
-/** Rotate an entity about (cx,cy) by `ang` radians. A rectangle can't carry
- *  rotation (it's axis-aligned), so it becomes a 4-line loop. */
+/** Size and angle of a rectangle reflected across a line along (dx,dy). A
+ *  result that lands square to the axes carries no angle, so it stays a plain,
+ *  dimensionable rectangle. */
+export function reflectedRect(
+  e: { width: number; height: number; angle?: number },
+  dx: number,
+  dy: number,
+): { width: number; height: number; angle?: number } {
+  const theta = (Math.atan2(dy, dx) * 180) / Math.PI;
+  let a = (((2 * theta - (e.angle ?? 0)) % 180) + 180) % 180;
+  if (a > 90) a -= 180;
+  if (Math.abs(a) < 1e-9) return { width: e.width, height: e.height };
+  if (Math.abs(Math.abs(a) - 90) < 1e-9) return { width: e.height, height: e.width };
+  return { width: e.width, height: e.height, angle: a };
+}
+
+/** Rotate an entity about (cx,cy) by `ang` radians. A rectangle becomes a
+ *  4-line loop. */
 export function rotated(e: ResolvedEntity, cx: number, cy: number, ang: number, id: string): ResolvedEntity[] {
   const c = e.construction ? { construction: true as const } : {};
   const R = (x: number, y: number) => rotPt(x, y, cx, cy, ang);
@@ -110,9 +129,7 @@ export function rotated(e: ResolvedEntity, cx: number, cy: number, ang: number, 
       return [{ type: "slot", id, x1, y1, x2, y2, width: e.width, ...c }];
     }
     case "rectangle": {
-      const hw = e.width / 2, hh = e.height / 2;
-      const corners = ([[e.x - hw, e.y - hh], [e.x + hw, e.y - hh], [e.x + hw, e.y + hh], [e.x - hw, e.y + hh]] as [number, number][])
-        .map(([x, y]) => R(x, y));
+      const corners = rectCorners(e.x, e.y, e.width, e.height, e.angle).map((q) => R(q.x, q.y));
       return corners.flatMap((c0, i) => {
         const c1 = corners[(i + 1) % 4];
         if (!c1) return [];

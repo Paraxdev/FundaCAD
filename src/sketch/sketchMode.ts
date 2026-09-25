@@ -34,7 +34,7 @@ import { compileAndSolve, coincKey, constraintIndexOf, solveKeepingAxes } from "
 import { SolverUnavailable } from "./solver";
 import { resolveRealEntities, toSketchEntity } from "./resolve";
 import { applyDrivingDimsDirect, dimAnchor, drivenBadges, drivingDimFor, findDrivingDim, type DrivingDim } from "./directDims";
-import { expandPattern, translated } from "./pattern";
+import { expandPattern, reflectedRect, translated } from "./pattern";
 import { candidatesFromEntities, dragSnap, originCandidate, settleOriginPin, showsSnapMarker, snap, type OriginPinRequest, type SnapGuide, type SnapKind, type SnapCandidate } from "./snap";
 import type { ResolvedEntity } from "./snap";
 import { detectRegions, entityPolyline, rectCorners, rectFromThreePoints } from "./region";
@@ -2481,9 +2481,8 @@ export class SketchMode {
       return { type: "circle", id, radius: e.radius, x: ctr.x, y: ctr.y, ...c };
     }
     if (e.type === "rectangle") {
-      // a reflected axis-aligned rectangle stays axis-aligned: reflect the center
       const ctr = rp(e.x, e.y);
-      return { type: "rectangle", id, width: e.width, height: e.height, x: ctr.x, y: ctr.y, ...c };
+      return { type: "rectangle", id, ...reflectedRect(e, b.x - a.x, b.y - a.y), x: ctr.x, y: ctr.y, ...c };
     }
     if (e.type === "arc") {
       // reflection flips orientation, so the through-point reflects too

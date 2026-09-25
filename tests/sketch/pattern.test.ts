@@ -1,7 +1,9 @@
 // Unit tests for expandPattern (src/sketch/pattern.ts). Mirrors the Python port
 // (the Python engine's `builder.py` _expand_pattern), see the file header comment there.
 import { describe, it, expect } from "vitest";
-import { expandPattern, scaled, rotated } from "../../src/sketch/pattern";
+import * as THREE from "three";
+import { expandPattern, scaled, rotated, translated, reflectedRect } from "../../src/sketch/pattern";
+import { rectCorners } from "../../src/sketch/region";
 import type { ResolvedEntity } from "../../src/sketch/snap";
 import type { Params, SketchPattern } from "../../src/types";
 
@@ -179,5 +181,37 @@ describe("rotated", () => {
     const out = rotated({ type: "rectangle", id: "r", width: 10, height: 4, x: 0, y: 0 }, 0, 0, Math.PI / 4, "r2");
     expect(out).toHaveLength(4);
     expect(out.every((e) => e.type === "line")).toBe(true);
+  });
+});
+
+describe("a rotated rectangle keeps its angle", () => {
+  const r: ResolvedEntity = { type: "rectangle", id: "r", width: 10, height: 4, x: 3, y: 1, angle: 30 };
+
+  it("through a translation", () => {
+    expect(translated(r, 5, -2, "r2")).toMatchObject({ type: "rectangle", x: 8, y: -1, angle: 30 });
+  });
+
+  it("through a scale", () => {
+    expect(scaled(r, 0, 0, 2, "r2")).toMatchObject({ type: "rectangle", width: 20, height: 8, angle: 30 });
+  });
+
+  it("through a rotation, which traces its real corners", () => {
+    const lines = rotated(r, 0, 0, Math.PI / 6, "r2") as Extract<ResolvedEntity, { type: "line" }>[];
+    const turned = rectCorners(3, 1, 10, 4, 30).map((q) => q.clone().rotateAround(new THREE.Vector2(0, 0), Math.PI / 6));
+    lines.forEach((l, k) => {
+      expect(l.x1).toBeCloseTo(turned[k]!.x, 9);
+      expect(l.y1).toBeCloseTo(turned[k]!.y, 9);
+    });
+  });
+
+  it("through a mirror, as 2 theta minus alpha", () => {
+    expect(reflectedRect(r, 1, 0)).toEqual({ width: 10, height: 4, angle: -30 });
+    expect(reflectedRect(r, 1, 1).angle).toBeCloseTo(60, 9);
+  });
+
+  it("and a mirror that lands square to the axes carries no angle", () => {
+    expect(reflectedRect({ width: 10, height: 4 }, 0, 1)).toEqual({ width: 10, height: 4 });
+    expect(reflectedRect({ width: 10, height: 4 }, 1, 1)).toEqual({ width: 4, height: 10 });
+    expect(reflectedRect(r, Math.cos(Math.PI / 12), Math.sin(Math.PI / 12))).toEqual({ width: 10, height: 4 });
   });
 });

@@ -162,6 +162,14 @@ describe("offsetEntity", () => {
     expect(out.pairs).toEqual([0, 1, 2, 3].map((k) => ({ src: `r~${k}`, cpy: `${cpy.id}~${k}` })));
   });
 
+  it("offsets a rotated rectangle at its own angle, unlinked since it is rigid", () => {
+    const ents: ResolvedEntity[] = [{ type: "rectangle", id: "r", width: 10, height: 6, x: 0, y: 0, angle: 30 }];
+    const out = offsetEntity(ents, 0, 2)!;
+    expect(out.entities[1]).toMatchObject({ type: "rectangle", width: 14, height: 10, angle: 30 });
+    expect(out.pairs).toEqual([]);
+    expect(out.linked).toBe(false);
+  });
+
   // these four used to no-op in complete silence, after the user had already
   // typed a distance and pressed Enter
   it("offsets a spline by pushing its points along their normals", () => {
