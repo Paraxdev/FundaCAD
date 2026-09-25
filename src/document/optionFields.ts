@@ -325,6 +325,12 @@ export function toggleValue(feature: Feature, f: ToggleField): boolean {
  *  line or a picked edge or face. Choosing it again changes nothing. */
 export const PLACED_AXIS = "placed";
 
+/** The datum axis id a circular pattern's `axis` names, if it names one. */
+export function patternAxisDatum(axis: unknown): string | null {
+  const d = (axis as { datum?: unknown } | null)?.datum;
+  return typeof d === "string" ? d : null;
+}
+
 /** A circular pattern's Axis row: the world axes, every datum axis above the
  *  pattern, and the placed axis it already has, so the row never shows "Z" for
  *  a pattern that turns about something else. Picking a world axis or a datum
@@ -340,12 +346,21 @@ export function patternAxisChoice(
     .filter((f) => f.type === "datumAxis")
     .map((f) => ({ value: f.id, label: (f as { name?: string }).name?.trim() || f.id }));
   const options = [...AXES, ...datums];
-  const placed = raw.axisRef != null || (raw.axis != null && typeof raw.axis !== "string");
+  const datum = patternAxisDatum(raw.axis);
+  const placed = raw.axisRef != null || (raw.axis != null && typeof raw.axis !== "string" && datum == null);
   if (placed) {
     options.push({ value: PLACED_AXIS, label: raw.axisRef != null ? "Picked" : "Line" });
     return { options, current: PLACED_AXIS };
   }
-  const name = typeof raw.axis === "string" ? raw.axis : "Z";
+  const name = datum ?? (typeof raw.axis === "string" ? raw.axis : "Z");
   if (!options.some((o) => o.value === name)) options.push({ value: name, label: name });
   return { options, current: name };
+}
+
+/** What choosing `value` in that row writes. A datum axis is `{datum}`, never
+ *  the bare id, which a build from before datum axes turns about world Z. */
+export function patternAxisPatch(value: string): Record<string, unknown> | null {
+  if (value === PLACED_AXIS) return null;
+  const named = AXES.some((o) => o.value === value);
+  return { axis: named ? value : { datum: value }, axisRef: undefined };
 }

@@ -16,6 +16,7 @@
 
 import type { Axis3, Selector, Vec3 } from "../types";
 import { axisVector } from "./patternMath";
+import { patternAxisDatum } from "../document/optionFields";
 
 export type AxisPlace = "origin" | "centre" | "picked";
 
@@ -77,7 +78,8 @@ export function axisLine(
 export function describeAxis(axis: unknown, axisRef: unknown, datumName?: (id: string) => string | undefined): string {
   if (axisRef) return "picked on the model";
   if (axis === "X" || axis === "Y" || axis === "Z") return `${axis} through the origin`;
-  if (typeof axis === "string") return datumName?.(axis) ?? axis;
+  const datum = patternAxisDatum(axis);
+  if (datum != null) return datumName?.(datum) ?? datum;
   const line = axis as Partial<AxisLineValue> | null;
   if (line && Array.isArray(line.origin) && Array.isArray(line.dir)) {
     const o = line.origin.map((v) => +v.toFixed(2)).join(", ");

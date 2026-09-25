@@ -438,9 +438,10 @@ export type CoreFeature =
   // applied to the body it cut or joined, and a copy that misses it is skipped.
   | { id: string; type: "patternRect"; countX: Num; countY: Num; spacingX: Num; spacingY: Num; bodies?: string[]; features?: string[] }
   | { id: string; type: "patternLinear"; count: Num; spacing: Num; axis: Axis3; bodies?: string[]; features?: string[] }
-  // `axis` is X, Y or Z through the origin, a line, or a datumAxis id; `axisRef`
-  // makes it follow an edge or face, with `axis` as the cache.
-  | { id: string; type: "patternCircular"; count: Num; angle: Num; axis: AxisSpec | string; axisRef?: Selector; bodies?: string[]; features?: string[] }
+  // `axis` is X, Y or Z through the origin, a line, or `{datum}` naming a
+  // datumAxis; `axisRef` makes it follow an edge or face, with the line in
+  // `axis` as the cache.
+  | { id: string; type: "patternCircular"; count: Num; angle: Num; axis: AxisSpec | { datum: string }; axisRef?: Selector; bodies?: string[]; features?: string[] }
   // Merge near-coplanar facets of an imported mesh (angular tolerance, degrees):
   // recovers planar faces / reduces facet count. Coarsens curved regions.
   | { id: string; type: "simplifyMesh"; tolerance: Num }

@@ -254,15 +254,35 @@ fn a_circular_pattern_axis_naming_no_datum_is_reported_before_a_build() {
         (
             "feature_add",
             json!({"feature": {"id": "pc1", "type": "patternCircular", "count": 6, "angle": 360,
-                               "axis": "ax9"}}),
+                               "axis": {"datum": "ax9"}}}),
         ),
         (
             "feature_add",
             json!({"feature": {"id": "ax9", "type": "datumAxis", "origin": [0, 0, 0], "dir": [0, 0, 1]}}),
         ),
     ]);
-    assert!(rs[0].text.contains("ax9") && rs[0].text.contains("datumAxis in the document"), "{}", rs[0].text);
+    assert!(rs[0].text.contains("ax9") && rs[0].text.contains("names no datumAxis in the document"), "{}", rs[0].text);
     assert!(rs[1].text.contains("ax9") && rs[1].text.contains("comes AFTER it"), "{}", rs[1].text);
+}
+
+/// Forms a build from before placed axes would turn about world Z without a
+/// word: a bare datum id, and `axisRef` over a bare X, Y or Z.
+#[test]
+fn a_circular_pattern_axis_an_older_build_would_misread_is_reported() {
+    let rs = drive(&[
+        ("feature_add", json!({"feature": {"id": "ax1", "type": "datumAxis", "origin": [0, 0, 0], "dir": [0, 0, 1]}})),
+        (
+            "feature_add",
+            json!({"feature": {"id": "pc1", "type": "patternCircular", "count": 6, "angle": 360, "axis": "ax1"}}),
+        ),
+        (
+            "feature_update",
+            json!({"id": "pc1", "patch": {"axis": "Z",
+                   "axisRef": {"kind": "edge", "by": "nearest", "point": [0, 0, 0]}}}),
+        ),
+    ]);
+    assert!(rs[1].text.contains(r#"a datum axis is {"datum": "ax1"}"#), "{}", rs[1].text);
+    assert!(rs[2].text.contains("with axisRef, axis must be the line"), "{}", rs[2].text);
 }
 
 // --- geometry (spawns the engine) --------------------------------------------

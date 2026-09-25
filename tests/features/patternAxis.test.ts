@@ -8,7 +8,7 @@ import {
   defaultAxisPlace,
   describeAxis,
 } from "../../src/features/patternAxis";
-import { patternAxisChoice, PLACED_AXIS } from "../../src/document/optionFields";
+import { patternAxisChoice, patternAxisPatch, PLACED_AXIS } from "../../src/document/optionFields";
 import type { Feature, Selector } from "../../src/types";
 
 const ref: Selector = { kind: "face", by: "nearest", point: [35, 30, 5], body: "body1" } as Selector;
@@ -46,7 +46,7 @@ describe("patternAxis", () => {
     expect(describeAxis("Z", undefined)).toBe("Z through the origin");
     expect(describeAxis({ origin: [20, 15, 0], dir: [0, 0, 1] }, undefined)).toBe("line through (20, 15, 0)");
     expect(describeAxis({ origin: [0, 0, 0], dir: [0, 0, 1] }, ref)).toBe("picked on the model");
-    expect(describeAxis("ax1", undefined, (id) => (id === "ax1" ? "Axis" : undefined))).toBe("Axis");
+    expect(describeAxis({ datum: "ax1" }, undefined, (id) => (id === "ax1" ? "Axis" : undefined))).toBe("Axis");
   });
 });
 
@@ -59,7 +59,13 @@ describe("the circular pattern's Axis row", () => {
     const { options, current } = patternAxisChoice(pc({ axis: "Z" }), [ax, pc({ axis: "Z" })]);
     expect(options.map((o) => o.label)).toEqual(["X", "Y", "Z", "Spindle"]);
     expect(current).toBe("Z");
-    expect(patternAxisChoice(pc({ axis: "ax1" }), [ax, pc({ axis: "ax1" })]).current).toBe("ax1");
+    expect(patternAxisChoice(pc({ axis: { datum: "ax1" } }), [ax, pc({ axis: { datum: "ax1" } })]).current).toBe("ax1");
+  });
+
+  it("writes a datum axis as {datum}, never the bare id an older build reads as Z", () => {
+    expect(patternAxisPatch("ax1")).toEqual({ axis: { datum: "ax1" }, axisRef: undefined });
+    expect(patternAxisPatch("Y")).toEqual({ axis: "Y", axisRef: undefined });
+    expect(patternAxisPatch(PLACED_AXIS)).toBeNull();
   });
 
   it("does not offer a datum axis below the pattern", () => {

@@ -929,8 +929,8 @@
    "fields": {
     "count": "Num",
     "angle": "Num, total degrees covered",
-    "axis": "\"X\", \"Y\" or \"Z\" (the world axis through the origin), a line {\"origin\":[x,y,z], \"dir\":[x,y,z]} such as the vertical line through a part's centre, or the id of a datumAxis above this pattern",
-    "axisRef": "optional Selector naming what the axis follows, re-resolved every rebuild: a straight edge (its line), a round edge (its centre line), a cylindrical or conical face (its axis) or a flat face (its normal through the middle of the face); is preferred over `axis`, which is the cache it falls back to",
+    "axis": "\"X\", \"Y\" or \"Z\" (the world axis through the origin), a line {\"origin\":[x,y,z], \"dir\":[x,y,z]} such as the vertical line through a part's centre, or {\"datum\": \"<id>\"} naming a datumAxis above this pattern (never the bare id)",
+    "axisRef": "optional Selector naming what the axis follows, re-resolved every rebuild: a straight edge (its line), a round edge (its centre line), a cylindrical or conical face (its axis) or a flat face (its normal through the middle of the face); is preferred over `axis`, which must then be the line {\"origin\", \"dir\"} it resolves to, the cache it falls back to",
     "bodies": "optional list of body ids",
     "features": "optional list of feature ids, INSTEAD of bodies: repeat what those features cut or joined rather than a whole body. A hole, or an extrude, revolve, sweep or loft whose operation is cut or join, or press-pull that cut or joined, or another pattern with features. They must be above this pattern."
    },
@@ -944,7 +944,7 @@
      "hole1"
     ]
    },
-   "notes": "Two modes. With `bodies` (or neither field) whole bodies are copied and fused, so patterning a plate with one hole gives overlapping plates. To repeat the HOLE, list the hole feature in `features`: each copy of its tool is cut from the body the hole was cut from, in one boolean, and a copy that misses the body is skipped. A fillet, chamfer, sketch, move or an extrude that made a new body cannot be patterned this way and is an error naming it. `bodies` and `features` together are an error. With a bare \"X\", \"Y\" or \"Z\" copies turn about the WORLD axis through the origin, so a bolt circle around a centred box needs no offset. A part drawn from a corner is not centred: give `axis` as a line through its centre, or `axisRef` a face or edge of it, or most copies land off the part. A build says how many copies missed the body as a warning."
+   "notes": "Two modes. With `bodies` (or neither field) whole bodies are copied and fused, so patterning a plate with one hole gives overlapping plates. To repeat the HOLE, list the hole feature in `features`: each copy of its tool is cut from the body the hole was cut from, in one boolean, and a copy that misses the body is skipped. A fillet, chamfer, sketch, move or an extrude that made a new body cannot be patterned this way and is an error naming it. `bodies` and `features` together are an error. With a bare \"X\", \"Y\" or \"Z\" copies turn about the WORLD axis through the origin, so a bolt circle around a centred box needs no offset. A part drawn from a corner is not centred: give `axis` as a line through its centre, or `axisRef` a face or edge of it with that line as `axis`, or most copies land off the part. A build says how many copies missed the body as a warning."
   },
   "patternRect": {
    "summary": "Repeat bodies on a 2D grid.",
