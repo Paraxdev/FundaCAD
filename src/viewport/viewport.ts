@@ -3137,8 +3137,8 @@ export class Viewport {
   clearPressPullGhost() {
     this.ghosts.clearPressPullGhost();
   }
-  setBlendGhost(edges: readonly BlendGhostEdge[], size: number, kind: BlendKind) {
-    this.ghosts.setBlendGhost(edges, size, kind);
+  setBlendGhost(edges: readonly BlendGhostEdge[], size: number, kind: BlendKind, capped = false) {
+    this.ghosts.setBlendGhost(edges, size, kind, capped);
   }
   clearBlendGhost() {
     this.ghosts.clearBlendGhost();
