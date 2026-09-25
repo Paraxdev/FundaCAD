@@ -48,7 +48,8 @@ export interface FeatureStartersDeps {
   toolBusy: () => boolean;
   hasBody: () => boolean;
   setStatus: (text: string, cls: "" | "connected" | "error") => void;
-  selectFeature: (id: string | null) => void;
+  /** `explicit` false for a selection the app makes, see stores/selection.ts. */
+  selectFeature: (id: string | null, explicit?: boolean) => void;
   noteCommitted: (id: string | null) => void;
   isSketchConsumed: (id: string) => boolean;
   getSelectedFeature: () => string | null;
@@ -85,16 +86,19 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     datumMoveTarget,
   } = deps;
 
+  // Selecting what was just committed is the app's doing, not a pick of the
+  // user's, so Pattern and Delete do not read it as one.
+  const committed = (id: string | null) => { noteCommitted(id); if (id) selectFeature(id, false); };
+
   // Interactive Fillet / Chamfer: pick an edge (or use a Ctrl-click pre-selection),
   // then drag an arrow to scrub the radius/distance with a live engine preview.
-  const edgeFeatureDone = (id: string | null) => { noteCommitted(id); if (id) selectFeature(id); };
   const startFillet = () => {
     if (toolBusy()) return;
-    edgeFeature.start("fillet", edgeFeatureDone);
+    edgeFeature.start("fillet", committed);
   };
   const startChamfer = () => {
     if (toolBusy()) return;
-    edgeFeature.start("chamfer", edgeFeatureDone);
+    edgeFeature.start("chamfer", committed);
   };
   /** The selection handle (features/edgeNudge.ts) was pressed: arm the same
    *  tool, from the same pre-selection, but already holding the arrow, the
@@ -109,14 +113,13 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
    *  one drag back through zero (or one Tab) away. */
   const grabEdgeHandle = (x: number, y: number, tangent: THREE.Vector3 | null, anchor?: THREE.Vector3) => {
     if (toolBusy()) return;
-    edgeFeature.start("fillet", edgeFeatureDone, { tangent, grabAt: { x, y }, ...(anchor ? { anchor } : {}) });
+    edgeFeature.start("fillet", committed, { tangent, grabAt: { x, y }, ...(anchor ? { anchor } : {}) });
   };
   // Interactive Press/Pull: pick a solid face, then drag an arrow along its normal
   // to add/cut material (planar) or offset a curved face, with a live preview.
-  const pressPullDone = (id: string | null) => { noteCommitted(id); if (id) selectFeature(id); };
   const startPressPull = () => {
     if (toolBusy()) return;
-    pressPull.start(pressPullDone);
+    pressPull.start(committed);
   };
   /** The same hand-off as grabEdgeHandle, for the arrow offered on a selected
    *  FACE (features/faceNudge.ts). There is no treatment to choose here, a
@@ -124,7 +127,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
    *  edge handle this one has no default to defend. */
   const grabFaceHandle = (x: number, y: number) => {
     if (toolBusy()) return;
-    pressPull.start(pressPullDone, { grabAt: { x, y } });
+    pressPull.start(committed, { grabAt: { x, y } });
   };
 
   /** `face` is the pick's face reference when a body face was taken, and null
@@ -328,7 +331,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   // is what makes "a plane 5 mm off this boss" one gesture.
   function createDatumPlane() {
     pickPlaneInteractive("Select a plane or face for the datum plane · a round face gives its tangent plane", (spec, face, datumId) => {
-      placeNewDatum(spec, { ...faceRef(face), ...(datumId ? { planeId: datumId } : {}) }, (id) => selectFeature(id));
+      placeNewDatum(spec, { ...faceRef(face), ...(datumId ? { planeId: datumId } : {}) }, (id) => selectFeature(id, false));
     });
   }
 
@@ -368,7 +371,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
           }
           const id = store.nextId();
           store.addFeature({ id, type: "datumPlane", plane: def, name: "Midplane" } as Feature);
-          selectFeature(id);
+          selectFeature(id, false);
         });
       });
     });
@@ -389,7 +392,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       }
       const id = store.nextId();
       store.addFeature({ id, type: "datumPlane", plane: def, name: "Plane" } as Feature);
-      selectFeature(id);
+      selectFeature(id, false);
     });
   }
 
@@ -404,7 +407,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       if (!p) return;
       const id = store.nextId();
       store.addFeature({ id, type: "datumPoint", point: p, name: "Point" } as Feature);
-      selectFeature(id);
+      selectFeature(id, false);
     });
   }
 
@@ -423,7 +426,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       }
       const id = store.nextId();
       store.addFeature({ id, type: "datumAxis", origin: a, dir, name: "Axis" } as Feature);
-      selectFeature(id);
+      selectFeature(id, false);
     });
   }
 
@@ -442,7 +445,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       store.addFeature({
         id, type: "datumAxis", origin: line.origin, dir: line.dir, axisEdge: sel, name: "Axis",
       } as Feature);
-      selectFeature(id);
+      selectFeature(id, false);
     });
   }
 
@@ -516,7 +519,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   // the right-clicked face (no separate pick step).
   function offsetPlaneFromFace(face: PlaneDef, parentId?: string) {
     if (toolBusy()) return;
-    placeNewDatum(face, parentId ? { planeId: parentId } : {}, (id) => selectFeature(id));
+    placeNewDatum(face, parentId ? { planeId: parentId } : {}, (id) => selectFeature(id, false));
   }
 
   /** The face reference a datum keeps, or nothing when the source was a
@@ -775,7 +778,6 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   // Move: translate / rotate the selected bodies and sketches with the gizmo.
   function startMove() {
     if (toolBusy()) return;
-    const done = (id: string | null) => { noteCommitted(id); if (id) selectFeature(id); };
     let ids = viewport.getSelectedBodies();
     const sketches = new Set(overlay.selectedRegions().map((r) => r.sketchId));
     const picked = getSelectedFeature();
@@ -786,7 +788,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     if (!ids.length && !sketches.size && picked && pickedType === "datumPlane") {
       const target = datumMoveTarget(picked);
       if (target) {
-        moveTool.startTarget(target, done);
+        moveTool.startTarget(target, committed);
         return;
       }
     }
@@ -794,7 +796,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       const target = sketchFeatureTarget(viewport, store, overlay, [...sketches], ids);
       if (target) {
         overlay.clearRegionSelection();
-        moveTool.startTarget(target, done);
+        moveTool.startTarget(target, committed);
         return;
       }
     }
@@ -811,7 +813,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       setStatus("Move: select a body first (Select: Bodies)", "");
       return;
     }
-    moveTool.start(ids, done);
+    moveTool.start(ids, committed);
   }
 
   // Mirror: choose the symmetry plane (the backend honors XY/XZ/YZ; the old tool
@@ -1075,7 +1077,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   // selected in the model view seed the tool.
   function startLoft() {
     if (toolBusy()) return;
-    loftTool.start((id) => { noteCommitted(id); if (id) selectFeature(id); });
+    loftTool.start(committed);
   }
 
   // Sweep: select a closed profile region, then pick a second (open) sketch as the
@@ -1339,11 +1341,10 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       setStatus("Pattern: create or import a body first", "");
       return;
     }
-    const patternDone = (id: string | null) => { noteCommitted(id); if (id) selectFeature(id); };
     const built = store.buildState.result?.bodies ?? [];
     const start = patternStart(store.document.features, patternFeatureCandidates(), built);
     if (start.mode === "features") {
-      patternTool.start(kind, [], patternDone, start.ids);
+      patternTool.start(kind, [], committed, start.ids);
       return;
     }
     // A feature the user pointed at that cannot be patterned is said, not
@@ -1364,10 +1365,9 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       setStatus("Pattern: select a body first (Select: Bodies)", "");
       return;
     }
-    patternTool.start(kind, ids, patternDone);
+    patternTool.start(kind, ids, committed);
   }
 
-  const extrudeDone = (id: string | null) => { noteCommitted(id); if (id) selectFeature(id); };
 
   function startExtrude() {
     if (toolBusy()) return;
@@ -1387,7 +1387,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
         return wr.plane.plane.distanceToPoint(sel.anchor) <= 0.01; // face on/behind the sketch plane
       });
       if (!underSketch) {
-        pressPull.start(pressPullDone);
+        pressPull.start(committed);
         return;
       }
     }
@@ -1395,7 +1395,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       setStatus("Extrude needs a face or a closed sketch profile", "");
       return;
     }
-    extrude.start(extrudeDone);
+    extrude.start(committed);
   }
 
   /** The handle offered on a selected sketch profile (features/regionNudge.ts)
@@ -1407,7 +1407,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
    *  a specific arrow standing on a specific profile is not a guess. */
   const grabRegionHandle = (x: number, y: number) => {
     if (toolBusy()) return;
-    extrude.start(extrudeDone, { grabAt: { x, y } });
+    extrude.start(committed, { grabAt: { x, y } });
   };
 
   /** The handle left standing on an extrude that was just committed was pressed:
@@ -1415,7 +1415,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
    *  it rather than stacking a new one. */
   const grabExtrudeEdit = (id: string, x: number, y: number) => {
     if (toolBusy()) return;
-    extrude.startEdit(id, extrudeDone, { grabAt: { x, y } });
+    extrude.startEdit(id, committed, { grabAt: { x, y } });
   };
 
   return {

@@ -41,7 +41,7 @@ export function createActions(e: Engine): (action: string) => void {
       e.setStatus("Create or import a body first", "");
       return;
     }
-    e.tools.faceOffset.start(mode, (id) => { if (id) e.selectFeature(id); });
+    e.tools.faceOffset.start(mode, (id) => { if (id) e.selectFeature(id, false); });
   }
 
   // Draft (swing a face over to a taper) and Thread (a climbing revolve cut into
@@ -54,7 +54,7 @@ export function createActions(e: Engine): (action: string) => void {
       e.setStatus("Create or import a body first", "");
       return;
     }
-    e.tools[which].start((id) => { if (id) e.selectFeature(id); });
+    e.tools[which].start((id) => { if (id) e.selectFeature(id, false); });
   }
 
   return function handleAction(action: string) {
