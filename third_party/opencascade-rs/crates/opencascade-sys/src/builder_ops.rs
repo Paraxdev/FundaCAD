@@ -147,6 +147,7 @@ mod inner {
             nx: f64, ny: f64, nz: f64,
             model_scale: f64,
             deflection: f64,
+            reach: &[f64],
             out: &mut Vec<f64>,
         ) -> bool;
         pub fn bo_face_contains(face: &TopoDS_Shape, x: f64, y: f64, z: f64, tol: f64) -> bool;
