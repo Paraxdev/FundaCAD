@@ -40,3 +40,51 @@ describe("editFeature", () => {
     expect(state.entered).toBe(0);
   });
 });
+
+// Every way to reach a fillet/chamfer's edit routes through the SAME call
+// (edgeFeature.startEdit), whether the radius is a plain literal or a bare
+// reference to a parameter (see params/engine.bareParamRef, edgeFeatureTool
+// c4e7f8cf). This is the routing every entry path shares: double-click in
+// history, the context menu's Edit, and the viewport's double-click-a-face
+// (app/viewportWiring.ts) all end up here, so a regression here breaks all of
+// them at once, whatever renders and clicks the entry point.
+function fakeFilletEngine(startEditResult: boolean) {
+  const state = { startEditCalls: [] as string[], statusCalls: [] as string[] };
+  const e = {
+    viewport: { highlightDatum: () => {} },
+    toolBusy: () => false,
+    dropBodyGizmo: () => {},
+    store: {
+      document: { features: [{ id: "f1", type: "fillet", radius: 4, edges: [] }] },
+      isSuppressed: () => false,
+      rollbackIndex: 1,
+      buildState: { result: null },
+    },
+    setStatus: (msg: string) => { state.statusCalls.push(msg); },
+    tools: {
+      edgeFeature: {
+        startEdit: (id: string) => {
+          state.startEditCalls.push(id);
+          return startEditResult;
+        },
+      },
+    },
+  };
+  return { e: e as unknown as Engine, state };
+}
+
+describe("editFeature: fillet/chamfer", () => {
+  it("routes to edgeFeature.startEdit regardless of a plain or parameter-bound radius", () => {
+    const { e, state } = fakeFilletEngine(true);
+    createSelection(e).editFeature("f1");
+    expect(state.startEditCalls).toEqual(["f1"]);
+    expect(state.statusCalls).toEqual([]); // the tool opened, no fallback message
+  });
+
+  it("falls back to the values-in-history status when startEdit refuses", () => {
+    const { e, state } = fakeFilletEngine(false);
+    createSelection(e).editFeature("f1");
+    expect(state.startEditCalls).toEqual(["f1"]);
+    expect(state.statusCalls.length).toBe(1);
+  });
+});
