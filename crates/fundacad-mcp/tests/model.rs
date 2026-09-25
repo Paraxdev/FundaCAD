@@ -590,24 +590,29 @@ fn a_press_pull_label_that_contradicts_its_sign_is_named() {
 }
 
 #[test]
-fn a_build_completes_only_the_tracked_faces_it_found_without_a_center() {
+fn a_build_completes_only_the_tracked_faces_written_without_an_extent() {
     let hole = |id: &str, face: Value| {
         json!({"id": id, "type": "hole", "diameter": 3, "points": [[0, 0, 5]], "face": face})
     };
     let tracked = json!({"kind": "face", "by": "tracked", "point": [0, 0, 5], "normal": [0, 0, 1]});
     let mut kept = tracked.clone();
-    kept["center"] = json!([9, 9, 9]);
+    kept["extent"] = json!([-9, 9, -9, 9]);
+    let mut older = tracked.clone();
+    older["center"] = json!([0, 0, 5]);
     let near = json!({"kind": "face", "by": "nearest", "point": [0, 0, 5]});
     let mut d = doc_with(&[
         json!({"id": "bx", "type": "box", "length": 10, "width": 10, "height": 10}),
         hole("a", tracked),
         hole("b", kept),
         hole("c", near.clone()),
+        hole("d", older.clone()),
     ]);
-    let centers = json!({"a": [0.0, 0.0, 5.0], "b": [1.0, 1.0, 1.0], "c": [2.0, 2.0, 2.0]});
-    m::write_face_centers(&mut d, centers.as_object().unwrap());
+    let extent = json!({"extent": [-5.0, 5.0, -5.0, 5.0], "point": [0.0, 0.0, 5.0], "points": [[0.0, 0.0, 5.0]]});
+    let tracked_faces = json!({"a": extent, "b": extent, "c": extent, "d": extent});
+    m::write_tracked_faces(&mut d, tracked_faces.as_object().unwrap());
     let face = |id: &str| m::find_feature(&d, id).unwrap().1["face"].clone();
-    assert_eq!(face("a")["center"], json!([0.0, 0.0, 5.0]));
-    assert_eq!(face("b")["center"], json!([9, 9, 9]), "a written centre is the author's");
+    assert_eq!(face("a")["extent"], json!([-5.0, 5.0, -5.0, 5.0]));
+    assert_eq!(face("b")["extent"], json!([-9, 9, -9, 9]), "a written extent is the author's");
     assert_eq!(face("c"), near, "only a tracked face takes one");
+    assert_eq!(face("d"), older, "a centre written by the older form keeps that form");
 }

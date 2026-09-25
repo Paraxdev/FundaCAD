@@ -223,14 +223,16 @@ pub fn face_area_centre(face: &Shape) -> Option<[f64; 4]> {
     ffi::bo_face_fp(face.raw(), &mut out).then_some(out)
 }
 
+pub fn outer_wire(face: &Shape) -> Option<Shape> {
+    let wire = own(opencascade_sys::plugin_ops::po_outer_wire(face.raw()));
+    (!is_null(&wire)).then_some(wire)
+}
+
 /// The length weighted centre of a face's outer boundary, which openings cut
 /// inside the face do not move.
 pub fn outline_center(face: &Shape) -> Option<[f64; 3]> {
     use opencascade_sys::{b_rep_g_prop::BRepGProp, g_prop};
-    let wire = own(opencascade_sys::plugin_ops::po_outer_wire(face.raw()));
-    if is_null(&wire) {
-        return None;
-    }
+    let wire = outer_wire(face)?;
     let mut props = g_prop::GProps_new();
     BRepGProp::LinearProperties(wire.raw(), props.pin_mut(), false, false);
     if !(props.Mass() > 0.0) {
@@ -238,6 +240,18 @@ pub fn outline_center(face: &Shape) -> Option<[f64; 3]> {
     }
     let c = g_prop::GProp_GProps_CentreOfMass(&props);
     Some([c.X(), c.Y(), c.Z()]).filter(|c| c.iter().all(|x| x.is_finite()))
+}
+
+/// `[umin, umax, vmin, vmax]` of a face's outer boundary along the unit
+/// directions `u` and `v`, measured on the curves, not a mesh of them.
+pub fn outline_extent(face: &Shape, u: [f64; 3], v: [f64; 3]) -> Option<[f64; 4]> {
+    // A copy without the mesh: `axial_extent` bounds a meshed edge by its
+    // polygon grown by the mesh deflection, so a face drawn once would measure
+    // larger than the same face built fresh.
+    let wire = outer_wire(face)?.deep_copy(true, false).ok()?;
+    let (u0, u1) = axial_extent(&wire, [0.0; 3], u)?;
+    let (v0, v1) = axial_extent(&wire, [0.0; 3], v)?;
+    Some([u0, u1, v0, v1]).filter(|e| e.iter().all(|x| x.is_finite()))
 }
 
 pub fn center_of_mass(s: &Shape) -> Option<[f64; 3]> {

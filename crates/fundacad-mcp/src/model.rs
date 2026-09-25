@@ -430,17 +430,25 @@ fn documented_missing_fields(kind: &str, f: &Map<String, Value>) -> Vec<String> 
         .collect()
 }
 
-/// Completes each `tracked` face selector written without a `center` with the
-/// one its build found, which is what lets the feature follow the face
-/// sideways from then on. A build of the completed document is the same model.
-pub fn write_face_centers(doc: &mut Doc, centers: &Map<String, Value>) {
+/// Completes each `tracked` face selector written with neither an `extent` nor
+/// the older `center` with the extent its build measured, which is what keeps
+/// the feature's points where they are on the face from then on. A build of
+/// the completed document is the same model.
+pub fn write_tracked_faces(doc: &mut Doc, tracked: &Map<String, Value>) {
     for f in features_mut(doc) {
-        let Some(center) = f.get("id").and_then(Value::as_str).and_then(|id| centers.get(id)).cloned() else {
+        let extent = f
+            .get("id")
+            .and_then(Value::as_str)
+            .and_then(|id| tracked.get(id))
+            .and_then(|t| t.get("extent"))
+            .cloned();
+        let Some(extent) = extent else {
             continue;
         };
         if let Some(face) = f.get_mut("face").and_then(Value::as_object_mut) {
-            if face.get("by").and_then(Value::as_str) == Some("tracked") && !face.contains_key("center") {
-                face.insert("center".into(), center);
+            let bare = !face.contains_key("extent") && !face.contains_key("center");
+            if face.get("by").and_then(Value::as_str) == Some("tracked") && bare {
+                face.insert("extent".into(), extent);
             }
         }
     }

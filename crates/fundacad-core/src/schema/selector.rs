@@ -109,12 +109,15 @@ pub enum SelectorBy {
         point: Vec3,
     },
     /// A flat face kept by its outward normal, which follows it wherever a
-    /// change upstream moves it. `center` is its outline's centre when this
-    /// was written, how far a feature placed on it has moved with it.
+    /// change upstream moves it. `extent` is its outline's `[umin, umax, vmin,
+    /// vmax]` in the face frame when this was written: a point placed on it
+    /// keeps its offset from the nearest of each axis's min, middle and max.
+    /// `center`, the older form, moves every point with the outline's centre.
     FaceTracked {
         point: Vec3,
         normal: Vec3,
         center: Option<Vec3>,
+        extent: Option<[Real; 4]>,
     },
     EdgeMatch {
         fp: EdgeFingerprint,
@@ -239,6 +242,7 @@ fn parse_known(
             point: need(m, "point")?,
             normal: need(m, "normal")?,
             center: take(m, "center")?,
+            extent: take(m, "extent")?,
         },
         ("face", "match") => SelectorBy::FaceMatch {
             fp: need(m, "fp")?,
@@ -305,11 +309,14 @@ impl Serialize for Selector {
             }
             SelectorBy::EdgeAll => {}
             SelectorBy::FaceNormal { dir } => put("dir", serde_json::to_value(dir))?,
-            SelectorBy::FaceTracked { point, normal, center } => {
+            SelectorBy::FaceTracked { point, normal, center, extent } => {
                 put("point", serde_json::to_value(point))?;
                 put("normal", serde_json::to_value(normal))?;
                 if let Some(c) = center {
                     put("center", serde_json::to_value(c))?;
+                }
+                if let Some(e) = extent {
+                    put("extent", serde_json::to_value(e))?;
                 }
             }
             SelectorBy::EdgeMatch { fp, nth } => {

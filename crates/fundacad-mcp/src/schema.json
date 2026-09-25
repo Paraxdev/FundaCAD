@@ -358,8 +358,8 @@
   "hole": {
    "summary": "Drill holes into a flat face along its normal: simple, counterbore, countersink, or a heat-set insert bore.",
    "fields": {
-    "face": "Selector naming the flat face to drill into. Use {\"kind\":\"face\", \"by\":\"tracked\", \"point\":[x,y,z], \"normal\":[nx,ny,nz], \"body\":\"body1\"}: ONE flat face kept by its outward normal, so the holes follow it when a parameter change moves it and keep their place on it. `point` is on the face, `normal` is the face's `normal` from `inspect`. Leave `center` out, the build writes it in",
-    "points": "list of [x,y,z] hole centres in world mm, projected onto the face. On a `tracked` face they are where the holes were when its `center` was written, and move with the face from there",
+    "face": "Selector naming the flat face to drill into. Use {\"kind\":\"face\", \"by\":\"tracked\", \"point\":[x,y,z], \"normal\":[nx,ny,nz], \"body\":\"body1\"}: ONE flat face kept by its outward normal, so the holes follow it when a parameter change moves it and keep their place on it. `point` is on the face, `normal` is the face's `normal` from `inspect`. Leave `extent` out, the build writes it in",
+    "points": "list of [x,y,z] hole centres in world mm, projected onto the face. On a `tracked` face they are where the holes were when its `extent` was written, and each keeps its distance from the face edges it was nearest then (or stays centred) as the face moves or grows",
     "sketch": "optional sketch id whose points (else circle centres) add positions; with no `face` the sketch plane gives the direction",
     "holeType": "\"simple\" (default), \"counterbore\", \"countersink\" or \"insert\"",
     "size": "\"M2\", \"M2.5\", \"M3\", \"M4\", \"M5\", \"M6\", \"M8\" or \"M10\". Fills in every dimension below that is left out",
