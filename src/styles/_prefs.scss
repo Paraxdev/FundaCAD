@@ -96,6 +96,11 @@
 label.pref-head {
   cursor: pointer;
 }
+.pref-head.pref-sub {
+  margin-top: var(--s-1);
+  padding-top: var(--s-3);
+  border-top: 1px solid var(--line);
+}
 .pref-title {
   font-size: 14px;
   font-weight: 600;
