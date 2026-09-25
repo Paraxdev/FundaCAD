@@ -10,8 +10,8 @@ use serde_json::{json, Value};
 
 use crate::builder::{py_g, Ctx, FResult, Fail, BAD_REQUEST};
 use crate::kernel::{self, BoolKind, Frame, Kind};
-use crate::select::entity::FaceEnt;
-use crate::select::Resolver;
+use crate::select::entity::{py_round, FaceEnt};
+use crate::select::{tracked, Resolver};
 
 const REFERENCE_NOT_FOUND: &str = "referenceNotFound";
 
@@ -328,7 +328,11 @@ pub fn handle(ctx: &mut Ctx, f: &Hole) -> FResult {
         .map_err(|_| Fail::Internal("TypeError".into()))?
         .filter(truthy);
     let (body, origin, normal) = if let Some(sel) = sel {
-        face_anchor(ctx, f, &sel)?
+        let (body, origin, normal, shift) = face_anchor(ctx, f, &sel)?;
+        for p in points.iter_mut().take(f.points.iter().flatten().count()) {
+            *p = [p[0] + shift[0], p[1] + shift[1], p[2] + shift[2]];
+        }
+        (body, origin, normal)
     } else if let Some(plane) = sk_plane {
         let body = pick_body(ctx, f, None, Some(points[0]))?;
         (body, plane.origin, plane.z)
@@ -349,12 +353,14 @@ fn truthy(v: &Value) -> bool {
     }
 }
 
-/// The body, centre and normal of the one flat face a `face` selector names.
-fn face_anchor(ctx: &mut Ctx, f: &Hole, sel: &Value) -> FResult<(usize, [f64; 3], [f64; 3])> {
+/// The body, centre and normal of the one flat face a `face` selector names,
+/// and how far a tracked face moved since its positions were written.
+fn face_anchor(ctx: &mut Ctx, f: &Hole, sel: &Value) -> FResult<(usize, [f64; 3], [f64; 3], [f64; 3])> {
     let Some(m) = sel.as_object() else {
         return Err(bad("Hole: `face` must be one face selector"));
     };
-    let anchor = if m.get("by").and_then(Value::as_str) == Some("nearest") {
+    let by = m.get("by").and_then(Value::as_str);
+    let anchor = if matches!(by, Some("nearest" | "tracked")) {
         match m.get("point") {
             Some(Value::Array(p)) => {
                 let mut xyz = [0.0; 3];
@@ -389,7 +395,14 @@ fn face_anchor(ctx: &mut Ctx, f: &Hole, sel: &Value) -> FResult<(usize, [f64; 3]
             "Hole: the face must be flat, a hole is drilled along a flat face's normal",
         ));
     }
-    Ok((body, face.centroid().to_array(), face.normal().to_array()))
+    let mut shift = [0.0; 3];
+    if by == Some("tracked") {
+        shift = tracked::shift(&face.shape, m)?.to_array();
+        if let Some(c) = tracked::outline_center(&face.shape) {
+            ctx.face_centers.insert(f.id.clone(), json!(c.to_array().map(|x| py_round(x, 6))));
+        }
+    }
+    Ok((body, face.centroid().to_array(), face.normal().to_array(), shift))
 }
 
 #[allow(clippy::too_many_arguments)]

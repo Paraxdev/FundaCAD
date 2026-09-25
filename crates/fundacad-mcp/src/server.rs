@@ -1273,6 +1273,9 @@ impl FundaCad {
             if let Some(ids) = result.get("bodyIds") {
                 st.doc.insert("bodyIds".into(), ids.clone());
             }
+            if let Some(centers) = result.get("faceCenters").and_then(Value::as_object) {
+                model::write_face_centers(&mut st.doc, centers);
+            }
             st.mesh = mesh.clone();
             st.built_for = Some(signature(&st.doc));
         }

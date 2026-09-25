@@ -369,6 +369,37 @@ fn a_hole_patterned_by_feature_builds_six_holes() {
     assert!(rs[4].text.contains(&format!("vol {want:.1} mm3")), "{}", rs[4].text);
 }
 
+/// The build writes the tracked face's centre in, and the hole then rides the
+/// top of the box up when its height parameter grows.
+#[test]
+fn a_hole_on_a_tracked_face_follows_it_through_a_parameter_change() {
+    let rs = drive(&[
+        ("param_set", json!({"name": "h", "expr": 10})),
+        (
+            "feature_add",
+            json!({"feature": {"id": "bx1", "type": "box", "length": 40, "width": 20, "height": "h"}}),
+        ),
+        (
+            "feature_add",
+            json!({"feature": {"id": "hole1", "type": "hole", "diameter": 4, "extent": "blind", "depth": 3,
+                               "face": {"kind": "face", "by": "tracked", "point": [3, 2, 5],
+                                        "normal": [0, 0, 1], "body": "body1"},
+                               "points": [[3, 2, 5]]}}),
+        ),
+        ("build", json!({})),
+        ("doc_get", json!({})),
+        ("param_set", json!({"name": "h", "expr": 200})),
+        ("build", json!({})),
+    ]);
+    for r in &rs {
+        assert!(!r.is_error, "{}", r.text);
+    }
+    let doc: Value = serde_json::from_str(&rs[4].text).expect("JSON");
+    assert_eq!(doc["features"][1]["face"]["center"], json!([0.0, 0.0, 5.0]), "{}", rs[4].text);
+    // 40 * 20 * 200 less a 4 mm hole 3 deep, still in the top: its wall and floor.
+    assert!(rs[6].text.contains("vol 159962 mm3, 8 faces"), "{}", rs[6].text);
+}
+
 #[test]
 fn an_empty_document_can_be_taken_all_the_way_to_a_solid() {
     let rs = drive(&[
