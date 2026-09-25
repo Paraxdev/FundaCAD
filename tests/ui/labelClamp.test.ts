@@ -2,7 +2,7 @@
 // Items card.
 
 import { describe, expect, it } from "vitest";
-import { clampLabel } from "../../src/ui/labelClamp";
+import { clampLabel, labelLeader } from "../../src/ui/labelClamp";
 
 const area = { left: 0, top: 0, right: 1400, bottom: 900 };
 const items = { left: 12, top: 48, right: 275, bottom: 888 };
@@ -39,5 +39,35 @@ describe("clampLabel", () => {
     const narrow = { left: [{ left: 0, top: 0, right: 700, bottom: 900 }], right: [{ left: 720, top: 0, right: 1400, bottom: 900 }] };
     const c = clampLabel(710, 450, 30, 10, area, narrow, 6);
     expect(c.x - 30).toBe(706);
+  });
+});
+
+describe("labelLeader", () => {
+  it("runs from the clamped label's border back to where its dimension put it", () => {
+    const p = { x: -300, y: 1200 };
+    const c = clampLabel(p.x, p.y, 30, 10, area, { left: [], right: [] }, 6);
+    const seg = labelLeader(c, 30, 10, p)!;
+    expect(seg).not.toBeNull();
+    expect({ x: seg.x2, y: seg.y2 }).toEqual(p);
+    // starts on the label's box, on the side facing the dimension
+    const onX = Math.abs(Math.abs(seg.x1 - c.x) - 30) < 1e-9 && Math.abs(seg.y1 - c.y) <= 10;
+    const onY = Math.abs(Math.abs(seg.y1 - c.y) - 10) < 1e-9 && Math.abs(seg.x1 - c.x) <= 30;
+    expect(onX || onY).toBe(true);
+    expect(seg.x1).toBeLessThan(c.x);
+    expect(seg.y1).toBeGreaterThan(c.y);
+  });
+
+  it("draws nothing for a label that stayed on its dimension", () => {
+    expect(labelLeader({ x: 700, y: 640 }, 30, 10, { x: 700, y: 640 })).toBeNull();
+    expect(labelLeader({ x: 700, y: 640 }, 30, 10, { x: 720, y: 645 })).toBeNull();
+  });
+
+  it("draws nothing for a stub shorter than the minimum", () => {
+    expect(labelLeader({ x: 700, y: 640 }, 30, 10, { x: 734, y: 640 })).toBeNull();
+    expect(labelLeader({ x: 700, y: 640 }, 30, 10, { x: 740, y: 640 })).not.toBeNull();
+  });
+
+  it("ignores a point that did not project", () => {
+    expect(labelLeader({ x: 700, y: 640 }, 30, 10, { x: NaN, y: 3 })).toBeNull();
   });
 });
