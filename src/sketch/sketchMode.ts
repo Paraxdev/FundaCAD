@@ -540,7 +540,12 @@ export class SketchMode {
 
     this.viewport.suspendPicking = true;
     this.viewFocus = this.focusPoint();
-    this.preSketchDir = this.viewport.rig.viewDirection(new THREE.Vector3());
+    // viewDirection() is the camera's look-along (eye toward target); setViewDir's
+    // `dir` is the opposite, eye = target + dir·d (see applyOverride's face normal
+    // for the same convention), so it has to be negated here or the restore below
+    // lands the camera on the far side of the model, upside-down-ish from where it
+    // was (round 2's PM-6: nav cube read BOTTOM after a plain sketch+extrude).
+    this.preSketchDir = this.viewport.rig.viewDirection(new THREE.Vector3()).negate();
     this.preSketchUp = new THREE.Vector3().setFromMatrixColumn(this.viewport.rig.active.matrixWorld, 1);
     this.navigatedDuringSketch = false;
     this.viewport.enterSketchView(this.viewFocus, this.plane.n, this.plane.v);
