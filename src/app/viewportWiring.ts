@@ -226,11 +226,16 @@ export function installViewportWiring(e: Engine): void {
   // fires when a sketch is visible (overlay.regions is empty otherwise), so normal
   // face/body picking is untouched the rest of the time.
   e.viewport.regionHoverAt = (x, y) => {
-    if (e.sketch.active || e.toolBusy()) { e.overlay.setHoverRegion(null); return false; }
+    if (e.sketch.active || e.toolBusy()) {
+      if (e.overlay.setHoverRegion(null)) e.viewport.requestRender();
+      return false;
+    }
     const wr = regionAt(x, y);
-    e.overlay.setHoverRegion(wr);
+    if (e.overlay.setHoverRegion(wr)) e.viewport.requestRender();
     return !!wr;
   };
+  // The section's handle lights on hover and is not a tool, so it keeps the per-move frame.
+  e.viewport.quietPointer = () => !e.toolBusy() && !e.tools.section.active;
   e.viewport.regionPickAt = (x, y, additive) => {
     if (e.sketch.active || e.toolBusy()) return false;
     const wr = regionAt(x, y);

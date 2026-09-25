@@ -110,6 +110,8 @@ export interface ViewCubeHooks {
   beginSetOverride(side: ViewCubeSide): void;
   /** clear a side's override (back to default orientation). */
   resetOverride(side: ViewCubeSide): void;
+  /** The cube's own look changed (hover), and the canvas needs a frame. */
+  redraw?(): void;
 }
 
 export class ViewCube {
@@ -417,6 +419,7 @@ export class ViewCube {
     } else {
       this.canvas.style.cursor = "";
     }
+    this.hooks.redraw?.();
   }
 
   // ---- right-click context menu -------------------------------------------
