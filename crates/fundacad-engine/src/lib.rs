@@ -21,6 +21,7 @@ use fundacad_protocol::{
     envelope, send_reply, CancelToken, JobResult, Limits, Message, ReplyOptions,
 };
 use serde_json::{json, Map, Value};
+use std::collections::HashMap;
 use std::io;
 use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU64, Ordering};
 use std::sync::mpsc;
@@ -115,8 +116,19 @@ pub fn error_result(message: &str) -> JobResult {
 struct Running {
     id: Value,
     client: u64,
+    op: String,
     cancel: CancelToken,
     serial: u64,
+}
+
+/// A request not yet taken by the job thread, so its own client can withdraw
+/// it and another client can be told what it is waiting behind.
+struct Waiting {
+    ticket: u64,
+    client: u64,
+    id: Value,
+    op: String,
+    out: Arc<dyn Outbox>,
 }
 
 /// How an engine supervises its jobs.
@@ -158,6 +170,7 @@ pub type Respawn<J> = Arc<dyn Fn() -> J + Send + Sync>;
 struct Pool<J> {
     rx: Mutex<mpsc::Receiver<Queued>>,
     running: Arc<Mutex<Option<Running>>>,
+    waiting: Arc<Mutex<Vec<Waiting>>>,
     respawn: Option<Respawn<J>>,
     opts: EngineOptions,
     serial: AtomicU64,
@@ -171,7 +184,7 @@ fn spawn_job_thread<J: Jobs>(pool: Arc<Pool<J>>, mut jobs: J) {
     let spawned = std::thread::Builder::new()
         .name("engine-jobs".into())
         .spawn(move || {
-            let mut docs = DocState::default();
+            let mut docs = HashMap::new();
             let abandoned = Arc::new(AtomicBool::new(false));
             while !abandoned.load(Ordering::SeqCst) {
                 let Ok(q) = lock(&pool.rx).recv() else { return };
@@ -207,14 +220,25 @@ struct Queued {
     client: u64,
     out: Arc<dyn Outbox>,
     closed: Arc<AtomicBool>,
+    ticket: u64,
+    /// Whether the client was sent a `queued` frame, and so is owed `started`.
+    announced: bool,
 }
 
+/// Each client's held document, so one client's delta is never applied to a
+/// document another client sent under the same revision number.
+type Docs = HashMap<u64, (DocState, Arc<AtomicBool>)>;
+
 /// One engine: a job thread and the read path in front of it. Every client of
-/// an engine shares its job thread, held document and caches, so the jobs of
-/// all connections run one at a time, as under server.py's `_JOB_LOCK`.
+/// an engine shares its job thread and caches, so the jobs of all connections
+/// run one at a time, as under server.py's `_JOB_LOCK`. Progress, cancel and
+/// the held document stay with the client that sent the request.
 pub struct Engine {
     jobs: mpsc::Sender<Queued>,
     running: Arc<Mutex<Option<Running>>>,
+    /// Locked before `running` wherever both are held.
+    waiting: Arc<Mutex<Vec<Waiting>>>,
+    next_ticket: AtomicU64,
     out: Arc<dyn Outbox>,
     next_client: AtomicU64,
     never_closed: Arc<AtomicBool>,
@@ -245,9 +269,11 @@ impl Engine {
     ) -> Engine {
         let (tx, rx) = mpsc::channel::<Queued>();
         let running: Arc<Mutex<Option<Running>>> = Arc::default();
+        let waiting: Arc<Mutex<Vec<Waiting>>> = Arc::default();
         let pool = Arc::new(Pool {
             rx: Mutex::new(rx),
             running: running.clone(),
+            waiting: waiting.clone(),
             respawn,
             opts,
             serial: AtomicU64::new(1),
@@ -256,6 +282,8 @@ impl Engine {
         Engine {
             jobs: tx,
             running,
+            waiting,
+            next_ticket: AtomicU64::new(1),
             out,
             next_client: AtomicU64::new(1),
             never_closed: Arc::new(AtomicBool::new(false)),
@@ -319,30 +347,79 @@ impl Engine {
                     Err(message) => reply(envelope::err(&id, &message, None)),
                 }
             }
-            _ => {
+            op => {
+                let ticket = self.next_ticket.fetch_add(1, Ordering::Relaxed);
+                let behind = self.blocker(client);
+                // Sent before the job is queued, so it can never follow the job's own reply.
+                if let Some(b) = &behind {
+                    reply(envelope::queued(&id, b));
+                }
+                lock(&self.waiting).push(Waiting {
+                    ticket,
+                    client,
+                    id: id.clone(),
+                    op: op.unwrap_or("").to_string(),
+                    out: out.clone(),
+                });
                 let queued = Queued {
                     req,
                     client,
                     out: out.clone(),
                     closed: closed.clone(),
+                    ticket,
+                    announced: behind.is_some(),
                 };
                 if self.jobs.send(queued).is_err() {
+                    lock(&self.waiting).retain(|w| w.ticket != ticket);
                     reply(envelope::err(&id, "the engine job thread is gone", None));
                 }
             }
         }
     }
 
-    /// Cancels `client`'s running job, only if it is `target` when one is given.
-    fn cancel(&self, client: u64, target: Option<&Value>) -> bool {
-        let guard = self.running.lock().unwrap_or_else(|p| p.into_inner());
-        match guard.as_ref() {
-            Some(r) if r.client == client && target.map_or(true, |t| t.is_null() || *t == r.id) => {
-                r.cancel.cancel();
-                true
+    /// The other client's job a new request from `client` will wait behind, if
+    /// any: `{who, name?, op}`, `who` being the app, an assistant or a session.
+    fn blocker(&self, client: u64) -> Option<Value> {
+        let (other, op) = {
+            let waiting = lock(&self.waiting);
+            let running = lock(&self.running);
+            match running.as_ref() {
+                Some(r) if r.client != client => (r.client, r.op.clone()),
+                _ => waiting
+                    .iter()
+                    .find(|w| w.client != client)
+                    .map(|w| (w.client, w.op.clone()))?,
             }
-            _ => false,
+        };
+        let mut who = lock(&self.live).role_of(&conn_id(other));
+        if let Value::Object(m) = &mut who {
+            m.insert("op".into(), Value::String(op));
         }
+        Some(who)
+    }
+
+    /// Cancels `client`'s running job, only if it is `target` when one is
+    /// given, or withdraws its queued request `target` and answers it cancelled.
+    /// Another client's job is never touched.
+    fn cancel(&self, client: u64, target: Option<&Value>) -> bool {
+        let target = target.filter(|t| !t.is_null());
+        let mut waiting = lock(&self.waiting);
+        if let Some(r) = lock(&self.running).as_ref() {
+            if r.client == client && target.map_or(true, |t| *t == r.id) {
+                r.cancel.cancel();
+                return true;
+            }
+        }
+        let Some(t) = target else { return false };
+        let Some(pos) = waiting.iter().position(|w| w.client == client && w.id == *t) else {
+            return false;
+        };
+        let w = waiting.remove(pos);
+        drop(waiting);
+        let _ = w
+            .out
+            .send(&mut std::iter::once(Message::Text(envelope::cancelled(&w.id))));
+        true
     }
 }
 
@@ -365,6 +442,7 @@ impl Drop for Client {
     fn drop(&mut self) {
         self.closed.store(true, Ordering::SeqCst);
         self.engine.cancel(self.id, None);
+        lock(&self.engine.waiting).retain(|w| w.client != self.id);
         let who = conn_id(self.id);
         let mut session = self.engine.live.lock().unwrap_or_else(|p| p.into_inner());
         session.release(&who);
@@ -375,12 +453,17 @@ impl Drop for Client {
 fn run_one<J: Jobs>(
     pool: &Arc<Pool<J>>,
     jobs: &mut J,
-    docs: &mut DocState,
+    docs: &mut Docs,
     q: Queued,
     abandoned: &Arc<AtomicBool>,
 ) {
     let Queued {
-        req, client, out, ..
+        req,
+        client,
+        out,
+        closed,
+        ticket,
+        announced,
     } = q;
     let out = &out;
     let id = req.get("id").cloned().unwrap_or(Value::Null);
@@ -391,12 +474,24 @@ fn run_one<J: Jobs>(
         .to_string();
     let cancel = CancelToken::new();
     let serial = pool.serial.fetch_add(1, Ordering::SeqCst);
-    *lock(&pool.running) = Some(Running {
-        id: id.clone(),
-        client,
-        cancel: cancel.clone(),
-        serial,
-    });
+    {
+        let mut waiting = lock(&pool.waiting);
+        // Gone means its client withdrew it, and that cancel already answered it.
+        let Some(pos) = waiting.iter().position(|w| w.ticket == ticket) else {
+            return;
+        };
+        waiting.remove(pos);
+        *lock(&pool.running) = Some(Running {
+            id: id.clone(),
+            client,
+            op: op.clone(),
+            cancel: cancel.clone(),
+            serial,
+        });
+    }
+    if announced {
+        let _ = out.send(&mut std::iter::once(Message::Text(envelope::started(&id))));
+    }
 
     let progress = Arc::new(Progress::default());
     progress.reset();
@@ -446,7 +541,11 @@ fn run_one<J: Jobs>(
                 .and_then(Value::as_object)
                 .filter(|_| !fresh)
                 .unwrap_or(&empty);
-            match docs.apply(&req, fresh) {
+            docs.retain(|_, (_, gone)| !gone.load(Ordering::SeqCst));
+            let (held, _) = docs
+                .entry(client)
+                .or_insert_with(|| (DocState::default(), closed.clone()));
+            match held.apply(&req, fresh) {
                 Some(doc) => jobs.rebuild(doc, tolerance, known, fresh, &ctx),
                 None => {
                     let mut m = Map::new();

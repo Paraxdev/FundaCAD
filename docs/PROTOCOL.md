@@ -627,7 +627,10 @@ wait for it).
 Reply: `{ "cancelled": true }` if something was actually stopped, `{ "cancelled": false }`
 if nothing was running, or `target` named a request that had already finished (a race
 between the click and the job completing must not cancel a different, unrelated job
-that started meanwhile). Omitting `target` cancels whatever is currently running.
+that started meanwhile). Omitting `target` cancels whatever this connection has running.
+A cancel only ever reaches the connection's own requests: another client's job on the
+same engine is never stopped by it. A `target` still waiting in the queue is withdrawn
+and answered `{ "ok": false, "cancelled": true, ... }` at once, before the ack.
 The engine cannot interrupt a running kernel call any other way, so a cancel not
 honoured within a grace period makes the app's supervisor kill and respawn the worker
 process (an engine on `--ws`, which nothing supervises, abandons its job thread instead); the operation it
@@ -657,6 +660,21 @@ tessellating. `meshed` / `meshTotal` carry the payload phase's per-body denomina
 (both `-1` outside it), so a client can say "meshing 812/3071" rather than sitting at
 0% for the whole phase. These fire roughly once a second during a long rebuild. An
 `import` streams the same way with `status: "importing"` and `phase` / `label` / `pct`.
+
+Every client of one engine shares its job thread, so a request can wait behind another
+client's job (an assistant's import while the window rebuilds). The waiting client is
+told so, and told again when its own request starts:
+
+```jsonc
+{ "id": "<same id>", "status": "queued", "behind": { "who": "assistant", "name": "Claude", "op": "import" } }
+{ "id": "<same id>", "status": "started" }
+```
+
+`who` is `app` (the window hosting the live document), `assistant` (a live-session guest,
+with the `name` it gave) or `session` (anyone else). A request that waits only behind the
+same connection's own jobs gets neither frame. Progress, queue frames and replies only
+ever go to the connection that sent the request, and each connection has its own held
+document for deltas, so a delta is never applied to another client's document.
 
 A client must route **any** frame carrying a `status` string to its progress listeners
 and never treat one as the terminal reply, the real `{ "ok": ... }` reply always
