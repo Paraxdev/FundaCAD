@@ -41,6 +41,8 @@ export interface BlendEditCommit {
   feature: Feature | null;
   /** the parameter to set, null when the size is not bound or did not move */
   param: { name: string; value: number } | null;
+  /** why nothing is written, when the edit cannot be committed as asked */
+  refused?: string;
 }
 
 const sizeField = (f: Feature) => (f.type === "chamfer" ? "distance" : "radius");
@@ -69,6 +71,15 @@ export function blendEditCommit(e: BlendEdit): BlendEditCommit {
   if (!e.paramRef) {
     const feature = editedBlend(e.original, e.opened, e.built);
     return { feature: same(feature, e.original) ? null : feature, param: null };
+  }
+  // The parameter is bound to the saved treatment's size field. A flip would
+  // write a distance into a radius parameter and leave the new field unset.
+  if (e.built.type !== e.opened.type) {
+    return {
+      feature: null,
+      param: null,
+      refused: `The ${sizeField(e.opened)} is driven by parameter "${e.paramRef}", so it cannot become a ${e.built.type} here`,
+    };
   }
   const field = sizeField(e.built);
   const openedSize = (e.opened as unknown as Record<string, unknown>)[field];
