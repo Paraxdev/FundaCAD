@@ -3389,6 +3389,13 @@ export class Viewport {
     // body's are) must come back off, which is what the saved flags are for.
     if (!opts.edges) for (const e of lines) e.object.visible = false;
 
+    // A still is full quality even in potato mode: the tier, passes and environment
+    // come back for this one render, and glass and emitters with the tier.
+    const wasLow = isRenderLowPower();
+    const liftPotato = this.scene.beginFullQuality();
+    const stillLow = isRenderLowPower();
+    if (stillLow !== wasLow) this.applyBodyFinish();
+
     let url = "";
     try {
       this.scene.renderer.setPixelRatio(1);
@@ -3401,6 +3408,10 @@ export class Viewport {
       // Whatever happened, the viewport goes back to being the viewport. A throw
       // between the resize and the restore would otherwise leave the canvas
       // drawing at twice its size with no furniture on it and no way back.
+      if (liftPotato) {
+        liftPotato();
+        if (isRenderLowPower() !== stillLow) this.applyBodyFinish();
+      }
       this.scene.renderer.setPixelRatio(dpr);
       this.scene.grid.group.visible = grid;
       this.scene.triad.group.visible = triad;

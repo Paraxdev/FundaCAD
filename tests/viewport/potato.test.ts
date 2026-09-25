@@ -5,6 +5,8 @@ import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { PotatoDraw } from "../../src/viewport/potato";
 import { BodyEdges } from "../../src/viewport/edgeLines";
+import { PostChain } from "../../src/viewport/scene";
+import { DEFAULT_RENDER, renderPrefs, setRenderPref } from "../../src/ui/renderPrefs";
 import type { RebuildResult } from "../../src/types";
 
 interface Seen {
@@ -200,5 +202,36 @@ describe("PotatoDraw", () => {
     for (let i = 0; i < 32; i++) draw.render(r.renderer, r.scene, r.camera);
     expect(draw.held).toEqual({ materials: 0, lines: 0 });
     draw.dispose();
+  });
+});
+
+describe("PostChain and potato mode", () => {
+  function chain(potatoOn: () => boolean) {
+    const scene = new THREE.Scene();
+    const draws: { scene: THREE.Scene; target: unknown }[] = [];
+    let current: unknown = null;
+    const renderer = {
+      getDrawingBufferSize: (v: THREE.Vector2) => v.set(64, 32),
+      getRenderTarget: () => current,
+      setRenderTarget: (t: unknown) => { current = t; },
+      render: (s: THREE.Scene) => { draws.push({ scene: s, target: current }); },
+    } as unknown as THREE.WebGLRenderer;
+    return { scene, draws, post: new PostChain(renderer, scene, potatoOn) };
+  }
+
+  it("draws the potato way only while its switch says so, so a still can lift it", () => {
+    setRenderPref("bloom", 0);
+    setRenderPref("potatoMode", true);
+    let lifted = false;
+    const c = chain(() => renderPrefs().potatoMode && !lifted);
+    const camera = new THREE.PerspectiveCamera();
+    c.post.render(camera);
+    expect(c.draws[0]!.target).toBeInstanceOf(THREE.WebGLRenderTarget);
+    lifted = true;
+    c.draws.length = 0;
+    c.post.render(camera);
+    expect(c.draws).toEqual([{ scene: c.scene, target: null }]);
+    setRenderPref("potatoMode", false);
+    setRenderPref("bloom", DEFAULT_RENDER.bloom);
   });
 });
