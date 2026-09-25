@@ -125,6 +125,23 @@ describe("PotatoDraw", () => {
     expect(col.getY(0)).toBe(1);
   });
 
+  it("pushes faces back so the thin edges win, and lights them without the environment", () => {
+    const r = rig();
+    let ambient = 0;
+    const render = r.renderer.render.bind(r.renderer);
+    (r.renderer as unknown as { render: (s: THREE.Scene) => void }).render = (s: THREE.Scene) => {
+      s.traverse((o) => { if ((o as THREE.AmbientLight).isAmbientLight) ambient = (o as THREE.AmbientLight).intensity; });
+      render(s, r.camera);
+    };
+    new PotatoDraw().render(r.renderer, r.scene, r.camera, 0.5);
+    const cheap = r.seen[0]!.materials[0] as THREE.MeshLambertMaterial;
+    expect(cheap.polygonOffsetFactor).toBeGreaterThan(r.pbr.polygonOffsetFactor);
+    expect(ambient).toBeGreaterThan(0);
+    let after = 0;
+    r.scene.traverse((o) => { if ((o as THREE.AmbientLight).isAmbientLight) after++; });
+    expect(after).toBe(0);
+  });
+
   it("skips what is hidden and hides the emitter lights only while drawing", () => {
     const r = rig();
     r.edges.object.visible = false;

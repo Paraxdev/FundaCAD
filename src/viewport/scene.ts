@@ -452,7 +452,7 @@ export class PostChain {
 
   render(camera: THREE.Camera) {
     if (renderPrefs().potatoMode) {
-      (this.potato ??= new PotatoDraw()).render(this.renderer, this.scene, camera);
+      (this.potato ??= new PotatoDraw()).render(this.renderer, this.scene, camera, renderPrefs().brightness);
       return;
     }
     if (this.potato) {
