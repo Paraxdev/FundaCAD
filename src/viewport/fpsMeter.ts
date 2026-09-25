@@ -60,8 +60,7 @@ export class FpsMeter {
     const now = performance.now();
     const last = this.stamps[this.stamps.length - 1];
     if (last === undefined || now - last > IDLE_AFTER_MS) {
-      this.el.textContent = "idle";
-      this.el.title = "The viewport only draws when something changes, nothing to render right now." + gpuLine;
+      this.show("idle", "The viewport only draws when something changes, nothing to render right now." + gpuLine);
       return;
     }
     // Rate over the window, and the mean interval between the frames in it.
@@ -72,10 +71,22 @@ export class FpsMeter {
     if (n < 2 || span <= 0) return; // too few samples this tick; keep the last text
     const fps = ((n - 1) / span) * 1000;
     const ms = span / (n - 1);
-    this.el.textContent = `${Math.round(fps)} fps · ${ms.toFixed(1)} ms`;
-    this.el.title = `${n} frames drawn in the last ${Math.round(span)}ms. `
-      + "The viewport renders on demand, so this only counts frames that were actually drawn."
-      + gpuLine;
+    this.show(
+      `${Math.round(fps)} fps · ${ms.toFixed(1)} ms`,
+      `${n} frames drawn in the last ${Math.round(span)}ms. `
+        + "The viewport renders on demand, so this only counts frames that were actually drawn."
+        + gpuLine,
+    );
+  }
+
+  /** Note: writing even an identical textContent replaces the text node, which
+   *  repaints the page and re-blurs every glass panel over the viewport, four
+   *  times a second on an idle app. Under a software renderer that alone kept
+   *  two to three cores busy and slowed the engine's rebuilds beside it. */
+  private show(text: string, title: string) {
+    if (!this.el) return;
+    if (this.el.textContent !== text) this.el.textContent = text;
+    if (this.el.title !== title) this.el.title = title;
   }
 
   /** Most recent mean frame time in ms, or null when idle. Read by the bug
