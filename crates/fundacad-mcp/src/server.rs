@@ -1472,6 +1472,10 @@ impl FundaCad {
     }
 
     async fn view(&self, args: &JsonObject) -> CallToolResult {
+        let camera = match view_camera(args) {
+            Ok(c) => c,
+            Err(e) => return e,
+        };
         let stale = {
             let st = self.state.lock().await;
             st.mesh.is_empty() || st.built_for.as_deref() != Some(&signature(&st.doc))
@@ -1561,13 +1565,9 @@ impl FundaCad {
         let request = ViewRequest {
             width: w,
             height: h,
-            view: args
-                .get("view")
-                .and_then(Value::as_str)
-                .map(str::to_string)
-                .or_else(|| Some("iso".into())),
-            azimuth: args.get("azimuth").and_then(Value::as_f64),
-            elevation: args.get("elevation").and_then(Value::as_f64),
+            view: Some(camera.view.clone()),
+            azimuth: camera.angles.map(|a| a.0),
+            elevation: camera.angles.map(|a| a.1),
             highlight,
             section: section.clone(),
             bodies: bodies.clone(),
@@ -1582,13 +1582,14 @@ impl FundaCad {
             Ok(p) => p,
             Err(e) => return failure(e),
         };
-        let where_ = match args.get("view").and_then(Value::as_str) {
-            Some(v) => v.to_string(),
-            None => format!(
-                "az {} el {}",
-                py_num(args.get("azimuth").or(Some(&json!(0)))),
-                py_num(args.get("elevation").or(Some(&json!(0))))
-            ),
+        let where_ = match camera.angles {
+            Some(_) => {
+                let given = |long: &str, short: &str| {
+                    py_num(args.get(long).filter(|v| !v.is_null()).or(args.get(short)).or(Some(&json!(0))))
+                };
+                format!("az {} el {}", given("azimuth", "az"), given("elevation", "el"))
+            }
+            None => camera.view.clone(),
         };
         let shown: Vec<String> = bodies.unwrap_or_else(|| {
             mesh.iter()
@@ -1640,6 +1641,70 @@ impl FundaCad {
             ),
         ])
     }
+}
+
+/// An argument the tool has no use for is refused by name. Ignoring it is how
+/// `view {az: 180}` drew the default iso and looked like it had worked.
+fn unknown_arguments(name: &str, tool: &rmcp::model::Tool, args: &JsonObject) -> Option<CallToolResult> {
+    let known = tool.input_schema.get("properties").and_then(Value::as_object)?;
+    let unknown: Vec<&String> = args.keys().filter(|k| !known.contains_key(k.as_str())).collect();
+    if unknown.is_empty() {
+        return None;
+    }
+    let mut have: Vec<&String> = known.keys().collect();
+    have.sort();
+    let list = |v: &[&String]| v.iter().map(|k| format!("'{k}'")).collect::<Vec<_>>().join(", ");
+    Some(failure(format!(
+        "{name} takes no {} {}, nothing was done. It takes {}.",
+        if unknown.len() == 1 { "argument" } else { "arguments" },
+        list(&unknown),
+        if have.is_empty() { "no arguments".to_string() } else { list(&have) }
+    )))
+}
+
+struct Camera {
+    view: String,
+    angles: Option<(f64, f64)>,
+}
+
+/// The camera `view` will actually use, or why the request cannot be drawn.
+/// `az` and `el` are taken as the short spellings they are; an angle that is
+/// not a number, or a view name nobody knows, is refused rather than quietly
+/// replaced by the default iso.
+fn view_camera(args: &JsonObject) -> Result<Camera, CallToolResult> {
+    let angle = |long: &str, short: &str| -> Result<Option<f64>, CallToolResult> {
+        let (key, v) = match (args.get(long), args.get(short)) {
+            (Some(v), _) if !v.is_null() => (long, v),
+            (_, Some(v)) if !v.is_null() => (short, v),
+            _ => return Ok(None),
+        };
+        let n = match v {
+            Value::Number(n) => n.as_f64(),
+            Value::String(t) => t.trim().parse::<f64>().ok(),
+            _ => None,
+        };
+        match n.filter(|f| f.is_finite()) {
+            Some(f) => Ok(Some(f)),
+            None => Err(failure(format!("`{key}` has to be a number of degrees, got {v}"))),
+        }
+    };
+    let az = angle("azimuth", "az")?;
+    let el = angle("elevation", "el")?;
+    let view = match args.get("view").and_then(Value::as_str) {
+        Some(v) => {
+            let name = v.trim().to_ascii_lowercase();
+            if !render::NAMED_VIEWS.iter().any(|(n, _)| *n == name) {
+                return Err(failure(format!(
+                    "no view '{v}', have {}, or give azimuth and elevation in degrees",
+                    render::NAMED_VIEWS.iter().map(|(n, _)| *n).collect::<Vec<_>>().join(", ")
+                )));
+            }
+            name
+        }
+        None => "iso".into(),
+    };
+    let angles = (az.is_some() || el.is_some()).then(|| (az.unwrap_or(0.0), el.unwrap_or(0.0)));
+    Ok(Camera { view, angles })
 }
 
 fn round3(v: f64) -> f64 {
@@ -2038,6 +2103,9 @@ impl ServerHandler for FundaCad {
             ))));
         }
         let args = request.arguments.clone().unwrap_or_default();
+        if let Some(refusal) = self.router.get(&name).and_then(|t| unknown_arguments(&name, t, &args)) {
+            return Ok(CallToolResponse::Complete(refusal));
+        }
         // Never fatal to a tool call: working privately is a worse answer than
         // working on the open document, but it is a working one.
         self.adopt_running_app().await;

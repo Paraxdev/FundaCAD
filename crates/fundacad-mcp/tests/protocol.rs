@@ -115,6 +115,18 @@ fn the_server_survives_a_failed_call_and_keeps_answering() {
     assert!(rs[2].text.contains("bx1"), "{}", rs[2].text);
 }
 
+#[test]
+fn an_argument_the_tool_does_not_take_is_refused_by_name() {
+    let rs = drive(&[
+        ("doc_get", json!({"feature_only": true})),
+        ("doc_get", json!({"features_only": true})),
+    ]);
+    assert!(rs[0].is_error, "{}", rs[0].text);
+    assert!(rs[0].text.contains("'feature_only'"), "{}", rs[0].text);
+    assert!(rs[0].text.contains("'features_only'"), "{}", rs[0].text);
+    assert!(!rs[1].is_error, "{}", rs[1].text);
+}
+
 // --- documents ---------------------------------------------------------------
 
 #[test]
@@ -449,6 +461,65 @@ fn view_still_draws_a_partial_build() {
     assert!(rs[2].text.contains("fil1"), "{}", rs[2].text);
     let png = rs[2].images.first().expect("a render came back");
     assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n");
+}
+
+/// Width over height of what was drawn, the corner pixel taken as background.
+fn drawn_aspect(png_bytes: &[u8]) -> f64 {
+    let decoder = png::Decoder::new(std::io::Cursor::new(png_bytes));
+    let mut reader = decoder.read_info().unwrap();
+    let mut buf = vec![0; reader.output_buffer_size()];
+    let info = reader.next_frame(&mut buf).unwrap();
+    let px = info.color_type.samples();
+    let at = |x: usize, y: usize| &buf[(y * info.width as usize + x) * px..][..3];
+    let bg = at(0, 0).to_vec();
+    let (mut x0, mut y0, mut x1, mut y1) = (usize::MAX, usize::MAX, 0, 0);
+    for y in 0..info.height as usize {
+        for x in 0..info.width as usize {
+            if at(x, y) != bg.as_slice() {
+                x0 = x0.min(x);
+                x1 = x1.max(x);
+                y0 = y0.min(y);
+                y1 = y1.max(y);
+            }
+        }
+    }
+    (x1 - x0 + 1) as f64 / (y1 - y0 + 1) as f64
+}
+
+#[test]
+fn view_draws_from_the_angle_it_was_given_and_says_which() {
+    let size = json!({"width": 320, "height": 320});
+    let with = |extra: Value| {
+        let mut a = size.clone();
+        a.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        ("view", a)
+    };
+    let rs = drive(&[
+        (
+            "feature_add",
+            json!({"feature": {"type": "box", "length": 40, "width": 20, "height": 10}}),
+        ),
+        with(json!({})),
+        with(json!({"az": 180, "el": 80})),
+        with(json!({"azimuth": 180, "elevation": 80})),
+        with(json!({"elevation": 90})),
+        with(json!({"az": -90, "el": 0})),
+        with(json!({"view": "sideways"})),
+        with(json!({"azimuth": "steep"})),
+    ]);
+    for r in &rs[1..6] {
+        assert!(!r.is_error, "{}", r.text);
+    }
+    assert!(rs[1].text.starts_with("iso view"), "{}", rs[1].text);
+    assert!(rs[2].text.starts_with("az 180 el 80 view"), "{}", rs[2].text);
+    assert_eq!(rs[2].images, rs[3].images, "az and azimuth drew different pictures");
+    assert_ne!(rs[1].images, rs[2].images, "the angle was ignored");
+    let top = drawn_aspect(&rs[4].images[0]);
+    let front = drawn_aspect(&rs[5].images[0]);
+    assert!((top - 2.0).abs() < 0.15, "top view of 40x20 drew {top}");
+    assert!((front - 4.0).abs() < 0.4, "front view of 40x10 drew {front}");
+    assert!(rs[6].is_error && rs[6].text.contains("sideways"), "{}", rs[6].text);
+    assert!(rs[7].is_error && rs[7].text.contains("azimuth"), "{}", rs[7].text);
 }
 
 fn box_and_broken_fillet() -> Vec<(&'static str, Value)> {
