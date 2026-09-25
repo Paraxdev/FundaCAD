@@ -112,6 +112,7 @@ export const FEATURE_TARGETS: Partial<Record<FeatureType, readonly TargetField[]
     field: "bodies", label: "Bodies", kind: "body", shape: "bodyId", arity: "many",
     whenEmpty: "the active body",
   }],
+  mirror: [{ field: "bodies", label: "Bodies", kind: "body", shape: "bodyId", arity: "many", whenEmpty: "the active body" }],
   removeBody: [{ field: "bodies", label: "Bodies", kind: "body", shape: "bodyId", arity: "many" }],
   patternRect: [{ field: "bodies", label: "Bodies", kind: "body", shape: "bodyId", arity: "many", whenEmpty: "the active body" }],
   patternLinear: [{ field: "bodies", label: "Bodies", kind: "body", shape: "bodyId", arity: "many", whenEmpty: "the active body" }],
