@@ -188,11 +188,11 @@
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent-tint-2);
 }
-/* FI-6: a picked tile (.is-selected, above) and one already worn by the
-   selection used to look identical, so a single click read as "applied" even
-   though nothing had happened yet. Worn gets its own solid fill and a check
-   badge; picked keeps the lighter outline. Both can be true at once (you
-   clicked the one that is already on the model), and the badge still shows. */
+/* Picked is a dashed outline, worn is solid with an "Applied" badge, so a
+   single click, which applies nothing, never reads as applied. */
+.rd-tile.is-selected:not(.is-worn) {
+  border-style: dashed;
+}
 .rd-tile.is-worn {
   border-color: var(--accent);
   background: var(--accent-tint);
@@ -207,11 +207,14 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
+  gap: 3px;
   height: 16px;
+  padding: 0 6px 0 4px;
   border-radius: var(--r-pill);
   background: var(--accent);
   color: var(--panel-2);
+  font-size: 10px;
+  font-weight: 600;
 }
 .rd-ball {
   display: block;

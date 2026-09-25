@@ -106,15 +106,9 @@ const selectionCount = computed(() => {
   return browser.selectedBodyIds.length;
 });
 const faceCount = ref(0);
-/** The material actually WORN by the current selection right now, or null.
- *  Only asked of a single face or a single lone body: several faces (or a
- *  face plus a body) rarely share one material and a tile "wearing" a mixed
- *  selection would be a guess dressed up as a fact.
- *
- *  FI-6: a single click only picks a tile to LOOK at, it never applies
- *  anything, and picked used to look exactly like worn (`.is-selected` on
- *  both). This is the other half of that state, so the tile that is actually
- *  on the model can be told apart from the one merely under the cursor. */
+/** The material the selection wears right now, or null when it wears none or
+ *  several. A single click only picks a tile to look at and applies nothing,
+ *  so this is what tells the tile on the model apart from the one picked. */
 const wornId = ref<string | null>(null);
 let facePoll: number | null = null;
 onMounted(() => {
@@ -124,14 +118,13 @@ onMounted(() => {
   // imperceptible for a button label and is one array length.
   facePoll = window.setInterval(() => {
     faceCount.value = engine.viewport.getSelectedFaceIds().length;
+    // A face with nothing of its own wears its body's material, and that is
+    // the one it looks like (FI-6 saw no mark at all on a freshly picked face).
     const faces = selectedFaceTargets();
-    if (faces.length === 1) {
-      wornId.value = store.faceMaterialId(faces[0]!.body, faces[0]!.face) ?? null;
-    } else if (!faces.length && browser.selectedBodyIds.length === 1) {
-      wornId.value = store.bodyMaterialId(browser.selectedBodyIds[0]!) ?? null;
-    } else {
-      wornId.value = null;
-    }
+    const worn = faces.length
+      ? faces.map((f) => store.faceMaterialId(f.body, f.face) ?? store.bodyMaterialId(f.body))
+      : browser.selectedBodyIds.map((id) => store.bodyMaterialId(id));
+    wornId.value = worn.length && worn.every((w) => w === worn[0]) ? worn[0] ?? null : null;
   }, 250);
 });
 onUnmounted(() => { if (facePoll !== null) window.clearInterval(facePoll); });
@@ -408,8 +401,8 @@ async function doImport() {
           @dragstart="onDragStart($event, m)"
           @dragend="endMaterialDrag()"
         >
-          <span v-if="wornId === m.id" class="rd-worn" title="Applied to the current selection">
-            <Icon name="check" :size="11" />
+          <span v-if="wornId === m.id" class="rd-worn" title="What the selection wears now">
+            <Icon name="check" :size="11" /> Applied
           </span>
           <img v-if="preview(m)" class="rd-ball" :src="preview(m)!" alt="" />
           <span v-else class="rd-ball flat" :style="{ background: m.color }"></span>
