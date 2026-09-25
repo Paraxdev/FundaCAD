@@ -1030,6 +1030,9 @@ export class EdgeFeatureTool {
    *  commit). Discrete actions (Tab, adding/removing a member) call
    *  pushPreview directly, they don't repeat fast enough to need this. */
   private schedulePreviewDuringDrag() {
+    // The verdict for the new size is often already known from the range, so
+    // the refusal banner follows now rather than a debounce and a build later.
+    this.refreshRefusal();
     this.refreshGhost();
     if (this.previewTimer != null) window.clearTimeout(this.previewTimer);
     this.previewTimer = window.setTimeout(() => {
