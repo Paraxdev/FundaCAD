@@ -262,3 +262,33 @@ fn a_round_that_cuts_the_body_in_pieces_refuses() {
     assert!(secs < 10.0, "took {secs} s");
     built(&doc(features, Some(fillet([0.0, -2.0, 4.0], 13.65))));
 }
+
+/// rim_blend.rs's cup, recess 25 wide and 24.1 deep under an r5 outer round:
+/// its inner rim rounded past the wall's foot. The ball's centre is out past
+/// the cup's side, so it carves the rim deeper, into the wall below the floor's
+/// level, rather than digging into another part.
+#[test]
+fn a_rim_carved_past_the_wall_foot_builds() {
+    let features = vec![
+        json!({"id": "sk", "type": "sketch", "plane": "XY", "entities": [
+            {"type": "circle", "id": "c", "x": 0, "y": 0, "radius": 30}]}),
+        json!({"id": "ex", "type": "extrude", "sketch": "sk", "distance": 30, "operation": "new"}),
+        json!({"id": "fi", "type": "fillet", "radius": 5,
+               "edges": [{"kind": "edge", "by": "nearest", "point": [30, 0, 30]}]}),
+        json!({"id": "pp1", "type": "press-pull", "distance": -20,
+               "face": {"kind": "face", "by": "nearest", "point": [0, 0, 30]}}),
+        json!({"id": "pp2", "type": "press-pull", "distance": -4.1,
+               "face": {"kind": "face", "by": "nearest", "point": [0, 0, 10]}}),
+    ];
+    // main's build: the same solid, 24747.81 by its display mesh.
+    let (out, _) = built(&doc(features.clone(), Some(fillet([25.0, 0.0, 30.0], 25.0))));
+    let v = kernel::volume(&out);
+    assert!((v - 24_817.434).abs() < 0.01, "volume {v}");
+    assert!((kernel::bbox(&out).expect("box")[5] - 20.0).abs() < 1e-6);
+    // At 30 the carve reaches the cup's foot and parts the floor from the wall,
+    // which main built as two pieces.
+    let (msg, code, _) = refused(&doc(features.clone(), Some(fillet([25.0, 0.0, 30.0], 30.0))));
+    assert_eq!(code.as_deref(), Some("blendTooLarge"), "{msg}");
+    assert!(msg.contains("in pieces") && msg.contains("up to 29.97mm"), "{msg}");
+    built(&doc(features, Some(fillet([25.0, 0.0, 30.0], 29.97))));
+}
