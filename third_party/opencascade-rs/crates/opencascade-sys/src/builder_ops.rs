@@ -140,6 +140,15 @@ mod inner {
             shapes: &TopoDS_Shape,
             model_scale: f64,
         ) -> UniquePtr<CxxVector<TopoDS_Shape>>;
+        #[allow(clippy::too_many_arguments)]
+        pub fn bo_profile_cuts(
+            shapes: &TopoDS_Shape,
+            ox: f64, oy: f64, oz: f64,
+            nx: f64, ny: f64, nz: f64,
+            model_scale: f64,
+            deflection: f64,
+            out: &mut Vec<f64>,
+        ) -> bool;
         pub fn bo_face_contains(face: &TopoDS_Shape, x: f64, y: f64, z: f64, tol: f64) -> bool;
         pub fn bo_face_is_planar(f: &TopoDS_Shape) -> bool;
         pub fn bo_face_plane_normal(f: &TopoDS_Shape, out: &mut [f64]) -> bool;

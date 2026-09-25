@@ -6,6 +6,7 @@
 #include <bindings_common.hxx>
 
 #include <BOPAlgo_BOP.hxx>
+#include <BOPAlgo_Builder.hxx>
 #include <BOPAlgo_Splitter.hxx>
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepAdaptor_Surface.hxx>
@@ -55,6 +56,7 @@
 #include <TColStd_Array1OfInteger.hxx>
 #include <TColStd_Array1OfReal.hxx>
 #include <TColgp_Array1OfPnt.hxx>
+#include <GCPnts_QuasiUniformDeflection.hxx>
 #include <GeomAPI_ProjectPointOnSurf.hxx>
 #include <GeomLib_IsPlanarSurface.hxx>
 #include <Geom_Surface.hxx>
@@ -90,6 +92,7 @@
 #include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <limits>
 #include <list>
 #include <mutex>
 #include <unordered_map>
@@ -980,8 +983,70 @@ inline BoShapes bo_subdivide(const TopoDS_Shape &edges) {
   }
 }
 
+// The model edges in a sketch plane that bound material coplanar with it, each cut
+// where that material starts or stops. One body's outline inside another's
+// coplanar face, a stretch of edge shared with the next face, or a revolve's seam
+// bounds nothing, and would otherwise cut a profile along a line that means
+// nothing. `limit`, unless void, bounds the faces looked at.
+inline std::vector<TopoDS_Shape> profile_cut_edges(const TopoDS_Shape &shapes, const gp_Pnt &o,
+                                                   const gp_Dir &n, double tol, const Bnd_Box &limit) {
+  std::vector<TopoDS_Shape> kept;
+  std::vector<std::pair<TopoDS_Face, Bnd_Box>> support;
+  for (TopoDS_Iterator bi(shapes); bi.More(); bi.Next()) {
+    for (TopExp_Explorer fx(bi.Value(), TopAbs_FACE); fx.More(); fx.Next()) {
+      const TopoDS_Face &fc = TopoDS::Face(fx.Current());
+      BRepAdaptor_Surface sa(fc, false);
+      if (sa.GetType() != GeomAbs_Plane) continue;
+      gp_Pln pl = sa.Plane();
+      if (std::abs(pl.Axis().Direction().Dot(n)) < 1.0 - 1e-9) continue;
+      if (std::abs(gp_Vec(o, pl.Location()).Dot(gp_Vec(n))) > tol) continue;
+      Bnd_Box fb;
+      BRepBndLib::Add(fc, fb, false);
+      if (fb.IsVoid() || (!limit.IsVoid() && limit.IsOut(fb))) continue;
+      support.push_back({fc, fb});
+    }
+  }
+  if (support.empty()) return kept;
+  TopTools_IndexedMapOfShape edges;
+  for (auto &f : support) TopExp::MapShapes(f.first, TopAbs_EDGE, edges);
+  TopTools_IndexedMapOfShape pieces;
+  if (support.size() > 1) {
+    BOPAlgo_Builder gf;
+    for (int i = 1; i <= edges.Extent(); ++i) gf.AddArgument(edges.FindKey(i));
+    gf.Perform();
+    if (!gf.HasErrors()) TopExp::MapShapes(gf.Shape(), TopAbs_EDGE, pieces);
+  }
+  if (pieces.IsEmpty()) pieces = edges;
+  auto covered = [&](const gp_Pnt &q) {
+    for (auto &f : support) {
+      if (f.second.IsOut(q)) continue;
+      if (BRepClass_FaceClassifier(f.first, q, tol).State() == TopAbs_IN) return true;
+    }
+    return false;
+  };
+  gp_Vec nv(n);
+  double step = 4 * tol;
+  for (int i = 1; i <= pieces.Extent(); ++i) {
+    const TopoDS_Edge &e = TopoDS::Edge(pieces.FindKey(i));
+    if (BRep_Tool::Degenerated(e)) continue;
+    BRepAdaptor_Curve cv(e);
+    gp_Pnt p;
+    gp_Vec t;
+    cv.D1((cv.FirstParameter() + cv.LastParameter()) / 2, p, t);
+    gp_Vec w = nv.Crossed(t);
+    if (w.Magnitude() < 1e-12) continue;
+    w.Normalize();
+    if (covered(p.Translated(w * step)) != covered(p.Translated(w * -step))) kept.push_back(e);
+  }
+  return kept;
+}
+
+inline double profile_cut_tol(double modelScale) {
+  return std::max(1e-5, (modelScale > 0 ? modelScale : 0.0) * 1e-4);
+}
+
 // face_footprint.py `split_profile_cells`: cut located cells along the model
-// edges lying in the sketch plane that bound material coplanar with it.
+// edges of profile_cut_edges.
 inline BoShapes bo_split_profile_cells(const TopoDS_Shape &cells, double ox, double oy, double oz,
                                        double nx, double ny, double nz, const TopoDS_Shape &shapes,
                                        double modelScale) {
@@ -991,99 +1056,19 @@ inline BoShapes bo_split_profile_cells(const TopoDS_Shape &cells, double ox, dou
   for (auto &c : in) out->push_back(c);
   if (in.empty()) return out;
   try {
-    double tol = std::max(1e-5, (modelScale > 0 ? modelScale : 0.0) * 1e-4);
-    Bnd_Box within;
+    double tol = profile_cut_tol(modelScale);
+    Bnd_Box reach;
     for (auto &c : in) {
       Bnd_Box b;
       BRepBndLib::AddOptimal(c, b, true, false);
-      if (!b.IsVoid()) within.Add(b);
+      if (!b.IsVoid()) reach.Add(b);
     }
-    auto sd = [&](double x, double y, double z) {
-      return (x - ox) * nx + (y - oy) * ny + (z - oz) * nz;
-    };
-    Bnd_Box reach = within;
     if (!reach.IsVoid()) reach.Enlarge(8 * tol);
-    std::vector<TopoDS_Shape> candidates;
-    for (TopoDS_Iterator bi(shapes); bi.More(); bi.Next()) {
-      TopTools_IndexedMapOfShape em;
-      TopExp::MapShapes(bi.Value(), TopAbs_EDGE, em);
-      for (int i = 1; i <= em.Extent(); ++i) {
-        const TopoDS_Shape &e = em.FindKey(i);
-        Bnd_Box eb;
-        BRepBndLib::AddOptimal(e, eb, true, false);
-        if (eb.IsVoid()) continue;
-        double a0, a1, a2, a3, a4, a5, w0, w1, w2, w3, w4, w5;
-        eb.Get(a0, a1, a2, a3, a4, a5);
-        if (!within.IsVoid()) {
-          within.Get(w0, w1, w2, w3, w4, w5);
-          if (!(w0 - tol <= a3 && a0 - tol <= w3 && w1 - tol <= a4 && a1 - tol <= w4 &&
-                w2 - tol <= a5 && a2 - tol <= w5))
-            continue;
-        }
-        double lo = 1e300, hi = -1e300;
-        for (double x : {a0, a3})
-          for (double y : {a1, a4})
-            for (double z : {a2, a5}) {
-              double d = sd(x, y, z);
-              lo = std::min(lo, d);
-              hi = std::max(hi, d);
-            }
-        if (!(lo <= tol && hi >= -tol)) continue;
-        BRepAdaptor_Curve cv(TopoDS::Edge(e));
-        double f = cv.FirstParameter(), l = cv.LastParameter();
-        bool inPlane = true;
-        for (int k = 0; k <= 8 && inPlane; ++k) {
-          gp_Pnt p = cv.Value(f + (l - f) * k / 8.0);
-          if (std::abs(sd(p.X(), p.Y(), p.Z())) > tol) inPlane = false;
-        }
-        if (inPlane) candidates.push_back(e);
-      }
-    }
-    if (candidates.empty()) return out;
-    std::vector<std::pair<TopoDS_Face, Bnd_Box>> support;
-    for (TopoDS_Iterator bi(shapes); bi.More(); bi.Next()) {
-      for (TopExp_Explorer fx(bi.Value(), TopAbs_FACE); fx.More(); fx.Next()) {
-        const TopoDS_Face &fc = TopoDS::Face(fx.Current());
-        BRepAdaptor_Surface sa(fc, false);
-        if (sa.GetType() != GeomAbs_Plane) continue;
-        gp_Pln pl = sa.Plane();
-        gp_Dir d = pl.Axis().Direction();
-        if (std::abs(d.X() * nx + d.Y() * ny + d.Z() * nz) < 1.0 - 1e-9) continue;
-        gp_Pnt o = pl.Location();
-        if (std::abs(sd(o.X(), o.Y(), o.Z())) > tol) continue;
-        Bnd_Box fb;
-        BRepBndLib::Add(fc, fb, false);
-        if (fb.IsVoid() || (!reach.IsVoid() && reach.IsOut(fb))) continue;
-        support.push_back({fc, fb});
-      }
-    }
-    // Only an edge with material on one side and none on the other bounds anything a
-    // profile can sit on. One body's outline inside another's coplanar face, or a
-    // revolve's seam, would otherwise cut a profile along a line that means nothing.
-    auto covered = [&](const gp_Pnt &q) {
-      for (auto &s : support) {
-        if (s.second.IsOut(q)) continue;
-        if (BRepClass_FaceClassifier(s.first, q, tol).State() == TopAbs_IN) return true;
-      }
-      return false;
-    };
-    gp_Vec N(nx, ny, nz);
-    double step = 4 * tol;
     TopTools_ListOfShape tools;
-    for (auto &e : candidates) {
-      BRepAdaptor_Curve cv(TopoDS::Edge(e));
-      double f = cv.FirstParameter(), l = cv.LastParameter();
-      bool bounds = false;
-      for (int k = 1; k <= 3 && !bounds; ++k) {
-        gp_Pnt p;
-        gp_Vec t;
-        cv.D1(f + (l - f) * k / 4.0, p, t);
-        gp_Vec w = N.Crossed(t);
-        if (w.Magnitude() < 1e-12) continue;
-        w.Normalize();
-        bounds = covered(p.Translated(w * step)) != covered(p.Translated(w * -step));
-      }
-      if (bounds) tools.Append(e);
+    for (auto &e : profile_cut_edges(shapes, gp_Pnt(ox, oy, oz), gp_Dir(nx, ny, nz), tol, reach)) {
+      Bnd_Box eb;
+      BRepBndLib::Add(e, eb, false);
+      if (reach.IsVoid() || !reach.IsOut(eb)) tools.Append(e);
     }
     if (tools.IsEmpty()) return out;
     BOPAlgo_Splitter sp;
@@ -1105,6 +1090,41 @@ inline BoShapes bo_split_profile_cells(const TopoDS_Shape &cells, double ox, dou
     return out;
   } catch (...) {
     return out;
+  }
+}
+
+// profile_cut_edges over the whole plane as polylines within `deflection`, each
+// followed by a NaN triple, for the sketch overlay to split its areas exactly
+// where a consuming feature will.
+inline bool bo_profile_cuts(const TopoDS_Shape &shapes, double ox, double oy, double oz, double nx,
+                            double ny, double nz, double modelScale, double deflection,
+                            rust::Vec<double> &out) {
+  try {
+    double tol = profile_cut_tol(modelScale);
+    for (auto &s : profile_cut_edges(shapes, gp_Pnt(ox, oy, oz), gp_Dir(nx, ny, nz), tol, Bnd_Box())) {
+      BRepAdaptor_Curve c(TopoDS::Edge(s));
+      if (c.GetType() == GeomAbs_Line) {
+        for (double t : {c.FirstParameter(), c.LastParameter()}) {
+          gp_Pnt p = c.Value(t);
+          out.push_back(p.X());
+          out.push_back(p.Y());
+          out.push_back(p.Z());
+        }
+      } else {
+        GCPnts_QuasiUniformDeflection pts(c, deflection);
+        if (!pts.IsDone() || pts.NbPoints() < 2) return false;
+        for (int i = 1; i <= pts.NbPoints(); ++i) {
+          gp_Pnt p = pts.Value(i);
+          out.push_back(p.X());
+          out.push_back(p.Y());
+          out.push_back(p.Z());
+        }
+      }
+      for (int k = 0; k < 3; ++k) out.push_back(std::numeric_limits<double>::quiet_NaN());
+    }
+    return true;
+  } catch (...) {
+    return false;
   }
 }
 
