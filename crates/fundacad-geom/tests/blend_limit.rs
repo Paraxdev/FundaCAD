@@ -1,7 +1,8 @@
-//! A blend the kernel refuses is built from its sections only where a ball of
-//! that size really rolls along the edge: a fill's ball resting on both faces,
-//! a cut's running on past a face into the air above it, never into the body.
-//! Past that the build says so, with the largest size that fits.
+//! A blend the kernel refuses is built from its sections. A fill past its
+//! faces is clamped to them, a flare or a bowl; a cut may carve on past a face
+//! into the air above it. It refuses, with the largest size that fits, a cut
+//! that would dig into the body beyond a face and a blend that cuts the body
+//! in pieces.
 
 use std::f64::consts::PI;
 
@@ -65,15 +66,10 @@ fn recess(r: Option<f64>) -> Value {
     )
 }
 
+/// Past the recess's depth the floor round is clamped to the wall's top, a
+/// bowl, at any size.
 #[test]
-fn a_floor_round_deeper_than_its_recess_refuses_with_the_size_that_fits() {
-    for r in [32.9, 20.0, 14.5] {
-        let (msg, code, secs) = refused(&recess(Some(r)));
-        assert_eq!(code.as_deref(), Some("blendTooLarge"), "{msg}");
-        assert!(msg.contains(&format!("at {r}mm")) && msg.contains("up to 14.09mm"), "{msg}");
-        assert!(secs < 5.0, "{r}: took {secs} s");
-    }
-
+fn a_floor_round_deeper_than_its_recess_is_a_bowl() {
     let (base, _) = built(&recess(None));
     let r = 14.09;
     let (out, _) = built(&recess(Some(r)));
@@ -85,6 +81,53 @@ fn a_floor_round_deeper_than_its_recess_refuses_with_the_size_that_fits() {
     let want = kernel::volume(&base) + 2.0 * PI * (22.0 - inward) * area;
     let got = kernel::volume(&out);
     assert!((got - want).abs() < 1e-3 * want, "volume {got}, a {r}mm fill holds {want}");
+
+    let (bowl, secs) = built(&recess(Some(32.9)));
+    let got = kernel::volume(&bowl);
+    assert!((got - 68_090.54).abs() < 1.0, "volume {got}");
+    assert!(secs < 5.0, "took {secs} s");
+}
+
+/// Six legs set into a round wall's underside, 12 long: rounded longer than
+/// the legs, their fills flare from the leg tips.
+#[test]
+fn leg_rounds_longer_than_the_legs_flare() {
+    let legs: Vec<(f64, f64)> = (0..6)
+        .map(|k| {
+            let a = (-90.0 + 54.0 * k as f64).to_radians();
+            (50.0 * a.cos(), 50.0 * a.sin())
+        })
+        .collect();
+    let features = vec![
+        json!({"id": "s1", "type": "sketch", "plane": "XY", "entities": [
+            {"type": "circle", "id": "c", "x": 0, "y": 0, "radius": 50}]}),
+        json!({"id": "e1", "type": "extrude", "sketch": "s1", "distance": 20, "operation": "new"}),
+        json!({"id": "s2", "type": "sketch", "plane": {"origin": [0, 0, 20], "normal": [0, 0, 1], "xdir": [1, 0, 0]},
+               "entities": legs.iter().enumerate()
+                   .map(|(k, (x, y))| json!({"type": "circle", "id": format!("l{k}"), "x": x, "y": y, "radius": 4.25}))
+                   .collect::<Vec<_>>()}),
+        json!({"id": "e2", "type": "extrude", "sketch": "s2", "distance": -32, "operation": "join"}),
+    ];
+    // Each leg's edge inside the wall is two arcs, split by the leg's seam.
+    let arcs: Vec<Value> = legs
+        .iter()
+        .flat_map(|(x, y)| {
+            [-40f64, 40.0].map(|d| {
+                let a = (-y).atan2(-x) + d.to_radians();
+                json!({"kind": "edge", "by": "nearest", "point": [x + 4.25 * a.cos(), y + 4.25 * a.sin(), 0.0]})
+            })
+        })
+        .collect();
+    let (base, _) = built(&doc(features.clone(), None));
+    let mut last = kernel::volume(&base);
+    for r in [20.0, 77.0] {
+        let round = json!({"id": "f", "type": "fillet", "radius": r, "tangentEdges": false, "edges": arcs});
+        let (out, secs) = built(&doc(features.clone(), Some(round)));
+        let v = kernel::volume(&out);
+        assert!(v > last, "{r}: {v} after {last}");
+        eprintln!("legs {r}: {v:.1} in {secs:.1} s");
+        last = v;
+    }
 }
 
 fn line(id: &str, a: [f64; 2], b: [f64; 2]) -> Value {
@@ -192,4 +235,30 @@ fn a_boss_rim_rounded_past_the_boss_refuses() {
     assert_eq!(code.as_deref(), Some("blendTooLarge"), "{msg}");
     assert!(msg.contains("into the body") && msg.contains("up to 4.99mm"), "{msg}");
     built(&doc(features, Some(fillet([10.0, 0.0, 15.0], 4.99))));
+}
+
+/// Two blocks joined by a 4 mm neck at their foot: rounding the neck's top
+/// edge far enough carves the whole neck away along it.
+#[test]
+fn a_round_that_cuts_the_body_in_pieces_refuses() {
+    let plan = [
+        [-30.0, -10.0], [-10.0, -10.0], [-10.0, -2.0], [10.0, -2.0], [10.0, -10.0], [30.0, -10.0],
+        [30.0, 10.0], [10.0, 10.0], [10.0, 2.0], [-10.0, 2.0], [-10.0, 10.0], [-30.0, 10.0],
+    ];
+    let entities: Vec<Value> =
+        (0..plan.len()).map(|i| line(&format!("l{i}"), plan[i], plan[(i + 1) % plan.len()])).collect();
+    let features = vec![
+        json!({"id": "sk", "type": "sketch", "plane": "XY", "entities": entities}),
+        json!({"id": "ex", "type": "extrude", "sketch": "sk", "distance": 4, "operation": "new"}),
+        json!({"id": "pads", "type": "sketch", "plane": "XY", "entities": [
+            {"type": "rectangle", "id": "a", "width": 20, "height": 20, "x": -20, "y": 0},
+            {"type": "rectangle", "id": "b", "width": 20, "height": 20, "x": 20, "y": 0}]}),
+        json!({"id": "up", "type": "extrude", "sketch": "pads", "distance": 20, "operation": "join"}),
+    ];
+    // The neck's far bottom corner leaves the ball's reach past 4 / (1 - 1 / sqrt 2).
+    let (msg, code, secs) = refused(&doc(features.clone(), Some(fillet([0.0, -2.0, 4.0], 20.0))));
+    assert_eq!(code.as_deref(), Some("blendTooLarge"), "{msg}");
+    assert!(msg.contains("in pieces") && msg.contains("up to 13.65mm"), "{msg}");
+    assert!(secs < 10.0, "took {secs} s");
+    built(&doc(features, Some(fillet([0.0, -2.0, 4.0], 13.65))));
 }
