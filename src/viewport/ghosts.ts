@@ -160,21 +160,23 @@ export class GhostLayer {
   // distance drag reads live instead of waiting on OCCT. Unlike press/pull, a
   // blend isn't a simple offset of a picked face, it depends on the two faces
   // that meet at the edge, so this samples the ALREADY-DISPLAYED mesh around
-  // each picked edge for those two faces' normals and hands the geometry to
-  // features/blendGhost.ts, which sweeps the wedge. An edge whose normals can't
-  // be pinned down (a seam, a T-junction, two faces meeting almost flat) is
+  // each picked edge for the wedge its two faces make and hands the geometry to
+  // features/blendGhost.ts, which sweeps it. An edge whose faces can't be
+  // pinned down (a seam, a T-junction, two faces meeting almost flat) is
   // simply left out rather than drawn wrong, see edgeFaceSamples.
   private blendGhostMesh: THREE.Mesh | null = null;
 
-  setBlendGhost(edges: readonly BlendGhostEdge[], size: number, kind: BlendKind) {
+  /** `capped` paints it as a refused size held back to `size`, the largest
+   *  one the kernel built. */
+  setBlendGhost(edges: readonly BlendGhostEdge[], size: number, kind: BlendKind, capped = false) {
     this.clearBlendGhost();
     const model = this.host.model();
     if (!model || !edges.length || size < 1e-4) return;
     const positions: number[] = [];
     for (const edge of edges) {
-      const samples = edgeFaceSamples(model, edge);
-      if (!samples) continue; // can't tell the two faces apart here, skip THIS edge
-      const geo = sweepBlendGhost(samples, size, kind);
+      const found = edgeFaceSamples(model, edge);
+      if (!found) continue; // can't tell the two faces apart here, skip THIS edge
+      const geo = sweepBlendGhost(found.samples, size, kind, found.closed);
       if (geo) positions.push(...geo.positions);
     }
     if (!positions.length) return;
@@ -182,15 +184,13 @@ export class GhostLayer {
     geom.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
     geom.computeVertexNormals();
     const mat = new THREE.MeshBasicMaterial({
-      color: themeColor("--accent", 0xff7a3c),
+      color: capped ? themeColor("--error", 0xe23b3b) : themeColor("--accent", 0xff7a3c),
       transparent: true,
-      opacity: 0.45,
+      opacity: capped ? 0.55 : 0.45,
       side: THREE.DoubleSide,
       depthWrite: false,
-      // The wedge previews material about to be CUT AWAY, so it always sits
-      // behind the sharp corner it is replacing, depth-tested against the
-      // solid it is still part of. Normal depth testing would hide it
-      // completely rather than show it through, so it is off here.
+      // On a convex edge the round sits inside the solid it is about to cut
+      // away, where depth testing would hide it completely.
       depthTest: false,
     });
     this.blendGhostMesh = new THREE.Mesh(geom, mat);
@@ -416,32 +416,30 @@ export class GhostLayer {
 // triangulation are two SEPARATE discretization passes though: a polyline
 // point is not, in general, also a mesh vertex (real gaps run 0.8-1.4mm), and
 // a straight edge's polyline is just its two endpoints, which are corners
-// where three faces meet. So rather than looking a point up as a vertex, this
-// resamples the edge at points strictly BETWEEN its ends (never a corner) and
-// finds each one's two adjacent faces by nearest triangle, one per faceId,
-// within a tolerance derived from the mesh's own tessellation density.
+// where three faces meet. So an open edge is resampled at points strictly
+// BETWEEN its ends to find its faces, and its end sections are carried out to
+// the true endpoints afterwards; a closed loop has no corner and is sampled
+// all the way round.
 
-/** One triangle of a body's mesh, local space, with its outward geometric
- *  normal precomputed (same winding faceNormalWorld relies on: no flip). */
 interface TriRec {
   faceId: number;
   a: THREE.Vector3;
   b: THREE.Vector3;
   c: THREE.Vector3;
   normal: THREE.Vector3;
+  /** the shipped per-vertex surface normals, when the mesh has them */
+  vn: [THREE.Vector3, THREE.Vector3, THREE.Vector3] | null;
   centroid: THREE.Vector3;
 }
 
 /** A uniform hash grid of a body's triangles, bucketed by centroid, cell size
- *  set from the mesh's own average edge length so a coarse body gets coarse
- *  cells and a finely tessellated one gets fine cells. `tolerance` is how far
- *  a sample point may sit from the nearest triangle and still count as "on"
- *  that face: a few triangle-edges' worth, floored so a degenerate/near-empty
- *  mesh doesn't collapse it to zero. */
+ *  set from the mesh's own average edge length. `tolerance` is how far a
+ *  sample point may sit from the nearest triangle and still count as on it. */
 interface TriGrid {
   cellSize: number;
   tolerance: number;
   cells: Map<string, TriRec[]>;
+  byFace: Map<number, TriRec[]>;
 }
 
 const triGridCache = new WeakMap<BodyMesh, TriGrid>();
@@ -452,6 +450,7 @@ function cellKey(x: number, y: number, z: number, cellSize: number): string {
 
 function buildTriGrid(body: BodyMesh): TriGrid {
   const pos = body.mesh.geometry.getAttribute("position");
+  const nrm = body.mesh.geometry.getAttribute("normal");
   const index = body.mesh.geometry.getIndex();
   const triCount = index ? index.count / 3 : 0;
   const recs: TriRec[] = [];
@@ -460,15 +459,23 @@ function buildTriGrid(body: BodyMesh): TriGrid {
     for (let t = 0; t < triCount; t++) {
       const fid = body.faceIds[t];
       if (fid === undefined) continue;
-      const a = new THREE.Vector3().fromBufferAttribute(pos, index.getX(t * 3));
-      const b = new THREE.Vector3().fromBufferAttribute(pos, index.getX(t * 3 + 1));
-      const c = new THREE.Vector3().fromBufferAttribute(pos, index.getX(t * 3 + 2));
-      const normal = b.clone().sub(a).cross(c.clone().sub(a)); // area-weighted, see faceNormalWorld
+      const ia = index.getX(t * 3), ib = index.getX(t * 3 + 1), ic = index.getX(t * 3 + 2);
+      const a = new THREE.Vector3().fromBufferAttribute(pos, ia);
+      const b = new THREE.Vector3().fromBufferAttribute(pos, ib);
+      const c = new THREE.Vector3().fromBufferAttribute(pos, ic);
+      const normal = b.clone().sub(a).cross(c.clone().sub(a));
       const len = normal.length();
-      if (len < 1e-12) continue; // degenerate triangle
+      if (len < 1e-12) continue;
       normal.divideScalar(len);
+      const vn: TriRec["vn"] = nrm
+        ? [
+            new THREE.Vector3().fromBufferAttribute(nrm, ia),
+            new THREE.Vector3().fromBufferAttribute(nrm, ib),
+            new THREE.Vector3().fromBufferAttribute(nrm, ic),
+          ]
+        : null;
       const centroid = a.clone().add(b).add(c).divideScalar(3);
-      recs.push({ faceId: fid, a, b, c, normal, centroid });
+      recs.push({ faceId: fid, a, b, c, normal, vn, centroid });
       edgeLenSum += a.distanceTo(b) + b.distanceTo(c) + c.distanceTo(a);
       edgeLenCount += 3;
     }
@@ -477,13 +484,17 @@ function buildTriGrid(body: BodyMesh): TriGrid {
   const cellSize = Math.max(avgEdge, 1e-3);
   const tolerance = Math.max(avgEdge * 3, 0.05);
   const cells = new Map<string, TriRec[]>();
+  const byFace = new Map<number, TriRec[]>();
   for (const r of recs) {
     const key = cellKey(r.centroid.x, r.centroid.y, r.centroid.z, cellSize);
     let list = cells.get(key);
     if (!list) cells.set(key, (list = []));
     list.push(r);
+    let own = byFace.get(r.faceId);
+    if (!own) byFace.set(r.faceId, (own = []));
+    own.push(r);
   }
-  return { cellSize, tolerance, cells };
+  return { cellSize, tolerance, cells, byFace };
 }
 
 function triGrid(body: BodyMesh): TriGrid {
@@ -497,22 +508,45 @@ function triGrid(body: BodyMesh): TriGrid {
 
 const scratchTri = new THREE.Triangle();
 const scratchClosest = new THREE.Vector3();
+/** A shipped vertex normal is only trusted this close to the facet's own: a
+ *  body without true normals has them averaged across the very edge sampled. */
+const VERTEX_NORMAL_AGREEMENT = Math.cos(Math.PI / 6);
 
-/** The two faces' outward normals nearest one point on an edge, or null when
- *  fewer than two distinct faces have a triangle within tolerance. Per
- *  faceId, only the closest triangle's normal counts, a curved face's normal
- *  turns along the edge so its nearest triangle is the right one to ask (see
- *  faceNormalWorld for the whole-face average used elsewhere). */
-function facesAtPoint(body: BodyMesh, p: Pt3): { faceIds: [number, number]; normals: [THREE.Vector3, THREE.Vector3] } | null {
+/** The face's surface normal at `at` on `tri`, up to sign: the shipped vertex
+ *  normals interpolated there when they agree with the facet, else the facet's.
+ *  The facet alone is off by half a facet's turn on a curved face. */
+function surfaceNormal(tri: TriRec, at: THREE.Vector3): THREE.Vector3 {
+  if (tri.vn) {
+    const n = THREE.Triangle.getInterpolation(at, tri.a, tri.b, tri.c, tri.vn[0], tri.vn[1], tri.vn[2], new THREE.Vector3());
+    if (n && n.lengthSq() > 1e-12) {
+      n.normalize();
+      if (Math.abs(n.dot(tri.normal)) >= VERTEX_NORMAL_AGREEMENT) return n;
+    }
+  }
+  return tri.normal.clone();
+}
+
+interface FaceHit {
+  faceId: number;
+  dist: number;
+  tri: TriRec;
+  closest: THREE.Vector3;
+}
+
+/** The two faces nearest one point on an edge, each with its surface normal
+ *  there and the triangle it came from, or null when fewer than two distinct
+ *  faces have a triangle within tolerance. */
+function facesAtPoint(
+  body: BodyMesh,
+  p: Pt3,
+): { faceIds: [number, number]; normals: [THREE.Vector3, THREE.Vector3]; tris: [TriRec, TriRec] } | null {
   const grid = triGrid(body);
   if (!grid.cells.size) return null;
   const pv = new THREE.Vector3(p[0], p[1], p[2]);
   const cs = grid.cellSize;
   const cx = Math.floor(pv.x / cs), cy = Math.floor(pv.y / cs), cz = Math.floor(pv.z / cs);
-  // tolerance is ~3 cells by construction (see buildTriGrid), +1 cell of slack
-  // for a sample that lands near a cell boundary.
   const reach = Math.max(1, Math.ceil(grid.tolerance / cs)) + 1;
-  const byFace = new Map<number, { dist: number; normal: THREE.Vector3 }>();
+  const byFace = new Map<number, FaceHit>();
   for (let dx = -reach; dx <= reach; dx++) {
     for (let dy = -reach; dy <= reach; dy++) {
       for (let dz = -reach; dz <= reach; dz++) {
@@ -524,24 +558,119 @@ function facesAtPoint(body: BodyMesh, p: Pt3): { faceIds: [number, number]; norm
           const dist = scratchClosest.distanceTo(pv);
           if (dist > grid.tolerance) continue;
           const prev = byFace.get(t.faceId);
-          if (!prev || dist < prev.dist) byFace.set(t.faceId, { dist, normal: t.normal });
+          if (!prev || dist < prev.dist) byFace.set(t.faceId, { faceId: t.faceId, dist, tri: t, closest: scratchClosest.clone() });
         }
       }
     }
   }
   if (byFace.size < 2) return null;
-  const nearest = [...byFace.entries()].sort((a, b) => a[1].dist - b[1].dist).slice(0, 2);
+  const [h0, h1] = [...byFace.values()].sort((a, b) => a.dist - b.dist) as [FaceHit, FaceHit];
   return {
-    faceIds: [nearest[0]![0], nearest[1]![0]],
-    normals: [nearest[0]![1].normal.clone(), nearest[1]![1].normal.clone()],
+    faceIds: [h0.faceId, h1.faceId],
+    normals: [surfaceNormal(h0.tri, h0.closest), surfaceNormal(h1.tri, h1.closest)],
+    tris: [h0.tri, h1.tri],
   };
 }
 
-/** `count` points along an edge polyline, evenly spaced by arc length,
- *  inset from both ends so a straight edge's two corner points (where a
- *  third face joins in) are never sampled. Null on a degenerate (zero-length,
- *  single-point) polyline. */
-function resampleEdge(pts: readonly Pt3[], count: number): Pt3[] | null {
+/** The direction that leaves the edge at `p` across the face `tri` belongs to:
+ *  in the face's tangent plane, perpendicular to the edge, signed by the
+ *  triangle vertex that stands furthest off the edge. */
+function intoFace(tri: TriRec, normal: THREE.Vector3, p: THREE.Vector3, tangent: THREE.Vector3): THREE.Vector3 | null {
+  const d = tangent.clone().cross(normal);
+  if (d.lengthSq() < 1e-12) return null;
+  d.normalize();
+  let best = 0;
+  for (const v of [tri.a, tri.b, tri.c]) {
+    const s = v.clone().sub(p).dot(d);
+    if (Math.abs(s) > Math.abs(best)) best = s;
+  }
+  if (Math.abs(best) < 1e-9) return null;
+  return best < 0 ? d.negate() : d;
+}
+
+/** How far the face runs from the edge at `p` before it ends, measured along
+ *  `into` in the plane across the edge: the furthest point where that plane
+ *  cuts the face's own triangles, ahead of the edge and not swung further
+ *  sideways than it is ahead (which a far wall of the same face would be).
+ *  Infinity when the plane finds nothing to measure. */
+function faceReach(tris: readonly TriRec[], p: THREE.Vector3, tangent: THREE.Vector3, into: THREE.Vector3, tol: number): number {
+  const lateral = tangent.clone().cross(into);
+  let reach = -Infinity;
+  const s = [0, 0, 0], l = [0, 0, 0], d = [0, 0, 0];
+  for (const t of tris) {
+    const vs = [t.a, t.b, t.c];
+    for (let i = 0; i < 3; i++) {
+      const v = vs[i]!;
+      const x = v.x - p.x, y = v.y - p.y, z = v.z - p.z;
+      d[i] = x * tangent.x + y * tangent.y + z * tangent.z;
+      s[i] = x * into.x + y * into.y + z * into.z;
+      l[i] = x * lateral.x + y * lateral.y + z * lateral.z;
+    }
+    for (let i = 0; i < 3; i++) {
+      const j = (i + 1) % 3;
+      const di = d[i]!, dj = d[j]!;
+      let ss: number, ll: number;
+      if (Math.abs(di) < 1e-9) {
+        ss = s[i]!;
+        ll = l[i]!;
+      } else if (di * dj < 0) {
+        const f = di / (di - dj);
+        ss = s[i]! + (s[j]! - s[i]!) * f;
+        ll = l[i]! + (l[j]! - l[i]!) * f;
+      } else continue;
+      if (ss > reach && Math.abs(ll) <= ss + tol) reach = ss;
+    }
+  }
+  return reach > 0 ? reach : Infinity;
+}
+
+/** How much the face `tri` belongs to curls toward `side` as it leaves the
+ *  edge along `into`, in 1/mm, read off the turn of the shipped normals from
+ *  `p` to the triangle's far vertex. 0 when the mesh has no normals to trust. */
+function faceBend(
+  tri: TriRec,
+  normalAtP: THREE.Vector3,
+  p: THREE.Vector3,
+  tangent: THREE.Vector3,
+  into: THREE.Vector3,
+  side: THREE.Vector3,
+): number {
+  if (!tri.vn) return 0;
+  let far = -1, a = 0;
+  [tri.a, tri.b, tri.c].forEach((v, i) => {
+    const s = v.clone().sub(p).dot(into);
+    if (s > a) { a = s; far = i; }
+  });
+  if (far < 0 || a < 1e-6) return 0;
+  const nv = tri.vn[far]!.clone();
+  if (Math.abs(nv.dot(tri.normal)) < VERTEX_NORMAL_AGREEMENT * nv.length()) return 0;
+  const m = normalAtP.clone().addScaledVector(tangent, -normalAtP.dot(tangent));
+  nv.addScaledVector(tangent, -nv.dot(tangent));
+  if (m.lengthSq() < 1e-12 || nv.lengthSq() < 1e-12) return 0;
+  m.normalize();
+  if (nv.dot(m) < 0) nv.negate();
+  const turn = -Math.atan2(nv.dot(into), nv.dot(m));
+  return (Math.sin(turn) / a) * Math.sign(m.dot(side));
+}
+
+/** True when a polyline's two ends meet: a circle, a slot's whole outline. */
+function isClosedPolyline(pts: readonly Pt3[]): boolean {
+  if (pts.length < 3) return false;
+  let total = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const a = pts[i - 1]!, b = pts[i]!;
+    total += Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+  }
+  const a = pts[0]!, b = pts[pts.length - 1]!;
+  return Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]) <= Math.max(total * 1e-4, 1e-6);
+}
+
+/** `count` points along an edge polyline, evenly spaced by arc length. An open
+ *  one is inset from both ends so a straight edge's two corner points (where
+ *  a third face joins in) are never sampled; a closed one is walked all the way
+ *  round from its first point, without repeating it at the end. Null on a
+ *  degenerate (zero-length) polyline. */
+function resampleEdge(pts: readonly Pt3[], count: number, closed = false): Pt3[] | null {
   const cum: number[] = [0];
   for (let i = 1; i < pts.length; i++) {
     const [x0, y0, z0] = pts[i - 1]!, [x1, y1, z1] = pts[i]!;
@@ -549,13 +678,14 @@ function resampleEdge(pts: readonly Pt3[], count: number): Pt3[] | null {
   }
   const total = cum[cum.length - 1]!;
   if (total < 1e-9) return null;
-  const inset = total * 0.04;
+  const inset = closed ? 0 : total * 0.04;
   const span = total - inset * 2;
   if (span <= 0) return null;
   const out: Pt3[] = [];
   let seg = 0;
   for (let i = 0; i < count; i++) {
-    const target = inset + (count === 1 ? 0.5 : i / (count - 1)) * span;
+    const f = closed ? i / count : count === 1 ? 0.5 : i / (count - 1);
+    const target = inset + f * span;
     while (seg < cum.length - 2 && cum[seg + 1]! < target) seg++;
     const segLen = cum[seg + 1]! - cum[seg]!;
     const t = segLen > 1e-12 ? (target - cum[seg]!) / segLen : 0;
@@ -565,73 +695,110 @@ function resampleEdge(pts: readonly Pt3[], count: number): Pt3[] | null {
   return out;
 }
 
-/** Between 12 and 24 resample points: more for an edge whose own polyline
+/** Between 12 and 64 resample points: more for an edge whose own polyline
  *  already carries more detail (a curved edge), never fewer than 12. */
 function sampleCount(polylineLen: number): number {
-  return Math.min(24, Math.max(12, polylineLen));
+  return Math.min(64, Math.max(12, polylineLen));
 }
 
 /** An edge is still drawable with some samples missing; below this many the
  *  ribbon would be too sparse to read as a fillet, so the whole edge is
- *  dropped instead (sweepBlendGhost also refuses fewer than 2). */
+ *  dropped instead. */
 const MIN_VALID_SAMPLES = 4;
 
-/** A picked edge's own resolved samples, by identity of its `points` array
- *  (stable for the edge's whole gesture, see edgeFaceSamples). The ghost
- *  redraws on every drag tick, but the model it reads doesn't stay the sharp,
- *  pre-feature one: the FIRST accepted preview already shows the blend
- *  applied, and the edge this ghost is meant to sweep no longer exists as a
- *  sharp corner in it. The two faces and their normals are a property of the
- *  ORIGINAL edge though, not of whatever size is currently previewed, so once
- *  resolved they're locked in and reused rather than re-derived against a
- *  model that has moved on. */
-const edgeSampleCache = new WeakMap<readonly Pt3[], EdgeSample[]>();
+export interface EdgeGhostSamples {
+  samples: EdgeSample[];
+  closed: boolean;
+}
 
-/** Every EdgeSample along one picked edge, `normal1` pinned to the SAME
- *  physical face (by faceId) across every sample, or null when the edge's
- *  body is gone, it has fewer than 2 points, or too few samples resolve to
- *  find their two faces to draw a continuous ribbon. A single unresolved
- *  sample (a seam, a T-junction) is skipped on its own rather than voiding
- *  the whole edge, as long as enough of the others come through.
- *  Tangent is a central difference of the (evenly resampled) polyline. */
-function edgeFaceSamples(model: ModelView, edge: BlendGhostEdge): EdgeSample[] | null {
+/** A picked edge's resolved samples, by identity of its `points` array. The
+ *  first accepted preview already shows the blend applied, and the sharp
+ *  corner this ghost sweeps no longer exists in that model, so the faces are
+ *  resolved once, against the model the gesture started on, and reused. */
+const edgeSampleCache = new WeakMap<readonly Pt3[], EdgeGhostSamples>();
+
+/** `from` turned by the rotation that takes tangent `t0` to `t1`, what carries
+ *  an inset sample's wedge out to the edge's true end. */
+function turned(from: Pt3, t0: THREE.Vector3, t1: THREE.Vector3): Pt3 {
+  const q = new THREE.Quaternion().setFromUnitVectors(t0, t1);
+  const v = new THREE.Vector3(from[0], from[1], from[2]).applyQuaternion(q);
+  return [v.x, v.y, v.z];
+}
+
+function unitTangent(a: Pt3, b: Pt3): THREE.Vector3 | null {
+  const t = new THREE.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+  return t.lengthSq() < 1e-12 ? null : t.normalize();
+}
+
+function endSample(point: Pt3, t1: THREE.Vector3 | null, s: EdgeSample): EdgeSample | null {
+  if (!t1) return null;
+  const t0 = new THREE.Vector3(s.tangent[0], s.tangent[1], s.tangent[2]);
+  return { ...s, point, tangent: [t1.x, t1.y, t1.z], into1: turned(s.into1, t0, t1), into2: turned(s.into2, t0, t1) };
+}
+
+/** Every EdgeSample along one picked edge, face 1 pinned to the SAME physical
+ *  face (by faceId) throughout, or null when the edge's body is gone, it has
+ *  fewer than 2 points, or too few samples find their two faces. A single
+ *  unresolved sample (a seam, a T-junction) is skipped on its own. */
+function edgeFaceSamples(model: ModelView, edge: BlendGhostEdge): EdgeGhostSamples | null {
   const cached = edgeSampleCache.get(edge.points);
   if (cached) return cached;
   const body = model.bodies.find((b) => b.id === edge.body);
   if (!body || edge.points.length < 2) return null;
-  const resampled = resampleEdge(edge.points, sampleCount(edge.points.length));
+  const closed = isClosedPolyline(edge.points);
+  const resampled = resampleEdge(edge.points, sampleCount(edge.points.length), closed);
   if (!resampled || resampled.length < 2) return null;
 
+  const grid = triGrid(body);
+  const n = resampled.length;
   let primaryFace: number | null = null;
-  const out: EdgeSample[] = [];
-  for (let i = 0; i < resampled.length; i++) {
+  const samples: EdgeSample[] = [];
+  for (let i = 0; i < n; i++) {
     const p = resampled[i]!;
     const found = facesAtPoint(body, p);
-    if (!found) continue; // this sample alone, not the whole edge
-    let n1: THREE.Vector3, n2: THREE.Vector3;
+    if (!found) continue;
+    let k1: 0 | 1;
     if (primaryFace === null || found.faceIds[0] === primaryFace) {
       primaryFace ??= found.faceIds[0];
-      n1 = found.normals[0];
-      n2 = found.normals[1];
+      k1 = 0;
     } else if (found.faceIds[1] === primaryFace) {
-      n1 = found.normals[1];
-      n2 = found.normals[0];
+      k1 = 1;
     } else {
-      continue; // neither face matches the pinned one, would twist the ribbon
+      continue;
     }
-    const prev = resampled[Math.max(0, i - 1)]!;
-    const next = resampled[Math.min(resampled.length - 1, i + 1)]!;
-    const tangent = new THREE.Vector3(next[0] - prev[0], next[1] - prev[1], next[2] - prev[2]);
-    if (tangent.lengthSq() < 1e-12) continue;
-    tangent.normalize();
-    out.push({
+    const k2 = k1 === 0 ? 1 : 0;
+    const prev = resampled[closed ? (i - 1 + n) % n : Math.max(0, i - 1)]!;
+    const next = resampled[closed ? (i + 1) % n : Math.min(n - 1, i + 1)]!;
+    const tangent = unitTangent(prev, next);
+    if (!tangent) continue;
+    const pv = new THREE.Vector3(p[0], p[1], p[2]);
+    const d1 = intoFace(found.tris[k1], found.normals[k1], pv, tangent);
+    const d2 = intoFace(found.tris[k2], found.normals[k2], pv, tangent);
+    if (!d1 || !d2) continue;
+    const side1 = d2.clone().addScaledVector(d1, -d2.dot(d1));
+    const side2 = d1.clone().addScaledVector(d2, -d1.dot(d2));
+    if (side1.lengthSq() < 1e-12 || side2.lengthSq() < 1e-12) continue;
+    samples.push({
       point: p,
       tangent: [tangent.x, tangent.y, tangent.z],
-      normal1: [n1.x, n1.y, n1.z],
-      normal2: [n2.x, n2.y, n2.z],
+      into1: [d1.x, d1.y, d1.z],
+      into2: [d2.x, d2.y, d2.z],
+      bend1: faceBend(found.tris[k1], found.normals[k1], pv, tangent, d1, side1.normalize()),
+      bend2: faceBend(found.tris[k2], found.normals[k2], pv, tangent, d2, side2.normalize()),
+      reach1: faceReach(grid.byFace.get(found.faceIds[k1]) ?? [], pv, tangent, d1, grid.tolerance),
+      reach2: faceReach(grid.byFace.get(found.faceIds[k2]) ?? [], pv, tangent, d2, grid.tolerance),
     });
   }
-  if (out.length < MIN_VALID_SAMPLES) return null;
+  if (samples.length < MIN_VALID_SAMPLES) return null;
+
+  if (!closed) {
+    const pts = edge.points;
+    const head = endSample(pts[0]!, unitTangent(pts[0]!, pts[1]!), samples[0]!);
+    const tail = endSample(pts[pts.length - 1]!, unitTangent(pts[pts.length - 2]!, pts[pts.length - 1]!), samples[samples.length - 1]!);
+    if (head) samples.unshift(head);
+    if (tail) samples.push(tail);
+  }
+  const out = { samples, closed };
   edgeSampleCache.set(edge.points, out);
   return out;
 }

@@ -2,36 +2,45 @@
 // distance is being dragged, so the handle feels as immediate as Press/Pull's
 // ghost (pressPullTool.ts) instead of waiting on an OCCT round trip per pixel.
 //
-// Geometry, not a picture: at a sample point P along the picked edge, with the
-// edge tangent T and the two adjacent faces' outward normals n1, n2 (both
-// perpendicular to T), the fillet's inscribed circle has its center at the
-// point offset `size` from BOTH face planes on the solid side, i.e. the point x
-// (relative to P) solving x·n1 = -size and x·n2 = -size in the plane
-// perpendicular to T. That is two linear equations in the two unknowns of that
-// plane, solved directly (solve2x2 below), no trig, no iteration. The arc then
-// runs between the two points where the circle touches each face, the short way
-// round; a chamfer's bevel is the straight line between those same two points,
-// offset `size` along each face instead of curving between them.
+// Each cross-section is solved in the plane across the edge, from the wedge the
+// two faces make there: the direction from the edge INTO each face, and how
+// much each face bends away from that direction. Not from face normals: a
+// normal's sign depends on the face's orientation in the B-rep, which the mesh
+// does not reliably carry, and a pair of normals cannot tell a convex corner
+// from a concave one. The wedge can. Convex (material inside the wedge) or
+// concave (air inside it), the rolling ball sits inside the wedge, `size` off
+// both faces. A flat face is a line there and a curved one a circle, so the
+// ball's centre is where two offset lines or circles cross.
 //
-// A degenerate sample (n1 and n2 nearly parallel: a seam, a face that grazes
-// the edge almost flat) has no well-posed wedge to fit a circle into, and
-// voids the WHOLE edge's ghost rather than draw whatever a near-singular solve
-// produces; see the module comment on the caller (viewport/ghosts.ts) for why
-// that caller may see this return null per edge but never per sample.
+// Neither shape is drawn reaching past the end of a face: a round that big has
+// nothing left to sit on, so the section stops growing where the shorter face
+// runs out.
+//
+// A sample with no solution (faces nearly tangent or folded shut, or a ball
+// too big for a hollow face) voids the WHOLE edge's ghost rather than draw
+// whatever a near-singular solve produces.
 
 export type Pt3 = readonly [number, number, number];
 type Vec3 = [number, number, number];
+type V2 = [number, number];
 
-/** One point along a picked edge with what the ghost needs to bend around it:
- *  the direction along the edge and the outward normal of each adjacent face,
- *  world space. Which face is `normal1` vs `normal2` only has to stay the SAME
- *  physical face across every sample of one edge, not any particular one, see
- *  the ribbon connectivity note on sweepBlendGhost. */
+/** One point along a picked edge: the direction along the edge and, for each
+ *  of the two faces meeting there, the unit direction that leaves the edge
+ *  across that face, perpendicular to the edge. `bend` is that face's
+ *  curvature across the edge in 1/mm, positive when it curls toward the other
+ *  face, 0 or absent for a face that runs straight away from the edge. Which
+ *  face is 1 and which is 2 only has to stay the same along one edge, or the
+ *  ribbon twists. */
 export interface EdgeSample {
   readonly point: Pt3;
   readonly tangent: Pt3;
-  readonly normal1: Pt3;
-  readonly normal2: Pt3;
+  readonly into1: Pt3;
+  readonly into2: Pt3;
+  readonly bend1?: number;
+  readonly bend2?: number;
+  /** how far each face runs from the edge before it ends, mm */
+  readonly reach1?: number;
+  readonly reach2?: number;
 }
 
 export type BlendKind = "fillet" | "chamfer";
@@ -41,103 +50,183 @@ export interface GhostGeometry {
   readonly positions: number[];
 }
 
-/** Segments in one fillet arc cross-section. 8 reads as a smooth quarter-circle
- *  at handle scale without being an unreasonable vertex count per edge sample. */
+/** Segments in one fillet arc cross-section. */
 export const ARC_SEGMENTS = 8;
 
 const EPS = 1e-6;
+/** Wedges closer than this to flat or to folded shut are refused. */
+const MIN_WEDGE = (2 * Math.PI) / 180;
 
 function sub(a: Pt3, b: Pt3): Vec3 {
   return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
 }
-function add(a: Vec3, b: Vec3): Vec3 {
+function add(a: Pt3, b: Pt3): Vec3 {
   return [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
 }
-function scale(a: Vec3, s: number): Vec3 {
+function scale(a: Pt3, s: number): Vec3 {
   return [a[0] * s, a[1] * s, a[2] * s];
 }
-function dot(a: Vec3, b: Vec3): number {
+function dot(a: Pt3, b: Pt3): number {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 }
-function cross(a: Vec3, b: Vec3): Vec3 {
-  return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
-}
-function length(a: Vec3): number {
-  return Math.sqrt(dot(a, a));
-}
-function normalize(a: Vec3): Vec3 | null {
-  const l = length(a);
+function normalize(a: Pt3): Vec3 | null {
+  const l = Math.sqrt(dot(a, a));
   return l < EPS ? null : scale(a, 1 / l);
 }
-/** `v` with its component along unit `axis` removed, then renormalized; null
- *  when what's left is too short to mean anything (v was ~parallel to axis). */
-function rejectAndNormalize(v: Vec3, axis: Vec3): Vec3 | null {
+function rejectAndNormalize(v: Pt3, axis: Pt3): Vec3 | null {
   return normalize(sub(v, scale(axis, dot(v, axis))));
 }
 
-/** `v` rotated 90° in the 2D plane, on whichever of the two perpendicular sides
- *  points away from `other` (dot ≤ 0), the in-face direction a chamfer offsets
- *  along: away from the edge, not back across the other face. */
-function perpAwayFrom(v: readonly [number, number], other: readonly [number, number]): [number, number] {
-  const r: [number, number] = [-v[1], v[0]];
-  return r[0] * other[0] + r[1] * other[1] <= 0 ? r : [-r[0], -r[1]];
+const dot2 = (a: V2, b: V2) => a[0] * b[0] + a[1] * b[1];
+const add2 = (a: V2, b: V2): V2 => [a[0] + b[0], a[1] + b[1]];
+const sub2 = (a: V2, b: V2): V2 => [a[0] - b[0], a[1] - b[1]];
+const scale2 = (a: V2, s: number): V2 => [a[0] * s, a[1] * s];
+const len2 = (a: V2) => Math.hypot(a[0], a[1]);
+
+/** One face in the cross-section plane, the edge at the origin: it leaves
+ *  along `dir`, `side` is the unit normal pointing into the wedge, and `bend`
+ *  curls it toward `side`. */
+interface Face2 {
+  dir: V2;
+  side: V2;
+  bend: number;
 }
 
-/** One cross-section across the corner at `sample`: the arc from the tangent
- *  point on face 1 to the tangent point on face 2 (fillet), or just those two
- *  points (chamfer). Null when the two face normals can't bound a real wedge
- *  at this sample (see module comment). */
-function crossSection(sample: EdgeSample, size: number, kind: BlendKind): Vec3[] | null {
-  const T = normalize(sample.tangent as unknown as Vec3);
-  if (!T) return null;
-  const n1 = rejectAndNormalize(sample.normal1 as unknown as Vec3, T);
-  const n2 = rejectAndNormalize(sample.normal2 as unknown as Vec3, T);
-  if (!n1 || !n2) return null;
+/** What a face is to the ball's centre: a line `size` off a flat face, a
+ *  circle `size` off a curved one. */
+type Offset =
+  | { line: true; point: V2; dir: V2 }
+  | { line: false; center: V2; radius: number; faceRadius: number };
 
-  // 2D basis of the plane ⟂ T, built FROM n1 so n1 reads as (1, 0) exactly.
-  const e1 = n1;
-  const e2 = normalize(cross(T, e1));
-  if (!e2) return null;
-  const n2x = dot(n2, e1);
-  const n2y = dot(n2, e2);
-  if (Math.abs(n2y) < EPS) return null; // n1 ≈ ±n2: a flat or spike edge, no wedge
+function offsetOf(f: Face2, size: number): Offset | null {
+  if (Math.abs(f.bend * size) < 1e-4) return { line: true, point: scale2(f.side, size), dir: f.dir };
+  const faceRadius = 1 / Math.abs(f.bend);
+  const center = scale2(f.side, 1 / f.bend);
+  const radius = f.bend > 0 ? faceRadius - size : faceRadius + size;
+  return radius > EPS ? { line: false, center, radius, faceRadius } : null;
+}
 
-  const P = sample.point as unknown as Vec3;
-  const at = (x: number, y: number): Vec3 => add(P, add(scale(e1, x), scale(e2, y)));
+function lineLine(a: Offset & { line: true }, b: Offset & { line: true }): V2[] {
+  const den = a.dir[0] * b.dir[1] - a.dir[1] * b.dir[0];
+  if (Math.abs(den) < EPS) return [];
+  const d = sub2(b.point, a.point);
+  const t = (d[0] * b.dir[1] - d[1] * b.dir[0]) / den;
+  return [add2(a.point, scale2(a.dir, t))];
+}
 
-  if (kind === "chamfer") {
-    const u1 = perpAwayFrom([1, 0], [n2x, n2y]);
-    const u2 = perpAwayFrom([n2x, n2y], [1, 0]);
-    return [at(size * u1[0], size * u1[1]), at(size * u2[0], size * u2[1])];
+function lineCircle(l: Offset & { line: true }, c: Offset & { line: false }): V2[] {
+  const f = sub2(l.point, c.center);
+  const bq = dot2(f, l.dir);
+  const disc = bq * bq - (dot2(f, f) - c.radius * c.radius);
+  if (disc < 0) return [];
+  const s = Math.sqrt(disc);
+  return [-bq - s, -bq + s].map((t) => add2(l.point, scale2(l.dir, t)));
+}
+
+function circleCircle(a: Offset & { line: false }, b: Offset & { line: false }): V2[] {
+  const d = sub2(b.center, a.center);
+  const dist = len2(d);
+  if (dist < EPS || dist > a.radius + b.radius || dist < Math.abs(a.radius - b.radius)) return [];
+  const along = (dist * dist + a.radius * a.radius - b.radius * b.radius) / (2 * dist);
+  const h = Math.sqrt(Math.max(0, a.radius * a.radius - along * along));
+  const u = scale2(d, 1 / dist);
+  const mid = add2(a.center, scale2(u, along));
+  const perp: V2 = [-u[1], u[0]];
+  return [add2(mid, scale2(perp, h)), add2(mid, scale2(perp, -h))];
+}
+
+function crossings(a: Offset, b: Offset): V2[] {
+  if (a.line && b.line) return lineLine(a, b);
+  if (a.line && !b.line) return lineCircle(a, b);
+  if (!a.line && b.line) return lineCircle(b, a);
+  return circleCircle(a as Offset & { line: false }, b as Offset & { line: false });
+}
+
+/** Where the ball touches the face whose offset is `o`. */
+function contact(o: Offset, face: Face2, center: V2, size: number): V2 {
+  if (o.line) return sub2(center, scale2(face.side, size));
+  const out = sub2(center, o.center);
+  return add2(o.center, scale2(out, o.faceRadius / len2(out)));
+}
+
+/** The ball of radius `size` touching both faces, and where it touches each. */
+function rollingBall(f1: Face2, f2: Face2, alpha: number, size: number): { center: V2; touch1: V2; touch2: V2 } | null {
+  const o1 = offsetOf(f1, size);
+  const o2 = offsetOf(f2, size);
+  if (!o1 || !o2) return null;
+  // Of the crossings, the ball is the one nearest where flat faces would put it.
+  const flat: V2 = [size / Math.tan(alpha / 2), size];
+  let center: V2 | null = null;
+  for (const c of crossings(o1, o2)) {
+    if (!center || len2(sub2(c, flat)) < len2(sub2(center, flat))) center = c;
   }
+  if (!center) return null;
+  return { center, touch1: contact(o1, f1, center, size), touch2: contact(o2, f2, center, size) };
+}
 
-  // Fillet: circle of radius `size` tangent to both face planes. Solving
-  // x·(1,0) = -size and x·(n2x,n2y) = -size (Cramer's rule, det = n2y since
-  // n1_2d = (1,0)) gives the center; the arc sweeps from angle 0 (face 1's
-  // tangent point) to atan2(n2y, n2x) (face 2's), the short way by construction.
-  const cx = -size;
-  const cy = (-size * (1 - n2x)) / n2y;
-  const theta = Math.atan2(n2y, n2x);
+/** The point `s` along a face from the edge, following its bend. */
+function alongFace(f: Face2, s: number): V2 {
+  if (Math.abs(f.bend * s) < 1e-6) return scale2(f.dir, s);
+  const a = f.bend * s;
+  return add2(scale2(f.dir, Math.sin(a) / f.bend), scale2(f.side, (1 - Math.cos(a)) / f.bend));
+}
+
+/** One cross-section across the corner at `sample`, from face 1's contact
+ *  point to face 2's: an arc for a fillet, the two points for a chamfer. */
+function crossSection(sample: EdgeSample, wanted: number, kind: BlendKind): Vec3[] | null {
+  const T = normalize(sample.tangent);
+  if (!T) return null;
+  const d1 = rejectAndNormalize(sample.into1, T);
+  const d2 = rejectAndNormalize(sample.into2, T);
+  if (!d1 || !d2) return null;
+  const cosA = Math.max(-1, Math.min(1, dot(d1, d2)));
+  const alpha = Math.acos(cosA);
+  if (alpha < MIN_WEDGE || alpha > Math.PI - MIN_WEDGE) return null;
+  const e2 = rejectAndNormalize(d2, d1);
+  if (!e2) return null;
+  const sinA = Math.sin(alpha);
+  const P = sample.point;
+  const room = Math.min(sample.reach1 ?? Infinity, sample.reach2 ?? Infinity);
+  const size = Math.min(wanted, kind === "chamfer" ? room : room * Math.tan(alpha / 2));
+  if (size < EPS) return null;
+  const to3 = (p: V2): Vec3 => add(P, add(scale(d1, p[0]), scale(e2, p[1])));
+
+  const f1: Face2 = { dir: [1, 0], side: [0, 1], bend: sample.bend1 ?? 0 };
+  const f2: Face2 = { dir: [cosA, sinA], side: [sinA, -cosA], bend: sample.bend2 ?? 0 };
+
+  if (kind === "chamfer") return [to3(alongFace(f1, size)), to3(alongFace(f2, size))];
+
+  // A curved face the ball cannot sit on (it outgrows the face's own round)
+  // still gets the flat-face ghost: the kernel may well build it, on
+  // neighbouring faces this sample knows nothing about.
+  const ball = rollingBall(f1, f2, alpha, size)
+    ?? rollingBall({ ...f1, bend: 0 }, { ...f2, bend: 0 }, alpha, size);
+  if (!ball) return null;
+  const { center } = ball;
+  const u = scale2(sub2(ball.touch1, center), 1 / size);
+  const v = scale2(sub2(ball.touch2, center), 1 / size);
+  const sweep = Math.acos(Math.max(-1, Math.min(1, dot2(u, v))));
+  const sinSweep = Math.sin(sweep);
   const pts: Vec3[] = [];
   for (let i = 0; i <= ARC_SEGMENTS; i++) {
-    const a = (theta * i) / ARC_SEGMENTS;
-    pts.push(at(cx + size * Math.cos(a), cy + size * Math.sin(a)));
+    const s = i / ARC_SEGMENTS;
+    const dir = sinSweep < EPS
+      ? u
+      : add2(scale2(u, Math.sin((1 - s) * sweep) / sinSweep), scale2(v, Math.sin(s * sweep) / sinSweep));
+    pts.push(to3(add2(center, scale2(dir, size))));
   }
   return pts;
 }
 
 /** The ghost mesh for one picked edge: a ribbon lofted between consecutive
- *  samples' cross-sections. `samples` must already agree on which face is
- *  `normal1` across the whole edge (the caller's job, edge topology is what
- *  guarantees only two faces meet it, this module just draws the wedge), or the
- *  ribbon twists. Null when there are fewer than 2 samples, the size is ~0, or
- *  ANY sample is degenerate: one bad sample means the ribbon can't be lofted
- *  past it without a seam, so the whole edge is skipped rather than drawn with
- *  a gap or a twist standing in for "we couldn't tell". */
+ *  samples' cross-sections, and from the last back to the first when `closed`.
+ *  Null when there are fewer than 2 samples, the size is ~0, or ANY sample has
+ *  no solution. */
 export function sweepBlendGhost(
   samples: readonly EdgeSample[],
   size: number,
   kind: BlendKind,
+  closed = false,
 ): GhostGeometry | null {
   if (size < EPS || samples.length < 2) return null;
   const sections: Vec3[][] = [];
@@ -146,6 +235,7 @@ export function sweepBlendGhost(
     if (!cs) return null;
     sections.push(cs);
   }
+  if (closed && samples.length > 2) sections.push(sections[0]!);
   const positions: number[] = [];
   const push3 = (p: Vec3) => positions.push(p[0], p[1], p[2]);
   for (let i = 0; i + 1 < sections.length; i++) {
