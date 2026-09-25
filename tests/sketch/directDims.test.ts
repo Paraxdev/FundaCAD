@@ -1,10 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { applyDrivingDimsDirect, upsertDrivingDim } from "../../src/sketch/directDims";
+import { applyDrivingDimsDirect, drivenBadges, drivingDimFor, upsertDrivingDim } from "../../src/sketch/directDims";
 import type { ResolvedEntity } from "../../src/sketch/snap";
 import type { SketchConstraint } from "../../src/types";
 
 const circle = (id: string, radius: number): ResolvedEntity => ({ type: "circle", id, radius, x: 0, y: 0 });
 const line = (id: string, x2: number, y2: number): ResolvedEntity => ({ type: "line", id, x1: 0, y1: 0, x2, y2 });
+const rect = (id: string, width: number, height: number): ResolvedEntity => ({ type: "rectangle", id, width, height, x: width / 2, y: height / 2 });
 
 describe("applyDrivingDimsDirect", () => {
   // The reported bug: a circle keeps the size it was drawn at, because its
@@ -135,13 +136,58 @@ describe("upsertDrivingDim", () => {
     expect(out.find((k) => k.type === "horizontal")).toBeTruthy();
   });
 
-  // rectangle W/H, line angle, radius, slot length/width, ... : none of these
-  // go through a constraint even inside a live sketch session, so the caller
-  // falls back to entityDims' direct write for them.
-  it("returns null for a field that is not line length or circle diameter", () => {
+  // MO-1: a width typed into a rectangle's label after drawing used to be a
+  // coordinate write, so the next drag undid it and the DOF count never moved.
+  it("turns a rectangle's width and height into driving p2pDistance dims on its own corners", () => {
+    const r = rect("r1", 20, 10);
+    const w = upsertDrivingDim([], r, "width", 42)!;
+    expect(w).toMatchObject([{ type: "p2pDistance", e1: "r1", p1: 1, e2: "r1", p2: 0, value: 42 }]);
+    const h = upsertDrivingDim(w, r, "height", 30)!;
+    expect(h).toHaveLength(2);
+    expect(h[1]).toMatchObject({ type: "p2pDistance", e1: "r1", p1: 0, e2: "r1", p2: 3, value: 30 });
+  });
+
+  it("updates a rectangle side already held by a typed-while-drawing dim instead of adding a second one", () => {
+    const r = rect("r1", 20, 10);
+    const existing: SketchConstraint[] = [{ type: "p2pDistance", e1: "r1", p1: 1, e2: "r1", p2: 2, value: 10, id: "c4" }];
+    const out = upsertDrivingDim(existing, r, "height", 12)!;
+    expect(out).toEqual([{ type: "p2pDistance", e1: "r1", p1: 1, e2: "r1", p2: 2, value: 12, id: "c4" }]);
+  });
+
+  it("hands a dragged badge placement to the constraint so the label stays put", () => {
+    const r = { ...rect("r1", 20, 10), dimPlace: { width: { ox: 0, oy: -9 } } } as ResolvedEntity;
+    expect(drivingDimFor(r, "width", 20)).toMatchObject({ place: { ox: 0, oy: -9 } });
+  });
+
+  it("leaves a rotated rectangle's sides as direct writes, the solver holds it rigid", () => {
+    const r = { ...rect("r1", 20, 10), angle: 30 } as ResolvedEntity;
+    expect(upsertDrivingDim([], r, "width", 42)).toBeNull();
+  });
+
+  it("returns null for a field that is not a line length, circle diameter or rectangle side", () => {
     const l = line("l1", 3, 4);
     expect(upsertDrivingDim([], l, "angle" as never, 10)).toBeNull();
     const c = circle("c1", 5);
     expect(upsertDrivingDim([], c, "radius" as never, 10)).toBeNull();
+  });
+});
+
+describe("drivenBadges", () => {
+  it("names the rectangle sides a driving dim holds, whichever corner pair it uses", () => {
+    const ents = [rect("r1", 20, 10), rect("r2", 5, 5)];
+    const cons: SketchConstraint[] = [
+      { type: "p2pDistance", e1: "r1", p1: 2, e2: "r1", p2: 3, value: 20 },
+      { type: "p2pDistance", e1: "r2", p1: 1, e2: "r2", p2: 2, value: 5, driven: true },
+    ];
+    expect([...drivenBadges(ents, cons)]).toEqual(["r1:width"]);
+  });
+});
+
+describe("applyDrivingDimsDirect on a rectangle", () => {
+  it("resizes the side and holds corner 0 where it was", () => {
+    const ents = [rect("r1", 20, 10)];
+    const cons: SketchConstraint[] = [{ type: "p2pDistance", e1: "r1", p1: 1, e2: "r1", p2: 0, value: 42 }];
+    expect(applyDrivingDimsDirect(ents, cons)).toBe(true);
+    expect(ents[0]).toMatchObject({ width: 42, height: 10, x: 21, y: 5 });
   });
 });

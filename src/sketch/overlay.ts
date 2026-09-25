@@ -812,8 +812,9 @@ export function dimensionLineObjects(
   plane: SketchPlane,
   extraSegs: [THREE.Vector2, THREE.Vector2][] = [],
   color: number = DIM_COLOR,
+  skip?: ReadonlySet<string>,
 ): THREE.Object3D[] {
-  const segs = [...dimensionSegments(ents), ...extraSegs];
+  const segs = [...dimensionSegments(ents, skip), ...extraSegs];
   if (!segs.length) return [];
   const pts: THREE.Vector3[] = [];
   for (const [a, b] of segs) pts.push(plane.to3D(a.x, a.y), plane.to3D(b.x, b.y));

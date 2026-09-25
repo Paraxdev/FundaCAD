@@ -209,12 +209,12 @@ function commitSketchDim(row: { key: string; index: number; field: string }, raw
   const copy = resolved[row.index];
   if (!copy) return null;
   adopt(row.key, m.unit);
-  // A line's length / a circle's diameter drive the solver elsewhere (see
-  // SketchMode.editDimension); routing this edit the same way keeps whatever
-  // else is pinned to that entity (a coincident endpoint, say) intact instead
-  // of sliding just the one coordinate entityDims' write() touches. Anything
-  // else (rectangle W/H, line angle, ...) has no such constraint to bypass and
-  // stays a direct coordinate write.
+  // A line's length, a circle's diameter and a rectangle's width/height drive
+  // the solver elsewhere (see SketchMode.editDimension); routing this edit the
+  // same way keeps whatever else is pinned to that entity (a coincident
+  // endpoint, a corner on the origin) intact instead of sliding just the
+  // coordinates entityDims' write() touches. The rest (slot, polygon) has no
+  // such constraint to bypass and stays a direct coordinate write.
   const driven = upsertDrivingDim(f.constraints ?? [], copy, row.field as DimField, m.value);
   if (driven) {
     const solve = store.headlessSolve;

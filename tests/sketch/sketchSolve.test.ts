@@ -11,6 +11,7 @@ vi.mock("@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url", () => ({
 }));
 
 import { compileAndSolve, constraintIndexOf } from "../../src/sketch/sketchSolve";
+import { drivingDimFor } from "../../src/sketch/directDims";
 import { breakLink } from "../../src/sketch/modify";
 import { rectCorners } from "../../src/sketch/region";
 import type { ResolvedEntity } from "../../src/sketch/snap";
@@ -533,5 +534,27 @@ describe("SK-6: a corner pinned to the Origin stays put under an unrelated dim",
     const outRect = r.entities.find((e) => e.id === "r1") as { x: number; y: number };
     expect(outRect.x).toBeCloseTo(25, 6);
     expect(outRect.y).toBeCloseTo(10, 6);
+  });
+});
+
+describe("a rectangle's typed width and height hold its free corner (MO-1)", () => {
+  // The reported sketch: one corner on the fixed origin point, width and height
+  // typed into their labels afterwards. As coordinate writes they left 2 DOF and
+  // grew about the centre, pulling the pinned corner off the origin.
+  const pinned = (): ResolvedEntity[] => [
+    { type: "rectangle", id: "r1", x: 10, y: 10, width: 20, height: 20 },
+    { type: "point", id: "o", x: 0, y: 0, construction: true },
+  ];
+  const fix: SketchConstraint = { type: "fix", e: "o", p: 0 };
+
+  it("is fully defined with its corner still on the origin", async () => {
+    const ents = pinned();
+    const r1 = ents[0]!;
+    const cons = [fix, drivingDimFor(r1, "width", 42)!, drivingDimFor(r1, "height", 42)!].map((c, i) => ({ ...c, id: `k${i}` })) as SketchConstraint[];
+    expect((await compileAndSolve(ents, [fix])).dof).toBe(2);
+    const r = await compileAndSolve(ents, cons);
+    expect(r.ok).toBe(true);
+    expect(r.dof).toBe(0);
+    expect(r.entities[0]).toMatchObject({ x: 21, y: 21, width: 42, height: 42 });
   });
 });
