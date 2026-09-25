@@ -11,8 +11,9 @@ import { isHistoryKey } from "../ui/focus";
 import { onPreviewError } from "../ui/previewError";
 import { getUnit, parseField } from "../ui/units";
 import { commonUnits, measureError, toUnit, tryParseMeasure, unitById, type UnitDef } from "../ui/measure";
+import { valueProblem, type ValueRule } from "../document/numFields";
 
-export interface DimFieldDef {
+export interface DimFieldDef extends ValueRule {
   name: string;
   /** a short word, or the tooltip when `icon` is given */
   label: string;
@@ -21,10 +22,6 @@ export interface DimFieldDef {
   /** The tool reads the raw text itself (a size name, a parameter expression),
    *  so the box does not judge it. */
   free?: boolean;
-  /** Only a value above zero means anything, a radius or a scale. */
-  positive?: boolean;
-  atLeast?: number;
-  integer?: boolean;
 }
 
 /** An on/off switch in the box, beside Confirm and Cancel.
@@ -113,6 +110,7 @@ export class DimInput {
    *  typed. The typed one is shown first, it is the one the user can act on. */
   private external: string | null = null;
   private typedProblem: string | null = null;
+  private focusName: string | null = null;
 
   constructor() {
     this.root = document.createElement("div");
@@ -208,6 +206,7 @@ export class DimInput {
     onInput?: () => void,
   ) {
     this.hide();
+    this.focusName = null;
     this.onInput = onInput ?? null;
     this.setClickThrough(false); // every other tool wants a clickable box
     this.onCommit = onCommit;
@@ -344,10 +343,20 @@ export class DimInput {
   }
 
   private rangeProblem(def: DimFieldDef, v: number): string | null {
-    if (def.integer && Math.abs(v - Math.round(v)) > 1e-9) return `${def.label} must be a whole number`;
-    if (def.positive && !(v > 0)) return `${def.label} must be more than 0`;
-    if (def.atLeast !== undefined && v < def.atLeast) return `${def.label} must be at least ${def.atLeast}`;
-    return null;
+    return valueProblem(def.label, def, v);
+  }
+
+  /** Judge the named field the way Tab and Enter do, for a tool that acts on
+   *  a key before the box sees it. Says why and keeps the text when it cannot
+   *  be used. */
+  accepts(name: string): boolean {
+    const f = this.fields.find((x) => x.def.name === name);
+    const problem = f ? this.fieldProblem(f) : null;
+    if (!problem) return true;
+    this.setTypedProblem(problem);
+    f!.input.focus();
+    f!.input.select();
+    return false;
   }
 
   private parse(f: Field): number | null {
@@ -387,9 +396,6 @@ export class DimInput {
     if (this.toggleBtn) this.toggleBtn.textContent = label;
   }
 
-  /** Focus + select the first field. show() calls it; tools whose flow keeps
-   *  clicking the canvas while the box stays open must call it again after each
-   *  click (the click blurs the input, and typing would silently go nowhere). */
   /** Takes a field out of the box without rebuilding it, so what the user has
    *  typed in the others survives. */
   setFieldHidden(name: string, hidden: boolean) {
@@ -400,9 +406,19 @@ export class DimInput {
     if (wrap) wrap.style.display = hidden ? "none" : "";
   }
 
+  /** Focus + select the first field, or the one `focusField` chose. show()
+   *  calls it; tools whose flow keeps clicking the canvas while the box stays
+   *  open must call it again after each click (the click blurs the input, and
+   *  typing would silently go nowhere). */
   focus() {
-    const f = this.fields[0];
+    const f = this.fields.find((x) => x.def.name === this.focusName && !x.hidden) ?? this.fields[0];
     if (f && this.active) { f.input.focus(); f.input.select(); }
+  }
+
+  /** Make `name` the field typing goes to for this showing. */
+  focusField(name: string) {
+    this.focusName = name;
+    this.focus();
   }
 
   private onKey(e: KeyboardEvent, field: Field) {

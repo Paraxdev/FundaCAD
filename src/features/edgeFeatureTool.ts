@@ -25,6 +25,7 @@ import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore, RebuildState } from "../document/store";
+import { featureValueRule } from "../document/numFields";
 import type { Feature, ParamTarget, Selector } from "../types";
 import { midMatchTol, polylineMid, edgeSelectorFrom } from "../viewport/edgeMatch";
 import { pickScope, type PickScope } from "../viewport/pickScope";
@@ -827,7 +828,7 @@ export class EdgeFeatureTool {
     // The label names the bound parameter, not just the field, so dragging
     // doesn't look like an ordinary literal edit it silently isn't.
     const field = this.paramRef ? { ...this.field, label: `${this.field.label}·${this.paramRef}` } : this.field;
-    this.dim.show([{ ...field, kind: "length", positive: true }], () => this.commit(), () => this.cancel(),
+    this.dim.show([{ ...field, kind: "length", ...featureValueRule(this.kind, this.field.name) }], () => this.commit(), () => this.cancel(),
       this.kind === "fillet"
         ? {
             label: this.continuity,
@@ -1238,9 +1239,12 @@ export class EdgeFeatureTool {
     // field) never sees it. Nothing is lost there: fillet and chamfer each
     // show exactly ONE field, so tabbing between fields was already a no-op
     // that only had the side effect of locking the field against the drag.
+    // The box's check on what was typed is not skipped with it: a value it
+    // refuses stays put with its reason, and nothing flips.
     if (e.key === "Tab" && this.phase === "drag") {
       e.preventDefault();
       e.stopImmediatePropagation();
+      if (!this.dim.accepts(this.field.name)) return;
       this.flipKind();
     }
   }

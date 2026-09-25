@@ -34,6 +34,7 @@
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore } from "../document/store";
+import { featureValueRule } from "../document/numFields";
 import type { Axis3, Feature, Selector, Vec3 } from "../types";
 import { DimInput } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
@@ -168,11 +169,11 @@ export class PatternTool {
       kind === "linear"
         ? [
             { name: "spacing", label: "Spacing", kind: "length" },
-            { name: "count", label: "Copies", kind: "count", integer: true, atLeast: MIN_COUNT },
+            { name: "count", label: "Copies", kind: "count", ...featureValueRule("patternLinear", "count") },
           ]
         : [
             { name: "angle", label: "Angle", kind: "angle" },
-            { name: "count", label: "Copies", kind: "count", integer: true, atLeast: MIN_COUNT },
+            { name: "count", label: "Copies", kind: "count", ...featureValueRule("patternCircular", "count") },
           ],
       () => this.commitSoon(),
       () => this.cancel(),

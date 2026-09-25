@@ -66,10 +66,11 @@ interface Probe {
   ends: boolean[];
   commits: number;
   sent: { dz: number; sized: boolean }[];
+  scales: number[];
 }
 
 function probe(at: [number, number, number], opts: { rebuild?: boolean; reopen?: () => MoveTarget | null } = {}): Probe {
-  const p: Probe = { target: null as unknown as MoveTarget, began: 0, ends: [], commits: 0, sent: [] };
+  const p: Probe = { target: null as unknown as MoveTarget, began: 0, ends: [], commits: 0, sent: [], scales: [] };
   const c = new THREE.Vector3(...at);
   p.target = {
     frame: WORLD_FRAME,
@@ -84,6 +85,7 @@ function probe(at: [number, number, number], opts: { rebuild?: boolean; reopen?:
     commit: (c): MoveCommit => {
       p.commits++;
       p.sent.push({ dz: c.values.dz, sized: c.sized });
+      p.scales.push(c.scale.z);
       return { id: null, rebuild: opts.rebuild ?? false };
     },
     end: (restore) => { p.ends.push(restore); },
@@ -267,6 +269,39 @@ describe("a typed move", () => {
     pointer(canvas, "pointerup", 40);
     typeAndEnter("-2");
     expect(a.sent).toEqual([{ dz: -2, sized: false }]);
+  });
+
+  const typeInto = (el: HTMLInputElement, text: string) => {
+    el.value = text;
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  };
+  const scaleField = () =>
+    [...document.querySelectorAll<HTMLInputElement>(".dim-input input")].find((i) =>
+      i.closest("label")?.textContent?.includes("Scale"))!;
+  /** The Z cube stands past the arrow's tip, at SCALE_AT gizmo units. */
+  const clickZCube = (canvas: HTMLCanvasElement) => {
+    pointer(canvas, "pointerdown", 79);
+    pointer(canvas, "pointerup", 79);
+  };
+
+  it("puts typing in the Scale field after a cube click, and scales along that cube", () => {
+    const { a, canvas } = setup();
+    clickZCube(canvas);
+    flushFrame();
+    expect(document.activeElement).toBe(scaleField());
+    typeInto(scaleField(), "3");
+    expect(a.sent).toEqual([{ dz: 0, sized: true }]);
+    expect(a.scales).toEqual([3]);
+  });
+
+  it("refuses a distance typed into Move while only a cube is picked, pointing at Scale", () => {
+    const { a, tool, canvas } = setup();
+    clickZCube(canvas);
+    typeAndEnter("-2");
+    expect(a.commits).toBe(0);
+    expect(tool.active).toBe(true);
+    expect(problem()).toMatch(/Scale/);
   });
 
   it("with no arrow picked, stays open and says so instead of closing on nothing", () => {
