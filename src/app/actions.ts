@@ -22,6 +22,11 @@ const KEEPS_PICK = new Set([
   "toggle-xray", "toggle-wireframe", "zebra", "curvature", "draft-analysis", "shortcut-help",
 ]);
 
+/** Commands that act on a body selection. Picking a body raises the Move gizmo
+ *  by itself and toolBusy() counts it, so without standing it down first these
+ *  refused silently whenever a body was selected, see Engine.dropBodyGizmo. */
+const BODY_VERBS = new Set(["mirror", "pattern-linear", "pattern-circular"]);
+
 /** The single dispatch point shared by the ribbon, the keymap, the command
  *  palette and every context menu. */
 export function createActions(e: Engine): (action: string) => void {
@@ -97,6 +102,7 @@ export function createActions(e: Engine): (action: string) => void {
     // they are dispatched from the inventory rather than as three switch arms
     // that would differ only in a string (features/booleanOps.ts).
     const boolOp = booleanOpOfAction(action);
+    if (boolOp || BODY_VERBS.has(action)) e.dropBodyGizmo();
     if (boolOp) return void e.starters.startBoolean(boolOp);
 
     switch (action) {

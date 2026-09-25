@@ -11,6 +11,8 @@ vi.mock("../../src/ui/choice", async (orig) => ({
 
 import { createFeatureStarters, type FeatureStartersDeps } from "../../src/features/featureStarters";
 import { resetTreePicks, routeTreeClick } from "../../src/ui/treePick";
+import { createActions } from "../../src/app/actions";
+import type { Engine } from "../../src/app/engine";
 
 let frames: (() => void)[] = [];
 const flushFrame = () => {
@@ -84,5 +86,28 @@ describe("Mirror names its targets", () => {
     r.starters.startMirror();
     await settle();
     expect(r.addFeature.mock.calls[0]![0]).toMatchObject({ type: "mirror", bodies: ["body1"] });
+  });
+});
+
+describe("body commands with a body selected", () => {
+  // Picking a body raises the Move gizmo, which reads as busy, so the ribbon's
+  // Mirror and Pattern did nothing at all for a selected body.
+  it.each(["mirror", "pattern-linear", "boolean-union"])("%s stands the selection's gizmo down first", (action) => {
+    const order: string[] = [];
+    const act = createActions({
+      sketch: { active: false },
+      starters: {
+        startMirror: () => order.push("start"),
+        startPattern: () => order.push("start"),
+        startBoolean: () => order.push("start"),
+      },
+      tools: { section: { picking: false, active: false } },
+      dropBodyGizmo: () => order.push("drop"),
+      toolBusy: () => false,
+      setStatus: vi.fn(),
+      lastAction: null,
+    } as unknown as Engine);
+    act(action);
+    expect(order).toEqual(["drop", "start"]);
   });
 });
