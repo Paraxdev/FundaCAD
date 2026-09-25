@@ -75,13 +75,12 @@ describe("the plugins this build offers", () => {
     }
   });
 
-  it("installs from the alpha release, never the Python beta's", () => {
-    // The engine runs plugin geometry as components, which the alpha release
-    // carries from the same commit as its host. The beta's bundles are the
-    // Python halves, built on the legacy branch.
-    expect(RELEASE_TAG).toBe("alpha");
+  it("installs from the rolling beta release", () => {
+    // The engine runs plugin geometry as components, which the beta release
+    // carries from the same commit as its host.
+    expect(RELEASE_TAG).toBe("beta");
     for (const p of officialPlugins()) {
-      expect(p.url).toBe(`${RELEASES}alpha/${p.asset}`);
+      expect(p.url).toBe(`${RELEASES}beta/${p.asset}`);
     }
   });
 });

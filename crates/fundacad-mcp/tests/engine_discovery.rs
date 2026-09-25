@@ -117,7 +117,7 @@ fn a_command_line_splits_the_way_a_shell_would() {
 
 #[test]
 fn only_an_app_built_with_the_rust_engine_is_started_as_one() {
-    // A Python beta build ignores `--engine` and opens a window, which is
+    // A Python engine build ignores `--engine` and opens a window, which is
     // not an engine however long the MCP server waits for LISTENING.
     let dir = tempfile::tempdir().unwrap();
     let rust = dir.path().join("rust.exe");

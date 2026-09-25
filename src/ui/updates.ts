@@ -1,5 +1,5 @@
 // In-app updates via tauri-plugin-updater: the packaged app checks the rolling
-// release's latest.json baked into its config (alpha/latest.json) and offers a
+// release's latest.json baked into its config (beta/latest.json) and offers a
 // one-click restart-and-update.
 // Only meaningful where the updater can actually replace the install, the NSIS
 // install on Windows, the .app on macOS, the AppImage on Linux, so the Rust
@@ -22,7 +22,7 @@ async function updatesSupported(): Promise<boolean> {
 }
 
 /** the packaged app's version ("dev" in a plain-browser session). CI stamps
- *  packaged alpha builds 1.0.<run>; local builds carry tauri.conf.json's 1.0.0. */
+ *  packaged beta builds 1.0.<run>; local builds carry tauri.conf.json's 1.0.0. */
 export async function appVersion(): Promise<string> {
   if (!isTauri()) return "dev";
   try {

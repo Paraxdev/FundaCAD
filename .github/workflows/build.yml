@@ -1,4 +1,4 @@
-# Cross-platform build + bundle for FundaCAD 1.0 alpha: Tauri 2 around the Rust
+# Cross-platform build + bundle for FundaCAD 1.0 beta: Tauri 2 around the Rust
 # geometry engine (docs/ENGINE.md), which runs as a worker process of the
 # same executable.
 #
@@ -6,9 +6,9 @@
 # the 7.8.1 sources and builds them statically into the binary. So this
 # workflow has no brew, vcpkg or apt OCCT step.
 #
-# `build-alpha` + `release-alpha` publish the rolling `alpha` release and its
-# update feed from `main`. The Python engine's beta lives on the `legacy`
-# branch, with its own copy of this workflow and its own `beta` release.
+# `build-beta` + `release-beta` publish the rolling `beta` release and its
+# update feed from `main`. The retired Python engine is frozen on the `legacy`
+# branch, whose last build is the `legacy-final` release.
 #
 # Scope: x86_64 Linux, Apple Silicon macOS, x86_64 Windows. (No Intel-mac / linux-arm64.)
 
@@ -66,7 +66,7 @@ jobs:
       - name: The app ships no plugin code
         run: node scripts/check-no-plugin-code.mjs
 
-  # The alpha build (docs/ENGINE.md section 6), on three platforms. The
+  # The beta build (docs/ENGINE.md section 6), on three platforms. The
   # engine is a worker process of the same executable, and there is no Python
   # in the bundle at all.
   #
@@ -74,7 +74,7 @@ jobs:
   # compiled from source into the binary on each platform, twenty minutes cold,
   # and a pull request is already told whether the engine compiles by the
   # `rust-geom` job.
-  build-alpha:
+  build-beta:
     needs: [test, rust-geom]
     permissions:
       contents: write # tauri-action may attach artifacts to a draft release
@@ -147,19 +147,19 @@ jobs:
         shell: bash
         run: |
           node -e "
-            for (const f of ['./src-tauri/tauri.conf.json', './src-tauri/tauri.alpha.conf.json']) {
+            for (const f of ['./src-tauri/tauri.conf.json', './src-tauri/tauri.beta.conf.json']) {
               if (require(f).bundle.resources) { console.error(f + ' bundles resources'); process.exit(1); }
             }
           "
 
-      # Rolling alpha versioning, 1.0.<run_number>: the Rust engine is the
-      # major upgrade, against the Python beta's 0.2.
+      # Rolling beta versioning, 1.0.<run_number>: the Rust engine is the
+      # major upgrade, against the retired Python engine's 0.2.
       #
-      # No `-alpha` suffix: tauri's msi target refuses a version whose
+      # No `-beta` suffix: tauri's msi target refuses a version whose
       # pre-release identifier is not numeric ("optional pre-release identifier
       # in app version must be numeric-only"), so it fails the Windows leg
       # outright and NSIS silently rewrites it to 0 in VIProductVersion. The
-      # tag, the title and the update feed say alpha instead.
+      # tag, the title and the update feed say beta instead.
       - name: Stamp rolling version
         shell: bash
         run: |
@@ -170,7 +170,7 @@ jobs:
       - name: Disable updater artifacts when they could not be trusted
         uses: ./.github/actions/updater-artifacts
         with:
-          config: src-tauri/tauri.alpha.conf.json
+          config: src-tauri/tauri.beta.conf.json
           signing-key: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
 
       # Plugin bundles for this release, built from the same commit as the
@@ -202,7 +202,7 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         uses: actions/upload-artifact@v4
         with:
-          name: fundacad-alpha-plugins
+          name: fundacad-beta-plugins
           retention-days: 7
           if-no-files-found: error
           path: dist-plugins/plugin-*.zip
@@ -220,7 +220,7 @@ jobs:
           CMAKE_POLICY_VERSION_MINIMUM: "3.5"
           NO_STRIP: true
         with:
-          args: --verbose --config src-tauri/tauri.alpha.conf.json
+          args: --verbose --config src-tauri/tauri.beta.conf.json
 
       # Checked against the bytes rather than the arguments: `engine_attach` is
       # the IPC command the webview reaches the engine through
@@ -263,12 +263,12 @@ jobs:
         uses: ./.github/actions/deb-gtk-depends
 
       # A week, the cap tests/build/artifactRetention.test.ts holds, so the
-      # alpha release can be republished from them by hand.
+      # beta release can be republished from them by hand.
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: fundacad-alpha-${{ matrix.platform }}
+          name: fundacad-beta-${{ matrix.platform }}
           retention-days: 7
           if-no-files-found: warn
           path: |
@@ -283,26 +283,26 @@ jobs:
             src-tauri/target/release/fundacad.exe
             src-tauri/target/release/bundle/**/*.sig
 
-  # Rolling "alpha" pre-release.
+  # Rolling "beta" pre-release, the Rust engine.
   #
   # Its own concurrency group and its own tag, moved in place, never deleted.
   #
-  # ITS OWN latest.json, on its own release. The updater endpoint is baked into
-  # the binary at build time (tauri.conf.json points at alpha/latest.json), and
-  # a beta install, built on `legacy`, reads the beta feed and can never be
-  # offered a build of this one.
-  # That separation has to come from the endpoint and not from the version:
-  # 1.0.x is NEWER than the beta's 0.2.x, so a beta install that ever read this
-  # manifest would take it. Section 6's own answer, publish no manifest at all,
-  # was rejected because a rolling build that cannot roll is one people install
-  # once and never update; tests/security/updater.test.ts pins the pair.
+  # The updater endpoint is baked into the binary at build time
+  # (tauri.conf.json points at beta/latest.json). Installs of the retired Python
+  # engine read the same feed, and 1.0.x is newer than their 0.2.x, so they move
+  # to this build too, which is intended. Section 6's own answer, publish no
+  # manifest at all, was rejected because a rolling build that cannot roll is
+  # one people install once and never update; tests/security/updater.test.ts
+  # pins the endpoint.
   #
-  # Its own plugin bundles, built by build-alpha from the same commit as the
+  # Its own plugin bundles, built by build-beta from the same commit as the
   # engine whose plugin host runs their geometry components. The app installs
-  # plugins from this release, not the beta's (RELEASE_TAG in
-  # src/plugins/index.ts), and the beta never reads this one.
-  release-alpha:
-    needs: build-alpha
+  # plugins from this release (RELEASE_TAG in src/plugins/index.ts).
+  #
+  # The retired `alpha` release is kept for a transition period and gets a copy
+  # of this release's latest.json, see the end of the publish step.
+  release-beta:
+    needs: build-beta
     if: >-
       (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
       && github.ref == 'refs/heads/main'
@@ -310,7 +310,7 @@ jobs:
     permissions:
       contents: write
     concurrency:
-      group: release-alpha
+      group: release-beta
       cancel-in-progress: false
     env:
       GH_TOKEN: ${{ github.token }}
@@ -322,7 +322,7 @@ jobs:
       # By pattern, so only this build's installers and bundles reach dist/.
       - uses: actions/download-artifact@v4
         with:
-          pattern: fundacad-alpha-*
+          pattern: fundacad-beta-*
           path: dist
 
       - name: Assemble latest.json
@@ -330,7 +330,7 @@ jobs:
         run: |
           set -euo pipefail
           v="1.0.${{ github.run_number }}"
-          base="https://github.com/${{ github.repository }}/releases/download/alpha"
+          base="https://github.com/${{ github.repository }}/releases/download/beta"
           d="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           jq -n --arg v "$v" --arg d "$d" '{version:$v, pub_date:$d, platforms:{}}' > latest.json
           add() { # $1 = updater platform key, $2 = updater bundle path
@@ -345,7 +345,7 @@ jobs:
           add darwin-aarch64 "$(find dist -name '*.app.tar.gz' | head -1)"  # macos-14 runners are arm64
           cat latest.json
 
-      - name: Publish rolling alpha release
+      - name: Publish rolling beta release
         shell: bash
         run: |
           set -euo pipefail
@@ -358,8 +358,8 @@ jobs:
           # src/plugins/index.ts). Without them every offered plugin is a 404.
           grep -q 'plugin-' <<<"$files" \
             || { echo "::error::no plugin bundles to publish"; exit 1; }
-          # Updates in place, never delete and recreate: a beta release that
-          # was recreated once stayed gone for two hours.
+          # Updates in place, never delete and recreate: a release that was
+          # recreated once stayed gone for two hours.
 
           # A manifest pointing installed copies at bundles they will reject is
           # worse than none.
@@ -382,17 +382,19 @@ jobs:
 
           # The warning section 6 calls not optional, and it comes first
           # because a reader who stops after the first screen has to have read
-          # it. Everything below it is the same shape as the beta's notes.
+          # it.
           cat > notes.md <<'WARN'
           > ### Read this first
           >
-          > **This is the new Rust geometry engine, and it is less tested than
-          > the beta.**
+          > **This is FundaCAD 1.0 on the Rust geometry engine.** It replaces
+          > the Python engine, which is retired. Its last build stays on the
+          > [legacy-final](https://github.com/Paraxdev/fundacad/releases/tag/legacy-final)
+          > release and is no longer updated.
           >
-          > - If a model builds differently here than in the beta, a missing
-          >   or changed face, a fillet that refuses, a feature the skipped
-          >   feature banner names, please report it with the file. That
-          >   difference is exactly what this release exists to find.
+          > - If a model builds differently here than it did on the Python
+          >   engine, a missing or changed face, a fillet that refuses, a
+          >   feature the skipped feature banner names, please report it with
+          >   the file.
           > - Plugin geometry runs as sandboxed WebAssembly components. Every
           >   plugin in this repository ships one (3D Printing Toolbox, Screws,
           >   Printing, Texture); a third party plugin without one says so by
@@ -403,18 +405,17 @@ jobs:
           >   MCP host. An installed MCP server plugin is removed on first
           >   start.
           > - Files open in both: documents saved here are ordinary `.funda`
-          >   files and open in the beta, and the other way round.
-          > - The [beta](https://github.com/Paraxdev/fundacad/releases/tag/beta)
-          >   continues on the Python engine, built from the `legacy` branch.
+          >   files and open in the Python engine build, and the other way
+          >   round.
 
           WARN
 
-          printf 'Rolling FundaCAD 1.0 alpha (1.0.%s), Rust engine, rebuilt from `main` at [`%s`](https://github.com/%s/commit/%s).\n' \
+          printf 'Rolling FundaCAD 1.0 beta (1.0.%s), Rust engine, rebuilt from `main` at [`%s`](https://github.com/%s/commit/%s).\n' \
             '${{ github.run_number }}' "${SHA:0:7}" "$R" "$SHA" >> notes.md
 
           # The commit the rolling tag is on RIGHT NOW: the build this replaces.
           # Read BEFORE the tag is moved, further down.
-          prev=$(gh api "repos/$R/git/ref/tags/alpha" --jq .object.sha 2>/dev/null || true)
+          prev=$(gh api "repos/$R/git/ref/tags/beta" --jq .object.sha 2>/dev/null || true)
           commits=''
           if [ -n "$prev" ] && [ "$prev" != "$SHA" ]; then
             commits=$(gh api "repos/$R/compare/$prev...$SHA" \
@@ -451,9 +452,9 @@ jobs:
 
           printf '\n---\n\nUnsigned: Windows SmartScreen needs "More info", then "Run anyway"; macOS may call the app damaged, which `xattr -dr com.apple.quarantine /Applications/FundaCAD.app` clears. [Install notes](https://github.com/%s#install).\n' \
             "$R" >> notes.md
-          printf '\nThis build carries no Python runtime, so it is a fraction of the beta download.\n' >> notes.md
+          printf '\nThis build carries no Python runtime, so it is a fraction of the size of the Python engine builds.\n' >> notes.md
           if [ "$SELF_UPDATES" = yes ]; then
-            printf '\nInstalled alpha copies update themselves from this release, and only from this one. A beta install never sees it.\n' >> notes.md
+            printf '\nInstalled copies update themselves from this release, copies of the retired alpha included.\n' >> notes.md
           else
             printf '\nThis build does not update itself, so take a new installer from this page when you want a newer one.\n' >> notes.md
           fi
@@ -462,26 +463,26 @@ jobs:
           # so the release attached to it never stops existing. GitHub refuses
           # this token a tag move across a commit that changes a workflow file,
           # so a refused move keeps the old tag and still publishes this build.
-          gh api -X PATCH "repos/$R/git/refs/tags/alpha" -f sha="$SHA" -F force=true \
-            || gh api -X POST "repos/$R/git/refs" -f ref=refs/tags/alpha -f sha="$SHA" \
-            || { gh api "repos/$R/git/refs/tags/alpha" >/dev/null 2>&1 \
-                   && echo "::warning::the alpha tag could not move to $SHA (a workflow file changed), the installers are still this build"; } \
-            || { echo "::error::the alpha tag is missing and could not be created"; exit 1; }
+          gh api -X PATCH "repos/$R/git/refs/tags/beta" -f sha="$SHA" -F force=true \
+            || gh api -X POST "repos/$R/git/refs" -f ref=refs/tags/beta -f sha="$SHA" \
+            || { gh api "repos/$R/git/refs/tags/beta" >/dev/null 2>&1 \
+                   && echo "::warning::the beta tag could not move to $SHA (a workflow file changed), the installers are still this build"; } \
+            || { echo "::error::the beta tag is missing and could not be created"; exit 1; }
 
-          TITLE='FundaCAD 1.0 alpha, Rust engine (rolling)'
-          if gh release view alpha --repo "$R" >/dev/null 2>&1; then
-            gh release edit alpha --repo "$R" --prerelease \
+          TITLE='FundaCAD 1.0 beta, Rust engine (rolling)'
+          if gh release view beta --repo "$R" >/dev/null 2>&1; then
+            gh release edit beta --repo "$R" --prerelease \
               --title "$TITLE" --notes-file notes.md
           else
-            gh release create alpha --repo "$R" --prerelease \
+            gh release create beta --repo "$R" --prerelease \
               --title "$TITLE" --notes-file notes.md
           fi
 
           # Binaries first, latest.json LAST, so the manifest on the release
           # only ever names files that are already up.
-          gh release upload alpha --repo "$R" --clobber $files
+          gh release upload beta --repo "$R" --clobber $files
           if [ "$SELF_UPDATES" = yes ]; then
-            gh release upload alpha --repo "$R" --clobber latest.json
+            gh release upload beta --repo "$R" --clobber latest.json
           else
             echo "latest.json withheld (see the warning above); the installers above are complete"
           fi
@@ -489,16 +490,28 @@ jobs:
           # Retire assets from older builds. Their filenames carry the version,
           # so they do not get clobbered by name and would otherwise pile up.
           keep=$(for f in $files latest.json; do basename "$f"; done | sort -u)
-          gh release view alpha --repo "$R" --json assets -q '.assets[].name' \
+          gh release view beta --repo "$R" --json assets -q '.assets[].name' \
             | while read -r asset; do
                 printf '%s\n' "$keep" | grep -qxF "$asset" \
-                  || gh release delete-asset alpha "$asset" --repo "$R" --yes || true
+                  || gh release delete-asset beta "$asset" --repo "$R" --yes || true
               done
+
+          # Transition mirror for the retired `alpha` channel. Copies built
+          # before the rename read alpha/latest.json and install plugins from
+          # the alpha release, so that release is left as it is and only gets
+          # this same manifest, whose URLs and signatures name this beta
+          # release's assets. An alpha copy updates into a build that reads the
+          # beta feed, and never needs the alpha release again.
+          # To drop the mirror once the alpha installs have moved over: delete
+          # this block, then `gh release delete alpha --cleanup-tag --yes`.
+          if [ "$SELF_UPDATES" = yes ] && gh release view alpha --repo "$R" >/dev/null 2>&1; then
+            gh release upload alpha --repo "$R" --clobber latest.json
+          fi
 
   # Browser end-to-end checks for the imported-assembly Browser tree.
   #
   # Deliberately NON-GATING: nothing `needs:` this job, so a browser flake can
-  # never block an alpha publish. That matters here because a green build
+  # never block a beta publish. That matters here because a green build
   # auto-publishes to users who auto-update, and browser e2e is the classic
   # flaky surface.
   #
@@ -573,7 +586,7 @@ jobs:
   # it. It compiles OpenCASCADE 7.8.1 from source through the occt-sys crate,
   # which is long on a cold runner and short once target/OCCT is cached, so the
   # static kernel gets its own cache keyed on the crate that builds it. It gates
-  # the alpha build: red here means the engine is broken.
+  # the beta build: red here means the engine is broken.
   rust-geom:
     runs-on: ubuntu-22.04
     steps:

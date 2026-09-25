@@ -111,9 +111,9 @@ fn app_name() -> &'static str {
 }
 
 /// Whether `path` is an app built with the Rust engine, which answers
-/// `--engine --ws`. A Python beta build ignores `--engine` and opens a
+/// `--engine --ws`. A Python engine build ignores `--engine` and opens a
 /// window, so it is recognised by the IPC command only the Rust build
-/// registers, the same test the alpha CI job applies to its bundle.
+/// registers, the same test the beta CI job applies to its bundle.
 pub fn is_rust_engine_app(path: &Path) -> bool {
     const MARKER: &[u8] = b"engine_attach";
     std::fs::read(path).is_ok_and(|bytes| bytes.windows(MARKER.len()).any(|w| w == MARKER))

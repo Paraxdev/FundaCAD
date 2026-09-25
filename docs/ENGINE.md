@@ -2,8 +2,8 @@
 
 The Funda Engine is FundaCAD's geometry engine: Rust, OpenCASCADE 7.8.1
 statically linked, built into the same executable as the app. It ships as
-`main`'s rolling 1.0 alpha. The sidecar, the previous engine, lives on the
-`legacy` branch, which keeps publishing the beta.
+`main`'s rolling 1.0 beta. The sidecar, the previous engine, is retired and
+frozen on the `legacy` branch, whose last build is the `legacy-final` release.
 
 Related: [ARCHITECTURE.md](ARCHITECTURE.md) (what exists today),
 [PROTOCOL.md](PROTOCOL.md) (the wire contract the engine honours),
@@ -106,8 +106,8 @@ not a prerequisite.
   textures or printers. The `featureTypes`, `exporters` and `shapeGenerators`
   manifest keys carry the plugin's own vocabulary, and the manifest key
   `geometryWasm` names the component; a plugin whose bundle carries only the
-  beta's own manifest key runs on the sidecar alone until it ships a
-  component.
+  sidecar's own manifest key runs on the retired sidecar alone until it ships
+  a component.
 
 #### The plugin component, in detail
 
@@ -231,7 +231,7 @@ use for them).
 - **CI.** The `rust-geom` job caches `target/OCCT`, runs
   `cargo test --workspace --features fundacad-engine/ws`, every golden check,
   and the app shell's tests (`src-tauri`, including the container seam); it
-  gates the alpha build.
+  gates the beta build.
 - **Hygiene.** `scripts/check-repo-hygiene.sh` applies to Rust too.
 
 ### 5.1 Golden files
@@ -277,101 +277,100 @@ in the `rust-geom` job.
   installed rather than compare a stand in (CI installs Arial and Times New
   Roman; Consolas has no Linux package).
 
-## 6. The `alpha` rolling release
+## 6. The `beta` rolling release
 
-The sidecar lives on the `legacy` branch, which keeps publishing the rolling
-`beta` release and `beta/latest.json` from its own copy of `build.yml`, and
-the Funda Engine is `main`, which publishes this rolling `alpha`. Alpha
-rather than beta because the Funda Engine is the less tested of the two. The
-workflow on `main` has no beta jobs at all.
+The Funda Engine is `main`, which publishes the rolling `beta` release and
+`beta/latest.json`. It was published as `alpha` while the sidecar still
+published the beta from the `legacy` branch. The sidecar is retired now:
+`legacy` publishes nothing, and its last build is the permanent
+`legacy-final` release, which carries no `latest.json`.
 
-A second rolling release beside `beta`, on the tag `alpha`. Two jobs in
-`.github/workflows/build.yml`, `build-alpha` and `release-alpha`, with
-their own `concurrency.group` (`release-alpha`), their own rolling tag
-moved in place rather than deleted, their own `latest.json` and the same
-old-asset sweep. What makes the bundle:
+Two jobs in `.github/workflows/build.yml`, `build-beta` and `release-beta`,
+with their own `concurrency.group` (`release-beta`), a rolling tag moved in
+place rather than deleted, a `latest.json` and an old-asset sweep. What makes
+the bundle:
 
 - The engine is a worker process of the same executable, reached over Tauri
   IPC (`src/geometry/transport.ts`).
-- `src-tauri/tauri.alpha.conf.json` on top of `tauri.conf.json` for the
+- `src-tauri/tauri.beta.conf.json` on top of `tauri.conf.json` for the
   release bundle settings and the MCP server beside the app. Neither declares
   a resource, so no sidecar runtime can be bundled, and the job checks the
   finished binary for the `engine_attach` command and the bundles for any
   sidecar runtime, so what shipped is a fact about the bytes rather than
   about the arguments.
-- Title: `FundaCAD 1.0 alpha, Funda Engine (rolling)`.
+- Title: `FundaCAD 1.0 beta, Rust engine (rolling)`.
 - Release notes open with the warning, which is not optional: this is the
-  Funda Engine and less tested than the beta, anything that builds differently
-  from the beta is worth a report, plugin geometry runs only for plugins that
-  ship a WebAssembly component (PrintToolbox so far), the beta continues on
-  the sidecar from `legacy`, and files open in both.
+  Funda Engine and the sidecar is retired, with its last build on
+  `legacy-final`, anything that builds differently from the sidecar is worth
+  a report, plugin geometry runs as WebAssembly components, and files open in
+  both.
 
 ### 6.1 The updater endpoint
 
-**Decided: its own feed, at its own endpoint, baked into its own build.** A
-rolling build that cannot update itself is one people install once and never
-update again, so there is no world where the alpha ships with no manifest at
-all.
+**Decided: a feed at a fixed endpoint, baked into the build.** A rolling
+build that cannot update itself is one people install once and never update
+again, so there is no world where the beta ships with no manifest at all.
 
 The endpoint is compiled into the binary (`tauri.conf.json` on `main`), so
 which feed a copy reads is settled when it is built and can never change
 afterwards:
 
-- a beta build reads `releases/download/beta/latest.json`, which only the
-  `release` job writes, and only on `legacy`;
-- an alpha build reads `releases/download/alpha/latest.json`, which
-  only `release-alpha` writes, and only on `main`.
+- a build of `main` reads `releases/download/beta/latest.json`, which only
+  `release-beta` writes;
+- a sidecar build from `legacy` reads the same `beta/latest.json`. It is
+  `0.2.x` and the Funda Engine is `1.0.x`, so those installs move to the
+  Funda Engine, which is intended;
+- a build from the `alpha` days reads `releases/download/alpha/latest.json`.
+  For a transition period `release-beta` writes the same manifest there too,
+  naming the beta's assets, so those installs move over and read the beta
+  feed from then on. The comment on that block in the workflow says how to
+  drop it.
 
-Neither job touches the other's release, and the two builds download their
-artifacts by pattern (`fundacad-beta-*`, `fundacad-alpha-*`) so one run's
-installers cannot be published to the other's page. `tests/security/updater.
-test.ts` holds the pair apart.
-
-The separation has to be the endpoint and cannot be the version: the alpha
-is `1.0.x` and the beta is `0.2.x`, so a beta install that ever read the
-alpha manifest would happily take it.
+`tests/security/updater.test.ts` pins the endpoint to the beta feed and keeps
+the alpha one out of every config.
 
 ### 6.2 The version
 
 `1.0.<run number>`: the Funda Engine is the major upgrade, so it is 1.0 (the
 base version in `package.json`, `src-tauri/Cargo.toml` and
 `src-tauri/tauri.conf.json` is `1.0.0`), and the title says `FundaCAD 1.0
-alpha`.
+beta`.
 
-No `-alpha` or `-rust` suffix. Tauri's msi target refuses a version whose
+No `-beta` or `-rust` suffix. Tauri's msi target refuses a version whose
 pre-release identifier is not numeric ("optional pre-release identifier in app
 version must be numeric-only and cannot be greater than 65535 for msi target"),
 so a suffix fails the Windows leg outright, and the NSIS target silently
 rewrites a non-numeric field to `0` in `VIProductVersion`. The tag, the title,
-the notes and the feed say alpha instead.
+the notes and the feed say beta instead.
 
-`tauri.alpha.conf.json` must not declare a `version`: CI stamps the one in
+`tauri.beta.conf.json` must not declare a `version`: CI stamps the one in
 `tauri.conf.json`, and a version in the merged config would override the stamp.
 
 ### 6.3 The CSP
 
 `connect-src` keeps `ipc:` and `http://ipc.localhost` and nothing else. The
-beta grants `ws://127.0.0.1:8765 http://127.0.0.1:8765` because its frontend
+sidecar build granted `ws://127.0.0.1:8765 http://127.0.0.1:8765` because its frontend
 talks to the sidecar over a loopback WebSocket; this engine is a stdio
 worker reached over Tauri IPC, so the webview never opens a socket.
 `tests/security/csp.test.ts` pins the tightened policy.
 
-### 6.4 Before the first alpha release is cut
+### 6.4 Notes on the release
 
-- The `build-alpha` job compiles OpenCASCADE from source on all three
+- The `build-beta` job compiles OpenCASCADE from source on all three
   runners, about twenty minutes cold, cached at `src-tauri/target/OCCT`; the
   Linux leg installs `cmake`, which `.github/actions/linux-deps` deliberately
   leaves out.
 - The updater is still off everywhere. `tauri.conf.json` carries upstream's
-  minisign pubkey, so both release jobs withhold `latest.json` and say so in
-  the notes. Generating a keypair turns both feeds on at once.
-- Plugin bundles ARE published to this release, packed by `build-alpha` with
+  minisign pubkey, so `release-beta` withholds `latest.json`, and with it the
+  alpha mirror, and says so in the notes. Generating a keypair turns the feed
+  on.
+- Plugin bundles ARE published to this release, packed by `build-beta` with
   their geometry components and nothing else, and the app installs from it
   (`RELEASE_TAG` in `src/plugins/index.ts`). Every plugin in the repository
-  ships a component. The beta and the alpha share one plugin directory on a
-  machine that has both, and a bundle the alpha installed has no sidecar
-  half, so the beta cannot build that plugin's features until the beta's own
-  bundle is installed again.
+  ships a component. A sidecar build shares one plugin directory with this
+  one on a machine that has both, and a bundle the Funda Engine installed has
+  no sidecar half, so the sidecar build cannot build that plugin's features.
+  `legacy-final` keeps the sidecar's own bundles.
 - `fundacad-mcp` is linked into the app and runs through `fundacad --mcp`, its
   private engine is the app started with `--engine --ws`, and the app's worker
   serves a loopback WebSocket beside its stdio pipe for live sessions

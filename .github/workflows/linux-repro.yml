@@ -1,4 +1,4 @@
-# Diagnostic only: rebuilds one corner chamfer on Linux, in the shipped alpha
+# Diagnostic only: rebuilds one corner chamfer on Linux, in the shipped beta
 # and in builds of this commit, with the phase trace on, to tell a GCC
 # optimiser problem from a slow path.
 name: linux-repro
@@ -83,14 +83,14 @@ jobs:
           p.kill()
           PY
 
-      - name: Run the released alpha's engine
+      - name: Run the released beta's engine
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           FUNDACAD_MCP_MODE: standalone
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq libwebkit2gtk-4.1-0 libayatana-appindicator3-1 > /dev/null
-          gh release download alpha -R ${{ github.repository }} -p "*_amd64.deb"
+          gh release download beta -R ${{ github.repository }} -p "*_amd64.deb"
           dpkg-deb -x *_amd64.deb app
           find app -type f -perm -u+x | head -n 20
           mcp=$(find app -name fundacad-mcp -type f | head -n1)

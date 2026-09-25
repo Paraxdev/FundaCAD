@@ -44,11 +44,10 @@ import type { RunOutcome } from "./runner/host";
  *  copy decides which of them get the label. */
 const RELEASES = "https://github.com/Paraxdev/fundacad/releases/download/";
 
-/** The release the assets hang off, the rolling alpha the installers and the
+/** The release the assets hang off, the rolling beta the installers and the
  *  update feed use. Its bundles carry the geometry components the engine's
- *  plugin host runs, built from the same commit as the host. The Python beta
- *  installs from its own `beta` release, which only the legacy branch writes. */
-export const RELEASE_TAG = "alpha";
+ *  plugin host runs, built from the same commit as the host. */
+export const RELEASE_TAG = "beta";
 
 export interface OfficialPlugin {
   manifest: PluginManifest;

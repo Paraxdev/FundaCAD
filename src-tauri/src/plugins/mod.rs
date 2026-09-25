@@ -96,7 +96,7 @@ pub struct Installed {
     pub official: bool,
     /// Whether the files on disk hold the geometry component the manifest
     /// names, read off the directory each time it is listed. False for a bundle
-    /// built for the Python beta, which this engine cannot run.
+    /// built for the retired Python engine, which this engine cannot run.
     #[serde(default)]
     pub component: bool,
 }

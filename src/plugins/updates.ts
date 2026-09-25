@@ -2,9 +2,10 @@
 //
 // Two reasons, and the second is why this exists. A newer version is the usual
 // one. The other is a bundle whose version says it is current and whose files
-// cannot run on this engine: the Python beta and this app share one plugin
-// directory, the beta publishes bundles with only a Python half, and this
-// app's bundle of the SAME version carries the component its engine runs.
+// cannot run on this engine: the retired Python engine build and this app share
+// one plugin directory, that build installed bundles with only a Python half,
+// and this app's bundle of the SAME version carries the component its engine
+// runs.
 // Compared by version alone such a bundle would look up to date forever, while
 // every feature it owns fails to build.
 
