@@ -1,5 +1,14 @@
 # FundaCAD
 
+> [!WARNING]
+> **This branch is no longer updated.** The Python geometry engine is retired,
+> and `legacy` is kept only as a record of it. FundaCAD continues on the Rust
+> engine, built from [`main`](https://github.com/Paraxdev/fundacad/tree/main)
+> and published as the
+> [rolling beta](https://github.com/Paraxdev/fundacad/releases/tag/beta).
+> The last Python engine installers stay on the
+> [legacy-final release](https://github.com/Paraxdev/fundacad/releases/tag/legacy-final).
+
 Free, open source parametric CAD for 3D printing. Sketch it, constrain it, model
 it, and export STEP, STL or 3MF. Windows, macOS and Linux.
 
@@ -44,10 +53,11 @@ the goal is it to make this a personalized version of a CAD with features I like
 
 ## Install
 
-Prebuilt installers for Windows, macOS (Apple Silicon) and Linux are on the
-[beta release](https://github.com/Paraxdev/fundacad/releases/tag/beta), rebuilt
-from `main` on every green build. These builds do not update themselves, so come
-back to that page for a newer one.
+The last Python engine installers for Windows, macOS (Apple Silicon) and Linux
+are on the
+[legacy-final release](https://github.com/Paraxdev/fundacad/releases/tag/legacy-final),
+and nothing newer will be built from this branch. For current builds, take the
+Rust engine from the [beta release](https://github.com/Paraxdev/fundacad/releases/tag/beta).
 
 On Windows there is also a **portable zip** (`…_x64_portable.zip`). Unzip it
 anywhere and run `fundacad.exe`: no installer, no admin rights, and several builds
