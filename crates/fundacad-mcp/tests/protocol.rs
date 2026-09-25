@@ -248,7 +248,63 @@ fn a_pattern_naming_a_missing_feature_is_reported_before_a_build() {
     assert!(r.text.contains("hole9") && r.text.contains("not in the document"), "{}", r.text);
 }
 
+#[test]
+fn a_circular_pattern_axis_naming_no_datum_is_reported_before_a_build() {
+    let rs = drive(&[
+        (
+            "feature_add",
+            json!({"feature": {"id": "pc1", "type": "patternCircular", "count": 6, "angle": 360,
+                               "axis": "ax9"}}),
+        ),
+        (
+            "feature_add",
+            json!({"feature": {"id": "ax9", "type": "datumAxis", "origin": [0, 0, 0], "dir": [0, 0, 1]}}),
+        ),
+    ]);
+    assert!(rs[0].text.contains("ax9") && rs[0].text.contains("datumAxis in the document"), "{}", rs[0].text);
+    assert!(rs[1].text.contains("ax9") && rs[1].text.contains("comes AFTER it"), "{}", rs[1].text);
+}
+
 // --- geometry (spawns the engine) --------------------------------------------
+
+/// A box drawn from its corner: turned about world Z most copies of its hole
+/// land off it, which the build says, and turned about a line through its
+/// middle every copy cuts.
+#[test]
+fn a_circular_pattern_about_a_placed_axis_cuts_every_copy() {
+    let base = [
+        (
+            "feature_add",
+            json!({"feature": {"id": "sk1", "type": "sketch", "plane": "XY", "entities": [
+                {"type": "rectangle", "width": 60, "height": 60, "x": 30, "y": 30, "angle": 0}]}}),
+        ),
+        ("feature_add", json!({"feature": {"id": "ex1", "type": "extrude", "sketch": "sk1", "distance": 10,
+                                           "operation": "new"}})),
+        (
+            "feature_add",
+            json!({"feature": {"id": "hole1", "type": "hole", "diameter": 4, "extent": "through",
+                               "face": {"kind": "face", "by": "nearest", "point": [45, 30, 10],
+                                        "body": "body1"},
+                               "points": [[45, 30, 10]]}}),
+        ),
+    ];
+    let with = |axis: Value| {
+        let mut steps: Vec<(&str, Value)> = base.to_vec();
+        steps.push((
+            "feature_add",
+            json!({"feature": {"id": "pc1", "type": "patternCircular", "count": 6, "angle": 360,
+                               "axis": axis, "features": ["hole1"]}}),
+        ));
+        steps.push(("build", json!({})));
+        drive(&steps).pop().expect("the build")
+    };
+    let world = with(json!("Z"));
+    assert!(world.text.contains("warning (pc1): 5 of 6 copies miss body1"), "{}", world.text);
+    let placed = with(json!({"origin": [30, 30, 0], "dir": [0, 0, 1]}));
+    assert!(!placed.is_error && !placed.text.contains("warning"), "{}", placed.text);
+    let want = 36000.0 - 6.0 * std::f64::consts::PI * 4.0 * 10.0;
+    assert!(placed.text.contains(&format!("vol {want:.0}")), "{}", placed.text);
+}
 
 #[test]
 fn a_hole_patterned_by_feature_builds_six_holes() {

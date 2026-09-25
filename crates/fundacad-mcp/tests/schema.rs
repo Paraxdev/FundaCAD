@@ -151,6 +151,22 @@ fn every_pattern_says_it_can_repeat_features() {
 }
 
 #[test]
+fn every_pattern_lists_the_bodies_it_can_repeat() {
+    for kind in ["patternLinear", "patternCircular", "patternRect"] {
+        let body = s::schema_text(Some(kind));
+        assert!(body.contains("  bodies: optional list of body ids"), "{kind}: {body}");
+    }
+}
+
+#[test]
+fn a_circular_pattern_says_how_to_place_its_axis() {
+    let body = s::schema_text(Some("patternCircular"));
+    assert!(body.contains("  axisRef: optional Selector"), "{body}");
+    assert!(body.contains("\"origin\"") && body.contains("datumAxis"), "{body}");
+    assert!(body.contains("drawn from a corner"), "{body}");
+}
+
+#[test]
 fn an_unknown_type_is_answered_with_the_list_rather_than_nothing() {
     let body = s::schema_text(Some("extrood"));
     assert!(body.contains("extrude") && body.contains("No feature type"));

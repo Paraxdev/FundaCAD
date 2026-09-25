@@ -12,7 +12,7 @@ mod face_anchor;
 mod hole;
 pub mod import;
 mod loft_sweep;
-mod pattern;
+pub mod pattern;
 mod primitives;
 mod revolve;
 pub mod sketch;

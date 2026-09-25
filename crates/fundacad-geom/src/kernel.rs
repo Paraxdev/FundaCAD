@@ -248,6 +248,13 @@ pub fn rotated(s: &Shape, r: [f64; 3]) -> KResult<Shape> {
     run("BRepBuilderAPI_Transform (rotate)", || format!("shape={}, euler_deg={r:?}", describe(s)), || ffi::bo_rotated(s.raw(), r[0], r[1], r[2]))
 }
 
+/// Turned `deg` degrees about the line through `origin` along `dir`.
+pub fn rotated_about(s: &Shape, origin: [f64; 3], dir: [f64; 3], deg: f64) -> KResult<Shape> {
+    let [ox, oy, oz] = origin;
+    let [dx, dy, dz] = dir;
+    run("BRepBuilderAPI_Transform (rotate about)", || format!("shape={}, origin={origin:?}, dir={dir:?}, deg={deg}", describe(s)), || ffi::bo_rotated_about(s.raw(), ox, oy, oz, dx, dy, dz, deg))
+}
+
 pub fn translated(s: &Shape, d: [f64; 3]) -> KResult<Shape> {
     run("BRepBuilderAPI_Transform (translate)", || format!("shape={}, by={d:?}", describe(s)), || ffi::bo_translated(s.raw(), d[0], d[1], d[2]))
 }

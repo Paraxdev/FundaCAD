@@ -377,6 +377,7 @@ feature_struct!(
         count_y: Num,
         spacing_x: Num,
         spacing_y: Num,
+        #[serde(default, skip_serializing_if = "Option::is_none")] bodies: Option<Vec<String>>,
         #[serde(default, skip_serializing_if = "Option::is_none")] features: Option<Vec<String>>,
     }
 );
@@ -385,11 +386,16 @@ feature_struct!(PatternLinear {
     #[serde(default, skip_serializing_if = "Option::is_none")] bodies: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")] features: Option<Vec<String>>,
 });
-feature_struct!(PatternCircular {
-    count: Num, angle: Num, axis: Axis3,
-    #[serde(default, skip_serializing_if = "Option::is_none")] bodies: Option<Vec<String>>,
-    #[serde(default, skip_serializing_if = "Option::is_none")] features: Option<Vec<String>>,
-});
+feature_struct!(
+    /// `axis` is X, Y, Z, a line, or the id of a datum axis above the pattern.
+    /// `axisRef` makes the axis follow an edge or face, with `axis` as the cache.
+    PatternCircular {
+        count: Num, angle: Num, axis: AxisSpec,
+        #[serde(default, skip_serializing_if = "Option::is_none")] axis_ref: Option<Selector>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] bodies: Option<Vec<String>>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] features: Option<Vec<String>>,
+    }
+);
 feature_struct!(SimplifyMesh { tolerance: Num });
 feature_struct!(
     /// `sx`/`sy`/`sz` override `factor` per axis; `about` is held still.
