@@ -370,19 +370,25 @@ feature_struct!(
     }
 );
 
-feature_struct!(PatternRect {
-    count_x: Num,
-    count_y: Num,
-    spacing_x: Num,
-    spacing_y: Num
-});
+feature_struct!(
+    /// `features` repeats those features' cuts and joins instead of a body.
+    PatternRect {
+        count_x: Num,
+        count_y: Num,
+        spacing_x: Num,
+        spacing_y: Num,
+        #[serde(default, skip_serializing_if = "Option::is_none")] features: Option<Vec<String>>,
+    }
+);
 feature_struct!(PatternLinear {
     count: Num, spacing: Num, axis: Axis3,
     #[serde(default, skip_serializing_if = "Option::is_none")] bodies: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")] features: Option<Vec<String>>,
 });
 feature_struct!(PatternCircular {
     count: Num, angle: Num, axis: Axis3,
     #[serde(default, skip_serializing_if = "Option::is_none")] bodies: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")] features: Option<Vec<String>>,
 });
 feature_struct!(SimplifyMesh { tolerance: Num });
 feature_struct!(

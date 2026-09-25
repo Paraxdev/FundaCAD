@@ -22,6 +22,7 @@ mod split;
 mod transform;
 
 pub use boolean::combine;
+pub use pattern::pattern_sources;
 
 use fundacad_core::schema::Feature;
 

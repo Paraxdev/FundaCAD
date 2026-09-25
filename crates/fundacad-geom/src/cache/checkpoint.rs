@@ -216,6 +216,7 @@ pub fn restore(store: &GeomStore, keys: &[String]) -> Option<(usize, Snapshot, M
         diagnostics: state.get("diagnostics").and_then(Value::as_array).cloned().unwrap_or_default(),
         errors,
         id_events,
+        tools: HashMap::new(),
     };
     Some((cp.feat_index + 1, snap, modified))
 }

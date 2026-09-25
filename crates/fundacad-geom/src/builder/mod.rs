@@ -203,7 +203,27 @@ pub struct Ctx {
     pub datum_marks: IndexMap<String, Value>,
     /// Projected sketch entity refresh entries, the Python engine's `projection_refresh.py`.
     pub projections: Vec<Value>,
+    /// The cut or join each feature applied so far, by feature id, which is
+    /// what a feature pattern repeats.
+    pub tools: HashMap<String, Vec<ToolRecord>>,
+    /// Every feature of the document in order, for naming one in a message.
+    pub timeline: Vec<Step>,
     ids: BodyIds,
+}
+
+/// One boolean a feature applied: the tool solid and the bodies it changed.
+#[derive(Clone)]
+pub struct ToolRecord {
+    pub kind: kernel::BoolKind,
+    pub bodies: Vec<String>,
+    pub tool: Shape,
+}
+
+#[derive(Clone)]
+pub struct Step {
+    pub id: String,
+    pub kind: String,
+    pub label: String,
 }
 
 static NEXT_UID: AtomicU64 = AtomicU64::new(0);
@@ -222,6 +242,8 @@ impl Ctx {
             sketch_planes: IndexMap::new(),
             datum_marks: IndexMap::new(),
             projections: Vec::new(),
+            tools: HashMap::new(),
+            timeline: Vec::new(),
             ids: BodyIds::new(None),
         }
     }
@@ -246,6 +268,8 @@ impl Ctx {
             sketch_planes: IndexMap::new(),
             datum_marks: IndexMap::new(),
             projections: Vec::new(),
+            tools: HashMap::new(),
+            timeline: Vec::new(),
             ids: BodyIds::new(None),
         }
     }
@@ -305,6 +329,13 @@ impl Ctx {
             b.shape = shape;
             b.generation = generation;
         }
+    }
+
+    pub fn record_tool(&mut self, feature_id: &str, kind: kernel::BoolKind, bodies: Vec<String>, tool: Shape) {
+        self.tools
+            .entry(feature_id.to_owned())
+            .or_default()
+            .push(ToolRecord { kind, bodies, tool });
     }
 
     pub fn remove_bodies(&mut self, ids: &HashSet<String>) {
@@ -459,6 +490,8 @@ pub struct Snapshot {
     pub diagnostics: Vec<Value>,
     pub errors: Vec<FeatureError>,
     pub id_events: Vec<Event>,
+    /// `Ctx::tools`, empty from a disk checkpoint.
+    pub tools: HashMap<String, Vec<ToolRecord>>,
 }
 
 /// The live state a `Tap` sees after each feature.
@@ -479,6 +512,7 @@ impl State<'_> {
             diagnostics: self.ctx.diagnostics.clone(),
             errors: self.errors.to_vec(),
             id_events: self.ctx.ids.events().to_vec(),
+            tools: self.ctx.tools.clone(),
         }
     }
 }
@@ -714,6 +748,18 @@ fn params_of(doc: &CadDocument) -> HashMap<String, f64> {
         .collect()
 }
 
+/// A snapshot at `at` can be resumed only when it still holds the tool of
+/// every feature before `at` that a feature pattern after it repeats. A disk
+/// checkpoint keeps none, so that document replays from the start.
+fn tools_kept(features: &[Feature], at: usize, tools: &HashMap<String, Vec<ToolRecord>>) -> bool {
+    let before: HashSet<&str> = features[..at].iter().map(Feature::id).collect();
+    features[at..]
+        .iter()
+        .filter_map(features::pattern_sources)
+        .flatten()
+        .all(|src| !before.contains(src.as_str()) || tools.contains_key(src))
+}
+
 /// Replays `doc`. `raw` is the same document as JSON, which is what a
 /// feature's label and references are read from.
 pub fn rebuild(doc: &CadDocument, raw: &Value, watch: &dyn Watch) -> Result<Rebuild, Cancelled> {
@@ -755,6 +801,8 @@ pub fn rebuild_from(
         sketch_planes: IndexMap::new(),
         datum_marks: IndexMap::new(),
         projections: Vec::new(),
+        tools: HashMap::new(),
+        timeline: Vec::new(),
         ids: BodyIds::new(recorded.clone()),
     };
     let raw_features: Vec<Value> = raw
@@ -763,12 +811,24 @@ pub fn rebuild_from(
         .cloned()
         .unwrap_or_default();
     let features: Vec<Feature> = raw_features.iter().map(typed).collect();
+    ctx.timeline = raw_features
+        .iter()
+        .map(|r| Step {
+            id: r.get("id").and_then(Value::as_str).unwrap_or("").to_owned(),
+            kind: r.get("type").and_then(Value::as_str).unwrap_or("").to_owned(),
+            label: label_of(r),
+        })
+        .collect();
     let mut errors: Vec<FeatureError> = Vec::new();
 
     let mut start = 0;
     if let Some((at, snap)) = resume {
-        if at <= features.len() && ctx.ids.restore(&snap.id_events) {
+        if at <= features.len()
+            && tools_kept(&features, at, &snap.tools)
+            && ctx.ids.restore(&snap.id_events)
+        {
             start = at;
+            ctx.tools = snap.tools;
             ctx.bodies = snap.bodies;
             ctx.sketches = snap.sketches;
             ctx.datums = snap.datums;

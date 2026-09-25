@@ -439,6 +439,8 @@ fn drill(
     }
     let after = kernel::volume(&cut);
     ctx.set_shape(body, cut);
+    let body_id = ctx.bodies[body].id.clone();
+    ctx.record_tool(&f.id, BoolKind::Cut, vec![body_id], kernel::compound(&tools));
     if (before - after).abs() < 1e-9 {
         ctx.diagnostics.push(json!({
             "feature_id": f.id,
