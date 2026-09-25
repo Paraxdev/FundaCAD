@@ -223,6 +223,7 @@ export class DocumentStore {
   private redoStack: UndoEntry[] = [];
   private docListeners = new Set<DocListener>();
   private rewindListeners = new Set<() => void>();
+  private openListeners = new Set<() => void>();
   private buildListeners = new Set<BuildListener>();
   private busyListeners = new Set<BusyListener>();
   private metaListeners = new Set<MetaListener>();
@@ -375,6 +376,15 @@ export class DocumentStore {
   private emitRewind() {
     for (const fn of this.rewindListeners) fn();
   }
+  /** Another document took this one's place: an open or a new document, never
+   *  an undo or a replacement of the same document. */
+  onOpen(fn: () => void): () => void {
+    this.openListeners.add(fn);
+    return () => this.openListeners.delete(fn);
+  }
+  private emitOpen() {
+    for (const fn of this.openListeners) fn();
+  }
   get busyState(): BusyState {
     return this.busy;
   }
@@ -498,6 +508,7 @@ export class DocumentStore {
   }
 
   newDocument() {
+    this.emitOpen();
     this.emitRewind();
     this.undoStack = [];
     this.redoStack = [];
@@ -1895,6 +1906,7 @@ export class DocumentStore {
     if (problem) throw new UnreadableDocumentError(problem.reason, problem.detail);
     const parsed = raw as CadDocument;
     for (const w of migrateDocument(parsed)) this.onWarning?.(w);
+    if (!opts.replace) this.emitOpen();
     this.emitRewind();
     if (opts.replace) this.pushUndo();
     else this.undoStack = [];

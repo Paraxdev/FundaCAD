@@ -827,6 +827,20 @@ describe("opening a document starts a history of its own", () => {
     expect(store.canRedo).toBe(true);
   });
 
+  it("tells listeners when another document takes this one's place, and only then", () => {
+    let opened = 0;
+    store.onOpen(() => opened++);
+    store.load(JSON.stringify(docA));
+    store.newDocument();
+    expect(opened).toBe(2);
+    store.addFeature({ id: "x", type: "box", length: 1, width: 1, height: 1 } as Feature);
+    store.undo();
+    store.load(JSON.stringify(docB), { replace: true });
+    expect(opened).toBe(2);
+    expect(() => store.load("{ not json")).toThrow();
+    expect(opened).toBe(2);
+  });
+
   it("a replacement of the same document stays one undoable step", () => {
     store.load(JSON.stringify(docA));
     store.load(JSON.stringify(docB), { replace: true });
