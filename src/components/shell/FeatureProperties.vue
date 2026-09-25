@@ -30,7 +30,7 @@
 // The title is the caller's business, the history heads it with the feature
 // name and the timeline already has the chip you clicked.
 
-import { onUnmounted, ref } from "vue";
+import { onUnmounted, ref, watch } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useBuildValue, useDocValue } from "../../app/useDoc";
 import { featureNotes } from "../../ui/featureNotes";
@@ -47,7 +47,15 @@ import { resolveEntities, resolveRealEntities, toSketchEntity } from "../../sket
 import { entityDims } from "../../sketch/entityDims";
 import { applyDrivingDimsDirect, upsertDrivingDim } from "../../sketch/directDims";
 import { toast } from "../../ui/toast";
-import { featureNumFields, featureWithTarget, readField, type FieldKind } from "../../document/numFields";
+import {
+  featureNumFields,
+  featureValueRule,
+  featureWithTarget,
+  readField,
+  valueProblem,
+  type FieldKind,
+  type ValueRule,
+} from "../../document/numFields";
 import {
   choiceFieldsFor,
   choiceValue,
@@ -361,6 +369,7 @@ const featureRows = useDocValue(() => {
       // both "Sharpness" describes neither, so whoever owns the feature type
       // gets to answer, and the inventory's label is what it falls back to.
       label: fieldLabel(f.type, field, values)?.text ?? label,
+      rule: featureValueRule(f.type, field),
       // An expression is written in CANONICAL units so a file evaluates the
       // same on every machine, which is a fact about it and not a display
       // choice, so the chip states it and is not offered as a picker.
@@ -407,6 +416,16 @@ function previewNumber(row: { key: string; kind: FieldKind }, raw: string): numb
   return m && typeof m !== "string" && m.unit ? m.value : null;
 }
 
+/** The row's own refusal of what was typed, the heads-up box's rule and words
+ *  for the same field. Shown under the row from Enter until the next edit. */
+const typedProblem = ref<{ row: string; message: string } | null>(null);
+watch(() => props.featureId, () => { typedProblem.value = null; });
+
+function rowProblem(key: string): string | null {
+  if (typedProblem.value?.row === key) return typedProblem.value.message;
+  return previewProblemRow.value === key ? previewProblem.value : null;
+}
+
 /** Show what the typed number would build, without committing it.
  *
  *  A value box that only answers on Enter is a value box you have to guess at:
@@ -427,12 +446,13 @@ function previewNumber(row: { key: string; kind: FieldKind }, raw: string): numb
  *  which is what the user asked for by pressing Enter.
  */
 function previewField(
-  row: { key: string; target: ParamTarget; kind: FieldKind },
+  row: { key: string; label: string; target: ParamTarget; kind: FieldKind; rule: ValueRule },
   raw: string,
 ) {
   previewProblemRow.value = row.key;
+  if (typedProblem.value?.row === row.key) typedProblem.value = null;
   const v = previewNumber(row, raw);
-  if (v === null) return;
+  if (v === null || valueProblem(row.label, row.rule, v)) return;
   const next = featureWithTarget(store.document, row.target, v);
   if (!next) return; // unresolvable, or the same value it already holds
   if (previewOpenFor === next.id) {
@@ -480,14 +500,22 @@ function endPreview(committing: boolean) {
 }
 
 function commitField(
-  row: { key: string; target: ParamTarget; kind: FieldKind },
+  row: { key: string; label: string; target: ParamTarget; kind: FieldKind; rule: ValueRule },
   raw: string,
 ): string | null {
   const { key, target, kind } = row;
   const u = unitOf(key, kind);
+  const refuse = (v: number) => {
+    const message = valueProblem(row.label, row.rule, v);
+    typedProblem.value = message ? { row: key, message } : null;
+    return message;
+  };
   const plain = plainNumber(raw);
   if (plain !== null) {
-    store.setTargetValue(target, plain * (u?.factor ?? 1), kind);
+    const v = plain * (u?.factor ?? 1);
+    const no = refuse(v);
+    if (no) return no;
+    store.setTargetValue(target, v, kind);
     return null;
   }
   const m = u ? measure(raw, u, u.dim) : null;
@@ -495,10 +523,13 @@ function commitField(
   // Only a literal that NAMED a unit is claimed here. A measurement that did
   // not name one is a bare expression, and R4 says those are canonical.
   if (m?.unit) {
+    const no = refuse(m.value);
+    if (no) return no;
     store.setTargetValue(target, m.value, kind);
     adopt(key, m.unit);
     return null;
   }
+  typedProblem.value = null;
   return store.setTargetExpr(target, raw, kind);
 }
 </script>
@@ -563,6 +594,6 @@ function commitField(
     :commit="(raw) => commitField(r, raw)"
     :preview="(raw) => previewField(r, raw)"
     :preview-end="endPreview"
-    :problem="previewProblemRow === r.key ? previewProblem : null"
+    :problem="rowProblem(r.key)"
   />
 </template>
