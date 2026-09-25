@@ -30,6 +30,7 @@ import { setPrompt } from "../ui/prompt";
 import type { Axis3, AxisSpec, Feature, PlaneDef, PlaneSpec, Selector, Vec3 } from "../types";
 import { findSelectorAt, replaceSelectorAt } from "./repickReference";
 import { awaitTreePick, treePickRefusal } from "../ui/treePick";
+import { deferPick } from "./deferPick";
 
 export interface FeatureStartersDeps {
   store: DocumentStore;
@@ -192,12 +193,10 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       if (!spec) return;
       const face = target?.kind === "face" ? target.face : null;
       const datumId = target?.kind === "datum" ? target.id : null;
-      // consume this click fully and run on the NEXT frame, so it can't bleed
-      // into the sketch's own first-corner placement.
       e.preventDefault();
       e.stopImmediatePropagation();
       cleanup();
-      requestAnimationFrame(() => onPick(spec, face, datumId));
+      deferPick(viewport.domElement, () => onPick(spec, face, datumId));
     };
     const onEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape") cleanup();
@@ -206,7 +205,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       const spec = pick.kind === "basePlane" ? pick.plane : pick.kind === "datumPlane" ? pick.def : null;
       if (!spec) return treePickRefusal(pick, "a plane, or a face picked in the view");
       cleanup();
-      requestAnimationFrame(() => onPick(spec, null, pick.kind === "datumPlane" ? pick.id : null));
+      deferPick(viewport.domElement, () => onPick(spec, null, pick.kind === "datumPlane" ? pick.id : null));
       return true;
     }, () => cleanup());
     const cleanup = () => {
