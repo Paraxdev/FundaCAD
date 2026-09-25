@@ -96,6 +96,17 @@ struct DraftGaveUp : SectionError {
   explicit DraftGaveUp(const std::string &m) { msg = m; }
 };
 
+enum class Misfit { None, OffFace, AcrossAxis, IntoBody, Mixed };
+
+// The ball does not fit the edge at the asked size. `fits` is the largest
+// share of that size that does, NaN when none does.
+struct TooLarge : SectionError {
+  Misfit why;
+  double fits;
+  gp_Pnt at;
+  TooLarge(Misfit w, double f, const gp_Pnt &p) : why(w), fits(f), at(p) { msg = "the blend does not fit the edge"; }
+};
+
 // Opt needs C++17, which the bridges do not build with.
 template <typename T> struct Opt {
   bool has = false;
@@ -229,7 +240,6 @@ struct Side {
   Handle(Geom_Surface) surf;
   bool planar;
   BRepAdaptor_Curve2d pcurve;
-  Opt<double> limit;
   int inward_sign = 1;
   gp_Vec inward_cached;
   gp_Vec normal_on_edge_cached;
@@ -445,42 +455,6 @@ inline Contacts contacts(const gp_Pnt &Pp, const gp_Vec &T, Sides &sides, int s,
   return out;
 }
 
-inline void face_limits(const gp_Pnt &Pp, const gp_Vec &T, Sides &sides, int s, bool chamfer, double size,
-                        double size2, bool g2) {
-  for (auto &side : sides) side->limit.reset();
-  if (s > 0) return;
-  Contacts c = contacts(Pp, T, sides, s, chamfer, size, size2, g2);
-  double tol = 1e-6;
-  for (int k = 0; k < 2; ++k) {
-    Side &side = *sides[k];
-    if (side.contains(c.Q[k], tol)) continue;
-    double lo = 0.0, hi = 1.0;
-    for (int i = 0; i < 24; ++i) {
-      double mid = 0.5 * (lo + hi);
-      if (side.contains(P(V(c.K) + (V(c.Q[k]) - V(c.K)).Multiplied(mid)), tol))
-        lo = mid;
-      else
-        hi = mid;
-    }
-    double span = c.Q[k].Distance(c.K);
-    if (lo * span > 1e-6) side.limit = std::max(lo * span - std::min(1e-3 * size, 1e-2), 0.5 * lo * span);
-  }
-}
-
-inline bool clamp_to_limits(gp_Pnt Q[2], const gp_Pnt &K, Sides &sides) {
-  bool moved = false;
-  for (int k = 0; k < 2; ++k) {
-    Side &side = *sides[k];
-    double span = Q[k].Distance(K);
-    if (!side.limit || span <= *side.limit) continue;
-    gp_Pnt q = P(V(K) + (V(Q[k]) - V(K)).Multiplied(*side.limit / span));
-    auto got = side.foot(q);
-    Q[k] = got ? got->first : q;
-    moved = true;
-  }
-  return moved;
-}
-
 inline Handle(Geom_Curve) make_conic(const gp_Pnt &Q0, const gp_Pnt &K, const gp_Pnt &Q1, double weight) {
   TColgp_Array1OfPnt poles(1, 3);
   poles.SetValue(1, Q0);
@@ -509,12 +483,10 @@ inline Section section(const gp_Pnt &Pp, const gp_Vec &T, Sides &sides, int s, b
   Handle(Geom_Curve) curve;
   if (chamfer) {
     if (axis != nullptr) clamp_to_axis(Q, Pp, Pp, *axis);
-    clamp_to_limits(Q, Pp, sides);
     curve = GC_MakeSegment(Q[1], Q[0]).Value();
   } else {
     gp_Pnt K = ct.K;
     bool clamped = axis != nullptr && clamp_to_axis(Q, K, Pp, *axis);
-    clamped = clamp_to_limits(Q, K, sides) || clamped;
     double k = conic_weight_scale(profile);
     if (g2 && std::abs(profile) < 1e-12) {
       TColgp_Array1OfPnt poles(1, 5);
@@ -1291,10 +1263,9 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
   if (s > 0) margin = 1.0;
   sides[0]->normal_on_edge_cached = fm.n1;
   sides[1]->normal_on_edge_cached = fm.n2;
-  face_limits(fm.P, fm.T, sides, s, chamfer, size, size2, g2);
-  // A convex edge gets no face limits, so a G2 section whose longer setback
-  // leaves the face would be lofted anyway and cut the body into a shape
-  // nobody asked for, or keep the boolean busy for minutes.
+  // A convex G2 section whose longer setback leaves the face would be lofted
+  // anyway and cut the body into a shape nobody asked for, or keep the boolean
+  // busy for minutes.
   if (g2 && s > 0 && !chamfer) {
     Contacts c = contacts(fm.P, fm.T, sides, s, chamfer, size, size2, g2);
     for (int k = 0; k < 2; ++k)
@@ -1305,20 +1276,90 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
   double fuzz = std::max(tol * 10, 1e-5);
 
   Opt<gp_Ax1> axis = closed ? common_axis(crv, faces, !chamfer) : Opt<gp_Ax1>();
+  if (axis)
+    for (auto &sd : sides) sd->planar = sd->planar || straight_meridian(sd->face);
+  auto set_frame = [&](const Frame &f) {
+    sides[0]->normal_on_edge_cached = f.n1;
+    sides[1]->normal_on_edge_cached = f.n2;
+    if (!chamfer) return;
+    const gp_Vec ns[2] = {f.n1, f.n2};
+    for (int k = 0; k < 2; ++k) {
+      gp_Vec d = ns[k].Crossed(f.T);
+      if (d.Magnitude() < 1e-12) throw err("the edge runs along a face normal");
+      sides[k]->inward_cached = d.Normalized().Multiplied(sides[k]->inward_sign);
+    }
+  };
+  std::vector<Frame> probes;
+  if (closed)
+    for (int k = 0; k < 8; ++k) probes.push_back(frame(t0 + (t1 - t0) * k / 8));
+  else
+    probes.push_back(fm);
+  std::unique_ptr<BRepClass3d_SolidClassifier> body;
+  const bool meridian[2] = {sides[0]->planar, sides[1]->planar};
+  // A fill's ball has to rest on both faces, it hangs in the air past either
+  // one's end and across the axis it reaches through the far wall. A cut's may
+  // run on past a face along that face's surface, carving what lies above it,
+  // but not into the body beyond, which is no corner of this edge. A curved
+  // meridian keeps its surface while the ball rests on the face, past it the
+  // cut carves along its tangent plane at the edge, like a flat face whose
+  // contact runs past its end; on the far side of the tube the ball would land
+  // in the wrong place.
+  auto misfit = [&](double k) {
+    double sz = size * k, sz2 = std::isnan(size2) ? size2 : size2 * k;
+    for (int j = 0; j < 2; ++j) sides[j]->planar = meridian[j];
+    if (axis) {
+      bool on[2] = {false, false}, off[2] = {false, false};
+      for (const Frame &f : probes) {
+        if (sides[0]->planar && sides[1]->planar) break;
+        set_frame(f);
+        Contacts c = contacts(f.P, f.T, sides, s, chamfer, sz, sz2, g2);
+        for (int j = 0; j < 2; ++j)
+          if (!sides[j]->planar) (sides[j]->contains(c.Q[j], fuzz) ? on : off)[j] = true;
+      }
+      for (int j = 0; j < 2; ++j) {
+        if (!off[j]) continue;
+        if (s < 0) return Misfit::OffFace;
+        if (on[j]) return Misfit::Mixed;
+        sides[j]->planar = true;
+      }
+    }
+    for (const Frame &f : probes) {
+      set_frame(f);
+      Contacts c = contacts(f.P, f.T, sides, s, chamfer, sz, sz2, g2);
+      if (s < 0 && axis) {
+        gp_Pnt Q[2] = {c.Q[0], c.Q[1]};
+        if (clamp_to_axis(Q, f.P, f.P, *axis)) return Misfit::AcrossAxis;
+      }
+      for (int j = 0; j < 2; ++j) {
+        if (sides[j]->contains(c.Q[j], fuzz)) continue;
+        if (s < 0) return Misfit::OffFace;
+        if (!body) body.reset(new BRepClass3d_SolidClassifier(shape));
+        body->Perform(c.Q[j], fuzz);
+        if (body->State() == TopAbs_IN) return Misfit::IntoBody;
+      }
+    }
+    return Misfit::None;
+  };
+  Misfit why = misfit(1.0);
+  if (why != Misfit::None) {
+    double lo = 0.0, hi = 1.0;
+    if (misfit(1e-3) == Misfit::None) {
+      lo = 1e-3;
+      for (int i = 0; i < 30; ++i) {
+        check_cancel();
+        double mid = 0.5 * (lo + hi);
+        (misfit(mid) == Misfit::None ? lo : hi) = mid;
+      }
+      why = misfit(hi);
+    }
+    throw TooLarge(why, lo > 0 ? lo : std::nan(""), fm.P);
+  }
+  set_frame(fm);
+
   if (axis) {
     Frame f0 = frame(t0);
-    for (auto &sd : sides) sd->planar = sd->planar || straight_meridian(sd->face);
     sides[0]->normal_on_edge_cached = f0.n1;
     sides[1]->normal_on_edge_cached = f0.n2;
-    // A curved meridian keeps its surface while the ball rests on the face. A
-    // ball too big for it would land on the far side of the tube, so past the
-    // face it carves along the face's tangent plane at the edge, like a flat
-    // face whose contact runs past its end.
-    if (!sides[0]->planar || !sides[1]->planar) {
-      Contacts c = contacts(f0.P, f0.T, sides, s, chamfer, size, size2, g2);
-      for (int k = 0; k < 2; ++k)
-        if (!sides[k]->planar && !sides[k]->contains(c.Q[k], fuzz)) sides[k]->planar = true;
-    }
     Section sec = section(f0.P, f0.T, sides, s, chamfer, size, size2, g2, profile, &*axis, margin);
     BRepBuilderAPI_MakeFace face(sec.wire, true);
     if (face.IsDone()) {
@@ -1658,6 +1699,7 @@ inline TopoDS_Shape combine(const TopoDS_Shape &shape, const std::vector<TopoDS_
   } catch (...) {
   }
   if (solid_count(out) == 0) throw err("at this size the blend removes the whole body");
+  if (solid_count(out) > solid_count(shape)) throw err("at this size the blend cuts the body in pieces");
   std::vector<TopoDS_Shape> all(cut);
   all.insert(all.end(), fuse.begin(), fuse.end());
   if (!sound(out, &shape) || !(kept_base(shape, out, all, false) || kept_base(shape, out, all)))
@@ -1700,7 +1742,9 @@ inline TopoDS_Shape section_blend_once(const TopoDS_Shape &shape, const std::vec
 
 // the Python engine's `section_blend.py` `section_blend`. size2 NaN for none. status 0 built,
 // 1 SectionBlendError (message is its sentence), 2 any other exception (its class),
-// 3 cancelled through `progress`.
+// 3 cancelled through `progress`, 4 the blend does not fit an edge (message is
+// "why fits x y z": fits the largest share of the size that does, -1 when none
+// does, x y z a point on the edge).
 inline std::unique_ptr<TopoDS_Shape> blend_section(const TopoDS_Shape &shape, const TopoDS_Shape &edges, bool chamfer,
                                                    rust::Slice<const double> sizes, double size2, bool g2, bool draft,
                                                    double profile, bool one_shot, const Message_ProgressRange &progress,
@@ -1732,6 +1776,12 @@ inline std::unique_ptr<TopoDS_Shape> blend_section(const TopoDS_Shape &shape, co
   } catch (const secblend::Cancelled &) {
     status = 3;
     message = "cancelled";
+  } catch (const secblend::TooLarge &e) {
+    status = 4;
+    char buf[160];
+    std::snprintf(buf, sizeof buf, "%d %.17g %.17g %.17g %.17g", static_cast<int>(e.why),
+                  std::isnan(e.fits) ? -1.0 : e.fits, e.at.X(), e.at.Y(), e.at.Z());
+    message = buf;
   } catch (const secblend::SectionError &e) {
     status = 1;
     message = e.msg;

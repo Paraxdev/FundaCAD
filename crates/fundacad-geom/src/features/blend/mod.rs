@@ -69,6 +69,63 @@ pub enum SectionErr {
     Internal(String),
     /// The job was cancelled while it ran.
     Cancelled,
+    /// The blend does not fit an edge: why, the largest share of the asked
+    /// size that does, and a point on that edge.
+    TooLarge {
+        why: Misfit,
+        fits: Option<f64>,
+        at: [f64; 3],
+    },
+}
+
+/// blend_section.hxx `Misfit`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Misfit {
+    OffFace,
+    AcrossAxis,
+    IntoBody,
+    Mixed,
+}
+
+impl Misfit {
+    pub fn from_code(code: i32) -> Misfit {
+        match code {
+            2 => Misfit::AcrossAxis,
+            3 => Misfit::IntoBody,
+            4 => Misfit::Mixed,
+            _ => Misfit::OffFace,
+        }
+    }
+}
+
+/// The section build's refusal of a blend too large for its edge, with the
+/// size that fits rounded down so that it still does.
+fn misfit_error(label: &str, body: &str, size: f64, why: Misfit, fits: Option<f64>, at: [f64; 3]) -> Fail {
+    let [x, y, z] = at.map(|c| py_g(py_round(c, 3)));
+    let past = match why {
+        Misfit::OffFace => "it would reach past the end of a face it joins",
+        Misfit::AcrossAxis => "it would reach across the middle of the round and through the far side",
+        Misfit::IntoBody => "it would cut on past a face into the body beyond it",
+        Misfit::Mixed => "it would run off a face on part of the edge only",
+    };
+    let head = format!(
+        "{label} failed on {body}: at {}mm the {} does not fit the edge through ({x}, {y}, {z}), {past}.",
+        py_g(size),
+        label.to_lowercase()
+    );
+    // Right at the limit the ball ends exactly on a face's edge and the kernel
+    // leaves a sliver face there, so the size offered stays a hair below it.
+    let fits = fits.map(|k| k * size - 1e-4).map(|v| {
+        let step = if v >= 1.0 { 100.0 } else { 1000.0 };
+        (v * step).floor() / step
+    });
+    match fits {
+        Some(v) if v > 0.0 => value_err(
+            format!("{head} It fits up to {}mm, so try that or a smaller value.", py_g(v)),
+            Some(BLEND_TOO_LARGE),
+        ),
+        _ => value_err(format!("{head} No size fits it here."), Some(BLEND_HAS_NO_END)),
+    }
 }
 
 /// Stop here when the job was cancelled. The builder drops whatever a
@@ -785,10 +842,16 @@ fn blend_edges(
         let sels = sel_value.as_array().map_or(&[][..], Vec::as_slice);
         let edges = drop_seams(&body_shape, sels, edges, label)?;
         refuse_smooth_edges(&body_shape, &edges, label)?;
+        let misfit: std::cell::Cell<Option<Fail>> = std::cell::Cell::new(None);
         let try_section = |shape: &Shape, es: &[Shape]| -> Option<Shape> {
-            section
-                .and_then(|s| s(shape, es).ok())
-                .filter(|out| still_sharp(out, es).is_empty())
+            match section?(shape, es) {
+                Ok(out) => Some(out).filter(|out| still_sharp(out, es).is_empty()),
+                Err(SectionErr::TooLarge { why, fits, at }) => {
+                    misfit.set(Some(misfit_error(label, &body_name, blend_size, why, fits, at)));
+                    None
+                }
+                Err(_) => None,
+            }
         };
         if section_only {
             match section.map(|s| s(&body_shape, &edges)) {
@@ -809,6 +872,9 @@ fn blend_edges(
                 Some(Err(SectionErr::Value(e))) => return Err(Fail::msg(e)),
                 Some(Err(SectionErr::Internal(name))) => return Err(Fail::Internal(name)),
                 Some(Err(SectionErr::Cancelled)) => return Err(Fail::msg("cancelled")),
+                Some(Err(SectionErr::TooLarge { why, fits, at })) => {
+                    return Err(misfit_error(label, &body_name, blend_size, why, fits, at))
+                }
                 None => return Err(Fail::Internal("TypeError".into())),
             }
         }
@@ -851,6 +917,9 @@ fn blend_edges(
                     report_edge_failures(&mut ctx.diagnostics, fid, &unresolved, &|e| {
                         one_edge_at(&work, e, blend_size).is_ok()
                     });
+                    if let Some(fail) = misfit.take() {
+                        return Err(fail);
+                    }
                     let body = BodyRef {
                         name: &body_name,
                         shape: &work,
@@ -870,7 +939,7 @@ fn blend_edges(
         let new_shape = if overlap::folds_over_itself(&work, &new_shape, blend_size) {
             match try_section(&body_shape, &edges) {
                 Some(built) => built,
-                None => return Err(fold_error(&body_name)),
+                None => return Err(misfit.take().unwrap_or_else(|| fold_error(&body_name))),
             }
         } else {
             new_shape
