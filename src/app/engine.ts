@@ -172,6 +172,11 @@ export interface Engine {
    *  (MoveTool.onUp), so the gizmo this cancels is always an untouched one, and
    *  cancelling leaves the selection it was raised on alone. */
   dropBodyGizmo(): void;
+  /** Raise the Move gizmo on the body selection, what picking a body does. */
+  raiseBodyGizmo(): void;
+  /** Raise it again once the command dropBodyGizmo made way for is escaped,
+   *  while the same bodies are still selected. */
+  restoreBodyGizmo(): void;
   /** True when the current rebuild produced a solid body (something to modify). */
   hasBody(): boolean;
   planePick: boolean;

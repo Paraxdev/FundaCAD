@@ -265,10 +265,7 @@ export function installViewportWiring(e: Engine): void {
     // is one, and arming the gizmo there focused its field, which then kept
     // every later Ctrl+Z and Ctrl+Y for itself (FI-2).
     if (cause === "restore") return;
-    e.tools.move.onClickThrough = (x, y, additive) => {
-      e.viewport.clickThrough(x, y, additive);
-    };
-    e.starters.startMove();
+    e.raiseBodyGizmo();
   };
   // Esc clears the body selection while in Bodies mode. toolOwnsScreen, not
   // toolBusy: the Move gizmo the selection raised cancels on the same key, and

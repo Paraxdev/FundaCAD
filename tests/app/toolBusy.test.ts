@@ -10,7 +10,7 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
-import { createToolBusy } from "../../src/app/toolBusy";
+import { createToolBusy, restoreWhenIdle } from "../../src/app/toolBusy";
 import type { Engine } from "../../src/app/engine";
 
 // isChoiceOpen() is a term of the predicate and reads a store, so the
@@ -91,5 +91,59 @@ describe("dropBodyGizmo", () => {
     const f = fakeEngine({ mode: "bodies" });
     createToolBusy(f.e).dropBodyGizmo();
     expect(f.cancels()).toBe(0);
+  });
+});
+
+describe("restoreWhenIdle", () => {
+  function harness() {
+    const frames: (() => void)[] = [];
+    const docFns = new Set<() => void>();
+    const s = { busy: true, sel: ["body1"] as string[], raised: 0 };
+    const stop = restoreWhenIdle({
+      busy: () => s.busy,
+      selection: () => s.sel,
+      onDocChange: (fn) => { docFns.add(fn); fn(); return () => docFns.delete(fn); },
+      raise: () => { s.raised++; },
+      frame: (fn) => frames.push(fn),
+      cancelFrame: (id) => { frames[id - 1] = () => {}; },
+    });
+    const step = (n = 1) => { for (let i = 0; i < n; i++) frames.shift()?.(); };
+    return { s, step, stop, frames, docChanged: () => [...docFns].forEach((fn) => fn()) };
+  }
+
+  it("raises the gizmo again once the command is escaped with the body still selected", () => {
+    const h = harness();
+    h.step(5);
+    expect(h.s.raised).toBe(0);
+    h.s.busy = false;
+    h.step(3);
+    expect(h.s.raised).toBe(1);
+    expect(h.frames).toHaveLength(0);
+  });
+
+  it("waits out the one idle frame a picker leaves before handing its pick on", () => {
+    const h = harness();
+    h.s.busy = false;
+    h.step();
+    h.s.busy = true;
+    h.step(3);
+    expect(h.s.raised).toBe(0);
+  });
+
+  it("gives up when the selection changes", () => {
+    const h = harness();
+    h.s.sel = [];
+    h.s.busy = false;
+    h.step(3);
+    expect(h.s.raised).toBe(0);
+    expect(h.frames).toHaveLength(0);
+  });
+
+  it("gives up when the command committed, which changed the document", () => {
+    const h = harness();
+    h.docChanged();
+    h.s.busy = false;
+    h.step(3);
+    expect(h.s.raised).toBe(0);
   });
 });
