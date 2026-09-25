@@ -19,6 +19,8 @@ import {
   entityPolyline,
   glyphRegion,
   pointInRegion,
+  profileBounds,
+  type Box,
   type Region,
 } from "./region";
 import { worldPointInRegion } from "./regionSelect";
@@ -190,14 +192,15 @@ export class SketchOverlay {
     datumPlanes?: Record<string, PlaneDef>;
   } = () => ({});
 
-  /** Where the model cuts a profile on a sketch plane, as loops, so a profile
-   *  that runs off its face splits there instead of picking as one region. The
-   *  active sketch in sketchMode reads the same answer.
+  /** Where the model cuts a profile on a sketch plane, as polylines reaching
+   *  `need`, the sketch-2D box of its curves, so a profile that runs off its
+   *  face splits there instead of picking as one region. The active sketch in
+   *  sketchMode reads the same answer.
    *
    *  Injected because the overlay has no engine. The default answers "no
    *  footprint", which is both the safe fallback and the literal truth for a
    *  sketch on a datum plane. See faceFootprint.profileCutCache. */
-  footprintFor: (plane: SketchPlane) => THREE.Vector2[][] = () => [];
+  footprintFor: (plane: SketchPlane, need: Box | null) => THREE.Vector2[][] = () => [];
 
   /** Newer cut lines landed while a tool or dialog held the regions, so the
    *  areas shown are split against an older model until the next update(). */
@@ -227,7 +230,7 @@ export class SketchOverlay {
         obj.userData.sketchId = f.id; // + entityId from curveObjects → Project-tool picking
         this.committed.add(obj);
       }
-      const footprint = this.footprintFor(plane);
+      const footprint = this.footprintFor(plane, profileBounds(ents));
       for (const region of detectRegions(f.id, ents, footprint.length ? footprint : undefined)) {
         const wr: WorldRegion = {
           sketchId: f.id,

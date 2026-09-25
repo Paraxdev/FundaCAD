@@ -130,15 +130,17 @@ describe("planeFootprint", () => {
 
 describe("profileCutCache", () => {
   type Line = [number, number, number][];
+  type Box = { minx: number; miny: number; maxx: number; maxy: number };
   const rim: Line[] = topRim().map((e) => e.points.map((p) => [...p] as [number, number, number]));
+  const need: Box = { minx: -5, miny: -5, maxx: 5, maxy: 5 };
   const source = (epoch: object, answer: Line[] | null = rim) => {
-    let asks = 0;
     let landed = 0;
     let now = epoch;
+    const reaches: Box[] = [];
     const pending: (() => void)[] = [];
     const src = {
-      cuts: () => {
-        asks++;
+      cuts: (_plane: unknown, reach: Box) => {
+        reaches.push(reach);
         return new Promise<Line[] | null>((res) => pending.push(() => res(answer)));
       },
       epoch: () => now,
@@ -149,22 +151,41 @@ describe("profileCutCache", () => {
       await Promise.resolve();
       await Promise.resolve();
     };
-    return { src, asks: () => asks, landed: () => landed, flush, retarget: (e: object) => (now = e) };
+    return { src, asks: () => reaches.length, reaches, landed: () => landed, flush, retarget: (e: object) => (now = e) };
   };
 
-  it("asks the engine once per plane per model and chains its lines into loops", async () => {
+  it("asks the engine once per plane per model and hands its lines back in sketch 2D", async () => {
     const s = source({});
     const cache = profileCutCache(s.src);
     const plane = topPlane();
-    expect(cache(plane)).toEqual([]);
-    expect(cache(plane)).toEqual([]);
+    expect(cache(plane, need)).toEqual([]);
+    expect(cache(plane, need)).toEqual([]);
     expect(s.asks()).toBe(1);
     await s.flush();
     expect(s.landed()).toBe(1);
-    const loops = cache(plane);
-    expect(loops).toHaveLength(1);
-    expect(loops[0]).toHaveLength(4);
+    const lines = cache(plane, need);
+    expect(lines).toHaveLength(4);
+    expect(lines[0]).toEqual([new THREE.Vector2(-10, -10), new THREE.Vector2(10, -10)]);
     expect(s.asks()).toBe(1);
+  });
+
+  it("asks for more than the sketch covers, and again only once it outgrows that", async () => {
+    const s = source({});
+    const cache = profileCutCache(s.src);
+    const plane = topPlane();
+    cache(plane, need);
+    await s.flush();
+    const r = s.reaches[0]!;
+    expect(r.minx).toBeLessThan(need.minx);
+    expect(r.maxy).toBeGreaterThan(need.maxy);
+    cache(plane, { minx: -6, miny: -6, maxx: 6, maxy: 6 });
+    expect(s.asks()).toBe(1);
+    const far = { minx: 100, miny: 100, maxx: 110, maxy: 110 };
+    expect(cache(plane, far)).toHaveLength(4);
+    expect(s.asks()).toBe(2);
+    const r2 = s.reaches[1]!;
+    expect(r2.minx).toBeLessThanOrEqual(r.minx);
+    expect(r2.maxx).toBeGreaterThanOrEqual(far.maxx);
   });
 
   it("asks again when the model changes, serving the last answer meanwhile", async () => {
@@ -173,10 +194,10 @@ describe("profileCutCache", () => {
     const s = source({});
     const cache = profileCutCache(s.src);
     const plane = topPlane();
-    cache(plane);
+    cache(plane, need);
     await s.flush();
     s.retarget({});
-    expect(cache(plane)).toHaveLength(1);
+    expect(cache(plane, need)).toHaveLength(4);
     expect(s.asks()).toBe(2);
   });
 
@@ -184,20 +205,22 @@ describe("profileCutCache", () => {
     const s = source({});
     const cache = profileCutCache(s.src);
     const plane = topPlane();
-    cache(plane);
+    cache(plane, need);
     s.retarget({});
     await s.flush();
     expect(s.landed()).toBe(0);
-    expect(cache(plane)).toEqual([]);
+    expect(cache(plane, null)).toEqual([]);
   });
 
-  it("reads no answer as no footprint", async () => {
+  it("reads no answer as no footprint, and asks nothing for a sketch with no curves", async () => {
     const s = source({}, null);
     const cache = profileCutCache(s.src);
     const plane = topPlane();
-    cache(plane);
+    expect(cache(plane, null)).toEqual([]);
+    expect(s.asks()).toBe(0);
+    cache(plane, need);
     await s.flush();
-    expect(cache(plane)).toEqual([]);
+    expect(cache(plane, need)).toEqual([]);
     expect(s.asks()).toBe(1);
   });
 });

@@ -229,27 +229,12 @@ function isClosedPolyline(pts: readonly THREE.Vector2[]): boolean {
 export function detectRegions(
   sketchId: string,
   allEntities: ResolvedEntity[],
-  /** Closed loops, in sketch 2D mm, bounding the face this sketch sits on,
-   *  outline first, then any holes in it. Omit for a sketch on a datum plane,
-   *  which has nothing behind it to be supported by. */
+  /** Where the model under the sketch starts or stops, as polylines in sketch 2D
+   *  mm: the engine's profile cut lines, closed or not. Omit for a sketch on a
+   *  datum plane, which has nothing behind it to be supported by. */
   footprint?: THREE.Vector2[][],
 ): Region[] {
-  // construction geometry is reference-only, it never forms a profile. Text glyphs
-  // are their own filled meshes (overlay), never part of line/arc region detection.
-  const entities = allEntities.filter((e) => !e.construction && e.type !== "text");
-
-  // Per-entity polyline, segments + bbox, for cheap crossing detection and
-  // tracing. The polyline is sampled ONCE here and everything below reads it,
-  // so what is picked is what is drawn.
-  const perEntity = entities.map((e) => {
-    const pts = entityPolyline(e);
-    const segs: Seg[] = [];
-    for (let i = 0; i < pts.length - 1; i++) {
-      const a = pts[i], b = pts[i + 1];
-      if (a && b) segs.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y });
-    }
-    return { e, pts, segs, box: segsBBox(segs) };
-  });
+  const perEntity = profileEntities(allEntities);
 
   // 1. collect every closed loop. Do any two entities' curves actually CROSS at
   //    an interior point (not merely meet at shared endpoints)? A crossing means
@@ -281,20 +266,48 @@ export function detectRegions(
     loops.push(...traceLoops(free));
   }
 
-  // 2. each loop becomes a region; its DIRECTLY-nested loops become holes, so
-  //    two concentric circles yield a ring (outer, hole=inner) AND a disk (inner).
-  //    parent(i) = the smallest-area loop that contains loop i. Uses a guaranteed-
-  //    interior point (not the centroid) so non-convex arrangement cells nest right.
-  // A sketch drawn ON a face is bounded by that face as well as by its own
-  // curves. Splitting against it is what makes the overhanging part of a
-  // profile a thing you can point at, rather than the whole profile being one
-  // region that extrudes off the edge of the part.
+  // 2. A sketch drawn ON a face is bounded by where the model under it starts
+  //    and stops as well as by its own curves, the same cut the engine makes
+  //    before a feature picks a cell, so an area shown is an area that builds.
+  let supportLoops: THREE.Vector2[][] | undefined;
   if (footprint && footprint.length) {
     const split = splitByFootprint(perEntity, loops, footprint);
     if (split) loops = split;
+    supportLoops = chainLoops(footprint);
   }
 
-  return nestLoops(sketchId, loops, footprint);
+  // 3. each loop becomes a region; its DIRECTLY-nested loops become holes, so
+  //    two concentric circles yield a ring (outer, hole=inner) AND a disk (inner).
+  return nestLoops(sketchId, loops, supportLoops);
+}
+
+/** The sketch-2D box every profile curve of these entities lies in, null when
+ *  there is none. What the engine's cut lines have to cover. */
+export function profileBounds(allEntities: ResolvedEntity[]): Box | null {
+  const boxes = profileEntities(allEntities).map((p) => p.box).filter((b) => b.minx <= b.maxx);
+  if (!boxes.length) return null;
+  return {
+    minx: Math.min(...boxes.map((b) => b.minx)),
+    miny: Math.min(...boxes.map((b) => b.miny)),
+    maxx: Math.max(...boxes.map((b) => b.maxx)),
+    maxy: Math.max(...boxes.map((b) => b.maxy)),
+  };
+}
+
+// Per-entity polyline, segments + bbox, for cheap crossing detection and tracing.
+// The polyline is sampled ONCE here and everything reads it, so what is picked is
+// what is drawn. Construction geometry is reference-only and text glyphs are
+// their own filled meshes, so neither forms a profile here.
+function profileEntities(allEntities: ResolvedEntity[]) {
+  return allEntities.filter((e) => !e.construction && e.type !== "text").map((e) => {
+    const pts = entityPolyline(e);
+    const segs: Seg[] = [];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i], b = pts[i + 1];
+      if (a && b) segs.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y });
+    }
+    return { e, pts, segs, box: segsBBox(segs) };
+  });
 }
 
 /** Turn a flat list of arrangement cells into Regions, resolving which loops are
@@ -310,10 +323,26 @@ function nestLoops(
   loops: THREE.Vector2[][],
   footprint?: THREE.Vector2[][],
 ): Region[] {
+  const parent = loopParents(loops);
+  const regions: Region[] = [];
+  for (let i = 0; i < loops.length; i++) {
+    const loop = loops[i];
+    if (!loop) continue;
+    const holes = loops.filter((_, j) => parent[j] === i);
+    const r = mkRegion(sketchId, loop, holes);
+    r.support = footprint && footprint.length
+      ? (pointInLoops(r.interior, footprint) ? "on-face" : "overhang")
+      : null;
+    regions.push(r);
+  }
+  return regions;
+}
+
+/** parent(i) = the smallest-area loop that contains loop i, -1 for none. */
+function loopParents(loops: THREE.Vector2[][]): number[] {
   const areas = loops.map(loopAbsArea);
   const reps = loops.map(loopInteriorPoint);
-  const parent = loops.map((_loopI, i) => {
-    // reps/areas are parallel to loops, so index i is always valid
+  return loops.map((_loopI, i) => {
     const p = reps[i];
     const ai = areas[i];
     if (!p || ai === undefined) return -1;
@@ -330,19 +359,6 @@ function nestLoops(
     }
     return best;
   });
-
-  const regions: Region[] = [];
-  for (let i = 0; i < loops.length; i++) {
-    const loop = loops[i];
-    if (!loop) continue;
-    const holes = loops.filter((_, j) => parent[j] === i);
-    const r = mkRegion(sketchId, loop, holes);
-    r.support = footprint && footprint.length
-      ? (pointInLoops(r.interior, footprint) ? "on-face" : "overhang")
-      : null;
-    regions.push(r);
-  }
-  return regions;
 }
 
 /** Chain open polylines into closed loops by their shared endpoints.
@@ -374,68 +390,52 @@ export function pointInLoops(p: THREE.Vector2, loops: THREE.Vector2[][]): boolea
   return inside;
 }
 
-/** Re-cut the sketch's own cells against the boundary of the face behind them.
+/** Re-cut the sketch's own cells along the cut lines, the planar arrangement of
+ *  both, keeping the cells that are the sketch's own material.
  *
- *  Returns null when the footprint does not actually cross the sketch, a
- *  profile wholly on the face, or wholly off it, is already one region and
- *  re-running the arrangement would only cost time and risk perturbing loops
- *  that were correct.
+ *  One rule for every layout: lines crossing the profile, a closed outline
+ *  wholly inside it, a hole straddling it. Only cut segments reaching the
+ *  sketch's box take part, the rest cannot bound any of its cells, which is
+ *  also why the lines need not be closed.
  *
- *  The filtering step is the subtle half. Feeding the face outline into the
- *  arrangement makes it produce cells for the FACE as well as for the sketch,
- *  most obviously "the face minus the profile", which is bounded by the outline
- *  and by the profile and so looks exactly like a legitimate mixed cell. Those
- *  are not profiles and must not become selectable regions; the user drew a
- *  circle, not a plate with a hole in it. So a cell survives only if its
- *  interior lies inside the sketch's OWN material, computed before the footprint
- *  was ever introduced. */
+ *  The filtering step is the subtle half. The arrangement also makes cells for
+ *  the model's face, "the face minus the profile" being the obvious one, and a
+ *  face outline that does not touch the sketch comes back as a loop around it.
+ *  Those are not profiles. So the cells are nested first, and a cell survives
+ *  only if a point of its MATERIAL, outside its holes, lies inside the sketch's
+ *  own loops as they were before the cut lines came in. Every cell is wholly in
+ *  or wholly out, since the sketch's curves are edges of the arrangement. */
 function splitByFootprint(
   perEntity: EntSegs[],
   sketchLoops: THREE.Vector2[][],
-  footprint: THREE.Vector2[][],
+  cuts: THREE.Vector2[][],
 ): THREE.Vector2[][] | null {
-  const fpGroups: EntSegs[] = footprint.map((loop) => {
+  if (!perEntity.length || !sketchLoops.length) return null;
+  const reach: Box = {
+    minx: Math.min(...perEntity.map((p) => p.box.minx)),
+    miny: Math.min(...perEntity.map((p) => p.box.miny)),
+    maxx: Math.max(...perEntity.map((p) => p.box.maxx)),
+    maxy: Math.max(...perEntity.map((p) => p.box.maxy)),
+  };
+  const cutGroups: EntSegs[] = [];
+  for (const line of cuts) {
     const segs: Seg[] = [];
-    for (let i = 0; i < loop.length; i++) {
-      const a = loop[i];
-      const b = loop[(i + 1) % loop.length];
-      if (a && b) segs.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y });
+    for (let i = 0; i + 1 < line.length; i++) {
+      const a = line[i], b = line[i + 1];
+      if (!a || !b) continue;
+      const s = { x1: a.x, y1: a.y, x2: b.x, y2: b.y };
+      if (boxesOverlap(segsBBox([s]), reach)) segs.push(s);
     }
-    return { segs, box: segsBBox(segs) };
-  }).filter((g) => g.segs.length > 0);
-  if (!fpGroups.length) return null;
-
-  // Only the sketch-vs-footprint pairs matter here: the sketch's own crossings
-  // were already resolved above, and a footprint that merely self-touches is not
-  // a reason to redo anything.
-  //
-  // A strict crossing is NOT enough of a test, and assuming it was is what made
-  // the first version of this silently do nothing. Curves are sampled as
-  // polylines, so a circle centred on the edge it straddles lands VERTICES
-  // exactly on that edge, 64 samples of a circle at (10,0) put points on
-  // (10,+6) and (10,-6), and a vertex touching a segment is not a crossing of
-  // two spans. anyCrossing already knows this; the same touch test has to be
-  // here or the common case is exactly the one that is missed.
-  let crosses = false;
-  outer: for (const s of perEntity) {
-    for (const f of fpGroups) {
-      if (!boxesOverlap(s.box, f.box)) continue;
-      for (const a of s.segs)
-        for (const b of f.segs) {
-          if (segCross(a, b)) { crosses = true; break outer; }
-          if (pointOnSegInterior(b.x1, b.y1, a) !== null) { crosses = true; break outer; }
-          if (pointOnSegInterior(b.x2, b.y2, a) !== null) { crosses = true; break outer; }
-          if (pointOnSegInterior(a.x1, a.y1, b) !== null) { crosses = true; break outer; }
-          if (pointOnSegInterior(a.x2, a.y2, b) !== null) { crosses = true; break outer; }
-        }
-    }
+    if (segs.length) cutGroups.push({ segs, box: segsBBox(segs) });
   }
-  if (!crosses) return null;
+  if (!cutGroups.length) return null;
 
-  const cells = traceLoops(planarize([...perEntity, ...fpGroups]));
-  const kept = cells.filter((cell) => {
-    const p = loopInteriorPoint(cell);
-    return sketchLoops.some((l) => pointInLoop(p, l));
+  const cells = traceLoops(planarize([...perEntity, ...cutGroups]));
+  const parent = loopParents(cells);
+  const kept = cells.filter((cell, i) => {
+    const holes = cells.filter((_, j) => parent[j] === i);
+    const p = materialPoint(cell, holes);
+    return !!p && sketchLoops.some((l) => pointInLoop(p, l));
   });
   // Never hand back fewer cells than the sketch had on its own: that would mean
   // the arrangement lost material the user drew, and silently dropping a profile
@@ -580,9 +580,39 @@ function interiorPoint(
   return centroid; // best effort
 }
 
+/** A point in the loop's material, outside every hole, found on scanlines, or
+ *  null when none is found. Unlike interiorPoint it never guesses, a wrong
+ *  answer here would keep or drop a whole cell. */
+function materialPoint(loop: THREE.Vector2[], holes: THREE.Vector2[][]): THREE.Vector2 | null {
+  const ok = (p: THREE.Vector2) => pointInLoop(p, loop) && !holes.some((h) => pointInLoop(p, h));
+  let minY = Infinity, maxY = -Infinity;
+  for (const p of loop) { minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y); }
+  const rings = [loop, ...holes];
+  let best: THREE.Vector2 | null = null;
+  let bestGap = 0;
+  for (let k = 1; k < 16; k++) {
+    const y = minY + ((maxY - minY) * k) / 16;
+    const xs: number[] = [];
+    for (const ring of rings) {
+      for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+        const a = ring[i], b = ring[j];
+        if (!a || !b) continue;
+        if ((a.y > y) !== (b.y > y)) xs.push(((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x);
+      }
+    }
+    xs.sort((m, n) => m - n);
+    for (let i = 0; i + 1 < xs.length; i++) {
+      const x0 = xs[i]!, x1 = xs[i + 1]!;
+      const p = new THREE.Vector2((x0 + x1) / 2, y);
+      if (x1 - x0 > bestGap && ok(p)) { best = p; bestGap = x1 - x0; }
+    }
+  }
+  return best;
+}
+
 // --- line-chain loop tracing ---
 type Seg = { x1: number; y1: number; x2: number; y2: number };
-type Box = { minx: number; miny: number; maxx: number; maxy: number };
+export type Box = { minx: number; miny: number; maxx: number; maxy: number };
 
 function segsBBox(segs: Seg[]): Box {
   let minx = Infinity, miny = Infinity, maxx = -Infinity, maxy = -Infinity;
