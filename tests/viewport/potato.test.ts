@@ -205,6 +205,22 @@ describe("PotatoDraw", () => {
   });
 });
 
+describe("PotatoDraw, lines only", () => {
+  it("swaps only the fat lines and draws straight to the current target", () => {
+    const r = rig();
+    new PotatoDraw(true).render(r.renderer, r.scene, r.camera);
+    expect(r.draws).toHaveLength(1);
+    expect(r.draws[0]!.target).toBeNull();
+    const seen = r.seen[0]!;
+    expect(seen.materials[0]).toBe(r.pbr);
+    expect(seen.lightVisible).toBe(true);
+    expect(seen.fatVisible).toBe(false);
+    expect(seen.proxies).toHaveLength(1);
+    expect(r.edges.object.visible).toBe(true);
+    expect(r.scene.getObjectByName("potato-lines")).toBeUndefined();
+  });
+});
+
 describe("PostChain and potato mode", () => {
   function chain(potatoOn: () => boolean) {
     const scene = new THREE.Scene();
@@ -232,6 +248,27 @@ describe("PostChain and potato mode", () => {
     c.post.render(camera);
     expect(c.draws).toEqual([{ scene: c.scene, target: null }]);
     setRenderPref("potatoMode", false);
+    setRenderPref("bloom", DEFAULT_RENDER.bloom);
+  });
+
+  it("draws a motion frame straight to the canvas with thin lines and no passes", () => {
+    setRenderPref("bloom", 1);
+    const c = chain(() => false);
+    const { edges } = rig();
+    c.scene.add(edges.object);
+    const lines: number[] = [];
+    const render = (c.post as unknown as { renderer: { render: (s: THREE.Scene) => void } }).renderer;
+    const plain = render.render;
+    render.render = (s) => {
+      let n = 0;
+      s.traverse((o) => { if (o.parent?.name === "potato-lines") n++; });
+      lines.push(n);
+      plain(s);
+    };
+    c.post.render(new THREE.PerspectiveCamera(), true);
+    expect(c.draws).toEqual([{ scene: c.scene, target: null }]);
+    expect(lines).toEqual([1]);
+    expect(edges.object.visible).toBe(true);
     setRenderPref("bloom", DEFAULT_RENDER.bloom);
   });
 });
