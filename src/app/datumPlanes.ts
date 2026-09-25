@@ -47,6 +47,7 @@ export function createDatumPlanes(
   // reflect the document's datum/construction planes as selectable quads in 3D.
   // Resolved client-side (source plane + offset along its normal) so no rebuild is
   // needed just to move/show a plane.
+  let lastSynced = "";
   const syncDatumPlanes = () => {
     const planes = e.store.document.features
       .filter((f): f is Extract<Feature, { type: "datumPlane" }> => f.type === "datumPlane")
@@ -59,7 +60,6 @@ export function createDatumPlanes(
         // most of what a sketch is placed by.
         return { id: f.id, origin: def.origin, normal: def.normal, xdir: def.xdir };
       });
-    e.viewport.setDatumPlanes(planes);
     // Datum points and axes ride the same visibility gate and the same rebuild
     // pass. An anchored datum (an axis following an edge) resolves in the engine
     // and arrives in the rebuild's `datumMarks`, so that placement IS PREFERRED when
@@ -82,6 +82,13 @@ export function createDatumPlanes(
           ? { id: f.id, origin: m.origin, dir: m.dir }
           : { id: f.id, origin: f.origin, dir: f.dir };
       });
+    // Every build emit lands here, the once a second progress ticks of a long
+    // rebuild included, and each repaint costs full frames. Those change nothing
+    // drawn here, so they must not repaint.
+    const key = JSON.stringify([planes, points, axes, e.viewport.modelDiagonal(), e.selectedFeature]);
+    if (key === lastSynced) return;
+    lastSynced = key;
+    e.viewport.setDatumPlanes(planes);
     e.viewport.setDatumMarkers(points, axes);
     e.viewport.highlightDatum(e.selectedFeature);
   };
