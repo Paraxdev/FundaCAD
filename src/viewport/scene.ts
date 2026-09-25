@@ -3,10 +3,11 @@
 // in the XY plane and cameras use up = +Z.
 
 import * as THREE from "three";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { stickyFact } from "../diagnostics/breadcrumbs";
 import { gridStep } from "../sketch/planeGrid";
 import { setRenderLowPower } from "./render";
-import { BACKGROUND_COLOR, bloomSettings, performanceModeOn, renderPrefs } from "../ui/renderPrefs";
+import { BACKGROUND_COLOR, bloomSettings, renderPrefs } from "../ui/renderPrefs";
 import { POTATO_PIXEL_RATIO, PotatoDraw } from "./potato";
 import { buildRoom, disposeRoom } from "./environments";
 import type { Environment } from "../ui/renderPrefs";
@@ -39,6 +40,10 @@ export interface SceneBundle {
   /** Re-aim and re-size the key light's shadow to the current model. Called after
    *  a rebuild (the model moved or grew) and when the shadows setting changes. */
   frameShadows: () => void;
+  /** Put the full render back for one still while potato mode is on: the power
+   *  tier, the pass chain and the environment. Returns the undo, or null when
+   *  potato mode is off and there is nothing to lift. */
+  beginFullQuality: () => (() => void) | null;
 }
 
 /** How many minor cells the ground grid spans, for a viewport `diagonalPx`
@@ -256,10 +261,13 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
   // without going to native 3x. Applied once here for the frames before the
   // first pref-apply lands.
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  let fullQuality = false;
+  const potatoOn = () => renderPrefs().potatoMode && !fullQuality;
   const applyPowerTier = () => {
-    const low = autoLowPower || performanceModeOn();
+    const p = renderPrefs();
+    const low = autoLowPower || p.performanceMode || potatoOn();
     setRenderLowPower(low);
-    const cap = renderPrefs().potatoMode ? POTATO_PIXEL_RATIO : low ? 1 : 2;
+    const cap = potatoOn() ? POTATO_PIXEL_RATIO : low ? 1 : 2;
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, cap));
     // Emitter shadows are the one expensive lighting extra; a weak machine drops
     // them (the emitter still lights, it just does not occlude). Flipping this
@@ -328,7 +336,7 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
   const modelGroup = new THREE.Group();
   scene.add(modelGroup);
 
-  const post = new PostChain(renderer, scene);
+  const post = new PostChain(renderer, scene, potatoOn);
 
   const frameShadows = () => {
     key.castShadow = renderPrefs().shadows;
@@ -343,6 +351,22 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
       frameShadows();
     },
     frameShadows,
+    beginFullQuality: () => {
+      if (!potatoOn()) return null;
+      fullQuality = true;
+      applyPowerTier();
+      const p = renderPrefs();
+      if (p.environment !== "none") {
+        scene.environment = environmentMapNow(renderer, p.environment);
+        scene.environmentIntensity = p.brightness;
+      }
+      frameShadows();
+      return () => {
+        fullQuality = false;
+        applyPowerTier();
+        scene.environment = null;
+      };
+    },
   };
 }
 
@@ -397,6 +421,13 @@ export class PostChain {
   private bloom: import("three/examples/jsm/postprocessing/UnrealBloomPass.js").UnrealBloomPass | null = null;
   private bokeh: import("three/examples/jsm/postprocessing/BokehPass.js").BokehPass | null = null;
   private loading = false;
+  private passes: {
+    EffectComposer: typeof import("three/examples/jsm/postprocessing/EffectComposer.js").EffectComposer;
+    RenderPass: typeof import("three/examples/jsm/postprocessing/RenderPass.js").RenderPass;
+    UnrealBloomPass: typeof import("three/examples/jsm/postprocessing/UnrealBloomPass.js").UnrealBloomPass;
+    BokehPass: typeof import("three/examples/jsm/postprocessing/BokehPass.js").BokehPass;
+    OutputPass: typeof import("three/examples/jsm/postprocessing/OutputPass.js").OutputPass;
+  } | null = null;
   private potato: PotatoDraw | null = null;
   private size = new THREE.Vector2(1, 1);
   private camera: THREE.Camera | null = null;
@@ -413,6 +444,7 @@ export class PostChain {
   constructor(
     private renderer: THREE.WebGLRenderer,
     private scene: THREE.Scene,
+    private potatoOn: () => boolean = () => renderPrefs().potatoMode,
   ) {}
 
   /** How many samples the offscreen buffer takes, or 0 when there is no buffer
@@ -451,8 +483,11 @@ export class PostChain {
   }
 
   render(camera: THREE.Camera) {
-    if (renderPrefs().potatoMode) {
+    if (this.potatoOn()) {
       (this.potato ??= new PotatoDraw()).render(this.renderer, this.scene, camera, renderPrefs().brightness);
+      // Only the modules, so a still taken in potato mode can build its passes at once.
+      const want = this.wanted();
+      if (want.bloom || want.blur) void this.loadPasses();
       return;
     }
     if (this.potato) {
@@ -464,17 +499,21 @@ export class PostChain {
       this.renderer.render(this.scene, camera);
       return;
     }
-    if (!this.composer) {
-      void this.build();
-      this.renderer.render(this.scene, camera);
-      return;
+    let composer = this.composer;
+    if (!composer) {
+      if (!this.passes) {
+        void this.loadPasses();
+        this.renderer.render(this.scene, camera);
+        return;
+      }
+      composer = this.build();
     }
     // The pass chain is built once and re-aimed, rather than rebuilt whenever
     // the camera object changes (it does: perspective and orthographic are two
     // objects the rig swaps between).
     if (this.camera !== camera) {
       this.camera = camera;
-      for (const pass of this.composer.passes) {
+      for (const pass of composer.passes) {
         const aimed = pass as { camera?: THREE.Camera };
         if (aimed.camera) aimed.camera = camera;
       }
@@ -506,10 +545,10 @@ export class PostChain {
         u["maxblur"]!.value = p.focusBlur * 0.012;
       }
     }
-    this.composer.render();
+    composer.render();
   }
 
-  private async build() {
+  private async loadPasses() {
     if (this.loading) return;
     this.loading = true;
     const [
@@ -521,6 +560,12 @@ export class PostChain {
       import("three/examples/jsm/postprocessing/BokehPass.js"),
       import("three/examples/jsm/postprocessing/OutputPass.js"),
     ]);
+    this.passes = { EffectComposer, RenderPass, UnrealBloomPass, BokehPass, OutputPass };
+  }
+
+  /** Synchronous once the modules are in, so a still can build the chain on the spot. */
+  private build(): import("three/examples/jsm/postprocessing/EffectComposer.js").EffectComposer {
+    const { EffectComposer, RenderPass, UnrealBloomPass, BokehPass, OutputPass } = this.passes!;
     // Our own target, for the `samples`. EffectComposer's default target has
     // none, so rendering through it would silently throw away the antialiasing
     // the canvas was created with, and a CAD model is mostly straight edges:
@@ -555,6 +600,7 @@ export class PostChain {
     this.bokeh = bokeh;
     this.composer = composer;
     this.camera = null; // force the re-aim above on the next frame
+    return composer;
   }
 }
 
@@ -569,44 +615,36 @@ export class PostChain {
  *  asset in the bundle) for something the renderer can produce from a handful of
  *  boxes, and the app deliberately fetches nothing at start-up. */
 const envCache = new Map<Environment, THREE.Texture>();
-const envPending = new Map<Environment, Promise<THREE.Texture>>();
 
-async function environmentMap(
-  renderer: THREE.WebGLRenderer,
-  id: Environment,
-): Promise<THREE.Texture> {
+/** The room for `id`, built now if it is not cached yet. A still taken in potato
+ *  mode needs it synchronously, the live viewport goes through environmentMap. */
+function environmentMapNow(renderer: THREE.WebGLRenderer, id: Environment): THREE.Texture {
   const held = envCache.get(id);
   if (held) return held;
-  // De-duplicated, not merely cached. Switching back and forth between two
-  // environments faster than a cubemap generates would otherwise start a second
-  // PMREM pass for one already in flight, and the loser's texture is leaked.
-  const inFlight = envPending.get(id);
-  if (inFlight) return inFlight;
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  let tex: THREE.Texture;
+  if (id === "studio") {
+    // three's own, kept as it is: it is a Y-up room, which is a quarter turn
+    // from this app's world, and it has looked right since the day materials
+    // landed. Turning it upright would be changing what every existing
+    // document reflects to fix something nobody can see.
+    const room = new RoomEnvironment();
+    tex = pmrem.fromScene(room, 0.04).texture;
+    room.dispose();
+  } else {
+    const room = buildRoom(id as Exclude<Environment, "studio" | "none">);
+    tex = pmrem.fromScene(room, 0.04).texture;
+    disposeRoom(room);
+  }
+  pmrem.dispose();
+  envCache.set(id, tex);
+  return tex;
+}
 
-  const job = (async () => {
-    const pmrem = new THREE.PMREMGenerator(renderer);
-    let tex: THREE.Texture;
-    if (id === "studio") {
-      // three's own, kept as it is: it is a Y-up room, which is a quarter turn
-      // from this app's world, and it has looked right since the day materials
-      // landed. Turning it upright would be changing what every existing
-      // document reflects to fix something nobody can see.
-      const { RoomEnvironment } = await import("three/examples/jsm/environments/RoomEnvironment.js");
-      const room = new RoomEnvironment();
-      tex = pmrem.fromScene(room, 0.04).texture;
-      room.dispose();
-    } else {
-      const room = buildRoom(id as Exclude<Environment, "studio" | "none">);
-      tex = pmrem.fromScene(room, 0.04).texture;
-      disposeRoom(room);
-    }
-    pmrem.dispose();
-    envCache.set(id, tex);
-    envPending.delete(id);
-    return tex;
-  })();
-  envPending.set(id, job);
-  return job;
+async function environmentMap(renderer: THREE.WebGLRenderer, id: Environment): Promise<THREE.Texture> {
+  // A task later, so a frame is drawn flat-lit first instead of waiting on the PMREM pass.
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  return environmentMapNow(renderer, id);
 }
 
 /** Put the user's viewport settings on a scene.
@@ -616,8 +654,8 @@ async function environmentMap(
  *  they cannot drift into a model lit from one side at one exposure and
  *  reflecting at another.
  *
- *  The environment is loaded ASYNCHRONOUSLY (it is a dynamic import and a render
- *  pass) and the rest is applied at once, so the viewport is never waiting on it
+ *  The environment is built ASYNCHRONOUSLY (a render pass, run a task later)
+ *  and the rest is applied at once, so the viewport is never waiting on it
  *  to draw a frame: the model appears flat-lit and gains its reflections a beat
  *  later, which is what it did before this existed. */
 function applyRenderPrefs(
