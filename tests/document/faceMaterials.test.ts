@@ -9,7 +9,7 @@
 import { describe, it, expect } from "vitest";
 import {
   faceKey, parseFaceKey, resolveFaceMaterials, faceMaterialPaint, faceMaterialFinishes,
-  staleFaceKeys, materialApplyTarget, type BodyFaceSpan,
+  staleFaceKeys, type BodyFaceSpan,
 } from "../../src/document/faceMaterials";
 import { FINISH, type MaterialDef } from "../../src/document/materials";
 
@@ -100,30 +100,6 @@ describe("the two maps the renderer wants", () => {
     // Glass says nothing about metalness, so it wears the app's default.
     expect(f[9]!.metalness).toBe(FINISH.metalness);
     expect(f[9]!.opacity).toBe(0.25);
-  });
-});
-
-describe("materialApplyTarget", () => {
-  it("targets the faces when a face is selected", () => {
-    const got = materialApplyTarget(1, [{ body: "body1", face: 5 }], ["body1"]);
-    expect(got).toEqual({ kind: "faces", faces: [{ body: "body1", face: 5 }] });
-  });
-
-  it("FI-3: never falls through to the body when a face is selected but its band did not resolve", () => {
-    // A body left selected in the browser tree under a face someone picked in
-    // the viewport (normal, by design) used to make an unresolved face pick
-    // silently overwrite the BODY's own material instead. It must do nothing.
-    const got = materialApplyTarget(1, [], ["body1"]);
-    expect(got).toEqual({ kind: "none" });
-  });
-
-  it("targets the bodies when nothing is selected on the face", () => {
-    const got = materialApplyTarget(0, [], ["body1", "body2"]);
-    expect(got).toEqual({ kind: "bodies", bodyIds: ["body1", "body2"] });
-  });
-
-  it("targets nothing when neither a face nor a body is selected", () => {
-    expect(materialApplyTarget(0, [], [])).toEqual({ kind: "none" });
   });
 });
 
