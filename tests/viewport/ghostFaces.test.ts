@@ -7,8 +7,8 @@
 
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { edgeFaceSamples, facesAtPoint, resampleEdge } from "../../src/viewport/ghosts";
-import { ARC_SEGMENTS, sweepBlendGhost } from "../../src/features/blendGhost";
+import { bodyOutline, edgeFaceSamples, facesAtPoint, resampleEdge } from "../../src/viewport/ghosts";
+import { ARC_SEGMENTS, TRIM_BUDGET, insideOutline, sectionOutline, sweepBlendGhost, type EdgeSample } from "../../src/features/blendGhost";
 import { BodyEdges, type BodyMesh, type ModelView } from "../../src/viewport/render";
 import type { Pt3 } from "../../src/features/blendGhost";
 
@@ -21,7 +21,7 @@ function makeBody(id: string, positions: number[], indices: number[], faceIds: n
     id,
     name: id,
     faceStart: 0,
-    faceCount: Math.max(...faceIds) + 1,
+    faceCount: faceIds.reduce((m, f) => Math.max(m, f), 0) + 1,
     mesh: new THREE.Mesh(geo),
     faceIds,
     edges: {} as BodyEdges,
@@ -351,6 +351,136 @@ describe("blend ghost against a curved face, read off the mesh", () => {
     // r = 9: a ball that far off the flat would stick out of the D.
     const geo = sweepBlendGhost(found().samples, 9, "fillet");
     expect(geo?.unsure).toBe(true);
+  });
+});
+
+/** The walls of polygons `loops` in the XY plane extruded from z = 0 to
+ *  `H` in `rows` bands, no caps: a plane across Z only ever cuts the walls. */
+function buildWalls(loops: [number, number][][], H: number, rows: number): BodyMesh {
+  const positions: number[] = [], indices: number[] = [], faceIds: number[] = [];
+  const tri = (p: Pt3[], fid: number) => {
+    for (const v of p) {
+      indices.push(positions.length / 3);
+      positions.push(...v);
+    }
+    faceIds.push(fid);
+  };
+  let fid = 0;
+  for (const loop of loops) {
+    loop.forEach(([x0, y0], i) => {
+      const [x1, y1] = loop[(i + 1) % loop.length]!;
+      for (let r = 0; r < rows; r++) {
+        const z0 = (H * r) / rows, z1 = (H * (r + 1)) / rows;
+        tri([[x0, y0, z0], [x1, y1, z0], [x1, y1, z1]], fid);
+        tri([[x0, y0, z0], [x1, y1, z1], [x0, y0, z1]], fid);
+      }
+      fid++;
+    });
+  }
+  return makeBody("walls", positions, indices, faceIds);
+}
+
+const sq = (x0: number, y0: number, x1: number, y1: number): [number, number][] => [[x0, y0], [x1, y0], [x1, y1], [x0, y1]];
+
+/** The body's section at height z, in world x and y. */
+function sectionAt(body: BodyMesh, z: number): Float64Array {
+  const X = new THREE.Vector3(1, 0, 0), Y = new THREE.Vector3(0, 1, 0), Z = new THREE.Vector3(0, 0, 1);
+  return bodyOutline(body, new THREE.Vector3(0, 0, z), Z, X, Y).slice();
+}
+
+/** Closed loops meet every segment end with another segment's, and the
+ *  pieces add up to the loops' perimeter. */
+function expectClosedLoops(segs: Float64Array, perimeter: number) {
+  const ends = new Map<string, number>();
+  let length = 0;
+  for (let i = 0; i < segs.length; i += 4) {
+    const len = Math.hypot(segs[i + 2]! - segs[i]!, segs[i + 3]! - segs[i + 1]!);
+    if (len < 1e-12) continue;
+    length += len;
+    for (const k of [i, i + 2]) {
+      const key = `${segs[k]!.toFixed(9)},${segs[k + 1]!.toFixed(9)}`;
+      ends.set(key, (ends.get(key) ?? 0) + 1);
+    }
+  }
+  expect(length).toBeCloseTo(perimeter, 9);
+  for (const count of ends.values()) expect(count % 2).toBe(0);
+}
+
+/** A square corner at the origin, standing along Z. */
+const cornerAt = (z: number): EdgeSample => ({ point: [0, 0, z], tangent: [0, 0, 1], into1: [1, 0, 0], into2: [0, 1, 0], reach1: 10, reach2: 10 });
+
+describe("bodyOutline", () => {
+  it("cuts a prism into its section", () => {
+    const segs = sectionAt(buildWalls([sq(0, 0, 10, 10)], 10, 2), 3.7);
+    expectClosedLoops(segs, 40);
+  });
+
+  it("stays closed where the plane runs through a row of vertices", () => {
+    const body = buildWalls([sq(0, 0, 10, 10)], 10, 2);
+    const segs = sectionAt(body, 5);
+    expectClosedLoops(segs, 40);
+    const o = sectionOutline(cornerAt(5), segs, segs.length / 4)!;
+    expect(o.refInside).toBe(true);
+    expect(insideOutline(o, [9.5, 9.5])).toBe(true);
+    expect(insideOutline(o, [10.5, 5])).toBe(false);
+  });
+
+  it("finds each of several disjoint loops", () => {
+    const segs = sectionAt(buildWalls([sq(0, 0, 10, 10), sq(20, 0, 30, 10), sq(0, 20, 10, 30)], 10, 3), 5);
+    expectClosedLoops(segs, 120);
+    const o = sectionOutline(cornerAt(5), segs, segs.length / 4)!;
+    for (const [q, inside] of [[[5, 5], true], [[25, 5], true], [[5, 25], true], [[15, 5], false], [[25, 25], false]] as const) {
+      expect(insideOutline(o, [q[0], q[1]])).toBe(inside);
+    }
+  });
+
+  it("leaves a through hole out of the material", () => {
+    const segs = sectionAt(buildWalls([sq(0, 0, 10, 10), sq(3, 3, 7, 7)], 10, 2), 2.5);
+    expectClosedLoops(segs, 56);
+    const o = sectionOutline(cornerAt(2.5), segs, segs.length / 4)!;
+    expect(insideOutline(o, [5, 5])).toBe(false);
+    expect(insideOutline(o, [1.5, 5])).toBe(true);
+    expect(insideOutline(o, [8.5, 8.5])).toBe(true);
+  });
+});
+
+describe("blend ghost cost on a large body", () => {
+  const R = 10, a = 6, H = 20;
+  const ye = Math.sqrt(R * R - a * a);
+  // Samples are cached by the identity of the points array, so a new one per body.
+  const edge = () => ({ body: "d", points: [[a, ye, 0], [a, ye, H]] as Pt3[] });
+
+  it("trims against a dense section at a cost that does not grow with it", () => {
+    const { samples } = edgeFaceSamples(modelOf(buildDShaft(R, a, H, 1500)), edge())!;
+    expect(samples.every((s) => s.outline)).toBe(true);
+    expect(samples[3]!.outline!.segs.length / 4).toBeGreaterThan(1000);
+    for (const r of [2, 6]) {
+      const budget = { left: TRIM_BUDGET, failed: false };
+      const geo = sweepBlendGhost(samples, r, "fillet", false, budget)!;
+      expect(budget.failed).toBe(false);
+      // CLIP_STEPS + 1 tries and two 8 step refinements per section.
+      expect(TRIM_BUDGET - budget.left).toBeLessThan(samples.length * 41 * 24);
+      const c = [a - r, Math.sqrt((R - r) ** 2 - (a - r) ** 2)];
+      for (let i = 0; i < geo.positions.length; i += 3) {
+        const d = Math.hypot(geo.positions[i]! - c[0]!, geo.positions[i + 1]! - c[1]!);
+        expect(Math.abs(d - r)).toBeLessThan(0.03 * r);
+      }
+    }
+  });
+
+  it("leaves the outline out of a body too big to section, so an update does no trimming at all", () => {
+    const { samples } = edgeFaceSamples(modelOf(buildDShaft(R, a, H, 40000)), edge())!;
+    expect(samples.some((s) => s.outline)).toBe(false);
+    const budget = { left: TRIM_BUDGET, failed: false };
+    expect(sweepBlendGhost(samples, 2, "fillet", false, budget)).not.toBeNull();
+    expect(budget.left).toBe(TRIM_BUDGET);
+  });
+
+  it("caps at the face ends, as with no outline, once an update runs out of budget", () => {
+    const { samples } = edgeFaceSamples(modelOf(buildDShaft(R, a, H, 1500)), edge())!;
+    const bare = samples.map(({ outline: _, ...s }) => s);
+    const starved = sweepBlendGhost(samples, 2, "fillet", false, { left: 50, failed: false });
+    expect(starved).toEqual(sweepBlendGhost(bare, 2, "fillet"));
   });
 });
 
