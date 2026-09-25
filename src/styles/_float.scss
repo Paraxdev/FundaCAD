@@ -344,6 +344,12 @@
 .tool-rail.compact .rail-label {
   font-size: 12px;
 }
+/* A list that scrolls clips 32px past its box, the room .rail-list keeps for
+   the shadows, which put its last tiles under the foot. Without the bottom
+   overhang the clip ends a gap above the foot. */
+.tool-rail.scrolls > .rail-list:first-child {
+  margin-bottom: 0;
+}
 .rail-sep {
   flex: none;
   height: 4px;

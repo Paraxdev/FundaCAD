@@ -37,12 +37,6 @@
     max-height: 100%;
     max-width: calc(100vw - 3 * var(--float-gap) - 48px);
   }
-  // A squeezed tool list scrolls, and its clip edge sits 32px past its box for
-  // the shadows (see .rail-list), which put its last tiles under the foot's.
-  // Stop the clip at the gap above the foot instead.
-  .tool-rail > .rail-list:first-child {
-    margin-bottom: calc(0px - var(--float-gap));
-  }
   // A short stage runs the controls column to the bottom edge, so it scrolls
   // rather than spilling. Padding and margin cancel so the shadows are not
   // clipped, the same as .rail-list.
