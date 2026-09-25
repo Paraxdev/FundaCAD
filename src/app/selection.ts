@@ -44,9 +44,8 @@ export function createSelection(
     e.viewport.highlightDatum(id); // brighten the matching construction plane (if any)
   };
 
-  // Click a model FACE → select the feature that created it, so Del deletes that
-  // feature (and the timeline/params show which one owns the face). Provenance is the
-  // per-face `faceOwners` the engine attaches to each body in the build result.
+  // The feature that created a face, from the per-face `faceOwners` the engine
+  // attaches to each body in the build result. A double click edits it.
   const featureForFace = (faceId: number): string | null => {
     for (const b of e.store.buildState.result?.bodies ?? []) {
       if (faceId >= b.faceStart && faceId < b.faceStart + b.faceCount) {
