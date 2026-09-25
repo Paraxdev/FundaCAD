@@ -46,10 +46,24 @@ export interface EdgeSample {
   /** how far each face runs from the edge before it ends, mm */
   readonly reach1?: number;
   readonly reach2?: number;
-  /** The body's outline in the plane across the edge, as x0,y0,x1,y1
-   *  segments with the edge point at the origin, x along `into1` and y along
-   *  the part of `into2` perpendicular to it. */
-  readonly outline?: Float64Array;
+  readonly outline?: SectionOutline;
+}
+
+/** The body's section in the plane across the edge near one sample, in a
+ *  frame with the edge point at the origin, x along `into1` and y along the
+ *  part of `into2` perpendicular to it. Only the part near the edge is kept,
+ *  so a drag update costs the same on any size of body: a point's side is
+ *  counted from `ref`, whose side was found against the whole section. */
+export interface SectionOutline {
+  /** kept segments as x0,y0,x1,y1, relative to `ref` */
+  readonly segs: Float64Array;
+  /** every segment nearer the edge point than this was kept */
+  readonly radius: number;
+  readonly ref: readonly [number, number];
+  readonly refInside: boolean;
+  /** which segments each equal angular sector around `ref` sees, CSR */
+  readonly sectorStart: Int32Array;
+  readonly sectorSegs: Int32Array;
 }
 
 export type BlendKind = "fillet" | "chamfer";
@@ -71,6 +85,13 @@ const MIN_WEDGE = (2 * Math.PI) / 180;
 const CLIP_STEPS = 24;
 /** Share of an edge's sections with no rolling ball before the ghost fades. */
 const UNSURE_SHARE = 0.25;
+/** Segment tests one update may spend trimming before the ghost gives up on
+ *  the outline and caps at the face ends instead, about a millisecond. */
+export const TRIM_BUDGET = 3e5;
+const MAX_SECTORS = 1024;
+/** How much a segment's sector range is widened by, so rounding in its
+ *  direction never leaves out a segment the exact test would count. */
+const SECTOR_PAD = 1e-7;
 
 function sub(a: Pt3, b: Pt3): Vec3 {
   return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -179,22 +200,154 @@ function rollingBall(f1: Face2, f2: Face2, alpha: number, size: number): { cente
   return { center, touch1: contact(o1, f1, center, size), touch2: contact(o2, f2, center, size) };
 }
 
-/** Even-odd test against the outline, whose loops close when the mesh does. */
-function insideOutline(outline: Float64Array, q: V2): boolean {
-  let inside = false;
-  for (let i = 0; i < outline.length; i += 4) {
-    const ax = outline[i]!, ay = outline[i + 1]!, bx = outline[i + 2]!, by = outline[i + 3]!;
-    if (ay > q[1] !== by > q[1] && q[0] < ax + ((q[1] - ay) * (bx - ax)) / (by - ay)) inside = !inside;
+function distanceToSegment(ax: number, ay: number, bx: number, by: number): number {
+  const ex = bx - ax, ey = by - ay;
+  const l = ex * ex + ey * ey;
+  const t = l > 0 ? Math.max(0, Math.min(1, -(ax * ex + ay * ey) / l)) : 0;
+  const x = ax + ex * t, y = ay + ey * t;
+  return Math.sqrt(x * x + y * y);
+}
+
+/** A stand-in for the direction of (x, y) that climbs with its angle, from 0
+ *  to 4 once round, cheaper than atan2 and as good for sorting into sectors. */
+function turnOf(x: number, y: number): number {
+  const t = y / (Math.abs(x) + Math.abs(y));
+  return x >= 0 ? (y >= 0 ? t : 4 + t) : 2 - t;
+}
+
+/** The `k`th smallest of `a`, reordering it. */
+function nthSmallest(a: Float64Array, k: number): number {
+  let lo = 0, hi = a.length - 1;
+  while (lo < hi) {
+    const pivot = a[(lo + hi) >> 1]!;
+    let i = lo, j = hi;
+    while (i <= j) {
+      while (a[i]! < pivot) i++;
+      while (a[j]! > pivot) j--;
+      if (i <= j) {
+        const t = a[i]!;
+        a[i++] = a[j]!;
+        a[j--] = t;
+      }
+    }
+    if (k <= j) hi = j;
+    else if (k >= i) lo = i;
+    else return a[k]!;
   }
-  return inside;
+  return a[k]!;
+}
+
+/** Where a sample's ball probes the corner: on the bisector, a little way
+ *  off both faces. */
+function probePoint(alpha: number, room: number): V2 {
+  const off = Math.min(2, Math.max(0.1, 0.15 * Math.min(room, 20)));
+  const d = off / Math.sin(alpha / 2);
+  return [Math.cos(alpha / 2) * d, Math.sin(alpha / 2) * d];
+}
+
+const roomOf = (s: EdgeSample) => Math.min(s.reach1 ?? Infinity, s.reach2 ?? Infinity);
+
+/** The body's section across the edge at `sample`, from `count` segments
+ *  x0,y0,x1,y1 in the sample's frame, kept only as far out as the `keep`
+ *  segments nearest the edge reach. Null when the sample has no wedge. */
+export function sectionOutline(sample: EdgeSample, segs: Float64Array, count: number, keep = Infinity): SectionOutline | null {
+  const w = wedgeOf(sample);
+  if (!w) return null;
+  const ref = probePoint(w.alpha, roomOf(sample));
+  const [rx, ry] = ref;
+  let refInside = false;
+  const dist = new Float64Array(count);
+  for (let i = 0; i < count; i++) {
+    const ax = segs[i * 4]!, ay = segs[i * 4 + 1]!, bx = segs[i * 4 + 2]!, by = segs[i * 4 + 3]!;
+    if (ay > ry !== by > ry && rx < ax + ((ry - ay) * (bx - ax)) / (by - ay)) refInside = !refInside;
+    dist[i] = distanceToSegment(ax, ay, bx, by);
+  }
+  let radius = count > keep ? nthSmallest(dist.slice(), Math.floor(keep)) : Infinity;
+  if (len2(ref) >= radius) radius = 0;
+  let kept = 0;
+  for (let i = 0; i < count; i++) if (dist[i]! < radius) kept++;
+  const sectors = Math.min(MAX_SECTORS, Math.max(8, Math.ceil(kept / 2)));
+  const width = 4 / sectors;
+  const local = new Float64Array(kept * 4);
+  const first = new Int32Array(kept), last = new Int32Array(kept);
+  const sectorStart = new Int32Array(sectors + 1);
+  for (let i = 0, k = 0; i < count; i++) {
+    if (!(dist[i]! < radius)) continue;
+    const ax = segs[i * 4]! - rx, ay = segs[i * 4 + 1]! - ry, bx = segs[i * 4 + 2]! - rx, by = segs[i * 4 + 3]! - ry;
+    local[k * 4] = ax;
+    local[k * 4 + 1] = ay;
+    local[k * 4 + 2] = bx;
+    local[k * 4 + 3] = by;
+    const ta = turnOf(ax, ay);
+    let d = turnOf(bx, by) - ta;
+    if (d > 2) d -= 4;
+    else if (d < -2) d += 4;
+    const lo = (d < 0 ? ta + d : ta) - SECTOR_PAD;
+    let f = Math.floor(lo / width), l = Math.floor((lo + Math.abs(d) + 2 * SECTOR_PAD) / width);
+    if (!(l - f + 1 < sectors)) [f, l] = [0, sectors - 1];
+    first[k] = f;
+    last[k] = l;
+    for (let s = f; s <= l; s++) sectorStart[(((s % sectors) + sectors) % sectors) + 1]!++;
+    k++;
+  }
+  for (let s = 0; s < sectors; s++) sectorStart[s + 1]! += sectorStart[s]!;
+  const fill = sectorStart.slice(0, sectors);
+  const sectorSegs = new Int32Array(sectorStart[sectors]!);
+  for (let k = 0; k < kept; k++) {
+    for (let s = first[k]!; s <= last[k]!; s++) sectorSegs[fill[((s % sectors) + sectors) % sectors]!++] = k;
+  }
+  return { segs: local, radius, ref, refInside, sectorStart, sectorSegs };
+}
+
+/** Segment tests left in one drag update, and whether any query ran out of
+ *  them or of outline. */
+export interface TrimBudget {
+  left: number;
+  failed: boolean;
+}
+
+/** Whether `q` is in the material, by the crossings on the way from `ref`,
+ *  which only the kept segments of the one sector facing `q` can make. Null
+ *  when `q` lies past the kept outline or the budget runs out. */
+export function insideOutline(o: SectionOutline, q: V2, budget?: TrimBudget): boolean | null {
+  if (len2(q) >= o.radius) return null;
+  const vx = q[0] - o.ref[0], vy = q[1] - o.ref[1];
+  if (vx === 0 && vy === 0) return o.refInside;
+  const sectors = o.sectorStart.length - 1;
+  const b = Math.min(sectors - 1, Math.floor((turnOf(vx, vy) * sectors) / 4));
+  const from = o.sectorStart[b]!, to = o.sectorStart[b + 1]!;
+  if (budget && (budget.left -= to - from + 1) < 0) return null;
+  const s = o.segs;
+  let odd = false;
+  for (let k = from; k < to; k++) {
+    const i = o.sectorSegs[k]! * 4;
+    const ax = s[i]!, ay = s[i + 1]!, bx = s[i + 2]!, by = s[i + 3]!;
+    const s0 = vx * ay - vy * ax, s1 = vx * by - vy * bx;
+    if (s0 > 0 === s1 > 0) continue;
+    const t = (ax * by - ay * bx) / (s1 - s0);
+    if (t >= 0 && t < 1) odd = !odd;
+  }
+  return o.refInside !== odd;
 }
 
 /** The stretch of `curve` over [0, 1] lying on the material side `inside`,
  *  the run through its middle, or failing that its longest run; null when no
- *  point of it is on that side. */
-function trimToSide(curve: (s: number) => V2, outline: Float64Array, inside: boolean): [number, number] | null {
-  const ok = (s: number) => insideOutline(outline, curve(s)) === inside;
-  const flags = Array.from({ length: CLIP_STEPS + 1 }, (_, i) => ok(i / CLIP_STEPS));
+ *  point of it is on that side, or when `budget.failed` says it could not
+ *  tell. */
+export function trimToSide(
+  curve: (s: number) => V2,
+  outline: SectionOutline,
+  inside: boolean,
+  budget: TrimBudget = { left: Infinity, failed: false },
+): [number, number] | null {
+  const ok = (s: number) => {
+    const side = insideOutline(outline, curve(s), budget);
+    if (side === null) budget.failed = true;
+    return side === inside;
+  };
+  const flags: boolean[] = [];
+  for (let i = 0; i <= CLIP_STEPS && !budget.failed; i++) flags.push(ok(i / CLIP_STEPS));
+  if (budget.failed) return null;
   const runs: [number, number][] = [];
   for (let i = 0; i <= CLIP_STEPS; i++) {
     if (!flags[i]) continue;
@@ -216,7 +369,7 @@ function trimToSide(curve: (s: number) => V2, outline: Float64Array, inside: boo
   };
   const lo = run[0] === 0 ? 0 : refine(run[0] / CLIP_STEPS, (run[0] - 1) / CLIP_STEPS);
   const hi = run[1] === CLIP_STEPS ? 1 : refine(run[1] / CLIP_STEPS, (run[1] + 1) / CLIP_STEPS);
-  return [lo, hi];
+  return budget.failed ? null : [lo, hi];
 }
 
 /** The point `s` along a face from the edge, following its bend. */
@@ -231,9 +384,9 @@ interface Section {
   unsure: boolean;
 }
 
-/** One cross-section across the corner at `sample`, from face 1's contact
- *  point to face 2's: an arc for a fillet, the two points for a chamfer. */
-function crossSection(sample: EdgeSample, wanted: number, kind: BlendKind): Section | null {
+/** The plane across the edge at `sample`: face 1 leaving along `d1`, `e2`
+ *  completing the frame toward face 2, and the wedge `alpha` between them. */
+function wedgeOf(sample: EdgeSample): { d1: Vec3; e2: Vec3; alpha: number; cosA: number } | null {
   const T = normalize(sample.tangent);
   if (!T) return null;
   const d1 = rejectAndNormalize(sample.into1, T);
@@ -243,17 +396,24 @@ function crossSection(sample: EdgeSample, wanted: number, kind: BlendKind): Sect
   const alpha = Math.acos(cosA);
   if (alpha < MIN_WEDGE || alpha > Math.PI - MIN_WEDGE) return null;
   const e2 = rejectAndNormalize(d2, d1);
-  if (!e2) return null;
+  return e2 ? { d1, e2, alpha, cosA } : null;
+}
+
+/** One cross-section across the corner at `sample`, from face 1's contact
+ *  point to face 2's: an arc for a fillet, the two points for a chamfer.
+ *  Without a `budget` the sample's outline is left out. */
+function crossSection(sample: EdgeSample, wanted: number, kind: BlendKind, budget: TrimBudget | null): Section | null {
+  const w = wedgeOf(sample);
+  if (!w) return null;
+  const { d1, e2, alpha, cosA } = w;
   const sinA = Math.sin(alpha);
   const P = sample.point;
   const to3 = (p: V2): Vec3 => add(P, add(scale(d1, p[0]), scale(e2, p[1])));
-  const room = Math.min(sample.reach1 ?? Infinity, sample.reach2 ?? Infinity);
-  const outline = sample.outline?.length ? sample.outline : null;
+  const room = roomOf(sample);
+  const outline = budget ? sample.outline ?? null : null;
   // A small ball tucked into the corner is in the material on a convex edge
   // and in the air on a concave one.
-  const bisector: V2 = [Math.cos(alpha / 2), Math.sin(alpha / 2)];
-  const probe = Math.min(2, Math.max(0.1, 0.15 * Math.min(room, 20)));
-  const convex = outline ? insideOutline(outline, scale2(bisector, probe / Math.sin(alpha / 2))) : false;
+  const convex = outline?.refInside ?? false;
   const size = convex
     ? wanted
     : Math.min(wanted, kind === "chamfer" ? room : room * Math.tan(alpha / 2));
@@ -263,10 +423,12 @@ function crossSection(sample: EdgeSample, wanted: number, kind: BlendKind): Sect
   const f2: Face2 = { dir: [cosA, sinA], side: [sinA, -cosA], bend: sample.bend2 ?? 0 };
 
   let curve: (s: number) => V2;
+  let inner: V2;
   let unsure = false;
   if (kind === "chamfer") {
     const a = alongFace(f1, size), b = alongFace(f2, size);
     curve = (s) => add2(scale2(a, 1 - s), scale2(b, s));
+    inner = add2(a, b);
   } else {
     // A curved face the ball cannot sit on (it outgrows the face's own round)
     // still gets the flat-face ghost, the shape the kernel falls back to.
@@ -277,6 +439,7 @@ function crossSection(sample: EdgeSample, wanted: number, kind: BlendKind): Sect
     }
     if (!ball) return null;
     const { center } = ball;
+    inner = center;
     const u = scale2(sub2(ball.touch1, center), 1 / size);
     const v = scale2(sub2(ball.touch2, center), 1 / size);
     const sweep = Math.acos(Math.max(-1, Math.min(1, dot2(u, v))));
@@ -291,7 +454,16 @@ function crossSection(sample: EdgeSample, wanted: number, kind: BlendKind): Sect
 
   let [lo, hi] = [0, 1];
   if (outline) {
-    const kept = trimToSide(curve, outline, convex);
+    // The ends sit on the true faces, which the mesh's facets cut inside or
+    // outside of by their chord sag, so each point is judged a little toward
+    // the ball, the side a face that is really there keeps.
+    const nudge = Math.min(0.02 * size, 0.05);
+    const judged = (s: number): V2 => {
+      const q = curve(s);
+      const l = len2(sub2(inner, q));
+      return l > 0 ? add2(q, scale2(sub2(inner, q), nudge / l)) : q;
+    };
+    const kept = trimToSide(judged, outline, convex, budget!);
     if (!kept) return null;
     [lo, hi] = kept;
   }
@@ -304,22 +476,29 @@ function crossSection(sample: EdgeSample, wanted: number, kind: BlendKind): Sect
 /** The ghost mesh for one picked edge: a ribbon lofted between consecutive
  *  samples' cross-sections, and from the last back to the first when `closed`.
  *  Null when there are fewer than 2 samples, the size is ~0, or ANY sample has
- *  no solution. */
+ *  no solution. Trimming to the body stops once `budget` runs out, and the
+ *  whole edge is capped at its face ends instead. */
 export function sweepBlendGhost(
   samples: readonly EdgeSample[],
   size: number,
   kind: BlendKind,
   closed = false,
+  budget: TrimBudget = { left: TRIM_BUDGET, failed: false },
 ): GhostGeometry | null {
   if (size < EPS || samples.length < 2) return null;
-  const sections: Vec3[][] = [];
-  let unsure = 0;
-  for (const s of samples) {
-    const cs = crossSection(s, size, kind);
-    if (!cs) return null;
-    sections.push(cs.points);
-    if (cs.unsure) unsure++;
-  }
+  const sectionsWith = (b: TrimBudget | null) => {
+    const out: Section[] = [];
+    for (const s of samples) {
+      const cs = crossSection(s, size, kind, b);
+      if (!cs || b?.failed) return null;
+      out.push(cs);
+    }
+    return out;
+  };
+  const found = sectionsWith(budget) ?? (budget.failed ? sectionsWith(null) : null);
+  if (!found) return null;
+  const sections = found.map((cs) => cs.points);
+  const unsure = found.filter((cs) => cs.unsure).length;
   if (closed && samples.length > 2) sections.push(sections[0]!);
   const positions: number[] = [];
   const push3 = (p: Vec3) => positions.push(p[0], p[1], p[2]);
