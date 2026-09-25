@@ -29,6 +29,7 @@ import { pointInRegion } from "../sketch/region";
 import { setPrompt } from "../ui/prompt";
 import type { Axis3, AxisSpec, Feature, PlaneDef, PlaneSpec, Selector, Vec3 } from "../types";
 import { findSelectorAt, replaceSelectorAt } from "./repickReference";
+import { awaitTreePick, treePickRefusal } from "../ui/treePick";
 
 export interface FeatureStartersDeps {
   store: DocumentStore;
@@ -123,20 +124,6 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     pressPull.start(pressPullDone, { grabAt: { x, y } });
   };
 
-  /** Abort an in-flight interactive plane pick, if any.
-   *
-   *  `planePick` is part of toolBusy(), and pickPlaneInteractive only clears it
-   *  from its own canvas click or Escape. Choosing the plane in the BROWSER
-   *  instead (tree.onSketchOnPlane) enters the sketch by a different route and
-   *  left the flag set forever, so from then on every tool guarded by toolBusy(),
-   *  extrude, fillet, shell, press/pull, measure, section, returned silently
-   *  and did nothing at all, with no message, until the app was restarted. */
-  function cancelPlanePick() {
-    pendingPickCleanup?.();
-  }
-
-  let pendingPickCleanup: (() => void) | null = null;
-
   /** `face` is the pick's face reference when a body face was taken, and null
    *  for a construction quad. A datum plane keeps it so it can follow the face
    *  across a rebuild; a sketch started directly on a face has no use for it,
@@ -209,8 +196,15 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     const onEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape") cleanup();
     };
+    const releaseTree = awaitTreePick((pick) => {
+      const spec = pick.kind === "basePlane" ? pick.plane : pick.kind === "datumPlane" ? pick.def : null;
+      if (!spec) return treePickRefusal(pick, "a plane, or a face picked in the view");
+      cleanup();
+      requestAnimationFrame(() => onPick(spec, null, pick.kind === "datumPlane" ? pick.id : null));
+      return true;
+    });
     const cleanup = () => {
-      pendingPickCleanup = null;
+      releaseTree();
       setPlanePick(false);
       viewport.showAllPlanes(false);
       viewport.suspendPicking = false;
@@ -221,7 +215,6 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       window.removeEventListener("keydown", onEsc, true);
       setPrompt(null);
     };
-    pendingPickCleanup = cleanup;
     canvas.addEventListener("pointermove", onMove);
     canvas.addEventListener("pointerdown", onDown, true);
     window.addEventListener("keydown", onEsc, true);
@@ -481,7 +474,10 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       if (!hit) return; // over nothing: stay in the pick rather than take a guess
       e.preventDefault();
       e.stopImmediatePropagation();
-      taken.push([hit.p.x, hit.p.y, hit.p.z]);
+      take([hit.p.x, hit.p.y, hit.p.z]);
+    };
+    const take = (p: Vec3) => {
+      taken.push(p);
       draw(null);
       if (taken.length < n) { say(); return; }
       const pts = taken.slice();
@@ -493,8 +489,13 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       if (taken.length) { taken.pop(); draw(null); say(); return; }
       cleanup();
     };
+    const releaseTree = awaitTreePick((pick) => {
+      if (pick.kind !== "datumPoint") return treePickRefusal(pick, "a point");
+      take(pick.point);
+      return true;
+    });
     const cleanup = () => {
-      pendingPickCleanup = null;
+      releaseTree();
       setPlanePick(false);
       viewport.suspendPicking = false;
       viewport.setPickMarkers([], null);
@@ -503,7 +504,6 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       window.removeEventListener("keydown", onEsc, true);
       setPrompt(null);
     };
-    pendingPickCleanup = cleanup;
     canvas.addEventListener("pointermove", onMove);
     canvas.addEventListener("pointerdown", onDown, true);
     window.addEventListener("keydown", onEsc, true);
@@ -695,7 +695,15 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     const onEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape") cleanup();
     };
+    const releaseTree = awaitTreePick((pick) => {
+      if (pick.kind !== "body") return treePickRefusal(pick, "one body");
+      if (exclude.includes(pick.id)) return "That body is already part of this operation, pick another";
+      cleanup();
+      requestAnimationFrame(() => onPick(pick.id));
+      return true;
+    });
     const cleanup = () => {
+      releaseTree();
       viewport.suspendPicking = false;
       viewport.hoverBody(null);
       canvas.style.cursor = "default";
@@ -875,7 +883,22 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     const onEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape") cleanup();
     };
+    // A sketch row names a profile only when that sketch shows exactly one.
+    const releaseTree = awaitTreePick((pick) => {
+      if (pick.kind !== "sketch") return treePickRefusal(pick, "a sketch profile");
+      const mine = overlay.regions.filter((r) => r.sketchId === pick.id);
+      const only = mine.length === 1 ? mine[0] : undefined;
+      if (!only) {
+        return mine.length
+          ? `That sketch has ${mine.length} profiles, click the one you mean in the view`
+          : "That sketch shows no closed profile";
+      }
+      cleanup();
+      requestAnimationFrame(() => onPick(only));
+      return true;
+    });
     const cleanup = () => {
+      releaseTree();
       viewport.suspendPicking = false;
       overlay.setHoverRegion(null);
       canvas.style.cursor = "default";
@@ -999,7 +1022,14 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     const onEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape") cleanup();
     };
+    const releaseTree = awaitTreePick((pick) => {
+      if (pick.kind !== "datumAxis") return treePickRefusal(pick, "an axis");
+      cleanup();
+      requestAnimationFrame(() => onPick({ origin: pick.origin, dir: pick.dir }));
+      return true;
+    });
     const cleanup = () => {
+      releaseTree();
       viewport.suspendPicking = false;
       viewport.emphasizeEdges(false);
       viewport.hoverEdge(null);
@@ -1125,7 +1155,9 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     const onEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape") cleanup();
     };
+    const releaseTree = awaitTreePick((pick) => treePickRefusal(pick, "a face, pick it in the view"));
     const cleanup = () => {
+      releaseTree();
       setPlanePick(false);
       viewport.suspendPicking = false;
       viewport.clearHover();
@@ -1170,7 +1202,9 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     const onEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape") cleanup();
     };
+    const releaseTree = awaitTreePick((pick) => treePickRefusal(pick, "an edge, pick it in the view"));
     const cleanup = () => {
+      releaseTree();
       viewport.suspendPicking = false;
       viewport.emphasizeEdges(false);
       viewport.hoverEdge(null);
@@ -1378,7 +1412,6 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   };
 
   return {
-    cancelPlanePick,
     startFillet,
     startChamfer,
     grabEdgeHandle,
