@@ -525,11 +525,11 @@ export class EdgeFeatureTool {
     }
     if (current) this.recolorGhostsFromDiagnostics(held?.diagnostics);
     // The ghost's job ends the moment the real geometry for THIS size is on
-    // screen, whether that's the built mesh or a held refusal (the refusal
-    // painting takes over from there, see refreshRefusal). A reply for an
-    // older size mid-debounce is `current` too (questionOf ignores the size
-    // itself) but doesn't match `this.size()`, so the ghost stays up.
-    if (current && (held || (size !== null && Math.abs(size - this.size()) < 1e-9))) {
+    // screen. A held refusal swaps it for the capped one instead. A reply for
+    // an older size mid-debounce is `current` too (questionOf ignores the
+    // size itself) but doesn't match `this.size()`, so the ghost stays up.
+    if (current && held) this.refreshGhost();
+    else if (current && size !== null && Math.abs(size - this.size()) < 1e-9) {
       this.viewport.clearBlendGhost();
     }
   }
@@ -965,10 +965,19 @@ export class EdgeFeatureTool {
       this.viewport.clearBlendGhost();
       return;
     }
+    // A size the kernel already refused is never drawn: the ghost would show a
+    // round the faces cannot hold. It stops, in red, at the size kept on screen.
+    const capped = this.refusedNow;
+    const size = capped ? this.shown : this.size();
+    if (size == null) {
+      this.viewport.clearBlendGhost();
+      return;
+    }
     this.viewport.setBlendGhost(
       this.ghosts.map((g) => ({ body: g.sels[0]?.body, points: g.points })),
-      this.size(),
+      size,
       this.kind,
+      capped,
     );
   }
 
