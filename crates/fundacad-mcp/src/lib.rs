@@ -24,6 +24,7 @@ pub mod describe;
 pub mod docfile;
 pub mod link;
 pub mod live;
+pub mod mesh;
 pub mod model;
 pub mod png;
 pub mod render;
