@@ -20,13 +20,17 @@ import { themeColor } from "./themeColors";
 
 // cameraPosition / modelMatrix / normal / position are all built into a
 // THREE.ShaderMaterial (prepended for us), so they are used here undeclared.
+// The view vector is formed per fragment from the interpolated world position.
+// Normalised per vertex and interpolated, it bent toward the grazing directions
+// of a large face's far corners, so a plate filling the view read as grazing
+// everywhere and the rim washed the whole screen in the accent.
 const VERT = /* glsl */ `
   varying vec3 vN;
-  varying vec3 vV;
+  varying vec3 vW;
   void main() {
     vec4 wp = modelMatrix * vec4(position, 1.0);
     vN = normalize(mat3(modelMatrix) * normal);
-    vV = normalize(cameraPosition - wp.xyz);
+    vW = wp.xyz;
     gl_Position = projectionMatrix * viewMatrix * wp;
   }
 `;
@@ -35,12 +39,16 @@ const FRAG = /* glsl */ `
   uniform vec3 uColor;
   uniform float uFill;
   uniform float uRim;
+  uniform float uFade;
   varying vec3 vN;
-  varying vec3 vV;
+  varying vec3 vW;
   void main() {
     // fresnel: 0 facing the camera, 1 at the grazing silhouette
-    float f = pow(1.0 - clamp(dot(normalize(vN), normalize(vV)), 0.0, 1.0), 2.4);
-    float a = clamp(uFill + uRim * f, 0.0, 1.0);
+    vec3 v = isOrthographic
+      ? vec3(viewMatrix[0][2], viewMatrix[1][2], viewMatrix[2][2])
+      : normalize(cameraPosition - vW);
+    float f = pow(1.0 - clamp(dot(normalize(vN), v), 0.0, 1.0), 2.4);
+    float a = clamp((uFill + uRim * f) * uFade, 0.0, 1.0);
     gl_FragColor = vec4(uColor, a);
   }
 `;
@@ -71,6 +79,7 @@ function glowMaterial(kind: GlowKind): THREE.ShaderMaterial {
         uColor: { value: new THREE.Color() },
         uFill: { value: fill },
         uRim: { value: rim },
+        uFade: { value: 1 },
       },
       vertexShader: VERT,
       fragmentShader: FRAG,
@@ -134,6 +143,34 @@ export function makeFaceHoverOverlay(positions: Float32Array, color: THREE.Color
   return mesh;
 }
 
+/** How much of the view a box covers, 0 to 1, from its projected corners
+ *  clipped to the screen. A corner behind the camera means the camera is in
+ *  among it, which is the whole view. */
+export function screenCoverage(box: THREE.Box3, matrixWorld: THREE.Matrix4, camera: THREE.Camera): number {
+  if (box.isEmpty()) return 0;
+  const toClip = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).multiply(matrixWorld);
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  const p = new THREE.Vector4();
+  for (let i = 0; i < 8; i++) {
+    p.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z, 1).applyMatrix4(toClip);
+    if (p.w <= 1e-9) return 1;
+    minX = Math.min(minX, p.x / p.w); maxX = Math.max(maxX, p.x / p.w);
+    minY = Math.min(minY, p.y / p.w); maxY = Math.max(maxY, p.y / p.w);
+  }
+  const w = Math.max(0, Math.min(1, maxX) - Math.max(-1, minX));
+  const h = Math.max(0, Math.min(1, maxY) - Math.max(-1, minY));
+  return (w * h) / 4;
+}
+
+/** The glow's strength for a body covering `coverage` of the view. A body that
+ *  fills the screen is the one being looked at already, and at full strength
+ *  its tint was the whole viewport and every glass panel over it, a mint wash
+ *  the gizmo's handles disappeared into. */
+export function glowFade(coverage: number): number {
+  const t = Math.min(1, Math.max(0, (coverage - 0.4) / 0.5));
+  return 1 - 0.75 * t * t * (3 - 2 * t);
+}
+
 /** Build the overlay mesh for a body: a second draw of its geometry, non-pickable
  *  and shadow-free, in the current theme accent. Not yet added to a parent. */
 export function makeSelectionGlow(geometry: THREE.BufferGeometry, kind: GlowKind): THREE.Mesh {
@@ -143,5 +180,12 @@ export function makeSelectionGlow(geometry: THREE.BufferGeometry, kind: GlowKind
   mesh.castShadow = false;
   mesh.receiveShadow = false;
   mesh.renderOrder = 3; // over the shaded body, under gizmos and other overlays
+  // Per draw, because the material is shared by every glowing body.
+  mesh.onBeforeRender = (_r, _s, camera, geo, mat) => {
+    if (!geo.boundingBox) geo.computeBoundingBox();
+    const m = mat as THREE.ShaderMaterial;
+    m.uniforms.uFade!.value = glowFade(screenCoverage(geo.boundingBox!, mesh.matrixWorld, camera));
+    m.uniformsNeedUpdate = true;
+  };
   return mesh;
 }
