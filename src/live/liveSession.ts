@@ -198,8 +198,8 @@ export class LiveSessionHost {
 
   /** Take one assistant's edit.
    *
-   *  Through `loadDocument`, which is the same path a file open takes: it pushes
-   *  undo, migrates, and schedules a rebuild. So the edit is one Ctrl+Z away and
+   *  Through `loadDocument` as a replacement, the same path a file open takes
+   *  except that it pushes undo: it migrates and schedules a rebuild. So the edit is one Ctrl+Z away and
    *  it goes through the same validation a person's does. Anything that bypassed
    *  that to be faster would be an edit the user cannot take back.
    *
@@ -224,7 +224,7 @@ export class LiveSessionHost {
       this.lastGuestSeen = this.now();
       return;
     }
-    this.store.loadDocument(p.document);
+    this.store.loadDocument(p.document, { replace: true });
     // Bounded: this is a receipt an assistant checks within seconds of offering,
     // not a history. Anything older than the last handful is being kept for a
     // client that has already given up waiting.

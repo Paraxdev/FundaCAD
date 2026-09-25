@@ -1856,7 +1856,7 @@ export class DocumentStore {
     const repo = this.repo;
     if (!repo) return;
     const snapshot = snapshotOf(repo, id);
-    this.load(JSON.stringify(snapshot));
+    this.load(JSON.stringify(snapshot), { replace: true });
     this.repo = repo;
     this.emitMeta();
   }
@@ -1878,7 +1878,10 @@ export class DocumentStore {
   toJSON(): string {
     return JSON.stringify(this.toObject(), null, 2);
   }
-  load(json: string) {
+  /** Open a document, with a history of its own. `replace` is for putting
+   *  another state of the SAME document in place (a version, an assistant's or a
+   *  plugin's edit), which stays one undoable step. */
+  load(json: string, opts: { replace?: boolean } = {}) {
     let raw: unknown;
     try {
       raw = JSON.parse(json);
@@ -1893,7 +1896,8 @@ export class DocumentStore {
     const parsed = raw as CadDocument;
     for (const w of migrateDocument(parsed)) this.onWarning?.(w);
     this.emitRewind();
-    this.pushUndo();
+    if (opts.replace) this.pushUndo();
+    else this.undoStack = [];
     this.redoStack = [];
     this.rearmProjectionValve(); // valve state must never cross documents
     // split persisted project state back out of the document; keep `this.doc`
@@ -1938,8 +1942,8 @@ export class DocumentStore {
     this.emitDoc();
     this.scheduleRebuild(true);
   }
-  loadDocument(doc: CadDocument) {
-    this.load(JSON.stringify(doc));
+  loadDocument(doc: CadDocument, opts: { replace?: boolean } = {}) {
+    this.load(JSON.stringify(doc), opts);
   }
 
   // --- rebuild pipeline ---
