@@ -388,6 +388,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   Object.assign(e, createSelection(e));
   Object.assign(e, createDocumentActions(e));
   e.store.onRewind(endPickSession);
+  e.store.onOpen(() => { if (e.sketch.active) e.sketch.cancel(); });
 
   return e;
 }
@@ -422,10 +423,7 @@ export function mountUi(e: Engine): void {
   e.ui.welcome = new WelcomeScreen({
     onNew: () => void e.newDocument(),
     onOpen: () => void e.openDoc(),
-    onOpenPath: async (path) => {
-      if (e.sketch.active) e.sketch.cancel(); // same guard as openDoc
-      return openDocumentAtPath(e.store, path, e.geometry);
-    },
+    onOpenPath: (path) => openDocumentAtPath(e.store, path, e.geometry),
   });
 
   e.starters = createFeatureStarters({

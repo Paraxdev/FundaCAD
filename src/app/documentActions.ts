@@ -15,15 +15,11 @@ export function createDocumentActions(
         });
         if (!ok) return;
       }
-      if (e.sketch.active) e.sketch.cancel();
       e.store.newDocument();
       e.viewport.resetCamera(false);
     },
 
-    // Open must exit an active sketch first, else the in-progress sketch's curves
-    // orphan on screen (loading the new doc doesn't touch the active-sketch overlay).
     async openDoc() {
-      if (e.sketch.active) e.sketch.cancel();
       await openDocument(e.store, e.geometry);
     },
 
