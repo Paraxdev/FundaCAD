@@ -449,7 +449,7 @@ export function mountUi(e: Engine): void {
     toolBusy: () => e.toolBusy(),
     hasBody: () => e.hasBody(),
     setStatus: (t, c) => e.setStatus(t, c),
-    selectFeature: (id) => e.selectFeature(id),
+    selectFeature: (id, explicit) => e.selectFeature(id, explicit),
     noteCommitted: (id) => e.noteCommitted(id),
     isSketchConsumed: (id) => e.isSketchConsumed(id),
     getSelectedFeature: () => e.selectedFeature,
