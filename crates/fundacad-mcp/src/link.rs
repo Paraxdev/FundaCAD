@@ -37,6 +37,8 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::Mutex;
 use tokio_tungstenite::tungstenite::Message;
+
+use crate::mesh::MeshBody;
 use tokio_tungstenite::{MaybeTlsStream, WebSocketStream};
 
 /// How long to wait for the spawned engine to print LISTENING.
@@ -269,11 +271,17 @@ impl Socket {
     /// asked for as the app gets it, streamed in binary chunks, since as one
     /// JSON message a large assembly is refused at the frame cap.
     pub async fn request(&mut self, id: &str, request: &Value) -> io::Result<Value> {
+        self.request_meshed(id, request).await.map(|(v, _)| v)
+    }
+
+    /// [`Socket::request`], a binary mesh reply's bodies kept as flat arrays
+    /// beside it; the reply's own `bodies` then carry every key but those.
+    pub async fn request_meshed(&mut self, id: &str, request: &Value) -> io::Result<(Value, Vec<MeshBody>)> {
         let mut payload = request.as_object().cloned().unwrap_or_default();
         payload.insert("id".into(), json!(id));
         payload.insert("binary".into(), json!(true));
         payload.insert("chunked".into(), json!(true));
-        let mut streamed: Option<(Map<String, Value>, Vec<Value>)> = None;
+        let mut streamed: Option<(Map<String, Value>, Vec<MeshBody>)> = None;
         let text = Value::Object(payload).to_string();
         self.ws
             .send(Message::Text(text.into()))
@@ -290,25 +298,35 @@ impl Socket {
             let text = match msg {
                 Message::Text(t) => t.to_string(),
                 Message::Binary(b) => {
-                    let mut value = fundacad_protocol::frame::decode_frame(&b)
+                    let (mut value, mut bufs) = fundacad_protocol::frame::decode_frame_raw(&b)
                         .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-                    let Some(stream) = value.get("stream").cloned() else {
-                        return Ok(value);
-                    };
-                    let (fields, bodies) = streamed.get_or_insert_with(Default::default);
-                    if let Some(Value::Object(mut result)) = value.get_mut("result").map(Value::take) {
-                        if let Some(Value::Array(chunk)) = result.shift_remove("bodies") {
-                            bodies.extend(chunk);
+                    let mut meshes = Vec::new();
+                    if let Some(result) = value.get_mut("result").and_then(Value::as_object_mut) {
+                        if let Some(Value::Array(bodies)) = result.get_mut("bodies") {
+                            for b in bodies.iter_mut() {
+                                let m = MeshBody::from_frame(b.take(), &mut bufs);
+                                *b = Value::Object(m.info.clone());
+                                meshes.push(m);
+                            }
                         }
+                    }
+                    let Some(stream) = value.get("stream").cloned() else {
+                        return Ok((value, meshes));
+                    };
+                    let (fields, all) = streamed.get_or_insert_with(Default::default);
+                    if let Some(Value::Object(mut result)) = value.get_mut("result").map(Value::take) {
+                        result.shift_remove("bodies");
                         result.shift_remove("manifest");
                         fields.extend(result);
                     }
+                    all.extend(meshes);
                     if stream.get("final") != Some(&Value::Bool(true)) {
                         continue;
                     }
-                    let (mut fields, bodies) = streamed.take().unwrap_or_default();
-                    fields.insert("bodies".into(), Value::Array(bodies));
-                    return Ok(json!({"id": value.get("id"), "ok": true, "result": fields}));
+                    let (mut fields, all) = streamed.take().unwrap_or_default();
+                    let infos = all.iter().map(|m| Value::Object(m.info.clone())).collect();
+                    fields.insert("bodies".into(), Value::Array(infos));
+                    return Ok((json!({"id": value.get("id"), "ok": true, "result": fields}), all));
                 }
                 Message::Close(_) => {
                     return Err(io::Error::new(
@@ -325,8 +343,8 @@ impl Socket {
                 continue; // building or importing progress
             }
             match value.get("id") {
-                Some(Value::Null) | None => return Ok(value),
-                Some(Value::String(got)) if got == id => return Ok(value),
+                Some(Value::Null) | None => return Ok((value, Vec::new())),
+                Some(Value::String(got)) if got == id => return Ok((value, Vec::new())),
                 _ => continue,
             }
         }
@@ -569,6 +587,12 @@ impl EngineLink {
     /// rather than routed. One agent asking one question at a time is the whole
     /// traffic pattern.
     pub async fn call(&self, op: &str, payload: Value) -> io::Result<Value> {
+        self.call_meshed(op, payload).await.map(|(v, _)| v)
+    }
+
+    /// [`Link::call`] with a mesh reply's bodies as flat arrays, see
+    /// [`Socket::request_meshed`].
+    pub async fn call_meshed(&self, op: &str, payload: Value) -> io::Result<(Value, Vec<MeshBody>)> {
         let mut state = self.state.lock().await;
         state.next_id += 1;
         let req_id = state.next_id.to_string();
@@ -581,7 +605,7 @@ impl EngineLink {
                 state.socket = Some(Socket::connect(self.port, &self.token).await?);
             }
             let socket = state.socket.as_mut().expect("just connected");
-            let sent = tokio::time::timeout(CALL_TIMEOUT, socket.request(&req_id, &request)).await;
+            let sent = tokio::time::timeout(CALL_TIMEOUT, socket.request_meshed(&req_id, &request)).await;
             match sent {
                 Ok(Ok(reply)) => return Ok(reply),
                 Ok(Err(e)) => {

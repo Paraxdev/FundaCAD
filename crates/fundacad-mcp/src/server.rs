@@ -49,6 +49,7 @@ use crate::docfile;
 use crate::link::{args as call_args, EngineLink, Mode};
 use crate::live::{LiveError, LiveLink};
 use crate::model::{self, Doc};
+use crate::mesh::MeshBody;
 use crate::render::{self, ViewRequest};
 use crate::schema;
 use crate::upload::{self, Upload, ASK_FOR_A_PATH, IMPORT_FORMATS, PIECES_WORTH_IT};
@@ -154,7 +155,7 @@ struct Rebuilt {
     link: Arc<EngineLink>,
     document: Map<String, Value>,
     result: Value,
-    mesh: Vec<Value>,
+    mesh: Arc<Vec<MeshBody>>,
     problems: Vec<String>,
 }
 
@@ -280,14 +281,14 @@ struct State {
     /// The last successful build's per-body mesh, which is what `view` draws.
     /// Kept rather than re-requested: a render right after a build is the
     /// common case and the mesh is the expensive part of the reply.
-    mesh: Vec<Value>,
+    mesh: Arc<Vec<MeshBody>>,
     /// The document signature `mesh` belongs to.
     built_for: Option<String>,
 }
 
 impl State {
     fn invalidate(&mut self) {
-        self.mesh.clear();
+        self.mesh = Arc::default();
         self.built_for = None;
     }
 
@@ -351,7 +352,7 @@ impl FundaCad {
                 private_edits: false,
                 uploads: HashMap::new(),
                 probed_at: None,
-                mesh: Vec::new(),
+                mesh: Arc::default(),
                 built_for: None,
             })),
             turn: Arc::new(Mutex::new(())),
@@ -1227,8 +1228,8 @@ impl FundaCad {
             (st.link.clone(), (st.doc.clone(), problems))
         };
         let (document, problems) = doc;
-        let reply = match link
-            .call(
+        let (reply, framed) = match link
+            .call_meshed(
                 "rebuild",
                 call_args([
                     ("document", Value::Object(document.clone())),
@@ -1256,11 +1257,17 @@ impl FundaCad {
             return Err(failure(format!("Build failed{where_}: {err}")));
         }
         let result = reply.get("result").cloned().unwrap_or_else(|| json!({}));
-        let mesh: Vec<Value> = result
-            .get("bodies")
-            .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default();
+        let mesh = Arc::new(if framed.is_empty() {
+            result
+                .get("bodies")
+                .and_then(Value::as_array)
+                .map_or(&[][..], Vec::as_slice)
+                .iter()
+                .map(MeshBody::from_value)
+                .collect()
+        } else {
+            framed
+        });
         {
             let mut st = self.state.lock().await;
             if let Some(ids) = result.get("bodyIds") {
@@ -1308,8 +1315,8 @@ impl FundaCad {
             }
         }
         let mut lines: Vec<String> = Vec::new();
-        for b in &mesh {
-            let id = b.get("id").and_then(Value::as_str).unwrap_or_default();
+        for b in mesh.iter() {
+            let id = b.id();
             let e = exact.get(id).cloned().unwrap_or_else(|| json!({}));
             let size: Vec<Value> = match e.get("bbox").and_then(|bb| bb.get("size")) {
                 Some(Value::Array(items)) => items.clone(),
@@ -1335,10 +1342,7 @@ impl FundaCad {
                 Some(v) => format!(", vol {} mm3", describe::g_format(v)),
                 None => String::new(),
             };
-            let triangles = b
-                .get("indices")
-                .and_then(Value::as_array)
-                .map_or(0, |i| i.len() / 3);
+            let triangles = b.triangles();
             lines.push(format!(
                 "{id} \"{}\": {} x {} x {} mm{vol}, {} faces, {triangles} triangles",
                 b.get("name")
@@ -1557,7 +1561,7 @@ impl FundaCad {
             });
         if let Some(list) = &bodies {
             let known: Vec<&str> =
-                mesh.iter().filter_map(|b| b.get("id").and_then(Value::as_str)).collect();
+                mesh.iter().map(MeshBody::id).collect();
             let unknown: Vec<&String> = list.iter().filter(|id| !known.contains(&id.as_str())).collect();
             if !unknown.is_empty() {
                 return failure(format!(
@@ -1584,7 +1588,7 @@ impl FundaCad {
             focus: args.get("focus").cloned().unwrap_or(Value::Null),
             draw_edges: true,
         };
-        let canvas = match render::render(&mesh, &request) {
+        let canvas = match render::render(&mesh[..], &request) {
             Ok(c) => c,
             Err(e) => return failure(format!("ValueError: {e}")),
         };
@@ -1602,14 +1606,7 @@ impl FundaCad {
             None => camera.view.clone(),
         };
         let shown: Vec<String> = bodies.unwrap_or_else(|| {
-            mesh.iter()
-                .map(|b| {
-                    b.get("id")
-                        .and_then(Value::as_str)
-                        .unwrap_or_default()
-                        .to_string()
-                })
-                .collect()
+            mesh.iter().map(|b| b.id().to_string()).collect()
         });
         let cut = if section.is_null() {
             String::new()

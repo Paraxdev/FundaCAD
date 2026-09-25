@@ -509,13 +509,67 @@ impl Canvas {
     }
 }
 
+/// A body to draw, as the engine's JSON reply has it or as flat arrays.
+pub trait Drawable {
+    fn body_id(&self) -> Option<&str>;
+    fn positions(&self) -> Vec<f64>;
+    fn indices(&self) -> Vec<usize>;
+    fn face_ids(&self) -> Vec<f64>;
+    fn polylines(&self) -> Vec<Vec<Vec3>>;
+}
+
+impl Drawable for Value {
+    fn body_id(&self) -> Option<&str> {
+        self.get("id").and_then(Value::as_str)
+    }
+    fn positions(&self) -> Vec<f64> {
+        floats(self.get("positions"))
+    }
+    fn indices(&self) -> Vec<usize> {
+        floats(self.get("indices")).into_iter().map(|v| v as usize).collect()
+    }
+    fn face_ids(&self) -> Vec<f64> {
+        floats(self.get("faceIds"))
+    }
+    fn polylines(&self) -> Vec<Vec<Vec3>> {
+        self.get("edges")
+            .and_then(Value::as_array)
+            .map_or(&[][..], Vec::as_slice)
+            .iter()
+            .map(polyline_points)
+            .collect()
+    }
+}
+
+impl Drawable for crate::mesh::MeshBody {
+    fn body_id(&self) -> Option<&str> {
+        self.info.get("id").and_then(Value::as_str)
+    }
+    fn positions(&self) -> Vec<f64> {
+        self.positions.iter().map(|&x| f64::from(x)).collect()
+    }
+    fn indices(&self) -> Vec<usize> {
+        self.indices.iter().map(|&i| i as usize).collect()
+    }
+    fn face_ids(&self) -> Vec<f64> {
+        self.face_ids.iter().map(|&i| f64::from(i)).collect()
+    }
+    fn polylines(&self) -> Vec<Vec<Vec3>> {
+        self.edges
+            .iter()
+            .filter(|p| p.len() >= 6 && p.len() % 3 == 0)
+            .map(|p| p.chunks_exact(3).map(|c| [f64::from(c[0]), f64::from(c[1]), f64::from(c[2])]).collect())
+            .collect()
+    }
+}
+
 /// (min, max) over every vertex of every mesh, or None when there are none.
-pub fn model_bounds(meshes: &[&Value]) -> Option<(Vec3, Vec3)> {
+pub fn model_bounds<M: Drawable>(meshes: &[&M]) -> Option<(Vec3, Vec3)> {
     let mut lo = [f64::INFINITY; 3];
     let mut hi = [f64::NEG_INFINITY; 3];
     let mut any = false;
     for m in meshes {
-        let pos = floats(m.get("positions"));
+        let pos = m.positions();
         for p in pos.chunks_exact(3) {
             any = true;
             for k in 0..3 {
@@ -562,22 +616,19 @@ pub struct ViewRequest {
 /// The body COLOUR is keyed on a body's position in the full list, not in the
 /// filtered one, so a body is the same colour whether or not its neighbours are
 /// being drawn.
-pub fn render(meshes: &[Value], req: &ViewRequest) -> Result<Canvas, String> {
+pub fn render<M: Drawable>(meshes: &[M], req: &ViewRequest) -> Result<Canvas, String> {
     let mut canvas = Canvas::new(req.width, req.height, BACKGROUND);
     let basis = view_basis(direction_for(
         req.view.as_deref(),
         req.azimuth,
         req.elevation,
     ));
-    let drawn: Vec<(usize, &Value)> = meshes
+    let drawn: Vec<(usize, &M)> = meshes
         .iter()
         .enumerate()
         .filter(|(_, m)| match &req.bodies {
             None => true,
-            Some(want) => want.is_empty()
-                || m.get("id")
-                    .and_then(Value::as_str)
-                    .is_some_and(|id| want.iter().any(|w| w == id)),
+            Some(want) => want.is_empty() || m.body_id().is_some_and(|id| want.iter().any(|w| w == id)),
         })
         .collect();
     if drawn.is_empty() {
@@ -598,16 +649,13 @@ pub fn render(meshes: &[Value], req: &ViewRequest) -> Result<Canvas, String> {
     let mut tris: Vec<([Vec3; 3], Rgb)> = Vec::new();
     let mut segs: Vec<(Vec3, Vec3)> = Vec::new();
     for (bi, m) in &drawn {
-        let pos = floats(m.get("positions"));
+        let pos = m.positions();
         if pos.len() < 9 {
             continue;
         }
-        let idx: Vec<usize> = floats(m.get("indices"))
-            .into_iter()
-            .map(|v| v as usize)
-            .collect();
-        let face_ids = floats(m.get("faceIds"));
-        let id = m.get("id").and_then(Value::as_str).unwrap_or_default();
+        let idx = m.indices();
+        let face_ids = m.face_ids();
+        let id = m.body_id().unwrap_or_default();
         let want = req
             .highlight
             .as_ref()
@@ -636,12 +684,7 @@ pub fn render(meshes: &[Value], req: &ViewRequest) -> Result<Canvas, String> {
             }
         }
         if req.draw_edges {
-            for poly in m
-                .get("edges")
-                .and_then(Value::as_array)
-                .map_or(&[][..], Vec::as_slice)
-            {
-                let pts = polyline_points(poly);
+            for pts in m.polylines() {
                 for k in 0..pts.len().saturating_sub(1) {
                     match plane {
                         None => segs.push((pts[k], pts[k + 1])),

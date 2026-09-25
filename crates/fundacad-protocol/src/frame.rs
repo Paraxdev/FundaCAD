@@ -399,10 +399,17 @@ pub fn reply_bytes(id: &Value, res: &JobResult, binary: bool, limits: &Limits) -
     Message::Text(text)
 }
 
-/// A binary mesh frame read back into the envelope the text reply carries,
-/// every `$buf` inlined the way [`FullBody::to_json`] writes it, so a Rust
-/// client can take the streamed reply and keep its JSON handling.
-pub fn decode_frame(bytes: &[u8]) -> Result<Value, String> {
+/// One `$buffers` entry of a binary frame.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Buf {
+    F32(Vec<f32>),
+    U32(Vec<u32>),
+}
+
+/// A binary frame's envelope with every `$buf` reference left in place, and
+/// the buffers they index. For a client that keeps a large mesh as arrays
+/// rather than as one JSON number per coordinate.
+pub fn decode_frame_raw(bytes: &[u8]) -> Result<(Value, Vec<Buf>), String> {
     let word = |at: usize| -> Result<[u8; 4], String> {
         bytes
             .get(at..at + 4)
@@ -413,28 +420,45 @@ pub fn decode_frame(bytes: &[u8]) -> Result<Value, String> {
     let head = bytes.get(4..4 + hl).ok_or("the frame header ends early")?;
     let mut env: Value = serde_json::from_slice(head).map_err(|e| e.to_string())?;
     let Some(result) = env.get_mut("result").and_then(Value::as_object_mut) else {
-        return Ok(env);
+        return Ok((env, Vec::new()));
     };
     let Some(Value::Array(meta)) = result.shift_remove("$buffers") else {
-        return Ok(env);
+        return Ok((env, Vec::new()));
     };
     let mut at = 4 + hl + (4 - hl % 4) % 4;
-    let mut bufs: Vec<Vec<Value>> = Vec::with_capacity(meta.len());
+    let mut bufs = Vec::with_capacity(meta.len());
     for m in &meta {
         let len = m.get("len").and_then(Value::as_u64).unwrap_or(0) as usize;
-        let float = m.get("dtype").and_then(Value::as_str) == Some(F32);
-        let mut vals = Vec::with_capacity(len);
-        for _ in 0..len {
-            let w = word(at)?;
-            at += 4;
-            vals.push(if float {
-                serde_json::Number::from_f64(f64::from(f32::from_le_bytes(w))).map_or(Value::Null, Value::Number)
-            } else {
-                Value::from(u32::from_le_bytes(w))
-            });
-        }
-        bufs.push(vals);
+        let raw = bytes.get(at..at + len * 4).ok_or("the frame ends early")?;
+        at += len * 4;
+        let words = raw.chunks_exact(4).map(|w| [w[0], w[1], w[2], w[3]]);
+        bufs.push(if m.get("dtype").and_then(Value::as_str) == Some(F32) {
+            Buf::F32(words.map(f32::from_le_bytes).collect())
+        } else {
+            Buf::U32(words.map(u32::from_le_bytes).collect())
+        });
     }
+    Ok((env, bufs))
+}
+
+/// A binary mesh frame read back into the envelope the text reply carries,
+/// every `$buf` inlined the way [`FullBody::to_json`] writes it, so a Rust
+/// client can take the streamed reply and keep its JSON handling.
+pub fn decode_frame(bytes: &[u8]) -> Result<Value, String> {
+    let (mut env, raw) = decode_frame_raw(bytes)?;
+    let Some(result) = env.get_mut("result").and_then(Value::as_object_mut) else {
+        return Ok(env);
+    };
+    let mut bufs: Vec<Vec<Value>> = raw
+        .into_iter()
+        .map(|b| match b {
+            Buf::F32(v) => v
+                .into_iter()
+                .map(|x| serde_json::Number::from_f64(f64::from(x)).map_or(Value::Null, Value::Number))
+                .collect(),
+            Buf::U32(v) => v.into_iter().map(Value::from).collect(),
+        })
+        .collect();
     let mut take = |v: &Value| -> Option<Vec<Value>> {
         let k = v.get("$buf")?.as_u64()? as usize;
         bufs.get_mut(k).map(std::mem::take)
