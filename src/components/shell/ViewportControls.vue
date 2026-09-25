@@ -175,6 +175,18 @@ async function screenshot() {
         @click="open('perf', $event)"
       />
     </div>
+    <!-- On a narrow stage Items and History are drawers, and their switches
+         go first, where a short column cannot scroll them out of sight. -->
+    <div v-if="shell.narrow" class="float-group">
+      <IconButton icon="items" title="Items (Ctrl Alt S)" :active="shell.itemsShown" @click="shell.toggleItems()" />
+      <IconButton
+        icon="history"
+        :title="ui.sketchActive ? 'Sketch options (Ctrl Alt H)' : 'History (Ctrl Alt H)'"
+        :active="shell.historyShown"
+        :badge="errorCount || null"
+        @click="shell.toggleHistory()"
+      />
+    </div>
     <div class="float-group">
       <IconButton icon="magnet" title="Snapping" :active="isOpen('snap')" @click="open('snap', $event)" />
       <button
@@ -192,6 +204,7 @@ async function screenshot() {
       <IconButton icon="camera" title="Screenshot" :active="saving" @click="screenshot()" />
       <IconButton icon="versions" title="Versions" :active="isOpen('versions')" @click="open('versions', $event)" />
       <IconButton
+        v-if="!shell.narrow"
         icon="history"
         title="History (Ctrl Alt H)"
         :active="shell.historyOpen"

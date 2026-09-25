@@ -46,6 +46,8 @@
 @use "prefs";
 // After every surface it repaints, so its finish is the one that shows.
 @use "glass";
+// After the layout and glass rules it bends below the two breakpoints.
+@use "responsive";
 // Last on purpose, see the header of _icons.scss.
 @use "icons";
 // Truly last, it switches every animation off when asked.

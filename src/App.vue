@@ -31,7 +31,8 @@ import TextToolPanel from "./components/overlays/TextToolPanel.vue";
 import FilletMembers from "./components/overlays/FilletMembers.vue";
 import ProjectFilterBar from "./components/overlays/ProjectFilterBar.vue";
 import MeasureReadout from "./components/overlays/MeasureReadout.vue";
-import { onMounted, onUnmounted, shallowRef } from "vue";
+import { onMounted, onUnmounted, shallowRef, useTemplateRef, watch } from "vue";
+import { isNarrowStage } from "./ui/layoutBreakpoints";
 import { useDialogStore } from "./stores/dialogs";
 import { useExportDialogStore } from "./stores/exportDialog";
 import { useToolPanelStore } from "./stores/toolPanels";
@@ -65,6 +66,19 @@ onMounted(() => {
   offContrib = onContribChange(() => { overlays.value = contributedOverlays(); });
 });
 onUnmounted(() => offContrib?.());
+
+const stage = useTemplateRef<HTMLElement>("stage");
+let stageRo: ResizeObserver | null = null;
+onMounted(() => {
+  if (!stage.value || typeof ResizeObserver === "undefined") return;
+  stageRo = new ResizeObserver(([entry]) => {
+    if (entry) shell.setNarrow(isNarrowStage(entry.contentRect.width));
+  });
+  stageRo.observe(stage.value);
+});
+onUnmounted(() => stageRo?.disconnect());
+// A drawer left open over the rail would hide the tools the new mode brings.
+watch(() => ui.sketchActive, () => shell.closeDrawer());
 </script>
 
 <template>
@@ -77,14 +91,14 @@ onUnmounted(() => offContrib?.());
     <!-- The viewport fills the stage and everything else floats over it. The
          float layer takes no pointer events itself, only its cards do, so the
          model can be picked through every gap between them. -->
-    <div id="stage">
+    <div id="stage" ref="stage" :class="{ narrow: shell.narrow }">
       <ViewportPane />
       <div id="float-layer">
         <div class="float-left">
           <!-- Items on top, the blend's edge list docked under it (shrinking
                Items while a fillet/chamfer is being edited), the rail beside. -->
           <div class="float-left-stack">
-            <BrowserPane v-if="shell.itemsOpen" />
+            <BrowserPane v-if="shell.itemsShown" />
             <FilletMembers />
             <TargetEditPanel />
           </div>
@@ -92,8 +106,8 @@ onUnmounted(() => offContrib?.());
         </div>
         <div class="float-right">
           <ViewportControls />
-          <SketchPalette v-if="ui.sketchActive" />
-          <TimelineBar v-else-if="shell.historyOpen" />
+          <SketchPalette v-if="ui.sketchActive && (!shell.narrow || shell.historyShown)" />
+          <TimelineBar v-else-if="!ui.sketchActive && shell.historyShown" />
         </div>
       </div>
     </div>
