@@ -1,0 +1,108 @@
+/* ============================================================================
+   RESPONSIVE, the shell below the size it was laid out for. Nothing above
+   either breakpoint changes.
+
+   narrow: a STAGE under ui/layoutBreakpoints.ts STAGE_NARROW_PX, which App.vue
+     marks as #stage.narrow. Items and History stop fitting beside the rail and
+     the view controls, so they become drawers laid over the model, one at a
+     time (stores/shell.ts), opened from the view controls column.
+   compact title bar: a WINDOW under 760px. Tighter spacing, and the
+     workspace switch keeps only its icons.
+   phone: a WINDOW under 560px. The title bar sheds what it can spare, the
+     rail drops its label pills (each tile keeps its tooltip) and the Render
+     dock stacks under the model instead of beside it.
+   ============================================================================ */
+
+#stage.narrow {
+  // Over the rail rather than beside it, so opening Items never shoves the
+  // rail across the model. The column of view controls stays reachable.
+  .float-left-stack {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 2;
+    max-width: calc(100vw - 3 * var(--float-gap) - 48px);
+  }
+  .float-left-stack > * {
+    max-width: 100%;
+  }
+  // To the left of the view controls, which keep their place at the edge.
+  .float-right > #timeline,
+  .float-right > #palette {
+    position: absolute;
+    top: 0;
+    right: calc(100% + var(--float-gap));
+    z-index: 2;
+    max-height: 100%;
+    max-width: calc(100vw - 3 * var(--float-gap) - 48px);
+  }
+  // A squeezed tool list scrolls, and its clip edge sits 32px past its box for
+  // the shadows (see .rail-list), which put its last tiles under the foot's.
+  // Stop the clip at the gap above the foot instead.
+  .tool-rail > .rail-list:first-child {
+    margin-bottom: calc(0px - var(--float-gap));
+  }
+  // A short stage runs the controls column to the bottom edge, so it scrolls
+  // rather than spilling. Padding and margin cancel so the shadows are not
+  // clipped, the same as .rail-list.
+  #viewcontrols {
+    max-height: 100%;
+    overflow-y: auto;
+    padding: 32px;
+    margin: -32px;
+    scrollbar-width: none;
+  }
+  #viewcontrols::-webkit-scrollbar {
+    display: none;
+  }
+  // The sketch options are a fixed stack of controls taller than a short
+  // stage, so the whole card scrolls rather than only its relations list.
+  .float-right > #palette {
+    overflow-y: auto;
+  }
+  // A diagnostic, and the one readout with no room left: the prompt and the
+  // controls column both reach into its corner here.
+  .roundtrip {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  #titlebar {
+    gap: var(--s-2);
+    padding: 0 var(--s-2);
+  }
+  .menu-btn {
+    padding: 0 var(--s-2);
+  }
+  #workspace-toggle .seg-btn > span {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  #titlebar .brand,
+  #titlebar .context-tab,
+  #titlebar .docname {
+    display: none;
+  }
+
+  .tool-rail > .rail-list > .rail-btn > .rail-pill,
+  .tool-rail > .rail-list > .rail-group > .rail-pill {
+    display: none;
+  }
+  .tool-rail .rail-child {
+    margin-left: 0;
+  }
+
+  #main {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+  #renderdock {
+    width: auto;
+    height: min(45vh, 420px);
+    margin: 0 var(--s-3) var(--s-3);
+  }
+}
