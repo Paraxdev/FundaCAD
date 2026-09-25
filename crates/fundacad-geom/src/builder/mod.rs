@@ -212,6 +212,8 @@ pub struct Ctx {
     pub hidden_bodies: HashSet<String>,
     pub sketch_planes: IndexMap<String, Value>,
     pub datum_marks: IndexMap<String, Value>,
+    /// Where each feature's tracked face outline sits now, by feature id.
+    pub face_centers: IndexMap<String, Value>,
     /// Projected sketch entity refresh entries, the Python engine's `projection_refresh.py`.
     pub projections: Vec<Value>,
     /// The cut or join each feature applied so far, by feature id, which is
@@ -258,6 +260,7 @@ impl Ctx {
             hidden_bodies: HashSet::new(),
             sketch_planes: IndexMap::new(),
             datum_marks: IndexMap::new(),
+            face_centers: IndexMap::new(),
             projections: Vec::new(),
             tools: HashMap::new(),
             patterned: HashSet::new(),
@@ -287,6 +290,7 @@ impl Ctx {
             hidden_bodies: HashSet::new(),
             sketch_planes: IndexMap::new(),
             datum_marks: IndexMap::new(),
+            face_centers: IndexMap::new(),
             projections: Vec::new(),
             tools: HashMap::new(),
             patterned: HashSet::new(),
@@ -485,6 +489,7 @@ pub struct Rebuild {
     pub datum_planes: IndexMap<String, PlaneRecord>,
     pub sketch_planes: IndexMap<String, Value>,
     pub datum_marks: IndexMap<String, Value>,
+    pub face_centers: IndexMap<String, Value>,
     pub body_ids: IndexMap<String, String>,
     /// `projectionUpdates`, only the entries a refresh found a real change for.
     pub projection_updates: Vec<Value>,
@@ -525,6 +530,7 @@ pub struct Snapshot {
     pub datums: IndexMap<String, PlaneRecord>,
     pub sketch_planes: IndexMap<String, Value>,
     pub datum_marks: IndexMap<String, Value>,
+    pub face_centers: IndexMap<String, Value>,
     pub diagnostics: Vec<Value>,
     pub errors: Vec<FeatureError>,
     pub id_events: Vec<Event>,
@@ -547,6 +553,7 @@ impl State<'_> {
             datums: self.ctx.datums.clone(),
             sketch_planes: self.ctx.sketch_planes.clone(),
             datum_marks: self.ctx.datum_marks.clone(),
+            face_centers: self.ctx.face_centers.clone(),
             diagnostics: self.ctx.diagnostics.clone(),
             errors: self.errors.to_vec(),
             id_events: self.ctx.ids.events().to_vec(),
@@ -885,6 +892,7 @@ pub fn rebuild_from(
         hidden_bodies,
         sketch_planes: IndexMap::new(),
         datum_marks: IndexMap::new(),
+        face_centers: IndexMap::new(),
         projections: Vec::new(),
         tools: HashMap::new(),
         patterned: HashSet::new(),
@@ -929,6 +937,7 @@ pub fn rebuild_from(
             ctx.datums = snap.datums;
             ctx.sketch_planes = snap.sketch_planes;
             ctx.datum_marks = snap.datum_marks;
+            ctx.face_centers = snap.face_centers;
             ctx.diagnostics = snap.diagnostics;
             errors = snap.errors;
             if snap.replay_sketches {
@@ -1108,6 +1117,7 @@ pub fn rebuild_from(
         datum_planes: ctx.datums,
         sketch_planes: ctx.sketch_planes,
         datum_marks: ctx.datum_marks,
+        face_centers: ctx.face_centers,
         body_ids,
         projection_updates: ctx.projections,
     })
@@ -1171,6 +1181,9 @@ pub fn result_fields(doc: &CadDocument, r: &Rebuild) -> Map<String, Value> {
     }
     if !r.datum_marks.is_empty() {
         m.insert("datumMarks".into(), json!(r.datum_marks));
+    }
+    if !r.face_centers.is_empty() {
+        m.insert("faceCenters".into(), json!(r.face_centers));
     }
     if !r.bodies.is_empty() {
         if !r.diagnostics.is_empty() {

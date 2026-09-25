@@ -430,6 +430,22 @@ fn documented_missing_fields(kind: &str, f: &Map<String, Value>) -> Vec<String> 
         .collect()
 }
 
+/// Completes each `tracked` face selector written without a `center` with the
+/// one its build found, which is what lets the feature follow the face
+/// sideways from then on. A build of the completed document is the same model.
+pub fn write_face_centers(doc: &mut Doc, centers: &Map<String, Value>) {
+    for f in features_mut(doc) {
+        let Some(center) = f.get("id").and_then(Value::as_str).and_then(|id| centers.get(id)).cloned() else {
+            continue;
+        };
+        if let Some(face) = f.get_mut("face").and_then(Value::as_object_mut) {
+            if face.get("by").and_then(Value::as_str) == Some("tracked") && !face.contains_key("center") {
+                face.insert("center".into(), center);
+            }
+        }
+    }
+}
+
 pub fn remove_feature(doc: &mut Doc, fid: &str) -> Result<Value, DocumentError> {
     let Some((i, _)) = find_feature(doc, fid) else {
         return err(missing_feature(doc, fid));

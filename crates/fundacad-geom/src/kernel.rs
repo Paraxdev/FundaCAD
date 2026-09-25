@@ -223,6 +223,23 @@ pub fn face_area_centre(face: &Shape) -> Option<[f64; 4]> {
     ffi::bo_face_fp(face.raw(), &mut out).then_some(out)
 }
 
+/// The length weighted centre of a face's outer boundary, which openings cut
+/// inside the face do not move.
+pub fn outline_center(face: &Shape) -> Option<[f64; 3]> {
+    use opencascade_sys::{b_rep_g_prop::BRepGProp, g_prop};
+    let wire = own(opencascade_sys::plugin_ops::po_outer_wire(face.raw()));
+    if is_null(&wire) {
+        return None;
+    }
+    let mut props = g_prop::GProps_new();
+    BRepGProp::LinearProperties(wire.raw(), props.pin_mut(), false, false);
+    if !(props.Mass() > 0.0) {
+        return None;
+    }
+    let c = g_prop::GProp_GProps_CentreOfMass(&props);
+    Some([c.X(), c.Y(), c.Z()]).filter(|c| c.iter().all(|x| x.is_finite()))
+}
+
 pub fn center_of_mass(s: &Shape) -> Option<[f64; 3]> {
     let mut out = [0.0; 3];
     ffi::bo_center_of_mass(s.raw(), &mut out).then_some(out)

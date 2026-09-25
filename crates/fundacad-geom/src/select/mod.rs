@@ -9,11 +9,12 @@
 //!
 //! Edge forms: `axis`, `all`, `nearest`, `match`, `tangentChain`, `ofFace`, and a
 //! face selector in an edge field (the edges around those faces). Face forms:
-//! `normal`, `nearest`, `match`, `all`. A list of selectors is their union.
+//! `normal`, `nearest`, `tracked`, `match`, `all`. A list of selectors is their union.
 
 pub mod entity;
 pub mod eval;
 mod plane;
+pub mod tracked;
 pub mod tuning;
 
 use std::cmp::Ordering;
@@ -382,6 +383,7 @@ impl<'a> Resolver<'a> {
                 Ok(take(faces, &[pick.index]))
             }
             Some("all") => faces_of(part),
+            Some("tracked") => tracked::resolve(self, part, m),
             Some("match") => self.faces_matching(part, need(m, "fp")?, nth_of(m)),
             _ => Err(Fail::msg(format!(
                 "unknown face selector: {}",

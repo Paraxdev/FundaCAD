@@ -588,3 +588,26 @@ fn a_press_pull_label_that_contradicts_its_sign_is_named() {
     assert!(problems[0].contains("`mode`"), "{problems:?}");
     assert!(problems[1].starts_with("wrong_named: operation is 'join'"), "{problems:?}");
 }
+
+#[test]
+fn a_build_completes_only_the_tracked_faces_it_found_without_a_center() {
+    let hole = |id: &str, face: Value| {
+        json!({"id": id, "type": "hole", "diameter": 3, "points": [[0, 0, 5]], "face": face})
+    };
+    let tracked = json!({"kind": "face", "by": "tracked", "point": [0, 0, 5], "normal": [0, 0, 1]});
+    let mut kept = tracked.clone();
+    kept["center"] = json!([9, 9, 9]);
+    let near = json!({"kind": "face", "by": "nearest", "point": [0, 0, 5]});
+    let mut d = doc_with(&[
+        json!({"id": "bx", "type": "box", "length": 10, "width": 10, "height": 10}),
+        hole("a", tracked),
+        hole("b", kept),
+        hole("c", near.clone()),
+    ]);
+    let centers = json!({"a": [0.0, 0.0, 5.0], "b": [1.0, 1.0, 1.0], "c": [2.0, 2.0, 2.0]});
+    m::write_face_centers(&mut d, centers.as_object().unwrap());
+    let face = |id: &str| m::find_feature(&d, id).unwrap().1["face"].clone();
+    assert_eq!(face("a")["center"], json!([0.0, 0.0, 5.0]));
+    assert_eq!(face("b")["center"], json!([9, 9, 9]), "a written centre is the author's");
+    assert_eq!(face("c"), near, "only a tracked face takes one");
+}

@@ -108,6 +108,14 @@ pub enum SelectorBy {
     FaceNearest {
         point: Vec3,
     },
+    /// A flat face kept by its outward normal, which follows it wherever a
+    /// change upstream moves it. `center` is its outline's centre when this
+    /// was written, how far a feature placed on it has moved with it.
+    FaceTracked {
+        point: Vec3,
+        normal: Vec3,
+        center: Option<Vec3>,
+    },
     EdgeMatch {
         fp: EdgeFingerprint,
         nth: Option<Real>,
@@ -170,6 +178,7 @@ impl Selector {
                 SelectorBy::EdgeNearest { .. } | SelectorBy::FaceNearest { .. } => "nearest",
                 SelectorBy::EdgeAll => "all",
                 SelectorBy::FaceNormal { .. } => "normal",
+                SelectorBy::FaceTracked { .. } => "tracked",
                 SelectorBy::EdgeMatch { .. } | SelectorBy::FaceMatch { .. } => "match",
                 SelectorBy::EdgeTangentChain { .. } => "tangentChain",
                 SelectorBy::EdgeOfFace { .. } => "ofFace",
@@ -225,6 +234,11 @@ fn parse_known(
         ("edge", "match") => SelectorBy::EdgeMatch {
             fp: need(m, "fp")?,
             nth: take(m, "nth")?,
+        },
+        ("face", "tracked") => SelectorBy::FaceTracked {
+            point: need(m, "point")?,
+            normal: need(m, "normal")?,
+            center: take(m, "center")?,
         },
         ("face", "match") => SelectorBy::FaceMatch {
             fp: need(m, "fp")?,
@@ -291,6 +305,13 @@ impl Serialize for Selector {
             }
             SelectorBy::EdgeAll => {}
             SelectorBy::FaceNormal { dir } => put("dir", serde_json::to_value(dir))?,
+            SelectorBy::FaceTracked { point, normal, center } => {
+                put("point", serde_json::to_value(point))?;
+                put("normal", serde_json::to_value(normal))?;
+                if let Some(c) = center {
+                    put("center", serde_json::to_value(c))?;
+                }
+            }
             SelectorBy::EdgeMatch { fp, nth } => {
                 put("fp", serde_json::to_value(fp))?;
                 if let Some(n) = nth {
