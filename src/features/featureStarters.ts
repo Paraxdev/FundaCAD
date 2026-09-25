@@ -19,6 +19,7 @@ import type { MoveTool } from "./moveTool";
 import type { MoveTarget } from "./moveTarget";
 import { sketchFeatureTarget } from "./sketchMoveTarget";
 import type { PatternKind, PatternTool } from "./patternTool";
+import { featureOwnersOfFaces, patternSources } from "./patternSources";
 import type { PlaneOffsetTool } from "./planeOffsetTool";
 import type { DatumPoseTool } from "./datumPoseTool";
 import { placeDatum, poseFields, ZERO_POSE, type DatumPose } from "../document/datumPose";
@@ -1270,11 +1271,44 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   // linear and circular are different gestures (pull an arrow vs sweep around
   // one), not two settings of the same one. But it is made by pressing the
   // button you meant, not by answering a dialog the button raised.
+  /** What Pattern is being pointed at, when it is being pointed at a FEATURE
+   *  rather than a body: the owners of any selected faces (several holes select
+   *  several owners), else a feature selected in the timeline/history. A
+   *  selected body means body-pattern regardless of what the history still
+   *  happens to have highlighted, that selection is stale for this purpose the
+   *  moment a body is picked instead. */
+  function patternFeatureCandidates(): string[] {
+    if (viewport.getSelectedBodies().length) return [];
+    const faceIds = viewport.getSelectedFaceIds();
+    if (faceIds.length) {
+      const owners = featureOwnersOfFaces(store.buildState.result?.bodies, faceIds);
+      if (owners.length) return owners;
+    }
+    const picked = getSelectedFeature();
+    return picked ? [picked] : [];
+  }
+
   function startPattern(kind: PatternKind) {
     if (toolBusy()) return;
     if (!hasBody()) {
       setStatus("Pattern: create or import a body first", "");
       return;
+    }
+    const patternDone = (id: string | null) => { noteCommitted(id); if (id) selectFeature(id); };
+    const candidates = patternFeatureCandidates();
+    if (candidates.length) {
+      const { ids, refused } = patternSources(store.document.features, candidates);
+      if (ids.length) {
+        patternTool.start(kind, [], patternDone, ids);
+        return;
+      }
+      // Every candidate was refused: say why (naming the one the user pointed
+      // at) rather than silently falling back to a body pattern nobody asked for.
+      const reason = refused[0]?.reason;
+      if (reason) {
+        setStatus(reason, "");
+        return;
+      }
     }
     // Same rule as Move: the selection if there is one, otherwise the active
     // body, which is what the kernel patterns when the feature names no bodies.
@@ -1288,7 +1322,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       setStatus("Pattern: select a body first (Select: Bodies)", "");
       return;
     }
-    patternTool.start(kind, ids, (id) => { noteCommitted(id); if (id) selectFeature(id); });
+    patternTool.start(kind, ids, patternDone);
   }
 
   const extrudeDone = (id: string | null) => { noteCommitted(id); if (id) selectFeature(id); };
