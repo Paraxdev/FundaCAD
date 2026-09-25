@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { polylineMid, nearestEdgeByMid, toggleSelectorByMid, midMatchTol, edgeSelectorFrom, type Vec3 } from "../../src/viewport/edgeMatch";
+import { polylineMid, nearestEdgeByMid, nearestEdgeByCurve, toggleSelectorByMid, midMatchTol, edgeSelectorFrom, type Vec3 } from "../../src/viewport/edgeMatch";
 
 const line = (a: Vec3, b: Vec3, n = 5): { points: Vec3[] } => {
   const points: Vec3[] = [];
@@ -129,5 +129,32 @@ describe("edgeSelectorFrom, the body stamp", () => {
 
   it("returns undefined for an empty polyline instead of a bogus selector", () => {
     expect(edgeSelectorFrom({ points: [] })).toBeUndefined();
+  });
+});
+
+describe("nearestEdgeByCurve", () => {
+  // A closed loop sampled from (r,0) all the way round: its arc-length midpoint
+  // is (-r,0), so a selector saved at (0,-r), as the debowler wall blend is, never
+  // matches by midpoint, yet the engine resolves it to this loop (NV-4).
+  const loop = (r: number, z: number, n = 64): { points: Vec3[] } => ({
+    points: Array.from({ length: n + 1 }, (_, i): Vec3 => {
+      const a = (2 * Math.PI * i) / n;
+      return [r * Math.cos(a), r * Math.sin(a), z];
+    }),
+  });
+
+  it("finds a loop by a point anywhere on it, where the midpoint match cannot", () => {
+    const edges = [loop(46, 30), loop(46, 20.3), loop(40, 20.3)];
+    expect(nearestEdgeByMid(edges, [0, -46, 20.3], 0.7)).toBeNull();
+    expect(nearestEdgeByCurve(edges, [0, -46, 20.3], 0.7)).toBe(1);
+    expect(nearestEdgeByCurve(edges, [0, 46, 20.3], 0.7)).toBe(1);
+  });
+
+  it("measures to the segment, not to the samples", () => {
+    expect(nearestEdgeByCurve([line([0, 0, 0], [10, 0, 0], 2)], [5, 0.1, 0], 0.2)).toBe(0);
+  });
+
+  it("returns null when nothing is within tolerance", () => {
+    expect(nearestEdgeByCurve([line([0, 0, 0], [10, 0, 0])], [5, 3, 0], 1)).toBeNull();
   });
 });

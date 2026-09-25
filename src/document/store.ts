@@ -985,6 +985,30 @@ export class DocumentStore {
     });
   }
 
+  /** A tool's edit of feature `id`: the replacement feature, a parameter to set,
+   *  or both, as ONE undo step. With a parameter it goes through the cascade
+   *  queue like setParam, so the feature and the parameter land in one mutate.
+   *  Returns an error for an invalid parameter value, and writes nothing then. */
+  commitFeatureEdit(id: string, feature: Feature | null, param: { name: string; value: number } | null): string | null {
+    const put = (d: CadDocument) => {
+      if (!feature) return;
+      const i = d.features.findIndex((f) => f.id === id);
+      if (i >= 0) d.features[i] = feature;
+    };
+    if (!param) {
+      if (feature) this.mutate(put, true);
+      return null;
+    }
+    const expr = String(param.value);
+    const v = params.validateExpr(this.doc, param.name, expr);
+    if (!v.ok) return v.error;
+    this.queueParamCommit((d) => {
+      put(d);
+      params.commitParamExpr(d, param.name, expr);
+    });
+    return null;
+  }
+
   replaceFeature(id: string, feature: Feature, bindings?: SketchBinding[]) {
     this.mutate((d) => {
       const i = d.features.findIndex((f) => f.id === id);
