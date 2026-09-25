@@ -154,9 +154,22 @@ describe("ScreenExtent", () => {
     expect(b.min).toBe(11); // 22 wide, 11 tall
   });
 
+  it("reports the larger side, so an edge straight down the screen measures its length", () => {
+    // The short-edge boost read the smaller side, which is 0 for any edge
+    // running straight across or down the screen, so a long vertical box edge
+    // got the full boost meant for one foreshortened to a point.
+    const b = new ScreenExtent();
+    b.add(100, 50);
+    b.add(100, 350);
+    expect(b.min).toBe(0);
+    expect(b.max).toBe(300);
+    expect(shortEdgeBoostPx(b.max)).toBe(0);
+  });
+
   it("reads as unmeasurable until something is added", () => {
     const b = new ScreenExtent();
     expect(b.measured).toBe(false);
+    expect(b.max).toBe(Infinity);
     // Infinity rather than 0, so a caller polling for an early exit does not
     // exit on an empty box and report a face it never looked at.
     expect(b.min).toBe(Infinity);

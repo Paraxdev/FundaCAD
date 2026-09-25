@@ -119,8 +119,9 @@ export function installViewportWiring(e: Engine): void {
         r.feature,
         r.name,
       )));
+    // Tied by rank, so a faint tangent edge beside a sharp one is not a question.
     const choices = ambiguousCandidates(
-      rows.map((r, i) => ({ ...r, label: labels[i] ?? "Edge", screenDist: r.cand.screenDist })),
+      rows.map((r, i) => ({ ...r, label: labels[i] ?? "Edge", screenDist: r.cand.rankPx })),
     );
     if (choices.length < 2) return false; // nothing worth asking, take the nearest
 

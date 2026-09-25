@@ -47,7 +47,7 @@ import {
   buildComMarker,
   clearOverlayObjects,
 } from "./overlays";
-import { Picker, occludedEdge, type EdgeCandidate, type Hit, type EdgeHit, type PickMods } from "./picking";
+import { Picker, type EdgeCandidate, type Hit, type PickMods } from "./picking";
 import { bandIndex, expandToBand, type BandIndex } from "./faceBands";
 import { flushRaycastIndex } from "./raycastIndex";
 import { GhostLayer, type BlendGhostEdge } from "./ghosts";
@@ -2494,11 +2494,13 @@ export class Viewport {
     return pickFacePlaneAt(this, clientX, clientY)?.def ?? null;
   }
 
-  /** Edge-only pick for the fillet/chamfer edge-selection tools. */
-  pickEdgeAt(clientX: number, clientY: number): EdgeHit | null {
+  /** Edge-only pick for the edge tools (fillet, chamfer, an axis): the whole
+   *  grab radius, faces never compete, and only edges you can see unless the
+   *  view is see-through. */
+  pickEdgeAt(clientX: number, clientY: number): EdgeCandidate | null {
     if (!this.model) return null;
     const rect = this.canvas.getBoundingClientRect();
-    return this.picker.pickEdge(clientX, clientY, rect, this.rig.active, this.model);
+    return this.picker.pickEdge(clientX, clientY, rect, this.rig.active, this.model, { visibleOnly: !this.seeThrough });
   }
 
   /** All visible edge lines of the current model, for tangent-chain expansion. */
@@ -2835,9 +2837,7 @@ export class Viewport {
   pickableEdgeCandidates(clientX: number, clientY: number, rect: DOMRect): EdgeCandidate[] {
     if (!this.model) return [];
     const cands = this.picker.pickEdgeCandidates(clientX, clientY, rect, this.rig.active, this.model);
-    const faceDist = this.picker.faceDepthAt(this.rig.active, this.model);
-    const scale = this.modelDiagonal() ?? 0;
-    return cands.filter((c) => !occludedEdge(c.depth, faceDist, scale));
+    return this.picker.visibleCandidates(cands, this.rig.active, this.model);
   }
 
   /** Emphasise the edge a menu row names, over everything; null clears it. */
