@@ -2,7 +2,7 @@
 // rest can't, mirroring the engine's own refusal so the tool can decide before
 // ever reaching it.
 import { describe, expect, it } from "vitest";
-import { facesOwnedByFeatures, featureOwnersOfFaces, patternSources } from "../../src/features/patternSources";
+import { facesOwnedByFeatures, featureOwnersOfFaces, patternSources, spansBody } from "../../src/features/patternSources";
 import type { Feature, RebuildResult } from "../../src/types";
 
 const hole = (id: string): Feature =>
@@ -116,6 +116,26 @@ describe("featureOwnersOfFaces", () => {
 
   it("is empty with no bodies", () => {
     expect(featureOwnersOfFaces(undefined, [0])).toEqual([]);
+  });
+});
+
+describe("spansBody", () => {
+  const box = (a: number[], b: number[]) => ({
+    min: { x: a[0]!, y: a[1]!, z: a[2]! },
+    max: { x: b[0]!, y: b[1]!, z: b[2]! },
+  });
+  const body = box([-10, -10, -10], [10, 10, 10]);
+
+  it("says the top a hole went through spans the body", () => {
+    expect(spansBody(box([-10, -10, 10], [10, 10, 10]), body)).toBe(true);
+  });
+
+  it("keeps the hole's own wall", () => {
+    expect(spansBody(box([-5, -5, -10], [-1.6, -1.6, 10]), body)).toBe(false);
+  });
+
+  it("keeps a pocket floor that reaches one side only", () => {
+    expect(spansBody(box([-10, -2, 5], [10, 2, 5]), body)).toBe(false);
   });
 });
 

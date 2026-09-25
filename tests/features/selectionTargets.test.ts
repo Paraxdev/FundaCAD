@@ -13,6 +13,7 @@ import {
   pointOf,
   readTarget,
   sameEntry,
+  targetsFor,
   targetsOf,
   writeTarget,
   type TargetField,
@@ -73,6 +74,15 @@ describe("the inventory", () => {
     expect(targetsOf("box")).toEqual([]);
     expect(targetsOf("datumPlane")).toEqual([]);
     expect(targetsOf("nonsense")).toEqual([]);
+  });
+});
+
+describe("targetsFor", () => {
+  it("drops the bodies row of a pattern that repeats features", () => {
+    const body = { id: "p", type: "patternCircular", count: 6, angle: 360, axis: "Z" } as Feature;
+    expect(targetsFor(body).map((t) => t.field)).toEqual(["bodies"]);
+    const holes = { ...body, features: ["h"] } as Feature;
+    expect(targetsFor(holes)).toEqual([]);
   });
 });
 

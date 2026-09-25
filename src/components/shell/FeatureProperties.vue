@@ -55,7 +55,8 @@ import {
   toggleFieldsFor,
   toggleValue,
 } from "../../document/optionFields";
-import { targetsOf } from "../../features/selectionTargets";
+import { targetsFor } from "../../features/selectionTargets";
+import { featureLabel } from "../../features/patternSources";
 import { holeChoicePatch } from "../../features/holeStandards";
 import { asFeature } from "../../types";
 import type { Feature, Num, ParamTarget } from "../../types";
@@ -72,7 +73,18 @@ const feature = useDocValue((doc) => doc.features.find((f) => f.id === props.fea
 // rows here rather than an empty heading.
 const targetRows = useDocValue((doc) => {
   const f = doc.features.find((x) => x.id === props.featureId);
-  return f ? targetsOf(f.type) : [];
+  return f ? targetsFor(f) : [];
+});
+
+// The features a pattern repeats, by name. Read only: which features is chosen
+// by pointing at them before Pattern starts.
+const repeatedLabels = useDocValue((doc) => {
+  const f = doc.features.find((x) => x.id === props.featureId);
+  const ids = (f as { features?: string[] } | undefined)?.features ?? [];
+  return ids.map((id) => {
+    const src = doc.features.find((x) => x.id === id);
+    return src ? featureLabel(src) : id;
+  });
 });
 
 // --- what each row is SHOWING its value in ---------------------------------
@@ -415,6 +427,10 @@ function commitField(
 </script>
 
 <template>
+  <div v-if="repeatedLabels.length" class="param-row">
+    <label>Features</label>
+    <div class="param-value">{{ repeatedLabels.join(", ") }}</div>
+  </div>
   <SelectionTargetRow
     v-for="t in targetRows"
     :key="`s:${t.field}`"

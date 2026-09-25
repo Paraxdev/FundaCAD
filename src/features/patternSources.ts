@@ -138,6 +138,27 @@ function ownerOfFace(bodies: BuildBodies, faceId: number): string | null {
   return null;
 }
 
+export interface Extent {
+  min: { x: number; y: number; z: number };
+  max: { x: number; y: number; z: number };
+}
+
+/** A face that reaches across its whole body along two axes, the box's top
+ *  that a hole was drilled through. Provenance hands such a face to the hole
+ *  because the hole changed it, but it is not part of what the hole repeats. */
+export function spansBody(face: Extent, body: Extent): boolean {
+  const axes = ["x", "y", "z"] as const;
+  const size = Math.hypot(...axes.map((a) => body.max[a] - body.min[a]));
+  const tol = 1e-3 * size;
+  const full = axes.filter(
+    (a) =>
+      body.max[a] - body.min[a] > tol &&
+      Math.abs(face.min[a] - body.min[a]) <= tol &&
+      Math.abs(face.max[a] - body.max[a]) <= tol,
+  );
+  return full.length >= 2;
+}
+
 /** Every face `featureIds` own, across every body, the faces a features-mode
  *  pattern ghosts and anchors on. */
 export function facesOwnedByFeatures(bodies: BuildBodies, featureIds: readonly string[]): number[] {
