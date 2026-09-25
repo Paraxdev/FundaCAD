@@ -62,6 +62,7 @@ const TAPER_ABOVE_PX = 48;
 
 type Phase = "pick" | "drag";
 type Op = ExtrudeOp;
+const PINNED_CYCLE: readonly Op[] = ["new", "join", "cut"];
 
 export class ExtrudeTool {
   active = false;
@@ -98,6 +99,10 @@ export class ExtrudeTool {
   /** while editing, this sketch is forced visible so its regions exist
    *  (consumed sketches hide by default), main.ts's isSketchVisible honors it. */
   forcedSketchId: string | null = null;
+  /** The operation a consumed sketch's second extrude is held to. Its profile
+   *  sits on the solid its first extrude made, so the direction guess would
+   *  read Cut and shave that body. New body until Alt+O picks another. */
+  private pinnedOp: Op | null = null;
 
   /** Where the last commit's far face stands and which way it grew, so the
    *  model view can keep a handle on it that reopens this extrude. The wiring
@@ -178,9 +183,11 @@ export class ExtrudeTool {
       if (!points.length) {
         this.forcedSketchId = null;
         this.overlay.update(this.store.document);
+        this.pinnedOp = null;
         return false;
       }
       this.overlay.selectRegionsByPoints(points);
+      this.pinnedOp = "new";
     }
     // Read the pre-selection BEFORE installing anything: a handle whose regions
     // have gone (the sketch was hidden or re-solved between the paint and the
@@ -544,6 +551,14 @@ export class ExtrudeTool {
       this.setSymmetric(!this.symmetric);
       return;
     }
+    if (e.altKey && (e.key === "o" || e.key === "O" || e.code === "KeyO") && this.phase === "drag" && this.pinnedOp) {
+      e.preventDefault();
+      e.stopPropagation();
+      this.pinnedOp = PINNED_CYCLE[(PINNED_CYCLE.indexOf(this.pinnedOp) + 1) % PINNED_CYCLE.length]!;
+      this.promptKey = "";
+      this.updatePreview();
+      return;
+    }
     if (this.dim.isActive && e.target instanceof HTMLInputElement) {
       if (e.key === "Escape") this.cancel();
       return;
@@ -735,7 +750,7 @@ export class ExtrudeTool {
   /** The instant translucent prism for the STRAIGHT extrude, no kernel round-trip
    *  (that is what makes depth dragging feel immediate). */
   private updatePrism(sign: number, depth: number) {
-    const cut = sign < 0;
+    const cut = this.drawsAsCut(sign);
     const key = `${depth.toFixed(3)}:${sign}:${this.symmetric ? "sym" : "one"}:${this.selectionIds()}`;
     if (key !== this.previewKey) {
       this.previewKey = key;
@@ -798,7 +813,7 @@ export class ExtrudeTool {
       this.viewport.addToScene(this.depthHandle.group);
     }
     // Red while the push removes material (a cut), amber while it adds.
-    this.placeHandle(this.depthHandle, this.taperTop, dir, px, this.hovering || this.grabbing, sign < 0);
+    this.placeHandle(this.depthHandle, this.taperTop, dir, px, this.hovering || this.grabbing, this.drawsAsCut(sign));
 
     this.updateTaperHandle(plane, dir, px);
   }
@@ -897,6 +912,12 @@ export class ExtrudeTool {
    *  one place the depth and taper handles are placed, so they cannot drift into
    *  two shapes or two screen-size rules: constant `pixelWorldSize` scale, glyph
    *  laid along its axis, amber or red for its state. */
+  /** Red for a cut. Otherwise a negative depth reads as one, which a pinned
+   *  operation says nothing about. */
+  private drawsAsCut(sign: number): boolean {
+    return this.pinnedOp ? this.pinnedOp === "cut" : sign < 0;
+  }
+
   private placeHandle(
     handle: DragHandle, at: THREE.Vector3, axis: THREE.Vector3, px: number,
     hot: boolean, cut: boolean,
@@ -1002,7 +1023,7 @@ export class ExtrudeTool {
    *  pre-sort its list by, gathered in one place. */
   private plannedOperation(): Op {
     return plannedOperation({
-      savedOperation: this.editId ? this.editOp : null,
+      savedOperation: this.editId ? this.editOp : this.pinnedOp,
       hasSolid: (this.store.buildState.result?.mesh.positions.length ?? 0) > 0,
       entersSolid: this.entersSolid(),
       allGlyphs: this.selected.length > 0 && this.selected.every((wr) => wr.entityId !== undefined),
@@ -1042,7 +1063,9 @@ export class ExtrudeTool {
     setPrompt(
       this.editId
         ? `${word} · Ctrl-click areas · drag or type a value${sym} · click to apply · Esc`
-        : `${word} · drag or type a depth, negative cuts${sym} · side handle tapers · click to commit · Esc`,
+        : this.pinnedOp
+          ? `${word} · Alt+O operation · drag or type a depth${sym} · side handle tapers · click to commit · Esc`
+          : `${word} · drag or type a depth, negative cuts${sym} · side handle tapers · click to commit · Esc`,
     );
   }
 
@@ -1159,6 +1182,7 @@ export class ExtrudeTool {
       this.editOp = null;
       this.editHiddenBodies = undefined;
       this.forcedSketchId = null;
+      this.pinnedOp = null;
       this.overlay.update(this.store.document); // re-hide the consumed sketch
     }
     setPrompt(null);
