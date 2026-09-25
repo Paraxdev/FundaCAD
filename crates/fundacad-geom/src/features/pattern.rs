@@ -185,10 +185,11 @@ fn found_line(origin: DVec3, dir: DVec3) -> Option<Turn> {
 
 /// The axis `axisRef` names now: a straight edge's line, a round edge's
 /// centre line, a round face's axis, or a flat face's normal through the
-/// middle of its box.
+/// middle of its box. A body the selector names that is gone is a lost
+/// reference, never a search of whatever bodies are left.
 fn referenced_axis(ctx: &Ctx, id: &str, sel: &Selector) -> Option<Turn> {
-    let pool: Vec<&Shape> = match sel.body().and_then(|b| ctx.find_body(b)) {
-        Some(i) => vec![ctx.bodies[i].shape()],
+    let pool: Vec<&Shape> = match sel.body() {
+        Some(b) => vec![ctx.bodies[ctx.find_body(b)?].shape()],
         None => ctx.shapes(),
     };
     axis_on(&pool, id, sel)
