@@ -281,6 +281,10 @@
   background: var(--accent-tint-2);
   color: var(--accent-hot);
 }
+.rd-chip:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
 
 /* A settings row with a READOUT after the control. .prefs-row is a two-column
    grid (label, control), so a third child lands on a line of its own: the value

@@ -14,6 +14,7 @@ import { useSketchPaletteStore } from "../../stores/sketchPalette";
 import { fmtLength, getUnit, onUnitChange, setUnit, asUnit, type Unit } from "../../ui/units";
 import { saveRenderedImage } from "../../io/files";
 import { setRenderPref } from "../../ui/renderPrefs";
+import { isRenderLowPower } from "../../viewport/render";
 import { toast } from "../../ui/toast";
 import type { ProjectionMode } from "../../viewport/cameras";
 import IconButton from "../ui/IconButton.vue";
@@ -137,6 +138,11 @@ function enablePerformanceMode() {
   setRenderPref("performanceMode", true);
   toast("Performance mode is on, you can turn it off in Preferences");
 }
+function enablePotatoMode() {
+  shell.closePopover();
+  setRenderPref("potatoMode", true);
+  toast("Potato mode is on, you can turn it off in Preferences");
+}
 function dismissPerformanceWarning() {
   shell.closePopover();
   ui.lowPerformanceDismissed = true;
@@ -200,9 +206,13 @@ async function screenshot() {
     <Popover v-if="isOpen('perf')" :anchor="anchorOf('perf')" side="left" kind="vc-pop perf-pop" @close="shell.closePopover()">
       <div class="perf-pop-title">Low performance</div>
       <p class="perf-pop-text">Detected stutters, your machine may have problems with displaying the models.</p>
-      <p class="perf-pop-text">
+      <p v-if="!isRenderLowPower()" class="perf-pop-text">
         Consider enabling
         <button type="button" class="perf-pop-link" @click="enablePerformanceMode()">performance mode</button>
+      </p>
+      <p class="perf-pop-text" title="Lowest quality, for slow or virtual machines">
+        {{ isRenderLowPower() ? "Performance mode is on, consider enabling" : "or, on a slow or virtual machine," }}
+        <button type="button" class="perf-pop-link" @click="enablePotatoMode()">potato mode</button>
       </p>
       <button type="button" class="pop-wide ghost" @click="dismissPerformanceWarning()">Dismiss</button>
     </Popover>
