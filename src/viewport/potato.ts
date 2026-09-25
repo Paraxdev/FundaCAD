@@ -13,6 +13,14 @@ import * as THREE from "three";
 /** Drawing buffer pixels per CSS pixel. Picked by measurement under SwiftShader. */
 export const POTATO_PIXEL_RATIO = 0.5;
 
+/** Stands in for the light the environment map gave, which Lambert cannot use. */
+const AMBIENT = 1.8;
+
+/** A 1px line at half resolution loses the depth test to its own face far more
+ *  often than a fat line did, so the faces are pushed further back. */
+const FACE_OFFSET_FACTOR = 2;
+const FACE_OFFSET_UNITS = 4;
+
 /** A twin nobody has drawn for this many potato frames is disposed. */
 const PRUNE_AFTER_FRAMES = 30;
 
@@ -67,6 +75,7 @@ export class PotatoDraw {
   private mats = new Map<THREE.Material, MatTwin>();
   private lines = new Map<FatLine, LineTwin>();
   private proxies = new THREE.Group();
+  private ambient = new THREE.AmbientLight(0xffffff, AMBIENT);
   private frame = 0;
   private swapped: { mesh: THREE.Mesh; was: THREE.Material | THREE.Material[] }[] = [];
   private hidden: THREE.Object3D[] = [];
@@ -79,12 +88,14 @@ export class PotatoDraw {
     this.proxies.matrixAutoUpdate = false;
   }
 
-  render(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera) {
+  render(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera, brightness = 1) {
     this.frame++;
+    this.ambient.intensity = AMBIENT * brightness;
     // The line twins copy their source's world matrix, so it has to be current.
     scene.updateMatrixWorld();
     this.proxies.clear();
     scene.traverseVisible((o) => this.visit(o));
+    this.proxies.add(this.ambient);
     scene.add(this.proxies);
     const target = this.frameTarget(renderer);
     const before = renderer.getRenderTarget();
@@ -195,6 +206,9 @@ export class PotatoDraw {
     t.seen = this.frame;
     const c = t.cheap;
     mirror(c, src);
+    c.polygonOffset = true;
+    c.polygonOffsetFactor = Math.max(src.polygonOffsetFactor, FACE_OFFSET_FACTOR);
+    c.polygonOffsetUnits = Math.max(src.polygonOffsetUnits, FACE_OFFSET_UNITS);
     c.color.copy(src.color);
     c.wireframe = src.wireframe;
     // These three shape the compiled program, which three only rebuilds on a version bump.
