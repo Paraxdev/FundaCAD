@@ -6,7 +6,7 @@ import * as THREE from "three";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { stickyFact } from "../diagnostics/breadcrumbs";
 import { gridStep } from "../sketch/planeGrid";
-import { setRenderLowPower } from "./render";
+import { isRenderLowPower, setRenderLowPower } from "./render";
 import { BACKGROUND_COLOR, bloomSettings, renderPrefs } from "../ui/renderPrefs";
 import { POTATO_PIXEL_RATIO, PotatoDraw } from "./potato";
 import { isSoftwareRendererName, setSoftwareRenderer } from "../ui/glassBlur";
@@ -45,6 +45,9 @@ export interface SceneBundle {
    *  tier, the pass chain and the environment. Returns the undo, or null when
    *  potato mode is off and there is nothing to lift. */
   beginFullQuality: () => (() => void) | null;
+  /** Multiply the pixel ratio for camera motion on a slow machine (motionQuality.ts);
+   *  1 puts it back. True when the drawing buffer changed size. */
+  setMotionScale: (scale: number) => boolean;
 }
 
 /** How many minor cells the ground grid spans, for a viewport `diagonalPx`
@@ -254,6 +257,9 @@ function detectLowPower(rendererName: string): boolean {
   return typeof mem === "number" && mem <= 2;
 }
 
+/** The floor under a motion frame's pixel ratio, potato mode's included. */
+const MIN_MOTION_PIXEL_RATIO = 0.35;
+
 export function createScene(canvas: HTMLCanvasElement): SceneBundle {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, stencil: true });
   const name = unmaskedRendererName(renderer);
@@ -268,13 +274,18 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
   // first pref-apply lands.
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   let fullQuality = false;
+  let motionScale = 1;
   const potatoOn = () => renderPrefs().potatoMode && !fullQuality;
+  const pixelRatio = (low: boolean) => {
+    const base = Math.min(window.devicePixelRatio, potatoOn() ? POTATO_PIXEL_RATIO : low ? 1 : 2);
+    if (motionScale >= 1 || fullQuality) return base;
+    return Math.min(base, Math.max(MIN_MOTION_PIXEL_RATIO, base * motionScale));
+  };
   const applyPowerTier = () => {
     const p = renderPrefs();
     const low = autoLowPower || p.performanceMode || potatoOn();
     setRenderLowPower(low);
-    const cap = potatoOn() ? POTATO_PIXEL_RATIO : low ? 1 : 2;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, cap));
+    renderer.setPixelRatio(pixelRatio(low));
     // Emitter shadows are the one expensive lighting extra; a weak machine drops
     // them (the emitter still lights, it just does not occlude). Flipping this
     // makes the lights and materials recompile, which the pref-apply already does.
@@ -373,6 +384,13 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
         scene.environment = null;
       };
     },
+    setMotionScale: (scale) => {
+      motionScale = scale;
+      const pr = pixelRatio(isRenderLowPower());
+      if (pr === renderer.getPixelRatio()) return false;
+      renderer.setPixelRatio(pr);
+      return true;
+    },
   };
 }
 
@@ -435,6 +453,7 @@ export class PostChain {
     OutputPass: typeof import("three/examples/jsm/postprocessing/OutputPass.js").OutputPass;
   } | null = null;
   private potato: PotatoDraw | null = null;
+  private motionDraw: PotatoDraw | null = null;
   private size = new THREE.Vector2(1, 1);
   private camera: THREE.Camera | null = null;
   /** How far in front of the camera is sharp, in world units. Written by the
@@ -488,7 +507,9 @@ export class PostChain {
     return { bloom: bloomWanted(p.bloom, this.bloomable), blur: p.focusBlur > 0 };
   }
 
-  render(camera: THREE.Camera) {
+  /** `motion` is a camera frame on a machine that cannot keep up: 1px edge lines
+   *  and no passes, until the view settles and draws in full again. */
+  render(camera: THREE.Camera, motion = false) {
     if (this.potatoOn()) {
       (this.potato ??= new PotatoDraw()).render(this.renderer, this.scene, camera, renderPrefs().brightness);
       // Only the modules, so a still taken in potato mode can build its passes at once.
@@ -499,6 +520,10 @@ export class PostChain {
     if (this.potato) {
       this.potato.dispose();
       this.potato = null;
+    }
+    if (motion) {
+      (this.motionDraw ??= new PotatoDraw(true)).render(this.renderer, this.scene, camera);
+      return;
     }
     const want = this.wanted();
     if (!want.bloom && !want.blur) {

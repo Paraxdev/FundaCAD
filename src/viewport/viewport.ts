@@ -36,6 +36,7 @@ import { SectionCaps } from "./sectionCaps";
 import { pickFacePlaneAt } from "../features/facePlanePick";
 import { FpsMeter } from "./fpsMeter";
 import { StutterWatch } from "./stutterWatch";
+import { MotionQuality } from "./motionQuality";
 import { sceneStats } from "../diagnostics/sceneStats";
 import {
   makeZebraMaterial,
@@ -132,6 +133,8 @@ export interface AreaDrag {
 /** (0,0,0), kept once. Read every frame to size the origin arrows, and a fresh
  *  Vector3 per frame for a constant is litter in the hot path. Never written. */
 const WORLD_ORIGIN = new THREE.Vector3(0, 0, 0);
+/** How long the camera has to stay still before a reduced motion frame is redrawn in full. */
+const MOTION_SETTLE_MS = 250;
 
 export class Viewport {
   readonly scene: SceneBundle;
@@ -288,6 +291,7 @@ export class Viewport {
       if (isRenderLowPower() !== wasLow || this.potato !== wasPotato) {
         this.stutter.reset();
         this.setStuttering(false);
+        this.motion.reset();
       }
       if (renderPrefs().tangentEdges !== this.tangentEdges) this.applyTangentEdges();
       this.requestRender();
@@ -3457,10 +3461,30 @@ export class Viewport {
     if (!this.movedDrawAt) return;
     const period = now - this.movedDrawAt;
     this.movedDrawAt = 0;
-    // Still watched in performance mode, where a stutter offers potato mode instead.
-    if (this.potato || this.store?.buildState.building || this.store?.busyState.active) return;
+    if (this.store?.buildState.building || this.store?.busyState.active) return;
     if (document.visibilityState !== "visible") return;
+    this.motion.sample(period, now);
+    // Still watched in performance mode, where a stutter offers potato mode instead.
+    if (this.potato) return;
     if (this.stutter.sample(period)) this.setStuttering(true);
+  }
+
+  private motion = new MotionQuality();
+  private motionScale = 1;
+  private motionActive = false;
+  private lastMovedAt = -Infinity;
+
+  /** The pixel ratio multiplier this tick draws with. True when it changed. */
+  private applyMotionScale(moved: boolean, now: number): boolean {
+    if (moved) this.lastMovedAt = now;
+    const moving = now - this.lastMovedAt < MOTION_SETTLE_MS;
+    if (this.motionActive && !moving) this.motion.settle(now);
+    this.motionActive = moving;
+    const want = moving ? this.motion.scale : 1;
+    if (want === this.motionScale) return false;
+    this.motionScale = want;
+    if (this.scene.setMotionScale(want)) this.motion.skipNext();
+    return true;
   }
 
   private scratchTarget = new THREE.Vector3();
@@ -3474,6 +3498,7 @@ export class Viewport {
       const dt = this.clock.getDelta();
       // Always advanced so damping and transitions progress; returns whether it moved.
       const moved = this.rig.update(dt);
+      if (this.applyMotionScale(moved, now) && !moved) this.requestRender();
       // Render-on-demand: skip the (relatively expensive) grid rebuild + GPU
       // draw entirely when nothing changed, camera didn't move, no mutation
       // flagged requestRender(), and we've drained the post-mutation linger.
@@ -3497,7 +3522,7 @@ export class Viewport {
         const shadows = this.scene.renderer.shadowMap;
         shadows.autoUpdate = !cameraOnly;
         try {
-          this.scene.post.render(this.rig.active);
+          this.scene.post.render(this.rig.active, this.motionScale < 1);
         } finally {
           shadows.autoUpdate = true;
         }

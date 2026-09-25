@@ -83,7 +83,9 @@ export class PotatoDraw {
   private copy: { scene: THREE.Scene; camera: THREE.OrthographicCamera; material: THREE.ShaderMaterial } | null = null;
   private size = new THREE.Vector2();
 
-  constructor() {
+  /** `linesOnly` swaps just the fat lines and draws straight to the current
+   *  target: the camera-motion draw on a slow machine (see motionQuality.ts). */
+  constructor(private readonly linesOnly = false) {
     this.proxies.name = "potato-lines";
     this.proxies.matrixAutoUpdate = false;
   }
@@ -102,6 +104,11 @@ export class PotatoDraw {
       // The line twins copy their source's world matrix, so it has to be current.
       scene.updateMatrixWorld();
       scene.traverseVisible((o) => this.visit(o));
+      if (this.linesOnly) {
+        scene.add(this.proxies);
+        renderer.render(scene, camera);
+        return;
+      }
       this.proxies.add(this.ambient);
       scene.add(this.proxies);
       target = this.frameTarget(renderer);
@@ -176,7 +183,7 @@ export class PotatoDraw {
 
   private visit(o: THREE.Object3D) {
     if (o === this.proxies) return;
-    if (isCostlyLight(o)) {
+    if (!this.linesOnly && isCostlyLight(o)) {
       o.visible = false;
       this.hidden.push(o);
       return;
@@ -190,6 +197,7 @@ export class PotatoDraw {
       }
       return;
     }
+    if (this.linesOnly) return;
     const mesh = o as THREE.Mesh;
     if (!mesh.isMesh || !mesh.material) return;
     const was = mesh.material;
