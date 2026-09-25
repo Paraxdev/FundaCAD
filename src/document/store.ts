@@ -1890,6 +1890,7 @@ export class DocumentStore {
     this.suppressed = new Set(parsed.suppressed ?? []);
     this.rollback = parsed.rollback ?? null;
     for (const { overlay, mapValue } of this.overlays) overlay.loadFrom(parsed as unknown as Record<string, unknown>, mapValue);
+    this.isolate = false; // the hidden set just came from the file, it is not an isolate
     this.palette = parsed.palette?.length ? parsed.palette.map((s) => ({ ...s })) : DEFAULT_PALETTE.map((s) => ({ ...s }));
     // Elements without an id and materials without a colour are dropped here, not at every reader.
     this.repo = normalizeRepo(parsed.versions);

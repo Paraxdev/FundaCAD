@@ -67,6 +67,7 @@ import { createDatumPlanes } from "./datumPlanes";
 import { createSketchVisibility } from "./sketchVisibility";
 import { installRebuildBridge } from "./rebuildBridge";
 import { installViewportWiring } from "./viewportWiring";
+import { installIsolateCamera } from "./isolateCamera";
 import { installSketchStateBridge } from "./sketchStateBridge";
 import { createActions } from "./actions";
 import { installKeyboard } from "./keyboard";
@@ -502,6 +503,7 @@ export function mountUi(e: Engine): void {
   installUnsavedGuard(e);
   installContextMenuGuard();
   installViewportWiring(e);
+  installIsolateCamera(e.store, e.viewport);
   installRebuildBridge(e);
   installSketchStateBridge(e);
   installKeyboard(e);
