@@ -302,7 +302,13 @@ export class DimFlow {
     this.dimPicks.push(pick);
     const r = resolveDim(this.dimPicks, this.dimOptions());
     if (isDimError(r)) {
-      if (r.message) toast(r.message); // toast on CLICK only, never from hover
+      // CLICK only, never from hover. A kept pick's message is the next step, so
+      // it is the prompt: a toast per pick stacked up over the bottom of the
+      // canvas and ate the second pick of a later dimension (FR-1).
+      if (r.message) {
+        if (r.keepPicks) setPrompt(r.message);
+        else toast(r.message);
+      }
       // a dead combination (concentric, coincident, same operand) drops the new
       // pick and keeps whatever already resolved, never a silent dead end
       if (!r.keepPicks) this.dimPicks = prev;
@@ -326,7 +332,7 @@ export class DimFlow {
       // and re-state what the tool is waiting for.
       if (this.dimPicks.length) {
         const r = resolveDim(this.dimPicks, this.dimOptions());
-        if (isDimError(r) && r.message) toast(r.message);
+        if (isDimError(r) && r.message) setPrompt(r.message);
       }
       return;
     }

@@ -39,6 +39,14 @@ export const useToastStore = defineStore("toasts", () => {
   }
 
   function push(message: string, kind: ToastItem["kind"], action: ToastAction | undefined, timeout: number) {
+    // The same line again restarts the one already showing rather than stacking
+    // a copy: the stack grows up over the canvas and a copy can take a click.
+    const same = items.value.find((x) => !x.leaving && x.message === message && x.kind === kind && !x.action && !action);
+    if (same) {
+      window.clearTimeout(timers.get(same.id));
+      timers.set(same.id, window.setTimeout(() => dismiss(same.id), timeout));
+      return;
+    }
     const id = nextId++;
     // keep the stack short, oldest goes first
     while (items.value.length >= MAX) {
