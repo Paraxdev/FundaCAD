@@ -397,7 +397,8 @@ function onClassicCamera(ev: Event) {
               </label>
               <p class="pref-hint">
                 Lowest quality, for slow or virtual machines. Flat shading, thin edges, half
-                resolution and no effects or camera animations. Includes performance mode.
+                resolution, no glass blur and no effects or camera animations. Includes
+                performance mode.
               </p>
             </div>
           </div>

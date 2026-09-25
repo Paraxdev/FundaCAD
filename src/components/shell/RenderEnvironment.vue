@@ -198,8 +198,8 @@ const onBloom = (e: Event) =>
       </div>
       <div class="sm-hint">
         Lowest quality, for slow or virtual machines. Flat shading, thin edges,
-        half resolution and no effects or camera animations. Includes
-        performance mode.
+        half resolution, no glass blur and no effects or camera animations.
+        Includes performance mode.
       </div>
     </section>
   </div>

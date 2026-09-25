@@ -427,3 +427,20 @@
 .cmdk-item.active {
   background: color-mix(in srgb, var(--accent) 16%, transparent);
 }
+
+/* ---- no blur (ui/glassBlur.ts) ------------------------------------------------ */
+
+/* Potato mode or a software renderer: every repaint of a blurred panel re-blurs
+   the viewport behind it on the CPU, so the glass keeps its sheen, rim and
+   shadow but goes opaque. The `*` catches the hard-coded blurs in other files. */
+html.no-glass-blur {
+  --float-blur: none;
+  --float-bg: var(--panel);
+  --float-bg-solid: var(--panel);
+}
+html.no-glass-blur *,
+html.no-glass-blur *::before,
+html.no-glass-blur *::after {
+  -webkit-backdrop-filter: none !important;
+          backdrop-filter: none !important;
+}
