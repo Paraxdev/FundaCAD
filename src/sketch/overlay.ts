@@ -199,8 +199,13 @@ export class SketchOverlay {
    *  sketch on a datum plane. See faceFootprint.profileCutCache. */
   footprintFor: (plane: SketchPlane) => THREE.Vector2[][] = () => [];
 
+  /** Newer cut lines landed while a tool or dialog held the regions, so the
+   *  areas shown are split against an older model until the next update(). */
+  splitStale = false;
+
   /** Rebuild committed sketch curves + region fills from the document. */
   update(doc: CadDocument, hiddenSketchId: string | null = null) {
+    this.splitStale = false;
     const resolved = this.resolvedPlanes();
     this.clearGroup(this.committed);
     this.clearGroup(this.fills);
