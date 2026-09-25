@@ -36,6 +36,10 @@
 // the two screen axes, which is a rotating-calipers pass over the projected
 // hull; worth doing, and worth doing only with that measurement in hand.
 
+/** How far from an edge, in screen px, the edge tools still take it: the
+ *  grab radius of every edge pick, whatever the zoom. */
+export const EDGE_GRAB_PX = 13;
+
 /** Screen-space radius, in px, within which an edge is preferred over a face. The band
  *  never exceeds this, so it is still the answer for any ordinary face. */
 export const EDGE_NEAR_PX = 3;
@@ -106,6 +110,12 @@ export class ScreenExtent {
     return Math.min(this.maxX - this.minX, this.maxY - this.minY);
   }
 
+  /** The max of width and height so far, Infinity before anything is added. */
+  get max(): number {
+    if (this.minX > this.maxX) return Infinity;
+    return Math.max(this.maxX - this.minX, this.maxY - this.minY);
+  }
+
   get measured(): boolean {
     return this.minX <= this.maxX;
   }
@@ -131,4 +141,55 @@ export function sampleIndices(total: number, budget: number): number[] {
   const out: number[] = [];
   for (let k = 0; k < budget; k++) out.push(Math.floor((k * total) / budget));
   return out;
+}
+
+// Tangent (smooth) edges, where two faces meet without a crease, as along a
+// fillet's borders. They are drawn faint because there is no corner there to
+// see, and a click beside one nearly always means one of the faces either side
+// of it or a sharp edge close by. So a smooth edge ranks behind any sharp edge
+// that is nearly as close, and is preferred over the face under the pointer
+// only when the pointer is on its drawn line. With no face under the pointer,
+// and in the edge tools where faces do not compete, it is still an edge like
+// any other.
+
+/** A smooth edge ranks as if it were this much further from the pointer, so a
+ *  sharp edge up to this much further away is preferred over it. */
+export const SMOOTH_EDGE_PENALTY_PX = 6;
+
+/** Over a face, a smooth edge is preferred only this close: about the half
+ *  width of its drawn line, and no short-edge boost. */
+export const SMOOTH_EDGE_BAND_PX = 1;
+
+/** The distance an edge candidate is ranked by, nearest first. */
+export function edgeRankPx(screenDist: number, smooth: boolean): number {
+  return screenDist + (smooth ? SMOOTH_EDGE_PENALTY_PX : 0);
+}
+
+/** How close the pointer has to be for this edge to be preferred over the face
+ *  under it, given that face's band (edgeBandPx) and the edge's own short-edge
+ *  boost (shortEdgeBoostPx). */
+export function edgeBandForPx(faceBandPx: number, shortBoostPx: number, smooth: boolean): number {
+  return smooth ? Math.min(faceBandPx, SMOOTH_EDGE_BAND_PX) : faceBandPx + shortBoostPx;
+}
+
+export interface BandCandidate {
+  /** distance from the pointer, in screen px */
+  screenDist: number;
+  /** round the back of the body (picking.occludedEdge) */
+  occluded: boolean;
+  /** edgeBandForPx for this edge */
+  bandPx: number;
+}
+
+/** Which edge, if any, the pointer means rather than the face under it: the
+ *  first candidate, in rank order, that is not occluded and lies within its own
+ *  band. With no face under the pointer every candidate is within reach, so the
+ *  first visible one is the answer. Null means the face. */
+export function preferredEdge(cands: readonly BandCandidate[], overFace: boolean): number | null {
+  for (let i = 0; i < cands.length; i++) {
+    const c = cands[i]!;
+    if (c.occluded) continue;
+    if (!overFace || c.screenDist <= c.bandPx) return i;
+  }
+  return null;
 }
