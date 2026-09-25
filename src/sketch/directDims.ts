@@ -19,6 +19,7 @@ import type { ResolvedEntity } from "./snap";
 import type { DimField, SketchConstraint } from "../types";
 import { dimPlaceOf } from "../types";
 import { newConstraintId } from "./id";
+import { rectCorners } from "./region";
 
 const EPS = 1e-9;
 
@@ -47,13 +48,15 @@ export function applyDrivingDimsDirect(
       if (e?.type !== "rectangle" || !(c.value > 0)) continue;
       const cur = field === "width" ? e.width : e.height;
       if (Math.abs(cur - c.value) <= EPS) continue;
-      // Hold corner 0 (where an origin pin sits) and grow away from it.
+      const k = heldCorner(e, c, entities, constraints);
+      const held = rectCorners(e.x, e.y, e.width, e.height, e.angle)[k]!;
+      const w = field === "width" ? c.value : e.width;
+      const h = field === "height" ? c.value : e.height;
+      const lx = (k === 1 || k === 2 ? 0.5 : -0.5) * w;
+      const ly = (k === 2 || k === 3 ? 0.5 : -0.5) * h;
       const a = ((e.angle ?? 0) * Math.PI) / 180;
-      const half = (c.value - cur) / 2;
-      const ux = field === "width" ? Math.cos(a) : -Math.sin(a);
-      const uy = field === "width" ? Math.sin(a) : Math.cos(a);
-      e.x += ux * half;
-      e.y += uy * half;
+      e.x = held.x - (lx * Math.cos(a) - ly * Math.sin(a));
+      e.y = held.y - (lx * Math.sin(a) + ly * Math.cos(a));
       if (field === "width") e.width = c.value;
       else e.height = c.value;
       changed = true;
@@ -74,6 +77,36 @@ export function applyDrivingDimsDirect(
     }
   }
   return changed;
+}
+
+/** The rectangle corner a no-solver resize keeps in place: one that is pinned
+ *  (a fix on it, a fixed point on it or coincident with it, or the origin), else
+ *  the second corner of the constraint's own pair. */
+function heldCorner(
+  e: Extract<ResolvedEntity, { type: "rectangle" }>,
+  c: Extract<SketchConstraint, { type: "p2pDistance" }>,
+  entities: ResolvedEntity[],
+  constraints: SketchConstraint[],
+): number {
+  const fixedPts = new Set<string>();
+  const fixedAt: { x: number; y: number }[] = [{ x: 0, y: 0 }];
+  for (const k of constraints) {
+    if (k.type !== "fix") continue;
+    fixedPts.add(k.e);
+    const pt = entities.find((x) => x.id === k.e);
+    if (pt?.type === "point") fixedAt.push(pt);
+  }
+  const corners = rectCorners(e.x, e.y, e.width, e.height, e.angle);
+  const pinned = (i: number): boolean => {
+    const q = corners[i]!;
+    if (fixedAt.some((f) => Math.hypot(f.x - q.x, f.y - q.y) <= 1e-6)) return true;
+    return constraints.some((k) =>
+      (k.type === "fix" && k.e === e.id && k.p === i) ||
+      (k.type === "coincident" &&
+        ((k.e1 === e.id && k.p1 === i && fixedPts.has(k.e2)) || (k.e2 === e.id && k.p2 === i && fixedPts.has(k.e1)))));
+  };
+  const found = [0, 1, 2, 3].find(pinned);
+  return found ?? c.p2;
 }
 
 /** Which side of its own rectangle a same-entity p2pDistance measures, by the
