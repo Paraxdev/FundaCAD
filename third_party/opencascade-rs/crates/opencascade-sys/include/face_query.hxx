@@ -7,6 +7,8 @@
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepAdaptor_Surface.hxx>
 #include <BRepBndLib.hxx>
+#include <BRep_Builder.hxx>
+#include <TopoDS_Compound.hxx>
 #include <BRepGProp.hxx>
 #include <BRepGProp_Face.hxx>
 #include <BRep_Tool.hxx>
@@ -14,6 +16,8 @@
 #include <GCPnts_AbscissaPoint.hxx>
 #include <GCPnts_QuasiUniformDeflection.hxx>
 #include <TopExp_Explorer.hxx>
+#include <TopLoc_Location.hxx>
+#include <gp_Trsf.hxx>
 #include <GProp_GProps.hxx>
 #include <GeomAbs_CurveType.hxx>
 #include <GeomAbs_SurfaceType.hxx>
@@ -33,6 +37,7 @@
 #include <gp_Vec.hxx>
 
 #include <cstdint>
+#include <memory>
 #include <limits>
 #include <stdexcept>
 
@@ -143,8 +148,60 @@ inline bool FQ_bbox(const TopoDS_Shape &shape, bool optimal, rust::Slice<double>
   return true;
 }
 
+// What one face adds to BRepBndLib::AddOptimal of a shape holding it. A bare
+// face would also count its own edges as free ones, a compound of it does not.
+inline bool FQ_face_bbox(const TopoDS_Shape &face, rust::Slice<double> out) {
+  TopoDS_Compound c;
+  BRep_Builder b;
+  b.MakeCompound(c);
+  b.Add(c, face);
+  return FQ_bbox(c, true, out);
+}
+
 inline std::uint64_t FQ_tshape(const TopoDS_Shape &shape) {
   return static_cast<std::uint64_t>(reinterpret_cast<std::uintptr_t>(shape.TShape().get()));
+}
+
+// The shape's own placement, row-major 3x4 with any scale folded in; false
+// for the identity.
+inline bool FQ_location(const TopoDS_Shape &shape, rust::Slice<double> out) {
+  fq_require(out, 12);
+  const gp_Trsf t = shape.Location().Transformation();
+  for (int r = 1; r <= 3; ++r)
+    for (int c = 1; c <= 4; ++c) out[(r - 1) * 4 + (c - 1)] = t.Value(r, c);
+  return !shape.Location().IsIdentity();
+}
+
+inline std::unique_ptr<TopoDS_Shape> FQ_unlocated(const TopoDS_Shape &shape) {
+  return std::unique_ptr<TopoDS_Shape>(new TopoDS_Shape(shape.Located(TopLoc_Location())));
+}
+
+inline int32_t FQ_orientation(const TopoDS_Shape &shape) { return static_cast<int32_t>(shape.Orientation()); }
+
+// Edges outside every face or vertices outside every edge, which a box built
+// face by face would miss.
+inline bool FQ_free_parts(const TopoDS_Shape &shape) {
+  return TopExp_Explorer(shape, TopAbs_EDGE, TopAbs_FACE).More() ||
+         TopExp_Explorer(shape, TopAbs_VERTEX, TopAbs_EDGE).More();
+}
+
+// 0 plane, 1 cylinder, 2 cone, 3 sphere, 4 torus, 5 bezier or bspline, 6 other.
+inline int32_t FQ_surface_code(const TopoDS_Shape &shape) {
+  if (shape.IsNull() || shape.ShapeType() != TopAbs_FACE) return 6;
+  try {
+    switch (BRepAdaptor_Surface(TopoDS::Face(shape)).GetType()) {
+    case GeomAbs_Plane: return 0;
+    case GeomAbs_Cylinder: return 1;
+    case GeomAbs_Cone: return 2;
+    case GeomAbs_Sphere: return 3;
+    case GeomAbs_Torus: return 4;
+    case GeomAbs_BezierSurface:
+    case GeomAbs_BSplineSurface: return 5;
+    default: return 6;
+    }
+  } catch (...) {
+    return 6;
+  }
 }
 
 // BRepGProp with OCP's defaults (skip shared false): mass, centre xyz. kind 2
