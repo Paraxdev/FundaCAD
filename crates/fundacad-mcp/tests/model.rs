@@ -176,6 +176,20 @@ fn a_replace_that_changes_the_type_is_checked_against_the_new_type() {
     assert_eq!(m::features(&d)[1]["type"], json!("chamfer"));
 }
 
+#[test]
+fn a_mirror_that_names_bodies_writes_its_plane_as_a_name_object() {
+    let mut d = chute();
+    m::add_feature(&mut d, &json!({"id": "m1", "type": "mirror", "plane": "YZ", "bodies": ["body1"]}), None).unwrap();
+    m::add_feature(&mut d, &json!({"id": "m2", "type": "mirror", "plane": "XZ"}), None).unwrap();
+    let f = |d: &m::Doc, id: &str| m::features(d).iter().find(|f| f["id"] == id).cloned().unwrap();
+    assert_eq!(f(&d, "m1")["plane"], json!({"name": "YZ"}));
+    assert_eq!(f(&d, "m2")["plane"], json!("XZ"), "without bodies the old form stays");
+    m::update_feature(&mut d, "m2", &json!({"bodies": ["body1"]}), false).unwrap();
+    assert_eq!(f(&d, "m2")["plane"], json!({"name": "XZ"}));
+    m::update_feature(&mut d, "m1", &json!({"plane": "XY"}), false).unwrap();
+    assert_eq!(f(&d, "m1")["plane"], json!({"name": "XY"}));
+}
+
 // --- parameters --------------------------------------------------------------
 
 #[test]

@@ -51,6 +51,7 @@
 import { BOOLEAN_COMMANDS } from "../features/booleanOps";
 import { HOLE_SIZES, holeFieldApplies } from "../features/holeStandards";
 import { contributedFeature } from "../plugins/contrib";
+import { mirrorPlaneName } from "./mirrorPlane";
 import type { Feature, FeatureType } from "../types";
 
 export interface ChoiceOption {
@@ -311,7 +312,9 @@ export function hasOptionFields(type: FeatureType | string): boolean {
  *  builder's default when the field is absent. Absent is the common case, most
  *  of these are optional, and a feature saved before the field existed has none. */
 export function choiceValue(feature: Feature, f: ChoiceField): string {
-  const v = (feature as unknown as Record<string, unknown>)[f.field];
+  const v = feature.type === "mirror" && f.field === "plane"
+    ? mirrorPlaneName((feature as Extract<Feature, { type: "mirror" }>).plane)
+    : (feature as unknown as Record<string, unknown>)[f.field];
   if (typeof v !== "string") return f.fallback;
   return f.options.some((o) => o.value === v) ? v : f.fallback;
 }

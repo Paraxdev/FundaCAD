@@ -773,15 +773,22 @@
    }
   },
   "mirror": {
-   "summary": "Mirror the active body across a world plane.",
+   "summary": "Mirror bodies across a world plane, each fused with its reflection.",
    "fields": {
-    "plane": "\"XY\", \"XZ\" or \"YZ\""
+    "plane": "\"XY\", \"XZ\" or \"YZ\", or the id of a datumPlane above this mirror; written {\"name\": \"YZ\"} once `bodies` is set, which feature_add and feature_update do for you",
+    "bodies": "optional list of body ids, each fused with its own reflection; the active body when absent. A body id that does not exist at this point is an error"
    },
    "example": {
     "id": "mir1",
     "type": "mirror",
-    "plane": "YZ"
-   }
+    "plane": {
+     "name": "YZ"
+    },
+    "bodies": [
+     "body1"
+    ]
+   },
+   "notes": "Set `bodies` whenever more than one body exists: without it the mirror reflects whichever body the timeline touched last, which is rarely the one meant."
   },
   "boolean": {
    "summary": "Combine bodies.",

@@ -428,3 +428,53 @@ fn a_build_before_placed_axes_refuses_every_new_axis_form() {
     let unfit: Feature = serde_json::from_value(with(serde_json::json!(5))).expect("load");
     assert!(matches!(unfit, Feature::Invalid(_)), "{unfit:?}");
 }
+
+#[test]
+fn a_mirror_plane_is_a_name_or_a_name_object_with_bodies() {
+    use fundacad_core::schema::{MirrorPlane, Plane3};
+    let raw = serde_json::json!({"parameters": {}, "features": [
+        {"id": "old", "type": "mirror", "plane": "YZ"},
+        {"id": "some", "type": "mirror", "plane": {"name": "XZ"}, "bodies": ["body1", "body2"]},
+    ]});
+    let doc: CadDocument = serde_json::from_value(raw.clone()).expect("load");
+    let m = |id: &str| match doc.feature(id) {
+        Some(Feature::Mirror(m)) => m.clone(),
+        other => panic!("{id} is a mirror, got {other:?}"),
+    };
+    assert_eq!(m("old").plane, MirrorPlane::Named(Plane3::YZ));
+    assert!(m("old").bodies.is_none() && m("old").extra.is_empty());
+    let some = m("some");
+    assert!(matches!(&some.plane, MirrorPlane::Ref(r) if r.name == Plane3::XZ && r.extra.is_empty()));
+    assert_eq!(some.plane.name(), "XZ");
+    assert_eq!(some.bodies.as_deref(), Some(&["body1".to_owned(), "body2".to_owned()][..]));
+    assert!(some.extra.is_empty());
+    assert_eq!(serde_json::to_value(&doc).expect("save"), raw);
+}
+
+/// A build from before targeted mirrors (main at 040f9ea5) had this `mirror`.
+/// `bodies` it would carry in `extra` and reflect the active body instead, so a
+/// mirror that names bodies writes `{name}`, which it loads as `Invalid` and
+/// builds as an error naming the feature.
+#[test]
+fn a_build_before_targeted_mirrors_refuses_a_mirror_that_names_bodies() {
+    use fundacad_core::schema::{Extra, Num, Plane3};
+    #[derive(Debug, serde::Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    #[allow(dead_code)]
+    struct BeforeTargetedMirrors {
+        id: String,
+        plane: Plane3,
+        #[serde(default)]
+        active_when: Option<Num>,
+        #[serde(flatten)]
+        extra: Extra,
+    }
+    let before = |plane: Value| {
+        serde_json::from_value::<BeforeTargetedMirrors>(
+            serde_json::json!({"id": "m", "plane": plane, "bodies": ["body1"]}),
+        )
+    };
+    assert!(before(serde_json::json!({"name": "YZ"})).is_err());
+    let bare = before(serde_json::json!("YZ")).expect("a bare name loads");
+    assert!(bare.extra.contains_key("bodies"), "and bodies would be ignored");
+}

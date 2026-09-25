@@ -185,6 +185,7 @@ pub fn add_feature(
             text
         }
     };
+    canonical_mirror(&mut f);
     if let Some(msg) = missing_fields_message(kind, &f) {
         return err(msg);
     }
@@ -257,10 +258,11 @@ pub fn update_feature(
     };
     out.entry("id").or_insert_with(|| json!(fid));
     let was = str_field(&existing, "type").unwrap_or_default();
-    let now = out.get("type").and_then(Value::as_str).unwrap_or_default();
+    let now = out.get("type").and_then(Value::as_str).unwrap_or_default().to_owned();
     if now != was {
-        check_new_type(fid, was, now, &out)?;
+        check_new_type(fid, was, &now, &out)?;
     }
+    canonical_mirror(&mut out);
     let value = Value::Object(out);
     forget_stale_join(doc, Some(&existing), &value);
     features_mut(doc)[i] = value.clone();
@@ -309,6 +311,19 @@ fn missing_fields_message(kind: &str, f: &Map<String, Value>) -> Option<String> 
             "{label} is missing the fields {}",
             many.iter().map(|k| format!("\"{k}\"")).collect::<Vec<_>>().join(", ")
         )),
+    }
+}
+
+/// A mirror that names bodies writes its plane as `{name}`, which a build from
+/// before targeted mirrors refuses instead of reflecting the active body.
+fn canonical_mirror(f: &mut Map<String, Value>) {
+    if f.get("type").and_then(Value::as_str) != Some("mirror") {
+        return;
+    }
+    let names_bodies = f.get("bodies").and_then(Value::as_array).is_some_and(|b| !b.is_empty());
+    if let (true, Some(Value::String(p))) = (names_bodies, f.get("plane")) {
+        let named = json!({"name": p});
+        f.insert("plane".into(), named);
     }
 }
 

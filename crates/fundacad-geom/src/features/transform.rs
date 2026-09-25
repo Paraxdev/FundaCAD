@@ -4,7 +4,7 @@
 
 use std::collections::HashSet;
 
-use fundacad_core::schema::{Mirror, Move, RemoveBody, Scale};
+use fundacad_core::schema::{Mirror, MirrorPlane, Move, RemoveBody, Scale};
 
 use crate::builder::plane::{plane_of, PlaneRef};
 use crate::builder::{Ctx, FResult, Fail};
@@ -112,13 +112,36 @@ pub fn scale(ctx: &mut Ctx, s: &Scale) -> FResult {
 }
 
 pub fn mirror(ctx: &mut Ctx, m: &Mirror) -> FResult {
-    let i = ctx.require_active("Mirror")?;
-    let plane = plane_of(PlaneRef::Name(m.plane.as_str()), &ctx.datums)?;
-    let shape = ctx.bodies[i].shape();
-    let mirrored = kernel::mirrored(shape, plane.origin, plane.z)?;
-    let wrapped = kernel::compound([&mirrored]);
-    let fused = kernel::boolean_op(shape, &[&wrapped], BoolKind::Fuse)?;
-    ctx.set_shape(i, fused);
+    let named = m.bodies.as_ref().filter(|v| !v.is_empty());
+    if let (Some(_), MirrorPlane::Named(n)) = (named, &m.plane) {
+        return Err(Fail::msg(format!(
+            "Mirror: with bodies the plane is written {{\"name\": \"{0}\"}}, not \"{0}\", \
+             which a build from before targeted mirrors would read as the active body",
+            n.as_str()
+        )));
+    }
+    let plane = plane_of(PlaneRef::Name(m.plane.name()), &ctx.datums)?;
+    let mut missing: Vec<&str> = named
+        .into_iter()
+        .flatten()
+        .map(String::as_str)
+        .filter(|id| ctx.find_body(id).is_none())
+        .collect();
+    missing.sort_unstable();
+    missing.dedup();
+    if !missing.is_empty() {
+        return Err(Fail::msg(format!(
+            "Mirror: no such body {}, it may have been renumbered or consumed by an earlier feature",
+            missing.join(", ")
+        )));
+    }
+    for i in targets(ctx, m.bodies.as_ref(), "Mirror")?.into_iter().flatten() {
+        let shape = ctx.bodies[i].shape();
+        let mirrored = kernel::mirrored(shape, plane.origin, plane.z)?;
+        let wrapped = kernel::compound([&mirrored]);
+        let fused = kernel::boolean_op(shape, &[&wrapped], BoolKind::Fuse)?;
+        ctx.set_shape(i, fused);
+    }
     Ok(())
 }
 

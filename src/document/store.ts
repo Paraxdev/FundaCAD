@@ -31,6 +31,7 @@ import {
 import { faceKey, parseFaceKey } from "./faceMaterials";
 import { documentShapeProblem, UnreadableDocumentError } from "./documentShape";
 import { forgetStaleJoins, joinSignatures } from "./bodyIds";
+import { canonicalMirrorPlanes } from "./mirrorPlane";
 import * as params from "../params/engine";
 import { extrasEmpty, trialConfiguration } from "../params/extras";
 import type { FieldKind } from "./numFields";
@@ -800,6 +801,7 @@ export class DocumentStore {
     const joins = joinSignatures(this.doc);
     fn(this.doc);
     forgetStaleJoins(joins, this.doc);
+    canonicalMirrorPlanes(this.doc);
     if (this.doc.paramDefs) this.applyRecompute(params.recompute(this.doc));
     this.markDirty();
     this.emitDoc();
@@ -1921,6 +1923,7 @@ export class DocumentStore {
         (f as { hiddenBodies?: string[] }).hiddenBodies = [];
       }
     }
+    canonicalMirrorPlanes(this.doc);
     this.markDirty(); // openDocument clears this via markSaved() once the path is known
     this.discardModelForReplacement();
     this.emitDoc();
