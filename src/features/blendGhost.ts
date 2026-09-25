@@ -238,10 +238,11 @@ function nthSmallest(a: Float64Array, k: number): number {
 }
 
 /** Where a sample's ball probes the corner: on the bisector, a little way
- *  off both faces. */
+ *  off both faces, but never past half the shorter face, where a sharp wedge
+ *  on a small part would be probing some other feature. */
 function probePoint(alpha: number, room: number): V2 {
   const off = Math.min(2, Math.max(0.1, 0.15 * Math.min(room, 20)));
-  const d = off / Math.sin(alpha / 2);
+  const d = Math.min(off / Math.sin(alpha / 2), 0.5 * Math.min(room, 40));
   return [Math.cos(alpha / 2) * d, Math.sin(alpha / 2) * d];
 }
 
