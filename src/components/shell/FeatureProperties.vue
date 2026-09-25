@@ -42,8 +42,10 @@ import { displayRound, isPlainNumber } from "../../ui/units";
 import { onPreviewError } from "../../ui/previewError";
 import { commonUnits, toUnit, tryParseMeasure, unitById, type Dim, type Measured, type UnitDef } from "../../ui/measure";
 import { contextMenu } from "../../ui/menu";
-import { resolveEntities, toSketchEntity } from "../../sketch/resolve";
+import { resolveEntities, resolveRealEntities, toSketchEntity } from "../../sketch/resolve";
 import { entityDims } from "../../sketch/entityDims";
+import { applyDrivingDimsDirect, upsertDrivingDim } from "../../sketch/directDims";
+import { toast } from "../../ui/toast";
 import { featureNumFields, featureWithTarget, readField, type FieldKind } from "../../document/numFields";
 import {
   choiceFieldsFor,
@@ -59,7 +61,7 @@ import { targetsFor } from "../../features/selectionTargets";
 import { featureLabel } from "../../features/patternSources";
 import { holeChoicePatch } from "../../features/holeStandards";
 import { asFeature } from "../../types";
-import type { Feature, Num, ParamTarget } from "../../types";
+import type { DimField, Feature, Num, ParamTarget } from "../../types";
 
 const props = defineProps<{ featureId: string; unit: string }>();
 
@@ -153,18 +155,40 @@ function measure(raw: string, showing: UnitDef | null, dim: Dim): Measured | str
 // --- sketch: editable per-entity dimensions (same descriptors as the in-canvas
 // labels). Editing entity i serialises just that entity back to numbers and
 // leaves the others (and their parameter references) untouched. ---
+
+/** "Line", "Arc", ... capitalised for the row label; entity.type is otherwise
+ *  only ever spelled lowercase, for JSON. */
+const TYPE_NAME: Record<string, string> = {
+  line: "Line", arc: "Arc", circle: "Circle", rectangle: "Rectangle",
+  slot: "Slot", polygon: "Polygon", bspline: "Curve", spline: "Curve", point: "Point",
+};
+
 const sketchRows = useDocValue((doc) => {
   const f = asFeature(feature.value, "sketch");
   if (!f) return [];
   const resolved = resolveEntities(f, doc.parameters);
+  const dimsOf = resolved.map((e) => entityDims(e));
+  // Only ambiguous when it needs to be: a lone circle still just says
+  // "Diameter", the plain label every sketch has always shown. Two lines both
+  // showing "Length" is where SK-7 lived, so ONLY a type with more than one
+  // dimensioned entity gets a "Line 1" / "Line 2" prefix to tell them apart.
+  const perType = new Map<string, number>();
+  resolved.forEach((e, i) => { if (dimsOf[i]!.length) perType.set(e.type, (perType.get(e.type) ?? 0) + 1); });
   const out: { key: string; label: string; unit: string; value: string; index: number; field: string }[] = [];
+  const seen = new Map<string, number>();
   resolved.forEach((e, i) => {
-    for (const d of entityDims(e)) {
+    const dims = dimsOf[i]!;
+    if (!dims.length) return;
+    const ambiguous = (perType.get(e.type) ?? 0) > 1;
+    const n = (seen.get(e.type) ?? 0) + 1;
+    seen.set(e.type, n);
+    const prefix = ambiguous ? `${TYPE_NAME[e.type] ?? e.type} ${n} ` : "";
+    for (const d of dims) {
       const key = `${i}:${d.field}`;
       const u = unitOf(key, "length");
       out.push({
         key,
-        label: d.label,
+        label: `${prefix}${d.label}`,
         unit: u?.label ?? "",
         value: String(toUnit(d.valueMm, u)),
         index: i,
@@ -181,12 +205,39 @@ function commitSketchDim(row: { key: string; index: number; field: string }, raw
   if (!m) return "not a value";
   const f = asFeature(feature.value, "sketch");
   if (!f) return null;
-  const copy = resolveEntities(f, store.document.parameters)[row.index];
+  const resolved = resolveEntities(f, store.document.parameters);
+  const copy = resolved[row.index];
   if (!copy) return null;
+  adopt(row.key, m.unit);
+  // A line's length / a circle's diameter drive the solver elsewhere (see
+  // SketchMode.editDimension); routing this edit the same way keeps whatever
+  // else is pinned to that entity (a coincident endpoint, say) intact instead
+  // of sliding just the one coordinate entityDims' write() touches. Anything
+  // else (rectangle W/H, line angle, ...) has no such constraint to bypass and
+  // stays a direct coordinate write.
+  const driven = upsertDrivingDim(f.constraints ?? [], copy, row.field as DimField, m.value);
+  if (driven) {
+    const solve = store.headlessSolve;
+    if (!solve) {
+      // No live solver session (WASM would not start, or this host never wired
+      // one in): the same fallback SketchMode reaches for when ITS solver is
+      // dead, applied to every entity the constraint set can resolve without
+      // solving rather than only the one being edited.
+      const all = resolveRealEntities(f, store.document.parameters);
+      applyDrivingDimsDirect(all, driven);
+      store.updateFeature(f.id, { entities: all.map(toSketchEntity), constraints: driven } as Partial<Feature>);
+      return null;
+    }
+    void (async () => {
+      const solved = await solve({ ...f, constraints: driven }, store.document.parameters);
+      if (!solved) { toast(`Could not satisfy this ${row.field} with the sketch's other constraints`); return; }
+      store.updateFeature(f.id, { entities: solved.entities, constraints: driven } as Partial<Feature>);
+    })();
+    return null;
+  }
   entityDims(copy).find((x) => x.field === row.field)?.write(m.value);
   const entities = f.entities.map((ent, j) => (j === row.index ? toSketchEntity(copy) : ent));
   store.updateFeature(f.id, { entities } as Partial<Feature>);
-  adopt(row.key, m.unit);
   return null;
 }
 

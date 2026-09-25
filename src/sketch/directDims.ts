@@ -16,7 +16,8 @@
 // here is indistinguishable from one authored on a working machine.
 
 import type { ResolvedEntity } from "./snap";
-import type { SketchConstraint } from "../types";
+import type { DimField, SketchConstraint } from "../types";
+import { newConstraintId } from "./id";
 
 const EPS = 1e-9;
 
@@ -56,4 +57,39 @@ export function applyDrivingDimsDirect(
     }
   }
   return changed;
+}
+
+/** The other end of the same rule: SketchMode.editDimension routes a line's
+ *  length and a circle's diameter through a driving constraint so the solver
+ *  keeps whatever else is pinned to that entity (a coincident endpoint, say)
+ *  intact, rather than sliding just that one coordinate. An editor with no live
+ *  solve session (FeatureProperties, editing a feature that is not open) needs
+ *  the same routing before it hands entities+constraints to a headless solve,
+ *  or the field it exposes is the trap SK-7 was: it looks like every other
+ *  dimension row but quietly breaks a closure the moment you type into it.
+ *
+ *  Returns the constraint list with the driving dim upserted (dedup by target,
+ *  same id if one already drove it), or null when `field` is one of the ones
+ *  that edit coordinates directly (rectangle W/H, line angle, ...), for the
+ *  caller to fall back to entityDims' own write(). */
+export function upsertDrivingDim(
+  constraints: SketchConstraint[],
+  entity: ResolvedEntity,
+  field: DimField,
+  mm: number,
+): SketchConstraint[] | null {
+  let existing: SketchConstraint | undefined;
+  let fresh: SketchConstraint;
+  if (entity.type === "line" && field === "length") {
+    existing = constraints.find((k) => k.type === "distance" && k.line === entity.id);
+    fresh = { type: "distance", line: entity.id, value: mm };
+  } else if (entity.type === "circle" && field === "diameter") {
+    existing = constraints.find((k) => k.type === "diameter" && k.circle === entity.id);
+    fresh = { type: "diameter", circle: entity.id, value: mm };
+  } else {
+    return null;
+  }
+  if (existing && "id" in existing && existing.id) fresh.id = existing.id;
+  else fresh.id = newConstraintId();
+  return [...constraints.filter((k) => k !== existing), fresh];
 }

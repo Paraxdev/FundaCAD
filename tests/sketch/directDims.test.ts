@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { applyDrivingDimsDirect } from "../../src/sketch/directDims";
+import { applyDrivingDimsDirect, upsertDrivingDim } from "../../src/sketch/directDims";
 import type { ResolvedEntity } from "../../src/sketch/snap";
 import type { SketchConstraint } from "../../src/types";
 
@@ -94,5 +94,54 @@ describe("applyDrivingDimsDirect", () => {
     expect(applyDrivingDimsDirect(ents, cons)).toBe(false);
     expect(ents[0]).toMatchObject({ radius: 10 });
     expect(ents[1]).toMatchObject({ x2: 6, y2: 8 });
+  });
+});
+
+describe("upsertDrivingDim", () => {
+  // SK-7: FeatureProperties has no live sketch session to route a length edit
+  // through SketchMode.editDimension, so it has to build the same driving
+  // constraint by hand before handing entities+constraints to a headless solve.
+  it("adds a fresh distance constraint for a line's length, with a new id", () => {
+    const l = line("l1", 3, 4);
+    const out = upsertDrivingDim([], l, "length", 10);
+    expect(out).not.toBeNull();
+    expect(out).toHaveLength(1);
+    expect(out![0]).toMatchObject({ type: "distance", line: "l1", value: 10 });
+    expect((out![0] as { id?: string }).id).toBeTruthy();
+  });
+
+  it("adds a fresh diameter constraint for a circle's diameter", () => {
+    const c = circle("c1", 5);
+    const out = upsertDrivingDim([], c, "diameter", 20);
+    expect(out).toMatchObject([{ type: "diameter", circle: "c1", value: 20 }]);
+  });
+
+  it("replaces the existing distance constraint on the same line, keeping its id", () => {
+    const l = line("l1", 3, 4);
+    const existing: SketchConstraint[] = [{ type: "distance", line: "l1", value: 5, id: "c9" }];
+    const out = upsertDrivingDim(existing, l, "length", 12)!;
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({ type: "distance", line: "l1", value: 12, id: "c9" });
+  });
+
+  it("leaves every other constraint untouched", () => {
+    const l = line("l1", 3, 4);
+    const existing: SketchConstraint[] = [
+      { type: "horizontal", line: "other" } as SketchConstraint,
+      { type: "distance", line: "l1", value: 5, id: "c9" },
+    ];
+    const out = upsertDrivingDim(existing, l, "length", 12)!;
+    expect(out).toHaveLength(2);
+    expect(out.find((k) => k.type === "horizontal")).toBeTruthy();
+  });
+
+  // rectangle W/H, line angle, radius, slot length/width, ... : none of these
+  // go through a constraint even inside a live sketch session, so the caller
+  // falls back to entityDims' direct write for them.
+  it("returns null for a field that is not line length or circle diameter", () => {
+    const l = line("l1", 3, 4);
+    expect(upsertDrivingDim([], l, "angle" as never, 10)).toBeNull();
+    const c = circle("c1", 5);
+    expect(upsertDrivingDim([], c, "radius" as never, 10)).toBeNull();
   });
 });
