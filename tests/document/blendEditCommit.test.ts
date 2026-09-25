@@ -103,4 +103,30 @@ describe("a mid-timeline fillet edit through the store", () => {
     expect(store.toJSON()).toBe(before);
     expect((store.document.features[2] as { name?: string }).name).toBe("Bowl to wall blend");
   });
+
+  it("an invalid parameter value writes nothing and leaves the preview open for the caller to end", async () => {
+    const store = new DocumentStore(stubBackend(rebuilds), doc(true));
+    const before = store.toJSON();
+    store.beginEditPreview("wall_blend");
+    await vi.runAllTimersAsync();
+    const err = store.commitFeatureEdit("wall_blend", null, { name: "wall_blend_r", value: Number.NaN });
+    expect(err).toMatch(/NaN/);
+    expect(store.editPreviewId).toBe("wall_blend");
+    await vi.runAllTimersAsync();
+    expect(store.toJSON()).toBe(before);
+    store.endEditPreview();
+    await vi.runAllTimersAsync();
+    expect(rebuilds.at(-1)!.features.map((f) => f.id)).toEqual(["s1", "e1", "wall_blend", "c1"]);
+  });
+
+  it("a successful commit ends the edit preview itself", async () => {
+    const store = new DocumentStore(stubBackend(rebuilds), doc(false));
+    store.beginEditPreview("wall_blend");
+    await vi.runAllTimersAsync();
+    const f = { ...store.document.features[2]!, radius: 7 } as Feature;
+    expect(store.commitFeatureEdit("wall_blend", f, null)).toBeNull();
+    expect(store.editPreviewId).toBeNull();
+    await vi.runAllTimersAsync();
+    expect(rebuilds.at(-1)!.features.map((x) => x.id)).toEqual(["s1", "e1", "wall_blend", "c1"]);
+  });
 });

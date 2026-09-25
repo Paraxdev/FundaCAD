@@ -73,6 +73,7 @@ import {
 import { CanvasGesture } from "./canvasGesture";
 import { blendEditCommit } from "./blendEdit";
 import { pointOnEdge } from "./edgeNudge";
+import { toast } from "../ui/toast";
 
 type Phase = "pick" | "drag";
 type Kind = EdgeTreatment;
@@ -1406,11 +1407,11 @@ export class EdgeFeatureTool {
         built: feature,
         paramRef: this.paramRef,
       });
-      const changed = edit.feature !== null || edit.param !== null;
-      this.store.endEditPreview(!changed); // the commit's own mutate rebuilds
-      if (changed && this.store.commitFeatureEdit(this.editId, edit.feature, edit.param)) {
-        this.store.endEditPreview();
-      }
+      const refused = edit.refused
+        ?? (edit.feature || edit.param ? this.store.commitFeatureEdit(this.editId, edit.feature, edit.param) : null);
+      // A commit ends the preview itself; anything else puts the committed model back.
+      this.store.endEditPreview();
+      if (refused) toast(refused, { kind: "warning" });
     } else if (this.editId) {
       this.store.endEditPreview();
     } else {
