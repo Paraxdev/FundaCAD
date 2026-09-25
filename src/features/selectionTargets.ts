@@ -158,6 +158,13 @@ export type TargetEntry = Selector | string | [number, number, number];
  *  wrote as a one-element array, and `split` spells its target two ways. A
  *  reader that trusted the declared arity would silently show an empty target
  *  for a legal document, which reads as "this feature acts on nothing". */
+/** `targetsOf` for one feature: a pattern that repeats features has no bodies. */
+export function targetsFor(f: Feature): readonly TargetField[] {
+  const all = targetsOf(f.type);
+  const repeats = (f as { features?: string[] }).features;
+  return repeats?.length ? all.filter((t) => t.field !== "bodies") : all;
+}
+
 export function readTarget(feature: Feature, t: TargetField): TargetEntry[] {
   const raw = (feature as unknown as Record<string, unknown>)[t.field];
   const fallback = t.alsoReads

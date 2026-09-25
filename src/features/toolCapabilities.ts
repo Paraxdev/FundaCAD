@@ -139,8 +139,11 @@ export const TOOL_CAPABILITIES: Record<ToolId, ToolCapability> = {
   // Two rows, not one: linear and circular are different gestures, pull an
   // arrow along an axis or sweep around one, which is why the ribbon splits
   // them too. Collapsing them here would offer a button that has to ask.
-  "pattern-linear": { label: "Linear Pattern", consumes: ["body"], source: "selection" },
-  "pattern-circular": { label: "Circular Pattern", consumes: ["body"], source: "selection" },
+  //
+  // A face stands for the feature that made it, so a hole's wall patterns the
+  // hole rather than the body (features/patternSources.ts).
+  "pattern-linear": { label: "Linear Pattern", consumes: ["body", "face"], source: "selection" },
+  "pattern-circular": { label: "Circular Pattern", consumes: ["body", "face"], source: "selection" },
   // The three booleans, each a command in its own right. One "Combine" entry
   // that opened a dialog would put a two-body selection one click from a
   // question instead of one click from an answer, which is the whole reason

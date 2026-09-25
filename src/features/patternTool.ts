@@ -41,7 +41,7 @@ import {
   linearOffsets,
   MIN_COUNT,
 } from "./patternMath";
-import { facesOwnedByFeatures, featureLabel } from "./patternSources";
+import { facesOwnedByFeatures, featureLabel, spansBody } from "./patternSources";
 import { CanvasGesture } from "./canvasGesture";
 
 export type PatternKind = "linear" | "circular";
@@ -111,9 +111,7 @@ export class PatternTool {
     this.kind = kind;
     this.bodies = bodies;
     this.features = features ?? [];
-    this.faceIds = this.features.length
-      ? facesOwnedByFeatures(this.store.buildState.result?.bodies, this.features)
-      : [];
+    this.faceIds = this.features.length ? this.repeatedFaces() : [];
     this.promptPrefix = this.features.length ? `Pattern ${this.sourceLabels()}: ` : "";
     this.onDone = onDone;
     this.count = START_COUNT;
@@ -155,6 +153,19 @@ export class PatternTool {
     this.refreshPrompt();
     this.updateGhosts();
     this.gesture.frame();
+  }
+
+  /** The faces the features made, less the ones they only changed. */
+  private repeatedFaces(): number[] {
+    const bodies = this.store.buildState.result?.bodies ?? [];
+    const owned = facesOwnedByFeatures(bodies, this.features);
+    const kept = owned.filter((id) => {
+      const body = bodies.find((b) => id >= b.faceStart && id < b.faceStart + b.faceCount);
+      const face = this.viewport.facesBox([id]);
+      const whole = body ? this.viewport.bodiesBox([body.id]) : null;
+      return !(face && whole && spansBody(face, whole));
+    });
+    return kept.length ? kept : owned;
   }
 
   /** How far the pattern's target reaches along a direction, the natural first
