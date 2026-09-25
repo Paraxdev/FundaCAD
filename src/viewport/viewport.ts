@@ -276,13 +276,15 @@ export class Viewport {
     this.scene.applyRenderPrefs();
     onRenderPrefsChange(() => {
       const wasLow = isRenderLowPower();
+      const wasPotato = this.potato;
+      this.potato = renderPrefs().potatoMode;
       this.scene.applyRenderPrefs(); // re-applies the power tier (performance mode)
       this.rig.setFov(renderPrefs().fov);
       // Only when the tier actually flipped: the finishes decide glass vs alpha
       // and how many emitter lights to draw off it, and re-running them on every
       // brightness nudge would walk every body's materials for nothing.
-      if (isRenderLowPower() !== wasLow) {
-        this.applyBodyFinish();
+      if (isRenderLowPower() !== wasLow) this.applyBodyFinish();
+      if (isRenderLowPower() !== wasLow || this.potato !== wasPotato) {
         this.stutter.reset();
         this.setStuttering(false);
       }
@@ -3414,10 +3416,11 @@ export class Viewport {
   // ticks draw nothing, so this is incremented at the draw, not at the tick.
   private fps = new FpsMeter();
 
-  /** Notified when the view starts or stops stuttering under the full render. */
+  /** Notified when the view starts or stops stuttering, under any render but potato mode. */
   onStutterChange: ((stuttering: boolean) => void) | null = null;
   private stutter = new StutterWatch();
   private stuttering = false;
+  private potato = renderPrefs().potatoMode;
   /** Start of the tick that drew a camera move, 0 when the last tick was not one. */
   private movedDrawAt = 0;
 
@@ -3433,7 +3436,8 @@ export class Viewport {
     if (!this.movedDrawAt) return;
     const period = now - this.movedDrawAt;
     this.movedDrawAt = 0;
-    if (isRenderLowPower() || this.store?.buildState.building || this.store?.busyState.active) return;
+    // Still watched in performance mode, where a stutter offers potato mode instead.
+    if (this.potato || this.store?.buildState.building || this.store?.busyState.active) return;
     if (document.visibilityState !== "visible") return;
     if (this.stutter.sample(period)) this.setStuttering(true);
   }

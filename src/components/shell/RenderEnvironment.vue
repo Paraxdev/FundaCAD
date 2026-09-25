@@ -14,7 +14,7 @@
 import { onMounted, onUnmounted, ref } from "vue";
 import {
   ENVIRONMENTS_LIST, MAX_BRIGHTNESS, MIN_BRIGHTNESS,
-  onRenderPrefsChange, renderPrefs, setRenderPref,
+  onRenderPrefsChange, performanceModeOn, renderPrefs, setRenderPref,
   type Background, type Environment,
 } from "../../ui/renderPrefs";
 import { DEFAULT_KEY } from "../../viewport/keyLight";
@@ -170,16 +170,36 @@ const onBloom = (e: Event) =>
       <div class="rd-chips" role="group" aria-label="Performance mode">
         <button
           class="rd-chip"
-          :class="{ active: prefs.performanceMode }"
+          :class="{ active: performanceModeOn(prefs) }"
           data-perf="mode"
-          :aria-pressed="prefs.performanceMode"
+          :aria-pressed="performanceModeOn(prefs)"
+          :disabled="prefs.potatoMode"
+          :title="prefs.potatoMode ? 'Potato mode includes performance mode' : undefined"
           @click="setRenderPref('performanceMode', !prefs.performanceMode)"
-        >{{ prefs.performanceMode ? "On" : "Off" }}</button>
+        >{{ performanceModeOn(prefs) ? "On" : "Off" }}</button>
       </div>
       <div class="sm-hint">
         Drop the heavy effects, glass refraction, a high pixel ratio and the
         extra emitter lights, for a lighter render. On automatically on a weak
         GPU; turn it on by hand if the viewport stutters or a laptop runs hot.
+      </div>
+    </section>
+
+    <section class="rd-section" title="Lowest quality, for slow or virtual machines">
+      <h3 class="rd-head">Potato mode</h3>
+      <div class="rd-chips" role="group" aria-label="Potato mode">
+        <button
+          class="rd-chip"
+          :class="{ active: prefs.potatoMode }"
+          data-potato="mode"
+          :aria-pressed="prefs.potatoMode"
+          @click="setRenderPref('potatoMode', !prefs.potatoMode)"
+        >{{ prefs.potatoMode ? "On" : "Off" }}</button>
+      </div>
+      <div class="sm-hint">
+        Lowest quality, for slow or virtual machines. Flat shading, thin edges,
+        half resolution and no effects or camera animations. Includes
+        performance mode.
       </div>
     </section>
   </div>

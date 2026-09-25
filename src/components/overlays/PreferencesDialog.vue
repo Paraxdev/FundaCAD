@@ -59,6 +59,7 @@ import {
   MIN_BRIGHTNESS,
   onRenderPrefsChange,
   ENVIRONMENTS_LIST,
+  performanceModeOn,
   renderPrefs,
   setRenderPref,
 } from "../../ui/renderPrefs";
@@ -195,6 +196,7 @@ function onDwell(ev: Event) { setHoverDwellMs(Number.parseFloat(value(ev))); }
 function onBloom(ev: Event) { const v = asBloom(value(ev)); if (v !== null) setRenderPref("bloom", v); }
 function pickTangent(id: string) { const v = asTangentEdges(id); if (v) setRenderPref("tangentEdges", v); }
 function onPerformanceMode(ev: Event) { setRenderPref("performanceMode", (ev.target as HTMLInputElement).checked); }
+function onPotatoMode(ev: Event) { setRenderPref("potatoMode", (ev.target as HTMLInputElement).checked); }
 function onMotion(ev: Event) { setMotion((ev.target as HTMLInputElement).checked); }
 const checked = (ev: Event) => (ev.target as HTMLInputElement).checked;
 function onInertia(ev: Event) { setNavPrefs({ inertia: checked(ev) }); }
@@ -369,7 +371,8 @@ function onClassicCamera(ev: Event) {
                   <input
                     id="prefs-performance-mode"
                     type="checkbox"
-                    :checked="render.performanceMode"
+                    :checked="performanceModeOn(render)"
+                    :disabled="render.potatoMode"
                     @change="onPerformanceMode"
                   />
                   <span class="track"><span class="knob"></span></span>
@@ -379,6 +382,24 @@ function onClassicCamera(ev: Event) {
                 Drops glass refraction, the high pixel ratio and the emitter shadows for a
                 lighter render. Weak GPUs get it automatically; turn it on if the viewport
                 stutters or a laptop runs hot.
+              </p>
+            </div>
+            <div class="pref-card" title="Lowest quality, for slow or virtual machines">
+              <label class="pref-head">
+                <span class="pref-title">Potato mode</span>
+                <span class="param-switch">
+                  <input
+                    id="prefs-potato-mode"
+                    type="checkbox"
+                    :checked="render.potatoMode"
+                    @change="onPotatoMode"
+                  />
+                  <span class="track"><span class="knob"></span></span>
+                </span>
+              </label>
+              <p class="pref-hint">
+                Lowest quality, for slow or virtual machines. Flat shading, thin edges, half
+                resolution and no effects or camera animations. Includes performance mode.
               </p>
             </div>
           </div>

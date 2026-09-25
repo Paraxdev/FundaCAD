@@ -206,6 +206,12 @@
   transform: translateX(13px);
   background: #fff;
 }
+.param-switch input:disabled {
+  cursor: default;
+}
+.param-switch input:disabled + .track {
+  opacity: 0.55;
+}
 .param-switch input:focus-visible + .track {
   box-shadow: 0 0 0 3px var(--accent-tint);
 }
