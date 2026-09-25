@@ -96,10 +96,13 @@ struct DraftGaveUp : SectionError {
   explicit DraftGaveUp(const std::string &m) { msg = m; }
 };
 
-enum class Misfit { None, OffFace, AcrossAxis, IntoBody, Mixed };
+enum class Misfit { None, IntoBody = 3, Mixed, Split };
 
-// The ball does not fit the edge at the asked size. `fits` is the largest
-// share of that size that does, NaN when none does.
+const double FITS_NONE = -1.0, FITS_UNKNOWN = -2.0;
+
+// The blend does not fit the edge at the asked size. `fits` is the largest
+// share of that size that does, FITS_NONE when none does and FITS_UNKNOWN when
+// the search ran out of time.
 struct TooLarge : SectionError {
   Misfit why;
   double fits;
@@ -240,6 +243,7 @@ struct Side {
   Handle(Geom_Surface) surf;
   bool planar;
   BRepAdaptor_Curve2d pcurve;
+  Opt<double> limit;
   int inward_sign = 1;
   gp_Vec inward_cached;
   gp_Vec normal_on_edge_cached;
@@ -455,6 +459,42 @@ inline Contacts contacts(const gp_Pnt &Pp, const gp_Vec &T, Sides &sides, int s,
   return out;
 }
 
+inline void face_limits(const gp_Pnt &Pp, const gp_Vec &T, Sides &sides, int s, bool chamfer, double size,
+                        double size2, bool g2) {
+  for (auto &side : sides) side->limit.reset();
+  if (s > 0) return;
+  Contacts c = contacts(Pp, T, sides, s, chamfer, size, size2, g2);
+  double tol = 1e-6;
+  for (int k = 0; k < 2; ++k) {
+    Side &side = *sides[k];
+    if (side.contains(c.Q[k], tol)) continue;
+    double lo = 0.0, hi = 1.0;
+    for (int i = 0; i < 24; ++i) {
+      double mid = 0.5 * (lo + hi);
+      if (side.contains(P(V(c.K) + (V(c.Q[k]) - V(c.K)).Multiplied(mid)), tol))
+        lo = mid;
+      else
+        hi = mid;
+    }
+    double span = c.Q[k].Distance(c.K);
+    if (lo * span > 1e-6) side.limit = std::max(lo * span - std::min(1e-3 * size, 1e-2), 0.5 * lo * span);
+  }
+}
+
+inline bool clamp_to_limits(gp_Pnt Q[2], const gp_Pnt &K, Sides &sides) {
+  bool moved = false;
+  for (int k = 0; k < 2; ++k) {
+    Side &side = *sides[k];
+    double span = Q[k].Distance(K);
+    if (!side.limit || span <= *side.limit) continue;
+    gp_Pnt q = P(V(K) + (V(Q[k]) - V(K)).Multiplied(*side.limit / span));
+    auto got = side.foot(q);
+    Q[k] = got ? got->first : q;
+    moved = true;
+  }
+  return moved;
+}
+
 inline Handle(Geom_Curve) make_conic(const gp_Pnt &Q0, const gp_Pnt &K, const gp_Pnt &Q1, double weight) {
   TColgp_Array1OfPnt poles(1, 3);
   poles.SetValue(1, Q0);
@@ -483,10 +523,12 @@ inline Section section(const gp_Pnt &Pp, const gp_Vec &T, Sides &sides, int s, b
   Handle(Geom_Curve) curve;
   if (chamfer) {
     if (axis != nullptr) clamp_to_axis(Q, Pp, Pp, *axis);
+    clamp_to_limits(Q, Pp, sides);
     curve = GC_MakeSegment(Q[1], Q[0]).Value();
   } else {
     gp_Pnt K = ct.K;
     bool clamped = axis != nullptr && clamp_to_axis(Q, K, Pp, *axis);
+    clamped = clamp_to_limits(Q, K, sides) || clamped;
     double k = conic_weight_scale(profile);
     if (g2 && std::abs(profile) < 1e-12) {
       TColgp_Array1OfPnt poles(1, 5);
@@ -1263,9 +1305,10 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
   if (s > 0) margin = 1.0;
   sides[0]->normal_on_edge_cached = fm.n1;
   sides[1]->normal_on_edge_cached = fm.n2;
-  // A convex G2 section whose longer setback leaves the face would be lofted
-  // anyway and cut the body into a shape nobody asked for, or keep the boolean
-  // busy for minutes.
+  face_limits(fm.P, fm.T, sides, s, chamfer, size, size2, g2);
+  // A convex edge gets no face limits, so a G2 section whose longer setback
+  // leaves the face would be lofted anyway and cut the body into a shape
+  // nobody asked for, or keep the boolean busy for minutes.
   if (g2 && s > 0 && !chamfer) {
     Contacts c = contacts(fm.P, fm.T, sides, s, chamfer, size, size2, g2);
     for (int k = 0; k < 2; ++k)
@@ -1296,14 +1339,14 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
     probes.push_back(fm);
   std::unique_ptr<BRepClass3d_SolidClassifier> body;
   const bool meridian[2] = {sides[0]->planar, sides[1]->planar};
-  // A fill's ball has to rest on both faces, it hangs in the air past either
-  // one's end and across the axis it reaches through the far wall. A cut's may
-  // run on past a face along that face's surface, carving what lies above it,
-  // but not into the body beyond, which is no corner of this edge. A curved
+  // A cut's ball may run on past a face along that face's surface, carving what
+  // lies above it, but not into the body beyond, which is no corner of this
+  // edge. A fill's is clamped to its faces instead (face_limits). A curved
   // meridian keeps its surface while the ball rests on the face, past it the
-  // cut carves along its tangent plane at the edge, like a flat face whose
+  // blend follows its tangent plane at the edge, like a flat face whose
   // contact runs past its end; on the far side of the tube the ball would land
-  // in the wrong place.
+  // in the wrong place. Resting on the face round part of the edge and past it
+  // round the rest, no one revolved section is right.
   auto misfit = [&](double k) {
     double sz = size * k, sz2 = std::isnan(size2) ? size2 : size2 * k;
     for (int j = 0; j < 2; ++j) sides[j]->planar = meridian[j];
@@ -1318,21 +1361,16 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
       }
       for (int j = 0; j < 2; ++j) {
         if (!off[j]) continue;
-        if (s < 0) return Misfit::OffFace;
         if (on[j]) return Misfit::Mixed;
         sides[j]->planar = true;
       }
     }
+    if (s < 0) return Misfit::None;
     for (const Frame &f : probes) {
       set_frame(f);
       Contacts c = contacts(f.P, f.T, sides, s, chamfer, sz, sz2, g2);
-      if (s < 0 && axis) {
-        gp_Pnt Q[2] = {c.Q[0], c.Q[1]};
-        if (clamp_to_axis(Q, f.P, f.P, *axis)) return Misfit::AcrossAxis;
-      }
       for (int j = 0; j < 2; ++j) {
         if (sides[j]->contains(c.Q[j], fuzz)) continue;
-        if (s < 0) return Misfit::OffFace;
         if (!body) body.reset(new BRepClass3d_SolidClassifier(shape));
         body->Perform(c.Q[j], fuzz);
         if (body->State() == TopAbs_IN) return Misfit::IntoBody;
@@ -1352,7 +1390,7 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
       }
       why = misfit(hi);
     }
-    throw TooLarge(why, lo > 0 ? lo : std::nan(""), fm.P);
+    throw TooLarge(why, lo > 0 ? lo : FITS_NONE, fm.P);
   }
   set_frame(fm);
 
@@ -1699,7 +1737,7 @@ inline TopoDS_Shape combine(const TopoDS_Shape &shape, const std::vector<TopoDS_
   } catch (...) {
   }
   if (solid_count(out) == 0) throw err("at this size the blend removes the whole body");
-  if (solid_count(out) > solid_count(shape)) throw err("at this size the blend cuts the body in pieces");
+  if (solid_count(out) > solid_count(shape)) throw TooLarge(Misfit::Split, FITS_UNKNOWN, gp_Pnt());
   std::vector<TopoDS_Shape> all(cut);
   all.insert(all.end(), fuse.begin(), fuse.end());
   if (!sound(out, &shape) || !(kept_base(shape, out, all, false) || kept_base(shape, out, all)))
@@ -1738,13 +1776,63 @@ inline TopoDS_Shape section_blend_once(const TopoDS_Shape &shape, const std::vec
   return combine(draft ? copy(shape) : shape, cut, fuse, tol, draft);
 }
 
+inline TopoDS_Shape blend_scaled(const TopoDS_Shape &shape, const std::vector<TopoDS_Shape> &es, bool chamfer,
+                                 double size2, bool g2, const std::vector<double> &sz, bool draft, double profile,
+                                 bool one_shot) {
+  one_shot_memo() = {};
+  one_shot_memo().never = !one_shot;
+  if (draft && one_shot) {
+    try {
+      return section_blend_once(shape, es, chamfer, size2, g2, sz, true, profile);
+    } catch (const DraftGaveUp &) {
+      OneShotMemo &memo = one_shot_memo();
+      memo.replay = !memo.thinned;
+      memo.calls = 0;
+    }
+  }
+  return section_blend_once(shape, es, chamfer, size2, g2, sz, false, profile);
+}
+
+// Whether a blend cuts the body apart shows only once it is built, so the size
+// that does not is found by building smaller ones, halving until one holds
+// together and then bisecting, for as long as a few builds of this one take.
+inline double split_limit(const TopoDS_Shape &shape, const std::vector<TopoDS_Shape> &es, bool chamfer, double size2,
+                          bool g2, const std::vector<double> &sz, bool draft, double profile, bool one_shot,
+                          double first_secs) {
+  using clock = std::chrono::steady_clock;
+  auto started = clock::now();
+  double budget = draft ? std::max(1.0, 2 * first_secs) : std::max(10.0, 3 * first_secs);
+  double lo = 0.0, hi = 1.0;
+  for (int i = 0; i < 10; ++i) {
+    if (std::chrono::duration<double>(clock::now() - started).count() > budget) return lo > 0 ? lo : FITS_UNKNOWN;
+    double k = lo > 0 ? 0.5 * (lo + hi) : 0.5 * hi;
+    BRepBuilderAPI_Copy cp(shape, false);
+    std::vector<TopoDS_Shape> ec;
+    for (const TopoDS_Shape &e : es) ec.push_back(cp.ModifiedShape(e));
+    std::vector<double> sk;
+    for (double x : sz) sk.push_back(x * k);
+    bool ok = true;
+    try {
+      blend_scaled(cp.Shape(), ec, chamfer, std::isnan(size2) ? size2 : size2 * k, g2, sk, draft, profile, one_shot);
+    } catch (const Cancelled &) {
+      throw;
+    } catch (const SectionError &) {
+      ok = false;
+    } catch (const Standard_Failure &) {
+      ok = false;
+    }
+    (ok ? lo : hi) = k;
+  }
+  return lo > 0 ? lo : FITS_NONE;
+}
+
 } // namespace secblend
 
 // the Python engine's `section_blend.py` `section_blend`. size2 NaN for none. status 0 built,
 // 1 SectionBlendError (message is its sentence), 2 any other exception (its class),
 // 3 cancelled through `progress`, 4 the blend does not fit an edge (message is
 // "why fits x y z": fits the largest share of the size that does, -1 when none
-// does, x y z a point on the edge).
+// does, -2 when the search ran out of time, x y z a point on the edge).
 inline std::unique_ptr<TopoDS_Shape> blend_section(const TopoDS_Shape &shape, const TopoDS_Shape &edges, bool chamfer,
                                                    rust::Slice<const double> sizes, double size2, bool g2, bool draft,
                                                    double profile, bool one_shot, const Message_ProgressRange &progress,
@@ -1757,30 +1845,31 @@ inline std::unique_ptr<TopoDS_Shape> blend_section(const TopoDS_Shape &shape, co
     bool bad = false;
     for (double x : sz) bad = bad || !(x > 0);
     if (bad || (!std::isnan(size2) && !(size2 > 0))) throw secblend::err("the size must be greater than 0");
-    secblend::one_shot_memo() = {};
-    secblend::one_shot_memo().never = !one_shot;
-    if (draft && one_shot) {
-      try {
-        TopoDS_Shape out = secblend::section_blend_once(shape, es, chamfer, size2, g2, sz, true, profile);
-        status = 0;
-        return std::unique_ptr<TopoDS_Shape>(new TopoDS_Shape(out));
-      } catch (const secblend::DraftGaveUp &) {
-        secblend::OneShotMemo &memo = secblend::one_shot_memo();
-        memo.replay = !memo.thinned;
-        memo.calls = 0;
-      }
+    // Failed booleans raise tolerances in place, so the search starts from a copy.
+    BRepBuilderAPI_Copy pristine(shape, false);
+    std::vector<TopoDS_Shape> pristine_es;
+    for (const TopoDS_Shape &e : es) pristine_es.push_back(pristine.ModifiedShape(e));
+    auto started = std::chrono::steady_clock::now();
+    try {
+      TopoDS_Shape out = secblend::blend_scaled(shape, es, chamfer, size2, g2, sz, draft, profile, one_shot);
+      status = 0;
+      return std::unique_ptr<TopoDS_Shape>(new TopoDS_Shape(out));
+    } catch (secblend::TooLarge &e) {
+      if (e.why != secblend::Misfit::Split) throw;
+      double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
+      BRepAdaptor_Curve crv(TopoDS::Edge(es.front()));
+      e.at = crv.Value(0.5 * (crv.FirstParameter() + crv.LastParameter()));
+      e.fits = secblend::split_limit(pristine.Shape(), pristine_es, chamfer, size2, g2, sz, draft, profile, one_shot, secs);
+      throw;
     }
-    TopoDS_Shape out = secblend::section_blend_once(shape, es, chamfer, size2, g2, sz, false, profile);
-    status = 0;
-    return std::unique_ptr<TopoDS_Shape>(new TopoDS_Shape(out));
   } catch (const secblend::Cancelled &) {
     status = 3;
     message = "cancelled";
   } catch (const secblend::TooLarge &e) {
     status = 4;
     char buf[160];
-    std::snprintf(buf, sizeof buf, "%d %.17g %.17g %.17g %.17g", static_cast<int>(e.why),
-                  std::isnan(e.fits) ? -1.0 : e.fits, e.at.X(), e.at.Y(), e.at.Z());
+    std::snprintf(buf, sizeof buf, "%d %.17g %.17g %.17g %.17g", static_cast<int>(e.why), e.fits, e.at.X(), e.at.Y(),
+                  e.at.Z());
     message = buf;
   } catch (const secblend::SectionError &e) {
     status = 1;

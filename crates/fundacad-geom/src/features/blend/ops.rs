@@ -5,7 +5,7 @@ use opencascade::primitives::Shape;
 use opencascade_sys::blend_ops as ffi;
 use opencascade_sys::topo_ds::TopoDS_Shape;
 
-use super::{BlendErr, Misfit, SectionErr};
+use super::{BlendErr, Fits, Misfit, SectionErr};
 use crate::kernel;
 use crate::select::entity::EdgeEnt;
 
@@ -222,7 +222,11 @@ fn section_with(
             match n.as_slice() {
                 [why, fits, x, y, z] => Err(SectionErr::TooLarge {
                     why: Misfit::from_code(*why as i32),
-                    fits: (*fits > 0.0).then_some(*fits),
+                    fits: match *fits {
+                        k if k > 0.0 => Fits::UpTo(k),
+                        k if k > -1.5 => Fits::Nothing,
+                        _ => Fits::Unknown,
+                    },
                     at: [*x, *y, *z],
                 }),
                 _ => Err(SectionErr::Internal(message)),
