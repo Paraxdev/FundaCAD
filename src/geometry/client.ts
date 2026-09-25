@@ -229,6 +229,10 @@ export interface GeometryBackend {
   readonly softCancel?: boolean;
   /** Coarse phase progress for a long op (import). Optional. */
   onOpProgress?(fn: (pct: number, label: string) => void): () => void;
+  /** A request of ours that waits behind another client's job on the same
+   *  engine: `behind` says whose and what, null once ours has started. Optional,
+   *  a backend with one client never queues behind anyone. */
+  onQueue?(fn: (id: string, behind: EngineWait | null) => void): () => void;
   /** One live-session op (see the Python engine's `live_session.py`): publish what this window
    *  has open, collect what an attached assistant has asked for.
    *
@@ -433,6 +437,24 @@ export function tooLargeToSend(len: number): string | null {
   );
 }
 
+/** Another client's job one of ours is waiting behind, as the engine names it. */
+export interface EngineWait {
+  op: string;
+  who: "app" | "assistant" | "session";
+  name?: string;
+}
+
+function engineWait(v: unknown): EngineWait | null {
+  if (!v || typeof v !== "object") return null;
+  const b = v as Record<string, unknown>;
+  const who = b.who === "app" || b.who === "assistant" ? b.who : "session";
+  return {
+    op: typeof b.op === "string" ? b.op : "",
+    who,
+    ...(typeof b.name === "string" && b.name ? { name: b.name } : {}),
+  };
+}
+
 export class Geometry implements GeometryBackend {
   private readonly transport: GeometryTransport;
   private pending = new Map<string, Pending>();
@@ -444,6 +466,7 @@ export class Geometry implements GeometryBackend {
   private statusListeners = new Set<StatusListener>();
   private opProgressListeners = new Set<(pct: number, label: string) => void>();
   private progressListeners = new Set<(feature: number, meshed: number, meshTotal: number) => void>();
+  private queueListeners = new Set<(id: string, behind: EngineWait | null) => void>();
   // Protocol-v2 per-body mesh cache: the engine answers unchanged bodies with
   // an etag stub instead of re-sending their (multi-MB) mesh; we keep the last
   // full payload per body and reassemble the merged RebuildResult locally, so
@@ -520,6 +543,11 @@ export class Geometry implements GeometryBackend {
     return () => this.progressListeners.delete(fn);
   }
 
+  onQueue(fn: (id: string, behind: EngineWait | null) => void): () => void {
+    this.queueListeners.add(fn);
+    return () => this.queueListeners.delete(fn);
+  }
+
   get connected(): boolean {
     return this.transport.open;
   }
@@ -553,7 +581,16 @@ export class Geometry implements GeometryBackend {
       // through to the pending map and resolved the caller's promise with a
       // frame carrying no `ok`, so the caller reported failure while the
       // engine happily kept working for another minute.
-      if (msg.status === "building") {
+      //
+      // Only frames for a request of ours still in flight count: a frame for
+      // anything else describes a job this window is not waiting on.
+      if (typeof msg.id !== "string" || !this.pending.has(msg.id)) return;
+      if (msg.status === "queued") {
+        const behind = engineWait(msg.behind);
+        for (const fn of this.queueListeners) fn(msg.id, behind);
+      } else if (msg.status === "started") {
+        for (const fn of this.queueListeners) fn(msg.id, null);
+      } else if (msg.status === "building") {
         const f = typeof msg.feature === "number" ? msg.feature : -1;
         const m = typeof msg.meshed === "number" ? msg.meshed : -1;
         const mt = typeof msg.meshTotal === "number" ? msg.meshTotal : -1;

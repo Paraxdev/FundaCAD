@@ -2,7 +2,7 @@
 //
 // The viewport renders ON DEMAND (see Viewport.loop): when the camera is still
 // and nothing is dirty, no frame is drawn at all. A naive counter would then sit
-// at "0 fps" on a perfectly healthy idle app, so this reports `idle` instead,
+// at "0 fps" on a perfectly healthy idle app, so this reports `render idle` instead,
 // which also makes the render-on-demand behaviour visible rather than looking
 // like a stall.
 //
@@ -60,7 +60,8 @@ export class FpsMeter {
     const now = performance.now();
     const last = this.stamps[this.stamps.length - 1];
     if (last === undefined || now - last > IDLE_AFTER_MS) {
-      this.show("idle", "The viewport only draws when something changes, nothing to render right now." + gpuLine);
+      // Not "idle" alone: beside the history's build state that read as the engine's.
+      this.show("render idle", "The viewport only draws when something changes, nothing to render right now. This says nothing about the geometry engine." + gpuLine);
       return;
     }
     // Rate over the window, and the mean interval between the frames in it.

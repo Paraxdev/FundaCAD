@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildProgress } from "../../src/ui/buildProgress";
+import { buildProgress, historyShowsEmpty, waitLabel } from "../../src/ui/buildProgress";
 
 describe("buildProgress", () => {
   it("is indeterminate before the first progress report", () => {
@@ -34,5 +34,29 @@ describe("buildProgress", () => {
     expect(buildProgress(-1, 3, 12, 5)).toEqual({ label: "meshing 3/12", pct: 25 });
     // a count running past the total must not read "13/12" or exceed 100%
     expect(buildProgress(-1, 13, 12, 5)).toEqual({ label: "meshing 12/12", pct: 100 });
+  });
+});
+
+describe("waitLabel", () => {
+  it("names an assistant by the name it gave, and says what it is doing", () => {
+    expect(waitLabel({ who: "assistant", name: "Claude", op: "import" })).toBe("Waiting: Claude is importing a file");
+    expect(waitLabel({ who: "assistant", op: "rebuild" })).toBe("Waiting: an AI assistant is building a model");
+  });
+
+  it("falls back to another session doing something", () => {
+    expect(waitLabel({ who: "session", op: "frobnicate" })).toBe("Waiting: another session is working");
+    expect(waitLabel({ who: "app", op: "export" })).toBe("Waiting: the app is exporting");
+  });
+});
+
+describe("historyShowsEmpty", () => {
+  it("keeps an empty document empty while its own rebuild waits", () => {
+    expect(historyShowsEmpty(0, { active: true, rebuild: true })).toBe(true);
+    expect(historyShowsEmpty(0, { active: false, rebuild: false })).toBe(true);
+  });
+
+  it("gives way to an import into an empty document, and to any feature", () => {
+    expect(historyShowsEmpty(0, { active: true, rebuild: false })).toBe(false);
+    expect(historyShowsEmpty(2, { active: false, rebuild: false })).toBe(false);
   });
 });

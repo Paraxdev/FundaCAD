@@ -1,6 +1,9 @@
-// The timeline's two pure bits of arithmetic, split out so they can be tested
-// without a DOM: how long to wait before offering Cancel, and what the
-// "building" chip should say.
+import type { EngineWait } from "../geometry/client";
+import type { BusyState } from "../document/store";
+
+// The timeline's pure bits, split out so they can be tested without a DOM: how
+// long to wait before offering Cancel, what the "building" chip and the busy
+// line should say, and when the history is empty.
 
 // A fast op must not flash a Cancel button; a slow one must offer it early.
 export const CANCEL_DELAY_MS = 700;
@@ -30,4 +33,27 @@ export function buildProgress(
     label: `building ${Math.min(progress + 1, total)}/${total}`,
     pct: total === 0 ? 0 : Math.round(((progress + 1) / total) * 100),
   };
+}
+
+const WAIT_DOING: Record<string, string> = {
+  import: "importing a file",
+  rebuild: "building a model",
+  computeAll: "building a model",
+  export: "exporting",
+  exportWith: "exporting",
+  inspect: "measuring a model",
+};
+
+/** What a request of ours queued behind another client's job is waiting for. */
+export function waitLabel(w: EngineWait): string {
+  const who = w.who === "assistant"
+    ? (w.name?.trim().slice(0, 40) || "an AI assistant")
+    : w.who === "app" ? "the app" : "another session";
+  return `Waiting: ${who} is ${WAIT_DOING[w.op] ?? "working"}`;
+}
+
+/** The history's empty state. A rebuild of a document with no features has
+ *  nothing to show even while it waits on the engine; an import into one does. */
+export function historyShowsEmpty(featureCount: number, busy: Pick<BusyState, "active" | "rebuild">): boolean {
+  return featureCount === 0 && (!busy.active || busy.rebuild);
 }
