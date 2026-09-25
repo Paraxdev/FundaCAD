@@ -105,6 +105,78 @@ impl StepAssembly {
     }
 }
 
+// Resource_FormatType values.
+const CODEPAGE_SJIS: i32 = 0;
+const CODEPAGE_UTF8: i32 = 4;
+const CODEPAGE_GBK: i32 = 25;
+
+/// Double byte text: every high byte either a `single` or a `lead` followed by
+/// a `trail`. None when the bytes are not that, else how many pairs there are
+/// and how many of them are `common`.
+fn double_byte_fit(
+    bytes: &[u8],
+    lead: impl Fn(u8) -> bool,
+    trail: impl Fn(u8) -> bool,
+    single: impl Fn(u8) -> bool,
+    common: impl Fn(u8, u8) -> bool,
+) -> Option<(usize, usize)> {
+    let (mut pairs, mut hits, mut i) = (0, 0, 0);
+    while i < bytes.len() {
+        let b = bytes[i];
+        if b < 0x80 || single(b) {
+            i += 1;
+            continue;
+        }
+        let t = *bytes.get(i + 1)?;
+        if !lead(b) || !trail(t) {
+            return None;
+        }
+        pairs += 1;
+        hits += usize::from(common(b, t));
+        i += 2;
+    }
+    Some((pairs, hits))
+}
+
+/// The code page a STEP file's unescaped text is in, as a Resource_FormatType.
+/// The standard wants anything beyond ASCII escaped, but CAD exports from
+/// Chinese and Japanese systems write names in the local code page, which a
+/// UTF-8 reading turns into Latin-1 mojibake.
+pub fn step_codepage(bytes: &[u8]) -> i32 {
+    if bytes.is_ascii() || std::str::from_utf8(bytes).is_ok() {
+        return CODEPAGE_UTF8;
+    }
+    let gbk = double_byte_fit(
+        bytes,
+        |b| (0x81..=0xFE).contains(&b),
+        |t| (0x40..=0x7E).contains(&t) || (0x80..=0xFE).contains(&t),
+        |_| false,
+        // GB2312, which nearly all Chinese text stays inside.
+        |b, t| (0xA1..=0xF7).contains(&b) && t >= 0xA1,
+    );
+    if let Some((pairs, hits)) = gbk {
+        if pairs > 0 && hits * 10 >= pairs * 9 {
+            return CODEPAGE_GBK;
+        }
+    }
+    let sjis = double_byte_fit(
+        bytes,
+        |b| (0x81..=0x9F).contains(&b) || (0xE0..=0xFC).contains(&b),
+        |t| (0x40..=0x7E).contains(&t) || (0x80..=0xFC).contains(&t),
+        |b| (0xA1..=0xDF).contains(&b),
+        // Kana and the first level kanji.
+        |b, _| (0x81..=0x9F).contains(&b),
+    );
+    if let Some((pairs, hits)) = sjis {
+        if pairs > 0 && hits * 2 >= pairs {
+            return CODEPAGE_SJIS;
+        }
+    }
+    // OCCT reads each string that is valid UTF-8 as such and any other one as
+    // Latin-1, which is right for a Western file and for one that mixes both.
+    CODEPAGE_UTF8
+}
+
 pub fn read_step_assembly(path: &Path) -> Result<StepAssembly, Error> {
     read_step_assembly_with(path, &ProgressRange::detached())
 }
@@ -112,8 +184,9 @@ pub fn read_step_assembly(path: &Path) -> Result<StepAssembly, Error> {
 /// [`read_step_assembly`] reporting its transfer into `progress`, which OCCT
 /// polls between entities and faces, so a cancel stops it there.
 pub fn read_step_assembly_with(path: &Path, progress: &ProgressRange) -> Result<StepAssembly, Error> {
+    let codepage = std::fs::read(path).map_or(CODEPAGE_UTF8, |b| step_codepage(&b));
     let lock = step_lock();
-    let a = ffi::step_assembly_read(path_str(path)?, progress.raw())?;
+    let a = ffi::step_assembly_read(path_str(path)?, codepage, progress.raw())?;
     drop(lock);
     let raw = a;
     let a = raw.as_ref().ok_or(Error::StepReadFailed)?;
@@ -166,4 +239,21 @@ pub fn to_bin_v3(shape: &Shape) -> Result<Vec<u8>, Error> {
 
 pub fn from_bin(data: &[u8]) -> Result<Shape, Error> {
     Shape::from_brep_bytes(data, &ProgressRange::detached())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn code_pages_of_unescaped_names() {
+        assert_eq!(step_codepage(b"#1 = PRODUCT ( 'plain', 'plain', '', ( #2 ) ) ;"), CODEPAGE_UTF8);
+        assert_eq!(step_codepage("'M3\u{d7}18 \u{87ba}\u{4e1d}'".as_bytes()), CODEPAGE_UTF8);
+        // The Ender-3 export's "4040 profile, 4 countersunk holes", in GBK.
+        assert_eq!(step_codepage(b"'4040 profile\xa3\xac4\xb8\xf6\xb3\xc1\xcd\xb7\xbf\xd7'"), CODEPAGE_GBK);
+        // "screw M3" in Shift_JIS.
+        assert_eq!(step_codepage(b"'\x82\xcb\x82\xb6 M3'"), CODEPAGE_SJIS);
+        // Latin-1: a high byte before ASCII is no double byte text.
+        assert_eq!(step_codepage(b"'Gr\xf6\xdfe \xd820'"), CODEPAGE_UTF8);
+    }
 }
