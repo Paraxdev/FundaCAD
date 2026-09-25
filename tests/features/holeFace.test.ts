@@ -38,9 +38,16 @@ describe("a hole's tracked face", () => {
     expect(face).toEqual({ ...top(), point: [5, 5, 6], extent: [0, 120, 0, 40] });
   });
 
-  it("drops the extent of a face the build could not measure, its positions are already carried", () => {
-    const { face } = rebaseHole({ ...top(), extent: [0, 60, 0, 40] } as Selector, [[3, 2, 5]], { point: [3, 2, 9], points: [[3, 2, 9]] });
-    expect(face).toEqual({ ...top(), point: [3, 2, 9] });
+  it("keeps the centre or extent of a face the build could not measure, and the positions written against it", () => {
+    const rec = { point: [3, 2, 9] as Vec3, points: [[3, 2, 9]] as Vec3[] };
+    const pts: Vec3[] = [[3, 2, 5]];
+    expect(rebaseHole(top([0, 0, 5]), pts, rec)).toEqual({ face: top([0, 0, 5]), points: pts });
+    const extent = { ...top(), extent: [0, 60, 0, 40] } as Selector;
+    expect(rebaseHole(extent, pts, rec)).toEqual({ face: extent, points: pts });
+  });
+
+  it("rebases a normal only face the build could not measure onto where it is now", () => {
+    expect(rebaseHole(top(), [[3, 2, 5]], { point: [3, 2, 9], points: [[3, 2, 9]] })).toEqual({ face: { ...top(), point: [3, 2, 9] }, points: [[3, 2, 9]] });
   });
 
   it("leaves a face with no build record alone", () => {

@@ -34,9 +34,12 @@ export function withExtent(face: Selector, rec: TrackedFaceRecord | undefined): 
 }
 
 /** A hole's face and positions moved to where the last build put them, so an
- *  edit starts from the holes on screen and writes an extent that is current. */
+ *  edit starts from the holes on screen and writes an extent that is current.
+ *  A build that measured no extent leaves a face with a centre or an extent as
+ *  it was: its positions carried against that stale form would move twice. */
 export function rebaseHole(face: Selector, points: Vec3[], rec: TrackedFaceRecord | undefined): { face: Selector; points: Vec3[] } {
   if (face.by !== "tracked" || !rec || rec.points.length !== points.length) return { face, points };
+  if (!rec.extent && (face.center || face.extent)) return { face, points };
   const { center: _was, extent: _then, ...rest } = face;
   const moved: Tracked = {
     ...rest,
