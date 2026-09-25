@@ -259,11 +259,15 @@ export function installViewportWiring(e: Engine): void {
   // body selection opens the move gizmo on it, and the tool hands a plain click
   // back here so the next click moves the gizmo to the next body (or, over
   // nothing, puts it away) in one click rather than two.
-  e.viewport.onBodySelectionChange = () => {
+  e.viewport.onBodySelectionChange = (cause) => {
     browser.setSelectedBodies(e.viewport.getSelectedBodies());
     if (e.toolBusy()) return;
     const ids = e.viewport.getSelectedBodies();
     if (!ids.length) { setPrompt(null); return; }
+    // A rebuild carrying the selection over is not a pick. Every undo and redo
+    // is one, and arming the gizmo there focused its field, which then kept
+    // every later Ctrl+Z and Ctrl+Y for itself (FI-2).
+    if (cause === "restore") return;
     e.tools.move.onClickThrough = (x, y, additive) => {
       e.viewport.clickThrough(x, y, additive);
     };

@@ -205,7 +205,9 @@ export class Viewport {
   // so face/body picking is skipped). regionHoverAt: hover-highlight it.
   regionPickAt: ((clientX: number, clientY: number, additive: boolean) => boolean) | null = null;
   regionHoverAt: ((clientX: number, clientY: number) => boolean) | null = null;
-  onBodySelectionChange: (() => void) | null = null; // fired when the body selection changes
+  /** Fired when the body selection changes; "restore" when a rebuild carried it
+   *  over rather than someone picking it. */
+  onBodySelectionChange: ((cause?: "restore") => void) | null = null;
   // An edge click that hit two coincident edges of touching bodies (edgeTies.ts).
   // Returning true means the app took the click and asked which one.
   onAmbiguousEdge:
@@ -2329,7 +2331,7 @@ export class Viewport {
     if (shouldAnnounce(memo.edges.length + memo.faces.length, edges.length + faces.length, duringStream))
       this.onSelectionChange?.();
     if (shouldAnnounce(memo.bodies.length, bodies.length, duringStream))
-      this.onBodySelectionChange?.();
+      this.onBodySelectionChange?.("restore");
   }
 
   /** Wall-clock cost of the last flush-seam pass, ms, surfaced in sceneStats
