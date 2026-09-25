@@ -21,6 +21,7 @@ function engine(features: Feature[], placed: Record<string, PlaneDef> = {}) {
       setDatumMarkers: () => {},
       highlightDatum: () => {},
       requestRender: () => {},
+      modelDiagonal: () => null,
     },
     selectedFeature: null,
   } as unknown as Engine;
@@ -49,6 +50,15 @@ describe("datum planes as the app draws them", () => {
     expect(drawn.at(-1)!.find((q) => q.id === "P1")!.origin).toEqual([0, 0, 40]);
     api.previewDatumPose("P0", null);
     expect(drawn.at(-1)!.find((q) => q.id === "P1")!.origin).toEqual([0, 0, 20]);
+  });
+
+  it("leaves the quads alone when a sync changes nothing, a rebuild's progress tick", () => {
+    const { api, drawn } = engine([p0, p1]);
+    api.syncDatumPlanes();
+    api.syncDatumPlanes();
+    expect(drawn.length).toBe(1);
+    api.previewDatumPose("P0", { ...ZERO_POSE, offset: 30 });
+    expect(drawn.length).toBe(2);
   });
 
   it("ignores a parent below it in the timeline, as the engine does", () => {
