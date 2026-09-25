@@ -1084,6 +1084,22 @@ inline bool trim_misses(const TopoDS_Shape &tool, bool keep_inside, const TopoDS
   return true;
 }
 
+// A face beside the edge rather than across it, like the shoulder a flat neck
+// runs out of or a corner round the edge runs on into, has the edge on the
+// wrong side of its surface, and keeping only its body's side would drop the
+// whole blend.
+inline bool trims_edge_away(const Trim &trim, const TopoDS_Edge &edge) {
+  BRepAdaptor_Curve crv(edge);
+  double t0 = crv.FirstParameter(), t1 = crv.LastParameter();
+  BRepClass3d_SolidClassifier cls(trim.solid);
+  for (double f : {0.02, 0.5, 0.98}) {
+    cls.Perform(crv.Value(t0 + (t1 - t0) * f), 1e-7);
+    TopAbs_State st = cls.State();
+    if (trim.keep_inside ? st == TopAbs_OUT : st == TopAbs_IN) return true;
+  }
+  return false;
+}
+
 inline bool touches(const TopoDS_Shape &edge, const std::vector<TopoDS_Vertex> &vertices) {
   for (TopExp_Explorer ex(edge, TopAbs_VERTEX); ex.More(); ex.Next())
     for (const TopoDS_Vertex &v : vertices)
@@ -1123,7 +1139,7 @@ inline std::vector<Trim> trims(const TopoDS_Shape &shape, const TopoDS_Edge &edg
     return false;
   };
   auto add = [&](const TopoDS_Face &g, const Opt<Trim> &trim) {
-    if (!trim) return;
+    if (!trim || trims_edge_away(*trim, edge)) return;
     seen.push_back(g);
     auto key = surface_key(g, trim->keep_inside);
     if (key) {
