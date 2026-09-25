@@ -94,6 +94,11 @@ export type GeneratedShapeReply = { ok: true; shape: GeneratedShape } | { ok: fa
 /** The `faceAxis` op: `dir` points out of the material, `hole` marks the round
  *  end of a bore on the bore's own axis, `sameAsNormal` a flat face square to
  *  the axis, which moves the same either way. */
+/** The `patternAxis` op: the line a circular pattern's `axisRef` names. */
+export type PatternAxisReply =
+  | { axis: { origin: [number, number, number]; dir: [number, number, number] } }
+  | { reason: string };
+
 export type FaceAxisReply =
   | { axis: { origin: [number, number, number]; dir: [number, number, number] }; hole: boolean; sameAsNormal?: boolean }
   | { reason: string };
@@ -177,6 +182,7 @@ export interface GeometryBackend {
    *  or why it has none. Null when the engine could not be asked. Optional, a
    *  test backend may not answer it. */
   faceAxis?(doc: CadDocument, face: Selector, body: string | null): Promise<FaceAxisReply | null>;
+  patternAxis?(doc: CadDocument, ref: Selector): Promise<PatternAxisReply | null>;
   /** Export through a format a plugin's geometry component registered with the
    *  engine. The engine rebuilds and meshes; `options` reach the plugin's
    *  exporter untouched, and `info` is whatever it reports back. Optional, a
@@ -1150,6 +1156,11 @@ export class Geometry implements GeometryBackend {
 
   async faceAxis(doc: CadDocument, face: Selector, body: string | null): Promise<FaceAxisReply | null> {
     const msg = await this.call<FaceAxisReply>("faceAxis", { document: doc, face, ...(body ? { body } : {}) });
+    return msg.ok ? msg.result : null;
+  }
+
+  async patternAxis(doc: CadDocument, ref: Selector): Promise<PatternAxisReply | null> {
+    const msg = await this.call<PatternAxisReply>("patternAxis", { document: doc, ref });
     return msg.ok ? msg.result : null;
   }
 
