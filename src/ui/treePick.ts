@@ -25,20 +25,36 @@ export type TreePick =
 export type TreePickAnswer = true | string;
 export type TreePickTaker = (pick: TreePick) => TreePickAnswer;
 
-const takers: TreePickTaker[] = [];
+interface PickSession {
+  taker: TreePickTaker;
+  end: () => void;
+}
 
-/** Wait for a row pick. The returned function stops waiting, call it from the
- *  pick's own cleanup so every way out of the pick also leaves here. */
-export function awaitTreePick(taker: TreePickTaker): () => void {
-  takers.push(taker);
+let session: PickSession | null = null;
+
+/** Open the one pick session: rows go to `taker` until the returned release is
+ *  called from the pick's own cleanup. `end` is that cleanup, run when anything
+ *  else ends the session (a new pick, a command, undo, another document), so a
+ *  taker can never outlive the tool that registered it. */
+export function awaitTreePick(taker: TreePickTaker, end: () => void): () => void {
+  endPickSession();
+  const mine: PickSession = { taker, end };
+  session = mine;
   return () => {
-    const i = takers.lastIndexOf(taker);
-    if (i >= 0) takers.splice(i, 1);
+    if (session === mine) session = null;
   };
 }
 
+/** End the live pick session, if any, through its own cleanup. */
+export function endPickSession() {
+  const s = session;
+  if (!s) return;
+  session = null;
+  s.end();
+}
+
 export function treePickWaiting(): boolean {
-  return takers.length > 0;
+  return session !== null;
 }
 
 const NOUN: Record<TreePick["kind"], string> = {
@@ -67,9 +83,8 @@ export interface TreeClickDeps {
 export type TreeClickRoute = "row" | "taken" | "refused";
 
 export function routeTreeClick(pick: TreePick, deps: TreeClickDeps): TreeClickRoute {
-  const taker = takers[takers.length - 1];
-  if (taker) {
-    const answer = taker(pick);
+  if (session) {
+    const answer = session.taker(pick);
     if (answer === true) return "taken";
     deps.hint(answer);
     return "refused";
@@ -83,5 +98,5 @@ export function routeTreeClick(pick: TreePick, deps: TreeClickDeps): TreeClickRo
 }
 
 export function resetTreePicks() {
-  takers.length = 0;
+  session = null;
 }

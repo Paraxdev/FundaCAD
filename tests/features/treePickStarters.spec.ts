@@ -4,7 +4,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { createFeatureStarters, type FeatureStartersDeps } from "../../src/features/featureStarters";
-import { resetTreePicks, routeTreeClick, treePickWaiting, type TreePick } from "../../src/ui/treePick";
+import { endPickSession, resetTreePicks, routeTreeClick, treePickWaiting, type TreePick } from "../../src/ui/treePick";
+import { createActions } from "../../src/app/actions";
+import { DocumentStore } from "../../src/document/store";
+import type { Engine } from "../../src/app/engine";
+import type { GeometryBackend } from "../../src/geometry/client";
 import { usePromptStore } from "../../src/stores/prompt";
 import { ZERO_POSE } from "../../src/document/datumPose";
 import type { PlaneDef } from "../../src/types";
@@ -41,7 +45,7 @@ function rig(bodies: { id: string; name: string }[] = []) {
       addFeature,
     },
     viewport,
-    overlay: { regions: [] },
+    overlay: { regions: [], selectedRegions: () => [] },
     sketch: { enter: vi.fn() },
     datumPose: { start: datumPoseStart },
     canvas,
@@ -59,7 +63,7 @@ function rig(bodies: { id: string; name: string }[] = []) {
   const hints: string[] = [];
   const click = (pick: TreePick) =>
     routeTreeClick(pick, { busyHint: () => null, hint: (t) => hints.push(t) });
-  return { starters, datumPoseStart, addFeature, viewport, hints, click, planePick: () => planePick };
+  return { starters, deps, datumPoseStart, addFeature, viewport, hints, click, planePick: () => planePick };
 }
 
 beforeEach(() => {
@@ -136,5 +140,92 @@ describe("a tool's pick answered from the Items tree", () => {
     expect(r.click({ kind: "body", id: "b2" })).toBe("taken");
     flushFrame();
     expect(r.addFeature.mock.calls[0]![0]).toMatchObject({ type: "boolean", operation: "subtract", target: "b1", tools: ["b2"] });
+  });
+});
+
+// The review's two leaks: a body pick that did not mark the screen busy, so a
+// second command started over it and its taker came back later; and undo,
+// which never touched the pick at all. Either way Box then Cylinder rows,
+// clicked long after, committed a boolean nobody asked for.
+describe("a pick session cannot outlive its tool", () => {
+  const stubBackend = {
+    async rebuild() { return { ok: false, error: { message: "stub" } }; },
+    async init() {},
+    onStatus() { return () => {}; },
+    connected: true,
+  } as unknown as GeometryBackend;
+
+  function actionsOver(r: ReturnType<typeof rig>) {
+    const d = r.deps as unknown as Record<string, unknown>;
+    return createActions({
+      sketch: { active: false },
+      starters: r.starters,
+      tools: { section: { picking: false, active: false } },
+      toolBusy: d.toolBusy,
+      setStatus: d.setStatus,
+      lastAction: null,
+    } as unknown as Engine);
+  }
+
+  const noBoolean = (r: ReturnType<typeof rig>) =>
+    r.addFeature.mock.calls.every(([f]) => (f as { type: string }).type !== "boolean");
+
+  it("a body pick holds the screen, so a starter called over it does nothing", () => {
+    const r = rig([{ id: "b1", name: "A" }, { id: "b2", name: "B" }]);
+    r.starters.startBoolean("subtract");
+    expect(r.planePick()).toBe(true);
+    r.starters.offsetPlane();
+    expect(usePromptStore().text).toBe("Click the body to keep · Esc cancels");
+  });
+
+  it("a command started over a body pick ends it, and later body rows commit nothing", () => {
+    const r = rig([{ id: "b1", name: "A" }, { id: "b2", name: "B" }]);
+    const act = actionsOver(r);
+    r.starters.startBoolean("subtract");
+    act("revolve");
+    expect(r.planePick()).toBe(false);
+    expect(treePickWaiting()).toBe(false);
+    expect(r.click({ kind: "body", id: "b1" })).toBe("row");
+    flushFrame();
+    expect(r.click({ kind: "body", id: "b2" })).toBe("row");
+    flushFrame();
+    expect(noBoolean(r)).toBe(true);
+  });
+
+  it("a look around the model keeps the pick", () => {
+    const r = rig([{ id: "b1", name: "A" }, { id: "b2", name: "B" }]);
+    r.starters.startBoolean("subtract");
+    try { actionsOver(r)("persp"); } catch { /* the fake has no viewport, only the pick matters */ }
+    expect(treePickWaiting()).toBe(true);
+  });
+
+  it("undo mid pick ends it through its cleanup, and later body rows commit nothing", () => {
+    const r = rig([{ id: "b1", name: "A" }, { id: "b2", name: "B" }]);
+    const store = new DocumentStore(stubBackend, { parameters: {}, features: [] });
+    store.onRewind(endPickSession);
+    store.addFeature({ id: "x", type: "box", length: 1, width: 1, height: 1 } as never);
+    r.starters.startBoolean("subtract");
+    store.undo();
+    expect(r.planePick()).toBe(false);
+    expect(usePromptStore().text).toBeNull();
+    expect(r.click({ kind: "body", id: "b1" })).toBe("row");
+    expect(r.click({ kind: "body", id: "b2" })).toBe("row");
+    flushFrame();
+    expect(noBoolean(r)).toBe(true);
+  });
+
+  it("redo, a load and a new document end it too", () => {
+    const r = rig([{ id: "b1", name: "A" }]);
+    const store = new DocumentStore(stubBackend, { parameters: {}, features: [] });
+    store.onRewind(endPickSession);
+    store.addFeature({ id: "x", type: "box", length: 1, width: 1, height: 1 } as never);
+    store.undo();
+    for (const replace of [() => store.redo(), () => store.load(JSON.stringify({ parameters: {}, features: [] })), () => store.newDocument()]) {
+      r.starters.offsetPlane();
+      expect(treePickWaiting()).toBe(true);
+      replace();
+      expect(treePickWaiting()).toBe(false);
+      expect(r.planePick()).toBe(false);
+    }
   });
 });

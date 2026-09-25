@@ -202,7 +202,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       cleanup();
       requestAnimationFrame(() => onPick(spec, null, pick.kind === "datumPlane" ? pick.id : null));
       return true;
-    });
+    }, () => cleanup());
     const cleanup = () => {
       releaseTree();
       setPlanePick(false);
@@ -493,7 +493,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       if (pick.kind !== "datumPoint") return treePickRefusal(pick, "a point");
       take(pick.point);
       return true;
-    });
+    }, () => cleanup());
     const cleanup = () => {
       releaseTree();
       setPlanePick(false);
@@ -676,6 +676,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       const id = viewport.bodyIdAt(cx, cy);
       return id && !exclude.includes(id) ? id : null;
     };
+    setPlanePick(true);
     viewport.suspendPicking = true;
     setPrompt(promptText);
     const onMove = (e: PointerEvent) => {
@@ -701,9 +702,10 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       cleanup();
       requestAnimationFrame(() => onPick(pick.id));
       return true;
-    });
+    }, () => cleanup());
     const cleanup = () => {
       releaseTree();
+      setPlanePick(false);
       viewport.suspendPicking = false;
       viewport.hoverBody(null);
       canvas.style.cursor = "default";
@@ -864,6 +866,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       }
       return best;
     };
+    setPlanePick(true);
     viewport.suspendPicking = true;
     setPrompt(promptText);
     const onMove = (e: PointerEvent) => {
@@ -896,9 +899,10 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       cleanup();
       requestAnimationFrame(() => onPick(only));
       return true;
-    });
+    }, () => cleanup());
     const cleanup = () => {
       releaseTree();
+      setPlanePick(false);
       viewport.suspendPicking = false;
       overlay.setHoverRegion(null);
       canvas.style.cursor = "default";
@@ -986,6 +990,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       }
       return null;
     };
+    setPlanePick(true);
     viewport.suspendPicking = true;
     viewport.emphasizeEdges(true);
     setPrompt(
@@ -1027,9 +1032,10 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       cleanup();
       requestAnimationFrame(() => onPick({ origin: pick.origin, dir: pick.dir }));
       return true;
-    });
+    }, () => cleanup());
     const cleanup = () => {
       releaseTree();
+      setPlanePick(false);
       viewport.suspendPicking = false;
       viewport.emphasizeEdges(false);
       viewport.hoverEdge(null);
@@ -1155,7 +1161,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     const onEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape") cleanup();
     };
-    const releaseTree = awaitTreePick((pick) => treePickRefusal(pick, "a face, pick it in the view"));
+    const releaseTree = awaitTreePick((pick) => treePickRefusal(pick, "a face, pick it in the view"), () => cleanup());
     const cleanup = () => {
       releaseTree();
       setPlanePick(false);
@@ -1184,6 +1190,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       setStatus("Create or import a body first", "");
       return;
     }
+    setPlanePick(true);
     viewport.suspendPicking = true;
     viewport.emphasizeEdges(true);
     setPrompt(promptText);
@@ -1202,9 +1209,10 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     const onEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape") cleanup();
     };
-    const releaseTree = awaitTreePick((pick) => treePickRefusal(pick, "an edge, pick it in the view"));
+    const releaseTree = awaitTreePick((pick) => treePickRefusal(pick, "an edge, pick it in the view"), () => cleanup());
     const cleanup = () => {
       releaseTree();
+      setPlanePick(false);
       viewport.suspendPicking = false;
       viewport.emphasizeEdges(false);
       viewport.hoverEdge(null);

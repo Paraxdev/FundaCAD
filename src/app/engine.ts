@@ -62,6 +62,7 @@ import { ThreadTool } from "../features/threadTool";
 import { HoleTool } from "../features/holeTool";
 import { createToolBusy } from "./toolBusy";
 import { createDocumentActions } from "./documentActions";
+import { endPickSession } from "../ui/treePick";
 import { createDatumPlanes } from "./datumPlanes";
 import { createSketchVisibility } from "./sketchVisibility";
 import { installRebuildBridge } from "./rebuildBridge";
@@ -385,6 +386,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   Object.assign(e, createDatumPlanes(e));
   Object.assign(e, createSelection(e));
   Object.assign(e, createDocumentActions(e));
+  e.store.onRewind(endPickSession);
 
   return e;
 }

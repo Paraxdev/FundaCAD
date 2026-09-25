@@ -4,6 +4,7 @@ import { contributedAction } from "../plugins/contrib";
 import { openParamsDialog } from "../ui/paramsDialog";
 import { toggleShortcutHUD } from "../input/shortcuts";
 import { choose } from "../ui/choice";
+import { endPickSession } from "../ui/treePick";
 import { SKETCH_TOOLS, SKETCH_MODIFY, NON_REPEATABLE } from "./actionTables";
 import { booleanOpOfAction } from "../features/booleanOps";
 import { useUiStore } from "../stores/ui";
@@ -12,6 +13,14 @@ import type { Engine } from "./engine";
 import type { SketchTool } from "../sketch/sketchMode";
 import type { StandardView } from "../viewport/cameras";
 import type { FaceOffsetMode } from "../features/faceOffsetTool";
+
+/** View and display actions: they change how the model is looked at, not the
+ *  model, so a pick still waiting survives them. */
+const KEEPS_PICK = new Set([
+  "fit", "reset-camera", "iso", "top", "front", "right", "persp",
+  "selmode", "selmode-auto", "selmode-faces", "selmode-bodies",
+  "toggle-xray", "toggle-wireframe", "zebra", "curvature", "draft-analysis", "shortcut-help",
+]);
 
 /** The single dispatch point shared by the ribbon, the keymap, the command
  *  palette and every context menu. */
@@ -57,7 +66,10 @@ export function createActions(e: Engine): (action: string) => void {
     // sketch CREATE tools: switch tool while sketching, else start a sketch with it
     if (SKETCH_TOOLS.has(action)) {
       if (e.sketch.active) e.sketch.setTool(action as SketchTool);
-      else e.starters.startSketch(action as SketchTool);
+      else {
+        endPickSession();
+        e.starters.startSketch(action as SketchTool);
+      }
       return;
     }
     // sketch MODIFY tools only make sense inside a sketch
@@ -77,6 +89,9 @@ export function createActions(e: Engine): (action: string) => void {
     if (action === "redo") return void e.doRedo();
     // a 3D modeling command finishes the active sketch first (mainstream MCAD behavior)
     if (e.sketch.active) e.sketch.finish(true);
+    // and replaces a pick still waiting, which a look around the model does not.
+    // Section pressed during its own aiming is its way out, see its case below.
+    if (!KEEPS_PICK.has(action) && !(action === "section" && e.tools.section.picking)) endPickSession();
 
     // The three booleans are one starter taking the operation as an argument, so
     // they are dispatched from the inventory rather than as three switch arms
