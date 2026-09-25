@@ -189,6 +189,9 @@ pub fn add_feature(
     if let Some(msg) = missing_fields_message(kind, &f) {
         return err(msg);
     }
+    if let Some(msg) = unread_fields_message(kind, &f, |_| true) {
+        return err(msg);
+    }
     let f = Value::Object(f);
     forget_stale_join(doc, None, &f);
     let feats = features_mut(doc);
@@ -229,6 +232,7 @@ pub fn update_feature(
     };
     let existing = existing.clone();
     let patch = patch.as_object().cloned().unwrap_or_default();
+    let sent: BTreeSet<String> = patch.keys().cloned().collect();
     let mut out = if replace {
         let mut out = patch;
         out.insert("id".into(), json!(fid));
@@ -263,6 +267,12 @@ pub fn update_feature(
         check_new_type(fid, was, &now, &out)?;
     }
     canonical_mirror(&mut out);
+    // Only what this call sent: a document may carry fields from a newer build,
+    // and editing another field must not refuse over them.
+    let fresh = |k: &str| replace || sent.contains(k);
+    if let Some(msg) = unread_fields_message(&now, &out, fresh) {
+        return err(msg);
+    }
     let value = Value::Object(out);
     forget_stale_join(doc, Some(&existing), &value);
     features_mut(doc)[i] = value.clone();
@@ -325,6 +335,39 @@ fn canonical_mirror(f: &mut Map<String, Value>) {
         let named = json!({"name": p});
         f.insert("plane".into(), named);
     }
+}
+
+/// The refusal for fields a core feature does not read, the ones `pick` keeps.
+/// A build carries such a field and ignores it, so a misspelt `bodies` would
+/// quietly act on the active body instead. `name` is the label any feature may
+/// carry. A plugin's feature is its own business and is not checked here.
+fn unread_fields_message(kind: &str, f: &Map<String, Value>, pick: impl Fn(&str) -> bool) -> Option<String> {
+    if !Feature::is_core_type(kind) {
+        return None;
+    }
+    let feature = serde_json::from_value::<Feature>(Value::Object(f.clone())).ok()?;
+    let unread: Vec<String> = feature
+        .extra()?
+        .keys()
+        .filter(|k| *k != "name" && pick(k))
+        .map(|k| format!("\"{k}\""))
+        .collect();
+    if unread.is_empty() {
+        return None;
+    }
+    let known: Vec<String> = crate::schema::features()
+        .get(kind)
+        .and_then(|t| t.get("fields"))
+        .and_then(Value::as_object)
+        .map(|m| m.keys().map(|k| format!("\"{k}\"")).collect())
+        .unwrap_or_default();
+    let (what, it) = if unread.len() == 1 { ("field", "it") } else { ("fields", "them") };
+    Some(format!(
+        "a {kind} has no {what} {}, a build would ignore {it} rather than use {it}. Its fields are {}, \
+         and any feature may carry \"activeWhen\" and \"name\". Call schema(\"{kind}\") for what each one means.",
+        unread.join(", "),
+        known.join(", ")
+    ))
 }
 
 /// Every field serde says a core feature is missing, found by filling each in

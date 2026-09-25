@@ -588,6 +588,11 @@ impl Feature {
         each_known!(self, f => f.active_when.clone(), v => v.get("activeWhen").and_then(|a| serde_json::from_value(a.clone()).ok()))
     }
 
+    /// The keys a known feature carries without reading them.
+    pub fn extra(&self) -> Option<&Extra> {
+        each_known!(self, f => Some(&f.extra), _v => None)
+    }
+
     pub fn is_core_type(type_name: &str) -> bool {
         Self::KNOWN.contains(&type_name)
     }

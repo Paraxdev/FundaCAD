@@ -177,6 +177,50 @@ fn a_replace_that_changes_the_type_is_checked_against_the_new_type() {
 }
 
 #[test]
+fn a_field_a_core_feature_does_not_read_is_refused_and_changes_nothing() {
+    let mut d = chute();
+    let before = m::features(&d).to_vec();
+    let e = m::add_feature(
+        &mut d,
+        &json!({"type": "move", "dx": 5, "dy": 0, "dz": 0, "rx": 0, "ry": 0, "rz": 0, "targets": ["body1"]}),
+        None,
+    )
+    .expect_err("a move with targets was accepted");
+    assert!(e.0.contains("\"targets\"") && e.0.contains("\"bodies\""), "{e}");
+    assert_eq!(m::features(&d), &before[..]);
+
+    let e = m::update_feature(&mut d, "chute_edges", &json!({"radious": 2}), false)
+        .expect_err("a misspelt radius was accepted");
+    assert!(e.0.contains("\"radious\"") && e.0.contains("fillet"), "{e}");
+    let e = m::update_feature(
+        &mut d,
+        "bx",
+        &json!({"type": "box", "length": 1, "width": 1, "height": 1, "depth": 3}),
+        true,
+    )
+    .expect_err("a replace with an unread field was accepted");
+    assert!(e.0.contains("\"depth\""), "{e}");
+    assert_eq!(m::features(&d), &before[..]);
+}
+
+#[test]
+fn a_label_a_plugin_field_and_a_field_already_there_are_not_refused() {
+    let mut d = chute();
+    m::add_feature(&mut d, &json!({"id": "b2", "type": "box", "length": 1, "width": 1, "height": 1, "name": "Lid"}), None)
+        .expect("any feature may carry a name");
+    m::add_feature(
+        &mut d,
+        &json!({"type": "elephantFootChamfer", "size": 0.4, "anyPluginKey": 1}),
+        None,
+    )
+    .expect("a plugin's feature is not checked here");
+    d.get_mut("features").expect("features")[0]["futureField"] = json!(true);
+    m::update_feature(&mut d, "bx", &json!({"length": 30}), false)
+        .expect("a field from a newer build that this patch did not send stays");
+    assert_eq!(m::features(&d)[0]["futureField"], json!(true));
+}
+
+#[test]
 fn a_mirror_that_names_bodies_writes_its_plane_as_a_name_object() {
     let mut d = chute();
     m::add_feature(&mut d, &json!({"id": "m1", "type": "mirror", "plane": "YZ", "bodies": ["body1"]}), None).unwrap();
