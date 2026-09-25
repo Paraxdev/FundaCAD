@@ -202,7 +202,7 @@ export function appHost(opts: AppHostOptions): BrokerHost {
           next.parameters ??= {};
           next.features ??= [];
           ensureBodyIds(next);
-          store.loadDocument(next);
+          store.loadDocument(next, { replace: true });
           return { ok: true };
         }
 

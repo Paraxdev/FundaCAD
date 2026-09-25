@@ -796,3 +796,41 @@ describe("previewError", () => {
     expect(store.previewError).toBeNull();
   });
 });
+
+describe("opening a document starts a history of its own", () => {
+  let store: DocumentStore;
+  beforeEach(() => {
+    vi.useFakeTimers();
+    store = new DocumentStore(stubBackend([]), doc());
+  });
+  afterEach(() => void vi.useRealTimers());
+
+  const docA = { parameters: {}, features: [{ id: "a", type: "box", length: 1, width: 1, height: 1 }] };
+  const docB = { parameters: {}, features: [{ id: "b", type: "cylinder", radius: 2, height: 3 }] };
+
+  it("undo never crosses back into the previously opened document", () => {
+    store.load(JSON.stringify(docA));
+    store.load(JSON.stringify(docB));
+    expect(store.canUndo).toBe(false);
+    store.undo();
+    expect(store.document.features.map((f) => f.id)).toEqual(["b"]);
+  });
+
+  it("undo works inside the newly opened document", () => {
+    store.load(JSON.stringify(docA));
+    store.addFeature({ id: "x", type: "box", length: 1, width: 1, height: 1 } as Feature);
+    store.load(JSON.stringify(docB));
+    store.addFeature({ id: "y", type: "box", length: 2, width: 2, height: 2 } as Feature);
+    store.undo();
+    expect(store.document.features.map((f) => f.id)).toEqual(["b"]);
+    expect(store.canUndo).toBe(false);
+    expect(store.canRedo).toBe(true);
+  });
+
+  it("a replacement of the same document stays one undoable step", () => {
+    store.load(JSON.stringify(docA));
+    store.load(JSON.stringify(docB), { replace: true });
+    store.undo();
+    expect(store.document.features.map((f) => f.id)).toEqual(["a"]);
+  });
+});
