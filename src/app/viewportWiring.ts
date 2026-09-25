@@ -28,17 +28,8 @@ export function installViewportWiring(e: Engine): void {
   // clicking a construction plane in the viewport selects it (so it can be cut by)
   e.viewport.onPickDatum = (id) => e.selectFeature(id);
 
-  e.viewport.onHit = (hit) => {
-    if (e.toolBusy()) return;
-    // No prompt here any more: onSelectionChange fires straight after this and
-    // owns the face line, now that a face selection offers a handle rather than
-    // a list of commands to go and find.
-    if (hit?.kind === "face") {
-      const owner = e.featureForFace(hit.faceId);
-      if (owner) e.selectFeature(owner); // show which feature this face came from
-    }
-  };
-
+  // A single face click selects the face and not its owner: selecting the owner
+  // opened its values, so the top of a plate a hole was cut into opened the Hole.
   // Double-click a face to open the edit of the feature that made it, the
   // viewport twin of double-clicking that feature's history entry. A visible
   // sketch profile reopens its sketch, and is asked first by the same ranking a
