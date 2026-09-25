@@ -173,11 +173,14 @@ export class GhostLayer {
     const model = this.host.model();
     if (!model || !edges.length || size < 1e-4) return;
     const positions: number[] = [];
+    let unsure = false;
     for (const edge of edges) {
       const found = edgeFaceSamples(model, edge);
       if (!found) continue; // can't tell the two faces apart here, skip THIS edge
       const geo = sweepBlendGhost(found.samples, size, kind, found.closed);
-      if (geo) positions.push(...geo.positions);
+      if (!geo) continue;
+      positions.push(...geo.positions);
+      unsure ||= geo.unsure;
     }
     if (!positions.length) return;
     const geom = new THREE.BufferGeometry();
@@ -186,7 +189,7 @@ export class GhostLayer {
     const mat = new THREE.MeshBasicMaterial({
       color: capped ? themeColor("--error", 0xe23b3b) : themeColor("--accent", 0xff7a3c),
       transparent: true,
-      opacity: capped ? 0.55 : 0.45,
+      opacity: capped ? 0.55 : unsure ? 0.2 : 0.45,
       side: THREE.DoubleSide,
       depthWrite: false,
       // On a convex edge the round sits inside the solid it is about to cut
@@ -440,6 +443,8 @@ interface TriGrid {
   tolerance: number;
   cells: Map<string, TriRec[]>;
   byFace: Map<number, TriRec[]>;
+  /** every triangle's corners, 9 numbers each, for sectioning the body */
+  corners: Float64Array;
 }
 
 const triGridCache = new WeakMap<BodyMesh, TriGrid>();
@@ -494,7 +499,15 @@ function buildTriGrid(body: BodyMesh): TriGrid {
     if (!own) byFace.set(r.faceId, (own = []));
     own.push(r);
   }
-  return { cellSize, tolerance, cells, byFace };
+  const corners = new Float64Array(recs.length * 9);
+  recs.forEach((r, i) => {
+    [r.a, r.b, r.c].forEach((v, k) => {
+      corners[i * 9 + k * 3] = v.x;
+      corners[i * 9 + k * 3 + 1] = v.y;
+      corners[i * 9 + k * 3 + 2] = v.z;
+    });
+  });
+  return { cellSize, tolerance, cells, byFace, corners };
 }
 
 function triGrid(body: BodyMesh): TriGrid {
@@ -624,6 +637,35 @@ function faceReach(tris: readonly TriRec[], p: THREE.Vector3, tangent: THREE.Vec
   return reach > 0 ? reach : Infinity;
 }
 
+/** Past this many triangle tests per edge the outline is left out, and the
+ *  ghost with it falls back to capping at the face ends. */
+const OUTLINE_BUDGET = 3e7;
+
+/** The body cut by the plane through `p` across `tangent`, as 2D segments in
+ *  the frame (x, y) with `p` at the origin. */
+function bodyOutline(corners: Float64Array, p: THREE.Vector3, tangent: THREE.Vector3, x: THREE.Vector3, y: THREE.Vector3): Float64Array {
+  const out: number[] = [];
+  const d = [0, 0, 0], u = [0, 0, 0], w = [0, 0, 0];
+  for (let t = 0; t < corners.length; t += 9) {
+    let above = 0;
+    for (let k = 0; k < 3; k++) {
+      const vx = corners[t + k * 3]! - p.x, vy = corners[t + k * 3 + 1]! - p.y, vz = corners[t + k * 3 + 2]! - p.z;
+      d[k] = vx * tangent.x + vy * tangent.y + vz * tangent.z;
+      if (d[k]! >= 0) above++;
+      u[k] = vx * x.x + vy * x.y + vz * x.z;
+      w[k] = vx * y.x + vy * y.y + vz * y.z;
+    }
+    if (above === 0 || above === 3) continue;
+    for (let i = 0; i < 3; i++) {
+      const j = (i + 1) % 3;
+      if (d[i]! >= 0 === d[j]! >= 0) continue;
+      const f = d[i]! / (d[i]! - d[j]!);
+      out.push(u[i]! + (u[j]! - u[i]!) * f, w[i]! + (w[j]! - w[i]!) * f);
+    }
+  }
+  return Float64Array.from(out);
+}
+
 /** How much the face `tri` belongs to curls toward `side` as it leaves the
  *  edge along `into`, in 1/mm, read off the turn of the shipped normals from
  *  `p` to the triangle's far vertex. 0 when the mesh has no normals to trust. */
@@ -751,6 +793,7 @@ function edgeFaceSamples(model: ModelView, edge: BlendGhostEdge): EdgeGhostSampl
 
   const grid = triGrid(body);
   const n = resampled.length;
+  const sectioned = (grid.corners.length / 9) * n <= OUTLINE_BUDGET;
   let primaryFace: number | null = null;
   const samples: EdgeSample[] = [];
   for (let i = 0; i < n; i++) {
@@ -787,6 +830,7 @@ function edgeFaceSamples(model: ModelView, edge: BlendGhostEdge): EdgeGhostSampl
       bend2: faceBend(found.tris[k2], found.normals[k2], pv, tangent, d2, side2.normalize()),
       reach1: faceReach(grid.byFace.get(found.faceIds[k1]) ?? [], pv, tangent, d1, grid.tolerance),
       reach2: faceReach(grid.byFace.get(found.faceIds[k2]) ?? [], pv, tangent, d2, grid.tolerance),
+      ...(sectioned ? { outline: bodyOutline(grid.corners, pv, tangent, d1, side1) } : {}),
     });
   }
   if (samples.length < MIN_VALID_SAMPLES) return null;
