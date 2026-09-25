@@ -3137,7 +3137,19 @@ export class SketchMode {
       this.selectedPole = { id: poleOf.id, k: gp.pole };
       this.refreshActive();
     }
-    if (!this.selected.size) return; // nothing to act on → let nav handle it
+    if (!this.selected.size) {
+      // Nothing under the cursor and nothing already selected: a right-drag
+      // still orbits (the `dragged` check above), but a plain click has no
+      // curve to act on. Leaving the event unclaimed used to mean the next
+      // idle Escape (someone dismissing a menu they expected to see) fell
+      // straight through escapeLayers to "close": a miss by a few pixels on a
+      // curve's rim could exit the sketch with no warning. Offering Exit
+      // Sketching here, instead of nothing, gives the click a real answer and
+      // makes leaving that way a click, never an accident.
+      e.preventDefault();
+      contextMenu(e.clientX, e.clientY, [{ label: "Exit Sketching", onClick: () => this.finish(true) }]);
+      return;
+    }
     e.preventDefault();
     const n = this.selected.size;
     const linked = this.modifyFlow.selectedProjectedIds().size;
