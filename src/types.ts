@@ -332,7 +332,7 @@ export type CoreFeature =
   // moves the face along the axis its walls run along (a hole's end), absent is "normal".
   | { id: string; type: "press-pull"; face: Selector | Selector[]; distance: Num; operation: "join" | "cut"; body?: string; upTo?: Selector; taper?: Num; mode?: PressPullMode; direction?: PressPullDirection }
   | { id: string; type: "deleteFace"; face: Selector | Selector[]; body?: string }
-  | { id: string; type: "mirror"; plane: Plane3 }
+  | { id: string; type: "mirror"; plane: Plane3; bodies?: string[] }
   // `operation` defaults to "new". `regions` are the areas to spin, as for extrude.
   // `axisEdge` makes the axis follow a model edge, with `axis` as the cache. `pitch`
   // (mm per turn) climbs the axis for a thread; without it the angle clamps to 360.

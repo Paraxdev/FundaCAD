@@ -815,22 +815,30 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     moveTool.start(ids, committed);
   }
 
-  // Mirror: choose the symmetry plane (the backend honors XY/XZ/YZ; the old tool
-  // was hard-coded to YZ). Mirrors the active body and unions the reflection.
-  async function startMirror() {
+  // Mirror: the selected bodies, the only body, or the one clicked, each fused
+  // with its reflection across the chosen plane. The targets are written into
+  // the feature, since the active body it would otherwise fall back to changes
+  // as the timeline grows.
+  function startMirror() {
     if (toolBusy()) return;
-    const hasSolid = hasBody();
-    if (!hasSolid) {
+    if (!hasBody()) {
       setStatus("Mirror: create a body first", "");
       return;
     }
-    const plane = await choose<"XY" | "XZ" | "YZ">("Mirror across plane", [
-      { value: "XY", label: "XY" },
-      { value: "XZ", label: "XZ" },
-      { value: "YZ", label: "YZ" },
-    ]);
-    if (!plane) return;
-    store.addFeature({ id: store.nextId(), type: "mirror", plane } as Feature);
+    const bodies = store.buildState.result?.bodies ?? [];
+    const commit = async (ids: string[]) => {
+      const plane = await choose<"XY" | "XZ" | "YZ">("Mirror across plane", [
+        { value: "XY", label: "XY" },
+        { value: "XZ", label: "XZ" },
+        { value: "YZ", label: "YZ" },
+      ]);
+      if (!plane) return;
+      store.addFeature({ id: store.nextId(), type: "mirror", plane, ...(ids.length ? { bodies: ids } : {}) } as Feature);
+    };
+    const pre = viewport.getSelectedBodies().filter((id) => bodies.some((b) => b.id === id));
+    if (pre.length) return void commit(pre);
+    if (bodies.length <= 1) return void commit(bodies.map((b) => b.id));
+    pickBodyInteractive("Click the body to mirror · Esc cancels", [], (id) => void commit([id]));
   }
 
   // Revolve: spin the selected sketch profiles around an axis POINTED AT in the
