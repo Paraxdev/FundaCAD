@@ -24,6 +24,20 @@ fn reply_result(reply: &Value, op: &str) -> Result<Value, String> {
     Err(format!("{op}: {why}"))
 }
 
+/// What a failed blob transfer means for the person reading the reply. An
+/// engine that does not know the op is an older build than this server.
+pub fn engine_problem(e: &str) -> String {
+    if e.contains("unknown op") {
+        format!(
+            "The engine is an older build than this MCP server and cannot hand geometry over \
+             ({e}). Run the fundacad-engine from the same build as fundacad-mcp, or restart \
+             FundaCAD after updating it."
+        )
+    } else {
+        format!("The engine could not be asked for the geometry: {e}")
+    }
+}
+
 /// The blob's bytes from the engine, None when it has no such blob. Checked
 /// against the hash before it is trusted, so a torn or stale file on the
 /// engine's side is never written into a document.

@@ -188,3 +188,22 @@ async fn opening_a_file_hands_its_geometry_to_the_engine() {
         "a blob the engine already has is sent again"
     );
 }
+
+#[tokio::test]
+async fn an_engine_too_old_to_hand_geometry_over_is_named_as_the_reason() {
+    empty_local_store();
+    let h = digest(&geometry(0));
+    let engine = FakeEngine::start(|op, _| {
+        json!({"ok": false, "error": {"message": format!("unknown op: {op}")}})
+    });
+    let srv = FundaCad::with_link(engine.link());
+    srv.t_doc_set(args(json!({"document": import_doc(&h)}))).await.unwrap();
+
+    let out = tempfile::tempdir().unwrap();
+    let r = srv
+        .t_doc_save(args(json!({"path": a_path(&out, "part.funda").to_string_lossy()})))
+        .await
+        .unwrap();
+    assert!(is_error(&r));
+    assert!(text_of(&r).contains("older build"), "{}", text_of(&r));
+}

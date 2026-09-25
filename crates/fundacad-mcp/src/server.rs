@@ -722,6 +722,7 @@ impl FundaCad {
         let root = docfile::blob_dir();
         let published = docfile::publish_all(&root, &blobs);
         let link = self.engine_link().await;
+        let mut pushed_note = String::new();
         if let Err(e) = crate::blobs::push(&link, &blobs).await {
             if !published {
                 return Ok(failure(format!(
@@ -732,6 +733,7 @@ impl FundaCad {
                 )));
             }
             log(&format!("[mcp] blobs not pushed to the engine, relying on {}: {e}", root.display()));
+            pushed_note = format!("\n{}", crate::blobs::engine_problem(&e));
         }
         let mut st = self.state.lock().await;
         st.doc = doc;
@@ -752,7 +754,7 @@ impl FundaCad {
             )
         };
         Ok(text(format!(
-            "Opened {}: {} features, {} parameters.{note}",
+            "Opened {}: {} features, {} parameters.{note}{pushed_note}",
             path.display(),
             model::features(&st.doc).len(),
             model::param_defs(&st.doc).len()
@@ -796,6 +798,7 @@ The format comes from the extension unless given. A large STEP can take minutes:
         }
         let root = docfile::blob_dir();
         let mut fetched = std::collections::HashMap::new();
+        let mut asking_failed = None;
         let link = st.link.clone();
         for digest in docfile::referenced_geometry(&st.doc) {
             if docfile::local_blob(&root, &digest).is_some() {
@@ -806,12 +809,19 @@ The format comes from the extension unless given. A large STEP can take minutes:
                     fetched.insert(digest, data);
                 }
                 Ok(None) => {}
-                Err(e) => log(&format!("[mcp] could not ask the engine for {digest}: {e}")),
+                Err(e) => {
+                    log(&format!("[mcp] could not ask the engine for {digest}: {e}"));
+                    asking_failed = Some(e);
+                }
             }
         }
         let embedded = match docfile::write_with(&path, &st.doc, Some(&root), &fetched) {
             Ok(n) => n,
-            Err(e) => return Ok(failure(e.to_string())),
+            Err(e) => {
+                let why = asking_failed
+                    .map_or_else(String::new, |e| format!("\n{}", crate::blobs::engine_problem(&e)));
+                return Ok(failure(format!("{e}{why}")));
+            }
         };
         st.path = Some(path.clone());
         let geometry = if embedded > 0 {
