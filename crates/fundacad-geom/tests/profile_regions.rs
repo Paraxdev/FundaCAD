@@ -162,3 +162,62 @@ fn a_profile_running_off_a_face_still_picks_the_overhang_alone() {
     let got = sizes(&r);
     assert_eq!(got[1], ("body2".to_owned(), [20, 20, 5]));
 }
+
+fn build(features: Vec<Value>) -> Vec<(String, [i64; 3])> {
+    let raw = json!({ "features": features });
+    let typed: CadDocument = serde_json::from_value(raw.clone()).unwrap();
+    sizes(&builder::rebuild(&typed, &raw, &NoWatch).unwrap_or_else(|_| panic!("cancelled")))
+}
+
+fn block(id: &str, sketch: &str, (x1, y1): (f64, f64), (x2, y2): (f64, f64)) -> Vec<Value> {
+    vec![
+        rect(sketch, "XY", (json!(x1), json!(y1)), (json!(x2), json!(y2))),
+        extrude(id, sketch, json!(10), [(x1 + x2) / 2.0, (y1 + y2) / 2.0, 0.0]),
+    ]
+}
+
+/// Material stops 3 mm before the end of a 20 mm edge, between any fixed samples
+/// of it, so only cutting the edge where it happens finds it.
+#[test]
+fn material_stopping_partway_along_an_edge_still_cuts_there() {
+    let pick = |seed: [f64; 3]| {
+        let mut f = block("a", "sa", (0.0, 0.0), (20.0, 20.0));
+        f.extend(block("b", "sb", (20.0, 0.0), (40.0, 17.0)));
+        f.push(rect("s", "XY", (json!(10), json!(10)), (json!(30), json!(30))));
+        f.push(extrude("e", "s", json!(5), seed));
+        build(f)[2].1
+    };
+    assert_eq!(pick([15.0, 15.0, 0.0]), [20, 10, 5], "the area over the two blocks");
+    assert_eq!(pick([25.0, 25.0, 0.0]), [20, 13, 5], "the area off them");
+}
+
+/// A frame corner: the cross rail's end overlaps the side rail, so each rail's
+/// edge is half inside the other and half a real outline.
+#[test]
+fn a_gusset_over_overlapping_rail_ends_picks_the_whole_corner() {
+    let mut f = block("side", "s1", (0.0, 0.0), (20.0, 460.0));
+    f.extend(block("cross", "s2", (0.0, 0.0), (480.0, 20.0)));
+    f.push(rect("g", "XY", (json!(0), json!(0)), (json!(40), json!(40))));
+    f.push(extrude("gusset", "g", json!(5), [10.0, 10.0, 0.0]));
+    assert_eq!(build(f)[2].1, [40, 40, 5]);
+}
+
+/// What the overlay splits with is the union's outline, nothing inside it.
+#[test]
+fn the_overlay_cuts_are_the_outline_of_the_coplanar_material() {
+    let mut f = block("side", "s1", (0.0, 0.0), (20.0, 460.0));
+    f.extend(block("cross", "s2", (0.0, 0.0), (480.0, 20.0)));
+    let raw = json!({ "features": f });
+    let typed: CadDocument = serde_json::from_value(raw.clone()).unwrap();
+    let r = builder::rebuild(&typed, &raw, &NoWatch).unwrap_or_else(|_| panic!("cancelled"));
+    let shapes: Vec<_> = r.bodies.iter().map(|b| &b.shape).collect();
+    let cuts = kernel::profile_cuts(&shapes, [0.0; 3], [0.0, 0.0, 1.0], 600.0, 0.1).unwrap();
+    let length: f64 = cuts
+        .iter()
+        .flat_map(|l| l.windows(2))
+        .map(|w| ((w[1][0] - w[0][0]).powi(2) + (w[1][1] - w[0][1]).powi(2)).sqrt())
+        .sum();
+    assert!((length - 2.0 * (480.0 + 460.0)).abs() < 1e-6, "outline length {length}");
+    let top = kernel::profile_cuts(&shapes, [0.0, 0.0, 10.0], [0.0, 0.0, 1.0], 600.0, 0.1).unwrap();
+    assert_eq!(top.len(), cuts.len());
+}

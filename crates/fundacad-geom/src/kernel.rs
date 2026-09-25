@@ -604,6 +604,34 @@ pub fn split_profile_cells(
     ))
 }
 
+/// The model edges `split_profile_cells` cuts along, over the whole plane, as
+/// polylines within `deflection`. None when an edge will not sample.
+pub fn profile_cuts(
+    shapes: &[&Shape],
+    origin: [f64; 3],
+    normal: [f64; 3],
+    model_scale: f64,
+    deflection: f64,
+) -> Option<Vec<Vec<[f64; 3]>>> {
+    let s = compound(shapes.iter().copied());
+    let mut flat = Vec::new();
+    let [ox, oy, oz] = origin;
+    let [nx, ny, nz] = normal;
+    if !ffi::bo_profile_cuts(s.raw(), ox, oy, oz, nx, ny, nz, model_scale, deflection, &mut flat) {
+        return None;
+    }
+    let mut out = vec![Vec::new()];
+    for c in flat.chunks_exact(3) {
+        if c[0].is_nan() {
+            out.push(Vec::new());
+        } else if let Some(line) = out.last_mut() {
+            line.push([c[0], c[1], c[2]]);
+        }
+    }
+    out.retain(|l| l.len() >= 2);
+    Some(out)
+}
+
 pub fn face_contains(face: &Shape, p: [f64; 3], tol: f64) -> bool {
     ffi::bo_face_contains(face.raw(), p[0], p[1], p[2], tol)
 }

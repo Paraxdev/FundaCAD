@@ -1043,28 +1043,32 @@ struct Cell {
     area: f64,
 }
 
+/// The model's box diagonal, what the profile cut tolerance scales by.
+fn model_scale(shapes: &[&Shape]) -> f64 {
+    let model = if shapes.len() == 1 {
+        shapes[0].clone()
+    } else {
+        kernel::compound(shapes.iter().copied())
+    };
+    match kernel::bbox(&model) {
+        Some(b) => {
+            let d = ((b[3] - b[0]).powi(2) + (b[4] - b[1]).powi(2) + (b[5] - b[2]).powi(2)).sqrt();
+            if d == 0.0 {
+                1.0
+            } else {
+                d
+            }
+        }
+        None => 1.0,
+    }
+}
+
 /// `_region_cells`: the sketch's cells cut where the model under them ends.
 fn region_cells(ctx: &Ctx, entry: &SketchEntry) -> Vec<Cell> {
     let mut faces = entry.faces.clone();
     let shapes = ctx.shapes();
     if !shapes.is_empty() && !faces.is_empty() {
-        let model = if shapes.len() == 1 {
-            shapes[0].clone()
-        } else {
-            kernel::compound(shapes.iter().copied())
-        };
-        let scale = match kernel::bbox(&model) {
-            Some(b) => {
-                let d =
-                    ((b[3] - b[0]).powi(2) + (b[4] - b[1]).powi(2) + (b[5] - b[2]).powi(2)).sqrt();
-                if d == 0.0 {
-                    1.0
-                } else {
-                    d
-                }
-            }
-            None => 1.0,
-        };
+        let scale = model_scale(&shapes);
         faces =
             kernel::split_profile_cells(&faces, entry.plane.origin, entry.plane.z, &shapes, scale);
     }
@@ -1076,6 +1080,38 @@ fn region_cells(ctx: &Ctx, entry: &SketchEntry) -> Vec<Cell> {
             face,
         })
         .collect()
+}
+
+/// The `profileCuts` op: the lines the built model cuts a profile along on one
+/// plane, the same lines `region_cells` cuts with, so the sketch overlay offers
+/// exactly the areas a feature will build.
+pub fn profile_cuts_result(req: &serde_json::Map<String, serde_json::Value>, watch: &dyn crate::builder::Watch) -> fundacad_protocol::JobResult {
+    use serde_json::json;
+    let vec3 = |k: &str| -> Option<[f64; 3]> {
+        let a = req.get(k)?.as_array()?;
+        Some([a.first()?.as_f64()?, a.get(1)?.as_f64()?, a.get(2)?.as_f64()?])
+    };
+    let (Some(origin), Some(normal)) = (vec3("origin"), vec3("normal")) else {
+        return fundacad_engine::error_result("'origin' and 'normal'");
+    };
+    let len = (normal[0].powi(2) + normal[1].powi(2) + normal[2].powi(2)).sqrt();
+    if len < 1e-12 {
+        return fundacad_engine::error_result("'normal' has no direction");
+    }
+    let normal = normal.map(|v| v / len);
+    let (_, built) = match crate::inspect::rebuild_request(req, watch) {
+        Ok(r) => r,
+        Err(e) => return e,
+    };
+    let shapes: Vec<&Shape> = built.bodies.iter().map(|b| &b.shape).collect();
+    let cuts = if shapes.is_empty() {
+        Vec::new()
+    } else {
+        let scale = model_scale(&shapes);
+        kernel::profile_cuts(&shapes, origin, normal, scale, (scale * 2e-4).max(1e-3)).unwrap_or_default()
+    };
+    let reply = json!({"cuts": cuts});
+    fundacad_protocol::JobResult::Json(reply.as_object().cloned().unwrap_or_default())
 }
 
 /// `_region_face_at`: the smallest cell containing the point, else the nearest.
