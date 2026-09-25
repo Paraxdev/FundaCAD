@@ -33,12 +33,12 @@ const MATCH_TOL = 1e-4;
 function isNearestAt(sel: unknown, at: readonly number[]): boolean {
   if (!sel || typeof sel !== "object") return false;
   const s = sel as { by?: string; point?: unknown };
-  if (s.by !== "nearest" || !Array.isArray(s.point) || s.point.length !== 3) return false;
+  if ((s.by !== "nearest" && s.by !== "tracked") || !Array.isArray(s.point) || s.point.length !== 3) return false;
   return s.point.every((v, i) => typeof v === "number" && Math.abs(v - (at[i] ?? NaN)) <= MATCH_TOL);
 }
 
 /**
- * Locate the `by:"nearest"` selector whose stored point is `at`, or null when the
+ * Locate the `by:"nearest"` or `by:"tracked"` selector whose stored point is `at`, or null when the
  * feature no longer has one, which happens legitimately: the user may have
  * already re-picked it, or edited the feature, since the rebuild that failed.
  * Callers must treat null as "nothing to repair", not as an error.

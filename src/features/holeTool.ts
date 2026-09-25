@@ -21,6 +21,7 @@ import { planeXDir } from "./planeMath";
 import {
   CLEARANCE, HOLE_TYPES, INSERT, isHoleSize, newHoleFields, parseHoleSize, type HoleSize,
 } from "./holeStandards";
+import { rebaseHole, trackedFace, upgradeFace, withCenter } from "./holeFace";
 
 type HoleFeature = Extract<Feature, { type: "hole" }>;
 
@@ -119,7 +120,8 @@ export class HoleTool {
     for (const [field] of featureNumFields("hole", values)) {
       if (typeof values[field] === "string" || this.store.isParamBound({ kind: "feature", feature: id, field })) return false;
     }
-    const first = f.points[0]!;
+    const placed = rebaseHole(f.face, f.points, this.store.buildState.result?.faceCenters?.[id]);
+    const first = placed.points[0]!;
     const at = new THREE.Vector3(first[0], first[1], first[2]);
     const plane = this.viewport.planarFaceThrough(at, f.body ?? null);
     if (!plane) return false;
@@ -132,7 +134,7 @@ export class HoleTool {
     this.through = f.extent === "through" && this.holeType !== "insert";
     this.depth = typeof f.depth === "number" ? f.depth : null;
     this.store.beginEditPreview(id, f);
-    this.begin(at, plane.normal, plane.origin, f.body ?? null, plane.faceId, f.face, f.points);
+    this.begin(at, plane.normal, plane.origin, f.body ?? null, plane.faceId, placed.face, placed.points);
     return true;
   }
 
@@ -253,9 +255,8 @@ export class HoleTool {
     this.xdir.set(xd[0], xd[1], xd[2]);
     this.ydir.crossVectors(this.normal, this.xdir).normalize();
     const onPlane = at.clone().addScaledVector(this.normal, -this.normal.dot(at.clone().sub(origin)));
-    this.face = face ?? {
-      kind: "face", by: "nearest", point: round3(onPlane), ...(bodyId ? { body: bodyId } : {}),
-    } as Selector;
+    const n: Vec3 = [this.normal.x, this.normal.y, this.normal.z];
+    this.face = face ? upgradeFace(face, n) : trackedFace(round3(onPlane), n, bodyId);
     this.points = points ? points.map((q) => [...q] as Vec3) : [round3(onPlane)];
     this.previewId = this.editId ?? this.store.nextId();
     this.viewport.clearHover();
@@ -540,6 +541,8 @@ export class HoleTool {
       setPrompt(`Hole refused: ${verdict.reason} · change it or Esc`);
       return;
     }
+    // The preview built this very face, so its centre is the one to keep.
+    this.face = withCenter(this.face!, this.store.buildState.result?.faceCenters?.[this.previewId]);
     const feature = this.buildFeature();
     const editId = this.editId;
     this.cleanup(false);

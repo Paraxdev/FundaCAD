@@ -46,6 +46,10 @@ export type Selector = (
   | { kind: "edge"; by: "all" }
   | { kind: "face"; by: "normal"; dir: [number, number, number] }
   | { kind: "face"; by: "nearest"; point: [number, number, number] }
+  // One flat face kept by its outward normal, so it is found again wherever a
+  // change upstream moves it. `center` is where its outline's centre was when
+  // this was written; a hole's positions move with the face from there.
+  | { kind: "face"; by: "tracked"; point: [number, number, number]; normal: [number, number, number]; center?: [number, number, number] }
   // --- v2: discriminating, drift-robust selection ---
   // `match` re-finds ONE entity by scored geometric fingerprint; `nth` breaks a
   // genuine tie (symmetric twins) by a rebuild-stable canonical order.
@@ -707,6 +711,8 @@ export interface RebuildResult {
   sketchPlanes?: Record<string, PlaneDef>;
   // Only datums that follow geometry.
   datumMarks?: Record<string, DatumMark>;
+  /** Where the outline centre of each feature's `tracked` face is this build, by feature id. */
+  faceCenters?: Record<string, [number, number, number]>;
   /** The document's body id map after this build, sent only when it changed. */
   bodyIds?: Record<string, string>;
 }

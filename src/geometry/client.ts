@@ -1044,6 +1044,7 @@ export class Geometry implements GeometryBackend {
     if (r.datumPlanes) out.datumPlanes = r.datumPlanes;
     if (r.sketchPlanes) out.sketchPlanes = r.sketchPlanes;
     if (r.datumMarks) out.datumMarks = r.datumMarks;
+    if (r.faceCenters) out.faceCenters = r.faceCenters;
     if (r.bodyIds) out.bodyIds = r.bodyIds;
     return out;
   }

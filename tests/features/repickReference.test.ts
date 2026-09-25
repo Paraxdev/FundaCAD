@@ -32,6 +32,12 @@ describe("findSelectorAt", () => {
     expect(findSelectorAt(pressPull(near([1, 2, 3])), [9, 9, 9])).toBeNull();
   });
 
+  it("finds a hole's tracked face by its stored point", () => {
+    const face = { kind: "face", by: "tracked", point: [3, 2, 5], normal: [0, 0, 1], center: [0, 0, 5] } as Selector;
+    const f = { id: "h1", type: "hole", face, points: [[3, 2, 5]] } as Feature;
+    expect(findSelectorAt(f, [3, 2, 5])).toEqual({ field: "face", index: null });
+  });
+
   it("ignores non-nearest selectors", () => {
     const f = { id: "f1", type: "draft", angle: 3, axis: "Z", faces: [{ kind: "face", by: "normal", dir: [0, 0, 1] }] } as unknown as Feature;
     expect(findSelectorAt(f, [0, 0, 1])).toBeNull();
