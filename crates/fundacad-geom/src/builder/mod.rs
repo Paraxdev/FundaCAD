@@ -28,6 +28,17 @@ pub use plane::PlaneRecord;
 
 /// Machine codes of the Python engine's `errors.py`.
 pub const BAD_REQUEST: &str = "badRequest";
+/// A feature names another that is not above it.
+pub const MISSING_FEATURE: &str = "missingFeature";
+
+/// A refusal naming a feature that is not above this one. Written from what is
+/// above only, `forward_references` says so when it is below instead.
+pub fn missing_reference(message: impl Into<String>) -> Fail {
+    Fail::Value {
+        message: message.into(),
+        code: Some(MISSING_FEATURE),
+    }
+}
 
 /// Why a feature did nothing: the arms of the Python rebuild loop's `except`.
 #[derive(Debug, Clone, PartialEq)]
@@ -228,6 +239,8 @@ pub struct Step {
     pub id: String,
     pub kind: String,
     pub label: String,
+    /// A datum axis's stored `origin` and `dir`.
+    pub line: Option<[[f64; 3]; 2]>,
 }
 
 static NEXT_UID: AtomicU64 = AtomicU64::new(0);
@@ -663,6 +676,53 @@ fn failure_detail(ctx: &Ctx, index: usize, type_name: Option<&str>, took: Durati
     })
 }
 
+/// A missing reference that names a feature further down the timeline says
+/// that, rather than that the feature does not exist. Done after the rebuild
+/// because a checkpoint keeps each feature's error while later ones change.
+/// The code is internal to this pass and is not sent.
+fn forward_references(errors: &mut [FeatureError], raw: &[Value], timeline: &[Step]) {
+    for e in errors.iter_mut().filter(|e| e.code.as_deref() == Some(MISSING_FEATURE)) {
+        e.code = None;
+        let Some(me) = timeline.iter().position(|s| Some(s.id.as_str()) == e.feature_id.as_deref()) else {
+            continue;
+        };
+        let later: Vec<String> = timeline[me + 1..]
+            .iter()
+            .map(|s| s.id.clone())
+            .filter(|id| !id.is_empty() && e.message.contains(id.as_str()))
+            .collect();
+        let Some(r) = raw.get(me).and_then(|node| references_any(node, &later)) else {
+            continue;
+        };
+        let Some(step) = timeline.iter().find(|s| s.id == r) else { continue };
+        let this = &timeline[me];
+        let (prefix, what) = if this.kind.starts_with("pattern") {
+            ("Pattern: ", "pattern".to_owned())
+        } else {
+            ("", this.kind.clone())
+        };
+        let named = |s: &Step| if s.label == s.kind { format!("{} {}", s.kind, s.id) } else { format!("{} ({})", s.label, s.id) };
+        e.message = format!(
+            "{prefix}{} comes after this {what} in the timeline, and a feature can only use what is above it. Move {} above {}, or move {} below it.",
+            named(step),
+            step.id,
+            this.id,
+            this.id,
+        );
+    }
+}
+
+fn datum_line(raw: &Value) -> Option<[[f64; 3]; 2]> {
+    if raw.get("type").and_then(Value::as_str) != Some("datumAxis") {
+        return None;
+    }
+    let v = |k: &str| -> Option<[f64; 3]> {
+        let a = raw.get(k)?.as_array()?;
+        Some([a.first()?.as_f64()?, a.get(1)?.as_f64()?, a.get(2)?.as_f64()?])
+    };
+    Some([v("origin")?, v("dir")?])
+}
+
 fn label_of(raw: &Value) -> String {
     let s = |k: &str| raw.get(k).and_then(Value::as_str).filter(|s| !s.is_empty());
     s("name")
@@ -851,6 +911,7 @@ pub fn rebuild_from(
             id: r.get("id").and_then(Value::as_str).unwrap_or("").to_owned(),
             kind: r.get("type").and_then(Value::as_str).unwrap_or("").to_owned(),
             label: label_of(r),
+            line: datum_line(r),
         })
         .collect();
     let mut errors: Vec<FeatureError> = Vec::new();
@@ -1018,6 +1079,8 @@ pub fn rebuild_from(
             }
         }
     }
+
+    forward_references(&mut errors, &raw_features, &ctx.timeline);
 
     let body_ids = ctx.ids.resulting_map();
     let bodies = std::mem::take(&mut ctx.bodies)
