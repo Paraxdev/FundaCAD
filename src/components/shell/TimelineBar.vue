@@ -19,6 +19,8 @@ import { getUnit, onUnitChange } from "../../ui/units";
 import FeatureProperties from "./FeatureProperties.vue";
 import { useSelectionOffers } from "../../composables/useSelectionOffers";
 import { relatedFeatureIds } from "../../ui/relatedFeatures";
+import { routeTreeClick, treePickWaiting } from "../../ui/treePick";
+import { featurePick } from "../../app/featurePick";
 import type { Feature } from "../../types";
 
 const engine = useEngine();
@@ -217,12 +219,18 @@ function chipTitle(f: { id: string; type: string; inactive?: boolean }, i: numbe
 function busyElsewhere(): boolean {
   return engine.toolBusy() || engine.sketch.active;
 }
+// A tool waiting for a pick takes the chip the way it takes an Items row.
 function onChipClick(id: string) {
+  const f = treePickWaiting() ? store.document.features.find((x) => x.id === id) : undefined;
+  if (f) {
+    routeTreeClick(featurePick(engine, f), { busyHint: () => null, hint: (t) => engine.setStatus(t, "") });
+    return;
+  }
   if (busyElsewhere()) return;
   timeline.select(id);
 }
 function onChipDblclick(id: string) {
-  if (busyElsewhere()) return;
+  if (busyElsewhere() || treePickWaiting()) return;
   timeline.edit(id);
 }
 // --- renaming ------------------------------------------------------------
