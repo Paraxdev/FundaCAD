@@ -163,6 +163,12 @@
   overflow-y: auto;
   white-space: normal;
   padding: 0 var(--s-2) var(--s-2);
+  // Scroll anchoring fights the properties panel opening under a clicked chip:
+  // the browser picks an anchor that shifts the whole list, so a real second
+  // click of a double-click lands on the newly moved row below, not the chip,
+  // and double-click-to-edit silently does nothing. The list never needs to
+  // hold a scroll position across a resize it caused itself.
+  overflow-anchor: none;
 }
 #timeline .timeline-track {
   flex-direction: column;
