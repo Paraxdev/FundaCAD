@@ -3477,7 +3477,10 @@ export class Viewport {
     this.motion.sample(period, now);
     // Still watched in performance mode, where a stutter offers potato mode instead.
     if (this.potato) return;
-    if (this.stutter.sample(period)) this.setStuttering(true);
+    // Judged on what a full quality frame costs, or a machine that only keeps up
+    // at a reduced size is never offered potato mode.
+    const full = this.motionScale < 1 ? this.motion.fullPeriod : 0;
+    if (this.stutter.sample(full > 0 ? full : period)) this.setStuttering(true);
   }
 
   private motion = new MotionQuality();

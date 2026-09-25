@@ -1,7 +1,7 @@
 // Cheaper frames while the camera moves, on a machine too slow to move it at full
 // quality. A reduced level draws the canvas at a lower pixel ratio, with 1px edge
-// lines and without the bloom and blur passes (PostChain); the camera coming to
-// rest puts full quality back for the frame that stays on screen.
+// lines and without the bloom and blur passes (PostChain). When the canvas
+// shrinks and grows back is the viewport's call (Viewport.applyMotionScale).
 //
 // Note: it is the canvas that shrinks, not an offscreen target. Under SwiftShader
 // the frame period follows the canvas size far more than the draw: a half size
@@ -42,6 +42,12 @@ export class MotionQuality {
   private stepLevel = 0;
   private slowLevel = -1;
   private slowUntil = 0;
+  private fullMedian = 0;
+
+  /** The last median measured at full quality, 0 before there is one. */
+  get fullPeriod(): number {
+    return this.fullMedian;
+  }
 
   get level(): number {
     return this.lvl;
@@ -64,6 +70,7 @@ export class MotionQuality {
     const med = median(this.window);
     this.window = [];
     this.lastMedian = med;
+    if (this.lvl === 0) this.fullMedian = med;
 
     if (this.stepFrom > 0) {
       const from = this.stepFrom;
@@ -123,6 +130,7 @@ export class MotionQuality {
     this.stepLevel = 0;
     this.slowLevel = -1;
     this.slowUntil = 0;
+    this.fullMedian = 0;
   }
 
   private mayRise(now: number): boolean {
