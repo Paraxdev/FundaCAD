@@ -9,7 +9,7 @@
 import * as THREE from "three";
 import { bodyOfFace, edgeObjects, type BodyMesh, type ModelView } from "./render";
 import type { EdgeRef } from "./edgeLines";
-import { makeSelectionGlow, removeSelectionGlows, type GlowKind } from "./selectionGlow";
+import { makeFaceHoverOverlay, makeSelectionGlow, removeSelectionGlows, type GlowKind } from "./selectionGlow";
 
 const EDGE_BASE = new THREE.Color(0x1b1f24);
 const HOVER = new THREE.Color(0xffd089); // pale hot amber (under cursor)
@@ -67,6 +67,10 @@ export class Highlighter {
    *  the body mesh, so it follows a move-ghost drag and is torn down with the
    *  model; keyed here so a hover-then-select swaps the intensity cleanly. */
   private bodyGlows = new Map<string, THREE.Mesh>();
+  /** The hovered faces' overlay on a glowing body (makeFaceHoverOverlay), kept
+   *  by key once taken down, since every pointer move clears the hover and sets
+   *  it again. */
+  private hoverOverlay: { key: string; meshes: THREE.Mesh[]; shown: boolean } | null = null;
 
   private bodyById(bodyId: string): BodyMesh | undefined {
     if (!this.byId) {
@@ -138,6 +142,73 @@ export class Highlighter {
     for (const f of faceIds) {
       if (!before.has(f) && !this.selectedFaces.has(f)) this.paintFace(f, HOVER);
     }
+    this.syncHoverOverlay();
+  }
+
+  private syncHoverOverlay() {
+    const faces = this.hoveredFaces.filter((f) => {
+      if (this.selectedFaces.has(f)) return false;
+      const body = bodyOfFace(this.view, f);
+      return !!body && this.bodyGlows.has(body.id);
+    });
+    const key = faces.join(",");
+    const cur = this.hoverOverlay;
+    if (!faces.length) {
+      if (cur?.shown) this.showOverlay(cur, faces);
+      return;
+    }
+    if (cur && cur.key === key) {
+      if (!cur.shown) this.showOverlay(cur, faces);
+      return;
+    }
+    if (cur) {
+      for (const m of cur.meshes) {
+        m.removeFromParent();
+        m.geometry.dispose();
+      }
+      this.hoverOverlay = null;
+    }
+    if (!faces.length) return;
+    const next = { key, meshes: [] as THREE.Mesh[], shown: false };
+    const byBody = new Map<BodyMesh, number[]>();
+    for (const f of faces) {
+      const body = bodyOfFace(this.view, f)!;
+      const tris = body.faceTriangles.get(f);
+      if (!tris) continue;
+      const list = byBody.get(body) ?? [];
+      list.push(...tris);
+      byBody.set(body, list);
+    }
+    for (const [body, tris] of byBody) {
+      const pos = body.mesh.geometry.getAttribute("position");
+      const index = body.mesh.geometry.getIndex();
+      if (!pos || !index) continue;
+      const out = new Float32Array(tris.length * 9);
+      let o = 0;
+      for (const t of tris) {
+        for (let k = 0; k < 3; k++) {
+          const v = index.getX(t * 3 + k);
+          out[o++] = pos.getX(v);
+          out[o++] = pos.getY(v);
+          out[o++] = pos.getZ(v);
+        }
+      }
+      const mesh = makeFaceHoverOverlay(out, HOVER);
+      mesh.userData.body = body.id;
+      next.meshes.push(mesh);
+    }
+    this.hoverOverlay = next;
+    this.showOverlay(next, faces);
+  }
+
+  private showOverlay(o: { meshes: THREE.Mesh[]; shown: boolean }, faces: readonly number[]) {
+    if (!faces.length) {
+      for (const m of o.meshes) m.removeFromParent();
+      o.shown = false;
+      return;
+    }
+    for (const m of o.meshes) this.bodyById(m.userData.body as string)?.mesh.add(m);
+    o.shown = true;
   }
 
   clearHover() {
@@ -165,6 +236,7 @@ export class Highlighter {
       this.selectedFaces.add(faceId);
       this.paintFace(faceId, SELECT);
     }
+    this.syncHoverOverlay();
   }
 
   /** Add to the selection without the toggle. A box drag over a region that
@@ -200,6 +272,7 @@ export class Highlighter {
     for (const f of this.selectedFaces) this.restoreFace(f);
     this.selectedEdges.clear();
     this.selectedFaces.clear();
+    this.syncHoverOverlay();
   }
 
   // --- whole-body selection (Bodies selection mode) ---------------------------
@@ -264,6 +337,7 @@ export class Highlighter {
     const glow = makeSelectionGlow(body.mesh.geometry, kind);
     body.mesh.add(glow);
     this.bodyGlows.set(bodyId, glow);
+    this.syncHoverOverlay();
   }
 
   /** Remove a body's glow. Neither half is disposed: the geometry is the body's
@@ -273,6 +347,7 @@ export class Highlighter {
     if (!glow) return;
     glow.removeFromParent();
     this.bodyGlows.delete(bodyId);
+    this.syncHoverOverlay();
   }
 
   private paintFace(faceId: number, color: THREE.Color) {

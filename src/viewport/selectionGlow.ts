@@ -88,15 +88,42 @@ function glowMaterial(kind: GlowKind): THREE.ShaderMaterial {
 }
 
 const GLOW_NAME = "selection-glow";
+const FACE_HOVER_NAME = "face-hover-overlay";
 
-/** Take every glow off a body mesh. A rebuild reuses an unchanged body's mesh
- *  but makes a new Highlighter, which has no record of the glows the old one
- *  parented there, so without this they stay lit for good. */
+/** Take every glow and face hover overlay off a body mesh. A rebuild reuses an
+ *  unchanged body's mesh but makes a new Highlighter, which has no record of
+ *  the overlays the old one parented there, so without this they stay lit. */
 export function removeSelectionGlows(mesh: THREE.Object3D) {
   for (let i = mesh.children.length - 1; i >= 0; i--) {
     const c = mesh.children[i]!;
-    if (c.name === GLOW_NAME) c.removeFromParent();
+    if (c.name === GLOW_NAME || c.name === FACE_HOVER_NAME) c.removeFromParent();
   }
+}
+
+let faceHoverMaterial: THREE.MeshBasicMaterial | null = null;
+
+/** The face under the cursor on a body that already glows. The vertex tint a
+ *  face hover normally paints sits under the glow and barely reads through it,
+ *  so the face is drawn again above the glow, opaque enough to be unmistakable. */
+export function makeFaceHoverOverlay(positions: Float32Array, color: THREE.Color): THREE.Mesh {
+  faceHoverMaterial ??= new THREE.MeshBasicMaterial({
+    transparent: true,
+    opacity: 0.72,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
+  });
+  faceHoverMaterial.color.copy(color);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  const mesh = new THREE.Mesh(geo, faceHoverMaterial);
+  mesh.name = FACE_HOVER_NAME;
+  mesh.raycast = () => {};
+  mesh.castShadow = false;
+  mesh.receiveShadow = false;
+  mesh.renderOrder = 4; // above the glow's 3
+  return mesh;
 }
 
 /** Build the overlay mesh for a body: a second draw of its geometry, non-pickable
