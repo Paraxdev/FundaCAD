@@ -94,8 +94,8 @@ export interface WireRebuildResult {
   // where each datum axis/point that follows geometry resolved to, same header,
   // same reason: a datum that follows an edge belongs to no single body
   datumMarks?: RebuildResult["datumMarks"];
-  // where each tracked face's outline sits, same header, same reason
-  faceCenters?: RebuildResult["faceCenters"];
+  // where each tracked face and its positions went, same header, same reason
+  trackedFaces?: RebuildResult["trackedFaces"];
   bodyIds?: RebuildResult["bodyIds"];
   // legacy direct-mesh shape (only when `protocol` is absent)
   mesh?: RebuildResult["mesh"];
@@ -276,7 +276,7 @@ export class RebuildAssembly {
       // body etag unchanged, so it joins the signature so a no-op rebuild does
       // not hand back the previous rebuild's datum placement.
       head.datumMarks,
-      head.faceCenters,
+      head.trackedFaces,
       head.bodyIds,
     ]);
     if (
@@ -337,7 +337,7 @@ export class RebuildAssembly {
     if (head.datumPlanes) out.datumPlanes = head.datumPlanes;
     if (head.sketchPlanes) out.sketchPlanes = head.sketchPlanes;
     if (head.datumMarks) out.datumMarks = head.datumMarks;
-    if (head.faceCenters) out.faceCenters = head.faceCenters;
+    if (head.trackedFaces) out.trackedFaces = head.trackedFaces;
     if (head.bodyIds) out.bodyIds = head.bodyIds;
 
     const asm = new RebuildAssembly(out, arrays, plan, sig);

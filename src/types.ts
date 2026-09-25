@@ -47,9 +47,11 @@ export type Selector = (
   | { kind: "face"; by: "normal"; dir: [number, number, number] }
   | { kind: "face"; by: "nearest"; point: [number, number, number] }
   // One flat face kept by its outward normal, so it is found again wherever a
-  // change upstream moves it. `center` is where its outline's centre was when
-  // this was written; a hole's positions move with the face from there.
-  | { kind: "face"; by: "tracked"; point: [number, number, number]; normal: [number, number, number]; center?: [number, number, number] }
+  // change upstream moves it. `extent` is its outline's [umin, umax, vmin, vmax]
+  // in the engine's face frame when this was written: a hole's positions keep
+  // their offset from the nearest of each axis's min, middle or max. `center`,
+  // the older form, moves every position with the outline's centre.
+  | { kind: "face"; by: "tracked"; point: [number, number, number]; normal: [number, number, number]; center?: [number, number, number]; extent?: [number, number, number, number] }
   // --- v2: discriminating, drift-robust selection ---
   // `match` re-finds ONE entity by scored geometric fingerprint; `nth` breaks a
   // genuine tie (symmetric twins) by a rebuild-stable canonical order.
@@ -688,6 +690,12 @@ export interface ResolveDiag {
 export type F32Wire = number[] | Float32Array;
 export type U32Wire = number[] | Uint32Array;
 
+export interface TrackedFaceRecord {
+  extent?: [number, number, number, number];
+  point: Vec3;
+  points: Vec3[];
+}
+
 export interface RebuildResult {
   mesh: { positions: F32Wire; indices: U32Wire; faceIds: U32Wire; normals?: F32Wire };
   // `smooth`: the two faces meet tangentially here (a fillet's boundary), drawn per the tangent edges setting.
@@ -711,8 +719,9 @@ export interface RebuildResult {
   sketchPlanes?: Record<string, PlaneDef>;
   // Only datums that follow geometry.
   datumMarks?: Record<string, DatumMark>;
-  /** Where the outline centre of each feature's `tracked` face is this build, by feature id. */
-  faceCenters?: Record<string, [number, number, number]>;
+  /** Each feature's `tracked` face this build, by feature id: its outline extent
+   *  now and where the pick point and the feature's own positions went. */
+  trackedFaces?: Record<string, TrackedFaceRecord>;
   /** The document's body id map after this build, sent only when it changed. */
   bodyIds?: Record<string, string>;
 }
