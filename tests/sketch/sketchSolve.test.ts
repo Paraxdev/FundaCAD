@@ -483,3 +483,55 @@ describe("SK-3: coincident reaches a circle centre and a rectangle corner", () =
     expect(outPt.y).toBeCloseTo(0, 3);
   });
 });
+
+describe("SK-6: a corner pinned to the Origin stays put under an unrelated dim", () => {
+  // sketchMode's own pointerdown handler creates exactly this: a fixed
+  // construction point at (0,0), which merges (by position, coincKey) with
+  // whatever entity corner was drawn on top of it. This test is the solver's
+  // half of the fix: once merged, that corner is genuinely un-movable, so a
+  // LATER dimension that only concerns some other, free entity has nowhere
+  // else to land its DOF but that other entity.
+  const rect = (id: string, x: number, y: number, width: number, height: number): ResolvedEntity =>
+    ({ type: "rectangle", id, x, y, width, height }) as ResolvedEntity;
+  const circ = (id: string, x: number, y: number, r: number): ResolvedEntity => ({ type: "circle", id, x, y, radius: r });
+  const originPt: ResolvedEntity = { type: "point", id: "o", x: 0, y: 0, construction: true };
+
+  it("moves the circle, not the rectangle, when a p2lDistance to the rectangle's edge is added", async () => {
+    // rectangle centred so its bottom-left corner sits exactly on the origin
+    const r1 = rect("r1", 25, 10, 50, 20);
+    const c1 = circ("c1", 12, 6, 3); // free-floating, not yet dimensioned to anything
+    const cons: SketchConstraint[] = [
+      { type: "fix", e: "o", p: 0 },
+      { type: "distance", line: "r1~0", value: 50 }, // SK-2: W/H are real constraints
+      { type: "distance", line: "r1~1", value: 20 },
+      // circle centre to the rectangle's LEFT edge (r1~3), a value the circle's
+      // CURRENT position does not already satisfy, so something has to move.
+      { type: "p2lDistance", e: "c1", p: 0, line: "r1~3", value: 15 },
+    ];
+    const r = await compileAndSolve([originPt, r1, c1], cons);
+    expect(r.ok).toBe(true);
+    expect(r.conflicts).toEqual([]);
+    const outRect = r.entities.find((e) => e.id === "r1") as { x: number; y: number; width: number; height: number };
+    // unmoved: still centred at (25,10), the corner the origin point pinned
+    expect(outRect.x).toBeCloseTo(25, 6);
+    expect(outRect.y).toBeCloseTo(10, 6);
+    expect(outRect.width).toBeCloseTo(50, 6);
+    expect(outRect.height).toBeCloseTo(20, 6);
+    const outCirc = r.entities.find((e) => e.id === "c1") as { x: number; y: number };
+    expect(outCirc.x).toBeCloseTo(15, 6); // the circle took the new distance instead
+  });
+
+  it("merges the corner with the origin point rather than adding a second point at the same spot", async () => {
+    const r1 = rect("r1", 25, 10, 50, 20);
+    const cons: SketchConstraint[] = [{ type: "fix", e: "o", p: 0 }];
+    const r = await compileAndSolve([originPt, r1], cons);
+    expect(r.ok).toBe(true);
+    // 4 DOF (2 free corners) minus the 2 the fixed corner removes: width and
+    // height are still free, but that corner and the rectangle's orientation
+    // are not, exactly what sharing the origin point's solver id predicts.
+    expect(r.dof).toBe(2);
+    const outRect = r.entities.find((e) => e.id === "r1") as { x: number; y: number };
+    expect(outRect.x).toBeCloseTo(25, 6);
+    expect(outRect.y).toBeCloseTo(10, 6);
+  });
+});

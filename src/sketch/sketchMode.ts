@@ -35,7 +35,7 @@ import { SolverUnavailable } from "./solver";
 import { resolveRealEntities, toSketchEntity } from "./resolve";
 import { applyDrivingDimsDirect } from "./directDims";
 import { expandPattern, translated } from "./pattern";
-import { candidatesFromEntities, dragSnap, originCandidate, showsSnapMarker, snap, type SnapGuide, type SnapKind, type SnapCandidate } from "./snap";
+import { candidatesFromEntities, dragSnap, originCandidate, pinOriginPoint, showsSnapMarker, snap, type SnapGuide, type SnapKind, type SnapCandidate } from "./snap";
 import type { ResolvedEntity } from "./snap";
 import { detectRegions, entityPolyline, rectCorners, rectFromThreePoints } from "./region";
 import { AreaBox } from "../viewport/areaBox";
@@ -1539,6 +1539,21 @@ export class SketchMode {
     if (!hit) return;
     e.preventDefault();
     const p = hit.p;
+
+    // SK-6: a click that visibly snapped to the Origin marker while DRAWING
+    // (never select/modify/pattern, which have their own notions of what a
+    // click here means) is a claim the user is making about where this corner
+    // belongs, not a coincidence the solver should feel free to undo the next
+    // time something unrelated gets dimensioned. Pin it now, the same real,
+    // fixed point the dimension tool would create picking the Origin by hand
+    // (snap.ts pinOriginPoint): any entity whose corner lands exactly here
+    // (this click, or the next) shares that point and inherits the fix.
+    if (
+      hit.kind === "center" && hit.label === "Origin" &&
+      this.tool !== "select" && !MODIFY_TOOLS.has(this.tool) && !PATTERN_TOOLS.has(this.tool)
+    ) {
+      pinOriginPoint(this.entities, this.constraints, p, newEntityId);
+    }
 
     if (this.tool === "select") {
       // Note: Chromium reports detail 0 on pointerdown, so a double press is timed here

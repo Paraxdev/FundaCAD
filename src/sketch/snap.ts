@@ -4,7 +4,7 @@
 // fallback.
 
 import * as THREE from "three";
-import type { DimPlace, ProjectedCurve, ProjectedSource } from "../types";
+import type { DimPlace, ProjectedCurve, ProjectedSource, SketchConstraint } from "../types";
 import { asRound } from "./entityDims";
 import { rectCorners } from "./region";
 import type { SketchPlane } from "./plane";
@@ -221,6 +221,53 @@ function axisName(dir: THREE.Vector3): string {
   const c = [dir.x, dir.y, dir.z];
   const i = c.findIndex((v) => Math.abs(Math.abs(v) - 1) < 1e-6);
   return i >= 0 ? `${names[i]} Axis` : "Axis";
+}
+
+/** An already-fixed construction point sitting exactly on `pos`, if the sketch
+ *  has one. Shared by the dimension tool (repeat-dimensioning to the origin
+ *  reuses it) and pinOriginPoint below, so the two never disagree about what
+ *  counts as "already pinned here". */
+export function existingFixedPoint(
+  entities: ResolvedEntity[],
+  constraints: SketchConstraint[],
+  pos: THREE.Vector2,
+): Extract<ResolvedEntity, { type: "point" }> | null {
+  const fixed = new Set(
+    constraints.filter((c): c is Extract<SketchConstraint, { type: "fix" }> => c.type === "fix").map((c) => c.e),
+  );
+  for (const e of entities) {
+    if (e.type === "point" && fixed.has(e.id) && Math.hypot(e.x - pos.x, e.y - pos.y) < 1e-6) return e;
+  }
+  return null;
+}
+
+/** Turn a bare position ON the origin into real, fixed geometry: reuse a
+ *  construction point already pinned there, or create one. Called the moment a
+ *  drawing tool's click actually SNAPS to the origin (never on a hover alone,
+ *  the same rule dimFlow's commitOriginPick follows).
+ *
+ *  No coincident constraint is added, and none is needed: sketchSolve merges
+ *  any two points at the same position into one solver point (coincKey), so an
+ *  entity's corner drawn exactly here shares this point's id and inherits its
+ *  `fix` for free. That is also why this is idempotent, drawing a second
+ *  corner on the origin finds the first point already there and reuses it
+ *  rather than stacking a duplicate.
+ *
+ *  This is what SK-6 was missing: the origin looked like a snap target but had
+ *  no geometry of its own to attach to, so a corner that landed on it did so by
+ *  numeric coincidence only, free for the next unrelated solve to move. */
+export function pinOriginPoint(
+  entities: ResolvedEntity[],
+  constraints: SketchConstraint[],
+  pos: THREE.Vector2,
+  newId: () => string,
+): Extract<ResolvedEntity, { type: "point" }> {
+  const existing = existingFixedPoint(entities, constraints, pos);
+  if (existing) return existing;
+  const point: Extract<ResolvedEntity, { type: "point" }> = { type: "point", id: newId(), x: pos.x, y: pos.y, construction: true };
+  entities.push(point);
+  constraints.push({ type: "fix", e: point.id, p: 0 });
+  return point;
 }
 
 /** Where a dragged point lands: on an anchor it is close to, or on a named axis

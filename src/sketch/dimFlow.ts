@@ -29,7 +29,7 @@ import {
   type DimOptions, type DimPlan, type DimTarget,
 } from "./dimensionTool";
 import { isDimConstraint, newEntityId } from "./id";
-import { originCandidate } from "./snap";
+import { existingFixedPoint, originCandidate, pinOriginPoint } from "./snap";
 import type { FieldKind } from "../document/numFields";
 import type { ResolvedEntity } from "./snap";
 import { setPrompt } from "../ui/prompt";
@@ -259,19 +259,6 @@ export class DimFlow {
     return originCandidate(this.host.plane())[0]?.p ?? null;
   }
 
-  /** An already-fixed construction point sitting exactly on the origin, if the
-   *  sketch has one (read-only, so repeat dimensioning to the origin reuses it
-   *  instead of piling up duplicate points). */
-  private existingOriginPoint(pos: THREE.Vector2): Extract<ResolvedEntity, { type: "point" }> | null {
-    const fixed = new Set(
-      this.host.constraints().filter((c) => c.type === "fix").map((c) => (c as Extract<SketchConstraint, { type: "fix" }>).e),
-    );
-    for (const e of this.host.entities()) {
-      if (e.type === "point" && fixed.has(e.id) && Math.hypot(e.x - pos.x, e.y - pos.y) < 1e-6) return e;
-    }
-    return null;
-  }
-
   /** SK-4: the Origin gets pick priority within its own hover radius, the same
    *  rule pickDimTarget already gives a real point over an edge (its own
    *  comment: "reference points are preferred over curve bodies"); checked
@@ -283,7 +270,8 @@ export class DimFlow {
   private pickOrigin(p: THREE.Vector2): DimTarget | null {
     const pos = this.originAnchorPos();
     if (!pos || pos.distanceTo(p) > this.host.pickTol()) return null;
-    const e: ResolvedEntity = this.existingOriginPoint(pos) ?? { type: "point", id: "__origin__", x: pos.x, y: pos.y, construction: true };
+    const e: ResolvedEntity = existingFixedPoint(this.host.entities(), this.host.constraints(), pos)
+      ?? { type: "point", id: "__origin__", x: pos.x, y: pos.y, construction: true };
     return { kind: "point", e, p: 0, pos: pos.clone() };
   }
 
@@ -293,14 +281,14 @@ export class DimFlow {
    *  produce, so the dimension it feeds is the same p2pDistance/p2lDistance
    *  the pair matrix already builds for any other point, no new constraint
    *  kind and no solver change needed. A no-op when the pick already resolved
-   *  to a real, existing point. */
+   *  to a real, existing point. Shares its geometry-creation with the drawing
+   *  tools' own origin-snap (snap.ts pinOriginPoint), so a rectangle corner
+   *  snapped to the Origin and a dimension picked from it land on the SAME
+   *  fixed point rather than two that merely happen to share a position. */
   private commitOriginPick(t: DimTarget): DimTarget {
     if (t.kind !== "point" || t.e.id !== "__origin__") return t;
-    const id = newEntityId();
-    const ent: ResolvedEntity = { type: "point", id, x: t.pos.x, y: t.pos.y, construction: true };
-    this.host.entities().push(ent);
-    this.host.constraints().push({ type: "fix", e: id, p: 0 });
-    return { kind: "point", e: ent, p: 0, pos: t.pos.clone() };
+    const point = pinOriginPoint(this.host.entities(), this.host.constraints(), t.pos, newEntityId);
+    return { kind: "point", e: point, p: 0, pos: t.pos.clone() };
   }
 
   private dimPick(t: DimTarget, ev: PointerEvent) {
