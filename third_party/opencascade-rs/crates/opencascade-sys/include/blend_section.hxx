@@ -1230,17 +1230,30 @@ inline std::vector<TopoDS_Shape> apply_trims(std::vector<TopoDS_Shape> tools, co
   return tools;
 }
 
-inline Opt<gp_Ax1> common_axis(const BRepAdaptor_Curve &crv, const std::vector<TopoDS_Face> &faces) {
+inline bool straight_meridian(const TopoDS_Face &f) {
+  GeomAbs_SurfaceType kind = BRepAdaptor_Surface(f).GetType();
+  return kind == GeomAbs_Plane || kind == GeomAbs_Cylinder || kind == GeomAbs_Cone;
+}
+
+// A torus or sphere on the axis is revolved too, for a fillet only, which is
+// what an earlier rim fillet leaves next to a cup's rim.
+inline Opt<gp_Ax1> common_axis(const BRepAdaptor_Curve &crv, const std::vector<TopoDS_Face> &faces, bool curved_ok) {
   if (crv.GetType() != GeomAbs_Circle) return {};
   gp_Ax1 ax = crv.Circle().Axis();
+  auto on_axis = [&](const gp_Ax1 &other) {
+    return other.IsParallel(ax, 1e-6) && gp_Lin(ax).Distance(other.Location()) < 1e-6;
+  };
   for (const TopoDS_Face &f : faces) {
     BRepAdaptor_Surface ad(f);
     GeomAbs_SurfaceType kind = ad.GetType();
     if (kind == GeomAbs_Plane) {
       if (!ad.Plane().Axis().IsParallel(ax, 1e-6)) return {};
     } else if (kind == GeomAbs_Cylinder || kind == GeomAbs_Cone) {
-      gp_Ax1 other = kind == GeomAbs_Cylinder ? ad.Cylinder().Axis() : ad.Cone().Axis();
-      if (!(other.IsParallel(ax, 1e-6) && gp_Lin(ax).Distance(other.Location()) < 1e-6)) return {};
+      if (!on_axis(kind == GeomAbs_Cylinder ? ad.Cylinder().Axis() : ad.Cone().Axis())) return {};
+    } else if (curved_ok && kind == GeomAbs_Torus) {
+      if (!on_axis(ad.Torus().Axis())) return {};
+    } else if (curved_ok && kind == GeomAbs_Sphere) {
+      if (gp_Lin(ax).Distance(ad.Sphere().Location()) >= 1e-6) return {};
     } else {
       return {};
     }
@@ -1291,12 +1304,21 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
   double reach = size * (g2 ? G2_SETBACK : 1.0) + (std::isnan(size2) ? 0.0 : size2);
   double fuzz = std::max(tol * 10, 1e-5);
 
-  Opt<gp_Ax1> axis = closed ? common_axis(crv, faces) : Opt<gp_Ax1>();
+  Opt<gp_Ax1> axis = closed ? common_axis(crv, faces, !chamfer) : Opt<gp_Ax1>();
   if (axis) {
     Frame f0 = frame(t0);
-    for (auto &sd : sides) sd->planar = true;
+    for (auto &sd : sides) sd->planar = sd->planar || straight_meridian(sd->face);
     sides[0]->normal_on_edge_cached = f0.n1;
     sides[1]->normal_on_edge_cached = f0.n2;
+    // A curved meridian keeps its surface while the ball rests on the face. A
+    // ball too big for it would land on the far side of the tube, so past the
+    // face it carves along the face's tangent plane at the edge, like a flat
+    // face whose contact runs past its end.
+    if (!sides[0]->planar || !sides[1]->planar) {
+      Contacts c = contacts(f0.P, f0.T, sides, s, chamfer, size, size2, g2);
+      for (int k = 0; k < 2; ++k)
+        if (!sides[k]->planar && !sides[k]->contains(c.Q[k], fuzz)) sides[k]->planar = true;
+    }
     Section sec = section(f0.P, f0.T, sides, s, chamfer, size, size2, g2, profile, &*axis, margin);
     BRepBuilderAPI_MakeFace face(sec.wire, true);
     if (face.IsDone()) {
