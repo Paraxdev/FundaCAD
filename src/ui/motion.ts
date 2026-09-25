@@ -9,6 +9,7 @@
 // already asked their system for less motion is not shown it first.
 
 import { readSetting } from "./storedSetting";
+import { renderPrefs } from "./renderPrefs";
 
 const KEY = "fundacad.animations";
 
@@ -36,6 +37,12 @@ apply();
 
 export function motionOn(): boolean {
   return on;
+}
+
+/** Whether the camera flies to a new view or jumps there. Potato mode jumps, a
+ *  flight is a run of full frames the machine cannot afford. */
+export function cameraFlightsOn(): boolean {
+  return on && !renderPrefs().potatoMode;
 }
 
 export function setMotion(next: boolean) {
