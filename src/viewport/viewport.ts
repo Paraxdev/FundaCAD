@@ -2127,6 +2127,7 @@ export class Viewport {
     this.streaming = false;
     this.streamMemo = null;
     this.model = null;
+    this.highlighter?.dispose();
     this.highlighter = null;
     this.lastResult = null;
     this.picker.invalidate();
@@ -2136,6 +2137,7 @@ export class Viewport {
   /** Must be a fresh ModelView each time: caches in render.ts and Highlighter key on its identity. */
   private adoptProgressiveView(view: ModelView) {
     this.model = view;
+    this.highlighter?.dispose();
     this.highlighter = new Highlighter(view);
     this.dropKey = "";
     this.picker.invalidate();
@@ -2252,6 +2254,7 @@ export class Viewport {
     // hideFlushSeams early-returns on an edgeless model, missing a reused body's reset.
     for (const d of edgeObjects(this.model)) d.flush();
     this.picker.invalidate(); // edge geometry just changed, drop cached targets
+    this.highlighter?.dispose();
     this.highlighter = new Highlighter(this.model);
     this.dropKey = "";
     // Before applyAnalysis: setBase() reads the selected set.
@@ -2369,6 +2372,7 @@ export class Viewport {
       for (const d of edgeObjects(this.model)) this.scene.modelGroup.remove(d.object);
       disposeModel(this.model);
       this.model = null;
+      this.highlighter?.dispose();
       this.highlighter = null;
     }
     this.targetGridZ = 0; // no model → grid back on the world XY plane
