@@ -160,15 +160,34 @@ export class ExtrudeTool {
   /** `opts.grabAt` is the direct-manipulation entry (features/regionNudge.ts):
    *  the user pressed the handle that appears the moment a profile is selected,
    *  so we arm from that pre-selection AND begin scrubbing inside the same
-   *  pointerdown. */
-  start(onDone: (id: string | null) => void, opts?: { grabAt?: { x: number; y: number } }) {
-    if (this.active) return;
+   *  pointerdown.
+   *
+   *  `opts.sketch` is a sketch chosen in the tree that is hidden, usually because
+   *  an earlier extrude consumed it. It is shown for the length of the gesture
+   *  and every area of it is pre-selected, so a second extrude of the same
+   *  profile is a new feature. Returns false when that sketch has no closed area. */
+  start(
+    onDone: (id: string | null) => void,
+    opts?: { grabAt?: { x: number; y: number }; sketch?: string },
+  ): boolean {
+    if (this.active) return false;
+    if (opts?.sketch) {
+      this.forcedSketchId = opts.sketch;
+      this.overlay.update(this.store.document);
+      const points = this.overlay.regionPointsForSketch(opts.sketch);
+      if (!points.length) {
+        this.forcedSketchId = null;
+        this.overlay.update(this.store.document);
+        return false;
+      }
+      this.overlay.selectRegionsByPoints(points);
+    }
     // Read the pre-selection BEFORE installing anything: a handle whose regions
     // have gone (the sketch was hidden or re-solved between the paint and the
     // press) must not arm the pick phase, which would be a bait-and-switch into
     // a tool nobody asked for, holding toolBusy() until noticed.
     const pre = this.overlay.selectedRegions();
-    if (opts?.grabAt && !pre.length) return;
+    if (opts?.grabAt && !pre.length) return false;
     this.active = true;
     this.phase = "pick";
     this.onDone = onDone;
@@ -187,6 +206,7 @@ export class ExtrudeTool {
     } else {
       setPrompt("Click a profile · Ctrl-click adds areas · Enter");
     }
+    return true;
   }
 
   /** Take hold of the arrow at (x, y) without a fresh pointerdown of our own,
@@ -1094,10 +1114,8 @@ export class ExtrudeTool {
   }
 
   cancel() {
-    if (this.editId) {
-      this.store.endEditPreview();
-      this.overlay.clearRegionSelection();
-    }
+    if (this.editId) this.store.endEditPreview();
+    if (this.editId || this.forcedSketchId) this.overlay.clearRegionSelection();
     this.cleanup();
     this.onDone?.(null);
   }

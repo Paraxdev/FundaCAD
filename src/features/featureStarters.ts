@@ -1390,11 +1390,29 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
         return;
       }
     }
+    const chosen = hiddenChosenSketch();
+    if (chosen) {
+      if (!extrude.start(committed, { sketch: chosen })) setStatus("That sketch has no closed profile to extrude", "");
+      return;
+    }
     if (overlay.regions.length === 0) {
       setStatus("Extrude needs a face or a closed sketch profile", "");
       return;
     }
     extrude.start(committed);
+  }
+
+  /** A sketch the user picked in the tree that shows no areas, the usual case
+   *  being one an earlier extrude consumed and hid. Its profile cannot be
+   *  clicked, so Extrude takes the sketch itself as the choice. An area already
+   *  picked in the viewport is preferred over it. */
+  function hiddenChosenSketch(): string | null {
+    const id = getSelectedFeature();
+    if (!id || !getSelectedFeatureExplicit()) return null;
+    if (overlay.selectedRegions().length) return null;
+    const f = store.document.features.find((x) => x.id === id);
+    if (f?.type !== "sketch") return null;
+    return overlay.regions.some((wr) => wr.sketchId === id) ? null : id;
   }
 
   /** The handle offered on a selected sketch profile (features/regionNudge.ts)
