@@ -219,6 +219,18 @@ describe("sectionOutline / insideOutline", () => {
     expect(insideOutline(o, [5, 5])).toBe(true);
     expect(insideOutline(o, [45, 5])).toBeNull();
   });
+
+  it("probes a sharp wedge on a small part near its corner, not past the part", () => {
+    // A 3 degree sliver 2mm long: the probe the ball's clearance alone asks
+    // for would sit far beyond its tip, in the air.
+    const a = (3 * Math.PI) / 180;
+    const sliver: EdgeSample = { point: [0, 0, 0], tangent: [0, 0, 1], into1: [1, 0, 0], into2: [Math.cos(a), Math.sin(a), 0], reach1: 2, reach2: 2 };
+    const tip: [number, number][] = [[0, 0], [2, 0], [2 * Math.cos(a), 2 * Math.sin(a)]];
+    const segs = segmentsOf(tip);
+    const o = sectionOutline(sliver, segs, segs.length / 4)!;
+    expect(Math.hypot(...o.ref)).toBeLessThanOrEqual(1);
+    expect(o.refInside).toBe(true);
+  });
 });
 
 describe("trimToSide", () => {
