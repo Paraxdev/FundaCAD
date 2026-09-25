@@ -12,7 +12,7 @@ import { useShellStore } from "../../stores/shell";
 import { featureMeta } from "../../ui/featureMeta";
 import Icon from "./Icon.vue";
 import { contextMenu } from "../../ui/menu";
-import { buildProgress, CANCEL_DELAY_MS } from "../../ui/buildProgress";
+import { buildProgress, CANCEL_DELAY_MS, historyShowsEmpty, waitLabel } from "../../ui/buildProgress";
 import { featureNotes } from "../../ui/featureNotes";
 import { gapIndexIn } from "../../ui/trackGaps";
 import { getUnit, onUnitChange } from "../../ui/units";
@@ -124,10 +124,6 @@ const notes = useBuildValue((b) =>
 const building = useBuildValue((b) => b.building);
 const progress = useBuildValue((b) => ({ progress: b.progress, meshed: b.meshed, meshTotal: b.meshTotal }));
 
-const chip = computed(() =>
-  buildProgress(progress.value.progress, progress.value.meshed, progress.value.meshTotal, features.value.length),
-);
-
 // --- busy / Cancel -------------------------------------------------------
 // Timestamp the TRANSITION into busy, not each emission: an op emits busy
 // frames throughout, and re-arming the delay on every one means it never
@@ -154,10 +150,16 @@ watch(
 );
 onUnmounted(() => { if (timer) clearTimeout(timer); });
 
-const showCancel = computed(() => busy.value.active && delayElapsed.value);
-const busyText = computed(() =>
-  busy.value.pct === null ? busy.value.label : `${busy.value.label} ${busy.value.pct}%`,
+const chip = computed(() =>
+  busy.value.waiting
+    ? { label: "waiting…", pct: 0 }
+    : buildProgress(progress.value.progress, progress.value.meshed, progress.value.meshTotal, features.value.length),
 );
+const busyText = computed(() => {
+  const b = busy.value;
+  if (b.waiting) return waitLabel(b.waiting);
+  return b.pct === null ? b.label : `${b.label} ${b.pct}%`;
+});
 
 // Cancelling is not instant (the engine kills the worker and spawns a fresh
 // one), so the button disables itself in flight, a second press would target
@@ -172,10 +174,11 @@ async function cancelBusy() {
   }
 }
 
-// `busy.active` joins this guard: importing into an EMPTY document is the most
-// common long operation there is, and without it the timeline would advertise
-// "start with a Sketch" for the whole 90+ seconds.
-const showEmpty = computed(() => features.value.length === 0 && !building.value && !busy.value.active);
+// An import into an EMPTY document is the most common long operation there is,
+// and without the busy check the timeline would advertise "start with a Sketch"
+// for the whole 90+ seconds.
+const showEmpty = computed(() => historyShowsEmpty(features.value.length, busy.value));
+const showCancel = computed(() => busy.value.active && delayElapsed.value && !showEmpty.value);
 
 // --- chips ---------------------------------------------------------------
 // The whole feature, not just its type: a boolean is named after the operation
@@ -537,7 +540,7 @@ function openMenu(e: MouseEvent, id: string, i: number) {
       class="timeline-cancel"
       :class="{ hidden: !showCancel }"
       :disabled="cancelling"
-      :title="busy.label || 'Stop the running operation'"
+      :title="busy.waiting ? 'Withdraw this request, the job it waits on carries on' : busy.label || 'Stop the running operation'"
       @click="cancelBusy()"
     >Cancel</button>
 

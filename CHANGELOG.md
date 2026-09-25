@@ -245,6 +245,18 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Fixed
 
+- **Another client's job no longer shows up as this document's rebuild.** With
+  an AI assistant (or any second client) running a long import on the same
+  engine, a freshly opened document's History said "Rebuilding" with a Cancel
+  that did nothing, while its own rebuild was simply waiting in the queue. The
+  engine now tells a client when its request waits behind someone else's job
+  and whose it is, so the History says "Waiting: Claude is importing a file",
+  an empty document keeps its empty state, and Cancel withdraws only this
+  window's own request, never the other job. Each connection also keeps its own
+  held document, so an edit sent as a delta can no longer land on a document
+  another client sent under the same revision number. The frame rate readout
+  says "render idle" rather than "idle", which read as the engine's state.
+
 - Changing a feature's `type` with the MCP `feature_update` now takes effect. The new type was dropped from the patch, so a fillet patched into a chamfer stayed a fillet and failed at the next build for want of its radius. The update is now checked as the new type straight away, and one missing a field the new type needs is refused with those fields named.
 
 - An `ofFace` edge selector now takes any face selector as its face, such as a face picked by a point, as well as a fingerprint. A fillet early in the timeline has no fingerprint yet for a face that later cuts reshape.

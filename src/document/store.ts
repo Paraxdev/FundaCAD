@@ -18,7 +18,7 @@ import {
 import type { CadDocument, Feature, ImportColorSource, ParamControl, ParamExtras, ParamTarget, PlaneSpec, ProjectedSource, ProjectionUpdate, RebuildReply, RebuildResult, ResolveDiag, Selector, ViewCubeSide, ViewOverride } from "../types";
 import { asFeature } from "../types";
 import { applyProjectionUpdate } from "../types";
-import type { FaceAxisReply, GeometryBackend, PatternAxisReply, ProjectionResult } from "../geometry/client";
+import type { EngineWait, FaceAxisReply, GeometryBackend, PatternAxisReply, ProjectionResult } from "../geometry/client";
 import { FORMAT_VERSION, migrateDocument } from "./migrate";
 import {
   ancestryOf, descendantsOf, type ElementDef, freshElementName, reparented,
@@ -105,10 +105,17 @@ export interface BusyState {
    *  necessity: OCCT gives no sub-operation progress, so this advances a few
    *  times and creeps on elapsed time in between. */
   pct: number | null;
+  /** The op is this document's own rebuild rather than an import or export. */
+  rebuild: boolean;
+  /** Another client's job on the same engine that this op is queued behind,
+   *  null once it runs. */
+  waiting: EngineWait | null;
 }
 
 type DocListener = (doc: CadDocument) => void;
 type BuildListener = (state: RebuildState) => void;
+const IDLE_BUSY: BusyState = { active: false, label: "", id: null, pct: null, rebuild: false, waiting: null };
+
 type BusyListener = (state: BusyState) => void;
 type MetaListener = () => void;
 
@@ -282,7 +289,7 @@ export class DocumentStore {
     meshTotal: null,
   };
 
-  private busy: BusyState = { active: false, label: "", id: null, pct: null };
+  private busy: BusyState = IDLE_BUSY;
 
   /** The last build of the document without a preview, and what it was built
    *  from. Leaving a tool, or undoing a commit the kernel refused, lands back on
@@ -337,6 +344,12 @@ export class DocumentStore {
       this.busy = { ...this.busy, pct, ...(label ? { label } : {}) };
       this.emitBusy();
     });
+    // Only the busy op's own request: any other id is not what this document waits on.
+    geometry.onQueue?.((id, behind) => {
+      if (!this.busy.active || this.busy.id !== id) return;
+      this.busy = { ...this.busy, waiting: behind };
+      this.emitBusy();
+    });
   }
 
   // --- access ---
@@ -373,16 +386,20 @@ export class DocumentStore {
 
   /** Run a cancellable backend op with busy state. `onStarted` hands back the request
    *  id, since a rebuild started meanwhile would otherwise be "most recent". */
-  async runBusy<T>(label: string, fn: (onStarted: (id: string) => void) => Promise<T>): Promise<T> {
-    this.busy = { active: true, label, id: null, pct: null };
+  async runBusy<T>(
+    label: string,
+    fn: (onStarted: (id: string) => void) => Promise<T>,
+    opts: { rebuild?: boolean } = {},
+  ): Promise<T> {
+    this.busy = { ...IDLE_BUSY, active: true, label, rebuild: opts.rebuild === true };
     this.emitBusy();
     try {
       return await fn((id) => {
-        this.busy = { ...this.busy, id };
+        this.busy = { ...this.busy, id, waiting: null };
         this.emitBusy();
       });
     } finally {
-      this.busy = { active: false, label: "", id: null, pct: null };
+      this.busy = IDLE_BUSY;
       this.emitBusy();
     }
   }
@@ -391,7 +408,7 @@ export class DocumentStore {
    *  covers both "nothing running" and "the engine had already finished". */
   async cancelBusy(): Promise<boolean> {
     if (!this.busy.active) return false;
-    // A rebuild never learns its id; undefined falls back to the client's lastHeavyId.
+    // No id yet means the request has not gone out, undefined falls back to the client's lastHeavyId.
     return (await this.geometry.cancel?.(this.busy.id ?? undefined)) ?? false;
   }
 
@@ -2077,7 +2094,7 @@ export class DocumentStore {
     this.rebuilding = true;
     const drain = (async () => {
       // runBusy gives a long rebuild its Cancel button.
-      await this.runBusy("Rebuilding", async () => {
+      await this.runBusy("Rebuilding", async (onStarted) => {
         try {
           do {
             this.rebuildQueued = false;
@@ -2090,7 +2107,10 @@ export class DocumentStore {
             const flight = { gen: ++this.sendGen, id: null as string | null, cancelled: false };
             this.inflight = flight;
             markSent();
-            const reply = await this.geometry.rebuild(effective, undefined, (id) => { flight.id = id; });
+            const reply = await this.geometry.rebuild(effective, undefined, (id) => {
+              flight.id = id;
+              onStarted(id);
+            });
             markReceived();
             this.inflight = null;
             if (flight.gen <= this.staleThrough) continue;
@@ -2116,7 +2136,7 @@ export class DocumentStore {
           this.rebuilding = false;
           this.inflight = null;
         }
-      });
+      }, { rebuild: true });
     })();
     this.rebuildDrain = drain;
     try {
