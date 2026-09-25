@@ -35,6 +35,18 @@ function paintIdle(e: EdgeRef, base: THREE.Color) {
   e.draw.setIdleColor(e.slot, base);
 }
 
+export interface HoverState {
+  body: string | null;
+  edge: EdgeRef | null;
+  faces: readonly number[];
+}
+
+export function sameHover(a: HoverState | undefined, b: HoverState | undefined): boolean {
+  if (!a || !b) return a === b;
+  return a.body === b.body && a.edge === b.edge
+    && a.faces.length === b.faces.length && a.faces.every((f, i) => f === b.faces[i]);
+}
+
 export class Highlighter {
   private hoveredEdge: EdgeRef | null = null;
   /** Every face the cursor is over. More than one when the face under the
@@ -120,6 +132,11 @@ export class Highlighter {
     if (line && !this.selectedEdges.has(line) && !this.errorEdges.has(line)) {
       paint(line, HOVER);
     }
+  }
+
+  /** What hover has lit, to tell whether a pointer move changed the picture. */
+  hoverState(): HoverState {
+    return { body: this.hoveredBody, edge: this.hoveredEdge, faces: this.hoveredFaces };
   }
 
   hoverFace(faceId: number | null) {

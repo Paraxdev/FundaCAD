@@ -81,7 +81,7 @@ const SKETCH_DIM_OPACITY = 0.55;
 const SKETCH_DIM_EDGE_OPACITY = 0.5;
 
 
-import { Highlighter, EDGE_HOVER_COLOR } from "./highlight";
+import { Highlighter, EDGE_HOVER_COLOR, sameHover } from "./highlight";
 import { ProgressiveModel } from "./progressive";
 import { nearestEdgeByMid, nearestEdgeByCurve, midMatchTol, edgeSelectorFrom, polylineMid } from "./edgeMatch";
 import { mergeScope, pickScope, type ScopeDecision, type ScopeView } from "./pickScope";
@@ -223,6 +223,9 @@ export class Viewport {
    *  and then the faces of a body already chosen. */
   private selectPolicy: SelectPolicy = "auto";
   suspendPicking = false;
+  /** True while nothing but the viewport's own hover reacts to pointer moves
+   *  (no tool, no sketch), so a move that lights nothing new draws nothing. */
+  quietPointer: (() => boolean) | null = null;
 
   /** Picking is off while a chunked reply is being drawn OR while a tool has
    *  suspended it. Two independent reasons, deliberately not one flag. */
@@ -249,6 +252,7 @@ export class Viewport {
       applyDir: (dir, up) => { this.rig.setViewDir(dir, up); this.requestRender(); },
       getOverrides: () => this.store?.viewOverrides ?? {},
       beginSetOverride: (side) => this.beginSetOverride(side),
+      redraw: () => this.requestRender(),
       resetOverride: (side) => {
         this.store?.setViewOverride(side, null);
         this.cube.refreshOverrideMarks();
@@ -374,10 +378,12 @@ export class Viewport {
         this.areaAt = { x: e.clientX, y: e.clientY };
         this.showAreaBox();
       }
-      // The ViewCube hover-highlights off this same pointermove. A right or middle
-      // drag is the camera's, which draws anyway, and a frame that only moved the
-      // camera can keep its shadow maps.
-      if (!(e.buttons & 6)) this.requestRender();
+      // A right or middle drag is the camera's, which draws anyway, and a frame
+      // that only moved the camera can keep its shadow maps. A plain move with no
+      // tool up draws only if the hover below or the ViewCube lit something new;
+      // a tool or a left drag (the area box) may repaint off any move.
+      const camera = (e.buttons & 6) !== 0;
+      if (!camera && (e.buttons !== 0 || !(this.quietPointer?.() ?? false))) this.requestRender();
       this.queueHover(e);
     });
     c.addEventListener("pointerleave", () => {
@@ -558,6 +564,12 @@ export class Viewport {
   }
 
   private handleHover(e: { clientX: number; clientY: number }, force = false) {
+    const before = this.highlighter?.hoverState();
+    this.hoverAt(e, force);
+    if (!sameHover(before, this.highlighter?.hoverState())) this.requestRender();
+  }
+
+  private hoverAt(e: { clientX: number; clientY: number }, force: boolean) {
     // while redefining a cube side, hover-highlight the model face under the
     // cursor (so the user sees which face they'll capture).
     if (this.setOverrideSide) {
@@ -573,7 +585,6 @@ export class Viewport {
       ? this.picker.pick(e.clientX, e.clientY, rect, this.rig.active, this.model)
       : null;
     this.highlighter?.clearHover();
-    this.requestRender();
     if (auto && this.highlighter) {
       this.lastHover = { clientX: e.clientX, clientY: e.clientY, force };
       this.noteIntent(this.bodyOfHit(hit));

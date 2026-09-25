@@ -382,10 +382,12 @@ export class SketchOverlay {
       .map((wr) => [wr.interior3D.x, wr.interior3D.y, wr.interior3D.z]);
   }
   /** Hover-highlight one region's fill (or clear with null). */
-  setHoverRegion(wr: WorldRegion | null) {
-    if (this.hovered === wr) return;
+  /** True when the hovered region changed. */
+  setHoverRegion(wr: WorldRegion | null): boolean {
+    if (this.hovered === wr) return false;
     this.hovered = wr;
     this.recolorFills();
+    return true;
   }
   /** Glyph outlines of a text entity in the open sketch, in sketch coordinates. */
   activeTextLoops(id: string): THREE.Vector2[][] {
