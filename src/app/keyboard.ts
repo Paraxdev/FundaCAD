@@ -1,5 +1,5 @@
 import { installKeymap } from "../input/keymap";
-import { isEditableTarget } from "../ui/focus";
+import { isEditableTarget, isPageSelectAll } from "../ui/focus";
 import { saveDocument, saveDocumentAs, exportModel } from "../io/files";
 import { SKETCH_TOOLS } from "./actionTables";
 import { logError, toggleConsole } from "../ui/logStore";
@@ -55,6 +55,10 @@ export function installKeyboard(e: Engine): void {
       e.store.removeFeature(e.selectedFeature);
       e.selectFeature(null);
     }
+  });
+
+  window.addEventListener("keydown", (ev) => {
+    if (isPageSelectAll(ev)) ev.preventDefault();
   });
 
   // The console, on Ctrl+`. Backquote alone used to open an orientation wheel;
