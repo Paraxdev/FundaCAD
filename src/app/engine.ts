@@ -453,6 +453,7 @@ export function mountUi(e: Engine): void {
     noteCommitted: (id) => e.noteCommitted(id),
     isSketchConsumed: (id) => e.isSketchConsumed(id),
     getSelectedFeature: () => e.selectedFeature,
+    getSelectedFeatureExplicit: () => e.selectedFeatureExplicit,
     setPlanePick: (v) => { e.planePick = v; },
   });
 

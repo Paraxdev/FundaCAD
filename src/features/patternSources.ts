@@ -174,3 +174,76 @@ export function facesOwnedByFeatures(bodies: BuildBodies, featureIds: readonly s
   }
   return out;
 }
+
+/** Feature types whose result is a body of their own, so pointing Pattern at
+ *  one means patterning that body. */
+function madeABody(f: Feature): boolean {
+  switch (f.type) {
+    case "box":
+    case "cylinder":
+    case "sphere":
+    case "cone":
+    case "torus":
+    case "import":
+    case "boolean":
+    case "mirror":
+    case "duplicate":
+      return true;
+    case "extrude":
+    case "revolve":
+    case "loft":
+    case "sweep":
+      return ((f as { operation?: string }).operation ?? "new") === "new";
+    case "thicken":
+      return (f as { operation?: string }).operation === "new";
+    case "patternRect":
+    case "patternLinear":
+    case "patternCircular":
+      return !(f as { features?: string[] }).features?.length;
+    default:
+      return false;
+  }
+}
+
+export type PatternStart =
+  | { mode: "features"; ids: string[] }
+  | { mode: "body"; body: string | null }
+  | { mode: "refuse"; reason: string };
+
+export interface PatternCandidates {
+  ids: readonly string[];
+  /** Faces clicked on the model named these, rather than a history selection. */
+  picked: boolean;
+  /** The history selection was the user's, not one the app made on its own. */
+  explicit: boolean;
+}
+
+/** What Pattern does with what it is pointed at.
+ *
+ *  A feature the user selected is what they mean to repeat, so one that cannot
+ *  be patterned is refused with the reason, never quietly swapped for a whole
+ *  body pattern: turning a filleted body about the origin is a star nobody
+ *  asked for. Two exceptions fall through to the body pattern: a feature that
+ *  made a body (the box just drawn, patterned means its body), and a selection
+ *  the app made by itself. */
+export function patternStart(
+  features: readonly Feature[],
+  candidates: PatternCandidates,
+  bodies: BuildBodies,
+): PatternStart {
+  if (!candidates.ids.length) return { mode: "body", body: null };
+  const { ids, refused } = patternSources(features, candidates.ids);
+  if (ids.length) return { mode: "features", ids };
+  const first = refused[0];
+  if (!first) return { mode: "body", body: null };
+  if (candidates.picked) return { mode: "refuse", reason: first.reason };
+  if (!candidates.explicit) return { mode: "body", body: null };
+  const f = features.find((x) => x.id === first.id);
+  if (f && madeABody(f)) return { mode: "body", body: bodyOwning(bodies, f.id) };
+  return { mode: "refuse", reason: first.reason };
+}
+
+function bodyOwning(bodies: BuildBodies, featureId: string): string | null {
+  for (const b of bodies ?? []) if (b.faceOwners?.includes(featureId)) return b.id;
+  return null;
+}

@@ -19,7 +19,7 @@ import type { MoveTool } from "./moveTool";
 import type { MoveTarget } from "./moveTarget";
 import { sketchFeatureTarget } from "./sketchMoveTarget";
 import type { PatternKind, PatternTool } from "./patternTool";
-import { featureOwnersOfFaces, patternSources } from "./patternSources";
+import { featureOwnersOfFaces, patternStart, type PatternCandidates } from "./patternSources";
 import type { PlaneOffsetTool } from "./planeOffsetTool";
 import type { DatumPoseTool } from "./datumPoseTool";
 import { placeDatum, poseFields, ZERO_POSE, type DatumPose } from "../document/datumPose";
@@ -52,6 +52,8 @@ export interface FeatureStartersDeps {
   noteCommitted: (id: string | null) => void;
   isSketchConsumed: (id: string) => boolean;
   getSelectedFeature: () => string | null;
+  /** Whether the user picked the selected feature, see stores/selection.ts. */
+  getSelectedFeatureExplicit?: () => boolean;
   setPlanePick: (v: boolean) => void;
   /** the Move gizmo's target for a selected datum plane */
   datumMoveTarget: (id: string) => MoveTarget | null;
@@ -78,6 +80,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     selectFeature,
     noteCommitted,
     getSelectedFeature,
+    getSelectedFeatureExplicit = () => true,
     setPlanePick,
     datumMoveTarget,
   } = deps;
@@ -1319,15 +1322,15 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
    *  selected body means body-pattern regardless of what the history still
    *  happens to have highlighted, that selection is stale for this purpose the
    *  moment a body is picked instead. */
-  function patternFeatureCandidates(): { ids: string[]; picked: boolean } {
-    if (viewport.getSelectedBodies().length) return { ids: [], picked: false };
+  function patternFeatureCandidates(): PatternCandidates {
+    if (viewport.getSelectedBodies().length) return { ids: [], picked: false, explicit: true };
     const faceIds = viewport.getSelectedFaceIds();
     if (faceIds.length) {
       const owners = featureOwnersOfFaces(store.buildState.result?.bodies, faceIds);
-      if (owners.length) return { ids: owners, picked: true };
+      if (owners.length) return { ids: owners, picked: true, explicit: true };
     }
     const selected = getSelectedFeature();
-    return { ids: selected ? [selected] : [], picked: false };
+    return { ids: selected ? [selected] : [], picked: false, explicit: getSelectedFeatureExplicit() };
   }
 
   function startPattern(kind: PatternKind) {
@@ -1337,26 +1340,22 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       return;
     }
     const patternDone = (id: string | null) => { noteCommitted(id); if (id) selectFeature(id); };
-    const candidates = patternFeatureCandidates();
-    if (candidates.ids.length) {
-      const { ids, refused } = patternSources(store.document.features, candidates.ids);
-      if (ids.length) {
-        patternTool.start(kind, [], patternDone, ids);
-        return;
-      }
-      // A face clicked on the model is a deliberate pick, so its refusal is
-      // said. The timeline keeps the last committed feature selected, so a
-      // refused one there falls through to the body pattern it always gave.
-      const reason = refused[0]?.reason;
-      if (reason && candidates.picked) {
-        setStatus(reason, "");
-        return;
-      }
+    const built = store.buildState.result?.bodies ?? [];
+    const start = patternStart(store.document.features, patternFeatureCandidates(), built);
+    if (start.mode === "features") {
+      patternTool.start(kind, [], patternDone, start.ids);
+      return;
+    }
+    // A feature the user pointed at that cannot be patterned is said, not
+    // swapped for a whole body pattern they did not ask for (patternStart).
+    if (start.mode === "refuse") {
+      setStatus(start.reason, "");
+      return;
     }
     // Same rule as Move: the selection if there is one, otherwise the active
     // body, which is what the kernel patterns when the feature names no bodies.
-    const built = store.buildState.result?.bodies ?? [];
     let ids = viewport.getSelectedBodies();
+    if (!ids.length && start.body) ids = [start.body];
     if (!ids.length && built.length) {
       const last = built[built.length - 1];
       if (last) ids = [last.id];
