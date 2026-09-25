@@ -32,6 +32,8 @@ const railEl = useTemplateRef<HTMLElement>("railEl");
 const listEl = useTemplateRef<HTMLElement>("listEl");
 /** Smaller tiles and no sub-labels once the tools no longer fit the height. */
 const compact = ref(false);
+/** The list is taller than its room even so, and scrolls. */
+const scrolls = ref(false);
 function measureFit() {
   const rail = railEl.value;
   const list = listEl.value;
@@ -39,6 +41,11 @@ function measureFit() {
   const foot = rail.querySelector<HTMLElement>(".rail-foot")?.offsetHeight ?? 0;
   const needed = compact.value ? list.scrollHeight * 1.3 : list.scrollHeight;
   compact.value = needed + foot + 12 > rail.clientHeight;
+  // After the compact tiles have laid out, they may be what makes it fit.
+  void nextTick(() => {
+    const l = listEl.value;
+    if (l) scrolls.value = l.scrollHeight > l.clientHeight + 1;
+  });
 }
 let fitRo: ResizeObserver | null = null;
 onMounted(() => {
@@ -323,7 +330,7 @@ function toggleIsolate() {
 </script>
 
 <template>
-  <nav id="toolrail" ref="railEl" class="tool-rail" :class="{ compact }" :data-mode="mode" aria-label="Tools">
+  <nav id="toolrail" ref="railEl" class="tool-rail" :class="{ compact, scrolls }" :data-mode="mode" aria-label="Tools">
     <div ref="listEl" class="rail-list">
       <RailButton
         icon="search"
