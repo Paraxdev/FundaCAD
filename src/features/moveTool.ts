@@ -236,6 +236,7 @@ export class MoveTool {
     this.gesture.attach();
 
     this.buildGizmo();
+    if (this.gizmo) this.placeGizmo(this.gizmo);
     this.dim.show(
       [
         { name: "move", label: "Move", kind: "length" },
@@ -585,14 +586,7 @@ export class MoveTool {
     // The gizmo sits where the selection now is: the anchor carried through the
     // same transform the bodies are under. It has to, or turning the part
     // leaves the rings behind on the original centroid.
-    const pos = this.anchor.clone().applyMatrix4(this.transform());
-    const k = this.viewport.pixelWorldSize(pos);
-    this.gizmo.position.copy(pos);
-    // Deliberately NOT turned with the selection. dx/dy/dz are world axes and
-    // so are rx/ry/rz, so an arrow that had rotated away from world X would
-    // still slide the bodies along world X, a handle pointing one way and
-    // acting another. The rings stay world-aligned for the same reason.
-    this.gizmo.scale.setScalar(k);
+    const pos = this.placeGizmo(this.gizmo);
     const lit = (kind: NonNullable<Grab>["kind"], i: number) =>
       (this.grab ? this.grab.kind === kind && this.grab.index === i
         : this.hover?.kind === kind && this.hover.index === i);
@@ -629,6 +623,22 @@ export class MoveTool {
     }
     this.applyTyped();
     this.gesture.frame();
+  }
+
+  /** Where the gizmo sits and how big it is on screen. Run on open as well as
+   *  every frame, so a press that lands before the first frame is tested
+   *  against the gizmo as drawn and not against an unplaced one. */
+  private placeGizmo(gizmo: THREE.Object3D): THREE.Vector3 {
+    const pos = this.anchor.clone().applyMatrix4(this.transform());
+    const k = this.viewport.pixelWorldSize(pos);
+    if (!gizmo.position.equals(pos) || gizmo.scale.x !== k) this.viewport.requestRender();
+    gizmo.position.copy(pos);
+    // Deliberately NOT turned with the selection. dx/dy/dz are world axes and
+    // so are rx/ry/rz, so an arrow that had rotated away from world X would
+    // still slide the bodies along world X, a handle pointing one way and
+    // acting another. The rings stay world-aligned for the same reason.
+    gizmo.scale.setScalar(k);
+    return pos;
   }
 
   /** A typed value retargets the handle most recently dragged.
@@ -804,6 +814,8 @@ export class MoveTool {
    *  gesture the hard one. */
   private hitHandle(x: number, y: number): Grab {
     if (!this.gizmo) return null;
+    // Note: matrixWorld only follows placeGizmo on the next render.
+    this.gizmo.updateMatrixWorld(true);
     const ray = this.viewport.rayFrom(x, y);
     // The origin is tested first and is preferred outright: it sits where all three
     // arrows meet, so anything else tested before it would take every press
