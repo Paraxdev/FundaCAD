@@ -459,3 +459,19 @@ fn a_rectangular_top_with_a_square_extent_still_anchors_per_axis() {
     assert!(errors(&r).is_empty(), "{:?}", errors(&r));
     assert_eq!(sorted(bores(&r)), vec![[5.0, 5.0, 4.5], [75.0, 35.0, 4.5]]);
 }
+
+// 6 out at (3.6, 4.8), 1 in from the r 7 rim: its offset from the rim is 1,
+// which cannot survive a shrink to radius 1 or 0.5 without going negative.
+// The clamp in `polar` lands it at the centre instead of refusing the build.
+#[test]
+fn a_rim_hole_shrunk_below_its_rim_offset_lands_at_the_centre() {
+    let at = [3.6, 4.8, 5.0];
+    for r in [1.0, 0.5] {
+        let face = tracked(at, [0.0, 0.0, 1.0], Some([-7.0, 7.0, -7.0, 7.0]));
+        let mut feats = disc(None);
+        feats.push(small_hole(face, at));
+        let b = build(json!({"r": r}), feats);
+        assert!(errors(&b).is_empty(), "r={r}: {:?}", errors(&b));
+        assert!(near(&b.tracked_faces["ho"]["points"][0], [0.0, 0.0, 5.0]), "r={r}: {}", b.tracked_faces["ho"]["points"][0]);
+    }
+}
