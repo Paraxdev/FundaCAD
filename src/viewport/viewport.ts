@@ -83,7 +83,7 @@ import { Highlighter, EDGE_HOVER_COLOR } from "./highlight";
 import { ProgressiveModel } from "./progressive";
 import { nearestEdgeByMid, midMatchTol, edgeSelectorFrom, polylineMid } from "./edgeMatch";
 import { mergeScope, pickScope, type ScopeDecision, type ScopeView } from "./pickScope";
-import { clickTakes, type SelectPolicy } from "./clickIntent";
+import { clickTakes, DwellIntent, type SelectPolicy } from "./clickIntent";
 import { getHoverDwellMs } from "../ui/interactionPrefs";
 import { edgesOnFace, faceEdgeTol, faceSurface, type Tri } from "./faceEdges";
 import { remapSelection, remapStreamedSelection, shouldAnnounce } from "./selectionMemo";
@@ -468,7 +468,7 @@ export class Viewport {
   /** The body the cursor arrived on and when. Under the auto policy a body lights
    *  whole on arrival and its face or edge takes over once the cursor has stayed
    *  on it for the hover delay preference, and a click takes whichever is lit. */
-  private intent: { bodyId: string; since: number } | null = null;
+  private intent = new DwellIntent();
   private intentTimer = 0;
   private lastHover: { clientX: number; clientY: number; force: boolean } | null = null;
 
@@ -479,6 +479,9 @@ export class Viewport {
       // hoverFace(null) early-returns after the first call, so this is free.
       this.highlighter?.clearHover();
       if (!this.pickSuppressed) this.highlighter?.hoverBody(null);
+      this.hoverPending = null;
+      this.intent.held();
+      clearTimeout(this.intentTimer);
       return;
     }
     // Judged now, not in the deferred pass, or a tool releasing picking in between
@@ -510,7 +513,7 @@ export class Viewport {
 
   private clearIntentHover() {
     this.hoverPending = null;
-    this.intent = null;
+    this.intent.clear();
     clearTimeout(this.intentTimer);
     this.highlighter?.clearHover();
     this.highlighter?.hoverBody(null);
@@ -519,21 +522,20 @@ export class Viewport {
 
   private noteIntent(bodyId: string | null) {
     if (bodyId === null) {
-      this.intent = null;
+      this.intent.hover(null, performance.now());
       clearTimeout(this.intentTimer);
       return;
     }
-    if (this.intent?.bodyId === bodyId) return;
-    this.intent = { bodyId, since: performance.now() };
+    if (!this.intent.hover(bodyId, performance.now())) return;
     clearTimeout(this.intentTimer);
     this.intentTimer = window.setTimeout(() => {
       const at = this.lastHover;
-      if (at && this.intent?.bodyId === bodyId) this.scheduleHover(at.clientX, at.clientY, at.force);
+      if (at && this.intent.isOn(bodyId)) this.scheduleHover(at.clientX, at.clientY, at.force);
     }, getHoverDwellMs() + 20);
   }
 
   private dwelt(bodyId: string): boolean {
-    return this.intent?.bodyId === bodyId && performance.now() - this.intent.since >= getHoverDwellMs();
+    return this.intent.dwelt(bodyId, performance.now(), getHoverDwellMs());
   }
 
   /** Under the auto policy, whether a hit takes its body whole: a face hit on a

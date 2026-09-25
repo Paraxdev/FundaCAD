@@ -115,34 +115,6 @@ export function faceMaterialFinishes(
   return out;
 }
 
-/** What a "Apply"/"Clear" gesture in the Render tab should land on: the
- *  selected faces if there ARE any, the selected bodies otherwise, or nothing.
- *
- *  `rawSelectedFaceCount` is the viewport's own face-pick count, asked for
- *  separately from `faceTargets` (the same ids resolved to body-local indices
- *  through the face-band index) on purpose: resolving a face id can come back
- *  empty even though a face IS selected (its band lookup misses right after a
- *  rebuild the selection has not caught up with yet), and that is a reason to
- *  do nothing, never a reason to fall through to "apply to the body instead".
- *  That fallthrough is what silently overwrote a body's own material with a
- *  face's in FI-3: a body stays selected in the browser tree under a face
- *  someone picked in the viewport, by design, so treating "no resolvable face"
- *  as "apply to the body" corrupts the body's material precisely when the user
- *  most clearly meant to touch one face and not the body it sits on. */
-export function materialApplyTarget(
-  rawSelectedFaceCount: number,
-  faceTargets: readonly { body: string; face: number }[],
-  selectedBodyIds: readonly string[],
-): { kind: "faces"; faces: { body: string; face: number }[] }
-  | { kind: "bodies"; bodyIds: string[] }
-  | { kind: "none" } {
-  if (rawSelectedFaceCount > 0) {
-    return faceTargets.length ? { kind: "faces", faces: [...faceTargets] } : { kind: "none" };
-  }
-  if (selectedBodyIds.length) return { kind: "bodies", bodyIds: [...selectedBodyIds] };
-  return { kind: "none" };
-}
-
 /** Every face key that names a body no longer in the model, so a document does
  *  not accumulate assignments to bodies that were deleted five edits ago. */
 export function staleFaceKeys(
