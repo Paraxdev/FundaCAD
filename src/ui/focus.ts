@@ -26,3 +26,12 @@ export function isHistoryKey(e: KeyboardEvent): boolean {
   const k = e.key.toLowerCase();
   return k === "z" || k === "y";
 }
+
+/** Ctrl or Cmd with A outside a text field. Left to the browser it selects every
+ *  label and button in the app, which reads as the whole UI turning blue (PH-2);
+ *  inside a field it stays the field's own select all. */
+export function isPageSelectAll(e: KeyboardEvent): boolean {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey) return false;
+  if (e.key.toLowerCase() !== "a") return false;
+  return !isEditableTarget(e.target);
+}

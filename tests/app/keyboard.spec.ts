@@ -65,3 +65,34 @@ describe("Delete key", () => {
     expect(removeFeature).not.toHaveBeenCalled();
   });
 });
+
+// PH-2: Ctrl+A outside a field selected the text of the whole app.
+describe("Ctrl+A", () => {
+  const selectAll = (target: EventTarget, init: KeyboardEventInit = { ctrlKey: true }) => {
+    const ev = new KeyboardEvent("keydown", { key: "a", bubbles: true, cancelable: true, ...init });
+    target.dispatchEvent(ev);
+    return ev.defaultPrevented;
+  };
+
+  beforeEach(() => {
+    document.body.innerHTML = "";
+    installKeyboard(fakeEngine({ selectedFeature: null, explicit: false }).e);
+  });
+
+  it("does not select the page from the canvas or a button", () => {
+    const button = document.createElement("button");
+    document.body.appendChild(button);
+    expect(selectAll(document.body)).toBe(true);
+    expect(selectAll(button)).toBe(true);
+    expect(selectAll(document.body, { metaKey: true })).toBe(true);
+  });
+
+  it("stays the field's own select all inside an input or an editable label", () => {
+    const input = document.createElement("input");
+    const label = document.createElement("div");
+    label.contentEditable = "true";
+    document.body.append(input, label);
+    expect(selectAll(input)).toBe(false);
+    expect(selectAll(label)).toBe(false);
+  });
+});
