@@ -228,11 +228,11 @@ export class PatternFlow {
   }
 
   private patternDimDefs(type: SketchPattern["type"]) {
-    if (type === "boltCircle") return [{ name: "count", label: "N" }, { name: "diameter", label: "Diameter", icon: "diameter" }];
-    if (type === "gridHoles") return [{ name: "countX", label: "Nx" }, { name: "countY", label: "Ny" }, { name: "diameter", label: "Diameter", icon: "diameter" }];
-    if (type === "hexHoles" || type === "honeycomb") return [{ name: "rings", label: "Rings" }, { name: "diameter", label: "Diameter", icon: "diameter" }];
-    if (type === "patternCircular") return [{ name: "count", label: "N" }, { name: "angle", label: "Angle", icon: "angle", kind: "angle" as const }];
-    return [{ name: "countX", label: "Nx" }, { name: "countY", label: "Ny" }]; // patternRect
+    if (type === "boltCircle") return [{ name: "count", label: "N", kind: "count" as const, integer: true, atLeast: 1 }, { name: "diameter", label: "Diameter", icon: "diameter", positive: true }];
+    if (type === "gridHoles") return [{ name: "countX", label: "Nx", kind: "count" as const, integer: true, atLeast: 1 }, { name: "countY", label: "Ny", kind: "count" as const, integer: true, atLeast: 1 }, { name: "diameter", label: "Diameter", icon: "diameter", positive: true }];
+    if (type === "hexHoles" || type === "honeycomb") return [{ name: "rings", label: "Rings", kind: "count" as const, integer: true, atLeast: 0 }, { name: "diameter", label: "Diameter", icon: "diameter", positive: true }];
+    if (type === "patternCircular") return [{ name: "count", label: "N", kind: "count" as const, integer: true, atLeast: 1 }, { name: "angle", label: "Angle", icon: "angle", kind: "angle" as const }];
+    return [{ name: "countX", label: "Nx", kind: "count" as const, integer: true, atLeast: 1 }, { name: "countY", label: "Ny", kind: "count" as const, integer: true, atLeast: 1 }]; // patternRect
   }
 
   /** Live sizing: cursor offset/distance from the start point drives the spatial

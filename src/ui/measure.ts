@@ -145,12 +145,34 @@ interface Normalised {
   derived: boolean;
 }
 
+const TYPOGRAPHIC_MINUS = /[\u2212\u2012\u2013\uFE63\uFF0D]/g;
+const DECIMAL_COMMA = /(\d),(\d+)/;
+
+/** What a keyboard or a paste may hand us that means the same thing as ASCII:
+ *  the minus signs a word processor or a locale substitutes, and a decimal
+ *  comma. A comma is read as a decimal point only when it is the lone comma in
+ *  a value with no point and no brackets (so a function's argument list is
+ *  never touched), and never when exactly three digits follow it, where "1,000"
+ *  could as easily be a thousand as one. That case is refused rather than
+ *  guessed. */
+export function canonicalTyping(raw: string): string {
+  const src = raw.replace(TYPOGRAPHIC_MINUS, "-").trim();
+  if (!src.includes(",") || src.includes("(") || src.includes(".")) return src;
+  if (src.indexOf(",") !== src.lastIndexOf(",")) return src;
+  const m = DECIMAL_COMMA.exec(src);
+  if (!m) return src;
+  if (m[2]!.length === 3) {
+    throw new ExprError(`"${src}" is ambiguous, write a point for decimals or leave the comma out`);
+  }
+  return src.replace(DECIMAL_COMMA, "$1.$2");
+}
+
 /** Rewrite the typed text into the expression language, folding every unit into
  *  the canonical one. A unit becomes a plain multiplication rather than a `mm`
  *  suffix so that feet, microns and thou, which the document language has no
  *  suffix for, travel the same path as millimetres. */
 export function normalise(raw: string): Normalised {
-  const src = raw.trim();
+  const src = canonicalTyping(raw);
   if (!src) throw new ExprError("empty value");
 
   const frac = FRACTION.exec(src);

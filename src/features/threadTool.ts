@@ -220,8 +220,8 @@ export class ThreadTool {
     this.viewport.clearHover();
     this.dim.show(
       [
-        { name: "pitch", label: "P", kind: "length" },
-        { name: "length", label: "L", kind: "length" },
+        { name: "pitch", label: "P", kind: "length", positive: true },
+        { name: "length", label: "L", kind: "length", positive: true },
       ],
       () => this.commit(),
       () => this.cancel(),

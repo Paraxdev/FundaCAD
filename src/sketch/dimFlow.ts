@@ -364,7 +364,7 @@ export class DimFlow {
       const discarded = prevField !== "" && this.host.dim().isUserDriven(prevField);
       this.dimFieldKey = plan.fieldKey;
       this.dimPlanKey = key;
-      this.host.dim().show(plan.fields, () => this.commitDim(), () => this.cancelDim());
+      this.host.dim().show(plan.fields.map((f) => ({ ...f, free: true })), () => this.commitDim(), () => this.cancelDim());
       if (discarded) toast("This is a different dimension now, retype the value");
     }
     this.host.dim().updateFromCursor({ [plan.field]: plan.measure() });

@@ -168,11 +168,11 @@ export class PatternTool {
       kind === "linear"
         ? [
             { name: "spacing", label: "Spacing", kind: "length" },
-            { name: "count", label: "Copies", kind: "count" },
+            { name: "count", label: "Copies", kind: "count", integer: true, atLeast: MIN_COUNT },
           ]
         : [
             { name: "angle", label: "Angle", kind: "angle" },
-            { name: "count", label: "Copies", kind: "count" },
+            { name: "count", label: "Copies", kind: "count", integer: true, atLeast: MIN_COUNT },
           ],
       () => this.commitSoon(),
       () => this.cancel(),
@@ -454,8 +454,10 @@ export class PatternTool {
     }
     // The count, without leaving the viewport for a number field. Both spellings,
     // because both are what people reach for.
-    const up = e.key === "]" || e.key === "ArrowUp" || e.key === "+";
-    const down = e.key === "[" || e.key === "ArrowDown" || e.key === "-";
+    // In a field, + and - are the value's sign or arithmetic, never the count.
+    const typing = isEditableTarget(e.target);
+    const up = e.key === "]" || e.key === "ArrowUp" || (e.key === "+" && !typing);
+    const down = e.key === "[" || e.key === "ArrowDown" || (e.key === "-" && !typing);
     if (!up && !down) return;
     const next = clampCount(this.count + (up ? 1 : -1));
     if (next === this.count) return;

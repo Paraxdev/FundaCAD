@@ -827,7 +827,7 @@ export class EdgeFeatureTool {
     // The label names the bound parameter, not just the field, so dragging
     // doesn't look like an ordinary literal edit it silently isn't.
     const field = this.paramRef ? { ...this.field, label: `${this.field.label}·${this.paramRef}` } : this.field;
-    this.dim.show([{ ...field, kind: "length" }], () => this.commit(), () => this.cancel(),
+    this.dim.show([{ ...field, kind: "length", positive: true }], () => this.commit(), () => this.cancel(),
       this.kind === "fillet"
         ? {
             label: this.continuity,

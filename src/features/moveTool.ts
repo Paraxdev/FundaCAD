@@ -241,7 +241,7 @@ export class MoveTool {
       [
         { name: "move", label: "Move", kind: "length" },
         { name: "turn", label: "Angle", kind: "angle" },
-        ...(target.handles.cubes.length ? [{ name: "size", label: "Scale", kind: "count" as const }] : []),
+        ...(target.handles.cubes.length ? [{ name: "size", label: "Scale", kind: "count" as const, positive: true }] : []),
       ],
       () => this.settleTyped(),
       () => this.cancel(),
@@ -516,13 +516,36 @@ export class MoveTool {
   /** Enter in the value box. Re-opens like a drag once something was written,
    *  and closes when nothing was. */
   private settleTyped() {
+    const unplaced = this.typedWithoutHandle();
+    if (unplaced) return this.dim.flag(unplaced);
     this.commitAndReopen(false);
+  }
+
+  /** A typed value only means something along a handle: which arrow a distance
+   *  runs along, which ring an angle turns about, which cube a scale stretches.
+   *  Typed before any handle was picked it went nowhere, and Enter closed the
+   *  box as if it had worked. */
+  private typedWithoutHandle(): string | null {
+    const typed = (name: string) => {
+      if (!this.dim.isUserDriven(name)) return false;
+      const v = this.dim.getValue(name);
+      return v !== null && Math.abs(v - (name === "size" ? 1 : 0)) > 1e-9;
+    };
+    const kind = this.last?.kind;
+    if (typed("move") && kind !== "axis" && kind !== "size") return "Click an arrow for the distance to run along";
+    if (typed("turn") && kind !== "ring") return "Click a ring for the angle to turn about";
+    if (typed("size") && kind !== "size") return "Click a cube for the scale to stretch along";
+    return null;
   }
 
   private commitAndReopen(evenUnchanged: boolean) {
     const target = this.target;
     const done = this.onDone;
     const through = this.onClickThrough;
+    // The handle last taken hold of outlives the re-open, so a click on an arrow
+    // (which re-opens at once, having moved nothing) still says which way the
+    // next typed distance goes.
+    const chosen = this.last;
     const res = this.commit();
     if (!target || (!res && !evenUnchanged)) return;
     // Asked only once the rebuild has landed, so an owner that has closed by
@@ -534,6 +557,7 @@ export class MoveTool {
       if (!next) return;
       this.open(next, done ?? (() => {}));
       this.onClickThrough = through;
+      if (chosen?.kind !== "origin") this.last = chosen;
     };
     // A drag that ended back where it started writes nothing (commit() falls
     // through to cancel()), so there is no rebuild to wait for.
@@ -599,7 +623,7 @@ export class MoveTool {
     const pos = this.placeGizmo(this.gizmo);
     const lit = (kind: NonNullable<Grab>["kind"], i: number) =>
       (this.grab ? this.grab.kind === kind && this.grab.index === i
-        : this.hover?.kind === kind && this.hover.index === i);
+        : (this.hover ?? this.last)?.kind === kind && (this.hover ?? this.last)?.index === i);
     for (const a of this.arrows) {
       const ax = AXES[a.axis];
       if (ax) a.mat.color.set(lit("axis", a.axis) ? HOT : ax.color);
@@ -608,7 +632,7 @@ export class MoveTool {
     const ringAxes = this.rings.map((r) => r.axis);
     for (const r of this.rings) {
       const ax = AXES[r.axis];
-      if (ax) r.ring.paint(ringLook(r.axis, ringAt(this.hover), this.grab ? ringAt(this.grab) ?? -1 : null, ringAxes), ax.color);
+      if (ax) r.ring.paint(ringLook(r.axis, ringAt(this.hover ?? this.last), this.grab ? ringAt(this.grab) ?? -1 : null, ringAxes), ax.color);
     }
     for (const c of this.cubes) {
       const ax = AXES[c.axis];
@@ -659,13 +683,15 @@ export class MoveTool {
   private applyTyped() {
     const l = this.last;
     if (this.grab || !l) return;
-    if (l.kind === "axis" && this.dim.isUserDriven("move")) {
+    // A resize cube sits on the same axis as its arrow, so a distance typed
+    // after picking one slides along that axis rather than going nowhere.
+    if ((l.kind === "axis" || l.kind === "size") && this.dim.isUserDriven("move")) {
       const v = this.dim.getValue("move");
       if (v != null && Math.abs(v - this.comp(l.index)) > 1e-6) {
         this.setComp(l.index, v);
         this.refreshPreview();
       }
-      return;
+      if (l.kind === "axis") return;
     }
     if (l.kind === "ring" && this.dim.isUserDriven("turn")) {
       const v = this.dim.getValue("turn");
