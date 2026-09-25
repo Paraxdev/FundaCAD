@@ -319,3 +319,32 @@ fn legacy_parameter_names_resolve_and_expressions_do_not() {
     assert_eq!(Num::Expr("w".into()).resolve(|n| doc.param(n)), Ok(40.0));
     assert!(Num::Expr("w/2".into()).resolve(|n| doc.param(n)).is_err());
 }
+
+#[test]
+fn a_pattern_carries_the_features_it_repeats() {
+    let raw = serde_json::json!({"parameters": {"n": 6}, "features": [
+        {"id": "pc", "type": "patternCircular", "count": "n", "angle": 360, "axis": "Z", "features": ["h"]},
+        {"id": "pl", "type": "patternLinear", "count": 3, "spacing": 10, "axis": "X", "features": ["h", "pc"]},
+        {"id": "pr", "type": "patternRect", "countX": 2, "countY": 2, "spacingX": 5, "spacingY": 5, "features": ["h"]},
+        {"id": "pb", "type": "patternCircular", "count": 4, "angle": 360, "axis": "Z", "bodies": ["body1"]}
+    ]});
+    let doc: CadDocument = serde_json::from_value(raw.clone()).expect("load");
+    let Some(Feature::PatternCircular(pc)) = doc.feature("pc") else {
+        panic!("pc is a circular pattern")
+    };
+    assert_eq!(pc.features.as_deref(), Some(&["h".to_owned()][..]));
+    assert!(pc.bodies.is_none() && pc.extra.is_empty());
+    let Some(Feature::PatternLinear(pl)) = doc.feature("pl") else {
+        panic!("pl is a linear pattern")
+    };
+    assert_eq!(pl.features.as_ref().map(Vec::len), Some(2));
+    let Some(Feature::PatternRect(pr)) = doc.feature("pr") else {
+        panic!("pr is a rect pattern")
+    };
+    assert!(pr.features.is_some() && pr.extra.is_empty());
+    let Some(Feature::PatternCircular(pb)) = doc.feature("pb") else {
+        panic!("pb is a circular pattern")
+    };
+    assert!(pb.features.is_none());
+    assert_eq!(serde_json::to_value(&doc).expect("save"), raw);
+}

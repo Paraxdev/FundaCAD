@@ -238,7 +238,48 @@ fn a_document_problem_is_reported_before_a_build_is_attempted() {
     assert!(r.text.contains("nothing"), "{}", r.text);
 }
 
+#[test]
+fn a_pattern_naming_a_missing_feature_is_reported_before_a_build() {
+    let r = one(
+        "feature_add",
+        json!({"feature": {"id": "pc1", "type": "patternCircular", "count": 6, "angle": 360,
+                           "axis": "Z", "features": ["hole9"]}}),
+    );
+    assert!(r.text.contains("hole9") && r.text.contains("not in the document"), "{}", r.text);
+}
+
 // --- geometry (spawns the engine) --------------------------------------------
+
+#[test]
+fn a_hole_patterned_by_feature_builds_six_holes() {
+    let rs = drive(&[
+        (
+            "feature_add",
+            json!({"feature": {"id": "bx1", "type": "box", "length": 80, "width": 80,
+                               "height": 10}}),
+        ),
+        (
+            "feature_add",
+            json!({"feature": {"id": "hole1", "type": "hole", "diameter": 6, "extent": "through",
+                               "face": {"kind": "face", "by": "nearest", "point": [25, 0, 5],
+                                        "body": "body1"},
+                               "points": [[25, 0, 5]]}}),
+        ),
+        ("param_set", json!({"name": "n", "expr": 6})),
+        (
+            "feature_add",
+            json!({"feature": {"id": "pc1", "type": "patternCircular", "count": "n",
+                               "angle": 360, "axis": "Z", "features": ["hole1"]}}),
+        ),
+        ("build", json!({})),
+    ]);
+    for r in &rs {
+        assert!(!r.is_error, "{}", r.text);
+    }
+    // 80 * 80 * 10 less six 6 mm through holes.
+    let want = 64000.0 - 6.0 * std::f64::consts::PI * 9.0 * 10.0;
+    assert!(rs[4].text.contains(&format!("vol {want:.1} mm3")), "{}", rs[4].text);
+}
 
 #[test]
 fn an_empty_document_can_be_taken_all_the_way_to_a_solid() {
