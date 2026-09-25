@@ -95,6 +95,17 @@ describe("MotionQuality", () => {
     expect(q.level).toBe(0);
   });
 
+  it("remembers what a full quality frame cost after it steps down", () => {
+    const q = new MotionQuality();
+    expect(q.fullPeriod).toBe(0);
+    let t = feed(q, 105, 4);
+    t = feed(q, 38, 9, t);
+    expect(q.level).toBe(2);
+    expect(q.fullPeriod).toBe(105);
+    q.reset();
+    expect(q.fullPeriod).toBe(0);
+  });
+
   it("starts over on reset", () => {
     const q = new MotionQuality();
     feed(q, 105, 4);
