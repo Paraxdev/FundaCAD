@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildProgress, historyShowsEmpty, waitLabel } from "../../src/ui/buildProgress";
+import { buildProgress, historyShowsBusy, historyShowsEmpty, waitLabel } from "../../src/ui/buildProgress";
 
 describe("buildProgress", () => {
   it("is indeterminate before the first progress report", () => {
@@ -58,5 +58,23 @@ describe("historyShowsEmpty", () => {
   it("gives way to an import into an empty document, and to any feature", () => {
     expect(historyShowsEmpty(0, { active: true, rebuild: false })).toBe(false);
     expect(historyShowsEmpty(2, { active: false, rebuild: false })).toBe(false);
+  });
+});
+
+describe("historyShowsBusy", () => {
+  const wait = { who: "assistant" as const, name: "Claude", op: "import" };
+
+  it("says what an empty document's rebuild is waiting behind, with its Cancel", () => {
+    expect(historyShowsBusy(0, { active: true, rebuild: true, waiting: wait })).toBe(true);
+  });
+
+  it("stays quiet for an empty document's own rebuild that is not waiting", () => {
+    expect(historyShowsBusy(0, { active: true, rebuild: true, waiting: null })).toBe(false);
+  });
+
+  it("shows any other busy op, and nothing when idle", () => {
+    expect(historyShowsBusy(0, { active: true, rebuild: false, waiting: null })).toBe(true);
+    expect(historyShowsBusy(3, { active: true, rebuild: true, waiting: null })).toBe(true);
+    expect(historyShowsBusy(3, { active: false, rebuild: false, waiting: null })).toBe(false);
   });
 });

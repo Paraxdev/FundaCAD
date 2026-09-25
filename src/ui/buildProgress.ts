@@ -53,7 +53,17 @@ export function waitLabel(w: EngineWait): string {
 }
 
 /** The history's empty state. A rebuild of a document with no features has
- *  nothing to show even while it waits on the engine; an import into one does. */
+ *  no steps to show even while it waits on the engine; an import into one does. */
 export function historyShowsEmpty(featureCount: number, busy: Pick<BusyState, "active" | "rebuild">): boolean {
   return featureCount === 0 && (!busy.active || busy.rebuild);
+}
+
+/** Whether the busy line and its Cancel belong on screen, once the delay has
+ *  passed. An empty document's own rebuild is instant and says nothing, unless
+ *  it is waiting behind another client's job, which is worth knowing. */
+export function historyShowsBusy(
+  featureCount: number,
+  busy: Pick<BusyState, "active" | "rebuild" | "waiting">,
+): boolean {
+  return busy.active && (busy.waiting !== null || !historyShowsEmpty(featureCount, busy));
 }

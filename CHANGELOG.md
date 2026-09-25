@@ -251,8 +251,9 @@ This file starts on 2026-08-03. For anything before that, see the
   that did nothing, while its own rebuild was simply waiting in the queue. The
   engine now tells a client when its request waits behind someone else's job
   and whose it is, so the History says "Waiting: Claude is importing a file",
-  an empty document keeps its empty state, and Cancel withdraws only this
-  window's own request, never the other job. Each connection also keeps its own
+  an empty document keeps its empty history but still says what it is
+  waiting for, and Cancel withdraws only this window's own request, never the
+  other job. Each connection also keeps its own
   held document, so an edit sent as a delta can no longer land on a document
   another client sent under the same revision number. The frame rate readout
   says "render idle" rather than "idle", which read as the engine's state.

@@ -12,7 +12,7 @@ import { useShellStore } from "../../stores/shell";
 import { featureMeta } from "../../ui/featureMeta";
 import Icon from "./Icon.vue";
 import { contextMenu } from "../../ui/menu";
-import { buildProgress, CANCEL_DELAY_MS, historyShowsEmpty, waitLabel } from "../../ui/buildProgress";
+import { buildProgress, CANCEL_DELAY_MS, historyShowsBusy, historyShowsEmpty, waitLabel } from "../../ui/buildProgress";
 import { featureNotes } from "../../ui/featureNotes";
 import { gapIndexIn } from "../../ui/trackGaps";
 import { getUnit, onUnitChange } from "../../ui/units";
@@ -178,7 +178,7 @@ async function cancelBusy() {
 // and without the busy check the timeline would advertise "start with a Sketch"
 // for the whole 90+ seconds.
 const showEmpty = computed(() => historyShowsEmpty(features.value.length, busy.value));
-const showCancel = computed(() => busy.value.active && delayElapsed.value && !showEmpty.value);
+const showCancel = computed(() => delayElapsed.value && historyShowsBusy(features.value.length, busy.value));
 
 // --- chips ---------------------------------------------------------------
 // The whole feature, not just its type: a boolean is named after the operation
