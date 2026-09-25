@@ -37,6 +37,8 @@ import type { DocumentStore } from "../document/store";
 import type { Axis3, Feature, Selector, Vec3 } from "../types";
 import { DimInput } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
+import { isEditableTarget } from "../ui/focus";
+import { logError } from "../ui/logStore";
 import { snap } from "../ui/units";
 import { axisDragDistance } from "./manipulator";
 import {
@@ -88,6 +90,7 @@ export class PatternTool {
   private middle = new THREE.Vector3(); // the patterned body's box centre
   private pickNote = ""; // why the last click did not give an axis
   private pickSeq = 0; // a pick answered after a newer one, or after the tool closed, is dropped
+  private pending: Promise<void> | null = null; // the axis pick still waiting on the engine
   private axisLineObj: THREE.Line | null = null;
   private count = START_COUNT;
   private value = 0; // mm between copies (linear) or degrees swept (circular)
@@ -171,7 +174,7 @@ export class PatternTool {
             { name: "angle", label: "Angle", kind: "angle" },
             { name: "count", label: "Copies", kind: "count" },
           ],
-      () => this.commit(),
+      () => this.commitSoon(),
       () => this.cancel(),
     );
     this.pushFields();
@@ -389,8 +392,13 @@ export class PatternTool {
     // A circular pattern's click on the model picks the axis; off the model it
     // applies, as it always did.
     const hit = this.kind === "circular" ? this.viewport.pickEntity(e.clientX, e.clientY) : null;
-    if (hit) void this.pickAxis(hit, e.clientX, e.clientY);
-    else this.commit();
+    if (!hit) {
+      this.commitSoon();
+      return;
+    }
+    const p = this.pickAxis(hit, e.clientX, e.clientY).catch((err: unknown) => { logError(err, { source: "pattern" }); });
+    this.pending = p;
+    void p.finally(() => { if (this.pending === p) this.pending = null; });
   }
 
   /** The axis an edge or face names, asked of the engine so the preview turns
@@ -425,6 +433,13 @@ export class PatternTool {
   private onKey(e: KeyboardEvent) {
     if (e.key === "Escape") {
       this.cancel();
+      return;
+    }
+    if (e.key === "Enter") {
+      if (isEditableTarget(e.target)) return; // the value box submits it
+      e.preventDefault();
+      e.stopPropagation();
+      this.commitSoon();
       return;
     }
     if (this.kind === "circular" && (e.key === "c" || e.key === "C") && !e.ctrlKey && !e.metaKey) {
@@ -470,7 +485,7 @@ export class PatternTool {
     if (body === this.promptKey) return;
     this.promptKey = body;
     if (this.kind === "linear") {
-      setPrompt(`${this.promptPrefix}${body} · drag an arrow · [ and ] change the count · click to apply · Esc`);
+      setPrompt(`${this.promptPrefix}${body} · drag an arrow · [ and ] change the count · Enter or click to apply · Esc`);
       return;
     }
     const where =
@@ -577,6 +592,13 @@ export class PatternTool {
 
   // --- ending ----------------------------------------------------------------
 
+  /** Applies once an axis pick still on its way to the engine has landed, so
+   *  Enter straight after clicking an edge turns about that edge. */
+  private commitSoon() {
+    if (this.pending) void this.pending.then(() => this.commit());
+    else this.commit();
+  }
+
   private commit() {
     if (!this.active) return;
     this.readFields();
@@ -623,6 +645,7 @@ export class PatternTool {
     this.viewport.clearPatternFeatureGhost();
     this.viewport.hoverEntity(null);
     this.pickSeq++;
+    this.pending = null;
     if (this.axisLineObj) {
       this.viewport.removeFromScene(this.axisLineObj);
       this.axisLineObj.geometry.dispose();
