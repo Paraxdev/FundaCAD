@@ -1099,6 +1099,18 @@ pub fn profile_cuts_result(req: &serde_json::Map<String, serde_json::Value>, wat
         return fundacad_engine::error_result("'normal' has no direction");
     }
     let normal = normal.map(|v| v / len);
+    let reach: Vec<[f64; 3]> = req
+        .get("reach")
+        .and_then(|r| r.as_array())
+        .map(|a| {
+            a.iter()
+                .filter_map(|p| {
+                    let p = p.as_array()?;
+                    Some([p.first()?.as_f64()?, p.get(1)?.as_f64()?, p.get(2)?.as_f64()?])
+                })
+                .collect()
+        })
+        .unwrap_or_default();
     let (_, built) = match crate::inspect::rebuild_request(req, watch) {
         Ok(r) => r,
         Err(e) => return e,
@@ -1108,7 +1120,7 @@ pub fn profile_cuts_result(req: &serde_json::Map<String, serde_json::Value>, wat
         Vec::new()
     } else {
         let scale = model_scale(&shapes);
-        kernel::profile_cuts(&shapes, origin, normal, scale, (scale * 2e-4).max(1e-3)).unwrap_or_default()
+        kernel::profile_cuts(&shapes, origin, normal, scale, (scale * 2e-4).max(1e-3), &reach).unwrap_or_default()
     };
     let reply = json!({"cuts": cuts});
     fundacad_protocol::JobResult::Json(reply.as_object().cloned().unwrap_or_default())

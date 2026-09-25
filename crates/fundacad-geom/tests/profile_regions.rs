@@ -211,13 +211,39 @@ fn the_overlay_cuts_are_the_outline_of_the_coplanar_material() {
     let typed: CadDocument = serde_json::from_value(raw.clone()).unwrap();
     let r = builder::rebuild(&typed, &raw, &NoWatch).unwrap_or_else(|_| panic!("cancelled"));
     let shapes: Vec<_> = r.bodies.iter().map(|b| &b.shape).collect();
-    let cuts = kernel::profile_cuts(&shapes, [0.0; 3], [0.0, 0.0, 1.0], 600.0, 0.1).unwrap();
+    let cuts = kernel::profile_cuts(&shapes, [0.0; 3], [0.0, 0.0, 1.0], 600.0, 0.1, &[]).unwrap();
     let length: f64 = cuts
         .iter()
         .flat_map(|l| l.windows(2))
         .map(|w| ((w[1][0] - w[0][0]).powi(2) + (w[1][1] - w[0][1]).powi(2)).sqrt())
         .sum();
     assert!((length - 2.0 * (480.0 + 460.0)).abs() < 1e-6, "outline length {length}");
-    let top = kernel::profile_cuts(&shapes, [0.0, 0.0, 10.0], [0.0, 0.0, 1.0], 600.0, 0.1).unwrap();
+    let top = kernel::profile_cuts(&shapes, [0.0, 0.0, 10.0], [0.0, 0.0, 1.0], 600.0, 0.1, &[]).unwrap();
     assert_eq!(top.len(), cuts.len());
+}
+
+/// Bounded to a box, the cut lines are the whole plane's that reach it.
+#[test]
+fn bounded_cut_lines_are_the_ones_reaching_the_box() {
+    let mut f = block("side", "s1", (0.0, 0.0), (20.0, 460.0));
+    f.extend(block("cross", "s2", (0.0, 0.0), (480.0, 20.0)));
+    let raw = json!({ "features": f });
+    let typed: CadDocument = serde_json::from_value(raw.clone()).unwrap();
+    let r = builder::rebuild(&typed, &raw, &NoWatch).unwrap_or_else(|_| panic!("cancelled"));
+    let shapes: Vec<_> = r.bodies.iter().map(|b| &b.shape).collect();
+    let reach = [[-10.0, -10.0, 0.0], [50.0, 50.0, 0.0]];
+    let all = kernel::profile_cuts(&shapes, [0.0; 3], [0.0, 0.0, 1.0], 600.0, 0.1, &[]).unwrap();
+    let near = kernel::profile_cuts(&shapes, [0.0; 3], [0.0, 0.0, 1.0], 600.0, 0.1, &reach).unwrap();
+    let reaches = |l: &Vec<[f64; 3]>| {
+        let (x0, x1) = (l.iter().map(|p| p[0]).fold(f64::MAX, f64::min), l.iter().map(|p| p[0]).fold(f64::MIN, f64::max));
+        let (y0, y1) = (l.iter().map(|p| p[1]).fold(f64::MAX, f64::min), l.iter().map(|p| p[1]).fold(f64::MIN, f64::max));
+        x1 >= -10.5 && x0 <= 50.5 && y1 >= -10.5 && y0 <= 50.5
+    };
+    let key = |l: &Vec<[f64; 3]>| format!("{:?}", l.iter().map(|p| p.map(|v| (v * 1e3).round() as i64)).collect::<Vec<_>>());
+    let mut want: Vec<String> = all.iter().filter(|l| reaches(l)).map(key).collect();
+    let mut got: Vec<String> = near.iter().map(key).collect();
+    want.sort();
+    got.sort();
+    assert!(got.len() < all.len(), "{} of {}", got.len(), all.len());
+    assert_eq!(got, want);
 }

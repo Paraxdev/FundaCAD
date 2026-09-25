@@ -604,20 +604,23 @@ pub fn split_profile_cells(
     ))
 }
 
-/// The model edges `split_profile_cells` cuts along, over the whole plane, as
-/// polylines within `deflection`. None when an edge will not sample.
+/// The model edges `split_profile_cells` cuts along, as polylines within
+/// `deflection`: those reaching the box of the `reach` points, else over the
+/// whole plane. None when an edge will not sample.
 pub fn profile_cuts(
     shapes: &[&Shape],
     origin: [f64; 3],
     normal: [f64; 3],
     model_scale: f64,
     deflection: f64,
+    reach: &[[f64; 3]],
 ) -> Option<Vec<Vec<[f64; 3]>>> {
     let s = compound(shapes.iter().copied());
     let mut flat = Vec::new();
     let [ox, oy, oz] = origin;
     let [nx, ny, nz] = normal;
-    if !ffi::bo_profile_cuts(s.raw(), ox, oy, oz, nx, ny, nz, model_scale, deflection, &mut flat) {
+    let reach: Vec<f64> = reach.iter().flatten().copied().collect();
+    if !ffi::bo_profile_cuts(s.raw(), ox, oy, oz, nx, ny, nz, model_scale, deflection, &reach, &mut flat) {
         return None;
     }
     let mut out = vec![Vec::new()];

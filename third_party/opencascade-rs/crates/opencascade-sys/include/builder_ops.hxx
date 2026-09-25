@@ -1093,15 +1093,24 @@ inline BoShapes bo_split_profile_cells(const TopoDS_Shape &cells, double ox, dou
   }
 }
 
-// profile_cut_edges over the whole plane as polylines within `deflection`, each
-// followed by a NaN triple, for the sketch overlay to split its areas exactly
-// where a consuming feature will.
+// profile_cut_edges as polylines within `deflection`, each followed by a NaN
+// triple, for the sketch overlay to split its areas exactly where a consuming
+// feature will. `reach`, xyz triples, bounds it to the edges reaching their box
+// the way bo_split_profile_cells bounds to its cells; empty is the whole plane.
 inline bool bo_profile_cuts(const TopoDS_Shape &shapes, double ox, double oy, double oz, double nx,
                             double ny, double nz, double modelScale, double deflection,
-                            rust::Vec<double> &out) {
+                            rust::Slice<const double> reach, rust::Vec<double> &out) {
   try {
     double tol = profile_cut_tol(modelScale);
-    for (auto &s : profile_cut_edges(shapes, gp_Pnt(ox, oy, oz), gp_Dir(nx, ny, nz), tol, Bnd_Box())) {
+    Bnd_Box limit;
+    for (size_t i = 0; i + 2 < reach.size(); i += 3) limit.Add(gp_Pnt(reach[i], reach[i + 1], reach[i + 2]));
+    if (!limit.IsVoid()) limit.Enlarge(8 * tol);
+    for (auto &s : profile_cut_edges(shapes, gp_Pnt(ox, oy, oz), gp_Dir(nx, ny, nz), tol, limit)) {
+      if (!limit.IsVoid()) {
+        Bnd_Box eb;
+        BRepBndLib::Add(s, eb, false);
+        if (limit.IsOut(eb)) continue;
+      }
       BRepAdaptor_Curve c(TopoDS::Edge(s));
       if (c.GetType() == GeomAbs_Line) {
         for (double t : {c.FirstParameter(), c.LastParameter()}) {
