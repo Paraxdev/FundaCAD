@@ -26,6 +26,8 @@ import { screenTransform } from "../../sketch/annotationFormat";
 import { useSketchAnnotationStore } from "../../stores/sketchAnnotations";
 import type { DimItem } from "../../sketch/sketchDimensions";
 import { displayValue, isPlainNumber, parseField } from "../../ui/units";
+import { clampLabel } from "../../ui/labelClamp";
+import type { Box } from "../../ui/promptPlacement";
 
 const s = useSketchAnnotationStore();
 
@@ -35,15 +37,41 @@ const scratch = new THREE.Vector3();
 let lastPose = -1;
 let raf = 0;
 
-function loop() {
+// The floating cards a label must not hide under, the prompt banner's list.
+const LEFT_CARDS = "#float-layer .float-left-stack > *, #float-layer .tool-rail .rail-btn, #float-layer .tool-rail .rail-group";
+const RIGHT_CARDS = "#float-layer .float-right > *";
+const LABEL_GAP = 6;
+let cards: { left: Box[]; right: Box[] } = { left: [], right: [] };
+let cardsKey = "";
+let cardsAt = 0;
+
+const rects = (sel: string): Box[] =>
+  [...document.querySelectorAll(sel)].map((o) => o.getBoundingClientRect());
+
+/** Re-read the cards a few times a second: they open, close and resize without
+ *  the camera moving, which is all the pose check below watches. */
+function refreshCards(now: number) {
+  if (now - cardsAt < 250) return;
+  cardsAt = now;
+  const next = { left: rects(LEFT_CARDS), right: rects(RIGHT_CARDS) };
+  const key = [...next.left, ...next.right].map((r) => `${r.left},${r.top},${r.right},${r.bottom}`).join(";");
+  if (key === cardsKey) return;
+  cardsKey = key;
+  cards = next;
+  lastPose = -1;
+}
+
+function loop(now: number = performance.now()) {
   raf = requestAnimationFrame(loop);
   const plane = s.dimPlane;
   const vp = s.dimViewport;
   if (!plane || !vp) return;
+  refreshCards(now);
   // skip the per-label projection + DOM writes when the camera hasn't moved
   const pose = vp.rig.poseVersion();
   if (pose === lastPose) return;
   lastPose = pose;
+  const area = vp.domElement.getBoundingClientRect();
   const items = s.dimItems;
   for (let i = 0; i < items.length; i++) {
     const el = els[i];
@@ -51,7 +79,8 @@ function loop() {
     if (!el || !l) continue;
     plane.to3D(l.anchor.x, l.anchor.y, scratch);
     const p = vp.projectToScreen(scratch);
-    el.style.transform = screenTransform(p.x, p.y);
+    const c = clampLabel(p.x, p.y, el.offsetWidth / 2, el.offsetHeight / 2, area, cards, LABEL_GAP);
+    el.style.transform = screenTransform(c.x, c.y);
   }
 }
 

@@ -42,6 +42,7 @@ const viewport = {
   rig: { poseVersion: () => 0 },
   projectToScreen: () => ({ x: 0, y: 0 }),
   forwardWheel,
+  domElement: { getBoundingClientRect: () => ({ left: 0, top: 0, right: 800, bottom: 600 }) },
 } as unknown as Viewport;
 
 function extra(over: Partial<ExtraDim> = {}): ExtraDim {
@@ -101,6 +102,18 @@ describe("SketchDimLayer", () => {
     // At first paint the element has no inline transform at all: the only thing
     // that ever sets one is the rAF loop, imperatively.
     expect(labels()[0]!.getAttribute("style")).toBeNull();
+  });
+
+  // PH-3: a label projected at the window's edge sat under the Items card.
+  it("draws a label clear of a left card it would sit under", async () => {
+    document.body.innerHTML = '<div id="float-layer"><div class="float-left-stack"><div class="card"></div></div></div>';
+    const card = document.querySelector<HTMLElement>(".card")!;
+    card.getBoundingClientRect = () => ({ left: 0, top: 0, right: 300, bottom: 600 }) as DOMRect;
+    mount(SketchDimLayer, { attachTo: document.body });
+    dims().show([], plane, [extra()]);
+    await nextTick();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(labels()[0]!.style.transform).toContain("translate(306px, 6px)");
   });
 
   it("hands the layer raw objects, never reactive proxies", async () => {
