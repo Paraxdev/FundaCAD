@@ -73,6 +73,36 @@ describe("blendEditCommit, a plain radius", () => {
   });
 });
 
+describe("blendEditCommit, a fillet flipped to a chamfer and back", () => {
+  it("unbound, the size moves from radius to distance and the name stays", () => {
+    const built = { id: "wall_blend", type: "chamfer", edges: [B, A], distance: 4 } as unknown as Feature;
+    const { feature, param } = blendEditCommit({ original: saved(), opened: toolView(4), built, paramRef: null });
+    expect(param).toBeNull();
+    const f = feature as unknown as Record<string, unknown>;
+    expect(f.type).toBe("chamfer");
+    expect(f.distance).toBe(4);
+    expect("radius" in f).toBe(false);
+    expect(f.name).toBe("Bowl to wall blend");
+    expect(f.edges).toEqual([A, B]);
+  });
+
+  it("unbound, a chamfer flipped to a fillet carries its distance into the radius", () => {
+    const chamfer = { id: "c1", type: "chamfer", name: "Edge break", edges: A, distance: 1.5 } as unknown as Feature;
+    const opened = { id: "c1", type: "chamfer", edges: A, distance: 1.5 } as unknown as Feature;
+    const built = { id: "c1", type: "fillet", edges: A, radius: 1.5 } as unknown as Feature;
+    const { feature } = blendEditCommit({ original: chamfer, opened, built, paramRef: null });
+    expect(feature).toEqual({ id: "c1", type: "fillet", name: "Edge break", edges: A, radius: 1.5 });
+  });
+
+  it("bound to a parameter, the flip is refused and nothing is written", () => {
+    const built = { id: "wall_blend", type: "chamfer", edges: [B, A], distance: 2 } as unknown as Feature;
+    const out = blendEditCommit({ original: saved(), opened: toolView(4), built, paramRef: "wall_blend_r" });
+    expect(out.feature).toBeNull();
+    expect(out.param).toBeNull();
+    expect(out.refused).toMatch(/wall_blend_r/);
+  });
+});
+
 describe("blendEditCommit, a radius bound to a bare parameter", () => {
   it("sets the parameter and leaves the feature alone", () => {
     const { feature, param } = blendEditCommit({
