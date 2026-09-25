@@ -10,6 +10,7 @@ import { scheduleRaycastIndex } from "./raycastIndex";
 import { BodyEdges, EDGE_IDLE_COLOR, EDGE_IDLE_WIDTH, type EdgeRef } from "./edgeLines";
 import { FINISH } from "../document/materials";
 import { removeSelectionGlows } from "./selectionGlow";
+import { weldByFace } from "./weld";
 
 export { BodyEdges, EDGE_IDLE_COLOR, EDGE_IDLE_WIDTH };
 export type { EdgeRef };
@@ -289,34 +290,13 @@ export function buildBodyMesh(
   // Triangle ORDER is untouched, so localFaceIds and faceTriangles stay valid. Only
   // runs for a DE-INDEXED body. Every body now ships normals (true surface normals,
   // with the engine already welding seam duplicates), and an ordinary indexed body
-  // arrives at ~1 vertex per triangle or fewer: running this string-keyed pass over
-  // it would find nothing to merge and cost a Map insert per index on every
+  // arrives at ~1 vertex per triangle or fewer: running this pass over
+  // it would find nothing to merge and cost a hash insert per index on every
   // live-preview tick.
   let posOut: ArrayLike<number> = localPositions;
   let nrmOut: ArrayLike<number> = localNormals;
   if (anyNormal && localIndices.length && localPositions.length > localIndices.length * 1.5) {
-    const q = 1e4; // 0.1µm position buckets, 1e-3 on the unit normal
-    const seen = new Map<string, number>();
-    const wp: number[] = [];
-    const wn: number[] = [];
-    for (let t = 0; t < localIndices.length; t++) {
-      const v = localIndices[t]!;
-      const fid = localFaceIds[(t / 3) | 0]!;
-      const b = v * 3;
-      const key = `${Math.round(localPositions[b]! * q)},${Math.round(localPositions[b + 1]! * q)},`
-        + `${Math.round(localPositions[b + 2]! * q)}|${Math.round(localNormals[b]! * 1e3)},`
-        + `${Math.round(localNormals[b + 1]! * 1e3)},${Math.round(localNormals[b + 2]! * 1e3)}|${fid}`;
-      let nv = seen.get(key);
-      if (nv === undefined) {
-        nv = wp.length / 3;
-        seen.set(key, nv);
-        wp.push(localPositions[b]!, localPositions[b + 1]!, localPositions[b + 2]!);
-        wn.push(localNormals[b]!, localNormals[b + 1]!, localNormals[b + 2]!);
-      }
-      localIndices[t] = nv;
-    }
-    posOut = wp;
-    nrmOut = wn;
+    ({ positions: posOut, normals: nrmOut } = weldByFace(localPositions, localNormals, localIndices, localFaceIds));
   }
 
   const geo = new THREE.BufferGeometry();
