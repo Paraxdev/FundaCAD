@@ -76,7 +76,18 @@ pub fn importing(id: &Value, phase: i64, label: &str, pct: i64) -> String {
     }))
 }
 
-/// The reply to a `cancel` op: whether a running request was hit.
+/// `{"id", "status": "queued", "behind"}`: the request waits behind another
+/// client's job, `behind` says whose and what it is.
+pub fn queued(id: &Value, behind: &Value) -> String {
+    pyjson::to_string(&json!({"id": id, "status": "queued", "behind": behind}))
+}
+
+/// `{"id", "status": "started"}`: a request that was told it was queued is now running.
+pub fn started(id: &Value) -> String {
+    pyjson::to_string(&json!({"id": id, "status": "started"}))
+}
+
+/// The reply to a `cancel` op: whether a running or queued request was hit.
 pub fn cancel_ack(id: &Value, hit: bool) -> String {
     ok(id, &json!({"cancelled": hit}))
 }
@@ -109,6 +120,11 @@ mod tests {
             building(&id, 3, -1, -1),
             r#"{"id": "r1", "status": "building", "feature": 3, "meshed": -1, "meshTotal": -1}"#
         );
+        assert_eq!(
+            queued(&id, &json!({"op": "import", "who": "session"})),
+            r#"{"id": "r1", "status": "queued", "behind": {"op": "import", "who": "session"}}"#
+        );
+        assert_eq!(started(&id), r#"{"id": "r1", "status": "started"}"#);
         assert_eq!(
             bad_json("x"),
             r#"{"id": null, "ok": false, "error": {"message": "bad JSON: x"}}"#

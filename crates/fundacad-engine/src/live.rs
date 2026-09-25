@@ -192,6 +192,18 @@ impl LiveSession {
         names
     }
 
+    /// Who the connection `id` is to another client waiting behind its job:
+    /// the app hosting the document, an assistant working on it, or neither.
+    pub fn role_of(&self, id: &str) -> Value {
+        if self.host_id.as_deref() == Some(id) {
+            return json!({"who": "app"});
+        }
+        match self.guests.get(id) {
+            Some((name, _)) => json!({"who": "assistant", "name": name_text(name)}),
+            None => json!({"who": "session"}),
+        }
+    }
+
     fn touch(&mut self, guest_id: &str, name: Option<&Value>) {
         let kept = match name.filter(|n| truthy(Some(n))) {
             Some(n) => n.clone(),
@@ -381,6 +393,16 @@ mod tests {
         let st = s.state(None, None);
         assert_eq!(st["attached"], false);
         assert!(st["document"].is_null());
+    }
+
+    #[test]
+    fn a_connection_is_named_by_its_part_in_the_session() {
+        let (mut s, _) = session();
+        publish(&mut s, APP, doc(1), 1);
+        s.state(Some(AGENT), Some(&json!("Claude")));
+        assert_eq!(s.role_of(APP), json!({"who": "app"}));
+        assert_eq!(s.role_of(AGENT), json!({"who": "assistant", "name": "Claude"}));
+        assert_eq!(s.role_of(OTHER), json!({"who": "session"}));
     }
 
     #[test]

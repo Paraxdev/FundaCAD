@@ -494,3 +494,127 @@ fn compute_all_resends_bodies_the_client_already_holds() {
     let c = reply_to(&rx, "c");
     assert!(c["result"]["bodies"][0].get("unchanged").is_none(), "{c}");
 }
+
+fn until_running(engine: &Engine) {
+    let t0 = Instant::now();
+    while engine.running.lock().unwrap().is_none() {
+        assert!(t0.elapsed() < Duration::from_secs(5));
+        std::thread::sleep(Duration::from_millis(5));
+    }
+}
+
+type Peer = (Client, Receiver<Message>);
+
+fn two_clients(gate: Receiver<()>) -> (Arc<Engine>, Peer, Peer) {
+    let (tx, _rx) = channel();
+    let engine = Arc::new(Engine::start(
+        Fake {
+            gate: Some(gate),
+            rebuilds: Arc::new(AtomicI64::new(0)),
+        },
+        Arc::new(Collect(Mutex::new(tx))),
+    ));
+    let (a_tx, a_rx) = channel();
+    let (b_tx, b_rx) = channel();
+    let a = engine.client(Arc::new(Collect(Mutex::new(a_tx))));
+    let b = engine.client(Arc::new(Collect(Mutex::new(b_tx))));
+    (engine, (a, a_rx), (b, b_rx))
+}
+
+fn say(c: &Client, v: Value) {
+    c.handle(Message::Text(v.to_string()));
+}
+
+#[test]
+fn a_request_behind_another_clients_job_is_told_so_and_can_only_withdraw_itself() {
+    let (gate_tx, gate_rx) = channel();
+    let (engine, (agent, agent_rx), (app, app_rx)) = two_clients(gate_rx);
+    say(&agent, json!({"id": "s", "op": "session_state", "name": "Claude"}));
+    assert_eq!(text(next(&agent_rx))["ok"], true);
+    say(&agent, json!({"id": "import", "op": "rebuild", "document": {"features": []}}));
+    until_running(&engine);
+
+    say(&app, json!({"id": "mine", "op": "rebuild", "document": {"features": []}}));
+    assert_eq!(
+        text(next(&app_rx)),
+        json!({"id": "mine", "status": "queued",
+            "behind": {"who": "assistant", "name": "Claude", "op": "rebuild"}})
+    );
+    say(&app, json!({"id": "c1", "op": "cancel", "target": "import"}));
+    assert_eq!(text(next(&app_rx))["result"], json!({"cancelled": false}));
+    say(&app, json!({"id": "c2", "op": "cancel"}));
+    assert_eq!(text(next(&app_rx))["result"], json!({"cancelled": false}));
+    say(&app, json!({"id": "c3", "op": "cancel", "target": "mine"}));
+    let withdrawn = text(next(&app_rx));
+    assert_eq!(withdrawn["id"], "mine");
+    assert_eq!(withdrawn["cancelled"], true);
+    assert_eq!(text(next(&app_rx))["result"], json!({"cancelled": true}));
+
+    say(&app, json!({"id": "next", "op": "rebuild", "document": {"features": [{"id": "f"}]}}));
+    assert_eq!(text(next(&app_rx))["status"], "queued");
+    gate_tx.send(()).unwrap();
+    gate_tx.send(()).unwrap();
+    let done = reply_to(&agent_rx, "import");
+    assert_eq!(done["ok"], true, "the other client's job was cancelled: {done}");
+    assert_eq!(text(next(&app_rx)), json!({"id": "next", "status": "started"}));
+    let next_reply = reply_to(&app_rx, "next");
+    assert_eq!(next_reply["ok"], true);
+    assert!(app_rx.try_recv().is_err(), "the withdrawn request still ran");
+    assert!(
+        agent_rx.try_recv().is_err(),
+        "a frame of the app's job reached the assistant"
+    );
+}
+
+/// The status frames `id` got before its reply.
+fn statuses_until(rx: &Receiver<Message>, id: &str) -> Vec<String> {
+    let mut out = vec![];
+    loop {
+        let m = text(next(rx));
+        if let Some(s) = m.get("status").and_then(Value::as_str) {
+            out.push(s.to_string());
+        } else if m["id"] == id {
+            return out;
+        }
+    }
+}
+
+#[test]
+fn a_clients_own_queue_and_an_idle_engine_send_no_queued_frame() {
+    let (gate_tx, gate_rx) = channel();
+    let (engine, (a, a_rx), (b, b_rx)) = two_clients(gate_rx);
+    say(&b, json!({"id": "b0", "op": "rebuild", "document": {"features": []}}));
+    gate_tx.send(()).unwrap();
+    assert!(statuses_until(&b_rx, "b0").iter().all(|s| s == "building"));
+    say(&a, json!({"id": "a1", "op": "rebuild", "document": {"features": []}}));
+    until_running(&engine);
+    say(&a, json!({"id": "a2", "op": "rebuild", "document": {"features": []}}));
+    gate_tx.send(()).unwrap();
+    gate_tx.send(()).unwrap();
+    assert!(statuses_until(&a_rx, "a1").iter().all(|s| s == "building"));
+    assert!(statuses_until(&a_rx, "a2").iter().all(|s| s == "building"));
+}
+
+#[test]
+fn a_delta_patches_its_own_clients_document_not_the_last_one_sent() {
+    let (tx, _rx) = channel();
+    let engine = Arc::new(Engine::start(
+        Fake {
+            gate: None,
+            rebuilds: Arc::new(AtomicI64::new(0)),
+        },
+        Arc::new(Collect(Mutex::new(tx))),
+    ));
+    let (a_tx, a_rx) = channel();
+    let (b_tx, b_rx) = channel();
+    let app = engine.client(Arc::new(Collect(Mutex::new(a_tx))));
+    let agent = engine.client(Arc::new(Collect(Mutex::new(b_tx))));
+    say(&app, json!({"id": "a1", "op": "rebuild", "revision": 1, "document": {"features": [{"id": "f1"}]}}));
+    assert_eq!(reply_to(&a_rx, "a1")["result"]["bodies"].as_array().unwrap().len(), 1);
+    let four = json!({"features": [{"id": "x"}, {"id": "y"}, {"id": "z"}, {"id": "w"}]});
+    say(&agent, json!({"id": "b1", "op": "rebuild", "revision": 1, "document": four}));
+    assert_eq!(reply_to(&b_rx, "b1")["result"]["bodies"].as_array().unwrap().len(), 4);
+    say(&app, json!({"id": "a2", "op": "rebuild", "baseRevision": 1, "revision": 2,
+        "ops": {"set": [[0, {"id": "f1b"}]]}}));
+    assert_eq!(reply_to(&a_rx, "a2")["result"]["bodies"].as_array().unwrap().len(), 1);
+}
