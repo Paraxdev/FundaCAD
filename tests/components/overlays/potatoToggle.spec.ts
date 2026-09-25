@@ -20,11 +20,13 @@ describe("Potato mode in Preferences", () => {
 
   it("sits directly beneath the performance switch with its tooltip", () => {
     mount(PreferencesDialog, { attachTo: document.body });
-    const perfCard = input("prefs-performance-mode").closest(".pref-card")!;
-    const potatoCard = input("prefs-potato-mode").closest(".pref-card")!;
-    expect(perfCard.nextElementSibling).toBe(potatoCard);
-    expect(potatoCard.querySelector(".pref-title")!.textContent).toBe("Potato mode");
-    expect(potatoCard.getAttribute("title")).toBe("Lowest quality, for slow or virtual machines");
+    const perfHead = input("prefs-performance-mode").closest(".pref-head")!;
+    const potatoHead = input("prefs-potato-mode").closest(".pref-head")!;
+    expect(potatoHead.parentElement).toBe(perfHead.parentElement);
+    // The performance hint, then the potato switch.
+    expect(perfHead.nextElementSibling!.nextElementSibling).toBe(potatoHead);
+    expect(potatoHead.querySelector(".pref-title")!.textContent).toBe("Potato mode");
+    expect(potatoHead.getAttribute("title")).toBe("Lowest quality, for slow or virtual machines");
   });
 
   it("turns on performance mode with it and gives it back when turned off", async () => {

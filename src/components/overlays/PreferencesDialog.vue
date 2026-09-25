@@ -383,9 +383,7 @@ function onClassicCamera(ev: Event) {
                 lighter render. Weak GPUs get it automatically; turn it on if the viewport
                 stutters or a laptop runs hot.
               </p>
-            </div>
-            <div class="pref-card" title="Lowest quality, for slow or virtual machines">
-              <label class="pref-head">
+              <label class="pref-head pref-sub" title="Lowest quality, for slow or virtual machines">
                 <span class="pref-title">Potato mode</span>
                 <span class="param-switch">
                   <input
