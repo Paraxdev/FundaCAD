@@ -89,6 +89,11 @@ export class DimInput {
   private fields: Field[] = [];
   private onCommit: ((values: Record<string, number>) => void) | null = null;
   private onCancel: (() => void) | null = null;
+  /** Fired on every keystroke, after userDriven is set, for a tool whose preview
+   *  or prompt reads the field but only ever refreshes on a pointer move: a typed
+   *  value with no drag in between would otherwise leave that stale. Optional,
+   *  most tools have nothing time-sensitive enough to need it. */
+  private onInput: (() => void) | null = null;
   private active = false;
   /** The kernel's refusal of what the boxes currently say, drawn under them.
    *  Its own element rather than a title attribute: a tooltip needs a hover the
@@ -188,8 +193,10 @@ export class DimInput {
     onCancel?: () => void,
     toggle?: DimToggleDef,
     extra?: HTMLElement,
+    onInput?: () => void,
   ) {
     this.hide();
+    this.onInput = onInput ?? null;
     this.setClickThrough(false); // every other tool wants a clickable box
     this.onCommit = onCommit;
     this.onCancel = onCancel ?? null;
@@ -242,6 +249,7 @@ export class DimInput {
         wrap.classList.add("typed");
         this.sizeToContent(field);
         this.adoptTypedUnit(field);
+        this.onInput?.();
       });
       this.sizeToContent(field);
       return field;
@@ -574,5 +582,6 @@ export class DimInput {
     this.fields = [];
     this.onCommit = null;
     this.onCancel = null;
+    this.onInput = null;
   }
 }
