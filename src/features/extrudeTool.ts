@@ -358,6 +358,18 @@ export class ExtrudeTool {
     this.updatePreview();
   }
 
+  /** Keystroke-driven twin of onMove's typed branch (lines above): a value typed
+   *  with the mouse sitting still never fires a pointermove, so without this the
+   *  prompt (and the operation buildFeature reads off it) would keep showing
+   *  whatever direction the depth defaulted to until Enter forced a recompute at
+   *  commit, one word behind what was actually about to be built. */
+  private onTypedDistance() {
+    if (this.phase !== "drag" || !this.dim.isUserDriven("distance")) return;
+    const v = this.dim.getValue("distance");
+    if (v != null) this.distance = v;
+    this.updatePreview();
+  }
+
   /** Park the depth input at a STABLE spot near the profile, anchored to the
    *  selection center (which doesn't move while you drag depth), offset off the
    *  geometry and clamped inside the viewport. Following the cursor made the box
@@ -557,6 +569,8 @@ export class ExtrudeTool {
         initial: this.symmetric,
         onChange: (on) => this.setSymmetric(on),
       },
+      undefined,
+      () => this.onTypedDistance(),
     );
     this.dim.updateFromCursor({ taper: this.taper });
     if (this.editId) {
@@ -914,7 +928,11 @@ export class ExtrudeTool {
       type: "extrude",
       sketch: first.sketchId,
       distance: Math.round(this.distance * 1000) / 1000,
-      operation: this.plannedOperation(),
+      // shownOp is what refreshPrompt just put on screen (or, before the first
+      // paint, the same fresh computation): reading it here rather than calling
+      // plannedOperation() again is what keeps the built feature from ever
+      // disagreeing with the word the prompt showed for this distance.
+      operation: this.shownOp ?? this.plannedOperation(),
       regions: this.selected.map((wr) => [wr.interior3D.x, wr.interior3D.y, wr.interior3D.z]),
       ...(this.symmetric ? { symmetric: true } : {}),
       ...(Math.abs(this.taper) >= TAPER_EPS ? { taper: Math.round(this.taper * 1000) / 1000 } : {}),
@@ -1038,6 +1056,12 @@ export class ExtrudeTool {
         return;
       }
     }
+    // A typed value with no drag in between never ran onMove, so the prompt can
+    // still be showing the word picked for the default distance rather than the
+    // one just typed. Refresh it here so shownOp is read off the FINAL distance:
+    // buildFeature reads shownOp rather than re-deriving it, so the operation
+    // that gets built is provably the one the word on screen just promised.
+    this.refreshPrompt();
     // Feature construction (id, regions, symmetric, taper, captured participants)
     // is shared with the live engine preview, so the thing committed is exactly
     // the thing that was on screen. See buildFeature.
