@@ -145,6 +145,29 @@
   pointer-events: none;
   z-index: 150;
 }
+.sketch-dim-leaders {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: calc(var(--z-float) - 1);
+}
+.sketch-dim-leaders line {
+  stroke: var(--accent);
+  stroke-width: 1;
+  stroke-dasharray: 3 2;
+  opacity: 0.75;
+}
+.sketch-dim-leaders circle,
+.sketch-dim-leaders polygon {
+  fill: var(--accent);
+  opacity: 0.9;
+}
+.sketch-dim-leaders .driven line { stroke: var(--text-dim, #8a90a0); }
+.sketch-dim-leaders .driven circle,
+.sketch-dim-leaders .driven polygon { fill: var(--text-dim, #8a90a0); }
 .sketch-dim {
   position: absolute;
   transform: translate(-50%, -50%);

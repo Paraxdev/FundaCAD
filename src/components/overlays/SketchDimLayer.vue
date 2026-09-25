@@ -26,13 +26,14 @@ import { screenTransform } from "../../sketch/annotationFormat";
 import { useSketchAnnotationStore } from "../../stores/sketchAnnotations";
 import type { DimItem } from "../../sketch/sketchDimensions";
 import { displayValue, isPlainNumber, parseField } from "../../ui/units";
-import { clampLabel } from "../../ui/labelClamp";
+import { clampLabel, labelLeader } from "../../ui/labelClamp";
 import type { Box } from "../../ui/promptPlacement";
 
 const s = useSketchAnnotationStore();
 
 // --- position: deliberately outside reactivity ----------------------------
 const els: (HTMLElement | null)[] = [];
+const leaders: (SVGGElement | null)[] = [];
 const scratch = new THREE.Vector3();
 let lastPose = -1;
 let raf = 0;
@@ -79,9 +80,38 @@ function loop(now: number = performance.now()) {
     if (!el || !l) continue;
     plane.to3D(l.anchor.x, l.anchor.y, scratch);
     const p = vp.projectToScreen(scratch);
-    const c = clampLabel(p.x, p.y, el.offsetWidth / 2, el.offsetHeight / 2, area, cards, LABEL_GAP);
+    const hw = el.offsetWidth / 2;
+    const hh = el.offsetHeight / 2;
+    const c = clampLabel(p.x, p.y, hw, hh, area, cards, LABEL_GAP);
     el.style.transform = screenTransform(c.x, c.y);
+    const g = leaders[i];
+    if (g) placeLeader(g, labelLeader(c, hw, hh, p));
   }
+}
+
+function placeLeader(g: SVGGElement, seg: ReturnType<typeof labelLeader>) {
+  if (!seg) {
+    g.setAttribute("visibility", "hidden");
+    return;
+  }
+  g.removeAttribute("visibility");
+  const [line, head, dot] = g.children;
+  line?.setAttribute("x1", String(seg.x1));
+  line?.setAttribute("y1", String(seg.y1));
+  line?.setAttribute("x2", String(seg.x2));
+  line?.setAttribute("y2", String(seg.y2));
+  dot?.setAttribute("cx", String(seg.x2));
+  dot?.setAttribute("cy", String(seg.y2));
+  // An arrowhead on the label's border, inside the gap clampLabel keeps clear,
+  // so the way to the dimension reads even where the line runs under a card.
+  const len = Math.hypot(seg.x2 - seg.x1, seg.y2 - seg.y1) || 1;
+  const ux = (seg.x2 - seg.x1) / len;
+  const uy = (seg.y2 - seg.y1) / len;
+  const tip = Math.min(LABEL_GAP - 1, len);
+  head?.setAttribute(
+    "points",
+    `${seg.x1 + ux * tip},${seg.y1 + uy * tip} ${seg.x1 - uy * 3.5},${seg.y1 + ux * 3.5} ${seg.x1 + uy * 3.5},${seg.y1 - ux * 3.5}`,
+  );
 }
 
 function stop() {
@@ -366,5 +396,23 @@ function onWheel(e: WheelEvent) {
         <template v-else>{{ l.text }}</template>
       </div>
     </div>
+  </Teleport>
+  <!-- A label kept on screen away from its dimension points back to it. Its own
+       layer, under the floating cards, so a leader running to a dimension behind
+       the Items card goes under the card rather than across it. -->
+  <Teleport to="body">
+    <svg v-if="s.dimItems.length" class="sketch-dim-leaders" aria-hidden="true">
+      <g
+        v-for="(l, i) in s.dimItems"
+        :key="i"
+        :ref="(el) => (leaders[i] = el as SVGGElement | null)"
+        :class="{ driven: l.driven }"
+        visibility="hidden"
+      >
+        <line />
+        <polygon />
+        <circle r="2" />
+      </g>
+    </svg>
   </Teleport>
 </template>
