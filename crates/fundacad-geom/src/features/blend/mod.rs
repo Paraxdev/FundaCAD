@@ -69,44 +69,46 @@ pub enum SectionErr {
     Internal(String),
     /// The job was cancelled while it ran.
     Cancelled,
-    /// The blend does not fit an edge: why, the largest share of the asked
-    /// size that does, and a point on that edge.
-    TooLarge {
-        why: Misfit,
-        fits: Option<f64>,
-        at: [f64; 3],
-    },
+    /// The blend does not fit an edge: why, how much of the asked size does,
+    /// and a point on that edge.
+    TooLarge { why: Misfit, fits: Fits, at: [f64; 3] },
 }
 
 /// blend_section.hxx `Misfit`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Misfit {
-    OffFace,
-    AcrossAxis,
     IntoBody,
     Mixed,
+    Split,
 }
 
 impl Misfit {
     pub fn from_code(code: i32) -> Misfit {
         match code {
-            2 => Misfit::AcrossAxis,
-            3 => Misfit::IntoBody,
             4 => Misfit::Mixed,
-            _ => Misfit::OffFace,
+            5 => Misfit::Split,
+            _ => Misfit::IntoBody,
         }
     }
 }
 
+/// The largest share of the asked size that fits.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Fits {
+    UpTo(f64),
+    Nothing,
+    /// The search for it ran out of time.
+    Unknown,
+}
+
 /// The section build's refusal of a blend too large for its edge, with the
 /// size that fits rounded down so that it still does.
-fn misfit_error(label: &str, body: &str, size: f64, why: Misfit, fits: Option<f64>, at: [f64; 3]) -> Fail {
+fn misfit_error(label: &str, body: &str, size: f64, why: Misfit, fits: Fits, at: [f64; 3]) -> Fail {
     let [x, y, z] = at.map(|c| py_g(py_round(c, 3)));
     let past = match why {
-        Misfit::OffFace => "it would reach past the end of a face it joins",
-        Misfit::AcrossAxis => "it would reach across the middle of the round and through the far side",
         Misfit::IntoBody => "it would cut on past a face into the body beyond it",
         Misfit::Mixed => "it would run off a face on part of the edge only",
+        Misfit::Split => "it would cut the body in pieces",
     };
     let head = format!(
         "{label} failed on {body}: at {}mm the {} does not fit the edge through ({x}, {y}, {z}), {past}.",
@@ -115,15 +117,17 @@ fn misfit_error(label: &str, body: &str, size: f64, why: Misfit, fits: Option<f6
     );
     // Right at the limit the ball ends exactly on a face's edge and the kernel
     // leaves a sliver face there, so the size offered stays a hair below it.
-    let fits = fits.map(|k| k * size - 1e-4).map(|v| {
+    let shown = |k: f64| {
+        let v = k * size - 1e-4;
         let step = if v >= 1.0 { 100.0 } else { 1000.0 };
         (v * step).floor() / step
-    });
+    };
     match fits {
-        Some(v) if v > 0.0 => value_err(
-            format!("{head} It fits up to {}mm, so try that or a smaller value.", py_g(v)),
+        Fits::UpTo(k) if shown(k) > 0.0 => value_err(
+            format!("{head} It fits up to {}mm, so try that or a smaller value.", py_g(shown(k))),
             Some(BLEND_TOO_LARGE),
         ),
+        Fits::Unknown => value_err(format!("{head} Try a smaller value."), Some(BLEND_TOO_LARGE)),
         _ => value_err(format!("{head} No size fits it here."), Some(BLEND_HAS_NO_END)),
     }
 }
