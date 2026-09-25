@@ -27,6 +27,7 @@ import {
   textureFieldApplies,
 } from "../../../plugins/FundaCAD.Texture/textureForm";
 import type { Engine } from "../../../src/app/engine";
+import { valueProblem } from "../../../src/document/numFields";
 import type { CadDocument, Feature } from "../../../src/types";
 
 /** Register the Texture plugin's description of its own feature type.
@@ -294,6 +295,53 @@ describe("FeatureProperties", () => {
     expect(fake.values).toEqual([]);
     expect(fake.exprs).toEqual([]);
     expect(w.find("input").classes()).toContain("input-error");
+  });
+
+  // A value the field cannot take is refused in the row, in the words the
+  // heads-up box uses for the same field, before anything reaches the build.
+  const FILLET = (): Feature => ({ id: "f1", type: "fillet", radius: 2 } as unknown as Feature);
+  const problemUnder = (w: VueWrapper, label: string) =>
+    w.findAll(".param-row").find((r) => r.find("label").text() === label)!.find(".param-problem");
+
+  it("refuses a negative radius in the row and writes nothing", async () => {
+    const fake = makeEngine({ parameters: {}, features: [FILLET()] });
+    const w = render(fake, "f1");
+    await commit(w, "Radius", "-2");
+    expect(fake.values).toEqual([]);
+    expect(fake.exprs).toEqual([]);
+    expect(problemUnder(w, "Radius").text()).toBe(valueProblem("Radius", { positive: true }, -2));
+    expect(problemUnder(w, "Radius").text()).toBe("Radius must be more than 0");
+  });
+
+  it("refuses a negative radius that names a unit too", async () => {
+    const fake = makeEngine({ parameters: {}, features: [FILLET()] });
+    const w = render(fake, "f1");
+    await commit(w, "Radius", "-1in");
+    expect(fake.values).toEqual([]);
+    expect(problemUnder(w, "Radius").text()).toBe("Radius must be more than 0");
+  });
+
+  it("still takes a radius above zero", async () => {
+    const fake = makeEngine({ parameters: {}, features: [FILLET()] });
+    const w = render(fake, "f1");
+    await commit(w, "Radius", "2,5");
+    expect(fake.values).toEqual([{ field: "radius", value: 2.5 }]);
+    expect(problemUnder(w, "Radius").exists()).toBe(false);
+  });
+
+  it("wants a whole count of at least one", async () => {
+    const fake = makeEngine({
+      parameters: {},
+      features: [{ id: "p1", type: "patternLinear", count: 3, spacing: 10 } as unknown as Feature],
+    });
+    const w = render(fake, "p1");
+    await commit(w, "Count", "2.5");
+    expect(problemUnder(w, "Count").text()).toBe("Count must be a whole number");
+    await commit(w, "Count", "0");
+    expect(problemUnder(w, "Count").text()).toBe("Count must be at least 1");
+    expect(fake.values).toEqual([]);
+    await commit(w, "Count", "4");
+    expect(fake.values).toEqual([{ field: "count", value: 4 }]);
   });
 
   it("renders nothing but the selection for a feature with no numeric fields", () => {
