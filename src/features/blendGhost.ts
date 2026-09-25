@@ -12,9 +12,14 @@
 // both faces. A flat face is a line there and a curved one a circle, so the
 // ball's centre is where two offset lines or circles cross.
 //
-// Neither shape is drawn reaching past the end of a face: a round that big has
-// nothing left to sit on, so the section stops growing where the shorter face
-// runs out.
+// Given the body's own outline across the edge, the ghost follows what the
+// kernel's fallback blend does when a round outgrows its faces. On a convex
+// edge the round is a cut, trimmed wherever it leaves the body, so only the
+// part of the arc inside the material is drawn. On a concave edge it is a fill
+// whose contacts stop at the ends of the faces. A ball too big to sit on a
+// curved face has no rolling ball solution at all, and what the kernel builds
+// there is its own approximation, so the ghost draws the flat-face shape faded
+// rather than as a confident band.
 //
 // A sample with no solution (faces nearly tangent or folded shut, or a ball
 // too big for a hollow face) voids the WHOLE edge's ghost rather than draw
@@ -41,6 +46,10 @@ export interface EdgeSample {
   /** how far each face runs from the edge before it ends, mm */
   readonly reach1?: number;
   readonly reach2?: number;
+  /** The body's outline in the plane across the edge, as x0,y0,x1,y1
+   *  segments with the edge point at the origin, x along `into1` and y along
+   *  the part of `into2` perpendicular to it. */
+  readonly outline?: Float64Array;
 }
 
 export type BlendKind = "fillet" | "chamfer";
@@ -48,6 +57,8 @@ export type BlendKind = "fillet" | "chamfer";
 export interface GhostGeometry {
   /** flat x,y,z triangle soup, ready for a BufferGeometry position attribute */
   readonly positions: number[];
+  /** the ball could not sit on a curved face along a good part of the edge */
+  readonly unsure: boolean;
 }
 
 /** Segments in one fillet arc cross-section. */
@@ -56,6 +67,10 @@ export const ARC_SEGMENTS = 8;
 const EPS = 1e-6;
 /** Wedges closer than this to flat or to folded shut are refused. */
 const MIN_WEDGE = (2 * Math.PI) / 180;
+/** Points tried along a section before its trim points are refined. */
+const CLIP_STEPS = 24;
+/** Share of an edge's sections with no rolling ball before the ghost fades. */
+const UNSURE_SHARE = 0.25;
 
 function sub(a: Pt3, b: Pt3): Vec3 {
   return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -164,6 +179,46 @@ function rollingBall(f1: Face2, f2: Face2, alpha: number, size: number): { cente
   return { center, touch1: contact(o1, f1, center, size), touch2: contact(o2, f2, center, size) };
 }
 
+/** Even-odd test against the outline, whose loops close when the mesh does. */
+function insideOutline(outline: Float64Array, q: V2): boolean {
+  let inside = false;
+  for (let i = 0; i < outline.length; i += 4) {
+    const ax = outline[i]!, ay = outline[i + 1]!, bx = outline[i + 2]!, by = outline[i + 3]!;
+    if (ay > q[1] !== by > q[1] && q[0] < ax + ((q[1] - ay) * (bx - ax)) / (by - ay)) inside = !inside;
+  }
+  return inside;
+}
+
+/** The stretch of `curve` over [0, 1] lying on the material side `inside`,
+ *  the run through its middle, or failing that its longest run; null when no
+ *  point of it is on that side. */
+function trimToSide(curve: (s: number) => V2, outline: Float64Array, inside: boolean): [number, number] | null {
+  const ok = (s: number) => insideOutline(outline, curve(s)) === inside;
+  const flags = Array.from({ length: CLIP_STEPS + 1 }, (_, i) => ok(i / CLIP_STEPS));
+  const runs: [number, number][] = [];
+  for (let i = 0; i <= CLIP_STEPS; i++) {
+    if (!flags[i]) continue;
+    const last = runs[runs.length - 1];
+    if (last && last[1] === i - 1) last[1] = i;
+    else runs.push([i, i]);
+  }
+  if (!runs.length) return null;
+  const mid = CLIP_STEPS / 2;
+  const run = runs.find(([a, b]) => a <= mid && mid <= b)
+    ?? runs.reduce((a, b) => (b[1] - b[0] > a[1] - a[0] ? b : a));
+  const refine = (good: number, bad: number) => {
+    for (let k = 0; k < 8; k++) {
+      const m = (good + bad) / 2;
+      if (ok(m)) good = m;
+      else bad = m;
+    }
+    return good;
+  };
+  const lo = run[0] === 0 ? 0 : refine(run[0] / CLIP_STEPS, (run[0] - 1) / CLIP_STEPS);
+  const hi = run[1] === CLIP_STEPS ? 1 : refine(run[1] / CLIP_STEPS, (run[1] + 1) / CLIP_STEPS);
+  return [lo, hi];
+}
+
 /** The point `s` along a face from the edge, following its bend. */
 function alongFace(f: Face2, s: number): V2 {
   if (Math.abs(f.bend * s) < 1e-6) return scale2(f.dir, s);
@@ -171,9 +226,14 @@ function alongFace(f: Face2, s: number): V2 {
   return add2(scale2(f.dir, Math.sin(a) / f.bend), scale2(f.side, (1 - Math.cos(a)) / f.bend));
 }
 
+interface Section {
+  points: Vec3[];
+  unsure: boolean;
+}
+
 /** One cross-section across the corner at `sample`, from face 1's contact
  *  point to face 2's: an arc for a fillet, the two points for a chamfer. */
-function crossSection(sample: EdgeSample, wanted: number, kind: BlendKind): Vec3[] | null {
+function crossSection(sample: EdgeSample, wanted: number, kind: BlendKind): Section | null {
   const T = normalize(sample.tangent);
   if (!T) return null;
   const d1 = rejectAndNormalize(sample.into1, T);
@@ -186,36 +246,59 @@ function crossSection(sample: EdgeSample, wanted: number, kind: BlendKind): Vec3
   if (!e2) return null;
   const sinA = Math.sin(alpha);
   const P = sample.point;
-  const room = Math.min(sample.reach1 ?? Infinity, sample.reach2 ?? Infinity);
-  const size = Math.min(wanted, kind === "chamfer" ? room : room * Math.tan(alpha / 2));
-  if (size < EPS) return null;
   const to3 = (p: V2): Vec3 => add(P, add(scale(d1, p[0]), scale(e2, p[1])));
+  const room = Math.min(sample.reach1 ?? Infinity, sample.reach2 ?? Infinity);
+  const outline = sample.outline?.length ? sample.outline : null;
+  // A small ball tucked into the corner is in the material on a convex edge
+  // and in the air on a concave one.
+  const bisector: V2 = [Math.cos(alpha / 2), Math.sin(alpha / 2)];
+  const probe = Math.min(2, Math.max(0.1, 0.15 * Math.min(room, 20)));
+  const convex = outline ? insideOutline(outline, scale2(bisector, probe / Math.sin(alpha / 2))) : false;
+  const size = convex
+    ? wanted
+    : Math.min(wanted, kind === "chamfer" ? room : room * Math.tan(alpha / 2));
+  if (size < EPS) return null;
 
   const f1: Face2 = { dir: [1, 0], side: [0, 1], bend: sample.bend1 ?? 0 };
   const f2: Face2 = { dir: [cosA, sinA], side: [sinA, -cosA], bend: sample.bend2 ?? 0 };
 
-  if (kind === "chamfer") return [to3(alongFace(f1, size)), to3(alongFace(f2, size))];
-
-  // A curved face the ball cannot sit on (it outgrows the face's own round)
-  // still gets the flat-face ghost: the kernel may well build it, on
-  // neighbouring faces this sample knows nothing about.
-  const ball = rollingBall(f1, f2, alpha, size)
-    ?? rollingBall({ ...f1, bend: 0 }, { ...f2, bend: 0 }, alpha, size);
-  if (!ball) return null;
-  const { center } = ball;
-  const u = scale2(sub2(ball.touch1, center), 1 / size);
-  const v = scale2(sub2(ball.touch2, center), 1 / size);
-  const sweep = Math.acos(Math.max(-1, Math.min(1, dot2(u, v))));
-  const sinSweep = Math.sin(sweep);
-  const pts: Vec3[] = [];
-  for (let i = 0; i <= ARC_SEGMENTS; i++) {
-    const s = i / ARC_SEGMENTS;
-    const dir = sinSweep < EPS
-      ? u
-      : add2(scale2(u, Math.sin((1 - s) * sweep) / sinSweep), scale2(v, Math.sin(s * sweep) / sinSweep));
-    pts.push(to3(add2(center, scale2(dir, size))));
+  let curve: (s: number) => V2;
+  let unsure = false;
+  if (kind === "chamfer") {
+    const a = alongFace(f1, size), b = alongFace(f2, size);
+    curve = (s) => add2(scale2(a, 1 - s), scale2(b, s));
+  } else {
+    // A curved face the ball cannot sit on (it outgrows the face's own round)
+    // still gets the flat-face ghost, the shape the kernel falls back to.
+    let ball = rollingBall(f1, f2, alpha, size);
+    if (!ball) {
+      ball = rollingBall({ ...f1, bend: 0 }, { ...f2, bend: 0 }, alpha, size);
+      unsure = f1.bend !== 0 || f2.bend !== 0;
+    }
+    if (!ball) return null;
+    const { center } = ball;
+    const u = scale2(sub2(ball.touch1, center), 1 / size);
+    const v = scale2(sub2(ball.touch2, center), 1 / size);
+    const sweep = Math.acos(Math.max(-1, Math.min(1, dot2(u, v))));
+    const sinSweep = Math.sin(sweep);
+    curve = (s) => {
+      const dir = sinSweep < EPS
+        ? u
+        : add2(scale2(u, Math.sin((1 - s) * sweep) / sinSweep), scale2(v, Math.sin(s * sweep) / sinSweep));
+      return add2(center, scale2(dir, size));
+    };
   }
-  return pts;
+
+  let [lo, hi] = [0, 1];
+  if (outline) {
+    const kept = trimToSide(curve, outline, convex);
+    if (!kept) return null;
+    [lo, hi] = kept;
+  }
+  const n = kind === "chamfer" ? 1 : ARC_SEGMENTS;
+  const points: Vec3[] = [];
+  for (let i = 0; i <= n; i++) points.push(to3(curve(lo + ((hi - lo) * i) / n)));
+  return { points, unsure };
 }
 
 /** The ghost mesh for one picked edge: a ribbon lofted between consecutive
@@ -230,10 +313,12 @@ export function sweepBlendGhost(
 ): GhostGeometry | null {
   if (size < EPS || samples.length < 2) return null;
   const sections: Vec3[][] = [];
+  let unsure = 0;
   for (const s of samples) {
     const cs = crossSection(s, size, kind);
     if (!cs) return null;
-    sections.push(cs);
+    sections.push(cs.points);
+    if (cs.unsure) unsure++;
   }
   if (closed && samples.length > 2) sections.push(sections[0]!);
   const positions: number[] = [];
@@ -247,5 +332,5 @@ export function sweepBlendGhost(
       push3(a0); push3(b1); push3(b0);
     }
   }
-  return positions.length ? { positions } : null;
+  return positions.length ? { positions, unsure: unsure >= samples.length * UNSURE_SHARE } : null;
 }

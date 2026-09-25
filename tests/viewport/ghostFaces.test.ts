@@ -12,9 +12,10 @@ import { ARC_SEGMENTS, sweepBlendGhost } from "../../src/features/blendGhost";
 import { BodyEdges, type BodyMesh, type ModelView } from "../../src/viewport/render";
 import type { Pt3 } from "../../src/features/blendGhost";
 
-function makeBody(id: string, positions: number[], indices: number[], faceIds: number[]): BodyMesh {
+function makeBody(id: string, positions: number[], indices: number[], faceIds: number[], normals?: number[]): BodyMesh {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  if (normals) geo.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
   geo.setIndex(new THREE.BufferAttribute(Uint32Array.from(indices), 1));
   return {
     id,
@@ -277,6 +278,79 @@ describe("blend ghost on a cylinder's circular rim", () => {
     expect(onCap).toBeGreaterThan(0);
     expect(onWall).toBeGreaterThan(0);
     expect(onCap).toBe(onWall);
+  });
+});
+
+/** A closed D-shaft prism with shipped surface normals: a cylinder of radius
+ *  `R` about Z cut flat at x = `a`, `H` tall. The flat meets the round along
+ *  the straight edge at (a, sqrt(R^2 - a^2)). */
+function buildDShaft(R: number, a: number, H: number, N: number): BodyMesh {
+  const positions: number[] = [], normals: number[] = [], indices: number[] = [], faceIds: number[] = [];
+  const tri = (p: Pt3[], n: Pt3[], fid: number) => {
+    for (let k = 0; k < 3; k++) {
+      indices.push(positions.length / 3);
+      positions.push(...p[k]!);
+      normals.push(...n[k]!);
+    }
+    faceIds.push(fid);
+  };
+  const t0 = Math.acos(a / R);
+  const ring: [number, number][] = [];
+  for (let i = 0; i <= N; i++) {
+    const t = t0 + ((2 * Math.PI - 2 * t0) * i) / N;
+    ring.push([R * Math.cos(t), R * Math.sin(t)]);
+  }
+  for (let i = 0; i < N; i++) {
+    const [x0, y0] = ring[i]!, [x1, y1] = ring[i + 1]!;
+    const n0: Pt3 = [x0 / R, y0 / R, 0], n1: Pt3 = [x1 / R, y1 / R, 0];
+    tri([[x0, y0, 0], [x1, y1, 0], [x1, y1, H]], [n0, n1, n1], 1);
+    tri([[x0, y0, 0], [x1, y1, H], [x0, y0, H]], [n0, n1, n0], 1);
+    tri([[0, 0, 0], [x1, y1, 0], [x0, y0, 0]], [[0, 0, -1], [0, 0, -1], [0, 0, -1]], 2);
+    tri([[0, 0, H], [x0, y0, H], [x1, y1, H]], [[0, 0, 1], [0, 0, 1], [0, 0, 1]], 3);
+  }
+  const [xe, ye] = ring[0]!, [xs, ys] = ring[N]!;
+  const fx: Pt3 = [1, 0, 0];
+  for (let j = 0; j < 8; j++) {
+    const y0 = ys + ((ye - ys) * j) / 8, y1 = ys + ((ye - ys) * (j + 1)) / 8;
+    tri([[a, y0, 0], [a, y1, 0], [a, y1, H]], [fx, fx, fx], 0);
+    tri([[a, y0, 0], [a, y1, H], [a, y0, H]], [fx, fx, fx], 0);
+  }
+  tri([[0, 0, 0], [xe, ye, 0], [xs, ys, 0]], [[0, 0, -1], [0, 0, -1], [0, 0, -1]], 2);
+  tri([[0, 0, H], [xs, ys, H], [xe, ye, H]], [[0, 0, 1], [0, 0, 1], [0, 0, 1]], 3);
+  return makeBody("d", positions, indices, faceIds, normals);
+}
+
+describe("blend ghost against a curved face, read off the mesh", () => {
+  const R = 10, a = 6, H = 20;
+  const ye = Math.sqrt(R * R - a * a);
+  const found = () => edgeFaceSamples(modelOf(buildDShaft(R, a, H, 72)), { body: "d", points: [[a, ye, 0], [a, ye, H]] })!;
+
+  it("measures the round's curvature from the shipped normals", () => {
+    const s = found().samples[5]!;
+    const bends = [s.bend1 ?? 0, s.bend2 ?? 0].sort((x, y) => x - y);
+    expect(bends[0]).toBeCloseTo(0, 6);
+    expect(bends[1]! * R).toBeCloseTo(1, 2);
+  });
+
+  // The ball inside the D, touching the flat (centre a - r off it) and the
+  // round from inside (centre R - r from the axis).
+  for (const r of [2, 6, 7.5]) {
+    it(`rolls the ball against the round at r = ${r}, r/R = ${r / R}`, () => {
+      const { samples } = found();
+      const geo = sweepBlendGhost(samples, r, "fillet")!;
+      expect(geo.unsure).toBe(false);
+      const c = [a - r, Math.sqrt((R - r) ** 2 - (a - r) ** 2)];
+      for (let i = 0; i < geo.positions.length; i += 3) {
+        const d = Math.hypot(geo.positions[i]! - c[0]!, geo.positions[i + 1]! - c[1]!);
+        expect(Math.abs(d - r)).toBeLessThan(0.03 * r);
+      }
+    });
+  }
+
+  it("fades when no ball of that size can sit on the round", () => {
+    // r = 9: a ball that far off the flat would stick out of the D.
+    const geo = sweepBlendGhost(found().samples, 9, "fillet");
+    expect(geo?.unsure).toBe(true);
   });
 });
 
