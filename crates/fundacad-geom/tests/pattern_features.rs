@@ -333,6 +333,17 @@ fn an_axis_reference_that_stops_resolving_keeps_the_cached_line_and_says_so() {
     assert!(n.iter().any(|m| m.contains("no longer resolves")), "{n:?}");
 }
 
+/// The selector's body is gone: the cached line is used and said, rather than
+/// the same face looked for on whatever bodies are left.
+#[test]
+fn an_axis_reference_whose_body_is_gone_keeps_the_cached_line_and_says_so() {
+    let wall = json!({"kind": "face", "by": "nearest", "point": [35, 30, 5], "body": "body9"});
+    let r = build(&around(world_z(), Some(wall)));
+    close(kernel::volume(&only_body(&r).shape), corner_holes(1.0));
+    let n = notes(&r);
+    assert!(n.iter().any(|m| m.contains("no longer resolves")), "{n:?}");
+}
+
 #[test]
 fn an_axis_reference_over_a_bare_world_axis_is_refused() {
     let wall = json!({"kind": "face", "by": "nearest", "point": [35, 30, 5], "body": "body1"});
