@@ -1813,14 +1813,14 @@ export class Viewport {
   }
 
   /** The rendered edge a saved `by:"nearest"` selector resolves to: its own
-   *  midpoint first, else the edge of `body` passing nearest the point, the
-   *  engine's rule, within a few percent of the model size. */
+   *  midpoint first, else the edge of `body` passing clearly nearest the point
+   *  (nearestEdgeByCurve), never further than 2% of the model size. */
   edgeLineForSelector(point: [number, number, number], body?: string): EdgeRef | null {
     const byMid = this.edgeLineByMid(point);
     if (byMid || !this.model) return byMid;
     const diag = this.model.box.getSize(this.projScratch).length();
     const pool = body ? this.model.edges.filter((e) => e.body === body) : this.model.edges;
-    const i = nearestEdgeByCurve(pool.map((e) => ({ points: e.points })), point, Math.max(midMatchTol(diag), 0.02 * diag));
+    const i = nearestEdgeByCurve(pool.map((e) => ({ points: e.points })), point, 0.02 * diag);
     return i == null ? null : (pool[i] ?? null);
   }
 

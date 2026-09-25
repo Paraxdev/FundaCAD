@@ -81,27 +81,43 @@ export function nearestEdgeByMid(
   return best >= 0 ? best : null;
 }
 
-/** Index of the edge whose polyline passes nearest `point`, or null when none
- *  comes within `tol`. This is how the engine resolves `by:"nearest"`, so it is
- *  the fallback for a selector whose point is not its edge's midpoint: one
- *  written by hand or by MCP, or one picked anywhere along a closed loop. */
+/** Index of the edge whose polyline passes nearest `point`, the engine's rule
+ *  for `by:"nearest"`, as the fallback for a selector whose point is not its
+ *  edge's midpoint: one written by hand or by MCP, or one picked anywhere along a
+ *  closed loop. Null unless the match is clear: within a quarter of that edge's
+ *  own length (never more than `cap`), and at most half as far as the next edge.
+ *  A model wide tolerance alone would reach a neighbouring hole on a large panel. */
 export function nearestEdgeByCurve(
   edges: { points: Vec3[] }[],
   point: Vec3,
-  tol: number,
+  cap: number,
 ): number | null {
-  let best = -1;
-  let bestD = tol * tol;
+  let best = -1, bestD = Infinity, secondD = Infinity;
   for (let i = 0; i < edges.length; i++) {
     const pts = edges[i]?.points;
     if (!pts?.length) continue;
+    let d = Infinity;
     const n = Math.max(1, pts.length - 1);
-    for (let k = 0; k < n; k++) {
-      const dd = segD2(pts[k]!, pts[Math.min(k + 1, pts.length - 1)]!, point);
-      if (dd < bestD) { bestD = dd; best = i; }
+    for (let k = 0; k < n; k++) d = Math.min(d, segD2(pts[k]!, pts[Math.min(k + 1, pts.length - 1)]!, point));
+    d = Math.sqrt(d);
+    if (d < bestD) {
+      secondD = bestD;
+      bestD = d;
+      best = i;
+    } else if (d < secondD) {
+      secondD = d;
     }
   }
-  return best >= 0 ? best : null;
+  if (best < 0) return null;
+  const tol = Math.min(cap, Math.max(0.5, 0.25 * polylineLength(edges[best]!.points)));
+  if (bestD > tol || bestD > 0.5 * secondD) return null;
+  return best;
+}
+
+function polylineLength(points: Vec3[]): number {
+  let total = 0;
+  for (let i = 1; i < points.length; i++) total += Math.sqrt(d2(points[i - 1]!, points[i]!));
+  return total;
 }
 
 function segD2(a: Vec3, b: Vec3, p: Vec3): number {
