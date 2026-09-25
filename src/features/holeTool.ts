@@ -271,8 +271,8 @@ export class HoleTool {
     });
     this.dim.show(
       [
-        { name: "size", label: "Size", kind: "count" },
-        { name: "depth", label: "Depth", kind: "length" },
+        { name: "size", label: "Size", kind: "count", free: true },
+        { name: "depth", label: "Depth", kind: "length", free: true },
         // Offset from the face centre (this.center) along its own xdir/ydir, so
         // a hole can be placed exactly without pixel-hunting for the click spot.
         { name: "x", label: "X", kind: "length" },
@@ -340,6 +340,22 @@ export class HoleTool {
     }
     this.seedDepth();
     this.valueChanged();
+  }
+
+  /** Size and depth are read by this tool rather than the box, a size name
+   *  and "through" not being numbers, so it is this tool that has to refuse
+   *  what it could not read instead of building the last value it could. */
+  private typedProblem(): string | null {
+    if (this.dim.isUserDriven("size") && !parseHoleSize(this.dim.getRaw("size"))) {
+      return `Size: "${this.dim.getRaw("size").trim()}" is not a size, type M5 or a diameter`;
+    }
+    const depthText = this.dim.getRaw("depth");
+    if (this.dim.isUserDriven("depth") && !(THROUGH.test(depthText) && this.holeType !== "insert")) {
+      const v = this.dim.getValue("depth");
+      if (v == null) return `Depth: "${depthText.trim()}" is not a number`;
+      if (v <= 0) return "Depth must be more than 0";
+    }
+    return null;
   }
 
   private sizeText(): string {
@@ -512,6 +528,8 @@ export class HoleTool {
       setPrompt("Click the face to place a hole first · Esc");
       return;
     }
+    const typed = this.typedProblem();
+    if (typed) return this.dim.flag(typed);
     if (this.previewTimer) {
       clearTimeout(this.previewTimer);
       this.previewTimer = 0;

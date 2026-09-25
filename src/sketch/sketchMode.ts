@@ -1967,22 +1967,22 @@ export class SketchMode {
     const t = this.tool;
     const defs =
       t === "circle2"
-        ? [{ name: "diameter", label: "Diameter", icon: "diameter" }]
+        ? [{ name: "diameter", label: "Diameter", icon: "diameter", positive: true }]
         : t === "polygon"
-          ? [{ name: "radius", label: "R" }, { name: "sides", label: "N", kind: "count" as const }]
+          ? [{ name: "radius", label: "R", positive: true }, { name: "sides", label: "N", kind: "count" as const, integer: true, atLeast: 3 }]
           : t === "centerRectangle"
-            ? [{ name: "width", label: "W" }, { name: "height", label: "H" }]
+            ? [{ name: "width", label: "W", positive: true }, { name: "height", label: "H", positive: true }]
             : t === "rectangle3"
               // W is live from the first click (it is the edge being drawn); H
               // only means anything once that edge exists, and typing into it
               // early would be typing into a field with no geometry behind it.
               ? this.clickPts.length === 1
-                ? [{ name: "width", label: "W" }]
-                : [{ name: "width", label: "W" }, { name: "height", label: "H" }]
+                ? [{ name: "width", label: "W", positive: true }]
+                : [{ name: "width", label: "W", positive: true }, { name: "height", label: "H", positive: true }]
             : t === "slot"
               ? this.clickPts.length === 1
-                ? [{ name: "length", label: "L" }]
-                : [{ name: "width", label: "W" }]
+                ? [{ name: "length", label: "L", positive: true }]
+                : [{ name: "width", label: "W", positive: true }]
               : null;
     if (!defs) return;
     this.dim.show(defs, () => this.multiClickAt(this.lastCursor.clone()));
@@ -2928,9 +2928,9 @@ export class SketchMode {
   private showDimFields() {
     const defs =
       this.tool === "rectangle"
-        ? [{ name: "width", label: "W" }, { name: "height", label: "H" }]
+        ? [{ name: "width", label: "W", positive: true }, { name: "height", label: "H", positive: true }]
         : this.tool === "circle"
-          ? [{ name: "diameter", label: "Diameter", icon: "diameter" }]
+          ? [{ name: "diameter", label: "Diameter", icon: "diameter", positive: true }]
           : [
               { name: "length", label: "L" },
               { name: "angle", label: "Angle", icon: "angle", kind: "angle" as const },

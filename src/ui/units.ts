@@ -99,7 +99,7 @@ export function snap(v: number, step: number): number {
 // the input-side consumers that historically import it from units.
 import type { FieldKind } from "../document/numFields";
 export type { FieldKind };
-import { tryParseMeasure, unitById } from "./measure";
+import { canonicalTyping, tryParseMeasure, unitById } from "./measure";
 
 /** numeric value to show in a field: angles stay in degrees, lengths convert */
 export function displayValue(mm: number, kind: FieldKind = "length"): number {
@@ -116,12 +116,12 @@ export function displayValue(mm: number, kind: FieldKind = "length"): number {
  *
  *  It now goes through ui/measure, so anything typeable in one field is
  *  typeable in all of them: units, symbols, compounds, fractions, arithmetic.
- *  A COUNT stays a plain number, "6 sides" has no unit to infer and a fraction
- *  of a side is not a thing. */
+ *  A COUNT takes arithmetic but no unit. It was parseFloat too, and so read
+ *  "12abc" as 12 and "20,5" as 20 without a word. */
 export function parseField(raw: string, kind: FieldKind = "length"): number | null {
   if (kind === "count") {
-    const v = parseFloat(raw);
-    return Number.isFinite(v) ? v : null;
+    const m = tryParseMeasure(raw, null);
+    return m && !m.unit ? m.value : null;
   }
   const display = kind === "length" ? unitById(current) : unitById("deg");
   return tryParseMeasure(raw, display)?.value ?? null;
@@ -141,5 +141,18 @@ export function parsedUnit(raw: string, kind: FieldKind = "length"): string | nu
  *  "5.0" and "-2e3" are plain; "5 mm", "width/2", "5+3" are expressions. */
 const PLAIN_NUMBER = /^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$/;
 export function isPlainNumber(raw: string): boolean {
-  return PLAIN_NUMBER.test(raw.trim());
+  return plainNumber(raw) !== null;
+}
+
+/** The value of a plain literal, read the way ui/measure reads one: a decimal
+ *  comma and a typographic minus are the same literal. Null for anything else,
+ *  an ambiguous "1,000" included. */
+export function plainNumber(raw: string): number | null {
+  let src: string;
+  try {
+    src = canonicalTyping(raw);
+  } catch {
+    return null;
+  }
+  return PLAIN_NUMBER.test(src) ? Number(src) : null;
 }

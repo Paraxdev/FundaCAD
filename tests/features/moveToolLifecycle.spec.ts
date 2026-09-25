@@ -65,10 +65,11 @@ interface Probe {
   began: number;
   ends: boolean[];
   commits: number;
+  sent: { dz: number; sized: boolean }[];
 }
 
 function probe(at: [number, number, number], opts: { rebuild?: boolean; reopen?: () => MoveTarget | null } = {}): Probe {
-  const p: Probe = { target: null as unknown as MoveTarget, began: 0, ends: [], commits: 0 };
+  const p: Probe = { target: null as unknown as MoveTarget, began: 0, ends: [], commits: 0, sent: [] };
   const c = new THREE.Vector3(...at);
   p.target = {
     frame: WORLD_FRAME,
@@ -80,8 +81,9 @@ function probe(at: [number, number, number], opts: { rebuild?: boolean; reopen?:
     box: () => new THREE.Box3(c.clone().subScalar(5), c.clone().addScalar(5)),
     begin: () => { p.began++; },
     preview: () => {},
-    commit: (): MoveCommit => {
+    commit: (c): MoveCommit => {
       p.commits++;
+      p.sent.push({ dz: c.values.dz, sized: c.sized });
       return { id: null, rebuild: opts.rebuild ?? false };
     },
     end: (restore) => { p.ends.push(restore); },
@@ -223,5 +225,55 @@ describe("move gizmo lifecycle", () => {
 
     expect(done).toHaveBeenCalledTimes(1);
     expect(vp.suspendPicking).toBe(true);
+  });
+});
+
+describe("a typed move", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    frames = [];
+    vi.stubGlobal("requestAnimationFrame", (fn: () => void) => { frames.push(fn); return frames.length; });
+    vi.stubGlobal("cancelAnimationFrame", () => {});
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    document.body.innerHTML = "";
+  });
+
+  const field = () => document.querySelector<HTMLInputElement>(".dim-input input")!;
+  const typeAndEnter = (text: string) => {
+    field().value = text;
+    field().dispatchEvent(new Event("input", { bubbles: true }));
+    field().dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  };
+  const problem = () => document.querySelector(".dim-problem")?.textContent ?? null;
+
+  function setup() {
+    const { vp, scene, canvas } = fakeViewport();
+    const tool = new MoveTool(vp, fakeStore().store);
+    const a = probe([0, 0, 0]);
+    a.target.reopen = () => a.target;
+    tool.startTarget(a.target, () => {});
+    flushFrame();
+    scene.updateMatrixWorld(true);
+    return { tool, a, canvas };
+  }
+
+  it("goes along an arrow that was only clicked, sign and all", () => {
+    // The click re-opens the gizmo at once, having moved nothing, and that
+    // re-open used to forget which arrow was picked, so the typed -2 went nowhere.
+    const { a, canvas } = setup();
+    pointer(canvas, "pointerdown", 40);
+    pointer(canvas, "pointerup", 40);
+    typeAndEnter("-2");
+    expect(a.sent).toEqual([{ dz: -2, sized: false }]);
+  });
+
+  it("with no arrow picked, stays open and says so instead of closing on nothing", () => {
+    const { tool, a } = setup();
+    typeAndEnter("-2");
+    expect(a.commits).toBe(0);
+    expect(tool.active).toBe(true);
+    expect(problem()).toMatch(/Click an arrow/);
   });
 });

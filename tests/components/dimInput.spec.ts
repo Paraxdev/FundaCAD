@@ -6,7 +6,7 @@
 // that the box gets out of the way of a drag it is not part of, and one that
 // its own buttons still have marks in them, which they lost to a flex rule.
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DimInput } from "../../src/sketch/dimInput";
 import { iconElement } from "../../src/ui/icons";
 
@@ -273,5 +273,94 @@ describe("DimInput hidden fields", () => {
 
     dim.setFieldHidden("taper", false);
     expect(inputs[1]!.closest("label")!.style.display).toBe("");
+  });
+});
+
+describe("what is typed is read, or refused out loud", () => {
+  const input = (i = 0) => root().querySelectorAll<HTMLInputElement>("input")[i]!;
+  const type = (text: string, i = 0) => {
+    input(i).value = text;
+    input(i).dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  const enter = (i = 0) =>
+    input(i).dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  const problem = () => root().querySelector(".dim-problem")?.textContent ?? null;
+
+  it("keeps the sign, the comma and the arithmetic", () => {
+    const got: Record<string, number>[] = [];
+    dim.show([{ name: "move", label: "Move" }], (v) => got.push(v));
+    for (const [text, want] of [["-2", -2], ["20,5", 20.5], ["-(5+2)", -7], ["\u22123", -3]] as const) {
+      type(text);
+      enter();
+      expect(got.pop()!.move).toBeCloseTo(want);
+    }
+  });
+
+  it("does not confirm text that is not a value, and says why", () => {
+    const commit = vi.fn();
+    dim.show([{ name: "move", label: "Move" }], commit);
+    type("abc");
+    enter();
+    expect(commit).not.toHaveBeenCalled();
+    expect(problem()).toBe('Move: "abc" is not a number');
+    expect(dim.getValue("move")).toBeNull();
+
+    type("1,000");
+    enter();
+    expect(problem()).toMatch(/ambiguous/);
+
+    type("3");
+    expect(problem()).toBeNull();
+    enter();
+    expect(commit).toHaveBeenCalledTimes(1);
+  });
+
+  it("refuses a negative where only a positive means anything, instead of flipping it", () => {
+    const commit = vi.fn();
+    dim.show([{ name: "radius", label: "R", positive: true }], commit);
+    type("-2");
+    expect(dim.getValue("radius")).toBeNull();
+    enter();
+    expect(commit).not.toHaveBeenCalled();
+    expect(problem()).toBe("R must be more than 0");
+  });
+
+  it("holds a count to whole numbers and its floor", () => {
+    const commit = vi.fn();
+    dim.show([{ name: "count", label: "N", kind: "count", integer: true, atLeast: 3 }], commit);
+    type("2.5");
+    enter();
+    expect(problem()).toBe("N must be a whole number");
+    type("2");
+    enter();
+    expect(problem()).toBe("N must be at least 3");
+    type("12abc");
+    enter();
+    expect(problem()).toMatch(/^N: /);
+    expect(commit).not.toHaveBeenCalled();
+  });
+
+  it("leaves a field the tool reads itself alone", () => {
+    const commit = vi.fn();
+    dim.show([{ name: "size", label: "Size", kind: "count", free: true }], commit);
+    type("M5");
+    enter();
+    expect(commit).toHaveBeenCalledTimes(1);
+    expect(problem()).toBeNull();
+  });
+
+  it("does not judge a value the cursor wrote", () => {
+    const commit = vi.fn();
+    dim.show([{ name: "radius", label: "R", positive: true }], commit);
+    dim.updateFromCursor({ radius: -1 });
+    enter();
+    expect(commit).toHaveBeenCalledTimes(1);
+  });
+
+  it("lets a tool refuse the confirm with its own reason", () => {
+    dim.show([{ name: "move", label: "Move" }], () => dim.flag("Click an arrow first"));
+    type("2");
+    enter();
+    expect(problem()).toBe("Click an arrow first");
   });
 });

@@ -10,7 +10,7 @@ import { iconElement } from "../ui/icons";
 import { isHistoryKey } from "../ui/focus";
 import { onPreviewError } from "../ui/previewError";
 import { getUnit, parseField } from "../ui/units";
-import { commonUnits, toUnit, tryParseMeasure, unitById, type UnitDef } from "../ui/measure";
+import { commonUnits, measureError, toUnit, tryParseMeasure, unitById, type UnitDef } from "../ui/measure";
 
 export interface DimFieldDef {
   name: string;
@@ -18,6 +18,13 @@ export interface DimFieldDef {
   label: string;
   icon?: string;
   kind?: "length" | "angle" | "count"; // default length; count = raw number, no unit
+  /** The tool reads the raw text itself (a size name, a parameter expression),
+   *  so the box does not judge it. */
+  free?: boolean;
+  /** Only a value above zero means anything, a radius or a scale. */
+  positive?: boolean;
+  atLeast?: number;
+  integer?: boolean;
 }
 
 /** An on/off switch in the box, beside Confirm and Cancel.
@@ -102,6 +109,10 @@ export class DimInput {
    *  where the eye already is. */
   private problem: HTMLDivElement | null = null;
   private unsubscribeError: (() => void) | null = null;
+  /** The kernel's or the tool's complaint, and the box's own about what was
+   *  typed. The typed one is shown first, it is the one the user can act on. */
+  private external: string | null = null;
+  private typedProblem: string | null = null;
 
   constructor() {
     this.root = document.createElement("div");
@@ -247,6 +258,7 @@ export class DimInput {
       input.addEventListener("keydown", (e) => this.onKey(e, field));
       input.addEventListener("input", () => {
         field.userDriven = true; // typing freezes the field from cursor tracking
+        if (this.typedProblem) this.setTypedProblem(null);
         wrap.classList.add("typed");
         this.sizeToContent(field);
         this.adoptTypedUnit(field);
@@ -316,6 +328,47 @@ export class DimInput {
     this.unsubscribeError = onPreviewError((m) => this.setProblem(m));
   }
 
+  /** Why what is typed in `f` cannot be used, or null. Judged only once the
+   *  user has typed: a value the cursor wrote is the tool's own. */
+  private fieldProblem(f: Field): string | null {
+    if (f.hidden || !f.userDriven || f.def.free) return null;
+    const raw = f.input.value.trim();
+    if (!raw) return null;
+    const v = this.parse(f);
+    if (v === null) {
+      const err = measureError(raw, f.unit);
+      if (err === null) return `${f.def.label} takes a plain number, no unit`;
+      return `${f.def.label}: ${/unknown parameter/.test(err) ? `"${raw}" is not a number` : err}`;
+    }
+    return this.rangeProblem(f.def, v);
+  }
+
+  private rangeProblem(def: DimFieldDef, v: number): string | null {
+    if (def.integer && Math.abs(v - Math.round(v)) > 1e-9) return `${def.label} must be a whole number`;
+    if (def.positive && !(v > 0)) return `${def.label} must be more than 0`;
+    if (def.atLeast !== undefined && v < def.atLeast) return `${def.label} must be at least ${def.atLeast}`;
+    return null;
+  }
+
+  private parse(f: Field): number | null {
+    // Parsed against THIS field's unit, not the document's: a field the user put
+    // into inches must read a bare "2" as two inches.
+    if (!f.unit) return parseField(f.input.value, f.def.kind);
+    return tryParseMeasure(f.input.value, f.unit)?.value ?? null;
+  }
+
+  /** Refuse the confirm and say why, for a tool that has its own reason, such
+   *  as a typed distance with no direction picked to apply it along. Cleared by
+   *  the next keystroke. */
+  flag(message: string) {
+    this.setTypedProblem(message);
+  }
+
+  private setTypedProblem(message: string | null) {
+    this.typedProblem = message;
+    this.renderProblem();
+  }
+
   /** The switch, when the tool asked for one. Null the rest of the time, which
    *  is every tool but Extrude so far. */
   private toggleBtn: HTMLButtonElement | null = null;
@@ -364,6 +417,8 @@ export class DimInput {
     if (e.key === "Tab") {
       e.preventDefault();
       field.userDriven = true; // Tab locks the current field
+      const problem = this.fieldProblem(field);
+      if (problem) this.setTypedProblem(problem);
       const shown = this.fields.filter((f) => !f.hidden || f === field);
       const next = shown[(shown.indexOf(field) + 1) % shown.length];
       if (next) {
@@ -500,6 +555,13 @@ export class DimInput {
    *  one who knows which of the two they would rather move. */
   private setProblem(message: string | null) {
     if (!this.active) return;
+    this.external = message;
+    this.renderProblem();
+  }
+
+  private renderProblem() {
+    if (!this.active) return;
+    const message = this.typedProblem ?? this.external;
     if (!message) {
       this.problem?.remove();
       this.problem = null;
@@ -530,14 +592,14 @@ export class DimInput {
     return !!f && f.userDriven;
   }
 
-  /** returns the field value in MM (length fields converted from display unit) */
+  /** returns the field value in MM (length fields converted from display unit),
+   *  or null when the text is not a value or one the field refuses */
   getValue(name: string): number | null {
     const f = this.fields.find((x) => x.def.name === name);
     if (!f) return null;
-    // Parsed against THIS field's unit, not the document's: a field the user put
-    // into inches must read a bare "2" as two inches.
-    if (!f.unit) return parseField(f.input.value, f.def.kind);
-    return tryParseMeasure(f.input.value, f.unit)?.value ?? null;
+    const v = this.parse(f);
+    if (v === null || (f.userDriven && this.rangeProblem(f.def, v))) return null;
+    return v;
   }
 
   /** The unit a field is currently showing, so a tool can label its own prompt
@@ -566,6 +628,14 @@ export class DimInput {
   }
 
   private commit() {
+    for (const f of this.fields) {
+      const problem = this.fieldProblem(f);
+      if (!problem) continue;
+      this.setTypedProblem(problem);
+      f.input.focus();
+      f.input.select();
+      return;
+    }
     const out: Record<string, number> = {};
     for (const f of this.fields) {
       const v = this.getValue(f.def.name); // already mm-converted
@@ -585,6 +655,8 @@ export class DimInput {
     this.unsubscribeError?.();
     this.unsubscribeError = null;
     this.problem = null; // innerHTML below takes the element with it
+    this.external = null;
+    this.typedProblem = null;
     this.root.classList.remove("dim-bad");
     this.root.style.display = "none";
     this.root.innerHTML = "";

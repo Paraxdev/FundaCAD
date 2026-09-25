@@ -161,7 +161,9 @@ button.finish:hover {
   font-variant-numeric: tabular-nums;
   letter-spacing: normal;
   text-transform: none;
-  padding: 2px 0;
+  /* Side padding keeps a leading minus off the focus ring, where it read as
+     part of the ring and a typed -2 looked like 2. */
+  padding: 2px 3px;
 }
 .dim-field input:focus {
   outline: none;

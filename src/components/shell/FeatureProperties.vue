@@ -39,7 +39,7 @@ import ChoiceRow from "./ChoiceRow.vue";
 import ToggleRow from "./ToggleRow.vue";
 import FileRow from "./FileRow.vue";
 import SelectionTargetRow from "./SelectionTargetRow.vue";
-import { displayRound, isPlainNumber } from "../../ui/units";
+import { displayRound, plainNumber } from "../../ui/units";
 import { onPreviewError } from "../../ui/previewError";
 import { commonUnits, toUnit, tryParseMeasure, unitById, type Dim, type Measured, type UnitDef } from "../../ui/measure";
 import { contextMenu } from "../../ui/menu";
@@ -401,7 +401,8 @@ const featureRows = useDocValue(() => {
  */
 function previewNumber(row: { key: string; kind: FieldKind }, raw: string): number | null {
   const u = unitOf(row.key, row.kind);
-  if (isPlainNumber(raw)) return Number(raw.trim()) * (u?.factor ?? 1);
+  const plain = plainNumber(raw);
+  if (plain !== null) return plain * (u?.factor ?? 1);
   const m = u ? measure(raw, u, u.dim) : null;
   return m && typeof m !== "string" && m.unit ? m.value : null;
 }
@@ -484,8 +485,9 @@ function commitField(
 ): string | null {
   const { key, target, kind } = row;
   const u = unitOf(key, kind);
-  if (isPlainNumber(raw)) {
-    store.setTargetValue(target, Number(raw.trim()) * (u?.factor ?? 1), kind);
+  const plain = plainNumber(raw);
+  if (plain !== null) {
+    store.setTargetValue(target, plain * (u?.factor ?? 1), kind);
     return null;
   }
   const m = u ? measure(raw, u, u.dim) : null;

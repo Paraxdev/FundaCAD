@@ -16,7 +16,10 @@ import {
   toUnit,
   tryParseMeasure,
   unitById,
+  canonicalTyping,
 } from "../../src/ui/measure";
+import { isPlainNumber, parseField, plainNumber } from "../../src/ui/units";
+import { parseHoleSize } from "../../src/features/holeStandards";
 
 const MM = unitById("mm");
 const IN = unitById("in");
@@ -193,6 +196,59 @@ describe("refusing rather than inventing", () => {
 
   it("refuses a division by zero instead of shipping Infinity into geometry", () => {
     expect(tryParseMeasure("2/0", MM)).toBeNull();
+  });
+});
+
+describe("what a keyboard or a paste hands over", () => {
+  it("keeps a leading minus, after select-all or not, and around a group", () => {
+    expect(val("-2")).toBeCloseTo(-2);
+    expect(val("- 2")).toBeCloseTo(-2);
+    expect(val("-(5+2)")).toBeCloseTo(-7);
+    expect(val("-.5")).toBeCloseTo(-0.5);
+  });
+
+  it("reads a typographic minus as a minus", () => {
+    expect(val("\u22122")).toBeCloseTo(-2);
+    expect(val("\u20132 mm")).toBeCloseTo(-2);
+  });
+
+  it("reads a decimal comma as a point, never as 205 or 20", () => {
+    expect(val("20,5")).toBeCloseTo(20.5);
+    expect(val("-0,25 in")).toBeCloseTo(-6.35);
+    expect(canonicalTyping("20,5")).toBe("20.5");
+  });
+
+  it("refuses a comma that could be a thousands separator", () => {
+    expect(tryParseMeasure("1,000", MM)).toBeNull();
+    expect(measureError("1,000", MM)).toMatch(/ambiguous/);
+  });
+
+  it("leaves commas alone once there are brackets or a point", () => {
+    expect(canonicalTyping("max(2,3)")).toBe("max(2,3)");
+    expect(tryParseMeasure("1.000,5", MM)).toBeNull();
+  });
+});
+
+describe("the other field readers", () => {
+  it("a count is no longer parseFloat, so trailing junk is refused, not dropped", () => {
+    expect(parseField("12abc", "count")).toBeNull();
+    expect(parseField("2-", "count")).toBeNull();
+    expect(parseField("20,5", "count")).toBeCloseTo(20.5);
+    expect(parseField("-(5+2)", "count")).toBeCloseTo(-7);
+    expect(parseField("6 mm", "count")).toBeNull();
+  });
+
+  it("a plain literal takes the same spellings", () => {
+    expect(plainNumber("20,5")).toBeCloseTo(20.5);
+    expect(plainNumber("\u22123")).toBe(-3);
+    expect(plainNumber("1,000")).toBeNull();
+    expect(plainNumber("5 mm")).toBeNull();
+    expect(isPlainNumber("-2")).toBe(true);
+  });
+
+  it("a hole size accepts a decimal comma and refuses a negative", () => {
+    expect(parseHoleSize("5,5")).toEqual({ diameter: 5.5 });
+    expect(parseHoleSize("-5")).toBeNull();
   });
 });
 

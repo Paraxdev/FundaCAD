@@ -4,6 +4,7 @@
 // leaves out. Both test files pin the same numbers.
 
 import type { Feature, HoleFit, HoleStandard, HoleType } from "../types";
+import { plainNumber } from "../ui/units";
 
 export const HOLE_SIZES = ["M2", "M2.5", "M3", "M4", "M5", "M6", "M8", "M10"] as const;
 export type HoleSize = (typeof HOLE_SIZES)[number];
@@ -183,10 +184,8 @@ export function parseHoleSize(text: string): { size: HoleSize } | { diameter: nu
     const name = `M${Number(m[1])}`;
     return isHoleSize(name) ? { size: name } : null;
   }
-  if (/^\d*\.?\d+$/.test(t)) {
-    const d = Number(t);
-    return d > 0 ? { diameter: d } : null;
-  }
+  const d = plainNumber(t);
+  if (d !== null) return d > 0 ? { diameter: d } : null;
   return null;
 }
 

@@ -201,7 +201,7 @@ export class ModifyFlow {
     if (idx === this.filletFirst) return;
     const second = idx;
     const first = this.filletFirst;
-    this.host.dim().show([{ name: "radius", label: "R", kind: "length" }], () =>
+    this.host.dim().show([{ name: "radius", label: "R", kind: "length", positive: true }], () =>
       this.applyFillet(first, second),
     );
   }
@@ -224,7 +224,7 @@ export class ModifyFlow {
     if (idx === this.filletFirst) return;
     const second = idx;
     const first = this.filletFirst;
-    this.host.dim().show([{ name: "distance", label: "D", kind: "length" }], () =>
+    this.host.dim().show([{ name: "distance", label: "D", kind: "length", positive: true }], () =>
       this.applyChamfer(first, second),
     );
   }
@@ -349,7 +349,7 @@ export class ModifyFlow {
   scaleClick(p: THREE.Vector2) {
     if (!this.host.selected().size) { toast("Select entities first, then Scale"); return; }
     const cx = p.x, cy = p.y;
-    this.host.dim().show([{ name: "factor", label: "Factor", icon: "scale", kind: "count" }], () => {
+    this.host.dim().show([{ name: "factor", label: "Factor", icon: "scale", kind: "count", positive: true }], () => {
       const f = this.host.dim().getValue("factor") ?? 1;
       this.host.dim().hide();
       if (f > 0) this.transformSelection((e) => [scaled(e, cx, cy, f, e.id)]);
