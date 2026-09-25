@@ -433,9 +433,12 @@ export type CoreFeature =
       drillPoint?: boolean; flip?: boolean; tapped?: boolean;
     }
   // Patterns union their copies. `bodies` absent means the active body.
-  | { id: string; type: "patternRect"; countX: Num; countY: Num; spacingX: Num; spacingY: Num }
-  | { id: string; type: "patternLinear"; count: Num; spacing: Num; axis: Axis3; bodies?: string[] }
-  | { id: string; type: "patternCircular"; count: Num; angle: Num; axis: Axis3; bodies?: string[] }
+  // `features` repeats those features' cuts and joins instead of a body
+  // (mutually exclusive with `bodies`): each copy of the feature's tool is
+  // applied to the body it cut or joined, and a copy that misses it is skipped.
+  | { id: string; type: "patternRect"; countX: Num; countY: Num; spacingX: Num; spacingY: Num; features?: string[] }
+  | { id: string; type: "patternLinear"; count: Num; spacing: Num; axis: Axis3; bodies?: string[]; features?: string[] }
+  | { id: string; type: "patternCircular"; count: Num; angle: Num; axis: Axis3; bodies?: string[]; features?: string[] }
   // Merge near-coplanar facets of an imported mesh (angular tolerance, degrees):
   // recovers planar faces / reduces facet count. Coarsens curved regions.
   | { id: string; type: "simplifyMesh"; tolerance: Num }

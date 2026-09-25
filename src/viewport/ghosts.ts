@@ -49,6 +49,31 @@ export interface BlendGhostEdge {
   readonly points: readonly Pt3[];
 }
 
+/** A standalone, non-indexed buffer of just `faceIds`' own triangles (their
+ *  body's own position buffer, unindexed so faces from different bodies can
+ *  share one geometry with no index-space collision), or null when none of
+ *  them own a triangle. The features-mode pattern ghost's template. */
+function facesGeometry(model: ModelView, faceIds: readonly number[]): THREE.BufferGeometry | null {
+  const out: number[] = [];
+  for (const faceId of faceIds) {
+    const body = bodyOfFace(model, faceId);
+    const tris = body?.faceTriangles.get(faceId);
+    const index = body?.mesh.geometry.getIndex();
+    if (!body || !tris || !index) continue;
+    const pos = body.mesh.geometry.getAttribute("position");
+    for (const t of tris) {
+      for (let k = 0; k < 3; k++) {
+        const vi = index.getX(t * 3 + k);
+        out.push(pos.getX(vi), pos.getY(vi), pos.getZ(vi));
+      }
+    }
+  }
+  if (!out.length) return null;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(out, 3));
+  return geo;
+}
+
 export class GhostLayer {
   constructor(private host: GhostHost) {}
 
@@ -303,6 +328,61 @@ export class GhostLayer {
     }
     this.patternGhostMat?.dispose();
     this.patternGhostMat = null;
+    this.host.requestRender();
+  }
+
+  // A features-mode pattern (patternTool.ts, features arg): the copies are of
+  // the listed features' own faces, not the whole body they sit on, so a hole
+  // patterned in a plate ghosts six holes, not six plates.
+  //
+  // Unlike setPatternGhost, the template geometry is not shared with the model:
+  // it is a fresh, standalone buffer of just those faces' triangles, built once
+  // per face set and reused (like the body ghosts) across every copy's matrix.
+  private featureGhosts: { key: string; geo: THREE.BufferGeometry; copies: THREE.Mesh[] } | null = null;
+
+  setPatternFeatureGhost(faceIds: readonly number[], matrices: readonly THREE.Matrix4[]) {
+    const key = `${faceIds.join(",")}|${matrices.length}`;
+    if (!this.featureGhosts || this.featureGhosts.key !== key) {
+      this.clearPatternFeatureGhost();
+      const model = this.host.model();
+      if (!model || !faceIds.length || !matrices.length) return;
+      const geo = facesGeometry(model, faceIds);
+      if (!geo) return;
+      this.patternGhostMat ??= new THREE.MeshBasicMaterial({
+        color: themeColor("--accent", 0xff7a3c),
+        transparent: true,
+        opacity: 0.3,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+      const copies: THREE.Mesh[] = [];
+      // Copy 0 is the original, already on screen, see setPatternGhost.
+      for (let i = 1; i < matrices.length; i++) {
+        const m = new THREE.Mesh(geo, this.patternGhostMat);
+        m.matrixAutoUpdate = false;
+        m.renderOrder = 1;
+        copies.push(m);
+        this.host.addToScene(m);
+      }
+      this.featureGhosts = { key, geo, copies };
+    }
+    for (let i = 0; i < this.featureGhosts.copies.length; i++) {
+      const m = this.featureGhosts.copies[i];
+      const mat = matrices[i + 1];
+      if (m && mat) {
+        m.matrix.copy(mat);
+        m.updateMatrixWorld(true);
+      }
+    }
+    this.host.requestRender();
+  }
+
+  clearPatternFeatureGhost() {
+    if (this.featureGhosts) {
+      for (const m of this.featureGhosts.copies) this.host.removeFromScene(m);
+      this.featureGhosts.geo.dispose();
+      this.featureGhosts = null;
+    }
     this.host.requestRender();
   }
 

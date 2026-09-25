@@ -18,6 +18,13 @@
 // features/patternMath holds the arithmetic and the Python engine's `builder.py`'s
 // _pattern_linear / _pattern_circular apply the same rule, which is what makes
 // the ghost a preview rather than a suggestion.
+//
+// FEATURES mode repeats a hole (or another cut/join feature) instead of a whole
+// body: `features` names which ones, and every "the bodies" below reads instead
+// as "the faces those features own" (faceOwnedByFeatures, resolved once at
+// start()). The gizmo, ghosts and starting spacing all key off that face set
+// rather than the body's; committing writes `features` and no `bodies`, the
+// engine repeats the feature's cut/join instead of copying the body outright.
 
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
@@ -34,6 +41,7 @@ import {
   linearOffsets,
   MIN_COUNT,
 } from "./patternMath";
+import { facesOwnedByFeatures, featureLabel } from "./patternSources";
 import { CanvasGesture } from "./canvasGesture";
 
 export type PatternKind = "linear" | "circular";
@@ -56,7 +64,10 @@ export class PatternTool {
   active = false;
   private kind: PatternKind = "linear";
   private bodies: string[] = [];
-  private centroid = new THREE.Vector3(); // where the bodies are
+  private features: string[] = []; // features mode when non-empty, see the file header
+  private faceIds: number[] = []; // the above features' own faces, resolved once at start()
+  private promptPrefix = ""; // "Pattern Hole1: " in features mode, "" in body mode
+  private centroid = new THREE.Vector3(); // where the bodies (or the patterned faces) are
   private anchor = new THREE.Vector3(); // where the gizmo sits (see placeGizmo)
   private axis = 0; // index into AXES
   private count = START_COUNT;
@@ -89,20 +100,34 @@ export class PatternTool {
     });
   }
 
-  start(kind: PatternKind, bodies: string[], onDone: (id: string | null) => void) {
+  start(
+    kind: PatternKind,
+    bodies: string[],
+    onDone: (id: string | null) => void,
+    features?: string[],
+  ) {
     if (this.active) return;
     this.active = true;
     this.kind = kind;
     this.bodies = bodies;
+    this.features = features ?? [];
+    this.faceIds = this.features.length
+      ? facesOwnedByFeatures(this.store.buildState.result?.bodies, this.features)
+      : [];
+    this.promptPrefix = this.features.length ? `Pattern ${this.sourceLabels()}: ` : "";
     this.onDone = onDone;
     this.count = START_COUNT;
-    this.centroid.copy(this.viewport.bodiesCentroid(bodies));
+    this.centroid.copy(
+      this.features.length
+        ? this.viewport.facesCentroid(this.faceIds)
+        : this.viewport.bodiesCentroid(bodies),
+    );
     if (kind === "linear") {
       this.axis = 0; // X
-      // One body-width apart, so the opening state is a row of copies that touch
+      // One span apart, so the opening state is a row of copies that touch
       // rather than a heap in the same place, the gesture starts from something
       // you can see and stretch, not from nothing.
-      this.value = this.bodySpan(AXES[0]!.dir) || 20;
+      this.value = this.span(AXES[0]!.dir) || 20;
     } else {
       this.axis = 2; // Z
       this.value = START_ANGLE;
@@ -132,13 +157,27 @@ export class PatternTool {
     this.gesture.frame();
   }
 
-  /** How far the pattern's bodies reach along a direction, the natural first
-   *  spacing, since copies one span apart are copies just touching. */
-  private bodySpan(dir: THREE.Vector3): number {
-    const box = this.viewport.bodiesBox(this.bodies);
+  /** How far the pattern's target reaches along a direction, the natural first
+   *  spacing, since copies one span apart are copies just touching. The bodies'
+   *  own span in body mode; in features mode the patterned FACES' span, a hole
+   *  in a large plate opens on a gap the size of the hole, not the plate. */
+  private span(dir: THREE.Vector3): number {
+    const box = this.features.length
+      ? this.viewport.facesBox(this.faceIds)
+      : this.viewport.bodiesBox(this.bodies);
     if (!box) return 0;
     const size = box.getSize(new THREE.Vector3());
     return Math.abs(size.dot(dir));
+  }
+
+  /** The feature(s) this pattern repeats, by name where one was given. */
+  private sourceLabels(): string {
+    return this.features
+      .map((id) => {
+        const f = this.store.document.features.find((x) => x.id === id);
+        return f ? featureLabel(f) : id;
+      })
+      .join(", ");
   }
 
   /** Put the gizmo where the gesture actually happens.
@@ -185,7 +224,8 @@ export class PatternTool {
   }
 
   private updateGhosts() {
-    this.viewport.setPatternGhost(this.bodies, this.transforms());
+    if (this.features.length) this.viewport.setPatternFeatureGhost(this.faceIds, this.transforms());
+    else this.viewport.setPatternGhost(this.bodies, this.transforms());
   }
 
   // --- input -----------------------------------------------------------------
@@ -242,7 +282,7 @@ export class PatternTool {
     // the direction you want, not a mode you enter first.
     if (hit !== this.axis) {
       this.axis = hit;
-      if (this.kind === "linear") this.value = this.bodySpan(this.axisDir()) || this.value;
+      if (this.kind === "linear") this.value = this.span(this.axisDir()) || this.value;
       this.placeGizmo(); // a circular pattern's gizmo lives on the axis it turns about
       this.pushFields();
       this.updateGhosts();
@@ -303,7 +343,7 @@ export class PatternTool {
     const body = describePattern(this.kind, this.count, this.value, this.axisName());
     if (body === this.promptKey) return;
     this.promptKey = body;
-    setPrompt(`${body} · drag an arrow · [ and ] change the count · click to apply · Esc`);
+    setPrompt(`${this.promptPrefix}${body} · drag an arrow · [ and ] change the count · click to apply · Esc`);
   }
 
   // --- gizmo -----------------------------------------------------------------
@@ -409,13 +449,15 @@ export class PatternTool {
     const count = Math.max(MIN_COUNT, Math.round(this.count));
     const axis = this.axisName();
     const value = this.value;
-    const bodies = this.bodies;
+    // features and bodies are mutually exclusive on the feature itself, the
+    // engine refuses both together, so never write more than one.
+    const target = this.features.length ? { features: this.features } : { bodies: this.bodies };
     const kind = this.kind;
     const done = this.onDone;
     this.cleanup();
-    // A pattern of one copy is the body you already had. Committing it would put
-    // a feature in the timeline that does nothing, which is a worse answer than
-    // saying so and leaving the model alone.
+    // A pattern of one copy is the body (or feature) you already had. Committing
+    // it would put a feature in the timeline that does nothing, which is a
+    // worse answer than saying so and leaving the model alone.
     if (count < 2) {
       setPrompt(null);
       done?.(null);
@@ -424,8 +466,8 @@ export class PatternTool {
     const id = this.store.nextId();
     this.store.addFeature(
       kind === "linear"
-        ? ({ id, type: "patternLinear", count, spacing: value, axis, bodies } as Feature)
-        : ({ id, type: "patternCircular", count, angle: value, axis, bodies } as Feature),
+        ? ({ id, type: "patternLinear", count, spacing: value, axis, ...target } as Feature)
+        : ({ id, type: "patternCircular", count, angle: value, axis, ...target } as Feature),
     );
     done?.(id);
   }
@@ -442,6 +484,7 @@ export class PatternTool {
     el.style.cursor = "default";
     this.dim.hide();
     this.viewport.clearPatternGhost();
+    this.viewport.clearPatternFeatureGhost();
     if (this.gizmo) {
       this.viewport.removeFromScene(this.gizmo);
       for (const a of this.arrows) {
@@ -456,6 +499,9 @@ export class PatternTool {
     this.grabbing = false;
     this.hoverAxis = -1;
     this.promptKey = "";
+    this.features = [];
+    this.faceIds = [];
+    this.promptPrefix = "";
     setPrompt(null);
   }
 }

@@ -1516,6 +1516,53 @@ export class Viewport {
     return box.isEmpty() ? null : box;
   }
 
+  /** centroid (world) of the given faces' own vertices, the features-mode
+   *  pattern gizmo anchor: repeating a hole should orbit/step from the hole,
+   *  not from wherever the whole body's centroid happens to sit. */
+  facesCentroid(faceIds: readonly number[]): THREE.Vector3 {
+    const out = new THREE.Vector3();
+    if (!this.model) return out;
+    const tmp = new THREE.Vector3();
+    let n = 0;
+    for (const faceId of faceIds) {
+      const body = bodyOfFace(this.model, faceId);
+      const tris = body?.faceTriangles.get(faceId);
+      const index = body?.mesh.geometry.getIndex();
+      if (!body || !tris || !index) continue;
+      const pos = body.mesh.geometry.getAttribute("position");
+      for (const t of tris) {
+        for (let k = 0; k < 3; k++) {
+          out.add(tmp.fromBufferAttribute(pos, index.getX(t * 3 + k)).applyMatrix4(body.mesh.matrixWorld));
+          n++;
+        }
+      }
+    }
+    if (n) out.divideScalar(n);
+    return out;
+  }
+
+  /** The world bounding box of the given faces, or null when they own no
+   *  triangle. The linear opening spacing for a features-mode pattern: one
+   *  span of the face actually being repeated, not the whole body's. */
+  facesBox(faceIds: readonly number[]): THREE.Box3 | null {
+    if (!this.model) return null;
+    const box = new THREE.Box3();
+    const tmp = new THREE.Vector3();
+    for (const faceId of faceIds) {
+      const body = bodyOfFace(this.model, faceId);
+      const tris = body?.faceTriangles.get(faceId);
+      const index = body?.mesh.geometry.getIndex();
+      if (!body || !tris || !index) continue;
+      const pos = body.mesh.geometry.getAttribute("position");
+      for (const t of tris) {
+        for (let k = 0; k < 3; k++) {
+          box.expandByPoint(tmp.fromBufferAttribute(pos, index.getX(t * 3 + k)).applyMatrix4(body.mesh.matrixWorld));
+        }
+      }
+    }
+    return box.isEmpty() ? null : box;
+  }
+
   /** True if (clientX,clientY) is over the ViewCube corner, so a right-click
    *  there belongs to the cube, not the model. */
   cubeHitsRegion(clientX: number, clientY: number): boolean {
@@ -3091,6 +3138,14 @@ export class Viewport {
   }
   clearPatternGhost() {
     this.ghosts.clearPatternGhost();
+  }
+  /** A features-mode pattern's ghost: copies of the given faces only, not the
+   *  whole body they sit on. */
+  setPatternFeatureGhost(faceIds: readonly number[], matrices: readonly THREE.Matrix4[]) {
+    this.ghosts.setPatternFeatureGhost(faceIds, matrices);
+  }
+  clearPatternFeatureGhost() {
+    this.ghosts.clearPatternFeatureGhost();
   }
 
 
