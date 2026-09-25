@@ -91,15 +91,20 @@ export class PotatoDraw {
   render(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera, brightness = 1) {
     this.frame++;
     this.ambient.intensity = AMBIENT * brightness;
-    // The line twins copy their source's world matrix, so it has to be current.
-    scene.updateMatrixWorld();
+    this.swapped.length = 0;
+    this.hidden.length = 0;
     this.proxies.clear();
-    scene.traverseVisible((o) => this.visit(o));
-    this.proxies.add(this.ambient);
-    scene.add(this.proxies);
-    const target = this.frameTarget(renderer);
     const before = renderer.getRenderTarget();
+    let target: THREE.WebGLRenderTarget;
+    // Everything that swaps or hides is inside the try, so a throw part way
+    // through still puts back what was already swapped.
     try {
+      // The line twins copy their source's world matrix, so it has to be current.
+      scene.updateMatrixWorld();
+      scene.traverseVisible((o) => this.visit(o));
+      this.proxies.add(this.ambient);
+      scene.add(this.proxies);
+      target = this.frameTarget(renderer);
       renderer.setRenderTarget(target);
       renderer.render(scene, camera);
     } finally {
@@ -127,6 +132,8 @@ export class PotatoDraw {
       // or to an XR target. Flagged as one, and stored as plain RGBA8, this target
       // gets the same encoded values and the same blending the canvas would, so
       // the grid and the see-through planes keep their brightness.
+      // Note: isXRRenderTarget is an internal three flag upstream plans to remove
+      // (three.js #23278), so every three upgrade has to re-verify this path.
       this.target.texture.internalFormat = "RGBA8";
       (this.target as { isXRRenderTarget?: boolean }).isXRRenderTarget = true;
       const material = new THREE.ShaderMaterial({
@@ -210,14 +217,20 @@ export class PotatoDraw {
     c.polygonOffsetFactor = Math.max(src.polygonOffsetFactor, FACE_OFFSET_FACTOR);
     c.polygonOffsetUnits = Math.max(src.polygonOffsetUnits, FACE_OFFSET_UNITS);
     c.color.copy(src.color);
+    c.emissive.copy(src.emissive);
+    c.emissiveIntensity = src.emissiveIntensity;
     c.wireframe = src.wireframe;
-    // These three shape the compiled program, which three only rebuilds on a version bump.
-    if (c.vertexColors !== src.vertexColors || c.flatShading !== src.flatShading || !!c.map !== !!src.map) {
+    // These shape the compiled program, which three only rebuilds on a version bump.
+    if (
+      c.vertexColors !== src.vertexColors || c.flatShading !== src.flatShading
+      || !!c.map !== !!src.map || !!c.emissiveMap !== !!src.emissiveMap
+    ) {
       c.vertexColors = src.vertexColors;
       c.flatShading = src.flatShading;
       c.needsUpdate = true;
     }
     c.map = src.map;
+    c.emissiveMap = src.emissiveMap;
     return c;
   }
 

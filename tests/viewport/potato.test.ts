@@ -73,7 +73,8 @@ describe("PotatoDraw", () => {
     expect(cheap.side).toBe(THREE.DoubleSide);
     expect(cheap.clippingPlanes).toBe(r.clip);
     expect(cheap.polygonOffset).toBe(true);
-    expect(cheap.emissive.getHex()).toBe(0);
+    expect(cheap.emissive.getHex()).toBe(0xff0000);
+    expect(cheap.emissiveIntensity).toBe(r.pbr.emissiveIntensity);
     // Only the PBR slot of a material array is swapped.
     expect((r.seen[0]!.materials[1] as THREE.MeshLambertMaterial).isMeshLambertMaterial).toBe(true);
     expect(r.seen[0]!.materials[2]).toBe(r.basic);
@@ -89,6 +90,27 @@ describe("PotatoDraw", () => {
     expect(r.multi.material).toBe(multiWas);
     expect(r.pbr.version).toBe(version);
     expect(JSON.stringify(r.pbr.toJSON())).toBe(before);
+  });
+
+  it("puts everything back when the traversal throws part way through", () => {
+    const r = rig();
+    const multiWas = r.multi.material;
+    const bomb = new THREE.Object3D();
+    Object.defineProperty(bomb, "isMesh", { get() { throw new Error("boom"); } });
+    r.scene.add(bomb);
+    const draw = new PotatoDraw();
+    expect(() => draw.render(r.renderer, r.scene, r.camera)).toThrow("boom");
+    expect(r.seen).toHaveLength(0);
+    expect(r.body.material).toBe(r.pbr);
+    expect(r.multi.material).toBe(multiWas);
+    expect(r.edges.object.visible).toBe(true);
+    expect(r.light.visible).toBe(true);
+    expect(r.scene.getObjectByName("potato-lines")).toBeUndefined();
+    r.scene.remove(bomb);
+    draw.render(r.renderer, r.scene, r.camera);
+    expect(r.seen).toHaveLength(1);
+    expect(r.body.material).toBe(r.pbr);
+    expect(r.light.visible).toBe(true);
   });
 
   it("draws fat lines as plain segments over the same points and colours", () => {
