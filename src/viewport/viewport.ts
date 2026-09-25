@@ -370,8 +370,10 @@ export class Viewport {
         this.areaAt = { x: e.clientX, y: e.clientY };
         this.showAreaBox();
       }
-      // Unconditional: the ViewCube hover-highlights off this same pointermove.
-      this.requestRender();
+      // The ViewCube hover-highlights off this same pointermove. A right or middle
+      // drag is the camera's, which draws anyway, and a frame that only moved the
+      // camera can keep its shadow maps.
+      if (!(e.buttons & 6)) this.requestRender();
       this.queueHover(e);
     });
     c.addEventListener("pointerleave", () => {
@@ -3476,6 +3478,8 @@ export class Viewport {
       // draw entirely when nothing changed, camera didn't move, no mutation
       // flagged requestRender(), and we've drained the post-mutation linger.
       if (moved || this.needsRender || this.lingerFrames > 0) {
+        // Shadows depend on the lights and the model, never on the camera.
+        const cameraOnly = moved && !this.needsRender && this.lingerFrames === 0;
         // keep the ground grid spacing/extent matched to the current zoom + pan
         const t = this.rig.getTarget(this.scratchTarget);
         this.scene.grid.update(t.x, t.y, this.pixelWorldSize(t), this.viewDiagonalPx(), this.targetGridZ);
@@ -3490,7 +3494,13 @@ export class Viewport {
         // on. Written every frame because the orbit distance changes every frame
         // a wheel is turned, and it costs one subtraction.
         this.scene.post.focusDistance = this.rig.active.position.distanceTo(t);
-        this.scene.post.render(this.rig.active);
+        const shadows = this.scene.renderer.shadowMap;
+        shadows.autoUpdate = !cameraOnly;
+        try {
+          this.scene.post.render(this.rig.active);
+        } finally {
+          shadows.autoUpdate = true;
+        }
         this.cube.render(this.rig.active); // draw the ViewCube overlay in the corner
         this.fps.frame();
         if (moved) this.movedDrawAt = now;
