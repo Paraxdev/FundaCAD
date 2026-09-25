@@ -237,24 +237,70 @@ fn a_boss_rim_rounded_past_the_boss_refuses() {
     built(&doc(features, Some(fillet([10.0, 0.0, 15.0], 4.99))));
 }
 
-/// Two blocks joined by a 4 mm neck at their foot: rounding the neck's top
-/// edge far enough carves the whole neck away along it.
-#[test]
-fn a_round_that_cuts_the_body_in_pieces_refuses() {
+/// Two 20 x 20 plates 4 thick joined by a neck 20 long and 4 wide.
+fn neck_plate() -> Vec<Value> {
     let plan = [
         [-30.0, -10.0], [-10.0, -10.0], [-10.0, -2.0], [10.0, -2.0], [10.0, -10.0], [30.0, -10.0],
         [30.0, 10.0], [10.0, 10.0], [10.0, 2.0], [-10.0, 2.0], [-10.0, 10.0], [-30.0, 10.0],
     ];
     let entities: Vec<Value> =
         (0..plan.len()).map(|i| line(&format!("l{i}"), plan[i], plan[(i + 1) % plan.len()])).collect();
-    let features = vec![
+    vec![
         json!({"id": "sk", "type": "sketch", "plane": "XY", "entities": entities}),
         json!({"id": "ex", "type": "extrude", "sketch": "sk", "distance": 4, "operation": "new"}),
+    ]
+}
+
+/// What stays of the neck's 4 x 4 section under a round of `r` past 4 on its
+/// top edge: the part inside the ball resting on the two faces' planes.
+fn neck_left(r: f64) -> f64 {
+    let (cy, cz, n) = (r - 2.0, 4.0 - r, 4000);
+    (0..n)
+        .map(|i| {
+            let y = -2.0 + 4.0 * (i as f64 + 0.5) / n as f64;
+            let h = (r * r - (y - cy).powi(2)).max(0.0).sqrt();
+            ((cz + h).min(4.0) - (cz - h).max(0.0)).max(0.0) * 4.0 / n as f64
+        })
+        .sum()
+}
+
+/// The flat neck's top edge runs out between the plates' inner ends. Those end
+/// faces meet the top face at a convex corner, and the body lies beyond their
+/// planes from the neck, so they are no end for the round to be cut off at:
+/// the kernel refuses past 4 and the section build carves the neck down.
+#[test]
+fn a_round_on_a_flat_neck_carves_it() {
+    let features = neck_plate();
+    let (base, _) = built(&doc(features.clone(), None));
+    for r in [6.0, 13.65] {
+        let (out, secs) = built(&doc(features.clone(), Some(fillet([0.0, -2.0, 4.0], r))));
+        let want = kernel::volume(&base) - 20.0 * (16.0 - neck_left(r));
+        let got = kernel::volume(&out);
+        assert!((got - want).abs() < 0.05, "{r}: volume {got}, the ball leaves {want}");
+        assert!(secs < 5.0, "{r}: took {secs} s");
+    }
+    let (msg, code, _) = refused(&doc(features.clone(), Some(fillet([0.0, -2.0, 4.0], 20.0))));
+    assert_eq!(code.as_deref(), Some("blendTooLarge"), "{msg}");
+    assert!(msg.contains("in pieces") && msg.contains("up to 13.65mm"), "{msg}");
+    // A 6 chamfer leaves the neck's bottom corner, a triangle of 2.
+    let chamfer = json!({"id": "bevel", "type": "chamfer", "distance": 6,
+                         "edges": [{"kind": "edge", "by": "nearest", "point": [0.0, -2.0, 4.0]}]});
+    let (out, _) = built(&doc(features, Some(chamfer)));
+    let got = kernel::volume(&out);
+    assert!((got - (kernel::volume(&base) - 20.0 * 14.0)).abs() < 1e-3, "volume {got}");
+}
+
+/// Two blocks joined by a 4 mm neck at their foot: rounding the neck's top
+/// edge far enough carves the whole neck away along it.
+#[test]
+fn a_round_that_cuts_the_body_in_pieces_refuses() {
+    let mut features = neck_plate();
+    features.extend([
         json!({"id": "pads", "type": "sketch", "plane": "XY", "entities": [
             {"type": "rectangle", "id": "a", "width": 20, "height": 20, "x": -20, "y": 0},
             {"type": "rectangle", "id": "b", "width": 20, "height": 20, "x": 20, "y": 0}]}),
         json!({"id": "up", "type": "extrude", "sketch": "pads", "distance": 20, "operation": "join"}),
-    ];
+    ]);
     // The neck's far bottom corner leaves the ball's reach past 4 / (1 - 1 / sqrt 2).
     let (msg, code, secs) = refused(&doc(features.clone(), Some(fillet([0.0, -2.0, 4.0], 20.0))));
     assert_eq!(code.as_deref(), Some("blendTooLarge"), "{msg}");
