@@ -92,7 +92,7 @@ describe("Mirror names its targets", () => {
 describe("body commands with a body selected", () => {
   // Picking a body raises the Move gizmo, which reads as busy, so the ribbon's
   // Mirror and Pattern did nothing at all for a selected body.
-  it.each(["mirror", "pattern-linear", "boolean-union"])("%s stands the selection's gizmo down first", (action) => {
+  it.each(["mirror", "pattern-linear", "boolean-union"])("%s stands the selection's gizmo down first, to come back on Escape", (action) => {
     const order: string[] = [];
     const act = createActions({
       sketch: { active: false },
@@ -103,11 +103,12 @@ describe("body commands with a body selected", () => {
       },
       tools: { section: { picking: false, active: false } },
       dropBodyGizmo: () => order.push("drop"),
+      restoreBodyGizmo: () => order.push("restore"),
       toolBusy: () => false,
       setStatus: vi.fn(),
       lastAction: null,
     } as unknown as Engine);
     act(action);
-    expect(order).toEqual(["drop", "start"]);
+    expect(order).toEqual(["drop", "restore", "start"]);
   });
 });

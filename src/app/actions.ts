@@ -102,7 +102,10 @@ export function createActions(e: Engine): (action: string) => void {
     // they are dispatched from the inventory rather than as three switch arms
     // that would differ only in a string (features/booleanOps.ts).
     const boolOp = booleanOpOfAction(action);
-    if (boolOp || BODY_VERBS.has(action)) e.dropBodyGizmo();
+    if (boolOp || BODY_VERBS.has(action)) {
+      e.dropBodyGizmo();
+      e.restoreBodyGizmo();
+    }
     if (boolOp) return void e.starters.startBoolean(boolOp);
 
     switch (action) {
