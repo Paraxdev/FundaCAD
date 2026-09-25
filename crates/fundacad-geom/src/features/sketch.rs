@@ -986,7 +986,7 @@ pub fn handle(ctx: &mut Ctx, f: &SketchFeature) -> FResult {
 /// `_require_sketch`.
 pub fn require<'a>(ctx: &'a Ctx, sid: &str, op: &str) -> FResult<&'a SketchEntry> {
     ctx.sketches.get(sid).ok_or_else(|| {
-        Fail::msg(format!(
+        crate::builder::missing_reference(format!(
             "the sketch this {op} depends on ({sid}) did not build, fix that sketch first"
         ))
     })
