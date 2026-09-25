@@ -30,10 +30,16 @@ const MIN_WIDTH = 220;
 
 const rects = (sel: string): Box[] => [...document.querySelectorAll(sel)].map((o) => o.getBoundingClientRect());
 
+// The toast stack is fixed to the window's bottom centre, the same place this
+// banner sits, so it is told how far up the banner reaches (--prompt-clear) and
+// stacks above it.
+const root = document.documentElement;
+const clearToasts = () => root.style.removeProperty("--prompt-clear");
+
 function place() {
   const me = el.value;
   const area = me?.parentElement;
-  if (!me || !area || !prompt.text) return;
+  if (!me || !area || !prompt.text) return clearToasts();
   const gap = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--float-gap")) || 12;
   const { left, right } = promptInsets(
     area.getBoundingClientRect(),
@@ -44,6 +50,9 @@ function place() {
   );
   me.style.setProperty("--prompt-left", `${left}px`);
   me.style.setProperty("--prompt-right", `${right}px`);
+  // offsetTop rather than the box: the entry animation slides the banner in.
+  const top = (me.offsetParent ?? area).getBoundingClientRect().top + me.offsetTop;
+  root.style.setProperty("--prompt-clear", `${Math.max(0, Math.round(window.innerHeight - top + gap))}px`);
 }
 
 let frame = 0;
@@ -66,6 +75,7 @@ onMounted(() => {
   schedule();
 });
 onUnmounted(() => {
+  clearToasts();
   ro?.disconnect();
   if (frame) cancelAnimationFrame(frame);
 });
