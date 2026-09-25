@@ -193,3 +193,42 @@ fn step_export_keeps_names_colours_and_placement() {
     );
     assert_eq!(back.leaves.len(), 4);
 }
+
+fn replace_all(hay: &[u8], from: &[u8], to: &[u8]) -> Vec<u8> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < hay.len() {
+        if hay[i..].starts_with(from) {
+            out.extend_from_slice(to);
+            i += from.len();
+        } else {
+            out.push(hay[i]);
+            i += 1;
+        }
+    }
+    out
+}
+
+#[test]
+fn step_names_in_a_local_code_page_read_as_written() {
+    let dir = scratch("codepage");
+    let a = kernel::make_box(10.0, 10.0, 10.0).unwrap();
+    let path = dir.join("named.step");
+    let doc = json!({"features": []});
+    step::write_tree(&step::build_export_tree(&doc, &[body("body1", "NAMEHOLDER", &a, None)], "single").unwrap(), &path)
+        .unwrap();
+    let written = std::fs::read(&path).unwrap();
+    // The Ender-3 export's raw GBK bytes for a 4040 profile with 4 countersunk holes.
+    let gbk: &[u8] = b"4040 profile\xa3\xac4\xb8\xf6\xb3\xc1\xcd\xb7\xbf\xd7";
+    std::fs::write(&path, replace_all(&written, b"NAMEHOLDER", gbk)).unwrap();
+    let back = xcaf::read_step_assembly(&path).unwrap();
+    assert_eq!(back.nodes[0].name, "4040 profile\u{ff0c}4\u{4e2a}\u{6c89}\u{5934}\u{5b54}");
+
+    // Escaped and UTF-8 names are untouched.
+    let path = dir.join("escaped.step");
+    std::fs::write(&path, replace_all(&written, b"NAMEHOLDER", br"M3\X2\00D7\X0\18")).unwrap();
+    assert_eq!(xcaf::read_step_assembly(&path).unwrap().nodes[0].name, "M3\u{d7}18");
+    let path = dir.join("utf8.step");
+    std::fs::write(&path, replace_all(&written, b"NAMEHOLDER", "Gr\u{f6}\u{df}e".as_bytes())).unwrap();
+    assert_eq!(xcaf::read_step_assembly(&path).unwrap().nodes[0].name, "Gr\u{f6}\u{df}e");
+}

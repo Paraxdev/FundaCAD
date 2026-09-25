@@ -30,6 +30,7 @@ mod inner {
         type StepAssembly;
         pub fn step_assembly_read(
             path: &str,
+            codepage: i32,
             progress: &Message_ProgressRange,
         ) -> Result<UniquePtr<StepAssembly>>;
         pub fn step_assembly_node_count(a: &StepAssembly) -> i32;

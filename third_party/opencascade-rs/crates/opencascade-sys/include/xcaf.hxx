@@ -19,6 +19,7 @@
 #include <STEPCAFControl_Writer.hxx>
 #include <STEPControl_Controller.hxx>
 #include <STEPControl_StepModelType.hxx>
+#include <StepData_ConfParameters.hxx>
 #include <StepData_StepModel.hxx>
 #include <TCollection_AsciiString.hxx>
 #include <TCollection_ExtendedString.hxx>
@@ -356,14 +357,20 @@ struct StepAssemblyWalk {
   }
 };
 
-inline std::unique_ptr<StepAssembly> step_assembly_read(rust::Str path, const Message_ProgressRange &progress) {
+// `codepage` is a Resource_FormatType for the file's unescaped text, what
+// `read.step.codepage` would say, without touching that global.
+inline std::unique_ptr<StepAssembly> step_assembly_read(rust::Str path, int32_t codepage,
+                                                        const Message_ProgressRange &progress) {
   std::string file(path.data(), path.size());
   Handle(TDocStd_Document) doc = new TDocStd_Document(TCollection_ExtendedString("XCAF"));
   STEPCAFControl_Reader reader;
   reader.SetNameMode(true);
   reader.SetColorMode(true);
   reader.SetLayerMode(true);
-  if (reader.ReadFile(file.c_str()) != IFSelect_RetDone) {
+  StepData_ConfParameters params;
+  params.InitFromStatic();
+  params.ReadCodePage = static_cast<Resource_FormatType>(codepage);
+  if (reader.ReadFile(file.c_str(), params) != IFSelect_RetDone) {
     throw std::runtime_error("could not read the STEP file (it may be truncated or not STEP)");
   }
   if (!reader.Transfer(doc, progress)) {
