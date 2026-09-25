@@ -35,7 +35,7 @@ import { SolverUnavailable } from "./solver";
 import { resolveRealEntities, toSketchEntity } from "./resolve";
 import { applyDrivingDimsDirect } from "./directDims";
 import { expandPattern, translated } from "./pattern";
-import { candidatesFromEntities, dragSnap, originCandidate, pinOriginPoint, showsSnapMarker, snap, type SnapGuide, type SnapKind, type SnapCandidate } from "./snap";
+import { candidatesFromEntities, dragSnap, originCandidate, settleOriginPin, showsSnapMarker, snap, type OriginPinRequest, type SnapGuide, type SnapKind, type SnapCandidate } from "./snap";
 import type { ResolvedEntity } from "./snap";
 import { detectRegions, entityPolyline, rectCorners, rectFromThreePoints } from "./region";
 import { AreaBox } from "../viewport/areaBox";
@@ -191,6 +191,7 @@ export class SketchMode {
   private candidates: SnapCandidate[] = []; // cached; rebuilt when entities change
   private base: THREE.Vector2 | null = null; // pending first point
   private chainStart: THREE.Vector2 | null = null; // first point of a line chain
+  private originPin: OriginPinRequest | null = null;
   private arcStart: THREE.Vector2 | null = null; // 3-point arc: start, end, then bulge
   private arcEnd: THREE.Vector2 | null = null;
   private splinePts: THREE.Vector2[] = []; // in-progress spline fit points
@@ -689,6 +690,7 @@ export class SketchMode {
     if (!this.viewSquare) { this.viewSquare = true; this.onViewSquare?.(true); }
     this.base = null;
     this.chainStart = null;
+    this.originPin = null;
     this.arcStart = null;
     this.arcEnd = null;
     this.splinePts = [];
@@ -723,6 +725,7 @@ export class SketchMode {
     this.tool = t;
     this.base = null;
     this.chainStart = null;
+    this.originPin = null;
     this.arcStart = null;
     this.arcEnd = null;
     this.splinePts = [];
@@ -1544,15 +1547,16 @@ export class SketchMode {
     // (never select/modify/pattern, which have their own notions of what a
     // click here means) is a claim the user is making about where this corner
     // belongs, not a coincidence the solver should feel free to undo the next
-    // time something unrelated gets dimensioned. Pin it now, the same real,
+    // time something unrelated gets dimensioned. Pin it with the same real,
     // fixed point the dimension tool would create picking the Origin by hand
     // (snap.ts pinOriginPoint): any entity whose corner lands exactly here
-    // (this click, or the next) shares that point and inherits the fix.
+    // shares that point and inherits the fix. The pin is only made once the
+    // shape commits (requestSolve), so a cancelled shape leaves nothing (SK-10).
     if (
       hit.kind === "center" && hit.label === "Origin" &&
       this.tool !== "select" && !MODIFY_TOOLS.has(this.tool) && !PATTERN_TOOLS.has(this.tool)
     ) {
-      pinOriginPoint(this.entities, this.constraints, p, newEntityId);
+      this.originPin ??= { at: p.clone(), count: this.entities.length };
     }
 
     if (this.tool === "select") {
@@ -2176,6 +2180,7 @@ export class SketchMode {
         this.onState?.();
       },
       onCancel: () => {
+        this.originPin = null;
         this.dropTextPreview();
         if (original) this.entities.push(original); // restore the unedited text
         this.refreshActive();
@@ -2712,6 +2717,7 @@ export class SketchMode {
       if (action === "cancel-geometry") {
         this.base = null;
         this.chainStart = null;
+        this.originPin = null;
         this.arcStart = null;
         this.arcEnd = null;
         this.modifyFlow.setFilletFirst(null);
@@ -3431,6 +3437,7 @@ export class SketchMode {
     this.selected.clear();
     this.base = null;
     this.chainStart = null;
+    this.originPin = null;
     this.arcStart = null;
     this.arcEnd = null;
     this.splinePts = [];
@@ -3447,6 +3454,7 @@ export class SketchMode {
    *  into one in-flight solve so the (single, shared) WASM wrapper is never
    *  re-entered, and stale results never clobber newer geometry. */
   private requestSolve() {
+    this.originPin = settleOriginPin(this.originPin, this.entities, this.constraints, newEntityId);
     this.bankIfChanged();
     this.solveDirty = true;
     void this.pump();

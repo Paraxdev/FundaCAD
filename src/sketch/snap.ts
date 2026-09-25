@@ -270,6 +270,24 @@ export function pinOriginPoint(
   return point;
 }
 
+/** A drawing click that snapped to the Origin, waiting for its shape. The pin
+ *  is only made once that shape commits (anything that grew the entity list
+ *  past `count`), so a shape cancelled halfway leaves no point behind (SK-10). */
+export type OriginPinRequest = { at: THREE.Vector2; count: number };
+
+/** Make the requested pin if the shape has committed. Returns the request
+ *  still waiting, or null once it is settled. */
+export function settleOriginPin(
+  req: OriginPinRequest | null,
+  entities: ResolvedEntity[],
+  constraints: SketchConstraint[],
+  newId: () => string,
+): OriginPinRequest | null {
+  if (!req || entities.length <= req.count) return req;
+  pinOriginPoint(entities, constraints, req.at, newId);
+  return null;
+}
+
 /** Where a dragged point lands: on an anchor it is close to, or on a named axis
  *  line, or null to follow the cursor. The grid and plain alignment guides are
  *  left out, a drag that stepped along the lattice would stop feeling like a drag. */

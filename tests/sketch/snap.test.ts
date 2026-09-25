@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import * as THREE from "three";
 import {
-  snap, candidatesFromEntities, dragSnap, existingFixedPoint, originCandidate, pinOriginPoint, showsSnapMarker,
+  snap, candidatesFromEntities, dragSnap, existingFixedPoint, originCandidate, pinOriginPoint, settleOriginPin, showsSnapMarker,
   type ResolvedEntity, type SnapCandidate,
 } from "../../src/sketch/snap";
 import { SketchPlane } from "../../src/sketch/plane";
@@ -409,5 +409,34 @@ describe("pinOriginPoint (SK-6)", () => {
     const point = pinOriginPoint(entities, constraints, new THREE.Vector2(0, 0), newId);
     expect(point.id).not.toBe("loose");
     expect(entities).toHaveLength(2);
+  });
+});
+
+describe("settleOriginPin (SK-10)", () => {
+  let n = 0;
+  const newId = () => `pin${n++}`;
+  const at = new THREE.Vector2(0, 0);
+
+  it("waits while nothing has committed", () => {
+    const entities: ResolvedEntity[] = [];
+    const constraints: SketchConstraint[] = [];
+    const req = { at, count: 0 };
+    expect(settleOriginPin(req, entities, constraints, newId)).toBe(req);
+    expect(entities).toEqual([]);
+    expect(constraints).toEqual([]);
+  });
+
+  it("pins once the shape has committed", () => {
+    const entities: ResolvedEntity[] = [{ type: "line", id: "l1", x1: 0, y1: 0, x2: 10, y2: 0 }];
+    const constraints: SketchConstraint[] = [];
+    expect(settleOriginPin({ at, count: 0 }, entities, constraints, newId)).toBeNull();
+    expect(entities[1]).toMatchObject({ type: "point", x: 0, y: 0, construction: true });
+    expect(constraints).toEqual([{ type: "fix", e: entities[1]!.id, p: 0 }]);
+  });
+
+  it("does nothing without a request", () => {
+    const entities: ResolvedEntity[] = [{ type: "line", id: "l1", x1: 0, y1: 0, x2: 10, y2: 0 }];
+    expect(settleOriginPin(null, entities, [], newId)).toBeNull();
+    expect(entities).toHaveLength(1);
   });
 });
