@@ -1008,6 +1008,15 @@ export class DocumentStore {
     });
   }
 
+  /** A value a build measured written into a feature with no undo step of its
+   *  own, so undoing the edit that asked for it undoes both. */
+  deriveFeature(id: string, patch: Partial<Feature>) {
+    this.applyDerived((d) => {
+      const i = d.features.findIndex((f) => f.id === id);
+      if (i >= 0) d.features[i] = { ...d.features[i], ...patch } as Feature;
+    });
+  }
+
   /** Take a field off a feature entirely. A model parameter bound to it stops
    *  resolving and the recompute in mutate() collects it. */
   removeFeatureField(id: string, field: string) {
