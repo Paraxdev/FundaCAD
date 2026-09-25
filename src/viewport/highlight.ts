@@ -9,7 +9,7 @@
 import * as THREE from "three";
 import { bodyOfFace, edgeObjects, type BodyMesh, type ModelView } from "./render";
 import type { EdgeRef } from "./edgeLines";
-import { makeFaceHoverOverlay, makeSelectionGlow, removeSelectionGlows, type GlowKind } from "./selectionGlow";
+import { disposeFaceHoverOverlay, makeFaceHoverOverlay, makeSelectionGlow, removeSelectionGlows, type GlowKind } from "./selectionGlow";
 
 const EDGE_BASE = new THREE.Color(0x1b1f24);
 const HOVER = new THREE.Color(0xffd089); // pale hot amber (under cursor)
@@ -161,13 +161,7 @@ export class Highlighter {
       if (!cur.shown) this.showOverlay(cur, faces);
       return;
     }
-    if (cur) {
-      for (const m of cur.meshes) {
-        m.removeFromParent();
-        m.geometry.dispose();
-      }
-      this.hoverOverlay = null;
-    }
+    if (cur) this.dropHoverOverlay();
     if (!faces.length) return;
     const next = { key, meshes: [] as THREE.Mesh[], shown: false };
     const byBody = new Map<BodyMesh, number[]>();
@@ -199,6 +193,18 @@ export class Highlighter {
     }
     this.hoverOverlay = next;
     this.showOverlay(next, faces);
+  }
+
+  private dropHoverOverlay() {
+    for (const m of this.hoverOverlay?.meshes ?? []) disposeFaceHoverOverlay(m);
+    this.hoverOverlay = null;
+  }
+
+  /** Free what this highlighter made for itself. The viewport calls it before
+   *  replacing the highlighter on a rebuild; the cached hover overlay is off
+   *  every mesh while hidden, so nothing else would ever reach it. */
+  dispose() {
+    this.dropHoverOverlay();
   }
 
   private showOverlay(o: { meshes: THREE.Mesh[]; shown: boolean }, faces: readonly number[]) {

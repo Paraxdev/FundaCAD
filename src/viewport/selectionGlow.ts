@@ -96,7 +96,8 @@ const FACE_HOVER_NAME = "face-hover-overlay";
 export function removeSelectionGlows(mesh: THREE.Object3D) {
   for (let i = mesh.children.length - 1; i >= 0; i--) {
     const c = mesh.children[i]!;
-    if (c.name === GLOW_NAME || c.name === FACE_HOVER_NAME) c.removeFromParent();
+    if (c.name === GLOW_NAME) c.removeFromParent();
+    else if (c.name === FACE_HOVER_NAME) disposeFaceHoverOverlay(c as THREE.Mesh);
   }
 }
 
@@ -105,6 +106,13 @@ let faceHoverMaterial: THREE.MeshBasicMaterial | null = null;
 /** The face under the cursor on a body that already glows. The vertex tint a
  *  face hover normally paints sits under the glow and barely reads through it,
  *  so the face is drawn again above the glow, opaque enough to be unmistakable. */
+/** Take a face hover overlay down for good. Its geometry is its own, a copy of
+ *  the hovered triangles; the material is shared and stays. */
+export function disposeFaceHoverOverlay(mesh: THREE.Mesh) {
+  mesh.removeFromParent();
+  mesh.geometry.dispose();
+}
+
 export function makeFaceHoverOverlay(positions: Float32Array, color: THREE.Color): THREE.Mesh {
   faceHoverMaterial ??= new THREE.MeshBasicMaterial({
     transparent: true,
