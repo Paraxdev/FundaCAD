@@ -73,7 +73,11 @@ import {
 import { CanvasGesture } from "./canvasGesture";
 import { blendEditCommit } from "./blendEdit";
 import { pointOnEdge } from "./edgeNudge";
+import { blendClickTarget, missPrompt, screenPolylineDist } from "./blendPick";
+import { EDGE_GRAB_PX } from "../viewport/edgeBand";
+import { EDGE_HOVER_COLOR } from "../viewport/highlight";
 import { toast } from "../ui/toast";
+import { isEditableTarget } from "../ui/focus";
 
 type Phase = "pick" | "drag";
 type Kind = EdgeTreatment;
@@ -107,6 +111,8 @@ interface GhostEdge {
   points: Vec3[];
   line: Line2;
   chain: number;
+  /** its colour when not hovered, select or error */
+  color: number;
 }
 
 /** One row in the member panel (ui side of the ghost list). A resolved row is a
@@ -573,7 +579,7 @@ export class EdgeFeatureTool {
     const line = new Line2(geo, mat);
     line.renderOrder = 998;
     this.viewport.addToScene(line);
-    this.ghosts.push({ id: ++this.memberSeq, sels: [sel], mid, points, line, chain: chain ?? ++this.chainCounter });
+    this.ghosts.push({ id: ++this.memberSeq, sels: [sel], mid, points, line, chain: chain ?? ++this.chainCounter, color: GHOST_SELECT });
   }
 
   // --- member panel (ui/FilletMembers.vue) ----------------------------------
@@ -636,6 +642,7 @@ export class EdgeFeatureTool {
   }
 
   private removeGhost(g: GhostEdge) {
+    if (g === this.hoveredGhost) this.hoveredGhost = null;
     this.ghosts = this.ghosts.filter((x) => x !== g);
     this.viewport.removeFromScene(g.line);
     g.line.geometry.dispose();
@@ -647,17 +654,52 @@ export class EdgeFeatureTool {
     this.unmatchedSels = [];
   }
 
-  /** Screen-space hit test against the ghost polylines (Line2 raycast is
-   *  finicky with tool-owned materials; a projected-point distance check is
-   *  robust and cheap at ghost counts). */
-  private ghostAt(clientX: number, clientY: number): GhostEdge | null {
+  /** The member ghost nearest the pointer and its screen distance, within the
+   *  same grab radius as a model edge. Measured against the projected polyline
+   *  (Line2 raycast is finicky with tool-owned materials), along its segments
+   *  and not only at its points, which on a straight edge are its two ends. */
+  private ghostAt(clientX: number, clientY: number): { g: GhostEdge; dist: number } | null {
+    let best: { g: GhostEdge; dist: number } | null = null;
     for (const g of this.ghosts) {
-      for (const p of g.points) {
-        const s = this.viewport.projectToScreen(new THREE.Vector3(p[0], p[1], p[2]));
-        if (Math.hypot(s.x - clientX, s.y - clientY) < 8) return g;
-      }
+      const pts = g.points.map((p) => this.viewport.projectToScreen(new THREE.Vector3(p[0], p[1], p[2])));
+      const dist = screenPolylineDist(pts, { x: clientX, y: clientY });
+      if (dist <= EDGE_GRAB_PX && (!best || dist < best.dist)) best = { g, dist };
     }
+    return best;
+  }
+
+  /** What the pointer is on in the drag phase: a member to drop, an edge to
+   *  add, or nothing. */
+  private clickTarget(clientX: number, clientY: number):
+    | { kind: "member"; g: GhostEdge }
+    | { kind: "edge"; hit: NonNullable<ReturnType<Viewport["pickEdgeAt"]>> }
+    | null {
+    const ghost = this.ghostAt(clientX, clientY);
+    const hit = this.viewport.pickEdgeAt(clientX, clientY);
+    const t = blendClickTarget(ghost?.dist ?? null, hit?.rankPx ?? null, EDGE_GRAB_PX);
+    if (t === "member" && ghost) return { kind: "member", g: ghost.g };
+    if (t === "edge" && hit) return { kind: "edge", hit };
     return null;
+  }
+
+  private hoveredGhost: GhostEdge | null = null;
+
+  /** The edge a click would add, tinted and drawn again wide on top, since the
+   *  tint alone is hard to tell from the other lit edges. */
+  private hoverModelEdge(edge: EdgeRef | null) {
+    this.viewport.hoverEdge(edge);
+    this.viewport.emphasiseEdge(edge);
+  }
+
+  /** Light the member a click would drop, the way a model edge lights up
+   *  before a click adds it. */
+  private hoverGhost(g: GhostEdge | null) {
+    if (g === this.hoveredGhost) return;
+    const prev = this.hoveredGhost;
+    this.hoveredGhost = g;
+    if (prev && this.ghosts.includes(prev)) (prev.line.material as LineMaterial).color.set(prev.color);
+    if (g) (g.line.material as LineMaterial).color.set(EDGE_HOVER_COLOR);
+    this.viewport.requestRender();
   }
 
   // --- tangent-chain propagation (MCAD "G1 chain") --------------------------
@@ -1019,7 +1061,8 @@ export class EdgeFeatureTool {
       const failed = !!entry?.failed?.some(
         (e) => Math.hypot(e.mid[0] - g.mid[0], e.mid[1] - g.mid[1], e.mid[2] - g.mid[2]) <= tol,
       );
-      (g.line.material as LineMaterial).color.set(failed ? GHOST_ERROR : GHOST_SELECT);
+      g.color = failed ? GHOST_ERROR : GHOST_SELECT;
+      if (g !== this.hoveredGhost) (g.line.material as LineMaterial).color.set(g.color);
     }
     this.viewport.requestRender();
   }
@@ -1027,7 +1070,7 @@ export class EdgeFeatureTool {
   private onMove(e: PointerEvent) {
     if (this.phase === "pick") {
       const hit = this.viewport.pickEdgeAt(e.clientX, e.clientY);
-      this.viewport.hoverEdge(hit?.edge ?? null);
+      this.hoverModelEdge(hit?.edge ?? null);
       this.viewport.domElement.style.cursor = hit ? "pointer" : "default";
       return;
     }
@@ -1073,13 +1116,15 @@ export class EdgeFeatureTool {
     // idle: highlight the handle under the pointer so it reads as grabbable
     this.hovering = this.hitGizmo(e.clientX, e.clientY);
     if (!this.hovering) {
-      // ghosts and bare edges are toggle targets in BOTH modes, show it
-      const g = this.ghostAt(e.clientX, e.clientY);
-      const hit = g ? null : this.viewport.pickEdgeAt(e.clientX, e.clientY);
-      this.viewport.hoverEdge(hit?.edge ?? null);
-      this.viewport.domElement.style.cursor = g || hit ? "pointer" : "default";
+      // members and bare edges are toggle targets in BOTH modes, show which
+      const t = this.clickTarget(e.clientX, e.clientY);
+      this.hoverGhost(t?.kind === "member" ? t.g : null);
+      this.hoverModelEdge(t?.kind === "edge" ? t.hit.edge : null);
+      this.viewport.domElement.style.cursor = t ? "pointer" : "default";
       return;
     }
+    this.hoverGhost(null);
+    this.hoverModelEdge(null);
     this.viewport.domElement.style.cursor = "grab";
   }
 
@@ -1095,7 +1140,7 @@ export class EdgeFeatureTool {
       this.beginDrag([hit.selector], mid, tan, hit.edge, { scope: this.scopeFor(e, hit.edge) });
       return;
     }
-    // drag phase: grabbing the handle scrubs; a clean click elsewhere commits
+    // drag phase: grabbing the handle scrubs, a click on an edge toggles it
     this.downPos = { x: e.clientX, y: e.clientY };
     this.downOnGizmo = this.hitGizmo(e.clientX, e.clientY);
     if (this.downOnGizmo) {
@@ -1107,29 +1152,22 @@ export class EdgeFeatureTool {
       this.viewport.domElement.style.cursor = "grabbing";
       return;
     }
-    // click toggles membership in BOTH modes, a ghost hit removes that edge,
-    // a bare-edge hit adds it. Either way this press is a toggle, not the
-    // commit-on-clean-click gesture (downOnGizmo doubles as that latch).
-    const g = this.ghostAt(e.clientX, e.clientY);
-    if (g) {
+    // click toggles membership in BOTH modes, a member hit removes that edge,
+    // a bare-edge hit adds it. Either way this press is a toggle, not a miss
+    // (downOnGizmo doubles as that latch).
+    const t = this.clickTarget(e.clientX, e.clientY);
+    if (t) {
       e.preventDefault();
       e.stopImmediatePropagation();
-      this.removeWithChain(g);
+      this.hoverGhost(null);
+      this.hoverModelEdge(null);
+      if (t.kind === "member") this.removeWithChain(t.g);
+      else this.addPicked(t.hit.edge, this.scopeFor(e, t.hit.edge));
       this.afterMembershipChange();
       this.downOnGizmo = true;
       return;
     }
-    const hit = this.viewport.pickEdgeAt(e.clientX, e.clientY);
-    if (hit) {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      this.viewport.clearHover();
-      this.addPicked(hit.edge, this.scopeFor(e, hit.edge));
-      this.afterMembershipChange();
-      this.downOnGizmo = true;
-      return;
-    }
-    // empty-space press: leave it to the camera rig; commit decided on pointerup
+    // a press on a face or empty space: leave it to the camera rig
   }
 
   private onUp(e: PointerEvent) {
@@ -1172,15 +1210,26 @@ export class EdgeFeatureTool {
       }
       return;
     }
-    // a clean click on empty space (no orbit drag) commits
+    // A clean click that found no edge keeps the tool and its members. Only
+    // Enter or the check button apply it.
     const moved =
       Math.abs(e.clientX - this.downPos.x) > 3 || Math.abs(e.clientY - this.downPos.y) > 3;
-    if (!this.downOnGizmo && !moved) this.commit();
+    if (this.downOnGizmo || moved) return;
+    if (this.memberCount()) setPrompt(missPrompt(this.kind, this.memberCount()));
+    else this.promptForPhase();
   }
 
   private onKey(e: KeyboardEvent) {
     if (e.key === "Escape") {
       this.cancel();
+      return;
+    }
+    // The value box handles its own Enter; this is Enter after a click on the
+    // model took the focus out of it.
+    if (e.key === "Enter" && this.phase === "drag" && !isEditableTarget(e.target)) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      this.commit();
       return;
     }
     // Tab flips fillet ↔ chamfer and carries the number across, mid-drag and
@@ -1238,7 +1287,7 @@ export class EdgeFeatureTool {
     this.setValue(opts?.fromZero ? 0 : seedValue(this.kind, this.bounds(), this.clearanceLimitMm));
     this.previewId = this.store.nextId();
     // keep edges emphasized: more edges can be clicked into the set mid-drag
-    this.viewport.clearHover();
+    this.hoverModelEdge(null);
     this.buildGizmo();
     this.mountInput();
     this.promptForPhase();
@@ -1467,7 +1516,7 @@ export class EdgeFeatureTool {
     this.opened = null;
     this.awaitingRollback = false;
     this.viewport.emphasizeEdges(false);
-    this.viewport.clearHover();
+    this.hoverModelEdge(null);
     this.viewport.suspendPicking = false;
     this.active = false;
     this.phase = "pick";
