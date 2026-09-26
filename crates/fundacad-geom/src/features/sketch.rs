@@ -221,20 +221,16 @@ fn rect_corners(w: f64, h: f64, x: f64, y: f64, angle: f64) -> [[f64; 2]; 4] {
     local.map(|[lx, ly]| [x + lx * c - ly * s, y + lx * s + ly * c])
 }
 
-/// `_translate_entity`.
+/// `translated` in src/sketch/pattern.ts.
 fn translate(ctx: &Ctx, e: &Item, dx: f64, dy: f64, id: String) -> FResult<Item> {
     let ent = match &e.ent {
-        // Python's fallthrough: a patterned copy of anything else is a point,
-        // and the lettering itself is not repeated.
         Ent::Text(t) => {
-            let n = |v: &Option<Num>| match v {
-                Some(n) => ctx.val(n),
-                None => Err(Fail::Missing("x".into())),
-            };
-            Ent::Point {
-                x: n(&t.x)? + dx,
-                y: n(&t.y)? + dy,
-            }
+            let o = |v: &Option<Num>| ctx.val_or(v.as_ref(), 0.0);
+            Ent::Text(Box::new(fundacad_core::schema::Text {
+                x: Some(Num::from(o(&t.x)? + dx)),
+                y: Some(Num::from(o(&t.y)? + dy)),
+                ..(**t).clone()
+            }))
         }
         Ent::Line { a, b } => Ent::Line {
             a: [a[0] + dx, a[1] + dy],
@@ -277,9 +273,27 @@ fn translate(ctx: &Ctx, e: &Item, dx: f64, dy: f64, id: String) -> FResult<Item>
             closed: *closed,
             knots: knots.clone(),
         },
-        Ent::Point { x, y } | Ent::Polygon { x, y, .. } => Ent::Point {
+        Ent::Point { x, y } => Ent::Point {
             x: x + dx,
             y: y + dy,
+        },
+        Ent::Polygon {
+            x,
+            y,
+            r,
+            sides,
+            angle,
+        } => Ent::Polygon {
+            x: x + dx,
+            y: y + dy,
+            r: *r,
+            sides: *sides,
+            angle: *angle,
+        },
+        Ent::Slot { a, b, w } => Ent::Slot {
+            a: [a[0] + dx, a[1] + dy],
+            b: [b[0] + dx, b[1] + dy],
+            w: *w,
         },
         _ => return Err(Fail::Missing("x".into())),
     };
@@ -290,8 +304,8 @@ fn translate(ctx: &Ctx, e: &Item, dx: f64, dy: f64, id: String) -> FResult<Item>
     })
 }
 
-/// `_rotate_entity`.
-fn rotate(e: &Item, cx: f64, cy: f64, ang: f64, id: &str) -> FResult<Vec<Item>> {
+/// `rotated` in src/sketch/pattern.ts, a rectangle becomes four lines.
+fn rotate(ctx: &Ctx, e: &Item, cx: f64, cy: f64, ang: f64, id: &str) -> FResult<Vec<Item>> {
     let (co, si) = (ang.cos(), ang.sin());
     let rot = |x: f64, y: f64| {
         let (ddx, ddy) = (x - cx, y - cy);
@@ -332,6 +346,37 @@ fn rotate(e: &Item, cx: f64, cy: f64, ang: f64, id: &str) -> FResult<Vec<Item>> 
         Ent::Point { x, y } => {
             let p = rot(*x, *y);
             one(Ent::Point { x: p[0], y: p[1] })
+        }
+        Ent::Polygon {
+            x,
+            y,
+            r,
+            sides,
+            angle,
+        } => {
+            let p = rot(*x, *y);
+            one(Ent::Polygon {
+                x: p[0],
+                y: p[1],
+                r: *r,
+                sides: *sides,
+                angle: angle + ang.to_degrees(),
+            })
+        }
+        Ent::Slot { a, b, w } => one(Ent::Slot {
+            a: rot(a[0], a[1]),
+            b: rot(b[0], b[1]),
+            w: *w,
+        }),
+        Ent::Text(t) => {
+            let o = |v: &Option<Num>| ctx.val_or(v.as_ref(), 0.0);
+            let p = rot(o(&t.x)?, o(&t.y)?);
+            one(Ent::Text(Box::new(fundacad_core::schema::Text {
+                x: Some(Num::from(p[0])),
+                y: Some(Num::from(p[1])),
+                angle: Some(Num::from(o(&t.angle)? + ang.to_degrees())),
+                ..(**t).clone()
+            })))
         }
         Ent::Line { a, b } => one(Ent::Line {
             a: rot(a[0], a[1]),
@@ -454,7 +499,7 @@ fn expand_pattern(
                 for s in &srcs {
                     let id = did(&p.id);
                     #[allow(clippy::cast_precision_loss)]
-                    out.extend(rotate(s, cx, cy, k as f64 * step, &id)?);
+                    out.extend(rotate(ctx, s, cx, cy, k as f64 * step, &id)?);
                 }
             }
         }
