@@ -240,12 +240,12 @@ fn translate(ctx: &Ctx, e: &Item, dx: f64, dy: f64, id: String) -> FResult<Item>
             a: [a[0] + dx, a[1] + dy],
             b: [b[0] + dx, b[1] + dy],
         },
-        Ent::Rect { w, h, x, y, .. } => Ent::Rect {
+        Ent::Rect { w, h, x, y, angle } => Ent::Rect {
             w: *w,
             h: *h,
             x: x + dx,
             y: y + dy,
-            angle: 0.0,
+            angle: *angle,
         },
         Ent::Circle { r, x, y } => Ent::Circle {
             r: *r,
