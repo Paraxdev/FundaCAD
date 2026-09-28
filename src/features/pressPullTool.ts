@@ -106,10 +106,9 @@ export class PressPullTool {
   private taperGrabbing = false;
   private taperGrabProj = 0;
   private taperGrabInset = 0;
-  /** true while the exact tapered solid is previewed through the engine (the
-   *  instant frontend ghost cannot lean a wall), so the switch back knows to
-   *  clear it and restore the ghost. */
-  private taperPreviewOn = false;
+  /** true while the exact solid is previewed through the engine, so the switch
+   *  to a round resize knows to clear it and restore the ghost. */
+  private enginePreviewOn = false;
   /** true when this drag began on the passive selection handle rather than on
    *  our own gizmo, a one-press gesture, so releasing it finishes (see onUp). */
   private fluentGrab = false;
@@ -428,24 +427,27 @@ export class PressPullTool {
   }
 
   /** keep the handle a constant on-screen size, point it the way we're dragging,
-   *  and keep a typed value previewing live (the pointer may be still). */
+   *  and keep a typed value previewing live (the pointer may be still). The
+   *  handle and its box ride on the face where it is now; the drag is still
+   *  measured from `anchor`, where the face started. */
   private tick() {
     if (this.phase === "drag" && this.gizmo) {
       const sign = this.value < 0 ? -1 : 1;
       const dir = this.axis.clone().multiplyScalar(sign);
       this.quat.setFromUnitVectors(Y_AXIS, dir);
-      const k = this.viewport.pixelWorldSize(this.anchor);
-      this.gizmo.position.copy(this.anchor);
+      const at = this.anchor.clone().addScaledVector(this.axis, this.value);
+      const k = this.viewport.pixelWorldSize(at);
+      this.gizmo.position.copy(at);
       this.gizmo.quaternion.copy(this.quat);
       this.gizmo.scale.setScalar(k);
       // Tone tracks the DIRECTION of the push: amber adds material, red cuts.
       this.handle?.paint({
         hot: this.hovering || this.grabbing,
         tone: sign < 0 ? "cut" : "idle",
-        refused: this.taperPreviewOn && this.store.previewError !== null,
+        refused: this.enginePreviewOn && this.store.previewError !== null,
       });
       this.placeTaperArc(dir, k);
-      const s = this.viewport.projectToScreen(this.anchor);
+      const s = this.viewport.projectToScreen(at);
       this.dim.position(s.x, s.y);
       if (!this.grabbing && this.dim.isUserDriven("distance")) {
         const v = this.dim.getValue("distance");
@@ -474,26 +476,21 @@ export class PressPullTool {
     }
   }
 
-  /** Instant ghost preview during the drag, a frontend-only translucent prism, no
-   *  kernel round-trip (that's why dragging feels immediate). The real OCCT geometry
-   *  is computed once on commit. Near-zero distance clears the ghost. */
+  /** The exact solid through the engine for every push but a round resize. A
+   *  flat face carries the faces around it along their own slopes, which no
+   *  straight ghost can draw. `hold` keeps the last push that built on screen
+   *  while the kernel refuses this one, the way fillet does. */
   private refreshPreview() {
     this.syncPeek();
-    // A leaning wall is not a prism, and the instant ghost cannot draw one, so a
-    // tapered push previews the EXACT solid through the engine, the way the
-    // extrude tool does. So does a push with an explicit operation, whose effect on
-    // the bodies it reaches no ghost can show, and one along an axis, which the
-    // ghost would draw along the normal. Plain straight pushes keep the ghost.
-    const exact = (this.mode !== "auto" || this.direction === "axis") && !this.round;
-    if ((this.canTaper() && Math.abs(this.taper) >= 0.05) || exact) {
+    if (!this.round) {
       this.viewport.clearPressPullGhost();
-      this.store.setPreview(this.buildFeature());
-      this.taperPreviewOn = true;
+      this.store.setPreview(this.buildFeature(), { hold: true });
+      this.enginePreviewOn = true;
       return;
     }
-    if (this.taperPreviewOn) {
+    if (this.enginePreviewOn) {
       this.store.setPreview(null);
-      this.taperPreviewOn = false;
+      this.enginePreviewOn = false;
     }
     // Nothing to ghost once the drag is asking for the face to GO: the honest
     // preview of a removal is the healed body, which needs the kernel. The
@@ -509,11 +506,12 @@ export class PressPullTool {
     this.viewport.setPressPullGhost(this.faceIds, this.value, this.round);
   }
 
-  /** A push into the part previews inside the body it cuts, so that body is seen
-   *  through for the drag. */
+  /** A cut with its own tool body previews inside the body it cuts, so that
+   *  body is seen through for the drag. An auto push shows the pushed body
+   *  itself, which is the thing to look at. */
   private syncPeek() {
     const f = this.pickingTarget || !this.faceIds.length ? null : this.buildFeature();
-    const cut = f?.type === "press-pull" && f.operation === "cut";
+    const cut = f?.type === "press-pull" && f.operation === "cut" && this.mode !== "auto";
     const body = this.bodyId ?? this.viewport.faceIdToBodyId(this.faceIds[0] ?? -1);
     this.viewport.setPeek(cut && body ? () => [body] : null);
   }
@@ -710,9 +708,9 @@ export class PressPullTool {
     const feature = this.buildFeature();
     // Drop the live tapered preview before the real add: it carries the same id,
     // so building both at once would duplicate it.
-    if (this.taperPreviewOn) {
+    if (this.enginePreviewOn) {
       this.store.setPreview(null);
-      this.taperPreviewOn = false;
+      this.enginePreviewOn = false;
     }
     this.store.addFeature(feature);
     if (verdict.kind === "wait") this.store.verifyCommit(feature.id, "Press/Pull");
@@ -740,9 +738,9 @@ export class PressPullTool {
     el.style.cursor = "default";
     this.viewport.clearPressPullGhost();
     this.viewport.setPeek(null);
-    if (this.taperPreviewOn) {
+    if (this.enginePreviewOn) {
       this.store.setPreview(null);
-      this.taperPreviewOn = false;
+      this.enginePreviewOn = false;
     }
     this.dim.hide();
     this.disposeGizmo();
