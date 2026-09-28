@@ -25,6 +25,12 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **A Flatpak for Linux.** The beta release now carries
+  `FundaCAD_<version>_x86_64.flatpak`, repackaged from the `.deb` on the GNOME
+  runtime, which brings its own WebKitGTK and GTK. It runs where the AppImage
+  cannot find them, NixOS, rpm-ostree systems and SteamOS included. It does
+  not update itself; install the new file over it.
+
 - **Press/pull can move the end of a hole along the hole.** Picking the cone,
   cap or floor at the end of a hole offers "Along axis" beside the value, and
   a round end starts on it: the hole gets deeper or shallower and its end keeps

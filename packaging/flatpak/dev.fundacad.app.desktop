@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=FundaCAD
+Comment=Parametric CAD
+Exec=fundacad
+Icon=dev.fundacad.app
+StartupWMClass=fundacad
+Categories=Graphics;Engineering;
+Terminal=false

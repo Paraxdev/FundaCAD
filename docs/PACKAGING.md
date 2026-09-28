@@ -62,6 +62,17 @@ Bundles land under `src-tauri/target/release/bundle/`: `.AppImage`, `.deb` and
 Windows. CI also publishes `src-tauri/target/release/fundacad.exe` as the
 portable Windows download.
 
+## Flatpak
+
+`build-flatpak` repackages the Linux `.deb` with
+`packaging/flatpak/dev.fundacad.app.yml` on the GNOME runtime (Flathub), which
+carries WebKitGTK 4.1 and GTK 3, and checks that `ldd` resolves every library
+the binary links inside it. It runs on X11 like the AppImage, reads a
+SpaceMouse over hidraw (`--device=all`, the host still needs the udev rule),
+and has no in-app updates, since the updater only replaces AppImages
+(`src-tauri/src/lib.rs`). A failed Flatpak build leaves it out of the beta
+release without holding the release back.
+
 ## Sizes
 
 Measured on Windows, 2026-09-17, against a sidecar build from `legacy`:
