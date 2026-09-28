@@ -26,7 +26,7 @@ import { screenTransform } from "../../sketch/annotationFormat";
 import { useSketchAnnotationStore } from "../../stores/sketchAnnotations";
 import type { DimItem } from "../../sketch/sketchDimensions";
 import { displayValue, isPlainNumber, parseField } from "../../ui/units";
-import { labelLeader, layoutLabels, type LabelAt } from "../../ui/labelClamp";
+import { labelLeader, layoutLabels, type Held, type LabelAt } from "../../ui/labelClamp";
 import type { Box } from "../../ui/promptPlacement";
 
 const s = useSketchAnnotationStore();
@@ -37,6 +37,7 @@ const leaders: (SVGGElement | null)[] = [];
 const scratch = new THREE.Vector3();
 let lastPose = -1;
 let raf = 0;
+const heldEdges = new Map<number, Held>();
 
 // The floating cards a label must not hide under, the prompt banner's list.
 const LEFT_CARDS = "#float-layer .float-left-stack > *, #float-layer .tool-rail .rail-btn, #float-layer .tool-rail .rail-group";
@@ -85,7 +86,7 @@ function loop(now: number = performance.now()) {
     at.push({ x: p.x, y: p.y, hw: el.offsetWidth / 2, hh: el.offsetHeight / 2 });
     idx.push(i);
   }
-  const placed = layoutLabels(at, area, cards, LABEL_GAP);
+  const placed = layoutLabels(at, area, cards, LABEL_GAP, heldEdges);
   for (let k = 0; k < idx.length; k++) {
     const i = idx[k]!;
     const a = at[k]!;
@@ -141,6 +142,7 @@ watch(
     // A rebuild replaces the label a drag is riding on, drop the drag so its
     // move/up handlers can't write a placement against stale geometry.
     drag = null;
+    heldEdges.clear();
     // The new set is at the same camera as the old one, so the pose check would
     // otherwise skip it forever.
     lastPose = -1;
