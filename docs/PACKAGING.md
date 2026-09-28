@@ -86,6 +86,8 @@ single executable. It still requires the system WebView2 runtime.
   (`src-tauri/icons/128x128@2x.png`, generated from
   `assets/brand/fundacad-mark.svg` by `tauri icon`) as the root icon the desktop file's
   `Icon=` names and `usr/share/icons/hicolor/256x256/apps`;
+- AppRun sources `packaging/appimage-deps-check.sh` first, which names any
+  system library the binary cannot find and how to install it;
 - every plugin that names a `geometryWasm` component has it in its bundle.
 
 ## Code signing & notarization
