@@ -284,7 +284,7 @@
     "distance": 5,
     "operation": "join"
    },
-   "notes": "A planar face extrudes into a prism and booleans. A cylinder, cone, sphere or torus is truly OFFSET, which is how a hole is resized. A freeform face that WRAPS (a full revolve, a swept tube) is thickened along its own surface; `inspect` marks those faces with \"wraps\": true."
+   "notes": "A planar face moves along its normal and every face around it is carried along its own surface to meet it, so a sloped side keeps its slope (the top of a frustum narrows as it rises) and a square side stays square. Where it runs into another part of the body it merges with it; where its sides meet before it gets that far it is refused. With a `taper`, or where the faces around it cannot be carried along, it extrudes into a straight prism and booleans instead. A cylinder, cone, sphere or torus is truly OFFSET, which is how a hole is resized. A freeform face that WRAPS (a full revolve, a swept tube) is thickened along its own surface; `inspect` marks those faces with \"wraps\": true."
   },
   "shell": {
    "summary": "Hollow a body to a wall thickness, optionally opening faces.",

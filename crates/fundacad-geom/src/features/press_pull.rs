@@ -22,6 +22,7 @@ use opencascade_sys as ffi;
 use serde_json::Value;
 
 use super::axis_push;
+use super::blend::ops as blend_ops;
 use super::boolean::combine;
 use super::extrude::prisms;
 use super::solid_ops::{
@@ -29,6 +30,7 @@ use super::solid_ops::{
 };
 use crate::builder::{py_g, Ctx, FResult, Fail};
 use crate::kernel::{self, BoolKind, Kind};
+use crate::mesh::edges::SMOOTH_EDGE_DEG;
 use crate::select::entity::FaceEnt;
 use crate::select::Resolver;
 
@@ -169,6 +171,88 @@ fn offset_faces(part: &Shape, pairs: &[(Shape, f64)]) -> FResult<Shape> {
     })
 }
 
+const CLOSED_IN: &str = "the faces beside this one meet before it gets that far, try a smaller distance";
+
+/// The first step of a push, short enough not to reach any other part of the body.
+const FIRST_STEP: f64 = 0.05;
+
+fn right_way(part: &Shape, out: &Shape, d: f64) -> bool {
+    let (before, after) = (kernel::volume(part), kernel::volume(out));
+    valid(out) && after > 0.0 && (after > before) == (d > 0.0)
+}
+
+/// The face of `slab` lying `along` from `face`'s plane and facing `dir`.
+fn slab_face(slab: &Shape, face: &Shape, dir: DVec3, along: f64) -> Option<Shape> {
+    let origin = centre(face);
+    faces_of(slab).into_iter().find(|f| {
+        normal(f).dot(dir) > 0.999 && ((centre(f) - origin).dot(dir) - along).abs() < 0.5 * along
+    })
+}
+
+/// A flat face moved along its normal with each face around it carried along
+/// its own surface to meet it, so a sloped side keeps its slope and a curved
+/// one keeps its curve, instead of a straight wall rising off the old edge.
+///
+/// Offsetting the face in the body itself fails once it runs into another part
+/// of the body, so the offset only takes a first short step there. That step's
+/// slab is bounded by the face's own neighbours and nothing else, so pushed on
+/// alone it goes as far as asked unless its sides meet, and merging it with
+/// the body settles whatever it ran into. None where the face cannot follow its
+/// neighbours at all, and the caller extrudes it straight.
+fn follow_neighbours(part: &Shape, face: &Shape, d: f64) -> FResult<Option<Shape>> {
+    // A round running into the face tangentially has no slope to carry on, so
+    // the face sinks or rises inside it as a straight recess or boss.
+    let smooth = kernel::subshapes(face, Kind::Edge)
+        .iter()
+        .any(|e| blend_ops::dihedral_deg(part, e).is_some_and(|a| a < SMOOTH_EDGE_DEG));
+    if smooth {
+        return Ok(None);
+    }
+    let step = FIRST_STEP.min(0.5 * d.abs());
+    let Ok(stepped) = offset_faces(part, &[(face.clone(), step.copysign(d))]) else {
+        return Ok(None);
+    };
+    let slab = if d > 0.0 {
+        kernel::boolean_op(&stepped, &[part], BoolKind::Cut)
+    } else {
+        kernel::boolean_op(part, &[&stepped], BoolKind::Cut)
+    };
+    let Ok(slab) = slab.map(|s| kernel::unwrap_compound(&s)) else {
+        return Ok(None);
+    };
+    let dir = normal(face) * d.signum();
+    let lone = kernel::count(&slab, Kind::Solid) == 1;
+    let Some(front) = lone.then(|| slab_face(&slab, face, dir, step)).flatten() else {
+        return Ok(None);
+    };
+    let grown = offset_faces(&slab, &[(front.clone(), d.abs() - step)])
+        .ok()
+        .filter(|g| kernel::volume(g) > kernel::volume(&slab));
+    let grown = match grown {
+        Some(g) => g,
+        None => collapsed(&slab, &front, face, dir, d.abs()).ok_or_else(|| Fail::msg(CLOSED_IN))?,
+    };
+    Ok(fused(part, &grown, d > 0.0)
+        .ok()
+        .filter(|out| right_way(part, out, d)))
+}
+
+/// The slab with its front face gone and its sides carried on until they meet
+/// in a ridge or a point: a push past where the sides close in, which goes no
+/// further however far it is asked to.
+fn collapsed(slab: &Shape, front: &Shape, face: &Shape, dir: DVec3, reach: f64) -> Option<Shape> {
+    let front = front.as_face()?;
+    let out = slab
+        .remove_features(&[&front], true, &ProgressRange::detached())
+        .ok()?
+        .shape;
+    let closed = kernel::count(&out, Kind::Face) < kernel::count(slab, Kind::Face)
+        && valid(&out)
+        && kernel::volume(&out) > kernel::volume(slab);
+    let (_, far) = kernel::axial_extent(&out, centre(face).to_array(), dir.to_array())?;
+    (closed && far <= reach + 1e-6).then_some(out)
+}
+
 /// `_thicken_press_pull`: one face grown into a slab and booleaned in.
 fn thicken_press_pull(part: &Shape, face: &Shape, d: f64) -> FResult<Shape> {
     let options = OffsetOptions {
@@ -229,6 +313,11 @@ fn press_pull_shape(part: &Shape, face: &Shape, d: f64, clamp: bool, taper: f64)
         };
         if dd.abs() < 1e-9 {
             return Ok(part.clone());
+        }
+        if taper == 0.0 {
+            if let Some(out) = follow_neighbours(part, face, dd)? {
+                return Ok(out);
+            }
         }
         let prism = prisms(face, dd, false, taper)?;
         return fused(part, &prism, dd > 0.0);
