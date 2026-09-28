@@ -40,20 +40,19 @@ the goal is it to make this a personalized version of a CAD with features I like
 
 
 <p align="center">
-  <img src="assets/readme/ui-overview.png" width="1000" alt="FundaCAD main window with a parametric part, the feature history and the tool rail">
+  <img src="assets/readme/gearbox.png" width="1000" alt="An exploded planetary gearbox modelled in FundaCAD: a ring gear, a sun gear, three brass planets and a carrier">
 </p>
 
 <p align="center">
-  <img src="assets/readme/sketch-on-face.png" width="900" alt="Drawing a constrained sketch on the face of a solid in FundaCAD">
+  <img src="assets/readme/ui-overview.png" width="900" alt="FundaCAD main window with the gearbox, the item tree, the tool rail and the feature history">
 </p>
 
 <p align="center">
-  <img src="assets/readme/transform-gizmo.png" width="900" alt="Moving and rotating a body with the FundaCAD transform gizmo">
+  <img src="assets/readme/sketch-gear-profile.png" width="900" alt="Editing the sketch of an involute gear profile in FundaCAD">
 </p>
 
-
 <p align="center">
-  <img src="assets/readme/area-select.png" width="900" alt="Area selection of faces and edges in the FundaCAD viewport">
+  <img src="assets/readme/render-materials.png" width="900" alt="The Render workspace in FundaCAD with graphite, blue PETG, brass and aluminium materials">
 </p>
 
 ## Features
