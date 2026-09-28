@@ -85,6 +85,7 @@ describe("the plugins in this repository", () => {
     // about where it came from.
     expect(shippedPlugins().map((p) => p.manifest.id)).toEqual([
       "FundaCAD.ExtraParameters",
+      "FundaCAD.Gamepad",
       "FundaCAD.MultiColor",
       "FundaCAD.Organic",
       "FundaCAD.PrintToolbox",

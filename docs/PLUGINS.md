@@ -93,7 +93,7 @@ table, so the reassuring half cannot go stale while the alarming half stays
 current. Hand-written reassurance goes stale silently and in the direction that
 hurts.
 
-## The eight plugins this project publishes
+## The nine plugins this project publishes
 
 | id | what it is | asks for | kind |
 | --- | --- | --- | --- |
@@ -102,6 +102,7 @@ hurts.
 | `FundaCAD.Screws` | a library of standard and your own screws, nuts, washers and inserts, inserted as solid bodies | `document.read`, `document.write`, `geometry.build`, `files.read`, `files.write` | `builtin` |
 | `FundaCAD.Printing` | printers on your network, and opening a model in a slicer | `document.read`, `files.read`, `files.write`, `network.local`, `process.spawn` | `builtin` |
 | `FundaCAD.SpaceMouse` | navigating and moving with a 3D mouse | `device.input`, `document.read`, `document.write` | `builtin` |
+| `FundaCAD.Gamepad` | flying the view and running commands from a game controller or a Steam Deck | `device.input`, `document.read`, `document.write` | `builtin` |
 | `FundaCAD.MultiColor` | filament slots, per body and per texture colour | `document.read`, `document.write` | `builtin` |
 | `FundaCAD.Organic` | node bodies: rounded solids from sized nodes linked into smooth limbs | `document.read`, `document.write` | `builtin` |
 | `FundaCAD.Texture` | a printed surface texture on picked faces or a whole body | `document.read`, `document.write`, `files.read` | `builtin` |
@@ -495,6 +496,8 @@ packaged into something that cannot be installed.
 plugins/
   FundaCAD.ExtraParameters/ manifest.json, README.md, main.ts, view.ts, state.ts,
                            ParametersSection.vue, SetupPanel.vue
+  FundaCAD.Gamepad/        manifest.json, README.md, main.ts, gamepad.ts, state.ts,
+                           GamepadSection.vue
   FundaCAD.Organic/        manifest.json, README.md, main.ts, nodeForm.ts, nodeTool.ts,
                            panel.ts, NodePanel.vue, geometry-rs/
   FundaCAD.MultiColor/     manifest.json, README.md, main.ts, palette.ts,
