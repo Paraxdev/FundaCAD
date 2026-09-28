@@ -300,6 +300,7 @@ pub fn combine(
         "cut" => {
             let mut results: Vec<(usize, Shape, Option<f64>)> = Vec::new();
             let mut removed = 0.0;
+            let mut parted = false;
             let mut sealed = false;
             for &i in &hits {
                 let b = &ctx.bodies[i];
@@ -328,9 +329,12 @@ pub fn combine(
                     )));
                 }
                 removed += (before - after).max(0.0);
+                parted |= kernel::count(&newshape, Kind::Solid) > kernel::count(b.shape(), Kind::Solid);
                 results.push((i, newshape, Some(after_signed)));
             }
-            if hits.is_empty() || removed < noop_eps(prism_vol) {
+            // A cut through a thin wall removes little next to its tool, and
+            // still cut the body it parted.
+            if hits.is_empty() || (removed < noop_eps(prism_vol) && !parted) {
                 // A cut that removed NOTHING is not always a cut that missed:
                 // OCCT hands a long swept tool's argument straight back
                 // sometimes, and the repair is to slice the tool. Try that
