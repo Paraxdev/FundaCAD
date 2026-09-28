@@ -7,6 +7,8 @@
 # Installing it ourselves would need root and cannot work on read-only
 # systems, so this only tells the user what to run.
 
+FUNDACAD_RELEASES=https://github.com/Paraxdev/FundaCAD/releases/tag/beta
+
 fundacad_deps_check() {
   local bin="$1" missing
   command -v ldd >/dev/null 2>&1 || return 0
@@ -19,17 +21,23 @@ fundacad_deps_check() {
     like=$(. /etc/os-release && echo "${ID_LIKE:-}")
   fi
 
-  # One package per family: WebKitGTK pulls in GTK 3 and libsoup 3 with it.
+  # Where no package can be installed, the Flatpak is the answer: its runtime
+  # carries WebKitGTK and GTK, so it needs nothing from the system.
+  local flatpak="Use the FundaCAD Flatpak instead, which brings its own WebKitGTK:
+  $FUNDACAD_RELEASES
+  flatpak install --user ./FundaCAD_<version>_x86_64.flatpak"
   if [ "$id" = nixos ]; then
-    hint="NixOS cannot load these libraries from the AppImage. Run it with appimage-run, with webkitgtk_4_1 in its extraPkgs."
+    hint="NixOS cannot load these libraries from the AppImage.
+$flatpak"
   elif [ -e /run/ostree-booted ]; then
-    hint="This system is image based. Layer the package and reboot:
-  rpm-ostree install webkit2gtk4.1
-or run FundaCAD inside a distrobox container."
+    hint="This system is image based.
+$flatpak
+Or layer the package and reboot: rpm-ostree install webkit2gtk4.1"
   elif [ "$id" = steamos ] || ! fundacad_usr_writable; then
-    hint="This system is read-only, so the package cannot be installed on it directly.
-Run FundaCAD inside a distrobox container, or turn off the read-only mode first."
+    hint="This system is read-only, so the package cannot be installed on it.
+$flatpak"
   else
+    # One package per family: WebKitGTK pulls in GTK 3 and libsoup 3 with it.
     case " $id $like " in
       *" debian "*|*" ubuntu "*) hint="sudo apt install libwebkit2gtk-4.1-0" ;;
       *" fedora "*|*" rhel "*)   hint="sudo dnf install webkit2gtk4.1" ;;
@@ -41,6 +49,8 @@ Run FundaCAD inside a distrobox container, or turn off the read-only mode first.
     esac
     case "$hint" in sudo*) hint="Install it with:
   $hint" ;; esac
+    hint="$hint
+Or use the Flatpak, which needs nothing installed: $FUNDACAD_RELEASES"
   fi
 
   local msg

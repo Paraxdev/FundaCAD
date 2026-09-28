@@ -255,7 +255,8 @@ This file starts on 2026-08-03. For anything before that, see the
   system's GTK and WebKitGTK, and without them it died with a bare loader
   error. It now lists the missing libraries and the install command for the
   distribution (apt, dnf, pacman, zypper, xbps, emerge), and on NixOS,
-  rpm-ostree systems and read-only systems says how to run it there instead.
+  rpm-ostree systems and read-only systems points to the Flatpak, which
+  brings its own WebKitGTK.
 
 - **The app icon is the FundaCAD cube everywhere.** The window, installer and
   launcher icons were still an atom; they are now generated from `assets/brand/fundacad-mark.svg`. The AppImage's
