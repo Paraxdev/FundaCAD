@@ -1043,14 +1043,27 @@ struct Cell {
     area: f64,
 }
 
-/// The model's box diagonal, what the profile cut tolerance scales by.
-fn model_scale(shapes: &[&Shape]) -> f64 {
-    let model = if shapes.len() == 1 {
-        shapes[0].clone()
-    } else {
-        kernel::compound(shapes.iter().copied())
-    };
-    match kernel::bbox(&model) {
+/// The shapes a profile on a plane can be cut by, those whose box meets the
+/// plane and, when given, the `reach` box, with the model's box diagonal the
+/// cut tolerance scales by. Coarse boxes: the answer is the same, and an exact
+/// box of a big import that was never meshed is seconds.
+fn cut_candidates<'a>(
+    shapes: &[&'a Shape],
+    origin: [f64; 3],
+    normal: [f64; 3],
+    reach: Option<[f64; 6]>,
+) -> (Vec<&'a Shape>, f64) {
+    let work = crate::par::Shared(shapes);
+    let boxes: Vec<Option<[f64; 6]>> =
+        crate::par::map_indexed(shapes.len(), move |i| kernel::coarse_bbox(work.get()[i]));
+    let mut all: Option<[f64; 6]> = None;
+    for b in boxes.iter().flatten() {
+        all = Some(match all {
+            None => *b,
+            Some(a) => std::array::from_fn(|k| if k < 3 { a[k].min(b[k]) } else { a[k].max(b[k]) }),
+        });
+    }
+    let scale = match all {
         Some(b) => {
             let d = ((b[3] - b[0]).powi(2) + (b[4] - b[1]).powi(2) + (b[5] - b[2]).powi(2)).sqrt();
             if d == 0.0 {
@@ -1060,7 +1073,27 @@ fn model_scale(shapes: &[&Shape]) -> f64 {
             }
         }
         None => 1.0,
-    }
+    };
+    // Looser than the kernel's own tolerance so no face it would keep is lost.
+    let slack = 16.0 * (scale * 1e-4).max(1e-5);
+    let meets = |b: &[f64; 6]| {
+        let (mut lo, mut hi) = (f64::INFINITY, f64::NEG_INFINITY);
+        for c in 0..8 {
+            let p = [b[if c & 1 == 0 { 0 } else { 3 }], b[if c & 2 == 0 { 1 } else { 4 }], b[if c & 4 == 0 { 2 } else { 5 }]];
+            let d = (0..3).map(|k| (p[k] - origin[k]) * normal[k]).sum::<f64>();
+            lo = lo.min(d);
+            hi = hi.max(d);
+        }
+        lo <= slack && hi >= -slack
+            && reach.map_or(true, |r| (0..3).all(|k| b[k] <= r[k + 3] + slack && b[k + 3] >= r[k] - slack))
+    };
+    let kept = shapes
+        .iter()
+        .zip(&boxes)
+        .filter(|(_, b)| b.as_ref().map_or(true, |b| meets(b)))
+        .map(|(s, _)| *s)
+        .collect();
+    (kept, scale)
 }
 
 /// `_region_cells`: the sketch's cells cut where the model under them ends.
@@ -1068,9 +1101,11 @@ fn region_cells(ctx: &Ctx, entry: &SketchEntry) -> Vec<Cell> {
     let mut faces = entry.faces.clone();
     let shapes = ctx.shapes();
     if !shapes.is_empty() && !faces.is_empty() {
-        let scale = model_scale(&shapes);
-        faces =
-            kernel::split_profile_cells(&faces, entry.plane.origin, entry.plane.z, &shapes, scale);
+        let (near, scale) = cut_candidates(&shapes, entry.plane.origin, entry.plane.z, None);
+        if !near.is_empty() {
+            faces =
+                kernel::split_profile_cells(&faces, entry.plane.origin, entry.plane.z, &near, scale);
+        }
     }
     faces
         .into_iter()
@@ -1085,7 +1120,7 @@ fn region_cells(ctx: &Ctx, entry: &SketchEntry) -> Vec<Cell> {
 /// The `profileCuts` op: the lines the built model cuts a profile along on one
 /// plane, the same lines `region_cells` cuts with, so the sketch overlay offers
 /// exactly the areas a feature will build.
-pub fn profile_cuts_result(req: &serde_json::Map<String, serde_json::Value>, watch: &dyn crate::builder::Watch) -> fundacad_protocol::JobResult {
+pub fn profile_cuts_result(req: &serde_json::Map<String, serde_json::Value>) -> fundacad_protocol::JobResult {
     use serde_json::json;
     let vec3 = |k: &str| -> Option<[f64; 3]> {
         let a = req.get(k)?.as_array()?;
@@ -1111,16 +1146,31 @@ pub fn profile_cuts_result(req: &serde_json::Map<String, serde_json::Value>, wat
                 .collect()
         })
         .unwrap_or_default();
-    let (_, built) = match crate::inspect::rebuild_request(req, watch) {
-        Ok(r) => r,
-        Err(e) => return e,
+    // Only what a build in this process already left: a replay or a disk read
+    // of a big import is seconds on the one job thread, ahead of real work.
+    let held = match req.get("document") {
+        Some(doc) => crate::cache::global().lock().unwrap_or_else(|p| p.into_inner()).held(doc),
+        None => return fundacad_engine::error_result("'document'"),
     };
-    let shapes: Vec<&Shape> = built.bodies.iter().map(|b| &b.shape).collect();
-    let cuts = if shapes.is_empty() {
+    let Some(bodies) = held else {
+        return fundacad_protocol::JobResult::Json(json!({"cuts": null, "ready": false}).as_object().cloned().unwrap_or_default());
+    };
+    let shapes: Vec<&Shape> = bodies.iter().map(|b| b.shape()).collect();
+    let bound = (!reach.is_empty()).then(|| {
+        let mut b = [f64::INFINITY, f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY];
+        for p in &reach {
+            for k in 0..3 {
+                b[k] = b[k].min(p[k]);
+                b[k + 3] = b[k + 3].max(p[k]);
+            }
+        }
+        b
+    });
+    let (near, scale) = cut_candidates(&shapes, origin, normal, bound);
+    let cuts = if near.is_empty() {
         Vec::new()
     } else {
-        let scale = model_scale(&shapes);
-        kernel::profile_cuts(&shapes, origin, normal, scale, (scale * 2e-4).max(1e-3), &reach).unwrap_or_default()
+        kernel::profile_cuts(&near, origin, normal, scale, (scale * 2e-4).max(1e-3), &reach).unwrap_or_default()
     };
     let reply = json!({"cuts": cuts});
     fundacad_protocol::JobResult::Json(reply.as_object().cloned().unwrap_or_default())

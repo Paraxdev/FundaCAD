@@ -161,6 +161,14 @@ pub fn bbox(s: &Shape) -> Option<[f64; 6]> {
     ffi::bo_bbox(s.raw(), true, &mut out).then_some(out)
 }
 
+/// A box from the B-rep's own geometry, never a triangulation, so the same
+/// shape always gets the same one. Looser than `bbox` on a B-spline, and
+/// milliseconds where `bbox` of an import that was never meshed is seconds.
+pub fn coarse_bbox(s: &Shape) -> Option<[f64; 6]> {
+    let mut out = [0.0; 6];
+    matches!(opencascade_sys::face_query::FQ_bbox(s.raw(), false, &mut out), Ok(true)).then_some(out)
+}
+
 type Remembered<T> = std::cell::RefCell<Vec<(Shape, T)>>;
 
 thread_local! {

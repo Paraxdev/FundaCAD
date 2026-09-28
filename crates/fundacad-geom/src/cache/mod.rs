@@ -206,6 +206,12 @@ impl RebuildCache {
             );
         }
 
+        // A disk resume at a snapshot is held in RAM from here on, or every
+        // later ask of this document reads the checkpoint back again.
+        let restored = (source == Source::Disk)
+            .then(|| resume.as_ref().map(|(at, snap)| (*at, snap.clone())))
+            .flatten();
+
         let began = Instant::now();
         let mut tap = CacheTap {
             keep_from: n.saturating_sub(self.window),
@@ -235,6 +241,11 @@ impl RebuildCache {
             ring.push(Some(snap));
         }
         ring.resize_with(n, || None);
+        if let Some((at, snap)) = restored {
+            if let Some(slot @ None) = at.checked_sub(1).and_then(|i| ring.get_mut(i)) {
+                *slot = Some(snap);
+            }
+        }
         for slot in ring.iter_mut().take(n.saturating_sub(self.window)) {
             *slot = None;
         }
@@ -267,6 +278,19 @@ impl RebuildCache {
             ..CacheStats::default()
         };
         Ok(r)
+    }
+
+    /// The bodies a feature added after the document's last one starts from,
+    /// when a build in this process left them: never a replay or a disk read.
+    pub fn held(&mut self, raw: &Value) -> Option<Vec<builder::Body>> {
+        let keys = self.chain_keys(raw);
+        let Some(last) = keys.len().checked_sub(1) else {
+            return Some(Vec::new());
+        };
+        if self.ring_keys.get(..keys.len()) != Some(&keys[..]) {
+            return None;
+        }
+        self.ring.get(last)?.as_ref().map(|s| s.bodies.clone())
     }
 
     /// The viewport payloads of a rebuild's bodies, reusing what either tier holds.

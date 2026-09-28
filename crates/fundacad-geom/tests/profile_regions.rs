@@ -289,3 +289,39 @@ fn bounded_cut_lines_are_the_ones_reaching_the_box() {
     assert!(got.len() < all.len(), "{} of {}", got.len(), all.len());
     assert_eq!(got, want);
 }
+
+/// Sketch open asks for cut lines on the job thread every build shares, so
+/// the op answers from the build it holds and builds nothing of its own, not
+/// even a document it could build in a moment.
+#[test]
+fn profile_cuts_answers_from_the_held_build_and_never_builds_one() {
+    std::env::set_var("FUNDACAD_DISK_CACHE", "0");
+    let mut f = block("side", "s1", (0.0, 0.0), (20.0, 460.0));
+    f.extend(block("cross", "s2", (0.0, 0.0), (480.0, 20.0)));
+    f.extend(block("far", "s3", (1000.0, 1000.0), (1020.0, 1020.0)));
+    let raw = json!({ "features": f });
+    let ask = || {
+        let req = json!({"document": raw, "origin": [0, 0, 10], "normal": [0, 0, 1],
+            "reach": [[-5, -5, 10], [25, -5, 10], [25, 25, 10], [-5, 25, 10]]});
+        let fundacad_protocol::JobResult::Json(m) =
+            fundacad_geom::features::sketch::profile_cuts_result(req.as_object().unwrap())
+        else {
+            panic!("expected json");
+        };
+        m
+    };
+    let before = ask();
+    assert_eq!(before.get("ready"), Some(&json!(false)), "{before:?}");
+    assert!(before["cuts"].is_null());
+    {
+        let mut cache = fundacad_geom::cache::global().lock().unwrap();
+        fundacad_geom::jobs::rebuild_result_cached(&raw, 0.1, &serde_json::Map::new(), &NoWatch, &mut cache);
+    }
+    let after = ask();
+    assert!(after.get("ready").is_none(), "{after:?}");
+    let cuts = after["cuts"].as_array().unwrap();
+    assert!(!cuts.is_empty());
+    for p in cuts.iter().flat_map(|l| l.as_array().unwrap()) {
+        assert!(p[0].as_f64().unwrap() < 500.0, "a line of the far block came back: {p}");
+    }
+}
