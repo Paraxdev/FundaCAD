@@ -294,6 +294,8 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   // Every sketch's areas split along the lines the engine cuts a consuming
   // feature's profile with, so a highlighted area is the area that builds. The
   // build RESULT is the epoch: a visibility toggle re-emits the same one.
+  let opened = 0;
+  e.store.onOpen(() => opened++);
   const splitAgain = () => {
     if (e.sketch.active) e.sketch.redraw();
     else if (e.toolBusy()) e.overlay.splitStale = true;
@@ -309,6 +311,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
       }),
     ),
     epoch: () => e.store.buildState.result,
+    document: () => opened,
     landed: splitAgain,
   });
   e.overlay.footprintFor = cuts;
