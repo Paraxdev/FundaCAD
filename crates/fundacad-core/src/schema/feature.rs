@@ -593,6 +593,14 @@ impl Feature {
         each_known!(self, f => Some(&f.extra), _v => None)
     }
 
+    /// The keys a known feature carries and a build ignores. `name` is the
+    /// label any feature may carry.
+    pub fn unread_fields(&self) -> Vec<&str> {
+        self.extra()
+            .map(|e| e.keys().map(String::as_str).filter(|k| *k != "name").collect())
+            .unwrap_or_default()
+    }
+
     pub fn is_core_type(type_name: &str) -> bool {
         Self::KNOWN.contains(&type_name)
     }
