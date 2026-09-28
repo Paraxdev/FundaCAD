@@ -1,26 +1,35 @@
 import { openDocument } from "../io/files";
+import { choose } from "../ui/choice";
 import type { Engine } from "./engine";
+
+/** An open sketch's edits reach the store only when the sketch is finished, so
+ *  `store.dirty` alone misses them. */
+export function hasUnsavedWork(e: Pick<Engine, "store" | "sketch">): boolean {
+  return e.store.dirty || e.sketch.hasUncommittedEdits;
+}
+
+/** Whether the user lets unsaved work go, asked only when there is some. */
+export async function mayDiscard(e: Pick<Engine, "store" | "sketch">, question: string): Promise<boolean> {
+  if (!hasUnsavedWork(e)) return true;
+  const pick = await choose(question, [
+    { value: "discard", label: "Discard", hint: "lose the unsaved changes" },
+    { value: "cancel", label: "Cancel" },
+  ]);
+  return pick === "discard";
+}
 
 export function createDocumentActions(
   e: Engine,
 ): Pick<Engine, "newDocument" | "openDoc" | "doUndo" | "doRedo"> {
   return {
     async newDocument() {
-      // window.confirm is a no-op in Tauri's WebKitGTK webview, use the native dialog.
-      if (e.store.dirty) {
-        const { ask } = await import("@tauri-apps/plugin-dialog");
-        const ok = await ask("Discard unsaved changes and start a new document?", {
-          title: "New Document",
-          kind: "warning",
-        });
-        if (!ok) return;
-      }
+      if (!(await mayDiscard(e, "Discard unsaved changes and start a new document?"))) return;
       e.store.newDocument();
       e.viewport.resetCamera(false);
     },
 
     async openDoc() {
-      await openDocument(e.store, e.geometry);
+      await openDocument(e.store, e.geometry, () => mayDiscard(e, "Discard unsaved changes and open another document?"));
     },
 
     // Undo/redo routing: while a sketch is OPEN its geometry lives in SketchMode and

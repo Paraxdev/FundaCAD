@@ -3411,6 +3411,10 @@ export class SketchMode {
     );
   }
 
+  /** An open sketch holds edits the document has not got yet. Undoing back to
+   *  where the session began leaves none. */
+  get hasUncommittedEdits(): boolean { return this.active && this.history.canUndo; }
+
   get canUndoSketch(): boolean { return this.history.canUndo; }
   get canRedoSketch(): boolean { return this.history.canRedo; }
 

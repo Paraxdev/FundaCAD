@@ -115,7 +115,13 @@ export async function saveDocumentAs(store: DocumentStore) {
   }
 }
 
-export async function openDocument(store: DocumentStore, geometry: GeometryBackend) {
+/** `mayReplace` is asked before a picked document takes the open one's place,
+ *  never for a mesh or CAD file, which is imported into it. */
+export async function openDocument(
+  store: DocumentStore,
+  geometry: GeometryBackend,
+  mayReplace: () => Promise<boolean> = async () => true,
+) {
   if (isTauri()) {
     const { open } = await import("@tauri-apps/plugin-dialog");
     const path = await open({
@@ -131,13 +137,14 @@ export async function openDocument(store: DocumentStore, geometry: GeometryBacke
     if (typeof path !== "string") return;
     const ext = path.split(".").pop()?.toLowerCase();
     if (isDocumentExt(ext)) {
+      if (!(await mayReplace())) return;
       await openDocumentAtPath(store, path, geometry);
     } else {
       await importPath(store, geometry, path); // a mesh / CAD file → import as a body
     }
   } else {
     const picked = await uploadText();
-    if (picked) {
+    if (picked && (await mayReplace())) {
       try {
         store.load(picked.text);
         // No real path in a plain browser (this came from a file input, not a
