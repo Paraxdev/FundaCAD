@@ -136,6 +136,7 @@ describe("profileCutCache", () => {
   const source = (epoch: object, first: Line[] | null = rim) => {
     let landed = 0;
     let now = epoch;
+    let doc: object = {};
     let answer = first;
     const reaches: Box[] = [];
     const pending: (() => void)[] = [];
@@ -145,6 +146,7 @@ describe("profileCutCache", () => {
         return new Promise<Line[] | null>((res) => pending.push(() => res(answer)));
       },
       epoch: () => now,
+      document: () => doc,
       landed: () => void landed++,
     };
     const flush = async () => {
@@ -155,6 +157,7 @@ describe("profileCutCache", () => {
     return {
       src, asks: () => reaches.length, reaches, landed: () => landed, flush,
       retarget: (e: object) => (now = e),
+      open: () => (doc = {}),
       answer: (a: Line[] | null) => (answer = a),
     };
   };
@@ -261,6 +264,23 @@ describe("profileCutCache", () => {
     s.retarget({});
     await s.flush();
     expect(s.landed()).toBe(1);
+  });
+
+  it("never splits another document's areas along this one's lines on the same plane", async () => {
+    const s = source({});
+    const cache = profileCutCache(s.src);
+    const plane = topPlane();
+    cache(plane, need);
+    await s.flush();
+    expect(cache(plane, need)).toHaveLength(4);
+    s.open();
+    expect(cache(plane, need)).toEqual([]);
+    expect(s.asks()).toBe(2);
+    s.open();
+    cache(plane, need);
+    await s.flush();
+    expect(s.landed()).toBe(2);
+    expect(cache(plane, null)).toHaveLength(4);
   });
 });
 

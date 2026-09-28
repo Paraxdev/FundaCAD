@@ -134,6 +134,9 @@ export interface CutSource {
   /** Any value whose IDENTITY changes exactly when the model does, the build
    *  result object itself is the natural one. */
   epoch(): unknown;
+  /** Any value whose IDENTITY changes exactly when another document is opened,
+   *  so one document's lines never split another's areas on the same plane. */
+  document(): unknown;
   /** An answer for the current model arrived, so whatever split against the
    *  previous one should split again. */
   landed(): void;
@@ -155,11 +158,11 @@ function askReach(need: Box, had: Box | null): Box {
 /** The engine's cut lines on a plane as sketch-2D polylines, per plane per model,
  *  covering the box each caller needs.
  *
- *  Keyed on the SketchPlane OBJECT, which the overlay hands out once per plane
- *  spec, so sketches sharing a plane share one request. Until the answer for
- *  the current model and box lands, the previous one is served, so a rebuild
- *  does not flash every split profile whole; a model the engine holds no
- *  build of yet is asked again once the next build lands. */
+ *  Keyed on the document and the SketchPlane OBJECT, which the overlay hands
+ *  out once per plane spec, so sketches sharing a plane share one request.
+ *  Until the answer for the current model and box lands, the previous one is
+ *  served, so a rebuild does not flash every split profile whole; a model the
+ *  engine holds no build of yet is asked again once the next build lands. */
 export interface CutCache {
   (plane: SketchPlane, need: Box | null): THREE.Vector2[][];
   /** The engine had no answer for a model that has since been replaced, so the
@@ -170,9 +173,15 @@ export interface CutCache {
 export function profileCutCache(src: CutSource): CutCache {
   interface Entry { epoch: unknown; reach: Box | null; lines: THREE.Vector2[][]; askedEpoch: unknown; asked: Box | null }
   const NONE = Symbol("never asked");
-  const byPlane = new WeakMap<SketchPlane, Entry>();
+  let doc: unknown = NONE;
+  let byPlane = new WeakMap<SketchPlane, Entry>();
   let unanswered: unknown = NONE;
   const cache = (plane: SketchPlane, need: Box | null) => {
+    const d = src.document();
+    if (d !== doc) {
+      doc = d;
+      byPlane = new WeakMap();
+    }
     let e = byPlane.get(plane);
     if (!e) {
       e = { epoch: NONE, reach: null, lines: [], askedEpoch: NONE, asked: null };
@@ -188,7 +197,9 @@ export function profileCutCache(src: CutSource): CutCache {
       e.asked = reach;
       unanswered = NONE;
       const entry = e;
+      const map = byPlane;
       void src.cuts(plane, reach).then((lines) => {
+        if (byPlane !== map) return;
         if (!lines) {
           if (src.epoch() !== now) src.landed();
           else unanswered = now;
