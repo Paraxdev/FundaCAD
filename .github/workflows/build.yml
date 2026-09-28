@@ -283,6 +283,56 @@ jobs:
             src-tauri/target/release/fundacad.exe
             src-tauri/target/release/bundle/**/*.sig
 
+  # The Linux build as a Flatpak, repackaged from the .deb above. The GNOME
+  # runtime carries WebKitGTK and GTK, which the AppImage takes from the system
+  # (appimage-unbundle), so this is what runs on NixOS, rpm-ostree and other
+  # read-only systems. Manifest: packaging/flatpak/dev.fundacad.app.yml.
+  build-flatpak:
+    needs: build-beta
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: fundacad-beta-ubuntu-22.04
+          path: linux
+
+      - name: Build the Flatpak
+        shell: bash
+        run: |
+          set -euo pipefail
+          deb=$(find linux -name '*.deb' | head -1)
+          [ -n "$deb" ] || { echo "::error::no .deb to repackage"; exit 1; }
+          v=$(basename "$deb" | sed -n 's/^FundaCAD_\(.*\)_amd64\.deb$/\1/p')
+          [ -n "$v" ] || { echo "::error::no version in $deb"; exit 1; }
+          cp "$deb" packaging/flatpak/fundacad.deb
+
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq flatpak flatpak-builder
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak-builder --user --install-deps-from=flathub --disable-rofiles-fuse \
+            --force-clean --repo=repo build packaging/flatpak/dev.fundacad.app.yml
+          flatpak build-bundle repo "FundaCAD_${v}_x86_64.flatpak" dev.fundacad.app \
+            --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo
+
+          # Every library the binary links has to come from the runtime; one
+          # that does not would be the same bare loader error as the AppImage.
+          flatpak install --user -y --noninteractive "FundaCAD_${v}_x86_64.flatpak"
+          flatpak run --command=ldd dev.fundacad.app /app/bin/fundacad > ldd.txt
+          if grep 'not found' ldd.txt ; then
+            echo "::error::the runtime lacks a library the binary needs"; exit 1
+          fi
+          ls -lh "FundaCAD_${v}_x86_64.flatpak"
+
+      - name: Upload the Flatpak
+        uses: actions/upload-artifact@v4
+        with:
+          name: fundacad-beta-flatpak
+          retention-days: 7
+          if-no-files-found: error
+          path: FundaCAD_*.flatpak
+
   # Rolling "beta" pre-release, the Rust engine.
   #
   # Its own concurrency group and its own tag, moved in place, never deleted.
@@ -302,9 +352,13 @@ jobs:
   # The retired `alpha` release is kept for a transition period and gets a copy
   # of this release's latest.json, see the end of the publish step.
   release-beta:
-    needs: build-beta
+    needs: [build-beta, build-flatpak]
+    # A failed Flatpak leaves it out of the release rather than holding the
+    # release back: always() lets this run once build-flatpak has finished
+    # either way.
     if: >-
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+      always() && needs.build-beta.result == 'success'
+      && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
       && github.ref == 'refs/heads/main'
     runs-on: ubuntu-22.04
     permissions:
@@ -353,7 +407,8 @@ jobs:
           files=$(find dist -type f \( -name '*.AppImage' -o -name '*.deb' -o -name '*.rpm' \
             -o -name '*.dmg' -o -name '*.msi' -o -name '*setup.exe' \
             -o -name 'fundacad.exe' \
-            -o -name '*.app.tar.gz' -o -name '*.sig' -o -name 'plugin-*.zip' \))
+            -o -name '*.app.tar.gz' -o -name '*.sig' -o -name 'plugin-*.zip' \
+            -o -name '*.flatpak' \))
           # The plugin bundles this build installs from (RELEASE_TAG in
           # src/plugins/index.ts). Without them every offered plugin is a 404.
           grep -q 'plugin-' <<<"$files" \

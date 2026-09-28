@@ -67,8 +67,22 @@ The builds are **not code signed**, so each OS says so in its own way:
   ```bash
   xattr -dr com.apple.quarantine /Applications/FundaCAD.app
   ```
-- **Linux**, the AppImage needs `chmod +x` and nothing else, and is the one to
-  reach for when the others give trouble: it carries its own WebKitGTK.
+- **Linux**, the Flatpak runs everywhere, NixOS, Fedora Silverblue and
+  SteamOS included, because its runtime carries WebKitGTK and GTK. Install it
+  from the downloaded file:
+
+  ```bash
+  flatpak install --user ./FundaCAD_1.0.217_x86_64.flatpak
+  flatpak run dev.fundacad.app
+  ```
+
+  It is sandboxed with access to your home folder. A SpaceMouse still needs
+  the udev rule from `packaging/99-spacemouse.rules` on the host.
+
+  The AppImage needs `chmod +x` and WebKitGTK 4.1 from your distribution. It
+  does not carry its own, because the bundled one left a blank window on
+  current systems; when it is missing, the AppImage says so and prints the
+  command that installs it.
 
   The `.deb` and `.rpm` are built on Ubuntu 22.04, so they depend on the
   WebKitGTK that ships from there on: `libwebkit2gtk-4.1-0`. That means
@@ -77,13 +91,12 @@ The builds are **not code signed**, so each OS says so in its own way:
   while apt goes and fetches it:
 
   ```bash
-  sudo apt install ./FundaCAD_0.1.38_amd64.deb
+  sudo apt install ./FundaCAD_1.0.217_amd64.deb
   ```
 
   Distributions carrying only the older `libwebkit2gtk-4.0-37`, or only the
   newer `libwebkitgtk-6.0-4`, cannot satisfy that dependency under the name the
-  package asks for, and there the AppImage is the answer rather than installing
-  WebKitGTK by hand.
+  package asks for, and there the Flatpak is the answer.
 
 ## Build
 

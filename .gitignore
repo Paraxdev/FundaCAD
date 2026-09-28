@@ -86,3 +86,10 @@ memory/
 dist-plugins/
 # Generated release binaries.
 src-tauri/binaries/
+
+# Flatpak build (packaging/flatpak), the .deb it repackages and its output
+packaging/flatpak/fundacad.deb
+.flatpak-builder/
+/build/
+/repo/
+*.flatpak
