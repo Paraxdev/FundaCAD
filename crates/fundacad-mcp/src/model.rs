@@ -347,9 +347,9 @@ fn unread_fields_message(kind: &str, f: &Map<String, Value>, pick: impl Fn(&str)
     }
     let feature = serde_json::from_value::<Feature>(Value::Object(f.clone())).ok()?;
     let unread: Vec<String> = feature
-        .extra()?
-        .keys()
-        .filter(|k| *k != "name" && pick(k))
+        .unread_fields()
+        .into_iter()
+        .filter(|k| pick(k))
         .map(|k| format!("\"{k}\""))
         .collect();
     if unread.is_empty() {

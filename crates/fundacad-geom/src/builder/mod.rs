@@ -468,6 +468,18 @@ fn note_splits(ctx: &mut Ctx, fid: &str, rawf: &Value, pre: &[(u64, u64, Shape)]
     ctx.diagnostics.splice(at..at, notes);
 }
 
+/// Says which fields a built-in feature carries without reading them, so a
+/// misspelt `bodies` is not silently the active body.
+fn note_unread(ctx: &mut Ctx, f: &Feature, fid: &str, kind: &str) {
+    let unread = f.unread_fields();
+    if unread.is_empty() {
+        return;
+    }
+    let names = unread.iter().map(|k| format!("\"{k}\"")).collect::<Vec<_>>().join(", ");
+    let (what, it) = if unread.len() == 1 { ("field", "it") } else { ("fields", "them") };
+    ctx.advise(fid, "unreadFields", format!("a {kind} has no {what} {names}, the build ignores {it}"));
+}
+
 /// A body as the build leaves it, debris dropped.
 pub struct BuiltBody {
     pub id: String,
@@ -1002,6 +1014,7 @@ pub fn rebuild_from(
         }
         let label = label_of(rawf);
         let detail = || Some(failure_detail(&ctx, i, type_name, began.elapsed()));
+        let ran = !matches!(outcome, Ok(Ran::Inactive));
         match outcome {
             Ok(Ran::Inactive) => {}
             Ok(Ran::Built) => {
@@ -1038,6 +1051,9 @@ pub fn rebuild_from(
                     detail: detail(),
                 });
             }
+        }
+        if ran {
+            note_unread(&mut ctx, f, fid.unwrap_or(""), type_name.unwrap_or(""));
         }
         crate::bench::phase("after_feature", || {
             tap.after_feature(

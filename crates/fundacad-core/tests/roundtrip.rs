@@ -478,3 +478,49 @@ fn a_build_before_targeted_mirrors_refuses_a_mirror_that_names_bodies() {
     let bare = before(serde_json::json!("YZ")).expect("a bare name loads");
     assert!(bare.extra.contains_key("bodies"), "and bodies would be ignored");
 }
+
+fn features_of(v: &Value, out: &mut Vec<Value>) {
+    match v {
+        Value::Object(m) => {
+            if let Some(Value::Array(fs)) = m.get("features") {
+                out.extend(fs.iter().filter(|f| f.get("type").is_some()).cloned());
+            }
+            m.values().for_each(|x| features_of(x, out));
+        }
+        Value::Array(a) => a.iter().for_each(|x| features_of(x, out)),
+        _ => {}
+    }
+}
+
+/// A build names the fields a built-in feature ignores, so an ordinary
+/// document must carry none or every build of it would warn. The Python
+/// engine's test fixtures keep fields it ignored too, and app_shapes carries
+/// one on purpose to show it round trips.
+#[test]
+fn no_ordinary_document_carries_a_field_a_build_ignores() {
+    let mut docs: Vec<(String, Value)> = documents()
+        .into_iter()
+        .filter(|(label, _)| !label.starts_with("python_engine_tests.json"))
+        .collect();
+    let dir = repo().join("tests/golden/corpus");
+    for entry in std::fs::read_dir(&dir).expect("the corpora") {
+        let path = entry.expect("an entry").path();
+        if path.extension().is_some_and(|e| e == "json") {
+            docs.push((path.display().to_string(), read(&path)));
+        }
+    }
+    let mut found = Vec::new();
+    for (label, doc) in &docs {
+        let mut features = Vec::new();
+        features_of(doc, &mut features);
+        for f in features {
+            let Ok(typed) = serde_json::from_value::<Feature>(f.clone()) else { continue };
+            for k in typed.unread_fields() {
+                if !(label.starts_with("app_shapes.json") && k == "newField") {
+                    found.push(format!("{label}: {} {} carries {k}", f["type"], f["id"]));
+                }
+            }
+        }
+    }
+    assert!(found.is_empty(), "{found:#?}");
+}
