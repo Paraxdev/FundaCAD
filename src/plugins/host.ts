@@ -110,6 +110,13 @@ export { openTextFile, saveTextFile } from "../io/files";
 /** A breadcrumb that survives twenty later toasts, for a bug report. */
 export { stickyFact } from "../diagnostics/breadcrumbs";
 
+// --- what can be done ----------------------------------------------------------
+/** Every command the palette offers, by the action id `Engine.handleAction`
+ *  takes. For a plugin that lets another input (a game controller) bind to
+ *  commands by name, without keeping a second list that drifts from the ribbon. */
+export { allCommands } from "../ui/commands";
+export type { Command } from "../ui/commands";
+
 // --- remembering something ---------------------------------------------------
 /** One `fundacad.*` localStorage key, read forward through its older names. */
 export { readSetting } from "../ui/storedSetting";

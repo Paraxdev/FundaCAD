@@ -77,6 +77,7 @@ const sources = {
 const CAPABILITIES: Record<string, (path: string) => boolean> = {
   "the printer connection": (p) => p.includes("/plugins/FundaCAD.Printing/"),
   "the 3D mouse": (p) => p.includes("/plugins/FundaCAD.SpaceMouse/"),
+  "the game controller": (p) => p.includes("/plugins/FundaCAD.Gamepad/"),
   "multiple colours": (p) => p.includes("/plugins/FundaCAD.MultiColor/"),
   // The one that was hardest to get out, and so the one these rules are worth
   // the most on. A surface texture was a MODELING TOOL: files under src/ named

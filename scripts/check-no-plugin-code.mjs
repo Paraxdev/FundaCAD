@@ -31,6 +31,8 @@ const dir = process.argv[2] || "dist/assets";
 const MARKERS = [
   ["FundaCAD.SpaceMouse", "spacemouse_start"],
   ["FundaCAD.SpaceMouse", "getSpaceMouseConfig"],
+  ["FundaCAD.Gamepad", "fundacad.gamepad.config"],
+  ["FundaCAD.Gamepad", "Cursor on / off"],
   ["FundaCAD.Printing", "Send to printer, filament mapping"],
   ["FundaCAD.Printing", "print-status-pill"],
   ["FundaCAD.MultiColor", "nearestPaletteSlot"],

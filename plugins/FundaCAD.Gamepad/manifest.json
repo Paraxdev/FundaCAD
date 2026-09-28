@@ -1,0 +1,13 @@
+{
+  "id": "FundaCAD.Gamepad",
+  "name": "Game controller",
+  "version": "1.0.0",
+  "kind": "builtin",
+  "summary": "Flies the view and runs commands from a game controller or a Steam Deck.",
+  "enabledByDefault": true,
+  "grants": [
+    "device.input",
+    "document.read",
+    "document.write"
+  ]
+}
