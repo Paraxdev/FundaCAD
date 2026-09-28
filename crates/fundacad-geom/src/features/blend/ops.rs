@@ -153,16 +153,17 @@ pub fn section(
     chamfer: bool,
     sizes: &[f64],
     size2: Option<f64>,
+    unit: f64,
     g2: bool,
     draft: bool,
     profile: f64,
 ) -> Result<Shape, SectionErr> {
-    let built = section_with(shape, edges, chamfer, sizes, size2, g2, draft, profile, true)?;
+    let built = section_with(shape, edges, chamfer, sizes, size2, unit, g2, draft, profile, true)?;
     let size = sizes.iter().copied().fold(f64::INFINITY, f64::min).min(size2.unwrap_or(f64::INFINITY));
     if !super::overlap::folds_over_itself(shape, &built, size) {
         return Ok(built);
     }
-    let again = section_with(shape, edges, chamfer, sizes, size2, g2, draft, profile, false)?;
+    let again = section_with(shape, edges, chamfer, sizes, size2, unit, g2, draft, profile, false)?;
     if super::overlap::folds_over_itself(shape, &again, size) {
         return Err(SectionErr::Blend(
             "at this size the blend folds over itself".into(),
@@ -178,6 +179,7 @@ fn section_with(
     chamfer: bool,
     sizes: &[f64],
     size2: Option<f64>,
+    unit: f64,
     g2: bool,
     draft: bool,
     profile: f64,
@@ -195,6 +197,7 @@ fn section_with(
             chamfer,
             sizes,
             size2.unwrap_or(f64::NAN),
+            unit,
             g2,
             draft,
             profile,

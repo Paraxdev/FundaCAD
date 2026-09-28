@@ -27,6 +27,9 @@
 #include <BRepCheck_Analyzer.hxx>
 #include <BRepClass3d_SolidClassifier.hxx>
 #include <BRepClass_FaceClassifier.hxx>
+#include <BRepExtrema_DistShapeShape.hxx>
+#include <BRepExtrema_ShapeProximity.hxx>
+#include <BRepMesh_IncrementalMesh.hxx>
 #include <BRepGProp.hxx>
 #include <BRepGProp_Face.hxx>
 #include <BRepOffsetAPI_ThruSections.hxx>
@@ -47,6 +50,7 @@
 #include <GeomAbs_SurfaceType.hxx>
 #include <Message_ProgressRange.hxx>
 #include <Message_ProgressScope.hxx>
+#include <OSD_Parallel.hxx>
 #include <Geom_BezierCurve.hxx>
 #include <Geom_BezierSurface.hxx>
 #include <ShapeFix_Solid.hxx>
@@ -60,6 +64,7 @@
 #include <TopExp.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopTools_IndexedDataMapOfShapeListOfShape.hxx>
+#include <TopTools_DataMapOfShapeShape.hxx>
 #include <TopTools_IndexedMapOfShape.hxx>
 #include <TopTools_ListOfShape.hxx>
 #include <TopoDS.hxx>
@@ -76,10 +81,12 @@
 
 #include <algorithm>
 #include <chrono>
+#include <exception>
 #include <cmath>
 #include <functional>
 #include <memory>
 #include <string>
+#include <thread>
 #include <tuple>
 #include <vector>
 
@@ -1745,11 +1752,190 @@ inline bool swallowed(const TopoDS_Shape &base, const std::vector<TopoDS_Shape> 
   return n > 0;
 }
 
+// Thinner than this, what a cut leaves of the body is a membrane, not a part:
+// boolean_one's last retry fuses the blend's own booleans at 1e-2, and a later
+// cut through such a wall with the model's fuzz found nothing to remove.
+const double MIN_SECTION = 1e-2;
+
+// The faces of `out` a cut made, the ones lying inside `base`.
+inline std::vector<TopoDS_Face> faces_cut_into(const TopoDS_Shape &base, const TopoDS_Shape &out,
+                                               const std::vector<TopoDS_Shape> &tools) {
+  std::vector<Bnd_Box> reach;
+  for (const TopoDS_Shape &t : tools) {
+    Bnd_Box box;
+    BRepBndLib::Add(t, box);
+    if (!box.IsVoid()) reach.push_back(box);
+  }
+  TopTools_IndexedMapOfShape old;
+  TopExp::MapShapes(base, TopAbs_FACE, old);
+  std::unique_ptr<BRepClass3d_SolidClassifier> bc;
+  const double uv[5][2] = {{0.5, 0.5}, {0.3, 0.7}, {0.7, 0.3}, {0.25, 0.25}, {0.75, 0.75}};
+  std::vector<TopoDS_Face> made;
+  TopTools_IndexedMapOfShape faces;
+  TopExp::MapShapes(out, TopAbs_FACE, faces);
+  for (int i = 1; i <= faces.Extent(); ++i) {
+    TopoDS_Face f = TopoDS::Face(faces(i));
+    if (old.Contains(f)) continue;
+    Bnd_Box fb;
+    BRepBndLib::Add(f, fb);
+    bool reached = false;
+    for (const Bnd_Box &b : reach) reached = reached || !fb.IsOut(b);
+    if (!reached) continue;
+    double u0, u1, v0, v1;
+    BRepTools::UVBounds(f, u0, u1, v0, v1);
+    BRepAdaptor_Surface surf(f);
+    for (auto &q : uv) {
+      gp_Pnt2d at(u0 + (u1 - u0) * q[0], v0 + (v1 - v0) * q[1]);
+      if (BRepClass_FaceClassifier(f, at, 1e-9).State() != TopAbs_IN) continue;
+      if (!bc) bc.reset(new BRepClass3d_SolidClassifier(base));
+      bc->Perform(surf.Value(at.X(), at.Y()), 1e-7);
+      if (bc->State() == TopAbs_IN) made.push_back(f);
+      break;
+    }
+  }
+  return made;
+}
+
+// Whether a face the cut made comes closer than `least` to a part of the body
+// it does not touch, through material. A section cut down to that is two
+// pieces held by a membrane. Faces are first sifted on a coarse mesh of a copy,
+// and an edge is measured on its own only where every face it bounds touches
+// the cut face, like the neck's far corner.
+inline bool thin_section(const TopoDS_Shape &base, const TopoDS_Shape &out, const std::vector<TopoDS_Shape> &tools,
+                         double least) {
+  std::vector<TopoDS_Face> made = faces_cut_into(base, out, tools);
+  if (made.empty()) return false;
+  Bnd_Box whole;
+  BRepBndLib::Add(out, whole);
+  double defl = std::max(least, 1e-3 * std::sqrt(whole.SquareExtent()));
+  std::vector<Bnd_Box> around;
+  for (const TopoDS_Face &f : made) {
+    Bnd_Box fb;
+    BRepBndLib::Add(f, fb);
+    fb.Enlarge(least);
+    around.push_back(fb);
+  }
+  TopTools_IndexedMapOfShape all_faces, faces;
+  TopExp::MapShapes(out, TopAbs_FACE, all_faces);
+  TopoDS_Compound nearby;
+  BRep_Builder builder;
+  builder.MakeCompound(nearby);
+  for (int i = 1; i <= all_faces.Extent(); ++i) {
+    Bnd_Box gb;
+    BRepBndLib::Add(all_faces(i), gb);
+    bool reached = false;
+    for (const Bnd_Box &b : around) reached = reached || (!gb.IsVoid() && !b.IsOut(gb));
+    if (!reached) continue;
+    faces.Add(all_faces(i));
+    builder.Add(nearby, all_faces(i));
+  }
+  // Only the faces near the cut are meshed, on a copy, so the body keeps no mesh.
+  BRepBuilderAPI_Copy meshed(nearby, false);
+  BRepMesh_IncrementalMesh(meshed.Shape(), defl, false, 0.5, true);
+  auto has_mesh = [](const TopoDS_Shape &f) {
+    TopLoc_Location loc;
+    return !BRep_Tool::Triangulation(TopoDS::Face(f), loc).IsNull();
+  };
+  TopTools_IndexedDataMapOfShapeListOfShape edge_faces;
+  TopExp::MapShapesAndAncestors(out, TopAbs_EDGE, TopAbs_FACE, edge_faces);
+  std::vector<std::pair<TopoDS_Shape, TopoDS_Shape>> pairs;
+  for (const TopoDS_Face &f : made) {
+    TopTools_IndexedMapOfShape own;
+    TopExp::MapShapes(f, TopAbs_VERTEX, own);
+    auto touches = [&](const TopoDS_Shape &g) {
+      for (TopExp_Explorer ex(g, TopAbs_VERTEX); ex.More(); ex.Next())
+        if (own.Contains(ex.Current())) return true;
+      return false;
+    };
+    Bnd_Box fb;
+    BRepBndLib::Add(f, fb);
+    fb.Enlarge(least);
+    auto reaches = [&](const TopoDS_Shape &g) {
+      Bnd_Box gb;
+      BRepBndLib::Add(g, gb);
+      return !gb.IsVoid() && !fb.IsOut(gb);
+    };
+    TopoDS_Shape fm = meshed.ModifiedShape(f);
+    TopoDS_Compound sifted;
+    builder.MakeCompound(sifted);
+    TopTools_DataMapOfShapeShape original;
+    for (int i = 1; i <= faces.Extent(); ++i) {
+      const TopoDS_Shape &g = faces(i);
+      if (g.IsSame(f) || !reaches(g) || touches(g)) continue;
+      TopoDS_Shape gm = meshed.ModifiedShape(g);
+      if (!has_mesh(fm) || !has_mesh(gm)) {
+        pairs.push_back({f, g});
+        continue;
+      }
+      builder.Add(sifted, gm);
+      original.Bind(gm, g);
+    }
+    if (!original.IsEmpty()) {
+      BRepExtrema_ShapeProximity prox(least + 2 * defl);
+      prox.LoadShape1(fm);
+      prox.LoadShape2(sifted);
+      prox.Perform();
+      if (!prox.IsDone()) {
+        for (TopTools_DataMapOfShapeShape::Iterator it(original); it.More(); it.Next())
+          pairs.push_back({f, it.Value()});
+      } else {
+        for (BRepExtrema_MapOfIntegerPackedMapOfInteger::Iterator it(prox.OverlapSubShapes2()); it.More(); it.Next()) {
+          const TopoDS_Shape &gm = prox.GetSubShape2(it.Key());
+          if (original.IsBound(gm)) pairs.push_back({f, original.Find(gm)});
+        }
+      }
+    }
+    for (int i = 1; i <= edge_faces.Extent(); ++i) {
+      const TopoDS_Shape &e = edge_faces.FindKey(i);
+      if (BRep_Tool::Degenerated(TopoDS::Edge(e)) || !reaches(e) || touches(e)) continue;
+      bool hidden = true;
+      for (TopTools_ListOfShape::Iterator it(edge_faces(i)); it.More() && hidden; it.Next())
+        hidden = it.Value().IsSame(f) || touches(it.Value());
+      if (hidden) pairs.push_back({f, e});
+    }
+  }
+  std::vector<std::vector<std::pair<gp_Pnt, gp_Pnt>>> closest(pairs.size());
+  OSD_Parallel::For(0, static_cast<int>(pairs.size()), [&](int i) {
+    BRepExtrema_DistShapeShape d;
+    d.SetFlag(Extrema_ExtFlag_MIN);
+    d.LoadS1(pairs[i].first);
+    d.LoadS2(pairs[i].second);
+    d.Perform();
+    if (!d.IsDone() || d.Value() >= least) return;
+    for (int k = 1; k <= d.NbSolution(); ++k) closest[i].push_back({d.PointOnShape1(k), d.PointOnShape2(k)});
+  });
+  std::unique_ptr<BRepClass3d_SolidClassifier> oc;
+  for (const auto &found : closest)
+    for (const auto &ab : found) {
+      double gap = ab.first.Distance(ab.second);
+      if (gap < 1e-7) continue;
+      if (!oc) oc.reset(new BRepClass3d_SolidClassifier(out));
+      oc->Perform(P((V(ab.first) + V(ab.second)).Multiplied(0.5)), 0.1 * gap);
+      if (oc->State() == TopAbs_IN) return true;
+    }
+  return false;
+}
+
+// While a search looks for the size that holds together, a build stops at
+// the first boolean's pieces, and only the few full builds near it pay for
+// the checks after it.
+inline bool &pieces_only() {
+  static thread_local bool on = false;
+  return on;
+}
+
 inline TopoDS_Shape combine(const TopoDS_Shape &shape, const std::vector<TopoDS_Shape> &cut,
                             const std::vector<TopoDS_Shape> &fuse, double tol, bool one_shot) {
   double fuzz = std::max(tol * 10, 1e-5);
   if (!cut.empty() && swallowed(shape, cut)) throw err("at this size the blend removes the whole body");
   TopoDS_Shape out = shape;
+  if (pieces_only()) {
+    if (!cut.empty()) out = boolean(Op::Cut, out, cut, fuzz);
+    if (!fuse.empty()) out = boolean(Op::Fuse, out, fuse, fuzz);
+    if (solid_count(out) == 0) throw err("at this size the blend removes the whole body");
+    if (solid_count(out) > solid_count(shape)) throw TooLarge(Misfit::Split, FITS_UNKNOWN, gp_Pnt());
+    return out;
+  }
   if (!cut.empty()) out = boolean_all(Op::Cut, out, cut, fuzz, one_shot);
   if (!fuse.empty()) out = boolean_all(Op::Fuse, out, fuse, fuzz, one_shot);
   check_cancel();
@@ -1763,7 +1949,8 @@ inline TopoDS_Shape combine(const TopoDS_Shape &shape, const std::vector<TopoDS_
   } catch (...) {
   }
   if (solid_count(out) == 0) throw err("at this size the blend removes the whole body");
-  if (solid_count(out) > solid_count(shape)) throw TooLarge(Misfit::Split, FITS_UNKNOWN, gp_Pnt());
+  if (solid_count(out) > solid_count(shape) || (!cut.empty() && thin_section(shape, out, cut, MIN_SECTION)))
+    throw TooLarge(Misfit::Split, FITS_UNKNOWN, gp_Pnt());
   std::vector<TopoDS_Shape> all(cut);
   all.insert(all.end(), fuse.begin(), fuse.end());
   if (!sound(out, &shape) || !(kept_base(shape, out, all, false) || kept_base(shape, out, all)))
@@ -1819,37 +2006,131 @@ inline TopoDS_Shape blend_scaled(const TopoDS_Shape &shape, const std::vector<To
   return section_blend_once(shape, es, chamfer, size2, g2, sz, false, profile);
 }
 
+// The sizes a refusal offers, by rank: thousandths of a mm below 1 mm and
+// hundredths from there.
+inline double grid_size(long r) { return r < 1000 ? r / 1000.0 : 1.0 + (r - 1000) / 100.0; }
+
+inline long grid_rank_below(double v) {
+  return v < 1.0 ? static_cast<long>(std::floor(v * 1000 + 1e-6))
+                 : 1000 + static_cast<long>(std::floor((v - 1.0) * 100 + 1e-6));
+}
+
+struct PiecesOnly {
+  bool was = pieces_only();
+  explicit PiecesOnly(bool on) { pieces_only() = on; }
+  ~PiecesOnly() { pieces_only() = was; }
+};
+
 // Whether a blend cuts the body apart shows only once it is built, so the size
-// that does not is found by building smaller ones, halving until one holds
-// together and then bisecting, for as long as a few builds of this one take.
+// that does not is found by building smaller ones on the grid of sizes in mm of
+// `unit`, so that an edge offers the same size whatever was asked, for as long
+// as a few builds of this one take. That search only counts the pieces of the
+// first boolean; from the size it finds, full builds step down to the largest
+// that passes every check. Two sizes are built at once, a third of the way
+// apart. A fraction of the asked size comes back.
 inline double split_limit(const TopoDS_Shape &shape, const std::vector<TopoDS_Shape> &es, bool chamfer, double size2,
-                          bool g2, const std::vector<double> &sz, bool draft, double profile, bool one_shot,
-                          double first_secs) {
+                          bool g2, const std::vector<double> &sz, double unit, bool draft, double profile,
+                          bool one_shot, double first_secs) {
   using clock = std::chrono::steady_clock;
   auto started = clock::now();
   double budget = draft ? std::max(1.0, 2 * first_secs) : std::max(10.0, 3 * first_secs);
-  double lo = 0.0, hi = 1.0;
-  for (int i = 0; i < 10; ++i) {
-    if (std::chrono::duration<double>(clock::now() - started).count() > budget) return lo > 0 ? lo : FITS_UNKNOWN;
-    double k = lo > 0 ? 0.5 * (lo + hi) : 0.5 * hi;
+  auto out_of_time = [&]() { return std::chrono::duration<double>(clock::now() - started).count() > budget; };
+  auto builds = [&](long r, bool quick) {
+    PiecesOnly mode(quick);
+    double v = grid_size(r);
     BRepBuilderAPI_Copy cp(shape, false);
     std::vector<TopoDS_Shape> ec;
     for (const TopoDS_Shape &e : es) ec.push_back(cp.ModifiedShape(e));
+    // Scaled so that asking for v itself builds with the very same sizes.
     std::vector<double> sk;
-    for (double x : sz) sk.push_back(x * k);
-    bool ok = true;
+    for (double x : sz) sk.push_back(x / unit * v);
     try {
-      blend_scaled(cp.Shape(), ec, chamfer, std::isnan(size2) ? size2 : size2 * k, g2, sk, draft, profile, one_shot);
+      blend_scaled(cp.Shape(), ec, chamfer, std::isnan(size2) ? size2 : size2 / unit * v, g2, sk, draft, profile,
+                   one_shot);
     } catch (const Cancelled &) {
       throw;
     } catch (const SectionError &) {
-      ok = false;
+      return false;
     } catch (const Standard_Failure &) {
-      ok = false;
+      return false;
     }
-    (ok ? lo : hi) = k;
+    return true;
+  };
+  // The second size builds on its own thread, which no cancel reaches, so it
+  // is always the smaller, quicker one.
+  auto both = [&](long a, long b, bool quick, bool &oka, bool &okb) {
+    std::exception_ptr failed;
+    std::thread other([&]() {
+      try {
+        okb = builds(b, quick);
+      } catch (...) {
+        failed = std::current_exception();
+      }
+    });
+    try {
+      oka = builds(a, quick);
+    } catch (...) {
+      other.join();
+      throw;
+    }
+    other.join();
+    if (failed) std::rethrow_exception(failed);
+  };
+  auto search = [&](long &lo, long &hi, bool quick) {
+    while (hi - lo > 1) {
+      if (out_of_time()) return false;
+      if (hi - lo == 2) {
+        (builds(lo + 1, quick) ? lo : hi) = lo + 1;
+        continue;
+      }
+      long b = lo + (hi - lo) / 3, a = lo + 2 * (hi - lo) / 3;
+      bool oka = false, okb = false;
+      both(a, b, quick, oka, okb);
+      if (oka)
+        lo = a;
+      else if (okb)
+        lo = b, hi = a;
+      else
+        hi = b;
+    }
+    return true;
+  };
+  long lo = 0, hi = grid_rank_below(unit);
+  if (grid_size(hi) < unit - 1e-9) ++hi;
+  bool whole = search(lo, hi, true);
+  if (lo <= 0) return whole ? FITS_NONE : FITS_UNKNOWN;
+  bool at = false, under = false;
+  if (lo > 1)
+    both(lo, lo - 1, false, at, under);
+  else
+    at = builds(lo, false);
+  if (at) return grid_size(lo) / unit;
+  if (under) return grid_size(lo - 1) / unit;
+  if (!whole) return FITS_UNKNOWN;
+  hi = lo - 1;
+  lo = 0;
+  for (long step = 2; hi - step > 0; step *= 4) {
+    if (out_of_time()) return FITS_UNKNOWN;
+    long a = hi - step, b = std::max(0L, hi - 2 * step);
+    bool oka = false, okb = false;
+    if (b > 0)
+      both(a, b, false, oka, okb);
+    else
+      oka = builds(a, false);
+    if (oka) {
+      lo = a;
+      break;
+    }
+    if (okb) {
+      lo = b;
+      hi = a;
+      break;
+    }
+    hi = b > 0 ? b : a;
+    if (b == 0) break;
   }
-  return lo > 0 ? lo : FITS_NONE;
+  if (!search(lo, hi, false)) return lo > 0 ? grid_size(lo) / unit : FITS_UNKNOWN;
+  return lo > 0 ? grid_size(lo) / unit : FITS_NONE;
 }
 
 } // namespace secblend
@@ -1857,12 +2138,14 @@ inline double split_limit(const TopoDS_Shape &shape, const std::vector<TopoDS_Sh
 // the Python engine's `section_blend.py` `section_blend`. size2 NaN for none. status 0 built,
 // 1 SectionBlendError (message is its sentence), 2 any other exception (its class),
 // 3 cancelled through `progress`, 4 the blend does not fit an edge (message is
-// "why fits x y z": fits the largest share of the size that does, -1 when none
-// does, -2 when the search ran out of time, x y z a point on the edge).
+// "why fits x y z": fits the largest size in mm of `unit` that does, -1 when
+// none does, -2 when the search ran out of time, x y z a point on the edge).
+// `unit` is the size asked for, which `sizes` and `size2` scale with.
 inline std::unique_ptr<TopoDS_Shape> blend_section(const TopoDS_Shape &shape, const TopoDS_Shape &edges, bool chamfer,
-                                                   rust::Slice<const double> sizes, double size2, bool g2, bool draft,
-                                                   double profile, bool one_shot, const Message_ProgressRange &progress,
-                                                   int32_t &status, rust::String &message) {
+                                                   rust::Slice<const double> sizes, double size2, double unit, bool g2,
+                                                   bool draft, double profile, bool one_shot,
+                                                   const Message_ProgressRange &progress, int32_t &status,
+                                                   rust::String &message) {
   secblend::CancelScope cancel(progress);
   std::vector<TopoDS_Shape> es;
   for (TopoDS_Iterator it(edges); it.More(); it.Next()) es.push_back(it.Value());
@@ -1870,7 +2153,8 @@ inline std::unique_ptr<TopoDS_Shape> blend_section(const TopoDS_Shape &shape, co
   try {
     bool bad = false;
     for (double x : sz) bad = bad || !(x > 0);
-    if (bad || (!std::isnan(size2) && !(size2 > 0))) throw secblend::err("the size must be greater than 0");
+    if (bad || !(unit > 0) || (!std::isnan(size2) && !(size2 > 0)))
+      throw secblend::err("the size must be greater than 0");
     // Failed booleans raise tolerances in place, so the search starts from a copy.
     BRepBuilderAPI_Copy pristine(shape, false);
     std::vector<TopoDS_Shape> pristine_es;
@@ -1885,7 +2169,8 @@ inline std::unique_ptr<TopoDS_Shape> blend_section(const TopoDS_Shape &shape, co
       double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
       BRepAdaptor_Curve crv(TopoDS::Edge(es.front()));
       e.at = crv.Value(0.5 * (crv.FirstParameter() + crv.LastParameter()));
-      e.fits = secblend::split_limit(pristine.Shape(), pristine_es, chamfer, size2, g2, sz, draft, profile, one_shot, secs);
+      e.fits = secblend::split_limit(pristine.Shape(), pristine_es, chamfer, size2, g2, sz, unit, draft, profile,
+                                     one_shot, secs);
       throw;
     }
   } catch (const secblend::Cancelled &) {
@@ -1894,8 +2179,8 @@ inline std::unique_ptr<TopoDS_Shape> blend_section(const TopoDS_Shape &shape, co
   } catch (const secblend::TooLarge &e) {
     status = 4;
     char buf[160];
-    std::snprintf(buf, sizeof buf, "%d %.17g %.17g %.17g %.17g", static_cast<int>(e.why), e.fits, e.at.X(), e.at.Y(),
-                  e.at.Z());
+    std::snprintf(buf, sizeof buf, "%d %.17g %.17g %.17g %.17g", static_cast<int>(e.why),
+                  e.fits > 0 ? e.fits * unit : e.fits, e.at.X(), e.at.Y(), e.at.Z());
     message = buf;
   } catch (const secblend::SectionError &e) {
     status = 1;

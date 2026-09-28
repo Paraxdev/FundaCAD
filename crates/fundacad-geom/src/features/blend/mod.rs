@@ -92,7 +92,7 @@ impl Misfit {
     }
 }
 
-/// The largest share of the asked size that fits.
+/// The largest size that fits, in mm of the asked one.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Fits {
     UpTo(f64),
@@ -116,9 +116,10 @@ fn misfit_error(label: &str, body: &str, size: f64, why: Misfit, fits: Fits, at:
         label.to_lowercase()
     );
     // Right at the limit the ball ends exactly on a face's edge and the kernel
-    // leaves a sliver face there, so the size offered stays a hair below it.
-    let shown = |k: f64| {
-        let v = k * size - 1e-4;
+    // leaves a sliver face there, so the size offered stays a hair below it. A
+    // split's limit is a size that built, already on this grid.
+    let shown = |v: f64| {
+        let v = if why == Misfit::Split { v + 1e-6 } else { v - 1e-4 };
         let step = if v >= 1.0 { 100.0 } else { 1000.0 };
         (v * step).floor() / step
     };
@@ -188,7 +189,7 @@ pub fn fillet(ctx: &mut Ctx, f: &Fillet) -> FResult {
                 .iter()
                 .map(|e| if chord { chord_radius(s, e, r) } else { r })
                 .collect();
-            ops::section(s, es, false, &sizes, None, g2, draft, profile)
+            ops::section(s, es, false, &sizes, None, r, g2, draft, profile)
         }
     };
     let section = section_at(p);
@@ -297,7 +298,7 @@ pub fn chamfer(ctx: &mut Ctx, f: &Chamfer) -> FResult {
         }
     };
     let section = move |s: &Shape, es: &[Shape]| -> Result<Shape, SectionErr> {
-        ops::section(s, es, true, &vec![d; es.len()], d2, false, draft, 0.0)
+        ops::section(s, es, true, &vec![d; es.len()], d2, d, false, draft, 0.0)
     };
     blend_edges(
         ctx,

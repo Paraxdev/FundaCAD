@@ -60,6 +60,7 @@ mod inner {
             chamfer: bool,
             sizes: &[f64],
             size2: f64,
+            unit: f64,
             g2: bool,
             draft: bool,
             profile: f64,
