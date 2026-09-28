@@ -26,7 +26,7 @@ import { screenTransform } from "../../sketch/annotationFormat";
 import { useSketchAnnotationStore } from "../../stores/sketchAnnotations";
 import type { DimItem } from "../../sketch/sketchDimensions";
 import { displayValue, isPlainNumber, parseField } from "../../ui/units";
-import { clampLabel, labelLeader } from "../../ui/labelClamp";
+import { labelLeader, layoutLabels, type LabelAt } from "../../ui/labelClamp";
 import type { Box } from "../../ui/promptPlacement";
 
 const s = useSketchAnnotationStore();
@@ -74,18 +74,25 @@ function loop(now: number = performance.now()) {
   lastPose = pose;
   const area = vp.domElement.getBoundingClientRect();
   const items = s.dimItems;
+  const at: LabelAt[] = [];
+  const idx: number[] = [];
   for (let i = 0; i < items.length; i++) {
     const el = els[i];
     const l = items[i];
     if (!el || !l) continue;
     plane.to3D(l.anchor.x, l.anchor.y, scratch);
     const p = vp.projectToScreen(scratch);
-    const hw = el.offsetWidth / 2;
-    const hh = el.offsetHeight / 2;
-    const c = clampLabel(p.x, p.y, hw, hh, area, cards, LABEL_GAP);
-    el.style.transform = screenTransform(c.x, c.y);
+    at.push({ x: p.x, y: p.y, hw: el.offsetWidth / 2, hh: el.offsetHeight / 2 });
+    idx.push(i);
+  }
+  const placed = layoutLabels(at, area, cards, LABEL_GAP);
+  for (let k = 0; k < idx.length; k++) {
+    const i = idx[k]!;
+    const a = at[k]!;
+    const c = placed[k]!;
+    els[i]!.style.transform = screenTransform(c.x, c.y);
     const g = leaders[i];
-    if (g) placeLeader(g, labelLeader(c, hw, hh, p));
+    if (g) placeLeader(g, labelLeader(c, a.hw, a.hh, a));
   }
 }
 
@@ -102,7 +109,7 @@ function placeLeader(g: SVGGElement, seg: ReturnType<typeof labelLeader>) {
   line?.setAttribute("y2", String(seg.y2));
   dot?.setAttribute("cx", String(seg.x2));
   dot?.setAttribute("cy", String(seg.y2));
-  // An arrowhead on the label's border, inside the gap clampLabel keeps clear,
+  // An arrowhead on the label's border, inside the gap layoutLabels keeps clear,
   // so the way to the dimension reads even where the line runs under a card.
   const len = Math.hypot(seg.x2 - seg.x1, seg.y2 - seg.y1) || 1;
   const ux = (seg.x2 - seg.x1) / len;
