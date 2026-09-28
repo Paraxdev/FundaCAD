@@ -52,8 +52,18 @@ runs:
         find "$root/usr/lib" -maxdepth 1 -type f -name '*.so*' -delete
         rm -rf "$root/usr/lib/x86_64-linux-gnu"
 
-        rm -f "$root/.DirIcon"
-        cp packaging/.DirIcon "$root/.DirIcon"
+        # One 256×256 raster of the app icon backs every icon the AppImage shows.
+        # Tauri leaves .DirIcon as a symlink and the root icon named by the
+        # desktop file's Icon= pointing at the 32×32 one, and the 256×256 theme
+        # directory empty, so thumbnailers and the AppImage catalog got nothing
+        # or a blurry icon.
+        icon_name=$(sed -n 's/^Icon=//p' "$root"/*.desktop | head -1)
+        [ -n "$icon_name" ] || { echo "::error::the desktop file names no Icon="; exit 1; }
+        icon=src-tauri/icons/128x128@2x.png
+        rm -f "${root:?}/.DirIcon" "${root:?}/${icon_name:?}.png"
+        cp "$icon" "$root/.DirIcon"
+        cp "$icon" "$root/$icon_name.png"
+        install -Dm644 "$icon" "$root/usr/share/icons/hicolor/256x256/apps/$icon_name.png"
 
         # The geometry engine must still be there, or we just shipped a dead app.
         # It is the executable itself, so what is checked is that it came through.
@@ -62,8 +72,11 @@ runs:
           || { echo "::error::nothing left in usr/bin"; ls -la "$root/usr"; exit 1; }
         # And that .DirIcon is a real file, not the symlink that was replaced:
         # a silent clobber of FundaCAD.png would leave a broken thumbnail icon.
+        # It must also be the same image as the icon the desktop file names.
         test -f "$root/.DirIcon" && test ! -L "$root/.DirIcon" && test -s "$root/.DirIcon" \
           || { echo "::error::.DirIcon is missing or not a real file"; exit 1; }
+        cmp -s "$root/.DirIcon" "$root/$icon_name.png" \
+          || { echo "::error::.DirIcon is not the app icon"; exit 1; }
         # No Python anywhere: the retired engine's runtime, sidecar-runtime/, is
         # 800 MB of dead weight and a sign a stale config was used. The
         # directory under usr/lib is named after productName, read from the
