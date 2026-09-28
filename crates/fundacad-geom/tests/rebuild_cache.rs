@@ -281,6 +281,32 @@ fn a_new_process_resumes_from_disk_with_identical_payloads() {
 }
 
 #[test]
+fn only_a_build_this_process_made_is_held_and_a_disk_resume_stays_in_ram() {
+    let root = scratch("held");
+    let base = doc();
+    {
+        let mut cache = RebuildCache::new(Some(GeomStore::open(&root).unwrap()));
+        cache.budget_ms = 0.0;
+        cache.tip_after = Duration::ZERO;
+        assert!(cache.held(&base).is_none(), "nothing is built yet");
+        warm(&mut cache, &base);
+        assert_eq!(cache.held(&base).map(|b| b.len()), Some(2));
+        let prefix = json!({"parameters": base["parameters"], "features": base["features"].as_array().unwrap()[..2]});
+        assert_eq!(cache.held(&prefix).map(|b| b.len()), Some(1));
+        assert!(cache.held(&edit(&base, 5, "radius", json!(1.0))).is_none());
+    }
+    let mut reopened = RebuildCache::new(Some(GeomStore::open(&root).unwrap()));
+    assert!(reopened.held(&base).is_none(), "a checkpoint on disk is not held");
+    warm(&mut reopened, &base);
+    assert_eq!(reopened.stats.source, Source::Disk);
+    assert_eq!(reopened.held(&base).map(|b| b.len()), Some(2));
+    let (got, replayed) = warm(&mut reopened, &base);
+    assert_eq!(reopened.stats.source, Source::Ram, "read the checkpoint back again");
+    assert!(replayed.is_empty(), "replayed {replayed:?}");
+    assert_eq!(got, cold(&base));
+}
+
+#[test]
 fn a_corrupt_checkpoint_blob_is_a_cold_rebuild_not_wrong_geometry() {
     let root = scratch("corrupt");
     let base = doc();
