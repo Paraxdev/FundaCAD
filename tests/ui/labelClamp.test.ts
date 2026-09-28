@@ -2,7 +2,7 @@
 // Items card.
 
 import { describe, expect, it } from "vitest";
-import { clampLabel, labelLeader, layoutLabels, type LabelAt } from "../../src/ui/labelClamp";
+import { clampLabel, labelLeader, layoutLabels, type Held, type LabelAt } from "../../src/ui/labelClamp";
 
 const area = { left: 0, top: 0, right: 1400, bottom: 900 };
 const items = { left: 12, top: 48, right: 275, bottom: 888 };
@@ -205,5 +205,165 @@ describe("layoutLabels", () => {
       const seg = labelLeader(c, ls[i]!.hw, ls[i]!.hh, ls[i]!)!;
       expect({ x: seg.x2, y: seg.y2 }).toEqual({ x: ls[i]!.x, y: ls[i]!.y });
     });
+  });
+
+  // the 760 x 640 stage the review found labels running off: the rail's buttons
+  // on the left, the right column reaching above the view
+  const narrow = { left: 0, top: 36, right: 760, bottom: 640 };
+  const rail = [164, 150, 112, 107, 102, 147, 121, 113, 89, 124, 116, 162, 101, 109, 130, 91, 112, 148, 122].map(
+    (right, k) => ({ left: 12, top: 48 + k * 36, right, bottom: 80 + k * 36 }),
+  );
+  const narrowCards = { left: rail, right: [{ left: 668, top: 16, right: 780, bottom: 596 }] };
+  const texts = [51, 51, 51, 51, 51, 51, 44, 51, 51, 44, 68, 68, 68, 68, 68];
+  const many = (n: number, x: number, y: number, dx = 9, dy = 7): LabelAt[] =>
+    Array.from({ length: n }, (_, k) => ({ x: x + (k % 5) * dx, y: y + (k % 3) * dy, hw: texts[k % texts.length]! / 2, hh: 10 }));
+  const clear = (ls: LabelAt[], out: { x: number; y: number }[], a: typeof area, cs: typeof cards) => {
+    for (let i = 0; i < ls.length; i++) {
+      const b = box(out[i]!, ls[i]!);
+      expect(b.left, `${i} left`).toBeGreaterThanOrEqual(a.left);
+      expect(b.right, `${i} right`).toBeLessThanOrEqual(a.right);
+      expect(b.top, `${i} top`).toBeGreaterThanOrEqual(a.top);
+      expect(b.bottom, `${i} bottom`).toBeLessThanOrEqual(a.bottom);
+      for (const o of [...cs.left, ...cs.right]) expect(overlaps(b, o), `${i} under a card`).toBe(false);
+      for (let j = i + 1; j < ls.length; j++) expect(overlaps(b, box(out[j]!, ls[j]!)), `${i} and ${j}`).toBe(false);
+    }
+  };
+  const rows = (out: { x: number; y: number }[]) => new Set(out.map((c) => Math.round(c.y))).size;
+  const cols = (out: { x: number; y: number }[], ls: LabelAt[]) =>
+    new Set(out.map((c, i) => Math.round(c.x - ls[i]!.hw))).size;
+
+  it("wraps a full row into a second one inward, never off the view or under a card", () => {
+    for (const [x, y] of [[-100, -100], [850, -100], [-100, 720], [850, 720], [380, -150], [380, 760]]) {
+      const ls = many(15, x!, y!);
+      const out = layoutLabels(ls, narrow, narrowCards, 6);
+      clear(ls, out, narrow, narrowCards);
+      expect(rows(out), `at ${x},${y}`).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it("wraps into a third row and more", () => {
+    const ls = many(40, 380, 760);
+    const out = layoutLabels(ls, narrow, narrowCards, 6);
+    clear(ls, out, narrow, narrowCards);
+    expect(rows(out)).toBeGreaterThanOrEqual(4);
+  });
+
+  it("wraps a full column into a second one inward", () => {
+    for (const x of [-200, 900]) {
+      const ls = many(40, x, 300, 3, 4);
+      const out = layoutLabels(ls, narrow, narrowCards, 6);
+      clear(ls, out, narrow, narrowCards);
+      expect(cols(out, ls)).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it("keeps a wide stage clear of its cards in every corner with a crowd", () => {
+    const stage = { left: 0, top: 36, right: 1400, bottom: 900 };
+    const rightRail = { left: 1088, top: 48, right: 1136, bottom: 520 };
+    const wide = { left: [items, ...rail.map((o) => ({ ...o, left: o.left + 276, right: o.right + 276 }))], right: [rightRail, palette] };
+    for (const [x, y] of [[-100, -100], [1490, -100], [-100, 990], [1490, 990]]) {
+      const ls = many(15, x!, y!);
+      const out = layoutLabels(ls, stage, wide, 6);
+      clear(ls, out, stage, wide);
+    }
+  });
+
+  it("keeps each wrapped row in the order its dimensions project", () => {
+    const ls = many(15, 380, 760, 20, 0);
+    const out = layoutLabels(ls, narrow, narrowCards, 6);
+    const byRow = new Map<number, number[]>();
+    out.forEach((c, i) => byRow.set(Math.round(c.y), [...(byRow.get(Math.round(c.y)) ?? []), i]));
+    for (const ids of byRow.values()) {
+      const byPos = [...ids].sort((a, b) => out[a]!.x - out[b]!.x);
+      const byDim = [...ids].sort((a, b) => ls[a]!.x - ls[b]!.x || a - b);
+      expect(byPos).toEqual(byDim);
+    }
+  });
+
+  it("does not let a label hovering at the edge jostle the others", () => {
+    const held = new Map<number, Held>();
+    // three labels well off the bottom, and one whose dimension wobbles across
+    // the clamp line while the view pans slowly sideways
+    const edge = area.bottom - 6 - 10;
+    const at = (t: number): LabelAt[] => {
+      const dx = t * 0.7;
+      return [
+        { x: 600 + dx, y: 1000, hw: 30, hh: 10 },
+        { x: 640 + dx, y: 1040, hw: 30, hh: 10 },
+        { x: 680 + dx, y: 980, hw: 34, hh: 10 },
+        { x: 650 + dx, y: edge + 2.5 * Math.sin(t * 1.3), hw: 26, hh: 10 },
+      ];
+    };
+    let prev = layoutLabels(at(0), area, none, 6, held);
+    let toggles = 0;
+    let wasIn = held.has(3);
+    for (let t = 1; t < 200; t++) {
+      const out = layoutLabels(at(t), area, none, 6, held);
+      const isIn = held.has(3);
+      if (isIn !== wasIn) toggles++;
+      for (let i = 0; i < 3; i++) {
+        const move = Math.abs(out[i]!.x - prev[i]!.x);
+        const allowed = 0.7 + (isIn !== wasIn ? 26 + 34 + 6 : 0) + 1e-9;
+        expect(move, `label ${i} at frame ${t}`).toBeLessThanOrEqual(allowed);
+        expect(out[i]!.y).toBe(prev[i]!.y);
+      }
+      wasIn = isIn;
+      prev = out;
+    }
+    expect(toggles).toBeLessThanOrEqual(1);
+  });
+
+  it("lets a label leave its edge once it is clearly back on screen", () => {
+    const held = new Map<number, Held>();
+    const l = (y: number): LabelAt[] => [{ x: 700, y, hw: 30, hh: 10 }];
+    layoutLabels(l(900), area, none, 6, held);
+    expect(held.get(0)?.edge).toBe("bottom");
+    layoutLabels(l(880), area, none, 6, held);
+    expect(held.get(0)?.edge).toBe("bottom");
+    expect(layoutLabels(l(860), area, none, 6, held)).toEqual([{ x: 700, y: 860 }]);
+    expect(held.has(0)).toBe(false);
+  });
+
+  it("moves the others no more than the pan and the room a newcomer needs, panning a crowd into each corner", () => {
+    const stage = { left: 0, top: 36, right: 1400, bottom: 900 };
+    const railL = rail.map((o) => ({ ...o, left: o.left + 276, right: o.right + 276 }));
+    const cs = { left: [items, ...railL], right: [{ left: 1088, top: 48, right: 1136, bottom: 520 }, palette] };
+    const offsets = Array.from({ length: 15 }, (_, k) => ({
+      x: ((k * 37) % 170) - 85,
+      y: ((k * 53) % 110) - 55,
+      hw: texts[k]! / 2,
+      hh: 10,
+    }));
+    for (const [vx, vy] of [[-4, -3], [4, -3], [-4, 3], [4, 3]]) {
+      const held = new Map<number, Held>();
+      const at = (t: number) => offsets.map((o) => ({ ...o, x: 700 + o.x + vx! * t, y: 460 + o.y + vy! * t }));
+      let prev = layoutLabels(at(0), stage, cs, 6, held);
+      let prevKeys = offsets.map((_, i) => held.get(i)?.edge);
+      let frames = 0;
+      let events = 0;
+      for (let t = 1; t <= 260; t++) {
+        const ls = at(t);
+        const out = layoutLabels(ls, stage, cs, 6, held);
+        const on = offsets.map((_, k) => k).filter((k) => held.has(k));
+        clear(on.map((k) => ls[k]!), on.map((k) => out[k]!), stage, cs);
+        const keys = offsets.map((_, i) => held.get(i)?.edge);
+        const changed = keys.some((k, i) => k !== prevKeys[i]);
+        if (changed) events++;
+        let worst = 0;
+        keys.forEach((k, i) => {
+          if (k !== prevKeys[i]) return;
+          const ex = Math.abs(out[i]!.x - prev[i]!.x) - Math.abs(vx!);
+          const ey = Math.abs(out[i]!.y - prev[i]!.y) - Math.abs(vy!);
+          worst = Math.max(worst, ex, ey);
+        });
+        // a newcomer needs at most its own length and a gap
+        expect(worst, `frame ${t} going ${vx},${vy}`).toBeLessThanOrEqual(changed ? 68 + 6 : 1e-6);
+        if (worst > 1e-6) frames++;
+        prev = out;
+        prevKeys = keys;
+      }
+      expect(held.size).toBe(15);
+      expect(frames).toBeLessThanOrEqual(events);
+    }
   });
 });
