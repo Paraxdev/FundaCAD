@@ -239,9 +239,17 @@ fn a_boss_rim_rounded_past_the_boss_refuses() {
 
 /// Two 20 x 20 plates 4 thick joined by a neck 20 long and 4 wide.
 fn neck_plate() -> Vec<Value> {
+    shouldered_neck(0.0)
+}
+
+/// The same with the plates' inner ends leaning: each runs from the neck's
+/// corner `lean` further out along x at the plate's far side, or in for less
+/// than 0.
+fn shouldered_neck(lean: f64) -> Vec<Value> {
+    let (a, b) = (10.0 + lean, 10.0);
     let plan = [
-        [-30.0, -10.0], [-10.0, -10.0], [-10.0, -2.0], [10.0, -2.0], [10.0, -10.0], [30.0, -10.0],
-        [30.0, 10.0], [10.0, 10.0], [10.0, 2.0], [-10.0, 2.0], [-10.0, 10.0], [-30.0, 10.0],
+        [-30.0, -10.0], [-a, -10.0], [-b, -2.0], [b, -2.0], [a, -10.0], [30.0, -10.0],
+        [30.0, 10.0], [a, 10.0], [b, 2.0], [-b, 2.0], [-a, 10.0], [-30.0, 10.0],
     ];
     let entities: Vec<Value> =
         (0..plan.len()).map(|i| line(&format!("l{i}"), plan[i], plan[(i + 1) % plan.len()])).collect();
@@ -264,6 +272,27 @@ fn neck_left(r: f64) -> f64 {
         .sum()
 }
 
+fn bevel(d: f64) -> Value {
+    json!({"id": "bevel", "type": "chamfer", "distance": d,
+           "edges": [{"kind": "edge", "by": "nearest", "point": [0.0, -2.0, 4.0]}]})
+}
+
+/// A 1 mm slot through the neck's middle, down from above.
+fn slot() -> Vec<Value> {
+    vec![
+        json!({"id": "ssk", "type": "sketch", "plane": "XY", "entities": [
+            {"type": "rectangle", "id": "r1", "width": 1.0, "height": 6.0, "x": 0.0, "y": 0.0}]}),
+        json!({"id": "slot", "type": "extrude", "sketch": "ssk", "distance": 20, "operation": "cut"}),
+    ]
+}
+
+fn refuses_up_to(doc: &Value, fits: &str) {
+    let (msg, code, secs) = refused(doc);
+    assert_eq!(code.as_deref(), Some("blendTooLarge"), "{msg}");
+    assert!(msg.contains("in pieces") && msg.contains(&format!("up to {fits}mm,")), "{msg}");
+    eprintln!("refused in {secs:.2} s: {msg}");
+}
+
 /// The flat neck's top edge runs out between the plates' inner ends. Those end
 /// faces meet the top face at a convex corner, and the body lies beyond their
 /// planes from the neck, so they are no end for the round to be cut off at:
@@ -272,22 +301,125 @@ fn neck_left(r: f64) -> f64 {
 fn a_round_on_a_flat_neck_carves_it() {
     let features = neck_plate();
     let (base, _) = built(&doc(features.clone(), None));
-    for r in [6.0, 13.65] {
+    for r in [6.0, 13.63] {
         let (out, secs) = built(&doc(features.clone(), Some(fillet([0.0, -2.0, 4.0], r))));
         let want = kernel::volume(&base) - 20.0 * (16.0 - neck_left(r));
         let got = kernel::volume(&out);
         assert!((got - want).abs() < 0.05, "{r}: volume {got}, the ball leaves {want}");
         assert!(secs < 5.0, "{r}: took {secs} s");
     }
-    let (msg, code, _) = refused(&doc(features.clone(), Some(fillet([0.0, -2.0, 4.0], 20.0))));
-    assert_eq!(code.as_deref(), Some("blendTooLarge"), "{msg}");
-    assert!(msg.contains("in pieces") && msg.contains("up to 13.65mm"), "{msg}");
+    // Past 13.63 the neck's far bottom corner is left under 0.01 thick, and
+    // whatever size was asked the same limit is offered.
+    for r in [13.64, 13.65, 20.0, 40.0] {
+        refuses_up_to(&doc(features.clone(), Some(fillet([0.0, -2.0, 4.0], r))), "13.63");
+    }
     // A 6 chamfer leaves the neck's bottom corner, a triangle of 2.
-    let chamfer = json!({"id": "bevel", "type": "chamfer", "distance": 6,
-                         "edges": [{"kind": "edge", "by": "nearest", "point": [0.0, -2.0, 4.0]}]});
-    let (out, _) = built(&doc(features, Some(chamfer)));
+    let (out, _) = built(&doc(features.clone(), Some(bevel(6.0))));
     let got = kernel::volume(&out);
     assert!((got - (kernel::volume(&base) - 20.0 * 14.0)).abs() < 1e-3, "volume {got}");
+    // Its corner is 0.01 thick at 8 - 0.01 * sqrt 2.
+    for d in [7.99, 10.0] {
+        refuses_up_to(&doc(features.clone(), Some(bevel(d))), "7.98");
+    }
+    let (out, _) = built(&doc(features, Some(bevel(7.98))));
+    let got = kernel::volume(&out);
+    assert!((got - (kernel::volume(&base) - 20.0 * (16.0 - 0.02f64.powi(2) / 2.0))).abs() < 1e-3, "volume {got}");
+}
+
+/// What the limit leaves still holds the plates together, as a part: a slot
+/// through it cuts the body in two rather than finding nothing to cut.
+#[test]
+fn a_slot_through_a_neck_rounded_to_its_limit_cuts_it() {
+    for blend in [fillet([0.0, -2.0, 4.0], 13.63), bevel(7.98)] {
+        let mut features = neck_plate();
+        features.push(blend);
+        features.extend(slot());
+        let (r, _) = build(&doc(features, None));
+        assert!(r.errors.is_empty(), "{:?}", r.errors.iter().map(|e| &e.message).collect::<Vec<_>>());
+        let solids: usize = r.bodies.iter().map(|b| kernel::count(&b.shape, Kind::Solid)).sum();
+        assert_eq!(solids, 2);
+    }
+}
+
+/// The neck with its plates' inner ends leaning out and then in, oblique
+/// shoulders beside the rounded edge's ends. Out, the plates stay clear of the
+/// round. In, they reach over the neck's far side, and the round carves what
+/// of them its sections sweep, as it carves the neck, and nothing past the
+/// neck's ends.
+#[test]
+fn a_round_beside_oblique_shoulders_carves_only_its_sweep() {
+    let r = 6.0;
+    let features = shouldered_neck(4.0);
+    let (base, _) = built(&doc(features.clone(), None));
+    let (out, _) = built(&doc(features, Some(fillet([0.0, -2.0, 4.0], r))));
+    let want = kernel::volume(&base) - 20.0 * (16.0 - neck_left(r));
+    let got = kernel::volume(&out);
+    assert!((got - want).abs() < 0.05, "leaning out: volume {got}, the ball leaves {want}");
+
+    let features = shouldered_neck(-4.0);
+    let (base, _) = built(&doc(features.clone(), None));
+    let (out, _) = built(&doc(features, Some(fillet([0.0, -2.0, 4.0], r))));
+    // The corner square outside the ball, swept along the neck.
+    let (cy, cz) = (-2.0 + r, 4.0 - r);
+    let square = kernel::polygon_face(&[[-10.0, -2.0, cz], [-10.0, cy, cz], [-10.0, cy, 4.0], [-10.0, -2.0, 4.0]])
+        .and_then(|f| kernel::prism(&f, [20.0, 0.0, 0.0]))
+        .expect("square");
+    let ball = kernel::polygon_face(&[[-11.0, cy, cz], [11.0, cy, cz], [11.0, cy + r, cz], [-11.0, cy + r, cz]])
+        .and_then(|f| kernel::revolve(&f, [0.0, cy, cz], [1.0, 0.0, 0.0], 360.0))
+        .expect("ball");
+    let sweep = kernel::boolean_op(&square, &[&ball], BoolKind::Cut).expect("sweep");
+    let want = kernel::volume(&kernel::boolean_op(&base, &[&sweep], BoolKind::Cut).expect("carve"));
+    let got = kernel::volume(&out);
+    assert!(want < kernel::volume(&base) - 20.0 * (16.0 - neck_left(r)) - 0.01, "the plates reach the sweep");
+    assert!((got - want).abs() < 0.05, "leaning in: volume {got}, the sweep leaves {want}");
+}
+
+/// A neck bent round the Z axis, radius 18 to 22 over 60 degrees, between two
+/// plates 10 to 30 out whose radial ends stand beside the neck's outer top
+/// edge. The round on that curved edge carves the neck as the flat one does,
+/// the section revolved.
+#[test]
+fn a_round_on_a_curved_neck_carves_it() {
+    let at = |rad: f64, deg: f64| [rad * deg.to_radians().cos(), rad * deg.to_radians().sin()];
+    let arc = |id: &str, rad: f64, a: f64, b: f64| {
+        let (p, q, m) = (at(rad, a), at(rad, b), at(rad, 0.5 * (a + b)));
+        json!({"type": "arc", "id": id, "x1": p[0], "y1": p[1], "x2": q[0], "y2": q[1], "mx": m[0], "my": m[1]})
+    };
+    let entities = vec![
+        arc("a0", 30.0, -70.0, -30.0),
+        line("l1", at(30.0, -30.0), at(22.0, -30.0)),
+        arc("a2", 22.0, -30.0, 30.0),
+        line("l3", at(22.0, 30.0), at(30.0, 30.0)),
+        arc("a4", 30.0, 30.0, 70.0),
+        line("l5", at(30.0, 70.0), at(10.0, 70.0)),
+        arc("a6", 10.0, 70.0, 30.0),
+        line("l7", at(10.0, 30.0), at(18.0, 30.0)),
+        arc("a8", 18.0, 30.0, -30.0),
+        line("l9", at(18.0, -30.0), at(10.0, -30.0)),
+        arc("a10", 10.0, -30.0, -70.0),
+        line("l11", at(10.0, -70.0), at(30.0, -70.0)),
+    ];
+    let features = vec![
+        json!({"id": "sk", "type": "sketch", "plane": "XY", "entities": entities}),
+        json!({"id": "ex", "type": "extrude", "sketch": "sk", "distance": 4, "operation": "new"}),
+    ];
+    let (base, _) = built(&doc(features.clone(), None));
+    for r in [6.0, 9.0] {
+        let (out, secs) = built(&doc(features.clone(), Some(fillet([22.0, 0.0, 4.0], r))));
+        let (c, cz, n) = (22.0 - r, 4.0 - r, 4000);
+        let carved: f64 = (0..n)
+            .map(|i| {
+                let rho = 18.0 + 4.0 * (i as f64 + 0.5) / n as f64;
+                let h = (r * r - (rho - c).powi(2)).max(0.0).sqrt();
+                let inside = ((cz + h).min(4.0) - (cz - h).max(0.0)).max(0.0);
+                (4.0 - inside) * rho * 4.0 / n as f64
+            })
+            .sum();
+        let want = kernel::volume(&base) - PI / 3.0 * carved;
+        let got = kernel::volume(&out);
+        assert!((got - want).abs() < 1e-3 * (PI / 3.0 * carved), "{r}: volume {got}, the ball leaves {want}");
+        eprintln!("curved neck {r}: {got:.3} in {secs:.1} s");
+    }
 }
 
 /// Two blocks joined by a 4 mm neck at their foot: rounding the neck's top
@@ -304,9 +436,9 @@ fn a_round_that_cuts_the_body_in_pieces_refuses() {
     // The neck's far bottom corner leaves the ball's reach past 4 / (1 - 1 / sqrt 2).
     let (msg, code, secs) = refused(&doc(features.clone(), Some(fillet([0.0, -2.0, 4.0], 20.0))));
     assert_eq!(code.as_deref(), Some("blendTooLarge"), "{msg}");
-    assert!(msg.contains("in pieces") && msg.contains("up to 13.65mm"), "{msg}");
+    assert!(msg.contains("in pieces") && msg.contains("up to 13.63mm"), "{msg}");
     assert!(secs < 10.0, "took {secs} s");
-    built(&doc(features, Some(fillet([0.0, -2.0, 4.0], 13.65))));
+    built(&doc(features, Some(fillet([0.0, -2.0, 4.0], 13.63))));
 }
 
 /// rim_blend.rs's cup, recess 25 wide and 24.1 deep under an r5 outer round:
@@ -332,9 +464,10 @@ fn a_rim_carved_past_the_wall_foot_builds() {
     assert!((v - 24_817.434).abs() < 0.01, "volume {v}");
     assert!((kernel::bbox(&out).expect("box")[5] - 20.0).abs() < 1e-6);
     // At 30 the carve reaches the cup's foot and parts the floor from the wall,
-    // which main built as two pieces.
-    let (msg, code, _) = refused(&doc(features.clone(), Some(fillet([25.0, 0.0, 30.0], 30.0))));
-    assert_eq!(code.as_deref(), Some("blendTooLarge"), "{msg}");
-    assert!(msg.contains("in pieces") && msg.contains("up to 29.97mm"), "{msg}");
-    built(&doc(features, Some(fillet([25.0, 0.0, 30.0], 29.97))));
+    // which main built as two pieces. At 29.99 it leaves the floor held by a
+    // wall 0.01 thick.
+    for r in [29.99, 30.0, 35.0] {
+        refuses_up_to(&doc(features.clone(), Some(fillet([25.0, 0.0, 30.0], r))), "29.98");
+    }
+    built(&doc(features, Some(fillet([25.0, 0.0, 30.0], 29.98))));
 }
