@@ -4293,7 +4293,7 @@
             "rx": 90,
             "dx": "front_x",
             "dz": "wheel_r",
-            "targets": [
+            "bodies": [
               "body2"
             ]
           },
@@ -4665,7 +4665,7 @@
             "sx": 1.35,
             "sy": 0.62,
             "sz": 0.22,
-            "targets": [
+            "bodies": [
               "body5"
             ]
           },
@@ -4675,7 +4675,7 @@
             "dx": -195,
             "dz": 665,
             "ry": -8,
-            "targets": [
+            "bodies": [
               "body5"
             ]
           },
@@ -4690,7 +4690,7 @@
             "type": "move",
             "dx": -195,
             "dz": 625,
-            "targets": [
+            "bodies": [
               "body6"
             ]
           },
@@ -4706,7 +4706,7 @@
             "rx": 90,
             "dx": "rear_x",
             "dz": "wheel_r",
-            "targets": [
+            "bodies": [
               "body7"
             ]
           },
@@ -4722,7 +4722,7 @@
             "rx": 90,
             "dx": "front_x",
             "dz": "wheel_r",
-            "targets": [
+            "bodies": [
               "body8"
             ]
           },
@@ -4736,7 +4736,7 @@
             "type": "move",
             "dx": 8,
             "dz": 272,
-            "targets": [
+            "bodies": [
               "body9"
             ]
           },
@@ -4750,7 +4750,7 @@
             "type": "move",
             "dx": 286,
             "dz": 562,
-            "targets": [
+            "bodies": [
               "body10"
             ]
           },
