@@ -20,8 +20,41 @@
     </p>
   </description>
   <launchable type="desktop-id">dev.fundacad.app.desktop</launchable>
+  <screenshots>
+    <screenshot type="default">
+      <caption>A parametric part with its feature history</caption>
+      <image>https://raw.githubusercontent.com/Paraxdev/FundaCAD/main/assets/readme/ui-overview.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>A constrained sketch on the face of a solid</caption>
+      <image>https://raw.githubusercontent.com/Paraxdev/FundaCAD/main/assets/readme/sketch-on-face.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Moving and rotating a body</caption>
+      <image>https://raw.githubusercontent.com/Paraxdev/FundaCAD/main/assets/readme/transform-gizmo.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Area selection of faces and edges</caption>
+      <image>https://raw.githubusercontent.com/Paraxdev/FundaCAD/main/assets/readme/area-select.png</image>
+    </screenshot>
+  </screenshots>
+  <keywords>
+    <keyword>CAD</keyword>
+    <keyword>parametric</keyword>
+    <keyword>3D printing</keyword>
+    <keyword>STEP</keyword>
+    <keyword>STL</keyword>
+    <keyword>3MF</keyword>
+    <keyword>sketch</keyword>
+    <keyword>OpenCASCADE</keyword>
+  </keywords>
+  <branding>
+    <color type="primary" scheme_preference="light">#4ca5e0</color>
+    <color type="primary" scheme_preference="dark">#1f4f70</color>
+  </branding>
   <url type="homepage">https://github.com/Paraxdev/FundaCAD</url>
   <url type="bugtracker">https://github.com/Paraxdev/FundaCAD/issues</url>
+  <url type="vcs-browser">https://github.com/Paraxdev/FundaCAD</url>
   <content_rating type="oars-1.1"/>
   <categories>
     <category>Graphics</category>

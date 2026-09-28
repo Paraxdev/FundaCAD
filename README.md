@@ -1,7 +1,21 @@
+<p align="center">
+  <img src="assets/brand/fundacad-mark.svg" width="96" alt="FundaCAD logo, a blue cube">
+</p>
+
 # FundaCAD
 
 Free, open source parametric CAD for 3D printing. Sketch it, constrain it, model
 it, and export STEP, STL or 3MF. Windows, macOS and Linux.
+
+<p align="center">
+  <a href="https://github.com/Paraxdev/fundacad/releases/tag/beta"><img alt="Download the beta" src="https://img.shields.io/badge/download-beta-2f6fed"></a>
+  <a href="LICENSE"><img alt="Licence AGPL-3.0" src="https://img.shields.io/badge/licence-AGPL--3.0-blue"></a>
+  <img alt="Windows, macOS and Linux" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey">
+</p>
+
+**[Download FundaCAD](https://github.com/Paraxdev/fundacad/releases/tag/beta)**, a
+portable Windows exe, a macOS app, and a Flatpak, AppImage, `.deb` and `.rpm` for
+Linux. No account, no cloud, no subscription, your files stay on your disk.
 
 Built on the Open CASCADE geometry kernel through the Funda Engine (Rust),
 with a [Tauri](https://tauri.app) shell and a Vue + three.js viewport. A part
@@ -26,21 +40,44 @@ the goal is it to make this a personalized version of a CAD with features I like
 
 
 <p align="center">
-  <img src="assets/readme/ui-overview.png" width="1000">
+  <img src="assets/readme/ui-overview.png" width="1000" alt="FundaCAD main window with a parametric part, the feature history and the tool rail">
 </p>
 
 <p align="center">
-  <img src="assets/readme/sketch-on-face.png" width="900">
+  <img src="assets/readme/sketch-on-face.png" width="900" alt="Drawing a constrained sketch on the face of a solid in FundaCAD">
 </p>
 
 <p align="center">
-  <img src="assets/readme/transform-gizmo.png" width="900">
+  <img src="assets/readme/transform-gizmo.png" width="900" alt="Moving and rotating a body with the FundaCAD transform gizmo">
 </p>
 
 
 <p align="center">
-  <img src="assets/readme/area-select.png" width="900">
+  <img src="assets/readme/area-select.png" width="900" alt="Area selection of faces and edges in the FundaCAD viewport">
 </p>
+
+## Features
+
+- **Parametric modelling with a feature history.** Extrude, revolve, loft,
+  sweep, fillet, chamfer, shell, draft, holes, threads, mirror, patterns,
+  split and booleans. Scrub back to any step, change it, and the part rebuilds.
+- **Constrained 2D sketches**, on a plane, a datum plane or the face of a body,
+  that follow that face when the model changes.
+- **Parameters** that drive dimensions, with sliders, groups and named
+  configurations through the Extra Parameters plugin.
+- **Made for 3D printing.** Export STL, 3MF and STEP, print-friendly hole
+  shapes and edge finishes that need no supports, real surface textures
+  (knurl, hex, voronoi, heightmaps), multi-material filament slots, a bed fit
+  check, and sending jobs to a printer on your network.
+- **Import STEP**, including large coloured assemblies, and keep working on them.
+- **A fastener library** of standard screws, nuts and washers to drop onto a face.
+- **3D mouse (SpaceMouse) and game controller** support, a Steam Deck included.
+- **AI assistants over MCP.** Claude or any MCP host can build, measure and edit
+  the model you have open.
+- **Plugins** for everything optional, each one asking for only what it needs.
+- **Themes**, dark, light, Dracula, Solarized, Noir tints and a colour-blind
+  safe one.
+- **Open file formats**, readable `.funda` JSON or the compact `.fundab`.
 
 ## Install
 

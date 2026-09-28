@@ -1,9 +1,11 @@
 [Desktop Entry]
 Type=Application
 Name=FundaCAD
-Comment=Parametric CAD
+GenericName=3D CAD Modeler
+Comment=Parametric CAD for 3D printing
 Exec=fundacad
 Icon=dev.fundacad.app
 StartupWMClass=fundacad
-Categories=Graphics;Engineering;
+Categories=Graphics;3DGraphics;Engineering;
+Keywords=CAD;3D;parametric;modeling;modelling;sketch;STEP;STL;3MF;3D printing;OpenCASCADE;
 Terminal=false
