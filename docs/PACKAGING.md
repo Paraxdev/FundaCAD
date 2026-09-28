@@ -81,8 +81,10 @@ single executable. It still requires the system WebView2 runtime.
 - the built binary registers `engine_attach`, the IPC command the webview
   reaches the engine through, and contains the MCP stdio server;
 - the AppImage carries no sidecar runtime;
-- the AppImage carries a real `.DirIcon`, the 256×256 raster in
-  `packaging/.DirIcon`, in place of the symlink Tauri's bundler leaves;
+- the AppImage carries a real `.DirIcon`, in place of the symlink Tauri's
+  bundler leaves, and it is the same 256×256 app icon
+  (`src-tauri/icons/128x128@2x.png`) as the root icon the desktop file's
+  `Icon=` names and `usr/share/icons/hicolor/256x256/apps`;
 - every plugin that names a `geometryWasm` component has it in its bundle.
 
 ## Code signing & notarization

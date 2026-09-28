@@ -25,7 +25,6 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
-
 - **Press/pull can move the end of a hole along the hole.** Picking the cone,
   cap or floor at the end of a hole offers "Along axis" beside the value, and
   a round end starts on it: the hole gets deeper or shallower and its end keeps
@@ -245,6 +244,10 @@ This file starts on 2026-08-03. For anything before that, see the
 - Each drag of the move gizmo is its own row in the timeline, so an undo takes back the last nudge instead of the whole sitting, and the next drag starts from the pose the last one produced.
 
 ### Fixed
+
+- **The AppImage shows the FundaCAD icon.** Its `.DirIcon` was a placeholder
+  cube, and the root icon the desktop file names was the 32×32 one. Both are
+  now the 256×256 app icon, which also fills the empty 256×256 theme slot.
 
 - **Another client's job no longer shows up as this document's rebuild.** With
   an AI assistant (or any second client) running a long import on the same
