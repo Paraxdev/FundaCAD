@@ -81,10 +81,8 @@ single executable. It still requires the system WebView2 runtime.
 - the built binary registers `engine_attach`, the IPC command the webview
   reaches the engine through, and contains the MCP stdio server;
 - the AppImage carries no sidecar runtime;
-- the AppImage carries the icon under the name its desktop file resolves
-  (`packaging/.AppIcon/`, copied in by the un-bundle action: Tauri's bundler
-  names the root icon after `productName` while the desktop file says
-  `Icon=fundacad`);
+- the AppImage carries a real `.DirIcon`, the 256×256 raster in
+  `packaging/.DirIcon`, in place of the symlink Tauri's bundler leaves;
 - every plugin that names a `geometryWasm` component has it in its bundle.
 
 ## Code signing & notarization

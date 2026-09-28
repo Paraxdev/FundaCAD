@@ -25,6 +25,7 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+
 - **Press/pull can move the end of a hole along the hole.** Picking the cone,
   cap or floor at the end of a hole offers "Along axis" beside the value, and
   a round end starts on it: the hole gets deeper or shallower and its end keeps
