@@ -52,6 +52,16 @@ runs:
         find "$root/usr/lib" -maxdepth 1 -type f -name '*.so*' -delete
         rm -rf "$root/usr/lib/x86_64-linux-gnu"
 
+        # The icon the desktop file resolves. Tauri's bundler names the root
+        # icon after productName (FundaCAD.png) while the desktop file it
+        # generates says Icon=fundacad, the binary name, so that lookup finds
+        # nothing in the AppDir root. packaging/.AppIcon/ carries the icon under
+        # the name the desktop file uses, plus the vector source the bundler
+        # skips; both land in the root, where the AppImage spec says an
+        # $APPICON.png/svg belongs.
+        cp packaging/.AppIcon/fundacad.png "$root/fundacad.png"
+        cp packaging/.AppIcon/fundacad.svg "$root/fundacad.svg"
+
         # The geometry engine must still be there, or we just shipped a dead app.
         # It is the executable itself, so what is checked is that it came through.
         bin=$(find "$root/usr/bin" -maxdepth 1 -type f | head -1)
