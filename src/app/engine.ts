@@ -294,7 +294,12 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   // Every sketch's areas split along the lines the engine cuts a consuming
   // feature's profile with, so a highlighted area is the area that builds. The
   // build RESULT is the epoch: a visibility toggle re-emits the same one.
-  e.overlay.footprintFor = profileCutCache({
+  const splitAgain = () => {
+    if (e.sketch.active) e.sketch.redraw();
+    else if (e.toolBusy()) e.overlay.splitStale = true;
+    else if (e.overlay.regions.length) e.overlay.update(e.store.document);
+  };
+  const cuts = profileCutCache({
     cuts: (plane, r) => e.store.profileCuts(
       [plane.origin.x, plane.origin.y, plane.origin.z],
       [plane.n.x, plane.n.y, plane.n.z],
@@ -304,11 +309,11 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
       }),
     ),
     epoch: () => e.store.buildState.result,
-    landed: () => {
-      if (e.sketch.active) e.sketch.redraw();
-      else if (e.toolBusy()) e.overlay.splitStale = true;
-      else if (e.overlay.regions.length) e.overlay.update(e.store.document);
-    },
+    landed: splitAgain,
+  });
+  e.overlay.footprintFor = cuts;
+  e.store.onBuild(() => {
+    if (cuts.stale()) splitAgain();
   });
   // params engine ↔ sketcher plumbing: closed sketches re-solve headlessly after
   // a parameter edit; the open one refreshes its live dim values itself.

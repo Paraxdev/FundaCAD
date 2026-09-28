@@ -185,7 +185,7 @@ export interface GeometryBackend {
   patternAxis?(doc: CadDocument, ref: Selector): Promise<PatternAxisReply | null>;
   /** The lines the built model cuts a sketch's areas along on one plane, as
    *  world polylines, the ones every consuming feature cuts with. Null when the
-   *  engine could not be asked. */
+   *  engine holds no build of `doc` yet or could not be asked. */
   profileCuts?(doc: CadDocument, origin: Vec3, normal: Vec3, reach?: Vec3[]): Promise<Vec3[][] | null>;
   /** Export through a format a plugin's geometry component registered with the
    *  engine. The engine rebuilds and meshes; `options` reach the plugin's
@@ -1202,8 +1202,8 @@ export class Geometry implements GeometryBackend {
   }
 
   async profileCuts(doc: CadDocument, origin: Vec3, normal: Vec3, reach?: Vec3[]): Promise<Vec3[][] | null> {
-    const msg = await this.call<{ cuts: Vec3[][] }>("profileCuts", { document: doc, origin, normal, ...(reach ? { reach } : {}) });
-    return msg.ok ? msg.result.cuts : null;
+    const msg = await this.call<{ cuts: Vec3[][] | null }>("profileCuts", { document: doc, origin, normal, ...(reach ? { reach } : {}) });
+    return msg.ok ? msg.result.cuts ?? null : null;
   }
 
   async patternAxis(doc: CadDocument, ref: Selector): Promise<PatternAxisReply | null> {

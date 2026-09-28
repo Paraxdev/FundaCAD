@@ -133,9 +133,10 @@ describe("profileCutCache", () => {
   type Box = { minx: number; miny: number; maxx: number; maxy: number };
   const rim: Line[] = topRim().map((e) => e.points.map((p) => [...p] as [number, number, number]));
   const need: Box = { minx: -5, miny: -5, maxx: 5, maxy: 5 };
-  const source = (epoch: object, answer: Line[] | null = rim) => {
+  const source = (epoch: object, first: Line[] | null = rim) => {
     let landed = 0;
     let now = epoch;
+    let answer = first;
     const reaches: Box[] = [];
     const pending: (() => void)[] = [];
     const src = {
@@ -151,7 +152,11 @@ describe("profileCutCache", () => {
       await Promise.resolve();
       await Promise.resolve();
     };
-    return { src, asks: () => reaches.length, reaches, landed: () => landed, flush, retarget: (e: object) => (now = e) };
+    return {
+      src, asks: () => reaches.length, reaches, landed: () => landed, flush,
+      retarget: (e: object) => (now = e),
+      answer: (a: Line[] | null) => (answer = a),
+    };
   };
 
   it("asks the engine once per plane per model and hands its lines back in sketch 2D", async () => {
@@ -221,7 +226,41 @@ describe("profileCutCache", () => {
     cache(plane, need);
     await s.flush();
     expect(cache(plane, need)).toEqual([]);
+    expect(s.landed()).toBe(0);
     expect(s.asks()).toBe(1);
+  });
+
+  it("keeps the split it has while the engine holds no build, and asks again once one lands", async () => {
+    const s = source({});
+    const cache = profileCutCache(s.src);
+    const plane = topPlane();
+    cache(plane, need);
+    await s.flush();
+    s.retarget({});
+    s.answer(null);
+    cache(plane, need);
+    await s.flush();
+    expect(cache(plane, need)).toHaveLength(4);
+    expect(s.asks()).toBe(2);
+    expect(s.landed()).toBe(1);
+    expect(cache.stale()).toBe(false);
+    s.retarget({});
+    expect(cache.stale()).toBe(true);
+    s.answer(rim.slice(0, 2));
+    cache(plane, need);
+    await s.flush();
+    expect(s.asks()).toBe(3);
+    expect(cache(plane, need)).toHaveLength(2);
+    expect(cache.stale()).toBe(false);
+  });
+
+  it("splits again at once when no answer comes back after the model already changed", async () => {
+    const s = source({}, null);
+    const cache = profileCutCache(s.src);
+    cache(topPlane(), need);
+    s.retarget({});
+    await s.flush();
+    expect(s.landed()).toBe(1);
   });
 });
 

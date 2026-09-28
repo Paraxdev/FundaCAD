@@ -127,8 +127,9 @@ export function loopsFromEdgePolys(flat: readonly THREE.Vector2[][]): THREE.Vect
  *  cuts every consuming feature's profile along the same lines, so an area
  *  highlighted here is the area that builds. */
 export interface CutSource {
-  /** World polylines, null when the engine could not be asked. Only lines
-   *  reaching `reach`, a sketch-2D box, need come back. */
+  /** World polylines, null when the engine has no answer yet (it holds no
+   *  build of this model) or could not be asked. Only lines reaching `reach`,
+   *  a sketch-2D box, need come back. */
   cuts(plane: SketchPlane, reach: Box): Promise<readonly (readonly [number, number, number])[][] | null>;
   /** Any value whose IDENTITY changes exactly when the model does, the build
    *  result object itself is the natural one. */
@@ -157,12 +158,21 @@ function askReach(need: Box, had: Box | null): Box {
  *  Keyed on the SketchPlane OBJECT, which the overlay hands out once per plane
  *  spec, so sketches sharing a plane share one request. Until the answer for
  *  the current model and box lands, the previous one is served, so a rebuild
- *  does not flash every split profile whole. */
-export function profileCutCache(src: CutSource): (plane: SketchPlane, need: Box | null) => THREE.Vector2[][] {
+ *  does not flash every split profile whole; a model the engine holds no
+ *  build of yet is asked again once the next build lands. */
+export interface CutCache {
+  (plane: SketchPlane, need: Box | null): THREE.Vector2[][];
+  /** The engine had no answer for a model that has since been replaced, so the
+   *  split is worth asking for again. */
+  stale(): boolean;
+}
+
+export function profileCutCache(src: CutSource): CutCache {
   interface Entry { epoch: unknown; reach: Box | null; lines: THREE.Vector2[][]; askedEpoch: unknown; asked: Box | null }
   const NONE = Symbol("never asked");
   const byPlane = new WeakMap<SketchPlane, Entry>();
-  return (plane, need) => {
+  let unanswered: unknown = NONE;
+  const cache = (plane: SketchPlane, need: Box | null) => {
     let e = byPlane.get(plane);
     if (!e) {
       e = { epoch: NONE, reach: null, lines: [], askedEpoch: NONE, asked: null };
@@ -176,19 +186,26 @@ export function profileCutCache(src: CutSource): (plane: SketchPlane, need: Box 
       const reach = askReach(need, e.askedEpoch === now ? e.asked : null);
       e.askedEpoch = now;
       e.asked = reach;
+      unanswered = NONE;
       const entry = e;
       void src.cuts(plane, reach).then((lines) => {
+        if (!lines) {
+          if (src.epoch() !== now) src.landed();
+          else unanswered = now;
+          return;
+        }
         if (src.epoch() !== now) return;
         if (entry.epoch === now && entry.reach && covers(entry.reach, reach)) return;
         const v = new THREE.Vector3();
         entry.epoch = now;
         entry.reach = reach;
-        entry.lines = (lines ?? []).map((l) => l.map((p) => plane.to2D(v.set(p[0], p[1], p[2]), new THREE.Vector2())));
+        entry.lines = lines.map((l) => l.map((p) => plane.to2D(v.set(p[0], p[1], p[2]), new THREE.Vector2())));
         src.landed();
       }).catch(() => undefined);
     }
     return e.lines;
   };
+  return Object.assign(cache, { stale: () => unanswered !== NONE && unanswered !== src.epoch() });
 }
 
 /** Where the camera should aim when a sketch opens on a face: the centre of the
