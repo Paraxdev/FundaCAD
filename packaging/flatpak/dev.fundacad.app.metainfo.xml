@@ -22,20 +22,20 @@
   <launchable type="desktop-id">dev.fundacad.app.desktop</launchable>
   <screenshots>
     <screenshot type="default">
-      <caption>A parametric part with its feature history</caption>
+      <caption>An exploded planetary gearbox</caption>
+      <image>https://raw.githubusercontent.com/Paraxdev/FundaCAD/main/assets/readme/gearbox.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>The main window with the feature history</caption>
       <image>https://raw.githubusercontent.com/Paraxdev/FundaCAD/main/assets/readme/ui-overview.png</image>
     </screenshot>
     <screenshot>
-      <caption>A constrained sketch on the face of a solid</caption>
-      <image>https://raw.githubusercontent.com/Paraxdev/FundaCAD/main/assets/readme/sketch-on-face.png</image>
+      <caption>Sketching an involute gear profile</caption>
+      <image>https://raw.githubusercontent.com/Paraxdev/FundaCAD/main/assets/readme/sketch-gear-profile.png</image>
     </screenshot>
     <screenshot>
-      <caption>Moving and rotating a body</caption>
-      <image>https://raw.githubusercontent.com/Paraxdev/FundaCAD/main/assets/readme/transform-gizmo.png</image>
-    </screenshot>
-    <screenshot>
-      <caption>Area selection of faces and edges</caption>
-      <image>https://raw.githubusercontent.com/Paraxdev/FundaCAD/main/assets/readme/area-select.png</image>
+      <caption>Materials in the Render workspace</caption>
+      <image>https://raw.githubusercontent.com/Paraxdev/FundaCAD/main/assets/readme/render-materials.png</image>
     </screenshot>
   </screenshots>
   <keywords>
