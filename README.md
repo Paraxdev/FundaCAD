@@ -40,11 +40,7 @@ the goal is it to make this a personalized version of a CAD with features I like
 
 
 <p align="center">
-  <img src="assets/readme/gearbox.png" width="1000" alt="An exploded planetary gearbox modelled in FundaCAD: a ring gear, a sun gear, three brass planets and a carrier">
-</p>
-
-<p align="center">
-  <img src="assets/readme/ui-overview.png" width="900" alt="FundaCAD main window with the gearbox, the item tree, the tool rail and the feature history">
+  <img src="assets/readme/ui-overview.png" width="1000" alt="FundaCAD main window with an exploded planetary gearbox, the item tree, the tool rail and the feature history">
 </p>
 
 <p align="center">

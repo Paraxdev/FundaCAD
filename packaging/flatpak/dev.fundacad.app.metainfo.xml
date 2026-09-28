@@ -22,11 +22,7 @@
   <launchable type="desktop-id">dev.fundacad.app.desktop</launchable>
   <screenshots>
     <screenshot type="default">
-      <caption>An exploded planetary gearbox</caption>
-      <image>https://raw.githubusercontent.com/Paraxdev/FundaCAD/main/assets/readme/gearbox.png</image>
-    </screenshot>
-    <screenshot>
-      <caption>The main window with the feature history</caption>
+      <caption>An exploded planetary gearbox in the main window</caption>
       <image>https://raw.githubusercontent.com/Paraxdev/FundaCAD/main/assets/readme/ui-overview.png</image>
     </screenshot>
     <screenshot>
