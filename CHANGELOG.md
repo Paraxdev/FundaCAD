@@ -245,9 +245,11 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Fixed
 
-- **The AppImage shows the FundaCAD icon.** Its `.DirIcon` was a placeholder
-  cube, and the root icon the desktop file names was the 32×32 one. Both are
-  now the 256×256 app icon, which also fills the empty 256×256 theme slot.
+- **The app icon is the FundaCAD cube everywhere.** The window, installer and
+  launcher icons were still an atom; they are now generated from `assets/brand/fundacad-mark.svg`. The AppImage's
+  `.DirIcon` and the root icon its desktop file names are the same 256×256
+  cube, where the latter was the 32×32 one, and it fills the empty 256×256
+  theme slot.
 
 - **Another client's job no longer shows up as this document's rebuild.** With
   an AI assistant (or any second client) running a long import on the same
