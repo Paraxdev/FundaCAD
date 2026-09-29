@@ -230,6 +230,7 @@ pub fn imprint(ctx: &mut Ctx, f: &Imprint) -> FResult {
     let before = kernel::count(&shape, Kind::Face);
     let options = BooleanOptions {
         non_destructive: true,
+        fuzzy: kernel::sketch_fuzz(kernel::extent(&shape)),
         ..Default::default()
     };
     let op = BooleanOp::run(

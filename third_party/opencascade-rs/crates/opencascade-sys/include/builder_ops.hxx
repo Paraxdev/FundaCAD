@@ -1046,10 +1046,11 @@ inline double profile_cut_tol(double modelScale) {
 }
 
 // face_footprint.py `split_profile_cells`: cut located cells along the model
-// edges of profile_cut_edges.
+// edges of profile_cut_edges, merging what lies within `fuzz` (fundacad-geom
+// kernel::sketch_fuzz).
 inline BoShapes bo_split_profile_cells(const TopoDS_Shape &cells, double ox, double oy, double oz,
                                        double nx, double ny, double nz, const TopoDS_Shape &shapes,
-                                       double modelScale) {
+                                       double modelScale, double fuzz) {
   BoShapes out(new std::vector<TopoDS_Shape>());
   std::vector<TopoDS_Shape> in;
   for (TopoDS_Iterator it(cells); it.More(); it.Next()) in.push_back(it.Value());
@@ -1076,6 +1077,7 @@ inline BoShapes bo_split_profile_cells(const TopoDS_Shape &cells, double ox, dou
     for (auto &c : in) args.Append(c);
     sp.SetArguments(args);
     sp.SetTools(tools);
+    if (fuzz > 0) sp.SetFuzzyValue(fuzz);
     sp.Perform();
     if (sp.HasErrors()) return out;
     std::vector<TopoDS_Shape> split;
