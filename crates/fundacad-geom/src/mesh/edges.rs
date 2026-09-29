@@ -75,6 +75,13 @@ fn one_edge(
         return None;
     }
     let points = edge_points(access, e)?;
+    let length: f64 = points
+        .windows(2)
+        .map(|w| (0..3).map(|k| (w[1][k] - w[0][k]).powi(2)).sum::<f64>().sqrt())
+        .sum();
+    if length < SLIVER_EDGE_MM {
+        return None;
+    }
     let smooth = faces.len() == 2
         && faces[0] != faces[1]
         && !(plane_of(faces[0]).is_some() && plane_of(faces[1]).is_some())
