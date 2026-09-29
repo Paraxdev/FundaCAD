@@ -24,6 +24,7 @@ mod inner {
         pub fn bo_copy(s: &TopoDS_Shape) -> Result<UniquePtr<TopoDS_Shape>>;
 
         pub fn bo_volume(s: &TopoDS_Shape) -> f64;
+        pub fn bo_volume_precise(s: &TopoDS_Shape) -> f64;
         pub fn bo_area(s: &TopoDS_Shape) -> f64;
         pub fn bo_bbox(s: &TopoDS_Shape, optimal: bool, out: &mut [f64]) -> bool;
         pub fn bo_extent(s: &TopoDS_Shape) -> f64;

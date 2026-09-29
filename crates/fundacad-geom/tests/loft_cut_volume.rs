@@ -1,6 +1,6 @@
-//! The quick volume integration misses by about a percent on a loft between
+//! The quick volume integration misses by a percent or more on a loft between
 //! closed spline sections, so a pin bored into one looked like a cut that grew
-//! the body and was refused as impossible.
+//! the body, and a thread joined onto one looked like a join that lost material.
 
 use fundacad_core::CadDocument;
 use fundacad_geom::builder::{self, NoWatch};
@@ -39,4 +39,21 @@ fn a_bore_into_a_lofted_spline_tray_is_cut_not_refused() {
     let r = builder::rebuild(&doc, &raw, &NoWatch).expect("not cancelled");
     assert!(r.errors.is_empty(), "{:?}", r.errors.iter().map(|e| &e.message).collect::<Vec<_>>());
     assert_eq!(kernel::count(&r.bodies[0].shape, Kind::Face), 5, "the side, both caps, the bore wall and its end");
+}
+
+#[test]
+fn a_thread_joined_onto_a_lofted_tray_is_kept_not_refused() {
+    let raw: Value = serde_json::from_str(include_str!("booleans/threaded_collar.json")).expect("fixture parses");
+    let doc: CadDocument = serde_json::from_value(raw.clone()).expect("a document");
+    let r = builder::rebuild(&doc, &raw, &NoWatch).expect("not cancelled");
+    assert!(r.errors.is_empty(), "{:?}", r.errors.iter().map(|e| &e.message).collect::<Vec<_>>());
+    let before: Value = {
+        let mut d = raw.clone();
+        d["features"].as_array_mut().expect("features").pop();
+        d
+    };
+    let b: CadDocument = serde_json::from_value(before.clone()).expect("a document");
+    let r0 = builder::rebuild(&b, &before, &NoWatch).expect("not cancelled");
+    let added = kernel::volume_precise(&r.bodies[0].shape) - kernel::volume_precise(&r0.bodies[0].shape);
+    assert!(added > 10.0 && added < 80.0, "the thread added {added}mm3");
 }
