@@ -28,6 +28,12 @@ fn signed_vol(s: &Shape) -> f64 {
     crate::bench::phase("volume", || kernel::volume(s))
 }
 
+/// Whether a join's volume looks like a real merge: more than the bodies held,
+/// less than the bodies plus the whole tool.
+fn join_fits(merged: f64, hit: f64, prism: f64) -> bool {
+    merged >= hit - noop_eps(hit) && merged > hit + noop_eps(prism) && merged < hit + prism - noop_eps(prism)
+}
+
 /// A body's signed volume, from the memo when a feature already measured it.
 fn body_vol(ctx: &Ctx, index: usize) -> f64 {
     ctx.known_volume(index).unwrap_or_else(|| signed_vol(ctx.bodies[index].shape()))
@@ -224,10 +230,16 @@ pub fn combine(
                 (merged, measured) =
                     kernel::serial_bool_known(&merged, &[ctx.bodies[i].shape()], BoolKind::Fuse, &known)?;
             }
-            let signed = measured.unwrap_or_else(|| signed_vol(&merged));
+            let mut signed = measured.unwrap_or_else(|| signed_vol(&merged));
+            let mut hit_vol: f64 = hit_signed.iter().map(|v| v.abs()).sum();
+            let mut prism_vol = prism_vol;
+            if !join_fits(signed.abs(), hit_vol, prism_vol) {
+                signed = kernel::volume_precise(&merged);
+                hit_vol = hits.iter().map(|&i| kernel::volume_precise(ctx.bodies[i].shape()).abs()).sum();
+                prism_vol = kernel::volume_precise(&solid).abs();
+            }
             let merged_vol = signed.abs();
             let mut merged_signed = Some(signed);
-            let hit_vol: f64 = hit_signed.iter().map(|v| v.abs()).sum();
             // What a fuse that really merged looks like: more material than the
             // bodies held on their own, and less than those bodies plus the
             // whole tool, because the overlap gets counted once instead of
@@ -235,7 +247,7 @@ pub fn combine(
             // giving up rather than the caller being wrong, so both get the
             // sliced retry.
             let merged_properly = |s: &Shape| {
-                let v = vol(s);
+                let v = kernel::volume_precise(s).abs();
                 hit_vol + noop_eps(prism_vol) < v && v < hit_vol + prism_vol - noop_eps(prism_vol)
             };
             let repair = |ctx: &Ctx| -> Option<Shape> {
@@ -331,6 +343,16 @@ pub fn combine(
                 removed += (before - after).max(0.0);
                 parted |= kernel::count(&newshape, Kind::Solid) > kernel::count(b.shape(), Kind::Solid);
                 results.push((i, newshape, Some(after_signed)));
+            }
+            let mut prism_vol = prism_vol;
+            if !hits.is_empty() && removed < noop_eps(prism_vol) && !parted {
+                removed = 0.0;
+                for (i, shape, measured) in &mut results {
+                    let after = kernel::volume_precise(shape);
+                    removed += (kernel::volume_precise(ctx.bodies[*i].shape()).abs() - after.abs()).max(0.0);
+                    *measured = Some(after);
+                }
+                prism_vol = kernel::volume_precise(&solid).abs();
             }
             // A cut through a thin wall removes little next to its tool, and
             // still cut the body it parted.
@@ -466,10 +488,16 @@ pub fn do_boolean(ctx: &mut Ctx, f: &BooleanFeature) -> FResult {
         let known = first_known(step, before_signed, tool_signed[0]);
         (shape, measured) = kernel::serial_bool_known(&shape, &[ctx.bodies[t].shape()], kind, &known)?;
     }
-    let shape_signed = measured.unwrap_or_else(|| signed_vol(&shape));
+    let mut shape_signed = measured.unwrap_or_else(|| signed_vol(&shape));
+    let mut before = before;
+    let mut tool_vol: f64 = tool_signed.iter().map(|v| v.abs()).sum();
+    if kind == BoolKind::Cut && shape_signed.abs() >= before - noop_eps(tool_vol.min(before)) {
+        shape_signed = kernel::volume_precise(&shape);
+        before = kernel::volume_precise(ctx.bodies[target].shape()).abs();
+        tool_vol = tools.iter().map(|&t| kernel::volume_precise(ctx.bodies[t].shape()).abs()).sum();
+    }
     let after = shape_signed.abs();
     let eps = noop_eps(before);
-    let tool_vol: f64 = tool_signed.iter().map(|v| v.abs()).sum();
     if kind == BoolKind::Cut && after >= before - noop_eps(tool_vol.min(before)) {
         return Err(Fail::msg(format!(
             "{label} removed nothing, no tool body overlaps the one being kept."

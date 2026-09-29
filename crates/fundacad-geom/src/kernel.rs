@@ -151,6 +151,13 @@ pub fn volume(s: &Shape) -> f64 {
     ffi::bo_volume(s.raw())
 }
 
+/// `volume` integrated to a millionth of the body. The quick one misses by about
+/// a percent on lofted spline faces, so a verdict that hangs on a small change
+/// is checked with this before it refuses anything.
+pub fn volume_precise(s: &Shape) -> f64 {
+    ffi::bo_volume_precise(s.raw())
+}
+
 pub fn area(s: &Shape) -> f64 {
     ffi::bo_area(s.raw())
 }
