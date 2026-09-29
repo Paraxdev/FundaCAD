@@ -419,6 +419,25 @@ fn drop_seams(shape: &Shape, sels: &[Value], edges: Vec<Shape>, label: &str) -> 
     ))
 }
 
+/// Sliver edges out of the set: one among real edges is left out, since the
+/// kernel refuses the whole blend over an edge it cannot put a round on.
+fn drop_slivers(edges: Vec<Shape>, label: &str) -> FResult<Vec<Shape>> {
+    use crate::mesh::edges::SLIVER_EDGE_MM;
+    let real: Vec<Shape> = edges
+        .iter()
+        .filter(|e| crate::kernel::length(e) >= SLIVER_EDGE_MM)
+        .cloned()
+        .collect();
+    if real.is_empty() && !edges.is_empty() {
+        return Err(Fail::msg(format!(
+            "can't {} here, the selected edge is under {}mm long, a sliver left where two corners nearly meet. Pick the edges beside it instead.",
+            label.to_lowercase(),
+            py_g(SLIVER_EDGE_MM)
+        )));
+    }
+    Ok(real)
+}
+
 fn names_one_edge(sel: &Value) -> bool {
     sel.get("kind").and_then(Value::as_str) == Some("edge")
         && matches!(sel.get("by").and_then(Value::as_str), Some("nearest" | "match"))
@@ -846,6 +865,7 @@ fn blend_edges(
         }
         let sels = sel_value.as_array().map_or(&[][..], Vec::as_slice);
         let edges = drop_seams(&body_shape, sels, edges, label)?;
+        let edges = drop_slivers(edges, label)?;
         refuse_smooth_edges(&body_shape, &edges, label)?;
         let misfit: std::cell::Cell<Option<Fail>> = std::cell::Cell::new(None);
         let try_section = |shape: &Shape, es: &[Shape]| -> Option<Shape> {
