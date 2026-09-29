@@ -535,7 +535,8 @@ inline TopoDS_Shape bo_unify(const TopoDS_Shape &s) {
 
 // Whether `r` is a volume the operation could give from these inputs. Only
 // judged when every input is a solid with volume, else always true.
-inline bool bo_volume_plausible(int kind, double a, const std::vector<double> &tools, double r) {
+// `rel` is the slack as a fraction of the larger operand.
+inline bool bo_volume_plausible(int kind, double a, const std::vector<double> &tools, double r, double rel = 1e-6) {
   if (!(a > 0)) return true;
   double sum = 0, most = a;
   for (double v : tools) {
@@ -543,11 +544,14 @@ inline bool bo_volume_plausible(int kind, double a, const std::vector<double> &t
     sum += v;
     most = std::max(most, v);
   }
-  double eps = 1e-6 * std::max(a, sum) + 1e-9;
+  double eps = rel * std::max(a, sum) + 1e-9;
   if (kind == 0) return r >= most - eps && r <= a + sum + eps;
   if (kind == 1) return r >= a - sum - eps && r <= a + eps && r >= -eps;
   return r >= -eps && r <= std::min(a, sum) + eps;
 }
+
+inline TopoDS_Shape bo_bool_run(const TopoDS_Shape &base, const TopTools_ListOfShape &tl, int kind, bool parallel,
+                                double fuzzy);
 
 // OCCT gets some coincident cylinders wrong with the operands one way round
 // and right the other (a cut that grows the body, a common of negative
@@ -589,11 +593,36 @@ inline TopoDS_Shape bo_checked(const TopoDS_Shape &result, const TopoDS_Shape &b
   bop.SetRunParallel(parallel);
   if (fuzzy > 0) bop.SetFuzzyValue(fuzzy);
   bop.Perform();
-  if (bop.HasErrors()) return result;
-  double r2 = bo_volume(bop.Shape());
-  if (!bo_volume_plausible(kind, a, tv, r2) || (kind == 0 && r2 <= r)) return result;
-  if (out_vol) *out_vol = r2;
-  return bop.Shape();
+  auto good = [&](double v) { return bo_volume_plausible(kind, a, tv, v) && !(kind == 0 && v <= r); };
+  if (!bop.HasErrors()) {
+    double r2 = bo_volume(bop.Shape());
+    if (good(r2)) {
+      if (out_vol) *out_vol = r2;
+      return bop.Shape();
+    }
+  }
+  // Volume integration of freeform faces is only good to about 1e-4 of the
+  // body, so a result that misses by less than that is taken as it is, and an
+  // inside out one is righted later by bo_unify_body.
+  const double loose = 1e-3;
+  if (bo_volume_plausible(kind, a, tv, r, loose) || bo_volume_plausible(kind, a, tv, -r, loose)) return result;
+  // Grossly impossible, as a chute cut into a scaled-sphere bowl that dropped
+  // the bowl face and came back an open shell: a coarser fuzz often gets past
+  // the grazing contact behind it, and otherwise there is no body to give.
+  for (double f : {std::max(1e-5, 10 * fuzzy), 1e-4}) {
+    if (f <= fuzzy) continue;
+    try {
+      TopoDS_Shape s = bo_bool_run(base, tools, kind, parallel, f);
+      double r3 = bo_volume(s);
+      bool changed = kind != 1 || r3 < a * (1 - 1e-6);
+      if (changed && bo_volume_plausible(kind, a, tv, r3, loose) && !(kind == 0 && r3 <= r)) {
+        if (out_vol) *out_vol = r3;
+        return s;
+      }
+    } catch (...) {
+    }
+  }
+  throw std::runtime_error("BOPAlgo_ImpossibleResult");
 }
 
 inline TopTools_ListOfShape bo_tool_list(const TopoDS_Shape &tools) {
