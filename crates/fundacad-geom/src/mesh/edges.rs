@@ -22,6 +22,10 @@ pub const EDGE_FALLBACK_SEG: usize = 24;
 /// the boundary of a fillet rather than a corner.
 pub const SMOOTH_EDGE_DEG: f64 = 1.0;
 
+/// An edge shorter than this is a sliver a boolean left where two vertices
+/// nearly met: too small to see, click or blend, so it is neither drawn nor blended.
+pub const SLIVER_EDGE_MM: f64 = 1e-4;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct EdgeLine {
     pub points: Vec<[f64; 3]>,

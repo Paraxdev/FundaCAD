@@ -139,6 +139,7 @@ mod inner {
             nx: f64, ny: f64, nz: f64,
             shapes: &TopoDS_Shape,
             model_scale: f64,
+            fuzz: f64,
         ) -> UniquePtr<CxxVector<TopoDS_Shape>>;
         #[allow(clippy::too_many_arguments)]
         pub fn bo_profile_cuts(

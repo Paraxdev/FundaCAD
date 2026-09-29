@@ -469,6 +469,13 @@ pub fn pick_fuzz(extent_mm: Option<f64>) -> f64 {
     }
 }
 
+/// The fuzz where sketch curves split the model. A corner the app snapped to a
+/// model vertex arrives up to a few 1e-5 mm off it whatever the part's size, and
+/// an exact split leaves an edge that short, so anything within a sliver merges.
+pub fn sketch_fuzz(extent_mm: Option<f64>) -> f64 {
+    pick_fuzz(extent_mm).max(crate::mesh::edges::SLIVER_EDGE_MM)
+}
+
 pub fn clean(s: &Shape) -> KResult<Shape> {
     run("ShapeUpgrade_UnifySameDomain", || format!("shape={}", describe(s)), || ffi::bo_clean(s.raw()))
 }
@@ -609,6 +616,7 @@ pub fn split_profile_cells(
         normal[2],
         s.raw(),
         model_scale,
+        sketch_fuzz(Some(model_scale)),
     ))
 }
 
