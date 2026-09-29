@@ -87,6 +87,11 @@ fn translate_kernel_error(name: String) -> Fail {
             "the kernel refused a degenerate value, a size, distance or direction is zero or \
              too small to represent (Standard_DomainError)",
         ),
+        "BOPAlgo_ImpossibleResult" => Fail::msg(
+            "the kernel's boolean came back with a body that cannot be right, a cut that adds \
+             material or a join that loses it, so it was refused. It is usually a surface the \
+             tool only grazes, moving the tool or the surface a little gets past it",
+        ),
         _ => Fail::Internal(name),
     }
 }
