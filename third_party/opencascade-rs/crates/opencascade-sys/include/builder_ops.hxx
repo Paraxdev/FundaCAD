@@ -197,6 +197,14 @@ inline double bo_volume(const TopoDS_Shape &s) {
   return p.Mass();
 }
 
+// Adaptive to a millionth of the body, slow enough to keep for the rare call.
+inline double bo_volume_precise(const TopoDS_Shape &s) {
+  if (s.IsNull()) return 0.0;
+  GProp_GProps p;
+  BRepGProp::VolumeProperties(s, p, 1e-6);
+  return p.Mass();
+}
+
 inline double bo_area(const TopoDS_Shape &s) {
   if (s.IsNull()) return 0.0;
   GProp_GProps p;
@@ -606,6 +614,17 @@ inline TopoDS_Shape bo_checked(const TopoDS_Shape &result, const TopoDS_Shape &b
   // inside out one is righted later by bo_unify_body.
   const double loose = 1e-3;
   if (bo_volume_plausible(kind, a, tv, r, loose) || bo_volume_plausible(kind, a, tv, -r, loose)) return result;
+  // On a lofted freeform face the quick integration can miss by a percent, so
+  // nothing is called impossible until every operand is measured closely.
+  const double close = 1e-5;
+  a = bo_volume_precise(base);
+  tv.clear();
+  for (TopTools_ListOfShape::Iterator it(tools); it.More(); it.Next()) tv.push_back(bo_volume_precise(it.Value()));
+  double rp = bo_volume_precise(result);
+  if (bo_volume_plausible(kind, a, tv, rp, close) || bo_volume_plausible(kind, a, tv, -rp, close)) {
+    if (out_vol) *out_vol = rp;
+    return result;
+  }
   // Grossly impossible, as a chute cut into a scaled-sphere bowl that dropped
   // the bowl face and came back an open shell: a coarser fuzz often gets past
   // the grazing contact behind it, and otherwise there is no body to give.
@@ -613,9 +632,9 @@ inline TopoDS_Shape bo_checked(const TopoDS_Shape &result, const TopoDS_Shape &b
     if (f <= fuzzy) continue;
     try {
       TopoDS_Shape s = bo_bool_run(base, tools, kind, parallel, f);
-      double r3 = bo_volume(s);
+      double r3 = bo_volume_precise(s);
       bool changed = kind != 1 || r3 < a * (1 - 1e-6);
-      if (changed && bo_volume_plausible(kind, a, tv, r3, loose) && !(kind == 0 && r3 <= r)) {
+      if (changed && bo_volume_plausible(kind, a, tv, r3, close) && !(kind == 0 && r3 <= rp)) {
         if (out_vol) *out_vol = r3;
         return s;
       }
