@@ -443,6 +443,12 @@ fn names_one_edge(sel: &Value) -> bool {
         && matches!(sel.get("by").and_then(Value::as_str), Some("nearest" | "match"))
 }
 
+/// A blend only reshapes the outside, so a hollow inside the body must survive
+/// it. A blend near one has been seen to come back with it filled.
+fn keeps_voids(before: &Shape, after: &Shape) -> bool {
+    crate::kernel::void_count(after) >= crate::kernel::void_count(before)
+}
+
 /// The kernel can hand a blend back with nothing cut, and that must not pass
 /// as done.
 fn refuse_unchanged(before: &Shape, after: &Shape, label: &str, body: &str) -> FResult {
@@ -894,7 +900,7 @@ fn blend_edges(
         let misfit: std::cell::Cell<Option<Fail>> = std::cell::Cell::new(None);
         let try_section = |shape: &Shape, es: &[Shape]| -> Option<Shape> {
             match section?(shape, es) {
-                Ok(out) => Some(out).filter(|out| still_sharp(out, es).is_empty()),
+                Ok(out) => Some(out).filter(|out| still_sharp(out, es).is_empty() && keeps_voids(shape, out)),
                 Err(SectionErr::TooLarge { why, fits, at }) => {
                     misfit.set(Some(misfit_error(label, &body_name, blend_size, why, fits, at)));
                     None
@@ -999,6 +1005,12 @@ fn blend_edges(
     for (index, shape) in &staged {
         let body = &ctx.bodies[*index];
         refuse_unchanged(body.shape(), shape, label, &body.name)?;
+        if !keeps_voids(body.shape(), shape) {
+            return Err(Fail::msg(format!(
+                "{label} failed on {}: the blend came back with a hollow inside the body filled in, so it was refused. Try a smaller size.",
+                body.name
+            )));
+        }
     }
     for (index, shape) in staged {
         ctx.set_shape(index, shape);
