@@ -37,6 +37,7 @@ use crate::select::Resolver;
 const CANT_OFFSET: &str = "can't offset this face by that amount";
 const RAN_PAST: &str = "that offset ran past what this surface can hold, try a smaller amount";
 const SWEEP_REFUSAL: &str = "can't press/pull this face, it is freeform and wraps around, so there is no one direction to push it in. Try a neighbouring face instead.";
+const SWEEP_INVALID: &str = "can't press/pull this face, pushed straight out along its normal it leaves no valid solid. Try a smaller distance or a neighbouring face instead.";
 
 fn v3(a: [f64; 3]) -> DVec3 {
     dvec3(a[0], a[1], a[2])
@@ -284,12 +285,16 @@ fn sweep_press_pull(part: &Shape, face: &Shape, d: f64) -> FResult<Shape> {
     let dir = if d > 0.0 { n } else { -n } * d.abs();
     let prism = kernel::clean(&kernel::prism(face, dir.to_array())?)?;
     let out = fused(part, &prism, d > 0.0)?;
+    let refusal = || {
+        let wraps = face.as_face().is_some_and(|f| f.wraps());
+        Fail::msg(if wraps { SWEEP_REFUSAL } else { SWEEP_INVALID })
+    };
     if !valid(&out) {
-        return Err(Fail::msg(SWEEP_REFUSAL));
+        return Err(refusal());
     }
     let (before, after) = (kernel::volume(part), kernel::volume(&out));
     if after <= 0.0 || (after > before) != (d > 0.0) {
-        return Err(Fail::msg(SWEEP_REFUSAL));
+        return Err(refusal());
     }
     Ok(out)
 }
