@@ -682,11 +682,24 @@ struct BodyRef<'a> {
     shape: &'a Shape,
 }
 
+/// The largest of a few halvings of `blend_size` at which the edges build
+/// together. Each can refuse alone at any size, its round having nowhere to end
+/// short of the next one, while the chain as a whole fits smaller.
+fn group_fits_at(body: &Shape, edges: &[Shape], op: &BlendOp, blend_size: f64) -> Option<f64> {
+    if edges.len() < 2 {
+        return None;
+    }
+    (1..=4).map(|k| blend_size / f64::from(1u32 << k)).find(|&size| {
+        op(body, edges, size).is_ok_and(|out| !overlap::folds_over_itself(body, &out, size))
+    })
+}
+
 fn blend_failure(
     label: &str,
     body: &BodyRef,
     unresolved: &[Shape],
     one_edge_at: &dyn Fn(&Shape, &Shape, f64) -> Result<Shape, BlendErr>,
+    group_op: &BlendOp,
     blend_size: f64,
     err: &BlendErr,
 ) -> Fail {
@@ -726,6 +739,17 @@ fn blend_failure(
                 kernel_sentence(err.text())
             ),
             helps.and(Some(BLEND_TOO_LARGE)),
+        );
+    }
+    if let Some(fits) = group_fits_at(body.shape, unresolved, group_op, blend_size) {
+        return value_err(
+            format!(
+                "{label} failed on {}: at {}mm the blend has nowhere to end where these edges run out, but together they build at {}mm, so try that size.",
+                body.name,
+                py_g(blend_size),
+                py_g(fits)
+            ),
+            Some(BLEND_TOO_LARGE),
         );
     }
     let which = if unresolved.len() == 1 {
@@ -954,6 +978,7 @@ fn blend_edges(
                         &body,
                         &unresolved,
                         &one_edge_at,
+                        op,
                         blend_size,
                         &combined_err,
                     ));
