@@ -284,6 +284,18 @@ pub fn void_count(s: &Shape) -> i32 {
     ffi::bo_void_count(s.raw())
 }
 
+/// Edges of the shape's solids that bound only one face. Zero for a closed
+/// solid; anything else is a hole in its skin that the volume does not show.
+/// A line drawn inside a face, as an imprint leaves, is not one.
+pub fn open_edge_count(s: &Shape) -> usize {
+    usize::try_from(ffi::bo_open_edge_count(s.raw())).unwrap_or(0)
+}
+
+/// Whether `edge` lies in `face` only as a line drawn on it, not a side of it.
+pub fn edge_inside_face(face: &Shape, edge: &Shape) -> bool {
+    ffi::bo_edge_inside_face(face.raw(), edge.raw())
+}
+
 pub fn location_translation(s: &Shape) -> [f64; 3] {
     let mut out = [0.0; 3];
     ffi::bo_location_translation(s.raw(), &mut out);

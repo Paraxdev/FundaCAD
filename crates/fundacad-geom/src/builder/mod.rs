@@ -473,6 +473,41 @@ fn note_splits(ctx: &mut Ctx, fid: &str, rawf: &Value, pre: &[(u64, u64, Shape)]
     ctx.diagnostics.splice(at..at, notes);
 }
 
+/// Says so when a feature left a solid body with holes in its skin, edges that
+/// bound only one face. The volume of such a shell can still come out right,
+/// so no other check sees it. Judged over all the bodies the feature changed,
+/// made or consumed, since a join or split gives its result a new body: a body
+/// that was already open is not called out again for every later feature.
+fn note_open(ctx: &mut Ctx, fid: &str, pre: &[(u64, u64, Shape)]) {
+    let open = |s: &Shape| {
+        if kernel::count(s, kernel::Kind::Solid) == 0 { 0 } else { kernel::open_edge_count(s) }
+    };
+    let now: HashSet<(u64, u64)> = ctx.bodies.iter().map(Body::identity).collect();
+    let was: HashSet<(u64, u64)> = pre.iter().map(|(uid, generation, _)| (*uid, *generation)).collect();
+    let before: usize = pre
+        .iter()
+        .filter(|(uid, generation, _)| !now.contains(&(*uid, *generation)))
+        .map(|(_, _, s)| open(s))
+        .sum();
+    let changed: Vec<(&Body, usize)> = ctx
+        .bodies
+        .iter()
+        .filter(|b| !was.contains(&b.identity()))
+        .map(|b| (b, open(&b.shape)))
+        .filter(|(_, n)| *n > 0)
+        .collect();
+    if changed.iter().map(|(_, n)| n).sum::<usize>() <= before {
+        return;
+    }
+    let notes: Vec<Value> = changed
+        .iter()
+        .map(|(b, n)| {
+            advisory(fid, "openShell", format!("{} is not a closed solid: {n} edge(s) bound only one face", b.name))
+        })
+        .collect();
+    ctx.diagnostics.extend(notes);
+}
+
 /// Says which fields a built-in feature carries without reading them, so a
 /// misspelt `bodies` is not silently the active body.
 fn note_unread(ctx: &mut Ctx, f: &Feature, fid: &str, kind: &str) {
@@ -1057,6 +1092,9 @@ pub fn rebuild_from(
                     });
                     crate::bench::phase("note_splits", || {
                         note_splits(&mut ctx, fid.unwrap_or(""), rawf, &pre_shapes);
+                    });
+                    crate::bench::phase("note_open", || {
+                        note_open(&mut ctx, fid.unwrap_or(""), &pre_shapes);
                     });
                 }
                 if type_name == Some("sketch") {

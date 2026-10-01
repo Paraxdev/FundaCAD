@@ -73,6 +73,12 @@ impl FaceAdjacency {
             .collect()
     }
 
+    /// The edge lies inside its one face as a drawn line, not along its side.
+    pub fn lies_inside(&self, edge: &Shape) -> bool {
+        let faces = self.edges.ancestors(edge);
+        faces.len() == 1 && crate::kernel::edge_inside_face(&faces[0], edge)
+    }
+
     /// Both sides of the edge are one face, the line where a wrapping face
     /// closes on itself.
     pub fn is_seam(&self, edge: &Shape) -> bool {

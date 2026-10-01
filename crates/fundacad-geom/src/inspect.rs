@@ -138,6 +138,9 @@ fn edge_entry(
     );
     if faces.len() == 2 && faces[0] == faces[1] {
         e.insert("seam".into(), json!(true));
+    } else if faces.len() == 1 && adj.lies_inside(edge) {
+        // A line drawn on its face, as an imprint leaves: no gap in the skin.
+        e.insert("inFace".into(), json!(true));
     } else if faces.len() < 2 {
         e.insert("openBoundary".into(), json!(true));
     }
@@ -227,7 +230,7 @@ fn measure(shape: &Shape) -> Local {
         let on = adj.faces_of_edge(e);
         if on.len() == 2 && on[0] == on[1] {
             seams.push(k);
-        } else if on.len() < 2 {
+        } else if on.len() < 2 && !adj.lies_inside(e) {
             open.push(k);
         }
     }

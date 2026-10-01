@@ -33,6 +33,8 @@ mod inner {
         pub fn bo_transform_point(s: &TopoDS_Shape, xyz: &mut [f64]);
         pub fn bo_euler_point(rx: f64, ry: f64, rz: f64, dx: f64, dy: f64, dz: f64, xyz: &mut [f64]);
         pub fn bo_void_count(s: &TopoDS_Shape) -> i32;
+        pub fn bo_open_edge_count(s: &TopoDS_Shape) -> i32;
+        pub fn bo_edge_inside_face(face: &TopoDS_Shape, edge: &TopoDS_Shape) -> bool;
         pub fn bo_location_translation(s: &TopoDS_Shape, out: &mut [f64]);
 
         pub fn bo_rotated(s: &TopoDS_Shape, rx: f64, ry: f64, rz: f64) -> Result<UniquePtr<TopoDS_Shape>>;
