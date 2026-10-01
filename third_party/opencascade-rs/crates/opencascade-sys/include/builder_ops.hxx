@@ -73,7 +73,9 @@
 #include <TopExp.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopLoc_Location.hxx>
+#include <NCollection_DataMap.hxx>
 #include <TopTools_HSequenceOfShape.hxx>
+#include <TopTools_ShapeMapHasher.hxx>
 #include <TopTools_IndexedMapOfShape.hxx>
 #include <TopTools_ListOfShape.hxx>
 #include <TopoDS.hxx>
@@ -381,6 +383,42 @@ inline void bo_transform_point(const TopoDS_Shape &shape, rust::Slice<double> xy
 // Solids beyond one shell per solid: a cavity sealed inside a body.
 inline int bo_void_count(const TopoDS_Shape &s) {
   return bo_count(s, 1) - bo_count(s, 0);
+}
+
+// Whether `edge` lies in `face` only as an INTERNAL or EXTERNAL edge, a line
+// drawn on the face rather than a side of it.
+inline bool bo_edge_inside_face(const TopoDS_Shape &face, const TopoDS_Shape &edge) {
+  bool seen = false;
+  for (TopExp_Explorer x(face, TopAbs_EDGE); x.More(); x.Next()) {
+    if (!x.Current().IsSame(edge)) continue;
+    TopAbs_Orientation o = x.Current().Orientation();
+    if (o == TopAbs_FORWARD || o == TopAbs_REVERSED) return false;
+    seen = true;
+  }
+  return seen;
+}
+
+// Edges of a solid that bound only one face: the holes in its skin. A seam
+// bounds its one face twice, and a degenerate edge or a line drawn inside a
+// face (an imprint's, say) bounds none, so none of those counts.
+inline int bo_open_edge_count(const TopoDS_Shape &s) {
+  int open = 0;
+  for (TopExp_Explorer so(s, TopAbs_SOLID); so.More(); so.Next()) {
+    TopTools_IndexedMapOfShape faces;
+    TopExp::MapShapes(so.Current(), TopAbs_FACE, faces);
+    NCollection_DataMap<TopoDS_Shape, int, TopTools_ShapeMapHasher> sides;
+    for (int i = 1; i <= faces.Extent(); ++i)
+      for (TopExp_Explorer x(faces(i), TopAbs_EDGE); x.More(); x.Next()) {
+        TopAbs_Orientation o = x.Current().Orientation();
+        if (o != TopAbs_FORWARD && o != TopAbs_REVERSED) continue;
+        if (BRep_Tool::Degenerated(TopoDS::Edge(x.Current()))) continue;
+        if (int *n = sides.ChangeSeek(x.Current())) ++*n;
+        else sides.Bind(x.Current(), 1);
+      }
+    for (NCollection_DataMap<TopoDS_Shape, int, TopTools_ShapeMapHasher>::Iterator it(sides); it.More(); it.Next())
+      if (it.Value() == 1) ++open;
+  }
+  return open;
 }
 
 inline void bo_location_translation(const TopoDS_Shape &s, rust::Slice<double> out) {
