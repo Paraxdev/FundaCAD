@@ -181,6 +181,11 @@ fn a_named_part_exports_to_a_file_of_its_name_lying_flat() {
     let r = mcp.call("export", json!({"path": bare.to_string_lossy(), "format": "stl", "separate": true}));
     assert!(!r.is_error, "{}", r.text);
     assert!(bare.join("Plate.stl").is_file(), "{}", r.text);
+    // Nor does a dot in the folder's name.
+    let dotted = tmp.path().join("bracket_v1.2");
+    let r = mcp.call("export", json!({"path": dotted.to_string_lossy(), "format": "stl", "separate": true}));
+    assert!(!r.is_error, "{}", r.text);
+    assert!(dotted.join("Plate.stl").is_file(), "{}", r.text);
 
     // A part whose name is taken by a folder refuses before anything moves.
     std::fs::remove_file(parts.join("Rod.stl")).unwrap();
