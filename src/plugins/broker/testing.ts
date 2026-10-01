@@ -366,6 +366,7 @@ export function testHost(opts: TestHostOptions = {}): TestHost {
         case "view":
         case "export":
         case "interference":
+        case "section":
         case "edit":
           return geometry(op, args);
       }

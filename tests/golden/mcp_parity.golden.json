@@ -232,7 +232,7 @@
   {
    "args": {},
    "isError": true,
-   "text": "No tool 'no_such_tool'. Have: build, doc_get, doc_import, doc_new, doc_open, doc_save, doc_set, edit, export, feature_add, feature_move, feature_remove, feature_update, inspect, interference, param_remove, param_set, schema, view",
+   "text": "No tool 'no_such_tool'. Have: build, doc_get, doc_import, doc_new, doc_open, doc_save, doc_set, edit, export, feature_add, feature_move, feature_remove, feature_update, inspect, interference, param_remove, param_set, schema, section, view",
    "tool": "no_such_tool"
   },
   {

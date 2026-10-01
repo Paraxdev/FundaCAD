@@ -172,3 +172,39 @@ fn a_named_part_exports_to_a_file_of_its_name_lying_flat() {
         .collect();
     assert!(left.is_empty(), "temporary files left: {left:?}");
 }
+
+#[test]
+fn a_section_gives_the_outline_and_the_numbers_a_beam_check_needs() {
+    let mut mcp = session();
+    let r = mcp.call(
+        "edit",
+        json!({"ops": [
+            {"op": "add", "feature": {"type": "box", "length": 20, "width": 10, "height": 30, "name": "Beam"}},
+            {"op": "add", "feature": {"type": "cylinder", "radius": 5, "height": 40, "name": "Tube"}},
+            {"op": "add", "feature": {"type": "cylinder", "radius": 3, "height": 50, "operation": "cut", "targets": ["body2"]}},
+            {"op": "add", "feature": {"type": "move", "dx": 30, "bodies": ["body2"]}}
+        ]}),
+    );
+    assert!(!r.is_error, "{}", r.text);
+    let r = mcp.call("section", json!({"axis": "Z", "at": 1}));
+    assert!(!r.is_error, "{}", r.text);
+    assert!(r.text.contains("body1 \"Beam\": area 200 mm2 in 1 piece\n"), "{}", r.text);
+    assert!(r.text.contains("Ix = 1667 mm4 (bending about x), Iy = 6667 mm4, Ixy = 0 mm4"), "{}", r.text);
+    assert!(r.text.contains("loop 1 (outline, 4 points): [[-10,-5],[10,-5],[10,5],[-10,5]]"), "{}", r.text);
+    // A tube, against pi (R^2 - r^2) and pi/4 (R^4 - r^4) within a quarter percent.
+    let r = mcp.call("section", json!({"axis": "Z", "at": 1, "bodies": ["Tube"], "outline": false}));
+    let number = |after: &str| -> f64 {
+        let at = r.text.find(after).unwrap_or_else(|| panic!("no {after} in {}", r.text)) + after.len();
+        r.text[at..].split(' ').next().unwrap().parse().unwrap()
+    };
+    let pi = std::f64::consts::PI;
+    assert!((number("area ") / (pi * 16.0) - 1.0).abs() < 2.5e-3, "{}", r.text);
+    assert!((number("Ix = ") / (pi / 4.0 * 544.0) - 1.0).abs() < 2.5e-3, "{}", r.text);
+    assert!(r.text.contains("in 1 piece with 1 hole"), "{}", r.text);
+    assert!(!r.text.contains("Beam"), "{}", r.text);
+    // At 45 degrees the beam's cut is root 2 longer.
+    let r = mcp.call("section", json!({"origin": [0, 0, 0], "normal": [0, 1, 1], "bodies": ["Beam"]}));
+    assert!(r.text.contains("area 282.8 mm2"), "{}", r.text);
+    let r = mcp.call("section", json!({"axis": "X", "at": 500}));
+    assert!(r.text.ends_with("The plane misses every body."), "{}", r.text);
+}

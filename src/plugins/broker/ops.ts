@@ -55,6 +55,7 @@ export const OPS = [
   "edit",
   "build",
   "interference",
+  "section",
   "inspect",
   "view",
   "export",
@@ -167,6 +168,11 @@ export const OP_TABLE: Record<Op, OpSpec> = {
   interference: {
     needs: ["document.read", "geometry.build"],
     why: "builds the open document and reports where its bodies overlap and how close they come, which is the document read back out",
+    writes: false,
+  },
+  section: {
+    needs: ["document.read", "geometry.build"],
+    why: "builds the open document and hands back its outline and section properties at a plane, the document's own shape read out",
     writes: false,
   },
   view: {
