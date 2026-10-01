@@ -25,6 +25,11 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **Section properties over MCP.** The new `section` tool cuts the built
+  bodies with a plane, across X, Y or Z or at any angle, and gives each body's
+  outline as closed loops with its area, centroid, second moments of area,
+  section modulus and polar moment, which is what a quick beam or spring check
+  needs.
 - **Check a mechanism for clashes over MCP.** The new `interference` tool
   reports which bodies overlap, by how much and where, and which pairs come
   closer than a clearance, without changing the document. Its `sweep` steps a

@@ -33,6 +33,7 @@ pub mod model;
 pub mod png;
 pub mod render;
 pub mod schema;
+pub mod section;
 pub mod server;
 pub mod shadow;
 pub mod tools;

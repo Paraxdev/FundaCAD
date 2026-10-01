@@ -163,6 +163,25 @@ pub fn edit() -> JsonObject {
     )
 }
 
+pub fn section() -> JsonObject {
+    object(
+        json!({
+            "axis": {"type": "string", "enum": ["X", "Y", "Z"],
+                     "description": "cut across this axis, at `at`"},
+            "at": {"type": "number", "description": "where along the axis, in mm"},
+            "origin": {"type": "array", "items": {"type": "number"},
+                       "description": "a point on a plane at any angle, with `normal`"},
+            "normal": {"type": "array", "items": {"type": "number"}},
+            "bodies": {"type": "array", "items": {"type": "string"},
+                       "description": "only these bodies, by id or name; every body the \
+                                       plane crosses if omitted"},
+            "outline": {"type": "boolean",
+                        "description": "include each loop's points (default true)"}
+        }),
+        &[],
+    )
+}
+
 pub fn interference() -> JsonObject {
     object(
         json!({

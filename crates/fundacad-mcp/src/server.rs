@@ -1087,6 +1087,15 @@ The format comes from the extension unless given. A large STEP can take minutes:
     }
 
     #[tool(
+        name = "section",
+        description = "Cut the built bodies with a plane and get, per body, the outline in the plane as closed loops of points and the section properties: area, centroid, second moments of area about the centroid (and principal ones when they differ), furthest fibre, section modulus and polar moment. For quick beam and spring checks. `axis` and `at` cut across X, Y or Z; `origin` and `normal` cut at any angle. Changes nothing.",
+        input_schema = crate::tools::section()
+    )]
+    pub async fn t_section(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
+        Ok(self.section(&args).await)
+    }
+
+    #[tool(
         name = "build",
         description = "Rebuild the document and report what came out: the bodies, their sizes, and any feature that failed. Build often, an error names the feature that caused it. isError is true if ANY feature failed, even when other features still produced bodies; the text still lists everything that did build, so check isError rather than scanning for \"FEATURE FAILED\".",
         input_schema = crate::tools::build()
@@ -2165,6 +2174,104 @@ impl FundaCad {
             steps.push(crate::clash::Step { value: *value, reply });
         }
         text(crate::clash::sweep_report(&sweep.param, &unit, &steps, clearance))
+    }
+}
+
+// --- section -----------------------------------------------------------------
+
+impl FundaCad {
+    async fn section(&self, args: &JsonObject) -> CallToolResult {
+        let plane = match crate::section::plane_of(args) {
+            Ok(p) => p,
+            Err(e) => return failure(e),
+        };
+        let wanted: Vec<String> = args
+            .get("bodies")
+            .and_then(Value::as_array)
+            .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
+            .unwrap_or_default();
+        let outline = args.get("outline").and_then(Value::as_bool).unwrap_or(true);
+        let (link, doc) = {
+            let mut st = self.state.lock().await;
+            model::recompute_parameters(&mut st.doc);
+            (st.link.clone(), st.doc.clone())
+        };
+        // Its own, finer mesh: the build's is meant for looking at, and a
+        // circle drawn with it is a few percent short of its area.
+        let (reply, framed) = match link
+            .call_meshed(
+                "rebuild",
+                call_args([
+                    ("document", Value::Object(doc)),
+                    ("revision", json!(1)),
+                    ("tolerance", json!(crate::section::TOLERANCE)),
+                ]),
+            )
+            .await
+        {
+            Ok(r) => r,
+            Err(e) => return engine_gone(&e),
+        };
+        if reply.get("ok") != Some(&json!(true)) {
+            return failure(format!("Build failed: {}", error_message(&reply)));
+        }
+        let result = reply.get("result").cloned().unwrap_or_else(|| json!({}));
+        let bodies: Vec<MeshBody> = if framed.is_empty() {
+            result
+                .get("bodies")
+                .and_then(Value::as_array)
+                .map_or(&[][..], Vec::as_slice)
+                .iter()
+                .map(MeshBody::from_value)
+                .collect()
+        } else {
+            framed
+        };
+        let name_of = |b: &MeshBody| b.get("name").and_then(Value::as_str).unwrap_or_default().to_string();
+        let missing: Vec<&String> = wanted
+            .iter()
+            .filter(|w| !bodies.iter().any(|b| b.id() == w.as_str() || name_of(b) == **w))
+            .collect();
+        if !missing.is_empty() {
+            return failure(format!(
+                "no body {} in this build. Check the ids or names against `build`.",
+                missing.iter().map(|m| format!("'{m}'")).collect::<Vec<_>>().join(", ")
+            ));
+        }
+        let mut parts = Vec::new();
+        let mut missed = Vec::new();
+        for b in &bodies {
+            if !wanted.is_empty() && !wanted.iter().any(|w| w == b.id() || *w == name_of(b)) {
+                continue;
+            }
+            let cut = crate::section::cut(b, &plane);
+            if cut.loops.is_empty() && cut.open.is_empty() {
+                missed.push(b.id().to_string());
+                continue;
+            }
+            parts.push(crate::section::report(b.id(), &name_of(b), &plane, &cut, outline));
+        }
+        let mut out = format!(
+            "Section on {}, in-plane axes {} and {}:",
+            plane.label, plane.axes.0, plane.axes.1
+        );
+        if parts.is_empty() {
+            out.push_str("\nThe plane misses every body.");
+        } else {
+            out.push('\n');
+            out.push_str(&parts.join("\n"));
+        }
+        if !missed.is_empty() && !wanted.is_empty() {
+            out.push_str(&format!("\nThe plane misses {}.", missed.join(", ")));
+        }
+        let failures = feature_failure_lines(
+            result.get("featureErrors").and_then(Value::as_array).map_or(&[][..], Vec::as_slice),
+        );
+        if !failures.is_empty() {
+            out.push_str("\nSome features failed, so this cut what did build:\n");
+            out.push_str(&failures.join("\n"));
+        }
+        text(out)
     }
 }
 
