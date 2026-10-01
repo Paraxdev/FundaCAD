@@ -784,9 +784,18 @@ fn datum_line(raw: &Value) -> Option<[[f64; 3]; 2]> {
 
 /// The bodies whose ids were not there before take the feature's name, one
 /// alone as it is, several as "name 1", "name 2", the way an import names the
-/// parts of an assembly.
-fn name_new_bodies(ctx: &mut Ctx, before: &HashSet<String>, name: &str) {
-    let fresh: Vec<usize> = (0..ctx.bodies.len()).filter(|&i| !before.contains(&ctx.bodies[i].id)).collect();
+/// parts of an assembly. A body merged into another (its id assigned since
+/// `mark` with an id to inherit) is that body still, whatever id the recorded
+/// map gave it, and keeps its name.
+fn name_new_bodies(ctx: &mut Ctx, before: &HashSet<String>, mark: usize, name: &str) {
+    let merged: HashSet<&str> = ctx.ids.events()[mark..]
+        .iter()
+        .filter(|e| e.inherit.is_some())
+        .map(|e| e.id.as_str())
+        .collect();
+    let fresh: Vec<usize> = (0..ctx.bodies.len())
+        .filter(|&i| !before.contains(&ctx.bodies[i].id) && !merged.contains(ctx.bodies[i].id.as_str()))
+        .collect();
     let several = fresh.len() > 1;
     for (n, i) in fresh.into_iter().enumerate() {
         ctx.bodies[i].name = if several { format!("{name} {}", n + 1) } else { name.to_owned() };
@@ -1070,6 +1079,7 @@ pub fn rebuild_from(
             Some(_) => ctx.bodies.iter().map(|b| b.id.clone()).collect(),
             None => HashSet::new(),
         };
+        let id_mark = ctx.ids.mark();
 
         let outcome = run_feature(&mut ctx, f, type_name, watch);
         // A feature a cancel cut short failed for no reason of its own, and
@@ -1084,7 +1094,7 @@ pub fn rebuild_from(
             Ok(Ran::Inactive) => {}
             Ok(Ran::Built) => {
                 if let Some(name) = naming {
-                    name_new_bodies(&mut ctx, &pre_ids, name);
+                    name_new_bodies(&mut ctx, &pre_ids, id_mark, name);
                 }
                 if prov {
                     crate::bench::phase("owners", || {
