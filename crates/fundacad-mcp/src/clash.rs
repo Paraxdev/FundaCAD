@@ -81,7 +81,13 @@ pub fn sweep_of(v: &Value) -> Result<Sweep, String> {
         let last = (steps - 1).max(1) as f64;
         let by_step = obj.get("steps").is_none();
         let step = if by_step { span.signum() * number(obj.get("step"), "step")?.abs() } else { span / last };
-        (0..steps).map(|i| round9(from + step * i as f64)).collect()
+        let mut values: Vec<f64> = (0..steps).map(|i| round9(from + step * i as f64)).collect();
+        // A step that does not divide the span still ends at `to`: the end
+        // of travel is where a mechanism most often clashes.
+        if values.last().is_some_and(|v| (v - round9(to)).abs() > 1e-6) {
+            values.push(round9(to));
+        }
+        values
     };
     if values.is_empty() {
         return Err("the sweep has no values".into());
@@ -321,6 +327,15 @@ mod tests {
         assert_eq!(s.values, vec![10.0, 5.0, 0.0]);
         assert!(sweep_of(&json!({"param": "a", "from": 0, "to": 1})).is_err());
         assert!(sweep_of(&json!({"param": "a", "values": [1, 2], "by": 3})).is_err());
+    }
+
+    #[test]
+    fn a_step_that_does_not_divide_the_span_still_ends_at_to() {
+        let s = sweep_of(&json!({"param": "press", "from": 0, "to": 10, "step": 3})).unwrap();
+        assert_eq!(s.values, vec![0.0, 3.0, 6.0, 9.0, 10.0]);
+        let s = sweep_of(&json!({"param": "press", "from": 0, "to": 1, "step": 5})).unwrap();
+        assert_eq!(s.values, vec![0.0, 1.0]);
+        assert!(sweep_of(&json!({"param": "a", "from": 0, "to": 100, "step": 1})).is_err());
     }
 
     #[test]
