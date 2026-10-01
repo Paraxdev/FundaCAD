@@ -254,10 +254,21 @@ fn a_section_gives_the_outline_and_the_numbers_a_beam_check_needs() {
     let r = mcp.call("section", json!({"origin": [0, 0, 0], "normal": [0, 1, 1], "bodies": ["Beam"]}));
     assert!(r.text.contains("area 282.8 mm2"), "{}", r.text);
     // A plane on the bottom face reads like one on the top face.
-    for at in [-15, 15] {
+    for (at, side) in [(-15, "plus"), (15, "less")] {
         let r = mcp.call("section", json!({"axis": "Z", "at": at, "bodies": ["Beam"], "outline": false}));
-        assert!(r.text.contains("the plane lies on a face of it, the face's area 200 mm2"), "Z = {at}: {}", r.text);
+        assert!(r.text.contains("body1 \"Beam\": area 200 mm2 in 1 piece\n"), "Z = {at}: {}", r.text);
+        let note = format!("the plane lies on a face of it, so this is the section at Z = {at} {side} a hair");
+        assert!(r.text.contains(&note), "Z = {at}: {}", r.text);
     }
+    // Far from the origin, where single precision is coarser than a micron.
+    let r = mcp.call("edit", json!({"ops": [
+        {"op": "add", "feature": {"type": "move", "dx": 1000.3, "dz": 515.3, "bodies": ["body1"]}}
+    ]}));
+    assert!(!r.is_error, "{}", r.text);
+    let r = mcp.call("section", json!({"axis": "Z", "at": 500.3, "bodies": ["Beam"], "outline": false}));
+    assert!(r.text.contains("area 200 mm2 in 1 piece") && r.text.contains("Z = 500.3 plus a hair"), "{}", r.text);
+    let r = mcp.call("section", json!({"axis": "Z", "at": 510, "bodies": ["Beam"], "outline": false}));
+    assert!(r.text.contains(", Ixy = 0 mm4"), "{}", r.text);
     let r = mcp.call("section", json!({"axis": "X", "at": 500}));
     assert!(r.text.ends_with("The plane misses every body."), "{}", r.text);
 }
