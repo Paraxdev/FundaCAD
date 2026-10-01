@@ -1245,3 +1245,301 @@ pub fn frame_for_normal(origin: [f64; 3], normal: [f64; 3]) -> Frame {
     };
     Frame::new(origin, hint, normal)
 }
+
+/// The `sketchOutline` op: the union of some of a sketch's closed shapes, as
+/// the lines, arcs and circles that bound it, for the MCP `sketch_merge`.
+/// Each face of the union comes back with its loops, outer first, and a point
+/// inside it in world coordinates, which is what an extrude's `regions` take.
+pub fn sketch_outline_result(req: &serde_json::Map<String, serde_json::Value>, watch: &dyn crate::builder::Watch) -> fundacad_protocol::JobResult {
+    use serde_json::Value;
+    let Some(raw) = req.get("document") else {
+        return fundacad_engine::error_result("'document'");
+    };
+    let Some(sid) = req.get("sketch").and_then(Value::as_str) else {
+        return fundacad_engine::error_result("'sketch'");
+    };
+    let ids: Vec<&str> = req
+        .get("entities")
+        .and_then(Value::as_array)
+        .map(|a| a.iter().filter_map(Value::as_str).collect())
+        .unwrap_or_default();
+    let doc: fundacad_core::CadDocument = match serde_json::from_value(raw.clone()) {
+        Ok(d) => d,
+        Err(e) => return fundacad_engine::error_result(&format!("the document does not parse: {e}")),
+    };
+    let Some(fundacad_core::schema::Feature::Sketch(f)) = doc.feature(sid) else {
+        return fundacad_engine::error_result(&format!("no sketch '{sid}' in the document"));
+    };
+    let ctx = Ctx::with_params(&doc);
+    let reply = outline(&ctx, f, &ids).and_then(|faces| {
+        let frame = outline_frame(req, f, watch);
+        let faces: Vec<Value> = faces
+            .into_iter()
+            .map(|o| {
+                let seed = frame.as_ref().zip(o.inside).map(|(p, [u, v])| {
+                    let w: [f64; 3] = std::array::from_fn(|k| crate::select::entity::py_round(p.origin[k] + u * p.x[k] + v * p.y[k], 6) + 0.0);
+                    serde_json::json!(w)
+                });
+                serde_json::json!({
+                    "area": crate::select::entity::py_round(o.area, 6),
+                    "inside": o.inside,
+                    "seed": seed,
+                    "loops": o.loops,
+                })
+            })
+            .collect();
+        Ok(serde_json::json!({"faces": faces}))
+    });
+    match reply {
+        Ok(v) => fundacad_protocol::JobResult::Json(v.as_object().cloned().unwrap_or_default()),
+        Err(fail) => fundacad_engine::error_result(&match fail {
+            Fail::Value { message, .. } => message,
+            Fail::Missing(k) => format!("a merged entity is missing '{k}'"),
+            Fail::Internal(n) => format!("the merge failed in the kernel ({n})"),
+        }),
+    }
+}
+
+/// One face of a merged outline, in the sketch's own coordinates.
+struct OutlineFace {
+    area: f64,
+    /// `None` when no point of it lies clear of the sketch's other shapes.
+    inside: Option<[f64; 2]>,
+    loops: Vec<Vec<serde_json::Value>>,
+}
+
+/// The plane the sketch builds on, as `build` picks it: the face it follows,
+/// else its datum, else its plane. Following a face or a datum needs the
+/// model built, so only those rebuild; `None` when that fails.
+fn outline_frame(req: &serde_json::Map<String, serde_json::Value>, f: &SketchFeature, watch: &dyn crate::builder::Watch) -> Option<Frame> {
+    let datum = f.plane_id.as_deref().filter(|s| !s.is_empty());
+    if f.face.is_none() && datum.is_none() {
+        return plane_of(PlaneRef::from(&f.plane), &indexmap::IndexMap::new()).ok();
+    }
+    let (_, built) = crate::inspect::rebuild_request(req, watch).ok()?;
+    if let Some(p) = built.sketch_planes.get(&f.id) {
+        let v3 = |k: &str| -> Option<[f64; 3]> {
+            let a = p.get(k)?.as_array()?;
+            Some([a.first()?.as_f64()?, a.get(1)?.as_f64()?, a.get(2)?.as_f64()?])
+        };
+        let rec = crate::builder::plane::PlaneRecord { origin: v3("origin")?, xdir: v3("xdir")?, normal: v3("normal")? };
+        return plane_of(PlaneRef::Record(rec), &built.datum_planes).ok();
+    }
+    match datum {
+        Some(id) => plane_of(PlaneRef::Name(id), &built.datum_planes).ok(),
+        None => plane_of(PlaneRef::from(&f.plane), &built.datum_planes).ok(),
+    }
+}
+
+/// `p`'s twin within `tol` already in `reps`, else `p` itself, added.
+fn weld(reps: &mut Vec<[f64; 2]>, p: [f64; 2], tol: f64) -> [f64; 2] {
+    if let Some(q) = reps.iter().find(|q| (q[0] - p[0]).hypot(q[1] - p[1]) <= tol) {
+        return *q;
+    }
+    reps.push(p);
+    p
+}
+
+/// A point well inside `face` and outside every shape of `avoid`, which an
+/// extrude's `regions` would otherwise pick instead: the centroid when it
+/// qualifies, else the middle of the widest run of qualifying samples on a
+/// few lines across the face, checked again before it is given.
+fn inside_point(face: &Shape, avoid: &[Shape]) -> Option<[f64; 2]> {
+    let good = |x: f64, y: f64| {
+        kernel::face_contains(face, [x, y, 0.0], 1e-7) && !avoid.iter().any(|a| kernel::face_contains(a, [x, y, 0.0], 1e-7))
+    };
+    let c = kernel::face_area_centre(face)?;
+    if good(c[1], c[2]) {
+        return Some([c[1], c[2]]);
+    }
+    let b = kernel::bbox(face)?;
+    let (w, h) = (b[3] - b[0], b[4] - b[1]);
+    const STEPS: usize = 400;
+    const LINES: usize = 15;
+    let mut runs: Vec<(f64, [f64; 2])> = Vec::new();
+    for k in 0..LINES {
+        #[allow(clippy::cast_precision_loss)]
+        let y = b[1] + h * (k as f64 + 0.5) / LINES as f64;
+        // The first and last qualifying sample of each run.
+        let mut run: Option<(f64, f64)> = None;
+        for i in 0..=STEPS + 1 {
+            #[allow(clippy::cast_precision_loss)]
+            let x = b[0] + w * i as f64 / STEPS as f64;
+            if i <= STEPS && good(x, y) {
+                run = Some(run.map_or((x, x), |(x0, _)| (x0, x)));
+            } else if let Some((x0, x1)) = run.take() {
+                runs.push((x1 - x0, [(x0 + x1) / 2.0, y]));
+            }
+        }
+    }
+    runs.sort_by(|a, b| b.0.total_cmp(&a.0));
+    runs.into_iter().map(|(_, p)| p).find(|p| good(p[0], p[1]))
+}
+
+/// The areas closed shapes bound: a rectangle, circle or ellipse each its own,
+/// and lines, arcs, polygons and slots by the cells their edges cut the plane
+/// into, so loops that share an edge or branch at a corner are all found.
+fn areas(items: &[&Item]) -> FResult<Vec<Shape>> {
+    let mut faces = Vec::new();
+    let mut edges = Vec::new();
+    for it in items {
+        match &it.ent {
+            Ent::Rect { w, h, x, y, angle } if *w > 0.0 && *h > 0.0 => faces.push(kernel::face_rect(*x, *y, *w, *h, *angle)?),
+            Ent::Circle { r, .. } if *r > 0.0 => {
+                if let Some(e) = entity_edges(&it.ent)?.first() {
+                    faces.push(face_of_loop(e)?);
+                }
+            }
+            Ent::Ellipse { rx, ry, .. } if *rx > 0.0 && *ry > 0.0 => {
+                if let Some(e) = entity_edges(&it.ent)?.first() {
+                    faces.push(face_of_loop(e)?);
+                }
+            }
+            Ent::Rect { .. } | Ent::Circle { .. } | Ent::Ellipse { .. } | Ent::Text(_) => {}
+            _ => edges.extend(entity_edges(&it.ent)?),
+        }
+    }
+    if !edges.is_empty() {
+        for cell in kernel::subdivide(&edges) {
+            faces.extend(kernel::subshapes(&cell, Kind::Face));
+        }
+    }
+    Ok(faces)
+}
+
+fn outline(ctx: &Ctx, f: &SketchFeature, ids: &[&str]) -> FResult<Vec<OutlineFace>> {
+    use serde_json::json;
+    let mut merged: Vec<Item> = Vec::new();
+    // Ends of the lines and arcs, to name one that closes nothing.
+    let mut ends: Vec<(String, [f64; 2], [f64; 2])> = Vec::new();
+    for id in ids {
+        let Some(e) = f.entities.iter().find(|e| e.id() == Some(*id)) else {
+            return Err(Fail::msg(format!("no entity '{id}' in sketch {}", f.id)));
+        };
+        let it = resolve(ctx, e)?;
+        if it.construction {
+            return Err(Fail::msg(format!("{id} is construction geometry, which bounds no area")));
+        }
+        match &it.ent {
+            Ent::Rect { w, h, .. } if *w > 0.0 && *h > 0.0 => {}
+            Ent::Circle { r, .. } if *r > 0.0 => {}
+            Ent::Line { a, b } | Ent::Arc { a, b, .. } => ends.push(((*id).to_string(), *a, *b)),
+            Ent::Polygon { .. } | Ent::Slot { .. } => {}
+            Ent::Rect { .. } | Ent::Circle { .. } => {
+                return Err(Fail::msg(format!("{id} has no area, give it a size first")));
+            }
+            _ => {
+                return Err(Fail::msg(format!(
+                    "{id} is {}, and only lines, arcs, rectangles, circles, polygons and slots merge",
+                    match e {
+                        SketchEntity::Ellipse(_) => "an ellipse",
+                        SketchEntity::Spline(_) => "a spline",
+                        SketchEntity::Bspline(_) => "a B-spline",
+                        SketchEntity::Point(_) => "a point",
+                        SketchEntity::Text(_) => "text",
+                        SketchEntity::Projected(_) => "projected geometry",
+                        _ => "not a closed shape",
+                    }
+                )));
+            }
+        }
+        merged.push(it);
+    }
+    // A line or arc end that meets no other: the build joins ends at 1e-9.
+    let mut open: Vec<&str> = Vec::new();
+    for (id, a, b) in &ends {
+        let meets = |p: &[f64; 2], own: &str| {
+            ends.iter().any(|(o, c, d)| {
+                (o != own || c != a || d != b) && [c, d].iter().any(|q| (q[0] - p[0]).hypot(q[1] - p[1]) <= 1e-9)
+            })
+        };
+        if (!meets(a, id) || !meets(b, id)) && !open.contains(&id.as_str()) {
+            open.push(id);
+        }
+    }
+    if !open.is_empty() {
+        return Err(Fail::msg(format!(
+            "{} {} not part of a closed loop, so {} no area to merge. Close the outline, or leave {} out",
+            open.join(", "),
+            if open.len() == 1 { "is" } else { "are" },
+            if open.len() == 1 { "it bounds" } else { "they bound" },
+            if open.len() == 1 { "it" } else { "them" }
+        )));
+    }
+    let faces = areas(&merged.iter().collect::<Vec<_>>())?;
+    if faces.is_empty() {
+        return Err(Fail::msg("the entities given bound no closed area"));
+    }
+    // What stays in the sketch: a seed inside one of its shapes would pick
+    // that shape, not the merged area.
+    let mut rest = Vec::new();
+    for e in f.entities.iter().filter(|e| !e.id().is_some_and(|id| ids.contains(&id))) {
+        if let Ok(it) = resolve(ctx, e) {
+            if !it.construction {
+                rest.push(it);
+            }
+        }
+    }
+    let avoid = areas(&rest.iter().collect::<Vec<_>>()).unwrap_or_default();
+    let fused = kernel::clean(&fuse_all(&faces)?)?;
+    let tol = kernel::sketch_fuzz(kernel::extent(&fused));
+    let xy = Frame { origin: [0.0; 3], x: [1.0, 0.0, 0.0], y: [0.0, 1.0, 0.0], z: [0.0, 0.0, 1.0] };
+    let mut reps: Vec<[f64; 2]> = Vec::new();
+    let mut out = Vec::new();
+    for face in kernel::subshapes(&fused, Kind::Face) {
+        let mut loops = Vec::new();
+        let mut seen: Vec<serde_json::Value> = Vec::new();
+        for wire in kernel::face_wire_list(&face)? {
+            let mut curves = Vec::new();
+            for edge in kernel::subshapes(&wire, Kind::Edge) {
+                let c = crate::projection::project_edge(&edge, &xy)?;
+                let num = |k: &str| c.get(k).and_then(serde_json::Value::as_f64).unwrap_or(0.0);
+                let ent = match c.get("kind").and_then(serde_json::Value::as_str) {
+                    Some("line") => {
+                        let a = weld(&mut reps, [num("x1"), num("y1")], tol);
+                        let b = weld(&mut reps, [num("x2"), num("y2")], tol);
+                        if a == b {
+                            continue;
+                        }
+                        json!({"type": "line", "x1": a[0], "y1": a[1], "x2": b[0], "y2": b[1]})
+                    }
+                    Some("arc") => {
+                        let a = weld(&mut reps, [num("x1"), num("y1")], tol);
+                        let b = weld(&mut reps, [num("x2"), num("y2")], tol);
+                        json!({"type": "arc", "x1": a[0], "y1": a[1], "x2": b[0], "y2": b[1], "mx": num("mx"), "my": num("my")})
+                    }
+                    Some("circle") => json!({"type": "circle", "radius": num("r"), "x": num("x"), "y": num("y")}),
+                    _ => {
+                        // A sliver the union left: shorter than the weld, gone.
+                        if crate::kernel::length(&edge) <= tol {
+                            continue;
+                        }
+                        return Err(Fail::msg(
+                            "the merged outline has a curve that is not a line, arc or circle, so it was left as it was",
+                        ));
+                    }
+                };
+                // An edge twice is an outline folded over itself.
+                let back = match ent["type"].as_str() {
+                    Some("line") => json!({"type": "line", "x1": ent["x2"], "y1": ent["y2"], "x2": ent["x1"], "y2": ent["y1"]}),
+                    _ => ent.clone(),
+                };
+                if seen.contains(&ent) || seen.contains(&back) {
+                    return Err(Fail::msg("the merged outline came out folded over itself, so nothing was merged"));
+                }
+                seen.push(ent.clone());
+                curves.push(ent);
+            }
+            if !curves.is_empty() {
+                loops.push(curves);
+            }
+        }
+        let r6 = |v: f64| crate::select::entity::py_round(v, 6) + 0.0;
+        out.push(OutlineFace {
+            area: kernel::area(&face),
+            inside: inside_point(&face, &avoid).map(|p| [r6(p[0]), r6(p[1])]),
+            loops,
+        });
+    }
+    Ok(out)
+}

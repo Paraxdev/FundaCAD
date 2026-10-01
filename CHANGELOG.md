@@ -49,6 +49,13 @@ This file starts on 2026-08-03. For anything before that, see the
   short report and a picture of the part coloured from blue to red by stress.
   In the app, Inspect, Analyze, Stress opens a panel that takes the fixed and
   loaded faces from the selection and paints the part by stress, with a legend.
+- **Merging overlapping sketch shapes over MCP.** The new `sketch_merge` tool
+  replaces closed shapes of a sketch that overlap or touch, rectangles,
+  circles, polygons, slots and loops of lines and arcs, with the outline of
+  their union. Where two overlapping rectangles made three areas that each
+  needed a `regions` point, the sketch has one, and the reply gives a point
+  inside it. Constraints on the merged shapes are dropped, and shapes sized by
+  parameters are merged only when asked to, since the outline is fixed numbers.
 - **Sketch shortcuts over MCP.** A sketch may give an outline as a `polyline`,
   a list of points that can close on itself, and a rectangle by two opposite
   corners. They are stored as the lines and centred rectangle the app already

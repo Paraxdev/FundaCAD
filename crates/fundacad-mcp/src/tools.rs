@@ -182,6 +182,24 @@ pub fn section() -> JsonObject {
     )
 }
 
+pub fn sketch_merge() -> JsonObject {
+    object(
+        json!({
+            "sketch": {"type": "string", "description": "the sketch's feature id"},
+            "entities": {"type": "array", "items": {"type": "string"},
+                         "description": "the ids of the closed shapes to unite, two or more; for a \
+                                         loop of lines and arcs, every one of them"},
+            "id": {"type": "string",
+                   "description": "what to name the outline's entities: id_1, id_2, ... (default m1)"},
+            "bake": {"type": "boolean",
+                     "description": "merge shapes sized by parameters at their values now; the \
+                                     outline stops following the parameters (default false)"},
+            "build": {"type": "boolean", "description": "build after merging (default false)"}
+        }),
+        &["sketch", "entities"],
+    )
+}
+
 pub fn printability() -> JsonObject {
     object(
         json!({

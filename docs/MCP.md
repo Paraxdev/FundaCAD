@@ -191,6 +191,7 @@ which a fresh engine could no longer start one and every build failed.
 | `param_set` / `param_remove` | the parameter table (this is what makes it parametric) |
 | `feature_add` / `feature_update` / `feature_remove` / `feature_move` | the timeline |
 | `edit` | several of the above and `param_set` in one call, all or nothing, optionally building once at the end |
+| `sketch_merge` | replace overlapping closed shapes of a sketch with the lines, arcs and circles around their union, so an extrude picks it with one `regions` point; replies with that point |
 | `build` | rebuild, and say what came out and what failed. After the first build it lists only the bodies that changed; `full` lists them all |
 | `interference` | which bodies overlap and by how much, and which come closer than a clearance, once or at every step of a parameter (`sweep`). Changes nothing |
 | `section` | cut the bodies with a plane: the outline as closed loops of points, and area, centroid, second moments, section modulus and polar moment for beam checks |
