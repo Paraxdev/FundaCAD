@@ -114,7 +114,7 @@ describe("the app's host and the test double agree", () => {
 });
 
 describe("what this host cannot do yet, it refuses by name", () => {
-  const unserved = ["doc_open", "doc_import", "doc_save", "build", "inspect", "view", "export", "interference", "section", "stress", "edit"] as const;
+  const unserved = ["doc_open", "doc_import", "doc_save", "build", "inspect", "view", "export", "interference", "section", "stress", "printability", "edit"] as const;
   // Served, but only by the desktop app. A host built without a bridge refuses
   // them for a different reason and has to say which reason it is: "you did not
   // ask for this", "the app cannot do this yet" and "this is not running in the

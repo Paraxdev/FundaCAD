@@ -182,6 +182,35 @@ pub fn section() -> JsonObject {
     )
 }
 
+pub fn printability() -> JsonObject {
+    object(
+        json!({
+            "bodies": {"type": "array", "items": {"type": "string"},
+                       "description": "only these bodies, by id or name; every body if omitted"},
+            "nozzle": {"type": "number", "description": "nozzle width in mm (default 0.4)"},
+            "layer": {"type": "number", "description": "layer height in mm (default 0.2)"},
+            "overhang": {"type": "number",
+                         "description": "the largest lean from vertical that prints without \
+                                         support, in degrees (default 45)"},
+            "minGap": {"type": "number",
+                       "description": "the narrowest air gap that stays open, in mm (default 0.2)"},
+            "maxBridge": {"type": "number",
+                          "description": "the longest flat span bridged without support, in mm \
+                                          (default 10)"},
+            "checks": {"type": "array",
+                       "items": {"type": "string", "enum": ["overhang", "wall", "gap", "bridge", "open"]},
+                       "description": "only these checks; all of them if omitted"},
+            "up": {"type": "string", "enum": ["+Z", "-Z", "+X", "-X", "+Y", "-Y"],
+                   "description": "the build direction, the parts as modelled (default +Z)"},
+            "layFlat": {"description": "check each part the way `export` lays it flat: true for \
+                                        its largest flat face down, or {body: face index}"},
+            "all": {"type": "boolean",
+                    "description": "list every finding rather than the first 5 of each kind a body"}
+        }),
+        &[],
+    )
+}
+
 pub fn interference() -> JsonObject {
     object(
         json!({
