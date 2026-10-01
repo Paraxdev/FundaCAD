@@ -1372,12 +1372,30 @@ fn place_files(result: &Value, folder: &Path) -> Result<String, String> {
             folder.display()
         ));
     }
+    // Every part checked before the first is moved in, so a name that is
+    // taken by a folder refuses the export with the old parts untouched.
+    if let Some(to) = written
+        .iter()
+        .filter_map(|from| Some(folder.join(from.file_name()?)))
+        .find(|to| to.is_dir())
+    {
+        return Err(format!("{} is a folder, so the part of that name cannot be written there.", to.display()));
+    }
     std::fs::create_dir_all(folder).map_err(|e| format!("Could not make {}: {e}", folder.display()))?;
     let mut lines = Vec::new();
     for from in &written {
         let Some(name) = from.file_name() else { continue };
         let to = folder.join(name);
-        std::fs::rename(from, &to).map_err(|e| format!("Could not write {}: {e}", to.display()))?;
+        if let Err(e) = std::fs::rename(from, &to) {
+            // The ones already moved replaced what was there: say which, or
+            // the folder reads as untouched when it now mixes old and new.
+            let placed = if lines.is_empty() {
+                String::from(" No part was written.")
+            } else {
+                format!(" These parts were already replaced:\n{}", lines.join("\n"))
+            };
+            return Err(format!("Could not write {}: {e}.{placed}", to.display()));
+        }
         let size = std::fs::metadata(&to).map_or(0, |m| m.len());
         lines.push(format!("  {} ({size} bytes)", name.to_string_lossy()));
     }
