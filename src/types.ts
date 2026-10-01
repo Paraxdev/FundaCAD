@@ -336,7 +336,7 @@ export type CoreFeature =
   // `mode` other than auto extrudes the face straight out and combines it like an
   // extrude; auto leaves `operation` to the sign of `distance`. `direction: "axis"`
   // moves the face along the axis its walls run along (a hole's end), absent is "normal".
-  | { id: string; type: "press-pull"; face: Selector | Selector[]; distance: Num; operation: "join" | "cut"; body?: string; upTo?: Selector; taper?: Num; mode?: PressPullMode; direction?: PressPullDirection }
+  | { id: string; type: "press-pull"; face: Selector | Selector[]; distance: Num; operation: "join" | "cut"; body?: string; upTo?: Selector; taper?: Num; mode?: PressPullMode; direction?: PressPullDirection; targets?: string[] }
   | { id: string; type: "deleteFace"; face: Selector | Selector[]; body?: string }
   // `plane` is written { name } once `bodies` is set (document/mirrorPlane.ts).
   | { id: string; type: "mirror"; plane: Plane3 | { name: Plane3 }; bodies?: string[] }

@@ -25,6 +25,7 @@ use serde_json::Value;
 const PLUGIN_TYPES: &[&str] = &[
     "counterboreBridge",
     "elephantFootChamfer",
+    "organic",
     "roofBridge",
     "sacrificialLayer",
     "teardropHole",
@@ -201,4 +202,64 @@ fn the_import_tool_still_says_what_to_do_when_there_is_no_path() {
         description.contains(fundacad_mcp::upload::ASK_FOR_A_PATH),
         "doc_import no longer says what to do when there is no path"
     );
+}
+
+#[test]
+fn every_documented_field_of_a_core_type_is_one_the_feature_reads() {
+    // The other half of keeping the reference honest: a field the schema
+    // documents and the feature does not have is refused by feature_add, so an
+    // agent following the reference to the letter is told it is wrong. Each
+    // documented field is set to null on the type's example, which a field the
+    // feature has reads as absent and a field it lacks keeps as unread.
+    for (kind, e) in s::features() {
+        if !Feature::is_core_type(kind) {
+            continue;
+        }
+        let Some(example) = e.get("example").and_then(Value::as_object) else {
+            continue;
+        };
+        for field in e.get("fields").and_then(Value::as_object).expect("checked").keys() {
+            let mut probe = example.clone();
+            probe.entry(field.clone()).or_insert(Value::Null);
+            let feature: Feature = serde_json::from_value(Value::Object(probe)).expect("a feature");
+            assert!(
+                !feature.unread_fields().contains(&field.as_str()),
+                "{kind} documents `{field}`, which the feature does not read"
+            );
+        }
+    }
+}
+
+#[test]
+fn every_plugin_feature_type_is_listed_here() {
+    // PLUGIN_TYPES is what the two coverage tests above trust, so a plugin
+    // shipping a type it does not list (as `organic` once did) went unnoticed.
+    let plugins = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../plugins");
+    let mut shipped = BTreeSet::new();
+    for entry in std::fs::read_dir(&plugins).expect("the plugins directory") {
+        let manifest = entry.expect("an entry").path().join("manifest.json");
+        let Ok(text) = std::fs::read_to_string(&manifest) else { continue };
+        let m: Value = serde_json::from_str(&text).expect("a manifest is JSON");
+        for t in m.get("featureTypes").and_then(Value::as_array).into_iter().flatten() {
+            shipped.insert(t.as_str().expect("a type name").to_string());
+        }
+    }
+    let listed: BTreeSet<String> = PLUGIN_TYPES.iter().map(|s| (*s).to_string()).collect();
+    assert_eq!(shipped, listed);
+}
+
+#[test]
+fn the_server_instructions_survive_a_host_that_keeps_2048_characters() {
+    // Claude Code cuts server instructions off at 2048 characters. The old
+    // instructions were the whole working order and lost every rule after
+    // "Use `move` to place the" to it.
+    use fundacad_mcp::server::instructions_for;
+    for live in [false, true] {
+        let text = instructions_for(live);
+        assert!(text.chars().count() <= 2048, "live={live}: {} characters", text.chars().count());
+        for rule in ["Z is up", "CENTRED ON THE ORIGIN", "`move`", "body1", "ABOVE", "`targets`", "NAME", "`schema`"] {
+            assert!(text.contains(rule), "live={live} lost {rule:?}");
+        }
+    }
+    assert!(instructions_for(true).starts_with("YOU ARE EDITING A DOCUMENT SOMEONE HAS OPEN"));
 }

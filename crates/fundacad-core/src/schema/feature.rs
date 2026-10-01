@@ -165,6 +165,8 @@ feature_struct!(PressPull {
     #[serde(default, skip_serializing_if = "Option::is_none")] mode: Option<PressPullMode>,
     /// Absent means `normal`.
     #[serde(default, skip_serializing_if = "Option::is_none")] direction: Option<PressPullDirection>,
+    /// The bodies a non-auto `mode` combines its prism with.
+    #[serde(default, skip_serializing_if = "Option::is_none")] targets: Option<Vec<String>>,
 });
 
 feature_struct!(DeleteFace {

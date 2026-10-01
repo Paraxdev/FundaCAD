@@ -1,14 +1,15 @@
 {
  "common": {
   "Num": "A number, or the NAME of a parameter as a string. `48` and `\"hub_d\"` are both valid; the string form is what makes the model parametric, and it is resolved against the document parameter table at build time.",
-  "PlaneSpec": "Either \"XY\", \"XZ\" or \"YZ\", or an explicit plane {\"origin\":[x,y,z], \"normal\":[x,y,z], \"xdir\":[x,y,z]} in world mm. In-plane Y is normal x xdir. FundaCAD is Z-UP.",
+  "PlaneSpec": "Either \"XY\", \"XZ\" or \"YZ\", or an explicit plane {\"origin\":[x,y,z], \"normal\":[x,y,z], \"xdir\":[x,y,z]} in world mm. In-plane Y is normal x xdir. FundaCAD is Z-UP. Normals: XY +Z, XZ -Y (so a positive extrude from an XZ sketch goes toward -Y), YZ +X.",
   "AxisSpec": "Either \"X\", \"Y\" or \"Z\", or a line {\"origin\":[x,y,z], \"dir\":[x,y,z]}.",
-  "Selector": "How a feature names a face or an edge of a body that does not exist until the rebuild runs. Prefer the selector the `inspect` tool hands back for that exact face or edge, it carries a geometric fingerprint and survives small changes upstream. The forms are:\n  {\"kind\":\"face\"|\"edge\", \"by\":\"match\", \"fp\":{...}, \"nth\":k, \"body\":\"body1\"}\n  {\"kind\":\"face\", \"by\":\"nearest\", \"point\":[x,y,z], \"body\":\"body1\"}\n  {\"kind\":\"face\", \"by\":\"normal\", \"dir\":[0,0,1], \"body\":\"body1\"}   ALL faces facing that way\n  {\"kind\":\"edge\", \"by\":\"nearest\", \"point\":[x,y,z], \"body\":\"body1\"}\n  {\"kind\":\"edge\", \"by\":\"axis\", \"axis\":\"Z\", \"body\":\"body1\"}         ALL edges parallel to Z\n  {\"kind\":\"edge\", \"by\":\"all\", \"body\":\"body1\"}\n  {\"kind\":\"edge\", \"by\":\"ofFace\", \"face\":{...fp}, \"body\":\"body1\"}   the edges bounding a face, \"face\" is a face fingerprint or any face selector, such as {\"kind\":\"face\", \"by\":\"nearest\", \"point\":[x,y,z]}\nALWAYS set `body`. Without it a pick on a multi-body model can land on the wrong body silently.",
+  "Selector": "How a feature names a face or an edge of a body that does not exist until the rebuild runs. Prefer the selector the `inspect` tool hands back for that exact face or edge, it carries a geometric fingerprint and survives small changes upstream. The forms are:\n  {\"kind\":\"face\"|\"edge\", \"by\":\"match\", \"fp\":{...}, \"nth\":k, \"body\":\"body1\"}\n  {\"kind\":\"face\", \"by\":\"nearest\", \"point\":[x,y,z], \"body\":\"body1\"}\n  {\"kind\":\"face\", \"by\":\"normal\", \"dir\":[0,0,1], \"body\":\"body1\"}   ALL faces facing that way\n  {\"kind\":\"edge\", \"by\":\"nearest\", \"point\":[x,y,z], \"body\":\"body1\"}\n  {\"kind\":\"edge\", \"by\":\"axis\", \"axis\":\"Z\", \"body\":\"body1\"}         ALL edges parallel to Z\n  {\"kind\":\"edge\", \"by\":\"all\", \"body\":\"body1\"}\n  {\"kind\":\"edge\", \"by\":\"ofFace\", \"face\":{...fp}, \"body\":\"body1\"}   the edges bounding a face, \"face\" is a face fingerprint or any face selector, such as {\"kind\":\"face\", \"by\":\"nearest\", \"point\":[x,y,z]}\n  {\"kind\":\"face\", \"by\":\"all\", \"body\":\"body1\"}\n  {\"kind\":\"edge\", \"by\":\"tangentChain\", \"seed\":{...fp}, \"body\":\"body1\"}   the edge and every edge tangent-continuous with it\nA face selector given where edges are expected means that face's edges.\nALWAYS set `body`. Without it a pick on a multi-body model can land on the wrong body silently. press-pull, offsetFace, thicken and deleteFace do not read the selector's `body`: set the feature's own `body` on those.",
   "region": "A 3D point INSIDE the closed sketch area you mean, in world mm. A sketch with several closed areas (a ring, a plate with holes, two separate outlines) needs one point per area you want. Omit `regions` entirely to use the whole sketch.",
-  "operation": "How the new material joins what is already there (default \"new\"): \"new\" makes a separate body, \"join\" fuses into the target, \"cut\" subtracts from it, \"intersect\" keeps only the overlap.\nWithout `targets`, a join/cut/intersect acts on EVERY visible body the new shape overlaps, not just the nearest one. That is what someone dragging a face across two parts means; it is not what building a second part beside a first one means. Set `targets` whenever more than one body exists.",
+  "operation": "How the new material joins what is already there (default \"new\"): \"new\" makes a separate body, \"join\" fuses into the target, \"cut\" subtracts from it, \"intersect\" keeps only the overlap.\nWithout `targets`, a join/cut/intersect acts on EVERY visible body the new shape overlaps, not just the nearest one. That is what someone dragging a face across two parts means; it is not what building a second part beside a first one means. Set `targets` whenever more than one body exists. \"Overlaps\" is judged by bounding boxes, and an intersect REPLACES each body it hits with the overlap, so it is not a clash check.\nOn extrude and sweep `operation` is REQUIRED; everywhere else it defaults to \"new\".",
   "targets": "Optional list of body ids [\"body1\", ...] that a join/cut/intersect is allowed to touch. Bodies not named are left alone even where the new shape passes straight through them. Ignored when `operation` is \"new\". A join that names targets and reaches none of them is an error rather than a quietly-created extra body.\nBody ids are handed out AT BUILD TIME, so read them back from `build` or `inspect` rather than assuming them. Once built, a body keeps its id when other features are added, removed or switched off, and a join keeps the id of the body it merges into.",
-  "activeWhen": "Optional on EVERY feature type: a Num. While it resolves to 0 the build leaves the feature out, exactly as if it were suppressed; any other value, or no field at all, builds it. Point it at a parameter whose expression is the condition: param_set coreOn = \"solidCore == 1\", then \"activeWhen\": \"coreOn\". A NaN condition is an error, never read as off.\nA feature that consumes a switched-off one fails and says so, so switch its consumers off with the same parameter. Skipping a body-creating feature renumbers every body after it, like suppress does.",
-  "MateConnector": "One side of a joint: a coordinate frame, an origin, a z axis that is the mating direction, and an optional x axis for rotational reference, named one of four ways:\n  {\"body\":\"body2\", \"face\": <Selector>}   the face centre, its outward normal is the axis\n  {\"body\":\"body2\", \"edge\": <Selector>}   the edge midpoint, its direction is the axis\n  {\"datum\": <datumAxis or datumPlane id>}   follows that datum\n  {\"origin\":[x,y,z], \"zdir\":[x,y,z], \"xdir\":[x,y,z]}   an explicit world frame\nA connector on geometry is a REFERENCE, re-resolved every rebuild, so the joint tracks the part as it changes. Set `body` whenever you use `face` or `edge`."
+  "activeWhen": "Optional on EVERY feature type: a Num. While it resolves to 0 the build leaves the feature out, exactly as if it were suppressed; any other value, or no field at all, builds it. Point it at a parameter whose expression is the condition: param_set coreOn = \"solidCore == 1\", then \"activeWhen\": \"coreOn\". A NaN condition is an error, never read as off.\nA feature that consumes a switched-off one fails and says so, so switch its consumers off with the same parameter. A switched-off body-creating feature makes no bodies; the other bodies keep their ids, but anything that used its bodies fails.",
+  "MateConnector": "One side of a joint: a coordinate frame, an origin, a z axis that is the mating direction, and an optional x axis for rotational reference, named one of four ways:\n  {\"body\":\"body2\", \"face\": <Selector>}   the face centre, its outward normal is the axis\n  {\"body\":\"body2\", \"edge\": <Selector>}   the edge midpoint, its direction is the axis\n  {\"datum\": <datumPlane id>}   follows that datum plane (a datumAxis is not supported here)\n  {\"origin\":[x,y,z], \"zdir\":[x,y,z], \"xdir\":[x,y,z]}   an explicit world frame\nA connector on geometry is a REFERENCE, re-resolved every rebuild, so the joint tracks the part as it changes. Set `body` whenever you use `face` or `edge`.",
+  "active body": "Where a field says \"the active body\", it is the most recently CREATED body; a join re-creates the body it merges into, so that body becomes the active one. Moving, filleting or cutting a body does not make it active. Name bodies explicitly whenever more than one exists."
  },
  "features": {
   "box": {
@@ -17,7 +18,7 @@
     "length": "Num, along X",
     "width": "Num, along Y",
     "height": "Num, along Z",
-    "operation": "How the new material joins what is already there (default \"new\"): \"new\" makes a separate body, \"join\" fuses into the target, \"cut\" subtracts from it, \"intersect\" keeps only the overlap.\nWithout `targets`, a join/cut/intersect acts on EVERY visible body the new shape overlaps, not just the nearest one. That is what someone dragging a face across two parts means; it is not what building a second part beside a first one means. Set `targets` whenever more than one body exists.",
+    "operation": "How the new material joins what is already there (default \"new\"): \"new\" makes a separate body, \"join\" fuses into the target, \"cut\" subtracts from it, \"intersect\" keeps only the overlap.\nWithout `targets`, a join/cut/intersect acts on EVERY visible body the new shape overlaps, not just the nearest one. That is what someone dragging a face across two parts means; it is not what building a second part beside a first one means. Set `targets` whenever more than one body exists. \"Overlaps\" is judged by bounding boxes, and an intersect REPLACES each body it hits with the overlap, so it is not a clash check.\nOn extrude and sweep `operation` is REQUIRED; everywhere else it defaults to \"new\".",
     "targets": "Optional list of body ids [\"body1\", ...] that a join/cut/intersect is allowed to touch. Bodies not named are left alone even where the new shape passes straight through them. Ignored when `operation` is \"new\". A join that names targets and reaches none of them is an error rather than a quietly-created extra body.\nBody ids are handed out AT BUILD TIME, so read them back from `build` or `inspect` rather than assuming them. Once built, a body keeps its id when other features are added, removed or switched off, and a join keeps the id of the body it merges into."
    },
    "example": {
@@ -34,7 +35,7 @@
    "fields": {
     "radius": "Num",
     "height": "Num, along Z",
-    "operation": "How the new material joins what is already there (default \"new\"): \"new\" makes a separate body, \"join\" fuses into the target, \"cut\" subtracts from it, \"intersect\" keeps only the overlap.\nWithout `targets`, a join/cut/intersect acts on EVERY visible body the new shape overlaps, not just the nearest one. That is what someone dragging a face across two parts means; it is not what building a second part beside a first one means. Set `targets` whenever more than one body exists.",
+    "operation": "How the new material joins what is already there (default \"new\"): \"new\" makes a separate body, \"join\" fuses into the target, \"cut\" subtracts from it, \"intersect\" keeps only the overlap.\nWithout `targets`, a join/cut/intersect acts on EVERY visible body the new shape overlaps, not just the nearest one. That is what someone dragging a face across two parts means; it is not what building a second part beside a first one means. Set `targets` whenever more than one body exists. \"Overlaps\" is judged by bounding boxes, and an intersect REPLACES each body it hits with the overlap, so it is not a clash check.\nOn extrude and sweep `operation` is REQUIRED; everywhere else it defaults to \"new\".",
     "targets": "Optional list of body ids [\"body1\", ...] that a join/cut/intersect is allowed to touch. Bodies not named are left alone even where the new shape passes straight through them. Ignored when `operation` is \"new\". A join that names targets and reaches none of them is an error rather than a quietly-created extra body.\nBody ids are handed out AT BUILD TIME, so read them back from `build` or `inspect` rather than assuming them. Once built, a body keeps its id when other features are added, removed or switched off, and a join keeps the id of the body it merges into."
    },
    "example": {
@@ -51,7 +52,7 @@
     "bottomRadius": "Num, at -height/2",
     "topRadius": "Num, at +height/2 (0 for a point tip)",
     "height": "Num, along Z",
-    "operation": "How the new material joins what is already there (default \"new\"): \"new\" makes a separate body, \"join\" fuses into the target, \"cut\" subtracts from it, \"intersect\" keeps only the overlap.\nWithout `targets`, a join/cut/intersect acts on EVERY visible body the new shape overlaps, not just the nearest one. That is what someone dragging a face across two parts means; it is not what building a second part beside a first one means. Set `targets` whenever more than one body exists.",
+    "operation": "How the new material joins what is already there (default \"new\"): \"new\" makes a separate body, \"join\" fuses into the target, \"cut\" subtracts from it, \"intersect\" keeps only the overlap.\nWithout `targets`, a join/cut/intersect acts on EVERY visible body the new shape overlaps, not just the nearest one. That is what someone dragging a face across two parts means; it is not what building a second part beside a first one means. Set `targets` whenever more than one body exists. \"Overlaps\" is judged by bounding boxes, and an intersect REPLACES each body it hits with the overlap, so it is not a clash check.\nOn extrude and sweep `operation` is REQUIRED; everywhere else it defaults to \"new\".",
     "targets": "Optional list of body ids [\"body1\", ...] that a join/cut/intersect is allowed to touch. Bodies not named are left alone even where the new shape passes straight through them. Ignored when `operation` is \"new\". A join that names targets and reaches none of them is an error rather than a quietly-created extra body.\nBody ids are handed out AT BUILD TIME, so read them back from `build` or `inspect` rather than assuming them. Once built, a body keeps its id when other features are added, removed or switched off, and a join keeps the id of the body it merges into."
    },
    "example": {
@@ -67,7 +68,7 @@
    "summary": "A sphere centred on the origin.",
    "fields": {
     "radius": "Num",
-    "operation": "How the new material joins what is already there (default \"new\"): \"new\" makes a separate body, \"join\" fuses into the target, \"cut\" subtracts from it, \"intersect\" keeps only the overlap.\nWithout `targets`, a join/cut/intersect acts on EVERY visible body the new shape overlaps, not just the nearest one. That is what someone dragging a face across two parts means; it is not what building a second part beside a first one means. Set `targets` whenever more than one body exists.",
+    "operation": "How the new material joins what is already there (default \"new\"): \"new\" makes a separate body, \"join\" fuses into the target, \"cut\" subtracts from it, \"intersect\" keeps only the overlap.\nWithout `targets`, a join/cut/intersect acts on EVERY visible body the new shape overlaps, not just the nearest one. That is what someone dragging a face across two parts means; it is not what building a second part beside a first one means. Set `targets` whenever more than one body exists. \"Overlaps\" is judged by bounding boxes, and an intersect REPLACES each body it hits with the overlap, so it is not a clash check.\nOn extrude and sweep `operation` is REQUIRED; everywhere else it defaults to \"new\".",
     "targets": "Optional list of body ids [\"body1\", ...] that a join/cut/intersect is allowed to touch. Bodies not named are left alone even where the new shape passes straight through them. Ignored when `operation` is \"new\". A join that names targets and reaches none of them is an error rather than a quietly-created extra body.\nBody ids are handed out AT BUILD TIME, so read them back from `build` or `inspect` rather than assuming them. Once built, a body keeps its id when other features are added, removed or switched off, and a join keeps the id of the body it merges into."
    },
    "example": {
@@ -81,7 +82,7 @@
    "fields": {
     "majorRadius": "Num, centre of the tube to the origin",
     "minorRadius": "Num, the tube (< majorRadius)",
-    "operation": "How the new material joins what is already there (default \"new\"): \"new\" makes a separate body, \"join\" fuses into the target, \"cut\" subtracts from it, \"intersect\" keeps only the overlap.\nWithout `targets`, a join/cut/intersect acts on EVERY visible body the new shape overlaps, not just the nearest one. That is what someone dragging a face across two parts means; it is not what building a second part beside a first one means. Set `targets` whenever more than one body exists.",
+    "operation": "How the new material joins what is already there (default \"new\"): \"new\" makes a separate body, \"join\" fuses into the target, \"cut\" subtracts from it, \"intersect\" keeps only the overlap.\nWithout `targets`, a join/cut/intersect acts on EVERY visible body the new shape overlaps, not just the nearest one. That is what someone dragging a face across two parts means; it is not what building a second part beside a first one means. Set `targets` whenever more than one body exists. \"Overlaps\" is judged by bounding boxes, and an intersect REPLACES each body it hits with the overlap, so it is not a clash check.\nOn extrude and sweep `operation` is REQUIRED; everywhere else it defaults to \"new\".",
     "targets": "Optional list of body ids [\"body1\", ...] that a join/cut/intersect is allowed to touch. Bodies not named are left alone even where the new shape passes straight through them. Ignored when `operation` is \"new\". A join that names targets and reaches none of them is an error rather than a quietly-created extra body.\nBody ids are handed out AT BUILD TIME, so read them back from `build` or `inspect` rather than assuming them. Once built, a body keeps its id when other features are added, removed or switched off, and a join keeps the id of the body it merges into."
    },
    "example": {
@@ -97,9 +98,11 @@
    "fields": {
     "plane": "PlaneSpec",
     "entities": "the curves, see the `sketchEntities` section of this schema",
-    "planeId": "optional; the id of a datumPlane feature, which is preferred over `plane`",
+    "planeId": "optional; the id of a datumPlane feature, preferred over `plane` (a `face` wins over both)",
     "face": "optional Selector; makes the sketch follow a body face",
+    "at": "optional [x,y,z], where a round face was picked; needed with a round `face`",
     "constraints": "optional; solved by the frontend, not needed for an authored sketch",
+    "patterns": "optional; in-sketch patterns of entity ids (patternRect, patternCircular, hexHoles, honeycomb, boltCircle, gridHoles), written by the app",
     "name": "optional label"
    },
    "example": {
@@ -149,11 +152,12 @@
     "sketch": "the id of a sketch feature",
     "distance": "Num, signed; negative goes the other way",
     "symmetric": "optional bool; sweeps `distance` BOTH ways off the sketch plane (the sign then means nothing). What a sketch on a datum plane inside a body wants",
-    "operation": "How the new material joins what is already there (default \"new\"): \"new\" makes a separate body, \"join\" fuses into the target, \"cut\" subtracts from it, \"intersect\" keeps only the overlap.\nWithout `targets`, a join/cut/intersect acts on EVERY visible body the new shape overlaps, not just the nearest one. That is what someone dragging a face across two parts means; it is not what building a second part beside a first one means. Set `targets` whenever more than one body exists.",
+    "operation": "How the new material joins what is already there (default \"new\"): \"new\" makes a separate body, \"join\" fuses into the target, \"cut\" subtracts from it, \"intersect\" keeps only the overlap.\nWithout `targets`, a join/cut/intersect acts on EVERY visible body the new shape overlaps, not just the nearest one. That is what someone dragging a face across two parts means; it is not what building a second part beside a first one means. Set `targets` whenever more than one body exists. \"Overlaps\" is judged by bounding boxes, and an intersect REPLACES each body it hits with the overlap, so it is not a clash check.\nOn extrude and sweep `operation` is REQUIRED; everywhere else it defaults to \"new\".",
     "targets": "Optional list of body ids [\"body1\", ...] that a join/cut/intersect is allowed to touch. Bodies not named are left alone even where the new shape passes straight through them. Ignored when `operation` is \"new\". A join that names targets and reaches none of them is an error rather than a quietly-created extra body.\nBody ids are handed out AT BUILD TIME, so read them back from `build` or `inspect` rather than assuming them. Once built, a body keeps its id when other features are added, removed or switched off, and a join keeps the id of the body it merges into.",
     "taper": "optional Num, degrees. Leans every wall in as the extrude climbs, so one feature makes an angled boss, a countersink, or a draw-ready wall. Positive narrows the far face (the way a part pulls out of a mould), negative widens it (an undercut). Must be between -89 and 89. Absent or 0 is a straight prism",
     "regions": "optional; A 3D point INSIDE the closed sketch area you mean, in world mm. A sketch with several closed areas (a ring, a plate with holes, two separate outlines) needs one point per area you want. Omit `regions` entirely to use the whole sketch.",
-    "region": "legacy single-area form of `regions`"
+    "region": "legacy single-area form of `regions`",
+    "hiddenBodies": "optional list of body ids the boolean must not touch (written by the app)"
    },
    "example": {
     "id": "ex1",
@@ -167,12 +171,12 @@
    "summary": "Spin a sketch profile around an axis. With `pitch` it climbs as it turns, which is how a thread is made.",
    "fields": {
     "sketch": "the id of a sketch feature",
-    "axis": "AxisSpec",
+    "axis": "AxisSpec. Only \"X\", \"Y\", \"Z\" or a line: the build reads any other name as Z, a datumAxis id included, and `validate` reports it",
     "angle": "Num, degrees. 360 is a full turn",
-    "operation": "How the new material joins what is already there (default \"new\"): \"new\" makes a separate body, \"join\" fuses into the target, \"cut\" subtracts from it, \"intersect\" keeps only the overlap.\nWithout `targets`, a join/cut/intersect acts on EVERY visible body the new shape overlaps, not just the nearest one. That is what someone dragging a face across two parts means; it is not what building a second part beside a first one means. Set `targets` whenever more than one body exists.",
+    "operation": "How the new material joins what is already there (default \"new\"): \"new\" makes a separate body, \"join\" fuses into the target, \"cut\" subtracts from it, \"intersect\" keeps only the overlap.\nWithout `targets`, a join/cut/intersect acts on EVERY visible body the new shape overlaps, not just the nearest one. That is what someone dragging a face across two parts means; it is not what building a second part beside a first one means. Set `targets` whenever more than one body exists. \"Overlaps\" is judged by bounding boxes, and an intersect REPLACES each body it hits with the overlap, so it is not a clash check.\nOn extrude and sweep `operation` is REQUIRED; everywhere else it defaults to \"new\".",
     "targets": "Optional list of body ids [\"body1\", ...] that a join/cut/intersect is allowed to touch. Bodies not named are left alone even where the new shape passes straight through them. Ignored when `operation` is \"new\". A join that names targets and reaches none of them is an error rather than a quietly-created extra body.\nBody ids are handed out AT BUILD TIME, so read them back from `build` or `inspect` rather than assuming them. Once built, a body keeps its id when other features are added, removed or switched off, and a join keeps the id of the body it merges into.",
     "pitch": "optional Num, mm of climb per full turn. With a pitch, an `angle` over 360 means more than one turn: a 2mm pitch at 1080 degrees climbs 6mm over three turns. The SIGN is the direction of climb along the axis, and a thread that cuts nothing is usually a thread climbing away from the body: try the other sign. A field takes a number or a parameter NAME, so write -2 directly, or define a parameter whose expression is -pitch and name that. \"-pitch\" in the field itself is an expression and is refused.",
-    "axisEdge": "optional Selector naming a model edge to spin about; is preferred over `axis`",
+    "axisEdge": "optional Selector naming the model edge the app keeps `axis` on. The build does not re-resolve it and always spins about `axis`, so `axis` must be that edge's line",
     "regions": "optional; A 3D point INSIDE the closed sketch area you mean, in world mm. A sketch with several closed areas (a ring, a plate with holes, two separate outlines) needs one point per area you want. Omit `regions` entirely to use the whole sketch."
    },
    "example": {
@@ -183,14 +187,14 @@
     "angle": 360,
     "operation": "new"
    },
-   "notes": "The profile must lie entirely on ONE side of the axis and must not cross it. For a thread, draw the tooth cross-section in a plane THROUGH the axis (XZ for a Z axis), set `pitch`, and wind `angle` to 360 * number_of_turns."
+   "notes": "The profile must lie entirely on ONE side of the axis and must not cross it. For a thread, draw the tooth cross-section in a plane THROUGH the axis (XZ for a Z axis), set `pitch`, and wind `angle` to 360 * number_of_turns. Without `pitch` the angle is clamped to 360."
   },
   "sweep": {
    "summary": "Sweep a closed profile sketch along an open path sketch.",
    "fields": {
     "profile": "sketch id (closed)",
     "path": "sketch id (open)",
-    "operation": "How the new material joins what is already there (default \"new\"): \"new\" makes a separate body, \"join\" fuses into the target, \"cut\" subtracts from it, \"intersect\" keeps only the overlap.\nWithout `targets`, a join/cut/intersect acts on EVERY visible body the new shape overlaps, not just the nearest one. That is what someone dragging a face across two parts means; it is not what building a second part beside a first one means. Set `targets` whenever more than one body exists.",
+    "operation": "How the new material joins what is already there (default \"new\"): \"new\" makes a separate body, \"join\" fuses into the target, \"cut\" subtracts from it, \"intersect\" keeps only the overlap.\nWithout `targets`, a join/cut/intersect acts on EVERY visible body the new shape overlaps, not just the nearest one. That is what someone dragging a face across two parts means; it is not what building a second part beside a first one means. Set `targets` whenever more than one body exists. \"Overlaps\" is judged by bounding boxes, and an intersect REPLACES each body it hits with the overlap, so it is not a clash check.\nOn extrude and sweep `operation` is REQUIRED; everywhere else it defaults to \"new\".",
     "targets": "Optional list of body ids [\"body1\", ...] that a join/cut/intersect is allowed to touch. Bodies not named are left alone even where the new shape passes straight through them. Ignored when `operation` is \"new\". A join that names targets and reaches none of them is an error rather than a quietly-created extra body.\nBody ids are handed out AT BUILD TIME, so read them back from `build` or `inspect` rather than assuming them. Once built, a body keeps its id when other features are added, removed or switched off, and a join keeps the id of the body it merges into."
    },
    "example": {
@@ -206,7 +210,7 @@
    "fields": {
     "sketches": "list of sketch ids, in order",
     "profiles": "alternative: [{\"sketch\": id, \"region\": [x,y,z]}, ...] to pick one area per sketch (a ring keeps its hole -> a tube)",
-    "operation": "How the new material joins what is already there (default \"new\"): \"new\" makes a separate body, \"join\" fuses into the target, \"cut\" subtracts from it, \"intersect\" keeps only the overlap.\nWithout `targets`, a join/cut/intersect acts on EVERY visible body the new shape overlaps, not just the nearest one. That is what someone dragging a face across two parts means; it is not what building a second part beside a first one means. Set `targets` whenever more than one body exists.",
+    "operation": "How the new material joins what is already there (default \"new\"): \"new\" makes a separate body, \"join\" fuses into the target, \"cut\" subtracts from it, \"intersect\" keeps only the overlap.\nWithout `targets`, a join/cut/intersect acts on EVERY visible body the new shape overlaps, not just the nearest one. That is what someone dragging a face across two parts means; it is not what building a second part beside a first one means. Set `targets` whenever more than one body exists. \"Overlaps\" is judged by bounding boxes, and an intersect REPLACES each body it hits with the overlap, so it is not a clash check.\nOn extrude and sweep `operation` is REQUIRED; everywhere else it defaults to \"new\".",
     "targets": "Optional list of body ids [\"body1\", ...] that a join/cut/intersect is allowed to touch. Bodies not named are left alone even where the new shape passes straight through them. Ignored when `operation` is \"new\". A join that names targets and reaches none of them is an error rather than a quietly-created extra body.\nBody ids are handed out AT BUILD TIME, so read them back from `build` or `inspect` rather than assuming them. Once built, a body keeps its id when other features are added, removed or switched off, and a join keeps the id of the body it merges into."
    },
    "example": {
@@ -224,7 +228,11 @@
    "fields": {
     "edges": "Selector or list of Selectors",
     "radius": "Num",
-    "profile": "optional Num in -1..1: 0 (or absent) is the circular fillet, -1 flattens it to a chamfer's chord, +1 pulls it into the corner"
+    "profile": "optional Num, clamped to -0.99..0.95: 0 (or absent) is the circular fillet, toward -1 flattens it to a chamfer's chord, toward +1 pulls it into the corner",
+    "sizeType": "optional \"radius\" (default) or \"chord\": chord reads `radius` as the width across the round",
+    "continuity": "optional \"G1\" (default) or \"G2\"",
+    "tangentEdges": "optional bool, default true: carry the round along edges tangent to the picked ones; false stops at the picked edges",
+    "draft": "optional bool"
    },
    "example": {
     "id": "fil1",
@@ -243,7 +251,11 @@
    "summary": "Flatten one or more edges.",
    "fields": {
     "edges": "Selector or list of Selectors",
-    "distance": "Num"
+    "distance": "Num",
+    "chamferType": "optional \"equal\" (default) or \"twoDistance\"",
+    "distance2": "optional Num, the second distance, read only with chamferType \"twoDistance\"",
+    "tangentEdges": "optional bool, default true, as on fillet",
+    "draft": "optional bool"
    },
    "example": {
     "id": "cha1",
@@ -263,7 +275,8 @@
     "distance": "Num, signed: positive grows the body, negative cuts in",
     "operation": "optional \"join\" or \"cut\", a label that must match the sign of `distance`. It does not change what the push does, `mode` does",
     "mode": "optional \"auto\" (the default: move the face itself, as described in the notes), or \"join\", \"cut\", \"new\" or \"intersect\": sweep the face into a prism along its normal (along the axis with `direction` \"axis\") by `distance` and combine that prism with the body, or with `targets`",
-    "body": "optional body id",
+    "targets": "optional list of body ids the prism of a non-auto `mode` is combined with, as on extrude; default the body pushed from",
+    "body": "optional body id; default the active body. The selectors' own `body` is NOT read here",
     "upTo": "optional Selector naming a target face to stop at, instead of using `distance`",
     "taper": "optional Num, degrees. Leans a PLANAR push's walls as they travel (a moulded boss, an angled pocket); positive narrows the far end. Must be between -89 and 89. Ignored on a curved face and on an `upTo` push. Absent or 0 is a straight push",
     "direction": "optional, \"normal\" (the default) or \"axis\". \"axis\" moves the face along the line the faces around it run along instead of along its own normal, so the cone, cap or flat floor at the end of a hole slides down the hole: negative makes the hole deeper, positive shallower, and the end keeps its shape where an offset along the normal would widen it. Every face bordering the pushed one must be a wall along that line, a cylinder parallel to it or a flat wall containing it, or the feature is refused. The line is a round wall's axis, else the face's own axis, else where two flat walls meet. `taper` is ignored with \"axis\""
@@ -290,7 +303,7 @@
    "summary": "Hollow a body to a wall thickness, optionally opening faces.",
    "fields": {
     "thickness": "Num",
-    "faces": "optional Selector(s) to remove (the openings)"
+    "faces": "optional Selector(s) to remove (the openings); absent = a closed hollow of the active body"
    },
    "example": {
     "id": "sh1",
@@ -313,7 +326,7 @@
    "fields": {
     "faces": "Selector or list",
     "distance": "Num",
-    "body": "optional body id"
+    "body": "optional body id; default the active body. The selectors' own `body` is NOT read here"
    },
    "example": {
     "id": "of1",
@@ -362,12 +375,12 @@
     "points": "list of [x,y,z] hole centres in world mm, projected onto the face. On a `tracked` face they are where the holes were when its `extent` was written, and each keeps its distance from the face edges it was nearest then (or stays centred) as the face moves or grows",
     "sketch": "optional sketch id whose points (else circle centres) add positions; with no `face` the sketch plane gives the direction",
     "holeType": "\"simple\" (default), \"counterbore\", \"countersink\" or \"insert\"",
-    "size": "\"M2\", \"M2.5\", \"M3\", \"M4\", \"M5\", \"M6\", \"M8\" or \"M10\". Fills in every dimension below that is left out",
+    "size": "\"M2\", \"M2.5\", \"M3\", \"M4\", \"M5\", \"M6\", \"M8\" or \"M10\". Fills in the diameter, the counterbore, the countersink and the insert bore when left out, but not `depth`",
     "standard": "\"clearance\" (ISO 273, default), \"tap\" (tap drill) or \"custom\"",
     "fit": "\"close\", \"normal\" (default) or \"loose\", for a clearance hole",
     "diameter": "Num, overrides the size",
     "extent": "\"blind\" (default) or \"through\" (through all)",
-    "depth": "Num, for a blind hole; defaults to twice the diameter without a size",
+    "depth": "Num, for a blind hole; default twice the diameter (an insert uses its preset depth)",
     "cbDiameter": "Num, counterbore diameter (ISO 4762 socket head default)",
     "cbDepth": "Num, counterbore depth",
     "csDiameter": "Num, countersink diameter at the face (ISO 10642 default)",
@@ -413,11 +426,11 @@
    "summary": "Give a surface (or a set of faces) a thickness.",
    "fields": {
     "thickness": "Num",
-    "faces": "optional Selector(s)",
+    "faces": "optional Selector(s); absent = every face of the body",
     "symmetric": "optional bool",
-    "operation": "\"join\" or \"new\"",
+    "operation": "optional \"new\" (default), \"join\", \"cut\" or \"intersect\"",
     "targets": "Optional list of body ids [\"body1\", ...] that a join/cut/intersect is allowed to touch. Bodies not named are left alone even where the new shape passes straight through them. Ignored when `operation` is \"new\". A join that names targets and reaches none of them is an error rather than a quietly-created extra body.\nBody ids are handed out AT BUILD TIME, so read them back from `build` or `inspect` rather than assuming them. Once built, a body keeps its id when other features are added, removed or switched off, and a join keeps the id of the body it merges into.",
-    "body": "optional body id"
+    "body": "optional body id; default the active body. The selectors' own `body` is NOT read here"
    },
    "example": {
     "id": "th1",
@@ -430,7 +443,7 @@
    "summary": "Remove faces and heal the wound (defeature: takes a blend or a boss off).",
    "fields": {
     "face": "Selector or list",
-    "body": "optional body id"
+    "body": "optional body id; default the active body. The selectors' own `body` is NOT read here"
    },
    "example": {
     "id": "df1",
@@ -450,8 +463,8 @@
   "cleanUp": {
    "summary": "Merge faces that are pieces of one surface, drop slivers.",
    "fields": {
-    "body": "optional body id",
-    "tolerance": "optional Num"
+    "body": "optional body id; absent = every body",
+    "tolerance": "optional Num, mm, default 0.12"
    },
    "example": {
     "id": "cu1",
@@ -459,9 +472,9 @@
    }
   },
   "simplifyMesh": {
-   "summary": "Decimate an imported mesh body.",
+   "summary": "Merge near-coplanar facets of the active (most recently created) imported mesh body.",
    "fields": {
-    "tolerance": "Num, mm"
+    "tolerance": "Num, DEGREES: neighbouring facets within this angle of each other merge"
    },
    "example": {
     "id": "sm1",
@@ -470,18 +483,51 @@
    }
   },
   "texture": {
-   "summary": "Emboss or engrave a pattern onto faces.",
+   "summary": "Emboss or engrave a pattern onto faces (Texture plugin).",
    "fields": {
-    "see": "the `texture` feature is UI-driven; author it from an existing document rather than from scratch"
+    "kind": "\"knurl\", \"hex\", \"waves\", \"ribs\", \"voronoi\", \"noise\", \"image\", \"stripes\", \"grid\", \"dots\", \"brick\", \"basket\", \"carbon\", \"isogrid\", \"grip\" or \"leather\"",
+    "faces": "optional Selector or list; absent = every face",
+    "body": "optional body id",
+    "depth": "optional Num, mm, greater than 0, default 0.4",
+    "scale": "optional Num, mm the pattern repeats over, greater than 0, default 2",
+    "direction": "optional \"out\" (default), \"in\" or \"both\"",
+    "profile": "optional \"facet\" (default) or \"round\"",
+    "projection": "optional \"triplanar\" (default), \"auto\" or \"box\"",
+    "imagePath": "optional path of the image; required with kind \"image\"",
+    "angle": "optional Num, degrees, default 0",
+    "offset": "optional Num, default 0",
+    "sharpness": "optional Num, default 0.5",
+    "seed": "optional whole Num, default 0",
+    "octaves": "optional whole Num, 1 to 6, default 3",
+    "invert": "optional bool",
+    "boundaryInset": "optional Num, mm the texture fades out before a face edge, default 0"
    },
-   "example": null
+   "example": {
+    "id": "tx1",
+    "type": "texture",
+    "kind": "knurl",
+    "faces": {
+     "kind": "face",
+     "by": "nearest",
+     "point": [
+      10,
+      0,
+      0
+     ],
+     "body": "body1"
+    },
+    "body": "body1",
+    "depth": 0.4,
+    "scale": 2
+   },
+   "notes": "Usually authored in the app. The finer options (grime, smooth, seamBlend, seamBand, amplitude, slopeMin, slopeMax, targetEdge, triBudget, colorSlot) are kept when a document carries them."
   },
   "teardropHole": {
    "summary": "Give sideways round holes a pointed or flat roof so they print without supports (3D Printing Toolbox plugin).",
    "fields": {
     "faces": "Selector or list, the inside face of each hole",
     "angle": "optional Num, degrees the roof leans from the build direction, 10 to 80, default 45",
-    "roof": "optional \"pointed\" or \"flat\"",
+    "roof": "optional \"pointed\" (default) or \"flat\"",
     "flatHeight": "optional Num, mm above the top of the hole where a flat roof sits, default 0",
     "buildDir": "optional \"+Z\", \"-Z\", \"+X\", \"-X\", \"+Y\" or \"-Y\", default \"+Z\""
    },
@@ -531,7 +577,7 @@
    "summary": "Cut the first layers above a counterbore floor into a slot then a square, so its ceiling bridges cleanly (3D Printing Toolbox plugin).",
    "fields": {
     "faces": "Selector or list, the flat floor of each counterbore",
-    "layerHeight": "optional Num, mm, default 0.2",
+    "layerHeight": "optional Num, mm, 0.01 to 5, default 0.2",
     "layers": "optional whole Num, 1 to 3, default 2 (3 adds an octagon layer)",
     "angle": "optional Num, degrees the slot turns about the bore, default 0"
    },
@@ -556,10 +602,10 @@
    "summary": "Close a round hole with a thin membrane to drill out after printing (3D Printing Toolbox plugin).",
    "fields": {
     "faces": "Selector or list, a hole's inside face or the flat face it opens onto",
-    "layerHeight": "optional Num, mm, default 0.2",
+    "layerHeight": "optional Num, mm, 0.01 to 5, default 0.2",
     "layers": "optional whole Num, 1 to 5, default 1",
     "depth": "optional Num, mm into the hole from its opening, default 0",
-    "side": "optional \"bottom\" or \"top\", which opening a picked hole face closes",
+    "side": "optional \"bottom\" (default) or \"top\", which opening a picked hole face closes",
     "buildDir": "optional \"+Z\", \"-Z\", \"+X\", \"-X\", \"+Y\" or \"-Y\", default \"+Z\""
    },
    "example": {
@@ -669,12 +715,12 @@
   "move": {
    "summary": "Translate and rotate bodies.",
    "fields": {
-    "dx": "Num",
-    "dy": "Num",
-    "dz": "Num",
-    "rx": "Num, degrees",
-    "ry": "Num, degrees",
-    "rz": "Num, degrees",
+    "dx": "optional Num, mm, default 0",
+    "dy": "optional Num, mm, default 0",
+    "dz": "optional Num, mm, default 0",
+    "rx": "optional Num, degrees, default 0",
+    "ry": "optional Num, degrees, default 0",
+    "rz": "optional Num, degrees, default 0",
     "bodies": "optional list of body ids; absent = the active body"
    },
    "example": {
@@ -687,17 +733,17 @@
     "ry": 0,
     "rz": 0
    },
-   "notes": "All six fields are required. This is the ONLY way to place a primitive, since box/cylinder/sphere are always centred on the origin."
+   "notes": "The rotation (X, then Y, then Z, about the WORLD origin) is applied BEFORE the translation, so to turn a part about its own centre, build it at the origin, rotate, then translate in the same move. A listed body that no longer exists is skipped with a warning. box, cylinder, cone, sphere and torus are always centred on the origin, so this (or a joint) is how they are placed."
   },
   "duplicate": {
    "summary": "Copy bodies and place the copies, leaving the originals in place.",
    "fields": {
-    "dx": "Num",
-    "dy": "Num",
-    "dz": "Num",
-    "rx": "Num, degrees",
-    "ry": "Num, degrees",
-    "rz": "Num, degrees",
+    "dx": "optional Num, mm, default 0",
+    "dy": "optional Num, mm, default 0",
+    "dz": "optional Num, mm, default 0",
+    "rx": "optional Num, degrees, default 0",
+    "ry": "optional Num, degrees, default 0",
+    "rz": "optional Num, degrees, default 0",
     "bodies": "optional list of body ids; absent = the active body"
    },
    "example": {
@@ -710,15 +756,15 @@
     "ry": 0,
     "rz": 0
    },
-   "notes": "Like move, but the source bodies stay put and each copy becomes a new body. A zero transform still makes an independent copy."
+   "notes": "Like move, but the source bodies stay put and each copy becomes a new body. A zero transform still makes an independent copy. The rotation is about the world origin and comes before the translation, as on move."
   },
   "joint": {
    "summary": "Position one body against another by aligning a mate connector on each, and re-resolve those connectors every rebuild so the assembly follows the parts.",
    "fields": {
     "moving": "body id of the body to reposition; nothing else moves",
-    "mate": "MateConnector on the MOVING body, the frame brought to meet `to`. One side of a joint: a coordinate frame, an origin, a z axis that is the mating direction, and an optional x axis for rotational reference, named one of four ways:\n  {\"body\":\"body2\", \"face\": <Selector>}   the face centre, its outward normal is the axis\n  {\"body\":\"body2\", \"edge\": <Selector>}   the edge midpoint, its direction is the axis\n  {\"datum\": <datumAxis or datumPlane id>}   follows that datum\n  {\"origin\":[x,y,z], \"zdir\":[x,y,z], \"xdir\":[x,y,z]}   an explicit world frame\nA connector on geometry is a REFERENCE, re-resolved every rebuild, so the joint tracks the part as it changes. Set `body` whenever you use `face` or `edge`.",
+    "mate": "MateConnector on the MOVING body, the frame brought to meet `to`. One side of a joint: a coordinate frame, an origin, a z axis that is the mating direction, and an optional x axis for rotational reference, named one of four ways:\n  {\"body\":\"body2\", \"face\": <Selector>}   the face centre, its outward normal is the axis\n  {\"body\":\"body2\", \"edge\": <Selector>}   the edge midpoint, its direction is the axis\n  {\"datum\": <datumPlane id>}   follows that datum plane (a datumAxis is not supported here)\n  {\"origin\":[x,y,z], \"zdir\":[x,y,z], \"xdir\":[x,y,z]}   an explicit world frame\nA connector on geometry is a REFERENCE, re-resolved every rebuild, so the joint tracks the part as it changes. Set `body` whenever you use `face` or `edge`.",
     "to": "MateConnector on the body it mates against, held fixed",
-    "mode": "\"rigid\", \"revolute\" or \"slider\": which freedom the joint leaves, so the UI offers the matching handle. The placement is the same for all three.",
+    "mode": "optional \"rigid\", \"revolute\" or \"slider\": which freedom the joint leaves, so the UI offers the matching handle. The placement is the same for all three.",
     "flush": "optional bool. Two mating faces meet FACE TO FACE by default (their outward normals opposed); `flush` points the connector axes the same way instead, so the parts sit on the same side.",
     "offset": "optional Num, mm along the mate axis (a slider's freedom)",
     "angle": "optional Num, degrees about the mate axis (a revolute's freedom)"
@@ -759,11 +805,11 @@
   "scale": {
    "summary": "Scale bodies, uniformly or per axis.",
    "fields": {
-    "factor": "Num, uniform",
-    "sx": "Num",
-    "sy": "Num",
-    "sz": "Num",
-    "about": "optional [x,y,z] centre",
+    "factor": "Num, REQUIRED even with sx/sy/sz: the uniform factor and the default for each of them. 0 is refused",
+    "sx": "optional Num, the factor along X; default `factor`",
+    "sy": "optional Num, the factor along Y; default `factor`",
+    "sz": "optional Num, the factor along Z; default `factor`",
+    "about": "optional [x,y,z] held still; default the body's placement origin, usually the world origin and NOT its centre",
     "bodies": "optional list of body ids"
    },
    "example": {
@@ -788,15 +834,15 @@
      "body1"
     ]
    },
-   "notes": "Set `bodies` whenever more than one body exists: without it the mirror reflects whichever body the timeline touched last, which is rarely the one meant."
+   "notes": "Set `bodies` whenever more than one body exists: without it the mirror reflects the most recently CREATED body, which is rarely the one meant."
   },
   "boolean": {
    "summary": "Combine bodies.",
    "fields": {
-    "operation": "\"union\", \"subtract\" or \"intersect\"",
-    "target": "body id kept",
-    "tools": "list of body ids applied to it",
-    "keepOriginals": "optional bool"
+    "operation": "\"union\", \"subtract\" or \"intersect\" (\"join\" and \"cut\" are read as union and subtract)",
+    "target": "optional body id, kept and modified; default the first body",
+    "tools": "optional list of body ids applied to it; default every other body",
+    "keepOriginals": "optional bool; keeps the TOOL bodies, the target is always replaced"
    },
    "example": {
     "id": "bo1",
@@ -807,15 +853,16 @@
      "body2"
     ]
    },
-   "notes": "Body ids are body1, body2, ..., NOT feature ids. Call `build` and read the body list before writing one."
+   "notes": "Body ids are body1, body2, ..., NOT feature ids. Call `build` and read the body list before writing one. An intersect REPLACES the target with the overlap and fails when there is none, so it is not a clash check."
   },
   "split": {
    "summary": "Cut bodies with a plane.",
    "fields": {
     "plane": "PlaneSpec",
     "planeId": "or a datumPlane feature id",
-    "keep": "\"top\", \"bottom\" or \"both\"",
-    "bodies": "optional list of body ids",
+    "keep": "\"top\" (the side the plane normal points to; on XZ that is -Y), \"bottom\" or \"both\"",
+    "body": "optional single body id; `bodies` wins when both are set",
+    "bodies": "optional list of body ids; absent = the active body. An id that does not exist is dropped",
     "groupSides": "optional bool"
    },
    "example": {
@@ -844,7 +891,7 @@
     "bodies": "list of body ids"
    },
    "example": {
-    "id": "rb1",
+    "id": "rm1",
     "type": "removeBody",
     "bodies": [
      "body2"
@@ -891,7 +938,7 @@
    }
   },
   "datumAxis": {
-   "summary": "A reference axis, an infinite construction line other features (revolve, circular pattern, mirror, a joint) can be aimed at by name.",
+   "summary": "A reference axis, an infinite construction line a circular pattern can turn about with {\"datum\": \"<id>\"}. Revolve, mirror and joints do not read datum axes.",
    "fields": {
     "origin": "[x,y,z], a point on the line",
     "dir": "[x,y,z], its direction; need not be unit length",
@@ -935,7 +982,7 @@
    "summary": "Repeat bodies around an axis.",
    "fields": {
     "count": "Num",
-    "angle": "Num, total degrees covered",
+    "angle": "Num, degrees: 360 spaces `count` copies evenly around the circle; any other angle puts the first and last copies at its two ends",
     "axis": "\"X\", \"Y\" or \"Z\" (the world axis through the origin), a line {\"origin\":[x,y,z], \"dir\":[x,y,z]} such as the vertical line through a part's centre, or {\"datum\": \"<id>\"} naming a datumAxis above this pattern (never the bare id)",
     "axisRef": "optional Selector naming what the axis follows, re-resolved every rebuild: a straight edge (its line), a round edge (its centre line), a cylindrical or conical face (its axis) or a flat face (its normal through the middle of the face); is preferred over `axis`, which must then be the line {\"origin\", \"dir\"} it resolves to, the cache it falls back to",
     "bodies": "optional list of body ids",
@@ -984,6 +1031,46 @@
    },
    "example": null,
    "notes": "The tool takes `path` when the file is one this machine can open, or `content` (the file itself, base64, with `name`) when you are holding the file and your host will not give you a path to it. A text format can go as it is with encoding \"text\". Inline, gzip it first: STEP is text and shrinks about tenfold, which is the difference between one message and ten. Still too big? Encode the WHOLE file once, split the text that comes out, and send the pieces with `part` and `parts`, quoting the `upload` id the first reply gives back. Do not encode each piece separately, the halves of a base64 string join back up and separately encoded pieces do not. Remember that content is written by YOU: every piece is a message of your own output, so past a handful of pieces the answer is to ask for a path rather than to keep typing. An imported body is ordinary geometry once it is in: `inspect` gives its faces and edges with selectors, and it can be cut, filleted and measured against like anything else. `solid: false` means the file did not close into a watertight solid, so a boolean against it will disappoint: say so rather than press on."
+  },
+  "organic": {
+   "summary": "A smooth, rounded solid from sized nodes (Node Bodies plugin): each chain of nodes becomes one limb lofted through them, a node on no chain is an ellipsoid, and everything fuses into one body.",
+   "fields": {
+    "nodes": "list of nodes {\"id\", \"x\", \"y\", \"z\", \"sx\", \"sy\", \"sz\", \"rx\", \"ry\", \"rz\"}: the centre in world mm, the three radii (sx default 5, sy and sz default sx) and a turn in degrees. Every value is a Num",
+    "chains": "optional list of chains, each a list of node ids in order, e.g. [[\"n1\", \"n2\", \"n3\"]]",
+    "blend": "optional Num, mm the junctions between limbs are rounded by, default 0",
+    "operation": "optional \"new\" (default), \"join\", \"cut\" or \"intersect\"",
+    "targets": "optional list of body ids a join/cut/intersect may touch",
+    "name": "optional body name, default \"Node body\""
+   },
+   "example": {
+    "id": "og1",
+    "type": "organic",
+    "nodes": [
+     {
+      "id": "n1",
+      "x": 0,
+      "y": 0,
+      "z": 0,
+      "sx": 6
+     },
+     {
+      "id": "n2",
+      "x": 0,
+      "y": 0,
+      "z": 30,
+      "sx": 4
+     }
+    ],
+    "chains": [
+     [
+      "n1",
+      "n2"
+     ]
+    ],
+    "blend": 0,
+    "operation": "new"
+   },
+   "notes": "A chain that doubles back on itself tighter than its own radius folds through itself and is refused; very sharp bends pinch on the inside."
   }
  },
  "sketchEntities": {

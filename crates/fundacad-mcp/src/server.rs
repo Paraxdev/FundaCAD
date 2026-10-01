@@ -80,23 +80,44 @@ pub const MUTATORS: &[&str] = &[
 /// one. `schema` in particular is what an agent reads BEFORE anything exists.
 pub const NO_DOCUMENT: &[&str] = &["schema"];
 
-/// Prepended to the working-order instructions when this server is driving the
-/// document a person has open. It is the one thing about this mode a model has
-/// to know, because it changes what a mistake costs: there is no private copy
-/// to throw away, and the person is watching.
-pub const LIVE_INSTRUCTIONS: &str = "YOU ARE WORKING ON A DOCUMENT SOMEONE HAS OPEN IN FUNDACAD, right now, on their
-screen. Every edit you make appears in their window as it happens.
+/// What the host puts in front of the model before its first call.
+///
+/// Kept SHORT and in order of what a mistake costs, because hosts cut server
+/// instructions off: Claude Code keeps the first 2048 characters, and the
+/// full working order (`schema::how_to`) used to lose its rules from "Use
+/// `move` to place them" on. The whole of it is still in the `schema` tool,
+/// which this points at. `tests/schema.rs` holds both texts under the limit.
+pub const INSTRUCTIONS: &str = "Rules that save most failed builds:
+- Z is up. A sketch on XY is a floor plan, on XZ a side elevation.
+- box, cylinder, cone, sphere and torus are CENTRED ON THE ORIGIN. Place them with `move`.
+- Body ids (body1, ...) are handed out at build time and are not feature ids. Read them from `build` or `inspect`. A body keeps its id, and a join keeps its target's.
+- A feature can only reference features ABOVE it in the timeline.
+- Once more than one body exists, set `targets` on every join, cut and intersect, or it acts on every body it overlaps.
+- A numeric field takes a number or a parameter NAME, never an expression.
+- Never guess a selector: take it from `inspect`, and always set its `body`.
+- To fit something to a part in a file, `doc_import` the file. Never model against a stand-in you made up; if you cannot reach the file, ask for its path.
 
-  * Read before you write. Each tool re-reads their document first, so what you
-    saw a moment ago may already have changed.
-  * An edit is refused if they changed the model while you were writing it. That
-    is not an error to retry blindly: read it again and decide again.
-  * `doc_new` and `doc_open` REPLACE what they have open. Do not call either
-    unless you were asked to.
-  * `doc_save` writes their document to a file. It is not how your work reaches
-    them; it is already there.
+Working order: `param_set` the driving dimensions first, `feature_add` a few features, `build` often, `inspect`, `view`, then `doc_save` to a .funda file the app opens.
+
+Call `schema` with a type before writing it for the first time: it has the fields, an example and the traps of every feature type, and the full working order.
+";
+
+/// Prepended to `INSTRUCTIONS` when this server is driving the document a
+/// person has open. It is the one thing about this mode a model has to know,
+/// because it changes what a mistake costs: there is no private copy to throw
+/// away, and the person is watching.
+pub const LIVE_INSTRUCTIONS: &str = "YOU ARE EDITING A DOCUMENT SOMEONE HAS OPEN IN FUNDACAD. Every edit appears in their window as you make it. Each tool re-reads their document first. An edit refused because they changed the model means read it again and decide again, not retry. `doc_new` and `doc_open` REPLACE what they have open: only call them when asked. Your work reaches them without `doc_save`.
 
 ";
+
+/// The instructions for this mode, live or private.
+pub fn instructions_for(live: bool) -> String {
+    if live {
+        format!("{LIVE_INSTRUCTIONS}{INSTRUCTIONS}")
+    } else {
+        INSTRUCTIONS.to_string()
+    }
+}
 
 /// How long to leave between re-probes for a running app. The probe is a file
 /// read, and only dials a port when that file exists, so the usual cost is
@@ -458,11 +479,7 @@ impl FundaCad {
     pub async fn instructions(&self) -> String {
         // Live mode adds a paragraph rather than replacing the working order,
         // which is just as true either way.
-        if self.state.lock().await.live.is_none() {
-            schema::how_to().to_string()
-        } else {
-            format!("{LIVE_INSTRUCTIONS}{}", schema::how_to())
-        }
+        instructions_for(self.state.lock().await.live.is_some())
     }
 
     /// Attach to the app if it has appeared since start-up.
@@ -888,7 +905,9 @@ The format comes from the extension unless given. A large STEP can take minutes:
             return Ok(failure("`document` needs a `features` list."));
         }
         let mut st = self.state.lock().await;
-        st.doc = doc.as_object().cloned().unwrap_or_default();
+        let mut next = doc.as_object().cloned().unwrap_or_default();
+        model::forget_stale_joins(&st.doc, &mut next);
+        st.doc = next;
         model::fill_defaults(&mut st.doc);
         fundacad_core::body_ids::ensure_map(&mut st.doc);
         st.doc
@@ -2035,11 +2054,7 @@ impl ServerHandler for FundaCad {
         // working order goes out as it stands at start-up, which is when a host
         // reads it. `call_live` is what keeps the live rules true afterwards.
         let live = self.state.try_lock().map(|s| s.live.is_some()).unwrap_or(false);
-        let instructions = if live {
-            format!("{LIVE_INSTRUCTIONS}{}", schema::how_to())
-        } else {
-            schema::how_to().to_string()
-        };
+        let instructions = instructions_for(live);
         ServerConfig::new(
             ServerCapabilities::builder()
                 .enable_tools()

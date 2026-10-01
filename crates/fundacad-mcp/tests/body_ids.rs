@@ -137,3 +137,36 @@ fn a_file_saved_before_the_map_keeps_the_numbering_it_was_made_with() {
     assert_eq!(built.len(), 1, "{built:?}");
     assert!(built[0].starts_with("body3 "), "{built:?}");
 }
+
+#[test]
+fn a_revolve_made_a_join_through_doc_set_keeps_its_targets_id() {
+    // The report: a revolve set to join into body1 came out as body3. It had
+    // been built as a new body first, and the edit that made it a join went
+    // through doc_get and doc_set, which kept its record of body3.
+    let mut mcp = session();
+    let sketch = json!({"id": "sk", "type": "sketch", "plane": "XZ", "entities": [
+        {"type": "rectangle", "width": 4, "height": 10, "x": 12, "y": 0, "angle": 0}]});
+    for f in [
+        json!({"id": "bx", "type": "box", "length": 20, "width": 20, "height": 20}),
+        json!({"id": "sp", "type": "sphere", "radius": 3}),
+        json!({"id": "mv", "type": "move", "dx": 50, "bodies": ["body2"]}),
+        sketch,
+        json!({"id": "rv", "type": "revolve", "sketch": "sk", "axis": "Z", "angle": 360, "operation": "new"}),
+    ] {
+        let r = mcp.call("feature_add", json!({"feature": f}));
+        assert!(!r.is_error, "{}", r.text);
+    }
+    let ids: Vec<String> = outcome(&mut mcp).iter().map(|l| l.split(' ').next().unwrap_or("").to_owned()).collect();
+    assert_eq!(ids, ["body1", "body2", "body3"]);
+
+    let mut doc: Value = serde_json::from_str(&mcp.call("doc_get", json!({})).text).expect("JSON");
+    let rv = doc["features"]
+        .as_array_mut()
+        .and_then(|fs| fs.iter_mut().find(|f| f["id"] == "rv"))
+        .expect("the revolve");
+    rv["operation"] = json!("join");
+    rv["targets"] = json!(["body1"]);
+    doc_set(&mut mcp, &doc);
+    let ids: Vec<String> = outcome(&mut mcp).iter().map(|l| l.split(' ').next().unwrap_or("").to_owned()).collect();
+    assert_eq!(ids, ["body1", "body2"], "the join merges into body1 and keeps its id");
+}
