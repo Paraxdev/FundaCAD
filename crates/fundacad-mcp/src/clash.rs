@@ -159,6 +159,10 @@ pub fn failures(r: &Value) -> Vec<String> {
 
 /// Requested bodies the engine did not find, by the id or name asked for.
 pub fn missing(r: &Value, asked: &[String]) -> Vec<String> {
+    // No `checked` list is a check of every body, nothing was filtered out.
+    if r.get("checked").is_none() {
+        return Vec::new();
+    }
     let checked = list(r, "checked");
     asked
         .iter()
@@ -227,17 +231,22 @@ pub struct Step {
 
 /// A line per step and a summary, which is what replaces a stack of check
 /// features: where it clashes, and how close it gets where it does not.
-pub fn sweep_report(param: &str, unit: &str, steps: &[Step], clearance: f64) -> String {
+/// `asked` is the `bodies` filter; a step where one of them was not built
+/// says so on its line.
+pub fn sweep_report(param: &str, unit: &str, steps: &[Step], clearance: f64, asked: &[String]) -> String {
     let at = |v: f64| format!("{param} = {}", g_format(v));
     let mut lines = Vec::new();
     let mut clashing: Vec<String> = Vec::new();
     let mut closest: Option<(f64, String, f64)> = None;
+    let mut unchecked = 0;
     let mut failed_steps = 0;
+    let mut cut_short: Option<String> = None;
+    let mut cut_steps = 0;
     for st in steps {
         let r = match &st.reply {
             Ok(r) => r,
             Err(why) => {
-                failed_steps += 1;
+                unchecked += 1;
                 lines.push(format!("{}: not checked, {why}", at(st.value)));
                 continue;
             }
@@ -269,6 +278,17 @@ pub fn sweep_report(param: &str, unit: &str, steps: &[Step], clearance: f64) -> 
                 closest = Some((d, pair(g), st.value));
             }
         }
+        if r.get("truncated").and_then(Value::as_bool) == Some(true) {
+            cut_steps += 1;
+            line.push_str(" (stopped early, not every pair checked)");
+            if cut_short.is_none() {
+                cut_short = r.get("message").and_then(Value::as_str).map(str::to_string);
+            }
+        }
+        let absent = missing(r, asked);
+        if !absent.is_empty() {
+            line.push_str(&format!(" ({} not built)", absent.join(", ")));
+        }
         let failed = failures(r);
         if !failed.is_empty() {
             failed_steps += 1;
@@ -280,18 +300,17 @@ pub fn sweep_report(param: &str, unit: &str, steps: &[Step], clearance: f64) -> 
         }
         lines.push(line);
     }
+    let checked = steps.len() - unchecked;
+    let of = if unchecked > 0 { format!("{checked} checked") } else { checked.to_string() };
     let unit = if unit.is_empty() || unit == "count" { String::new() } else { format!(" {unit}") };
-    let mut summary = if clashing.is_empty() {
-        format!("No overlaps at any of the {} steps.", steps.len())
+    let mut summary = if checked == 0 {
+        format!("None of the {} steps could be checked.", steps.len())
+    } else if clashing.is_empty() {
+        format!("No overlaps at any of the {of} steps.")
     } else {
-        format!(
-            "Overlaps at {} of {} steps: {param} = {}{unit}.",
-            clashing.len(),
-            steps.len(),
-            clashing.join(", ")
-        )
+        format!("Overlaps at {} of {of} steps: {param} = {}{unit}.", clashing.len(), clashing.join(", "))
     };
-    if clearance > 0.0 {
+    if clearance > 0.0 && checked > 0 {
         match closest {
             Some((d, who, v)) => summary.push_str(&format!(
                 " Closest any non-overlapping pair gets: {} ({who}, at {param} = {}{unit}).",
@@ -301,11 +320,22 @@ pub fn sweep_report(param: &str, unit: &str, steps: &[Step], clearance: f64) -> 
             None => summary.push_str(&format!(" No other pair comes within {} mm at any step.", mm(clearance))),
         }
     }
+    let plural = |n: usize| if n == 1 { "" } else { "s" };
+    if unchecked > 0 && checked > 0 {
+        summary.push_str(&format!(" {unchecked} step{} could not be checked.", plural(unchecked)));
+    }
     if failed_steps > 0 {
         summary.push_str(&format!(
             " {failed_steps} step{} had failed features, so {} checked a different set of bodies.",
-            if failed_steps == 1 { "" } else { "s" },
+            plural(failed_steps),
             if failed_steps == 1 { "it" } else { "they" }
+        ));
+    }
+    if cut_steps > 0 {
+        summary.push_str(&format!(
+            " At {cut_steps} step{} the check stopped early: {}",
+            plural(cut_steps),
+            cut_short.as_deref().unwrap_or("not every pair was checked.")
         ));
     }
     format!("{summary}\n{}", lines.join("\n"))
@@ -339,6 +369,34 @@ mod tests {
     }
 
     #[test]
+    fn steps_that_were_not_checked_are_not_counted_as_clear() {
+        let clear = json!({"pairs": [], "clearances": [], "checked": [{"id": "body1", "name": "Frame"}, {"id": "body2", "name": "Slider"}]});
+        let partial = json!({"pairs": [], "clearances": [], "checked": [{"id": "body1", "name": "Frame"}],
+                             "errors": [{"feature_id": "ex2", "message": "depth must be positive"}]});
+        let cut = json!({"pairs": [], "clearances": [], "truncated": true, "checked": [{"id": "body1", "name": "Frame"}, {"id": "body2", "name": "Slider"}],
+                         "message": "Stopped after checking 400 candidate pairs; pick a smaller set of bodies for a full sweep."});
+        let text = sweep_report(
+            "press",
+            "mm",
+            &[
+                Step { value: 0.0, reply: Ok(clear) },
+                Step { value: 6.0, reply: Ok(cut) },
+                Step { value: 12.0, reply: Ok(partial) },
+                Step { value: 13.0, reply: Err("the geometry engine could not be reached".into()) },
+            ],
+            0.0,
+            &["Frame".to_string(), "Slider".to_string()],
+        );
+        assert!(text.starts_with("No overlaps at any of the 3 checked steps. 1 step could not be checked."), "{text}");
+        assert!(text.contains("1 step had failed features"), "{text}");
+        assert!(text.contains("At 1 step the check stopped early: Stopped after checking 400"), "{text}");
+        assert!(text.contains("press = 6: clear (stopped early, not every pair checked)"), "{text}");
+        assert!(text.contains("press = 12: clear (Slider not built) (features failed: ex2)"), "{text}");
+        let none = sweep_report("press", "mm", &[Step { value: 0.0, reply: Err("x".into()) }], 1.0, &[]);
+        assert!(none.starts_with("None of the 1 steps could be checked.\n"), "{none}");
+    }
+
+    #[test]
     fn a_sweep_names_where_it_clashes() {
         let clash = json!({"pairs": [{"a": "body1", "b": "body2", "aName": "Head", "bName": "Slider", "volume": 2.5}],
                            "clearances": []});
@@ -349,6 +407,7 @@ mod tests {
             "mm",
             &[Step { value: 0.0, reply: Ok(clear) }, Step { value: 4.0, reply: Ok(clash) }],
             1.0,
+            &[],
         );
         assert!(text.starts_with("Overlaps at 1 of 2 steps: press = 4 mm."), "{text}");
         assert!(text.contains("0.4 mm (body1 \"Head\" / body2 \"Slider\", at press = 0 mm)"), "{text}");
