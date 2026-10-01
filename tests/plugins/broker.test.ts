@@ -129,6 +129,7 @@ describe("the op table", () => {
         "feature_update",
         "param_remove",
         "param_set",
+        "sketch_merge",
       ].sort(),
     );
     // and every one of them needs the grant that says so

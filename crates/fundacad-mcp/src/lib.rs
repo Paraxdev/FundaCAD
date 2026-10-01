@@ -38,6 +38,7 @@ pub mod section;
 pub mod server;
 pub mod shadow;
 pub mod shortcuts;
+pub mod sketchmerge;
 pub mod stress;
 pub mod tools;
 pub mod upload;

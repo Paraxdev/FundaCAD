@@ -140,7 +140,7 @@ fn prefix_for(kind: &str) -> &'static str {
         .map_or("f", |(_, p)| *p)
 }
 
-fn is_id(s: &str) -> bool {
+pub(crate) fn is_id(s: &str) -> bool {
     let mut chars = s.chars();
     matches!(chars.next(), Some(c) if c.is_ascii_alphabetic())
         && s.len() <= 64
@@ -648,6 +648,18 @@ fn param_defs_mut(doc: &mut Doc) -> &mut Map<String, Value> {
         .or_insert_with(|| json!({}))
         .as_object_mut()
         .expect("paramDefs is an object")
+}
+
+/// Put `f` back at timeline position `i`.
+pub(crate) fn replace_feature(doc: &mut Doc, i: usize, f: Value) {
+    features_mut(doc)[i] = f;
+}
+
+/// Make a model parameter a plain one: what it drove is gone.
+pub(crate) fn unbind_parameter(doc: &mut Doc, name: &str) {
+    if let Some(Value::Object(d)) = param_defs_mut(doc).get_mut(name) {
+        d.remove("target");
+    }
 }
 
 pub fn param_defs(doc: &Doc) -> Map<String, Value> {

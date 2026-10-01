@@ -53,6 +53,7 @@ export const OPS = [
   "feature_remove",
   "feature_move",
   "edit",
+  "sketch_merge",
   "build",
   "interference",
   "section",
@@ -154,6 +155,11 @@ export const OP_TABLE: Record<Op, OpSpec> = {
   edit: {
     needs: ["document.write"],
     why: "applies several timeline and parameter edits at once, each one an edit the single ops already need this for",
+    writes: true,
+  },
+  sketch_merge: {
+    needs: ["document.write", "geometry.build"],
+    why: "has the engine unite overlapping shapes of a sketch and writes the outline back into it",
     writes: true,
   },
 

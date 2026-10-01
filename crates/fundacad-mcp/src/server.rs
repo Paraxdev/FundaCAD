@@ -75,6 +75,7 @@ pub const MUTATORS: &[&str] = &[
     "feature_remove",
     "feature_move",
     "edit",
+    "sketch_merge",
 ];
 
 /// Tools that need no document at all, so they must not be made to wait for
@@ -641,11 +642,11 @@ impl FundaCad {
         let Ok(CallToolResponse::Complete(result)) = out else {
             return Ok(out);
         };
-        // An `edit` that built and found a failing feature still made its
-        // edits, and they are the user's to see: its isError is about the
-        // build, not the edit. A refused edit changes nothing, so the check
-        // below has nothing to offer for it anyway.
-        if !MUTATORS.contains(&name) || (is_error(&result) && name != "edit") {
+        // An `edit` or a `sketch_merge` that built and found a failing
+        // feature still made its change, and it is the user's to see: its
+        // isError is about the build. A refused one changes nothing, so the
+        // check below has nothing to offer for it anyway.
+        if !MUTATORS.contains(&name) || (is_error(&result) && !matches!(name, "edit" | "sketch_merge")) {
             return Ok(Ok(CallToolResponse::Complete(result)));
         }
         let (changed, document) = {
@@ -1152,6 +1153,15 @@ The format comes from the extension unless given. A large STEP can take minutes:
     }
 
     #[tool(
+        name = "sketch_merge",
+        description = "Replace closed shapes of a sketch that overlap or touch (rectangles, circles, polygons, slots, loops of lines and arcs) with the lines, arcs and circles that bound their union, so the sketch has one area where the overlaps made several, and an extrude picks it with one `regions` point. Leave out a shape meant as a hole. Constraints on the merged shapes are dropped. The outline is fixed numbers: shapes sized by parameters are refused unless `bake` is true. Replies with a point inside each merged area.",
+        input_schema = crate::tools::sketch_merge()
+    )]
+    pub async fn t_sketch_merge(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
+        Ok(self.sketch_merge(&args).await)
+    }
+
+    #[tool(
         name = "build",
         description = "Rebuild the document and report what came out: the bodies, their sizes, and any feature that failed. Build often, an error names the feature that caused it. isError is true if ANY feature failed, even when other features still produced bodies; the text still lists everything that did build, so check isError rather than scanning for \"FEATURE FAILED\".",
         input_schema = crate::tools::build()
@@ -1531,7 +1541,7 @@ fn clipped(s: &str, max: usize) -> String {
 /// `json.dumps(v)`: compact, but with a space after every colon and comma. The
 /// difference is only whitespace, and it is in the line an agent reads after
 /// every edit, so the two servers say it the same way while both exist.
-fn py_json(v: &Value) -> String {
+pub(crate) fn py_json(v: &Value) -> String {
     match v {
         Value::Object(o) => format!(
             "{{{}}}",
@@ -2162,6 +2172,11 @@ impl FundaCad {
             st.invalidate();
             st.state_line(&crate::shortcuts::noted(&crate::edits::summary(&done), &notes))
         };
+        self.then_build(head, args).await
+    }
+
+    /// `head`, and a build after it when the call asked for one.
+    async fn then_build(&self, head: String, args: &JsonObject) -> CallToolResult {
         if !truthy(args.get("build")) {
             return text(head);
         }
@@ -2181,6 +2196,37 @@ impl FundaCad {
         } else {
             text(all)
         }
+    }
+
+    async fn sketch_merge(&self, args: &JsonObject) -> CallToolResult {
+        let (link, doc, plan) = {
+            let mut st = self.state.lock().await;
+            model::recompute_parameters(&mut st.doc);
+            match crate::sketchmerge::plan(&st.doc, args) {
+                Ok(p) => (st.link.clone(), st.doc.clone(), p),
+                Err(why) => return failure(why),
+            }
+        };
+        let before = model::find_feature(&doc, &plan.sketch).map(|(_, f)| f.clone());
+        let payload = json!({"document": doc, "sketch": plan.sketch, "entities": plan.ids});
+        let outline = match link.call("sketchOutline", payload).await {
+            Err(e) => return engine_gone(&e),
+            Ok(r) if r.get("ok") != Some(&json!(true)) => return failure(format!("Could not merge: {}", error_message(&r))),
+            Ok(r) => r.get("result").cloned().unwrap_or_else(|| json!({})),
+        };
+        let head = {
+            let mut st = self.state.lock().await;
+            if model::find_feature(&st.doc, &plan.sketch).map(|(_, f)| f.clone()) != before {
+                return failure(format!("{} changed while it was being merged, so nothing was merged. Try again", plan.sketch));
+            }
+            let merged = match crate::sketchmerge::apply(&mut st.doc, &plan, &outline) {
+                Ok(m) => m,
+                Err(why) => return failure(why),
+            };
+            st.invalidate();
+            st.state_line(&crate::sketchmerge::reply(&plan, &merged))
+        };
+        self.then_build(head, args).await
     }
 
     async fn interference(&self, args: &JsonObject) -> CallToolResult {
