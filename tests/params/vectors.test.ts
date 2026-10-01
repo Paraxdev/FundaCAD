@@ -3,11 +3,12 @@
 // evaluators are pinned to one behaviour.
 
 import { describe, it, expect } from "vitest";
-import type { CadDocument, ParamCheck, ParamDef } from "../../src/types";
+import type { CadDocument, Feature, ParamCheck, ParamDef } from "../../src/types";
 import { evalExpr } from "../../src/params/eval";
 import { extractRefs, isIdentName, isNumericLiteral, isReservedName, renameRefs } from "../../src/params/parse";
 import { recompute, validateExpr } from "../../src/params/engine";
 import { checkResults } from "../../src/params/extras";
+import { COMMON_NUM_FIELDS, FEATURE_NUM_FIELDS, INT_FIELDS } from "../../src/document/numFields";
 import RAW from "../vectors/params.json";
 
 type Expected = number | "NaN" | "Infinity" | "-Infinity";
@@ -22,6 +23,10 @@ interface Vectors {
   recompute: { name: string; defs: Record<string, ParamDef>; values: Record<string, number>; issues: Record<string, string> }[];
   validate: { defs: Record<string, ParamDef>; cases: { name: string | null; expr: string; kind?: "count"; ok?: number; error?: string }[] }[];
   checks: { defs: Record<string, ParamDef>; checks: ParamCheck[]; results: { ok: boolean; error?: string }[] }[];
+  targets: { name: string; defs: Record<string, ParamDef>; features: unknown[]; expect: unknown[] }[];
+  featureNumFields: Record<string, [string, string][]>;
+  commonNumFields: [string, string][];
+  intFields: Record<string, number | "-Infinity">;
 }
 
 const V = RAW as unknown as Vectors;
@@ -70,6 +75,22 @@ describe("parameter vectors shared with fundacad-core", () => {
       expect(Object.keys(r.issues).sort(), c.name).toEqual(Object.keys(c.issues).sort());
       for (const [k, w] of Object.entries(c.issues)) expect(r.issues[k], `${c.name}: ${k}`).toContain(w);
     }
+  });
+
+  it("writes each parameter into the feature field it drives", () => {
+    for (const c of V.targets) {
+      const doc = docOf(c.defs);
+      doc.features = structuredClone(c.features) as Feature[];
+      recompute(doc);
+      expect(doc.features, c.name).toEqual(c.expect);
+    }
+  });
+
+  it("keeps the field tables fundacad-core copies", () => {
+    const rows = (r: readonly (readonly [string, string, string])[]) => r.map(([field, , kind]) => [field, kind]);
+    expect(Object.fromEntries(Object.entries(FEATURE_NUM_FIELDS).map(([type, r]) => [type, rows(r!)]))).toEqual(V.featureNumFields);
+    expect(rows(COMMON_NUM_FIELDS)).toEqual(V.commonNumFields);
+    expect(Object.fromEntries(Object.entries(INT_FIELDS).map(([f, min]) => [f, Number.isFinite(min) ? min : String(min)]))).toEqual(V.intFields);
   });
 
   it("validates expressions and runs checks", () => {

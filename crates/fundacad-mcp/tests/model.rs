@@ -378,6 +378,179 @@ fn a_reserved_name_is_refused() {
     }
 }
 
+fn field(d: &m::Doc, fid: &str, key: &str) -> Value {
+    m::find_feature(d, fid).expect("feature").1[key].clone()
+}
+
+#[test]
+fn a_joint_the_app_bound_to_a_parameter_moves_when_the_parameter_does() {
+    // The app turns `angle: "press"` into a number plus a model parameter that
+    // targets the field, so after it has saved the document the field only
+    // moves when the parameter's value is written back into it.
+    let mut d = doc_with(&[
+        json!({"id": "a", "type": "box", "length": 20, "width": 20, "height": 20}),
+        json!({"id": "b", "type": "box", "length": 6, "width": 6, "height": 6}),
+    ]);
+    let face = |p: [f64; 3], body: &str| json!({"kind": "face", "by": "nearest", "point": p, "body": body});
+    m::add_feature(
+        &mut d,
+        &json!({"id": "j", "type": "joint", "moving": "body2", "mode": "revolute", "angle": 30, "offset": 2,
+                "mate": {"body": "body2", "face": face([50.0, 0.0, -3.0], "body2")},
+                "to": {"body": "body1", "face": face([0.0, 0.0, 10.0], "body1")}}),
+        None,
+    )
+    .unwrap();
+    d.insert(
+        "paramDefs".into(),
+        json!({"press": {"expr": "30", "value": 30, "unit": "deg"},
+               "d1": {"expr": "press", "value": 30, "unit": "deg",
+                      "target": {"kind": "feature", "feature": "j", "field": "angle"}},
+               "d2": {"expr": "press", "value": 30, "unit": "deg",
+                      "target": {"kind": "feature", "feature": "j", "field": "moving"}}}),
+    );
+
+    m::set_parameter(&mut d, "press", &json!(75), "deg", None).unwrap();
+    assert_eq!(field(&d, "j", "angle"), json!(75));
+    assert_eq!(field(&d, "j", "offset"), json!(2), "a field nothing targets moved");
+    assert_eq!(
+        field(&d, "j", "moving"),
+        json!("body2"),
+        "a target naming a field the joint does not list was written"
+    );
+    assert_eq!(m::validate(&mut d), Vec::<String>::new());
+}
+
+#[test]
+fn a_target_path_names_a_list_entry_by_its_id() {
+    // `nodes.n2.sx` is the `sx` of the entry whose id is n2, wherever the list
+    // has put it, as the app's `fieldHolder` reads it.
+    let mut d = m::new_document();
+    d.insert(
+        "features".into(),
+        json!([{"id": "o1", "type": "someNodes", "blend": 1,
+                "nodes": [{"id": "n2", "x": 10, "sx": 3}, {"id": "n1", "x": 0, "sx": 5}]}]),
+    );
+    d.insert(
+        "paramDefs".into(),
+        json!({"size": {"expr": "3", "value": 3, "unit": "mm"},
+               "d1": {"expr": "size * 2", "value": 6, "unit": "count",
+                      "target": {"kind": "feature", "feature": "o1", "field": "nodes.n2.sx"}},
+               "d2": {"expr": "size", "value": 3, "unit": "count",
+                      "target": {"kind": "feature", "feature": "o1", "field": "nodes.n9.sx"}}}),
+    );
+    m::set_parameter(&mut d, "size", &json!(4.5), "mm", None).unwrap();
+    assert_eq!(
+        field(&d, "o1", "nodes"),
+        json!([{"id": "n2", "x": 10, "sx": 9}, {"id": "n1", "x": 0, "sx": 5}])
+    );
+    assert_eq!(field(&d, "o1", "blend"), json!(1));
+}
+
+/// A cylinder whose radius the app bound to `r` through the model parameter d1.
+fn bound_cylinder() -> m::Doc {
+    let mut d = doc_with(&[json!({"id": "cy1", "type": "cylinder", "radius": 5, "height": 4})]);
+    d.insert(
+        "paramDefs".into(),
+        json!({"r": {"expr": "5", "value": 5, "unit": "mm"},
+               "d1": {"expr": "r", "value": 5, "unit": "mm",
+                      "target": {"kind": "feature", "feature": "cy1", "field": "radius"}}}),
+    );
+    m::recompute_parameters(&mut d);
+    d
+}
+
+#[test]
+fn redefining_the_bound_parameter_itself_keeps_its_target() {
+    // A sweep sets the parameter it is given, and that may be the one holding
+    // the target, an app-made dN or a name typed into the field as `crank=30`.
+    let mut d = bound_cylinder();
+    m::set_parameter(&mut d, "d1", &json!("r * 2"), "mm", None).unwrap();
+    assert_eq!(field(&d, "cy1", "radius"), json!(10));
+    m::set_parameter(&mut d, "r", &json!(3), "mm", None).unwrap();
+    assert_eq!(field(&d, "cy1", "radius"), json!(6), "the field stopped following r");
+    m::set_parameter(&mut d, "d1", &json!(25), "mm", None).unwrap();
+    assert_eq!(field(&d, "cy1", "radius"), json!(25));
+    assert_eq!(
+        m::param_defs(&d)["d1"]["target"],
+        json!({"kind": "feature", "feature": "cy1", "field": "radius"})
+    );
+}
+
+#[test]
+fn a_binding_goes_with_its_feature_and_never_reaches_one_reusing_the_id() {
+    let mut d = bound_cylinder();
+    m::remove_feature(&mut d, "cy1").unwrap();
+    assert!(!m::param_defs(&d).contains_key("d1"), "the binding outlived its feature");
+    let fid = m::add_feature(&mut d, &json!({"type": "cylinder", "radius": 2, "height": 4}), None).unwrap();
+    assert_eq!(fid, "cy1");
+    assert_eq!(m::validate(&mut d), Vec::<String>::new());
+    assert_eq!(field(&d, "cy1", "radius"), json!(2));
+}
+
+#[test]
+fn a_binding_another_parameter_uses_is_kept_and_named_when_its_feature_goes() {
+    let mut d = bound_cylinder();
+    m::set_parameter(&mut d, "wall", &json!("d1 / 5"), "mm", None).unwrap();
+    m::remove_feature(&mut d, "cy1").unwrap();
+    assert!(m::param_defs(&d).contains_key("d1"));
+    assert_eq!(
+        m::validate(&mut d),
+        ["parameter d1: its dimension or feature no longer exists"]
+    );
+    // Still a parameter to redefine, which a sweep over it does.
+    m::set_parameter(&mut d, "d1", &json!(10), "mm", None).unwrap();
+    assert_eq!(params(&d)["wall"], json!(2.0));
+}
+
+#[test]
+fn an_edit_to_a_bound_field_becomes_what_its_parameter_says() {
+    let mut d = bound_cylinder();
+    let (f, notes) = m::update_feature_noted(&mut d, "cy1", &json!({"radius": 7}), false).unwrap();
+    assert_eq!(f["radius"], json!(7));
+    assert_eq!(notes, ["radius follows parameter d1, so d1 is now '7'"]);
+    assert_eq!(m::validate(&mut d), Vec::<String>::new());
+    assert_eq!(field(&d, "cy1", "radius"), json!(7), "the edit was put back");
+    assert_eq!(m::param_defs(&d)["d1"]["expr"], json!("7"));
+
+    // A name or an expression goes into the parameter the same way, and the
+    // field holds its number.
+    m::set_parameter(&mut d, "other", &json!(33), "mm", None).unwrap();
+    m::update_feature(&mut d, "cy1", &json!({"radius": "other"}), false).unwrap();
+    assert_eq!(field(&d, "cy1", "radius"), json!(33));
+    m::update_feature(&mut d, "cy1", &json!({"radius": "r + 1"}), false).unwrap();
+    assert_eq!(field(&d, "cy1", "radius"), json!(6));
+    assert_eq!(m::validate(&mut d), Vec::<String>::new());
+    m::set_parameter(&mut d, "r", &json!(9), "mm", None).unwrap();
+    assert_eq!(field(&d, "cy1", "radius"), json!(10));
+
+    // Sending back the value the field holds is not an edit.
+    let body = m::find_feature(&d, "cy1").unwrap().1.clone();
+    let (_, notes) = m::update_feature_noted(&mut d, "cy1", &body, true).unwrap();
+    assert!(notes.is_empty(), "{notes:?}");
+    assert_eq!(m::param_defs(&d)["d1"]["expr"], json!("r + 1"));
+}
+
+#[test]
+fn validate_reads_a_bound_field_after_its_parameter_is_written() {
+    // A document set wholesale may hold anything in a bound field, and the
+    // recompute replaces it before a build reads it.
+    let mut d = bound_cylinder();
+    d.get_mut("features").unwrap()[0]["radius"] = json!("r + 1");
+    assert_eq!(m::validate(&mut d), Vec::<String>::new());
+    assert_eq!(field(&d, "cy1", "radius"), json!(5));
+}
+
+#[test]
+fn a_bad_expression_for_a_bound_field_is_refused_and_changes_nothing() {
+    let mut d = bound_cylinder();
+    let before = d.clone();
+    let e = m::update_feature(&mut d, "cy1", &json!({"radius": "nope * 2", "height": 9}), false)
+        .unwrap_err();
+    assert!(e.0.contains("radius follows parameter d1"), "{e}");
+    assert!(e.0.contains("unknown parameter nope"), "{e}");
+    assert_eq!(d, before);
+}
+
 // --- validation --------------------------------------------------------------
 
 #[test]

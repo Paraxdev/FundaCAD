@@ -268,7 +268,8 @@ pub fn update_feature(
     update_feature_noted(doc, fid, patch, replace).map(|(v, _)| v)
 }
 
-/// `update_feature`, and a note for each sketch shortcut it expanded.
+/// `update_feature`, and a note for each sketch shortcut it expanded and each
+/// bound field it gave a new value.
 pub fn update_feature_noted(
     doc: &mut Doc,
     fid: &str,
@@ -326,10 +327,96 @@ pub fn update_feature_noted(
     if let Some(msg) = unread_fields_message(&now, &out, fresh) {
         return err(msg);
     }
+    let (rebound, said) = rebind_edited_fields(doc, fid, &existing, &mut out);
+    let mut notes = notes;
+    notes.extend(said);
     let value = Value::Object(out);
-    forget_stale_join(doc, Some(&existing), &value);
-    features_mut(doc)[i] = value.clone();
+    if rebound.is_empty() {
+        forget_stale_join(doc, Some(&existing), &value);
+        features_mut(doc)[i] = value.clone();
+        return Ok((value, notes));
+    }
+    // Tried on a copy first, so a refused expression changes nothing.
+    let mut next = doc.clone();
+    forget_stale_join(&mut next, Some(&existing), &value);
+    features_mut(&mut next)[i] = value;
+    for (name, _, text) in &rebound {
+        if let Some(d) = param_defs_mut(&mut next).get_mut(name).and_then(Value::as_object_mut) {
+            d.insert("expr".into(), json!(text));
+        }
+    }
+    let issues = recompute_parameters(&mut next);
+    for (name, field, text) in &rebound {
+        if let Some(why) = issues.get(name).filter(|w| *w != DANGLING) {
+            return err(format!("{fid}: {field} follows parameter {name}, and {name} = '{text}': {why}"));
+        }
+    }
+    *doc = next;
+    let value = features(doc)[i].clone();
     Ok((value, notes))
+}
+
+/// The edit's new values for fields a model parameter drives, moved into that
+/// parameter's expression as (parameter, field, expression), and a note for
+/// each. The app edits a bound field through its parameter (`commitFieldExpr`),
+/// so a number, a parameter name or an expression typed there becomes what the
+/// parameter says and the field follows it. Written into the field alone, it
+/// would be put back by the next recompute.
+///
+/// A value the field already holds is not an edit, so a `replace` that sends
+/// back the body `doc_get` gave keeps every binding as it was.
+fn rebind_edited_fields(
+    doc: &Doc,
+    fid: &str,
+    existing: &Value,
+    out: &mut Map<String, Value>,
+) -> (Vec<(String, String, String)>, Vec<String>) {
+    use fundacad_core::params::targets::{feature_target, feature_target_resolves, field_holder_mut, read_field};
+    let mut rebound = Vec::new();
+    let mut notes = Vec::new();
+    let Some(was) = existing.as_object() else {
+        return (rebound, notes);
+    };
+    for (name, d) in &param_defs(doc) {
+        let Some((target, field)) = feature_target(d) else {
+            continue;
+        };
+        if target != fid {
+            continue;
+        }
+        let old = read_field(was, field).cloned();
+        let text = match read_field(out, field) {
+            Some(new) if same_value(Some(new), old.as_ref()) => continue,
+            Some(Value::Number(n)) => expr_text(&Value::Number(n.clone())),
+            Some(Value::String(t)) => t.clone(),
+            Some(_) => continue,
+            None => {
+                // Removed, a field the app's table lists is written straight
+                // back, and any other one lets its binding go.
+                if old.is_some() && feature_target_resolves(&[Value::Object(out.clone())], fid, field) {
+                    notes.push(format!(
+                        "{field} follows parameter {name}, which writes it back, param_remove {name} first to take it off"
+                    ));
+                }
+                continue;
+            }
+        };
+        // The field keeps its number until the recompute writes the new one,
+        // since a string there is not a number the binding can resolve to.
+        if let (Some(o), Some((holder, key))) = (old, field_holder_mut(out, field)) {
+            holder.insert(key.to_owned(), o);
+        }
+        notes.push(format!("{field} follows parameter {name}, so {name} is now '{text}'"));
+        rebound.push((name.clone(), field.to_owned(), text));
+    }
+    (rebound, notes)
+}
+
+fn same_value(a: Option<&Value>, b: Option<&Value>) -> bool {
+    match (a.and_then(Value::as_f64), b.and_then(Value::as_f64)) {
+        (Some(x), Some(y)) => x == y,
+        _ => a == b,
+    }
 }
 
 /// A feature whose type changes is checked as the new type straight away, since
@@ -512,11 +599,16 @@ pub fn write_tracked_faces(doc: &mut Doc, tracked: &Map<String, Value>) {
     }
 }
 
+/// Remove a feature and, as the app's recompute does straight after, the model
+/// parameters bound to its fields that nothing else uses. Left for later, such
+/// a binding would take hold of the next feature given the same id.
 pub fn remove_feature(doc: &mut Doc, fid: &str) -> Result<Value, DocumentError> {
     let Some((i, _)) = find_feature(doc, fid) else {
         return err(missing_feature(doc, fid));
     };
-    Ok(features_mut(doc).remove(i))
+    let f = features_mut(doc).remove(i);
+    recompute_parameters(doc);
+    Ok(f)
 }
 
 pub fn move_feature(doc: &mut Doc, fid: &str, to: i64) -> Result<Value, DocumentError> {
@@ -601,9 +693,14 @@ pub fn set_parameter(
             def.insert((*key).into(), v.clone());
         }
     }
+    // Nor the field it drives: the app's `commitFieldExpr` changes a bound
+    // parameter's expression and nothing else, so the field follows the new one.
+    if let Some(t) = before.as_ref().and_then(|b| b.get("target")) {
+        def.insert("target".into(), t.clone());
+    }
     param_defs_mut(doc).insert(name.into(), Value::Object(def));
     let issues = recompute_parameters(doc);
-    if let Some(why) = issues.get(name) {
+    if let Some(why) = issues.get(name).filter(|w| *w != DANGLING) {
         let why = why.clone();
         // Put the table back exactly as it was: a refused edit that left a
         // broken definition behind would break every LATER edit too.
@@ -733,6 +830,38 @@ fn safe_refs(src: Option<&Value>) -> BTreeSet<String> {
         .unwrap_or_default()
 }
 
+/// Why a parameter that other parameters use keeps a target that has gone.
+pub const DANGLING: &str = "its dimension or feature no longer exists";
+
+/// The GC half of the app's `recompute`: a model parameter bound to a feature
+/// field that no longer resolves (the feature is gone, or its type no longer
+/// has the field) is deleted when no other parameter uses it, and named in the
+/// returned list when one does. Constraint, entity and pattern targets live in
+/// sketches this server does not solve, and are left to the app.
+fn forget_dangling_bindings(doc: &mut Doc) -> Vec<String> {
+    let defs = param_defs(doc);
+    let used: BTreeSet<String> = defs
+        .values()
+        .flat_map(|d| safe_refs(d.get("expr")))
+        .filter(|r| defs.contains_key(r))
+        .collect();
+    let mut kept = Vec::new();
+    for (name, d) in &defs {
+        let Some((feature, field)) = fundacad_core::params::targets::feature_target(d) else {
+            continue;
+        };
+        if fundacad_core::params::targets::feature_target_resolves(features(doc), feature, field) {
+            continue;
+        }
+        if used.contains(name) {
+            kept.push(name.clone());
+        } else {
+            param_defs_mut(doc).remove(name);
+        }
+    }
+    kept
+}
+
 struct Table(BTreeMap<String, f64>);
 
 impl fundacad_core::params::Scope for Table {
@@ -741,8 +870,9 @@ impl fundacad_core::params::Scope for Table {
     }
 }
 
-/// Evaluate every definition in dependency order, write the derived cache, and
-/// return {name: why} for the ones that could not be evaluated.
+/// Evaluate every definition in dependency order, write each value into the
+/// feature field its target names, write the derived cache, and return
+/// {name: why} for the ones that could not be evaluated.
 ///
 /// Resolution is iterative rather than a topological sort on purpose: what is
 /// left over when no further definition can be resolved IS the cycle, so cycle
@@ -753,6 +883,7 @@ impl fundacad_core::params::Scope for Table {
 /// passes through states where one parameter is momentarily unresolvable, and
 /// dropping its value there would take the geometry down with it.
 pub fn recompute_parameters(doc: &mut Doc) -> BTreeMap<String, String> {
+    let dangling = forget_dangling_bindings(doc);
     let defs = param_defs(doc);
     let mut issues: BTreeMap<String, String> = BTreeMap::new();
     let mut nodes: BTreeMap<String, Option<Expr>> = BTreeMap::new();
@@ -846,6 +977,13 @@ pub fn recompute_parameters(doc: &mut Doc) -> BTreeMap<String, String> {
             }
         }
     }
+    // A field the app has bound (a number plus a paramDef whose target names
+    // it) moves only by this write, so without it a parameter edit or an
+    // interference sweep rebuilds the pose the app last saved.
+    fundacad_core::params::targets::write_targets(doc);
+    for name in dangling {
+        issues.entry(name).or_insert_with(|| DANGLING.into());
+    }
     let mut table = Map::new();
     for (k, v) in &cached {
         table.insert(k.clone(), json!(v));
@@ -903,6 +1041,9 @@ fn holds_text(kind: &str, field: &str) -> bool {
 /// arrive later with less context.
 pub fn validate(doc: &mut Doc) -> Vec<String> {
     let mut problems = Vec::new();
+    // Before the snapshot, since it writes bound fields: the checks below read
+    // the fields as the build will.
+    let param_issues = recompute_parameters(doc);
     let feats: Vec<Value> = features(doc).to_vec();
     let mut seen: BTreeSet<String> = BTreeSet::new();
     let mut by_id: BTreeMap<String, usize> = BTreeMap::new();
@@ -1020,7 +1161,7 @@ pub fn validate(doc: &mut Doc) -> Vec<String> {
         }
     }
 
-    for (name, why) in recompute_parameters(doc) {
+    for (name, why) in param_issues {
         problems.push(format!("parameter {name}: {why}"));
     }
     problems.extend(press_pull_label_problems(doc, &feats));

@@ -2,12 +2,15 @@
 //! (`parse.ts`, `eval.ts`, and the evaluation half of `engine.ts` and `extras.ts`).
 //!
 //! What is ported is what a headless engine needs: evaluating the table in
-//! dependency order, validating an expression, and running checks. Writing
-//! values back into bound fields, garbage collecting dangling model parameters,
-//! renames and deletes stay in the app, which owns document edits.
+//! dependency order, validating an expression, running checks, and writing
+//! values back into the feature fields they drive (`targets`), which a headless
+//! editor needs for a parameter to move anything the app has bound. Garbage
+//! collecting dangling model parameters, renames and deletes stay in the app,
+//! which owns document edits.
 
 pub mod eval;
 pub mod parse;
+pub mod targets;
 
 use std::collections::VecDeque;
 

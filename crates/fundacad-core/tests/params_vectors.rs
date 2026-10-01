@@ -3,13 +3,16 @@
 
 use std::path::Path;
 
+use fundacad_core::params::targets::{
+    write_targets, COMMON_NUM_FIELDS, FEATURE_NUM_FIELDS, INT_FIELDS,
+};
 use fundacad_core::params::{
     check_results, eval_expr, extract_refs, is_ident_name, is_numeric_literal, is_reserved_name,
     rename_refs, resolve, validate_expr, FieldKind,
 };
 use fundacad_core::schema::{ParamCheck, ParamDef};
 use indexmap::IndexMap;
-use serde_json::Value;
+use serde_json::{json, Map, Value};
 
 fn vectors() -> Value {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/vectors/params.json");
@@ -183,4 +186,54 @@ fn validation_and_checks() {
             }
         }
     }
+}
+
+#[test]
+fn feature_targets() {
+    for c in vectors()["targets"].as_array().expect("targets") {
+        let name = c["name"].as_str().expect("name");
+        let r = resolve(&defs(&c["defs"]));
+        let mut table = c["defs"].as_object().expect("defs").clone();
+        for (k, d) in &mut table {
+            d["value"] = json!(r.values[k]);
+        }
+        let mut doc = Map::new();
+        doc.insert("paramDefs".into(), Value::Object(table));
+        doc.insert("features".into(), c["features"].clone());
+        write_targets(&mut doc);
+        assert_eq!(doc["features"], c["expect"], "{name}");
+    }
+}
+
+#[test]
+fn field_tables() {
+    fn kind(k: FieldKind) -> &'static str {
+        match k {
+            FieldKind::Length => "length",
+            FieldKind::Angle => "angle",
+            FieldKind::Count => "count",
+        }
+    }
+    let rows = |r: &[(&str, FieldKind)]| -> Value {
+        r.iter().map(|(f, k)| json!([f, kind(*k)])).collect()
+    };
+    let v = vectors();
+    let own: Map<String, Value> = FEATURE_NUM_FIELDS
+        .iter()
+        .map(|(t, r)| ((*t).to_owned(), rows(r)))
+        .collect();
+    assert_eq!(Value::Object(own), v["featureNumFields"]);
+    assert_eq!(rows(COMMON_NUM_FIELDS), v["commonNumFields"]);
+    let ints: Map<String, Value> = INT_FIELDS
+        .iter()
+        .map(|(f, min)| {
+            let min = if min.is_finite() {
+                json!(*min as i64)
+            } else {
+                json!("-Infinity")
+            };
+            ((*f).to_owned(), min)
+        })
+        .collect();
+    assert_eq!(Value::Object(ints), v["intFields"]);
 }
