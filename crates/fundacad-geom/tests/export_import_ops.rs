@@ -219,25 +219,53 @@ fn a_3mf_body_is_one_closed_shell() {
     }
 }
 
-#[test]
-fn a_revolved_tip_ending_on_the_axis_exports_as_a_sphere() {
-    // The profile an agent wrote, rounded to five places, which puts the tip
-    // arc's centre 1.9e-6 mm off the axis.
-    let doc = json!({"features": [
+/// A revolved spike: a base on the XY plane, a short wall, a flank and a
+/// rounded tip arc closing on the Z axis at `tip_x`.
+fn spike(tip_x: f64) -> Value {
+    json!({"features": [
         {"id": "sk", "type": "sketch", "plane": "XZ", "entities": [
             {"type": "line", "id": "base", "x1": 0, "y1": 3, "x2": 19, "y2": 3},
             {"type": "line", "id": "foot", "x1": 19, "y1": 3, "x2": 19, "y2": 5},
             {"type": "line", "id": "flank", "x1": 19, "y1": 5, "x2": 0.4326, "y2": 43.324},
-            {"type": "arc", "id": "tip", "x1": 0.4326, "y1": 43.324, "x2": 0, "y2": 43.65, "mx": 0.27082, "my": 43.55939},
-            {"type": "line", "id": "axis", "x1": 0, "y1": 43.65, "x2": 0, "y2": 3}]},
+            {"type": "arc", "id": "tip", "x1": 0.4326, "y1": 43.324, "x2": tip_x, "y2": 43.65, "mx": 0.27082, "my": 43.55939},
+            {"type": "line", "id": "axis", "x1": tip_x, "y1": 43.65, "x2": 0, "y2": 3}]},
         {"id": "rv", "type": "revolve", "sketch": "sk", "axis": "Z", "angle": 360, "operation": "new"},
-    ]});
+    ]})
+}
+
+#[test]
+fn a_revolved_tip_ending_on_the_axis_round_trips_as_a_closed_sphere() {
+    std::env::set_var("FUNDACAD_BLOB_DIR", scratch("tipblobs"));
     let c = Client::new();
     let dir = scratch("tip");
-    let path = p(&dir, "tip.step");
-    let r = c.call(json!({"id": 1, "op": "export", "document": doc, "format": "step", "path": path}));
-    assert_eq!(r["ok"], true, "{r}");
-    let text = std::fs::read_to_string(&path).unwrap();
-    assert!(!text.contains("SURFACE_OF_REVOLUTION"), "the tip is still a generic surface of revolution");
-    assert!(text.contains("SPHERICAL_SURFACE"));
+    // The profile an agent wrote, rounded to five places, which puts the tip
+    // arc's centre 1.9e-6 mm off the axis; and the same tip ending 1e-5 mm
+    // short of the axis, which revolved into a hair-thin tube that came back
+    // from STEP as a hole.
+    for tip_x in [0.0, 1e-5] {
+        let path = p(&dir, &format!("tip{tip_x}.step"));
+        let r = c.call(json!({"id": 1, "op": "export", "document": spike(tip_x), "format": "step", "path": path}));
+        assert_eq!(r["ok"], true, "{r}");
+        let text = std::fs::read_to_string(&path).unwrap();
+        let n = |k: &str| text.matches(k).count();
+        assert_eq!(n("SURFACE_OF_REVOLUTION"), 0, "{tip_x}: the tip is still a generic surface of revolution");
+        assert_eq!(
+            [n("PLANE("), n("CYLINDRICAL_SURFACE"), n("CONICAL_SURFACE"), n("SPHERICAL_SURFACE")],
+            [1, 1, 1, 1],
+            "{tip_x}: base, foot, flank and tip"
+        );
+
+        let r = c.call(json!({"id": 2, "op": "import", "format": "step", "path": path}));
+        assert_eq!(r["ok"], true, "{r}");
+        assert_eq!(r["result"]["faces"], 4, "{tip_x}");
+        let back = json!({"features": [{"id": "imp", "type": "import", "name": "tip", "geom": r["result"]["geom"]}]});
+        let model_path = p(&dir, &format!("tip{tip_x}.3mf"));
+        let r = c.call(json!({"id": 3, "op": "export", "document": back, "format": "3mf", "path": model_path}));
+        assert_eq!(r["ok"], true, "{r}");
+        let mut z = zip::ZipArchive::new(std::fs::File::open(&model_path).unwrap()).unwrap();
+        let mut model = String::new();
+        io::Read::read_to_string(&mut z.by_name("3D/3dmodel.model").unwrap(), &mut model).unwrap();
+        let open = edge_uses(&model).into_iter().filter(|(_, n)| *n != 2).count();
+        assert_eq!(open, 0, "{tip_x}: the STEP read back is not watertight");
+    }
 }
