@@ -313,8 +313,9 @@ fn num4(x: f64) -> String {
     if x.abs() < 1e-9 {
         return "0".into();
     }
+    // Four significant figures however small: a thin wire's I is 1e-6 mm4.
     let digits = (4 - x.abs().log10().floor() as i32 - 1).max(0);
-    g_format(round(x, digits.min(6)))
+    g_format(round(x, digits))
 }
 
 /// One body's cut, as text.
@@ -445,5 +446,12 @@ mod tests {
         assert!(plane_of(&m(serde_json::json!({"axis": "W", "at": 1}))).is_err());
         let p = plane_of(&m(serde_json::json!({"origin": [0, 0, 0], "normal": [0, 0, 2]}))).unwrap();
         assert_eq!(cross(p.u, p.v), [0.0, 0.0, 1.0]);
+    }
+
+    #[test]
+    fn small_moments_keep_four_figures() {
+        assert_eq!(num4(4.9087e-6), "4.909e-06");
+        assert_eq!(num4(3.0680e-7), "3.068e-07");
+        assert_eq!(num4(1666.6667), "1667");
     }
 }
