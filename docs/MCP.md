@@ -195,6 +195,7 @@ which a fresh engine could no longer start one and every build failed.
 | `interference` | which bodies overlap and by how much, and which come closer than a clearance, once or at every step of a parameter (`sweep`). Changes nothing |
 | `section` | cut the bodies with a plane: the outline as closed loops of points, and area, centroid, second moments, section modulus and polar moment for beam checks |
 | `stress` | a linear static stress analysis of one body: fix faces, load others with a force or a pressure, pick a material, and get the peak von Mises stress and where, the largest deflection, the safety factor against yield, the load balance, warnings, and a PNG coloured by stress. Changes nothing |
+| `printability` | what would go wrong printing the parts on an FDM printer: overhangs past 45 deg, walls under two nozzle widths, floors under two layers, gaps that would fuse, long bridges and open shells, each with its face and a `view` focus. As modelled or laid flat as `export` would. Changes nothing |
 | `inspect` | exact volume, area, bbox, and every face and edge with a ready-made selector |
 | `view` | a PNG: orthographic, flat-shaded, with sections, body filtering and zoom |
 | `doc_import` | read a STEP, STL, 3MF, OBJ, BREP or GLB file in as a body to model against, by `path` or as inline `content`, compressed and in pieces if it is large |

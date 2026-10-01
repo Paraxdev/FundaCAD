@@ -56,6 +56,14 @@ This file starts on 2026-08-03. For anything before that, see the
   whose ends must match by hand. New entities are now checked when a sketch is
   added or its entities updated: an unknown type, a missing or unread field, or
   an id used twice is refused with what it should be.
+- **A 3D-printability check over MCP.** The new `printability` tool looks at
+  the built parts the way a slicer would and lists what will go wrong on an FDM
+  printer: faces that lean out past the overhang angle, walls thinner than two
+  nozzle widths, floors thinner than two layers, gaps narrow enough to fuse,
+  flat ceilings bridged further than the printer can, and shells that are not
+  closed solids. Each finding names its face and ends in a `view` focus. Nozzle,
+  layer, angle and limits can be set, and `layFlat` checks the parts the way
+  `export` would lay them on the bed.
 - **Section properties over MCP.** The new `section` tool cuts the built
   bodies with a plane, across X, Y or Z or at any angle, and gives each body's
   outline as closed loops with its area, centroid, second moments of area,

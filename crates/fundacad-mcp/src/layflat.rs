@@ -82,18 +82,18 @@ fn add_move(doc: &mut Doc, id: &str, turn: (f64, f64), shift: [f64; 3]) -> Resul
         .map_err(|e| e.to_string())
 }
 
-/// Turn and place the bodies in `doc` for printing. `how` is `true` or
-/// {body: face index}; `only` is the one body being exported, if it is one;
-/// `apart` is a separate export, where each part goes at the origin rather
-/// than beside the last. Returns a line saying what went down on what.
-pub async fn lay_flat(
+/// The face each part goes down on, as `export {layFlat}` picks it: the one
+/// asked for in {body: face index}, else its largest flat face, None for a
+/// part with no flat face. `only` is the one body being exported, if it is
+/// one. `printability {layFlat}` asks the same, so it checks what export
+/// would write.
+pub(crate) async fn bed_faces(
     link: &EngineLink,
-    doc: &mut Doc,
+    doc: &Doc,
     built: &[Value],
     how: &Value,
     only: Option<&str>,
-    apart: bool,
-) -> Result<String, String> {
+) -> Result<Vec<(String, Option<(i64, [f64; 3])>)>, String> {
     let mut asked: Vec<(String, i64)> = Vec::new();
     match how {
         Value::Bool(true) => {}
@@ -115,21 +115,39 @@ pub async fn lay_flat(
         None => built.iter().map(id_of).filter(|i| !i.is_empty()).collect(),
     };
     let detailed = engine_bodies(link, doc, Some(&ids)).await?;
-
-    let mut turns: Vec<(String, (f64, f64))> = Vec::new();
-    let mut notes = Vec::new();
-    let mut unflat = Vec::new();
+    let mut out = Vec::new();
     for id in &ids {
         let Some(body) = detailed.iter().find(|b| &id_of(b) == id) else { continue };
         let wanted = asked.iter().find(|(b, _)| b == id).map(|(_, i)| *i);
-        match pick_face(body, wanted)? {
-            Some((i, n, _)) => {
+        out.push((id.clone(), pick_face(body, wanted)?.map(|(i, n, _)| (i, n))));
+    }
+    Ok(out)
+}
+
+/// Turn and place the bodies in `doc` for printing. `how` is `true` or
+/// {body: face index}; `only` is the one body being exported, if it is one;
+/// `apart` is a separate export, where each part goes at the origin rather
+/// than beside the last. Returns a line saying what went down on what.
+pub async fn lay_flat(
+    link: &EngineLink,
+    doc: &mut Doc,
+    built: &[Value],
+    how: &Value,
+    only: Option<&str>,
+    apart: bool,
+) -> Result<String, String> {
+    let mut turns: Vec<(String, (f64, f64))> = Vec::new();
+    let mut notes = Vec::new();
+    let mut unflat = Vec::new();
+    for (id, face) in bed_faces(link, doc, built, how, only).await? {
+        match face {
+            Some((i, n)) => {
                 turns.push((id.clone(), face_down(n)));
                 notes.push(format!("{id} on F{i}"));
             }
             None => {
                 turns.push((id.clone(), (0.0, 0.0)));
-                unflat.push(id.clone());
+                unflat.push(id);
             }
         }
     }
