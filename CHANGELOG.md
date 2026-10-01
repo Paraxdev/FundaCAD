@@ -25,6 +25,26 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **Check a mechanism for clashes over MCP.** The new `interference` tool
+  reports which bodies overlap, by how much and where, and which pairs come
+  closer than a clearance, without changing the document. Its `sweep` steps a
+  parameter (`{param: "press", from: 0, to: 12, steps: 13}`) and gives the
+  clashes and the smallest gap at every step. Checking a fit used to mean an
+  intersect feature, which replaced its target body when the parts did overlap
+  and failed the build when they did not.
+- **Many edits in one MCP call, and shorter replies.** `edit` applies a list of
+  feature and parameter changes all or nothing and can build once at the end.
+  Edits no longer print the whole timeline, `feature_update` names the fields it
+  changed instead of echoing the feature, and `build` lists only the bodies that
+  changed since the last build (`full: true` lists them all).
+- **A feature's name names its bodies.** Give a box, an extrude or any other
+  feature that makes a body a `name` and the body is called that in the build,
+  the part list and the STEP file, instead of "Cylinder" or "Box copy".
+- **Export a file per part, laid flat.** MCP `export` takes `separate` (one file
+  per body, named after it), `body` (one body) and `layFlat` (each part turned
+  onto its largest flat face, or a face you pick, and set side by side on the
+  bed).
+
 - **A Flatpak for Linux.** The beta release now carries
   `FundaCAD_<version>_x86_64.flatpak`, repackaged from the `.deb` on the GNOME
   runtime, which brings its own WebKitGTK and GTK. It runs where the AppImage

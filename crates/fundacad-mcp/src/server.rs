@@ -74,6 +74,7 @@ pub const MUTATORS: &[&str] = &[
     "feature_update",
     "feature_remove",
     "feature_move",
+    "edit",
 ];
 
 /// Tools that need no document at all, so they must not be made to wait for
@@ -305,6 +306,10 @@ struct State {
     mesh: Arc<Vec<MeshBody>>,
     /// The document signature `mesh` belongs to.
     built_for: Option<String>,
+    /// Each body's line from the last `build`, so the next one can say only
+    /// what changed. A 32-body assembly listed in full after every edit is
+    /// most of an agent's context gone on bodies it did not touch.
+    reported: Option<HashMap<String, String>>,
 }
 
 impl State {
@@ -313,25 +318,16 @@ impl State {
         self.built_for = None;
     }
 
+    /// The edit, how long the timeline is now, and anything that will fail a
+    /// build. Not the timeline itself: printed after every edit it grew with
+    /// the model, and at two hundred features it was most of every reply.
+    /// `doc_get` has it for whoever needs it.
     fn state_line(&mut self, head: &str) -> String {
-        let ids: Vec<String> = model::features(&self.doc)
-            .iter()
-            .map(|f| {
-                format!(
-                    "{}:{}",
-                    f.get("id").and_then(Value::as_str).unwrap_or("None"),
-                    f.get("type").and_then(Value::as_str).unwrap_or("None")
-                )
-            })
-            .collect();
+        let count = model::features(&self.doc).len();
         let problems = model::validate(&mut self.doc);
         let mut out = format!(
-            "{head}\ntimeline: {}",
-            if ids.is_empty() {
-                "(empty)".to_string()
-            } else {
-                ids.join(" -> ")
-            }
+            "{head} {count} feature{} in the timeline.",
+            if count == 1 { "" } else { "s" }
         );
         if !problems.is_empty() {
             out.push_str("\nproblems (these WILL fail a build):\n  ");
@@ -375,6 +371,7 @@ impl FundaCad {
                 probed_at: None,
                 mesh: Arc::default(),
                 built_for: None,
+                reported: None,
             })),
             turn: Arc::new(Mutex::new(())),
             router: Arc::new(Self::tool_router()),
@@ -546,6 +543,7 @@ impl FundaCad {
             st.doc = doc.unwrap_or_else(model::new_document);
             model::fill_defaults(&mut st.doc);
             st.invalidate();
+            st.reported = None;
             old
         };
         // The private engine held a worker that nothing will ask for again.
@@ -625,7 +623,11 @@ impl FundaCad {
         let Ok(CallToolResponse::Complete(result)) = out else {
             return Ok(out);
         };
-        if !MUTATORS.contains(&name) || is_error(&result) {
+        // An `edit` that built and found a failing feature still made its
+        // edits, and they are the user's to see: its isError is about the
+        // build, not the edit. A refused edit changes nothing, so the check
+        // below has nothing to offer for it anyway.
+        if !MUTATORS.contains(&name) || (is_error(&result) && name != "edit") {
             return Ok(Ok(CallToolResponse::Complete(result)));
         }
         let (changed, document) = {
@@ -716,6 +718,7 @@ impl FundaCad {
         st.doc = model::new_document();
         st.path = None;
         st.invalidate();
+        st.reported = None;
         Ok(text("New empty document."))
     }
 
@@ -758,6 +761,7 @@ impl FundaCad {
         model::fill_defaults(&mut st.doc);
         st.path = Some(path.clone());
         st.invalidate();
+        st.reported = None;
         let issues = model::recompute_parameters(&mut st.doc);
         let note = if issues.is_empty() {
             String::new()
@@ -914,6 +918,7 @@ The format comes from the extension unless given. A large STEP can take minutes:
             .entry("version")
             .or_insert_with(|| json!(model::FORMAT_VERSION));
         st.invalidate();
+        st.reported = None;
         model::recompute_parameters(&mut st.doc);
         Ok(text(st.state_line("Replaced the document.")))
     }
@@ -1016,7 +1021,7 @@ The format comes from the extension unless given. A large STEP can take minutes:
             Err(e) => return Ok(doc_error(e)),
         };
         st.invalidate();
-        Ok(text(st.state_line(&format!("Updated {id}: {}", py_json(&f)))))
+        Ok(text(st.state_line(&updated_line(&id, &f, &patch, replace))))
     }
 
     #[tool(
@@ -1064,12 +1069,30 @@ The format comes from the extension unless given. A large STEP can take minutes:
     }
 
     #[tool(
+        name = "edit",
+        description = "Several feature and parameter edits in one call, applied in order and all or nothing: if one is refused, none is applied and the reply names it. Each entry of `ops` is {op, ...} with that tool's own arguments: add (feature_add), update (feature_update), remove, move, param (param_set), param_remove. Later entries may use ids that earlier ones gave. Pass build:true to build once at the end. Prefer this to a run of single feature_* calls.",
+        input_schema = crate::tools::edit()
+    )]
+    pub async fn t_edit(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
+        Ok(self.edit(&args).await)
+    }
+
+    #[tool(
+        name = "interference",
+        description = "Which bodies overlap, and by how much, without changing the document. Reports every overlapping pair with the overlap's volume and box, and pairs closer than `clearance` (default 1 mm) with their gap. `sweep` repeats the check at each value of a parameter, for a mechanism: {param:\"press\", from:0, to:12, steps:13} gives the clashes and the smallest gap at every step. Use this, not an intersect feature, to check fits and clearances.",
+        input_schema = crate::tools::interference()
+    )]
+    pub async fn t_interference(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
+        Ok(self.interference(&args).await)
+    }
+
+    #[tool(
         name = "build",
         description = "Rebuild the document and report what came out: the bodies, their sizes, and any feature that failed. Build often, an error names the feature that caused it. isError is true if ANY feature failed, even when other features still produced bodies; the text still lists everything that did build, so check isError rather than scanning for \"FEATURE FAILED\".",
         input_schema = crate::tools::build()
     )]
-    pub async fn t_build(&self, _args: JsonObject) -> Result<CallToolResult, McpError> {
-        Ok(self.build().await)
+    pub async fn t_build(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
+        Ok(self.build(truthy(args.get("full"))).await)
     }
 
     #[tool(
@@ -1092,7 +1115,7 @@ The format comes from the extension unless given. A large STEP can take minutes:
 
     #[tool(
         name = "export",
-        description = "Write the model to STEP, STL or 3MF. Refused if a feature failed to build, naming which, unless allowPartial:true is passed, in which case it writes the file anyway and still names the failures.",
+        description = "Write the model to STEP, STL or 3MF. `separate` writes one file per body, named after the body; `body` writes one body; `layFlat` turns the parts for printing. Refused if a feature failed to build, naming which, unless allowPartial:true is passed, in which case it writes the file anyway and still names the failures.",
         input_schema = crate::tools::export()
     )]
     pub async fn t_export(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
@@ -1115,33 +1138,89 @@ The format comes from the extension unless given. A large STEP can take minutes:
         // export is accepted. A refusal then removes the temporary file
         // alone: whatever was already at `path` (a previous good export) is
         // never touched, let alone overwritten and then deleted.
-        let tmp_path = temp_sibling(&path);
-        let (link, doc) = {
-            let st = self.state.lock().await;
+        let separate = truthy(args.get("separate"));
+        let wanted = args
+            .get("body")
+            .and_then(Value::as_str)
+            .filter(|b| !b.is_empty())
+            .map(str::to_string);
+        if separate && wanted.is_some() {
+            return Ok(failure(
+                "Give `body` or `separate`, not both: one body to one file, or every body to a \
+                 file of its own.",
+            ));
+        }
+        let lay_flat = args.get("layFlat").filter(|v| truthy(Some(v))).cloned();
+        let (link, mut doc) = {
+            let mut st = self.state.lock().await;
+            model::recompute_parameters(&mut st.doc);
             (st.link.clone(), st.doc.clone())
         };
-        let reply = match link
-            .call(
-                "export",
-                call_args([
-                    ("document", Value::Object(doc)),
-                    ("format", json!(format)),
-                    ("path", json!(tmp_path.to_string_lossy())),
-                ]),
-            )
-            .await
-        {
+        let mut body_id = None;
+        let mut laid = String::new();
+        if wanted.is_some() || lay_flat.is_some() {
+            let built = match engine_bodies(&link, &doc, None).await {
+                Ok(b) => b,
+                Err(e) => return Ok(failure(e)),
+            };
+            if let Some(w) = &wanted {
+                match find_body(&built, w) {
+                    Some(id) => body_id = Some(id),
+                    None => return Ok(failure(no_such_body(w, &built))),
+                }
+            }
+            if let Some(how) = &lay_flat {
+                match crate::layflat::lay_flat(&link, &mut doc, &built, how, body_id.as_deref(), separate).await {
+                    Ok(note) => laid = note,
+                    Err(e) => return Ok(failure(e)),
+                }
+            }
+        }
+        // A temporary folder beside `path`, holding a file of the same name:
+        // a refusal removes the folder and nothing that was already there,
+        // and the STEP's top assembly is named after the file, so the name
+        // inside has to be the real one. A separate export's folder of parts
+        // is made inside it too.
+        let tmp_root = temp_sibling(&path);
+        if let Err(e) = std::fs::create_dir(&tmp_root) {
+            return Ok(failure(format!("Could not write beside {}: {e}", path.display())));
+        }
+        let tmp_path = tmp_root.join(path.file_name().unwrap_or_default());
+        let mut payload = call_args([
+            ("document", Value::Object(doc)),
+            ("format", json!(format)),
+            ("path", json!(tmp_path.to_string_lossy())),
+        ]);
+        if let Some(obj) = payload.as_object_mut() {
+            if separate {
+                obj.insert("separate".into(), json!(true));
+            }
+            if let Some(id) = &body_id {
+                obj.insert("body".into(), json!(id));
+            }
+        }
+        let discard = || {
+            let _ = std::fs::remove_dir_all(&tmp_root);
+        };
+        let reply = match link.call("export", payload).await {
             Ok(r) => r,
             Err(e) => {
-                let _ = std::fs::remove_file(&tmp_path);
+                discard();
                 return Ok(engine_gone(&e));
             }
         };
         if reply.get("ok") != Some(&json!(true)) {
-            let _ = std::fs::remove_file(&tmp_path);
+            discard();
             return Ok(failure(format!("Export failed: {}", error_message(&reply))));
         }
         let result = reply.get("result").cloned().unwrap_or_else(|| json!({}));
+        if let Some(e) = result.get("error") {
+            discard();
+            return Ok(failure(format!(
+                "Export failed: {}",
+                e.get("message").and_then(Value::as_str).unwrap_or("?")
+            )));
+        }
         // `warnings` mixes a feature failure in with an ordinary export
         // advisory (like a plugin's displacement not surviving STEP); only
         // the entries that carry a `feature_id` (even a null one, `wire`
@@ -1154,7 +1233,7 @@ The format comes from the extension unless given. A large STEP can take minutes:
             .unwrap_or_default();
         let failures = feature_failure_lines(&failed);
         if !failures.is_empty() && !truthy(args.get("allowPartial")) {
-            let _ = std::fs::remove_file(&tmp_path);
+            discard();
             return Ok(failure(format!(
                 "Export refused: {} failed to build, the {format} would be incomplete. Pass \
                  allowPartial:true to write it anyway.\n{}",
@@ -1162,12 +1241,28 @@ The format comes from the extension unless given. A large STEP can take minutes:
                 failures.join("\n")
             )));
         }
-        if let Err(e) = std::fs::rename(&tmp_path, &path) {
-            let _ = std::fs::remove_file(&tmp_path);
-            return Ok(failure(format!("Could not write {}: {e}", path.display())));
+        let mut out = if separate {
+            let folder = path.with_extension("");
+            match place_files(&result, &folder) {
+                Ok(written) => written,
+                Err(e) => {
+                    discard();
+                    return Ok(failure(e));
+                }
+            }
+        } else {
+            if let Err(e) = std::fs::rename(&tmp_path, &path) {
+                discard();
+                return Ok(failure(format!("Could not write {}: {e}", path.display())));
+            }
+            let size = std::fs::metadata(&path).map_or(0, |m| m.len());
+            format!("Wrote {} ({size} bytes).", path.display())
+        };
+        discard();
+        if !laid.is_empty() {
+            out.push('\n');
+            out.push_str(&laid);
         }
-        let size = std::fs::metadata(&path).map_or(0, |m| m.len());
-        let mut out = format!("Wrote {} ({size} bytes).", path.display());
         if !failures.is_empty() {
             out.push('\n');
             out.push_str(&failures.join("\n"));
@@ -1176,18 +1271,102 @@ The format comes from the extension unless given. A large STEP can take minutes:
     }
 }
 
-/// A same-directory temporary name for `path`, so writing to it and then
-/// renaming over `path` never crosses a filesystem, and a refusal that
-/// removes it never touches `path` itself. Includes this process's id, since
-/// two agents (or two calls before the first finishes) could target the same
+/// Every body the document builds, as `inspect` summarises it: id, name and
+/// box. `only` narrows it, and asks for every face as well.
+pub(crate) async fn engine_bodies(
+    link: &EngineLink,
+    doc: &Doc,
+    only: Option<&[String]>,
+) -> Result<Vec<Value>, String> {
+    let mut payload = Map::new();
+    payload.insert("document".into(), Value::Object(doc.clone()));
+    payload.insert("detail".into(), json!(only.is_some()));
+    payload.insert("summary".into(), json!(true));
+    if let Some(ids) = only {
+        payload.insert("bodies".into(), json!(ids));
+    }
+    let reply = link
+        .call("inspect", Value::Object(payload))
+        .await
+        .map_err(|e| format!("the geometry engine could not be reached: {e}"))?;
+    if reply.get("ok") != Some(&json!(true)) {
+        return Err(format!("Could not measure the bodies: {}", error_message(&reply)));
+    }
+    Ok(reply
+        .get("result")
+        .and_then(|r| r.get("bodies"))
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default())
+}
+
+/// A body named by id or by name, as its id.
+pub(crate) fn find_body(built: &[Value], wanted: &str) -> Option<String> {
+    let field = |b: &Value, k: &str| b.get(k).and_then(Value::as_str).map(str::to_string);
+    built
+        .iter()
+        .find(|b| field(b, "id").as_deref() == Some(wanted))
+        .or_else(|| built.iter().find(|b| field(b, "name").as_deref() == Some(wanted)))
+        .and_then(|b| field(b, "id"))
+}
+
+pub(crate) fn no_such_body(wanted: &str, built: &[Value]) -> String {
+    let have: Vec<String> = built
+        .iter()
+        .map(|b| {
+            let id = b.get("id").and_then(Value::as_str).unwrap_or("?");
+            match b.get("name").and_then(Value::as_str) {
+                Some(n) if n != id => format!("{id} \"{n}\""),
+                _ => id.to_string(),
+            }
+        })
+        .collect();
+    format!("no body '{wanted}' in this build, have {}", have.join(", "))
+}
+
+/// Move a separate export's files from the temporary folder into `folder`,
+/// replacing files of the same name and leaving anything else there alone.
+fn place_files(result: &Value, folder: &Path) -> Result<String, String> {
+    let written: Vec<PathBuf> = result
+        .get("paths")
+        .and_then(Value::as_array)
+        .map(|a| a.iter().filter_map(Value::as_str).map(PathBuf::from).collect())
+        .unwrap_or_default();
+    if folder.exists() && !folder.is_dir() {
+        return Err(format!(
+            "{} is a file, and a separate export writes a folder of that name.",
+            folder.display()
+        ));
+    }
+    std::fs::create_dir_all(folder).map_err(|e| format!("Could not make {}: {e}", folder.display()))?;
+    let mut lines = Vec::new();
+    for from in &written {
+        let Some(name) = from.file_name() else { continue };
+        let to = folder.join(name);
+        std::fs::rename(from, &to).map_err(|e| format!("Could not write {}: {e}", to.display()))?;
+        let size = std::fs::metadata(&to).map_or(0, |m| m.len());
+        lines.push(format!("  {} ({size} bytes)", name.to_string_lossy()));
+    }
+    Ok(format!(
+        "Wrote {} file{} to {}:\n{}",
+        lines.len(),
+        if lines.len() == 1 { "" } else { "s" },
+        folder.display(),
+        lines.join("\n")
+    ))
+}
+
+/// A temporary folder beside `path`, so moving the export out of it never
+/// crosses a filesystem, and a refusal that removes it never touches `path`
+/// itself. Includes this process's id, since two agents could target the same
 /// export path at once.
 fn temp_sibling(path: &Path) -> PathBuf {
     let pid = std::process::id();
-    let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or("export");
-    match path.extension().and_then(|s| s.to_str()) {
-        Some(ext) => path.with_file_name(format!("{stem}.partial-{pid}.{ext}")),
-        None => path.with_file_name(format!("{stem}.partial-{pid}")),
-    }
+    let name = path.file_name().and_then(|s| s.to_str()).unwrap_or("export");
+    let dir = path.with_file_name(format!(".{name}.partial-{pid}"));
+    // Left by an export this process never finished; nobody else's.
+    let _ = std::fs::remove_dir_all(&dir);
+    dir
 }
 
 fn error_message(reply: &Value) -> String {
@@ -1197,6 +1376,38 @@ fn error_message(reply: &Value) -> String {
         .and_then(Value::as_str)
         .unwrap_or("?")
         .to_string()
+}
+
+/// What an update changed: the fields the patch named, with the values they
+/// have now. Not the whole feature, which for a sketch is pages of points the
+/// caller sent a moment ago.
+fn updated_line(id: &str, feature: &Value, patch: &Value, replace: bool) -> String {
+    let kind = feature.get("type").and_then(Value::as_str).unwrap_or("None");
+    if replace {
+        return format!("Replaced {id} ({kind}).");
+    }
+    let fields: Vec<String> = patch
+        .as_object()
+        .into_iter()
+        .flatten()
+        .map(|(k, _)| match feature.get(k) {
+            Some(v) => format!("{k} = {}", clipped(&py_json(v), 80)),
+            None => format!("{k} removed"),
+        })
+        .collect();
+    if fields.is_empty() {
+        format!("Updated {id} ({kind}): nothing in the patch.")
+    } else {
+        format!("Updated {id} ({kind}): {}.", fields.join(", "))
+    }
+}
+
+fn clipped(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        return s.to_string();
+    }
+    let cut: String = s.chars().take(max).collect();
+    format!("{cut}...")
 }
 
 /// `json.dumps(v)`: compact, but with a space after every colon and comma. The
@@ -1301,7 +1512,7 @@ impl FundaCad {
         Ok(Rebuilt { link, document, result, mesh, problems })
     }
 
-    async fn build(&self) -> CallToolResult {
+    async fn build(&self, full: bool) -> CallToolResult {
         let Rebuilt { link, document, result, mesh, problems } = match self.rebuild().await {
             Ok(r) => r,
             Err(e) => return e,
@@ -1336,7 +1547,7 @@ impl FundaCad {
                 }
             }
         }
-        let mut lines: Vec<String> = Vec::new();
+        let mut bodies: Vec<(String, String)> = Vec::new();
         for b in mesh.iter() {
             let id = b.id();
             let e = exact.get(id).cloned().unwrap_or_else(|| json!({}));
@@ -1365,7 +1576,7 @@ impl FundaCad {
                 None => String::new(),
             };
             let triangles = b.triangles();
-            lines.push(format!(
+            bodies.push((id.to_string(), format!(
                 "{id} \"{}\": {} x {} x {} mm{vol}, {} faces, {triangles} triangles",
                 b.get("name")
                     .and_then(Value::as_str)
@@ -1374,8 +1585,9 @@ impl FundaCad {
                 py_num(size.get(1)),
                 py_num(size.get(2)),
                 py_num(b.get("faceCount"))
-            ));
+            )));
         }
+        let mut lines = self.changed_bodies(&bodies, full).await;
         // `featureErrors`, NOT `errors`. A feature that fails is recorded as a
         // no-op and the rebuild carries on, so the reply is a successful one
         // carrying the failures beside the geometry that did build. Reading the
@@ -1406,6 +1618,9 @@ impl FundaCad {
         if mesh.is_empty() {
             lines.push("No bodies were produced.".into());
         }
+        if lines.is_empty() {
+            lines.push("Built, nothing failed.".into());
+        }
         if !problems.is_empty() {
             lines.push(format!("document problems: {}", problems.join("; ")));
         }
@@ -1419,6 +1634,45 @@ impl FundaCad {
         } else {
             text(full)
         }
+    }
+
+    /// The body lines worth printing: all of them the first time and when
+    /// asked, otherwise only the bodies that are new or changed since the last
+    /// build reported them, the ones that went away, and a count of the rest.
+    async fn changed_bodies(&self, bodies: &[(String, String)], full: bool) -> Vec<String> {
+        let previous = {
+            let mut st = self.state.lock().await;
+            st.reported.replace(bodies.iter().cloned().collect())
+        };
+        let previous = match previous {
+            Some(p) if !full => p,
+            _ => return bodies.iter().map(|(_, line)| line.clone()).collect(),
+        };
+        let mut out: Vec<String> = bodies
+            .iter()
+            .filter(|(id, line)| previous.get(id) != Some(line))
+            .map(|(_, line)| line.clone())
+            .collect();
+        let shown = out.len();
+        let mut gone: Vec<&String> =
+            previous.keys().filter(|id| !bodies.iter().any(|(b, _)| b == *id)).collect();
+        gone.sort();
+        if !gone.is_empty() {
+            out.push(format!(
+                "gone since the last build: {}",
+                gone.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
+            ));
+        }
+        let same = bodies.len() - shown;
+        if same > 0 {
+            out.push(format!(
+                "{} {} unchanged{}",
+                if shown == 0 { "all".to_string() } else { format!("{same} other") },
+                if same == 1 && shown > 0 { "body" } else { "bodies" },
+                if shown == 0 { format!(" ({same})") } else { String::new() }
+            ));
+        }
+        out
     }
 
     async fn inspect(&self, args: &JsonObject) -> CallToolResult {
@@ -1752,6 +2006,165 @@ fn keep_indices(body: &mut Value, key: &str, want: &[i64]) {
                 .and_then(Value::as_i64)
                 .is_some_and(|i| want.contains(&i))
         });
+    }
+}
+
+// --- edit and interference ---------------------------------------------------
+
+impl FundaCad {
+    async fn edit(&self, args: &JsonObject) -> CallToolResult {
+        let ops = match args.get("ops").and_then(Value::as_array) {
+            Some(o) if !o.is_empty() => o.clone(),
+            _ => return failure("`ops` needs at least one edit."),
+        };
+        let head = {
+            let mut st = self.state.lock().await;
+            // On a copy: the document only changes if every entry applies.
+            let mut doc = st.doc.clone();
+            let mut done = Vec::new();
+            for (n, entry) in ops.iter().enumerate() {
+                match crate::edits::apply(&mut doc, entry) {
+                    Ok(d) => done.push(d),
+                    Err(why) => {
+                        return failure(crate::edits::refused(n + 1, ops.len(), entry, &why))
+                    }
+                }
+            }
+            st.doc = doc;
+            st.invalidate();
+            st.state_line(&crate::edits::summary(&done))
+        };
+        if !truthy(args.get("build")) {
+            return text(head);
+        }
+        let built = self.build(false).await;
+        let body = built
+            .content
+            .iter()
+            .filter_map(|c| match c {
+                ContentBlock::Text(t) => Some(t.text.clone()),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        let all = format!("{head}\nbuild:\n{body}");
+        if is_error(&built) {
+            failure(all)
+        } else {
+            text(all)
+        }
+    }
+
+    async fn interference(&self, args: &JsonObject) -> CallToolResult {
+        let clearance = match args.get("clearance").filter(|v| !v.is_null()) {
+            None => crate::clash::DEFAULT_CLEARANCE,
+            Some(v) => match v.as_f64().filter(|c| c.is_finite() && *c >= 0.0) {
+                Some(c) => c,
+                None => return failure(format!("`clearance` is a distance in mm, 0 or more, got {v}")),
+            },
+        };
+        let bodies: Vec<String> = args
+            .get("bodies")
+            .and_then(Value::as_array)
+            .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
+            .unwrap_or_default();
+        let sweep = match args.get("sweep").filter(|v| !v.is_null()) {
+            None => None,
+            Some(v) => match crate::clash::sweep_of(v) {
+                Ok(s) => Some(s),
+                Err(e) => return failure(e),
+            },
+        };
+        let (link, doc) = {
+            let mut st = self.state.lock().await;
+            model::recompute_parameters(&mut st.doc);
+            (st.link.clone(), st.doc.clone())
+        };
+        let ask = |document: Doc| {
+            let mut payload = Map::new();
+            payload.insert("document".into(), Value::Object(document));
+            payload.insert("clearance".into(), json!(clearance));
+            if !bodies.is_empty() {
+                payload.insert("bodies".into(), json!(bodies));
+            }
+            let link = link.clone();
+            async move {
+                match link.call("interference", Value::Object(payload)).await {
+                    Err(e) => Err(format!("the geometry engine could not be reached: {e}")),
+                    Ok(reply) if reply.get("ok") != Some(&json!(true)) => {
+                        Err(format!("the check failed: {}", error_message(&reply)))
+                    }
+                    Ok(reply) => {
+                        let r = reply.get("result").cloned().unwrap_or_else(|| json!({}));
+                        match r.get("error") {
+                            // Nothing built at all: the engine names the
+                            // feature that stopped it.
+                            Some(e) => Err(format!(
+                                "nothing built, {}",
+                                e.get("message").and_then(Value::as_str).unwrap_or("no bodies")
+                            )),
+                            None => Ok(r),
+                        }
+                    }
+                }
+            }
+        };
+        let unknown = |r: &Value| -> Option<CallToolResult> {
+            if bodies.is_empty() {
+                return None;
+            }
+            let missing = crate::clash::missing(r, &bodies);
+            (!missing.is_empty()).then(|| {
+                failure(format!(
+                    "no body {} in this build. Check the ids or names against `build`.",
+                    missing.iter().map(|m| format!("'{m}'")).collect::<Vec<_>>().join(", ")
+                ))
+            })
+        };
+
+        let Some(sweep) = sweep else {
+            let r = match ask(doc).await {
+                Ok(r) => r,
+                Err(e) => return failure(e),
+            };
+            if let Some(refusal) = unknown(&r) {
+                return refusal;
+            }
+            let mut out = crate::clash::report(&r, clearance);
+            let failed = crate::clash::failures(&r);
+            if !failed.is_empty() {
+                out.push_str("\nSome features failed, so this checked what did build:\n");
+                out.push_str(&failed.join("\n"));
+            }
+            return text(out);
+        };
+
+        let defs = model::param_defs(&doc);
+        let Some(def) = defs.get(&sweep.param) else {
+            let mut have: Vec<&String> = defs.keys().collect();
+            have.sort();
+            return failure(format!(
+                "no parameter '{}' to sweep, have [{}]",
+                sweep.param,
+                have.iter().map(|k| format!("'{k}'")).collect::<Vec<_>>().join(", ")
+            ));
+        };
+        let unit = def.get("unit").and_then(Value::as_str).unwrap_or("mm").to_string();
+        let mut steps = Vec::new();
+        for value in &sweep.values {
+            let mut d = doc.clone();
+            let reply = match model::set_parameter(&mut d, &sweep.param, &json!(value), &unit, None) {
+                Err(e) => Err(e.to_string()),
+                Ok(_) => ask(d).await,
+            };
+            if let Ok(r) = &reply {
+                if let Some(refusal) = unknown(r) {
+                    return refusal;
+                }
+            }
+            steps.push(crate::clash::Step { value: *value, reply });
+        }
+        text(crate::clash::sweep_report(&sweep.param, &unit, &steps, clearance))
     }
 }
 

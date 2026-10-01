@@ -122,6 +122,7 @@ describe("the op table", () => {
         "doc_open",
         "doc_import",
         "doc_set",
+        "edit",
         "feature_add",
         "feature_move",
         "feature_remove",

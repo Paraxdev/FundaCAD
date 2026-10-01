@@ -717,5 +717,28 @@ pub fn interference_result(req: &Map<String, Value>, watch: &dyn Watch) -> JobRe
         }
     }
     let clearance = req.get("clearance").and_then(Value::as_f64);
-    JobResult::Json(interference(&r.bodies, clearance, MAX_INTERFERENCE_OPS, watch))
+    // `bodies` narrows the sweep to the ones named, by id or by name, which is
+    // what checks one mechanism's parts without paying for every other pair.
+    let want: Option<Vec<&str>> = req
+        .get("bodies")
+        .and_then(Value::as_array)
+        .filter(|a| !a.is_empty())
+        .map(|a| a.iter().filter_map(Value::as_str).collect());
+    let mut picked = r.bodies;
+    if let Some(w) = &want {
+        picked.retain(|b| w.contains(&b.id.as_str()) || w.contains(&b.name.as_str()));
+    }
+    let mut out = interference(&picked, clearance, MAX_INTERFERENCE_OPS, watch);
+    if want.is_some() {
+        out.insert(
+            "checked".into(),
+            Value::Array(picked.iter().map(|b| json!({"id": b.id, "name": b.name})).collect()),
+        );
+    }
+    // A feature that failed changes which bodies there are to check, so a
+    // clash report that hid it would answer a different question.
+    if !r.errors.is_empty() {
+        out.insert("errors".into(), Value::Array(r.errors.iter().map(FeatureError::wire).collect()));
+    }
+    JobResult::Json(out)
 }

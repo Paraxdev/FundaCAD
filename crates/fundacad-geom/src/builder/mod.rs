@@ -747,6 +747,17 @@ fn datum_line(raw: &Value) -> Option<[[f64; 3]; 2]> {
     Some([v("origin")?, v("dir")?])
 }
 
+/// The bodies whose ids were not there before take the feature's name, one
+/// alone as it is, several as "name 1", "name 2", the way an import names the
+/// parts of an assembly.
+fn name_new_bodies(ctx: &mut Ctx, before: &HashSet<String>, name: &str) {
+    let fresh: Vec<usize> = (0..ctx.bodies.len()).filter(|&i| !before.contains(&ctx.bodies[i].id)).collect();
+    let several = fresh.len() > 1;
+    for (n, i) in fresh.into_iter().enumerate() {
+        ctx.bodies[i].name = if several { format!("{name} {}", n + 1) } else { name.to_owned() };
+    }
+}
+
 fn label_of(raw: &Value) -> String {
     let s = |k: &str| raw.get(k).and_then(Value::as_str).filter(|s| !s.is_empty());
     s("name")
@@ -1011,6 +1022,20 @@ pub fn rebuild_from(
             Vec::new()
         };
 
+        // A feature's `name` names the bodies it makes, so a part is "Slider"
+        // in the build, the STEP tree and the part list rather than
+        // "Cylinder". Only bodies with an id this feature brought in: a join
+        // or a cut keeps the name of the body it worked on.
+        let naming = rawf
+            .get("name")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|n| !n.is_empty() && type_name != Some("import"));
+        let pre_ids: HashSet<String> = match naming {
+            Some(_) => ctx.bodies.iter().map(|b| b.id.clone()).collect(),
+            None => HashSet::new(),
+        };
+
         let outcome = run_feature(&mut ctx, f, type_name, watch);
         // A feature a cancel cut short failed for no reason of its own, and
         // must not reach the cache as though it had.
@@ -1023,6 +1048,9 @@ pub fn rebuild_from(
         match outcome {
             Ok(Ran::Inactive) => {}
             Ok(Ran::Built) => {
+                if let Some(name) = naming {
+                    name_new_bodies(&mut ctx, &pre_ids, name);
+                }
                 if prov {
                     crate::bench::phase("owners", || {
                         owners::update(&mut ctx, f, fid.unwrap_or(""), &pre, &pre_owners);
