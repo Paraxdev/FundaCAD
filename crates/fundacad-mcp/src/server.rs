@@ -1214,7 +1214,12 @@ The format comes from the extension unless given. A large STEP can take minutes:
         if let Err(e) = std::fs::create_dir(&tmp_root) {
             return Ok(failure(format!("Could not write beside {}: {e}", path.display())));
         }
-        let tmp_path = tmp_root.join(path.file_name().unwrap_or_default());
+        let mut tmp_path = tmp_root.join(path.file_name().unwrap_or_default());
+        // The parts are named after the bodies and take the path's extension,
+        // so a folder path with none would make files a slicer cannot place.
+        if separate && path.extension().is_none() {
+            tmp_path.set_extension(format.to_ascii_lowercase());
+        }
         let mut payload = call_args([
             ("document", Value::Object(doc)),
             ("format", json!(format)),
