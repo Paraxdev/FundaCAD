@@ -179,7 +179,13 @@ pub fn cut(body: &MeshBody, plane: &Plane) -> Cut {
     }
     let mut used = vec![false; segments.len()];
     let mut out = Cut::default();
-    for start in 0..segments.len() {
+    // An open chain is walked from its first segment, the one no other
+    // segment leads into, so it comes out whole rather than in pieces. The
+    // closed loops are what is left.
+    let ends: std::collections::HashSet<(i64, i64)> = segments.iter().map(|s| key(s.1)).collect();
+    let (heads, rest): (Vec<usize>, Vec<usize>) =
+        (0..segments.len()).partition(|&i| !ends.contains(&key(segments[i].0)));
+    for start in heads.into_iter().chain(rest) {
         if used[start] {
             continue;
         }
@@ -460,5 +466,23 @@ mod tests {
         assert_eq!(num4(4.9087e-6), "4.909e-06");
         assert_eq!(num4(3.0680e-7), "3.068e-07");
         assert_eq!(num4(1666.6667), "1667");
+    }
+
+    #[test]
+    fn one_open_chain_is_one_chain_whatever_order_its_triangles_come_in() {
+        // A strip standing across z = 0, three squares wide, its middle
+        // square's triangles listed first.
+        let positions: Vec<f32> = vec![
+            0.0, 0.0, -1.0, 1.0, 0.0, -1.0, 2.0, 0.0, -1.0, 3.0, 0.0, -1.0, // bottom row
+            0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 2.0, 0.0, 1.0, 3.0, 0.0, 1.0, // top row
+        ];
+        let indices = vec![1, 2, 6, 1, 6, 5, 0, 1, 5, 0, 5, 4, 2, 3, 7, 2, 7, 6];
+        let body = MeshBody { info: Default::default(), positions, indices, face_ids: vec![], edges: vec![] };
+        let m = |v: Value| v.as_object().cloned().unwrap();
+        let plane = plane_of(&m(serde_json::json!({"axis": "Z", "at": 0}))).unwrap();
+        let c = cut(&body, &plane);
+        assert!(c.loops.is_empty());
+        assert_eq!(c.open.len(), 1, "{:?}", c.open);
+        assert_eq!(c.open[0].len(), 7, "{:?}", c.open);
     }
 }
