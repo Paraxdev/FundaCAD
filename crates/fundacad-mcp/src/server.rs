@@ -2761,6 +2761,7 @@ impl ServerHandler for FundaCad {
         // working on the open document, but it is a working one.
         self.adopt_running_app().await;
 
+        let mut lost = false;
         for attempt in 0..2 {
             let live = self.state.lock().await.live.is_some();
             if live && !NO_DOCUMENT.contains(&name.as_str()) {
@@ -2770,16 +2771,30 @@ impl ServerHandler for FundaCad {
                     Ok(out) => return out,
                     Err(e) if attempt == 0 && e.is_lost() => {
                         self.drop_lost_app(e.message()).await;
+                        lost = true;
                         continue;
                     }
                     Err(e) => return Ok(CallToolResponse::Complete(failure(e.message()))),
                 }
             }
-            if MUTATORS.contains(&name.as_str()) {
+            let mutates = MUTATORS.contains(&name.as_str());
+            if mutates {
                 self.state.lock().await.private_edits = true;
             }
             let tcc = ToolCallContext::new(self, request, context);
-            return self.router.call(tcc).await;
+            let out = self.router.call(tcc).await;
+            // The agent was working on the open document a moment ago: say
+            // that this change did not reach it.
+            if lost && mutates {
+                if let Ok(CallToolResponse::Complete(result)) = out {
+                    return Ok(CallToolResponse::Complete(append(
+                        result,
+                        "\n(FundaCAD's engine went away, so this was done on a private copy, not in the \
+                         open document. doc_save it to keep it, or reopen FundaCAD and do it again there.)",
+                    )));
+                }
+            }
+            return out;
         }
         unreachable!("the loop returns or continues once")
     }
