@@ -13,6 +13,7 @@
 //!   `render`       the z-buffered flat rasteriser `view` draws with
 //!   `describe`     an inspect report, as something worth reading
 //!   `schema`       the feature reference the agent reads first
+//!   `shadow`       running from a copy, so a build can replace the original
 //!
 //! There are two worlds, as there were: PRIVATE holds the document in this
 //! process and spawns its own engine, LIVE works on the document a running
@@ -30,12 +31,16 @@ pub mod png;
 pub mod render;
 pub mod schema;
 pub mod server;
+pub mod shadow;
 pub mod tools;
 pub mod upload;
 
 /// Runs the MCP server on stdio for either the standalone binary or the
 /// desktop executable's `--mcp` mode.
 pub fn run_stdio() -> Result<(), ()> {
+	if let Some(code) = shadow::run_from_copy() {
+		return if code == 0 { Ok(()) } else { Err(()) };
+	}
 	let runtime = tokio::runtime::Builder::new_current_thread()
 		.enable_all()
 		.build()
