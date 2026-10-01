@@ -89,11 +89,14 @@ pub fn plane_of(args: &serde_json::Map<String, Value>) -> Result<Plane, String> 
     let u = unit(cross(cross(n, pick), n)).expect("pick is not parallel to n");
     let v = cross(n, u);
     let r = |a: [f64; 3]| format!("({}, {}, {})", g_format(round(a[0], 6)), g_format(round(a[1], 6)), g_format(round(a[2], 6)));
+    // `at` slides the plane along its normal; the label and every number
+    // in the reply are measured from where it ends up.
+    let origin = match at {
+        Some(t) => [origin[0] + n[0] * t, origin[1] + n[1] * t, origin[2] + n[2] * t],
+        None => origin,
+    };
     Ok(Plane {
-        origin: match at {
-            Some(t) => [origin[0] + n[0] * t, origin[1] + n[1] * t, origin[2] + n[2] * t],
-            None => origin,
-        },
+        origin,
         n,
         u,
         v,
@@ -446,6 +449,10 @@ mod tests {
         assert!(plane_of(&m(serde_json::json!({"axis": "W", "at": 1}))).is_err());
         let p = plane_of(&m(serde_json::json!({"origin": [0, 0, 0], "normal": [0, 0, 2]}))).unwrap();
         assert_eq!(cross(p.u, p.v), [0.0, 0.0, 1.0]);
+        // `at` moves the plane, and the label says where it went.
+        let p = plane_of(&m(serde_json::json!({"origin": [0, 0, 0], "normal": [0, 0, 1], "at": 10}))).unwrap();
+        assert_eq!(p.origin, [0.0, 0.0, 10.0]);
+        assert_eq!(p.label, "the plane through (0, 0, 10) normal to (0, 0, 1)");
     }
 
     #[test]
