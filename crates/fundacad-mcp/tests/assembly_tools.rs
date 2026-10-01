@@ -238,6 +238,11 @@ fn a_section_gives_the_outline_and_the_numbers_a_beam_check_needs() {
     // At 45 degrees the beam's cut is root 2 longer.
     let r = mcp.call("section", json!({"origin": [0, 0, 0], "normal": [0, 1, 1], "bodies": ["Beam"]}));
     assert!(r.text.contains("area 282.8 mm2"), "{}", r.text);
+    // A plane on the bottom face reads like one on the top face.
+    for at in [-15, 15] {
+        let r = mcp.call("section", json!({"axis": "Z", "at": at, "bodies": ["Beam"], "outline": false}));
+        assert!(r.text.contains("the plane lies on a face of it, the face's area 200 mm2"), "Z = {at}: {}", r.text);
+    }
     let r = mcp.call("section", json!({"axis": "X", "at": 500}));
     assert!(r.text.ends_with("The plane misses every body."), "{}", r.text);
 }

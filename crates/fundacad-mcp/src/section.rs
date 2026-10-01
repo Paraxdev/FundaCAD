@@ -117,7 +117,15 @@ fn round(x: f64, places: i32) -> f64 {
 pub struct Cut {
     pub loops: Vec<Vec<[f64; 2]>>,
     pub open: Vec<Vec<[f64; 2]>>,
+    /// The plane lies on a flat face of the body, and the loops are that
+    /// face's outline.
+    pub on_face: bool,
 }
+
+/// Closer to the plane than this, in mm, a mesh point is taken to be on it.
+/// The mesh is single precision, so a point modelled on the plane can land
+/// a few hundred nanometres either side of it.
+const ON_PLANE: f64 = 1e-5;
 
 /// Where a triangle edge from `a` to `b` crosses the plane, written so the
 /// two triangles that share the edge compute the very same point.
@@ -133,6 +141,40 @@ fn key(p: [f64; 2]) -> (i64, i64) {
 
 /// Cut a body's triangles with the plane.
 pub fn cut(body: &MeshBody, plane: &Plane) -> Cut {
+    let (mut out, coplanar) = cut_at(body, plane, 0.0);
+    if !out.loops.is_empty() || !out.open.is_empty() {
+        out.on_face = coplanar && !out.loops.is_empty();
+        return out;
+    }
+    if !coplanar {
+        return out;
+    }
+    // The plane lies on a face and nothing crosses it: a points-on-the-plane
+    // rule has to pick a side, so the bottom face of a part would read as a
+    // miss while its top face cut fine. Cut a hair inside the body instead,
+    // on whichever side the material is.
+    let nudge = 20.0 * ON_PLANE;
+    let mut best: Option<Cut> = None;
+    for shift in [nudge, -nudge] {
+        let (c, _) = cut_at(body, plane, shift);
+        let area: f64 = c.loops.iter().map(|l| signed_area(l)).sum();
+        if area > best.as_ref().map_or(0.0, |b| b.loops.iter().map(|l| signed_area(l)).sum()) {
+            best = Some(c);
+        }
+    }
+    match best {
+        Some(mut c) => {
+            c.on_face = true;
+            c
+        }
+        None => out,
+    }
+}
+
+/// The cut with the plane moved `shift` mm along its normal, and whether any
+/// triangle lies in the plane.
+fn cut_at(body: &MeshBody, plane: &Plane, shift: f64) -> (Cut, bool) {
+    let mut coplanar = false;
     let pos = &body.positions;
     let point = |i: u32| -> [f64; 3] {
         let k = i as usize * 3;
@@ -148,12 +190,15 @@ pub fn cut(body: &MeshBody, plane: &Plane) -> Cut {
             .iter()
             .map(|&i| {
                 let p = point(i);
-                let d = dot([p[0] - plane.origin[0], p[1] - plane.origin[1], p[2] - plane.origin[2]], plane.n);
-                // A point exactly on the plane counts as above it, so a face
-                // lying in the plane cuts nothing and an edge in it is cut once.
-                (p, if d == 0.0 { 1e-12 } else { d })
+                let d = dot([p[0] - plane.origin[0], p[1] - plane.origin[1], p[2] - plane.origin[2]], plane.n) - shift;
+                // A point on the plane counts as above it, so a face lying in
+                // the plane cuts nothing and an edge in it is cut once.
+                (p, if d.abs() <= ON_PLANE { 1e-12 } else { d })
             })
             .collect();
+        if ps.iter().all(|p| p.1 == 1e-12) {
+            coplanar = true;
+        }
         let mut exit = None;
         let mut enter = None;
         for k in 0..3 {
@@ -221,7 +266,7 @@ pub fn cut(body: &MeshBody, plane: &Plane) -> Cut {
             l.reverse();
         }
     }
-    out
+    (out, coplanar)
 }
 
 /// Drop points that lie on the line through their neighbours: a flat side is
@@ -342,7 +387,8 @@ pub fn report(id: &str, name: &str, plane: &Plane, cut: &Cut, outline: bool) -> 
     ];
     let holes = cut.loops.iter().filter(|l| signed_area(l) < 0.0).count();
     let mut out = vec![format!(
-        "{who}: area {} mm2 in {} piece{}{}",
+        "{who}: {}area {} mm2 in {} piece{}{}",
+        if cut.on_face { "the plane lies on a face of it, the face's " } else { "" },
         num4(p.area),
         cut.loops.len() - holes,
         if cut.loops.len() - holes == 1 { "" } else { "s" },
