@@ -25,6 +25,13 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **Sketch shortcuts over MCP.** A sketch may give an outline as a `polyline`,
+  a list of points that can close on itself, and a rectangle by two opposite
+  corners. They are stored as the lines and centred rectangle the app already
+  draws, so a ten sided outline is one entity to write instead of ten lines
+  whose ends must match by hand. New entities are now checked when a sketch is
+  added or its entities updated: an unknown type, a missing or unread field, or
+  an id used twice is refused with what it should be.
 - **Section properties over MCP.** The new `section` tool cuts the built
   bodies with a plane, across X, Y or Z or at any angle, and gives each body's
   outline as closed loops with its area, centroid, second moments of area,
