@@ -2152,10 +2152,15 @@ impl FundaCad {
             }
             let missing = crate::clash::missing(r, &bodies);
             (!missing.is_empty()).then(|| {
-                failure(format!(
-                    "no body {} in this build. Check the ids or names against `build`.",
-                    missing.iter().map(|m| format!("'{m}'")).collect::<Vec<_>>().join(", ")
-                ))
+                let names = missing.iter().map(|m| format!("'{m}'")).collect::<Vec<_>>().join(", ");
+                let failed = crate::clash::failures(r);
+                if failed.is_empty() {
+                    failure(format!("no body {names} in this build. Check the ids or names against `build`."))
+                } else {
+                    // A body that is not there because its feature failed:
+                    // the id is not the problem, the feature is.
+                    failure(format!("no body {names} in this build, some features failed:\n{}", failed.join("\n")))
+                }
             })
         };
 
@@ -2187,21 +2192,43 @@ impl FundaCad {
             ));
         };
         let unit = def.get("unit").and_then(Value::as_str).unwrap_or("mm").to_string();
-        let mut steps = Vec::new();
+        let mut steps: Vec<crate::clash::Step> = Vec::new();
         for value in &sweep.values {
             let mut d = doc.clone();
             let reply = match model::set_parameter(&mut d, &sweep.param, &json!(value), &unit, None) {
                 Err(e) => Err(e.to_string()),
                 Ok(_) => ask(d).await,
             };
+            // A name that is wrong is wrong at every step: refused as soon
+            // as a step builds cleanly without it, before the whole sweep is
+            // spent on it. A body that is only missing at some steps (its
+            // feature failed there) is a note on those steps' lines.
             if let Ok(r) = &reply {
-                if let Some(refusal) = unknown(r) {
-                    return refusal;
+                if crate::clash::failures(r).is_empty() && !steps.iter().any(|s| s.reply.is_ok()) {
+                    if let Some(refusal) = unknown(r) {
+                        return refusal;
+                    }
                 }
             }
             steps.push(crate::clash::Step { value: *value, reply });
         }
-        text(crate::clash::sweep_report(&sweep.param, &unit, &steps, clearance))
+        let report = crate::clash::sweep_report(&sweep.param, &unit, &steps, clearance, &bodies);
+        let built: Vec<&Value> = steps.iter().filter_map(|s| s.reply.as_ref().ok()).collect();
+        if built.is_empty() {
+            return failure(report);
+        }
+        // Missing at every step that built: no step checked what was asked.
+        let never: Vec<String> = crate::clash::missing(built[0], &bodies)
+            .into_iter()
+            .filter(|b| built.iter().all(|r| crate::clash::missing(r, &bodies).contains(b)))
+            .collect();
+        if !never.is_empty() {
+            return failure(format!(
+                "no body {} at any step of the sweep. Check the ids or names against `build`.\n{report}",
+                never.iter().map(|m| format!("'{m}'")).collect::<Vec<_>>().join(", ")
+            ));
+        }
+        text(report)
     }
 }
 

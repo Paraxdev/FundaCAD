@@ -96,6 +96,20 @@ fn interference_reports_overlaps_and_gaps_and_sweeps_a_parameter() {
     assert!(r.text.contains("drop = 1: CLASH body1/body2 14.137 mm3"), "{}", r.text);
     assert_eq!(mcp.call("doc_get", json!({})).text, before);
 
+    // A body whose feature fails at one step is a note on that step, and the
+    // rest of the sweep still counts.
+    let r = mcp.call("edit", json!({"ops": [
+        {"op": "param", "name": "pinh", "expr": 10},
+        {"op": "update", "id": "cy1", "patch": {"height": "pinh"}}
+    ]}));
+    assert!(!r.is_error, "{}", r.text);
+    let r = mcp.call("interference", json!({"bodies": ["Block", "Pin"], "sweep": {"param": "pinh", "values": [10, 0]}}));
+    assert!(!r.is_error, "{}", r.text);
+    assert!(r.text.contains("pinh = 0: clear (Pin not built) (features failed: cy1"), "{}", r.text);
+    assert!(r.text.contains("1 step had failed features"), "{}", r.text);
+    let r = mcp.call("interference", json!({"bodies": ["Block", "Nope"], "sweep": {"param": "pinh", "values": [10, 0]}}));
+    assert!(r.is_error && r.text.starts_with("no body 'Nope' in this build"), "{}", r.text);
+
     let r = mcp.call("interference", json!({"bodies": ["Nope"]}));
     assert!(r.is_error && r.text.contains("no body 'Nope'"), "{}", r.text);
     let r = mcp.call("interference", json!({"sweep": {"param": "nope", "values": [1]}}));
