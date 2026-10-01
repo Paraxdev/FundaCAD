@@ -569,6 +569,85 @@ inline TopoDS_Shape bo_unwrap(const TopoDS_Shape &s) {
   return cur;
 }
 
+// A face of a solid without the INTERNAL edges a boolean left in it where an
+// operand only touched the face along a line, as a blade whose flat side
+// grazes a cylinder: the shell is still closed, but the line bounds just that
+// one face and reads as an open edge. Edges in `keep`, lines the operands
+// already carried such as an imprint's, stay. Null when nothing is dropped.
+inline TopoDS_Face bo_face_without_internal(const TopoDS_Face &f, const TopTools_IndexedMapOfShape &keep) {
+  auto drop = [&](const TopoDS_Shape &e) { return e.Orientation() == TopAbs_INTERNAL && !keep.Contains(e); };
+  bool any = false;
+  for (TopoDS_Iterator w(f, false, false); w.More() && !any; w.Next())
+    for (TopoDS_Iterator e(w.Value(), false, false); e.More() && !any; e.Next()) any = drop(e.Value());
+  if (!any) return TopoDS_Face();
+  // Builder::Add composes a child with its parent's location and orientation,
+  // so both copies are filled bare and get theirs back after.
+  BRep_Builder bb;
+  TopoDS_Shape out = f.EmptyCopied();
+  out.Location(TopLoc_Location());
+  out.Orientation(TopAbs_FORWARD);
+  for (TopoDS_Iterator w(f, false, false); w.More(); w.Next()) {
+    if (w.Value().ShapeType() != TopAbs_WIRE) {
+      bb.Add(out, w.Value());
+      continue;
+    }
+    TopoDS_Shape wire = w.Value().EmptyCopied();
+    wire.Location(TopLoc_Location());
+    wire.Orientation(TopAbs_FORWARD);
+    int kept = 0;
+    for (TopoDS_Iterator e(w.Value(), false, false); e.More(); e.Next()) {
+      if (drop(e.Value())) continue;
+      bb.Add(wire, e.Value());
+      ++kept;
+    }
+    if (kept == 0) continue;
+    wire.Closed(w.Value().Closed());
+    wire.Location(w.Value().Location());
+    wire.Orientation(w.Value().Orientation());
+    bb.Add(out, wire);
+  }
+  out.Location(f.Location());
+  out.Orientation(f.Orientation());
+  return TopoDS::Face(out);
+}
+
+// The INTERNAL edges of every operand, which a boolean's result may keep.
+inline TopTools_IndexedMapOfShape bo_internal_edges(const TopoDS_Shape &base, const TopTools_ListOfShape &tools) {
+  TopTools_IndexedMapOfShape out;
+  auto add = [&](const TopoDS_Shape &s) {
+    for (TopExp_Explorer x(s, TopAbs_EDGE); x.More(); x.Next())
+      if (x.Current().Orientation() == TopAbs_INTERNAL) out.Add(x.Current());
+  };
+  add(base);
+  for (TopTools_ListOfShape::Iterator it(tools); it.More(); it.Next()) add(it.Value());
+  return out;
+}
+
+inline TopoDS_Shape bo_drop_internal_edges(const TopoDS_Shape &s, const TopTools_IndexedMapOfShape &keep) {
+  try {
+    Handle(BRepTools_ReShape) re = new BRepTools_ReShape();
+    bool changed = false;
+    for (TopExp_Explorer so(s, TopAbs_SOLID); so.More(); so.Next())
+      for (TopExp_Explorer fx(so.Current(), TopAbs_FACE); fx.More(); fx.Next()) {
+        TopoDS_Face f = TopoDS::Face(fx.Current());
+        if (re->IsRecorded(f)) continue;
+        TopoDS_Face g = bo_face_without_internal(f, keep);
+        if (g.IsNull()) continue;
+        // ReShape matches faces regardless of orientation, so the replacement
+        // is recorded for the face as it sits forward.
+        f.Orientation(TopAbs_FORWARD);
+        g.Orientation(TopAbs_FORWARD);
+        re->Replace(f, g);
+        changed = true;
+      }
+    if (!changed) return s;
+    TopoDS_Shape out = re->Apply(s);
+    return BRepCheck_Analyzer(out).IsValid() ? out : s;
+  } catch (...) {
+    return s;
+  }
+}
+
 inline TopoDS_Shape bo_unify(const TopoDS_Shape &s) {
   ShapeUpgrade_UnifySameDomain up(s, true, true, true);
   up.AllowInternalEdges(false);
@@ -714,7 +793,7 @@ inline BoShape bo_boolean(const TopoDS_Shape &base, const TopoDS_Shape &tools, i
   BO_GUARD(
       TopTools_ListOfShape tl = bo_tool_list(tools);
       TopoDS_Shape out = bo_checked(bo_bool_run(base, tl, kind, parallel, fuzzy), base, tl, kind, parallel, fuzzy);
-      out = bo_unify(out);
+      out = bo_unify(bo_drop_internal_edges(out, bo_internal_edges(base, tl)));
       if (unwrap) out = bo_unwrap(out);
       return bo_own(out);)
 }
@@ -729,8 +808,9 @@ inline BoShape bo_bool_build(const TopoDS_Shape &base, const TopoDS_Shape &tools
 inline BoShape bo_bool_check(const TopoDS_Shape &result, const TopoDS_Shape &base, const TopoDS_Shape &tools,
                              int kind, bool parallel, double fuzzy, rust::Slice<const double> vols,
                              double &out_vol) {
-  BO_GUARD(std::vector<double> v(vols.begin(), vols.end());
-           return bo_own(bo_checked(result, base, bo_tool_list(tools), kind, parallel, fuzzy, v, &out_vol));)
+  BO_GUARD(std::vector<double> v(vols.begin(), vols.end()); TopTools_ListOfShape tl = bo_tool_list(tools);
+           TopoDS_Shape out = bo_checked(result, base, tl, kind, parallel, fuzzy, v, &out_vol);
+           return bo_own(bo_drop_internal_edges(out, bo_internal_edges(base, tl)));)
 }
 
 inline BoShape bo_clean(const TopoDS_Shape &s) { BO_GUARD(return bo_own(bo_unify(s));) }
