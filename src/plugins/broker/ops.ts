@@ -52,7 +52,9 @@ export const OPS = [
   "feature_update",
   "feature_remove",
   "feature_move",
+  "edit",
   "build",
+  "interference",
   "inspect",
   "view",
   "export",
@@ -146,6 +148,12 @@ export const OP_TABLE: Record<Op, OpSpec> = {
     writes: true,
   },
 
+  edit: {
+    needs: ["document.write"],
+    why: "applies several timeline and parameter edits at once, each one an edit the single ops already need this for",
+    writes: true,
+  },
+
   build: {
     needs: ["document.read", "geometry.build"],
     why: "runs the kernel over the open document, and the sizes it reports are the document read back out",
@@ -154,6 +162,11 @@ export const OP_TABLE: Record<Op, OpSpec> = {
   inspect: {
     needs: ["document.read", "geometry.build"],
     why: "measures the built bodies, which is the document at its most legible",
+    writes: false,
+  },
+  interference: {
+    needs: ["document.read", "geometry.build"],
+    why: "builds the open document and reports where its bodies overlap and how close they come, which is the document read back out",
     writes: false,
   },
   view: {

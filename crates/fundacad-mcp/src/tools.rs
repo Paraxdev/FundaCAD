@@ -135,7 +135,50 @@ pub fn feature_move() -> JsonObject {
 }
 
 pub fn build() -> JsonObject {
-    object(json!({}), &[])
+    object(
+        json!({"full": {"type": "boolean",
+                        "description": "list every body, not only the ones that changed since \
+                                        the last build"}}),
+        &[],
+    )
+}
+
+pub fn edit() -> JsonObject {
+    object(
+        json!({
+            "ops": {"type": "array",
+                    "description": "the edits, applied in order. Each is an object with `op` \
+                                    and that tool's own arguments: \
+                                    {op:\"add\", feature, at?}, \
+                                    {op:\"update\", id, patch, replace?}, \
+                                    {op:\"remove\", id}, {op:\"move\", id, to}, \
+                                    {op:\"param\", name, expr, unit?, comment?}, \
+                                    {op:\"param_remove\", name}",
+                    "items": {"type": "object"}},
+            "build": {"type": "boolean",
+                      "description": "build once after the last edit and report it as `build` \
+                                      does"}
+        }),
+        &["ops"],
+    )
+}
+
+pub fn interference() -> JsonObject {
+    object(
+        json!({
+            "bodies": {"type": "array", "items": {"type": "string"},
+                       "description": "only check these bodies against each other, by id or \
+                                       name; every body if omitted"},
+            "clearance": {"type": "number",
+                          "description": "also report pairs that do not touch but are closer \
+                                          than this many mm (default 1). 0 reports overlaps only"},
+            "sweep": {"type": "object",
+                      "description": "check at each value of a parameter: {param, from, to, \
+                                      steps} (steps counts the values, ends included) or \
+                                      {param, values:[...]}. The document is not changed"}
+        }),
+        &[],
+    )
 }
 
 pub fn inspect() -> JsonObject {
@@ -193,6 +236,16 @@ pub fn export() -> JsonObject {
         json!({
             "path": {"type": "string"},
             "format": {"type": "string", "enum": ["step", "stl", "3mf"]},
+            "separate": {"type": "boolean",
+                         "description": "one file per body, named after the body, in a folder \
+                                         named after `path` (parts.stl writes parts/<name>.stl)"},
+            "body": {"type": "string", "description": "export only this body, by id or name"},
+            "layFlat": {"description": "turn each part for printing: true puts each body's \
+                                        largest flat face on the bed, or {body: face index} \
+                                        picks the face per body (indices from `inspect`). \
+                                        Parts are set side by side at z = 0. The document is \
+                                        not changed",
+                        "anyOf": [{"type": "boolean"}, {"type": "object"}]},
             "allowPartial": {"type": "boolean",
                              "description": "write the file even if a feature failed to build \
                                              (default: refuse and name the failures)"}
