@@ -616,3 +616,97 @@ fn a_build_completes_only_the_tracked_faces_written_without_an_extent() {
     assert_eq!(face("c"), near, "only a tracked face takes one");
     assert_eq!(face("d"), older, "a centre written by the older form keeps that form");
 }
+
+#[test]
+fn a_field_is_text_or_a_number_by_its_own_type_not_by_its_name() {
+    // `profile` is a sketch id on a sweep and a Num on a fillet, `size` is "M3"
+    // on a hole and millimetres on an elephantFootChamfer. A misspelt parameter
+    // in the numeric one has to be reported, and the text one must not be.
+    let edge = json!({"kind": "edge", "by": "all", "body": "body1"});
+    let mut d = doc_with(&[
+        json!({"id": "bx1", "type": "box", "length": 20, "width": 20, "height": 20}),
+        json!({"id": "f1", "type": "fillet", "edges": edge, "radius": 1, "profile": "soft"}),
+        json!({"id": "ef1", "type": "elephantFootChamfer", "size": "squish"}),
+    ]);
+    let problems = m::validate(&mut d);
+    assert!(problems.iter().any(|p| p.contains("f1: profile") && p.contains("'soft'")), "{problems:?}");
+    assert!(problems.iter().any(|p| p.contains("ef1: size") && p.contains("'squish'")), "{problems:?}");
+
+    m::set_parameter(&mut d, "soft", &json!(0.5), "", None).unwrap();
+    m::set_parameter(&mut d, "squish", &json!(0.4), "mm", None).unwrap();
+    assert_eq!(m::validate(&mut d), Vec::<String>::new());
+    // And a parameter a fillet's profile uses is a parameter in use.
+    assert!(m::remove_parameter(&mut d, "soft").is_err());
+}
+
+#[test]
+fn every_plugin_features_text_options_pass_validation() {
+    let face = json!({"kind": "face", "by": "nearest", "point": [0, 0, 13], "body": "body1"});
+    let mut d = doc_with(&[
+        json!({"id": "bx1", "type": "box", "length": 20, "width": 20, "height": 20}),
+        json!({"id": "td1", "type": "teardropHole", "faces": face, "roof": "flat", "buildDir": "-X"}),
+        json!({"id": "rb1", "type": "roofBridge", "faces": face, "buildDir": "+Y"}),
+        json!({"id": "sl1", "type": "sacrificialLayer", "faces": face, "side": "top", "buildDir": "-Z"}),
+        json!({"id": "tx1", "type": "texture", "kind": "knurl", "faces": face, "body": "body1",
+               "direction": "in", "profile": "round", "projection": "box"}),
+        json!({"id": "tx2", "type": "texture", "kind": "image", "imagePath": "C:/maps/bark.png"}),
+        json!({"id": "og1", "type": "organic", "nodes": [{"id": "n1", "x": 0, "y": 0, "z": 0, "sx": 6}],
+               "operation": "join", "targets": ["body1"], "name": "Grip"}),
+    ]);
+    assert_eq!(m::validate(&mut d), Vec::<String>::new());
+}
+
+#[test]
+fn a_revolve_about_a_name_that_is_not_an_axis_is_reported() {
+    // The build reads any axis name other than X, Y or Z as Z, so a datum axis
+    // id there spins the profile about the wrong line without an error.
+    let mut d = doc_with(&[
+        json!({"id": "s1", "type": "sketch", "plane": "XZ", "entities": []}),
+        json!({"id": "ax1", "type": "datumAxis", "origin": [5, 0, 0], "dir": [0, 0, 1]}),
+        json!({"id": "rv1", "type": "revolve", "sketch": "s1", "axis": "ax1", "angle": 360}),
+    ]);
+    let problems = m::validate(&mut d);
+    assert!(problems.iter().any(|p| p.contains("rv1: axis 'ax1'")), "{problems:?}");
+    m::update_feature(&mut d, "rv1", &json!({"axis": {"origin": [5, 0, 0], "dir": [0, 0, 1]}}), false).unwrap();
+    assert_eq!(m::validate(&mut d), Vec::<String>::new());
+}
+
+#[test]
+fn a_press_pull_takes_the_targets_its_schema_documents() {
+    // The build combines a non-auto press-pull's prism with `targets`; the
+    // feature used to have no such field, so feature_add refused it.
+    let face = json!({"kind": "face", "by": "normal", "dir": [0, 0, 1], "body": "body1"});
+    let d = doc_with(&[
+        json!({"id": "bx1", "type": "box", "length": 20, "width": 20, "height": 20}),
+        json!({"id": "pp1", "type": "press-pull", "face": face, "distance": 5, "mode": "join",
+               "targets": ["body1"], "body": "body1"}),
+    ]);
+    assert_eq!(m::features(&d).len(), 2);
+}
+
+#[test]
+fn a_document_set_over_this_one_forgets_the_records_of_a_feature_that_became_a_join() {
+    // doc_get, edit, doc_set is an edit too. A revolve built as a new body was
+    // recorded as body3; made a join into body1 by editing the document, it has
+    // to merge as body1, so its old record must go. Features the old document
+    // does not have keep theirs: a file numbered before the map existed may
+    // rely on a join's fresh id.
+    let mut before = m::new_document();
+    before.insert("features".into(), json!([
+        {"id": "bx", "type": "box", "length": 20, "width": 20, "height": 20},
+        {"id": "rv", "type": "revolve", "sketch": "sk", "axis": "Z", "angle": 360, "operation": "new"},
+        {"id": "keep", "type": "revolve", "sketch": "sk", "axis": "Z", "angle": 360,
+         "operation": "join", "targets": ["body1"]}
+    ]));
+    let ids = json!({"bx:0": "body1", "rv:0": "body3", "keep:0": "body1", "old:0": "body4"});
+    before.insert("bodyIds".into(), ids.clone());
+
+    let mut after = before.clone();
+    after["features"][1]["operation"] = json!("join");
+    after["features"][1]["targets"] = json!(["body1"]);
+    after["features"].as_array_mut().unwrap().push(
+        json!({"id": "old", "type": "box", "length": 1, "width": 1, "height": 1, "operation": "join"}),
+    );
+    m::forget_stale_joins(&before, &mut after);
+    assert_eq!(after["bodyIds"], json!({"bx:0": "body1", "keep:0": "body1", "old:0": "body4"}));
+}

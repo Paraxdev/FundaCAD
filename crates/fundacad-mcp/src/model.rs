@@ -215,6 +215,28 @@ fn forget_stale_join(doc: &mut Doc, before: Option<&Value>, after: &Value) {
     }
 }
 
+/// What `forget_stale_join` does for one edit, for a whole document handed
+/// over in place of `before`: every feature `before` has too that joins now,
+/// and did not join the same targets there, loses its `bodyIds` records. A
+/// feature `before` lacks is left alone, because a document new to this
+/// session may be a file whose joins were numbered before the map existed.
+///
+/// `doc_get`, edit, `doc_set` is an edit like any other, and without this the
+/// record of a revolve built as a new body (`body3`) outlived its becoming a
+/// join into body1, so the merged body came out as body3.
+pub fn forget_stale_joins(before: &Doc, after: &mut Doc) {
+    let was: BTreeMap<&str, &Value> = features(before)
+        .iter()
+        .filter_map(|f| Some((str_field(f, "id")?, f)))
+        .collect();
+    let now: Vec<Value> = features(after).to_vec();
+    for f in &now {
+        if let Some(prior) = str_field(f, "id").and_then(|id| was.get(id).copied()) {
+            forget_stale_join(after, Some(prior), f);
+        }
+    }
+}
+
 /// Merge `patch` into a feature (or replace its body wholesale).
 ///
 /// A merge cannot remove a field, which matters: `upTo` on a press/pull and
@@ -656,7 +678,7 @@ fn feature_users_of_param(doc: &Doc, name: &str) -> Vec<String> {
             if v.as_str().is_none() {
                 continue;
             }
-            if NOT_NUMERIC.contains(&k.as_str()) || documented_not_numeric(kind, k) {
+            if holds_text(kind, k) {
                 continue;
             }
             if safe_refs(Some(v)).contains(name) {
@@ -817,16 +839,25 @@ const NOT_NUMERIC: &[&str] = &[
     "standard", "size", "fit", "extent", "direction",
 ];
 
-/// Whether the schema documents `field` of `kind` as something other than a
-/// `Num`, as a plugin's text options (`roof: "pointed"`) are. A field the schema
-/// does not describe is still checked.
-fn documented_not_numeric(kind: &str, field: &str) -> bool {
-    crate::schema::features()
+/// Whether `field` of `kind` holds text that is never a parameter name: an id,
+/// a mode, a plugin's text option (`roof: "pointed"`).
+///
+/// The schema decides for every field it documents, by whether the field's doc
+/// says `Num`, so the same name can be text on one type and a number on
+/// another (`profile` is a sketch id on a sweep and a Num on a fillet, `size`
+/// is "M3" on a hole and millimetres on an elephantFootChamfer). Only a field
+/// the schema does not describe falls back to `NOT_NUMERIC`, and is otherwise
+/// still checked.
+fn holds_text(kind: &str, field: &str) -> bool {
+    match crate::schema::features()
         .get(kind)
         .and_then(|t| t.get("fields"))
         .and_then(|f| f.get(field))
         .and_then(Value::as_str)
-        .is_some_and(|doc| !doc.split(|c: char| !c.is_ascii_alphanumeric()).any(|w| w == "Num"))
+    {
+        Some(doc) => !doc.split(|c: char| !c.is_ascii_alphanumeric()).any(|w| w == "Num"),
+        None => NOT_NUMERIC.contains(&field),
+    }
 }
 
 /// Everything wrong with the document that can be seen without building it.
@@ -939,6 +970,20 @@ pub fn validate(doc: &mut Doc) -> Vec<String> {
         }
     }
 
+    // A revolve's axis is X, Y, Z or a line. The build reads any other name as
+    // Z, so a datum axis id there spins about the wrong axis without a word.
+    for f in &feats {
+        if str_field(f, "type") != Some("revolve") {
+            continue;
+        }
+        if let Some(name) = f.get("axis").and_then(Value::as_str).filter(|a| !["X", "Y", "Z"].contains(a)) {
+            let fid = str_field(f, "id").unwrap_or_default();
+            problems.push(format!(
+                "{fid}: axis '{name}' is not X, Y or Z, and a revolve reads any other name as Z. Give the line itself, {{\"origin\": [x, y, z], \"dir\": [x, y, z]}}"
+            ));
+        }
+    }
+
     for (name, why) in recompute_parameters(doc) {
         problems.push(format!("parameter {name}: {why}"));
     }
@@ -963,10 +1008,7 @@ pub fn validate(doc: &mut Doc) -> Vec<String> {
             // is the file it was read from. Without them here, every imported
             // body reports two problems that say a build WILL fail, on a
             // document that builds.
-            if NOT_NUMERIC.contains(&k.as_str())
-                || params.contains(text)
-                || documented_not_numeric(kind, k)
-            {
+            if holds_text(kind, k) || params.contains(text) {
                 continue;
             }
             // An EXPRESSION in a feature field is the mistake worth naming

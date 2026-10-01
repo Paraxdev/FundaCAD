@@ -488,10 +488,7 @@ pub fn press_pull(ctx: &mut Ctx, f: &PressPull) -> FResult {
         .unwrap_or("auto")
         .to_owned();
     let along_axis = f.direction.as_ref().is_some_and(|d| d.as_str() == "axis");
-    let targets: Option<Vec<String>> = f
-        .extra
-        .get("targets")
-        .and_then(|t| serde_json::from_value(t.clone()).ok());
+    let targets: Option<Vec<String>> = f.targets.clone();
     let mut act_shape = ctx.bodies[act].shape().clone();
     let mut warned = false;
     for sel in &sels {
