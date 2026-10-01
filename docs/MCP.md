@@ -99,6 +99,15 @@ its bytes, so a legacy window running the sidecar is never started by mistake), 
 workspace `target/` directories. The spawned engine is told the app's plugin
 directory unless `FUNDACAD_PLUGIN_DIR` is already set.
 
+On Windows the process the host starts runs the server from a copy of its own
+executable in `%TEMP%\fundacad-mcp-shadow`, and copies the engine it found
+beside it there too, because Windows will not overwrite an executable that is
+running: with a host holding `fundacad.exe --mcp` open, `cargo build` failed
+with "Access is denied". The build now writes the original freely and the next
+server the host starts runs it. `FUNDACAD_MCP_SHADOW=0` runs in place,
+`FUNDACAD_MCP_SHADOW=1` copies on other platforms too
+(`crates/fundacad-mcp/src/shadow.rs`).
+
 Tool calls are answered in the order they arrive: the SDK spawns a task per
 request, so the server runs on a single-threaded runtime and holds one turn
 lock.
