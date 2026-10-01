@@ -172,6 +172,14 @@ fn a_named_part_exports_to_a_file_of_its_name_lying_flat() {
     assert!(!r.is_error, "{}", r.text);
     assert!(bare.join("Plate.stl").is_file(), "{}", r.text);
 
+    // A part whose name is taken by a folder refuses before anything moves.
+    std::fs::remove_file(parts.join("Rod.stl")).unwrap();
+    std::fs::create_dir(parts.join("Rod.stl")).unwrap();
+    let before = std::fs::read(parts.join("Plate.stl")).unwrap();
+    let r = mcp.call("export", json!({"path": path.to_string_lossy(), "format": "stl", "separate": true}));
+    assert!(r.is_error && r.text.contains("Rod.stl is a folder"), "{}", r.text);
+    assert_eq!(std::fs::read(parts.join("Plate.stl")).unwrap(), before, "the old plate was replaced");
+
     // A face picked by index, on one body exported alone.
     let one = tmp.path().join("plate.stl");
     let r = mcp.call(
