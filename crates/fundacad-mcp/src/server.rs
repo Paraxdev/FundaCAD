@@ -647,15 +647,22 @@ impl FundaCad {
                 result,
                 &format!("\n(applied in FundaCAD, revision {rev})"),
             )))),
-            Err(e) if e.is_lost() => Err(e),
             Err(e) => {
                 // The local document now holds an edit the app never took. Put
                 // it back, or the next tool would build on a change that does
                 // not exist anywhere else and the agent would have no way to
-                // notice. The mesh cache needs no help: it is keyed on the
-                // document's signature, which this restores with it.
+                // notice. A lost engine is retried privately, and the retry
+                // has to start from the document as pulled, or it applies the
+                // same edit twice. The mesh cache needs no help: it is keyed
+                // on the document's signature, which this restores with it.
+                // The bodies a build inside the tool reported never reached
+                // the agent, so the next build lists them all again.
                 let mut st = self.state.lock().await;
                 st.doc = before;
+                st.reported = None;
+                if e.is_lost() {
+                    return Err(e);
+                }
                 Ok(Ok(CallToolResponse::Complete(failure(e.message()))))
             }
         }
