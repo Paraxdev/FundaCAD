@@ -317,10 +317,21 @@ pub struct Props {
 }
 
 pub fn properties(loops: &[Vec<[f64; 2]>]) -> Props {
+    // Summed about a point of the section itself: about the plane's origin,
+    // a part a metre away subtracts two numbers near 1e8 to get its product
+    // of inertia, and what is left is rounding.
+    let o = loops.first().and_then(|l| l.first()).copied().unwrap_or([0.0, 0.0]);
+    let mut p = section_about(loops, o);
+    p.centroid = [p.centroid[0] + o[0], p.centroid[1] + o[1]];
+    p
+}
+
+fn section_about(loops: &[Vec<[f64; 2]>], o: [f64; 2]) -> Props {
     let (mut a, mut sx, mut sy, mut ixx, mut iyy, mut ixy) = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
     for l in loops {
         for i in 0..l.len() {
             let (p, q) = (l[i], l[(i + 1) % l.len()]);
+            let (p, q) = ([p[0] - o[0], p[1] - o[1]], [q[0] - o[0], q[1] - o[1]]);
             let c = p[0] * q[1] - q[0] * p[1];
             a += c;
             sx += (p[0] + q[0]) * c;
@@ -341,19 +352,16 @@ pub fn properties(loops: &[Vec<[f64; 2]>]) -> Props {
     let mut cv: f64 = 0.0;
     for l in loops {
         for p in l {
-            cu = cu.max((p[0] - cx).abs());
-            cv = cv.max((p[1] - cy).abs());
+            cu = cu.max((p[0] - o[0] - cx).abs());
+            cv = cv.max((p[1] - o[1] - cy).abs());
         }
     }
-    Props {
-        area,
-        centroid: [cx, cy],
-        iu: ixx - area * cy * cy,
-        iv: iyy - area * cx * cx,
-        iuv: ixy - area * cx * cy,
-        cv,
-        cu,
-    }
+    let (iu, iv) = (ixx - area * cy * cy, iyy - area * cx * cx);
+    // What is left of a symmetric section's product after the subtraction
+    // is rounding, a billionth of its moments: that is a zero.
+    let iuv = ixy - area * cx * cy;
+    let iuv = if iuv.abs() <= 1e-9 * iu.abs().max(iv.abs()) { 0.0 } else { iuv };
+    Props { area, centroid: [cx, cy], iu, iv, iuv, cv, cu }
 }
 
 fn num(x: f64) -> String {
@@ -364,11 +372,11 @@ fn num(x: f64) -> String {
 }
 
 fn num4(x: f64) -> String {
-    if x.abs() < 1e-9 {
-        return "0".into();
+    if x == 0.0 || !x.is_finite() {
+        return g_format(x);
     }
     // Four significant figures however small: a thin wire's I is 1e-6 mm4.
-    let digits = (4 - x.abs().log10().floor() as i32 - 1).max(0);
+    let digits = (4 - x.abs().log10().floor() as i32 - 1).clamp(0, 300);
     g_format(round(x, digits))
 }
 
