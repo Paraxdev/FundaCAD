@@ -1,5 +1,5 @@
 {
-  "about": "Parameter expression vectors shared by src/params (tests/params/vectors.test.ts) and fundacad-core::params (crates/fundacad-core/tests/params_vectors.rs). expect is a number or \"NaN\", \"Infinity\", \"-Infinity\"; digits, when present, compares like toBeCloseTo, otherwise the result must be exact. error is a substring of the message.",
+  "about": "Parameter expression vectors shared by src/params (tests/params/vectors.test.ts) and fundacad-core::params (crates/fundacad-core/tests/params_vectors.rs). expect is a number or \"NaN\", \"Infinity\", \"-Infinity\"; digits, when present, compares like toBeCloseTo, otherwise the result must be exact. error is a substring of the message. targets are features after recompute writes each parameter into the feature field it drives (src/document/numFields.ts writeTarget, fundacad-core::params::targets), and featureNumFields, commonNumFields and intFields are the tables that write follows, each side checking its own copy against them.",
   "eval": [
     { "expr": "2 + 3 * 4", "expect": 14 },
     { "expr": "(2 + 3) * 4", "expect": 20 },
@@ -212,5 +212,87 @@
         { "ok": false, "error": "does not evaluate to a number" }
       ]
     }
-  ]
+  ],
+  "targets": [
+    {
+      "name": "a bound field follows its parameter, a broken one keeps its cached value",
+      "defs": {
+        "press": { "expr": "30", "value": 0, "unit": "deg" },
+        "d1": { "expr": "press * 2", "value": 0, "unit": "deg", "target": { "kind": "feature", "feature": "j1", "field": "angle" } },
+        "d2": { "expr": "missing * 2", "value": 4, "unit": "mm", "target": { "kind": "feature", "feature": "j1", "field": "offset" } }
+      },
+      "features": [{ "id": "j1", "type": "joint", "moving": "body2", "mode": "revolute", "angle": 0, "offset": 0 }],
+      "expect": [{ "id": "j1", "type": "joint", "moving": "body2", "mode": "revolute", "angle": 60, "offset": 4 }]
+    },
+    {
+      "name": "a field the type lists is written even when absent, one it does not list never is",
+      "defs": {
+        "d1": { "expr": "2", "value": 0, "unit": "mm", "target": { "kind": "feature", "feature": "c1", "field": "distance2" } },
+        "d2": { "expr": "4", "value": 0, "unit": "mm", "target": { "kind": "feature", "feature": "e1", "field": "sketch" } },
+        "d3": { "expr": "4", "value": 0, "unit": "mm", "target": { "kind": "feature", "feature": "gone", "field": "distance" } }
+      },
+      "features": [{ "id": "c1", "type": "chamfer", "distance": 1 }, { "id": "e1", "type": "extrude", "sketch": "s1", "distance": 5 }],
+      "expect": [{ "id": "c1", "type": "chamfer", "distance": 1, "distance2": 2 }, { "id": "e1", "type": "extrude", "sketch": "s1", "distance": 5 }]
+    },
+    {
+      "name": "counts round halves up and keep their least value",
+      "defs": {
+        "d1": { "expr": "2.5", "value": 0, "unit": "count", "target": { "kind": "feature", "feature": "p1", "field": "countX" } },
+        "d2": { "expr": "0.4", "value": 0, "unit": "count", "target": { "kind": "feature", "feature": "p1", "field": "countY" } },
+        "d3": { "expr": "12.5", "value": 0, "unit": "mm", "target": { "kind": "feature", "feature": "p1", "field": "spacingX" } },
+        "d4": { "expr": "-2.5", "value": 0, "unit": "count", "target": { "kind": "feature", "feature": "r1", "field": "seed" } }
+      },
+      "features": [{ "id": "p1", "type": "patternRect", "countX": 2, "countY": 2, "spacingX": 10, "spacingY": 10 }, { "id": "r1", "type": "vectorNoise", "seed": 0 }],
+      "expect": [{ "id": "p1", "type": "patternRect", "countX": 3, "countY": 1, "spacingX": 12.5, "spacingY": 10 }, { "id": "r1", "type": "vectorNoise", "seed": -2 }]
+    },
+    {
+      "name": "a path through a list names the entry by its id",
+      "defs": {
+        "d1": { "expr": "7", "value": 0, "unit": "count", "target": { "kind": "feature", "feature": "o1", "field": "nodes.n2.sx" } },
+        "d2": { "expr": "7", "value": 0, "unit": "count", "target": { "kind": "feature", "feature": "o1", "field": "nodes.n9.sx" } },
+        "d3": { "expr": "7", "value": 0, "unit": "count", "target": { "kind": "feature", "feature": "o1", "field": "nodes.n2" } },
+        "d4": { "expr": "2", "value": 0, "unit": "count", "target": { "kind": "feature", "feature": "o1", "field": "blend" } }
+      },
+      "features": [{ "id": "o1", "type": "vectorNodes", "blend": 1, "nodes": [{ "id": "n2", "x": 10, "sx": 3 }, { "id": "n1", "x": 0, "sx": 5 }] }],
+      "expect": [{ "id": "o1", "type": "vectorNodes", "blend": 2, "nodes": [{ "id": "n2", "x": 10, "sx": 7 }, { "id": "n1", "x": 0, "sx": 5 }] }]
+    },
+    {
+      "name": "activeWhen is a target only where the feature carries it",
+      "defs": {
+        "d1": { "expr": "0", "value": 1, "unit": "count", "target": { "kind": "feature", "feature": "b1", "field": "activeWhen" } },
+        "d2": { "expr": "0", "value": 1, "unit": "count", "target": { "kind": "feature", "feature": "b2", "field": "activeWhen" } }
+      },
+      "features": [{ "id": "b1", "type": "box", "length": 1, "width": 1, "height": 1, "activeWhen": 1 }, { "id": "b2", "type": "box", "length": 1, "width": 1, "height": 1 }],
+      "expect": [{ "id": "b1", "type": "box", "length": 1, "width": 1, "height": 1, "activeWhen": 0 }, { "id": "b2", "type": "box", "length": 1, "width": 1, "height": 1 }]
+    }
+  ],
+  "featureNumFields": {
+    "extrude": [["distance", "length"], ["taper", "angle"]],
+    "fillet": [["radius", "length"], ["profile", "count"]],
+    "chamfer": [["distance", "length"], ["distance2", "length"]],
+    "press-pull": [["distance", "length"], ["taper", "angle"]],
+    "revolve": [["angle", "angle"], ["pitch", "length"]],
+    "datumPlane": [["offset", "length"], ["tiltX", "angle"], ["tiltY", "angle"], ["spin", "angle"], ["shiftX", "length"], ["shiftY", "length"]],
+    "box": [["length", "length"], ["width", "length"], ["height", "length"]],
+    "cylinder": [["radius", "length"], ["height", "length"]],
+    "cone": [["bottomRadius", "length"], ["topRadius", "length"], ["height", "length"]],
+    "sphere": [["radius", "length"]],
+    "torus": [["majorRadius", "length"], ["minorRadius", "length"]],
+    "shell": [["thickness", "length"]],
+    "offsetFace": [["distance", "length"]],
+    "thicken": [["thickness", "length"]],
+    "draft": [["angle", "angle"]],
+    "hole": [["diameter", "length"], ["depth", "length"], ["cbDiameter", "length"], ["cbDepth", "length"], ["csDiameter", "length"], ["csAngle", "angle"], ["leadIn", "length"]],
+    "patternRect": [["countX", "count"], ["countY", "count"], ["spacingX", "length"], ["spacingY", "length"]],
+    "patternLinear": [["count", "count"], ["spacing", "length"]],
+    "patternCircular": [["count", "count"], ["angle", "angle"]],
+    "simplifyMesh": [["tolerance", "angle"]],
+    "cleanUp": [["tolerance", "length"]],
+    "scale": [["factor", "count"], ["sx", "count"], ["sy", "count"], ["sz", "count"]],
+    "move": [["dx", "length"], ["dy", "length"], ["dz", "length"], ["rx", "angle"], ["ry", "angle"], ["rz", "angle"]],
+    "joint": [["offset", "length"], ["angle", "angle"]],
+    "duplicate": [["dx", "length"], ["dy", "length"], ["dz", "length"], ["rx", "angle"], ["ry", "angle"], ["rz", "angle"]]
+  },
+  "commonNumFields": [["activeWhen", "count"]],
+  "intFields": { "sides": 3, "count": 1, "countX": 1, "countY": 1, "rings": 1, "seed": "-Infinity" }
 }
