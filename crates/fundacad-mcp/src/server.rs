@@ -1219,12 +1219,23 @@ The format comes from the extension unless given. A large STEP can take minutes:
         if let Err(e) = std::fs::create_dir(&tmp_root) {
             return Ok(failure(format!("Could not write beside {}: {e}", path.display())));
         }
-        let mut tmp_path = tmp_root.join(path.file_name().unwrap_or_default());
-        // The parts are named after the bodies and take the path's extension,
-        // so a folder path with none would make files a slicer cannot place.
-        if separate && path.extension().is_none() {
-            tmp_path.set_extension(format.to_ascii_lowercase());
+        // A separate export's folder is the path less its extension, split
+        // the way the engine splits it. A path whose extension is not the
+        // format's ("parts", "bracket_v1.2") is the folder's whole name, and
+        // the engine is given it with the format's extension added, which is
+        // the one the parts then take.
+        let file_name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let mut tmp_name = file_name.clone();
+        let mut folder = path.clone();
+        if separate {
+            let (stem, ext) = split_ext(&file_name);
+            if format_exts(&format).contains(&ext.trim_start_matches('.').to_ascii_lowercase().as_str()) {
+                folder = path.with_file_name(stem);
+            } else {
+                tmp_name = format!("{file_name}.{}", format.to_ascii_lowercase());
+            }
         }
+        let tmp_path = tmp_root.join(&tmp_name);
         let mut payload = call_args([
             ("document", Value::Object(doc)),
             ("format", json!(format)),
@@ -1281,7 +1292,6 @@ The format comes from the extension unless given. A large STEP can take minutes:
             )));
         }
         let mut out = if separate {
-            let folder = path.with_extension("");
             match place_files(&result, &folder) {
                 Ok(written) => written,
                 Err(e) => {
@@ -1411,6 +1421,26 @@ fn place_files(result: &Value, folder: &Path) -> Result<String, String> {
         folder.display(),
         lines.join("\n")
     ))
+}
+
+/// A file name split as the engine splits it (Python's os.path.splitext):
+/// leading dots are part of the name, the extension keeps its dot.
+fn split_ext(name: &str) -> (&str, &str) {
+    let lead = name.len() - name.trim_start_matches('.').len();
+    match name[lead..].rfind('.') {
+        Some(dot) => name.split_at(lead + dot),
+        None => (name, ""),
+    }
+}
+
+/// The extensions a file of this export format goes by.
+fn format_exts(format: &str) -> &'static [&'static str] {
+    match format.to_ascii_lowercase().as_str() {
+        "step" | "stp" => &["step", "stp"],
+        "stl" => &["stl"],
+        "3mf" => &["3mf"],
+        _ => &[],
+    }
 }
 
 /// A temporary folder beside `path`, so moving the export out of it never
