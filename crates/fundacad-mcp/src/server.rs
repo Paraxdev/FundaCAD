@@ -200,16 +200,21 @@ fn edit_note(name: &str, args: &JsonObject) -> String {
     }
 }
 
-/// A fingerprint of where a body's surface is: its triangle corners rounded
-/// to a micron. The same shape meshes the same way, so an unchanged body keeps
-/// its print, and a body that only moved does not.
+/// A fingerprint of where a body's surface is: its mesh points rounded to a
+/// micron, sorted, so it does not depend on the order the faces come in (a
+/// timeline reordered to the same shape lists them differently). An
+/// unchanged body keeps its print, and a body that only moved does not.
 fn shape_print(b: &MeshBody) -> u64 {
     use std::hash::{Hash, Hasher};
+    let mut points: Vec<[i64; 3]> = b
+        .positions
+        .chunks_exact(3)
+        .map(|p| [0, 1, 2].map(|k| ((p[k] as f64) * 1000.0).round() as i64))
+        .collect();
+    points.sort_unstable();
+    points.dedup();
     let mut h = std::collections::hash_map::DefaultHasher::new();
-    for x in &b.positions {
-        ((*x as f64) * 1000.0).round().to_bits().hash(&mut h);
-    }
-    b.indices.hash(&mut h);
+    points.hash(&mut h);
     h.finish()
 }
 
