@@ -2177,13 +2177,13 @@ impl FundaCad {
             (!missing.is_empty()).then(|| {
                 let names = missing.iter().map(|m| format!("'{m}'")).collect::<Vec<_>>().join(", ");
                 let failed = crate::clash::failures(r);
-                if failed.is_empty() {
-                    failure(format!("no body {names} in this build. Check the ids or names against `build`."))
-                } else {
-                    // A body that is not there because its feature failed:
-                    // the id is not the problem, the feature is.
-                    failure(format!("no body {names} in this build, some features failed:\n{}", failed.join("\n")))
+                let mut why = format!("no body {names} in this build. Check the ids or names against `build`.");
+                if !failed.is_empty() {
+                    // Maybe the name is right and its feature failed.
+                    why.push_str(" Some features failed, which may be why:\n");
+                    why.push_str(&failed.join("\n"));
                 }
+                failure(why)
             })
         };
 
