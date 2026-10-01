@@ -166,6 +166,12 @@ fn a_named_part_exports_to_a_file_of_its_name_lying_flat() {
     assert!(lo[2].abs() < 1e-3 && (hi[2] - 40.0).abs() < 1e-3, "the rod stands on an end: {lo:?} {hi:?}");
     assert!(parts.join("Spare rod.stl").is_file() || parts.join("Spare_rod.stl").is_file());
 
+    // A folder path with no extension still gives files a slicer knows.
+    let bare = tmp.path().join("bare");
+    let r = mcp.call("export", json!({"path": bare.to_string_lossy(), "format": "stl", "separate": true}));
+    assert!(!r.is_error, "{}", r.text);
+    assert!(bare.join("Plate.stl").is_file(), "{}", r.text);
+
     // A face picked by index, on one body exported alone.
     let one = tmp.path().join("plate.stl");
     let r = mcp.call(
