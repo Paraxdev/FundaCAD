@@ -36,6 +36,7 @@ pub mod schema;
 pub mod section;
 pub mod server;
 pub mod shadow;
+pub mod shortcuts;
 pub mod tools;
 pub mod upload;
 

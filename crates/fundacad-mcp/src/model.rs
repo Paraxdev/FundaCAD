@@ -154,6 +154,17 @@ pub fn add_feature(
     feature: &Value,
     at: Option<i64>,
 ) -> Result<String, DocumentError> {
+    add_feature_noted(doc, feature, at).map(|(fid, _)| fid)
+}
+
+/// `add_feature`, and a note for each sketch shortcut it expanded ("polyline
+/// p became lines p_1..p_4"), since the ids the agent will see are not the
+/// ones it wrote.
+pub fn add_feature_noted(
+    doc: &mut Doc,
+    feature: &Value,
+    at: Option<i64>,
+) -> Result<(String, Vec<String>), DocumentError> {
     let Some(obj) = feature.as_object() else {
         return err("a feature needs a `type`");
     };
@@ -186,6 +197,10 @@ pub fn add_feature(
         }
     };
     canonical_mirror(&mut f);
+    let notes = match crate::shortcuts::expand(&mut f, Some(&[])) {
+        Ok(n) => n,
+        Err(msg) => return err(msg),
+    };
     if let Some(msg) = missing_fields_message(kind, &f) {
         return err(msg);
     }
@@ -201,7 +216,7 @@ pub fn add_feature(
         }
         _ => feats.push(f),
     }
-    Ok(fid)
+    Ok((fid, notes))
 }
 
 /// A feature that became a join, or joins other targets now, loses its
@@ -249,6 +264,16 @@ pub fn update_feature(
     patch: &Value,
     replace: bool,
 ) -> Result<Value, DocumentError> {
+    update_feature_noted(doc, fid, patch, replace).map(|(v, _)| v)
+}
+
+/// `update_feature`, and a note for each sketch shortcut it expanded.
+pub fn update_feature_noted(
+    doc: &mut Doc,
+    fid: &str,
+    patch: &Value,
+    replace: bool,
+) -> Result<(Value, Vec<String>), DocumentError> {
     let Some((i, existing)) = find_feature(doc, fid) else {
         return err(missing_feature(doc, fid));
     };
@@ -292,13 +317,18 @@ pub fn update_feature(
     // Only what this call sent: a document may carry fields from a newer build,
     // and editing another field must not refuse over them.
     let fresh = |k: &str| replace || sent.contains(k);
+    let kept = existing.get("entities").and_then(Value::as_array).cloned().unwrap_or_default();
+    let notes = match crate::shortcuts::expand(&mut out, fresh("entities").then_some(kept.as_slice())) {
+        Ok(n) => n,
+        Err(msg) => return err(msg),
+    };
     if let Some(msg) = unread_fields_message(&now, &out, fresh) {
         return err(msg);
     }
     let value = Value::Object(out);
     forget_stale_join(doc, Some(&existing), &value);
     features_mut(doc)[i] = value.clone();
-    Ok(value)
+    Ok((value, notes))
 }
 
 /// A feature whose type changes is checked as the new type straight away, since
@@ -425,6 +455,11 @@ fn core_missing_fields(f: &Map<String, Value>) -> (Vec<String>, Option<String>) 
     }
     let other = if missing.is_empty() { why } else { None };
     (missing, other)
+}
+
+/// The field a serde complaint says is missing, if that is the complaint.
+pub(crate) fn missing_field_of(error: &str) -> Option<String> {
+    missing_field(error)
 }
 
 fn missing_field(error: &str) -> Option<String> {

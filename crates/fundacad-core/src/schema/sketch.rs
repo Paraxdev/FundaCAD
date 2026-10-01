@@ -256,6 +256,25 @@ impl SketchEntity {
                 .and_then(serde_json::Value::as_str),
         }
     }
+
+    /// The fields no build reads, kept as they were written.
+    pub fn extra(&self) -> Option<&Extra> {
+        match self {
+            SketchEntity::Rectangle(e) => Some(&e.extra),
+            SketchEntity::Circle(e) => Some(&e.extra),
+            SketchEntity::Line(e) => Some(&e.extra),
+            SketchEntity::Arc(e) => Some(&e.extra),
+            SketchEntity::Ellipse(e) => Some(&e.extra),
+            SketchEntity::Spline(e) => Some(&e.extra),
+            SketchEntity::Bspline(e) => Some(&e.extra),
+            SketchEntity::Point(e) => Some(&e.extra),
+            SketchEntity::Polygon(e) => Some(&e.extra),
+            SketchEntity::Slot(e) => Some(&e.extra),
+            SketchEntity::Text(e) => Some(&e.extra),
+            SketchEntity::Projected(e) => Some(&e.extra),
+            SketchEntity::Unknown(_) | SketchEntity::Invalid(_) => None,
+        }
+    }
 }
 
 macro_rules! plain_struct {

@@ -933,8 +933,20 @@ The format comes from the extension unless given. A large STEP can take minutes:
         if !ok {
             return Ok(failure("`document` needs a `features` list."));
         }
-        let mut st = self.state.lock().await;
         let mut next = doc.as_object().cloned().unwrap_or_default();
+        // Shortcuts only: a whole document may carry entity fields from a
+        // newer build, and refusing it over them would lose the lot.
+        let mut notes = Vec::new();
+        if let Some(Value::Array(features)) = next.get_mut("features") {
+            for f in features.iter_mut().filter_map(Value::as_object_mut) {
+                let id = f.get("id").and_then(Value::as_str).unwrap_or("a sketch").to_string();
+                match crate::shortcuts::expand(f, None) {
+                    Ok(said) => notes.extend(said.into_iter().map(|n| format!("in {id}, {n}"))),
+                    Err(why) => return Ok(failure(why)),
+                }
+            }
+        }
+        let mut st = self.state.lock().await;
         model::forget_stale_joins(&st.doc, &mut next);
         st.doc = next;
         model::fill_defaults(&mut st.doc);
@@ -945,7 +957,7 @@ The format comes from the extension unless given. A large STEP can take minutes:
         st.invalidate();
         st.reported = None;
         model::recompute_parameters(&mut st.doc);
-        Ok(text(st.state_line("Replaced the document.")))
+        Ok(text(st.state_line(&crate::shortcuts::noted("Replaced the document.", &notes))))
     }
 
     #[tool(
@@ -1017,12 +1029,12 @@ The format comes from the extension unless given. A large STEP can take minutes:
         };
         let at = args.get("at").and_then(Value::as_i64);
         let mut st = self.state.lock().await;
-        let fid = match model::add_feature(&mut st.doc, &feature, at) {
-            Ok(fid) => fid,
+        let (fid, notes) = match model::add_feature_noted(&mut st.doc, &feature, at) {
+            Ok(r) => r,
             Err(e) => return Ok(doc_error(e)),
         };
         st.invalidate();
-        Ok(text(st.state_line(&format!("Added {fid}."))))
+        Ok(text(st.state_line(&crate::shortcuts::noted(&format!("Added {fid}."), &notes))))
     }
 
     #[tool(
@@ -1041,12 +1053,13 @@ The format comes from the extension unless given. A large STEP can take minutes:
         };
         let replace = args.get("replace").and_then(Value::as_bool).unwrap_or(false);
         let mut st = self.state.lock().await;
-        let f = match model::update_feature(&mut st.doc, &id, &patch, replace) {
-            Ok(f) => f,
+        let (f, notes) = match model::update_feature_noted(&mut st.doc, &id, &patch, replace) {
+            Ok(r) => r,
             Err(e) => return Ok(doc_error(e)),
         };
         st.invalidate();
-        Ok(text(st.state_line(&updated_line(&id, &f, &patch, replace))))
+        let line = crate::shortcuts::noted(&updated_line(&id, &f, &patch, replace), &notes);
+        Ok(text(st.state_line(&line)))
     }
 
     #[tool(
@@ -2117,8 +2130,9 @@ impl FundaCad {
             // On a copy: the document only changes if every entry applies.
             let mut doc = st.doc.clone();
             let mut done = Vec::new();
+            let mut notes = Vec::new();
             for (n, entry) in ops.iter().enumerate() {
-                match crate::edits::apply(&mut doc, entry) {
+                match crate::edits::apply(&mut doc, entry, &mut notes) {
                     Ok(d) => done.push(d),
                     Err(why) => {
                         return failure(crate::edits::refused(n + 1, ops.len(), entry, &why))
@@ -2127,7 +2141,7 @@ impl FundaCad {
             }
             st.doc = doc;
             st.invalidate();
-            st.state_line(&crate::edits::summary(&done))
+            st.state_line(&crate::shortcuts::noted(&crate::edits::summary(&done), &notes))
         };
         if !truthy(args.get("build")) {
             return text(head);

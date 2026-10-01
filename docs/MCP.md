@@ -345,6 +345,14 @@ one-shot calls is not a session, use `--script`, which is either a JSON array of
   body exists. Found by an agent building a two-half spool: an oversized cut tool
   reached across and took material out of a body it had never named.
 - **A feature can only reference features above it in the timeline.**
+- **A sketch outline can be written as a `polyline`**, a list of points with
+  `closed: true`, and a rectangle by two corners with `from` and `to`. Neither is
+  stored: the polyline becomes `line` entities `id_1`, `id_2`, … whose shared
+  ends are the same values, and the rectangle its centre form, and the reply
+  says so. New entities are checked when a sketch is added or its entities are
+  updated, so a misspelt type or field is refused there rather than drawing
+  nothing at build time. Entities sent back as `doc_get` gave them pass, and
+  `doc_set` only expands the shortcuts.
 
 ## Layout
 

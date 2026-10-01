@@ -64,8 +64,9 @@ pub enum Done {
     ParamRemoved(String),
 }
 
-/// Apply one entry of `ops` to `doc`, or say why not.
-pub fn apply(doc: &mut Doc, entry: &Value) -> Result<Done, String> {
+/// Apply one entry of `ops` to `doc`, or say why not. A sketch shortcut it
+/// expanded adds a note to `notes`.
+pub fn apply(doc: &mut Doc, entry: &Value, notes: &mut Vec<String>) -> Result<Done, String> {
     let Some(entry) = entry.as_object() else {
         return Err("each edit is an object with an `op`".into());
     };
@@ -95,14 +96,16 @@ pub fn apply(doc: &mut Doc, entry: &Value) -> Result<Done, String> {
         "add" => {
             let feature = need(entry, "feature")?;
             let at = entry.get("at").and_then(Value::as_i64);
-            let fid = model::add_feature(doc, feature, at).map_err(doc_err)?;
+            let (fid, said) = model::add_feature_noted(doc, feature, at).map_err(doc_err)?;
+            notes.extend(said.into_iter().map(|n| format!("in {fid}, {n}")));
             Ok(Done::Added(fid, kind_of(feature).to_string()))
         }
         "update" => {
             let id = need_str(entry, "id")?;
             let patch = need(entry, "patch")?;
             let replace = entry.get("replace").and_then(Value::as_bool).unwrap_or(false);
-            model::update_feature(doc, &id, patch, replace).map_err(doc_err)?;
+            let (_, said) = model::update_feature_noted(doc, &id, patch, replace).map_err(doc_err)?;
+            notes.extend(said.into_iter().map(|n| format!("in {id}, {n}")));
             if replace {
                 return Ok(Done::Replaced(id));
             }
@@ -224,9 +227,9 @@ mod tests {
     #[test]
     fn unknown_ops_and_arguments_are_named() {
         let mut doc = model::new_document();
-        let e = apply(&mut doc, &json!({"op": "nope"})).err().unwrap();
+        let e = apply(&mut doc, &json!({"op": "nope"}), &mut Vec::new()).err().unwrap();
         assert!(e.contains("no op 'nope'"), "{e}");
-        let e = apply(&mut doc, &json!({"op": "remove", "id": "x", "at": 1})).err().unwrap();
+        let e = apply(&mut doc, &json!({"op": "remove", "id": "x", "at": 1}), &mut Vec::new()).err().unwrap();
         assert!(e.contains("'at'"), "{e}");
     }
 }
