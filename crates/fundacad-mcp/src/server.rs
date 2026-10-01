@@ -2222,17 +2222,6 @@ impl FundaCad {
                 Err(e) => Err(e.to_string()),
                 Ok(_) => ask(d).await,
             };
-            // A name that is wrong is wrong at every step: refused as soon
-            // as a step builds cleanly without it, before the whole sweep is
-            // spent on it. A body that is only missing at some steps (its
-            // feature failed there) is a note on those steps' lines.
-            if let Ok(r) = &reply {
-                if crate::clash::failures(r).is_empty() && !steps.iter().any(|s| s.reply.is_ok()) {
-                    if let Some(refusal) = unknown(r) {
-                        return refusal;
-                    }
-                }
-            }
             steps.push(crate::clash::Step { value: *value, reply });
         }
         let report = crate::clash::sweep_report(&sweep.param, &unit, &steps, clearance, &bodies);
@@ -2241,14 +2230,18 @@ impl FundaCad {
             return failure(report);
         }
         // Missing at every step that built: no step checked what was asked.
+        // A body missing at only some steps (its feature failed there, or a
+        // join merged it away) is a note on those steps and in the summary.
         let never: Vec<String> = crate::clash::missing(built[0], &bodies)
             .into_iter()
             .filter(|b| built.iter().all(|r| crate::clash::missing(r, &bodies).contains(b)))
             .collect();
         if !never.is_empty() {
+            let failed = built.iter().any(|r| !crate::clash::failures(r).is_empty());
             return failure(format!(
-                "no body {} at any step of the sweep. Check the ids or names against `build`.\n{report}",
-                never.iter().map(|m| format!("'{m}'")).collect::<Vec<_>>().join(", ")
+                "no body {} at any step of the sweep. Check the ids or names against `build`{}.\n{report}",
+                never.iter().map(|m| format!("'{m}'")).collect::<Vec<_>>().join(", "),
+                if failed { ", and the failed features below, which may be why" } else { "" }
             ));
         }
         text(report)

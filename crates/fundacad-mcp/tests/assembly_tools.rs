@@ -107,8 +107,9 @@ fn interference_reports_overlaps_and_gaps_and_sweeps_a_parameter() {
     assert!(!r.is_error, "{}", r.text);
     assert!(r.text.contains("pinh = 0: clear (Pin not built) (features failed: cy1"), "{}", r.text);
     assert!(r.text.contains("1 step had failed features"), "{}", r.text);
+    assert!(r.text.contains("Pin was not built at 1 step (pinh = 0 mm)"), "{}", r.text);
     let r = mcp.call("interference", json!({"bodies": ["Block", "Nope"], "sweep": {"param": "pinh", "values": [10, 0]}}));
-    assert!(r.is_error && r.text.starts_with("no body 'Nope' in this build"), "{}", r.text);
+    assert!(r.is_error && r.text.starts_with("no body 'Nope' at any step of the sweep"), "{}", r.text);
 
     let r = mcp.call("interference", json!({"bodies": ["Nope"]}));
     assert!(r.is_error && r.text.contains("no body 'Nope'"), "{}", r.text);
