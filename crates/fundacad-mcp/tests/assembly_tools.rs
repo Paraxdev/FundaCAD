@@ -62,6 +62,11 @@ fn edit_applies_everything_or_nothing_and_build_names_only_what_changed() {
     let r = mcp.call("build", json!({"full": true}));
     assert_eq!(r.text.lines().filter(|l| l.starts_with("body")).count(), 2, "{}", r.text);
 
+    // A part that only moved reads the same size, so it says it moved.
+    let r = mcp.call("edit", json!({"ops": [{"op": "param", "name": "slide", "expr": 4}], "build": true}));
+    assert!(r.text.contains("body2 \"Pin\"") && r.text.contains("(moved or reshaped, same size)"), "{}", r.text);
+    assert!(r.text.contains("1 other body unchanged"), "{}", r.text);
+
     // feature_update says what changed, not the whole feature.
     let r = mcp.call("feature_update", json!({"id": "bx1", "patch": {"height": 10}}));
     assert_eq!(r.text, "Updated bx1 (box): height = 10. 3 features in the timeline.");

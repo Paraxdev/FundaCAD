@@ -200,6 +200,19 @@ fn edit_note(name: &str, args: &JsonObject) -> String {
     }
 }
 
+/// A fingerprint of where a body's surface is: its triangle corners rounded
+/// to a micron. The same shape meshes the same way, so an unchanged body keeps
+/// its print, and a body that only moved does not.
+fn shape_print(b: &MeshBody) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    for x in &b.positions {
+        ((*x as f64) * 1000.0).round().to_bits().hash(&mut h);
+    }
+    b.indices.hash(&mut h);
+    h.finish()
+}
+
 /// What the last build was of. Cheap and exact: if this string is unchanged,
 /// the cached mesh is still the answer.
 fn signature(doc: &Doc) -> String {
@@ -309,7 +322,7 @@ struct State {
     /// Each body's line from the last `build`, so the next one can say only
     /// what changed. A 32-body assembly listed in full after every edit is
     /// most of an agent's context gone on bodies it did not touch.
-    reported: Option<HashMap<String, String>>,
+    reported: Option<HashMap<String, (String, u64)>>,
 }
 
 impl State {
@@ -1563,7 +1576,7 @@ impl FundaCad {
                 }
             }
         }
-        let mut bodies: Vec<(String, String)> = Vec::new();
+        let mut bodies: Vec<(String, String, u64)> = Vec::new();
         for b in mesh.iter() {
             let id = b.id();
             let e = exact.get(id).cloned().unwrap_or_else(|| json!({}));
@@ -1601,7 +1614,7 @@ impl FundaCad {
                 py_num(size.get(1)),
                 py_num(size.get(2)),
                 py_num(b.get("faceCount"))
-            )));
+            ), shape_print(b)));
         }
         let mut lines = self.changed_bodies(&bodies, full).await;
         // `featureErrors`, NOT `errors`. A feature that fails is recorded as a
@@ -1655,23 +1668,31 @@ impl FundaCad {
     /// The body lines worth printing: all of them the first time and when
     /// asked, otherwise only the bodies that are new or changed since the last
     /// build reported them, the ones that went away, and a count of the rest.
-    async fn changed_bodies(&self, bodies: &[(String, String)], full: bool) -> Vec<String> {
+    async fn changed_bodies(&self, bodies: &[(String, String, u64)], full: bool) -> Vec<String> {
         let previous = {
             let mut st = self.state.lock().await;
-            st.reported.replace(bodies.iter().cloned().collect())
+            st.reported.replace(
+                bodies.iter().map(|(id, line, print)| (id.clone(), (line.clone(), *print))).collect(),
+            )
         };
         let previous = match previous {
             Some(p) if !full => p,
-            _ => return bodies.iter().map(|(_, line)| line.clone()).collect(),
+            _ => return bodies.iter().map(|(_, line, _)| line.clone()).collect(),
         };
-        let mut out: Vec<String> = bodies
-            .iter()
-            .filter(|(id, line)| previous.get(id) != Some(line))
-            .map(|(_, line)| line.clone())
-            .collect();
+        let mut out: Vec<String> = Vec::new();
+        for (id, line, print) in bodies {
+            match previous.get(id) {
+                Some((was, p)) if was == line && p == print => {}
+                // Same size, volume and counts, different geometry: a part
+                // that moved or turned, or a hole that moved inside it. The
+                // line alone would read exactly as it did last time.
+                Some((was, _)) if was == line => out.push(format!("{line} (moved or reshaped, same size)")),
+                _ => out.push(line.clone()),
+            }
+        }
         let shown = out.len();
         let mut gone: Vec<&String> =
-            previous.keys().filter(|id| !bodies.iter().any(|(b, _)| b == *id)).collect();
+            previous.keys().filter(|id| !bodies.iter().any(|(b, _, _)| b == *id)).collect();
         gone.sort();
         if !gone.is_empty() {
             out.push(format!(
