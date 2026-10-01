@@ -20,6 +20,7 @@
 #include <BRepBuilderAPI_GTransform.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
+#include <BRepBuilderAPI_MakeVertex.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepBuilderAPI_Transform.hxx>
 #include <BRepCheck_Analyzer.hxx>
@@ -1302,47 +1303,123 @@ inline bool bo_face_has_holes(const TopoDS_Shape &f) { return bo_count(f, 3) > 1
 
 // --- revolve ----------------------------------------------------------------
 
-// Arcs whose centre lies within `tol` of the axis, rebuilt through the same
-// endpoints with the centre exactly on it. BRepSweep only makes a sphere of an
-// arc centred within Precision::Confusion of the axis, so a profile written
-// with rounded coordinates misses by microns and gets a generic surface of
-// revolution closing on the axis in a pole, which other importers mesh badly.
-// Null when no arc needed it.
-inline BoShape bo_snap_axis_arcs_(const TopoDS_Shape &s, const gp_Pnt &o, const gp_Dir &d, double tol) {
+// A profile written with rounded coordinates misses the axis by microns, and
+// BRepSweep only closes a revolve on the axis within Precision::Confusion. So
+// before revolving: a vertex within `tol` of the axis moves onto it, and an arc
+// whose centre lies within `tol` of it is rebuilt with the centre exactly on
+// it. Otherwise an arc meant as a sphere becomes a generic surface of
+// revolution closing in a pole, and a tip ending just off the axis leaves a
+// hair-thin tube there; both mesh badly in other importers, the tube as a hole
+// in a STEP read back. The lines and arcs at a moved vertex are rebuilt through
+// it, and a line left with no length is dropped. Null when nothing moved.
+inline BoShape bo_snap_to_axis_(const TopoDS_Shape &s, const gp_Pnt &o, const gp_Dir &d, double tol) {
   const gp_Lin axis(o, d);
+  const double conf = Precision::Confusion();
+  TopTools_IndexedMapOfShape faces, verts, edges;
+  TopExp::MapShapes(s, TopAbs_FACE, faces);
+  TopExp::MapShapes(s, TopAbs_VERTEX, verts);
+  TopExp::MapShapes(s, TopAbs_EDGE, edges);
+  auto on_axis = [&](const gp_Pnt &p) { return o.Translated(gp_Vec(d) * gp_Vec(o, p).Dot(gp_Vec(d))); };
+  auto in_faces = [&](const gp_Pnt &q) {
+    for (int i = 1; i <= faces.Extent(); ++i) {
+      BRepAdaptor_Surface sf(TopoDS::Face(faces(i)), false);
+      if (sf.GetType() != GeomAbs_Plane || sf.Plane().Distance(q) > conf) return false;
+    }
+    return true;
+  };
+  auto snappable = [](const BRepAdaptor_Curve &c) {
+    return c.GetType() == GeomAbs_Line || c.GetType() == GeomAbs_Circle;
+  };
+
+  // The vertices to move, onto one new vertex per point of the axis.
+  std::vector<TopoDS_Vertex> from, to;
+  for (int i = 1; i <= verts.Extent(); ++i) {
+    const TopoDS_Vertex &v = TopoDS::Vertex(verts(i));
+    const gp_Pnt p = BRep_Tool::Pnt(v);
+    const double off = axis.Distance(p);
+    if (off <= conf || off > tol) continue;
+    const gp_Pnt q = on_axis(p);
+    if (!in_faces(q)) continue;
+    bool ok = true;
+    for (int j = 1; j <= edges.Extent() && ok; ++j) {
+      const TopoDS_Edge &e = TopoDS::Edge(edges(j));
+      TopoDS_Vertex a, b;
+      TopExp::Vertices(e, a, b);
+      if ((a.IsSame(v) || b.IsSame(v)) && (BRep_Tool::IsClosed(e) || !snappable(BRepAdaptor_Curve(e)))) ok = false;
+    }
+    if (!ok) continue;
+    TopoDS_Vertex nv;
+    for (size_t k = 0; k < to.size() && nv.IsNull(); ++k)
+      if (BRep_Tool::Pnt(to[k]).Distance(q) <= conf) nv = to[k];
+    if (nv.IsNull()) nv = BRepBuilderAPI_MakeVertex(q).Vertex();
+    from.push_back(v);
+    to.push_back(nv);
+  }
+  auto moved = [&](const TopoDS_Vertex &v) {
+    for (size_t k = 0; k < from.size(); ++k)
+      if (from[k].IsSame(v)) return to[k];
+    return v;
+  };
+
   Handle(BRepTools_ReShape) re = new BRepTools_ReShape();
   std::vector<TopoDS_Edge> made;
-  TopTools_IndexedMapOfShape edges;
-  TopExp::MapShapes(s, TopAbs_EDGE, edges);
+  bool changed = false;
   for (int i = 1; i <= edges.Extent(); ++i) {
-    const TopoDS_Edge &e = TopoDS::Edge(edges(i));
+    const TopoDS_Edge e = TopoDS::Edge(edges(i).Oriented(TopAbs_FORWARD));
     if (BRep_Tool::Degenerated(e) || BRep_Tool::IsClosed(e)) continue;
-    BRepAdaptor_Curve c(e);
-    if (c.GetType() != GeomAbs_Circle) continue;
-    const gp_Circ circ = c.Circle();
-    const double off = axis.Distance(circ.Location());
-    if (off <= Precision::Confusion() || off > tol) continue;
-    const gp_Dir n = circ.Axis().Direction();
-    if (!circ.Axis().IsNormal(gp_Ax1(o, d), Precision::Angular())) continue;
-    if (gp_Pln(circ.Location(), n).Distance(o) > Precision::Confusion()) continue;
-    const double f = c.FirstParameter(), l = c.LastParameter();
-    const gp_Pnt a = c.Value(f), b = c.Value(l);
-    const gp_Vec ab(a, b);
-    const double den = 2.0 * gp_Vec(d).Dot(ab);
-    if (std::abs(den) < Precision::Confusion()) continue;
-    const double t = (o.SquareDistance(b) - o.SquareDistance(a)) / den;
-    const gp_Pnt centre = o.Translated(gp_Vec(d) * t);
-    if (centre.Distance(circ.Location()) > 10.0 * tol) continue;
-    const gp_Circ snapped(gp_Ax2(centre, n, gp_Dir(gp_Vec(centre, a))), centre.Distance(a));
-    double pb = ElCLib::Parameter(snapped, b);
-    if (pb <= Precision::PConfusion()) pb += 2.0 * M_PI;
     TopoDS_Vertex va = TopExp::FirstVertex(e), vb = TopExp::LastVertex(e);
-    BRepBuilderAPI_MakeEdge mk(new Geom_Circle(snapped), va, vb, 0.0, pb);
-    if (!mk.IsDone()) continue;
-    re->Replace(e.Oriented(TopAbs_FORWARD), mk.Edge());
-    made.push_back(mk.Edge());
+    const TopoDS_Vertex na = moved(va), nb = moved(vb);
+    const bool shifted = !na.IsSame(va) || !nb.IsSame(vb);
+    BRepAdaptor_Curve c(e);
+    if (shifted && na.IsSame(nb)) {
+      re->Remove(e);
+      changed = true;
+      continue;
+    }
+    const gp_Pnt a = BRep_Tool::Pnt(na), b = BRep_Tool::Pnt(nb);
+    TopoDS_Edge out;
+    if (c.GetType() == GeomAbs_Line) {
+      if (!shifted) continue;
+      BRepBuilderAPI_MakeEdge mk(na, nb);
+      if (!mk.IsDone()) continue;
+      out = mk.Edge();
+    } else if (c.GetType() == GeomAbs_Circle) {
+      const gp_Circ circ = c.Circle();
+      const double off = axis.Distance(circ.Location());
+      const gp_Dir n = circ.Axis().Direction();
+      const double den = 2.0 * gp_Vec(d).Dot(gp_Vec(a, b));
+      bool centred = off > conf && off <= tol && circ.Axis().IsNormal(gp_Ax1(o, d), Precision::Angular()) &&
+                     gp_Pln(circ.Location(), n).Distance(o) <= conf && std::abs(den) >= conf;
+      gp_Pnt centre;
+      if (centred) {
+        centre = o.Translated(gp_Vec(d) * ((o.SquareDistance(b) - o.SquareDistance(a)) / den));
+        centred = centre.Distance(circ.Location()) <= 10.0 * tol;
+      }
+      if (centred) {
+        const gp_Circ snapped(gp_Ax2(centre, n, gp_Dir(gp_Vec(centre, a))), centre.Distance(a));
+        double pb = ElCLib::Parameter(snapped, b);
+        if (pb <= Precision::PConfusion()) pb += 2.0 * M_PI;
+        BRepBuilderAPI_MakeEdge mk(new Geom_Circle(snapped), na, nb, 0.0, pb);
+        if (!mk.IsDone()) continue;
+        out = mk.Edge();
+      } else if (shifted) {
+        const gp_Pnt mid = c.Value(0.5 * (c.FirstParameter() + c.LastParameter()));
+        GC_MakeArcOfCircle arc(a, mid, b);
+        if (!arc.IsDone()) continue;
+        BRepBuilderAPI_MakeEdge mk(arc.Value(), na, nb);
+        if (!mk.IsDone()) continue;
+        out = mk.Edge();
+      } else {
+        continue;
+      }
+    } else {
+      continue;
+    }
+    re->Replace(e, out);
+    made.push_back(out);
+    changed = true;
   }
-  if (made.empty()) return BoShape();
+  if (!changed) return BoShape();
   TopoDS_Shape out = re->Apply(s);
   for (TopExp_Explorer fx(out, TopAbs_FACE); fx.More(); fx.Next()) {
     const TopoDS_Face &face = TopoDS::Face(fx.Current());
@@ -1355,9 +1432,9 @@ inline BoShape bo_snap_axis_arcs_(const TopoDS_Shape &s, const gp_Pnt &o, const 
   return bo_own(out);
 }
 
-inline BoShape bo_snap_axis_arcs(const TopoDS_Shape &s, double ox, double oy, double oz, double dx,
-                                 double dy, double dz, double tol) {
-  BO_GUARD(return bo_snap_axis_arcs_(s, gp_Pnt(ox, oy, oz), gp_Dir(dx, dy, dz), tol);)
+inline BoShape bo_snap_to_axis(const TopoDS_Shape &s, double ox, double oy, double oz, double dx,
+                               double dy, double dz, double tol) {
+  BO_GUARD(return bo_snap_to_axis_(s, gp_Pnt(ox, oy, oz), gp_Dir(dx, dy, dz), tol);)
 }
 
 inline BoShape bo_revolve(const TopoDS_Shape &s, double ox, double oy, double oz, double dx,

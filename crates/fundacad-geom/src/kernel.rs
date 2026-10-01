@@ -707,12 +707,13 @@ pub fn prism_taper(
     ))
 }
 
-/// `s` with every arc centred within `tol` of the axis rebuilt centred on it,
-/// None when no arc needed that. See `bo_snap_axis_arcs`.
-pub fn snap_axis_arcs(s: &Shape, origin: [f64; 3], dir: [f64; 3], tol: f64) -> Option<Shape> {
+/// `s` with every vertex within `tol` of the axis moved onto it and every arc
+/// centred within `tol` of it rebuilt centred on it, None when nothing needed
+/// that. See `bo_snap_to_axis`.
+pub fn snap_to_axis(s: &Shape, origin: [f64; 3], dir: [f64; 3], tol: f64) -> Option<Shape> {
     let [ox, oy, oz] = origin;
     let [dx, dy, dz] = dir;
-    let inner = ffi::bo_snap_axis_arcs(s.raw(), ox, oy, oz, dx, dy, dz, tol).ok()?;
+    let inner = ffi::bo_snap_to_axis(s.raw(), ox, oy, oz, dx, dy, dz, tol).ok()?;
     (!inner.is_null()).then(|| Shape::from_raw(inner))
 }
 
