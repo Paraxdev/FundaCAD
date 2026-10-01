@@ -242,6 +242,8 @@ pub fn sweep_report(param: &str, unit: &str, steps: &[Step], clearance: f64, ask
     let mut failed_steps = 0;
     let mut cut_short: Option<String> = None;
     let mut cut_steps = 0;
+    // Asked-for bodies that were not there, and at which steps.
+    let mut absent_at: Vec<(String, Vec<String>)> = Vec::new();
     for st in steps {
         let r = match &st.reply {
             Ok(r) => r,
@@ -288,6 +290,12 @@ pub fn sweep_report(param: &str, unit: &str, steps: &[Step], clearance: f64, ask
         let absent = missing(r, asked);
         if !absent.is_empty() {
             line.push_str(&format!(" ({} not built)", absent.join(", ")));
+            for a in absent {
+                match absent_at.iter_mut().find(|(b, _)| *b == a) {
+                    Some((_, at)) => at.push(g_format(st.value)),
+                    None => absent_at.push((a, vec![g_format(st.value)])),
+                }
+            }
         }
         let failed = failures(r);
         if !failed.is_empty() {
@@ -329,6 +337,16 @@ pub fn sweep_report(param: &str, unit: &str, steps: &[Step], clearance: f64, ask
             " {failed_steps} step{} had failed features, so {} checked a different set of bodies.",
             plural(failed_steps),
             if failed_steps == 1 { "it" } else { "they" }
+        ));
+    }
+    // A step without one of the bodies asked about did not check its pairs:
+    // "clear" there says nothing about the positions an agent sweeps for.
+    for (body, at) in &absent_at {
+        summary.push_str(&format!(
+            " {body} was not built at {} step{} ({param} = {}{unit}), so its pairs were not checked there.",
+            at.len(),
+            plural(at.len()),
+            at.join(", ")
         ));
     }
     if cut_steps > 0 {
@@ -392,6 +410,7 @@ mod tests {
         assert!(text.contains("At 1 step the check stopped early: Stopped after checking 400"), "{text}");
         assert!(text.contains("press = 6: clear (stopped early, not every pair checked)"), "{text}");
         assert!(text.contains("press = 12: clear (Slider not built) (features failed: ex2)"), "{text}");
+        assert!(text.contains("Slider was not built at 1 step (press = 12 mm), so its pairs were not checked there."), "{text}");
         let none = sweep_report("press", "mm", &[Step { value: 0.0, reply: Err("x".into()) }], 1.0, &[]);
         assert!(none.starts_with("None of the 1 steps could be checked.\n"), "{none}");
     }
