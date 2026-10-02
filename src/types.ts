@@ -285,15 +285,28 @@ export type PlaneSpec = Plane3 | PlaneDef;
 /** The handle the UI offers; the engine applies offset and angle whatever the mode. */
 export type JointMode = "rigid" | "revolute" | "slider";
 
-/** One side of a joint: a frame on body geometry (re-resolved), on a datum, or given outright. */
+/** One side of a joint: a frame on body geometry (re-resolved), on a datum, or given outright.
+ *  `axis` is a face or edge read as a line: a round face's axis, a flat face's normal
+ *  through its centre, a circle's axis or a straight edge. */
 export interface MateConnector {
   body?: string;
   face?: Selector;
   edge?: Selector;
+  axis?: Selector;
   datum?: string;
   origin?: Vec3;
   zdir?: Vec3;
   xdir?: Vec3;
+}
+
+/** One joint of a mechanism: `a` moves against `b`, the reference its offset and angle
+ *  are measured in. Every field but the id may be missing from a document an agent
+ *  wrote; the engine names the gap ("joints[pin2].a has no body"). */
+export interface MechanismJoint {
+  id: string;
+  mode?: JointMode;
+  a?: MateConnector;
+  b?: MateConnector;
 }
 
 export type PressPullMode = "auto" | "join" | "cut" | "new" | "intersect";
@@ -463,6 +476,11 @@ export type CoreFeature =
   // by `offset` and spin by `angle` about the mate axis (the Python engine's `joints.py`).
   | { id: string; type: "joint"; moving: string; mate: MateConnector; to: MateConnector;
       mode?: JointMode; flush?: boolean; offset?: Num; angle?: Num; name?: string }
+  // A closed-loop linkage: `ground` stays put, the other bodies in `joints` move until
+  // every joint is met, with the `drive` joint at `offset` (mm, a slider) or `angle`
+  // (deg, a revolute). The value that does not match the drive's mode is ignored.
+  | { id: string; type: "mechanism"; ground: string; joints: MechanismJoint[];
+      drive?: string; offset?: Num; angle?: Num; name?: string }
   // Repair boolean debris; parametric because later booleans make more of it.
   | { id: string; type: "cleanUp"; body?: string; tolerance?: Num }
   // Remove bodies by id (mainstream MCAD "Remove"). Runs at its point in the timeline and
@@ -491,7 +509,7 @@ const CORE_FEATURE_TYPES = {
   boolean: true, box: true, chamfer: true, cleanUp: true, cone: true, cylinder: true,
   datumAxis: true, datumPlane: true, datumPoint: true, deleteFace: true, draft: true,
   duplicate: true, extrude: true, fillet: true, hole: true, import: true, imprint: true, joint: true,
-  loft: true, mirror: true, move: true, offsetFace: true, patternCircular: true,
+  loft: true, mechanism: true, mirror: true, move: true, offsetFace: true, patternCircular: true,
   patternLinear: true, patternRect: true, "press-pull": true, removeBody: true, revolve: true, scale: true,
   shell: true, simplifyMesh: true, sketch: true, sphere: true, split: true, sweep: true,
   thicken: true, torus: true,
@@ -727,9 +745,12 @@ export interface RebuildResult {
 }
 
 /** The resolved placement of a datum that follows geometry, as it stands this
- *  rebuild. An axis is a line (origin + direction); a point is one position. */
+ *  rebuild. An axis is a line (origin + direction); a point is one position.
+ *  A mechanism's drive axis also carries `value`, the drive coordinate the
+ *  linkage solved to (mm for a slider, deg for a revolute), so a drive handle on
+ *  a mechanism with no drive value set starts where the parts are, not at 0. */
 export type DatumMark =
-  | { kind: "axis"; origin: Vec3; dir: Vec3 }
+  | { kind: "axis"; origin: Vec3; dir: Vec3; value?: number }
   | { kind: "point"; position: Vec3 };
 
 export type RebuildReply =

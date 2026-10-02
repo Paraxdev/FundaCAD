@@ -764,6 +764,30 @@ const nodes = useDocValue((doc): TreeNode[] => {
     })));
   }
 
+  // --- Mechanisms (only when present) ---
+  // Linkages, after the joints for the same reason: they are about the bodies.
+  // Double-click raises the drive's handle, as it does from the timeline.
+  const mechanisms = doc.features.filter(
+    (f): f is Extract<Feature, { type: "mechanism" }> => f.type === "mechanism",
+  );
+  if (mechanisms.length && show("bodies")) {
+    const nameOf = (id: string | undefined) => bodies.find((b) => b.id === id)?.name ?? id ?? "?";
+    folder("Mechanisms", "mechanism", mechanisms.map((f, i) => ({
+      kind: "row" as const,
+      k: `m:${f.id}`,
+      depth: 1,
+      label: f.name || `Mechanism ${i + 1}`,
+      icon: "mechanism",
+      selected: selection.featureId === f.id,
+      error: errId === f.id,
+      activate: viaTool(() => ({ kind: "feature", id: f.id }), () => engine.selectFeature(f.id)),
+      edit: unlessWaiting(() => engine.editFeature(f.id)),
+      rename: (name: string) => store.updateFeature(f.id, { name } as Partial<Feature>),
+      remove: () => store.removeFeature(f.id),
+      title: `Mechanism ${i + 1} on ${nameOf(f.ground)} · double-click to drag its drive · right-click to Rename / Delete`,
+    })));
+  }
+
   // --- Sketches ---
   const pickedSketches = browser.sketchSelection.keys;
   if (show("sketches")) folder("Sketches", "sketch", sketches.map((f, i) => ({

@@ -59,6 +59,9 @@ export const FEATURE_NUM_FIELDS: Partial<Record<Feature["type"], [string, string
   scale: [["factor", "Factor", "count"], ["sx", "X factor", "count"], ["sy", "Y factor", "count"], ["sz", "Z factor", "count"]],
   move: [["dx", "Move X", "length"], ["dy", "Move Y", "length"], ["dz", "Move Z", "length"], ["rx", "Rotate X", "angle"], ["ry", "Rotate Y", "angle"], ["rz", "Rotate Z", "angle"]],
   joint: [["offset", "Offset", "length"], ["angle", "Angle", "angle"]],
+  // The drive value: a slider drive reads the offset, a revolute one the angle, and
+  // fieldApplies shows only that one (document/mechanism.ts).
+  mechanism: [["offset", "Drive offset", "length"], ["angle", "Drive angle", "angle"]],
   duplicate: [["dx", "Move X", "length"], ["dy", "Move Y", "length"], ["dz", "Move Z", "length"], ["rx", "Rotate X", "angle"], ["ry", "Rotate Y", "angle"], ["rz", "Rotate Z", "angle"]],
 };
 
@@ -255,6 +258,7 @@ export function valueProblem(label: string, rule: ValueRule, v: number): string 
 export const NON_NUM_STRING_FIELDS = new Set([
   "id", "type", "name", "operation", "font", "style", "align", "text", "pathRef",
   "plane", "sketch", "axis", "profile", "path", "direction", "body", "imagePath", "solid",
+  "ground", "drive", "mode",
 ]);
 
 /** A parameter target resolved to the live object holding the number. */

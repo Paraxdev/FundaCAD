@@ -68,6 +68,7 @@ import {
   toggleFieldsFor,
   toggleValue,
 } from "../../document/optionFields";
+import { mechanismDriveChoice, mechanismDrivePatch } from "../../document/mechanism";
 import { targetsFor } from "../../features/selectionTargets";
 import { featureLabel } from "../../features/patternSources";
 import { holeChoicePatch } from "../../features/holeStandards";
@@ -294,7 +295,9 @@ const choiceRows = useDocValue(() => {
     .map((c) =>
       f.type === "patternCircular" && c.field === "axis"
         ? { ...c, ...patternAxisChoice(f, store.document.features) }
-        : { ...c, current: choiceValue(f, c) },
+        : f.type === "mechanism" && c.field === "drive"
+          ? { ...c, ...mechanismDriveChoice(values) }
+          : { ...c, current: choiceValue(f, c) },
     );
 });
 
@@ -324,6 +327,7 @@ function setOption(field: string, value: string | boolean) {
     if (!axis) return;
     patch = axis;
   }
+  if (f?.type === "mechanism" && field === "drive") patch = mechanismDrivePatch(String(value));
   const hole = asFeature(f, "hole");
   if (hole) {
     patch = holeChoicePatch(hole, field, value, (k) =>

@@ -37,7 +37,7 @@ function fakeEngine(over: {
       move: { active: over.move ?? false, cancel: () => { cancelled++; } },
       edgeFeature: off, pressPull: off, faceOffset: off, draft: off, thread: off, hole: off,
       loft: off, planeOffset: off, datumPose: off, lightAim: off, pattern: off, measure: off, targetEdit: off,
-      revolvePitch: off, joint: off, section: { picking: false },
+      revolvePitch: off, joint: off, mechanism: off, section: { picking: false },
     },
   } as unknown as Engine;
   return { e, cancels: () => cancelled };

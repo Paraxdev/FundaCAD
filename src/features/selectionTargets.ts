@@ -114,6 +114,8 @@ export const FEATURE_TARGETS: Partial<Record<FeatureType, readonly TargetField[]
   }],
   mirror: [{ field: "bodies", label: "Bodies", kind: "body", shape: "bodyId", arity: "many", whenEmpty: "the active body" }],
   removeBody: [{ field: "bodies", label: "Bodies", kind: "body", shape: "bodyId", arity: "many" }],
+  // The body that holds still while the rest of the linkage moves about it.
+  mechanism: [{ field: "ground", label: "Ground", kind: "body", shape: "bodyId", arity: "one" }],
   patternRect: [{ field: "bodies", label: "Bodies", kind: "body", shape: "bodyId", arity: "many", whenEmpty: "the active body" }],
   patternLinear: [{ field: "bodies", label: "Bodies", kind: "body", shape: "bodyId", arity: "many", whenEmpty: "the active body" }],
   patternCircular: [{ field: "bodies", label: "Bodies", kind: "body", shape: "bodyId", arity: "many", whenEmpty: "the active body" }],

@@ -108,6 +108,7 @@ pub const FEATURE_NUM_FIELDS: &[(&str, &[(&str, FieldKind)])] = &[
         ],
     ),
     ("joint", &[("offset", Length), ("angle", Angle)]),
+    ("mechanism", &[("offset", Length), ("angle", Angle)]),
     (
         "duplicate",
         &[

@@ -52,6 +52,7 @@ import { BOOLEAN_COMMANDS } from "../features/booleanOps";
 import { HOLE_SIZES, holeFieldApplies } from "../features/holeStandards";
 import { contributedFeature } from "../plugins/contrib";
 import { mirrorPlaneName } from "./mirrorPlane";
+import { mechanismFieldApplies, NO_DRIVE } from "./mechanism";
 import type { Feature, FeatureType } from "../types";
 
 export interface ChoiceOption {
@@ -150,6 +151,14 @@ export const FEATURE_CHOICE_FIELDS: Partial<Record<FeatureType, ChoiceField[]>> 
   draft: [{ field: "axis", label: "Pull axis", options: AXES, fallback: "Z" }],
   patternLinear: [{ field: "axis", label: "Direction", options: AXES, fallback: "X" }],
   patternCircular: [{ field: "axis", label: "Axis", options: AXES, fallback: "Z" }],
+  // Which joint the drive value moves. The options are this mechanism's own
+  // revolute and slider joints, so FeatureProperties asks mechanismDriveChoice
+  // for them; this entry is what puts the row there at all.
+  mechanism: [{
+    field: "drive", label: "Drive", fallback: NO_DRIVE,
+    options: [{ value: NO_DRIVE, label: "None" }],
+    title: "The joint the drive value moves: a revolute joint turns by the drive angle, a slider slides by the drive offset",
+  }],
   "press-pull": [{
     field: "mode", label: "Operation", fallback: "auto",
     options: [{ value: "auto", label: "Auto" }, ...BOOLEAN_OPS],
@@ -250,6 +259,7 @@ export function fieldApplies(
   if (type === "chamfer" && field === "distance2") return values.chamferType === "twoDistance";
   if (type === "fillet" && field === "profile") return values.continuity !== "G2";
   if (type === "hole") return holeFieldApplies(field, values);
+  if (type === "mechanism") return mechanismFieldApplies(field, values);
   return contributedFeature(type)?.fieldApplies?.(field, values) ?? true;
 }
 
