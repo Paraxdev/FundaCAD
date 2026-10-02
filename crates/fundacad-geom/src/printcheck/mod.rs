@@ -11,13 +11,13 @@
 
 pub mod bridge;
 pub mod bvh;
+pub mod op;
 
 use std::collections::HashMap;
 
 use serde_json::{Map, Value};
 
-use crate::describe::g_format;
-use crate::mesh::MeshBody;
+use fundacad_protocol::pyjson::g_format;
 
 pub fn dot(a: [f64; 3], b: [f64; 3]) -> f64 {
     a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
@@ -74,13 +74,9 @@ pub struct Settings {
     pub lay_flat: Option<Value>,
 }
 
-/// The tool's arguments, checked.
+/// The request's settings, checked. Keys it does not know are left alone,
+/// as every op leaves them: the envelope's are in the same map.
 pub fn settings_of(args: &Map<String, Value>) -> Result<Settings, String> {
-    const KNOWN: [&str; 10] =
-        ["bodies", "nozzle", "layer", "overhang", "minGap", "maxBridge", "checks", "up", "layFlat", "all"];
-    if let Some(k) = args.keys().find(|k| !KNOWN.contains(&k.as_str())) {
-        return Err(format!("printability takes no '{k}', it takes {}", KNOWN.join(", ")));
-    }
     let num = |k: &str, default: f64, lo: f64, hi: f64| -> Result<f64, String> {
         match args.get(k).filter(|v| !v.is_null()) {
             None => Ok(default),
@@ -161,9 +157,19 @@ pub struct Body {
     pub bed: f64,
 }
 
+/// A body's triangles as the viewport and an STL get them: flat xyz
+/// positions, three indices a triangle, and each triangle's face index.
+pub struct Mesh<'a> {
+    pub id: &'a str,
+    pub name: &'a str,
+    pub positions: &'a [f32],
+    pub indices: &'a [u32],
+    pub face_ids: &'a [u32],
+}
+
 impl Body {
-    pub fn new(mesh: &MeshBody, up: [f64; 3]) -> Body {
-        let p = &mesh.positions;
+    pub fn new(mesh: &Mesh<'_>, up: [f64; 3]) -> Body {
+        let p = mesh.positions;
         let pts: Vec<[f64; 3]> = p.chunks_exact(3).map(|c| [c[0] as f64, c[1] as f64, c[2] as f64]).collect();
         let mut tris: Vec<[usize; 3]> = mesh
             .indices
@@ -188,9 +194,8 @@ impl Body {
         }
         let face = (0..tris.len()).map(|i| mesh.face_ids.get(i).copied().unwrap_or(0)).collect();
         let keys = pts.iter().map(|&q| key3(q)).collect();
-        let name = mesh.get("name").and_then(Value::as_str).unwrap_or_default().to_string();
         let bed = pts.iter().map(|&q| dot(q, up)).fold(f64::INFINITY, f64::min);
-        Body { id: mesh.id().to_string(), name, pts, tris, n, area, face, keys, up, bed }
+        Body { id: mesh.id.to_string(), name: mesh.name.to_string(), pts, tris, n, area, face, keys, up, bed }
     }
 
     pub(crate) fn key(&self, i: usize) -> Key3 {
@@ -322,8 +327,15 @@ pub struct Topology {
 }
 
 /// Run the checks. `together` is an as-modelled check, where the bodies
-/// print as one object and gaps between them matter.
-pub fn run(bodies: &[Body], s: &Settings, together: bool, topo: &HashMap<String, Topology>) -> Vec<Finding> {
+/// print as one object and gaps between them matter. `stop` is asked between
+/// bodies; once it says so the findings so far come back.
+pub fn run(
+    bodies: &[Body],
+    s: &Settings,
+    together: bool,
+    topo: &HashMap<String, Topology>,
+    stop: &dyn Fn() -> bool,
+) -> Vec<Finding> {
     let mut out = Vec::new();
     let edges: Vec<HashMap<EdgeKey, Vec<usize>>> = bodies.iter().map(Body::edges).collect();
     let (tree, index) = tree_of(bodies);
@@ -331,11 +343,14 @@ pub fn run(bodies: &[Body], s: &Settings, together: bool, topo: &HashMap<String,
         // Printed as one, a body can stand on another.
         let others = (together && bodies.len() > 1).then_some(&tree);
         for bi in 0..bodies.len() {
+            if stop() {
+                return out;
+            }
             out.extend(overhangs(bodies, bi, &edges[bi], s, others));
         }
     }
     if s.checks.wall || s.checks.gap {
-        out.extend(thickness(bodies, s, together, &tree, &index));
+        out.extend(thickness(bodies, s, together, &tree, &index, stop));
     }
     if s.checks.open {
         for (bi, b) in bodies.iter().enumerate() {
@@ -560,7 +575,14 @@ const FACING: f64 = -0.9;
 const SLACK: f64 = 0.99;
 
 /// Walls, floors and gaps, by rays from points over every surface.
-fn thickness(bodies: &[Body], s: &Settings, together: bool, tree: &bvh::Bvh, index: &[Vec<usize>]) -> Vec<Finding> {
+fn thickness(
+    bodies: &[Body],
+    s: &Settings,
+    together: bool,
+    tree: &bvh::Bvh,
+    index: &[Vec<usize>],
+    stop: &dyn Fn() -> bool,
+) -> Vec<Finding> {
     let total: f64 = bodies.iter().flat_map(|b| b.area.iter()).sum();
     let spacing = s.nozzle.max((total / 300_000.0).sqrt());
     let wall_ray = (2.0 * s.nozzle).max(2.0 * s.layer) + 0.05;
@@ -577,6 +599,9 @@ fn thickness(bodies: &[Body], s: &Settings, together: bool, tree: &bvh::Bvh, ind
     };
 
     for (bi, b) in bodies.iter().enumerate() {
+        if stop() {
+            break;
+        }
         for (t, [x, y, z]) in b.tris.iter().enumerate() {
             if b.area[t] <= 0.0 {
                 continue;
@@ -880,8 +905,11 @@ mod tests {
     use super::*;
     use serde_json::json;
 
-    /// A closed box as a mesh, two triangles a side, each side its own face.
-    pub(crate) fn box_mesh(id: &str, lo: [f64; 3], hi: [f64; 3]) -> MeshBody {
+    /// A closed box's positions, indices and face ids, two triangles a
+    /// side, each side its own face.
+    type Raw = (Vec<f32>, Vec<u32>, Vec<u32>);
+
+    fn box_raw(lo: [f64; 3], hi: [f64; 3]) -> Raw {
         let c = |i: usize| -> [f64; 3] {
             [if i & 1 == 0 { lo[0] } else { hi[0] }, if i & 2 == 0 { lo[1] } else { hi[1] }, if i & 4 == 0 { lo[2] } else { hi[2] }]
         };
@@ -898,9 +926,12 @@ mod tests {
             indices.extend([base, base + 1, base + 2, base, base + 2, base + 3]);
             face_ids.extend([f as u32, f as u32]);
         }
-        let mut info = Map::new();
-        info.insert("id".into(), json!(id));
-        MeshBody { info, positions, indices, face_ids, edges: vec![] }
+        (positions, indices, face_ids)
+    }
+
+    fn box_body(id: &str, lo: [f64; 3], hi: [f64; 3]) -> Body {
+        let (positions, indices, face_ids) = box_raw(lo, hi);
+        Body::new(&Mesh { id, name: "", positions: &positions, indices: &indices, face_ids: &face_ids }, [0.0, 0.0, 1.0])
     }
 
     fn defaults() -> Settings {
@@ -908,9 +939,8 @@ mod tests {
     }
 
     #[test]
-    fn settings_refuse_what_they_do_not_know() {
+    fn settings_refuse_values_they_cannot_use() {
         let m = |v: Value| v.as_object().cloned().unwrap();
-        assert!(settings_of(&m(json!({"nozle": 0.4}))).is_err());
         assert!(settings_of(&m(json!({"nozzle": -1}))).is_err());
         assert!(settings_of(&m(json!({"up": "+Z", "layFlat": true}))).is_err());
         assert!(settings_of(&m(json!({"checks": ["walls"]}))).is_err());
@@ -929,15 +959,15 @@ mod tests {
 
     #[test]
     fn a_box_on_the_bed_is_fine() {
-        let b = Body::new(&box_mesh("body1", [0.0; 3], [20.0, 20.0, 10.0]), [0.0, 0.0, 1.0]);
-        let f = run(&[b], &defaults(), true, &HashMap::new());
+        let b = box_body("body1", [0.0; 3], [20.0, 20.0, 10.0]);
+        let f = run(&[b], &defaults(), true, &HashMap::new(), &|| false);
         assert!(f.is_empty(), "{f:?}");
     }
 
     #[test]
     fn a_thin_fin_is_one_perimeter_and_counted_once() {
-        let b = Body::new(&box_mesh("body1", [0.0; 3], [0.6, 20.0, 10.0]), [0.0, 0.0, 1.0]);
-        let f = run(&[b], &defaults(), true, &HashMap::new());
+        let b = box_body("body1", [0.0; 3], [0.6, 20.0, 10.0]);
+        let f = run(&[b], &defaults(), true, &HashMap::new(), &|| false);
         assert_eq!(f.len(), 1, "{f:?}");
         assert_eq!(f[0].kind, Kind::Wall);
         assert!((f[0].value - 0.6).abs() < 1e-6 && (f[0].area - 200.0).abs() < 1e-6, "{f:?}");
@@ -945,24 +975,24 @@ mod tests {
 
     #[test]
     fn two_boxes_a_tenth_apart_print_fused_unless_laid_apart() {
-        let a = Body::new(&box_mesh("body1", [0.0; 3], [10.0; 3]), [0.0, 0.0, 1.0]);
-        let b = Body::new(&box_mesh("body2", [10.1, 0.0, 0.0], [20.1, 10.0, 10.0]), [0.0, 0.0, 1.0]);
-        let f = run(&[a, b], &defaults(), true, &HashMap::new());
+        let a = box_body("body1", [0.0; 3], [10.0; 3]);
+        let b = box_body("body2", [10.1, 0.0, 0.0], [20.1, 10.0, 10.0]);
+        let f = run(&[a, b], &defaults(), true, &HashMap::new(), &|| false);
         assert_eq!(f.len(), 1, "{f:?}");
         assert_eq!(f[0].kind, Kind::Fused);
         assert!((f[0].value - 0.1).abs() < 1e-5, "{f:?}");
-        let a = Body::new(&box_mesh("body1", [0.0; 3], [10.0; 3]), [0.0, 0.0, 1.0]);
-        let b = Body::new(&box_mesh("body2", [10.1, 0.0, 0.0], [20.1, 10.0, 10.0]), [0.0, 0.0, 1.0]);
-        assert!(run(&[a, b], &defaults(), false, &HashMap::new()).is_empty());
+        let a = box_body("body1", [0.0; 3], [10.0; 3]);
+        let b = box_body("body2", [10.1, 0.0, 0.0], [20.1, 10.0, 10.0]);
+        assert!(run(&[a, b], &defaults(), false, &HashMap::new(), &|| false).is_empty());
     }
 
     #[test]
     fn a_box_in_the_air_has_its_bottom_as_an_overhang_but_not_on_the_bed() {
         // Two boxes as one print: the high one's bottom hangs over nothing.
-        let low = Body::new(&box_mesh("body1", [0.0; 3], [5.0; 3]), [0.0, 0.0, 1.0]);
-        let mut high = Body::new(&box_mesh("body2", [20.0, 0.0, 10.0], [30.0, 10.0, 12.0]), [0.0, 0.0, 1.0]);
+        let low = box_body("body1", [0.0; 3], [5.0; 3]);
+        let mut high = box_body("body2", [20.0, 0.0, 10.0], [30.0, 10.0, 12.0]);
         high.bed = 0.0;
-        let f = run(&[low, high], &defaults(), true, &HashMap::new());
+        let f = run(&[low, high], &defaults(), true, &HashMap::new(), &|| false);
         assert_eq!(f.len(), 1, "{f:?}");
         assert_eq!((f[0].kind, f[0].body, f[0].face), (Kind::Overhang, 1, 4));
         assert_eq!(f[0].value, 90.0);

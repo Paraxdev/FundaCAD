@@ -2591,184 +2591,44 @@ fn meshed_bodies(result: &Value, framed: Vec<MeshBody>) -> Vec<MeshBody> {
 // --- printability ----------------------------------------------------------------
 
 impl FundaCad {
+    /// The engine's `printability` op does the work, so the app's panel and
+    /// this tool check the same mesh the same way; this adds the failures.
     async fn printability(&self, args: &JsonObject) -> CallToolResult {
-        use crate::printcheck::{self, Body, Topology};
-        let s = match printcheck::settings_of(args) {
-            Ok(s) => s,
-            Err(e) => return failure(e),
-        };
-        let wanted: Vec<String> = args
-            .get("bodies")
-            .and_then(Value::as_array)
-            .map(|a| a.iter().filter_map(|v| v.as_str().map(str::to_string)).collect())
-            .unwrap_or_default();
+        // The engine passes over keys it does not know, as every op does, so
+        // a misspelt setting is caught here rather than quietly defaulted.
+        const KNOWN: [&str; 10] =
+            ["bodies", "nozzle", "layer", "overhang", "minGap", "maxBridge", "checks", "up", "layFlat", "all"];
+        if let Some(k) = args.keys().find(|k| !KNOWN.contains(&k.as_str())) {
+            return failure(format!("printability takes no '{k}', it takes {}", KNOWN.join(", ")));
+        }
         let (link, doc) = {
             let mut st = self.state.lock().await;
             model::recompute_parameters(&mut st.doc);
             (st.link.clone(), st.doc.clone())
         };
-        // The fine mesh `section` uses: what gets printed is triangles, and
-        // these are close enough to the exact faces for a 0.2 mm gap.
-        let (reply, framed) = match link
-            .call_meshed(
-                "rebuild",
-                call_args([
-                    ("document", Value::Object(doc.clone())),
-                    ("revision", json!(1)),
-                    ("tolerance", json!(crate::section::TOLERANCE)),
-                ]),
-            )
-            .await
-        {
+        let mut payload = args.clone();
+        payload.insert("document".into(), Value::Object(doc));
+        let reply = match link.call("printability", Value::Object(payload)).await {
             Ok(r) => r,
             Err(e) => return engine_gone(&e),
         };
         if reply.get("ok") != Some(&json!(true)) {
-            return failure(format!("Build failed: {}", error_message(&reply)));
+            return failure(error_message(&reply));
         }
-        let result = reply.get("result").cloned().unwrap_or_else(|| json!({}));
-        let meshes = meshed_bodies(&result, framed);
-        let name_of = |b: &MeshBody| b.get("name").and_then(Value::as_str).unwrap_or_default().to_string();
-        let missing: Vec<&String> = wanted
-            .iter()
-            .filter(|w| !meshes.iter().any(|b| b.id() == w.as_str() || name_of(b) == **w))
-            .collect();
-        if !missing.is_empty() {
-            return failure(format!(
-                "no body {} in this build. Check the ids or names against `build`.",
-                missing.iter().map(|m| format!("'{m}'")).collect::<Vec<_>>().join(", ")
-            ));
-        }
-        let chosen: Vec<&MeshBody> = meshes
-            .iter()
-            .filter(|b| wanted.is_empty() || wanted.iter().any(|w| w == b.id() || *w == name_of(b)))
-            .collect();
-        let failures = feature_failure_lines(
-            result.get("featureErrors").and_then(Value::as_array).map_or(&[][..], Vec::as_slice),
-        );
-        if chosen.is_empty() {
-            let mut out = String::from("Nothing built to check.");
-            if !failures.is_empty() {
+        let r = reply.get("result").cloned().unwrap_or_else(|| json!({}));
+        let mut out = r.get("report").and_then(Value::as_str).unwrap_or_default().to_string();
+        let failed = crate::clash::failures(&r);
+        let nothing = r.get("bodies").and_then(Value::as_array).is_none_or(Vec::is_empty);
+        if nothing {
+            if !failed.is_empty() {
                 out.push('\n');
-                out.push_str(&failures.join("\n"));
+                out.push_str(&failed.join("\n"));
             }
             return failure(out);
         }
-
-        // What the exact shapes know and the mesh cannot: open edges,
-        // separate solids, an inside-out volume.
-        let summary = match engine_bodies(&link, &doc, None).await {
-            Ok(b) => b,
-            Err(e) => return failure(e),
-        };
-        let mut topo: HashMap<String, Topology> = HashMap::new();
-        for b in &summary {
-            let id = b.get("id").and_then(Value::as_str).unwrap_or_default().to_string();
-            topo.insert(
-                id,
-                Topology {
-                    open_edges: b.get("openEdges").and_then(Value::as_array).map_or(0, Vec::len),
-                    solids: b.get("solidCount").and_then(Value::as_i64).unwrap_or(1),
-                    volume: b.get("volume").and_then(Value::as_f64).unwrap_or(1.0),
-                },
-            );
-        }
-
-        let mut ups: HashMap<String, [f64; 3]> = HashMap::new();
-        let header = match &s.lay_flat {
-            Some(how) => {
-                let faces = match crate::layflat::bed_faces(&link, &doc, &summary, how, None).await {
-                    Ok(f) => f,
-                    Err(e) => return failure(e),
-                };
-                let mut on = Vec::new();
-                for (id, face) in faces {
-                    if !chosen.iter().any(|b| b.id() == id) {
-                        continue;
-                    }
-                    match face {
-                        Some((i, n)) => {
-                            ups.insert(id.clone(), [-n[0], -n[1], -n[2]]);
-                            on.push(format!("{id} on F{i}"));
-                        }
-                        None => on.push(format!("{id} as modelled, no flat face")),
-                    }
-                }
-                format!(
-                    "laid flat as export would ({}), each on its own bed; coordinates are the model's",
-                    on.join(", ")
-                )
-            }
-            None => String::new(),
-        };
-        let mut bodies: Vec<Body> = chosen
-            .iter()
-            .map(|m| Body::new(m, ups.get(m.id()).copied().unwrap_or(s.up.0)))
-            .collect();
-        let header = if s.lay_flat.is_some() {
-            header
-        } else {
-            // One object on one bed: the lowest point of any of them.
-            let bed = bodies.iter().map(|b| b.bed).fold(f64::INFINITY, f64::min);
-            for b in &mut bodies {
-                b.bed = bed;
-            }
-            let axis = s.up.1[1..].to_ascii_lowercase();
-            let sign = if s.up.1.starts_with('-') { -1.0 } else { 1.0 };
-            format!(
-                "{} up as modelled, bed at {axis} = {}",
-                s.up.1,
-                crate::describe::g_format(((bed * sign) * 1000.0).round() / 1000.0)
-            )
-        };
-        let mut findings = printcheck::run(&bodies, &s, s.lay_flat.is_none(), &topo);
-
-        // A sideways round hole is the overhang everyone prints: say what fixes it.
-        let flagged: Vec<String> = findings
-            .iter()
-            .filter(|f| f.kind == printcheck::Kind::Overhang)
-            .map(|f| bodies[f.body].id.clone())
-            .collect::<std::collections::BTreeSet<_>>()
-            .into_iter()
-            .collect();
-        if !flagged.is_empty() {
-            if let Ok(detail) = engine_bodies(&link, &doc, Some(&flagged)).await {
-                for f in findings.iter_mut().filter(|f| f.kind == printcheck::Kind::Overhang) {
-                    let b = &bodies[f.body];
-                    let Some(face) = detail
-                        .iter()
-                        .find(|d| d.get("id").and_then(Value::as_str) == Some(b.id.as_str()))
-                        .and_then(|d| d.get("faces"))
-                        .and_then(Value::as_array)
-                        .and_then(|fs| fs.iter().find(|x| x.get("i").and_then(Value::as_u64) == Some(f.face as u64)))
-                    else {
-                        continue;
-                    };
-                    let axis = face
-                        .get("axis")
-                        .and_then(Value::as_array)
-                        .and_then(|a| Some([a.first()?.as_f64()?, a.get(1)?.as_f64()?, a.get(2)?.as_f64()?]));
-                    // Round the air, lying down, and more of a turn than a
-                    // fillet into a corner makes.
-                    let sideways = face.get("surface").and_then(Value::as_str) == Some("cylinder")
-                        && b.hollow(f.face)
-                        && axis.is_some_and(|a| {
-                            printcheck::dot(printcheck::unit(a), b.up).abs() < 0.2 && b.turns(f.face, a) > 120.0
-                        });
-                    if sideways {
-                        if !f.note.is_empty() {
-                            f.note.push_str(", ");
-                        }
-                        f.note.push_str("a sideways hole: teardropHole or roofBridge fixes it");
-                    }
-                }
-            }
-        }
-
-        let mut out = printcheck::report(&bodies, &findings, &s, &header, &topo);
-        if !failures.is_empty() {
+        if !failed.is_empty() {
             out.push_str("\nSome features failed, so this checked what did build:\n");
-            out.push_str(&failures.join("\n"));
+            out.push_str(&failed.join("\n"));
         }
         text(out)
     }

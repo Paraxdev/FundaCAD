@@ -434,6 +434,74 @@ Reply:
   names the first failure and the error carries its `feature_id`. The analysis beats the job's heartbeat throughout and stops
   on `cancel`; the factorisation, one long call, finishes before a cancel takes effect.
 
+### `printability`
+
+What would go wrong printing the bodies in layers of extruded plastic: overhangs past
+the angle that prints unsupported, walls under two nozzle widths, floors under two
+layers, gaps narrow enough to fuse, flat ceilings bridged too far, and shells that are
+not closed. Display only, like `stress`. The document is rebuilt through the warm
+cache; each body is meshed on a copy at the fine tolerance `section` uses (0.01, the
+live body and its viewport mesh are left alone), and the checks are rays and angles on
+those triangles, which are what an STL export holds. The MCP `printability` tool is
+this op with its `report` printed.
+
+```jsonc
+{ "op": "printability", "id": "...", "document": { /* CadDocument */ },
+  "bodies": ["body1", "Bracket"],   // optional, ids or names; default every body
+  "nozzle": 0.4, "layer": 0.2,      // mm, optional
+  "overhang": 45,                    // degrees from vertical that print unsupported
+  "minGap": 0.2, "maxBridge": 10,   // mm, optional
+  "checks": ["overhang", "wall", "gap", "bridge", "open"],  // optional, default all
+  "up": "+Z",                        // optional: +X, -X, +Y, -Y, +Z or -Z
+  "layFlat": true,                   // or {"body1": 4}; not with `up`
+  "all": false }                     // the report lists every finding, not five a kind
+```
+
+- As modelled (no `layFlat`) the bodies print as one object on one bed at the lowest
+  point of any of them along `up`, so a body can stand on another and two bodies
+  closer than `minGap` print fused. `layFlat` puts each body on its own bed on the face
+  `export {layFlat}` would: the face given, else its largest flat face, else as
+  modelled; then no gap between bodies counts.
+- Keys it does not know are passed over, as by every op.
+
+Reply:
+```jsonc
+{ "header": "+Z up as modelled, bed at z = 0",
+  "report": "Printability, +Z up as modelled, ...",   // the text the MCP tool prints
+  "settings": { "nozzle": 0.4, "layer": 0.2, "overhang": 45, "minGap": 0.2,
+                "maxBridge": 10, "up": "+Z", "layFlat": false },  // up null when laid flat
+  "bodies": [ { "id": "body1", "name": "Box", "up": [0, 0, 1], "bed": 0,
+                "bedFace": null, "openEdges": 0, "solids": 1, "insideOut": false } ],
+  "findings": [ { "kind": "wall", "body": "body2", "face": 1,
+                  "other": { "body": "body2", "face": 0 },
+                  "value": 0.6, "limit": 0.8, "area": 200, "low": 0,
+                  "at": [x, y, z], "extent": 22.4, "note": "" } ],
+  "errors": [ /* feature failures */ ] }
+```
+
+- `kind` is `overhang`, `bridge`, `wall`, `floor`, `gap`, `fused` (two bodies printed
+  as one that would join) or `meshHole` (a face that did not triangulate).
+- `face` and `other.face` are face indices, the `i` of `inspect` and the mesh
+  `faceIds`. `other` is the facing face of a wall, floor, gap or fused pair, null
+  otherwise.
+- `value` is, for an overhang, its steepest lean past vertical in degrees (90 is a
+  flat ceiling); for a bridge its span; for a wall, floor, gap or fused pair the
+  thickness or gap; all in mm; for a mesh hole the count of open mesh edges. `limit`
+  is what a bridge, wall, floor, gap or fused pair was held to, 0 otherwise. `low` is
+  an overhang's lowest point above the bed. `at` and `extent` are where to look and
+  how big the region is.
+- `findings` lists everything found on the mesh, ordered as `report` lists it: by
+  body, by kind, the worst first, then the fused pairs. What the exact shape says is
+  on the body instead: `openEdges` (edges that bound one face, an open shell),
+  `solids` (more than 1 is separate pieces) and `insideOut` (a closed shell whose
+  volume is negative). `bedFace` is the face a laid flat body sits on.
+- With no body built, `bodies` and `findings` are empty, `report` says
+  `Nothing built to check.` and `errors` says why, whatever `bodies` asked for.
+- A refusal is an ordinary error reply: a setting out of range, `up` and `layFlat`
+  together, a body asked for that is not there, or a `layFlat` face that is missing or
+  not flat. The check beats the job's heartbeat throughout and stops on `cancel`
+  between its steps.
+
 ### `inspect`
 
 Exact B-rep measurements of the document's live bodies. Rebuilds through the same
