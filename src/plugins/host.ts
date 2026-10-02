@@ -79,6 +79,17 @@ export type { EntityKind, EntitySource } from "../features/toolCapabilities";
 export type { Engine } from "../app/engine";
 export type { DocumentStore } from "../document/store";
 export type { GeneratedShape, GeneratedShapeReply, GeometryBackend, ShapePlacement } from "../geometry/client";
+// The engine's printability check, as `GeometryBackend.printability` takes and
+// answers it.
+export type {
+  PrintabilityCheck,
+  PrintabilityFinding,
+  PrintabilityKind,
+  PrintabilityOptions,
+  PrintabilityReply,
+  PrintabilityResult,
+  PrintabilityUp,
+} from "../geometry/client";
 export type { Viewport } from "../viewport/viewport";
 export type { CtxItem, MenuDef, MenuItem } from "../ui/menu";
 export type { CadDocument, Feature, Num, PlaneSpec, RebuildResult, Selector } from "../types";
@@ -120,6 +131,11 @@ export type { Command } from "../ui/commands";
 // --- remembering something ---------------------------------------------------
 /** One `fundacad.*` localStorage key, read forward through its older names. */
 export { readSetting } from "../ui/storedSetting";
+
+// --- showing a number --------------------------------------------------------
+/** The app's display-precision rule, so a plugin's readout rounds a length the
+ *  way every other panel in the window does. */
+export { roundForDisplay as displayRound } from "../ui/measure";
 
 // --- the document, as a name rather than as content --------------------------
 export { stripDocumentExt } from "../io/documentExt";

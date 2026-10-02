@@ -1,18 +1,17 @@
-import { beforeEach, describe, expect, it } from "vitest";
-import { createPinia, setActivePinia } from "pinia";
-import { createPanels, type PanelsDeps } from "../../src/ui/panels";
-import { usePanelsStore } from "../../src/stores/panels";
-import { KIND_COLORS } from "../../src/ui/printability";
+import { describe, expect, it } from "vitest";
+import {
+  createPrintabilityPanel, EMPHASIS_COLOR, type PrintabilityDeps,
+} from "../../plugins/FundaCAD.PrintToolbox/printabilityPanel";
+import { KIND_COLORS } from "../../plugins/FundaCAD.PrintToolbox/printability";
 import { EDGE_HOVER_COLOR } from "../../src/viewport/highlight";
-import type { PrintabilityOptions, PrintabilityReply, PrintabilityResult } from "../../src/geometry/client";
-import type { CadDocument } from "../../src/types";
+import type { CadDocument, PrintabilityOptions, PrintabilityReply, PrintabilityResult } from "fundacad";
 
-// The Printability panel's facade against a hand-made viewport, store and
-// engine: Check covers the selection or every body, Cancel names its own
-// request, the flagged faces are tinted on their own layer, a row puts its
-// finding forward and frames it, and an edit takes the tints off.
-
-beforeEach(() => setActivePinia(createPinia()));
+// The toolbox's Printability panel controller against a hand-made viewport,
+// store and engine: Check covers the selection or every body, Cancel names its
+// own request, the flagged faces are tinted on their own layer, a row puts its
+// finding forward and frames it, an edit takes the tints off, a completed
+// build tints again, the stress colours keep their body, and switching the
+// plugin off leaves nothing behind.
 
 // body1 has six faces, so the viewport numbers body2's faces from 6.
 type Built = { id: string; name: string; faceStart: number; faceCount: number }[];
@@ -37,11 +36,16 @@ const reply: PrintabilityReply = {
   errors: [],
 };
 
+type BuildState = { result: { bodies: Built } | null; building: boolean };
+
 function rig() {
   let selectedBodies: string[] = [];
+  let stressBody: string | null = null;
   const hidden = new Set<string>();
-  const openListeners: (() => void)[] = [];
-  const docListeners: (() => void)[] = [];
+  const openListeners = new Set<() => void>();
+  const docListeners = new Set<() => void>();
+  const buildListeners = new Set<(s: BuildState) => void>();
+  const stressListeners = new Set<() => void>();
   const marks: { marks: unknown; layer: string | undefined }[] = [];
   const frames: { at: number[]; size: number }[] = [];
   const statuses: string[] = [];
@@ -50,19 +54,24 @@ function rig() {
   let settle: (r: PrintabilityResult) => void = () => {};
   const built = { features: [{ id: "shown" }] } as unknown as CadDocument;
   const docs: CadDocument[] = [];
+  const sub = <T>(set: Set<T>, fn: T) => { set.add(fn); return () => { set.delete(fn); }; };
 
   const viewport = {
     getSelectedBodies: () => selectedBodies,
     setFaceMarks: (m: unknown, layer?: string) => marks.push({ marks: m, layer }),
     frameAround: (at: number[], size: number) => frames.push({ at, size }),
+    stressOverlayBody: () => stressBody,
+    onStressOverlayChange: (fn: () => void) => sub(stressListeners, fn),
   };
   const store = {
     document: { features: [] } as unknown as CadDocument,
     // What the model on screen was built from: rolled back, suppressions out.
     builtDocument: () => built,
-    buildState: { result: { bodies: BUILT } },
-    onDocChange: (fn: () => void) => { docListeners.push(fn); fn(); return () => {}; },
-    onOpen: (fn: () => void) => { openListeners.push(fn); return () => {}; },
+    buildState: { result: { bodies: BUILT }, building: false } as BuildState,
+    // Both replay at once, as the real store's do.
+    onDocChange: (fn: () => void) => { const off = sub(docListeners, fn); fn(); return off; },
+    onBuild: (fn: (s: BuildState) => void) => { const off = sub(buildListeners, fn); fn(store.buildState); return off; },
+    onOpen: (fn: () => void) => sub(openListeners, fn),
     isBodyVisible: (id: string) => !hidden.has(id),
   };
   const geometry = {
@@ -78,29 +87,36 @@ function rig() {
     store, viewport, geometry,
     hasBody: () => true,
     setStatus: (t: string) => statuses.push(t),
-  } as unknown as PanelsDeps;
-  const ui = createPanels(deps);
+  } as unknown as PrintabilityDeps;
+  const ui = createPrintabilityPanel(deps);
   /** The last marks drawn on the printability layer. */
   const tints = () => marks.filter((m) => m.layer === "printability").at(-1)?.marks;
+  const listening = () => docListeners.size + buildListeners.size + openListeners.size + stressListeners.size;
   return {
-    ui, marks, frames, statuses, calls, cancels, tints, docs, built,
+    ui, marks, frames, statuses, calls, cancels, tints, docs, built, listening,
     select: (ids: string[]) => { selectedBodies = ids; },
     hide: (id: string) => hidden.add(id),
     settle: (r: PrintabilityResult) => settle(r),
     editDoc: () => docListeners.forEach((f) => f()),
-    /** A build drawn again: setModel drops every mark and the rebuild bridge
-     *  asks the panel to tint again, maybe with the bodies' faces anew. */
-    rebuild: (bodies: Built = store.buildState.result.bodies) => {
-      store.buildState = { result: { bodies } };
-      ui.refreshPrintabilityMarks();
+    /** A completed build: the rebuild bridge's setModel drops every mark, and
+     *  the panel's own build listener tints again, maybe with the bodies'
+     *  faces anew. */
+    rebuild: (bodies: Built = BUILT, building = false) => {
+      store.buildState = { result: { bodies }, building };
+      buildListeners.forEach((f) => f(store.buildState));
+    },
+    /** The Stress panel's colours going onto a body, or off with null. */
+    stress: (body: string | null) => {
+      stressBody = body;
+      stressListeners.forEach((f) => f());
     },
     open: () => openListeners.forEach((f) => f()),
   };
 }
 
 async function checked(r: ReturnType<typeof rig>) {
-  r.ui.showPrintability();
-  const run = r.ui.runPrintability();
+  r.ui.show();
+  const run = r.ui.run();
   r.settle({ ok: true, result: reply });
   await run;
 }
@@ -112,8 +128,8 @@ async function flush() {
 describe("printability panel flow", () => {
   it("checks every body when none is selected, and only the selected ones otherwise", async () => {
     const r = rig();
-    r.ui.showPrintability();
-    const a = r.ui.runPrintability();
+    r.ui.show();
+    const a = r.ui.run();
     // None named: the engine checks every body of the document it is sent,
     // which is the one the model on screen was built from.
     expect(r.calls[0]).toEqual({ nozzle: 0.4, layer: 0.2, overhang: 45, minGap: 0.2, maxBridge: 10, up: "+Z" });
@@ -121,8 +137,8 @@ describe("printability panel flow", () => {
     r.settle({ ok: true, result: reply });
     await a;
     r.select(["body2", "gone"]);
-    usePanelsStore().printability!.setup.layFlat = true;
-    const b = r.ui.runPrintability();
+    r.ui.data.value!.setup.layFlat = true;
+    const b = r.ui.run();
     expect(r.calls[1]!.bodies).toEqual(["body2"]);
     expect(r.calls[1]!.layFlat).toBe(true);
     expect("up" in r.calls[1]!).toBe(false);
@@ -133,7 +149,7 @@ describe("printability panel flow", () => {
   it("lists the findings by body and tints their faces by kind on its own layer", async () => {
     const r = rig();
     await checked(r);
-    const d = usePanelsStore().printability!;
+    const d = r.ui.data.value!;
     expect(d.running).toBe(false);
     expect(d.result!.groups.map((g) => [g.name, g.rows.map((x) => x.text)])).toEqual([
       ["Block", ["Overhang, 100 mm² leaning 90°", "Thin wall 0.6 mm (under 0.8)"]],
@@ -151,18 +167,23 @@ describe("printability panel flow", () => {
   it("puts a hovered row's faces forward, and a clicked one stays forward and is framed", async () => {
     const r = rig();
     await checked(r);
-    r.ui.hoverFinding(1);
+    r.ui.hover(1);
     expect(r.tints()).toEqual([
       { faceIds: [3], color: KIND_COLORS.overhang },
       { faceIds: [7, 2], color: KIND_COLORS.gap },
-      { faceIds: [4, 5], color: EDGE_HOVER_COLOR },
+      { faceIds: [4, 5], color: EMPHASIS_COLOR },
     ]);
-    r.ui.hoverFinding(null);
-    r.ui.pickFinding(2);
+    r.ui.hover(null);
+    r.ui.pick(2);
     expect(r.frames).toEqual([{ at: [10, 5, 5], size: 8 }]);
-    expect((r.tints() as { faceIds: number[] }[]).at(-1)).toEqual({ faceIds: [7, 2], color: EDGE_HOVER_COLOR });
-    r.ui.pickFinding(1);
+    expect((r.tints() as { faceIds: number[] }[]).at(-1)).toEqual({ faceIds: [7, 2], color: EMPHASIS_COLOR });
+    r.ui.pick(1);
     expect(r.frames.at(-1)).toEqual({ at: [0, 5, 5], size: 5 });
+  });
+
+  it("puts a finding forward in the app's own hover colour", () => {
+    // The plugin keeps its own copy of the colour, which this holds to the app's.
+    expect(EMPHASIS_COLOR).toBe(EDGE_HOVER_COLOR);
   });
 
   it("does not tint a hidden body, nor a face past its body's faces", async () => {
@@ -173,14 +194,28 @@ describe("printability panel flow", () => {
     // The gap's own side is on the hidden Lid; its other side, on the Block, still shows.
     const shown = [{ faceIds: [3], color: KIND_COLORS.overhang }, { faceIds: [2], color: KIND_COLORS.gap }];
     expect(r.tints()).toEqual(shown);
-    r.ui.hoverFinding(1);
+    r.ui.hover(1);
     expect(r.tints()).toEqual(shown);
+  });
+
+  it("leaves the body the stress colours are on alone, and tints it again when they come off", async () => {
+    const r = rig();
+    await checked(r);
+    r.stress("body1");
+    // Only the gap's own side, on the Lid, is left.
+    expect(r.tints()).toEqual([{ faceIds: [7], color: KIND_COLORS.gap }]);
+    r.stress(null);
+    expect(r.tints()).toEqual([
+      { faceIds: [3], color: KIND_COLORS.overhang },
+      { faceIds: [4, 5], color: KIND_COLORS.wall },
+      { faceIds: [7, 2], color: KIND_COLORS.gap },
+    ]);
   });
 
   it("says nothing was found on a clean model", async () => {
     const r = rig();
-    r.ui.showPrintability();
-    const run = r.ui.runPrintability();
+    r.ui.show();
+    const run = r.ui.run();
     r.settle({ ok: true, result: { ...reply, findings: [] } });
     await run;
     expect(r.statuses.at(-1)).toBe("Printability: nothing found");
@@ -189,34 +224,41 @@ describe("printability panel flow", () => {
 
   it("shows a refusal's message in the panel", async () => {
     const r = rig();
-    r.ui.showPrintability();
-    const run = r.ui.runPrintability();
+    r.ui.show();
+    const run = r.ui.run();
     r.settle({ ok: false, message: "face 7 of body1 is not flat" });
     await run;
-    expect(usePanelsStore().printability!.error).toBe("face 7 of body1 is not flat");
-    expect(usePanelsStore().printability!.result).toBeNull();
+    expect(r.ui.data.value!.error).toBe("face 7 of body1 is not flat");
+    expect(r.ui.data.value!.result).toBeNull();
   });
 
   it("does not send settings that are not ready", async () => {
     const r = rig();
-    r.ui.showPrintability();
-    usePanelsStore().printability!.setup.nozzle = 0;
-    await r.ui.runPrintability();
+    r.ui.show();
+    r.ui.data.value!.setup.nozzle = 0;
+    await r.ui.run();
     expect(r.calls).toEqual([]);
-    expect(usePanelsStore().printability!.error).toMatch(/nozzle/);
+    expect(r.ui.data.value!.error).toMatch(/nozzle/);
   });
 
   it("cancels by its own request id and stays quiet about it", async () => {
     const r = rig();
-    r.ui.showPrintability();
-    const run = r.ui.runPrintability();
-    expect(usePanelsStore().printability!.requestId).toBe("req-1");
-    await r.ui.cancelPrintability();
+    r.ui.show();
+    const run = r.ui.run();
+    expect(r.ui.data.value!.requestId).toBe("req-1");
+    await r.ui.cancel();
     expect(r.cancels).toEqual(["req-1"]);
     r.settle({ ok: false, cancelled: true, message: "printability check cancelled" });
     await run;
-    expect(usePanelsStore().printability!.error).toBeNull();
+    expect(r.ui.data.value!.error).toBeNull();
     expect(r.statuses.at(-1)).toBe("Printability check cancelled");
+  });
+
+  it("keeps the list of bodies for the panel's Bodies line in step with the build", () => {
+    const r = rig();
+    expect(r.ui.bodies.value).toEqual([{ id: "body1", name: "Block" }, { id: "body2", name: "Lid" }]);
+    r.rebuild([{ id: "body1", name: "Block", faceStart: 0, faceCount: 6 }]);
+    expect(r.ui.bodies.value).toEqual([{ id: "body1", name: "Block" }]);
   });
 });
 
@@ -225,36 +267,46 @@ describe("printability panel across changes", () => {
     const r = rig();
     await checked(r);
     r.rebuild();
-    expect(usePanelsStore().printability!.stale).toBe(false);
+    expect(r.ui.data.value!.stale).toBe(false);
     expect(r.tints()).not.toBeNull();
     r.editDoc();
     r.rebuild();
-    expect(usePanelsStore().printability!.stale).toBe(true);
+    expect(r.ui.data.value!.stale).toBe(true);
     expect(r.tints()).toBeNull();
-    r.ui.hoverFinding(0);
+    r.ui.hover(0);
     expect(r.tints()).toBeNull();
+  });
+
+  it("tints again on a completed build only, not while one is running", async () => {
+    const r = rig();
+    await checked(r);
+    const before = r.marks.length;
+    r.rebuild(BUILT, true);
+    expect(r.marks.length).toBe(before);
+    r.rebuild();
+    expect(r.marks.length).toBe(before + 1);
   });
 
   it("leaves the tints off a model edited while it ran", async () => {
     const r = rig();
-    r.ui.showPrintability();
-    const run = r.ui.runPrintability();
+    r.ui.show();
+    const run = r.ui.run();
     r.editDoc();
     r.settle({ ok: true, result: reply });
     await run;
-    expect(usePanelsStore().printability!.stale).toBe(true);
+    expect(r.ui.data.value!.stale).toBe(true);
     expect(r.tints()).toBeNull();
     expect(r.statuses.at(-1)).toMatch(/changed while it ran/);
   });
 
   it("closing stops a Check in flight, drops its late reply and its tints", async () => {
     const r = rig();
-    r.ui.showPrintability();
-    const run = r.ui.runPrintability();
-    r.ui.closePrintability();
+    r.ui.show();
+    const run = r.ui.run();
+    r.ui.close();
     await flush();
     expect(r.cancels).toEqual(["req-1"]);
-    expect(usePanelsStore().printability).toBeNull();
+    expect(r.ui.data.value).toBeNull();
     r.settle({ ok: true, result: reply });
     await run;
     expect(r.tints()).toBeNull();
@@ -264,13 +316,29 @@ describe("printability panel across changes", () => {
     const r = rig();
     await checked(r);
     r.open();
-    expect(usePanelsStore().printability).toBeNull();
+    expect(r.ui.data.value).toBeNull();
     expect(r.tints()).toBeNull();
   });
 
   it("a rebuild with the panel closed only clears its own layer", () => {
     const r = rig();
     r.rebuild();
-    expect(r.marks).toEqual([{ marks: null, layer: "printability" }]);
+    expect(r.marks.length).toBeGreaterThan(0);
+    expect(r.marks.every((m) => m.marks === null && m.layer === "printability")).toBe(true);
+  });
+
+  it("switched off, it closes, takes its tints away and stops listening", async () => {
+    const r = rig();
+    r.ui.show();
+    const run = r.ui.run();
+    r.ui.dispose();
+    await flush();
+    expect(r.cancels).toEqual(["req-1"]);
+    expect(r.ui.data.value).toBeNull();
+    expect(r.tints()).toBeNull();
+    expect(r.listening()).toBe(0);
+    r.settle({ ok: true, result: reply });
+    await run;
+    expect(r.tints()).toBeNull();
   });
 });

@@ -1,8 +1,8 @@
 // Facade for the floating "measure-panel" popups: Properties, Interference,
-// Stress, Printability and the Overhang (Draft Analysis) settings. The DOM
-// lives in components/overlays/*Panel.vue; what stays here is the part that is
-// genuinely this layer's job, preconditions, status-line messages, the
-// geometry call, and unit formatting of the numbers those produce.
+// Stress and the Overhang (Draft Analysis) settings. The DOM lives in
+// components/overlays/*Panel.vue; what stays here is the part that is genuinely
+// this layer's job, preconditions, status-line messages, the geometry call,
+// and unit formatting of the numbers those produce.
 //
 // The app's own panels only. A capability that wants a floating panel brings its
 // own component and its own state; a plugin's camera view used to be a fifth
@@ -17,10 +17,6 @@ import { usePanelsStore, type PanelRow, type ClashRow, type ClearanceRow } from 
 import {
   buildStressRequest, formatStressResult, FIXED_MARK_COLOR, LOAD_MARK_COLOR, type StressFaceSet,
 } from "./stress";
-import {
-  buildPrintabilityRequest, findingMarks, findingView, formatPrintabilityResult, problemCount,
-} from "./printability";
-import { EDGE_HOVER_COLOR } from "../viewport/highlight";
 import type { Selector } from "../types";
 import * as THREE from "three";
 
@@ -169,10 +165,6 @@ export function createPanels(deps: PanelsDeps) {
 
   /** The bodies the panel can analyse, in build order. */
   function stressBodies(): { id: string; name: string }[] {
-    return builtBodies();
-  }
-
-  function builtBodies(): { id: string; name: string }[] {
     return (store.buildState.result?.bodies ?? []).map((b) => ({ id: b.id, name: b.name }));
   }
 
@@ -325,7 +317,6 @@ export function createPanels(deps: PanelsDeps) {
     panels.clearStressResult();
     colours = null;
     viewport.setStressOverlay(null);
-    refreshPrintabilityMarks();
     refreshStressMarks();
   }
 
@@ -348,7 +339,6 @@ export function createPanels(deps: PanelsDeps) {
       return;
     }
     viewport.setStressOverlay(on ? colours!.overlay : null);
-    refreshPrintabilityMarks();
     panels.setStressColours(on ? "shown" : "hidden");
     refreshStressMarks();
   }
@@ -379,7 +369,6 @@ export function createPanels(deps: PanelsDeps) {
     panels.clearStressResult();
     colours = null;
     viewport.setStressOverlay(null);
-    refreshPrintabilityMarks();
     refreshStressMarks();
     setStatus("Analysing stress…", "");
     const res = await geometry.stress(store.document, req.body, req.options, (id) => {
@@ -435,143 +424,7 @@ export function createPanels(deps: PanelsDeps) {
     colours = null;
     facesFor = null;
     viewport.setStressOverlay(null);
-    refreshPrintabilityMarks();
     viewport.setFaceMarks(null);
-  }
-
-  // --- Inspect: Printability, what would go wrong making the bodies layer by
-  // layer. The settings are edited in the panel; this side picks the bodies,
-  // runs the engine op with a Cancel, and tints the faces it flagged. ---
-
-  // Its own layer of face marks, so Stress's marks and these come and go apart.
-  const PRINTABILITY_MARKS = "printability";
-  // Bumped per Check and on close, so a reply for an earlier Check is dropped.
-  let checkSeq = 0;
-  // The document the result's face ids were taken on (docEpoch, above).
-  let checkedEpoch = -1;
-
-  store.onOpen(() => { if (panels.printability) closePrintability(); });
-
-  /** The bodies the panel can check, in build order. */
-  function printabilityBodies(): { id: string; name: string }[] {
-    return builtBodies();
-  }
-
-  /** What a Check covers: the selected bodies, or none named when none is
-   *  selected, so the engine checks every body of the document it is sent
-   *  rather than of a build that may be about to be replaced. */
-  function printabilityScope(): string[] {
-    const all = builtBodies().map((b) => b.id);
-    return viewport.getSelectedBodies().filter((id) => all.includes(id));
-  }
-
-  function showPrintability() {
-    if (!hasBody()) {
-      setStatus("Printability: create or import a body first", "");
-      return;
-    }
-    if (!geometry.printability) {
-      setStatus("Printability: this geometry engine cannot run the check", "error");
-      return;
-    }
-    panels.showPrintability();
-    refreshPrintabilityMarks();
-    setStatus("Printability: checks the selected bodies, or every body when none is selected", "");
-  }
-
-  /** Tint the faces the last Check flagged, one colour per kind, and the
-   *  finding a row puts forward in the hover colour. Nothing once the model
-   *  has changed since, when the face ids may name other faces, nor on a body
-   *  the user has hidden. Called by the rebuild bridge after every model it
-   *  draws, as setModel drops every mark. */
-  function refreshPrintabilityMarks() {
-    const d = panels.printability;
-    if (d?.result && !d.stale && checkedEpoch !== docEpoch) panels.setPrintabilityStale();
-    if (!d?.result || d.stale) {
-      viewport.setFaceMarks(null, PRINTABILITY_MARKS);
-      return;
-    }
-    // The engine numbers each body's faces from 0; the viewport numbers on
-    // from the body's faceStart. An index past the body's faces is left plain
-    // rather than tinted on the next body.
-    const built = new Map((store.buildState.result?.bodies ?? []).map((b) => [b.id, b]));
-    // A body painted by stress shows its stress, not these.
-    const stressed = panels.stress?.colours === "shown" ? colours?.overlay.bodyId : undefined;
-    const faceOf = (body: string, face: number): number | null => {
-      const b = built.get(body);
-      if (!b || body === stressed || !store.isBodyVisible(body) || !Number.isInteger(face) || face < 0 || face >= b.faceCount) return null;
-      return b.faceStart + face;
-    };
-    viewport.setFaceMarks(findingMarks(d.result.findings, d.hovered ?? d.picked, EDGE_HOVER_COLOR, faceOf), PRINTABILITY_MARKS);
-  }
-
-  /** Put a finding forward while the pointer is over its row, null once it leaves. */
-  function hoverFinding(index: number | null) {
-    const d = panels.printability;
-    if (!d || d.hovered === index) return;
-    panels.setPrintabilityFocus("hovered", index);
-    refreshPrintabilityMarks();
-  }
-
-  /** Put a finding forward until another is clicked, and look at it. */
-  function pickFinding(index: number) {
-    const f = panels.printability?.result?.findings[index];
-    if (!f) return;
-    panels.setPrintabilityFocus("picked", index);
-    refreshPrintabilityMarks();
-    const v = findingView(f);
-    viewport.frameAround(v.at, v.size);
-  }
-
-  async function runPrintability() {
-    const d = panels.printability;
-    if (!d || d.running) return;
-    if (!geometry.printability) {
-      setStatus("Printability: this geometry engine cannot run the check", "error");
-      return;
-    }
-    const req = buildPrintabilityRequest(d.setup, printabilityScope());
-    if (!req.ok) {
-      panels.printabilityFinished({ error: req.message });
-      setStatus(`Printability: ${req.message}`, "");
-      return;
-    }
-    const seq = ++checkSeq;
-    const epoch = docEpoch;
-    panels.printabilityStarted();
-    panels.clearPrintabilityResult();
-    viewport.setFaceMarks(null, PRINTABILITY_MARKS);
-    setStatus("Checking printability…", "");
-    const res = await geometry.printability(store.builtDocument(), req.options, (id) => {
-      if (seq === checkSeq) panels.printabilitySent(id);
-    });
-    if (seq !== checkSeq || !panels.printability) return;
-    if (!res.ok) {
-      panels.printabilityFinished(res.cancelled ? {} : { error: res.message });
-      setStatus(res.cancelled ? "Printability check cancelled" : `Printability check failed: ${res.message}`, res.cancelled ? "" : "error");
-      return;
-    }
-    const view = formatPrintabilityResult(res.result);
-    checkedEpoch = epoch;
-    panels.printabilityFinished({ result: view });
-    const n = problemCount(view);
-    setStatus(n ? `Printability: ${n} thing${n === 1 ? "" : "s"} to look at` : "Printability: nothing found", n ? "" : "connected");
-    refreshPrintabilityMarks();
-    if (epoch !== docEpoch) setStatus("Printability: the model changed while it ran, check again to see the faces", "");
-  }
-
-  /** Stop the Check in flight, by its own id as for Stress. */
-  async function cancelPrintability() {
-    const id = panels.printability?.running ? panels.printability.requestId : null;
-    if (id) await geometry.cancel?.(id);
-  }
-
-  /** Close Printability, stopping a Check in flight, and drop its tints. */
-  function closePrintability() {
-    if (panels.printability?.running) void cancelPrintability();
-    checkSeq++;
-    panels.printability = null;
-    viewport.setFaceMarks(null, PRINTABILITY_MARKS);
   }
 
   function showOverhangSettings() {
@@ -586,8 +439,6 @@ export function createPanels(deps: PanelsDeps) {
     showOverhangSettings, closeOverhangSettings,
     showStress, closeStress, runStress, cancelStress, stressBodies, setStressBody,
     setStressFacesFromSelection, addStressLoad, removeStressLoad, setStressColours, refreshStressMarks,
-    showPrintability, closePrintability, runPrintability, cancelPrintability, printabilityBodies,
-    hoverFinding, pickFinding, refreshPrintabilityMarks,
   };
 }
 

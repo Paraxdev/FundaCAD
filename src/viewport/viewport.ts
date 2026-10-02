@@ -2639,7 +2639,8 @@ export class Viewport {
   /** Stress overlay: the analysed body's surface coloured by a per-vertex
    *  value over `range` (blue low, red high), drawn in the body's place, which
    *  is hidden while it shows. Pass null to clear. Display only, cleared
-   *  automatically on the next `setModel`. */
+   *  automatically on the next `setModel`. Tells `onStressOverlayChange`
+   *  listeners when the body it is on changes. */
   setStressOverlay(o: {
     bodyId: string;
     positions: number[];
@@ -2670,13 +2671,30 @@ export class Viewport {
         b.edges.setBodyVisible(false);
       }
     }
+    const was = this.stressBody;
+    this.stressBody = this.stressMesh && o ? o.bodyId : null;
     this.requestRender();
+    if (this.stressBody !== was) for (const fn of this.stressListeners) fn();
   }
   hasStressOverlay(): boolean {
     return this.stressMesh !== null;
   }
+  /** The body the stress overlay is drawn in place of, or null when none is
+   *  up. Something else tinting faces leaves that body alone: a tint over the
+   *  colours would misread them. */
+  stressOverlayBody(): string | null {
+    return this.stressBody;
+  }
+  /** Called after the stress overlay goes onto another body or comes off,
+   *  `setModel` clearing it included. Returns the unsubscribe. */
+  onStressOverlayChange(fn: () => void): () => void {
+    this.stressListeners.add(fn);
+    return () => this.stressListeners.delete(fn);
+  }
   private stressMesh: THREE.Mesh | null = null;
   private stressHidden: { bodyId: string; wasVisible: boolean } | null = null;
+  private stressBody: string | null = null;
+  private stressListeners = new Set<() => void>();
 
   /** Tint sets of faces (display face ids), each in its own colour: the faces
    *  an analysis holds fixed or loads, or the ones a check flagged. Pass null

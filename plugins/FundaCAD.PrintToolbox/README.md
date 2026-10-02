@@ -1,9 +1,9 @@
 # 3D Printing Toolbox
 
 Hole shapes, layer tricks and edge finishes that let a part print without
-supports. Each tool but the bed fit check is a feature in the history, built as
-exact geometry, so a fillet or a boolean after it sees the reshaped hole and an
-export carries it.
+supports. Each tool but the bed fit check and the printability check is a
+feature in the history, built as exact geometry, so a fillet or a boolean after
+it sees the reshaped hole and an export carries it.
 
 | tool | what it does | pick |
 | --- | --- | --- |
@@ -16,8 +16,9 @@ export carries it.
 | Elephant-Foot Chamfer | chamfers the outer edges of the lowest face opposite the build direction, to cancel first-layer squish | the body, or its bottom face |
 | Vertical Edge Fillet | fillets every edge of a body that runs parallel to the build direction, optionally convex edges only | the body |
 | Bed Fit Check | a toast, not a feature: reports whether the model's bounding box fits a printer bed and, if not, the scale that would make it fit | (no pick, uses the built model) |
+| Printability | a panel, not a feature: runs the engine's printability check with the nozzle, layer, overhang angle, gap and bridge limits and which way is up set in the panel, lists overhangs, thin walls and floors, gaps that would fuse, long bridges and open shells by body, and tints their faces one colour per kind; hovering a line picks out its face, clicking it turns the view to it | the selected bodies, or every body when none is selected |
 
-All nine live in the PRINT ribbon group. The first six are offered when faces
+All ten live in the PRINT ribbon group. The first six are offered when faces
 are selected; the chamfer and fillet act on the selected bodies, or the active
 one when nothing is selected, and add their feature at once, no pick and wait.
 With faces already selected a face tool acts at once too; otherwise it waits
@@ -34,8 +35,9 @@ same for Vertical Edge Fillet.
 
 | grant | what it does with it |
 | --- | --- |
-| `document.read` | reads which faces you selected and which body they belong to |
+| `document.read` | reads which faces you selected and which body they belong to, and the document the printability check is run on |
 | `document.write` | adds the feature to your history |
+| `geometry.build` | runs the geometry engine's printability check on the built bodies |
 
 It reads no files, writes no files, and reaches no network.
 
@@ -55,6 +57,9 @@ again and the same file builds as it did.
 | `faceTool.ts` | the one pick tool every face-target verb runs through |
 | `bodyTool.ts` | the pick-free counterpart for a verb that acts on a body: the chamfer and the fillet |
 | `bedFit.ts` | the bed fit check's pure math, presets and remembered setting; not a feature |
+| `printability.ts` | the printability check's settings, the request it sends, its findings in words and the face tints; pure |
+| `printabilityState.ts`, `printabilityPanel.ts` | the panel's state, and running the check, tinting the faces it found and framing one |
+| `PrintabilityPanel.vue` | the panel itself |
 | `geometry-rs/src/lib.rs` | claims the feature types from the geometry engine |
 | `geometry-rs/src/holes.rs` | teardrop and roof bridge |
 | `geometry-rs/src/layers.rs` | counterbore bridge and sacrificial layer |

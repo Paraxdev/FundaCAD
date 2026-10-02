@@ -146,7 +146,6 @@ export const MODEL: Group[] = [
           { action: "properties", label: "Properties", iconName: "properties" },
           { action: "interference", label: "Interference", iconName: "interference" },
           { action: "stress", label: "Stress", iconName: "stress" },
-          { action: "printability", label: "Printability", iconName: "printability" },
           { action: "draft-analysis", label: "Overhang", iconName: "draftAnalysis" },
           { action: "zebra", label: "Zebra", iconName: "zebra" },
           { action: "curvature", label: "Curvature", iconName: "curvature" },

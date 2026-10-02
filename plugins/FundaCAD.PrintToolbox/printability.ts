@@ -1,13 +1,13 @@
 // The pure half of the Printability panel: the settings and their defaults,
-// turning them into the `printability` op's options, turning its reply into
-// plain-English rows grouped by body, and the face tints for each kind of
+// turning them into the engine's `printability` op's options, turning its reply
+// into plain-English rows grouped by body, and the face tints for each kind of
 // finding that the viewport and the panel's legend share. Nothing here touches
 // the viewport or the store, so all of it is testable in node.
 
+import { displayRound } from "fundacad";
 import type {
   PrintabilityCheck, PrintabilityFinding, PrintabilityKind, PrintabilityOptions, PrintabilityReply, PrintabilityUp,
-} from "../geometry/client";
-import { displayRound } from "./units";
+} from "fundacad";
 
 export interface PrintabilitySetup {
   /** mm whatever the display unit: these are nozzle-sized numbers, and the
@@ -65,6 +65,11 @@ export const KIND_COLORS: Record<PrintabilityKind, number> = {
   fused: 0xe23b3b,
   meshHole: 0xf0e442,
 };
+
+/** A tint as a CSS colour, for the legend's swatches. */
+export function cssHex(c: number): string {
+  return `#${c.toString(16).padStart(6, "0")}`;
+}
 
 export const KIND_LABELS: Record<PrintabilityKind, string> = {
   overhang: "Overhang",
