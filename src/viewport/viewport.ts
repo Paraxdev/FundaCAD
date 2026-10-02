@@ -93,7 +93,7 @@ import { clickTakes, DwellIntent, type SelectPolicy } from "./clickIntent";
 import { getHoverDwellMs } from "../ui/interactionPrefs";
 import { edgesOnFace, faceEdgeTol, faceSurface, type Tri } from "./faceEdges";
 import { remapSelection, remapStreamedSelection, shouldAnnounce } from "./selectionMemo";
-import { cylinderFromFace, radialAt, solidInsideCylinder } from "../features/planeMath";
+import { arcSweep, cylinderFromFace, FULL_SWEEP, radialAt, solidInsideCylinder } from "../features/planeMath";
 import type { RoundFace } from "../features/radialDrag";
 import type { Plane3, PlaneDef, RebuildResult, Selector, Vec3 } from "../types";
 import { dragStep } from "./dragStep";
@@ -1985,6 +1985,8 @@ export class Viewport {
       radius: cylinder.radius,
       solidInside,
       radial: new THREE.Vector3(radial[0], radial[1], radial[2]),
+      full: arcSweep(cylinder, points) > FULL_SWEEP,
+      tangent: null,
     };
   }
 

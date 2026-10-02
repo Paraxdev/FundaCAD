@@ -34,13 +34,13 @@ export function circleDiameter(points: readonly Pt3[], tol = 0.01): number | nul
 
 const mm = (v: number) => `${Number(v.toFixed(2))} mm`;
 
-/** "1 edge · 300.74 mm · ⌀95.73 mm", "3 faces", "1 face · ⌀50 mm". */
+/** "1 edge · 300.74 mm · ⌀95.73 mm", "3 faces", "1 face · ⌀50 mm", "1 face · R2 mm". */
 export function describeSelection(input: {
   count: number;
   noun: string;
   plural: string;
   edges?: readonly (readonly Pt3[])[];
-  roundFaceDiameter?: number | null;
+  roundFace?: { radius: number; full: boolean } | null;
 }): string {
   if (input.count <= 0) return "";
   const parts = [`${input.count} ${input.count === 1 ? input.noun : input.plural}`];
@@ -48,8 +48,9 @@ export function describeSelection(input: {
     parts.push(mm(input.edges.reduce((s, e) => s + polylineLength(e), 0)));
     const d = input.edges.length === 1 ? circleDiameter(input.edges[0]!) : null;
     if (d !== null) parts.push(`⌀${mm(d)}`);
-  } else if (input.roundFaceDiameter != null) {
-    parts.push(`⌀${mm(input.roundFaceDiameter)}`);
+  } else if (input.roundFace) {
+    const { radius, full } = input.roundFace;
+    parts.push(full ? `⌀${mm(radius * 2)}` : `R${mm(radius)}`);
   }
   return parts.join(" · ");
 }

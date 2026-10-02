@@ -6,6 +6,7 @@ import {
   COLLAPSE_FRACTION,
   collapseDiameter,
   deltaForDiameter,
+  deltaForRadius,
   radialDrag,
 } from "../../src/features/radialDrag";
 
@@ -79,5 +80,37 @@ describe("radialDrag", () => {
 
   it("reports the floor as a diameter, since that is what the readout speaks", () => {
     expect(collapseDiameter(5)).toBeCloseTo(1);
+  });
+
+  it("never removes a partial arc, however far it is pushed in", () => {
+    // A slot end has no hole to take away, so its size keeps reading as a size
+    // and the engine says why the smaller ones cannot be built.
+    expect(radialDrag(5, -4.9, true, false).mode).toBe("resize");
+    expect(radialDrag(5, -5, true, false).mode).toBe("resize");
+    const past = radialDrag(2, -3, false, false);
+    expect(past.mode).toBe("resize");
+    expect(past.radius).toBeCloseTo(-1);
+    expect(past.distance).toBeCloseTo(3);
+    expect(radialDrag(5, -4.9, true, true).mode).toBe("remove");
+  });
+
+  it("round-trips a typed radius through the drag", () => {
+    for (const target of [2.6, 2, 1.5, 0.05]) {
+      for (const inside of [true, false]) {
+        expect(radialDrag(2, deltaForRadius(2, target), inside, false).radius).toBeCloseTo(target, 9);
+      }
+    }
+  });
+
+  it("signs a typed radius for the kernel on a bore and on a boss", () => {
+    const table: [boolean, number, number][] = [
+      [false, 2.6, -0.6], // bore grown
+      [false, 1.5, 0.5], // bore shrunk
+      [true, 2.6, 0.6], // boss grown
+      [true, 1.5, -0.5], // boss shrunk
+    ];
+    for (const [inside, target, distance] of table) {
+      expect(radialDrag(2, deltaForRadius(2, target), inside, false).distance).toBeCloseTo(distance, 9);
+    }
   });
 });
