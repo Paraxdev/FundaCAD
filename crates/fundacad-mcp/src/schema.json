@@ -280,7 +280,8 @@
     "body": "optional body id; default the active body. The selectors' own `body` is NOT read here",
     "upTo": "optional Selector naming a target face to stop at, instead of using `distance`",
     "taper": "optional Num, degrees. Leans a PLANAR push's walls as they travel (a moulded boss, an angled pocket); positive narrows the far end. Must be between -89 and 89. Ignored on a curved face and on an `upTo` push. Absent or 0 is a straight push",
-    "direction": "optional, \"normal\" (the default) or \"axis\". \"axis\" moves the face along the line the faces around it run along instead of along its own normal, so the cone, cap or flat floor at the end of a hole slides down the hole: negative makes the hole deeper, positive shallower, and the end keeps its shape where an offset along the normal would widen it. Every face bordering the pushed one must be a wall along that line, a cylinder parallel to it or a flat wall containing it, or the feature is refused. The line is a round wall's axis, else the face's own axis, else where two flat walls meet. `taper` is ignored with \"axis\""
+    "direction": "optional, \"normal\" (the default) or \"axis\". \"axis\" moves the face along the line the faces around it run along instead of along its own normal, so the cone, cap or flat floor at the end of a hole slides down the hole: negative makes the hole deeper, positive shallower, and the end keeps its shape where an offset along the normal would widen it. Every face bordering the pushed one must be a wall along that line, a cylinder parallel to it or a flat wall containing it, or the feature is refused. The line is a round wall's axis, else the face's own axis, else where two flat walls meet. `taper` is ignored with \"axis\"",
+    "followTangent": "optional bool, default true. When a cylinder, cone, sphere or torus face is resized so that faces running smoothly into it would no longer meet it (a slot end made narrower than the slot), true moves that whole closed run with it so the slot narrows as one, false refuses and names those faces. Ignored on flat faces and with a non-auto mode"
    },
    "example": {
     "id": "pp1",
@@ -298,7 +299,7 @@
     "distance": 5,
     "operation": "join"
    },
-   "notes": "A planar face moves along its normal and every face around it is carried along its own surface to meet it, so a sloped side keeps its slope (the top of a frustum narrows as it rises) and a square side stays square. Where it runs into another part of the body it merges with it; where its sides meet before it gets that far it is refused. With a `taper`, or where the faces around it cannot be carried along, it extrudes into a straight prism and booleans instead. A cylinder, cone, sphere or torus is truly OFFSET, which is how a hole is resized. A freeform face that WRAPS (a full revolve, a swept tube) is thickened along its own surface; `inspect` marks those faces with \"wraps\": true."
+   "notes": "A planar face moves along its normal and every face around it is carried along its own surface to meet it, so a sloped side keeps its slope (the top of a frustum narrows as it rises) and a square side stays square. Where it runs into another part of the body it merges with it; where its sides meet before it gets that far it is refused. With a `taper`, or where the faces around it cannot be carried along, it extrudes into a straight prism and booleans instead. A cylinder, cone, sphere or torus keeps its axis or centre and changes size by distance along its outward normal, so a negative distance grows a hole and shrinks a boss. The faces around it keep their own surfaces and are trimmed or extended to meet it, so growing one end of a slot gives a bigger round end with the straight walls trimmed back. Selecting every face of a slot resizes the slot as one. A size at or below zero is refused, never clamped. A freeform face that WRAPS (a full revolve, a swept tube) is thickened along its own surface; `inspect` marks those faces with \"wraps\": true."
   },
   "shell": {
    "summary": "Hollow a body to a wall thickness, optionally opening faces.",
@@ -327,7 +328,8 @@
    "fields": {
     "faces": "Selector or list",
     "distance": "Num",
-    "body": "optional body id; default the active body. The selectors' own `body` is NOT read here"
+    "body": "optional body id; default the active body. The selectors' own `body` is NOT read here",
+    "followTangent": "optional bool, default true. When a cylinder, cone, sphere or torus face is resized so that faces running smoothly into it would no longer meet it (a slot end made narrower than the slot), true moves that whole closed run with it so the slot narrows as one, false refuses and names those faces. Ignored on flat faces and with a non-auto mode"
    },
    "example": {
     "id": "of1",
