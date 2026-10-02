@@ -62,6 +62,7 @@ const DRAWN_BY_APP: Record<FeatureType, "app"> = {
   move: "app",
   duplicate: "app",
   joint: "app",
+  mechanism: "app",
   removeBody: "app",
 };
 

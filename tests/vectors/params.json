@@ -291,6 +291,7 @@
     "scale": [["factor", "count"], ["sx", "count"], ["sy", "count"], ["sz", "count"]],
     "move": [["dx", "length"], ["dy", "length"], ["dz", "length"], ["rx", "angle"], ["ry", "angle"], ["rz", "angle"]],
     "joint": [["offset", "length"], ["angle", "angle"]],
+    "mechanism": [["offset", "length"], ["angle", "angle"]],
     "duplicate": [["dx", "length"], ["dy", "length"], ["dz", "length"], ["rx", "angle"], ["ry", "angle"], ["rz", "angle"]]
   },
   "commonNumFields": [["activeWhen", "count"]],

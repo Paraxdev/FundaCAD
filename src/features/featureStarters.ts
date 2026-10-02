@@ -27,7 +27,9 @@ import { pickPlaneTarget, planeSpecOf, type FacePlanePick } from "./facePlanePic
 import { choose } from "../ui/choice";
 import { pointInRegion } from "../sketch/region";
 import { setPrompt } from "../ui/prompt";
-import type { Axis3, AxisSpec, Feature, PlaneDef, PlaneSpec, Selector, Vec3 } from "../types";
+import type { Axis3, AxisSpec, Feature, JointMode, MechanismJoint, PlaneDef, PlaneSpec, Selector, Vec3 } from "../types";
+import type { Hit } from "../viewport/picking";
+import { isDrivable, nextJointId, NO_DRIVE } from "../document/mechanism";
 import { findSelectorAt, repickedExtent, repickedSelector, replaceSelectorAt } from "./repickReference";
 import { awaitTreePick, treePickRefusal } from "../ui/treePick";
 import { deferPick } from "./deferPick";
@@ -1346,6 +1348,126 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     });
   }
 
+  /** One-shot pick of a line on a body for a mechanism joint: a face (a round
+   *  face's axis, a flat face's normal) or an edge (a circle's axis, a straight
+   *  edge), whichever the cursor is on, gated the way selection is. Resolves to
+   *  the body and its selector, or null on Esc. A body in `exclude` does not
+   *  answer: a joint's two sides are on different bodies. */
+  function pickAxisConnectorInteractive(
+    promptText: string,
+    exclude: string | null,
+  ): Promise<{ body: string; sel: Selector } | null> {
+    return new Promise((resolve) => {
+      const connectorAt = (x: number, y: number): { body: string; sel: Selector; hit: Hit } | null => {
+        const hit = viewport.pickEntity(x, y);
+        if (!hit) return null;
+        if (hit.kind === "edge") {
+          const body = hit.edge.body;
+          return body && body !== exclude ? { body, sel: hit.selector, hit } : null;
+        }
+        const face = viewport.pickFaceForPressPull(x, y);
+        const body = face?.bodyId;
+        if (!face || !body || body === exclude) return null;
+        return { body, sel: { ...face.selector, body }, hit };
+      };
+      setPlanePick(true);
+      viewport.suspendPicking = true;
+      viewport.emphasizeEdges(true);
+      setPrompt(promptText);
+      const onMove = (e: PointerEvent) => viewport.hoverEntity(connectorAt(e.clientX, e.clientY)?.hit ?? null);
+      const onDown = (e: PointerEvent) => {
+        if (e.button !== 0) return;
+        const got = connectorAt(e.clientX, e.clientY);
+        if (!got) return; // a click on empty space or the other side's body is a miss, not a cancel
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        cleanup();
+        requestAnimationFrame(() => resolve({ body: got.body, sel: got.sel }));
+      };
+      const onEsc = (e: KeyboardEvent) => {
+        if (e.key !== "Escape") return;
+        cleanup();
+        resolve(null);
+      };
+      const releaseTree = awaitTreePick(
+        (pick) => treePickRefusal(pick, "a face or an edge, pick it in the view"),
+        () => { cleanup(); resolve(null); },
+      );
+      const cleanup = () => {
+        releaseTree();
+        setPlanePick(false);
+        viewport.suspendPicking = false;
+        viewport.emphasizeEdges(false);
+        viewport.hoverEntity(null);
+        canvas.removeEventListener("pointermove", onMove);
+        canvas.removeEventListener("pointerdown", onDown, true);
+        window.removeEventListener("keydown", onEsc, true);
+        setPrompt(null);
+      };
+      canvas.addEventListener("pointermove", onMove);
+      canvas.addEventListener("pointerdown", onDown, true);
+      window.addEventListener("keydown", onEsc, true);
+    });
+  }
+
+  // Mechanism: a linkage the engine closes. Pick the ground body, then each joint
+  // as a kind and two lines, one on the part that moves and one on the part it
+  // joins (a pin's round face or its circular edge, a slot's straight edge), then
+  // which revolute or slider joint the drive turns or slides. The engine moves
+  // every other body until all the joints are met; the drive value is edited in
+  // the rows or with the handle a double-click raises. Esc at any step cancels
+  // the whole mechanism, nothing is written until the drive is chosen.
+  async function startMechanism() {
+    if (toolBusy()) return;
+    if (!hasBody()) {
+      setStatus("Create or import a body first", "");
+      return;
+    }
+    const ground = await new Promise<string>((resolve) =>
+      pickBodyInteractive("Mechanism: pick the GROUND body, the one that holds still · Esc to cancel", [], resolve));
+    const joints: MechanismJoint[] = [];
+    for (;;) {
+      const kinds: { value: JointMode | "done"; label: string }[] = [
+        { value: "revolute", label: "Revolute (pin)" },
+        { value: "slider", label: "Slider" },
+        { value: "rigid", label: "Rigid" },
+      ];
+      if (joints.length) kinds.push({ value: "done", label: "Done" });
+      const title = joints.length
+        ? `Mechanism: ${joints.length} joint${joints.length === 1 ? "" : "s"} so far, add another or finish`
+        : "Mechanism: what kind is the first joint?";
+      const mode = await choose<JointMode | "done">(title, kinds);
+      if (mode === null) return setStatus("Mechanism cancelled", "");
+      if (mode === "done") break;
+      const id = nextJointId(joints, mode);
+      const a = await pickAxisConnectorInteractive(
+        `Mechanism ${id}: pick a face or edge on the part that MOVES · Esc to cancel`, null);
+      if (!a) return setStatus("Mechanism cancelled", "");
+      const b = await pickAxisConnectorInteractive(
+        `Mechanism ${id}: pick a face or edge on the part it JOINS · Esc to cancel`, a.body);
+      if (!b) return setStatus("Mechanism cancelled", "");
+      joints.push({ id, mode, a: { body: a.body, axis: a.sel }, b: { body: b.body, axis: b.sel } });
+    }
+    const drivable = joints.filter((j) => isDrivable(j.mode));
+    let drive: string | null = NO_DRIVE;
+    if (drivable.length) {
+      drive = await choose<string>("Mechanism: which joint does the drive move?", [
+        ...drivable.map((j) => ({ value: j.id, label: `${j.id} (${j.mode})` })),
+        { value: NO_DRIVE, label: "None, close it as modelled" },
+      ]);
+      if (drive === null) return setStatus("Mechanism cancelled", "");
+    }
+    const id = store.nextId();
+    store.addFeature({
+      id,
+      type: "mechanism",
+      ground,
+      joints,
+      ...(drive ? { drive } : {}),
+    } as Feature);
+    committed(id);
+  }
+
   // Draft: pick a face to taper by 5° about the body's base (pull +Z; edit the
   // angle in the value rows).
   // Pattern: repeat the selected bodies along an axis or around one, set up in
@@ -1504,6 +1626,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     startSweep,
     startPrimitive,
     startJoint,
+    startMechanism,
     startPattern,
     startExtrude,
     grabRegionHandle,

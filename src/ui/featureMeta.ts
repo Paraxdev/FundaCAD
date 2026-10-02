@@ -73,6 +73,7 @@ export const FEATURE_META: Partial<Record<FeatureType, FeatureMeta>> = {
   move: { icon: "move", label: "Move" },
   duplicate: { icon: "copy", label: "Duplicate" },
   joint: { icon: "assembly", label: "Joint" },
+  mechanism: { icon: "mechanism", label: "Mechanism" },
   removeBody: { icon: "removeBody", label: "Remove Body" },
 };
 

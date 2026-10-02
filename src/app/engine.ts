@@ -43,6 +43,7 @@ import { LightAimTool } from "../features/lightAimTool";
 import { datumMoveTarget } from "../features/datumPlaneEdit";
 import { RevolvePitchTool } from "../features/revolvePitchTool";
 import { JointTool } from "../features/jointTool";
+import { MechanismTool } from "../features/mechanismTool";
 import { createFeatureStarters } from "../features/featureStarters";
 import { createContextMenus } from "../ui/contextMenus";
 import { createPanels } from "../ui/panels";
@@ -101,6 +102,7 @@ export interface EngineTools {
   lightAim: LightAimTool;
   revolvePitch: RevolvePitchTool;
   joint: JointTool;
+  mechanism: MechanismTool;
 }
 
 export interface EngineUi {
@@ -365,6 +367,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
     lightAim: new LightAimTool(e.viewport),
     revolvePitch: new RevolvePitchTool(e.viewport, e.store, e.overlay),
     joint: new JointTool(e.viewport, e.store),
+    mechanism: new MechanismTool(e.viewport, e.store),
   };
 
   const move = e.tools.move;

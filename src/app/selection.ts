@@ -138,6 +138,12 @@ export function createSelection(
         // place the axis this build, and those fall through to the rows.
         if (!e.tools.joint.startEdit(id, done)) e.setStatus(VALUES_IN_HISTORY, "");
         break;
+      case "mechanism":
+        // The drive's arrow (a slider) or dial (a revolute) on the drive joint's
+        // axis. It stands down without a drive, when an expression drives the
+        // value, or when the engine could not solve the linkage this build.
+        if (!e.tools.mechanism.startEdit(id, done)) e.setStatus(VALUES_IN_HISTORY, "");
+        break;
       default:
         // A feature type the app has no tool for may still have one: a plugin
         // that contributes a tool contributes how to REOPEN what the tool made,
