@@ -6,11 +6,9 @@
 //! (support) and edges where the part goes up or ends (no support), and from
 //! points across the ceiling rays go out in opposite pairs: the span at a
 //! point is the shortest pair that ends on support at both ends. A point with
-//! no such pair is not bridged at all.
-//!
-//! Known limit: a ray goes straight through an edge without support, so a
-//! U-shaped ceiling whose ray leaves through a step up and finds a wall again
-//! beyond it counts as bridged.
+//! no such pair is not bridged at all. A ray that reaches an edge without
+//! support first has left the ceiling there: what it would find beyond, a
+//! wall past a step up or another body's top across the air, holds nothing.
 
 use std::collections::HashMap;
 
@@ -68,6 +66,7 @@ pub fn span(
     let flat = |p: [f64; 3]| [dot(p, u), dot(p, v)];
 
     let mut support: Vec<([f64; 2], [f64; 2])> = Vec::new();
+    let mut free: Vec<([f64; 2], [f64; 2])> = Vec::new();
     for (key, n) in &count {
         if *n != 1 {
             continue;
@@ -90,6 +89,8 @@ pub fn span(
         });
         if held {
             support.push((flat(b.pts[i]), flat(b.pts[j])));
+        } else {
+            free.push((flat(b.pts[i]), flat(b.pts[j])));
         }
     }
     support.extend(posts.iter().map(|(p, q)| (flat(*p), flat(*q))));
@@ -123,8 +124,8 @@ pub fn span(
             let q = flat(q);
             let mut best = f64::INFINITY;
             for d in &dirs {
-                let there = reach(q, *d, &support);
-                let back = reach(q, [-d[0], -d[1]], &support);
+                let there = reach(q, *d, &support, &free);
+                let back = reach(q, [-d[0], -d[1]], &support, &free);
                 if there.is_finite() && back.is_finite() {
                     best = best.min(there + back);
                 }
@@ -144,10 +145,18 @@ pub fn span(
     }
 }
 
-/// How far from `q` along `d` the nearest supported edge is.
-fn reach(q: [f64; 2], d: [f64; 2], support: &[([f64; 2], [f64; 2])]) -> f64 {
+/// How far from `q` along `d` the nearest supported edge is, or infinity
+/// when the ray leaves the ceiling through a `free` edge before that. A tie
+/// is a corner, or a ceiling's edge right over another body's top: held.
+fn reach(q: [f64; 2], d: [f64; 2], support: &[([f64; 2], [f64; 2])], free: &[([f64; 2], [f64; 2])]) -> f64 {
+    let held = nearest(q, d, support);
+    if held <= nearest(q, d, free) + 1e-6 { held } else { f64::INFINITY }
+}
+
+/// How far from `q` along `d` the nearest of `edges` is.
+fn nearest(q: [f64; 2], d: [f64; 2], edges: &[([f64; 2], [f64; 2])]) -> f64 {
     let mut best = f64::INFINITY;
-    for (a, b) in support {
+    for (a, b) in edges {
         let e = [b[0] - a[0], b[1] - a[1]];
         let den = d[0] * e[1] - d[1] * e[0];
         if den.abs() < 1e-12 {
