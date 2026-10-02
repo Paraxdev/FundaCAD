@@ -44,7 +44,9 @@ This file starts on 2026-08-03. For anything before that, see the
   a copy of the body, so the model is never changed, and it says plainly when
   the answer needs care: a deflection too large for a linear analysis, a peak
   at a sharp inside corner or where a fixture ends, too few elements through a
-  thin wall, and printed parts being weaker across their layers.
+  thin wall, and printed parts being weaker across their layers. An assistant
+  runs the same analysis through the MCP `stress` tool, which answers with a
+  short report and a picture of the part coloured from blue to red by stress.
 - **Sketch shortcuts over MCP.** A sketch may give an outline as a `polyline`,
   a list of points that can close on itself, and a rectangle by two opposite
   corners. They are stored as the lines and centred rectangle the app already

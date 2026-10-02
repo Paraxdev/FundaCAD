@@ -81,6 +81,7 @@ export const UNSERVED: Partial<Record<Op, string>> = {
   view: "the geometry engine is not reachable from a plugin yet",
   interference: "the geometry engine is not reachable from a plugin yet",
   section: "the geometry engine is not reachable from a plugin yet",
+  stress: "the geometry engine is not reachable from a plugin yet",
   edit: "not served to plugins yet. Call the single ops (feature_add, feature_update, param_set) one by one",
 };
 
@@ -307,6 +308,7 @@ export function appHost(opts: AppHostOptions): BrokerHost {
         case "export":
         case "interference":
         case "section":
+        case "stress":
         case "edit":
           throw new HostRefused(`${op} is not served here`);
       }

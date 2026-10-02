@@ -62,6 +62,31 @@ pub const NAMED_VIEWS: &[(&str, Vec3)] = &[
     ("bottom", [0.0, 0.0, -1.0]),
 ];
 
+/// The stress scale, low to high: blue, cyan, green, yellow, red. Bright enough
+/// to survive the shading multiply, and the order every analysis package uses,
+/// so nobody has to read a legend to know red is the worry.
+pub const STRESS_STOPS: &[Rgb] = &[
+    [40, 70, 225],
+    [40, 175, 230],
+    [60, 200, 95],
+    [240, 210, 45],
+    [225, 50, 40],
+];
+
+/// The frame around the colour bar, light so it reads on the background.
+pub const BAR_FRAME: Rgb = [200, 204, 210];
+
+/// A value's colour on the stress scale, `t` from 0 (blue) to 1 (red).
+pub fn stress_color(t: f64) -> Rgb {
+    let t = if t.is_finite() { t.clamp(0.0, 1.0) } else { 0.0 };
+    let span = (STRESS_STOPS.len() - 1) as f64;
+    let at = t * span;
+    let k = (at.floor() as usize).min(STRESS_STOPS.len() - 2);
+    let f = at - k as f64;
+    let (a, b) = (STRESS_STOPS[k], STRESS_STOPS[k + 1]);
+    std::array::from_fn(|c| (f64::from(a[c]) + (f64::from(b[c]) - f64::from(a[c])) * f).round() as u8)
+}
+
 /// Which way a named section axis points. `at` is then a coordinate on it.
 pub const SECTION_AXES: &[(&str, Vec3)] = &[
     ("x", [1.0, 0.0, 0.0]),
@@ -439,6 +464,17 @@ impl Canvas {
     /// triangles are dropped by the sign test on the edge function, so a closed
     /// solid draws roughly half its triangles.
     pub fn triangle(&mut self, p0: Vec3, p1: Vec3, p2: Vec3, rgb: Rgb) {
+        self.fill(p0, p1, p2, |_, _| rgb);
+    }
+
+    /// A triangle whose colour is blended from one per corner, for a value
+    /// that varies across the surface.
+    pub fn triangle_blend(&mut self, p0: Vec3, p1: Vec3, p2: Vec3, rgb: [Rgb; 3]) {
+        self.fill(p0, p1, p2, |w0, w1| mix([1.0 - w0 - w1, w1, w0], &rgb));
+    }
+
+    /// `colour` gets the barycentric weights of p2 and p1, in that order.
+    fn fill(&mut self, p0: Vec3, p1: Vec3, p2: Vec3, colour: impl Fn(f64, f64) -> Rgb) {
         let xs = [p0[0], p1[0], p2[0]];
         let ys = [p0[1], p1[1], p2[1]];
         let lo_x = xs.iter().cloned().fold(f64::INFINITY, f64::min).floor();
@@ -468,7 +504,7 @@ impl Canvas {
                 let depth = p0[2] + w1 * (p1[2] - p0[2]) + w0 * (p2[2] - p0[2]);
                 let i = (y as usize) * (self.w as usize) + x as usize;
                 if depth > self.depth[i] {
-                    self.put(x, y, rgb, depth);
+                    self.put(x, y, colour(w0, w1), depth);
                 }
             }
         }
@@ -516,6 +552,11 @@ pub trait Drawable {
     fn indices(&self) -> Vec<usize>;
     fn face_ids(&self) -> Vec<f64>;
     fn polylines(&self) -> Vec<Vec<Vec3>>;
+    /// One colour per vertex, blended across each triangle in place of the
+    /// body's colour. None, an ordinary body, keeps its flat colour.
+    fn vertex_colors(&self) -> Option<Vec<Rgb>> {
+        None
+    }
 }
 
 impl Drawable for Value {
@@ -608,6 +649,59 @@ pub struct ViewRequest {
     /// fitted view.
     pub focus: Value,
     pub draw_edges: bool,
+    /// A blue to red bar at the right edge, the scale of a stress picture. The
+    /// model is fitted to the space left of it. There is no font, so its
+    /// numbers go in the caption.
+    pub color_bar: bool,
+}
+
+/// Where the colour bar goes, as (x0, y0, x1, y1) in pixels, ends exclusive.
+fn color_bar_box(width: u32, height: u32) -> (u32, u32, u32, u32) {
+    let bar = (width / 40).clamp(8, 24);
+    let x1 = width.saturating_sub(bar);
+    let x0 = x1.saturating_sub(bar);
+    let y0 = height / 5;
+    (x0, y0, x1, height - y0)
+}
+
+fn draw_color_bar(canvas: &mut Canvas) {
+    let (x0, y0, x1, y1) = color_bar_box(canvas.w, canvas.h);
+    if x1 <= x0 + 2 || y1 <= y0 + 2 {
+        return;
+    }
+    for y in y0..y1 {
+        let frame_row = y == y0 || y == y1 - 1;
+        let t = f64::from(y1 - 2 - y.clamp(y0 + 1, y1 - 2)) / f64::from((y1 - y0 - 3).max(1));
+        let inside = stress_color(t);
+        for x in x0..x1 {
+            let rgb = if frame_row || x == x0 || x == x1 - 1 { BAR_FRAME } else { inside };
+            let i = (y as usize) * (canvas.w as usize) + x as usize;
+            canvas.depth[i] = f64::INFINITY;
+            canvas.color[i * 3..i * 3 + 3].copy_from_slice(&rgb);
+        }
+    }
+}
+
+/// The colour at `p`, a point on (or clipped from) the triangle `tri`, blended
+/// from its corners' colours by area.
+fn blend_at(p: Vec3, tri: &[Vec3; 3], rgb: &[Rgb; 3]) -> Rgb {
+    let n = cross(sub(tri[1], tri[0]), sub(tri[2], tri[0]));
+    let nn = dot(n, n);
+    if nn < 1e-30 {
+        return rgb[0];
+    }
+    let w1 = dot(cross(sub(p, tri[0]), sub(tri[2], tri[0])), n) / nn;
+    let w2 = dot(cross(sub(tri[1], tri[0]), sub(p, tri[0])), n) / nn;
+    mix([1.0 - w1 - w2, w1, w2], rgb)
+}
+
+/// Three colours weighted, the weights summing to one.
+fn mix(w: [f64; 3], rgb: &[Rgb; 3]) -> Rgb {
+    std::array::from_fn(|c| {
+        (w[0] * f64::from(rgb[0][c]) + w[1] * f64::from(rgb[1][c]) + w[2] * f64::from(rgb[2][c]))
+            .round()
+            .clamp(0.0, 255.0) as u8
+    })
 }
 
 /// The image, as a canvas. `meshes` is one value per body in the shape the
@@ -646,7 +740,7 @@ pub fn render<M: Drawable>(meshes: &[M], req: &ViewRequest) -> Result<Canvas, St
     // colour it wants. Built up front because the camera has to be fitted to
     // what SURVIVES the section, not to what was sent: a cutaway fitted to the
     // whole model wastes half the frame on empty space.
-    let mut tris: Vec<([Vec3; 3], Rgb)> = Vec::new();
+    let mut tris: Vec<([Vec3; 3], [Rgb; 3])> = Vec::new();
     let mut segs: Vec<(Vec3, Vec3)> = Vec::new();
     for (bi, m) in &drawn {
         let pos = m.positions();
@@ -662,6 +756,7 @@ pub fn render<M: Drawable>(meshes: &[M], req: &ViewRequest) -> Result<Canvas, St
             .filter(|(body, _)| body == id)
             .map(|(_, faces)| faces);
         let base = BODY_COLORS[bi % BODY_COLORS.len()];
+        let painted = m.vertex_colors().filter(|c| c.len() * 3 >= pos.len());
         let point = |i: usize| -> Vec3 { [pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]] };
         for (t, tri) in idx.chunks_exact(3).enumerate() {
             if tri.iter().any(|i| (i + 1) * 3 > pos.len()) {
@@ -673,12 +768,21 @@ pub fn render<M: Drawable>(meshes: &[M], req: &ViewRequest) -> Result<Canvas, St
                     colour = HIGHLIGHT_COLOR;
                 }
             }
+            let corners = match &painted {
+                Some(p) => [p[tri[0]], p[tri[1]], p[tri[2]]],
+                None => [colour; 3],
+            };
             let (a, b, c) = (point(tri[0]), point(tri[1]), point(tri[2]));
             match plane {
-                None => tris.push(([a, b, c], colour)),
+                None => tris.push(([a, b, c], corners)),
                 Some((n, d)) => {
                     for piece in clip_triangle(a, b, c, n, d) {
-                        tris.push((piece, colour));
+                        let rgb = if painted.is_some() {
+                            piece.map(|p| blend_at(p, &[a, b, c], &corners))
+                        } else {
+                            corners
+                        };
+                        tris.push((piece, rgb));
                     }
                 }
             }
@@ -710,6 +814,12 @@ pub fn render<M: Drawable>(meshes: &[M], req: &ViewRequest) -> Result<Canvas, St
     if pool.is_empty() {
         return Ok(canvas);
     }
+    // The model is framed in what the colour bar leaves.
+    let plot_w = if req.color_bar {
+        color_bar_box(req.width, req.height).0.max(1)
+    } else {
+        req.width
+    };
     let (centre, scale) = match req.focus.get("at").filter(|v| !v.is_null()) {
         Some(at) => {
             let mut world = [0.0; 3];
@@ -727,10 +837,10 @@ pub fn render<M: Drawable>(meshes: &[M], req: &ViewRequest) -> Result<Canvas, St
                 .unwrap_or(10.0);
             (
                 [v[0], v[1]],
-                f64::from(req.width.min(req.height)) / size.max(1e-6),
+                f64::from(plot_w.min(req.height)) / size.max(1e-6),
             )
         }
-        None => fit_scale(&pool, req.width, req.height, 0.06),
+        None => fit_scale(&pool, plot_w, req.height, 0.06),
     };
     // The outline bias is a fixed fraction of the model's own depth range, so
     // it is the same visual nudge on a 2 mm part and a 2 m one.
@@ -739,19 +849,27 @@ pub fn render<M: Drawable>(meshes: &[M], req: &ViewRequest) -> Result<Canvas, St
         - zs.iter().cloned().fold(f64::INFINITY, f64::min);
     let bias = if span_z == 0.0 { 1.0 } else { span_z } * 1e-3;
 
-    for (tri, colour) in &tris {
+    for (tri, colours) in &tris {
         let v: Vec<Vec3> = tri.iter().map(|p| to_view(*p, &basis)).collect();
         let scr: Vec<Vec3> = v
             .iter()
-            .map(|p| project(*p, centre, scale, req.width, req.height))
+            .map(|p| project(*p, centre, scale, plot_w, req.height))
             .collect();
         let n = cross(sub(v[1], v[0]), sub(v[2], v[0]));
-        canvas.triangle(scr[0], scr[1], scr[2], shade(*colour, n));
+        if colours[1] == colours[0] && colours[2] == colours[0] {
+            canvas.triangle(scr[0], scr[1], scr[2], shade(colours[0], n));
+        } else {
+            let lit = colours.map(|c| shade(c, n));
+            canvas.triangle_blend(scr[0], scr[1], scr[2], lit);
+        }
     }
     for (a, b) in &segs {
-        let sa = project(to_view(*a, &basis), centre, scale, req.width, req.height);
-        let sb = project(to_view(*b, &basis), centre, scale, req.width, req.height);
+        let sa = project(to_view(*a, &basis), centre, scale, plot_w, req.height);
+        let sb = project(to_view(*b, &basis), centre, scale, plot_w, req.height);
         canvas.line(sa, sb, EDGE_COLOR, bias);
+    }
+    if req.color_bar {
+        draw_color_bar(&mut canvas);
     }
     Ok(canvas)
 }

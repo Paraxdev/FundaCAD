@@ -5,7 +5,7 @@
 //! counting pixels, which is the reason the renderer is pure of the wire and of
 //! files.
 
-use fundacad_mcp::render::{self as r, Canvas, Rgb, Vec3, ViewRequest};
+use fundacad_mcp::render::{self as r, Canvas, Drawable, Rgb, Vec3, ViewRequest};
 use serde_json::{json, Value};
 
 fn box_mesh(size: [f64; 3], centre: [f64; 3], ident: &str) -> Value {
@@ -447,4 +447,94 @@ fn only_the_named_bodies_are_drawn() {
     assert!(painted(&one) > 1000, "the kept body was not drawn");
     let mid = one.pixel(100, 100);
     assert!(mid[2] > mid[0], "the kept body should keep its own colour");
+}
+
+// --- per-vertex colour and the colour bar ------------------------------------
+
+/// A cube that brings a colour for each of its corners, as a stress surface does.
+struct Painted {
+    mesh: Value,
+    colors: Vec<Rgb>,
+}
+
+impl Drawable for Painted {
+    fn body_id(&self) -> Option<&str> {
+        self.mesh.body_id()
+    }
+    fn positions(&self) -> Vec<f64> {
+        self.mesh.positions()
+    }
+    fn indices(&self) -> Vec<usize> {
+        self.mesh.indices()
+    }
+    fn face_ids(&self) -> Vec<f64> {
+        self.mesh.face_ids()
+    }
+    fn polylines(&self) -> Vec<Vec<Vec3>> {
+        self.mesh.polylines()
+    }
+    fn vertex_colors(&self) -> Option<Vec<Rgb>> {
+        Some(self.colors.clone())
+    }
+}
+
+/// The cube's corners coloured by height: low on the scale below, high above.
+fn painted_cube() -> Painted {
+    let mesh = cube("b1");
+    let colors = mesh
+        .positions()
+        .chunks_exact(3)
+        .map(|p| r::stress_color(if p[2] > 0.0 { 1.0 } else { 0.0 }))
+        .collect();
+    Painted { mesh, colors }
+}
+
+#[test]
+fn one_colour_on_every_vertex_draws_what_the_flat_colour_draws() {
+    let mesh = cube("b1");
+    let flat = draw(&[mesh.clone()], &request(160, 120, "iso"));
+    let n = mesh.positions().len() / 3;
+    let same_colour = Painted { mesh, colors: vec![r::BODY_COLORS[0]; n] };
+    let blended = r::render(&[same_colour], &request(160, 120, "iso")).expect("drawn");
+    assert!(same(&flat, &blended));
+}
+
+#[test]
+fn vertex_colours_blend_across_the_faces() {
+    let canvas = r::render(&[painted_cube()], &request(200, 200, "front")).expect("drawn");
+    // Red at the top of the front face, blue at its foot, a blend between.
+    let top = canvas.pixel(100, 30);
+    let foot = canvas.pixel(100, 170);
+    let middle = canvas.pixel(100, 100);
+    assert!(top[0] > top[2] + 60, "{top:?}");
+    assert!(foot[2] > foot[0] + 60, "{foot:?}");
+    assert!(middle != top && middle != foot, "{middle:?}");
+}
+
+#[test]
+fn the_colour_bar_is_drawn_only_when_asked_and_the_model_makes_room() {
+    let plain = r::render(&[painted_cube()], &request(200, 200, "front")).expect("drawn");
+    let mut with_bar_req = request(200, 200, "front");
+    with_bar_req.color_bar = true;
+    let with_bar = r::render(&[painted_cube()], &with_bar_req).expect("drawn");
+    let frame = |c: &Canvas| {
+        (0..c.h)
+            .flat_map(|y| (0..c.w).map(move |x| (x, y)))
+            .filter(|(x, y)| c.pixel(*x, *y) == r::BAR_FRAME)
+            .count()
+    };
+    assert_eq!(frame(&plain), 0, "a plain render has no bar");
+    assert!(frame(&with_bar) > 200);
+    // 200 px wide: an 8 px bar at x 184 to 191 over rows 40 to 159, framed.
+    let (high, low) = (with_bar.pixel(188, 41), with_bar.pixel(188, 158));
+    assert_eq!(high, r::stress_color(1.0));
+    assert_eq!(low, r::stress_color(0.0));
+    assert_eq!(with_bar.pixel(184, 100), r::BAR_FRAME);
+    // The model is fitted left of the bar, with a gap before it.
+    for y in 0..200 {
+        for x in 176..184 {
+            assert!(!off_background(with_bar.pixel(x, y)), "the model runs into the bar at ({x}, {y})");
+        }
+    }
+    assert!(painted(&with_bar) > 10_000);
 }

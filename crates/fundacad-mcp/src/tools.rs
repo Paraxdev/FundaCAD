@@ -200,6 +200,67 @@ pub fn interference() -> JsonObject {
     )
 }
 
+pub fn stress() -> JsonObject {
+    let faces = |what: &str| {
+        json!({"anyOf": [{"type": "array", "items": {"type": "object"}}, {"type": "object"}],
+               "description": format!(
+                   "{what}, as face selectors. Copy each from the face's `selector` in \
+                    `inspect` (detail:true, selectors:true), body included. One selector \
+                    without a list is taken too. A face index is not a selector")})
+    };
+    let load = json!({"type": "object", "properties": {
+        "faces": faces("the faces this load pushes on"),
+        "force": {"type": "array", "items": {"type": "number"},
+                  "description": "[x, y, z] in N, the TOTAL force, spread over the faces by \
+                                  area: [0, 0, -20] is 20 N (about 2 kg) pushing down"},
+        "pressure": {"type": "number",
+                     "description": "in MPa (N per square mm), pushing into the faces along \
+                                     their inward normal"}
+    }});
+    object(
+        json!({
+            "body": {"type": "string",
+                     "description": "the body to analyse, by id or name, as `build` lists \
+                                     it. One closed solid"},
+            "fixed": faces("the faces held still in every direction, at least one, e.g. the \
+                            face bolted to the wall"),
+            "loads": {"anyOf": [{"type": "array", "items": load.clone()}, load],
+                      "description": "what pushes on the part, each {faces, force} or {faces, \
+                                      pressure}, never both. One load without a list is taken \
+                                      too. A load only on fixed faces does nothing to the part"},
+            "material": {"type": ["string", "object"],
+                         "description": "a preset by name (default PLA): PLA, PETG, ABS, ASA, \
+                                         PA12 nylon, PC, aluminium 6061-T6, steel S235; or \
+                                         your own {E, nu, yield, name} with E and yield in \
+                                         MPa and nu the Poisson's ratio. Without yield there \
+                                         is no safety factor"},
+            "size": {"type": "number",
+                     "description": "element size in mm (default: chosen from the part's \
+                                     volume and thickness). Smaller is finer and slower"},
+            "maxElements": {"type": "integer",
+                            "description": "the most tetrahedra the mesh may have (default \
+                                            30000, at most 80000). A size too fine for it is \
+                                            grown, with a warning"},
+            "image": {"type": "boolean",
+                      "description": "return a PNG of the body coloured by stress, blue low \
+                                      to red high, with a colour bar (default true)"},
+            "view": {"type": "string",
+                     "enum": ["iso", "front", "back", "left", "right", "top", "bottom"],
+                     "description": "where the picture looks from, as in `view`"},
+            "azimuth": {"type": "number",
+                        "description": "degrees anticlockwise from +X, as in `view`; used \
+                                        instead of `view`"},
+            "elevation": {"type": "number",
+                          "description": "degrees above the XY plane, as in `view`"},
+            "az": {"type": "number", "description": "short for azimuth"},
+            "el": {"type": "number", "description": "short for elevation"},
+            "width": {"type": "integer"},
+            "height": {"type": "integer"}
+        }),
+        &["body", "fixed", "loads"],
+    )
+}
+
 pub fn inspect() -> JsonObject {
     object(
         json!({

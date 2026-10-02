@@ -1134,6 +1134,15 @@ The format comes from the extension unless given. A large STEP can take minutes:
     }
 
     #[tool(
+        name = "stress",
+        description = "Linear static stress analysis of one body, without changing the document. Hold faces still with `fixed`, push on others with `loads` (a total force in N or a pressure in MPa), pick a `material` by name (PLA, PETG, ABS, ASA, PA12 nylon, PC, aluminium 6061-T6, steel S235) or as {E, nu, yield} in MPa. Faces are the per-face selectors `inspect` lists with detail:true and selectors:true. Units are mm, N and MPa. Answers with the peak von Mises stress and where, the largest deflection and where, the safety factor against yield, applied load against reaction, the mesh, warnings to heed, and a PNG coloured blue (low) to red (high) by stress. Takes seconds to a minute.",
+        input_schema = crate::tools::stress()
+    )]
+    pub async fn t_stress(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
+        Ok(self.stress(&args).await)
+    }
+
+    #[tool(
         name = "build",
         description = "Rebuild the document and report what came out: the bodies, their sizes, and any feature that failed. Build often, an error names the feature that caused it. isError is true if ANY feature failed, even when other features still produced bodies; the text still lists everything that did build, so check isError rather than scanning for \"FEATURE FAILED\".",
         input_schema = crate::tools::build()
@@ -1971,6 +1980,7 @@ impl FundaCad {
             bodies: bodies.clone(),
             focus: args.get("focus").cloned().unwrap_or(Value::Null),
             draw_edges: true,
+            color_bar: false,
         };
         let canvas = match render::render(&mesh[..], &request) {
             Ok(c) => c,
@@ -2392,6 +2402,130 @@ impl FundaCad {
             out.push_str(&failures.join("\n"));
         }
         text(out)
+    }
+}
+
+// --- stress ------------------------------------------------------------------
+
+impl FundaCad {
+    async fn stress(&self, args: &JsonObject) -> CallToolResult {
+        let request = match crate::stress::request_of(args) {
+            Ok(r) => r,
+            Err(e) => return failure(e),
+        };
+        let camera = match view_camera(args) {
+            Ok(c) => c,
+            Err(e) => return e,
+        };
+        let side = |key: &str, default: i64| {
+            args.get(key)
+                .and_then(Value::as_i64)
+                .filter(|n| *n != 0)
+                .unwrap_or(default)
+                .clamp(64, MAX_IMAGE_PX) as u32
+        };
+        let (w, h) = (side("width", 640), side("height", 480));
+        let wanted = request.payload.get("body").and_then(Value::as_str).unwrap_or_default().to_string();
+        let (link, doc) = {
+            let mut st = self.state.lock().await;
+            model::recompute_parameters(&mut st.doc);
+            (st.link.clone(), st.doc.clone())
+        };
+        let mut payload = request.payload;
+        payload.insert("document".into(), Value::Object(doc.clone()));
+        let reply = match link.call("stress", Value::Object(payload)).await {
+            Ok(r) => r,
+            Err(e) => return engine_gone(&e),
+        };
+        if reply.get("ok") != Some(&json!(true)) {
+            let why = error_message(&reply);
+            // The body may be missing because a feature failed: say which
+            // bodies there are and every failure, not only the first.
+            if let Some(refusal) = Self::missing_body(&link, &doc, &wanted).await {
+                return refusal;
+            }
+            return failure(format!("The analysis was refused: {why}"));
+        }
+        let r = reply.get("result").cloned().unwrap_or_else(|| json!({}));
+        let mut out = crate::stress::report(&r);
+        let failed = crate::clash::failures(&r);
+        if !failed.is_empty() {
+            out.push_str("\nSome features failed, so this analysed what did build:\n");
+            out.push_str(&failed.join("\n"));
+        }
+        if !request.image {
+            return text(out);
+        }
+        let Some(surface) = crate::stress::surface_of(&r) else {
+            out.push_str("\nNo picture: the reply carried no surface to draw.");
+            return text(out);
+        };
+        let view = ViewRequest {
+            width: w,
+            height: h,
+            view: Some(camera.view.clone()),
+            azimuth: camera.angles.map(|a| a.0),
+            elevation: camera.angles.map(|a| a.1),
+            draw_edges: true,
+            color_bar: true,
+            ..ViewRequest::default()
+        };
+        let png = match render::render(std::slice::from_ref(&surface), &view)
+            .map_err(|e| format!("ValueError: {e}"))
+            .and_then(|c| crate::png::encode(&c))
+        {
+            Ok(p) => p,
+            Err(e) => return failure(format!("{out}\nThe picture could not be drawn: {e}")),
+        };
+        let where_ = match camera.angles {
+            Some(_) => {
+                let given = |long: &str, short: &str| {
+                    py_num(args.get(long).filter(|v| !v.is_null()).or(args.get(short)).or(Some(&json!(0))))
+                };
+                format!("az {} el {}", given("azimuth", "az"), given("elevation", "el"))
+            }
+            None => camera.view.clone(),
+        };
+        out.push_str(&format!("\n{where_} view of {}, {w}x{h}. {}", surface.id, surface.scale()));
+        CallToolResult::success(vec![
+            ContentBlock::text(out),
+            ContentBlock::image(
+                base64::engine::general_purpose::STANDARD.encode(&png),
+                "image/png",
+            ),
+        ])
+    }
+
+    /// A refusal naming `wanted` and the bodies there are, with every feature
+    /// failure, when the build has no such body; None when it has one.
+    async fn missing_body(link: &EngineLink, doc: &Doc, wanted: &str) -> Option<CallToolResult> {
+        let reply = link
+            .call(
+                "inspect",
+                call_args([
+                    ("document", Value::Object(doc.clone())),
+                    ("detail", json!(false)),
+                    ("summary", json!(true)),
+                ]),
+            )
+            .await
+            .ok()?;
+        let r = reply.get("result").filter(|_| reply.get("ok") == Some(&json!(true)))?;
+        let built = r.get("bodies").and_then(Value::as_array).map_or(&[][..], Vec::as_slice);
+        if find_body(built, wanted).is_some() {
+            return None;
+        }
+        let failed = crate::clash::failures(r);
+        let mut why = if built.is_empty() {
+            format!("nothing built, so there is no body '{wanted}' to analyse.")
+        } else {
+            format!("{}. Check the id or name against `build`.", no_such_body(wanted, built))
+        };
+        if !failed.is_empty() {
+            why.push_str(" Some features failed, which may be why:\n");
+            why.push_str(&failed.join("\n"));
+        }
+        Some(failure(why))
     }
 }
 
