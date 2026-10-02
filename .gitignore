@@ -49,6 +49,10 @@ green-select.png
 !tests/fixtures/asm_*.step
 !third_party/opencascade-rs/crates/viewer/models/*.step
 
+# screen recordings handed over as bug reports
+*.mp4
+*.MP4
+
 # research / experiment shelf: kept out of the repo
 proving-ground/
 
