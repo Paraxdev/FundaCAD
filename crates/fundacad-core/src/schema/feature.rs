@@ -470,6 +470,9 @@ plain_struct!(
         #[serde(default, skip_serializing_if = "Option::is_none")] origin: Option<Vec3>,
         #[serde(default, skip_serializing_if = "Option::is_none")] zdir: Option<Vec3>,
         #[serde(default, skip_serializing_if = "Option::is_none")] xdir: Option<Vec3>,
+        /// A face or edge whose line is the frame: a round face's axis, a flat
+        /// face's normal, a circle's centre line or a straight edge.
+        #[serde(default, skip_serializing_if = "Option::is_none")] axis: Option<Selector>,
     }
 );
 
@@ -483,6 +486,29 @@ feature_struct!(Joint {
     #[serde(default, skip_serializing_if = "Option::is_none")] angle: Option<Num>,
     #[serde(default, skip_serializing_if = "Option::is_none")] name: Option<String>,
 });
+plain_struct!(
+    /// One joint of a mechanism. Every field is optional so a nested miss
+    /// reaches the handler, which names the joint and the field.
+    MechanismJoint {
+        #[serde(default, skip_serializing_if = "Option::is_none")] id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] mode: Option<JointMode>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] a: Option<MateConnector>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] b: Option<MateConnector>,
+    }
+);
+
+feature_struct!(
+    /// Bodies joined into a closed linkage, posed together: `ground` stays put,
+    /// `drive` names the joint `offset` (a slider) or `angle` (a revolute) moves.
+    Mechanism {
+        #[serde(default, skip_serializing_if = "Option::is_none")] ground: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] joints: Option<Vec<MechanismJoint>>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] drive: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] offset: Option<Num>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] angle: Option<Num>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] name: Option<String>,
+    }
+);
 feature_struct!(CleanUp {
     #[serde(default, skip_serializing_if = "Option::is_none")] body: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")] tolerance: Option<Num>,
@@ -528,6 +554,7 @@ tagged_enum! {
         Move(Move) = "move",
         Duplicate(Move) = "duplicate",
         Joint(Joint) = "joint",
+        Mechanism(Mechanism) = "mechanism",
         CleanUp(CleanUp) = "cleanUp",
         RemoveBody(RemoveBody) = "removeBody",
     }
@@ -571,6 +598,7 @@ macro_rules! each_known {
             Feature::Move($f) => $e,
             Feature::Duplicate($f) => $e,
             Feature::Joint($f) => $e,
+            Feature::Mechanism($f) => $e,
             Feature::CleanUp($f) => $e,
             Feature::RemoveBody($f) => $e,
             Feature::Unknown($unknown)

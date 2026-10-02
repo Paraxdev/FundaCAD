@@ -76,6 +76,10 @@ pub fn update(
         }
         _ => None,
     };
+    // A mechanism says how it moved each body; joint keeps re-owning the faces
+    // it moves, as the Python engine did.
+    let rigid = std::mem::take(&mut ctx.rigid_moves);
+    let rigid: &[super::RigidMove] = if matches!(f, Feature::Mechanism(_)) { &rigid } else { &[] };
     let all: Vec<&Owners> = pre_owners.iter().map(|(_, o)| o).collect();
     let changed: Vec<usize> = ctx
         .bodies
@@ -139,15 +143,37 @@ pub fn update(
                     .collect();
             }
         }
+        // A rigidly moved body keeps its faces' TShapes, so each face finds
+        // the fingerprint it had before the move. The rest go by their
+        // unrounded centres sent through the move, rounded once where they land.
+        let mut carried: HashMap<u64, Option<&String>> = HashMap::new();
+        if let Some(m) = rigid.iter().find(|m| m.body == b.id) {
+            let before = ctx.face_fps.0.get(&b.uid).map_or(&[][..], Vec::as_slice);
+            prior = Owners::new();
+            for (face, raw) in before {
+                let Some(raw) = raw else { continue };
+                let Some(owner) = prior_src.get(&key(raw[0], [raw[1], raw[2], raw[3]])) else {
+                    continue;
+                };
+                let c = m.rot * glam::DVec3::new(raw[1], raw[2], raw[3]) + m.shift;
+                prior.insert(key(raw[0], c.to_array()), owner.clone());
+                // A TShape seen twice in the body names no one face.
+                carried
+                    .entry(kernel::tshape_id(face))
+                    .and_modify(|o| *o = None)
+                    .or_insert(Some(owner));
+            }
+        }
         let mut owners = Owners::new();
         let mut fps = Vec::with_capacity(fs.len());
         for (face, raw) in fs.into_iter().zip(rs) {
             let raw = raw.flatten();
+            let same = carried.get(&kernel::tshape_id(&face)).copied().flatten();
             fps.push((face, raw));
             let Some(raw) = raw else { continue };
             let fp = key(raw[0], [raw[1], raw[2], raw[3]]);
-            let owner = prior
-                .get(&fp)
+            let owner = same
+                .or_else(|| prior.get(&fp))
                 .or_else(|| all.iter().rev().find_map(|o| o.get(&fp)))
                 .cloned()
                 .unwrap_or_else(|| fid.to_owned());

@@ -173,7 +173,7 @@ fn line(origin: DVec3, dir: DVec3) -> Option<Turn> {
 /// The direction of a line found on the model points the way its largest
 /// component is positive, so the same edge or face always turns the same way
 /// (src/features/patternAxis.ts `canonicalDir` is the same rule).
-fn canonical(d: DVec3) -> DVec3 {
+pub(crate) fn canonical(d: DVec3) -> DVec3 {
     let a = d.abs();
     let big = if a.x >= a.y && a.x >= a.z { d.x } else if a.y >= a.z { d.y } else { d.z };
     if big < 0.0 { -d } else { d }
@@ -215,7 +215,7 @@ fn axis_on(pool: &[&Shape], id: &str, sel: &Selector) -> Option<Turn> {
     None
 }
 
-fn edge_axis(edge: Shape) -> Option<Turn> {
+pub(crate) fn edge_axis(edge: Shape) -> Option<Turn> {
     let mut o = [0.0; 7];
     if let Ok(true) = fq::FQ_edge_circle(edge.raw(), &mut o) {
         return found_line(DVec3::new(o[3], o[4], o[5]), DVec3::new(o[0], o[1], o[2]));
@@ -224,7 +224,7 @@ fn edge_axis(edge: Shape) -> Option<Turn> {
     (ent.curve == CurveType::Line).then(|| found_line(ent.mid, ent.dir())).flatten()
 }
 
-fn face_axis(face: Shape) -> Option<Turn> {
+pub(crate) fn face_axis(face: Shape) -> Option<Turn> {
     let mut o = [0.0; 13];
     let kind = fq::FQ_surface(face.raw(), &mut o).ok()?;
     let dir = DVec3::new(o[1], o[2], o[3]);

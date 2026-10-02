@@ -3,11 +3,13 @@
 //! the parts.
 
 use fundacad_core::schema::{Joint, MateConnector, Num, Selector, Vec3};
+use glam::DVec3;
 use opencascade::primitives::Shape;
-use opencascade::select_access as sa;
+use opencascade::select_access::{self as sa, SurfaceType};
 use opencascade_sys::joint_ops as ffi;
 use serde_json::json;
 
+use super::pattern::{self, Turn};
 use crate::builder::{Ctx, FResult, Fail, BAD_REQUEST};
 use crate::select::{entity::EdgeEnt, Resolver};
 
@@ -15,9 +17,10 @@ use crate::select::{entity::EdgeEnt, Resolver};
 /// reference, `None` where the x axis is left to the kernel.
 #[derive(Debug, Clone, Copy)]
 pub struct Frame {
-    origin: [f64; 3],
-    zdir: [f64; 3],
-    xdir: [f64; 3],
+    pub(crate) origin: [f64; 3],
+    pub(crate) zdir: [f64; 3],
+    /// All zero when the kernel picks the x axis.
+    pub(crate) xdir: [f64; 3],
 }
 
 impl Frame {
@@ -39,10 +42,10 @@ fn length(v: [f64; 3]) -> f64 {
 }
 
 /// `plane(o, z, x)`: a zero z axis is a refusal, a zero x is no x at all.
-fn frame(origin: [f64; 3], zdir: [f64; 3], xdir: Option<[f64; 3]>) -> FResult<Frame> {
+fn frame(who: &str, origin: [f64; 3], zdir: [f64; 3], xdir: Option<[f64; 3]>) -> FResult<Frame> {
     if length(zdir) < 1e-9 {
         return Err(Fail::Value {
-            message: "joint: a connector's axis is zero length".into(),
+            message: format!("{who}: a connector's axis is zero length"),
             code: Some(BAD_REQUEST),
         });
     }
@@ -77,17 +80,41 @@ fn resolve_one(
     Ok(one?.into_iter().next())
 }
 
-/// `_joint_frame`.
-fn connector(ctx: &mut Ctx, spec: &MateConnector, fid: &str) -> FResult<Option<Frame>> {
+/// The line an `axis` connector names: a round face's axis through the
+/// middle of the face, a flat face's normal through its centroid, a circle's
+/// centre line or a straight edge, pointing the way its largest component is
+/// positive so a pin and its hole agree.
+fn axis_line(found: Shape, edge: bool) -> Option<([f64; 3], [f64; 3])> {
+    let line = |t: Turn| match t {
+        Turn::Line { origin, dir } => Some((DVec3::from_array(origin), DVec3::from_array(dir))),
+        Turn::World(_) => None,
+    };
+    if edge {
+        let (o, d) = line(pattern::edge_axis(found)?)?;
+        return Some((o.to_array(), d.to_array()));
+    }
+    let probe = sa::face_probe(&found)?;
+    let centre = DVec3::from_array(probe.centre?);
+    if probe.surface == SurfaceType::Plane {
+        let n = pattern::canonical(DVec3::from_array(probe.normal?).normalize_or_zero());
+        return (n != DVec3::ZERO).then(|| (centre.to_array(), n.to_array()));
+    }
+    let (o, d) = line(pattern::face_axis(found)?)?;
+    Some(((o + d * (centre - o).dot(d)).to_array(), d.to_array()))
+}
+
+/// `_joint_frame`. `who` heads the refusals: the feature, and for a
+/// mechanism the joint and side.
+pub(crate) fn connector(ctx: &mut Ctx, spec: &MateConnector, fid: &str, who: &str) -> FResult<Option<Frame>> {
     if let Some(origin) = &spec.origin {
         let z = spec.zdir.as_ref().map_or([0.0, 0.0, 1.0], v3);
-        return frame(v3(origin), z, spec.xdir.as_ref().map(v3)).map(Some);
+        return frame(who, v3(origin), z, spec.xdir.as_ref().map(v3)).map(Some);
     }
     if let Some(datum) = &spec.datum {
         let Some(d) = ctx.datums.get(datum).copied() else {
             return Ok(None);
         };
-        return frame(d.origin, d.normal, Some(d.xdir)).map(Some);
+        return frame(who, d.origin, d.normal, Some(d.xdir)).map(Some);
     }
     let Some(shape) = body_shape(ctx, spec.body.as_ref()).cloned() else {
         return Ok(None);
@@ -99,7 +126,7 @@ fn connector(ctx: &mut Ctx, spec: &MateConnector, fid: &str) -> FResult<Option<F
         let probe = sa::face_probe(&face);
         let centre = probe.and_then(|p| p.centre).unwrap_or([0.0; 3]);
         let normal = probe.and_then(|p| p.normal).unwrap_or([0.0; 3]);
-        return frame(centre, normal, None).map(Some);
+        return frame(who, centre, normal, None).map(Some);
     }
     if let Some(sel) = &spec.edge {
         let Some(edge) = resolve_one(ctx, &shape, sel, fid, false)? else {
@@ -108,10 +135,26 @@ fn connector(ctx: &mut Ctx, spec: &MateConnector, fid: &str) -> FResult<Option<F
         let Ok(ent) = EdgeEnt::new(edge) else {
             return Ok(None);
         };
-        return frame(ent.mid.to_array(), ent.dir().to_array(), None).map(Some);
+        return frame(who, ent.mid.to_array(), ent.dir().to_array(), None).map(Some);
+    }
+    if let Some(sel) = &spec.axis {
+        let edge = sel.kind() == Some("edge");
+        let Some(found) = resolve_one(ctx, &shape, sel, fid, !edge)? else {
+            return Ok(None);
+        };
+        let Some((origin, dir)) = axis_line(found, edge) else {
+            return Err(Fail::Value {
+                message: format!(
+                    "{who}: the axis connector names a {} with no axis, pick a round or flat face, or a round or straight edge",
+                    if edge { "edge" } else { "face" }
+                ),
+                code: Some(BAD_REQUEST),
+            });
+        };
+        return frame(who, origin, dir, None).map(Some);
     }
     Err(Fail::Value {
-        message: "joint: a connector needs one of origin, datum, face or edge".into(),
+        message: format!("{who}: a connector needs one of origin, datum, face, edge or axis"),
         code: Some(BAD_REQUEST),
     })
 }
@@ -125,8 +168,8 @@ pub fn handle(ctx: &mut Ctx, f: &Joint) -> FResult {
         );
         return Ok(());
     };
-    let mate = connector(ctx, &f.mate, &f.id)?;
-    let fixed = connector(ctx, &f.to, &f.id)?;
+    let mate = connector(ctx, &f.mate, &f.id, "joint")?;
+    let fixed = connector(ctx, &f.to, &f.id, "joint")?;
     let (Some(mate), Some(fixed)) = (mate, fixed) else {
         ctx.skip_feature(
             &f.id,

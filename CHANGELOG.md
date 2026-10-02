@@ -25,6 +25,15 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **Mechanisms.** A `mechanism` feature joins bodies with revolute, slider and
+  rigid joints, closed loops included, and poses them all at once: the ground
+  stays put, one joint is driven to an `angle` or `offset`, and every other
+  part follows, so a four bar or a slider-crank moves as one piece instead of a
+  move feature per part fed angles worked out by hand. The linkage stays on the
+  branch it was modelled on, a value it cannot reach fails the build naming the
+  joint that stays apart and by how much, and motions the joints leave free are
+  reported. Joints and mechanisms take a new `axis` connector, the line of a
+  pin, hole, circle or straight edge, so a pin and its hole line up directly.
 - **Sketch shortcuts over MCP.** A sketch may give an outline as a `polyline`,
   a list of points that can close on itself, and a rectangle by two opposite
   corners. They are stored as the lines and centred rectangle the app already
