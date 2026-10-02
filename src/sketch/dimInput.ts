@@ -12,6 +12,7 @@ import { onPreviewError } from "../ui/previewError";
 import { getUnit, parseField } from "../ui/units";
 import { commonUnits, measureError, toUnit, tryParseMeasure, unitById, type UnitDef } from "../ui/measure";
 import { valueProblem, type ValueRule } from "../document/numFields";
+import { replayedPress } from "../viewport/navigator/input";
 
 export interface DimFieldDef extends ValueRule {
   name: string;
@@ -148,6 +149,8 @@ export class DimInput {
     // after this capture listener has already run, so a gate here would miss
     // the one gesture that needs it most, the grab-the-handle-and-pull entry.
     if (this.foreignPress) return;
+    // A finger tap is replayed after it lifted, so no release would end it.
+    if (replayedPress(e) === "tap") return;
     if (this.ownsTarget(e.target)) return;
     this.foreignPress = true;
     this.applyHitTesting();

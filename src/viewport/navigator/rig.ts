@@ -12,7 +12,7 @@ import { boxDepthRange } from "./anchor";
 import { bindInput } from "./input";
 import { Navigator, lookQuatUp } from "./navigator";
 import { clonePose, distanceOf, eyeOf, forwardOf, setOrientation } from "./pose";
-import { getNavPrefs, onNavPrefsChange } from "../../ui/interactionPrefs";
+import { getNavPrefs, noteDetectedWheel, onNavPrefsChange } from "../../ui/interactionPrefs";
 
 const STANDARD: Record<StandardView, { dir: [number, number, number]; up: [number, number, number] }> = {
   front: { dir: [0, -1, 0], up: [0, 0, 1] },
@@ -80,7 +80,11 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
   nav.on("change", write);
   write();
 
-  const input = bindInput(dom, nav, { scrollPans: () => getNavPrefs().scrollPans });
+  const input = bindInput(dom, nav, {
+    wheelDevice: () => getNavPrefs().wheelDevice,
+    touchpadScroll: () => getNavPrefs().touchpadScroll,
+    detected: noteDetectedWheel,
+  });
 
   const local = (clientX: number, clientY: number): [number, number] => {
     const r = dom.getBoundingClientRect();

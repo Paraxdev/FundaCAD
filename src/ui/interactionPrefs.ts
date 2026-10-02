@@ -67,26 +67,42 @@ export function setNavigatorChoice(choice: NavigatorChoice) {
   }
 }
 
+export type WheelDevicePref = "auto" | "touchpad" | "mouse";
+export type TouchpadScroll = "orbit" | "pan";
+
 export interface NavPrefs {
   /** An orbit keeps turning a moment after release, about the same pivot. */
   inertia: boolean;
-  /** A plain wheel (two-finger scroll) pans; ctrl+wheel and pinch still zoom. */
-  scrollPans: boolean;
+  /** Where wheel events come from: told apart per scroll, or always one. */
+  wheelDevice: WheelDevicePref;
+  /** What a touchpad's two-finger scroll does; Shift does the other. A pinch
+   *  (or Ctrl with the wheel) zooms either way. */
+  touchpadScroll: TouchpadScroll;
   /** Smooth time of eased zooms and drags, seconds. */
   smoothTime: number;
 }
 
 const NAV_PREFS_KEY = "fundacad.navigation";
-const NAV_DEFAULTS: NavPrefs = { inertia: false, scrollPans: false, smoothTime: 0.125 };
+const NAV_DEFAULTS: NavPrefs = { inertia: false, wheelDevice: "auto", touchpadScroll: "orbit", smoothTime: 0.125 };
+
+export function asWheelDevice(v: unknown): WheelDevicePref | null {
+  return v === "auto" || v === "touchpad" || v === "mouse" ? v : null;
+}
+export function asTouchpadScroll(v: unknown): TouchpadScroll | null {
+  return v === "orbit" || v === "pan" ? v : null;
+}
 
 function readNavPrefs(): NavPrefs {
   try {
     const raw = readSetting(NAV_PREFS_KEY);
-    const v = raw ? (JSON.parse(raw) as Partial<NavPrefs>) : {};
+    const v = raw ? (JSON.parse(raw) as Partial<NavPrefs> & { scrollPans?: unknown }) : {};
     const t = typeof v.smoothTime === "number" && Number.isFinite(v.smoothTime) ? v.smoothTime : NAV_DEFAULTS.smoothTime;
+    // "Scroll pans" made every wheel pan, which is a touchpad that pans.
+    const legacyPans = v.scrollPans === true && v.wheelDevice === undefined && v.touchpadScroll === undefined;
     return {
       inertia: typeof v.inertia === "boolean" ? v.inertia : NAV_DEFAULTS.inertia,
-      scrollPans: typeof v.scrollPans === "boolean" ? v.scrollPans : NAV_DEFAULTS.scrollPans,
+      wheelDevice: asWheelDevice(v.wheelDevice) ?? (legacyPans ? "touchpad" : NAV_DEFAULTS.wheelDevice),
+      touchpadScroll: asTouchpadScroll(v.touchpadScroll) ?? (legacyPans ? "pan" : NAV_DEFAULTS.touchpadScroll),
       smoothTime: Math.min(0.5, Math.max(0, t)),
     };
   } catch {
@@ -114,4 +130,25 @@ export function setNavPrefs(patch: Partial<NavPrefs>) {
 export function onNavPrefsChange(fn: () => void): () => void {
   navListeners.add(fn);
   return () => navListeners.delete(fn);
+}
+
+// --- the wheel device seen --------------------------------------------------------
+
+/** What the last scroll was read as, for the setting's "Automatic" readout. */
+let detectedWheel: "touchpad" | "mouse" | null = null;
+const detectedListeners = new Set<() => void>();
+
+export function getDetectedWheel(): "touchpad" | "mouse" | null {
+  return detectedWheel;
+}
+
+export function noteDetectedWheel(kind: "touchpad" | "mouse") {
+  if (kind === detectedWheel) return;
+  detectedWheel = kind;
+  for (const fn of detectedListeners) fn();
+}
+
+export function onDetectedWheelChange(fn: () => void): () => void {
+  detectedListeners.add(fn);
+  return () => detectedListeners.delete(fn);
 }

@@ -15,6 +15,7 @@ import type { NudgePlacement } from "../features/selectionNudge";
 import { regionBeatsSurface } from "../sketch/regionOverSurface";
 import { regionArea } from "../sketch/region";
 import type { Engine } from "./engine";
+import { replayedPress } from "../viewport/navigator/input";
 
 /** How far the ambiguous-edge menu sits off the click, px. */
 const AMBIGUOUS_MENU_OFFSET = 16;
@@ -385,7 +386,8 @@ export function installViewportWiring(e: Engine): void {
   };
   // Bubble phase: a press on the handle itself is stopped in capture by the nudge.
   e.viewport.domElement.addEventListener("pointerdown", (ev) => {
-    if (ev.button === 0) dropRecentExtrude();
+    // A finger drag nobody claimed orbits, as a mouse orbit would not drop it.
+    if (ev.button === 0 && replayedPress(ev) !== "drag") dropRecentExtrude();
   });
   window.addEventListener("keydown", (ev) => {
     if (ev.key === "Escape") dropRecentExtrude();

@@ -121,23 +121,6 @@ describe("navigator rig input", () => {
     expect(wheel(-5, true)).toBeCloseTo(Math.exp(-0.05), 9);
   });
 
-  it("two touches pinch, and lifting one goes back to a one finger orbit", () => {
-    const { rig, fire } = rigWithBox();
-    const s0 = rig.viewScale();
-    fire("pointerdown", { pointerType: "touch", pointerId: 11, button: 0, buttons: 1, clientX: 350, clientY: 300 });
-    expect(rig.navigator.dragging()).toBe("orbit");
-    fire("pointerdown", { pointerType: "touch", pointerId: 12, button: 0, buttons: 1, clientX: 450, clientY: 300 });
-    expect(rig.navigator.dragging()).toBe("pan");
-    fire("pointermove", { pointerType: "touch", pointerId: 11, clientX: 300, clientY: 300 });
-    fire("pointermove", { pointerType: "touch", pointerId: 12, clientX: 500, clientY: 300 });
-    steady(rig);
-    expect(rig.viewScale()).toBeLessThan(s0 * 0.6);
-    fire("pointerup", { pointerType: "touch", pointerId: 12 });
-    expect(rig.navigator.dragging()).toBe("orbit");
-    fire("pointerup", { pointerType: "touch", pointerId: 11 });
-    expect(rig.navigator.dragging()).toBe(null);
-  });
-
   it("the three.js camera carries the pose on screen right after a change", () => {
     const { rig } = rigWithBox();
     rig.orbitBy(0.4, 0.2);

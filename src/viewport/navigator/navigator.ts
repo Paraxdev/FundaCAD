@@ -73,6 +73,10 @@ export class Navigator {
   private gesture: Gesture = null;
   private wheelAt: { x: number; y: number; log: number } | null = null;
   private pinchZoom: ZoomChannel | null = null;
+  /** The orbit channel a two-finger scroll is turning, and the pixel its
+   *  pivot was taken under. */
+  private scrollChannel: OrbitChannel | null = null;
+  private scrollPivot: { x: number; y: number; pivot: THREE.Vector3 } | null = null;
   /** The pan channel is a two-finger scroll's rather than a drag's. */
   private scrolling = false;
   /** A gesture moved the view and its re-seat has not run yet. */
@@ -346,6 +350,45 @@ export class Navigator {
     }
     this.pan.cx -= dx;
     this.pan.cy -= dy;
+    this.emit("inputstart");
+  }
+
+  /** Two-finger scroll as an orbit: the view turns as if the fingers dragged
+   *  it, about the pivot under the cursor. `fresh` starts a new swipe, which
+   *  takes a new pivot; the rest of the swipe keeps that one, though the model
+   *  turns away from under the cursor that chose it. */
+  scrollOrbit(x: number, y: number, dx: number, dy: number, fresh = true) {
+    if (this.locked) {
+      this.scrollPan(x, y, dx, dy);
+      return;
+    }
+    if (!Number.isFinite(dx) || !Number.isFinite(dy)) return;
+    // A swipe still easing is fed, not frozen, or every event would drop the
+    // part of the last one not yet shown.
+    const ours = this.orbit !== null && this.orbit === this.scrollChannel && !this.gesture;
+    if (ours) {
+      if (this.flight?.hard) return;
+      this.flight = null;
+    } else if (!this.takeInput()) return;
+    const same = !fresh && this.scrollPivot !== null
+      && Math.abs(this.scrollPivot.x - x) < 2 && Math.abs(this.scrollPivot.y - y) < 2;
+    if (!same) this.scrollPivot = { x, y, pivot: this.pivotAt(x, y) };
+    if (!ours || !same) {
+      this.endGesture(true);
+      const t = this.pose.level ? { yaw: this.pose.yaw, elev: this.pose.elev, roll: 0 } : decompose(this.pose.q);
+      // A swipe still turning about another pivot stops where it is shown.
+      this.orbit?.freeze();
+      this.orbit = new OrbitChannel(this.scrollPivot!.pivot, t.yaw, t.elev, t.roll);
+      this.scrollChannel = this.orbit;
+    }
+    const o = this.orbit!;
+    if (this.mode === "auto" && this.pose.ortho) {
+      this.pose.ortho = false;
+      this.moved();
+    }
+    // The content follows the fingers, as a scrolled page does: a scroll of +dy
+    // moves the page up, which a drag does with -dy.
+    this.orbitGoal(o, -dx, -dy);
     this.emit("inputstart");
   }
 
