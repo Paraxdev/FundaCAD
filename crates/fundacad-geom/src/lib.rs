@@ -28,6 +28,7 @@ pub mod kernel;
 pub mod measure;
 pub mod mesh;
 pub mod par;
+pub mod printcheck;
 #[cfg(feature = "plugins")]
 pub mod plugins;
 pub mod projection;

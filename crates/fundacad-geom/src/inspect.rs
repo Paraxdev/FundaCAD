@@ -581,7 +581,7 @@ pub fn inspect_result(req: &Map<String, Value>, watch: &dyn Watch) -> JobResult 
     JobResult::Json(m)
 }
 
-fn fail_text(f: &builder::Fail) -> String {
+pub(crate) fn fail_text(f: &builder::Fail) -> String {
     match f {
         builder::Fail::Value { message, .. } => message.clone(),
         builder::Fail::Missing(k) => format!("'{k}'"),

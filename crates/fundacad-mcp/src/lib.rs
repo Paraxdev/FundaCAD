@@ -31,7 +31,6 @@ pub mod live;
 pub mod mesh;
 pub mod model;
 pub mod png;
-pub mod printcheck;
 pub mod render;
 pub mod schema;
 pub mod section;

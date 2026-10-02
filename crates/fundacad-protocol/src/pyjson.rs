@@ -154,6 +154,39 @@ pub fn truthy(v: Option<&Value>) -> bool {
     }
 }
 
+/// `%g` with six significant digits, the way Python prints it.
+pub fn g_format(v: f64) -> String {
+    if v == 0.0 {
+        // Negative zero keeps its sign, as `%g` prints it. It is what a normal
+        // of (-1, -0, 0) reads as, and the two servers have to agree on it.
+        return if v.is_sign_negative() { "-0" } else { "0" }.into();
+    }
+    if !v.is_finite() {
+        return if v.is_nan() {
+            "nan".into()
+        } else if v > 0.0 {
+            "inf".into()
+        } else {
+            "-inf".into()
+        };
+    }
+    let exp = v.abs().log10().floor() as i32;
+    if exp < -4 || exp >= 6 {
+        let mantissa = trim_zeros(&format!("{:.5}", v / 10f64.powi(exp)));
+        let sign = if exp < 0 { '-' } else { '+' };
+        return format!("{mantissa}e{sign}{:02}", exp.abs());
+    }
+    trim_zeros(&format!("{:.*}", (5 - exp).max(0) as usize, v))
+}
+
+fn trim_zeros(s: &str) -> String {
+    if !s.contains('.') {
+        return s.to_string();
+    }
+    let t = s.trim_end_matches('0');
+    t.strip_suffix('.').unwrap_or(t).to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
