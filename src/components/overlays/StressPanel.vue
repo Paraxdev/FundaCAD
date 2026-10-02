@@ -23,8 +23,10 @@ const panels = usePanelsStore();
 const bodies = ref<{ id: string; name: string }[]>([]);
 let offBuild: (() => void) | null = null;
 onMounted(() => {
+  // onBuild replays at once, and this mounts inside app.mount(), before
+  // mountUi has made engine.ui: the first replay has no panels to ask.
   offBuild = engine.store.onBuild(() => {
-    bodies.value = engine.ui.panels.stressBodies();
+    bodies.value = engine.ui?.panels?.stressBodies() ?? [];
   });
 });
 onUnmounted(() => offBuild?.());
