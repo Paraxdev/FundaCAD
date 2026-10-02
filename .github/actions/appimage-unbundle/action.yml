@@ -96,10 +96,13 @@ runs:
           echo "::error::the bundle carries a Python interpreter"; exit 1
         fi
 
-        wget -qO "$work/appimagetool" \
+        curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o "$work/appimagetool" \
           https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
         chmod +x "$work/appimagetool"
-        ARCH=x86_64 "$work/appimagetool" --appimage-extract-and-run "$root" "$img"
+        # The runtime the build fetched with retries, so appimagetool does not
+        # download it again with none.
+        ARCH=x86_64 "$work/appimagetool" --appimage-extract-and-run \
+          ${LDAI_RUNTIME_FILE:+--runtime-file "$LDAI_RUNTIME_FILE"} "$root" "$img"
         echo "after: $(du -m "$img" | cut -f1) MB"
 
         # The old .sig covers the old bytes. Leaving it would hand every existing
