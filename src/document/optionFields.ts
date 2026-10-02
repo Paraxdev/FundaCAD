@@ -230,6 +230,8 @@ export const FEATURE_TOGGLE_FIELDS: Partial<Record<FeatureType, ToggleField[]>> 
   thicken: [{ field: "symmetric", label: "Symmetric", fallback: false }],
   fillet: [{ field: "tangentEdges", label: "Include Tangent Edges", fallback: true }],
   chamfer: [{ field: "tangentEdges", label: "Include Tangent Edges", fallback: true }],
+  "press-pull": [{ field: "followTangent", label: "Tangent faces follow", fallback: true }],
+  offsetFace: [{ field: "followTangent", label: "Tangent faces follow", fallback: true }],
   hole: [
     { field: "drillPoint", label: "Drill point", fallback: false },
     { field: "flip", label: "Flip direction", fallback: false },
@@ -260,6 +262,13 @@ export function fieldApplies(
   if (type === "fillet" && field === "profile") return values.continuity !== "G2";
   if (type === "hole") return holeFieldApplies(field, values);
   if (type === "mechanism") return mechanismFieldApplies(field, values);
+  // The tool writes followTangent only for a round face with tangent neighbours, so its
+  // absence is how a feature says the switch has nothing to act on.
+  if ((type === "press-pull" || type === "offsetFace") && field === "followTangent") {
+    return typeof values.followTangent === "boolean" &&
+      (values.mode ?? "auto") === "auto" &&
+      values.direction !== "axis";
+  }
   return contributedFeature(type)?.fieldApplies?.(field, values) ?? true;
 }
 
