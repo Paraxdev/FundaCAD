@@ -684,6 +684,41 @@ export interface CadDocument {
   palette?: { name: string; color: string; material?: string }[];
   /** per-body palette-slot assignment (body id → slot index into `palette`). */
   bodyColors?: Record<string, number>;
+  /** The Stress panel's setup, saved so reopening the file and the panel puts
+   *  the study back. Selectors only: the panel finds the faces again on the
+   *  build it opens on. The rebuild ignores it (document/stressStudy.ts). */
+  stress?: StressStudy;
+}
+
+/** The six world axes a direction can be picked from in the Stress panel. */
+export type AxisDirection = "-Z" | "+Z" | "+X" | "-X" | "+Y" | "-Y";
+
+/** How a support holds its faces: all three directions, radially and along a
+ *  cylinder's axis while free to turn about it, or along the face normal only. */
+export type StressSupportType = "fixed" | "pinned" | "slider";
+
+/** A stress study as the document stores it. Units are mm, N, MPa and g/cm3;
+ *  gravity is 9.81 m/s2 along its direction. */
+export interface StressStudy {
+  body: string | null;
+  supports: { id: number; type: StressSupportType; faces: Selector[] }[];
+  loads: {
+    id: number;
+    kind: "force" | "pressure";
+    faces: Selector[];
+    /** N, the total over the faces. */
+    force: number;
+    direction: "into" | AxisDirection | "custom";
+    custom: [number, number, number];
+    /** MPa, pushing into the faces. */
+    pressure: number;
+  }[];
+  gravity: { on: boolean; direction: AxisDirection };
+  /** A preset's name, or "Custom" for the numbers in `custom`. */
+  material: string;
+  custom: { E: number; nu: number; yield: number; density: number };
+  /** mm, null for the engine's automatic size. */
+  size: number | null;
 }
 
 // A non-fatal note from a rebuild: a low-confidence match, a skipped boolean, a sealed void.

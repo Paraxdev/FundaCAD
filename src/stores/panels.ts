@@ -1,6 +1,10 @@
 import { defineStore } from "pinia";
 import { markRaw, ref } from "vue";
-import { emptyFaceSet, newLoad, newSetup, type StressFaceSet, type StressResultView, type StressSetup } from "../ui/stress";
+import {
+  emptyFaceSet, newLoad, newSetup, newSupport, nextId,
+  type StressFaceSet, type StressResultView, type StressSetup,
+} from "../ui/stress";
+import type { StressSupportType, Vec3 } from "../types";
 
 /** A key/value readout line. */
 export interface PanelRow {
@@ -39,6 +43,25 @@ export interface InterferenceData {
   truncatedMessage?: string;
 }
 
+/** The deformed shape drawn on the result's colours: the scale on the slider,
+ *  the automatic one it started at, the slider's top, and whether it swings. */
+export interface StressDeform {
+  scale: number;
+  auto: number;
+  max: number;
+  animate: boolean;
+}
+
+/** A point pinned on the coloured body: where it is on the result's surface
+ *  (a triangle and barycentric weights, so it rides the deformed shape) and the
+ *  readout taken there. */
+export interface StressProbePin {
+  id: number;
+  tri: number;
+  weights: Vec3;
+  label: string;
+}
+
 /** The Stress panel: the setup the user edits in place, the request in flight
  *  (its id, for Cancel), and the last result, already in display units. */
 export interface StressData {
@@ -53,6 +76,11 @@ export interface StressData {
    *  faces can be picked again (the rows stay), or none to show, before a Run
    *  or once the model has changed under them. */
   colours: "shown" | "hidden" | "none";
+  /** Null until a result with displacements arrives. */
+  deform: StressDeform | null;
+  /** Probe mode, and the points pinned with it. */
+  probe: boolean;
+  pins: StressProbePin[];
 }
 
 /** The floating "measure-panel" popups. Each is independent, Properties and
@@ -81,7 +109,25 @@ export const usePanelsStore = defineStore("panels", () => {
       if (!stress.value.setup.body) stress.value.setup.body = body;
       return;
     }
-    stress.value = { setup: newSetup(body), running: false, requestId: null, result: null, error: null, colours: "none" };
+    stress.value = fresh(newSetup(body));
+  }
+
+  function fresh(setup: StressSetup): StressData {
+    return {
+      setup, running: false, requestId: null, result: null, error: null, colours: "none",
+      deform: null, probe: false, pins: [],
+    };
+  }
+
+  /** Put a setup in place of the panel's, as a saved study is read back. Drops
+   *  the result, which was for the setup it replaces. */
+  function replaceStressSetup(setup: StressSetup) {
+    if (stress.value) {
+      stress.value.setup = setup;
+      clearStressResult();
+    } else {
+      stress.value = fresh(setup);
+    }
   }
 
   /** Change the analysed body. Faces belong to one body, so the face sets of
@@ -90,12 +136,23 @@ export const usePanelsStore = defineStore("panels", () => {
     const s = stress.value?.setup;
     if (!s || s.body === body) return;
     s.body = body;
-    s.fixed = emptyFaceSet();
+    for (const x of s.supports) x.faces = emptyFaceSet();
     for (const l of s.loads) l.faces = emptyFaceSet();
   }
 
-  function setStressFixed(faces: StressFaceSet) {
-    if (stress.value) stress.value.setup.fixed = faces;
+  function setStressSupportFaces(supportId: number, faces: StressFaceSet) {
+    const x = stress.value?.setup.supports.find((v) => v.id === supportId);
+    if (x) x.faces = faces;
+  }
+
+  function addStressSupport(type: StressSupportType = "fixed") {
+    const s = stress.value?.setup;
+    if (s) s.supports.push(newSupport(nextId(s.supports), type));
+  }
+
+  function removeStressSupport(supportId: number) {
+    const s = stress.value?.setup;
+    if (s) s.supports = s.supports.filter((x) => x.id !== supportId);
   }
 
   function setStressLoadFaces(loadId: number, faces: StressFaceSet) {
@@ -106,7 +163,7 @@ export const usePanelsStore = defineStore("panels", () => {
   function addStressLoad() {
     const s = stress.value?.setup;
     if (!s) return;
-    s.loads.push(newLoad(s.loads.reduce((m, l) => Math.max(m, l.id), 0) + 1));
+    s.loads.push(newLoad(nextId(s.loads)));
   }
 
   function removeStressLoad(loadId: number) {
@@ -134,20 +191,45 @@ export const usePanelsStore = defineStore("panels", () => {
     stress.value.error = outcome.error ?? null;
   }
 
+  /** Drop the result and everything drawn from it: the deformed shape and
+   *  the probes. */
   function clearStressResult() {
     if (!stress.value) return;
     stress.value.result = null;
     stress.value.colours = "none";
+    stress.value.deform = null;
+    stress.value.probe = false;
+    stress.value.pins = [];
   }
 
   function setStressColours(c: StressData["colours"]) {
     if (stress.value) stress.value.colours = c;
   }
 
+  function setStressDeform(d: StressDeform | null) {
+    if (stress.value) stress.value.deform = d;
+  }
+
+  function setStressProbe(on: boolean) {
+    if (stress.value) stress.value.probe = on;
+  }
+
+  function addStressPin(pin: Omit<StressProbePin, "id">) {
+    const d = stress.value;
+    if (d) d.pins.push({ ...pin, id: nextId(d.pins) });
+  }
+
+  function removeStressPin(id: number) {
+    const d = stress.value;
+    if (d) d.pins = d.pins.filter((p) => p.id !== id);
+  }
+
   return {
     properties, interference, overhang, params, stress,
     showProperties, showInterference,
-    showStress, setStressBody, setStressFixed, setStressLoadFaces, addStressLoad, removeStressLoad,
+    showStress, replaceStressSetup, setStressBody, setStressSupportFaces, addStressSupport, removeStressSupport,
+    setStressLoadFaces, addStressLoad, removeStressLoad,
     stressStarted, stressSent, stressFinished, clearStressResult, setStressColours,
+    setStressDeform, setStressProbe, addStressPin, removeStressPin,
   };
 });

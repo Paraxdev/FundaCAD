@@ -692,12 +692,41 @@
 .properties-panel {
   min-width: 260px;
 }
-/* The Stress setup runs long with several loads; it scrolls rather than
-   running off the bottom of the window. */
+/* The Stress panel floats over the model it analyses and the arrows it asks
+   the user to drag, so it is a fixed narrow column at the side, never as wide
+   as its longest hint or warning: those wrap. The setup runs long with several
+   loads; it scrolls rather than running off the bottom of the window. */
 .stress-panel {
-  min-width: 300px;
+  box-sizing: border-box;
+  width: 340px;
+  max-width: calc(100vw - 32px);
   max-height: calc(100vh - 160px);
   overflow-y: auto;
+  overflow-wrap: anywhere;
+}
+/* Only the text wraps anywhere: a button keeps its label whole, and the row of
+   them wraps onto a second line instead. */
+.stress-panel .btn {
+  overflow-wrap: normal;
+  white-space: nowrap;
+}
+/* The Stress panel's labels in the view: the value beside the cursor while an
+   arrow is dragged or the body probed, and each pinned probe's readout. */
+.stress-glyph-label {
+  position: fixed;
+  z-index: 1400;
+  pointer-events: none;
+  padding: 2px 6px;
+  border-radius: var(--r-xs, 4px);
+  background: var(--panel-2, #1b1f24);
+  border: 1px solid var(--line-strong, #3a4048);
+  color: var(--text, #e6e9ee);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.stress-probe-pin {
+  opacity: 0.9;
 }
 .measure-title {
   font-weight: 600;

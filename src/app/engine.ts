@@ -47,6 +47,7 @@ import { MechanismTool } from "../features/mechanismTool";
 import { createFeatureStarters } from "../features/featureStarters";
 import { createContextMenus } from "../ui/contextMenus";
 import { createPanels } from "../ui/panels";
+import { StressGlyphs } from "../viewport/stressGlyphs";
 import { createBugReporter } from "../ui/bugReporter";
 
 import { useRibbonStore } from "../stores/ribbon";
@@ -512,6 +513,7 @@ export function mountUi(e: Engine): void {
     geometry: e.geometry,
     hasBody: () => e.hasBody(),
     setStatus: (t, c) => e.setStatus(t, c),
+    stressGlyphs: (handlers) => new StressGlyphs(e.viewport, handlers),
   });
 
   // handleAction closes over `menus`/`panels`/`starters`, and those close back

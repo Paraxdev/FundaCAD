@@ -56,6 +56,13 @@ This file starts on 2026-08-03. For anything before that, see the
   density. A part that can still move is refused with the motion it has left,
   such as a turn about the pin, and the reply gives the reaction at each
   support. The MCP `stress` tool takes the same supports and gravity.
+- **Hands-on stress tools.** The Stress panel saves its setup with the
+  document, so a part reopens ready to run. Each force draws an arrow in the
+  view whose tip you drag to set its direction and size, pressures and gravity
+  draw arrows too, and supports are tinted by kind with a pin's axis drawn.
+  After a run, a slider bends the part by its deflection, exaggerated or at
+  true scale and animated if you like, and Probe reads the stress and the
+  deflection under the cursor and pins readouts to the part.
 - **Merging overlapping sketch shapes over MCP.** The new `sketch_merge` tool
   replaces closed shapes of a sketch that overlap or touch, rectangles,
   circles, polygons, slots and loops of lines and arcs, with the outline of
