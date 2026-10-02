@@ -129,6 +129,24 @@ fn an_empty_document_has_nothing_to_check() {
 }
 
 #[test]
+fn a_ledge_is_not_held_by_another_body_across_the_air() {
+    // The T's cap hangs out 8 mm each side; a fin 10 mm off its end has its
+    // top at the cap's underside. Nothing reaches across that gap.
+    let doc = json!({"features": [
+        {"id": "s", "type": "box", "length": 4, "width": 4, "height": 10},
+        {"id": "m", "type": "move", "dz": 5, "bodies": ["body1"]},
+        {"id": "c", "type": "box", "length": 20, "width": 4, "height": 4},
+        {"id": "n", "type": "move", "dz": 12, "bodies": ["body2"]},
+        {"id": "j", "type": "boolean", "operation": "union", "target": "body1", "tools": ["body2"]},
+        {"id": "f", "type": "box", "length": 0.6, "width": 20, "height": 10},
+        {"id": "k", "type": "move", "dx": 20, "dz": 5, "bodies": ["body3"]},
+    ]});
+    let r = run(json!({"document": doc, "checks": ["overhang", "bridge"]}));
+    let kinds: Vec<&str> = r["findings"].as_array().unwrap().iter().map(|f| f["kind"].as_str().unwrap()).collect();
+    assert_eq!(kinds, ["overhang", "overhang"], "{r}");
+}
+
+#[test]
 fn a_failed_build_says_why_even_when_bodies_are_named() {
     let doc = json!({"features": [{"id": "bx", "type": "box", "length": -5, "width": 10, "height": 10}]});
     let r = run(json!({"document": doc, "bodies": ["body1"]}));
