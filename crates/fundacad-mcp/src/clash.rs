@@ -300,11 +300,20 @@ pub fn sweep_report(param: &str, unit: &str, steps: &[Step], clearance: f64, ask
         let failed = failures(r);
         if !failed.is_empty() {
             failed_steps += 1;
-            let ids: Vec<&str> = list(r, "errors")
+            // Each id with why it failed: at a sweep step that reason (a joint
+            // that cannot close, a depth gone negative) is often the answer.
+            let why: Vec<String> = list(r, "errors")
                 .iter()
-                .filter_map(|e| e.get("feature_id").and_then(Value::as_str))
+                .filter_map(|e| {
+                    let id = e.get("feature_id").and_then(Value::as_str);
+                    match (id, e.get("message").and_then(Value::as_str)) {
+                        (Some(id), Some(m)) => Some(format!("{id}: {m}")),
+                        (Some(id), None) => Some(id.to_string()),
+                        (None, m) => m.map(str::to_string),
+                    }
+                })
                 .collect();
-            line.push_str(&format!(" (features failed: {})", ids.join(", ")));
+            line.push_str(&format!(" (features failed: {})", why.join("; ")));
         }
         lines.push(line);
     }
@@ -409,10 +418,27 @@ mod tests {
         assert!(text.contains("1 step had failed features"), "{text}");
         assert!(text.contains("At 1 step the check stopped early: Stopped after checking 400"), "{text}");
         assert!(text.contains("press = 6: clear (stopped early, not every pair checked)"), "{text}");
-        assert!(text.contains("press = 12: clear (Slider not built) (features failed: ex2)"), "{text}");
+        assert!(
+            text.contains("press = 12: clear (Slider not built) (features failed: ex2: depth must be positive)"),
+            "{text}"
+        );
         assert!(text.contains("Slider was not built at 1 step (press = 12 mm), so its pairs were not checked there."), "{text}");
         let none = sweep_report("press", "mm", &[Step { value: 0.0, reply: Err("x".into()) }], 1.0, &[]);
         assert!(none.starts_with("None of the 1 steps could be checked.\n"), "{none}");
+    }
+
+    #[test]
+    fn a_failed_step_says_why_each_feature_failed() {
+        let failed = json!({"pairs": [], "clearances": [],
+                            "errors": [{"feature_id": "mech1", "message": "joint pin2 stays 0.8 mm apart, the linkage cannot close"},
+                                       {"feature_id": "ex3", "message": "nothing to cut"}]});
+        let text = sweep_report("press", "mm", &[Step { value: 11.0, reply: Ok(failed) }], 0.0, &[]);
+        assert!(
+            text.contains(
+                "press = 11: clear (features failed: mech1: joint pin2 stays 0.8 mm apart, the linkage cannot close; ex3: nothing to cut)"
+            ),
+            "{text}"
+        );
     }
 
     #[test]
