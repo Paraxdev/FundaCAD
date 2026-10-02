@@ -270,27 +270,23 @@ is refused, and silently never builds anything. `FUNDACAD_ENGINE_TOKEN` and
 ### Troubleshooting
 
 - **`FundaCAD's kernel crashes when built with the MinGW (windows-gnu)
-  toolchain`**, or cmake output mentioning `MinGW Makefiles`. Another Rust,
-  usually Chocolatey's `rust` package, comes before rustup on the PATH. Check
-  with `where.exe cargo`: the first line has to be in `C:\Users\<you>\.cargo\bin`.
-  Windows puts the System Path before the User Path, so Chocolatey's
-  `C:\ProgramData\chocolatey\bin` (a System entry) comes first however the User
-  Path is ordered. Any one of these fixes it:
-  1. For the current terminal only, in PowerShell:
+  toolchain`**, or cmake output mentioning `MinGW Makefiles`. The cargo that
+  ran targets `windows-gnu` instead of `windows-msvc`. Either rustup's default
+  toolchain is the GNU one, or a second Rust install (from a package manager,
+  MSYS2 or similar) comes before rustup on the PATH.
+  1. Run `rustup show`. If the default toolchain ends in `-windows-gnu`, run
+     `rustup default stable-x86_64-pc-windows-msvc`.
+  2. Run `where.exe cargo`. If the first line is not in
+     `C:\Users\<you>\.cargo\bin`, another Rust is ahead of rustup. Uninstall it,
+     or move `%USERPROFILE%\.cargo\bin` above it in the PATH, then open a new
+     terminal. Windows reads the System Path before the User Path, so a Rust in
+     the System Path needs `.cargo\bin` moved there too. To try a build without
+     changing anything, put rustup first for the current PowerShell only:
 
      ```powershell
      $env:PATH = "$HOME\.cargo\bin;$env:PATH"
-     npm run tauri build
+     npm run tauri dev
      ```
-
-  2. For good: run `choco uninstall rust` in an administrator terminal, make
-     sure `%USERPROFILE%\.cargo\bin` is in the **User** Path (Settings, System,
-     About, Advanced system settings, Environment Variables, or run
-     `rustup-init.exe` again, which adds it), then open a new terminal.
-  3. Or, as administrator, add `%USERPROFILE%\.cargo\bin` to the **System**
-     Path above `C:\ProgramData\chocolatey\bin`, then open a new terminal.
-
-  Then make MSVC the default: `rustup default stable-x86_64-pc-windows-msvc`.
 - **`rustup` is not recognized**, or `where.exe cargo` lists nothing in
   `C:\Users\<you>\.cargo\bin`. rustup is either not installed or its folder is
   not on the PATH. If `C:\Users\<you>\.cargo\bin\rustup.exe` exists, add that
