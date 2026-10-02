@@ -123,6 +123,11 @@
   padding: var(--s-2);
   border-radius: var(--r-sm);
   cursor: pointer;
+  /* A row, like the .tree-folder heads between them, not text: a long press
+     on a label held a finger's worth of selection instead of the row. The
+     rename field turns selection back on for itself, see .tree-label.renaming. */
+  -webkit-user-select: none;
+  user-select: none;
   color: var(--text);
   transition: background var(--t-fast) var(--ease), color var(--t-fast) var(--ease);
 }

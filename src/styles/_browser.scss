@@ -112,6 +112,13 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* The inline rename is a contenteditable span inside a row that cannot be
+   selected. WebKit inherits -webkit-user-select, and an editable region that
+   inherited none there can refuse the caret, so it says text for itself. */
+.tree-label.renaming {
+  -webkit-user-select: text;
+  user-select: text;
+}
 .tree-eye {
   font-size: 12px;
   color: var(--text-mute);
