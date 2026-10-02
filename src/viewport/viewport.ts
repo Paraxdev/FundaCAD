@@ -2181,7 +2181,7 @@ export class Viewport {
     // solid, a center-of-mass point); any rebuild invalidates them.
     this.setInterferenceOverlay(null, null);
     this.setStressOverlay(null);
-    this.setFaceMarks(null);
+    this.clearFaceMarks();
     this.setComMarker(null);
     this.dropAreaProjection();
     const hidden = new Set(hiddenBodies);
@@ -2396,7 +2396,7 @@ export class Viewport {
 
   clearModel() {
     this.setStressOverlay(null);
-    this.setFaceMarks(null);
+    this.clearFaceMarks();
     this.dropAreaProjection();
     this.faceBands = new Map();
     // A reply with no geometry ends its stream here, not in setModel; left open,
@@ -2679,11 +2679,15 @@ export class Viewport {
   private stressHidden: { bodyId: string; wasVisible: boolean } | null = null;
 
   /** Tint sets of faces (display face ids), each in its own colour: the faces
-   *  an analysis holds fixed or loads. Pass null to clear. Face ids belong to
-   *  one tessellation, so `setModel` clears these too. */
-  setFaceMarks(marks: { faceIds: number[]; color: number }[] | null) {
-    clearOverlayObjects(this.faceMarkMeshes);
-    this.faceMarkMeshes = [];
+   *  an analysis holds fixed or loads, or the ones a check flagged. Pass null
+   *  to clear. `layer` names whose marks these are, and replaces only those,
+   *  so two panels' marks can be up together and one closing leaves the
+   *  other's. Face ids belong to one tessellation, so `setModel` clears every
+   *  layer. */
+  setFaceMarks(marks: { faceIds: number[]; color: number }[] | null, layer = "default") {
+    clearOverlayObjects(this.faceMarkMeshes.get(layer) ?? []);
+    this.faceMarkMeshes.delete(layer);
+    const meshes: THREE.Mesh[] = [];
     for (const m of marks ?? []) {
       const tris = m.faceIds.flatMap((f) => this.faceTriangles(f));
       if (!tris.length) continue;
@@ -2698,11 +2702,24 @@ export class Viewport {
       }
       const mesh = buildFaceMarkMesh(out, m.color);
       this.scene.scene.add(mesh);
-      this.faceMarkMeshes.push(mesh);
+      meshes.push(mesh);
     }
+    if (meshes.length) this.faceMarkMeshes.set(layer, meshes);
     this.requestRender();
   }
-  private faceMarkMeshes: THREE.Mesh[] = [];
+  private clearFaceMarks() {
+    for (const meshes of this.faceMarkMeshes.values()) clearOverlayObjects(meshes);
+    this.faceMarkMeshes.clear();
+  }
+  private faceMarkMeshes = new Map<string, THREE.Mesh[]>();
+
+  /** Fly the camera to look at `at` with about `size` mm across the view,
+   *  keeping the direction it looks from, as Fit does for the whole model. */
+  frameAround(at: [number, number, number], size: number) {
+    const r = Math.max(size, 1e-3) / 2;
+    this.rig.fitSphere(new THREE.Sphere(new THREE.Vector3(at[0], at[1], at[2]), r), { animate: true, padding: 1 });
+    this.requestRender();
+  }
 
   /** Center-of-mass marker for the Properties panel (pass null to clear). */
   setComMarker(point: THREE.Vector3 | null) {

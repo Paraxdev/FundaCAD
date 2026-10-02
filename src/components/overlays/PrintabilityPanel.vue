@@ -1,0 +1,211 @@
+<script setup lang="ts">
+// Inspect → Printability: what would go wrong making the selected bodies, or
+// every body, layer by layer. The user sets the nozzle, layer and limits and
+// which way is up, and Check lists the findings by body while the view tints
+// the faces they are on, one colour per kind (see ui/panels.ts runPrintability).
+//
+// No Esc-dismiss: Esc clears the body selection, which is how the user widens
+// the check back to every body, and it must not close the results with it.
+
+import { computed, onMounted, onUnmounted, ref } from "vue";
+import { useEngine } from "../../app/engineKey";
+import { usePanelsStore } from "../../stores/panels";
+import { useBrowserStore } from "../../stores/browser";
+import FloatingPanel from "./FloatingPanel.vue";
+import { CHECKS, KIND_COLORS, KIND_LABELS, UP_CHOICES } from "../../ui/printability";
+import { cssHex } from "../../ui/stress";
+import type { PrintabilityKind } from "../../geometry/client";
+
+const engine = useEngine();
+const panels = usePanelsStore();
+const browser = useBrowserStore();
+
+const bodies = ref<{ id: string; name: string }[]>([]);
+let offBuild: (() => void) | null = null;
+onMounted(() => {
+  // onBuild replays at once, and this mounts inside app.mount(), before
+  // mountUi has made engine.ui: the first replay has no panels to ask.
+  offBuild = engine.store.onBuild(() => {
+    bodies.value = engine.ui?.panels?.printabilityBodies() ?? [];
+  });
+});
+onUnmounted(() => offBuild?.());
+
+const d = computed(() => panels.printability);
+const setup = computed(() => panels.printability?.setup ?? null);
+
+/** What Check will cover, as the facade decides it: the selected bodies, or
+ *  every body when none is selected. */
+const scope = computed(() => {
+  const picked = bodies.value.filter((b) => browser.selectedBodyIds.includes(b.id));
+  if (picked.length === 1) return picked[0]!.name || picked[0]!.id;
+  if (picked.length) return `${picked.length} selected`;
+  const n = bodies.value.length;
+  return n === 1 ? "The one body" : `All ${n}`;
+});
+
+const focus = computed(() => d.value?.hovered ?? d.value?.picked ?? null);
+
+function swatch(k: PrintabilityKind): string {
+  return cssHex(KIND_COLORS[k] ?? 0x888888);
+}
+
+function close() {
+  engine.ui.panels.closePrintability();
+}
+</script>
+
+<template>
+  <FloatingPanel :open="!!panels.printability" panel-class="printability-panel" @close="close">
+    <template v-if="d && setup">
+      <div class="measure-title">Printability</div>
+
+      <div class="measure-row">
+        <span class="measure-k">Bodies</span>
+        <span class="measure-v printability-scope">{{ scope }}</span>
+      </div>
+
+      <div class="measure-divider" />
+      <div class="measure-row">
+        <span class="measure-k">Nozzle</span>
+        <span class="measure-v"><input v-model.number="setup.nozzle" class="measure-number printability-nozzle" type="number" min="0" step="0.05" /> mm</span>
+      </div>
+      <div class="measure-row">
+        <span class="measure-k">Layer</span>
+        <span class="measure-v"><input v-model.number="setup.layer" class="measure-number printability-layer" type="number" min="0" step="0.05" /> mm</span>
+      </div>
+      <div class="measure-row">
+        <span class="measure-k">Overhang angle</span>
+        <span class="measure-v"><input v-model.number="setup.overhang" class="measure-number printability-overhang" type="number" min="1" max="89" step="1" /> °</span>
+      </div>
+      <div class="measure-row">
+        <span class="measure-k">Smallest gap</span>
+        <span class="measure-v"><input v-model.number="setup.minGap" class="measure-number printability-gap" type="number" min="0" step="0.05" /> mm</span>
+      </div>
+      <div class="measure-row">
+        <span class="measure-k">Longest bridge</span>
+        <span class="measure-v"><input v-model.number="setup.maxBridge" class="measure-number printability-bridge" type="number" min="0" step="1" /> mm</span>
+      </div>
+      <div class="measure-row">
+        <span class="measure-k">Up</span>
+        <select v-model="setup.up" class="measure-select printability-up" :disabled="setup.layFlat">
+          <option v-for="u in UP_CHOICES" :key="u.value" :value="u.value">{{ u.label }}</option>
+        </select>
+      </div>
+      <div class="measure-row">
+        <label class="measure-k printability-toggle">
+          <input v-model="setup.layFlat" class="printability-layflat" type="checkbox" />
+          Lay flat on the largest flat face
+        </label>
+      </div>
+
+      <div class="measure-divider" />
+      <div class="printability-checks">
+        <label v-for="c in CHECKS" :key="c.value" class="measure-k printability-toggle">
+          <input v-model="setup.checks[c.value]" :class="'printability-check-' + c.value" type="checkbox" />
+          {{ c.label }}
+        </label>
+      </div>
+
+      <div class="measure-row printability-actions">
+        <button
+          type="button" class="btn btn-primary printability-run" :disabled="d.running"
+          @click="engine.ui.panels.runPrintability()"
+        >{{ d.running ? "Checking…" : "Check" }}</button>
+        <button
+          type="button" class="btn printability-cancel" :disabled="!d.running"
+          @click="engine.ui.panels.cancelPrintability()"
+        >Cancel</button>
+        <button type="button" class="btn printability-close" @click="close">Close</button>
+      </div>
+      <div v-if="d.error" class="measure-hint printability-error">{{ d.error }}</div>
+
+      <template v-if="d.result">
+        <div class="measure-divider" />
+        <div v-if="d.result.header" class="measure-hint printability-header">{{ d.result.header }}</div>
+        <div v-for="g in d.result.groups" :key="g.body" class="printability-group">
+          <div class="measure-row printability-body"><span class="measure-v">{{ g.name }}</span></div>
+          <div v-for="(n, i) in g.notes" :key="'n' + i" class="measure-row printability-note">
+            <span class="measure-v">{{ n }}</span>
+          </div>
+          <div
+            v-for="r in g.rows" :key="r.index"
+            class="measure-row printability-finding" :class="{ 'is-focus': focus === r.index }"
+            @mouseenter="engine.ui.panels.hoverFinding(r.index)"
+            @mouseleave="engine.ui.panels.hoverFinding(null)"
+            @click="engine.ui.panels.pickFinding(r.index)"
+          >
+            <span class="measure-v"><span class="printability-swatch" :style="{ background: swatch(r.kind) }" />{{ r.text }}</span>
+          </div>
+          <div v-if="!g.notes.length && !g.rows.length" class="measure-row printability-clean">
+            <span class="measure-k">Nothing found</span>
+          </div>
+        </div>
+        <div v-if="!d.result.groups.length && !d.result.errors.length" class="measure-row printability-clean">
+          <span class="measure-k">Nothing found</span>
+        </div>
+        <div v-if="d.result.kinds.length" class="printability-legend">
+          <span v-for="k in d.result.kinds" :key="k" class="measure-k printability-legend-item">
+            <span class="printability-swatch" :style="{ background: swatch(k) }" />{{ KIND_LABELS[k] }}
+          </span>
+        </div>
+        <div v-for="(w, i) in d.result.errors" :key="'e' + i" class="measure-hint printability-warning">{{ w }}</div>
+        <div v-if="d.stale" class="measure-hint printability-stale">The model changed since this check, check again to see the faces</div>
+      </template>
+
+      <div class="measure-hint">
+        Checks the selected bodies, or every body when none is selected · hover a finding to pick out its face, click to look at it
+      </div>
+    </template>
+  </FloatingPanel>
+</template>
+
+<style scoped>
+.printability-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.printability-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-4);
+}
+.printability-actions {
+  justify-content: flex-start;
+  gap: var(--s-2);
+  margin-top: var(--s-2);
+}
+.printability-body {
+  margin-top: var(--s-2);
+  font-weight: 600;
+}
+.printability-finding {
+  cursor: pointer;
+  border-radius: 2px;
+}
+.printability-finding:hover,
+.printability-finding.is-focus {
+  background: var(--accent-tint, rgba(255, 122, 60, 0.14));
+}
+.printability-swatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 2px;
+  vertical-align: middle;
+}
+.printability-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-3);
+  margin-top: var(--s-2);
+}
+.printability-error,
+.printability-warning,
+.printability-note {
+  color: var(--accent-hot, #ff9a5c);
+}
+</style>

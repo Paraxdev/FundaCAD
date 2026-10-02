@@ -1972,6 +1972,12 @@ export class DocumentStore {
     else this.rebuildTimer = window.setTimeout(run, 120);
   }
 
+  /** The document the model on screen was built from, for an analysis whose
+   *  answer names that model's faces. */
+  builtDocument(): CadDocument {
+    return this.effectiveDoc();
+  }
+
   /** the document actually sent to build: features up to the rollback marker,
    *  minus suppressed ones. The full document is what we save/serialize. */
   private effectiveDoc(): CadDocument {

@@ -141,6 +141,65 @@ export type StressResult =
   | { ok: true; result: StressReply }
   | { ok: false; message: string; cancelled?: boolean };
 
+export type PrintabilityCheck = "overhang" | "wall" | "gap" | "bridge" | "open";
+export type PrintabilityUp = "+X" | "-X" | "+Y" | "-Y" | "+Z" | "-Z";
+
+/** The `printability` op's options past the document (docs/PROTOCOL.md).
+ *  Lengths in mm, the overhang in degrees past vertical. `up` and `layFlat`
+ *  are two answers to how the part sits, so never both; without either it
+ *  prints +Z up as modelled. Leaving `checks` out runs every check. */
+export interface PrintabilityOptions {
+  bodies?: string[];
+  nozzle?: number;
+  layer?: number;
+  overhang?: number;
+  minGap?: number;
+  maxBridge?: number;
+  checks?: PrintabilityCheck[];
+  up?: PrintabilityUp;
+  /** True to lay each body on its largest flat face, or a face index per body id. */
+  layFlat?: true | Record<string, number>;
+}
+
+export type PrintabilityKind = "overhang" | "bridge" | "wall" | "floor" | "gap" | "fused" | "meshHole";
+
+/** One thing the check found. `face` is the body's own face index, the `i` of
+ *  `inspect` and of a body's faceIds on the wire, which the viewport numbers
+ *  on from the body's faceStart. `other` is the facing face of a wall, floor,
+ *  gap or fused pair, on another body for `fused`. */
+export interface PrintabilityFinding {
+  kind: PrintabilityKind;
+  body: string;
+  face: number;
+  other: { body: string; face: number } | null;
+  /** Degrees past vertical for an overhang (90 a flat ceiling), the open mesh
+   *  edges for a meshHole, otherwise mm: a span, a thickness or a gap. */
+  value: number;
+  /** What a wall, floor, gap, fused pair or bridge was held to, mm; 0 otherwise. */
+  limit: number;
+  area: number;
+  /** An overhang's lowest point above the bed, mm. */
+  low: number;
+  at: Vec3;
+  extent: number;
+  note: string;
+}
+
+/** How the part was checked and what turned up, ordered per body and kind.
+ *  `bodies` and `findings` are empty when nothing built, and `errors` says why. */
+export interface PrintabilityReply {
+  header: string;
+  report: string;
+  settings: { nozzle: number; layer: number; overhang: number; minGap: number; maxBridge: number; up: string | null; layFlat: boolean };
+  bodies: { id: string; name: string; up: Vec3; bed: number; bedFace: number | null; openEdges: number; solids: number; insideOut: boolean }[];
+  findings: PrintabilityFinding[];
+  errors?: { feature_id?: string; message: string }[];
+}
+
+export type PrintabilityResult =
+  | { ok: true; result: PrintabilityReply }
+  | { ok: false; message: string; cancelled?: boolean };
+
 // The surface the rest of the app depends on. `Geometry` implements it over
 // either engine's transport, and tests stub it by hand.
 export interface GeometryBackend {
@@ -224,6 +283,10 @@ export interface GeometryBackend {
    *  hands back the request id for a Cancel through `cancel(id)`. Optional, a
    *  test backend may have no solver. */
   stress?(doc: CadDocument, body: string, opts: StressOptions, onStarted?: (id: string) => void): Promise<StressResult>;
+  /** What would go wrong making the document's bodies layer by layer: overhangs,
+   *  thin walls, gaps, bridges and open shells. `onStarted` as for `stress`.
+   *  Optional, a test backend may not check. */
+  printability?(doc: CadDocument, opts: PrintabilityOptions, onStarted?: (id: string) => void): Promise<PrintabilityResult>;
   patternAxis?(doc: CadDocument, ref: Selector): Promise<PatternAxisReply | null>;
   /** The lines the built model cuts a sketch's areas along on one plane, as
    *  world polylines, the ones every consuming feature cuts with. Null when the
@@ -1243,6 +1306,13 @@ export class Geometry implements GeometryBackend {
     if (msg.ok) return { ok: true, result: msg.result };
     if (msg.cancelled) return { ok: false, cancelled: true, message: "stress analysis cancelled" };
     return { ok: false, message: msg.error?.message ?? "stress analysis failed" };
+  }
+
+  async printability(doc: CadDocument, opts: PrintabilityOptions, onStarted?: (id: string) => void): Promise<PrintabilityResult> {
+    const msg = await this.call<PrintabilityReply>("printability", { document: doc, ...opts }, onStarted);
+    if (msg.ok) return { ok: true, result: msg.result };
+    if (msg.cancelled) return { ok: false, cancelled: true, message: "printability check cancelled" };
+    return { ok: false, message: msg.error?.message ?? "printability check failed" };
   }
 
   async faceAxis(doc: CadDocument, face: Selector, body: string | null): Promise<FaceAxisReply | null> {

@@ -699,6 +699,13 @@
   max-height: calc(100vh - 160px);
   overflow-y: auto;
 }
+/* A check of several bodies lists a row per finding; it scrolls the same way. */
+.printability-panel {
+  min-width: 300px;
+  max-width: 380px;
+  max-height: calc(100vh - 160px);
+  overflow-y: auto;
+}
 .measure-title {
   font-weight: 600;
   margin-bottom: var(--s-2);

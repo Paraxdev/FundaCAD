@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { markRaw, ref } from "vue";
 import { emptyFaceSet, newLoad, newSetup, type StressFaceSet, type StressResultView, type StressSetup } from "../ui/stress";
+import { newPrintabilitySetup, type PrintabilitySetup, type PrintabilityView } from "../ui/printability";
 
 /** A key/value readout line. */
 export interface PanelRow {
@@ -53,6 +54,25 @@ export interface StressData {
    *  faces can be picked again (the rows stay), or none to show, before a Run
    *  or once the model has changed under them. */
   colours: "shown" | "hidden" | "none";
+}
+
+/** The Printability panel: the settings the user edits in place, the check in
+ *  flight (its id, for Cancel), and the last result grouped by body. */
+export interface PrintabilityData {
+  setup: PrintabilitySetup;
+  /** True from Check until the reply; `requestId` arrives once it is sent. */
+  running: boolean;
+  requestId: string | null;
+  result: PrintabilityView | null;
+  /** Why the last Check did not produce a result, cleared by the next. */
+  error: string | null;
+  /** The model changed since the result: its rows stay, but their faces may
+   *  be other faces now, so nothing is tinted until the next Check. */
+  stale: boolean;
+  /** The finding under the pointer in the list, and the one last clicked, by
+   *  index into `result.findings`. The hovered one wins while there is one. */
+  hovered: number | null;
+  picked: number | null;
 }
 
 /** The floating "measure-panel" popups. Each is independent, Properties and
@@ -144,10 +164,68 @@ export const usePanelsStore = defineStore("panels", () => {
     if (stress.value) stress.value.colours = c;
   }
 
+  // Not markRaw either: the settings are bound to the panel's inputs.
+  const printability = ref<PrintabilityData | null>(null);
+
+  /** Open the Printability panel. A panel already open keeps its settings. */
+  function showPrintability() {
+    if (printability.value) return;
+    printability.value = {
+      setup: newPrintabilitySetup(), running: false, requestId: null, result: null, error: null, stale: false,
+      hovered: null, picked: null,
+    };
+  }
+
+  function printabilityStarted() {
+    if (!printability.value) return;
+    printability.value.running = true;
+    printability.value.requestId = null;
+    printability.value.error = null;
+  }
+
+  function printabilitySent(id: string) {
+    if (printability.value?.running) printability.value.requestId = id;
+  }
+
+  /** Settle a Check: a result, an error, or neither for a cancel. A new result
+   *  starts with nothing put forward. */
+  function printabilityFinished(outcome: { result?: PrintabilityView; error?: string }) {
+    const d = printability.value;
+    if (!d) return;
+    d.running = false;
+    d.requestId = null;
+    if (outcome.result) {
+      d.result = markRaw(outcome.result);
+      d.stale = false;
+      d.hovered = null;
+      d.picked = null;
+    }
+    d.error = outcome.error ?? null;
+  }
+
+  function clearPrintabilityResult() {
+    const d = printability.value;
+    if (!d) return;
+    d.result = null;
+    d.stale = false;
+    d.hovered = null;
+    d.picked = null;
+  }
+
+  function setPrintabilityStale() {
+    if (printability.value?.result) printability.value.stale = true;
+  }
+
+  function setPrintabilityFocus(which: "hovered" | "picked", index: number | null) {
+    if (printability.value) printability.value[which] = index;
+  }
+
   return {
-    properties, interference, overhang, params, stress,
+    properties, interference, overhang, params, stress, printability,
     showProperties, showInterference,
     showStress, setStressBody, setStressFixed, setStressLoadFaces, addStressLoad, removeStressLoad,
     stressStarted, stressSent, stressFinished, clearStressResult, setStressColours,
+    showPrintability, printabilityStarted, printabilitySent, printabilityFinished, clearPrintabilityResult,
+    setPrintabilityStale, setPrintabilityFocus,
   };
 });
