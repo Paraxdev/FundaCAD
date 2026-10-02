@@ -349,7 +349,9 @@ export type CoreFeature =
   // `mode` other than auto extrudes the face straight out and combines it like an
   // extrude; auto leaves `operation` to the sign of `distance`. `direction: "axis"`
   // moves the face along the axis its walls run along (a hole's end), absent is "normal".
-  | { id: string; type: "press-pull"; face: Selector | Selector[]; distance: Num; operation: "join" | "cut"; body?: string; upTo?: Selector; taper?: Num; mode?: PressPullMode; direction?: PressPullDirection; targets?: string[] }
+  // `followTangent` absent is true: when a resized round face would lose the faces running
+  // smoothly into it, their closed run moves with it. False refuses instead.
+  | { id: string; type: "press-pull"; face: Selector | Selector[]; distance: Num; operation: "join" | "cut"; body?: string; upTo?: Selector; taper?: Num; mode?: PressPullMode; direction?: PressPullDirection; targets?: string[]; followTangent?: boolean }
   | { id: string; type: "deleteFace"; face: Selector | Selector[]; body?: string }
   // `plane` is written { name } once `bodies` is set (document/mirrorPlane.ts).
   | { id: string; type: "mirror"; plane: Plane3 | { name: Plane3 }; bodies?: string[] }
@@ -435,7 +437,7 @@ export type CoreFeature =
   // (none = a fully closed hollow).
   | { id: string; type: "shell"; thickness: Num; faces?: Selector | Selector[] }
   // A true surface offset, flat and cylindrical faces only: BRepOffset is unsafe elsewhere.
-  | { id: string; type: "offsetFace"; faces: Selector | Selector[]; distance: Num; body?: string }
+  | { id: string; type: "offsetFace"; faces: Selector | Selector[]; distance: Num; body?: string; followTangent?: boolean }
   // Thicken: give surface geometry a wall. `faces` absent = the whole body,
   // which is how a non-watertight mesh import (a surface body, `solid: false`)
   // becomes real material. `symmetric` grows it both ways about the surface.

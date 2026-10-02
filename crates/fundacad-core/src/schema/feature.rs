@@ -167,6 +167,8 @@ feature_struct!(PressPull {
     #[serde(default, skip_serializing_if = "Option::is_none")] direction: Option<PressPullDirection>,
     /// The bodies a non-auto `mode` combines its prism with.
     #[serde(default, skip_serializing_if = "Option::is_none")] targets: Option<Vec<String>>,
+    /// Absent means true.
+    #[serde(default, skip_serializing_if = "Option::is_none")] follow_tangent: Option<bool>,
 });
 
 feature_struct!(DeleteFace {
@@ -372,6 +374,8 @@ feature_struct!(OffsetFace {
     faces: OneOrMany<Selector>,
     distance: Num,
     #[serde(default, skip_serializing_if = "Option::is_none")] body: Option<String>,
+    /// Absent means true.
+    #[serde(default, skip_serializing_if = "Option::is_none")] follow_tangent: Option<bool>,
 });
 feature_struct!(Thicken {
     #[serde(default, skip_serializing_if = "Option::is_none")] faces: Option<OneOrMany<Selector>>,

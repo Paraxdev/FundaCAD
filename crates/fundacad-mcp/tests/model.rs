@@ -858,6 +858,35 @@ fn a_press_pull_takes_the_targets_its_schema_documents() {
 }
 
 #[test]
+fn press_pull_and_offset_face_take_the_follow_tangent_their_schema_documents() {
+    use fundacad_core::schema::Feature;
+    for kind in ["press-pull", "offsetFace"] {
+        let doc = fundacad_mcp::schema::features()[kind]["fields"]["followTangent"]
+            .as_str()
+            .unwrap_or_else(|| panic!("{kind} does not document followTangent"));
+        assert!(doc.contains("default true"), "{kind}: {doc}");
+    }
+    let face = json!({"kind": "face", "by": "nearest", "point": [0, 0, 10], "body": "body1"});
+    let mut d = doc_with(&[
+        json!({"id": "bx1", "type": "box", "length": 20, "width": 20, "height": 20}),
+        json!({"id": "pp1", "type": "press-pull", "face": face, "distance": -1, "body": "body1",
+               "followTangent": false}),
+        json!({"id": "of1", "type": "offsetFace", "faces": face, "distance": 1, "body": "body1",
+               "followTangent": true}),
+    ]);
+    m::update_feature(&mut d, "of1", &json!({"followTangent": false}), false).unwrap();
+    for f in &m::features(&d)[1..] {
+        assert_eq!(f["followTangent"], json!(false), "{f}");
+        let typed: Feature = serde_json::from_value(f.clone()).unwrap();
+        assert!(typed.unread_fields().is_empty(), "{f}");
+        assert_eq!(&serde_json::to_value(&typed).unwrap(), f);
+    }
+    let absent = json!({"id": "pp2", "type": "press-pull", "face": face, "distance": 1});
+    let typed: Feature = serde_json::from_value(absent.clone()).unwrap();
+    assert_eq!(serde_json::to_value(&typed).unwrap(), absent);
+}
+
+#[test]
 fn a_document_set_over_this_one_forgets_the_records_of_a_feature_that_became_a_join() {
     // doc_get, edit, doc_set is an edit too. A revolve built as a new body was
     // recorded as body3; made a join into body1 by editing the document, it has
