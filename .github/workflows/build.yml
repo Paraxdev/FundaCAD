@@ -104,6 +104,22 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         run: sudo apt-get install -y cmake
 
+      # appimagetool downloads the AppImage runtime from GitHub on every run,
+      # once, with no retry, and a single 500 from GitHub failed the whole
+      # Linux build. Fetch it here with retries and hand it to both packers:
+      # linuxdeploy's AppImage plugin reads LDAI_RUNTIME_FILE, and
+      # appimage-unbundle passes it to appimagetool as --runtime-file.
+      - name: Fetch the AppImage runtime (Linux)
+        if: matrix.platform == 'ubuntu-22.04'
+        shell: bash
+        run: |
+          set -euo pipefail
+          rt="$RUNNER_TEMP/runtime-x86_64"
+          curl -fsSL --retry 5 --retry-all-errors --retry-delay 10 -o "$rt" \
+            https://github.com/AppImage/type2-runtime/releases/download/continuous/runtime-x86_64
+          test -s "$rt"
+          echo "LDAI_RUNTIME_FILE=$rt" >> "$GITHUB_ENV"
+
       # wasm32-wasip2 for the plugin geometry components packed below.
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
