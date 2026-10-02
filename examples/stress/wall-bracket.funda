@@ -1,0 +1,430 @@
+{
+  "features": [
+    {
+      "id": "profile",
+      "type": "sketch",
+      "name": "L profile",
+      "plane": "XZ",
+      "entities": [
+        {
+          "type": "line",
+          "id": "p_1",
+          "x1": 0,
+          "y1": 0,
+          "x2": "thickness",
+          "y2": 0
+        },
+        {
+          "type": "line",
+          "id": "p_2",
+          "x1": "thickness",
+          "y1": 0,
+          "x2": "thickness",
+          "y2": "armUnderside"
+        },
+        {
+          "type": "line",
+          "id": "p_3",
+          "x1": "thickness",
+          "y1": "armUnderside",
+          "x2": "armLength",
+          "y2": "armUnderside"
+        },
+        {
+          "type": "line",
+          "id": "p_4",
+          "x1": "armLength",
+          "y1": "armUnderside",
+          "x2": "armLength",
+          "y2": "plateHeight"
+        },
+        {
+          "type": "line",
+          "id": "p_5",
+          "x1": "armLength",
+          "y1": "plateHeight",
+          "x2": 0,
+          "y2": "plateHeight"
+        },
+        {
+          "type": "line",
+          "id": "p_6",
+          "x1": 0,
+          "y1": "plateHeight",
+          "x2": 0,
+          "y2": 0
+        }
+      ]
+    },
+    {
+      "id": "bracket",
+      "type": "extrude",
+      "name": "Bracket",
+      "sketch": "profile",
+      "distance": "halfWidth",
+      "symmetric": true,
+      "operation": "new"
+    },
+    {
+      "id": "cornerFillet",
+      "type": "fillet",
+      "name": "Corner fillet",
+      "edges": {
+        "kind": "edge",
+        "by": "match",
+        "fp": {
+          "mid": [
+            5.0,
+            0.0,
+            55.0
+          ],
+          "dir": [
+            -0.0,
+            1.0,
+            -0.0
+          ],
+          "length": 24.0,
+          "curve": "line"
+        },
+        "body": "body1"
+      },
+      "radius": "cornerRadius"
+    },
+    {
+      "id": "gussetProfile",
+      "type": "sketch",
+      "name": "Gusset profile",
+      "plane": "XZ",
+      "entities": [
+        {
+          "type": "line",
+          "id": "g_1",
+          "x1": "thickness",
+          "y1": "armUnderside",
+          "x2": "gussetTip",
+          "y2": "armUnderside"
+        },
+        {
+          "type": "line",
+          "id": "g_2",
+          "x1": "gussetTip",
+          "y1": "armUnderside",
+          "x2": "thickness",
+          "y2": "gussetFoot"
+        },
+        {
+          "type": "line",
+          "id": "g_3",
+          "x1": "thickness",
+          "y1": "gussetFoot",
+          "x2": "thickness",
+          "y2": "armUnderside"
+        }
+      ]
+    },
+    {
+      "id": "gusset",
+      "type": "extrude",
+      "name": "Gusset",
+      "sketch": "gussetProfile",
+      "distance": "halfGusset",
+      "symmetric": true,
+      "operation": "join",
+      "targets": [
+        "body1"
+      ]
+    },
+    {
+      "id": "gussetFillet",
+      "type": "fillet",
+      "name": "Gusset ends",
+      "edges": [
+        {
+          "kind": "edge",
+          "by": "match",
+          "fp": {
+            "mid": [
+              45.0,
+              0.0,
+              55.0
+            ],
+            "dir": [
+              0.0,
+              1.0,
+              0.0
+            ],
+            "length": 5.0,
+            "curve": "line"
+          },
+          "body": "body1"
+        },
+        {
+          "kind": "edge",
+          "by": "match",
+          "fp": {
+            "mid": [
+              5.0,
+              0.0,
+              20.0
+            ],
+            "dir": [
+              -0.0,
+              1.0,
+              -0.0
+            ],
+            "length": 5.0,
+            "curve": "line"
+          },
+          "body": "body1"
+        },
+        {
+          "kind": "edge",
+          "by": "match",
+          "fp": {
+            "mid": [
+              27.0,
+              -2.5,
+              55.0
+            ],
+            "dir": [
+              1.0,
+              0.0,
+              0.0
+            ],
+            "length": 36.0,
+            "curve": "line"
+          },
+          "body": "body1"
+        },
+        {
+          "kind": "edge",
+          "by": "match",
+          "fp": {
+            "mid": [
+              27.0,
+              2.5,
+              55.0
+            ],
+            "dir": [
+              1.0,
+              0.0,
+              0.0
+            ],
+            "length": 36.0,
+            "curve": "line"
+          },
+          "body": "body1"
+        },
+        {
+          "kind": "edge",
+          "by": "match",
+          "fp": {
+            "mid": [
+              5.0,
+              -2.5,
+              35.5
+            ],
+            "dir": [
+              0.0,
+              0.0,
+              1.0
+            ],
+            "length": 31.0,
+            "curve": "line"
+          },
+          "body": "body1"
+        },
+        {
+          "kind": "edge",
+          "by": "match",
+          "fp": {
+            "mid": [
+              5.0,
+              2.5,
+              35.5
+            ],
+            "dir": [
+              0.0,
+              0.0,
+              1.0
+            ],
+            "length": 31.0,
+            "curve": "line"
+          },
+          "body": "body1"
+        }
+      ],
+      "radius": "gussetRadius"
+    }
+  ],
+  "parameters": {
+    "armLength": 70.0,
+    "armUnderside": 55.0,
+    "cornerRadius": 4.0,
+    "gussetFoot": 20.0,
+    "gussetHeight": 35.0,
+    "gussetLength": 40.0,
+    "gussetRadius": 2.0,
+    "gussetThickness": 5.0,
+    "gussetTip": 45.0,
+    "halfGusset": 2.5,
+    "halfWidth": 12.0,
+    "plateHeight": 60.0,
+    "thickness": 5.0,
+    "width": 24.0
+  },
+  "paramDefs": {
+    "armLength": {
+      "expr": "70",
+      "value": 70.0,
+      "unit": "mm"
+    },
+    "plateHeight": {
+      "expr": "60",
+      "value": 60.0,
+      "unit": "mm"
+    },
+    "thickness": {
+      "expr": "5",
+      "value": 5.0,
+      "unit": "mm"
+    },
+    "width": {
+      "expr": "24",
+      "value": 24.0,
+      "unit": "mm"
+    },
+    "gussetLength": {
+      "expr": "40",
+      "value": 40.0,
+      "unit": "mm"
+    },
+    "gussetHeight": {
+      "expr": "35",
+      "value": 35.0,
+      "unit": "mm"
+    },
+    "gussetThickness": {
+      "expr": "5",
+      "value": 5.0,
+      "unit": "mm"
+    },
+    "cornerRadius": {
+      "expr": "4",
+      "value": 4.0,
+      "unit": "mm"
+    },
+    "gussetRadius": {
+      "expr": "2",
+      "value": 2.0,
+      "unit": "mm"
+    },
+    "halfWidth": {
+      "expr": "width / 2",
+      "value": 12.0,
+      "unit": "mm"
+    },
+    "halfGusset": {
+      "expr": "gussetThickness / 2",
+      "value": 2.5,
+      "unit": "mm"
+    },
+    "armUnderside": {
+      "expr": "plateHeight - thickness",
+      "value": 55.0,
+      "unit": "mm"
+    },
+    "gussetFoot": {
+      "expr": "armUnderside - gussetHeight",
+      "value": 20.0,
+      "unit": "mm"
+    },
+    "gussetTip": {
+      "expr": "thickness + gussetLength",
+      "value": 45.0,
+      "unit": "mm"
+    }
+  },
+  "bodyIds": {
+    "bracket:0": "body1",
+    "gusset:0": "body1"
+  },
+  "version": 9,
+  "stress": {
+    "body": "body1",
+    "supports": [
+      {
+        "id": 1,
+        "type": "fixed",
+        "faces": [
+          {
+            "kind": "face",
+            "by": "match",
+            "fp": {
+              "centroid": [
+                0.0,
+                2.3684757858670006e-16,
+                30.0
+              ],
+              "normal": [
+                -1.0,
+                -0.0,
+                -0.0
+              ],
+              "area": 1440.0,
+              "surface": "plane"
+            },
+            "body": "body1"
+          }
+        ]
+      }
+    ],
+    "loads": [
+      {
+        "id": 1,
+        "kind": "force",
+        "faces": [
+          {
+            "kind": "face",
+            "by": "match",
+            "fp": {
+              "centroid": [
+                70.0,
+                0.0,
+                57.5
+              ],
+              "normal": [
+                1.0,
+                0.0,
+                -0.0
+              ],
+              "area": 119.99999999999997,
+              "surface": "plane"
+            },
+            "body": "body1"
+          }
+        ],
+        "force": 30.0,
+        "direction": "-Z",
+        "custom": [
+          0,
+          0,
+          -1
+        ],
+        "pressure": 0.1
+      }
+    ],
+    "gravity": {
+      "on": true,
+      "direction": "-Z"
+    },
+    "material": "PLA",
+    "custom": {
+      "E": 2000,
+      "nu": 0.35,
+      "yield": 40,
+      "density": 1.2
+    },
+    "size": null
+  }
+}

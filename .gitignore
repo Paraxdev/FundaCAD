@@ -33,6 +33,7 @@ green-select.png
 # Repo-WIDE, not just src-tauri/, this is a public repo, and a stray part file
 # anywhere in the tree publishes real geometry and dimensions. Two fixtures are
 # deliberate exceptions: one synthetic bench part, and third_party sample models.
+# The stress samples are synthetic too, modelled from parameters for the docs.
 # scripts/check-repo-hygiene.sh backstops this by failing CI if a model is ever
 # actually tracked (gitignore says nothing about `git add -f`, or a path already
 # tracked before the rule existed).
@@ -44,6 +45,7 @@ green-select.png
 *.stl
 *.3mf
 !tests/fixtures/textured_box.funda
+!examples/stress/*.funda
 !tests/fixtures/asm_*.step
 !third_party/opencascade-rs/crates/viewer/models/*.step
 

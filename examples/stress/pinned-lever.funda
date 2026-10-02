@@ -1,0 +1,399 @@
+{
+  "features": [
+    {
+      "id": "outline",
+      "type": "sketch",
+      "name": "Lever outline",
+      "plane": "XY",
+      "entities": [
+        {
+          "type": "line",
+          "id": "arm_1",
+          "x1": 0,
+          "y1": "lowerEdge",
+          "x2": "lugStart",
+          "y2": "lowerEdge"
+        },
+        {
+          "type": "line",
+          "id": "arm_2",
+          "x1": "lugStart",
+          "y1": "lowerEdge",
+          "x2": "lugStart",
+          "y2": "lugFace"
+        },
+        {
+          "type": "line",
+          "id": "arm_3",
+          "x1": "lugStart",
+          "y1": "lugFace",
+          "x2": "lugEnd",
+          "y2": "lugFace"
+        },
+        {
+          "type": "line",
+          "id": "arm_4",
+          "x1": "lugEnd",
+          "y1": "lugFace",
+          "x2": "lugEnd",
+          "y2": "lowerEdge"
+        },
+        {
+          "type": "line",
+          "id": "arm_5",
+          "x1": "lugEnd",
+          "y1": "lowerEdge",
+          "x2": "leverLength",
+          "y2": "lowerEdge"
+        },
+        {
+          "type": "line",
+          "id": "arm_6",
+          "x1": "leverLength",
+          "y1": "lowerEdge",
+          "x2": "leverLength",
+          "y2": "halfWidth"
+        },
+        {
+          "type": "line",
+          "id": "arm_7",
+          "x1": "leverLength",
+          "y1": "halfWidth",
+          "x2": 0,
+          "y2": "halfWidth"
+        },
+        {
+          "type": "line",
+          "id": "arm_8",
+          "x1": 0,
+          "y1": "halfWidth",
+          "x2": 0,
+          "y2": "lowerEdge"
+        },
+        {
+          "id": "eye",
+          "type": "circle",
+          "x": 0,
+          "y": 0,
+          "radius": "eyeRadius"
+        }
+      ]
+    },
+    {
+      "id": "lever",
+      "type": "extrude",
+      "name": "Lever",
+      "sketch": "outline",
+      "distance": "thickness",
+      "operation": "new"
+    },
+    {
+      "id": "pinSketch",
+      "type": "sketch",
+      "name": "Pin hole",
+      "plane": "XY",
+      "entities": [
+        {
+          "id": "hole",
+          "type": "circle",
+          "x": 0,
+          "y": 0,
+          "radius": "pinRadius"
+        }
+      ]
+    },
+    {
+      "id": "pinHole",
+      "type": "extrude",
+      "name": "Pin hole",
+      "sketch": "pinSketch",
+      "distance": "thickness",
+      "symmetric": true,
+      "operation": "cut",
+      "targets": [
+        "body1"
+      ]
+    },
+    {
+      "id": "blends",
+      "type": "fillet",
+      "name": "Inside corners",
+      "edges": [
+        {
+          "kind": "edge",
+          "by": "match",
+          "fp": {
+            "mid": [
+              8.306623862917656,
+              -10.000000000000174,
+              5.0
+            ],
+            "dir": [
+              0.0,
+              0.0,
+              1.0
+            ],
+            "length": 10.0,
+            "curve": "line"
+          },
+          "body": "body1"
+        },
+        {
+          "kind": "edge",
+          "by": "match",
+          "fp": {
+            "mid": [
+              8.306623862917661,
+              10.000000000000172,
+              5.0
+            ],
+            "dir": [
+              0.0,
+              0.0,
+              1.0
+            ],
+            "length": 10.0,
+            "curve": "line"
+          },
+          "body": "body1"
+        },
+        {
+          "kind": "edge",
+          "by": "match",
+          "fp": {
+            "mid": [
+              27.0,
+              -10.0,
+              5.0
+            ],
+            "dir": [
+              0.0,
+              0.0,
+              1.0
+            ],
+            "length": 10.0,
+            "curve": "line"
+          },
+          "body": "body1"
+        },
+        {
+          "kind": "edge",
+          "by": "match",
+          "fp": {
+            "mid": [
+              33.0,
+              -10.0,
+              5.0
+            ],
+            "dir": [
+              0.0,
+              0.0,
+              1.0
+            ],
+            "length": 10.0,
+            "curve": "line"
+          },
+          "body": "body1"
+        }
+      ],
+      "radius": "blendRadius"
+    }
+  ],
+  "parameters": {
+    "blendRadius": 2.0,
+    "eyeDiameter": 26.0,
+    "eyeRadius": 13.0,
+    "halfWidth": 10.0,
+    "leverLength": 100.0,
+    "leverWidth": 20.0,
+    "lowerEdge": -10.0,
+    "lugDepth": 3.0,
+    "lugEnd": 33.0,
+    "lugFace": -13.0,
+    "lugLength": 6.0,
+    "lugStart": 27.0,
+    "pinDiameter": 8.0,
+    "pinRadius": 4.0,
+    "stopDistance": 30.0,
+    "thickness": 10.0
+  },
+  "paramDefs": {
+    "leverLength": {
+      "expr": "100",
+      "value": 100.0,
+      "unit": "mm"
+    },
+    "leverWidth": {
+      "expr": "20",
+      "value": 20.0,
+      "unit": "mm"
+    },
+    "thickness": {
+      "expr": "10",
+      "value": 10.0,
+      "unit": "mm"
+    },
+    "eyeDiameter": {
+      "expr": "26",
+      "value": 26.0,
+      "unit": "mm"
+    },
+    "pinDiameter": {
+      "expr": "8",
+      "value": 8.0,
+      "unit": "mm"
+    },
+    "stopDistance": {
+      "expr": "30",
+      "value": 30.0,
+      "unit": "mm"
+    },
+    "lugLength": {
+      "expr": "6",
+      "value": 6.0,
+      "unit": "mm"
+    },
+    "lugDepth": {
+      "expr": "3",
+      "value": 3.0,
+      "unit": "mm"
+    },
+    "halfWidth": {
+      "expr": "leverWidth / 2",
+      "value": 10.0,
+      "unit": "mm"
+    },
+    "eyeRadius": {
+      "expr": "eyeDiameter / 2",
+      "value": 13.0,
+      "unit": "mm"
+    },
+    "pinRadius": {
+      "expr": "pinDiameter / 2",
+      "value": 4.0,
+      "unit": "mm"
+    },
+    "lugStart": {
+      "expr": "stopDistance - lugLength / 2",
+      "value": 27.0,
+      "unit": "mm"
+    },
+    "lugEnd": {
+      "expr": "stopDistance + lugLength / 2",
+      "value": 33.0,
+      "unit": "mm"
+    },
+    "lugFace": {
+      "expr": "-halfWidth - lugDepth",
+      "value": -13.0,
+      "unit": "mm"
+    },
+    "lowerEdge": {
+      "expr": "-halfWidth",
+      "value": -10.0,
+      "unit": "mm"
+    },
+    "blendRadius": {
+      "expr": "2",
+      "value": 2.0,
+      "unit": "mm"
+    }
+  },
+  "bodyIds": {
+    "lever:0": "body1"
+  },
+  "version": 9,
+  "stress": {
+    "body": "body1",
+    "supports": [
+      {
+        "id": 1,
+        "type": "pinned",
+        "faces": [
+          {
+            "kind": "face",
+            "by": "nearest",
+            "point": [
+              -4.0,
+              0.0,
+              5.0
+            ],
+            "body": "body1"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "type": "slider",
+        "faces": [
+          {
+            "kind": "face",
+            "by": "match",
+            "fp": {
+              "centroid": [
+                30.0,
+                -13.0,
+                5.0
+              ],
+              "normal": [
+                0.0,
+                -1.0,
+                -0.0
+              ],
+              "area": 60.0,
+              "surface": "plane"
+            },
+            "body": "body1"
+          }
+        ]
+      }
+    ],
+    "loads": [
+      {
+        "id": 1,
+        "kind": "force",
+        "faces": [
+          {
+            "kind": "face",
+            "by": "match",
+            "fp": {
+              "centroid": [
+                100.0,
+                -1.387778780781446e-17,
+                5.0
+              ],
+              "normal": [
+                1.0,
+                -0.0,
+                -0.0
+              ],
+              "area": 199.99999999999997,
+              "surface": "plane"
+            },
+            "body": "body1"
+          }
+        ],
+        "force": 70.0,
+        "direction": "-Y",
+        "custom": [
+          0,
+          0,
+          -1
+        ],
+        "pressure": 0.1
+      }
+    ],
+    "gravity": {
+      "on": false,
+      "direction": "-Z"
+    },
+    "material": "PETG",
+    "custom": {
+      "E": 2000,
+      "nu": 0.35,
+      "yield": 40,
+      "density": 1.2
+    },
+    "size": null
+  }
+}

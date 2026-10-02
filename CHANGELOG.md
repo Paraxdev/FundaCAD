@@ -63,6 +63,8 @@ This file starts on 2026-08-03. For anything before that, see the
   After a run, a slider bends the part by its deflection, exaggerated or at
   true scale and animated if you like, and Probe reads the stress and the
   deflection under the cursor and pins readouts to the part.
+- **Stress samples.** `examples/stress` has a wall bracket and a lever on a
+  pin, each with its supports, loads and material set up, to open and run.
 - **Merging overlapping sketch shapes over MCP.** The new `sketch_merge` tool
   replaces closed shapes of a sketch that overlap or touch, rectangles,
   circles, polygons, slots and loops of lines and arcs, with the outline of
