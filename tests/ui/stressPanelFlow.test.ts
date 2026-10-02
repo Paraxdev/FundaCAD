@@ -47,7 +47,7 @@ function rig() {
   const marks: unknown[] = [];
   const overlays: unknown[] = [];
   const statuses: string[] = [];
-  const calls: { body: string; opts: StressOptions }[] = [];
+  const calls: { body: string; opts: StressOptions; doc: CadDocument }[] = [];
   const cancels: (string | undefined)[] = [];
   const docListeners: (() => void)[] = [];
   let settle: (r: StressResult) => void = () => {};
@@ -71,8 +71,11 @@ function rig() {
     setStressOverlay: (o: unknown) => { overlays.push(o); shown = o !== null; },
     hasStressOverlay: () => shown,
   };
+  const built = { features: [{ id: "on-screen" }] } as unknown as CadDocument;
   const store = {
     document: { features: [] } as unknown as CadDocument,
+    // What the model on screen was built from: rolled back, suppressions out.
+    builtDocument: () => built,
     buildState: { result: { bodies: [{ id: "b1", name: "Block" }, { id: "b2", name: "Lid" }] } },
     onDocChange: (fn: () => void) => { docListeners.push(fn); fn(); return () => {}; },
     onOpen: (fn: () => void) => { openListeners.push(fn); return () => {}; },
@@ -80,7 +83,7 @@ function rig() {
   };
   const geometry = {
     stress: (_doc: CadDocument, body: string, opts: StressOptions, onStarted?: (id: string) => void) => {
-      calls.push({ body, opts });
+      calls.push({ body, opts, doc: _doc });
       onStarted?.(`req-${calls.length}`);
       return new Promise<StressResult>((res) => { settle = res; });
     },
@@ -93,7 +96,7 @@ function rig() {
   } as unknown as PanelsDeps;
   const ui = createPanels(deps);
   return {
-    ui, marks, overlays, statuses, calls, cancels,
+    ui, built, marks, overlays, statuses, calls, cancels,
     select: (ids: number[]) => { selected = ids; },
     settle: (r: StressResult) => settle(r),
     editDoc: () => docListeners.forEach((f) => f()),
@@ -153,6 +156,7 @@ describe("stress panel flow", () => {
     const run = r.ui.runStress();
     expect(r.calls).toHaveLength(1);
     expect(r.calls[0]!.body).toBe("b1");
+    expect(r.calls[0]!.doc, "the model on screen, not the whole timeline").toBe(r.built);
     expect(r.calls[0]!.opts.loads).toEqual([
       { faces: [{ kind: "face", by: "nearest", point: [5, 5, 10], body: "b1" }], force: [0, 0, -100] },
     ]);

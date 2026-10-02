@@ -371,7 +371,7 @@ export function createPanels(deps: PanelsDeps) {
     viewport.setStressOverlay(null);
     refreshStressMarks();
     setStatus("Analysing stress…", "");
-    const res = await geometry.stress(store.document, req.body, req.options, (id) => {
+    const res = await geometry.stress(store.builtDocument(), req.body, req.options, (id) => {
       if (seq === runSeq) panels.stressSent(id);
     });
     if (seq !== runSeq || !panels.stress) return;
