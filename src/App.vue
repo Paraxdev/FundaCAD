@@ -20,6 +20,7 @@ import { useUiStore } from "./stores/ui";
 import PropertiesPanel from "./components/overlays/PropertiesPanel.vue";
 import InterferencePanel from "./components/overlays/InterferencePanel.vue";
 import StressPanel from "./components/overlays/StressPanel.vue";
+import PrintabilityPanel from "./components/overlays/PrintabilityPanel.vue";
 import OverhangPanel from "./components/overlays/OverhangPanel.vue";
 import ParamsDialog from "./components/overlays/ParamsDialog.vue";
 import WelcomeModal from "./components/overlays/WelcomeModal.vue";
@@ -133,6 +134,7 @@ watch(() => ui.sketchActive, () => shell.closeDrawer());
   <PropertiesPanel />
   <InterferencePanel />
   <StressPanel />
+  <PrintabilityPanel />
   <OverhangPanel />
   <ParamsDialog />
   <MeasureReadout />

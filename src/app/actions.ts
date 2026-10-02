@@ -317,6 +317,9 @@ export function createActions(e: Engine): (action: string) => void {
       case "stress":
         e.ui.panels.showStress();
         break;
+      case "printability":
+        e.ui.panels.showPrintability();
+        break;
       // --- global File / View commands (also reachable from the palette) ---
       case "new":
         void e.newDocument();
