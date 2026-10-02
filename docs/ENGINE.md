@@ -357,7 +357,8 @@ worker reached over Tauri IPC, so the webview never opens a socket.
 ### 6.4 Notes on the release
 
 - The `build-beta` job compiles OpenCASCADE from source on all three
-  runners, about twenty minutes cold, cached at `src-tauri/target/OCCT`; the
+  runners, about twenty minutes cold, cached at `target/OCCT` (the install
+  only, not the build tree beside it) under the same key as `rust-geom`'s; the
   Linux leg installs `cmake`, which `.github/actions/linux-deps` deliberately
   leaves out.
 - The updater is still off everywhere. `tauri.conf.json` carries upstream's
