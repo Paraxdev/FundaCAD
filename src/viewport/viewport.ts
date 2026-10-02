@@ -49,7 +49,7 @@ import {
   buildFaceMarkMesh,
   clearOverlayObjects,
 } from "./overlays";
-import { stressColors } from "../ui/stress";
+import { barycentric, displacedPositions, stressColors } from "../ui/stress";
 import { Picker, type EdgeCandidate, type Hit, type PickMods } from "./picking";
 import { bandIndex, expandToBand, type BandIndex } from "./faceBands";
 import { flushRaycastIndex } from "./raycastIndex";
@@ -2647,7 +2647,9 @@ export class Viewport {
 
   /** Stress overlay: the analysed body's surface coloured by a per-vertex
    *  value over `range` (blue low, red high), drawn in the body's place, which
-   *  is hidden while it shows. Pass null to clear. Display only, cleared
+   *  is hidden while it shows. With `displacement` (three numbers per vertex)
+   *  the surface can be drawn deformed, `scale` times the true deflection, see
+   *  setStressDeformation. Pass null to clear. Display only, cleared
    *  automatically on the next `setModel`. Tells `onStressOverlayChange`
    *  listeners when the body it is on changes. */
   setStressOverlay(o: {
@@ -2656,11 +2658,14 @@ export class Viewport {
     indices: number[];
     values: number[];
     range: { min: number; max: number };
+    displacement?: number[];
+    scale?: number;
   } | null) {
     if (this.stressMesh) {
       clearOverlayObjects([this.stressMesh]);
       this.stressMesh = null;
     }
+    this.stressShape = null;
     if (this.stressHidden) {
       const b = this.model?.bodies.find((x) => x.id === this.stressHidden!.bodyId);
       // Only what this overlay changed: a body the user hid meanwhile stays hidden.
@@ -2673,6 +2678,10 @@ export class Viewport {
     if (o && o.positions.length && o.indices.length && o.values.length * 3 === o.positions.length) {
       this.stressMesh = buildStressMesh(o.positions, o.indices, stressColors(o.values, o.range.min, o.range.max));
       this.scene.scene.add(this.stressMesh);
+      if (o.displacement && o.displacement.length === o.positions.length) {
+        this.stressShape = { base: Float32Array.from(o.positions), displacement: Float32Array.from(o.displacement) };
+        this.setStressDeformation(o.scale ?? 0);
+      }
       const b = this.model?.bodies.find((x) => x.id === o.bodyId);
       if (b) {
         this.stressHidden = { bodyId: b.id, wasVisible: b.mesh.visible };
@@ -2700,10 +2709,68 @@ export class Viewport {
     this.stressListeners.add(fn);
     return () => this.stressListeners.delete(fn);
   }
-  private stressMesh: THREE.Mesh | null = null;
-  private stressHidden: { bodyId: string; wasVisible: boolean } | null = null;
   private stressBody: string | null = null;
   private stressListeners = new Set<() => void>();
+
+  /** Draw the stress overlay deformed, each vertex moved by `scale` times its
+   *  displacement (0 is the shape as built). Rewrites the positions in place,
+   *  cheap enough to call every frame while the deformation swings. */
+  setStressDeformation(scale: number) {
+    const mesh = this.stressMesh;
+    const shape = this.stressShape;
+    if (!mesh || !shape) return;
+    const attr = mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
+    displacedPositions(shape.base, shape.displacement, Number.isFinite(scale) ? scale : 0, attr.array as Float32Array);
+    attr.needsUpdate = true;
+    // The material shades flat from screen derivatives, so the normals can
+    // stay; the bounds cannot, or a probe ray misses a part that bent out of them.
+    mesh.geometry.computeBoundingSphere();
+    mesh.geometry.computeBoundingBox();
+    this.requestRender();
+  }
+
+  /** The stress overlay's triangle under the cursor, as drawn (deformed or
+   *  not), with the hit's barycentric weights. The overlay is left out of every
+   *  other pick, so this asks the mesh directly. */
+  pickStressOverlay(clientX: number, clientY: number): { tri: number; weights: Vec3; point: Vec3 } | null {
+    const mesh = this.stressMesh;
+    if (!mesh) return null;
+    const hits: THREE.Intersection[] = [];
+    THREE.Mesh.prototype.raycast.call(mesh, this.rayFrom(clientX, clientY), hits);
+    hits.sort((a, b) => a.distance - b.distance);
+    const hit = hits[0];
+    if (!hit || hit.faceIndex == null) return null;
+    const tri = hit.faceIndex;
+    const corners = this.stressCorners(tri);
+    if (!corners) return null;
+    const p: Vec3 = [hit.point.x, hit.point.y, hit.point.z];
+    return { tri, weights: barycentric(corners[0], corners[1], corners[2], p), point: p };
+  }
+
+  /** Where a point given by triangle and barycentric weights is on the stress
+   *  overlay as it is drawn now, so a pinned probe follows the deformed shape. */
+  stressOverlayPoint(tri: number, weights: Vec3): Vec3 | null {
+    const c = this.stressCorners(tri);
+    if (!c) return null;
+    return [0, 1, 2].map((k) => weights[0] * c[0][k]! + weights[1] * c[1][k]! + weights[2] * c[2][k]!) as Vec3;
+  }
+
+  private stressCorners(tri: number): [Vec3, Vec3, Vec3] | null {
+    const geo = this.stressMesh?.geometry;
+    const index = geo?.getIndex();
+    if (!geo || !index || tri < 0 || tri * 3 + 2 >= index.count) return null;
+    const pos = geo.getAttribute("position");
+    const corner = (k: number): Vec3 => {
+      const i = index.getX(tri * 3 + k);
+      return [pos.getX(i), pos.getY(i), pos.getZ(i)];
+    };
+    return [corner(0), corner(1), corner(2)];
+  }
+
+  private stressMesh: THREE.Mesh | null = null;
+  private stressHidden: { bodyId: string; wasVisible: boolean } | null = null;
+  /** The overlay's undeformed positions and displacement, while it has one. */
+  private stressShape: { base: Float32Array; displacement: Float32Array } | null = null;
 
   /** Tint sets of faces (display face ids), each in its own colour: the faces
    *  an analysis holds fixed or loads, or the ones a check flagged. Pass null

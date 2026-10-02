@@ -153,6 +153,9 @@ export function installRebuildBridge(e: Engine): void {
         e.ui.panels.refreshStressMarks();
       } else {
         e.viewport.clearModel();
+        // Nothing left to analyse: the panel says the body is gone and takes
+        // its arrows off the empty view.
+        e.ui.panels.refreshStressMarks();
       }
       markDrawn(); // the viewport just applied this reply, the round trip's last leg
       // Re-split the committed profiles against the model that just landed.

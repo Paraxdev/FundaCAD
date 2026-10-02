@@ -103,15 +103,28 @@ export type FaceAxisReply =
   | { axis: { origin: [number, number, number]; dir: [number, number, number] }; hole: boolean; sameAsNormal?: boolean }
   | { reason: string };
 
-/** A material preset the engine knows by name, or one typed in (MPa). */
-export type StressMaterial = string | { E: number; nu: number; yield: number; name?: string };
+/** A material preset the engine knows by name, or one typed in (MPa, and
+ *  g/cm3 for the density gravity needs). */
+export type StressMaterial = string | { E: number; nu: number; yield: number; density?: number; name?: string };
+
+/** One support: `fixed` holds its faces every way, `pinned` holds cylindrical
+ *  faces radially and along their axis but lets them turn about it, `slider`
+ *  holds them along their normal only. */
+export interface StressSupport {
+  type: "fixed" | "pinned" | "slider";
+  faces: Selector[];
+}
 
 /** The `stress` op's options past the document and the body (docs/PROTOCOL.md).
  *  Selectors carry their body. Units are mm, N and MPa; a force is the total
- *  over its faces, a pressure pushes into them. */
+ *  over its faces, a pressure pushes into them. `fixed` is the older spelling
+ *  of a fixed support; at least one of it and `supports` is needed. Gravity is
+ *  in m/s2, and `true` means 9.81 down Z. */
 export interface StressOptions {
-  fixed: Selector[];
+  fixed?: Selector[];
+  supports?: StressSupport[];
   loads: ({ faces: Selector[]; force: Vec3 } | { faces: Selector[]; pressure: number })[];
+  gravity?: boolean | Vec3;
   material: StressMaterial;
   size?: number;
   maxElements?: number;
@@ -119,11 +132,14 @@ export interface StressOptions {
 
 /** A linear static analysis of one body. `surface` is the boundary of the
  *  analysis mesh with a value per vertex, for drawing; `displacement` holds
- *  three numbers per vertex. Display only, nothing here reaches the document. */
+ *  three numbers per vertex. Display only, nothing here reaches the document.
+ *  `weight` is the gravity force on the body (null without gravity), and
+ *  `reactions` one force per support, `fixed` first and then `supports` in
+ *  order; engines from before either leave them out. */
 export interface StressReply {
   body: string;
   name: string;
-  material: { name: string; E: number; nu: number; yield: number };
+  material: { name: string; E: number; nu: number; yield: number; density?: number | null };
   mesh: { nodes: number; elements: number; size: number; minDihedral: number };
   /** `face` is null for a peak inside the body, away from every face. */
   maxVonMises: { value: number; at: Vec3; face?: number | null };
@@ -132,6 +148,8 @@ export interface StressReply {
   safetyFactor: number | null;
   applied: Vec3;
   reaction: Vec3;
+  weight?: Vec3 | null;
+  reactions?: Vec3[];
   warnings?: string[];
   surface?: { positions: number[]; indices: number[]; faceIds?: number[]; vonMises: number[]; displacement?: number[] };
   errors?: { feature_id?: string; message: string }[];

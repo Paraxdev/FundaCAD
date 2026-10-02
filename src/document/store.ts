@@ -15,7 +15,7 @@ import {
   type VersionDiff,
   type VersionRepo,
 } from "./versions";
-import type { CadDocument, Feature, ImportColorSource, ParamControl, ParamExtras, ParamTarget, PlaneSpec, ProjectedSource, ProjectionUpdate, RebuildReply, RebuildResult, ResolveDiag, Selector, Vec3, ViewCubeSide, ViewOverride } from "../types";
+import type { CadDocument, Feature, ImportColorSource, ParamControl, ParamExtras, ParamTarget, PlaneSpec, ProjectedSource, ProjectionUpdate, RebuildReply, RebuildResult, ResolveDiag, Selector, StressStudy, Vec3, ViewCubeSide, ViewOverride } from "../types";
 import { asFeature } from "../types";
 import { applyProjectionUpdate } from "../types";
 import type { EngineWait, FaceAxisReply, GeometryBackend, PatternAxisReply, ProjectionResult } from "../geometry/client";
@@ -32,6 +32,7 @@ import { faceKey, parseFaceKey } from "./faceMaterials";
 import { documentShapeProblem, UnreadableDocumentError } from "./documentShape";
 import { forgetStaleJoins, joinSignatures } from "./bodyIds";
 import { canonicalMirrorPlanes } from "./mirrorPlane";
+import { normalizeStressStudy } from "./stressStudy";
 import * as params from "../params/engine";
 import { extrasEmpty, trialConfiguration } from "../params/extras";
 import type { FieldKind } from "./numFields";
@@ -256,6 +257,9 @@ export class DocumentStore {
   private elements: ElementDef[] = [];
   /** Saved versions of this document. Null until the first one. */
   private repo: VersionRepo | null = null;
+  /** The Stress panel's study (document/stressStudy.ts). Null until the panel
+   *  is first used on this document. */
+  private stress: StressStudy | null = null;
   // static descriptor list driving toJSON/load below, in the exact on-disk key
   // order (palette piggybacks on bodyColors' condition, so isn't listed here).
   private readonly overlays: { overlay: Overlay<any>; mapValue?: (v: unknown) => any }[] = [
@@ -521,6 +525,7 @@ export class DocumentStore {
     this.elements = [];
     this.materials = STARTER_LIBRARY.map((m) => ({ ...m }));
     this.repo = null;
+    this.stress = null;
     this.path = null;
     this.isDirty = false;
     this.discardModelForReplacement();
@@ -1413,6 +1418,25 @@ export class DocumentStore {
   setBodyName(id: string, name: string) {
     this.writeOverlayBatch(this.bodyNames, [id], name.trim() || null);
   }
+  // --- the Stress panel's study ----------------------------------------------
+  // Saved with the file and off the undo stack, like the elements below: the
+  // panel writes it on every edit to a field, and a Ctrl+Z that stepped back
+  // through each digit typed into a force would bury the model edits around it.
+
+  /** The saved study, or null when the panel has not been used on this document. */
+  get stressStudy(): Readonly<StressStudy> | null {
+    return this.stress;
+  }
+
+  /** Save the panel's study with the document (null drops it). Marks the
+   *  document changed only when it did change. */
+  setStressStudy(study: StressStudy | null) {
+    const next = study ? structuredClone(study) : null;
+    if (JSON.stringify(next) === JSON.stringify(this.stress)) return;
+    this.stress = next;
+    this.markDirty();
+  }
+
   // --- elements: the user's own folders over the bodies ---------------------
   // Display only and off the undo stack. Visibility, name, material and colour
   // moved onto it (writeOverlayBatch), a folder move has not: it could use the
@@ -1828,6 +1852,7 @@ export class DocumentStore {
     // reference it, and a synced/customized palette is project state in its own
     // right (the "design in loaded colors" premise) even with zero assignments.
     if (this.bodyColors.size || !this.paletteIsDefault()) out.palette = this.palette;
+    if (this.stress) out.stress = structuredClone(this.stress);
     if (withVersions && this.repo) out.versions = this.repo;
     return out;
   }
@@ -1921,6 +1946,7 @@ export class DocumentStore {
     this.palette = parsed.palette?.length ? parsed.palette.map((s) => ({ ...s })) : DEFAULT_PALETTE.map((s) => ({ ...s }));
     // Elements without an id and materials without a colour are dropped here, not at every reader.
     this.repo = normalizeRepo(parsed.versions);
+    this.stress = normalizeStressStudy(parsed.stress);
     this.materials = parsed.materials?.length
       ? parsed.materials
           .map((m, i) => normalizeMaterial(m, i))

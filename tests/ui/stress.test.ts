@@ -19,7 +19,7 @@ function faces(sel: Selector, normal: [number, number, number], area = 100, ids 
 
 function ready(): StressSetup {
   const s = newSetup("b1");
-  s.fixed = faces(bottom, [0, 0, -1], 100, [1]);
+  s.supports[0]!.faces = faces(bottom, [0, 0, -1], 100, [1]);
   s.loads[0]!.faces = faces(top, [0, 0, 1]);
   return s;
 }
@@ -48,7 +48,7 @@ describe("buildStressRequest", () => {
       ok: true,
       body: "b1",
       options: {
-        fixed: [bottom],
+        supports: [{ type: "fixed", faces: [bottom] }],
         loads: [{ faces: [top], force: [0, 0, -100] }],
         material: "PLA",
       },
@@ -58,7 +58,7 @@ describe("buildStressRequest", () => {
   it("keeps the body stamped on every selector", () => {
     const r = buildStressRequest(ready());
     if (!r.ok) throw new Error(r.message);
-    for (const s of [...r.options.fixed, ...r.options.loads.flatMap((l) => l.faces)]) expect(s.body).toBe("b1");
+    for (const s of [...r.options.supports!.flatMap((x) => x.faces), ...r.options.loads.flatMap((l) => l.faces)]) expect(s.body).toBe("b1");
   });
 
   it("points a force along an axis or a custom vector, scaled to its magnitude", () => {
@@ -97,10 +97,10 @@ describe("buildStressRequest", () => {
     setUnit("in");
     const s = ready();
     s.material = CUSTOM_MATERIAL;
-    s.custom = { E: 2300, nu: 0.35, yield: 40 };
+    s.custom = { E: 2300, nu: 0.35, yield: 40, density: 1.1 };
     s.size = 2;
     const r = buildStressRequest(s);
-    expect(r.ok && r.options.material).toEqual({ E: 2300, nu: 0.35, yield: 40, name: "Custom" });
+    expect(r.ok && r.options.material).toEqual({ E: 2300, nu: 0.35, yield: 40, density: 1.1, name: "Custom" });
     expect(r.ok && r.options.size).toBe(2);
   });
 
@@ -124,7 +124,7 @@ describe("buildStressRequest", () => {
       return r.ok ? "ok" : r.message;
     };
     expect(msg(newSetup(null))).toMatch(/body/);
-    expect(msg(newSetup("b1"))).toMatch(/fixed faces/);
+    expect(msg(newSetup("b1"))).toBe("set the faces of the support from a face selection");
     const s = ready();
     s.loads.push(newLoad(2));
     expect(msg(s)).toBe("set the faces of load 2 from a face selection");
@@ -139,7 +139,7 @@ describe("buildStressRequest", () => {
     s.size = -1;
     expect(msg(s)).toMatch(/element size/);
     s.loads = [];
-    expect(msg(s)).toBe("add a load");
+    expect(msg(s)).toBe("add a load, or turn on gravity");
   });
 
   it("refuses \"into the face\" on faces that point every way", () => {
