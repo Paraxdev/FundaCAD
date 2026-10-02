@@ -361,7 +361,8 @@ export class Viewport {
       this.dragMoved = false;
       this.downPos = { x: e.clientX, y: e.clientY };
       // A left drag draws a selection box; shift adds, as it does for a click.
-      this.areaDown = (this.canAreaSelect?.() ?? true)
+      // A finger's drag turns the view instead.
+      this.areaDown = e.pointerType !== "touch" && (this.canAreaSelect?.() ?? true)
         ? {
             x: e.clientX,
             y: e.clientY,
@@ -437,6 +438,9 @@ export class Viewport {
     let rightDown: { x: number; y: number } | null = null;
     let rightDrag = false; // did this right-press move far enough to be a pan?
     let menuPending = false; // contextmenu seen mid-press → deliver on release
+    // When the last right press came up: the menu that follows a release
+    // (Windows) is the drag's, a later one (a finger's long press) is not.
+    let rightUpAt = -Infinity;
     c.addEventListener(
       "pointerdown",
       (e) => {
@@ -462,6 +466,7 @@ export class Viewport {
         rightDown = null;
         if (menuPending && !rightDrag) this.onContextClick?.(at.x, at.y);
         menuPending = false;
+        rightUpAt = performance.now();
       },
       true,
     );
@@ -471,7 +476,7 @@ export class Viewport {
       if (this.cubeHitsRegion(e.clientX, e.clientY)) return; // ViewCube owns its corner
       e.preventDefault();
       if (e.buttons & 2) menuPending = true; // fired on press → wait for the release
-      else if (!rightDrag) this.onContextClick(e.clientX, e.clientY); // fired on release
+      else if (!rightDrag || performance.now() - rightUpAt > 400) this.onContextClick(e.clientX, e.clientY); // fired on release
     });
     c.addEventListener("dblclick", (e) => {
       if (this.cubeHitsRegion(e.clientX, e.clientY)) return;

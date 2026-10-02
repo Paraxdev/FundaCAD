@@ -39,11 +39,15 @@ import { asIconPackId, getIconPack, iconPacks, onIconPackChange, setIconPack } f
 import { asUnit, getUnit, onUnitChange, setUnit } from "../../ui/units";
 import { motionOn, onMotionChange, setMotion } from "../../ui/motion";
 import {
+  asTouchpadScroll,
+  asWheelDevice,
+  getDetectedWheel,
   getHoverDwellMs,
   getNavPrefs,
   MAX_DWELL_MS,
   MIN_DWELL_MS,
   navigatorChoice,
+  onDetectedWheelChange,
   onHoverDwellChange,
   onNavPrefsChange,
   setHoverDwellMs,
@@ -88,6 +92,7 @@ const render = ref(renderPrefs());
 const dwell = ref(getHoverDwellMs());
 const motion = ref(motionOn());
 const nav = ref(getNavPrefs());
+const detectedWheel = ref(getDetectedWheel());
 const classicCamera = ref(navigatorChoice() === "legacy");
 
 const sections = shallowRef(contributedSettings());
@@ -102,6 +107,7 @@ onMounted(() => {
     onHoverDwellChange(() => { dwell.value = getHoverDwellMs(); }),
     onMotionChange(() => { motion.value = motionOn(); }),
     onNavPrefsChange(() => { nav.value = getNavPrefs(); }),
+    onDetectedWheelChange(() => { detectedWheel.value = getDetectedWheel(); }),
     onContribChange(() => { sections.value = contributedSettings(); }),
   );
 });
@@ -135,6 +141,16 @@ const TANGENT = [
   { id: "show", label: "Show" },
   { id: "faint", label: "Faint" },
   { id: "hide", label: "Hide" },
+];
+
+const WHEEL_DEVICES = [
+  { id: "auto", label: "Automatic" },
+  { id: "touchpad", label: "Touchpad" },
+  { id: "mouse", label: "Mouse" },
+];
+const TOUCHPAD_SCROLL = [
+  { id: "orbit", label: "Orbits" },
+  { id: "pan", label: "Pans" },
 ];
 
 const value = (ev: Event) => (ev.target as HTMLSelectElement).value;
@@ -200,7 +216,8 @@ function onPotatoMode(ev: Event) { setRenderPref("potatoMode", (ev.target as HTM
 function onMotion(ev: Event) { setMotion((ev.target as HTMLInputElement).checked); }
 const checked = (ev: Event) => (ev.target as HTMLInputElement).checked;
 function onInertia(ev: Event) { setNavPrefs({ inertia: checked(ev) }); }
-function onScrollPans(ev: Event) { setNavPrefs({ scrollPans: checked(ev) }); }
+function pickWheelDevice(id: string) { const v = asWheelDevice(id); if (v) setNavPrefs({ wheelDevice: v }); }
+function pickTouchpadScroll(id: string) { const v = asTouchpadScroll(id); if (v) setNavPrefs({ touchpadScroll: v }); }
 function onSmoothing(ev: Event) { setNavPrefs({ smoothTime: Number.parseFloat(value(ev)) }); }
 function onClassicCamera(ev: Event) {
   classicCamera.value = checked(ev);
@@ -434,16 +451,46 @@ function onClassicCamera(ev: Event) {
               </p>
             </div>
             <div class="pref-card">
-              <label class="pref-head">
-                <span class="pref-title">Scroll pans</span>
-                <span class="param-switch">
-                  <input id="prefs-scroll-pans" type="checkbox" :checked="nav.scrollPans" @change="onScrollPans" />
-                  <span class="track"><span class="knob"></span></span>
-                </span>
-              </label>
+              <div class="pref-head">
+                <span class="pref-title">Scrolling</span>
+                <div id="prefs-wheel-device" class="pref-seg" role="radiogroup" aria-label="Scrolling">
+                  <button
+                    v-for="d in WHEEL_DEVICES"
+                    :key="d.id"
+                    type="button"
+                    role="radio"
+                    :aria-checked="nav.wheelDevice === d.id"
+                    :class="{ on: nav.wheelDevice === d.id }"
+                    @click="pickWheelDevice(d.id)"
+                  >{{ d.label }}</button>
+                </div>
+              </div>
               <p class="pref-hint">
-                For trackpads: two fingers scrolling move the view, and a pinch (or Ctrl
-                with the wheel) zooms.
+                A mouse wheel zooms; a touchpad's two fingers turn or move the view and a
+                pinch zooms. Automatic tells them apart each time you scroll<template
+                  v-if="nav.wheelDevice === 'auto' && detectedWheel"
+                >, and took the last one for a {{ detectedWheel }}</template>. Pick one
+                if it guesses wrong.
+              </p>
+            </div>
+            <div class="pref-card">
+              <div class="pref-head">
+                <span class="pref-title">Two-finger scroll</span>
+                <div id="prefs-touchpad-scroll" class="pref-seg" role="radiogroup" aria-label="Two-finger scroll">
+                  <button
+                    v-for="t in TOUCHPAD_SCROLL"
+                    :key="t.id"
+                    type="button"
+                    role="radio"
+                    :aria-checked="nav.touchpadScroll === t.id"
+                    :class="{ on: nav.touchpadScroll === t.id }"
+                    @click="pickTouchpadScroll(t.id)"
+                  >{{ t.label }}</button>
+                </div>
+              </div>
+              <p class="pref-hint">
+                On a touchpad, what two fingers scrolling do to the view. Shift with the
+                scroll does the other, and a pinch zooms toward the pointer.
               </p>
             </div>
             <div class="pref-card">
