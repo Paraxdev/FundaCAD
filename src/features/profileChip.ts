@@ -121,6 +121,9 @@ export class ProfileChip {
     click: (() => void) | null,
     start?: (e: PointerEvent) => void,
   ) {
+    // Set here as well as in the stylesheet, so a finger scrub is a scrub and not
+    // a page pan on whichever element is wired, styled or not.
+    target.style.touchAction = "none";
     target.addEventListener("pointerdown", (e) => {
       if (e.button !== 0) return;
       hold(e);
@@ -142,16 +145,21 @@ export class ProfileChip {
         f0 = Math.max(0, Math.min(1, f0));
         this.change(profileFromFraction(f0));
       };
-      const up = () => {
+      const end = () => {
         target.removeEventListener("pointermove", move);
         target.removeEventListener("pointerup", up);
-        target.removeEventListener("pointercancel", up);
+        target.removeEventListener("pointercancel", end);
         target.classList.remove("scrubbing");
+      };
+      // Only a real release is a click. A cancelled pointer (the browser took
+      // the touch for a gesture) ends the scrub and opens nothing.
+      const up = () => {
+        end();
         if (!moved) click?.();
       };
       target.addEventListener("pointermove", move);
       target.addEventListener("pointerup", up);
-      target.addEventListener("pointercancel", up);
+      target.addEventListener("pointercancel", end);
     });
   }
 

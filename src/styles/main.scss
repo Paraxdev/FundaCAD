@@ -48,6 +48,9 @@
 @use "glass";
 // After the layout and glass rules it bends below the two breakpoints.
 @use "responsive";
+// After every surface whose small targets it grows for a finger, and after
+// _responsive, so a breakpoint never undoes a touch rule. See its header.
+@use "touch";
 // Last on purpose, see the header of _icons.scss.
 @use "icons";
 // Truly last, it switches every animation off when asked.

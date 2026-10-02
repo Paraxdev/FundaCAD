@@ -259,7 +259,15 @@ function rowAt(x: number, y: number): { groupId: string; action: string } | null
 }
 function onWindowUp(e: PointerEvent) {
   if (e.button !== 0 || !pressDown) return;
-  sendHold({ type: "release", over: rowAt(e.clientX, e.clientY) });
+  const over = rowAt(e.clientX, e.clientY);
+  // A finger that held a family open and lifted off its rows leaves the list
+  // up to be tapped: sliding onto a row is a mouse move, and on a screen it
+  // scrolls the rail instead.
+  if (e.pointerType === "touch" && !over && hold.value.phase === "open") {
+    pressDown = false;
+    return;
+  }
+  sendHold({ type: "release", over });
 }
 function onWindowCancel() {
   if (hold.value.phase !== "idle") sendHold({ type: "cancel" });
@@ -386,6 +394,7 @@ function toggleIsolate() {
           :active="e.items.some((t) => isActive(t.action)) || flyout?.id === e.id"
           menu
           :data-family="e.id"
+          data-own-touch
           :class="{ holding: hold.phase !== 'idle' && 'groupId' in hold && hold.groupId === e.id }"
           @pointerdown="onFamilyDown($event, e)"
           @click="onFamilyClick($event, e)"

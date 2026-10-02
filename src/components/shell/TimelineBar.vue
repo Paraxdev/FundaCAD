@@ -354,14 +354,24 @@ function onMarkerDown(e: PointerEvent) {
   const m = e.currentTarget as HTMLElement;
   m.classList.add("dragging");
   const move = (ev: PointerEvent) => m.style.setProperty("--x", `${ev.clientX}px`);
-  const up = (ev: PointerEvent) => {
+  const end = () => {
     window.removeEventListener("pointermove", move);
     window.removeEventListener("pointerup", up);
+    window.removeEventListener("pointercancel", cancel);
     m.classList.remove("dragging");
+  };
+  const up = (ev: PointerEvent) => {
+    end();
     store.setRollback(gapIndexAt(ev));
   };
+  // A cancelled pointer (the browser took a touch for a gesture, a pen left the
+  // screen's range) never gets a pointerup. Without this the listeners stayed
+  // on the window and the next unrelated release anywhere moved the rollback.
+  // A cancel is not a drop, so the marker stays where it was.
+  const cancel = () => end();
   window.addEventListener("pointermove", move);
   window.addEventListener("pointerup", up);
+  window.addEventListener("pointercancel", cancel);
 }
 
 /** Which inter-feature gap (0..n) the pointer falls into. The measuring is here;
