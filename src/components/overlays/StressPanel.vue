@@ -7,7 +7,7 @@
 // No Esc-dismiss: Esc is how a face selection is cleared while picking, and it
 // must not throw the setup away with it.
 
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { usePanelsStore } from "../../stores/panels";
 import FloatingPanel from "./FloatingPanel.vue";
@@ -21,15 +21,18 @@ const engine = useEngine();
 const panels = usePanelsStore();
 
 const bodies = ref<{ id: string; name: string }[]>([]);
+function readBodies() {
+  bodies.value = engine.ui?.panels?.stressBodies() ?? [];
+}
 let offBuild: (() => void) | null = null;
 onMounted(() => {
   // onBuild replays at once, and this mounts inside app.mount(), before
-  // mountUi has made engine.ui: the first replay has no panels to ask.
-  offBuild = engine.store.onBuild(() => {
-    bodies.value = engine.ui?.panels?.stressBodies() ?? [];
-  });
+  // mountUi has made engine.ui: the first replay has no panels to ask, so the
+  // list is read again whenever the panel opens.
+  offBuild = engine.store.onBuild(readBodies);
 });
 onUnmounted(() => offBuild?.());
+watch(() => !!panels.stress, (open) => open && readBodies());
 
 const setup = computed(() => panels.stress?.setup ?? null);
 const preset = computed(() => STRESS_MATERIALS.find((m) => m.name === setup.value?.material) ?? null);
