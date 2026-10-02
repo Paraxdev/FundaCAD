@@ -1136,7 +1136,7 @@ The format comes from the extension unless given. A large STEP can take minutes:
 
     #[tool(
         name = "stress",
-        description = "Linear static stress analysis of one body, without changing the document. Hold faces still with `fixed`, push on others with `loads` (a total force in N or a pressure in MPa), pick a `material` by name (PLA, PETG, ABS, ASA, PA12 nylon, PC, aluminium 6061-T6, steel S235) or as {E, nu, yield} in MPa. Faces are the per-face selectors `inspect` lists with detail:true and selectors:true. Units are mm, N and MPa. Answers with the peak von Mises stress and where, the largest deflection and where, the safety factor against yield, applied load against reaction, the mesh, warnings to heed, and a PNG coloured blue (low) to red (high) by stress. Takes seconds to a minute.",
+        description = "Linear static stress analysis of one body, without changing the document. Hold faces still with `fixed`, or with `supports` that are fixed, pinned (a hole or a pin, free to turn about its axis) or slider (held across the face only), push on others with `loads` (a total force in N or a pressure in MPa), add the body's own weight with `gravity`, pick a `material` by name (PLA, PETG, ABS, ASA, PA12 nylon, PC, aluminium 6061-T6, steel S235) or as {E, nu, yield, density} in MPa and g/cm3. Faces are the per-face selectors `inspect` lists with detail:true and selectors:true. Units are mm, N and MPa. Answers with the peak von Mises stress and where, the largest deflection and where, the safety factor against yield, applied load (with the weight) against reaction, the reaction at each support, the mesh, warnings to heed, and a PNG coloured blue (low) to red (high) by stress. Takes seconds to a minute.",
         input_schema = crate::tools::stress()
     )]
     pub async fn t_stress(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
@@ -2492,7 +2492,7 @@ impl FundaCad {
             return failure(format!("The analysis was refused: {why}"));
         }
         let r = reply.get("result").cloned().unwrap_or_else(|| json!({}));
-        let mut out = crate::stress::report(&r);
+        let mut out = crate::stress::report(&r, &request.supports);
         let failed = crate::clash::failures(&r);
         if !failed.is_empty() {
             out.push_str("\nSome features failed, so this analysed what did build:\n");

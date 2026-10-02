@@ -152,3 +152,52 @@ async fn malformed_arguments_are_refused_before_the_engine_is_asked() {
     }
     assert!(engine.ops().is_empty(), "{:?}", engine.ops());
 }
+
+#[test]
+fn supports_and_gravity_are_taken_and_reported() {
+    let mut mcp = Mcp::start(&BTreeMap::new(), &std::env::temp_dir());
+    let r = mcp.call(
+        "edit",
+        json!({"ops": [
+            {"op": "add", "feature": {"type": "box", "length": 100, "width": 10, "height": 10, "name": "Bar"}},
+            {"op": "add", "feature": {"type": "move", "dx": 50, "bodies": ["body1"]}}
+        ], "build": true}),
+    );
+    assert!(!r.is_error, "{}", r.text);
+    // A PLA bar glued to a wall at x = 0, resting on a frictionless floor, under its own
+    // weight and a push at the far end.
+    let r = mcp.call(
+        "stress",
+        json!({"body": "body1", "fixed": face([-1.0, 0.0, 0.0]),
+               "supports": [{"type": "slider", "faces": [face([0.0, 0.0, -1.0])]}],
+               "loads": [{"faces": [face([1.0, 0.0, 0.0])], "force": [0, 0, -10]}],
+               "gravity": true, "material": "PLA", "size": 3, "image": false}),
+    );
+    assert!(!r.is_error, "{}", r.text);
+    let text = &r.text;
+    // 1.24 g/cm3 over 10000 cubic mm at 9.81 m/s2 is 0.1216 N.
+    assert!(text.contains("\nweight (0, 0, -0.1216) N from gravity, part of the applied load\n"), "{text}");
+    assert!(text.contains("applied (0, 0, -10.12) N, reaction at the supports (0, 0, 10.12) N"), "{text}");
+    assert!(text.contains("\nreaction at each support:\n- fixed: ("), "{text}");
+    assert!(text.contains("\n- supports[0] (slider): (0, 0, "), "{text}");
+
+    // One pin alone leaves the body free to turn, and the refusal says so.
+    let r = mcp.call(
+        "edit",
+        json!({"ops": [
+            {"op": "add", "feature": {"type": "cylinder", "radius": 3, "height": 20, "name": "Hole"}},
+            {"op": "add", "feature": {"type": "move", "dx": 90, "bodies": ["body2"]}},
+            {"op": "add", "feature": {"type": "boolean", "operation": "subtract", "target": "body1", "tools": ["body2"]}}
+        ], "build": true}),
+    );
+    assert!(!r.is_error, "{}", r.text);
+    let r = mcp.call(
+        "stress",
+        json!({"body": "body1",
+               "supports": [{"type": "pinned", "faces": {"kind": "face", "by": "nearest", "point": [93, 0, 0], "body": "body1"}}],
+               "loads": [{"faces": [face([-1.0, 0.0, 0.0])], "force": [0, 0, -10]}],
+               "size": 3, "image": false}),
+    );
+    assert!(r.is_error, "{}", r.text);
+    assert!(r.text.contains("the body can still turn about the pin's axis through (90, 0, "), "{}", r.text);
+}

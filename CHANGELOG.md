@@ -49,6 +49,13 @@ This file starts on 2026-08-03. For anything before that, see the
   short report and a picture of the part coloured from blue to red by stress.
   In the app, Inspect, Analyze, Stress opens a panel that takes the fixed and
   loaded faces from the selection and paints the part by stress, with a legend.
+- **Pins, sliders and gravity in stress analysis.** A support can now be
+  fixed, pinned or a slider. A pin holds a hole or a shaft and lets it turn
+  about its axis, a slider holds a face only along its normal so the part can
+  slide along it, and gravity adds the part's own weight from the material's
+  density. A part that can still move is refused with the motion it has left,
+  such as a turn about the pin, and the reply gives the reaction at each
+  support. The MCP `stress` tool takes the same supports and gravity.
 - **Merging overlapping sketch shapes over MCP.** The new `sketch_merge` tool
   replaces closed shapes of a sketch that overlap or touch, rectangles,
   circles, polygons, slots and loops of lines and arcs, with the outline of
