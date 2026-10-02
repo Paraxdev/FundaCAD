@@ -3698,7 +3698,9 @@ export class Viewport {
     // Judged on what a full quality frame costs, or a machine that only keeps up
     // at a reduced size is never offered potato mode.
     const full = this.motionScale < 1 ? this.motion.fullPeriod(now) : 0;
-    if (this.stutter.sample(full > 0 ? full : period)) this.setStuttering(true);
+    // Both ways: a machine that was busy (a render in another app) and is not
+    // any more has the warning taken back.
+    this.setStuttering(this.stutter.sample(full > 0 ? full : period));
   }
 
   private motion = new MotionQuality();
