@@ -56,6 +56,7 @@ export const OPS = [
   "build",
   "interference",
   "section",
+  "stress",
   "inspect",
   "view",
   "export",
@@ -173,6 +174,11 @@ export const OP_TABLE: Record<Op, OpSpec> = {
   section: {
     needs: ["document.read", "geometry.build"],
     why: "builds the open document and hands back its outline and section properties at a plane, the document's own shape read out",
+    writes: false,
+  },
+  stress: {
+    needs: ["document.read", "geometry.build"],
+    why: "builds the open document and reports how one body bends and where it is most stressed under a load, without changing it",
     writes: false,
   },
   view: {
