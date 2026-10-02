@@ -3689,12 +3689,15 @@ export class Viewport {
     this.movedDrawAt = 0;
     if (this.store?.buildState.building || this.store?.busyState.active) return;
     if (document.visibilityState !== "visible") return;
-    this.motion.sample(period, now);
+    // Only a frame drawn at the size the level asked for says anything about the
+    // level: a gesture's first frames from a canvas that has grown back are full
+    // size, and judged as the reduced level they read as slow.
+    if (this.motionScale === this.motion.scale) this.motion.sample(period, now);
     // Still watched in performance mode, where a stutter offers potato mode instead.
     if (this.potato) return;
     // Judged on what a full quality frame costs, or a machine that only keeps up
     // at a reduced size is never offered potato mode.
-    const full = this.motionScale < 1 ? this.motion.fullPeriod : 0;
+    const full = this.motionScale < 1 ? this.motion.fullPeriod(now) : 0;
     if (this.stutter.sample(full > 0 ? full : period)) this.setStuttering(true);
   }
 
