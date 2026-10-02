@@ -251,6 +251,28 @@ export function radialAt(cyl: Cylinder, at: Vec3): Vec3 | null {
   return unit(sub(rel, scale(cyl.axis, dot(rel, cyl.axis))));
 }
 
+/** A sweep above this is a full round. Short of 2π because a tessellated ring's
+ *  vertices leave one chord's angle uncovered, and a coarse ring's chord is wide. */
+export const FULL_SWEEP = 2 * Math.PI - Math.PI / 4;
+
+/** How far round its axis a face's points reach, in radians: 2π less the widest
+ *  angular gap between them. 0 with fewer than two points off the axis. */
+export function arcSweep(cyl: Cylinder, points: readonly Vec3[]): number {
+  const u = planeXDir(cyl.axis);
+  if (!u) return 0;
+  const v = cross(cyl.axis, u);
+  const angles: number[] = [];
+  for (const p of points) {
+    const r = radialAt(cyl, p);
+    if (r) angles.push(Math.atan2(dot(r, v), dot(r, u)));
+  }
+  if (angles.length < 2) return 0;
+  angles.sort((a, b) => a - b);
+  let gap = (angles[0] as number) + 2 * Math.PI - (angles[angles.length - 1] as number);
+  for (let i = 1; i < angles.length; i++) gap = Math.max(gap, (angles[i] as number) - (angles[i - 1] as number));
+  return 2 * Math.PI - gap;
+}
+
 /** Does the material lie INSIDE this cylindrical face, a shaft or boss, rather
  *  than outside it, as on a bore?
  *

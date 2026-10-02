@@ -43,7 +43,7 @@ function readCounts(engine: Engine): { counts: SelectionCounts; signature: strin
 export function useSelectionOffers(engine: Engine) {
   const counts = shallowRef<SelectionCounts>({});
   const toolOwns = ref(false);
-  const measured = shallowRef<{ edges: Pt3[][]; roundFaceDiameter: number | null }>({ edges: [], roundFaceDiameter: null });
+  const measured = shallowRef<{ edges: Pt3[][]; roundFace: { radius: number; full: boolean } | null }>({ edges: [], roundFace: null });
   let signature = "";
 
   const kind = computed(() => primaryKind(counts.value));
@@ -76,7 +76,7 @@ export function useSelectionOffers(engine: Engine) {
       noun: one,
       plural: one === "body" ? "bodies" : `${one}s`,
       ...(withNumbers && k === "edge" ? { edges: measured.value.edges } : {}),
-      ...(withNumbers && k === "face" ? { roundFaceDiameter: measured.value.roundFaceDiameter } : {}),
+      ...(withNumbers && k === "face" ? { roundFace: measured.value.roundFace } : {}),
     });
   };
   const summary = computed(() => describe(false));
@@ -98,7 +98,7 @@ export function useSelectionOffers(engine: Engine) {
       counts.value = next.counts;
       const edges = next.counts.edge ? engine.viewport.selectedEdgeLines().map((e) => e.points) : [];
       const round = next.counts.face === 1 ? engine.viewport.selectedFacesForPressPull()?.round : null;
-      measured.value = { edges, roundFaceDiameter: round ? round.radius * 2 : null };
+      measured.value = { edges, roundFace: round ? { radius: round.radius, full: round.full ?? true } : null };
     }
     toolOwns.value = engine.toolOwnsScreen();
     return Object.keys(next.counts).length > 0;

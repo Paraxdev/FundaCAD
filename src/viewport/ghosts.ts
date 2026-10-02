@@ -115,6 +115,9 @@ export class GhostLayer {
       for (const [i0, i1, i2] of tris) {
         push(moved(wv(i0))); push(moved(wv(i1))); push(moved(wv(i2)));
       }
+      // A resized round face keeps its neighbours on their own surfaces, so a
+      // wall from its old boundary would draw a step the result does not have.
+      if (round) continue;
       // boundary walls: an edge interior to the face appears in two triangles
       // (toggled out); a boundary edge appears once (kept).
       const edges = new Map<string, [number, number]>();

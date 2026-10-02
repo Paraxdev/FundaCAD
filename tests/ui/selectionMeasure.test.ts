@@ -36,7 +36,12 @@ describe("selection measure", () => {
 
   it("counts faces and adds a round face's diameter", () => {
     expect(describeSelection({ count: 3, noun: "face", plural: "faces" })).toBe("3 faces");
-    expect(describeSelection({ count: 1, noun: "face", plural: "faces", roundFaceDiameter: 50 })).toBe("1 face · ⌀50 mm");
+    expect(describeSelection({ count: 1, noun: "face", plural: "faces", roundFace: { radius: 25, full: true } })).toBe("1 face · ⌀50 mm");
     expect(describeSelection({ count: 0, noun: "face", plural: "faces" })).toBe("");
+  });
+
+  it("gives a partial arc its radius, not a diameter", () => {
+    expect(describeSelection({ count: 1, noun: "face", plural: "faces", roundFace: { radius: 2, full: false } })).toBe("1 face · R2 mm");
+    expect(describeSelection({ count: 1, noun: "face", plural: "faces", roundFace: { radius: 2, full: true } })).toBe("1 face · ⌀4 mm");
   });
 });
