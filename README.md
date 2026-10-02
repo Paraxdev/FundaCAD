@@ -130,26 +130,127 @@ The builds are **not code signed**, so each OS says so in its own way:
   newer `libwebkitgtk-6.0-4`, cannot satisfy that dependency under the name the
   package asks for, and there the Flatpak is the answer.
 
-## Build
+## Run it from source
 
-Needs [Node](https://nodejs.org), [Rust](https://rustup.rs), cmake and a C++
-toolchain: the Funda Engine compiles OpenCASCADE from source on the first
-build, about twenty minutes, then it is cached (docs/PACKAGING.md). On Windows
-use the MSVC toolchain.
+FundaCAD is a Vue frontend in a [Tauri](https://tauri.app) window, with the
+Funda Engine (Rust) and the OpenCASCADE geometry kernel (C++) compiled into one
+executable. Running it from a checkout takes a handful of tools, one clone and
+one command. The very first build also compiles OpenCASCADE itself, which takes
+about twenty minutes; every build after that reuses it.
+
+### 1. Install the tools
+
+**Windows** (10 or 11, x64):
+
+1. **Node.js 22 LTS or newer** from [nodejs.org](https://nodejs.org), the LTS
+   installer with its defaults.
+2. **Visual Studio 2022 Build Tools** from
+   [visualstudio.microsoft.com/visual-cpp-build-tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/).
+   In the installer tick the **Desktop development with C++** workload and
+   install. It brings the MSVC compiler and the Windows SDK. Visual Studio 2022
+   Community with the same workload works too.
+3. **CMake 3.22 or newer** from [cmake.org/download](https://cmake.org/download/),
+   the Windows x64 installer, and let it add CMake to the PATH. CMake 4 is fine.
+4. **Rust 1.89 or newer** through [rustup](https://rustup.rs): run
+   `rustup-init.exe` and take the defaults, which install the stable toolchain
+   for `x86_64-pc-windows-msvc`. Install it after the Build Tools. If rustup
+   is already installed, run `rustup update` to get a current toolchain.
+5. **Git** from [git-scm.com](https://git-scm.com).
+
+The WebView2 runtime the window draws with is already part of Windows 10 and
+11. If it was removed, get the Evergreen runtime from
+[Microsoft](https://developer.microsoft.com/microsoft-edge/webview2/).
+
+Open a **new** terminal so it sees the new PATH, and check:
+
+```powershell
+node --version     # v22 or newer
+cmake --version    # 3.22 or newer
+rustup show        # the active toolchain ends in -pc-windows-msvc, 1.89 or newer
+where.exe cargo    # the FIRST line is in C:\Users\<you>\.cargo\bin
+```
+
+If `where.exe cargo` lists another cargo first, or `rustup` is not
+recognized, see [Troubleshooting](#troubleshooting) before going on.
+
+Clone into a short path such as `C:\src\fundacad`. The OpenCASCADE build nests
+deep folders inside the checkout, and a long base path runs into Windows' 260
+character path limit (see Troubleshooting).
+
+**Linux** (Debian or Ubuntu 22.04 and newer; other distributions need the same
+packages under their own names, see
+[Tauri's prerequisites](https://v2.tauri.app/start/prerequisites/)). The
+package list is the one CI installs, from
+[`.github/actions/linux-deps/action.yml`](.github/actions/linux-deps/action.yml),
+which is the source of truth, plus cmake:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
+  libssl-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev \
+  libudev-dev patchelf libfuse2 cmake
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+plus Node.js 22 or newer from [nodejs.org](https://nodejs.org) or your package
+manager.
+
+**macOS**:
+
+```bash
+xcode-select --install
+brew install cmake node
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+### 2. Run it
 
 ```bash
 git clone https://github.com/Paraxdev/fundacad.git
 cd fundacad
 npm install
+npm run tauri dev
 ```
 
-Then:
+`npm run tauri dev` starts the Vite dev server, compiles the app and opens the
+window. Frontend edits show up live; a Rust edit recompiles and restarts the
+app.
+
+**The first build takes about twenty minutes**, longer on a laptop. Most of it
+is spent in OpenCASCADE, a large C++ library that is compiled from source and
+linked statically, so the app needs no OpenCASCADE installed on any machine it
+runs on. Cargo sits on `Building [...] opencascade-sys(build)` meanwhile, that
+is normal. The kernel lands in `target/OCCT` at the top of the checkout and is
+shared by the app and the engine workspace, so it is compiled once per
+checkout. Running `cargo clean` in the top folder deletes it, and the next
+build compiles it again. Another checkout or worktree can reuse it by setting
+the `FUNDACAD_OCCT_ROOT` environment variable to the **absolute** path of that
+`target/OCCT`, for example `C:\src\fundacad\target\OCCT`. The details are in
+[docs/PACKAGING.md](docs/PACKAGING.md#the-opencascade-kernel).
+
+Builds from before this layout put the kernel in `src-tauri/target/OCCT`
+instead. Nothing reads that folder any more, so it can be deleted to free about
+a gigabyte.
+
+### 3. Build an installer
 
 ```bash
-npm run tauri dev      # run it, starts vite and the engine for you
-npm run tauri build    # package a desktop build
-npm test               # vitest
-cargo test --workspace --features fundacad-engine/ws   # the engine
+npm run tauri build
+```
+
+The installers land in `src-tauri/target/release/bundle/`: an `.msi` and an
+NSIS `-setup.exe` on Windows (Tauri downloads WiX and NSIS the first time), a
+`.dmg` and `.app` on macOS, an AppImage, `.deb` and `.rpm` on Linux. The bare
+executable is `src-tauri/target/release/fundacad.exe` on Windows. The release
+build compiles the Rust again with optimisations but reuses the kernel.
+
+### 4. Run the tests
+
+```bash
+npm test                 # frontend unit tests (vitest)
+npm run typecheck        # vue-tsc
+cargo test --workspace --features fundacad-engine/ws   # the engine, from the top folder
+cd src-tauri && cargo test --tests                     # the app shell, needs the dist/ that npm run build makes
 ```
 
 ### Frontend only
@@ -165,6 +266,72 @@ The engine prints `TOKEN <t>` on its first line and refuses connections without
 it, so open `http://localhost:5173/?token=<t>`. Without it the viewport connects,
 is refused, and silently never builds anything. `FUNDACAD_ENGINE_TOKEN` and
 `FUNDACAD_ENGINE_PORT` fix the token and the port instead.
+
+### Troubleshooting
+
+- **`FundaCAD's kernel crashes when built with the MinGW (windows-gnu)
+  toolchain`**, or cmake output mentioning `MinGW Makefiles`. Another Rust,
+  usually Chocolatey's `rust` package, comes before rustup on the PATH. Check
+  with `where.exe cargo`: the first line has to be in `C:\Users\<you>\.cargo\bin`.
+  Windows puts the System Path before the User Path, so Chocolatey's
+  `C:\ProgramData\chocolatey\bin` (a System entry) comes first however the User
+  Path is ordered. Any one of these fixes it:
+  1. For the current terminal only, in PowerShell:
+
+     ```powershell
+     $env:PATH = "$HOME\.cargo\bin;$env:PATH"
+     npm run tauri build
+     ```
+
+  2. For good: run `choco uninstall rust` in an administrator terminal, make
+     sure `%USERPROFILE%\.cargo\bin` is in the **User** Path (Settings, System,
+     About, Advanced system settings, Environment Variables, or run
+     `rustup-init.exe` again, which adds it), then open a new terminal.
+  3. Or, as administrator, add `%USERPROFILE%\.cargo\bin` to the **System**
+     Path above `C:\ProgramData\chocolatey\bin`, then open a new terminal.
+
+  Then make MSVC the default: `rustup default stable-x86_64-pc-windows-msvc`.
+- **`rustup` is not recognized**, or `where.exe cargo` lists nothing in
+  `C:\Users\<you>\.cargo\bin`. rustup is either not installed or its folder is
+  not on the PATH. If `C:\Users\<you>\.cargo\bin\rustup.exe` exists, add that
+  folder to the User Path as above and open a new terminal; otherwise install
+  rustup (step 1).
+- **`exceeds the OS max path limit`** or another MSBuild error about a path
+  being too long. The checkout sits too deep for the nested OpenCASCADE build
+  folders. Clone it again into a short path such as `C:\src\fundacad`.
+- **`use of unstable library feature`** inside `opencascade-sys`'s build
+  script, or cargo saying the package requires a newer rustc. The toolchain is
+  older than 1.89; run `rustup update`.
+- **`include could not find requested file: .../OpenCASCADEFoundationClassesTargets.cmake`**
+  followed by `Builtin OpenCASCADE library not found`. Older builds registered
+  their OpenCASCADE build folders in CMake's package registry, and CMake picked
+  a broken one from there. The current build ignores that registry, so pull
+  the latest `main`. On an older branch, clear the registry entries, which only
+  ever point at build folders:
+
+  ```powershell
+  reg delete HKCU\Software\Kitware\CMake\Packages\OpenCASCADE /f
+  ```
+
+  On Linux and macOS: `rm -rf ~/.cmake/packages/OpenCASCADE`. On the current
+  `main` those entries are harmless and can stay.
+- **`This directory holds an OpenCASCADE kernel built by MinGW or GCC`** (or
+  `by MSVC`, or `built for <another target>`). A kernel from the other Windows
+  toolchain, or for another target, is in the folder the message names, often
+  left by a build with the wrong cargo. Delete that folder and build again;
+  the kernel is rebuilt there.
+- **`FUNDACAD_OCCT_ROOT holds no OpenCASCADE install`** or **`FUNDACAD_OCCT_ROOT
+  has to be an absolute path`**. That environment variable points somewhere
+  without a kernel, or is relative. Remove it to use the checkout's own
+  `target/OCCT`, or set it to the absolute path of a folder that has one.
+- **`Compatibility with CMake < 3.5 has been removed from CMake`**. CMake 4
+  refuses the minimum OpenCASCADE 7.8.1 declares. The checkout's
+  `.cargo/config.toml` sets `CMAKE_POLICY_VERSION_MINIMUM=3.5`, which cargo
+  only reads when run inside the checkout; set that environment variable when
+  building from elsewhere.
+- **`could not find any instance of Visual Studio`**. The Build Tools are
+  missing the **Desktop development with C++** workload; add it from the
+  Visual Studio Installer.
 
 ## Docs
 

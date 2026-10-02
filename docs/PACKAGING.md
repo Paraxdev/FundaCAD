@@ -38,14 +38,8 @@ What the pieces are:
   `session.json`.
 - **OpenCASCADE 7.8.1 is compiled from source**, statically, by the `occt-sys`
   crate the vendored bindings (`third_party/opencascade-rs`) pull in. It needs
-  cmake and a C++ toolchain, it takes about twenty minutes cold, and it lands in
-  `<target>/OCCT`, which is what CI caches. Several target directories can share
-  one build: point `FUNDACAD_OCCT_ROOT` at an installed kernel (its `cmake`,
-  `include` and `lib`) and the build script links it instead of building again.
-  On Windows use the rustup MSVC toolchain, a MinGW `cargo` earlier on PATH
-  picks the wrong cmake generator, and set `CMAKE_POLICY_VERSION_MINIMUM=3.5`
-  (the root `.cargo/config.toml` does), because CMake 4 refuses OCCT 7.8.1's
-  declared minimum.
+  cmake and a C++ toolchain and takes about twenty minutes cold. See
+  [The OpenCASCADE kernel](#the-opencascade-kernel) below.
 - **Plugin bundles** are packed by `scripts/build-plugins.py`, which builds each
   plugin's geometry component with `scripts/build-plugin-wasm.py` (the
   `wasm32-wasip2` target), and are published to the same release.
@@ -61,6 +55,56 @@ Bundles land under `src-tauri/target/release/bundle/`: `.AppImage`, `.deb` and
 `.rpm` on Linux, `.app` and `.dmg` on macOS, `.msi` and NSIS `-setup.exe` on
 Windows. CI also publishes `src-tauri/target/release/fundacad.exe` as the
 portable Windows download.
+
+## The OpenCASCADE kernel
+
+The build script of `opencascade-sys` (`third_party/opencascade-rs/crates/opencascade-sys/build.rs`)
+finds or builds the kernel like this:
+
+- **Where it lives.** `FUNDACAD_OCCT_ROOT` names the install directory (its
+  `cmake`, `include` and `lib`, or `lib/cmake/opencascade` on Linux and macOS).
+  The root `.cargo/config.toml` sets it to `<repo>/target/OCCT`, relative to the
+  checkout, and cargo reads that file from `src-tauri` too, so the root
+  workspace and the app share one kernel per checkout. An environment variable
+  of the same name overrides it, which is how several checkouts or worktrees
+  share one kernel. It has to be an absolute path: a relative one would resolve
+  against the build script's own directory, so the build script refuses it.
+- **Cross builds.** A build for a target other than the host (`cargo build
+  --target ...`, or a macOS universal build) uses `<parent>/<target triple>/OCCT`
+  beside that directory instead, `target/<triple>/OCCT` by default, so each
+  target gets its own kernel.
+- **First build.** When that directory holds no complete install (every
+  toolkit library in `OCCT_LIBS` and the cmake config files), the kernel is
+  built into it (it has to be named `OCCT` for that, a quirk of `occt-sys`).
+  The build script keeps its bookkeeping in `.fundacad` inside it: a lock file,
+  so two cargo runs that both need the kernel take turns and building the
+  workspace and the app at once compiles it once; an `installing` marker that
+  is only removed once the install finished, so an interrupted build is
+  resumed rather than linked; and a `target` stamp naming the target triple
+  the kernel was built for.
+- **No CMake package registry.** OCCT's own build used to register its build
+  tree in the CMake user package registry (`HKCU\Software\Kitware\CMake\Packages\OpenCASCADE`
+  on Windows, `~/.cmake/packages/OpenCASCADE` elsewhere), and `find_package`
+  fell back to that registry whenever the expected install was missing, so a
+  stale or half built tree from anywhere on the machine got picked up. The
+  kernel build now writes nothing there (and removes an entry for its own
+  build tree should one appear) and the find step reads neither registry, it
+  is pointed at the exact install instead. Entries older builds left there are
+  therefore harmless.
+- **Wrong toolchain.** On Windows a kernel built by MinGW (`lib/libTK*.a`, or a
+  `build` configured for `MinGW Makefiles`) cannot be linked by an MSVC build,
+  nor the other way round. The build script stops with a message naming the
+  directory to delete instead of failing later in cmake or the linker. Use the
+  rustup MSVC toolchain; a MinGW `cargo`, such as Chocolatey's, earlier on PATH
+  builds the `windows-gnu` target, which the build script refuses because that
+  kernel crashes in ordinary fillets.
+- **CMake 4.** `CMAKE_POLICY_VERSION_MINIMUM=3.5` (set by the root
+  `.cargo/config.toml`) lets CMake 4 configure OCCT 7.8.1, whose declared
+  minimum it otherwise refuses.
+- **CI** caches `target/OCCT` without its `build` directory, in `rust-geom`
+  and `build-beta` under one key.
+- **The old location.** Builds from before this layout installed the kernel
+  in `src-tauri/target/OCCT`. Nothing reads it any more, so it can be deleted.
 
 ## Flatpak
 
