@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   KIND_COLORS, buildPrintabilityRequest, findingMarks, findingText, findingView, formatPrintabilityResult,
   newPrintabilitySetup, problemCount,
-} from "../../src/ui/printability";
-import type { PrintabilityFinding, PrintabilityReply } from "../../src/geometry/client";
+} from "../../plugins/FundaCAD.PrintToolbox/printability";
+import type { PrintabilityFinding, PrintabilityReply } from "fundacad";
 
-// The pure half of the Printability panel: what it sends, how it words the
-// reply, and the faces it tints.
+// The pure half of the toolbox's Printability panel: what it sends, how it
+// words the reply, and the faces it tints.
 
 function finding(over: Partial<PrintabilityFinding>): PrintabilityFinding {
   return {

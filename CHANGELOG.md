@@ -70,10 +70,10 @@ This file starts on 2026-08-03. For anything before that, see the
   flat ceilings bridged further than the printer can, and shells that are not
   closed solids. Each finding names its face and ends in a `view` focus. Nozzle,
   layer, angle and limits can be set, and `layFlat` checks the parts the way
-  `export` would lay them on the bed. In the app, Inspect, Analyze,
-  Printability runs the same check on the selected bodies, or on all of them,
-  lists what it found by body and colours the faces by kind; clicking a line
-  turns the view to it.
+  `export` would lay them on the bed. In the app, Printability in the 3D
+  Printing Toolbox's PRINT group runs the same check on the selected bodies, or
+  on all of them, lists what it found by body and colours the faces by kind;
+  clicking a line turns the view to it.
 - **Section properties over MCP.** The new `section` tool cuts the built
   bodies with a plane, across X, Y or Z or at any angle, and gives each body's
   outline as closed loops with its area, centroid, second moments of area,

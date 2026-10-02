@@ -1,9 +1,10 @@
 // The Printability panel against the real engine, in a real browser.
 //
-// What only the running app can answer: the ribbon opens the panel, Check
-// reaches the engine's `printability` op and lists what it found, the flagged
-// faces are tinted in the viewport, a row click frames the camera on it, and
-// closing the panel takes the tints away.
+// The panel is the 3D Printing Toolbox plugin's, which a development build
+// compiles in. What only the running app can answer: the toolbox's PRINT group
+// opens the panel, Check reaches the engine's `printability` op and lists what
+// it found, the flagged faces are tinted in the viewport, a row click frames
+// the camera on it, and closing the panel takes the tints away.
 //
 // Usage (from the repo root, with vite on 5173 + engine on 8765 (`fundacad-engine --ws`)):
 //   SC_TOKEN=<engine token> SC_CHROME=<chromium> node e2e/printability_e2e.cjs [shots dir]
@@ -59,12 +60,13 @@ const check = (name, ok, detail) => {
   await page.waitForTimeout(4000);
   const shot = async (name) => { if (SHOTS) await page.screenshot({ path: `${SHOTS}/${name}.png` }); };
 
-  // Through the ribbon, as a person would get there.
-  await page.getByText("Inspect", { exact: true }).first().click().catch(() => {});
+  // Through the tool rail, as a person would get there: the PRINT group's
+  // tile opens its flyout, and Printability is in it.
+  await page.click('#toolrail [data-family="cat:PRINT"]', { timeout: 10000 });
   await page.waitForTimeout(300);
-  await page.getByText("Printability", { exact: true }).first().click();
+  await page.click('[data-pick="print-printability"]');
   await page.waitForSelector(".printability-panel", { timeout: 5000 });
-  check("the ribbon opens the panel", true);
+  check("the PRINT group opens the panel", true);
   const scope = await page.textContent(".printability-scope");
   check("with nothing selected it checks every body", /All 2/.test(scope || ""), scope);
 

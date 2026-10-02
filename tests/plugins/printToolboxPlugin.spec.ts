@@ -7,8 +7,9 @@ import { createPinia, setActivePinia } from "pinia";
 import { activate } from "../../plugins/FundaCAD.PrintToolbox/main";
 import { loadBedFitSetting } from "../../plugins/FundaCAD.PrintToolbox/bedFit";
 import { customBedReq } from "../../plugins/FundaCAD.PrintToolbox/customBedDialog";
+import { printabilityPanel } from "../../plugins/FundaCAD.PrintToolbox/printabilityPanel";
 import {
-  anyToolBusy, contributedAction, contributedRibbon, contributors, resetContributions,
+  anyToolBusy, contributedAction, contributedOverlays, contributedRibbon, contributors, resetContributions,
 } from "../../src/plugins/contrib";
 import { applicableTools } from "../../src/features/toolCapabilities";
 import { iconPaths } from "../../src/ui/icons";
@@ -27,6 +28,12 @@ function fakeEngine() {
     dir: "+Z",
     added: [] as Record<string, unknown>[],
     bbox: null as { min: [number, number, number]; max: [number, number, number] } | null,
+    marks: [] as { marks: unknown; layer: string | undefined }[],
+    listeners: 0,
+  };
+  const listen = () => {
+    state.listeners++;
+    return () => { state.listeners--; };
   };
   const viewport = {
     setSelectionMode: vi.fn(),
@@ -34,6 +41,10 @@ function fakeEngine() {
     faceIdToBodyId: (id: number) => `body${id}`,
     getSelectedBodies: () => state.bodies,
     get draftConfig() { return { dir: state.dir, threshold: 45 }; },
+    setFaceMarks: (marks: unknown, layer?: string) => { state.marks.push({ marks, layer }); },
+    frameAround: vi.fn(),
+    stressOverlayBody: () => null,
+    onStressOverlayChange: listen,
     selectedFacesForPressPull: () => state.faces.length
       ? {
         selectors: state.faces.map((f) => ({ kind: "face", by: "nearest", point: f.point })),
@@ -45,10 +56,17 @@ function fakeEngine() {
     nextId: () => `f${state.added.length + 1}`,
     addFeature: (f: Record<string, unknown>) => { state.added.push(f); },
     get buildState() { return { result: state.bbox ? { bbox: state.bbox } : null }; },
+    builtDocument: () => ({ features: [] }),
+    isBodyVisible: () => true,
+    onDocChange: listen,
+    onOpen: listen,
+    onBuild: listen,
   };
+  const geometry = { printability: vi.fn(), cancel: vi.fn() };
   const e = {
     viewport,
     store,
+    geometry,
     toolBusy: () => false,
     hasBody: () => state.hasBody,
     setStatus: (t: string) => { state.status = t; },
@@ -85,7 +103,7 @@ describe("the 3D Printing Toolbox, switched on and off", () => {
     resetContributions();
   });
 
-  it("adds eight tools and a bed fit check, in a PRINT ribbon group, with marks", () => {
+  it("adds eight tools, a bed fit check and the printability check, in a PRINT ribbon group, with marks", () => {
     expect(contributors()).toEqual(["FundaCAD.PrintToolbox"]);
     const faceIds = ["print-teardrop", "print-roof-bridge", "print-counterbore-bridge", "print-sacrificial-layer",
       "print-thread-ribs", "print-zip-tie-channel"];
@@ -100,9 +118,11 @@ describe("the 3D Printing Toolbox, switched on and off", () => {
       expect(contributedAction(id)).toBeTypeOf("function");
     }
     const group = contributedRibbon().find((g) => g.group === "PRINT");
-    expect(group?.items.map((i) => i.action)).toEqual([...faceIds, ...bodyIds, "print-bed-fit-check"]);
+    expect(group?.items.map((i) => i.action)).toEqual([...faceIds, ...bodyIds, "print-bed-fit-check", "print-printability"]);
+    expect(contributedAction("print-printability")).toBeTypeOf("function");
     expect(iconPaths("printTeardrop")).toContain("<path");
     expect(iconPaths("printBedFit")).toContain("<rect");
+    expect(iconPaths("printPrintability")).toContain("<path");
   });
 
   it("describes the features it leaves in the history", () => {
@@ -160,6 +180,17 @@ describe("the 3D Printing Toolbox, switched on and off", () => {
     expect(loadBedFitSetting()).toEqual(before);
   });
 
+  it("opens the Printability panel, and refuses an empty document", () => {
+    expect(contributedOverlays().length).toBe(2);
+    engine.state.hasBody = false;
+    contributedAction("print-printability")!();
+    expect(printabilityPanel.value?.data.value).toBeNull();
+    expect(engine.state.status).toContain("create or import a body first");
+    engine.state.hasBody = true;
+    contributedAction("print-printability")!();
+    expect(printabilityPanel.value?.data.value?.setup.nozzle).toBe(0.4);
+  });
+
   it("acts at once on faces already selected, with the Overhang build direction", () => {
     engine.state.faces = [{ point: [0, 0, 13], faceId: 4 }];
     engine.state.dir = "+X";
@@ -203,10 +234,18 @@ describe("the 3D Printing Toolbox, switched on and off", () => {
   });
 
   it("takes everything away when switched off, mid-pick included", () => {
+    contributedAction("print-printability")!();
     contributedAction("print-teardrop")!();
+    expect(engine.state.listeners).toBeGreaterThan(0);
     stop();
     expect(anyToolBusy()).toBe(false);
     expect(contributedAction("print-teardrop")).toBeNull();
+    expect(contributedAction("print-printability")).toBeNull();
+    expect(contributedOverlays()).toEqual([]);
+    // The panel is closed, its tints are off and nothing it listened to still calls it.
+    expect(printabilityPanel.value).toBeNull();
+    expect(engine.state.marks.at(-1)).toEqual({ marks: null, layer: "printability" });
+    expect(engine.state.listeners).toBe(0);
     expect(featureMeta({ type: "teardropHole" })).not.toEqual({ icon: "printTeardrop", label: "Teardrop" });
     engine.state.faces = [{ point: [0, 0, 0], faceId: 1 }];
     press("Enter");

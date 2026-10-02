@@ -1,5 +1,6 @@
 // The 3D Printing Toolbox: print-friendly hole shapes and layer tricks, each a feature type this
-// plugin owns, geometry included (geometry/register.py).
+// plugin owns, geometry included (geometry/register.py), and two checks that are not features: the
+// bed fit check's toast and the Printability panel, which runs the engine's printability check.
 //
 // Adding a tool: describe it in printForm.ts, add it to PRINT_TOOLS, give it an icon below, and
 // register its handler in geometry/register.py with its type in manifest.json's featureTypes.
@@ -9,12 +10,15 @@ import type { Engine } from "fundacad";
 import { bedFitMessage, bedSizeOf, loadBedFitSetting, saveBedFitSetting, BED_PRESETS } from "./bedFit";
 import { openCustomBedDialog } from "./customBedDialog";
 import CustomBedHost from "./CustomBedHost.vue";
+import PrintabilityPanel from "./PrintabilityPanel.vue";
+import { createPrintabilityPanel, printabilityPanel } from "./printabilityPanel";
 import { BodyTool } from "./bodyTool";
 import { FaceTool } from "./faceTool";
 import { PRINT_TOOLS, type PrintTool } from "./printForm";
 
 const ID = "FundaCAD.PrintToolbox";
 const BED_FIT_ACTION = "print-bed-fit-check";
+const PRINTABILITY_ACTION = "print-printability";
 
 // Compile-time constants only: these reach the DOM through the app's Icon component.
 const ICONS: Record<string, string> = {
@@ -36,11 +40,25 @@ const ICONS: Record<string, string> = {
   printVerticalFillet:
     '<path d="M14 4H8A4 4 0 0 0 4 8V20"/><line x1="14" y1="4" x2="14" y2="20"/>' +
     '<line x1="4" y1="20" x2="14" y2="20"/>',
+  printPrintability:
+    '<path d="M10 2.5 L14 2.5 L14 5 L12.6 7.5 L11.4 7.5 L10 5 Z"/>' +
+    '<path d="M6 11.5 L18 11.5 M6 14.5 L16 14.5 M6 17.5 L14 17.5"/>' +
+    '<line x1="3.5" y1="20.5" x2="20.5" y2="20.5" stroke-width="1"/>',
 };
 
 export async function activate(e: Engine): Promise<() => void> {
   const faceTool = new FaceTool(e.viewport, e.store);
   const bodyTool = new BodyTool(e.viewport, e.store);
+  // The Printability panel's state and listeners live and die with this activation; the overlay
+  // finds it through printabilityPanel.
+  const printability = createPrintabilityPanel({
+    store: e.store,
+    viewport: e.viewport,
+    geometry: e.geometry,
+    hasBody: () => e.hasBody(),
+    setStatus: (t, c) => e.setStatus(t, c),
+  });
+  printabilityPanel.value = printability;
 
   function start(tool: PrintTool) {
     if (e.toolBusy()) return;
@@ -93,16 +111,18 @@ export async function activate(e: Engine): Promise<() => void> {
     actions: {
       ...Object.fromEntries(PRINT_TOOLS.map((t) => [t.id, () => start(t)])),
       [BED_FIT_ACTION]: () => void checkBedFit(),
+      [PRINTABILITY_ACTION]: () => printability.show(),
     },
     ribbon: [{
       group: "PRINT",
       items: [
         ...PRINT_TOOLS.map((t) => ({ action: t.id, label: t.label, iconName: t.icon })),
         { action: BED_FIT_ACTION, label: "Bed Fit Check", iconName: "printBedFit" },
+        { action: PRINTABILITY_ACTION, label: "Printability", iconName: "printPrintability" },
       ],
     }],
     icons: { ...ICONS, printBedFit: '<rect x="4" y="4" width="16" height="16" rx="1.5"/><path d="M4 15L9 10L13 14L20 7"/>' },
-    overlays: [CustomBedHost],
+    overlays: [CustomBedHost, PrintabilityPanel],
     features: PRINT_TOOLS.map((t) => ({
       type: t.type,
       meta: { icon: t.icon, label: t.label },
@@ -117,6 +137,8 @@ export async function activate(e: Engine): Promise<() => void> {
   return () => {
     faceTool.cancel();
     bodyTool.cancel();
+    printability.dispose();
+    if (printabilityPanel.value === printability) printabilityPanel.value = null;
     off();
   };
 }
