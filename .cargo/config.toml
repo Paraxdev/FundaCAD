@@ -2,3 +2,7 @@
 # CMake 4 refuses OpenCASCADE 7.8.1's cmake_minimum_required; this lets the
 # static kernel build configure on current toolchains.
 CMAKE_POLICY_VERSION_MINIMUM = "3.5"
+# One OpenCASCADE kernel per checkout, shared by this workspace and src-tauri
+# (cargo reads this file from there too). The first build compiles it into
+# this directory. An environment variable of the same name still overrides it.
+FUNDACAD_OCCT_ROOT = { value = "target/OCCT", relative = true }

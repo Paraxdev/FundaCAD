@@ -150,7 +150,6 @@ fn patch_occt(occt: &OcctConfig) -> std::path::PathBuf {
     let out = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("occt-patched");
     std::fs::create_dir_all(&out).unwrap();
     let msvc = std::env::var("TARGET").unwrap().contains("msvc");
-    let lib_file = |name: &str| if msvc { format!("{name}.lib") } else { format!("lib{name}.a") };
 
     let mut build = cc::Build::new();
     build
@@ -166,8 +165,8 @@ fn patch_occt(occt: &OcctConfig) -> std::path::PathBuf {
     };
     for (source, toolkit) in OCCT_PATCHES {
         let objects = build.clone().file(format!("occt-patch/{source}.cxx")).compile_intermediates();
-        let original = occt.library_dir.join(lib_file(toolkit));
-        let copy = out.join(lib_file(toolkit));
+        let original = occt.library_dir.join(static_lib_file(toolkit));
+        let copy = out.join(static_lib_file(toolkit));
         let members = if msvc {
             run(build.get_archiver().arg("/NOLOGO").arg("/LIST").arg(&original))
         } else {
@@ -213,21 +212,65 @@ impl OcctConfig {
         println!("cargo:rerun-if-env-changed=DEP_OCCT_ROOT");
         println!("cargo:rerun-if-env-changed=FUNDACAD_OCCT_ROOT");
 
-        // FUNDACAD_OCCT_ROOT points at an installed builtin kernel (cmake,
-        // include, lib) so several target dirs share one 22 minute OCCT build.
-        let shared_root = std::env::var_os("FUNDACAD_OCCT_ROOT").filter(|v| !v.is_empty());
-        if let Some(root) = &shared_root {
-            std::env::set_var("DEP_OCCT_ROOT", root);
-        }
+        // FUNDACAD_OCCT_ROOT is where the kernel is installed (cmake, include,
+        // lib), so every target dir of a checkout shares one twenty minute
+        // OCCT build. The root .cargo/config.toml sets it to <repo>/target/OCCT.
+        let shared_root = std::env::var_os("FUNDACAD_OCCT_ROOT")
+            .filter(|v| !v.is_empty())
+            .map(std::path::PathBuf::from)
+            .map(|root| {
+                // A relative path would resolve against this crate's directory,
+                // not the shell's. The config value is made absolute by cargo.
+                if !root.is_absolute() {
+                    panic!(
+                        "\n\nFUNDACAD_OCCT_ROOT has to be an absolute path, got: {}\n",
+                        root.display()
+                    );
+                }
+                let target = std::env::var("TARGET").unwrap();
+                if std::env::var("HOST").unwrap() == target {
+                    return root;
+                }
+                // A cross build (cargo --target) needs a kernel of its own.
+                let parent = root.parent().map(std::path::Path::to_path_buf).unwrap_or_default();
+                parent.join(target).join("OCCT")
+            });
 
         #[cfg(feature = "builtin")]
-        if shared_root.is_none() {
-            occt_sys::build_occt();
-            std::env::set_var("DEP_OCCT_ROOT", occt_sys::occt_path().as_os_str());
-        }
+        let root = {
+            let root = shared_root.unwrap_or_else(occt_sys::occt_path);
+            build_kernel_into(&root);
+            Some(root)
+        };
+        #[cfg(not(feature = "builtin"))]
+        let root = shared_root;
 
-        let dst =
-            std::panic::catch_unwind(|| cmake::Config::new("OCCT").register_dep("occt").build());
+        let config_dir = root.as_deref().and_then(|root| {
+            refuse_foreign_kernel(root);
+            let lib = root.join("lib");
+            if lib.is_dir() {
+                println!("cargo:rerun-if-changed={}", lib.display());
+            }
+            std::env::set_var("DEP_OCCT_ROOT", root);
+            kernel_config_dir(root)
+        });
+
+        let dst = std::panic::catch_unwind(|| {
+            let mut find = cmake::Config::new("OCCT");
+            find.register_dep("occt")
+                // OCCT's own build registers its build tree in the CMake user
+                // package registry, and find_package falls back to the registry
+                // when the prefix has no usable config, picking up any stale or
+                // half built tree on the machine.
+                .define("CMAKE_FIND_USE_PACKAGE_REGISTRY", "OFF")
+                .define("CMAKE_FIND_USE_SYSTEM_PACKAGE_REGISTRY", "OFF")
+                .define("CMAKE_FIND_PACKAGE_NO_PACKAGE_REGISTRY", "ON")
+                .define("CMAKE_FIND_PACKAGE_NO_SYSTEM_PACKAGE_REGISTRY", "ON");
+            if let Some(dir) = &config_dir {
+                find.define("OpenCASCADE_DIR", dir);
+            }
+            find.build()
+        });
 
         #[cfg(feature = "builtin")]
         let dst = dst.expect("Builtin OpenCASCADE library not found.");
@@ -273,6 +316,191 @@ impl OcctConfig {
             Self { include_dir, library_dir, is_dynamic }
         } else {
             panic!("OpenCASCADE library found but something wrong with config.");
+        }
+    }
+}
+
+/// Our bookkeeping inside a kernel root: the lock, the fake OUT_DIR handed to
+/// occt-sys, the `installing` marker and the `target` stamp. It sits beside
+/// `build`, never in it, because cmake-rs wipes `build` when the OCCT sources
+/// move.
+const STATE_DIR: &str = ".fundacad";
+
+fn static_lib_file(name: &str) -> String {
+    if std::env::var("TARGET").unwrap().contains("msvc") {
+        format!("{name}.lib")
+    } else {
+        format!("lib{name}.a")
+    }
+}
+
+/// The directory holding the installed kernel's OpenCASCADEConfig.cmake, when
+/// `root` holds a complete install: `cmake` in OCCT's Windows layout,
+/// `lib/cmake/opencascade` in its Unix one.
+fn kernel_config_dir(root: &std::path::Path) -> Option<std::path::PathBuf> {
+    if root.join(STATE_DIR).join("installing").exists() {
+        return None;
+    }
+    let lib = root.join("lib");
+    if !OCCT_LIBS.iter().all(|name| lib.join(static_lib_file(name)).exists()) {
+        return None;
+    }
+    [root.join("cmake"), root.join("lib").join("cmake").join("opencascade")].into_iter().find(
+        |dir| {
+            dir.join("OpenCASCADEConfig.cmake").exists()
+                && dir.join("OpenCASCADEFoundationClassesTargets.cmake").exists()
+        },
+    )
+}
+
+/// Panics when `root` holds a kernel, or a kernel build, for another target or
+/// from the other Windows toolchain, which would otherwise fail much later as
+/// cmake or linker noise.
+fn refuse_foreign_kernel(root: &std::path::Path) {
+    let target = std::env::var("TARGET").unwrap();
+    let msvc = target.contains("msvc");
+    let lib = root.join("lib");
+    let (ours, theirs) =
+        if msvc { ("TKernel.lib", "libTKernel.a") } else { ("libTKernel.a", "TKernel.lib") };
+    let built_by = if msvc { "MinGW or GCC" } else { "MSVC" };
+
+    let stamp = std::fs::read_to_string(root.join(STATE_DIR).join("target")).unwrap_or_default();
+    let stamp = stamp.trim();
+    let mut evidence = None;
+    if !stamp.is_empty() && stamp != target {
+        evidence = Some(format!("built for {stamp}"));
+    } else if lib.join(theirs).exists() && !lib.join(ours).exists() {
+        evidence = Some(format!("built by {built_by} (lib holds {theirs})"));
+    } else if target.contains("windows") {
+        let cache =
+            std::fs::read_to_string(root.join("build").join("CMakeCache.txt")).unwrap_or_default();
+        let generator =
+            cache.lines().find_map(|l| l.strip_prefix("CMAKE_GENERATOR:INTERNAL=")).unwrap_or("");
+        let foreign = if msvc {
+            generator.contains("MinGW") || generator.contains("MSYS")
+        } else {
+            generator.starts_with("Visual Studio")
+        };
+        if foreign {
+            evidence = Some(format!("built by {built_by} (build was configured for {generator})"));
+        }
+    }
+    if let Some(evidence) = evidence {
+        panic!(
+            r#"
+
+This directory holds an OpenCASCADE kernel {evidence},
+which this {target} build cannot use:
+
+    {root}
+
+Delete it and build again. The kernel is then rebuilt there for this build,
+which takes about twenty minutes.
+"#,
+            root = root.display()
+        );
+    }
+}
+
+/// Builds and installs the kernel into `root` unless a complete one is there.
+#[cfg(feature = "builtin")]
+fn build_kernel_into(root: &std::path::Path) {
+    if kernel_config_dir(root).is_some() {
+        return;
+    }
+    refuse_foreign_kernel(root);
+    // occt-sys installs into $OUT_DIR/../../../../OCCT and takes no other
+    // destination, so it is handed an OUT_DIR four levels below `root`.
+    if root.file_name() != Some(std::ffi::OsStr::new("OCCT")) {
+        panic!(
+            r#"
+
+FUNDACAD_OCCT_ROOT holds no OpenCASCADE install:
+
+    {}
+
+Point it at an installed kernel (with cmake, include and lib in it), or at a
+directory named OCCT to build one there.
+"#,
+            root.display()
+        );
+    }
+    let state = root.join(STATE_DIR);
+    let fake_out = state.join("cargo").join("out");
+    let build = root.join("build");
+    std::fs::create_dir_all(&fake_out).unwrap();
+    std::fs::create_dir_all(&build).unwrap();
+
+    // The workspace and src-tauri share one root, and two cargo runs building
+    // the kernel into it at once would wreck it. The `installing` marker keeps
+    // the unlocked check above from taking a half installed kernel, whether
+    // another run is installing it or an earlier one was interrupted.
+    let lock = std::fs::File::create(state.join("kernel.lock")).unwrap();
+    lock.lock().unwrap();
+    if kernel_config_dir(root).is_some() {
+        return;
+    }
+    let installing = state.join("installing");
+    std::fs::write(&installing, "").unwrap();
+    let target = std::env::var("TARGET").unwrap();
+    std::fs::write(state.join("target"), &target).unwrap();
+
+    // OCCT calls export(PACKAGE) under policy CMP0090 OLD, which writes the
+    // build tree into the user package registry unless this is set, and
+    // occt-sys passes no defines of ours, so it goes in a seeded cache.
+    let cache = build.join("CMakeCache.txt");
+    let seeded = std::fs::read_to_string(&cache).unwrap_or_default();
+    if !seeded.contains("CMAKE_EXPORT_NO_PACKAGE_REGISTRY") {
+        let line = "CMAKE_EXPORT_NO_PACKAGE_REGISTRY:BOOL=ON\n";
+        std::fs::write(&cache, seeded + line).unwrap();
+    }
+
+    let out_dir = std::env::var_os("OUT_DIR").unwrap();
+    std::env::set_var("OUT_DIR", &fake_out);
+    let built = std::panic::catch_unwind(occt_sys::build_occt);
+    std::env::set_var("OUT_DIR", out_dir);
+    forget_registered_build(&build);
+    if let Err(panic) = built {
+        std::panic::resume_unwind(panic);
+    }
+
+    std::fs::remove_file(&installing).unwrap();
+    if kernel_config_dir(root).is_none() {
+        panic!("OpenCASCADE was built but {} holds no complete install", root.display());
+    }
+}
+
+/// Removes a CMake user package registry entry for `build`. The seeded cache
+/// stops OCCT making one, but cmake-rs deletes the whole build directory, seed
+/// included, when the OCCT sources it was configured from have moved.
+#[cfg(feature = "builtin")]
+fn forget_registered_build(build: &std::path::Path) {
+    use std::process::Command;
+
+    let normal = |path: &str| {
+        let path = path.trim().trim_start_matches(r"\\?\").replace('\\', "/");
+        let path = path.trim_end_matches('/');
+        if cfg!(windows) { path.to_lowercase() } else { path.to_string() }
+    };
+    let build = std::fs::canonicalize(build).unwrap_or_else(|_| build.to_path_buf());
+    let build = normal(&build.to_string_lossy());
+
+    if cfg!(windows) {
+        let key = r"HKCU\Software\Kitware\CMake\Packages\OpenCASCADE";
+        let Ok(listed) = Command::new("reg").args(["query", key]).output() else { return };
+        for line in String::from_utf8_lossy(&listed.stdout).lines() {
+            if let Some((name, path)) = line.split_once("REG_SZ") {
+                if normal(path) == build {
+                    let _ = Command::new("reg").args(["delete", key, "/v", name.trim(), "/f"]).output();
+                }
+            }
+        }
+    } else if let Some(home) = std::env::var_os("HOME") {
+        let packages = std::path::Path::new(&home).join(".cmake/packages/OpenCASCADE");
+        for entry in std::fs::read_dir(packages).into_iter().flatten().flatten() {
+            if std::fs::read_to_string(entry.path()).is_ok_and(|path| normal(&path) == build) {
+                let _ = std::fs::remove_file(entry.path());
+            }
         }
     }
 }
