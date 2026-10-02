@@ -131,6 +131,57 @@ export function buildClashMesh(positions: number[], indices: number[]): THREE.Me
   return mesh;
 }
 
+/** The stress result's surface, one sRGB colour per vertex (`colors`, three
+ *  per vertex). Lit and flat shaded, so the part keeps its shape under the
+ *  colours; it stands in for the body, which the viewport hides meanwhile. */
+export function buildStressMesh(positions: number[], indices: number[], colors: Float32Array): THREE.Mesh {
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  // The ramp is authored in sRGB; vertex colours are read as linear.
+  const lin = new Float32Array(colors.length);
+  const c = new THREE.Color();
+  for (let i = 0; i + 2 < colors.length; i += 3) {
+    c.setRGB(colors[i]!, colors[i + 1]!, colors[i + 2]!, THREE.SRGBColorSpace);
+    lin[i] = c.r;
+    lin[i + 1] = c.g;
+    lin[i + 2] = c.b;
+  }
+  geo.setAttribute("color", new THREE.BufferAttribute(lin, 3));
+  geo.setIndex(indices);
+  geo.computeVertexNormals();
+  const mat = new THREE.MeshStandardMaterial({
+    vertexColors: true,
+    flatShading: true,
+    roughness: 0.85,
+    metalness: 0,
+    side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.raycast = () => {};
+  return mesh;
+}
+
+/** A translucent tint over a set of faces (world-space triangles, nine numbers
+ *  each), for the faces an analysis holds or loads. */
+export function buildFaceMarkMesh(positions: Float32Array, color: number): THREE.Mesh {
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  const mat = new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity: 0.6,
+    depthWrite: false,
+    polygonOffset: true,
+    polygonOffsetFactor: -2,
+    polygonOffsetUnits: -2,
+    side: THREE.DoubleSide,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.raycast = () => {};
+  mesh.renderOrder = 6;
+  return mesh;
+}
+
 /** The short marker line between a clearance pair's two nearest points. */
 export function buildClearanceLine(pointA: THREE.Vector3, pointB: THREE.Vector3): THREE.Line {
   const geo = new THREE.BufferGeometry().setFromPoints([pointA, pointB]);

@@ -149,6 +149,8 @@ export function installRebuildBridge(e: Engine): void {
         e.viewport.setFacePaint(p.faces); // + per-face inlay colours
         e.viewport.setFaceFinish(p.faceFinish); // + a material dropped on one face
         e.viewport.setBodyFinish(e.store.materialFinishes()); // + how each is finished
+        // setModel dropped the Stress panel's face marks with the old face ids.
+        e.ui.panels.refreshStressMarks();
       } else {
         e.viewport.clearModel();
       }

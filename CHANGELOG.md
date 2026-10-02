@@ -47,6 +47,8 @@ This file starts on 2026-08-03. For anything before that, see the
   thin wall, and printed parts being weaker across their layers. An assistant
   runs the same analysis through the MCP `stress` tool, which answers with a
   short report and a picture of the part coloured from blue to red by stress.
+  In the app, Inspect, Analyze, Stress opens a panel that takes the fixed and
+  loaded faces from the selection and paints the part by stress, with a legend.
 - **Sketch shortcuts over MCP.** A sketch may give an outline as a `polyline`,
   a list of points that can close on itself, and a rectangle by two opposite
   corners. They are stored as the lines and centred rectangle the app already
