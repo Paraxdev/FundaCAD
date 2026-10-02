@@ -331,6 +331,7 @@ impl Jobs for GeomJobs {
             "blobHas" | "blobRead" | "blobWrite" => crate::import::blob_result(op, req),
             "inspect" => crate::inspect::inspect_result(req, &EngineWatch(ctx)),
             "interference" => crate::inspect::interference_result(req, &EngineWatch(ctx)),
+            "stress" => crate::stress::stress_result(req, &EngineWatch(ctx)),
             "faceAxis" => crate::features::axis_push::face_axis_result(req, &EngineWatch(ctx)),
             "profileCuts" => crate::features::sketch::profile_cuts_result(req),
             "patternAxis" => crate::features::pattern::pattern_axis_result(req, &EngineWatch(ctx)),

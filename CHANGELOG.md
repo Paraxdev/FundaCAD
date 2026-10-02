@@ -34,6 +34,17 @@ This file starts on 2026-08-03. For anything before that, see the
   joint that stays apart and by how much, and motions the joints leave free are
   reported. Joints and mechanisms take a new `axis` connector, the line of a
   pin, hole, circle or straight edge, so a pin and its hole line up directly.
+- **Stress analysis.** The engine can now tell how a part bends and where it is
+  most stressed under load: fix some of its faces, push on others with a force
+  or a pressure, pick a material (PLA, PETG, ABS, ASA, nylon, PC, aluminium,
+  steel or your own), and the `stress` op answers with the peak von Mises
+  stress and where it is, the largest deflection, the safety factor against
+  yield and a stress colour map of the surface. It fills the part with
+  quadratic tetrahedra and solves a linear static analysis written in Rust, on
+  a copy of the body, so the model is never changed, and it says plainly when
+  the answer needs care: a deflection too large for a linear analysis, a peak
+  at a sharp inside corner or where a fixture ends, too few elements through a
+  thin wall, and printed parts being weaker across their layers.
 - **Sketch shortcuts over MCP.** A sketch may give an outline as a `polyline`,
   a list of points that can close on itself, and a rectangle by two opposite
   corners. They are stored as the lines and centred rectangle the app already

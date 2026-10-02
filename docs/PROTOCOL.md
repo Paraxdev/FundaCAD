@@ -350,6 +350,90 @@ Reply, either the axis or why the face has none:
 { "reason": "the walls around the face do not all run along one axis" }
 ```
 
+### `stress`
+
+A linear static stress analysis of one body, in mm, N and MPa. Display only: the
+result never enters the document or undo history. The document is rebuilt through
+the same warm cache as `inspect`; a copy of the body is meshed (the live body and its
+viewport mesh are left alone), filled with tetrahedra by isosurface stuffing and solved
+on quadratic (10 node) tetrahedra with faer's sparse Cholesky, on one thread, so the
+same request gives the same answer every time.
+
+```jsonc
+{ "op": "stress", "id": "...", "document": { /* CadDocument */ },
+  "body": "body3",                      // id or name; one closed solid
+  "fixed": [ /* face Selectors */ ],    // held still in every direction; at least one
+  "loads": [
+    { "faces": [ /* face Selectors */ ], "force": [0, 0, -20] },  // N, the total, spread by area
+    { "faces": [ /* ... */ ], "pressure": 0.5 }                   // MPa, pushing into the faces
+  ],
+  "material": "PLA",     // optional, default PLA; a preset or {"E", "nu", "yield", "name"}
+  "size": 1.5,           // optional, element size in mm
+  "maxElements": 30000 } // optional, default 30000, at most 80000
+```
+
+- `fixed` and each load's `faces` take one face selector or a list (the same forms
+  `inspect` hands back in each face's `selector`). A selector that picks no face of the
+  body, or carries a `body` other than the one analysed, is refused.
+- A load has exactly one of `force` and `pressure`. A pressure on a planar face is
+  applied as that face's resultant (pressure times its area as tessellated, along
+  minus its outward normal), since the volume mesh rounds sharp edges over within
+  about one element; on a curved face it follows the surface, scaled to the face's
+  tessellated area. A face with curved edges reads a fraction of a percent small.
+- Material presets, names case-insensitive (E and yield in MPa): `PLA` (3500, 0.36,
+  50), `PETG` (2100, 0.38, 50), `ABS` (2200, 0.35, 40), `ASA` (2200, 0.35, 45),
+  `PA12 nylon` (also `PA12`, `nylon`; 1700, 0.40, 45), `PC` (2400, 0.37, 60),
+  `aluminium 6061-T6` (also `aluminium`, `aluminum`; 69000, 0.33, 275) and
+  `steel S235` (also `steel`; 210000, 0.30, 235). A custom material needs `E` and
+  `nu`; without `yield` the reply's `safetyFactor` is null.
+- `size` defaults to about 70% of `maxElements` for the body's volume, and at most
+  half its typical thickness `2 V / A`. A size smaller than `maxElements` allows is
+  grown to fit before anything is meshed (a warning says so). `maxElements` above
+  80000 is capped there with a warning. The factorisation may take at most 3 GB, and
+  less when the machine has less free, which a compact part usually passes above
+  about 50000 elements (a slender or thin walled one goes further). A mesh that would
+  not fit is refused with the `maxElements` that would.
+- A load only on fixed faces does nothing to the part: it is refused when every load
+  is, and otherwise draws a warning.
+
+Reply:
+```jsonc
+{ "body": "body3", "name": "Spring",
+  "material": { "name": "PLA", "E": 3500, "nu": 0.36, "yield": 50 },
+  "mesh": { "nodes": 12345, "elements": 23456, "size": 1.2, "minDihedral": 11.2 },
+  "maxVonMises": { "value": 31.2, "at": [x,y,z], "face": 4 },   // face null when the peak is inside
+  "maxDisplacement": { "value": 0.84, "at": [x,y,z], "vector": [dx,dy,dz] },
+  "safetyFactor": 1.6,                 // yield / peak von Mises
+  "applied": [0, 0, -20], "reaction": [0, 0, 20],   // N; they balance
+  "warnings": ["..."],
+  "surface": { "positions": [...], "indices": [...], "faceIds": [...],
+               "vonMises": [...], "displacement": [...] },
+  "errors": [ /* feature failures, only when a feature failed */ ] }
+```
+
+- `mesh.nodes` counts the quadratic mesh's nodes (corners and mid-edge nodes).
+- `maxVonMises.face` is the face index (the `i` of `inspect`, the mesh `faceIds`) the
+  peak lies on: of the boundary triangles touching it, the face with the most area.
+- `safetyFactor` is null when the material has no `yield` or nothing is stressed.
+- `surface` is the boundary of the volume mesh, outward wound: `positions` (xyz per
+  vertex), `indices` (three per triangle), `faceIds` (one per triangle), and per vertex
+  `vonMises` (MPa) and `displacement` (xyz, mm), as inline JSON numbers like the overlap
+  meshes of `interference`, positions rounded to 4 places and the fields to 6.
+- `warnings`, in plain words: a deflection above a tenth of the part's smallest
+  bounding size (a linear analysis is not trustworthy there), a load only on fixed
+  faces, a peak near an edge where two faces fold inward by more than 30 degrees or
+  where a fixed face ends (stress there grows as the mesh is refined), elements larger
+  than half the typical thickness `2 V / A` (thin walls may get fewer than two through
+  them), an element size grown to stay within `maxElements`, fixed faces too narrow to
+  get any element, and for plastics that printed parts are weaker across their layers.
+- A refusal is an ordinary error reply, `{"ok": false, "error": {"message"}}`: no body
+  or an unknown one, a body that is not one closed solid, no fixed face, no load or
+  loads only on fixed faces, a selector that picks nothing, an unknown material, a part
+  too thin for the elements (allow more elements or use a smaller size), a body the
+  fixed faces do not hold, or a mesh too large for the memory. When a feature of the document failed, the message
+  names the first failure and the error carries its `feature_id`. The analysis beats the job's heartbeat throughout and stops
+  on `cancel`; the factorisation, one long call, finishes before a cancel takes effect.
+
 ### `inspect`
 
 Exact B-rep measurements of the document's live bodies. Rebuilds through the same

@@ -126,6 +126,18 @@ const WELD_QUANTUM: f64 = 1e-6;
 /// solid reads as one open patch per face. Triangles the weld collapses are
 /// dropped.
 pub fn weld(positions: &[f64], indices: &[u32]) -> (Vec<f64>, Vec<u32>) {
+    let (out_pos, remap) = weld_vertices(positions);
+    let mut out_idx = Vec::with_capacity(indices.len());
+    for t in indices.chunks_exact(3) {
+        if let Some(t) = welded_triangle(&remap, t) {
+            out_idx.extend_from_slice(&t);
+        }
+    }
+    (out_pos, out_idx)
+}
+
+/// The welded positions of `weld`, and the index among them of each input vertex.
+pub fn weld_vertices(positions: &[f64]) -> (Vec<f64>, Vec<u32>) {
     let mut first: std::collections::HashMap<[i64; 3], u32> = std::collections::HashMap::new();
     let mut out_pos = Vec::with_capacity(positions.len());
     let remap: Vec<u32> = positions
@@ -138,14 +150,13 @@ pub fn weld(positions: &[f64], indices: &[u32]) -> (Vec<f64>, Vec<u32>) {
             })
         })
         .collect();
-    let mut out_idx = Vec::with_capacity(indices.len());
-    for t in indices.chunks_exact(3) {
-        let [a, b, c] = [0, 1, 2].map(|k| remap[t[k] as usize]);
-        if a != b && b != c && a != c {
-            out_idx.extend_from_slice(&[a, b, c]);
-        }
-    }
-    (out_pos, out_idx)
+    (out_pos, remap)
+}
+
+/// Triangle `t` over the welded vertices, or None when the weld collapses it.
+pub fn welded_triangle(remap: &[u32], t: &[u32]) -> Option<[u32; 3]> {
+    let [a, b, c] = [0, 1, 2].map(|k| remap[t[k] as usize]);
+    (a != b && b != c && a != c).then_some([a, b, c])
 }
 
 /// Which group each index belongs to, the inverse of `par::share_groups`.
