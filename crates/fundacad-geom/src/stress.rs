@@ -5,6 +5,10 @@
 //! faces and loaded faces are selectors resolved on that same copy, so their indices are the
 //! mesh's face ids. The reply carries the peaks, the balance of applied load and reaction, and
 //! the boundary of the volume mesh coloured by von Mises stress for the viewport.
+//!
+//! Besides fixed faces, a support may be a slider (held along the face normal only) or a pin
+//! (a cylindrical face held towards its axis and along it, free to turn), and gravity may pull
+//! on the whole body with the material's density.
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -17,7 +21,9 @@ use serde_json::{json, Map, Value};
 
 use crate::builder::{Fail, FeatureError, Watch};
 use crate::export;
-use crate::fem::solve::{self, Load, LoadKind, Problem, Solution, SolveError};
+use crate::fem::solve::{
+    self, Axis, Hold, Load, LoadKind, Problem, SlideFace, Solution, SolveError, Support,
+};
 use crate::fem::tetmesh::{self, MeshError};
 use crate::fem::{MeshOptions, MeshStats, SurfaceMesh, TetMesh};
 use crate::kernel::{self, Kind};
@@ -48,32 +54,39 @@ const CORNER_REACH: f64 = 1.5;
 /// it to well under a minute, so this only stops beats for a call that is truly stuck.
 const FACTOR_BEATS: Duration = Duration::from_secs(600);
 
-/// A material for the analysis: Young's modulus and yield strength in MPa.
+/// Standard gravity in m/s2, what `gravity: true` pulls with along -Z.
+pub const STANDARD_GRAVITY: f64 = 9.81;
+
+/// A material for the analysis: Young's modulus and yield strength in MPa, density in g/cm3.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Material {
     pub name: String,
     pub e: f64,
     pub nu: f64,
     pub yield_strength: Option<f64>,
+    pub density: Option<f64>,
     /// Usually 3D printed, so weaker across its layers than these bulk values say.
     pub printed: bool,
 }
 
-/// (name, other spellings, E, nu, yield, printed). The app mirrors the names and values.
-const PRESETS: [(&str, &[&str], f64, f64, f64, bool); 8] = [
-    ("PLA", &[], 3500.0, 0.36, 50.0, true),
-    ("PETG", &[], 2100.0, 0.38, 50.0, true),
-    ("ABS", &[], 2200.0, 0.35, 40.0, true),
-    ("ASA", &[], 2200.0, 0.35, 45.0, true),
+/// (name, other spellings, E, nu, yield, density, printed). The app mirrors the names and
+/// values.
+#[allow(clippy::type_complexity)]
+const PRESETS: [(&str, &[&str], f64, f64, f64, f64, bool); 8] = [
+    ("PLA", &[], 3500.0, 0.36, 50.0, 1.24, true),
+    ("PETG", &[], 2100.0, 0.38, 50.0, 1.27, true),
+    ("ABS", &[], 2200.0, 0.35, 40.0, 1.04, true),
+    ("ASA", &[], 2200.0, 0.35, 45.0, 1.07, true),
     (
         "PA12 nylon",
         &["PA12", "nylon", "PA"],
         1700.0,
         0.40,
         45.0,
+        1.01,
         true,
     ),
-    ("PC", &["polycarbonate"], 2400.0, 0.37, 60.0, true),
+    ("PC", &["polycarbonate"], 2400.0, 0.37, 60.0, 1.20, true),
     (
         "aluminium 6061-T6",
         &[
@@ -86,6 +99,7 @@ const PRESETS: [(&str, &[&str], f64, f64, f64, bool); 8] = [
         69000.0,
         0.33,
         275.0,
+        2.70,
         false,
     ),
     (
@@ -94,6 +108,7 @@ const PRESETS: [(&str, &[&str], f64, f64, f64, bool); 8] = [
         210000.0,
         0.30,
         235.0,
+        7.85,
         false,
     ),
 ];
@@ -106,11 +121,12 @@ pub fn preset(name: &str) -> Option<Material> {
         .find(|(n, alt, ..)| {
             n.to_lowercase() == want || alt.iter().any(|a| a.to_lowercase() == want)
         })
-        .map(|&(n, _, e, nu, y, printed)| Material {
+        .map(|&(n, _, e, nu, y, density, printed)| Material {
             name: n.to_string(),
             e,
             nu,
             yield_strength: Some(y),
+            density: Some(density),
             printed,
         })
 }
@@ -151,6 +167,17 @@ fn material_of(v: Option<&Value>) -> Result<Material, String> {
                     }
                 },
             };
+            let density = match m.get("density") {
+                None | Some(Value::Null) => None,
+                Some(d) => match d.as_f64() {
+                    Some(d) if d.is_finite() && d > 0.0 => Some(d),
+                    _ => {
+                        return Err(format!(
+                            "the material's density must be a number above 0 g/cm3, got {d}"
+                        ))
+                    }
+                },
+            };
             let name = m
                 .get("name")
                 .and_then(Value::as_str)
@@ -162,6 +189,7 @@ fn material_of(v: Option<&Value>) -> Result<Material, String> {
                 e,
                 nu,
                 yield_strength,
+                density,
                 printed: e < 20_000.0,
             })
         }
@@ -179,6 +207,181 @@ fn positive(req: &Map<String, Value>, key: &str) -> Result<Option<f64>, String> 
             _ => Err(format!("{key} must be a number above 0, got {v}")),
         },
     }
+}
+
+/// Below this, in m/s2 along every axis, a gravity vector pulls on nothing.
+const NO_GRAVITY: f64 = 1e-9;
+
+/// What `gravity` asks for, in m/s2: true is standard gravity along -Z. A vector of no length
+/// is no gravity, so a request with no load is refused as it is without gravity, rather than
+/// solved for nothing.
+fn gravity_of(v: Option<&Value>) -> Result<Option<[f64; 3]>, String> {
+    match v {
+        None | Some(Value::Null) | Some(Value::Bool(false)) => Ok(None),
+        Some(Value::Bool(true)) => Ok(Some([0.0, 0.0, -STANDARD_GRAVITY])),
+        Some(g) => vec3_of(g)
+            .map(|v| v.iter().any(|c| c.abs() >= NO_GRAVITY).then_some(v))
+            .ok_or_else(|| format!("gravity must be true, false or [gx, gy, gz] in m/s2, got {g}")),
+    }
+}
+
+/// The force per cubic mm, N, that gravity `g` in m/s2 puts on a material of `density` in
+/// g/cm3: a g/cm3 is 1e-9 t/mm3 and a m/s2 is 1000 mm/s2, and t mm/s2 is N.
+pub fn body_force(density: f64, g: [f64; 3]) -> [f64; 3] {
+    g.map(|c| density * 1e-9 * c * 1e3)
+}
+
+/// How a support of the request holds its faces.
+#[derive(Debug, Clone, PartialEq)]
+enum SupportKind {
+    Fixed,
+    /// One surface per face, in the order of the support's face ids.
+    Slider(Vec<SlideFace>),
+    /// One axis per face, in the order of the support's face ids.
+    Pinned(Vec<Axis>),
+}
+
+impl SupportKind {
+    /// The word for it, as the panel and the request spell it.
+    fn word(&self) -> &'static str {
+        match self {
+            SupportKind::Fixed => "fixed",
+            SupportKind::Slider(_) => "slider",
+            SupportKind::Pinned(_) => "pinned",
+        }
+    }
+}
+
+/// The exact surface of face `face` of `shape`, as a slider holds it: a plane, a cylinder,
+/// a cone, a sphere, a torus or another surface turned about an axis, with its axis or centre,
+/// else a free-form face whose normal the mesh gives.
+fn slide_face(shape: &Shape, face: u32) -> SlideFace {
+    let Some((kind, o)) = surface_kind(shape, face) else {
+        return SlideFace::Mesh;
+    };
+    let axis = Axis {
+        origin: [o[4], o[5], o[6]],
+        dir: [o[1], o[2], o[3]],
+    };
+    match kind {
+        0 => SlideFace::Plane(axis.dir),
+        1 => SlideFace::Cylinder(axis),
+        2 => SlideFace::Cone {
+            axis,
+            semi_angle: o[7],
+        },
+        3 => SlideFace::Sphere(axis.origin),
+        4 => SlideFace::Torus { axis, major: o[7] },
+        5 => SlideFace::Revolution(axis),
+        _ => SlideFace::Mesh,
+    }
+}
+
+/// The surface kind of face `face` of `shape` and its parameters, as `FQ_surface` gives them:
+/// 0 plane, 1 cylinder, 2 cone, 3 sphere, 4 torus, 5 surface of revolution, -1 other.
+fn surface_kind(shape: &Shape, face: u32) -> Option<(i32, [f64; 13])> {
+    let f = shape.shape_map(ShapeType::Face).get(face as usize + 1)?;
+    let mut o = [0.0; 13];
+    let kind = opencascade_sys::face_query::FQ_surface(f.raw(), &mut o).ok()?;
+    Some((kind, o))
+}
+
+/// What a face that is not a cylinder is, in words a person can find it by.
+fn not_round_words(kind: Option<i32>) -> &'static str {
+    match kind {
+        Some(0) => "flat",
+        Some(2) => "a cone",
+        Some(3) => "a ball",
+        Some(4) => "ring-shaped (a torus)",
+        _ => "curved but not a cylinder",
+    }
+}
+
+/// A support or a load as a refusal names it: the panel's words, counted from 1, then where
+/// it sits in the request, as an MCP caller wrote it, "support 1 (supports[0])".
+fn named(what: &str, list: &str, i: usize) -> String {
+    format!("{what} {} ({list}[{i}])", i + 1)
+}
+
+/// The request's `supports`, each with its face ids. A missing type is fixed.
+fn supports_of(
+    shape: &Shape,
+    body_id: &str,
+    v: Option<&Value>,
+) -> Result<Vec<(SupportKind, Vec<u32>)>, String> {
+    let list = match v {
+        None | Some(Value::Null) => Vec::new(),
+        Some(Value::Array(a)) => a.iter().collect(),
+        Some(one) => vec![one],
+    };
+    let mut out = Vec::with_capacity(list.len());
+    for (i, sup) in list.iter().enumerate() {
+        let at = named("support", "supports", i);
+        let Some(m) = sup.as_object() else {
+            return Err(format!(
+                "{at} must be {{type, faces}}, a type of fixed, pinned or slider and the faces it holds, got {sup}"
+            ));
+        };
+        let kind = match m.get("type") {
+            None | Some(Value::Null) => "fixed",
+            Some(Value::String(t)) => t.as_str(),
+            Some(other) => {
+                return Err(format!(
+                    "the type of {at} must be fixed, pinned or slider, got {other}"
+                ))
+            }
+        };
+        let Some(faces) = m.get("faces") else {
+            return Err(format!("{at} has no faces, give the faces it holds"));
+        };
+        let check = match kind.trim().to_lowercase().as_str() {
+            k @ ("fixed" | "pinned" | "slider") => k.to_string(),
+            _ => {
+                return Err(format!(
+                    "{at} has type '{kind}', a support is fixed, pinned or slider"
+                ))
+            }
+        };
+        let faces = face_ids(
+            shape,
+            body_id,
+            faces,
+            &format!("support {}", i + 1),
+            &format!("supports[{i}].faces"),
+        )?;
+        let kind = match check.as_str() {
+            "fixed" => SupportKind::Fixed,
+            "slider" => SupportKind::Slider(faces.iter().map(|&f| slide_face(shape, f)).collect()),
+            _ => {
+                let mut axes = Vec::with_capacity(faces.len());
+                for &f in &faces {
+                    let kind = surface_kind(shape, f);
+                    match kind {
+                        Some((1, o)) => axes.push(Axis {
+                            origin: [o[4], o[5], o[6]],
+                            dir: [o[1], o[2], o[3]],
+                        }),
+                        _ => {
+                            // The face ids mean nothing to a person, so the face is told by
+                            // what it is.
+                            let which = if faces.len() == 1 {
+                                "its face".to_string()
+                            } else {
+                                format!("one of its {} faces", faces.len())
+                            };
+                            return Err(format!(
+                                "{at} is pinned, which needs cylindrical faces (a hole or a pin), but {which} is {}, pick the round face of the hole or the pin",
+                                not_round_words(kind.map(|k| k.0))
+                            ));
+                        }
+                    }
+                }
+                SupportKind::Pinned(axes)
+            }
+        };
+        out.push((kind, faces));
+    }
+    Ok(out)
 }
 
 /// A selector or a list of them, as a list.
@@ -229,21 +432,35 @@ fn refuse(message: &str, errors: &[FeatureError]) -> JobResult {
     }
 }
 
-/// What the face selectors at `what` pick on `shape` (the copy that was meshed), as its mesh
-/// face ids. A selector that picks nothing is refused rather than ignored.
-fn face_ids(shape: &Shape, body_id: &str, sels: &Value, what: &str) -> Result<Vec<u32>, String> {
+/// What the face selectors at `path` in the request pick on `shape` (the copy that was meshed),
+/// as its mesh face ids. A refusal names them by `words` first when there are any (the panel's
+/// "support 1"), then by `path`. A selector that picks nothing is refused rather than ignored.
+fn face_ids(
+    shape: &Shape,
+    body_id: &str,
+    sels: &Value,
+    words: &str,
+    path: &str,
+) -> Result<Vec<u32>, String> {
+    let label = |path: String| {
+        if words.is_empty() {
+            path
+        } else {
+            format!("{words} ({path})")
+        }
+    };
     let list = selector_list(sels);
     if list.is_empty() {
-        return Err(format!("{what} names no faces"));
+        return Err(format!("{} names no faces", label(path.to_string())));
     }
     let map = shape.shape_map(ShapeType::Face);
     let mut ids = Vec::new();
     for (i, sel) in list.iter().enumerate() {
-        let at = if list.len() > 1 || sels.is_array() {
-            format!("{what}[{i}]")
+        let at = label(if list.len() > 1 || sels.is_array() {
+            format!("{path}[{i}]")
         } else {
-            what.to_string()
-        };
+            path.to_string()
+        });
         if let Some(b) = sel.get("body").and_then(Value::as_str) {
             if b != body_id {
                 return Err(format!(
@@ -277,41 +494,55 @@ fn vec3_of(v: &Value) -> Option<[f64; 3]> {
     Some(out)
 }
 
-fn loads_of(shape: &Shape, body_id: &str, v: Option<&Value>) -> Result<Vec<Load>, String> {
+/// The loads, which may be none when gravity is on.
+fn loads_of(
+    shape: &Shape,
+    body_id: &str,
+    v: Option<&Value>,
+    gravity: bool,
+) -> Result<Vec<Load>, String> {
     let list = match v {
         None | Some(Value::Null) => Vec::new(),
         Some(Value::Array(a)) => a.iter().collect(),
         Some(one) => vec![one],
     };
-    if list.is_empty() {
-        return Err("there is no load, add a force or a pressure on a face".into());
+    if list.is_empty() && !gravity {
+        return Err(
+            "there is no load, add a force or a pressure on a face, or turn gravity on".into(),
+        );
     }
     let mut out = Vec::with_capacity(list.len());
     for (i, l) in list.iter().enumerate() {
-        let at = format!("loads[{i}]");
+        let at = named("load", "loads", i);
         let Some(faces) = l.get("faces") else {
-            return Err(format!("{at} has no faces"));
+            return Err(format!("{at} has no faces, give the faces it pushes on"));
         };
-        let faces = face_ids(shape, body_id, faces, &format!("{at}.faces"))?;
-        let kind = match (l.get("force"), l.get("pressure")) {
-            (Some(f), None) => LoadKind::Force(
-                vec3_of(f)
-                    .ok_or_else(|| format!("{at}.force must be three numbers in N, got {f}"))?,
-            ),
-            (None, Some(p)) => LoadKind::Pressure(
-                p.as_f64()
-                    .filter(|p| p.is_finite())
-                    .ok_or_else(|| format!("{at}.pressure must be a number in MPa, got {p}"))?,
-            ),
-            (Some(_), Some(_)) => {
-                return Err(format!("{at} has both a force and a pressure, give one"))
-            }
-            (None, None) => {
-                return Err(format!(
-                    "{at} needs a force [x, y, z] in N or a pressure in MPa"
-                ))
-            }
-        };
+        let faces = face_ids(
+            shape,
+            body_id,
+            faces,
+            &format!("load {}", i + 1),
+            &format!("loads[{i}].faces"),
+        )?;
+        let kind =
+            match (l.get("force"), l.get("pressure")) {
+                (Some(f), None) => LoadKind::Force(vec3_of(f).ok_or_else(|| {
+                    format!("the force of {at} must be three numbers in N, got {f}")
+                })?),
+                (None, Some(p)) => {
+                    LoadKind::Pressure(p.as_f64().filter(|p| p.is_finite()).ok_or_else(|| {
+                        format!("the pressure of {at} must be a number in MPa, got {p}")
+                    })?)
+                }
+                (Some(_), Some(_)) => {
+                    return Err(format!("{at} has both a force and a pressure, give one"))
+                }
+                (None, None) => {
+                    return Err(format!(
+                        "{at} needs a force [x, y, z] in N or a pressure in MPa"
+                    ))
+                }
+            };
         out.push(Load { faces, kind });
     }
     Ok(out)
@@ -378,13 +609,20 @@ fn unit(a: [f64; 3]) -> [f64; 3] {
 struct PeakPlace {
     /// The face with the most boundary area touching the peak node, None for a node inside.
     face: Option<u32>,
-    /// The node touches both fixed and free boundary, so it is where a fixture ends.
-    at_fixture_edge: bool,
+    /// How the support holds a face whose edge the peak is at: the node touches both held
+    /// and free boundary.
+    support_edge: Option<&'static str>,
 }
 
 /// The boundary triangles touching TET10 node `node`: a corner node by being one of their
-/// corners, a mid-edge node by holding both ends of its edge.
-fn peak_place(mesh: &TetMesh, sol: &Solution, node: u32, fixed: &[u32]) -> PeakPlace {
+/// corners, a mid-edge node by holding both ends of its edge. `held` lists the faces the
+/// supports hold, sorted, each with how it is held.
+fn peak_place(
+    mesh: &TetMesh,
+    sol: &Solution,
+    node: u32,
+    held: &[(u32, &'static str)],
+) -> PeakPlace {
     let ends: Vec<u32> = if (node as usize) < sol.corners {
         vec![node]
     } else {
@@ -404,11 +642,18 @@ fn peak_place(mesh: &TetMesh, sol: &Solution, node: u32, fixed: &[u32]) -> PeakP
         }
     }
     areas.sort_by(|a, b| b.1.total_cmp(&a.1).then(a.0.cmp(&b.0)));
-    let is_fixed = |t: usize| fixed.binary_search(&mesh.boundary_face[t]).is_ok();
+    let held_as = |t: usize| {
+        held.binary_search_by_key(&mesh.boundary_face[t], |h| h.0)
+            .ok()
+            .map(|i| held[i].1)
+    };
+    let free = touching.iter().any(|&t| held_as(t).is_none());
+    // A fixed face first, as the one whose edge stress grows most with refinement.
+    let mut ways: Vec<&'static str> = touching.iter().filter_map(|&t| held_as(t)).collect();
+    ways.sort_by_key(|&w| w != "fixed");
     PeakPlace {
         face: areas.first().map(|a| a.0),
-        at_fixture_edge: touching.iter().any(|&t| is_fixed(t))
-            && touching.iter().any(|&t| !is_fixed(t)),
+        support_edge: ways.first().copied().filter(|_| free),
     }
 }
 
@@ -716,6 +961,17 @@ fn analyse(
     watch: &dyn Watch,
 ) -> Result<Map<String, Value>, String> {
     let material = material_of(req.get("material"))?;
+    let gravity = gravity_of(req.get("gravity"))?;
+    let density = match (gravity, material.density) {
+        (None, _) => None,
+        (Some(_), Some(d)) => Some(d),
+        (Some(_), None) => {
+            return Err(
+                "gravity needs the material's density in g/cm3, add density to the material or turn gravity off"
+                    .into(),
+            )
+        }
+    };
     let size = positive(req, "size")?;
     let mut warnings: Vec<String> = Vec::new();
     let max_elements = match positive(req, "maxElements")? {
@@ -754,11 +1010,37 @@ fn analyse(
     let thickness = 2.0 * volume / area;
 
     let fixed_sel = req.get("fixed").unwrap_or(&Value::Null);
-    if selector_list(fixed_sel).is_empty() {
-        return Err("no face is fixed, fix at least one face so the body is held".into());
+    let has_supports = selector_list(req.get("supports").unwrap_or(&Value::Null))
+        .iter()
+        .any(|s| !s.is_null());
+    if selector_list(fixed_sel).is_empty() && !has_supports {
+        return Err(
+            "no face is fixed, fix at least one face or add a support (fixed, pinned or slider) so the body is held"
+                .into(),
+        );
     }
-    let fixed = face_ids(&shape, id, fixed_sel, "fixed")?;
-    let loads = loads_of(&shape, id, req.get("loads"))?;
+    let given_fixed = if selector_list(fixed_sel).is_empty() {
+        Vec::new()
+    } else {
+        face_ids(&shape, id, fixed_sel, "", "fixed")?
+    };
+    let supports = supports_of(&shape, id, req.get("supports"))?;
+    // Every face held in all three directions, by `fixed` or a fixed support.
+    let mut fixed = given_fixed.clone();
+    // Every face any support holds, with how the first support to name it holds it.
+    let mut held: Vec<(u32, &'static str)> = given_fixed.iter().map(|&f| (f, "fixed")).collect();
+    for (kind, faces) in &supports {
+        if *kind == SupportKind::Fixed {
+            fixed.extend(faces);
+        }
+        held.extend(faces.iter().map(|&f| (f, kind.word())));
+    }
+    fixed.sort_unstable();
+    fixed.dedup();
+    // A fixed face holds most, so it names the face whatever else holds it.
+    held.sort_by_key(|&(f, word)| (f, word != "fixed"));
+    held.dedup_by_key(|h| h.0);
+    let loads = loads_of(&shape, id, req.get("loads"), gravity.is_some())?;
     // A fixed face does not move, so a load only on fixed faces goes straight into the
     // fixture and does nothing to the part.
     let dead: Vec<usize> = (0..loads.len())
@@ -769,7 +1051,7 @@ fn analyse(
                 .all(|f| fixed.binary_search(f).is_ok())
         })
         .collect();
-    if dead.len() == loads.len() {
+    if dead.len() == loads.len() && gravity.is_none() {
         return Err(if loads.len() == 1 {
             "the load is only on fixed faces, a fixed face does not move, so the load pushes on the fixture and not the part, load a face that is not fixed".into()
         } else {
@@ -778,7 +1060,8 @@ fn analyse(
     }
     for i in dead {
         warnings.push(format!(
-            "loads[{i}] is only on fixed faces, so it pushes on the fixture and does nothing to the part"
+            "{} is only on fixed faces, so it pushes on the fixture and does nothing to the part",
+            named("load", "loads", i)
         ));
     }
 
@@ -831,14 +1114,37 @@ fn analyse(
     .map_err(|e| mesh_error_text(&e))?;
 
     let (loads, origin) = exact_pressures(loads, &surface, &planar, &mesh);
+    let supports: Vec<Support> = supports
+        .into_iter()
+        .map(|(kind, faces)| Support {
+            hold: match kind {
+                SupportKind::Fixed => Hold::Fixed,
+                SupportKind::Slider(surfaces) => Hold::Slider(surfaces),
+                SupportKind::Pinned(axes) => Hold::Pinned(axes),
+            },
+            faces,
+        })
+        .collect();
     let problem = Problem {
         mesh: &mesh,
         material: solve::Material {
             e: material.e,
             nu: material.nu,
         },
-        fixed: fixed.clone(),
+        fixed: given_fixed,
+        supports,
         loads,
+        // Scaled by the body's true volume over the mesh's, which rounds its edges over
+        // within about an element, so the weight is what the real body weighs, as the
+        // pressures above are what the real faces take.
+        body_force: gravity.zip(density).map(|(g, d)| {
+            let scale = if stats.volume > 0.0 {
+                volume / stats.volume
+            } else {
+                1.0
+            };
+            body_force(d, g).map(|c| c * scale)
+        }),
     };
     let sol = solve::solve_with(&problem, &mut tick, &mut |f| {
         crate::heartbeat::while_running(FACTOR_BEATS, f)
@@ -858,18 +1164,17 @@ fn analyse(
     }
     let peak = sol.max_von_mises;
     let peak_at = sol.nodes[sol.max_von_mises_node as usize];
-    let place = peak_place(&mesh, &sol, sol.max_von_mises_node, &fixed);
+    let place = peak_place(&mesh, &sol, sol.max_von_mises_node, &held);
     let at_inside_corner = inside_corners(&surface)
         .iter()
         .any(|s| segment_distance(peak_at, s) <= CORNER_REACH * stats.size);
-    if peak > 0.0 && (at_inside_corner || place.at_fixture_edge) {
-        let spot = if at_inside_corner {
-            "at a sharp inside corner"
-        } else {
-            "where a fixed face ends"
+    if peak > 0.0 && (at_inside_corner || place.support_edge.is_some()) {
+        let spot = match place.support_edge {
+            Some(word) if !at_inside_corner => format!("where a {word} face ends"),
+            _ => "at a sharp inside corner".to_string(),
         };
         warnings.push(format!(
-            "the peak stress is {spot}, stress at a sharp inside corner or where a fixture ends grows as the mesh is refined, look at the colour away from it"
+            "the peak stress is {spot}, stress at a sharp inside corner or where a support ends grows as the mesh is refined, look at the colour away from it"
         ));
     }
     if stats.size > thickness / 2.0 * 1.0001 {
@@ -886,8 +1191,9 @@ fn analyse(
     }
     if !sol.missing_fixed.is_empty() {
         let n = sol.missing_fixed.len();
+        let which = if has_supports { "held" } else { "fixed" };
         warnings.push(format!(
-            "{n} of the fixed faces got no elements, they are narrower than the element size and hold nothing"
+            "{n} of the {which} faces got no elements, they are narrower than the element size and hold nothing"
         ));
     }
     if material.printed {
@@ -903,6 +1209,7 @@ fn analyse(
     out.insert("name".into(), json!(name));
     let mut mat = json!({"name": material.name, "E": material.e, "nu": material.nu});
     mat["yield"] = material.yield_strength.map_or(Value::Null, |y| json!(y));
+    mat["density"] = material.density.map_or(Value::Null, |d| json!(d));
     out.insert("material".into(), mat);
     out.insert(
         "mesh".into(),
@@ -931,7 +1238,12 @@ fn analyse(
         .map(|y| y / peak);
     out.insert("safetyFactor".into(), safety.map_or(Value::Null, |s| r6(s)));
     out.insert("applied".into(), r3(sol.applied));
+    out.insert("weight".into(), sol.weight.map_or(Value::Null, r3));
     out.insert("reaction".into(), r3(sol.reaction));
+    out.insert(
+        "reactions".into(),
+        Value::Array(sol.reactions.iter().map(|&r| r3(r)).collect()),
+    );
     out.insert("warnings".into(), json!(warnings));
     out.insert("surface".into(), surface_of(&mesh, &sol));
     Ok(out)
@@ -961,6 +1273,32 @@ mod tests {
             ("my PETG", 2000.0, Some(30.0))
         );
         assert!(material_of(Some(&json!({"E": 2000, "nu": 0.6}))).is_err());
+    }
+
+    #[test]
+    fn gravity_reads_as_a_force_per_volume_in_newtons() {
+        assert_eq!(gravity_of(None), Ok(None));
+        assert_eq!(gravity_of(Some(&json!(false))), Ok(None));
+        assert_eq!(
+            gravity_of(Some(&json!(true))),
+            Ok(Some([0.0, 0.0, -STANDARD_GRAVITY]))
+        );
+        assert_eq!(
+            gravity_of(Some(&json!([1, 2, 3]))),
+            Ok(Some([1.0, 2.0, 3.0]))
+        );
+        assert!(gravity_of(Some(&json!([1, 2]))).is_err());
+        // A vector of no length pulls nowhere, so it is no gravity.
+        assert_eq!(gravity_of(Some(&json!([0, 0, 0]))), Ok(None));
+        assert_eq!(gravity_of(Some(&json!([0, -0.0, 1e-300]))), Ok(None));
+        // A litre of water, 1 g/cm3 over a million cubic mm, weighs 9.81 N.
+        let b = body_force(1.0, [0.0, 0.0, -9.81]);
+        assert!((b[2] * 1e6 + 9.81).abs() < 1e-12, "{b:?}");
+        assert_eq!(preset("PLA").unwrap().density, Some(1.24));
+        assert_eq!(preset("steel").unwrap().density, Some(7.85));
+        let custom = material_of(Some(&json!({"E": 2000, "nu": 0.3}))).unwrap();
+        assert_eq!(custom.density, None);
+        assert!(material_of(Some(&json!({"E": 2000, "nu": 0.3, "density": 0}))).is_err());
     }
 
     #[test]

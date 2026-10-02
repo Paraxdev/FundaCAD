@@ -269,18 +269,39 @@ pub fn stress() -> JsonObject {
             "body": {"type": "string",
                      "description": "the body to analyse, by id or name, as `build` lists \
                                      it. One closed solid"},
-            "fixed": faces("the faces held still in every direction, at least one, e.g. the \
-                            face bolted to the wall"),
+            "fixed": faces("the faces held still in every direction, e.g. the face bolted to \
+                            the wall. Give `fixed`, `supports` or both"),
+            "supports": {"type": "array",
+                         "items": {"type": "object", "properties": {
+                             "type": {"type": "string", "enum": ["fixed", "pinned", "slider"],
+                                      "description": "fixed (default): held still. pinned: \
+                                                      round faces only, a hole or a pin, held \
+                                                      towards its axis and along it, free to \
+                                                      turn about it. slider: held across the \
+                                                      face only, free to slide along it \
+                                                      (frictionless)"},
+                             "faces": faces("the faces this support holds")}},
+                         "description": "ways the part is held besides `fixed`, each {type, \
+                                         faces}. Together they must stop every slide and turn: \
+                                         one pin leaves the turn about it, sliders alone leave \
+                                         a slide, and the analysis says which motion is left"},
+            "gravity": {"anyOf": [{"type": "boolean"},
+                                  {"type": "array", "items": {"type": "number"}}],
+                        "description": "the body's own weight: true is 9.81 m/s2 along -Z, or \
+                                        [gx, gy, gz] in m/s2 (default off). Needs the \
+                                        material's density, which the presets have"},
             "loads": {"anyOf": [{"type": "array", "items": load.clone()}, load],
                       "description": "what pushes on the part, each {faces, force} or {faces, \
                                       pressure}, never both. One load without a list is taken \
-                                      too. A load only on fixed faces does nothing to the part"},
+                                      too. A load only on fixed faces does nothing to the part. \
+                                      May be left out when `gravity` is on"},
             "material": {"type": ["string", "object"],
                          "description": "a preset by name (default PLA): PLA, PETG, ABS, ASA, \
                                          PA12 nylon, PC, aluminium 6061-T6, steel S235; or \
-                                         your own {E, nu, yield, name} with E and yield in \
-                                         MPa and nu the Poisson's ratio. Without yield there \
-                                         is no safety factor"},
+                                         your own {E, nu, yield, density, name} with E and \
+                                         yield in MPa, nu the Poisson's ratio and density in \
+                                         g/cm3. Without yield there is no safety factor, \
+                                         without density no gravity"},
             "size": {"type": "number",
                      "description": "element size in mm (default: chosen from the part's \
                                      volume and thickness). Smaller is finer and slower"},
@@ -304,7 +325,7 @@ pub fn stress() -> JsonObject {
             "width": {"type": "integer"},
             "height": {"type": "integer"}
         }),
-        &["body", "fixed", "loads"],
+        &["body"],
     )
 }
 

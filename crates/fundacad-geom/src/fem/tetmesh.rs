@@ -235,6 +235,7 @@ pub fn tetrahedralize(
         );
         boundary_face.push(surface.face_ids[surf.nearest_triangle(c)]);
     }
+    let node_faces = node_faces(&surf, surface, &nodes, &boundary, h, tick)?;
 
     Ok((
         TetMesh {
@@ -242,9 +243,50 @@ pub fn tetrahedralize(
             tets,
             boundary,
             boundary_face,
+            node_faces,
         },
         stats,
     ))
+}
+
+/// A boundary node lies on a face when one of the face's triangles passes within this share
+/// of the element size of it. Every boundary node is a point of the surface, a lattice vertex
+/// warped onto it or a cut point found to within a ten-billionth of the size, so this only
+/// has to allow for rounding, and a node on an edge comes out on both faces.
+const ON_FACE: f64 = 1e-6;
+
+/// The faces each boundary node lies on, as sorted (node, face id) pairs. A node no face
+/// passes near (a cut point kept off a defect in the surface) goes to the face nearest it.
+fn node_faces(
+    surf: &Surface,
+    surface: &SurfaceMesh,
+    nodes: &[V3],
+    boundary: &[[u32; 3]],
+    h: f64,
+    tick: &mut dyn FnMut() -> bool,
+) -> Result<Vec<(u32, u32)>, MeshError> {
+    let mut on_boundary: Vec<u32> = boundary.iter().flatten().copied().collect();
+    on_boundary.sort_unstable();
+    on_boundary.dedup();
+    let tol = ON_FACE * h;
+    let mut out: Vec<(u32, u32)> = Vec::with_capacity(on_boundary.len() * 3 / 2);
+    let mut near: Vec<usize> = Vec::new();
+    for (i, &n) in on_boundary.iter().enumerate() {
+        if i % TICK_EVERY == 0 && !tick() {
+            return Err(MeshError::Cancelled);
+        }
+        let p = nodes[n as usize];
+        near.clear();
+        surf.within(p, tol, &mut near);
+        let start = out.len();
+        out.extend(near.iter().map(|&t| (n, surface.face_ids[t])));
+        if out.len() == start {
+            out.push((n, surface.face_ids[surf.nearest_triangle(p)]));
+        }
+        out[start..].sort_unstable();
+    }
+    out.dedup();
+    Ok(out)
 }
 
 /// The element size to stuff with: the one asked for, grown when the mesh would exceed
@@ -630,6 +672,31 @@ impl Surface {
         let d = sub(p, q);
         let dist = norm(d);
         (if dot(d, n) < 0.0 { -dist } else { dist }, q)
+    }
+
+    /// Adds to `out` the input index of every triangle within `tol` of `p`.
+    fn within(&self, p: V3, tol: f64, out: &mut Vec<usize>) {
+        let reach = tol * tol;
+        let mut stack = vec![0u32];
+        while let Some(i) = stack.pop() {
+            let n = &self.nodes[i as usize];
+            if box_dist2(n, p) > reach {
+                continue;
+            }
+            if n.count > 0 {
+                let start = n.index as usize;
+                for tri in &self.tris[start..start + n.count as usize] {
+                    let (q, _) = closest_on_triangle(p, &tri.v);
+                    let d = sub(p, q);
+                    if dot(d, d) <= reach {
+                        out.push(tri.id as usize);
+                    }
+                }
+            } else {
+                stack.push(n.index);
+                stack.push(i + 1);
+            }
+        }
     }
 
     /// Index of the input triangle closest to `p`.
@@ -1851,6 +1918,57 @@ mod tests {
             );
             assert!((norm(q) - r).abs() < 0.01 * r);
         }
+    }
+
+    #[test]
+    fn boundary_nodes_know_every_face_they_lie_on() {
+        // A box off the lattice, so its edges are rounded over by triangles that span two
+        // faces. Face 2a + side lies in the plane where coordinate a is `plane(f)`.
+        let (size, off) = ([10.0, 6.0, 4.0], [0.37, 0.21, 0.13]);
+        let (m, _) = mesh(&cuboid(size, &|p| add(p, off)), 1.3);
+        let plane = |f: u32| {
+            let a = (f / 2) as usize;
+            (a, off[a] + if f % 2 == 1 { size[a] } else { 0.0 })
+        };
+        let on = |n: u32, f: u32| {
+            let (a, c) = plane(f);
+            (m.nodes[n as usize][a] - c).abs() < 1e-9
+        };
+        let mut boundary: Vec<u32> = m.boundary.iter().flatten().copied().collect();
+        boundary.sort_unstable();
+        boundary.dedup();
+        let mut listed: Vec<u32> = m.node_faces.iter().map(|e| e.0).collect();
+        listed.dedup();
+        assert_eq!(listed, boundary);
+        assert!(m.node_faces.windows(2).all(|w| w[0] < w[1]));
+        for &(n, f) in &m.node_faces {
+            assert!(
+                on(n, f),
+                "node {n} at {:?} is off face {f}",
+                m.nodes[n as usize]
+            );
+        }
+        let mut edges = 0;
+        for &n in &boundary {
+            let faces: Vec<u32> = (0..6).filter(|&f| on(n, f)).collect();
+            for &f in &faces {
+                assert!(
+                    m.node_faces.binary_search(&(n, f)).is_ok(),
+                    "node {n} on {f}"
+                );
+            }
+            edges += usize::from(faces.len() > 1);
+        }
+        // Tags alone would put nodes on faces they are off, the corners of the triangles
+        // that round the edges over.
+        let off_tag = m
+            .boundary
+            .iter()
+            .zip(&m.boundary_face)
+            .filter(|(t, &f)| t.iter().any(|&n| !on(n, f)))
+            .count();
+        eprintln!("{edges} nodes on an edge, {off_tag} triangles with a corner off their face");
+        assert!(edges > 0 && off_tag > 0);
     }
 
     #[test]

@@ -4,6 +4,10 @@
 //! checking the arguments before anything is sent, so a malformed load costs
 //! no rebuild, the reading of the reply as a short report, and the boundary of
 //! the volume mesh it hands back, coloured by von Mises stress for the picture.
+//!
+//! Faces are held by `fixed` and by `supports` (fixed, pinned on a round face,
+//! or a slider held only across its face), and `gravity` adds the body's
+//! weight from the material's density.
 
 use std::collections::HashMap;
 
@@ -15,12 +19,18 @@ use crate::render::{stress_color, Drawable, Rgb, Vec3};
 /// The keys a load takes. Anything else is a typo that would otherwise be
 /// dropped on the way to the engine.
 const LOAD_KEYS: [&str; 3] = ["faces", "force", "pressure"];
-const MATERIAL_KEYS: [&str; 4] = ["E", "nu", "yield", "name"];
+const MATERIAL_KEYS: [&str; 5] = ["E", "nu", "yield", "density", "name"];
+const SUPPORT_KEYS: [&str; 2] = ["type", "faces"];
+const SUPPORT_TYPES: [&str; 3] = ["fixed", "pinned", "slider"];
+const SELECTOR_HINT: &str = "take each face's selector from `inspect` with detail:true and selectors:true";
 
 /// What the tool sends the engine, less the document, and whether it draws.
 pub struct Request {
     pub payload: Map<String, Value>,
     pub image: bool,
+    /// What each support is called in the report, in the order of the
+    /// reply's `reactions`: `fixed` first when given, then each of `supports`.
+    pub supports: Vec<String>,
 }
 
 fn finite(v: &Value) -> Option<f64> {
@@ -29,7 +39,7 @@ fn finite(v: &Value) -> Option<f64> {
 
 /// A face selector or a list of them, each checked to be an object.
 fn selectors(v: Option<&Value>, what: &str) -> Result<(), String> {
-    let hint = "take each face's selector from `inspect` with detail:true and selectors:true";
+    let hint = SELECTOR_HINT;
     let list: Vec<&Value> = match v {
         None | Some(Value::Null) => return Err(format!("`{what}` is missing, {hint}")),
         Some(Value::Array(a)) if a.is_empty() => return Err(format!("`{what}` names no faces, {hint}")),
@@ -74,12 +84,50 @@ fn load(v: &Value, at: &str) -> Result<(), String> {
     }
 }
 
+/// One of `supports`, and its name for the report.
+fn support(v: &Value, at: &str) -> Result<String, String> {
+    let Some(m) = v.as_object() else {
+        return Err(format!("`{at}` is {{type, faces}}, a type of fixed, pinned or slider and the faces it holds, got {v}"));
+    };
+    if let Some(k) = m.keys().find(|k| !SUPPORT_KEYS.contains(&k.as_str())) {
+        return Err(format!("`{at}` takes no '{k}', a support takes type and faces"));
+    }
+    let kind = match m.get("type") {
+        None | Some(Value::Null) => "fixed".to_string(),
+        Some(Value::String(t)) if SUPPORT_TYPES.contains(&t.trim().to_lowercase().as_str()) => t.trim().to_lowercase(),
+        Some(other) => {
+            return Err(format!(
+                "`{at}.type` is fixed (held still), pinned (a round face, free to turn about its axis) or slider (held across the face only), got {other}"
+            ))
+        }
+    };
+    selectors(m.get("faces"), &format!("{at}.faces"))?;
+    Ok(format!("{at} ({kind})"))
+}
+
+/// `gravity` is true (9.81 m/s2 down -Z), false, or [gx, gy, gz] in m/s2. A vector of no
+/// length pulls nowhere, so it is off, and a request with no load is refused as without it.
+fn gravity(v: Option<&Value>) -> Result<bool, String> {
+    match v {
+        None | Some(Value::Null) => Ok(false),
+        Some(Value::Bool(b)) => Ok(*b),
+        Some(Value::Array(a)) if a.len() == 3 && a.iter().all(|x| finite(x).is_some()) => {
+            Ok(a.iter().filter_map(finite).any(|x| x.abs() >= 1e-9))
+        }
+        Some(other) => Err(format!(
+            "`gravity` is true for 9.81 m/s2 along -Z, false, or [gx, gy, gz] in m/s2, got {other}"
+        )),
+    }
+}
+
 fn material(v: &Value) -> Result<(), String> {
     match v {
         Value::String(s) if !s.trim().is_empty() => Ok(()),
         Value::Object(m) => {
             if let Some(k) = m.keys().find(|k| !MATERIAL_KEYS.contains(&k.as_str())) {
-                return Err(format!("`material` takes no '{k}', a material of your own is {{E, nu, yield, name}}"));
+                return Err(format!(
+                    "`material` takes no '{k}', a material of your own is {{E, nu, yield, density, name}}"
+                ));
             }
             match m.get("E").and_then(finite) {
                 Some(e) if e > 0.0 => {}
@@ -93,6 +141,13 @@ fn material(v: &Value) -> Result<(), String> {
                 None | Some(Value::Null) => {}
                 Some(y) if finite(y).is_some_and(|y| y > 0.0) => {}
                 Some(y) => return Err(format!("`material.yield` is a strength in MPa above 0, got {y}")),
+            }
+            match m.get("density") {
+                None | Some(Value::Null) => {}
+                Some(d) if finite(d).is_some_and(|d| d > 0.0) => {}
+                Some(d) => {
+                    return Err(format!("`material.density` is in g/cm3 above 0, e.g. 1.24 for PLA, got {d}"))
+                }
             }
             match m.get("name") {
                 None | Some(Value::Null | Value::String(_)) => Ok(()),
@@ -117,13 +172,41 @@ pub fn request_of(args: &Map<String, Value>) -> Result<Request, String> {
         }
         Some(other) => return Err(format!("`body` is a body id or name, got {other}")),
     };
-    selectors(args.get("fixed"), "fixed")?;
-    let loads = match args.get("loads") {
-        None | Some(Value::Null) => {
-            return Err("`loads` is missing, give at least one {faces, force} or {faces, pressure}".into())
+    let supports: Vec<Value> = match args.get("supports") {
+        None | Some(Value::Null) => Vec::new(),
+        Some(Value::Array(a)) => a.clone(),
+        Some(one) => vec![one.clone()],
+    };
+    let mut names = Vec::new();
+    // `fixed` may be left out, or empty, when `supports` holds the body.
+    let fixed = args.get("fixed").filter(|f| !f.is_null() && !(f.as_array().is_some_and(Vec::is_empty) && !supports.is_empty()));
+    match fixed {
+        None if supports.is_empty() => {
+            return Err(format!(
+                "`fixed` is missing, hold at least one face with `fixed` (held still) or `supports` (fixed, pinned or slider), {SELECTOR_HINT}"
+            ))
         }
-        Some(Value::Array(a)) if a.is_empty() => {
-            return Err("`loads` is empty, give at least one {faces, force} or {faces, pressure}".into())
+        None => {}
+        Some(f) => {
+            selectors(Some(f), "fixed")?;
+            names.push("fixed".to_string());
+        }
+    }
+    for (i, s) in supports.iter().enumerate() {
+        names.push(support(s, &format!("supports[{i}]"))?);
+    }
+    let pulled = gravity(args.get("gravity"))?;
+    let loads = match args.get("loads") {
+        None | Some(Value::Null) if pulled => Vec::new(),
+        None | Some(Value::Null) => {
+            return Err(
+                "`loads` is missing, give at least one {faces, force} or {faces, pressure}, or turn `gravity` on".into(),
+            )
+        }
+        Some(Value::Array(a)) if a.is_empty() && !pulled => {
+            return Err(
+                "`loads` is empty, give at least one {faces, force} or {faces, pressure}, or turn `gravity` on".into(),
+            )
         }
         Some(Value::Array(a)) => a.clone(),
         Some(one) => vec![one.clone()],
@@ -142,10 +225,23 @@ pub fn request_of(args: &Map<String, Value>) -> Result<Request, String> {
         .collect();
     let mut payload = Map::new();
     payload.insert("body".into(), json!(body));
-    payload.insert("fixed".into(), args.get("fixed").cloned().unwrap_or(Value::Null));
+    if let Some(f) = fixed {
+        payload.insert("fixed".into(), f.clone());
+    }
+    if !supports.is_empty() {
+        payload.insert("supports".into(), Value::Array(supports));
+    }
+    if pulled {
+        payload.insert("gravity".into(), args.get("gravity").cloned().unwrap_or(json!(true)));
+    }
     payload.insert("loads".into(), Value::Array(loads));
     if let Some(m) = args.get("material").filter(|m| !m.is_null()) {
         material(m)?;
+        if pulled && m.is_object() && m.get("density").is_none_or(Value::is_null) {
+            return Err(
+                "`gravity` needs the material's density in g/cm3, add `density` to `material`, e.g. 1.24 for PLA".into(),
+            );
+        }
         payload.insert("material".into(), m.clone());
     }
     if let Some(v) = args.get("size").filter(|v| !v.is_null()) {
@@ -169,7 +265,11 @@ pub fn request_of(args: &Map<String, Value>) -> Result<Request, String> {
         Some(Value::Bool(b)) => *b,
         Some(other) => return Err(format!("`image` is true or false, got {other}")),
     };
-    Ok(Request { payload, image })
+    Ok(Request {
+        payload,
+        image,
+        supports: names,
+    })
 }
 
 /// Four significant figures, enough to compare and short enough to read.
@@ -208,9 +308,11 @@ fn who(r: &Value) -> String {
 }
 
 /// The engine's reply as a few lines: what was analysed, the peaks and where,
-/// the safety factor, the balance of load and reaction, the mesh, and the
-/// engine's warnings word for word.
-pub fn report(r: &Value) -> String {
+/// the safety factor, the balance of load and reaction (the weight among the
+/// loads, and each support's share when there is more than one), the mesh,
+/// and the engine's warnings word for word. `supports` names the supports in
+/// the order of the reply's `reactions`.
+pub fn report(r: &Value, supports: &[String]) -> String {
     let empty = json!({});
     let mat = r.get("material").unwrap_or(&empty);
     let name = mat.get("name").and_then(Value::as_str).unwrap_or("?");
@@ -251,11 +353,23 @@ pub fn report(r: &Value) -> String {
         None => "no safety factor, nothing is stressed".into(),
     });
 
+    let at = if supports.len() == 1 && supports[0] == "fixed" { "the fixed faces" } else { "the supports" };
     out.push(format!(
-        "applied {} N, reaction at the fixed faces {} N",
+        "applied {} N, reaction at {at} {} N",
         triple(r.get("applied"), sig),
         triple(r.get("reaction"), sig)
     ));
+    if let Some(w) = r.get("weight").filter(|w| w.is_array()) {
+        out.push(format!("weight {} N from gravity, part of the applied load", triple(Some(w), sig)));
+    }
+    let shares = r.get("reactions").and_then(Value::as_array).map_or(&[][..], Vec::as_slice);
+    if shares.len() > 1 {
+        out.push("reaction at each support:".into());
+        for (i, share) in shares.iter().enumerate() {
+            let name = supports.get(i).cloned().unwrap_or_else(|| format!("support {i}"));
+            out.push(format!("- {name}: {} N", triple(Some(share), sig)));
+        }
+    }
 
     let mesh = r.get("mesh").unwrap_or(&empty);
     let count = |k: &str| mesh.get(k).and_then(Value::as_u64).unwrap_or(0);
@@ -474,7 +588,7 @@ mod tests {
             "applied": [0.0, 0.0, -100.0], "reaction": [0.0, 0.0, 100.0],
             "warnings": ["printed parts are weaker across their layers"],
         });
-        let text = report(&r);
+        let text = report(&r, &["fixed".to_string()]);
         assert!(text.starts_with("Stress in body1 \"Bar\", PLA (E 3500 MPa, nu 0.36, yield 50 MPa):"), "{text}");
         assert!(text.contains("peak von Mises 61.23 MPa at (0, 5, 5) on face 0"), "{text}");
         assert!(text.contains("largest deflection 0.84 mm at (100, 5, -5)"), "{text}");
@@ -482,6 +596,102 @@ mod tests {
         assert!(text.contains("applied (0, 0, -100) N, reaction at the fixed faces (0, 0, 100) N"), "{text}");
         assert!(text.contains("mesh: 600 quadratic tetrahedra, 1200 nodes, element size 2.5 mm"), "{text}");
         assert!(text.ends_with("warnings:\n- printed parts are weaker across their layers"), "{text}");
+    }
+
+    #[test]
+    fn supports_and_gravity_pass_through_named_in_order() {
+        let r = request_of(&args(json!({
+            "body": "body1",
+            "fixed": face([-1.0, 0.0, 0.0]),
+            "supports": [
+                {"type": "pinned", "faces": [face([0.0, 1.0, 0.0])]},
+                {"faces": face([0.0, 0.0, -1.0])},
+            ],
+            "gravity": [0, 0, -9.81],
+            "material": {"E": 2300, "nu": 0.35, "density": 1.27},
+        })))
+        .expect("a good request");
+        assert_eq!(r.supports, vec!["fixed", "supports[0] (pinned)", "supports[1] (fixed)"]);
+        assert_eq!(r.payload["gravity"], json!([0, 0, -9.81]));
+        assert_eq!(r.payload["supports"].as_array().map(Vec::len), Some(2));
+        assert_eq!(r.payload["loads"], json!([]));
+        // Supports alone hold the body, and an empty `fixed` beside them is dropped.
+        let r = request_of(&args(json!({
+            "body": "body1", "fixed": [],
+            "supports": {"type": "Slider", "faces": face([0.0, 0.0, -1.0])},
+            "loads": [{"faces": face([0.0, 0.0, 1.0]), "pressure": 0.1}],
+            "gravity": false,
+        })))
+        .expect("supports alone");
+        assert!(r.payload.get("fixed").is_none() && r.payload.get("gravity").is_none());
+        assert_eq!(r.supports, vec!["supports[0] (slider)"]);
+    }
+
+    #[test]
+    fn malformed_supports_and_gravity_are_named() {
+        let base = || json!({"body": "body1", "supports": [{"type": "slider", "faces": face([0.0, 0.0, -1.0])}],
+                             "loads": [{"faces": [face([1.0, 0.0, 0.0])], "force": [0, 0, -1]}]});
+        let refused = |patch: Value| {
+            let mut a = base();
+            for (k, v) in patch.as_object().expect("an object") {
+                a[k] = v.clone();
+            }
+            request_of(&args(a)).err().expect("refused")
+        };
+        let none = refused(json!({"supports": null}));
+        assert!(none.contains("`fixed` is missing, hold at least one face with `fixed`") && none.contains("`supports`"), "{none}");
+        assert!(refused(json!({"supports": [{"type": "glued", "faces": face([0.0, 0.0, 1.0])}]}))
+            .contains("`supports[0].type` is fixed (held still), pinned"));
+        assert!(refused(json!({"supports": [{"type": "slider"}]})).contains("`supports[0].faces` is missing"));
+        assert!(refused(json!({"supports": [{"faces": face([0.0, 0.0, 1.0]), "axis": [0, 0, 1]}]}))
+            .contains("`supports[0]` takes no 'axis'"));
+        assert!(refused(json!({"supports": [7]})).contains("`supports[0]` is {type, faces}"));
+        assert!(refused(json!({"gravity": "down"})).contains("`gravity` is true for 9.81 m/s2 along -Z"));
+        assert!(refused(json!({"gravity": [0, -9.81]})).contains("`gravity`"));
+        let dense = refused(json!({"gravity": true, "material": {"E": 2000, "nu": 0.3}}));
+        assert!(dense.contains("`gravity` needs the material's density in g/cm3"), "{dense}");
+        assert!(refused(json!({"material": {"E": 2000, "nu": 0.3, "density": 0}})).contains("`material.density`"));
+        let no_load = refused(json!({"loads": []}));
+        assert!(no_load.contains("or turn `gravity` on"), "{no_load}");
+        // With gravity on the loads may be left out.
+        let mut a = base();
+        a.as_object_mut().unwrap().remove("loads");
+        a["gravity"] = json!(true);
+        assert!(request_of(&args(a.clone())).is_ok());
+        // A vector of no length pulls nowhere: it is no gravity, so no load is refused, and
+        // beside a load it is not sent on.
+        a["gravity"] = json!([0, 0, 0]);
+        let none = request_of(&args(a)).err().expect("refused");
+        assert!(none.contains("`loads` is missing"), "{none}");
+        let mut a = base();
+        a["gravity"] = json!([0.0, -0.0, 0.0]);
+        assert!(request_of(&args(a)).expect("a load").payload.get("gravity").is_none());
+    }
+
+    #[test]
+    fn the_report_names_the_weight_and_each_supports_reaction() {
+        let r = json!({
+            "body": "body1",
+            "material": {"name": "PLA", "E": 3500.0, "nu": 0.36, "yield": 50.0, "density": 1.24},
+            "maxVonMises": {"value": 1.0, "at": [0.0, 0.0, 0.0], "face": 0},
+            "applied": [0.0, 0.0, -100.121644], "weight": [0.0, 0.0, -0.121644],
+            "reaction": [0.0, 0.0, 100.121644],
+            "reactions": [[0.0, 0.0, 60.0], [0.0, 0.0, 40.121644]],
+        });
+        let names = ["fixed".to_string(), "supports[0] (slider)".to_string()];
+        let text = report(&r, &names);
+        assert!(text.contains("applied (0, 0, -100.1) N, reaction at the supports (0, 0, 100.1) N"), "{text}");
+        assert!(text.contains("\nweight (0, 0, -0.1216) N from gravity, part of the applied load\n"), "{text}");
+        assert!(
+            text.contains("reaction at each support:\n- fixed: (0, 0, 60) N\n- supports[0] (slider): (0, 0, 40.12) N"),
+            "{text}"
+        );
+        // One support and no gravity read as before.
+        let one = json!({"applied": [0.0, 0.0, -1.0], "reaction": [0.0, 0.0, 1.0], "weight": null,
+                         "reactions": [[0.0, 0.0, 1.0]]});
+        let text = report(&one, &["supports[0] (pinned)".to_string()]);
+        assert!(text.contains("reaction at the supports (0, 0, 1) N"), "{text}");
+        assert!(!text.contains("weight") && !text.contains("each support"), "{text}");
     }
 
     #[test]

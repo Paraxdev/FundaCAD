@@ -195,7 +195,7 @@ which a fresh engine could no longer start one and every build failed.
 | `build` | rebuild, and say what came out and what failed. After the first build it lists only the bodies that changed; `full` lists them all |
 | `interference` | which bodies overlap and by how much, and which come closer than a clearance, once or at every step of a parameter (`sweep`). Changes nothing |
 | `section` | cut the bodies with a plane: the outline as closed loops of points, and area, centroid, second moments, section modulus and polar moment for beam checks |
-| `stress` | a linear static stress analysis of one body: fix faces, load others with a force or a pressure, pick a material, and get the peak von Mises stress and where, the largest deflection, the safety factor against yield, the load balance, warnings, and a PNG coloured by stress. Changes nothing |
+| `stress` | a linear static stress analysis of one body: hold faces (`fixed`, or `supports` that are fixed, pinned or slider), load others with a force or a pressure, add its weight with `gravity`, pick a material, and get the peak von Mises stress and where, the largest deflection, the safety factor against yield, the load balance with the reaction at each support, warnings, and a PNG coloured by stress. Changes nothing |
 | `printability` | what would go wrong printing the parts on an FDM printer: overhangs past 45 deg, walls under two nozzle widths, floors under two layers, gaps that would fuse, long bridges and open shells, each with its face and a `view` focus. As modelled or laid flat as `export` would. Changes nothing |
 | `inspect` | exact volume, area, bbox, and every face and edge with a ready-made selector |
 | `view` | a PNG: orthographic, flat-shaded, with sections, body filtering and zoom |
@@ -203,6 +203,38 @@ which a fresh engine could no longer start one and every build failed.
 | `export` | STEP, STL, 3MF, OBJ, BREP. `separate` writes a file per body named after it, `body` one body, `layFlat` turns each part onto a flat face for printing |
 
 `schema` is also served as an MCP resource at `fundacad://schema`.
+
+### Supports and gravity in `stress`
+
+`fixed` holds faces still in every direction. `supports` adds more ways to
+hold the part, each `{type, faces}`:
+
+- `fixed` (the default when `type` is left out): held still, like `fixed`.
+- `pinned`: round faces only, a hole or a pin. Held towards the face's
+  cylinder axis and along it, free to turn about it. A flat face is refused.
+- `slider`: held along the face's normal only, free to slide in the face
+  without friction. A round face takes its exact normal from the model, so a
+  slider in a hole or round a shaft leaves the part free to slide along the
+  axis and turn about it, and one on a ball leaves it free to turn every way.
+  One slider on several faces holds a node where they meet along each face's
+  normal.
+
+Give `fixed`, `supports` or both. Together they must stop every slide and
+turn: a part on sliders alone, or on one pin alone, is refused with the motion
+left free in words, for example `the body can still turn about the pin's axis
+through (0, 0, 0), add another support` or `the body can still turn about the
+hole's axis through (0, 0, 0), a slider leaves a hole free to turn, add another
+support`. A refusal about a support or a load names it the way the app's panel
+does and then by its place in your request, `support 1 (supports[0])`.
+
+`gravity: true` pulls with 9.81 m/s2 along -Z, or give `[gx, gy, gz]` in m/s2.
+It needs the material's density in g/cm3: the presets carry one (PLA 1.24,
+PETG 1.27, ABS 1.04, ASA 1.07, PA12 nylon 1.01, PC 1.20, aluminium 6061-T6
+2.70, steel S235 7.85) and a material of your own takes `density`. With gravity
+on, `loads` may be left out. `[0, 0, 0]` pulls nowhere and counts as no gravity.
+
+The summary adds a `weight` line when gravity is on, and the reaction at each
+support, in the order `fixed` then `supports`, when there is more than one.
 
 The same names are the op vocabulary a compute plugin reaches the document
 through (`src/plugins/broker/ops.ts`), and `tests/plugins/broker.test.ts` reads

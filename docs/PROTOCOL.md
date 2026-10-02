@@ -362,12 +362,18 @@ same request gives the same answer every time.
 ```jsonc
 { "op": "stress", "id": "...", "document": { /* CadDocument */ },
   "body": "body3",                      // id or name; one closed solid
-  "fixed": [ /* face Selectors */ ],    // held still in every direction; at least one
+  "fixed": [ /* face Selectors */ ],    // held still in every direction
+  "supports": [                         // optional, more ways to hold it, after `fixed`
+    { "type": "fixed",  "faces": [ /* ... */ ] },   // the default type, as `fixed`
+    { "type": "pinned", "faces": [ /* ... */ ] },   // round faces: free to turn about the axis
+    { "type": "slider", "faces": [ /* ... */ ] }    // held along the face normal only
+  ],
+  "gravity": true,       // optional: true is [0, 0, -9.81] m/s2, or [gx, gy, gz]
   "loads": [
     { "faces": [ /* face Selectors */ ], "force": [0, 0, -20] },  // N, the total, spread by area
     { "faces": [ /* ... */ ], "pressure": 0.5 }                   // MPa, pushing into the faces
   ],
-  "material": "PLA",     // optional, default PLA; a preset or {"E", "nu", "yield", "name"}
+  "material": "PLA",     // optional, default PLA; a preset or {"E", "nu", "yield", "density", "name"}
   "size": 1.5,           // optional, element size in mm
   "maxElements": 30000 } // optional, default 30000, at most 80000
 ```
@@ -375,6 +381,33 @@ same request gives the same answer every time.
 - `fixed` and each load's `faces` take one face selector or a list (the same forms
   `inspect` hands back in each face's `selector`). A selector that picks no face of the
   body, or carries a `body` other than the one analysed, is refused.
+- At least one face is held, by `fixed`, `supports` or both. A support's `type` is
+  `fixed` when left out, and an unknown one is refused. A `pinned` support takes only
+  faces on a cylinder (a hole or a pin), each with its own axis read from the model, and
+  holds its nodes towards that axis and along it. A `slider` holds its nodes along the
+  normal of each of its faces they lie on: the exact normal of a plane, cylinder, cone,
+  sphere, torus or other surface turned about an axis, read from the model, so a slider on
+  a hole or a shaft leaves the slide along its axis and the turn about it free and one on a
+  ball leaves the turns about its centre free; for a free-form face, the area weighted
+  normal of the boundary triangles lying on that face around the node. A node where two
+  faces of one slider meet at an angle is held along both normals, as with two sliders. A
+  support holds the nodes lying on its faces, and not the corners of the volume mesh's
+  triangles that round its edges over onto the faces beside it. A node a fixed support holds is fixed;
+  otherwise it is held in every direction its supports hold it. Those directions are
+  eliminated exactly, in a frame of the node's own, not by a penalty.
+- The body must be held against every rigid motion: the directions each piece is held in
+  must stop all three slides and all three turns. When they do not, the refusal names a
+  motion left free, as `the body can still slide along X, add a support that holds it
+  that way`, `the body can still turn about the pin's axis through (x, y, z), add another
+  support` or `the body can still turn about the hole's axis through (x, y, z), a slider
+  leaves a hole free to turn, add another support` (an axis that is no pin's and no round
+  slider face's is named by its direction).
+- `gravity` needs a density: the presets carry one, a custom material takes `density` in
+  g/cm3, and without one the request is refused (`gravity needs the material's density in
+  g/cm3`). The body force rho g (rho in t/mm3, g in mm/s2, so N per cubic mm) is spread by
+  the consistent quadratic element load vector, scaled by the body's volume over the
+  mesh's so the weight is the real body's. With gravity on, `loads` may be empty. A
+  `gravity` vector of no length is no gravity, so without a load it is refused as one.
 - A load has exactly one of `force` and `pressure`. A pressure on a planar face is
   applied as that face's resultant (pressure times its area as tessellated, along
   minus its outward normal), since the volume mesh rounds sharp edges over within
@@ -384,8 +417,10 @@ same request gives the same answer every time.
   50), `PETG` (2100, 0.38, 50), `ABS` (2200, 0.35, 40), `ASA` (2200, 0.35, 45),
   `PA12 nylon` (also `PA12`, `nylon`; 1700, 0.40, 45), `PC` (2400, 0.37, 60),
   `aluminium 6061-T6` (also `aluminium`, `aluminum`; 69000, 0.33, 275) and
-  `steel S235` (also `steel`; 210000, 0.30, 235). A custom material needs `E` and
-  `nu`; without `yield` the reply's `safetyFactor` is null.
+  `steel S235` (also `steel`; 210000, 0.30, 235). Their densities in g/cm3: PLA 1.24,
+  PETG 1.27, ABS 1.04, ASA 1.07, PA12 nylon 1.01, PC 1.20, aluminium 2.70, steel 7.85.
+  A custom material needs `E` and `nu`; without `yield` the reply's `safetyFactor` is
+  null, and without `density` there is no gravity.
 - `size` defaults to about 70% of `maxElements` for the body's volume, and at most
   half its typical thickness `2 V / A`. A size smaller than `maxElements` allows is
   grown to fit before anything is meshed (a warning says so). `maxElements` above
@@ -394,17 +429,20 @@ same request gives the same answer every time.
   about 50000 elements (a slender or thin walled one goes further). A mesh that would
   not fit is refused with the `maxElements` that would.
 - A load only on fixed faces does nothing to the part: it is refused when every load
-  is, and otherwise draws a warning.
+  is and gravity is off, and otherwise draws a warning.
 
 Reply:
 ```jsonc
 { "body": "body3", "name": "Spring",
-  "material": { "name": "PLA", "E": 3500, "nu": 0.36, "yield": 50 },
+  "material": { "name": "PLA", "E": 3500, "nu": 0.36, "yield": 50, "density": 1.24 },
   "mesh": { "nodes": 12345, "elements": 23456, "size": 1.2, "minDihedral": 11.2 },
   "maxVonMises": { "value": 31.2, "at": [x,y,z], "face": 4 },   // face null when the peak is inside
   "maxDisplacement": { "value": 0.84, "at": [x,y,z], "vector": [dx,dy,dz] },
   "safetyFactor": 1.6,                 // yield / peak von Mises
-  "applied": [0, 0, -20], "reaction": [0, 0, 20],   // N; they balance
+  "applied": [0, 0, -20.1], "reaction": [0, 0, 20.1],   // N; they balance
+  "weight": [0, 0, -0.1],             // N, gravity's pull, part of `applied`; null without
+  "reactions": [[0, 0, 12], [0, 0, 8.1]],   // N, one per support: `fixed` (when given),
+                                      // then `supports` in order; they sum to `reaction`
   "warnings": ["..."],
   "surface": { "positions": [...], "indices": [...], "faceIds": [...],
                "vonMises": [...], "displacement": [...] },
@@ -415,6 +453,9 @@ Reply:
 - `maxVonMises.face` is the face index (the `i` of `inspect`, the mesh `faceIds`) the
   peak lies on: of the boundary triangles touching it, the face with the most area.
 - `safetyFactor` is null when the material has no `yield` or nothing is stressed.
+- `material.density` is null when the material has none.
+- `reactions` splits the reaction among the supports: a node two supports share gives
+  each the part along the directions it holds, or all of it to a fixed one.
 - `surface` is the boundary of the volume mesh, outward wound: `positions` (xyz per
   vertex), `indices` (three per triangle), `faceIds` (one per triangle), and per vertex
   `vonMises` (MPa) and `displacement` (xyz, mm), as inline JSON numbers like the overlap
@@ -422,15 +463,21 @@ Reply:
 - `warnings`, in plain words: a deflection above a tenth of the part's smallest
   bounding size (a linear analysis is not trustworthy there), a load only on fixed
   faces, a peak near an edge where two faces fold inward by more than 30 degrees or
-  where a fixed face ends (stress there grows as the mesh is refined), elements larger
-  than half the typical thickness `2 V / A` (thin walls may get fewer than two through
-  them), an element size grown to stay within `maxElements`, fixed faces too narrow to
-  get any element, and for plastics that printed parts are weaker across their layers.
+  where a held face ends, naming how it is held (`where a slider face ends`; stress there
+  grows as the mesh is refined), elements larger than half the typical thickness `2 V / A`
+  (thin walls may get fewer than two through them), an element size grown to stay within
+  `maxElements`, held faces too narrow for any node to lie on them, and for plastics that
+  printed parts are weaker across their layers.
 - A refusal is an ordinary error reply, `{"ok": false, "error": {"message"}}`: no body
-  or an unknown one, a body that is not one closed solid, no fixed face, no load or
-  loads only on fixed faces, a selector that picks nothing, an unknown material, a part
-  too thin for the elements (allow more elements or use a smaller size), a body the
-  fixed faces do not hold, or a mesh too large for the memory. When a feature of the document failed, the message
+  or an unknown one, a body that is not one closed solid, no held face, no load (and no gravity) or
+  loads only on fixed faces, a selector that picks nothing, an unknown material or
+  support type, a pinned support on a face that is not round, gravity without a
+  density, a part too thin for the elements (allow more elements or use a smaller
+  size), a body the supports do not hold, or a mesh too large for the memory. A support or
+  a load is named as the app's panel numbers it, from 1, then by its place in the request,
+  as `support 1 (supports[0]) is pinned, which needs cylindrical faces (a hole or a pin),
+  but its face is flat, pick the round face of the hole or the pin`; a face is told by what
+  it is, never by an index. When a feature of the document failed, the message
   names the first failure and the error carries its `feature_id`. The analysis beats the job's heartbeat throughout and stops
   on `cancel`; the factorisation, one long call, finishes before a cancel takes effect.
 
