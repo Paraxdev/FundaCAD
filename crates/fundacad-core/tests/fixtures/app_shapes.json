@@ -111,6 +111,7 @@
         { "id": "f33", "type": "move", "dx": 1, "dy": 2, "dz": 3, "rx": 0, "ry": 0, "rz": 45, "bodies": ["body1"] },
         { "id": "f34", "type": "duplicate", "dx": 10, "dy": 0, "dz": 0, "rx": 0, "ry": 0, "rz": 0 },
         { "id": "f35", "type": "joint", "moving": "body2", "mate": { "body": "body2", "face": { "kind": "face", "by": "nearest", "point": [0, 0, 0] } }, "to": { "datum": "f12", "origin": [0, 0, 0], "zdir": [0, 0, 1], "xdir": [1, 0, 0], "edge": { "kind": "edge", "by": "nearest", "point": [1, 0, 0] } }, "mode": "revolute", "flush": true, "offset": 1, "angle": 90, "name": "Hinge" },
+        { "id": "f40", "type": "mechanism", "ground": "body1", "joints": [{ "id": "pin", "mode": "revolute", "a": { "body": "body2", "axis": { "kind": "face", "by": "nearest", "point": [5, 0, 5], "body": "body2" } }, "b": { "body": "body1", "edge": { "kind": "edge", "by": "nearest", "point": [1, 0, 0] } } }, { "id": "slide", "mode": "slider", "a": { "body": "body2", "origin": [0, 0, 0], "zdir": [1, 0, 0] }, "b": { "body": "body1", "axis": { "kind": "edge", "by": "nearest", "point": [0, 5, 0] } } }], "drive": "pin", "offset": 2, "angle": "press", "name": "Linkage" },
         { "id": "f36", "type": "cleanUp", "body": "body1", "tolerance": 0.01 },
         { "id": "f37", "type": "removeBody", "bodies": ["body4"] },
         { "id": "f38", "type": "texture", "kind": "knurl", "faces": { "by": "all" }, "depth": 0.4, "activeWhen": 1 },

@@ -313,6 +313,21 @@ pub fn rotated_about(s: &Shape, origin: [f64; 3], dir: [f64; 3], deg: f64) -> KR
     run("BRepBuilderAPI_Transform (rotate about)", || format!("shape={}, origin={origin:?}, dir={dir:?}, deg={deg}", describe(s)), || ffi::bo_rotated_about(s.raw(), ox, oy, oz, dx, dy, dz, deg))
 }
 
+/// `s` turned by the rotation whose columns `x` and `z` are where the world x
+/// and z axes go, then shifted by `shift`. Only the location changes, so the
+/// moved body shares its geometry and triangulation with the original.
+pub fn rigid_moved(s: &Shape, x: [f64; 3], z: [f64; 3], shift: [f64; 3]) -> KResult<Shape> {
+    // Mated flush with no offset or angle, a world frame onto (shift, z, x) is
+    // exactly the rigid move.
+    const WORLD: [f64; 9] = [0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 0.0];
+    let fixed = [shift[0], shift[1], shift[2], z[0], z[1], z[2], x[0], x[1], x[2]];
+    run(
+        "TopoDS_Shape::Moved (rigid)",
+        || format!("shape={}, x={x:?}, z={z:?}, shift={shift:?}", describe(s)),
+        || opencascade_sys::joint_ops::jt_mated(s.raw(), &fixed, &WORLD, 0.0, 0.0, true),
+    )
+}
+
 pub fn translated(s: &Shape, d: [f64; 3]) -> KResult<Shape> {
     run("BRepBuilderAPI_Transform (translate)", || format!("shape={}, by={d:?}", describe(s)), || ffi::bo_translated(s.raw(), d[0], d[1], d[2]))
 }

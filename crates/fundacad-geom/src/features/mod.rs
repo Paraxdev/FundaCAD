@@ -8,6 +8,7 @@ mod datum;
 mod defeature;
 mod extrude;
 mod joint;
+mod mechanism;
 mod face_anchor;
 mod hole;
 pub mod import;
@@ -48,6 +49,7 @@ fn handle(ctx: &mut Ctx, f: &Feature) -> FResult {
         Feature::DatumPlane(d) => datum::datum_plane(ctx, d),
         Feature::DatumPoint(_) => Ok(()),
         Feature::Joint(j) => joint::handle(ctx, j),
+        Feature::Mechanism(m) => mechanism::handle(ctx, m),
         Feature::DatumAxis(d) => datum::datum_axis(ctx, d),
         Feature::Sketch(s) => sketch::handle(ctx, s),
         Feature::Extrude(e) => extrude::handle(ctx, e),

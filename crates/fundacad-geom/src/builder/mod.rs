@@ -228,9 +228,21 @@ pub struct Ctx {
     pub patterned: HashSet<String>,
     /// Every feature of the document in order, for naming one in a message.
     pub timeline: Vec<Step>,
+    /// The bodies this feature moved rigidly, for face provenance to follow.
+    /// Only a mechanism fills it; the rebuild clears it before each feature.
+    pub rigid_moves: Vec<RigidMove>,
     ids: BodyIds,
     face_fps: owners::FaceFps,
     volumes: HashMap<(u64, u64), f64>,
+}
+
+/// A body moved as a whole, each point `p` going to `rot * p + shift`.
+#[derive(Debug, Clone)]
+pub struct RigidMove {
+    /// The body's id.
+    pub body: String,
+    pub rot: glam::DMat3,
+    pub shift: glam::DVec3,
 }
 
 /// One boolean a feature applied: the tool solid and the bodies it changed.
@@ -270,6 +282,7 @@ impl Ctx {
             tools: HashMap::new(),
             patterned: HashSet::new(),
             timeline: Vec::new(),
+            rigid_moves: Vec::new(),
             ids: BodyIds::new(None),
             face_fps: owners::FaceFps::default(),
             volumes: HashMap::new(),
@@ -300,6 +313,7 @@ impl Ctx {
             tools: HashMap::new(),
             patterned: HashSet::new(),
             timeline: Vec::new(),
+            rigid_moves: Vec::new(),
             ids: BodyIds::new(None),
             face_fps: owners::FaceFps::default(),
             volumes: HashMap::new(),
@@ -984,6 +998,7 @@ pub fn rebuild_from(
         tools: HashMap::new(),
         patterned: HashSet::new(),
         timeline: Vec::new(),
+        rigid_moves: Vec::new(),
         ids: BodyIds::new(recorded.clone()),
         face_fps: owners::FaceFps::default(),
         volumes: HashMap::new(),
@@ -1096,6 +1111,7 @@ pub fn rebuild_from(
         };
         let id_mark = ctx.ids.mark();
 
+        ctx.rigid_moves.clear();
         let outcome = run_feature(&mut ctx, f, type_name, watch);
         // A feature a cancel cut short failed for no reason of its own, and
         // must not reach the cache as though it had.

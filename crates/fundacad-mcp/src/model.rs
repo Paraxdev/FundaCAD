@@ -130,6 +130,7 @@ const PREFIXES: &[(&str, &str)] = &[
     ("patternLinear", "pln"),
     ("split", "spl"),
     ("hole", "ho"),
+    ("mechanism", "mech"),
 ];
 
 fn prefix_for(kind: &str) -> &'static str {
