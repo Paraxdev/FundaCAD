@@ -27,7 +27,7 @@ version = "0.2.0"
 edition = "2021"
 license = "AGPL-3.0-only"
 authors = ["Paraxdev"]
-rust-version = "1.84"
+rust-version = "1.89"
 
 # The engine is a long lived worker and its hot loops are thin Rust over a
 # static C++ kernel, so cross crate inlining is worth the slower link. Unwinding
