@@ -31,6 +31,9 @@ quick-xml = "0.37"
 # Deterministic data parallelism: every parallel pass collects by index and is
 # assembled in the serial order, so a reply is byte identical either way.
 rayon = "1"
+# Sparse Cholesky for the stress analysis (src/fem). Sequential on purpose: no
+# "rayon" feature, so a solve gives the same bits on every machine.
+faer = { version = "0.24", default-features = false, features = ["std", "sparse-linalg"] }
 fontdb = "0.24.0"
 ttf-parser = "0.25.1"
 # The plugin host (src/plugins, docs/ENGINE.md 2.3). wasmtime and its WASI

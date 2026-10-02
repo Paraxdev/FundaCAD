@@ -27,7 +27,7 @@ version = "0.2.0"
 edition = "2021"
 license = "AGPL-3.0-only"
 authors = ["Paraxdev"]
-rust-version = "1.77"
+rust-version = "1.84"
 
 # The engine is a long lived worker and its hot loops are thin Rust over a
 # static C++ kernel, so cross crate inlining is worth the slower link. Unwinding
@@ -49,3 +49,44 @@ opt-level = 3
 # golden-check compares meshes of a million vertices in the debug build CI runs.
 [profile.dev.package.fundacad-cli]
 opt-level = 2
+
+# faer (the stress analysis's sparse Cholesky) is generic SIMD code that crawls
+# at opt-level 0, so the debug tests that solve a small part would take minutes.
+[profile.dev.package.faer]
+opt-level = 3
+[profile.dev.package.faer-traits]
+opt-level = 3
+[profile.dev.package.gemm]
+opt-level = 3
+[profile.dev.package.gemm-common]
+opt-level = 3
+[profile.dev.package.gemm-f32]
+opt-level = 3
+[profile.dev.package.gemm-f64]
+opt-level = 3
+[profile.dev.package.gemm-c32]
+opt-level = 3
+[profile.dev.package.gemm-c64]
+opt-level = 3
+[profile.dev.package.nano-gemm]
+opt-level = 3
+[profile.dev.package.nano-gemm-core]
+opt-level = 3
+[profile.dev.package.nano-gemm-f32]
+opt-level = 3
+[profile.dev.package.nano-gemm-f64]
+opt-level = 3
+[profile.dev.package.nano-gemm-c32]
+opt-level = 3
+[profile.dev.package.nano-gemm-c64]
+opt-level = 3
+[profile.dev.package.private-gemm-x86]
+opt-level = 3
+[profile.dev.package.pulp]
+opt-level = 3
+[profile.dev.package.dyn-stack]
+opt-level = 3
+[profile.dev.package.qd]
+opt-level = 3
+[profile.dev.package.num-complex]
+opt-level = 3

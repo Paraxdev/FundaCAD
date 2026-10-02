@@ -36,6 +36,16 @@ distributing FundaCAD under its own terms.
 - **wasmtime** (the plugin host), Apache-2.0 WITH LLVM-exception,
   https://github.com/bytecodealliance/wasmtime
 - **serde / serde_json / glam / tungstenite**, MIT OR Apache-2.0
+- **faer** (the stress analysis's sparse linear algebra), MIT,
+  https://codeberg.org/sarah-quinones/faer, with its numeric crates
+  **faer-traits**, **gemm**, **gemm-common**, **gemm-f32**, **gemm-f64**, **gemm-c32**,
+  **gemm-c64**, **nano-gemm** (and its `-core`, `-codegen`, `-f32`, `-f64`, `-c32`, `-c64`
+  crates), **private-gemm-x86**, **pulp**, **pulp-wasm-simd-flag**, **dyn-stack**,
+  **dyn-stack-macros**, **qd**, **reborrow**, **equator** and **equator-macro**, all MIT,
+  https://github.com/sarah-quinones; **num-complex**, **generativity**, **seq-macro**,
+  **paste**, **num_cpus** and **enum-as-inner**, MIT OR Apache-2.0; **libm**, **raw-cpuid**,
+  **interpol** and **sysctl**, MIT; **defer**, MIT OR Apache-2.0; **bytemuck**, Zlib OR
+  Apache-2.0 OR MIT; **byteorder**, **walkdir** and **same-file**, Unlicense OR MIT
 
 ## Written offer (LGPL source availability)
 
