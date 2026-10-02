@@ -146,6 +146,10 @@ const MOTION_SETTLE_MS = 300;
 const MOTION_MIN_GESTURE_MS = 300;
 /** How long the camera and the pointer stay still before a reduced canvas grows back. */
 const MOTION_RESTORE_MS = 1000;
+/** How long the camera stays still before a reduced canvas grows back whatever
+ *  the pointer does. Without it a hand resting on the mouse, hovering the model,
+ *  kept the view blurry indefinitely. */
+const MOTION_RESTORE_MAX_MS = 2500;
 /** The longest a canvas resize waits for the GPU to drain before it goes ahead anyway. */
 const MAX_RESIZE_WAIT_MS = 250;
 
@@ -3730,7 +3734,10 @@ export class Viewport {
     let want = this.motionScale;
     if (moving) {
       if (this.motionScale < 1 || now - this.gestureStart >= MOTION_MIN_GESTURE_MS) want = this.motion.scale;
-    } else if (now - Math.max(this.lastMovedAt, this.lastPointerAt) >= MOTION_RESTORE_MS) {
+    } else if (
+      now - Math.max(this.lastMovedAt, this.lastPointerAt) >= MOTION_RESTORE_MS
+      || now - this.lastMovedAt >= MOTION_RESTORE_MAX_MS
+    ) {
       want = 1;
     }
     if (want === this.motionScale) {
