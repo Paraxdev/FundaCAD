@@ -76,6 +76,7 @@ import {
 } from "./transformGizmo";
 import { themeColor } from "../viewport/themeColors";
 import { CanvasGesture } from "./canvasGesture";
+import { hitPx, hitScale } from "../input/pointerKind";
 
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 
@@ -572,7 +573,8 @@ export class RevolvePitchTool {
     // Quantised so an orbit, which changes mmPerPx every frame under a
     // perspective camera, does not rebuild a tube sixty times a second for a
     // shape that has not visibly moved.
-    const key = `${this.angle.toFixed(4)}|${this.pitch.toFixed(4)}|${Math.round(span * 2)}`;
+    // The pointer kind is in it too, since the grab tube is sized for a finger on touch.
+    const key = `${this.angle.toFixed(4)}|${this.pitch.toFixed(4)}|${Math.round(span * 2)}|${hitScale()}`;
     if (key !== this.arcKey) {
       this.arcKey = key;
       const pts = sweepArc(this.at, this.axis, this.angle, this.pitch, span, ARC_SEGMENTS);
@@ -594,7 +596,7 @@ export class RevolvePitchTool {
       this.arcGrab.geometry = new THREE.TubeGeometry(
         curve,
         ARC_SEGMENTS,
-        ARC_GRAB_PX * mmPerPx,
+        hitPx(ARC_GRAB_PX) * mmPerPx,
         6,
         false,
       );
@@ -653,8 +655,6 @@ export class RevolvePitchTool {
    *  the ray reaches first is the one drawn on top, which is the one the hand
    *  was aiming at. */
   private pick(x: number, y: number): "pitch" | "angle" | null {
-    const rc = this.viewport.rayFrom(x, y);
-    const arrow = this.gizmo ? rc.intersectObjects(this.gizmo.children, false)[0] : undefined;
     // The HEAD is in the set as well as the grab tube. The tube ends where the
     // head begins, so without it the point of the arrow, which is the part of an
     // arrow a hand goes for, was the one place on the control that took no
@@ -662,10 +662,14 @@ export class RevolvePitchTool {
     const parts = this.arc?.visible
       ? [this.arcGrab, this.arcHead].filter((o): o is THREE.Mesh => !!o)
       : [];
-    const curve = rc.intersectObjects(parts, false)[0];
-    if (!arrow) return curve ? "angle" : null;
-    if (!curve) return "pitch";
-    return curve.distance < arrow.distance ? "angle" : "pitch";
+    const gizmo = this.gizmo;
+    return this.viewport.probe(x, y, (rc): "pitch" | "angle" | null => {
+      const arrow = gizmo ? rc.intersectObjects(gizmo.children, false)[0] : undefined;
+      const curve = rc.intersectObjects(parts, false)[0];
+      if (!arrow) return curve ? "angle" : null;
+      if (!curve) return "pitch";
+      return curve.distance < arrow.distance ? "angle" : "pitch";
+    });
   }
 
   // --- ending ----------------------------------------------------------------

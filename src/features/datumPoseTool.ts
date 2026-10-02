@@ -203,7 +203,13 @@ export class DatumPoseTool {
     this.grabValue = this.pose[h];
     this.grabAxis.copy(s.axes[h]).normalize();
     const frame = rotationFrame(this.grabAxis);
-    const at = this.handles.grabbedAt(h, s, this.viewport.rayFrom(e.clientX, e.clientY));
+    // Read off the same ray that found the ring: a finger's press may have
+    // taken it on one of probe's outer rays, and the exact one would miss the
+    // band and fall back to a made up starting angle.
+    const handles = this.handles;
+    const at =
+      this.viewport.probe(e.clientX, e.clientY, (rc) => (handles.hit(rc) === h ? handles.grabbedAt(h, s, rc) : null)) ??
+      handles.grabbedAt(h, s, this.viewport.rayFrom(e.clientX, e.clientY));
     this.grabDialStart = Math.atan2(at.dot(frame.v), at.dot(frame.u));
     this.grabScreen = { x: e.clientX, y: e.clientY };
     this.turned = 0;
@@ -275,7 +281,9 @@ export class DatumPoseTool {
   }
 
   hit(x: number, y: number): Grab | null {
-    return this.handles?.hit(this.viewport.rayFrom(x, y)) ?? null;
+    const handles = this.handles;
+    if (!handles) return null;
+    return this.viewport.probe(x, y, (rc) => handles.hit(rc));
   }
 
   // --- state -----------------------------------------------------------------

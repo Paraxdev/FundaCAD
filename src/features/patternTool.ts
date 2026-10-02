@@ -73,6 +73,13 @@ const AXES: { name: Axis3; dir: THREE.Vector3; color: number }[] = [
 /** Starting numbers. A pattern of one is not a pattern, so the tool opens with
  *  something to look at, the drag then corrects it, which is a smaller job than
  *  conjuring it from nothing. */
+/** The radius, in gizmo units, of the invisible sleeve an arrow is grabbed by.
+ *  The drawn shaft is a hairline and the cone tapers to a point, so aiming at
+ *  the arrow itself was aiming at a pixel or two. The same size as the move
+ *  tool's arrows, for the same reason. */
+const ARROW_GRAB_R = 6.5;
+/** How far an arrow reaches, root to tip, in gizmo units. */
+const ARROW_LENGTH = 45;
 const START_COUNT = 4;
 const START_ANGLE = 360;
 
@@ -513,7 +520,14 @@ export class PatternTool {
       head.position.y = 39;
       shaft.renderOrder = 999;
       head.renderOrder = 999;
-      arrow.add(shaft, head);
+      // Never drawn, always hit: `material.visible` keeps it out of the render
+      // list while leaving it in the raycast, which `object.visible` would not.
+      const sleeve = new THREE.Mesh(
+        new THREE.CylinderGeometry(ARROW_GRAB_R, ARROW_GRAB_R, ARROW_LENGTH, 8),
+        new THREE.MeshBasicMaterial({ visible: false }),
+      );
+      sleeve.position.y = ARROW_LENGTH / 2;
+      arrow.add(shaft, head, sleeve);
       arrow.quaternion.setFromUnitVectors(Y_AXIS, a.dir);
       g.add(arrow);
       this.arrows.push({ group: arrow, mat, axis: i });
@@ -522,17 +536,22 @@ export class PatternTool {
   }
 
   private hitAxis(x: number, y: number): number {
-    if (!this.gizmo) return -1;
-    const hit = this.viewport.rayFrom(x, y).intersectObjects(this.gizmo.children, true)[0];
-    if (!hit) return -1;
-    for (const a of this.arrows) {
-      let o: THREE.Object3D | null = hit.object;
-      while (o) {
-        if (o === a.group) return a.axis;
-        o = o.parent;
+    const gizmo = this.gizmo;
+    if (!gizmo) return -1;
+    // Wrapped in an object because axis 0 is falsy and probe keeps looking past a falsy answer.
+    const found = this.viewport.probe(x, y, (rc) => {
+      const hit = rc.intersectObjects(gizmo.children, true)[0];
+      if (!hit) return null;
+      for (const a of this.arrows) {
+        let o: THREE.Object3D | null = hit.object;
+        while (o) {
+          if (o === a.group) return { axis: a.axis };
+          o = o.parent;
+        }
       }
-    }
-    return -1;
+      return null;
+    });
+    return found ? found.axis : -1;
   }
 
   private tick() {
@@ -661,7 +680,12 @@ export class PatternTool {
       this.viewport.removeFromScene(this.gizmo);
       for (const a of this.arrows) {
         a.mat.dispose();
-        for (const c of a.group.children) (c as THREE.Mesh).geometry.dispose();
+        for (const c of a.group.children) {
+          const m = c as THREE.Mesh;
+          m.geometry.dispose();
+          // The grab sleeve has a material of its own; the shaft and head share a.mat.
+          if (m.material !== a.mat) (m.material as THREE.Material).dispose();
+        }
       }
       this.gizmo = null;
       this.arrows = [];

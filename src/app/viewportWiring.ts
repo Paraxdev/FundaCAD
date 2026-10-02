@@ -5,7 +5,7 @@ import { isEditableTarget } from "../ui/focus";
 import { contextMenu, dismissContextMenu } from "../ui/menu";
 import { featureMeta } from "../ui/featureMeta";
 import { bodyRowLabel, distinguish, dominantOwner, edgeChoiceLabel } from "../ui/edgeChoice";
-import { ambiguousCandidates } from "../viewport/edgeTies";
+import { TIE_BAND_PX, ambiguousCandidates } from "../viewport/edgeTies";
 import { areaFilterLabel } from "../viewport/areaSelect";
 import { useBrowserStore } from "../stores/browser";
 import { edgeNudgePlacement } from "../features/edgeNudge";
@@ -15,6 +15,7 @@ import type { NudgePlacement } from "../features/selectionNudge";
 import { regionBeatsSurface } from "../sketch/regionOverSurface";
 import { regionArea } from "../sketch/region";
 import type { Engine } from "./engine";
+import { hitPx } from "../input/pointerKind";
 import { replayedPress } from "../viewport/navigator/input";
 
 /** How far the ambiguous-edge menu sits off the click, px. */
@@ -112,8 +113,10 @@ export function installViewportWiring(e: Engine): void {
         r.name,
       )));
     // Tied by rank, so a faint tangent edge beside a sharp one is not a question.
+    // A fingertip cannot aim as finely as a cursor, so its tie band is wider.
     const choices = ambiguousCandidates(
       rows.map((r, i) => ({ ...r, label: labels[i] ?? "Edge", screenDist: r.cand.rankPx })),
+      hitPx(TIE_BAND_PX),
     );
     if (choices.length < 2) return false; // nothing worth asking, take the nearest
 

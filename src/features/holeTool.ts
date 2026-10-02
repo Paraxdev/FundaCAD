@@ -15,6 +15,7 @@ import { asFeature } from "../types";
 import { DimInput } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
 import { CanvasGesture } from "./canvasGesture";
+import { hitPx } from "../input/pointerKind";
 import { previewVerdict } from "./previewVerdict";
 import { featureNumFields } from "../document/numFields";
 import { planeXDir } from "./planeMath";
@@ -172,7 +173,8 @@ export class HoleTool {
 
   /** The index of the placed hole nearest `p`, within its own pick radius, or -1. */
   private pointNear(p: THREE.Vector3): number {
-    const reach = Math.max(this.currentDiameter() / 2, this.viewport.pixelWorldSize(p) * 8);
+    // At least 8 screen pixels, so a small hole is still a target, and a fingertip's worth on touch.
+    const reach = Math.max(this.currentDiameter() / 2, this.viewport.pixelWorldSize(p) * hitPx(8));
     return this.points.findIndex((q) => p.distanceTo(new THREE.Vector3(q[0], q[1], q[2])) <= reach);
   }
 

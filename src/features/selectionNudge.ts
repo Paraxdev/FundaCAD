@@ -195,9 +195,8 @@ export class SelectionNudge {
   }
 
   private hitTest(x: number, y: number): boolean {
-    if (!this.handle) return false;
-    return (
-      this.viewport.rayFrom(x, y).intersectObjects(this.handle.group.children, false).length > 0
-    );
+    const handle = this.handle;
+    if (!handle) return false;
+    return this.viewport.probe(x, y, (rc) => rc.intersectObjects(handle.group.children, false).length > 0) ?? false;
   }
 }

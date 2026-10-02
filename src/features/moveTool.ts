@@ -854,31 +854,38 @@ export class MoveTool {
     if (!this.gizmo) return null;
     // Note: matrixWorld only follows placeGizmo on the next render.
     this.gizmo.updateMatrixWorld(true);
-    const ray = this.viewport.rayFrom(x, y);
-    // The origin is tested first and is preferred outright: it sits where all three
-    // arrows meet, so anything else tested before it would take every press
-    // aimed at the middle of the gizmo.
-    if (this.origin && ray.intersectObject(this.origin.mesh, false).length) {
-      return { kind: "origin", index: 0 };
-    }
     const arrowParts: THREE.Object3D[] = [];
     for (const a of this.arrows) arrowParts.push(...a.group.children);
-    const onArrow = ray.intersectObjects(arrowParts, false)[0];
-    if (onArrow) {
-      let o: THREE.Object3D | null = onArrow.object;
-      while (o && o.userData.axis === undefined) o = o.parent;
-      if (o) return { kind: "axis", index: o.userData.axis as number };
-    }
-    // Planes before cubes and rings: they sit in the open quadrants between the
-    // arrows, so nothing else is competing for those pixels, and after the arrows
-    // so a square never steals a press meant for the arrow root beside it.
-    const onPlane = ray.intersectObjects(this.planes.map((p) => p.hit), false)[0];
-    if (onPlane) return { kind: "plane", index: onPlane.object.userData.plane as number };
-    const onCube = ray.intersectObjects(this.cubes.map((c) => c.mesh), false)[0];
-    if (onCube) return { kind: "size", index: onCube.object.userData.size as number };
-    const onRing = ray.intersectObjects(this.rings.map((r) => r.ring.band), false)[0];
-    if (onRing) return { kind: "ring", index: onRing.object.userData.ring as number };
-    return null;
+    const planeHits = this.planes.map((p) => p.hit);
+    const cubeMeshes = this.cubes.map((c) => c.mesh);
+    const ringBands = this.rings.map((r) => r.ring.band);
+    // The family order below holds per ray: a finger's extra rays are only asked
+    // when the one under it hits nothing at all, so an arrow under the touch
+    // still beats a ring beside it.
+    return this.viewport.probe(x, y, (ray): Grab => {
+      // The origin is tested first and is preferred outright: it sits where all three
+      // arrows meet, so anything else tested before it would take every press
+      // aimed at the middle of the gizmo.
+      if (this.origin && ray.intersectObject(this.origin.mesh, false).length) {
+        return { kind: "origin", index: 0 };
+      }
+      const onArrow = ray.intersectObjects(arrowParts, false)[0];
+      if (onArrow) {
+        let o: THREE.Object3D | null = onArrow.object;
+        while (o && o.userData.axis === undefined) o = o.parent;
+        if (o) return { kind: "axis", index: o.userData.axis as number };
+      }
+      // Planes before cubes and rings: they sit in the open quadrants between the
+      // arrows, so nothing else is competing for those pixels, and after the arrows
+      // so a square never steals a press meant for the arrow root beside it.
+      const onPlane = ray.intersectObjects(planeHits, false)[0];
+      if (onPlane) return { kind: "plane", index: onPlane.object.userData.plane as number };
+      const onCube = ray.intersectObjects(cubeMeshes, false)[0];
+      if (onCube) return { kind: "size", index: onCube.object.userData.size as number };
+      const onRing = ray.intersectObjects(ringBands, false)[0];
+      if (onRing) return { kind: "ring", index: onRing.object.userData.ring as number };
+      return null;
+    });
   }
 
   private commit(): MoveCommit | null {

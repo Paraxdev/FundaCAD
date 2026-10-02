@@ -76,6 +76,7 @@ import { blendEditCommit } from "./blendEdit";
 import { pointOnEdge } from "./edgeNudge";
 import { blendClickTarget, missPrompt, screenPolylineDist } from "./blendPick";
 import { EDGE_GRAB_PX } from "../viewport/edgeBand";
+import { hitPx } from "../input/pointerKind";
 import { EDGE_HOVER_COLOR } from "../viewport/highlight";
 import { toast } from "../ui/toast";
 import { isEditableTarget } from "../ui/focus";
@@ -661,10 +662,12 @@ export class EdgeFeatureTool {
    *  and not only at its points, which on a straight edge are its two ends. */
   private ghostAt(clientX: number, clientY: number): { g: GhostEdge; dist: number } | null {
     let best: { g: GhostEdge; dist: number } | null = null;
+    // Sized for the pointer in use, the same as the model edge pick it competes with.
+    const grab = hitPx(EDGE_GRAB_PX);
     for (const g of this.ghosts) {
       const pts = g.points.map((p) => this.viewport.projectToScreen(new THREE.Vector3(p[0], p[1], p[2])));
       const dist = screenPolylineDist(pts, { x: clientX, y: clientY });
-      if (dist <= EDGE_GRAB_PX && (!best || dist < best.dist)) best = { g, dist };
+      if (dist <= grab && (!best || dist < best.dist)) best = { g, dist };
     }
     return best;
   }
@@ -677,7 +680,7 @@ export class EdgeFeatureTool {
     | null {
     const ghost = this.ghostAt(clientX, clientY);
     const hit = this.viewport.pickEdgeAt(clientX, clientY);
-    const t = blendClickTarget(ghost?.dist ?? null, hit?.rankPx ?? null, EDGE_GRAB_PX);
+    const t = blendClickTarget(ghost?.dist ?? null, hit?.rankPx ?? null, hitPx(EDGE_GRAB_PX));
     if (t === "member" && ghost) return { kind: "member", g: ghost.g };
     if (t === "edge" && hit) return { kind: "edge", hit };
     return null;
@@ -1388,9 +1391,9 @@ export class EdgeFeatureTool {
   }
 
   private hitGizmo(x: number, y: number): boolean {
-    if (!this.gizmo) return false;
-    const ray = this.viewport.rayFrom(x, y);
-    return ray.intersectObjects(this.gizmo.children, false).length > 0;
+    const gizmo = this.gizmo;
+    if (!gizmo) return false;
+    return this.viewport.probe(x, y, (rc) => rc.intersectObjects(gizmo.children, false).length > 0) ?? false;
   }
 
   /** Re-anchor the gizmo/input to the new member set and refresh the preview.
