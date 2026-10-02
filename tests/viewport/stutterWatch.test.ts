@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { STUTTER_MS, STUTTER_WINDOW_MS, StutterWatch } from "../../src/viewport/stutterWatch";
+import { STUTTER_CLEAR_MS, STUTTER_MS, STUTTER_WINDOW_MS, StutterWatch } from "../../src/viewport/stutterWatch";
 
 /** Feed frames of `ms` until `durationMs` of drawing has passed; returns the last verdict. */
 function feed(w: StutterWatch, ms: number, durationMs: number): boolean {
@@ -51,5 +51,28 @@ describe("StutterWatch", () => {
     feed(w, 80, STUTTER_WINDOW_MS * 2);
     w.reset();
     expect(w.sample(80)).toBe(false);
+  });
+
+  it("holds the verdict between the two lines, so it does not flicker", () => {
+    const w = new StutterWatch();
+    expect(feed(w, 80, STUTTER_WINDOW_MS * 2)).toBe(true);
+    expect(feed(w, (STUTTER_MS + STUTTER_CLEAR_MS) / 2, STUTTER_WINDOW_MS * 2)).toBe(true);
+    expect(feed(w, 33.3, STUTTER_WINDOW_MS * 2)).toBe(false);
+    expect(feed(w, (STUTTER_MS + STUTTER_CLEAR_MS) / 2, STUTTER_WINDOW_MS * 2)).toBe(false);
+  });
+
+  it("does not flicker when 60 Hz frames land on 33 and 50 ms at random", () => {
+    const w = new StutterWatch();
+    expect(feed(w, 80, STUTTER_WINDOW_MS * 2)).toBe(true);
+    let seed = 7;
+    const random = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+    let flips = 0;
+    let last = true;
+    for (let i = 0; i < 20_000; i++) {
+      const v = w.sample(random() < 0.5 ? 33.3 : 50);
+      if (v !== last) flips++;
+      last = v;
+    }
+    expect(flips).toBe(0);
   });
 });
