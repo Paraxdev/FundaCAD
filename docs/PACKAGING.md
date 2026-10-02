@@ -95,8 +95,8 @@ finds or builds the kernel like this:
   `build` configured for `MinGW Makefiles`) cannot be linked by an MSVC build,
   nor the other way round. The build script stops with a message naming the
   directory to delete instead of failing later in cmake or the linker. Use the
-  rustup MSVC toolchain; a MinGW `cargo`, such as Chocolatey's, earlier on PATH
-  builds the `windows-gnu` target, which the build script refuses because that
+  rustup MSVC toolchain; a `cargo` that defaults to `windows-gnu` (a GNU rustup
+  default, or another Rust install earlier on PATH) builds that target, which the build script refuses because that
   kernel crashes in ordinary fillets.
 - **CMake 4.** `CMAKE_POLICY_VERSION_MINIMUM=3.5` (set by the root
   `.cargo/config.toml`) lets CMake 4 configure OCCT 7.8.1, whose declared
