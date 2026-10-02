@@ -89,6 +89,13 @@ export class LightAimTool {
     return this.viewport.rayFrom(e.clientX, e.clientY);
   }
 
+  /** Is the pointer on the stalk? Through probe, so a finger near it counts. */
+  private onStalk(e: PointerEvent): boolean {
+    const stalk = this.stalk;
+    if (!stalk) return false;
+    return this.viewport.probe(e.clientX, e.clientY, (rc) => stalk.hit(rc)) ?? false;
+  }
+
   private radius(): number {
     return STALK_PX * this.viewport.pixelWorldSize(this.foot);
   }
@@ -100,7 +107,7 @@ export class LightAimTool {
       this.write(a);
       return;
     }
-    const h = !!this.stalk?.hit(this.ray(e));
+    const h = this.onStalk(e);
     if (h !== this.hover) this.viewport.requestRender();
     this.hover = h;
     this.viewport.domElement.style.cursor = h ? "grab" : "default";
@@ -109,7 +116,7 @@ export class LightAimTool {
   private onDown(e: PointerEvent) {
     if (e.button !== 0) return;
     this.downPos = { x: e.clientX, y: e.clientY };
-    this.downOnStalk = !!this.stalk?.hit(this.ray(e));
+    this.downOnStalk = this.onStalk(e);
     if (!this.downOnStalk) return;
     e.preventDefault();
     e.stopImmediatePropagation();

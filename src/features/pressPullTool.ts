@@ -523,9 +523,19 @@ export class PressPullTool {
   }
 
   private hitGizmo(x: number, y: number): boolean {
-    if (!this.gizmo) return false;
-    const ray = this.viewport.rayFrom(x, y);
-    return ray.intersectObjects(this.gizmo.children, false).length > 0;
+    return this.handleAt(x, y) === "push";
+  }
+
+  /** The handle under the pointer, the taper arc first as the press tests
+   *  them. One probe for both, so a finger's wider reach takes the handle
+   *  under the touch before one beside it. */
+  private handleAt(x: number, y: number): "taper" | "push" | null {
+    const arc = this.taperArc;
+    const gizmo = this.gizmo;
+    if (!arc && !gizmo) return null;
+    return this.viewport.probe(x, y, (rc) =>
+      arc && rc.intersectObjects(arc.group.children, false).length > 0 ? "taper"
+        : gizmo && rc.intersectObjects(gizmo.children, false).length > 0 ? "push" : null);
   }
 
   /** A taper is offered only where a wall exists to lean: a PLANAR by-distance
@@ -562,8 +572,7 @@ export class PressPullTool {
   }
 
   private hitTaper(x: number, y: number): boolean {
-    if (!this.taperArc) return false;
-    return this.viewport.rayFrom(x, y).intersectObjects(this.taperArc.group.children, false).length > 0;
+    return this.handleAt(x, y) === "taper";
   }
 
   private disposeTaperArc() {

@@ -21,9 +21,12 @@ import type { StandardView } from "./cameras";
 import type { ViewCubeSide, ViewOverride } from "../types";
 import { contextMenu } from "../ui/menu";
 import { themeColor } from "./themeColors";
+import { hitScale } from "../input/pointerKind";
 
 const SIZE = 120; // corner viewport, CSS px
 const MARGIN = 14; // gap from the top-right edge
+/** Pixel radii of the extra samples a finger's pick tries around the touch. */
+const CUBE_PROBE_RINGS_PX = [6, 12];
 const HALF = 0.5; // half-extent of the unit cube
 
 // the six face sides, with the world-space view direction (eye relative to
@@ -374,7 +377,24 @@ export class ViewCube {
     return true;
   }
 
+  /** The part under a pixel. For a finger, when the pixel itself is on
+   *  nothing, the pixels on two rings around it are tried too, nearest ring
+   *  first, since the nubs are a few pixels across and a fingertip is not.
+   *  Each sample ranks its hits exactly as the single pick does. */
   private pick(clientX: number, clientY: number): Part | null {
+    const part = this.pickExact(clientX, clientY);
+    if (part || hitScale() === 1) return part;
+    for (const r of CUBE_PROBE_RINGS_PX) {
+      for (let k = 0; k < 8; k++) {
+        const a = (k * Math.PI) / 4;
+        const p = this.pickExact(clientX + r * Math.cos(a), clientY + r * Math.sin(a));
+        if (p) return p;
+      }
+    }
+    return null;
+  }
+
+  private pickExact(clientX: number, clientY: number): Part | null {
     const rect = this.canvas.getBoundingClientRect();
     const left = rect.right - SIZE - MARGIN - this.rightInset;
     const top = rect.top + MARGIN;

@@ -177,8 +177,9 @@ export class PlaneOffsetTool {
   }
 
   private hitGizmo(x: number, y: number): boolean {
-    if (!this.gizmo) return false;
-    return this.viewport.rayFrom(x, y).intersectObjects(this.gizmo.children, false).length > 0;
+    const gizmo = this.gizmo;
+    if (!gizmo) return false;
+    return this.viewport.probe(x, y, (rc) => rc.intersectObjects(gizmo.children, false).length > 0) ?? false;
   }
 
   private commit() {

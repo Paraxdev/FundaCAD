@@ -415,8 +415,9 @@ export class SectionTool {
   }
 
   private hitGizmo(x: number, y: number): boolean {
-    if (!this.gizmo || !this.gizmo.visible) return false;
-    return this.viewport.rayFrom(x, y).intersectObjects(this.gizmo.children, false).length > 0;
+    const gizmo = this.gizmo;
+    if (!gizmo || !gizmo.visible) return false;
+    return this.viewport.probe(x, y, (rc) => rc.intersectObjects(gizmo.children, false).length > 0) ?? false;
   }
 
   stop() {

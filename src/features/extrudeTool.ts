@@ -948,14 +948,25 @@ export class ExtrudeTool {
    *  invisible grab volumes (direct children of the group), never the drawn
    *  shape, the convention every createDragHandle caller shares. */
   private hitGizmo(x: number, y: number): boolean {
-    if (!this.depthHandle || this.phase !== "drag") return false;
-    return this.viewport.rayFrom(x, y).intersectObjects(this.depthHandle.group.children, false).length > 0;
+    return this.handleAt(x, y) === "depth";
   }
 
   /** Is the cursor on the taper handle? Same convention as the depth handle. */
   private hitTaper(x: number, y: number): boolean {
-    if (!this.taperHandle || this.phase !== "drag") return false;
-    return this.viewport.rayFrom(x, y).intersectObjects(this.taperHandle.group.children, false).length > 0;
+    return this.handleAt(x, y) === "taper";
+  }
+
+  /** The handle under the pointer, the taper first as the press tests them. One
+   *  probe for both, so a finger's wider reach takes the handle under the
+   *  touch before one beside it. */
+  private handleAt(x: number, y: number): "taper" | "depth" | null {
+    if (this.phase !== "drag") return null;
+    const taper = this.taperHandle;
+    const depth = this.depthHandle;
+    if (!taper && !depth) return null;
+    return this.viewport.probe(x, y, (rc) =>
+      taper && rc.intersectObjects(taper.group.children, false).length > 0 ? "taper"
+        : depth && rc.intersectObjects(depth.group.children, false).length > 0 ? "depth" : null);
   }
 
   /** The feature this gesture would commit (also what the engine previews while

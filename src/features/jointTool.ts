@@ -283,12 +283,15 @@ export class JointTool {
   /** Which handle the cursor is over, by ray distance so the nearer surface is preferred
    *  wherever the two overlap on screen. */
   private pick(x: number, y: number): "offset" | "angle" | null {
-    const rc = this.viewport.rayFrom(x, y);
-    const arrow = this.gizmo ? rc.intersectObjects(this.gizmo.children, false)[0] : undefined;
-    const ring = this.dial ? rc.intersectObjects(this.dial.children, false)[0] : undefined;
-    if (!arrow) return ring ? "angle" : null;
-    if (!ring) return "offset";
-    return ring.distance < arrow.distance ? "angle" : "offset";
+    const gizmo = this.gizmo;
+    const dial = this.dial;
+    return this.viewport.probe(x, y, (rc): "offset" | "angle" | null => {
+      const arrow = gizmo ? rc.intersectObjects(gizmo.children, false)[0] : undefined;
+      const ring = dial ? rc.intersectObjects(dial.children, false)[0] : undefined;
+      if (!arrow) return ring ? "angle" : null;
+      if (!ring) return "offset";
+      return ring.distance < arrow.distance ? "angle" : "offset";
+    });
   }
 
   private pushPreview() {

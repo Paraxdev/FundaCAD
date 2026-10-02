@@ -996,14 +996,15 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     const triad = viewport.scene.triad;
     // The hit lands on a shaft, a head or the arm's undrawn hit sleeve, so walk
     // up to whichever ancestor carries the tag rather than assuming a depth.
-    const axisAt = (x: number, y: number): Axis3 | null => {
-      const hit = viewport.rayFrom(x, y).intersectObjects(triad.arms, true)[0];
-      for (let o: THREE.Object3D | null = hit?.object ?? null; o; o = o.parent) {
-        const a = o.userData?.axis;
-        if (a === "X" || a === "Y" || a === "Z") return a;
-      }
-      return null;
-    };
+    const axisAt = (x: number, y: number): Axis3 | null =>
+      viewport.probe(x, y, (rc): Axis3 | null => {
+        const hit = rc.intersectObjects(triad.arms, true)[0];
+        for (let o: THREE.Object3D | null = hit?.object ?? null; o; o = o.parent) {
+          const a = o.userData?.axis;
+          if (a === "X" || a === "Y" || a === "Z") return a;
+        }
+        return null;
+      });
     setPlanePick(true);
     viewport.suspendPicking = true;
     viewport.emphasizeEdges(true);

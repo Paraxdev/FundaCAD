@@ -9,6 +9,7 @@ import { bodyOfFace, edgeObjects, faceIdOfHit, visibleBodyMeshes } from "./rende
 import type { BodyEdges, EdgeRef } from "./edgeLines";
 import { edgeSelectorFrom } from "./edgeMatch";
 import { flushRaycastIndex } from "./raycastIndex";
+import { hitScale } from "../input/pointerKind";
 import {
   BAND_CAP_EXTENT_PX,
   ScreenExtent,
@@ -138,14 +139,17 @@ export class Picker {
     // shrinks with the face under the cursor, so a small or shallowly-angled
     // face keeps an interior to click, widens for an edge foreshortened toward
     // a point, and all but closes for a smooth edge. See edgeBand.ts.
-    const faceBand = edgeBandPx(face ? faceScreenExtentPx(view, face.faceId, camera, rect) : null);
+    // The band is scaled after it is measured, not by raising EDGE_NEAR_PX, so the
+    // extent walk's early exit at BAND_CAP_EXTENT_PX still means "capped" and a
+    // finger simply gets the same shape of band at fingertip size.
+    const faceBand = edgeBandPx(face ? faceScreenExtentPx(view, face.faceId, camera, rect) : null) * hitScale();
     const scale = modelScale(view);
     const i = preferredEdge(cands.map((c) => ({
       screenDist: c.screenDist,
       occluded: !this.pointVisible(c.point, camera, view, scale),
       bandPx: edgeBandForPx(
         faceBand,
-        c.edge.smooth ? 0 : shortEdgeBoostPx(edgeScreenLengthPx(c.edge, camera, rect)),
+        c.edge.smooth ? 0 : shortEdgeBoostPx(edgeScreenLengthPx(c.edge, camera, rect)) * hitScale(),
         c.edge.smooth,
       ),
     })), !!face);
@@ -219,7 +223,9 @@ export class Picker {
     this.raycaster.setFromCamera(this.ndc, camera);
     // Wide candidate threshold (three.js Line2 threshold is ~0.5× screen px, so
     // this is a forgiving grab radius).
-    this.raycaster.params.Line2 = { threshold: EDGE_PICK_THRESHOLD };
+    // A finger gets a grab radius to match its size; set per pick because the
+    // pointer in use can change between two moves.
+    this.raycaster.params.Line2 = { threshold: EDGE_PICK_THRESHOLD * hitScale() };
     (this.raycaster as any).camera = camera;
     // NOTE: each LineMaterial's .resolution is kept in sync by
     // setEdgeResolution() on resize, and set at creation time in buildBodyMesh()

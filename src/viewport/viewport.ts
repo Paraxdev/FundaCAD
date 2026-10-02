@@ -122,6 +122,7 @@ import {
 } from "./areaSelect";
 import { collectInBox, projectForArea, type AreaProjection } from "./areaProjection";
 import { isEditableTarget } from "../ui/focus";
+import { hitScale } from "../input/pointerKind";
 
 /** One box drag. The box previews by selecting every frame, so each frame starts
  *  from the selection as it was when the drag began. */
@@ -137,6 +138,8 @@ export interface AreaDrag {
 /** (0,0,0), kept once. Read every frame to size the origin arrows, and a fresh
  *  Vector3 per frame for a constant is litter in the hot path. Never written. */
 const WORLD_ORIGIN = new THREE.Vector3(0, 0, 0);
+/** Pixel radii of the extra rays `probe` casts for a finger. */
+const PROBE_RINGS_PX = [8, 16];
 /** How long the camera has to stay still for a gesture to count as over. */
 const MOTION_SETTLE_MS = 300;
 /** How long a gesture from a full size canvas runs before the canvas may shrink. */
@@ -1047,7 +1050,8 @@ export class Viewport {
         return Number.isFinite(s.x) && Number.isFinite(s.y) ? s : null;
       },
       { x: clientX, y: clientY },
-      POINT_SNAP_PX,
+      // A fingertip covers more of the screen than a cursor, so the snap reach grows with it.
+      POINT_SNAP_PX * hitScale(),
     );
     return best ? { p: new THREE.Vector3(best.p[0], best.p[1], best.p[2]), kind: best.kind } : null;
   }
@@ -3119,6 +3123,23 @@ export class Viewport {
   /** a reusable Raycaster aimed at the given client coords (no allocation) */
   private sharedRaycaster = new THREE.Raycaster();
   private ndc = new THREE.Vector2();
+  /** Hit test a handle at a pixel: `test` gets the ray through it and, for a
+   *  finger, rays on two rings around it when that one misses, nearest ring
+   *  first, so a handle sized for a mouse is a fingertip's size to hit. The
+   *  raycaster is shared; read what `test` needs before it returns. */
+  probe<T>(clientX: number, clientY: number, test: (rc: THREE.Raycaster) => T | null | undefined | false): T | null {
+    const hit = test(this.rayFrom(clientX, clientY));
+    if (hit || hitScale() === 1) return hit || null;
+    for (const r of PROBE_RINGS_PX) {
+      for (let k = 0; k < 8; k++) {
+        const a = (k * Math.PI) / 4;
+        const h = test(this.rayFrom(clientX + r * Math.cos(a), clientY + r * Math.sin(a)));
+        if (h) return h;
+      }
+    }
+    return null;
+  }
+
   rayFrom(clientX: number, clientY: number): THREE.Raycaster {
     const rect = this.canvas.getBoundingClientRect();
     this.ndc.set(

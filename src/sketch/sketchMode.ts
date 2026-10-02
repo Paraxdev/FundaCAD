@@ -37,6 +37,7 @@ import { applyDrivingDimsDirect, dimAnchor, drivenBadges, drivingDimFor, findDri
 import { expandPattern, reflectedRect, translated } from "./pattern";
 import { candidatesFromEntities, dragSnap, originCandidate, settleOriginPin, showsSnapMarker, snap, type OriginPinRequest, type SnapGuide, type SnapKind, type SnapCandidate } from "./snap";
 import type { ResolvedEntity } from "./snap";
+import { hitPx } from "../input/pointerKind";
 import { detectRegions, entityPolyline, profileBounds, rectCorners, rectFromThreePoints } from "./region";
 import { AreaBox } from "../viewport/areaBox";
 import { Disposer } from "../lib/disposer";
@@ -2954,6 +2955,8 @@ export class SketchMode {
       this.candidates, // cached; rebuilt only when entities change
       (q) => this.viewport.projectToScreen(this.plane.to3D(q.x, q.y)),
       this.gridSnap ? this.snapStep() : 0,
+      // snap()'s own 10 px reach, widened for a finger.
+      hitPx(10),
     );
     return {
       p: res.point,
@@ -3104,7 +3107,8 @@ export class SketchMode {
 
   // --- modify tools: trim + fillet -------------------------------------
   private pickTol(): number {
-    return this.planeMmPerPx() * 9;
+    // Nine screen pixels on the plane, or a fingertip's worth on touch.
+    return this.planeMmPerPx() * hitPx(9);
   }
   /** raw (unsnapped) cursor point on the sketch plane */
   private planePoint(e: MouseEvent): THREE.Vector2 | null {
@@ -3637,7 +3641,7 @@ export class SketchMode {
   private dragPointTarget(e: PointerEvent): THREE.Vector2 | null {
     const raw = this.planePoint(e);
     const res = raw && !e.ctrlKey
-      ? dragSnap(raw, this.dragAnchors, (q) => this.viewport.projectToScreen(this.plane.to3D(q.x, q.y)))
+      ? dragSnap(raw, this.dragAnchors, (q) => this.viewport.projectToScreen(this.plane.to3D(q.x, q.y)), hitPx(10))
       : null;
     this.showSnap(res ? { kind: res.kind, p: res.point, world: this.plane.to3D(res.point.x, res.point.y), label: res.label, guides: res.guides } : null);
     return res?.point ?? raw;

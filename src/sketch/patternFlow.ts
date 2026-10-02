@@ -9,8 +9,9 @@ import * as THREE from "three";
 import type { SketchPattern } from "../types";
 import type { DimInput } from "./dimInput";
 import { newPatternId } from "./id";
-import { nearCentreDot, patternSweepDeg, selectionCentre, snapAngleDeg } from "./patternDrag";
+import { CENTRE_GRAB_PX, nearCentreDot, patternSweepDeg, selectionCentre, snapAngleDeg } from "./patternDrag";
 import { setPrompt } from "../ui/prompt";
+import { hitPx } from "../input/pointerKind";
 import type { SketchTool } from "./sketchMode";
 
 // preset hole patterns: self-contained (click a center, no source selection)
@@ -158,7 +159,9 @@ export class PatternFlow {
   grabCentre(clientX: number, clientY: number): boolean {
     const pat = this.pendingPattern;
     if (!pat || pat.type !== "patternCircular") return false;
-    if (!nearCentreDot(this.host.toScreen(pat.cx as number, pat.cy as number), { x: clientX, y: clientY })) return false;
+    // The dot is a mouse sized target, so a finger gets a wider reach to it.
+    const dot = this.host.toScreen(pat.cx as number, pat.cy as number);
+    if (!nearCentreDot(dot, { x: clientX, y: clientY }, hitPx(CENTRE_GRAB_PX))) return false;
     this.centreDrag = true;
     return true;
   }

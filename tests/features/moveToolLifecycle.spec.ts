@@ -39,6 +39,9 @@ function fakeViewport() {
     hoverThrough: () => {},
     rayFrom: (_x: number, y: number) =>
       new THREE.Raycaster(new THREE.Vector3(-200, 0, y), new THREE.Vector3(1, 0, 0)),
+    // A mouse's probe: the one ray through the pixel.
+    probe: <T>(x: number, y: number, test: (rc: THREE.Raycaster) => T | null | undefined | false) =>
+      test(vp.rayFrom(x, y)) || null,
     screenToPlane: () => null,
     pointAt: () => null,
   };
