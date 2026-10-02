@@ -193,7 +193,7 @@ fn slab(o: [f64; 3], inv: [f64; 3], lo: [f64; 3], hi: [f64; 3], t_min: f64, t_ma
     true
 }
 
-/// Möller–Trumbore: how far along `o + t d` the ray meets the triangle, if
+/// Möller and Trumbore: how far along `o + t d` the ray meets the triangle, if
 /// it does. Either side of the triangle counts.
 pub fn intersect(o: [f64; 3], d: [f64; 3], p: &[[f64; 3]; 3]) -> Option<f64> {
     let sub = |a: [f64; 3], b: [f64; 3]| [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
