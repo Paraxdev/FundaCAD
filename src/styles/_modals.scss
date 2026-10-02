@@ -692,6 +692,13 @@
 .properties-panel {
   min-width: 260px;
 }
+/* The Stress setup runs long with several loads; it scrolls rather than
+   running off the bottom of the window. */
+.stress-panel {
+  min-width: 300px;
+  max-height: calc(100vh - 160px);
+  overflow-y: auto;
+}
 .measure-title {
   font-weight: 600;
   margin-bottom: var(--s-2);

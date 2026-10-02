@@ -314,6 +314,9 @@ export function createActions(e: Engine): (action: string) => void {
       case "interference":
         void e.ui.panels.showInterference();
         break;
+      case "stress":
+        e.ui.panels.showStress();
+        break;
       // --- global File / View commands (also reachable from the palette) ---
       case "new":
         void e.newDocument();

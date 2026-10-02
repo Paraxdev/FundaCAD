@@ -45,8 +45,11 @@ import {
   buildClashMesh,
   buildClearanceLine,
   buildComMarker,
+  buildStressMesh,
+  buildFaceMarkMesh,
   clearOverlayObjects,
 } from "./overlays";
+import { stressColors } from "../ui/stress";
 import { Picker, type EdgeCandidate, type Hit, type PickMods } from "./picking";
 import { bandIndex, expandToBand, type BandIndex } from "./faceBands";
 import { flushRaycastIndex } from "./raycastIndex";
@@ -2177,6 +2180,8 @@ export class Viewport {
     // Analysis overlays key off the PREVIOUS tessellation's bodies (an overlap
     // solid, a center-of-mass point); any rebuild invalidates them.
     this.setInterferenceOverlay(null, null);
+    this.setStressOverlay(null);
+    this.setFaceMarks(null);
     this.setComMarker(null);
     this.dropAreaProjection();
     const hidden = new Set(hiddenBodies);
@@ -2390,6 +2395,8 @@ export class Viewport {
   }
 
   clearModel() {
+    this.setStressOverlay(null);
+    this.setFaceMarks(null);
     this.dropAreaProjection();
     this.faceBands = new Map();
     // A reply with no geometry ends its stream here, not in setModel; left open,
@@ -2628,6 +2635,74 @@ export class Viewport {
   }
   private clashMeshes: THREE.Mesh[] = [];
   private clearanceLines: THREE.Line[] = [];
+
+  /** Stress overlay: the analysed body's surface coloured by a per-vertex
+   *  value over `range` (blue low, red high), drawn in the body's place, which
+   *  is hidden while it shows. Pass null to clear. Display only, cleared
+   *  automatically on the next `setModel`. */
+  setStressOverlay(o: {
+    bodyId: string;
+    positions: number[];
+    indices: number[];
+    values: number[];
+    range: { min: number; max: number };
+  } | null) {
+    if (this.stressMesh) {
+      clearOverlayObjects([this.stressMesh]);
+      this.stressMesh = null;
+    }
+    if (this.stressHidden) {
+      const b = this.model?.bodies.find((x) => x.id === this.stressHidden!.bodyId);
+      // Only what this overlay changed: a body the user hid meanwhile stays hidden.
+      if (b && !b.mesh.visible) {
+        b.mesh.visible = this.stressHidden.wasVisible;
+        b.edges.setBodyVisible(b.mesh.visible);
+      }
+      this.stressHidden = null;
+    }
+    if (o && o.positions.length && o.indices.length && o.values.length * 3 === o.positions.length) {
+      this.stressMesh = buildStressMesh(o.positions, o.indices, stressColors(o.values, o.range.min, o.range.max));
+      this.scene.scene.add(this.stressMesh);
+      const b = this.model?.bodies.find((x) => x.id === o.bodyId);
+      if (b) {
+        this.stressHidden = { bodyId: b.id, wasVisible: b.mesh.visible };
+        b.mesh.visible = false;
+        b.edges.setBodyVisible(false);
+      }
+    }
+    this.requestRender();
+  }
+  hasStressOverlay(): boolean {
+    return this.stressMesh !== null;
+  }
+  private stressMesh: THREE.Mesh | null = null;
+  private stressHidden: { bodyId: string; wasVisible: boolean } | null = null;
+
+  /** Tint sets of faces (display face ids), each in its own colour: the faces
+   *  an analysis holds fixed or loads. Pass null to clear. Face ids belong to
+   *  one tessellation, so `setModel` clears these too. */
+  setFaceMarks(marks: { faceIds: number[]; color: number }[] | null) {
+    clearOverlayObjects(this.faceMarkMeshes);
+    this.faceMarkMeshes = [];
+    for (const m of marks ?? []) {
+      const tris = m.faceIds.flatMap((f) => this.faceTriangles(f));
+      if (!tris.length) continue;
+      const out = new Float32Array(tris.length * 9);
+      let k = 0;
+      for (const t of tris) {
+        for (const v of [t.a, t.b, t.c]) {
+          out[k++] = v.x;
+          out[k++] = v.y;
+          out[k++] = v.z;
+        }
+      }
+      const mesh = buildFaceMarkMesh(out, m.color);
+      this.scene.scene.add(mesh);
+      this.faceMarkMeshes.push(mesh);
+    }
+    this.requestRender();
+  }
+  private faceMarkMeshes: THREE.Mesh[] = [];
 
   /** Center-of-mass marker for the Properties panel (pass null to clear). */
   setComMarker(point: THREE.Vector3 | null) {

@@ -103,6 +103,44 @@ export type FaceAxisReply =
   | { axis: { origin: [number, number, number]; dir: [number, number, number] }; hole: boolean; sameAsNormal?: boolean }
   | { reason: string };
 
+/** A material preset the engine knows by name, or one typed in (MPa). */
+export type StressMaterial = string | { E: number; nu: number; yield: number; name?: string };
+
+/** The `stress` op's options past the document and the body (docs/PROTOCOL.md).
+ *  Selectors carry their body. Units are mm, N and MPa; a force is the total
+ *  over its faces, a pressure pushes into them. */
+export interface StressOptions {
+  fixed: Selector[];
+  loads: ({ faces: Selector[]; force: Vec3 } | { faces: Selector[]; pressure: number })[];
+  material: StressMaterial;
+  size?: number;
+  maxElements?: number;
+}
+
+/** A linear static analysis of one body. `surface` is the boundary of the
+ *  analysis mesh with a value per vertex, for drawing; `displacement` holds
+ *  three numbers per vertex. Display only, nothing here reaches the document. */
+export interface StressReply {
+  body: string;
+  name: string;
+  material: { name: string; E: number; nu: number; yield: number };
+  mesh: { nodes: number; elements: number; size: number; minDihedral: number };
+  /** `face` is null for a peak inside the body, away from every face. */
+  maxVonMises: { value: number; at: Vec3; face?: number | null };
+  maxDisplacement: { value: number; at: Vec3; vector: Vec3 };
+  /** Null when nothing is stressed, so nothing yields. */
+  safetyFactor: number | null;
+  applied: Vec3;
+  reaction: Vec3;
+  warnings?: string[];
+  surface?: { positions: number[]; indices: number[]; faceIds?: number[]; vonMises: number[]; displacement?: number[] };
+  errors?: { feature_id?: string; message: string }[];
+}
+
+export type StressResult =
+  | { ok: true; result: StressReply }
+  | { ok: false; message: string; cancelled?: boolean };
+
 // The surface the rest of the app depends on. `Geometry` implements it over
 // either engine's transport, and tests stub it by hand.
 export interface GeometryBackend {
@@ -182,6 +220,10 @@ export interface GeometryBackend {
    *  or why it has none. Null when the engine could not be asked. Optional, a
    *  test backend may not answer it. */
   faceAxis?(doc: CadDocument, face: Selector, body: string | null): Promise<FaceAxisReply | null>;
+  /** Linear static stress in one body (`body` is its id or name). `onStarted`
+   *  hands back the request id for a Cancel through `cancel(id)`. Optional, a
+   *  test backend may have no solver. */
+  stress?(doc: CadDocument, body: string, opts: StressOptions, onStarted?: (id: string) => void): Promise<StressResult>;
   patternAxis?(doc: CadDocument, ref: Selector): Promise<PatternAxisReply | null>;
   /** The lines the built model cuts a sketch's areas along on one plane, as
    *  world polylines, the ones every consuming feature cuts with. Null when the
@@ -1194,6 +1236,13 @@ export class Geometry implements GeometryBackend {
       };
     }
     return { ok: false, message: msg.error?.message };
+  }
+
+  async stress(doc: CadDocument, body: string, opts: StressOptions, onStarted?: (id: string) => void): Promise<StressResult> {
+    const msg = await this.call<StressReply>("stress", { document: doc, body, ...opts }, onStarted);
+    if (msg.ok) return { ok: true, result: msg.result };
+    if (msg.cancelled) return { ok: false, cancelled: true, message: "stress analysis cancelled" };
+    return { ok: false, message: msg.error?.message ?? "stress analysis failed" };
   }
 
   async faceAxis(doc: CadDocument, face: Selector, body: string | null): Promise<FaceAxisReply | null> {

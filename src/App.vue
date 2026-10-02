@@ -19,6 +19,7 @@ import { useShellStore } from "./stores/shell";
 import { useUiStore } from "./stores/ui";
 import PropertiesPanel from "./components/overlays/PropertiesPanel.vue";
 import InterferencePanel from "./components/overlays/InterferencePanel.vue";
+import StressPanel from "./components/overlays/StressPanel.vue";
 import OverhangPanel from "./components/overlays/OverhangPanel.vue";
 import ParamsDialog from "./components/overlays/ParamsDialog.vue";
 import WelcomeModal from "./components/overlays/WelcomeModal.vue";
@@ -131,6 +132,7 @@ watch(() => ui.sketchActive, () => shell.closeDrawer());
        and the Overhang settings are legitimately on screen together. -->
   <PropertiesPanel />
   <InterferencePanel />
+  <StressPanel />
   <OverhangPanel />
   <ParamsDialog />
   <MeasureReadout />
