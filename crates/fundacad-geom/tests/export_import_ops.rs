@@ -52,6 +52,14 @@ fn scratch(name: &str) -> PathBuf {
     d
 }
 
+/// One blob store for the whole binary: the variable is process wide and tests
+/// run in parallel, so a test pointing it at its own folder pulls the store
+/// out from under another test between its import and its export.
+fn blob_dir() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| std::env::set_var("FUNDACAD_BLOB_DIR", scratch("blobs")));
+}
+
 fn two_bodies() -> Value {
     json!({"features": [
         {"id": "a", "type": "box", "length": 10, "width": 10, "height": 10},
@@ -158,7 +166,7 @@ fn export_one_body_separate_bodies_and_refusals() {
 
 #[test]
 fn step_round_trips_through_export_and_import() {
-    std::env::set_var("FUNDACAD_BLOB_DIR", scratch("blobs"));
+    blob_dir();
     let c = Client::new();
     let dir = scratch("roundtrip");
     let path = p(&dir, "Model Two.step");
@@ -235,7 +243,7 @@ fn spike(tip_x: f64) -> Value {
 
 #[test]
 fn a_revolved_tip_ending_on_the_axis_round_trips_as_a_closed_sphere() {
-    std::env::set_var("FUNDACAD_BLOB_DIR", scratch("tipblobs"));
+    blob_dir();
     let c = Client::new();
     let dir = scratch("tip");
     // The profile an agent wrote, rounded to five places, which puts the tip
