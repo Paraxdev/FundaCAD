@@ -97,13 +97,14 @@ describe("MotionQuality", () => {
 
   it("remembers what a full quality frame cost after it steps down", () => {
     const q = new MotionQuality();
-    expect(q.fullPeriod).toBe(0);
+    expect(q.fullPeriod(0)).toBe(0);
     let t = feed(q, 105, 4);
     t = feed(q, 38, 9, t);
     expect(q.level).toBe(2);
-    expect(q.fullPeriod).toBe(105);
+    expect(q.fullPeriod(t)).toBe(105);
+    expect(q.fullPeriod(t + 60_000)).toBe(0); // too old to describe the machine now
     q.reset();
-    expect(q.fullPeriod).toBe(0);
+    expect(q.fullPeriod(t)).toBe(0);
   });
 
   it("starts over on reset", () => {
@@ -111,5 +112,66 @@ describe("MotionQuality", () => {
     feed(q, 105, 4);
     q.reset();
     expect(q.scale).toBe(MOTION_LEVELS[0]);
+  });
+
+  it("climbs back once a busy GPU frees up, even on a model that is not pixel bound", () => {
+    const q = new MotionQuality();
+    let t = feed(q, 105, 4); // another app rendering: straight down
+    t = feed(q, 60, 9, t);
+    expect(q.level).toBe(2);
+    // Now 25 ms at half size, which pixel pricing reads as 100 ms full size.
+    t = feed(q, 25, 200, t + 30_000);
+    expect(q.level).toBe(0);
+  });
+
+  it("steps back down from a level up that was too slow and does not retry it at once", () => {
+    const q = new MotionQuality();
+    let t = feed(q, 105, 4);
+    t = feed(q, 25, 400, t + 30_000); // probes all the way back up
+    expect(q.level).toBe(0);
+    t = feed(q, 50, 4, t); // the other app is back
+    expect(q.level).toBe(1);
+    t = feed(q, 36, 5, t); // the step paid off
+    expect(q.level).toBe(1);
+    feed(q, 25, 400, t); // inside the memory window: no retry
+    expect(q.level).toBe(1);
+  });
+
+  it("tries a level up at the end of a comfortable gesture", () => {
+    const q = new MotionQuality();
+    let t = feed(q, 105, 4);
+    t = feed(q, 28, 5, t + 40_000);
+    expect(q.level).toBe(1);
+    q.settle(t);
+    expect(q.level).toBe(1); // the rise was mid gesture, nothing measured since
+  });
+
+  it("climbs back on a laptop held to 30 fps once the busy GPU frees up", () => {
+    const q = new MotionQuality();
+    let t = feed(q, 105, 4);
+    t = feed(q, 60, 9, t);
+    expect(q.level).toBe(2);
+    feed(q, 33.4, 400, t + 30_000);
+    expect(q.level).toBe(0);
+  });
+
+  it("backs off a level up that keeps failing on a pixel bound machine", () => {
+    const q = new MotionQuality();
+    const cost = [60, 46, 15]; // what each level really costs
+    let t = 0;
+    let changes = 0;
+    let last = q.level;
+    for (let i = 0; i < 20_000; i++) {
+      const ms = cost[q.level]!;
+      t += ms;
+      q.sample(ms, t);
+      if (q.level !== last) {
+        changes++;
+        last = q.level;
+      }
+    }
+    // About 5 minutes of motion: the old 30 s memory alone retried ten times.
+    expect(t).toBeGreaterThan(290_000);
+    expect(changes).toBeLessThan(10);
   });
 });
