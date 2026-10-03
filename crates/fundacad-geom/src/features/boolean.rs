@@ -470,14 +470,28 @@ pub fn do_boolean(ctx: &mut Ctx, f: &BooleanFeature) -> FResult {
             "Boolean: a body cannot be both the target and the tool.",
         ));
     }
+    let mut missing: Vec<&str> = Vec::new();
     let tools: Vec<usize> = tool_ids
         .iter()
-        .filter_map(|id| ctx.find_body(id))
+        .filter_map(|id| {
+            let found = ctx.find_body(id);
+            if found.is_none() {
+                missing.push(id);
+            }
+            found
+        })
         .filter(|&i| ctx.bodies[i].id != target_id)
         .collect();
     if tools.is_empty() {
         ctx.skip_feature(&f.id, "boolean", "tool bodies already consumed or missing");
         return Ok(());
+    }
+    if !missing.is_empty() {
+        ctx.advise(
+            &f.id,
+            "toolsMissing",
+            format!("{} no longer in the model, the other tools were applied", missing.join(", ")),
+        );
     }
     let before_signed = body_vol(ctx, target);
     let before = before_signed.abs();
