@@ -364,3 +364,93 @@ describe("what is typed is read, or refused out loud", () => {
     expect(problem()).toBe("Click an arrow first");
   });
 });
+
+describe("DimInput's choice on a field's name", () => {
+  // A round face's size reads as a radius, a diameter or an offset, picked from
+  // a menu on the name or typed ahead of the number.
+  const input = () => root().querySelector<HTMLInputElement>("input")!;
+  const tag = () => root().querySelector<HTMLElement>(".dim-name")!;
+  const type = (text: string) => {
+    input().value = text;
+    input().dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  const menuRows = () => [...document.querySelectorAll<HTMLButtonElement>(".dim-unit-menu .dim-unit-item")];
+  const options = [
+    { id: "radius", label: "R", word: "Radius" },
+    { id: "diameter", label: "Diameter", icon: "diameter", word: "Diameter" },
+    { id: "offset", label: "Offset", word: "Offset" },
+  ];
+  const read = (raw: string) => {
+    const m = /^r(?=\d)/.exec(raw);
+    if (m) return { choice: "radius", text: raw.slice(1) };
+    return /^[-+]/.test(raw) ? { choice: "offset", text: raw } : null;
+  };
+  const show = (seen: [string, boolean][], withRead = true) =>
+    dim.show([{
+      name: "size", label: "Diameter", icon: "diameter", kind: "length",
+      choices: { options, chosen: "diameter", ...(withRead ? { read } : {}), onChoose: (id, typed) => seen.push([id, typed]) },
+    }], () => {});
+
+  it("is a plain name unless the field has choices", () => {
+    dim.show([{ name: "size", label: "D" }], () => {});
+    expect(tag().tagName).toBe("SPAN");
+    expect(tag().querySelector("[data-icon='caretDown']")).toBeNull();
+  });
+
+  it("opens a menu of the choices, the chosen one marked, and reports a pick", () => {
+    const seen: [string, boolean][] = [];
+    show(seen);
+    expect(tag().tagName).toBe("BUTTON");
+    expect(tag().title).toBe("Diameter");
+    press("pointerdown", tag());
+    expect(menuRows().map((r) => r.textContent)).toEqual(["Radius", "Diameter", "Offset"]);
+    expect(menuRows().map((r) => r.classList.contains("active"))).toEqual([false, true, false]);
+
+    press("pointerdown", menuRows()[0]!);
+    expect(seen).toEqual([["radius", false]]);
+    expect(dim.choiceOf("size")).toBe("radius");
+    expect(tag().textContent).toBe("R");
+    expect(menuRows()).toEqual([]);
+  });
+
+  it("takes the choice typed ahead of the number and reads the number alone", () => {
+    const seen: [string, boolean][] = [];
+    show(seen);
+    type("r2.5");
+    expect(seen).toEqual([["radius", true]]);
+    expect(dim.getValue("size")).toBeCloseTo(2.5);
+    expect(input().value).toBe("r2.5");
+
+    type("-0.5");
+    expect(seen.at(-1)).toEqual(["offset", true]);
+    expect(dim.getValue("size")).toBeCloseTo(-0.5);
+    expect(tag().textContent).toBe("Offset");
+  });
+
+  it("control: without a reader the same text is not a value", () => {
+    const seen: [string, boolean][] = [];
+    show(seen, false);
+    type("r2.5");
+    expect(seen).toEqual([]);
+    expect(dim.getValue("size")).toBeNull();
+  });
+
+  it("follows the tool without calling back", () => {
+    const seen: [string, boolean][] = [];
+    show(seen);
+    dim.setChoice("size", "offset");
+    expect(seen).toEqual([]);
+    expect(dim.choiceOf("size")).toBe("offset");
+    expect(tag().textContent).toBe("Offset");
+    expect(tag().querySelector("[data-icon='caretDown']")).not.toBeNull();
+  });
+
+  it("leaves the unit menu converting through the shared popup", () => {
+    show([]);
+    type("10");
+    press("pointerdown", root().querySelector<HTMLElement>(".dim-field .dim-unit:not(.dim-choice)")!);
+    const inch = menuRows().find((r) => r.textContent === "in")!;
+    press("pointerdown", inch);
+    expect(Number(input().value)).toBeCloseTo(0.39, 2);
+  });
+});
