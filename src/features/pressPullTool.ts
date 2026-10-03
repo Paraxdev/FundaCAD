@@ -778,7 +778,7 @@ export class PressPullTool {
         : shown !== null && Math.abs(shown) >= MIN_PUSH
           ? `keeping ${this.sizeText(shown)}`
           : "drag back";
-      setPrompt(`${this.outcomes.refusal} · ${then} · Esc`);
+      setPrompt(`Refused, ${then} · Esc`);
       return;
     }
     if (r) {

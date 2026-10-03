@@ -236,7 +236,7 @@ export class FaceOffsetTool {
         : held !== null && Math.abs(held) >= MIN_OFFSET
           ? `keeping ${this.sizeText(held)}`
           : "drag back";
-      setPrompt(`${this.outcomes.refusal} · ${then} · Esc`);
+      setPrompt(`Refused, ${then} · Esc`);
       return;
     }
     const moves = this.followMoves();
