@@ -243,8 +243,35 @@ fn r6(v: DVec3) -> Value {
     json!(v.to_array().map(|x| py_round(x, 6)))
 }
 
+fn resize_info(body: &Shape, face: &Shape) -> Option<Value> {
+    let r = crate::features::resize::describe(body, face)?;
+    let t = &r.tangent;
+    let mut info = json!({
+        "kind": r.kind,
+        "size": py_round(r.size, 6),
+        "full": r.full,
+        "concave": r.concave,
+        "contact": r.contact.map(|c| py_round(c, 6)),
+        "tangent": {
+            "faces": t.faces,
+            "lostWhen": t.lost_when,
+            "run": t.run.iter().map(|p| r6(*p)).collect::<Vec<_>>(),
+            "closed": t.closed,
+            "followable": t.followable,
+        },
+    });
+    if let Some((origin, dir)) = r.axis {
+        info["axis"] = json!({"origin": r6(origin), "dir": r6(dir)});
+    }
+    if let Some(c) = r.centre {
+        info["centre"] = r6(c);
+    }
+    Some(info)
+}
+
 /// The `faceAxis` op: the axis press/pull would move `face` of `body` along,
-/// `{axis: {origin, dir}, hole, sameAsNormal}`, or `{reason}` when it has none.
+/// `{axis: {origin, dir}, hole, sameAsNormal}`, or `{reason}` when it has none,
+/// either one with `resize` when the face is a cylinder, cone, sphere or torus.
 pub fn face_axis_result(req: &Map<String, Value>, watch: &dyn Watch) -> JobResult {
     let (_, built) = match crate::inspect::rebuild_request(req, watch) {
         Ok(r) => r,
@@ -267,13 +294,19 @@ pub fn face_axis_result(req: &Map<String, Value>, watch: &dyn Watch) -> JobResul
         });
     let reply = match found {
         None => json!({"reason": "the face was not found"}),
-        Some((body, face)) => match hole_axis(&body.shape, &face) {
-            Ok(a) => {
-                let same = matches!(surf(&face), Surf::Plane(n) if parallel(n, a.dir));
-                json!({"axis": {"origin": r6(a.origin), "dir": r6(a.dir)}, "hole": a.hole, "sameAsNormal": same})
+        Some((body, face)) => {
+            let mut reply = match hole_axis(&body.shape, &face) {
+                Ok(a) => {
+                    let same = matches!(surf(&face), Surf::Plane(n) if parallel(n, a.dir));
+                    json!({"axis": {"origin": r6(a.origin), "dir": r6(a.dir)}, "hole": a.hole, "sameAsNormal": same})
+                }
+                Err(why) => json!({"reason": why}),
+            };
+            if let Some(info) = resize_info(&body.shape, &face) {
+                reply["resize"] = info;
             }
-            Err(why) => json!({"reason": why}),
-        },
+            reply
+        }
     };
     JobResult::Json(reply.as_object().cloned().unwrap_or_default())
 }
