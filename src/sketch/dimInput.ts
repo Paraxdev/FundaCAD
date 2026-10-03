@@ -23,6 +23,31 @@ export interface DimFieldDef extends ValueRule {
   /** The tool reads the raw text itself (a size name, a parameter expression),
    *  so the box does not judge it. */
   free?: boolean;
+  /** What the field reads, picked from a menu on its name. `label` and `icon`
+   *  are the chosen one's. */
+  choices?: DimChoices;
+}
+
+/** One of the things a field can read, a radius or a diameter say. */
+export interface DimChoice {
+  id: string;
+  /** the name tag, or its tooltip when `icon` is given */
+  label: string;
+  icon?: string;
+  /** the menu row */
+  word: string;
+}
+
+/** The tool stays the owner of the choice, as with the toggle: this reports a
+ *  pick and follows with `setChoice` when it changes some other way. */
+export interface DimChoices {
+  options: DimChoice[];
+  chosen: string;
+  /** A choice written ahead of the number ("r2.5") and the number's own text,
+   *  null when the text names none. */
+  read?: (raw: string) => { choice: string; text: string } | null;
+  /** `typed` when the text picked it, so the tool leaves the text as it is. */
+  onChoose: (id: string, typed: boolean) => void;
 }
 
 /** An on/off switch in the box, beside Confirm and Cancel.
@@ -53,6 +78,9 @@ interface Field {
   unit: UnitDef | null;
   /** the clickable unit chip, or null for a count (which has no unit) */
   chip: HTMLButtonElement | null;
+  /** the name tag, a button when the field has choices */
+  tag: HTMLElement;
+  choice: string | null;
   // false = follows the cursor; true = holds the user's typed/locked value
   userDriven: boolean;
   hidden?: boolean;
@@ -264,15 +292,10 @@ export class DimInput {
     this.fields = defs.map((def) => {
       const wrap = document.createElement("label");
       wrap.className = "dim-field";
-      const name = document.createElement("span");
-      name.className = "dim-name";
-      if (def.icon) {
-        name.appendChild(iconElement(def.icon, 12));
-        name.title = def.label;
-      } else {
-        name.textContent = def.label;
-      }
-      wrap.appendChild(name);
+      const tag = document.createElement(def.choices ? "button" : "span");
+      tag.className = def.choices ? "dim-name dim-unit dim-choice" : "dim-name";
+      if (tag instanceof HTMLButtonElement) tag.type = "button";
+      wrap.appendChild(tag);
       const input = document.createElement("input");
       input.type = "text";
       // NOT inputMode "decimal": that asks a touch keyboard for digits only, and
@@ -281,7 +304,17 @@ export class DimInput {
       input.autocomplete = "off";
       wrap.appendChild(input);
 
-      const field: Field = { def, input, unit: initialUnit(def.kind), chip: null, userDriven: false };
+      const field: Field = {
+        def, input, unit: initialUnit(def.kind), chip: null, tag, choice: def.choices?.chosen ?? null, userDriven: false,
+      };
+      this.paintName(field);
+      if (def.choices) {
+        tag.addEventListener("pointerdown", (e) => {
+          e.preventDefault(); // never blur the input to open the menu
+          e.stopPropagation();
+          this.openChoiceMenu(field);
+        });
+      }
 
       if (field.unit) {
         // The unit is a BUTTON, not a caption: clicking it is how you change
@@ -309,6 +342,7 @@ export class DimInput {
         wrap.classList.add("typed");
         this.sizeToContent(field);
         this.adoptTypedUnit(field);
+        this.adoptTypedChoice(field);
         this.onInput?.();
       });
       this.sizeToContent(field);
@@ -379,7 +413,7 @@ export class DimInput {
    *  user has typed: a value the cursor wrote is the tool's own. */
   private fieldProblem(f: Field): string | null {
     if (f.hidden || !f.userDriven || f.def.free) return null;
-    const raw = f.input.value.trim();
+    const raw = this.numberText(f).trim();
     if (!raw) return null;
     const v = this.parse(f);
     if (v === null) {
@@ -408,10 +442,16 @@ export class DimInput {
   }
 
   private parse(f: Field): number | null {
+    const text = this.numberText(f);
     // Parsed against THIS field's unit, not the document's: a field the user put
     // into inches must read a bare "2" as two inches.
-    if (!f.unit) return parseField(f.input.value, f.def.kind);
-    return tryParseMeasure(f.input.value, f.unit)?.value ?? null;
+    if (!f.unit) return parseField(text, f.def.kind);
+    return tryParseMeasure(text, f.unit)?.value ?? null;
+  }
+
+  /** The text without a choice written ahead of the number. */
+  private numberText(f: Field): string {
+    return f.def.choices?.read?.(f.input.value)?.text ?? f.input.value;
   }
 
   /** Refuse the confirm and say why, for a tool that has its own reason, such
@@ -457,16 +497,41 @@ export class DimInput {
     if (!f || (f.def.label === label && f.def.icon === icon)) return;
     const { icon: _old, ...rest } = f.def;
     f.def = icon ? { ...rest, label, icon } : { ...rest, label };
-    const tag = f.input.closest("label")?.querySelector<HTMLElement>(".dim-name");
-    if (!tag) return;
+    this.paintName(f);
+  }
+
+  /** Put a field's choice in a state without picking it, for a tool that
+   *  changed it some other way. Does NOT call back, as with setToggle. */
+  setChoice(name: string, id: string) {
+    const f = this.fields.find((x) => x.def.name === name);
+    const c = f?.def.choices?.options.find((o) => o.id === id);
+    if (!f || !c) return;
+    f.choice = id;
+    this.setFieldLabel(name, c.label, c.icon);
+  }
+
+  /** The choice a field is reading, null when it has none. */
+  choiceOf(name: string): string | null {
+    return this.fields.find((x) => x.def.name === name)?.choice ?? null;
+  }
+
+  private paintName(f: Field) {
+    const tag = f.tag;
     tag.replaceChildren();
-    if (icon) {
-      tag.appendChild(iconElement(icon, 12));
-      tag.title = label;
+    if (f.def.icon) {
+      tag.appendChild(iconElement(f.def.icon, 12));
+      tag.title = f.def.label;
     } else {
-      tag.textContent = label;
+      tag.textContent = f.def.label;
       tag.removeAttribute("title");
     }
+    if (f.def.choices) tag.appendChild(iconElement("caretDown", 10));
+  }
+
+  private choose(f: Field, id: string, typed: boolean) {
+    if (id === f.choice) return;
+    this.setChoice(f.def.name, id);
+    f.def.choices?.onChoose(id, typed);
   }
 
   /** Takes a field out of the box without rebuilding it, so what the user has
@@ -535,53 +600,84 @@ export class DimInput {
    *  typed, only the chip moves. */
   private adoptTypedUnit(f: Field) {
     if (!f.unit) return;
-    const m = tryParseMeasure(f.input.value, f.unit);
+    const m = tryParseMeasure(this.numberText(f), f.unit);
     if (!m?.unit || m.unit === f.unit) return;
     f.unit = m.unit;
     if (f.chip) f.chip.textContent = m.unit.label;
+  }
+
+  /** A choice typed ahead of the number picks it, the text left as typed. */
+  private adoptTypedChoice(f: Field) {
+    const got = f.def.choices?.read?.(f.input.value);
+    if (got) this.choose(f, got.choice, true);
   }
 
   /** The chip's menu: pick a unit and the value is CONVERTED, not reinterpreted.
    *  10 mm shown as inches is 0.3937 in, not 10 in. */
   private openUnitMenu(f: Field) {
     if (!f.unit || !f.chip) return;
-    this.closeUnitMenu();
-    const dim = f.unit.dim;
-    const menu = document.createElement("div");
-    menu.className = "dim-unit-menu";
-    for (const u of commonUnits(dim)) {
-      const row = document.createElement("button");
-      row.type = "button";
-      row.className = "dim-unit-item" + (u.id === f.unit.id ? " active" : "");
-      row.textContent = u.label;
-      row.addEventListener("pointerdown", (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const current = tryParseMeasure(f.input.value, f.unit);
+    this.openMenu(f.chip, commonUnits(f.unit.dim).map((u) => ({
+      label: u.label,
+      active: u.id === f.unit?.id,
+      pick: () => {
+        const current = tryParseMeasure(this.numberText(f), f.unit);
         f.unit = u;
         if (f.chip) f.chip.textContent = u.label;
         if (current) f.input.value = String(toUnit(current.value, u));
         this.sizeToContent(f);
-        this.closeUnitMenu();
         f.input.focus();
+      },
+    })));
+  }
+
+  /** The name's menu. The tool rewrites the value in the new terms. */
+  private openChoiceMenu(f: Field) {
+    const choices = f.def.choices;
+    if (!choices) return;
+    this.openMenu(f.tag, choices.options.map((c) => ({
+      label: c.word,
+      active: c.id === f.choice,
+      pick: () => {
+        this.choose(f, c.id, false);
+        this.sizeToContent(f);
+        f.input.focus();
+        f.input.select();
+      },
+    })));
+  }
+
+  private openMenu(anchor: HTMLElement, rows: { label: string; active: boolean; pick: () => void }[]) {
+    this.closeMenu();
+    const menu = document.createElement("div");
+    menu.className = "dim-unit-menu";
+    for (const r of rows) {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "dim-unit-item" + (r.active ? " active" : "");
+      row.textContent = r.label;
+      row.addEventListener("pointerdown", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        this.closeMenu();
+        r.pick();
       });
       menu.appendChild(row);
     }
-    const r = f.chip.getBoundingClientRect();
-    menu.style.left = `${r.left}px`;
-    menu.style.top = `${r.bottom + 2}px`;
+    const at = anchor.getBoundingClientRect();
+    menu.style.left = `${at.left}px`;
+    menu.style.top = `${at.bottom + 2}px`;
     document.body.appendChild(menu);
-    this.unitMenu = menu;
+    this.menu = menu;
     // One dismissal path, on the next press anywhere else.
     setTimeout(() => window.addEventListener("pointerdown", this.boundCloseMenu, { once: true, capture: true }), 0);
   }
 
-  private unitMenu: HTMLDivElement | null = null;
-  private boundCloseMenu = () => this.closeUnitMenu();
+  private menu: HTMLDivElement | null = null;
+  private boundCloseMenu = () => this.closeMenu();
 
-  private closeUnitMenu() {
-    this.unitMenu?.remove();
-    this.unitMenu = null;
+  private closeMenu() {
+    this.menu?.remove();
+    this.menu = null;
   }
 
   /** tool pushes cursor-derived values in MM; only tracking fields accept them */
@@ -748,7 +844,7 @@ export class DimInput {
     this.toggleBtn = null;
     this.toggleOn = false;
     this.active = false;
-    this.closeUnitMenu();
+    this.closeMenu();
     this.unsubscribeError?.();
     this.unsubscribeError = null;
     this.problem = null; // innerHTML below takes the element with it

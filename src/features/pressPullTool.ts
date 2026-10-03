@@ -16,7 +16,7 @@ import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore, RebuildState } from "../document/store";
 import type { Feature, PressPullDirection, PressPullMode, Selector, Vec3 } from "../types";
-import { DimInput, type DimFieldDef, type DimToggleDef } from "../sketch/dimInput";
+import { DimInput, type DimChoice, type DimChoices, type DimFieldDef, type DimToggleDef } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
 import { fmtLength, snap } from "../ui/units";
 import {
@@ -29,7 +29,15 @@ import {
   type DragHandle,
 } from "./manipulator";
 import { draftAngle, draftDelta } from "./draftMath";
-import { collapseDiameter, deltaForDiameter, deltaForRadius, radialDrag, type RoundFace } from "./radialDrag";
+import { COLLAPSE_FRACTION, radialDrag, type RoundFace } from "./radialDrag";
+import {
+  defaultQuantity,
+  deltaForSize,
+  isAbsolute,
+  parseSizeText,
+  sizeReadout,
+  type SizeQuantity,
+} from "./sizeQuantity";
 import { CanvasGesture } from "./canvasGesture";
 import { commitDecision } from "./edgeDragMath";
 import {
@@ -73,6 +81,12 @@ type Phase = "pick" | "drag";
 
 const Y_AXIS = HANDLE_UP;
 
+const QUANTITIES: (DimChoice & { id: SizeQuantity })[] = [
+  { id: "radius", label: "R", word: "Radius" },
+  { id: "diameter", label: "Diameter", icon: "diameter", word: "Diameter" },
+  { id: "offset", label: "Offset", word: "Offset" },
+];
+
 const MODES: PressPullMode[] = ["auto", "join", "cut", "new", "intersect"];
 const MODE_LABEL: Record<PressPullMode, string> = { auto: "Auto", join: "Join", cut: "Cut", new: "New", intersect: "Intersect" };
 
@@ -99,6 +113,9 @@ export class PressPullTool {
    *  no taper, no boolean mode and no up to. Outlives `round` when a Ctrl-click
    *  adds a face outside its tangent run. */
   private resizing = false;
+  /** What the size field reads for a round face, from its wrap until the user picks. */
+  private quantity: SizeQuantity = "diameter";
+  private quantityPicked = false;
   /** Tangent faces follow, remembered for the session. */
   private follow = true;
   private toggleKind: "mode" | "follow" | null = null;
@@ -425,6 +442,8 @@ export class PressPullTool {
     this.bodyId = bodyId;
     this.round = round;
     this.contact = null;
+    this.quantity = defaultQuantity(round?.full !== false);
+    this.quantityPicked = false;
     this.resizing = round !== null || (faceIds.length > 1 && faceIds.some((id) => this.viewport.roundFaceAt(id, anchor) !== null));
     this.anchor.copy(anchor);
     this.axis.copy(round?.radial ?? normal).normalize();
@@ -459,7 +478,12 @@ export class PressPullTool {
    *  resize has none, and its free switch is Tangent faces follow instead of
    *  the boolean mode. */
   private showBox() {
-    const defs: DimFieldDef[] = [{ name: "distance", ...this.fieldLabel(), kind: "length" }];
+    const defs: DimFieldDef[] = [{
+      name: "distance",
+      ...this.fieldLabel(),
+      kind: "length",
+      ...(this.round ? { choices: this.quantityChoices() } : {}),
+    }];
     if (!this.resizing) defs.push({ name: "taper", label: "Angle", icon: "angle", kind: "angle" });
     this.toggleKind = !this.resizing ? "mode" : this.round ? "follow" : null;
     const toggle = this.toggleKind === "mode" ? this.modeToggle() : this.toggleKind === "follow" ? this.followToggle() : undefined;
@@ -476,33 +500,69 @@ export class PressPullTool {
   }
 
   private fieldLabel(): { label: string; icon?: string } {
-    return !this.round ? { label: "D" } : this.full ? { label: "Diameter", icon: "diameter" } : { label: "R" };
+    if (!this.round) return { label: "D" };
+    const { label, icon } = QUANTITIES.find((q) => q.id === this.quantity)!;
+    return icon ? { label, icon } : { label };
+  }
+
+  /** R, ⌀ or Offset on the field's name, also picked by typing r2.5, ⌀5 or +0.5. */
+  private quantityChoices(): DimChoices {
+    return {
+      options: QUANTITIES,
+      chosen: this.quantity,
+      read: (raw) => {
+        const got = parseSizeText(raw);
+        return got && { choice: got.quantity, text: got.text };
+      },
+      onChoose: (id, typed) => this.chooseQuantity(id as SizeQuantity, typed),
+    };
+  }
+
+  /** A pick from the menu shows the same size in the new terms; a typed one
+   *  leaves the text alone, it is the value. */
+  private chooseQuantity(q: SizeQuantity, typed: boolean) {
+    this.quantityPicked = true;
+    const held = !typed && this.dim.isUserDriven("distance");
+    if (held) {
+      const v = this.dim.getValue("distance");
+      if (v != null && !(this.absolute && v < 0)) this.value = this.fromReadout(v);
+    }
+    this.quantity = q;
+    if (!typed) {
+      if (held) this.dim.seed("distance", this.readout());
+      else this.dim.updateFromCursor({ distance: this.readout() });
+    }
+    this.promptNow();
+  }
+
+  /** The field reads a size rather than how far the face moves. */
+  private get absolute(): boolean {
+    return !!this.round && isAbsolute(this.quantity);
   }
 
   /** What the heads-up field shows for the current drag: the size a round face
-   *  would become, a diameter on a full round (0 while the drag is asking for
-   *  it to go) and a radius on a partial arc, the travelled distance on any other. */
+   *  would become as a radius or a diameter (0 while the drag is asking for a
+   *  full one to go) or how far it moves, the travelled distance on any other. */
   private readout(): number {
     const r = this.round;
     if (!r) return Math.abs(this.value);
-    const d = radialDrag(r.radius, this.value, r.solidInside, this.full);
-    return this.full ? d.diameter : d.radius;
+    return sizeReadout(this.quantity, r.radius, this.value, r.solidInside, this.full);
   }
 
   /** The inverse: a number the user TYPED into that field, read back as a drag. */
   private fromReadout(v: number): number {
     const r = this.round;
     if (!r) return v;
-    return this.full ? deltaForDiameter(r.radius, v) : deltaForRadius(r.radius, v);
+    return deltaForSize(this.quantity, r.radius, v);
   }
 
   private negativeSize(): string {
-    return `a ${this.full ? "diameter" : "radius"} can't be negative`;
+    return `a ${this.quantity} can't be negative`;
   }
 
   /** Typing a size is absolute, so a minus sign is a mistake to say at once. */
   private onTyped() {
-    if (!this.round) return;
+    if (!this.absolute) return;
     const v = this.dim.getValue("distance");
     if (v != null && v < 0) this.dim.flag(this.negativeSize());
   }
@@ -534,7 +594,7 @@ export class PressPullTool {
       this.dim.positionPast(tip, { x: tip.x - s.x, y: tip.y - s.y }, this.viewport.domElement.getBoundingClientRect());
       if (!this.grabbing && this.dim.isUserDriven("distance")) {
         const v = this.dim.getValue("distance");
-        if (v != null && !(this.round && v < 0)) {
+        if (v != null && !(this.absolute && v < 0)) {
           // the field is the truth: typed sign is preferred (out = +, cut = −). The old
           // code re-applied the drag's sign onto |v|, so a typed "-2" after an
           // outward drag silently JOINED 2 instead of cutting.
@@ -700,7 +760,15 @@ export class PressPullTool {
     if (!r) return fmtLength(Math.abs(value));
     const d = radialDrag(r.radius, value, r.solidInside, this.full);
     if (d.mode === "remove") return "it removed";
-    return this.full ? `⌀${fmtLength(d.diameter)}` : `R${fmtLength(d.radius)}`;
+    if (this.quantity === "offset") return `${value < 0 ? "-" : "+"}${fmtLength(Math.abs(value))}`;
+    return this.quantity === "diameter" ? `⌀${fmtLength(d.diameter)}` : `R${fmtLength(d.radius)}`;
+  }
+
+  /** Where a full round stops resizing and goes, said the way the field reads it. */
+  private removalText(r: RoundFace): string {
+    const at = r.radius * COLLAPSE_FRACTION;
+    if (this.quantity === "offset") return `past ${fmtLength(at - r.radius)}`;
+    return this.quantity === "diameter" ? `under ⌀${fmtLength(2 * at)}` : `under R${fmtLength(at)}`;
   }
 
   private promptNow() {
@@ -709,7 +777,7 @@ export class PressPullTool {
     if (this.refusalShown) {
       const shown = this.shown;
       const then = this.dim.isUserDriven("distance")
-        ? `type another ${r ? (this.full ? "diameter" : "radius") : "distance"}`
+        ? `type another ${r ? this.quantity : "distance"}`
         : shown !== null && Math.abs(shown) >= MIN_PUSH
           ? `keeping ${this.sizeText(shown)}`
           : "drag back";
@@ -724,9 +792,10 @@ export class PressPullTool {
       if (moves > 0) {
         return setPrompt(`Moves the ${moves === 1 ? "face that runs" : `${moves} faces that run`} smoothly into it · Esc`);
       }
+      const ask = this.quantity === "offset" ? "how far it moves, + is bigger" : `a ${this.quantity}`;
       return setPrompt(this.full
-        ? `Drag or type a diameter · under ${collapseDiameter(r.radius).toFixed(2)}mm removes it · Esc`
-        : "Drag or type a radius · Esc");
+        ? `Drag or type ${ask} · ${this.removalText(r)} removes it · Esc`
+        : `Drag or type ${ask} · Esc`);
     }
     if (this.faces.length > 1) return setPrompt(`${this.faces.length} faces · drag or type a distance · click to commit · Esc`);
     setPrompt("Drag or type a value, negative cuts · click a face to stop at it · Esc");
@@ -959,8 +1028,8 @@ export class PressPullTool {
     if (axis) this.setGuideAxis(axis);
     this.round = { ...round, radius: r.radius, full: r.full, solidInside: !r.concave, tangent: r.tangent };
     this.contact = r.contact;
-    const { label, icon } = this.fieldLabel();
-    this.dim.setFieldLabel("distance", label, icon);
+    if (!this.quantityPicked) this.quantity = defaultQuantity(r.full);
+    this.dim.setChoice("distance", this.quantity);
     this.dim.updateFromCursor({ distance: this.readout() });
     this.syncToggle();
     if (this.neutral) this.promptNow();
@@ -1037,7 +1106,7 @@ export class PressPullTool {
       setPrompt("That number can't be read · Esc");
       return;
     }
-    if (typed && v != null && this.round && v < 0) {
+    if (typed && v != null && this.absolute && v < 0) {
       this.dim.flag(this.negativeSize());
       return;
     }
@@ -1059,7 +1128,7 @@ export class PressPullTool {
     }
     if (this.neutral) {
       // keep the tool alive: silently cancelling here read as "nothing happened"
-      setPrompt(this.round ? `The ${this.full ? "diameter" : "radius"} is unchanged` : "Nothing to commit yet");
+      setPrompt(this.round ? `The ${this.quantity === "offset" ? "size" : this.quantity} is unchanged` : "Nothing to commit yet");
       return;
     }
     const k = this.keyOf(this.buildFeature());
@@ -1081,10 +1150,30 @@ export class PressPullTool {
       this.store.setPreview(null);
       this.enginePreviewOn = false;
     }
+    const reselect = this.round && feature.type === "press-pull" && this.faces.length === 1
+      ? this.faceAnchor.clone().addScaledVector(this.axis, this.value)
+      : null;
     this.store.addFeature(feature);
     if (decision.unverified) this.store.verifyCommit(feature.id, "Press/Pull");
     this.cleanup();
     this.onDone?.(feature.id);
+    if (reselect) this.reselectAfterBuild(feature.id, reselect);
+  }
+
+  /** Select the resized face where it now stands once the commit has built, so
+   *  the next resize is one grab away. The viewport's own carry over of the
+   *  selection looks where the face used to be. */
+  private reselectAfterBuild(id: string, at: THREE.Vector3) {
+    let started = false;
+    // onBuild replays the current state at once, which is the model before the commit.
+    const off = this.store.onBuild((s) => {
+      if (s.building) { started = true; return; }
+      if (!started || !s.result || s.previewBuilt) return;
+      off();
+      if (this.active || s.errorFeatureId === id) return;
+      const face = this.viewport.faceIdNear([at.x, at.y, at.z]);
+      if (face != null) this.viewport.selectOnlyFace(face);
+    });
   }
 
   /** Commit an "extrude up to a surface", the engine derives each face's distance
