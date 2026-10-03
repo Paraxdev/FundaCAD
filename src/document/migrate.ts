@@ -17,7 +17,7 @@ import { asFeature } from "../types";
 import type { CadDocument, ParamDef, ParamTarget } from "../types";
 import { FEATURE_NUM_FIELDS, RIGID_ENTITY_NUM_FIELDS, kindUnit, presentCommonFields } from "./numFields";
 import { isDimConstraint, newConstraintId, noteConstraintId } from "../sketch/id";
-import { nextDName } from "../params/engine";
+import { nextDName, sameTarget } from "../params/engine";
 
 // v4 → v5: geometry left the document. An `import` feature used to carry the
 // whole shape inline as base64 ASCII BREP (`brep`); it now carries `geom`, the
@@ -169,7 +169,15 @@ export function migrateDocument(parsed: CadDocument): string[] {
     const value = params[raw];
     if (value === undefined) return; // not a known param, leave for the legacy path
     h[field] = value;
-    defs[nextDName(defs)] = { expr: raw, value, unit, target };
+    // recompute writes targets in table order, so a second def for a bound
+    // field would override the one the panel edits
+    const existing = Object.values(defs).find((d) => d.target && sameTarget(d.target, target));
+    if (existing) {
+      existing.expr = raw;
+      existing.value = value;
+    } else {
+      defs[nextDName(defs)] = { expr: raw, value, unit, target };
+    }
   };
   for (const f of features) {
     const rows = [...(FEATURE_NUM_FIELDS[f.type] ?? []), ...presentCommonFields(f as unknown as Record<string, unknown>)];

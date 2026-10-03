@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { FORMAT_VERSION, migrateDocument } from "../../src/document/migrate";
+import { commitFieldExpr, recompute } from "../../src/params/engine";
 import type { CadDocument } from "../../src/types";
 
 const v1 = (doc: Partial<CadDocument>): CadDocument =>
@@ -69,6 +70,30 @@ describe("migrateDocument", () => {
       { kind: "feature", feature: "sk", field: "activeWhen" },
       { kind: "feature", feature: "bo", field: "activeWhen" },
     ]);
+  });
+
+  it("rebinds a field that already has a model param instead of minting a second one", () => {
+    const target = { kind: "feature" as const, feature: "bx", field: "length" };
+    const doc = v1({
+      version: FORMAT_VERSION,
+      parameters: { a: 10, b: 20, d1: 10 },
+      paramDefs: {
+        a: { expr: "10", value: 10, unit: "mm" },
+        b: { expr: "20", value: 20, unit: "mm" },
+        d1: { expr: "a", value: 10, unit: "mm", target },
+      },
+      features: [{ id: "bx", type: "box", length: "b", width: 5, height: 5 }] as unknown as CadDocument["features"],
+    });
+    migrateDocument(doc);
+    const bound = Object.entries(doc.paramDefs!).filter(([, d]) => d.target?.kind === "feature" && d.target.feature === "bx");
+    expect(bound).toEqual([["d1", { expr: "b", value: 20, unit: "mm", target }]]);
+    const length = () => (doc.features[0] as unknown as { length: number }).length;
+    expect(length()).toBe(20);
+
+    // what store.setTargetValue does for a bound field
+    commitFieldExpr(doc, target, "30", "length");
+    recompute(doc);
+    expect(length()).toBe(30);
   });
 
   it("binds rigid-entity fields but leaves solved geometry on the legacy path", () => {
