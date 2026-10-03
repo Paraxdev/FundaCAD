@@ -18,6 +18,7 @@ mod primitives;
 mod revolve;
 pub mod sketch;
 mod press_pull;
+pub mod resize;
 mod solid_ops;
 mod split;
 mod transform;
