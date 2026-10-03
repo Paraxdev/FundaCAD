@@ -50,3 +50,22 @@ export function featureNotes(src: NoteSources): Map<string, string> {
   }
   return notes;
 }
+
+/** The subset of a build state the failures are read from. */
+export interface FailureSources {
+  featureErrors?: { feature_id?: string; message: string }[] | undefined;
+  errorFeatureId?: string | null | undefined;
+  errorMessage?: string | null | undefined;
+  heldRefusal?: { featureId: string } | null | undefined;
+}
+
+/** feature id -> why it failed, for the History badge and its red chips. A held
+ *  preview's refusal is left out: that value is still being chosen, its tool
+ *  says why in the value box, and the model on screen is the last one that built. */
+export function featureFailures(src: FailureSources): Map<string, string> {
+  const failed = new Map<string, string>();
+  for (const e of src.featureErrors ?? []) if (e.feature_id) failed.set(e.feature_id, e.message);
+  const id = src.errorFeatureId;
+  if (id && !failed.has(id) && src.heldRefusal?.featureId !== id) failed.set(id, src.errorMessage ?? "failed");
+  return failed;
+}

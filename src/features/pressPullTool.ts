@@ -576,9 +576,20 @@ export class PressPullTool {
 
   /** Typing a size is absolute, so a minus sign is a mistake to say at once. */
   private onTyped() {
-    if (!this.absolute) return;
+    if (this.absolute) {
+      const v = this.dim.getValue("distance");
+      if (v != null && v < 0) this.dim.flag(this.negativeSize());
+    }
+    this.promptNow();
+  }
+
+  /** The typed value cannot be used: a minus on a size, or not yet a number.
+   *  The drag value behind it is stale then, so nothing it would do is offered. */
+  private typedUnusable(): { reason: string | null } | null {
+    if (!this.dim.isUserDriven("distance")) return null;
     const v = this.dim.getValue("distance");
-    if (v != null && v < 0) this.dim.flag(this.negativeSize());
+    if (v == null) return { reason: null };
+    return this.absolute && v < 0 ? { reason: this.negativeSize() } : null;
   }
 
   /** keep the handle a constant on-screen size, point it the way we're dragging,
@@ -789,7 +800,7 @@ export class PressPullTool {
   /** Where a full round stops resizing and goes, said the way the field reads it. */
   private removalText(r: RoundFace): string {
     const at = r.radius * COLLAPSE_FRACTION;
-    if (this.quantity === "offset") return `past ${fmtLength(at - r.radius)}`;
+    if (this.quantity === "offset") return `below ${fmtLength(at - r.radius)}`;
     return this.quantity === "diameter" ? `under ⌀${fmtLength(2 * at)}` : `under R${fmtLength(at)}`;
   }
 
@@ -807,6 +818,12 @@ export class PressPullTool {
       return;
     }
     if (r) {
+      const ask = this.quantity === "offset" ? "how far it moves, + is bigger" : `a ${this.quantity}`;
+      const unusable = this.typedUnusable();
+      if (unusable) {
+        const why = unusable.reason;
+        return setPrompt(why ? `${why[0]!.toUpperCase()}${why.slice(1)} · type another ${this.quantity} · Esc` : `Type ${ask} · Esc`);
+      }
       // Nothing to ghost once the drag is asking for the face to GO; the
       // readout dropping to 0 and this line are what say so.
       if (this.removing) return setPrompt("Release to remove this face · drag back to keep it · Esc");
@@ -814,7 +831,6 @@ export class PressPullTool {
       if (moves > 0) {
         return setPrompt(`Moves the ${moves === 1 ? "face that runs" : `${moves} faces that run`} smoothly into it · Esc`);
       }
-      const ask = this.quantity === "offset" ? "how far it moves, + is bigger" : `a ${this.quantity}`;
       return setPrompt(this.full
         ? `Drag or type ${ask} · ${this.removalText(r)} removes it · Esc`
         : `Drag or type ${ask} · Esc`);

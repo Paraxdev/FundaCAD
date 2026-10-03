@@ -11,7 +11,7 @@
 // sentence. Getting that backwards paints a failed feature as a successful one.
 
 import { describe, it, expect } from "vitest";
-import { featureNotes } from "../../src/ui/featureNotes";
+import { featureFailures, featureNotes } from "../../src/ui/featureNotes";
 
 describe("featureNotes", () => {
   it("is empty when a build reported nothing", () => {
@@ -66,5 +66,25 @@ describe("featureNotes", () => {
       diagnostics: [{ feature_id: "e2", reason: "still shown" }],
     });
     expect(notes.get("e2")).toBe("still shown");
+  });
+});
+
+describe("featureFailures", () => {
+  const held = { featureId: "p1" };
+
+  it("leaves a held preview's refusal out of the badge", () => {
+    const state = { featureErrors: [], errorFeatureId: "p1", errorMessage: "too small for its walls", heldRefusal: held };
+    expect(featureFailures(state).size).toBe(0);
+  });
+
+  it("still counts a committed feature that fails, held refusal or not", () => {
+    const failed = { feature_id: "f3", message: "fillet is larger than the edge" };
+    expect([...featureFailures({ featureErrors: [failed], errorFeatureId: "p1", heldRefusal: held }).keys()]).toEqual(["f3"]);
+    expect(featureFailures({ errorFeatureId: "f3", errorMessage: "fillet is larger than the edge" }).get("f3"))
+      .toBe("fillet is larger than the edge");
+  });
+
+  it("counts a preview that failed without asking to be held", () => {
+    expect([...featureFailures({ errorFeatureId: "p1", errorMessage: "no" }).keys()]).toEqual(["p1"]);
   });
 });

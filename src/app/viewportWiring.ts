@@ -15,8 +15,11 @@ import type { NudgePlacement } from "../features/selectionNudge";
 import { regionBeatsSurface } from "../sketch/regionOverSurface";
 import { regionArea } from "../sketch/region";
 import type { Engine } from "./engine";
+import type { Selector } from "../types";
 import { hitPx } from "../input/pointerKind";
 import { replayedPress } from "../viewport/navigator/input";
+import { exactRound, roundFacePrompt } from "../ui/selectionMeasure";
+import { offeredResize } from "../features/pressPullAxis";
 
 /** How far the ambiguous-edge menu sits off the click, px. */
 const AMBIGUOUS_MENU_OFFSET = 16;
@@ -307,6 +310,8 @@ export function installViewportWiring(e: Engine): void {
   // underneath it, so without this rule the handle would answer the wrong click).
   // Faces last.
   function refreshNudge() {
+    roundAsk++;
+    exactRound.value = null;
     const edges = e.viewport.selectedEdgeLines();
     const regions = edges.length ? [] : e.overlay.selectedRegions();
     const faces = edges.length || regions.length ? null : e.viewport.selectedFacesForPressPull();
@@ -352,10 +357,8 @@ export function installViewportWiring(e: Engine): void {
           `(in cuts) · Ctrl-click adds · Esc clears`,
       );
     } else if (faces?.round) {
-      setPrompt(
-        `Round face selected (⌀${(faces.round.radius * 2).toFixed(2)}mm), drag the handle to resize it ` +
-          `· drag it away to nothing to remove it · Esc to clear`,
-      );
+      setPrompt(roundFacePrompt({ radius: faces.round.radius, full: faces.round.full !== false }));
+      askExactRound(faces.selectors[0]!, faces.bodyId, faces.faceIds[0]!);
     } else if (faces?.faceIds.length) {
       setPrompt(
         `${plural(faces.faceIds.length, "face")} selected, drag the handle to push or pull ` +
@@ -366,6 +369,18 @@ export function installViewportWiring(e: Engine): void {
     }
   }
   e.viewport.onSelectionChange = refreshNudge;
+
+  let roundAsk = 0;
+  /** The engine's size and wrap replace the mesh's guess in the prompt and the readout. */
+  function askExactRound(face: Selector, bodyId: string | null, faceId: number) {
+    const ask = roundAsk;
+    void e.store.faceAxis(face, bodyId).then((reply) => {
+      const r = offeredResize(reply, ["cylinder"]);
+      if (ask !== roundAsk || !r) return;
+      exactRound.value = { faceId, radius: r.radius, full: r.full };
+      if (!e.toolBusy()) setPrompt(roundFacePrompt(r));
+    });
+  }
 
   // An extrude that just committed keeps its arrow on the far face until the user
   // moves on, so the next pull edits it instead of needing a double-click.
