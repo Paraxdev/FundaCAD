@@ -16,7 +16,7 @@ use glam::DVec3;
 use opencascade::primitives::Shape;
 
 use self::neighbours::{first_contact, left_behind, neighbours, same_surface, tangent_run, EdgeKind};
-use self::surface::{concave, faces_at, inner_point, surf, Surf};
+use self::surface::{concave, faces_at, inner_point, surf, tol_apart, Surf};
 use crate::builder::Fail;
 use crate::topo::FaceAdjacency;
 
@@ -46,6 +46,8 @@ impl From<Result<Shape, Bad>> for Resize {
 
 #[doc(hidden)]
 pub use check::checked_solid;
+#[doc(hidden)]
+pub use memo::{forget, seen, Seen};
 
 /// `faces` moved `d` along their outward normal, so a positive `d` adds
 /// material. `faces` is one analytic curved face (its siblings on the same
@@ -56,9 +58,13 @@ pub fn resize(part: &Shape, faces: &[Shape], d: f64, follow: bool) -> Resize {
     crate::bench::phase("resize", || resize_in(part, faces, d, follow))
 }
 
+/// Below this the kernel's booleans fail and offsetting a run's section has
+/// aborted the process, so a step this small leaves the body as it is.
+const STILL: f64 = 1e-6;
+
 fn resize_in(part: &Shape, faces: &[Shape], d: f64, follow: bool) -> Resize {
-    let Some(first) = faces.first() else { return Resize::Failed };
-    if d.abs() < 1e-9 {
+    let Some(first) = faces.first() else { return Resize::Refused(refusal::not_one_run()) };
+    if d.abs() < STILL {
         return Resize::Built(part.clone());
     }
     let memo::Around { group, nbs } = memo::around(part, first);
@@ -66,6 +72,9 @@ fn resize_in(part: &Shape, faces: &[Shape], d: f64, follow: bool) -> Resize {
         return whole_run(part, &FaceAdjacency::new(part), faces, d);
     }
     let s = surf(first);
+    if matches!(s, Surf::Plane { .. }) {
+        return Resize::Refused(refusal::not_one_run());
+    }
     if !s.analytic_curved() {
         return Resize::Failed;
     }
@@ -89,21 +98,25 @@ fn resize_in(part: &Shape, faces: &[Shape], d: f64, follow: bool) -> Resize {
         return unsupported();
     }
     let reach = contact - s.size();
-    let (mid, mid_group) = if reach.abs() < 1e-9 {
+    let (mid, mid_group) = if reach.abs() < STILL {
         (part.clone(), group)
     } else {
         let mid = match cells::cells(part, &group, &s, &nbs, reach, cut) {
             Ok(m) => m,
             Err(e) => return Resize::from(Err(e)),
         };
-        let g = faces_at(&mid, &s, reach);
+        let g = faces_at(&mid, &s, reach, tol_apart(reach));
         if g.is_empty() {
             return Resize::Failed;
         }
         (mid, g)
     };
+    let rest = s.size() + delta - contact;
+    if rest.abs() < STILL {
+        return Resize::Built(mid);
+    }
     let run = tangent_run(&FaceAdjacency::new(&mid), &mid_group);
-    match run::run_offset(&mid, &run, &mid_group[0], s.size() + delta - contact, cut) {
+    match run::run_offset(&mid, &run, &mid_group[0], rest, cut) {
         Some(r) => r.into(),
         None => unsupported(),
     }
@@ -111,11 +124,12 @@ fn resize_in(part: &Shape, faces: &[Shape], d: f64, follow: bool) -> Resize {
 
 /// Every face of one closed tangent run, resized once.
 fn whole_run(part: &Shape, adj: &FaceAdjacency, faces: &[Shape], d: f64) -> Resize {
-    let Some(main) = faces.iter().find(|f| matches!(surf(f), Surf::Cyl { .. })) else { return Resize::Failed };
+    let not_one = || Resize::Refused(refusal::not_one_run());
+    let Some(main) = faces.iter().find(|f| matches!(surf(f), Surf::Cyl { .. })) else { return not_one() };
     let run = tangent_run(adj, std::slice::from_ref(main));
     let same = run.len() == faces.len() && run.iter().all(|r| faces.iter().any(|f| f.is_same(r)));
     if !same {
-        return Resize::Failed;
+        return not_one();
     }
     let s = surf(main);
     let Some(cave) = concave(main, &s) else { return Resize::Failed };
@@ -123,7 +137,7 @@ fn whole_run(part: &Shape, adj: &FaceAdjacency, faces: &[Shape], d: f64) -> Resi
     if let Some(f) = refusal::size_guard(&s, delta) {
         return Resize::Refused(f);
     }
-    run::run_offset(part, &run, main, delta, d < 0.0).map_or(Resize::Failed, Resize::from)
+    run::run_offset(part, &run, main, delta, d < 0.0).map_or_else(not_one, Resize::from)
 }
 
 /// The resize of `face` with no left behind rule: the band split along every
@@ -238,6 +252,8 @@ mod refusal {
     pub const CUTS_APART: &str = "cutsApart";
     pub const FACE_VANISHES: &str = "faceVanishes";
     pub const STEP_LEFT: &str = "stepLeft";
+    pub const PAST_BODY: &str = "pastBody";
+    pub const NOT_ONE_RUN: &str = "notOneRun";
     pub const RESIZE_INVALID: &str = "resizeInvalid";
 
     pub fn coded(code: &'static str, message: String) -> Fail {
@@ -303,6 +319,18 @@ mod refusal {
     pub fn cuts_apart(cone: bool) -> Fail {
         let what = if cone { "offset" } else { "radius" };
         coded(CUTS_APART, format!("that size cuts the body apart, try a smaller {what}"))
+    }
+
+    pub fn past_body(cone: bool) -> Fail {
+        let what = if cone { "offset" } else { "radius" };
+        coded(PAST_BODY, format!("that size runs past the whole body and would take all of it away, try a smaller {what}"))
+    }
+
+    pub fn not_one_run() -> Fail {
+        coded(
+            NOT_ONE_RUN,
+            "can't resize these faces together, select one round face, or every face of one smooth loop such as all four faces of a slot".into(),
+        )
     }
 
     pub fn face_vanishes() -> Fail {

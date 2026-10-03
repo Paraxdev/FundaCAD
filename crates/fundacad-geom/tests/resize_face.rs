@@ -313,6 +313,58 @@ fn sizes_with_no_valid_result_are_refused_with_the_reason() {
     assert_eq!(code, "faceVanishes", "{message}");
 }
 
+#[test]
+fn a_size_past_the_body_or_a_mixed_pick_is_refused_saying_what_to_do() {
+    let body = slot();
+    let end = face_at(&body, SLOT_END);
+    for follow in [true, false] {
+        let (code, message) = refused(run(&body, std::slice::from_ref(&end), -100.0, follow));
+        assert_eq!(code, "pastBody", "{message}");
+        assert!(message.contains("try a smaller radius"), "{message}");
+    }
+    let h = hole(3.0);
+    let (code, message) = refused(run(&h, &[face_at(&h, [-3.0, 0.0, 5.0])], -100.0, true));
+    assert_eq!(code, "pastBody", "{message}");
+    let other_end = face_at(&body, [-10.0, 0.0, 5.0]);
+    let wall = face_at(&body, [0.0, 2.0, 5.0]);
+    let top = face_at(&body, [15.0, 15.0, 10.0]);
+    let picks = [vec![end.clone(), wall.clone()], vec![end.clone(), other_end], vec![end, top], vec![wall]];
+    for faces in &picks {
+        let (code, message) = refused(run(&body, faces, -0.5, true));
+        assert_eq!(code, "notOneRun", "{} faces: {message}", faces.len());
+        assert!(message.contains("select one round face, or every face of one smooth loop"), "{message}");
+    }
+}
+
+#[test]
+fn a_step_below_the_kernel_tolerance_changes_nothing_and_one_above_it_builds() {
+    let h = hole(3.0);
+    let wall = face_at(&h, [-3.0, 0.0, 5.0]);
+    let body = slot();
+    let end = face_at(&body, SLOT_END);
+    for d in [1e-4, 1e-5, -1e-4, -1e-5] {
+        let out = built(run(&h, std::slice::from_ref(&wall), d, true));
+        let want = PI * 10.0 * (9.0 - (3.0 - d) * (3.0 - d));
+        let dv = kernel::volume(&out) - kernel::volume(&h);
+        assert!(close(dv, want, 1e-6), "hole {d}: {dv} against {want}");
+        // A shrink narrows the whole slot, a grow makes the end alone bigger.
+        let out = built(run(&body, std::slice::from_ref(&end), d, true));
+        let dv = kernel::volume(&out) - kernel::volume(&body);
+        if d > 0.0 {
+            let want = slot_volume(4.0 - 2.0 * d) - slot_volume(4.0);
+            assert!(close(dv, want, 1e-6), "slot end {d}: {dv} against {want}");
+        } else {
+            assert!(dv < 0.0 && dv > -0.01, "slot end {d}: {dv}");
+        }
+    }
+    for d in [5e-7, 1e-7, -1e-7, 1e-9] {
+        let out = built(run(&h, std::slice::from_ref(&wall), d, true));
+        assert!(out.is_same(&h), "hole {d}");
+        let out = built(run(&body, std::slice::from_ref(&end), d, true));
+        assert!(out.is_same(&body), "slot end {d}");
+    }
+}
+
 /// A 30 x 20 x 20 block with its top +x edge rounded r 5.
 fn filleted_block() -> Shape {
     let block = Shape::box_from_corners(dvec3(0.0, -10.0, 0.0), dvec3(30.0, 10.0, 20.0));
