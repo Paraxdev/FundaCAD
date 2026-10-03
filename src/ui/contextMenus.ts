@@ -14,6 +14,7 @@ import { bodyExtraMenu, elementMoveMenu, materialMenu } from "./browserTree";
 import { ancestryOf } from "../document/elements";
 import { useBrowserStore } from "../stores/browser";
 import { contextMenu, type CtxItem } from "./menu";
+import { useContextMenuStore } from "../stores/contextMenu";
 import { isInspectorEditable } from "../document/numFields";
 import { allCommands } from "./commands";
 import { featureMeta } from "./featureMeta";
@@ -163,6 +164,38 @@ export function createContextMenus(deps: ContextMenusDeps) {
       { label: "Delete face (heal)", danger: true, onClick: unlessBusy(() => { viewport.selectOnlyFace(hit.faceId); deleteSelectedFace(); }) },
     ];
     contextMenu(x, y, items);
+    if (facePick?.kind !== "planar") offerTangentFaces(x, y, hit, items);
+  }
+
+  /** "Select tangent faces" beside "Select coplanar faces", once the engine has
+   *  named a tangent run for the face. The menu opens without waiting for it,
+   *  so the entry joins the menu still open, never a later one. */
+  function offerTangentFaces(x: number, y: number, hit: FaceHit, items: CtxItem[]) {
+    const menu = useContextMenuStore();
+    const epoch = menu.epoch;
+    const face = { kind: "face" as const, by: "nearest" as const, point: hit.point };
+    void store.faceAxis(face, viewport.faceIdToBodyId(hit.faceId)).then((reply) => {
+      const run = reply?.resize?.tangent?.run;
+      if (!Array.isArray(run) || run.length < 2 || !menu.open || menu.epoch !== epoch) return;
+      const at = items.findIndex((i) => i.label === "Select coplanar faces") + 1;
+      const item: CtxItem = {
+        label: "Select tangent faces",
+        onClick: unlessBusy(() => {
+          const others = new Set<number>();
+          for (const p of run) {
+            const id = viewport.faceIdNear(p);
+            if (id !== null && id !== hit.faceId) others.add(id);
+          }
+          viewport.selectOnlyFace(hit.faceId);
+          // selectFaces paints without announcing, and selectOnlyFace announced one face
+          viewport.selectFaces([...others]);
+          viewport.onSelectionChange?.();
+          const n = others.size + 1;
+          setStatus(`Selected ${n} tangent face${n === 1 ? "" : "s"}`, "");
+        }),
+      };
+      contextMenu(x, y, [...items.slice(0, at), item, ...items.slice(at)]);
+    });
   }
 
   /** The bodies a body-menu entry acts on: the whole selection when the body
