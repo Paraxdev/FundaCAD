@@ -8,6 +8,7 @@
 
 import type { FaceAxisReply } from "../geometry/client";
 import type { PressPullDirection, Vec3 } from "../types";
+import type { RoundTangent } from "./radialDrag";
 
 export interface HoleAxis {
   origin: Vec3;
@@ -47,4 +48,40 @@ export function anchorOnAxis(point: Vec3, axis: HoleAxis): Vec3 {
   const { origin: o, dir: d } = axis;
   const t = (point[0] - o[0]) * d[0] + (point[1] - o[1]) * d[1] + (point[2] - o[2]) * d[2];
   return [o[0] + d[0] * t, o[1] + d[1] * t, o[2] + d[2] * t];
+}
+
+/** What the engine says about resizing a cylindrical face, exact where the
+ *  mesh fit is not. */
+export interface OfferedResize {
+  radius: number;
+  full: boolean;
+  concave: boolean;
+  /** the radius where a neighbour would first be left behind, or null */
+  contact: number | null;
+  tangent: RoundTangent;
+}
+
+const LOST_WHEN = new Set([null, "shrink", "grow"]);
+
+/** The cylinder resize in a faceAxis reply, or null: none, another kind of
+ *  face, or a malformed reply. */
+export function offeredResize(reply: FaceAxisReply | null): OfferedResize | null {
+  const r = reply?.resize;
+  if (!r || typeof r !== "object" || r.kind !== "cylinder") return null;
+  if (typeof r.size !== "number" || !Number.isFinite(r.size) || !(r.size > 0)) return null;
+  if (typeof r.full !== "boolean" || typeof r.concave !== "boolean") return null;
+  const contact = r.contact ?? null;
+  if (contact !== null && (typeof contact !== "number" || !Number.isFinite(contact) || contact < 0)) return null;
+  const t = r.tangent;
+  if (!t || typeof t !== "object") return null;
+  if (!Number.isInteger(t.faces) || t.faces < 0 || !LOST_WHEN.has(t.lostWhen ?? null)) return null;
+  if (!Array.isArray(t.run) || !t.run.every(finite)) return null;
+  if (typeof t.closed !== "boolean" || typeof t.followable !== "boolean") return null;
+  return {
+    radius: r.size,
+    full: r.full,
+    concave: r.concave,
+    contact,
+    tangent: { faces: t.faces, lostWhen: t.lostWhen ?? null, run: t.run, closed: t.closed, followable: t.followable },
+  };
 }

@@ -152,6 +152,22 @@ describe("commitDecision", () => {
     expect(commitDecision({ ...base, value: 20, verdict: "builds", shown: 30 }))
       .toEqual({ action: "commit", value: 20 });
   });
+
+  describe("with a signed value, as press/pull reads one", () => {
+    const signed = { ...base, value: -0.9, shown: -0.65, meaningful: (v: number) => Math.abs(v) >= 1e-3 };
+
+    it("commits the push on screen when the dragged one is refused", () => {
+      expect(commitDecision(signed)).toEqual({ action: "commit", value: -0.65 });
+    });
+
+    it("keeps the tool open on a refused typed value", () => {
+      expect(commitDecision({ ...signed, typed: true })).toEqual({ action: "stay" });
+    });
+
+    it("cancels when what is on screen is no push at all", () => {
+      expect(commitDecision({ ...signed, shown: 0 })).toEqual({ action: "cancel" });
+    });
+  });
 });
 
 describe("blendRefusalReason", () => {

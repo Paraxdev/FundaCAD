@@ -399,6 +399,31 @@ export class DimInput {
     if (this.toggleBtn) this.toggleBtn.textContent = label;
   }
 
+  /** For a switch that only applies once the tool has learned more, such as
+   *  an engine answer that lands after the box is up. */
+  setToggleHidden(hidden: boolean) {
+    if (this.toggleBtn) this.toggleBtn.style.display = hidden ? "none" : "";
+  }
+
+  /** Rename a field in place, keeping what is typed in it. Problems name the
+   *  field by this label too. */
+  setFieldLabel(name: string, label: string, icon?: string) {
+    const f = this.fields.find((x) => x.def.name === name);
+    if (!f || (f.def.label === label && f.def.icon === icon)) return;
+    const { icon: _old, ...rest } = f.def;
+    f.def = icon ? { ...rest, label, icon } : { ...rest, label };
+    const tag = f.input.closest("label")?.querySelector<HTMLElement>(".dim-name");
+    if (!tag) return;
+    tag.replaceChildren();
+    if (icon) {
+      tag.appendChild(iconElement(icon, 12));
+      tag.title = label;
+    } else {
+      tag.textContent = label;
+      tag.removeAttribute("title");
+    }
+  }
+
   /** Takes a field out of the box without rebuilding it, so what the user has
    *  typed in the others survives. */
   setFieldHidden(name: string, hidden: boolean) {
