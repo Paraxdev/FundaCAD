@@ -15,7 +15,7 @@
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore, RebuildState } from "../document/store";
-import type { Feature, PressPullDirection, PressPullMode, Selector } from "../types";
+import type { Feature, PressPullDirection, PressPullMode, Selector, Vec3 } from "../types";
 import { DimInput, type DimFieldDef, type DimToggleDef } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
 import { fmtLength, snap } from "../ui/units";
@@ -24,6 +24,7 @@ import {
   createDragHandle,
   createRotationArc,
   fluentRelease,
+  HANDLE_LENGTH,
   HANDLE_UP,
   type DragHandle,
 } from "./manipulator";
@@ -40,6 +41,7 @@ import {
   type HoleAxis,
   type OfferedResize,
 } from "./pressPullAxis";
+import { axialSpan, ResizeGuides, resizeAxis, type GuideAxis } from "./resizeGuides";
 
 /** Steepest taper the tool offers, degrees, just under the engine's 89 fold limit. */
 const MAX_PP_TAPER = 88;
@@ -114,6 +116,11 @@ export class PressPullTool {
   private previewId = ""; // id shared by the live preview and the committed feature
 
   private gizmo: THREE.Group | null = null;
+  private guides = new ResizeGuides();
+  /** the round face's axis and its span along it, the mesh fit's until the engine answers */
+  private guideAxis: GuideAxis | null = null;
+  private guideSpan: [number, number] | null = null;
+  private roundPoints: Vec3[] = [];
   private handle: DragHandle | null = null;
   private hovering = false;
   private grabbing = false;
@@ -423,6 +430,7 @@ export class PressPullTool {
     this.axis.copy(round?.radial ?? normal).normalize();
     this.faceAnchor.copy(anchor);
     this.faceNormal.copy(normal).normalize();
+    this.seedGuides(round, faceIds[0]);
     this.direction = "normal";
     this.holeAxis = null;
     this.phase = "drag";
@@ -520,8 +528,10 @@ export class PressPullTool {
         refused: this.refusalShown !== null,
       });
       this.placeTaperArc(dir, k);
+      this.placeGuides(at);
       const s = this.viewport.projectToScreen(at);
-      this.dim.position(s.x, s.y);
+      const tip = this.viewport.projectToScreen(at.clone().addScaledVector(dir, k * HANDLE_LENGTH));
+      this.dim.positionPast(tip, { x: tip.x - s.x, y: tip.y - s.y }, this.viewport.domElement.getBoundingClientRect());
       if (!this.grabbing && this.dim.isUserDriven("distance")) {
         const v = this.dim.getValue("distance");
         if (v != null && !(this.round && v < 0)) {
@@ -547,6 +557,34 @@ export class PressPullTool {
       }
       this.gesture.frame();
     }
+  }
+
+  /** The axis line and the dashed size line of a round face resize. */
+  private placeGuides(handle: THREE.Vector3) {
+    const axis = this.guideAxis;
+    const span = this.guideSpan;
+    if (!this.round || !axis || !span || this.removing || this.pickingTarget) {
+      this.guides.clear();
+      return;
+    }
+    this.guides.update(this.viewport, { axis, span, handle, full: this.full });
+  }
+
+  /** The guides stand on the picked face's mesh until the engine gives its exact axis. */
+  private seedGuides(round: RoundFace | null, faceId: number | undefined) {
+    this.roundPoints = [];
+    this.guideAxis = null;
+    this.guideSpan = null;
+    if (!round || faceId === undefined) return;
+    for (const t of this.viewport.faceTriangles(faceId)) {
+      for (const v of [t.a, t.b, t.c]) this.roundPoints.push([v.x, v.y, v.z]);
+    }
+    this.setGuideAxis({ origin: round.cylinder.point, dir: round.cylinder.axis });
+  }
+
+  private setGuideAxis(axis: GuideAxis) {
+    this.guideAxis = axis;
+    this.guideSpan = axialSpan(this.roundPoints, axis);
   }
 
   /** The value as the feature stores it. */
@@ -904,7 +942,7 @@ export class PressPullTool {
     void this.store.faceAxis(face, bodyId).then((reply) => {
       if (ask !== this.axisAsk || !this.active || this.phase !== "drag") return;
       if (this.round) {
-        this.adoptResize(offeredResize(reply));
+        this.adoptResize(offeredResize(reply), resizeAxis(reply));
         return;
       }
       this.holeAxis = offeredAxis(reply);
@@ -915,9 +953,10 @@ export class PressPullTool {
   }
 
   /** The engine's exact size, wrap and tangent run replace the mesh's guess. */
-  private adoptResize(r: OfferedResize | null) {
+  private adoptResize(r: OfferedResize | null, axis: GuideAxis | null) {
     const round = this.round;
     if (!round || !r) return;
+    if (axis) this.setGuideAxis(axis);
     this.round = { ...round, radius: r.radius, full: r.full, solidInside: !r.concave, tangent: r.tangent };
     this.contact = r.contact;
     const { label, icon } = this.fieldLabel();
@@ -1079,6 +1118,10 @@ export class PressPullTool {
       this.enginePreviewOn = false;
     }
     this.dim.hide();
+    this.guides.clear();
+    this.guideAxis = null;
+    this.guideSpan = null;
+    this.roundPoints = [];
     this.disposeGizmo();
     this.disposeTaperArc();
     this.viewport.clearHover();
