@@ -115,7 +115,7 @@ const DIMPLE = [block, ...revolve("dimple", [
       kind: t.curve?.kind ?? null,
       label: name ? (name.title || name.textContent) : null,
       field: box?.querySelector("input")?.value ?? null,
-      shown: t.shownFeature ? { distance: t.shownFeature.distance, faces: Array.isArray(t.shownFeature.face) ? t.shownFeature.face.length : 1 } : null,
+      shown: t.outcomes.shownFeature ? { distance: t.outcomes.shownFeature.distance, faces: Array.isArray(t.outcomes.shownFeature.face) ? t.outcomes.shownFeature.face.length : 1 } : null,
       previewError: window.store.previewError,
       ghost: !!window.viewport.ghosts.ppGhost,
       prompt: document.querySelector("#prompt")?.textContent ?? "",
@@ -227,7 +227,7 @@ const DIMPLE = [block, ...revolve("dimple", [
   await drag(0.5);
   await page.mouse.up();
   await settle();
-  await page.waitForFunction(() => window.pressPull.shownFeature != null, null, { timeout: 120000 }).catch(() => {});
+  await page.waitForFunction(() => window.pressPull.outcomes.shownFeature != null, null, { timeout: 120000 }).catch(() => {});
   t = await tool();
   check("dragging out previews all four faces as one widening, with no refusal",
     t.shown && t.shown.faces === 4 && t.shown.distance < 0 && t.previewError === null, t);
@@ -272,7 +272,7 @@ const DIMPLE = [block, ...revolve("dimple", [
   await shot("06_dimple_ghost");
   await page.mouse.up();
   await settle();
-  await page.waitForFunction(() => window.pressPull.shownFeature != null, null, { timeout: 120000 }).catch(() => {});
+  await page.waitForFunction(() => window.pressPull.outcomes.shownFeature != null, null, { timeout: 120000 }).catch(() => {});
   t = await tool();
   check("the engine's preview replaces it", !t.ghost && t.shown !== null && t.previewError === null, t);
   await page.keyboard.press("Escape");

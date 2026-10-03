@@ -59,6 +59,9 @@ const check = (name, ok, detail) => {
   check("draft opened on the selected face", await open());
 
   await typeInto(0, "45");
+  // Enter before the kernel has answered commits and undoes instead, with the
+  // tool closed; this is the case where it already knows.
+  await page.waitForFunction(() => window.store.previewError !== null, null, { timeout: 120000 }).catch(() => {});
   await page.keyboard.press("Enter");
   await page.waitForTimeout(800);
   await idle();

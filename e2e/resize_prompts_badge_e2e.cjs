@@ -154,10 +154,10 @@ const HOLE_WALL = [0, 7.125 + 3.3690784184224394, 13.015];
   await page.waitForTimeout(200);
   await typeValue("1.5");
   await settle();
-  await page.waitForFunction(() => window.pressPull.refusalShown !== null, null, { timeout: 120000 }).catch(() => {});
+  await page.waitForFunction(() => window.pressPull.outcomes.refusal !== null, null, { timeout: 120000 }).catch(() => {});
   await page.waitForTimeout(300);
   const refused = await page.evaluate(() => ({
-    refused: window.pressPull.refusalShown,
+    refused: window.pressPull.outcomes.refusal,
     held: window.store.buildState.heldRefusal?.code ?? null,
     problem: document.querySelector(".dim-input .dim-problem")?.textContent ?? null,
   }));
@@ -180,10 +180,10 @@ const HOLE_WALL = [0, 7.125 + 3.3690784184224394, 13.015];
   await page.waitForTimeout(200);
   await typeValue("1.5");
   await settle();
-  await page.waitForFunction(() => window.__fundacad.faceOffset.refusalShown !== null, null, { timeout: 120000 }).catch(() => {});
+  await page.waitForFunction(() => window.__fundacad.faceOffset.outcomes.refusal !== null, null, { timeout: 120000 }).catch(() => {});
   await page.waitForTimeout(300);
   const oref = await page.evaluate(() => ({
-    refused: window.__fundacad.faceOffset.refusalShown,
+    refused: window.__fundacad.faceOffset.outcomes.refusal,
     held: window.store.buildState.heldRefusal?.code ?? null,
   }));
   check("Offset Face refuses 1.5 with follow off", oref.refused !== null && oref.held !== null, oref);

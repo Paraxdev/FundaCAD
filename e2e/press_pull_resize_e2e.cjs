@@ -121,8 +121,8 @@ const HOLE_WALL = [0, 7.125 + 3.3690784184224394, 13.015];
       field: box?.querySelector("input")?.value ?? null,
       toggle: toggle ? { text: toggle.textContent, on: toggle.classList.contains("on"), shown: toggle.style.display !== "none" } : null,
       problem: box?.querySelector(".dim-problem")?.textContent ?? null,
-      refused: t.refusalShown,
-      shown: t.shownFeature ? { distance: t.shownFeature.distance, followTangent: t.shownFeature.followTangent } : null,
+      refused: t.outcomes.refusal,
+      shown: t.outcomes.shownFeature ? { distance: t.outcomes.shownFeature.distance, followTangent: t.outcomes.shownFeature.followTangent } : null,
       previewError: window.store.previewError,
       held: window.store.buildState.heldRefusal?.code ?? null,
       prompt: document.querySelector("#prompt")?.textContent ?? "",
@@ -213,7 +213,7 @@ const HOLE_WALL = [0, 7.125 + 3.3690784184224394, 13.015];
   await typeValue("1.5");
   await page.waitForTimeout(300);
   await settle();
-  await page.waitForFunction(() => window.pressPull.shownFeature?.distance === 0.5, null, { timeout: 120000 }).catch(() => {});
+  await page.waitForFunction(() => window.pressPull.outcomes.shownFeature?.distance === 0.5, null, { timeout: 120000 }).catch(() => {});
   await settle();
   t = await tool();
   check("typing 1.5 previews a shrink of 0.5 with the run following", t.shown && t.shown.distance === 0.5 && t.shown.followTangent === true && t.previewError === null, t);
@@ -228,7 +228,7 @@ const HOLE_WALL = [0, 7.125 + 3.3690784184224394, 13.015];
     .querySelector(".dim-toggle").dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0 })));
   await page.waitForTimeout(300);
   await settle();
-  await page.waitForFunction(() => window.pressPull.refusalShown !== null, null, { timeout: 120000 }).catch(() => {});
+  await page.waitForFunction(() => window.pressPull.outcomes.refusal !== null, null, { timeout: 120000 }).catch(() => {});
   t = await tool();
   check("the switch reads off", t.toggle && !t.toggle.on, t.toggle);
   check("the refusal is in the box", !!t.problem && /Tangent faces follow/.test(t.problem) && /2 flat faces/.test(t.problem), t.problem);
@@ -246,14 +246,14 @@ const HOLE_WALL = [0, 7.125 + 3.3690784184224394, 13.015];
   await drag(0.3, { release: false });
   await page.waitForTimeout(300);
   await settle();
-  await page.waitForFunction(() => window.pressPull.shownFeature?.followTangent === false, null, { timeout: 120000 }).catch(() => {});
+  await page.waitForFunction(() => window.pressPull.outcomes.shownFeature?.followTangent === false, null, { timeout: 120000 }).catch(() => {});
   t = await tool();
   const grownTo = t.shown;
   check("dragged out, the end grows with follow off", grownTo && grownTo.followTangent === false && grownTo.distance < 0 && t.refused === null, t);
   await page.mouse.up();
   await drag(-0.2);
   await settle();
-  await page.waitForFunction(() => window.pressPull.refusalShown !== null, null, { timeout: 120000 }).catch(() => {});
+  await page.waitForFunction(() => window.pressPull.outcomes.refusal !== null, null, { timeout: 120000 }).catch(() => {});
   t = await tool();
   check("dragged in past R 2 it is refused", t.value <= -0.2 && t.refused !== null && t.held === "tangentLost", t);
   check("the prompt says which size is kept", /keeping R/.test(t.prompt), t.prompt);
