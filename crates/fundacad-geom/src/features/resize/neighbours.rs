@@ -66,6 +66,7 @@ pub(super) fn edge_kind(face: &Shape, other: &Shape, edge: &Shape) -> Option<Edg
     Some(if w.dot(n2) < 0.0 { EdgeKind::Convex } else { EdgeKind::Reflex })
 }
 
+#[derive(Clone)]
 pub(super) struct Nb {
     pub face: Shape,
     pub kind: Option<EdgeKind>,

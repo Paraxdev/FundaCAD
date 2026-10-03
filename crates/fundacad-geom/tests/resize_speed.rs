@@ -1,0 +1,135 @@
+//! A round face resize is fast enough to drag: on the c1 report each lone
+//! face step builds in under 400 ms and a whole slot narrowing in under a
+//! second, and a drag asking the same face again at new sizes gets the same
+//! answers as fresh resizes. The timings only mean something in a release
+//! build, so that test is ignored by default:
+//! `cargo test --release -p fundacad-geom --test resize_speed -- --ignored`.
+
+use std::f64::consts::PI;
+use std::time::{Duration, Instant};
+
+use fundacad_core::CadDocument;
+use fundacad_geom::builder::{self, NoWatch};
+use fundacad_geom::features::resize::{self, Resize};
+use fundacad_geom::kernel::{self, BoolKind, Kind};
+use fundacad_geom::select::Resolver;
+use glam::{dvec3, DVec3};
+use opencascade::primitives::Shape;
+use serde_json::{json, Value};
+
+const C1: &str = include_str!("press_pull/c1_slot_end.json");
+
+fn cut(a: &Shape, b: &Shape) -> Shape {
+    kernel::unify_body(&kernel::boolean_op(a, &[b], BoolKind::Cut).unwrap())
+}
+
+fn fuse(a: &Shape, b: &Shape) -> Shape {
+    kernel::unify_body(&kernel::boolean_op(a, &[b], BoolKind::Fuse).unwrap())
+}
+
+/// A slot `w` wide with its round ends at x = ±8, through a 40 x 40 x 10 plate.
+fn slot(w: f64) -> Shape {
+    let r = w / 2.0;
+    let tool = fuse(
+        &fuse(
+            &Shape::box_from_corners(dvec3(-8.0, -r, -1.0), dvec3(8.0, r, 11.0)),
+            &Shape::cylinder(dvec3(-8.0, 0.0, -1.0), r, DVec3::Z, 12.0),
+        ),
+        &Shape::cylinder(dvec3(8.0, 0.0, -1.0), r, DVec3::Z, 12.0),
+    );
+    cut(&Shape::box_from_corners(dvec3(-20.0, -20.0, 0.0), dvec3(20.0, 20.0, 10.0)), &tool)
+}
+
+fn slot_volume(w: f64) -> f64 {
+    16000.0 - 10.0 * (16.0 * w + PI * (w / 2.0) * (w / 2.0))
+}
+
+fn face_at(body: &Shape, sel: &Value) -> Shape {
+    Resolver::new(None, None).faces(body, sel).expect("a face").remove(0)
+}
+
+fn nearest(p: [f64; 3]) -> Value {
+    json!({"kind": "face", "by": "nearest", "point": p})
+}
+
+fn built(r: Resize) -> Shape {
+    match r {
+        Resize::Built(s) => {
+            assert!(s.is_valid().unwrap_or(false), "a valid result");
+            assert_eq!(kernel::count(&s, Kind::Solid), 1);
+            s
+        }
+        Resize::Refused(f) => panic!("refused: {f:?}"),
+        Resize::Failed => panic!("the kernel failed"),
+    }
+}
+
+fn close(a: f64, b: f64, tol: f64) -> bool {
+    (a - b).abs() <= tol
+}
+
+#[test]
+fn a_drag_over_one_face_gets_the_same_answers_as_fresh_resizes() {
+    let end = nearest([10.0, 0.0, 5.0]);
+    let body = slot(4.0);
+    let face = face_at(&body, &end);
+    let grown = kernel::volume(&built(resize::resize(&body, std::slice::from_ref(&face), -1.0, true)));
+    for _ in 0..2 {
+        let narrowed = built(resize::resize(&body, std::slice::from_ref(&face), 0.5, true));
+        assert!(close(kernel::volume(&narrowed), slot_volume(3.0), 1e-3), "{}", kernel::volume(&narrowed));
+        let again = built(resize::resize(&body, std::slice::from_ref(&face), -1.0, true));
+        assert!(close(kernel::volume(&again), grown, 1e-9), "{} against {grown}", kernel::volume(&again));
+        assert!(matches!(resize::resize(&body, std::slice::from_ref(&face), 0.5, false), Resize::Refused(_)));
+    }
+    let other = slot(6.0);
+    let narrowed = built(resize::resize(&other, &[face_at(&other, &end)], 0.5, true));
+    assert!(close(kernel::volume(&narrowed), slot_volume(5.0), 1e-3), "{}", kernel::volume(&narrowed));
+}
+
+fn c1() -> Value {
+    serde_json::from_str(C1).expect("the c1 document")
+}
+
+/// The c1 body with every feature after `last` dropped.
+fn through(last: &str) -> Shape {
+    let mut raw = c1();
+    let features = raw["features"].as_array_mut().unwrap();
+    let at = features.iter().position(|f| f["id"] == last).expect("the feature");
+    features.truncate(at + 1);
+    let doc: CadDocument = serde_json::from_value(raw.clone()).expect("a document");
+    let r = builder::rebuild(&doc, &raw, &NoWatch).expect("not cancelled");
+    assert!(r.errors.is_empty());
+    r.bodies[0].shape.clone()
+}
+
+fn timed(body: &Shape, sel: &Value, d: f64) -> (Shape, Duration) {
+    let face = face_at(body, sel);
+    let t = Instant::now();
+    let out = built(resize::resize(body, &[face], d, true));
+    (out, t.elapsed())
+}
+
+#[test]
+#[ignore = "timings, run in a release build"]
+fn c1_resizes_within_the_drag_budget() {
+    let (c1, body) = (c1(), through("f5"));
+    let step = |id: usize| (c1["features"][id]["face"].clone(), c1["features"][id]["distance"].as_f64().unwrap());
+    let mut shape = body.clone();
+    let mut times = Vec::new();
+    for id in 5..8 {
+        let (sel, d) = step(id);
+        let (out, took) = timed(&shape, &sel, d);
+        times.push(took);
+        shape = out;
+    }
+    assert!(close(kernel::volume(&shape), 50967.729, 1e-2), "{}", kernel::volume(&shape));
+    let (sel, _) = step(5);
+    let (_, run) = timed(&body, &sel, 0.5);
+    let (_, again) = timed(&body, &sel, 0.45);
+    eprintln!("c1 steps {times:?}, slot narrowed {run:?}, then dragged on {again:?}");
+    for t in &times {
+        assert!(*t < Duration::from_millis(400), "a step took {t:?}");
+    }
+    assert!(run < Duration::from_secs(1), "narrowing the slot took {run:?}");
+    assert!(again < Duration::from_secs(1), "narrowing it again took {again:?}");
+}

@@ -32,19 +32,21 @@ pub(super) fn cone_tool(s: &Surf, delta: f64, p: DVec3, bounds: (f64, f64)) -> O
 }
 
 /// The solid on the centre side of the group's surface offset by `delta`,
-/// reaching `ext` past the group along its axis. None where the offset
-/// surface does not exist.
-pub(super) fn long_tool(group: &Shape, s: &Surf, delta: f64, ext: f64) -> Option<Shape> {
+/// reaching `ext` past the group along its axis but not far past `body`.
+/// None where the offset surface does not exist.
+pub(super) fn long_tool(group: &Shape, s: &Surf, delta: f64, ext: f64, body: &Shape) -> Option<Shape> {
+    let margin = 1.0 + 2.0 * delta.abs();
     match *s {
         Surf::Cyl { dir, loc, r } => {
             let (lo, hi) = kernel::axial_extent(group, loc.to_array(), dir.to_array())?;
-            (r + delta > 1e-6).then(|| Shape::cylinder(loc + dir * (lo - ext), r + delta, dir, hi - lo + 2.0 * ext))
+            let (lo, hi) = clipped((lo - ext, hi + ext), body, loc, dir, margin);
+            (r + delta > 1e-6).then(|| Shape::cylinder(loc + dir * lo, r + delta, dir, hi - lo))
         }
         Surf::Cone { dir, apex, .. } => {
             let p = kernel::subshapes(group, kernel::Kind::Face).iter().find_map(inner_point)?.0;
             let a = nappe(dir, apex, p);
             let (lo, hi) = kernel::axial_extent(group, apex.to_array(), a.to_array())?;
-            cone_tool(s, delta, p, (lo - ext, hi + ext))
+            cone_tool(s, delta, p, clipped((lo - ext, hi + ext), body, apex, a, margin))
         }
         Surf::Sphere { c, r } => (r + delta > 1e-6).then(|| Shape::sphere(r + delta).at(c).build()),
         Surf::Torus { dir, loc, big, small } => {
@@ -52,6 +54,23 @@ pub(super) fn long_tool(group: &Shape, s: &Surf, delta: f64, ext: f64) -> Option
             (s2 > 1e-6 && s2 < big).then(|| Shape::torus().at(loc).z_axis(dir).radius_1(big).radius_2(s2).build())
         }
         _ => None,
+    }
+}
+
+/// `span` along the axis through `o` along `dir`, cut back to `margin` past
+/// the body, read off the corners of its control point box.
+pub(super) fn clipped(span: (f64, f64), body: &Shape, o: DVec3, dir: DVec3, margin: f64) -> (f64, f64) {
+    let Some(b) = kernel::coarse_bbox(body) else { return span };
+    let along = (0..8).map(|i| {
+        let c = DVec3::new(b[if i & 1 == 0 { 0 } else { 3 }], b[if i & 2 == 0 { 1 } else { 4 }], b[if i & 4 == 0 { 2 } else { 5 }]);
+        (c - o).dot(dir)
+    });
+    let (blo, bhi) = along.fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), t| (lo.min(t), hi.max(t)));
+    let (lo, hi) = (span.0.max(blo - margin), span.1.min(bhi + margin));
+    if lo < hi {
+        (lo, hi)
+    } else {
+        span
     }
 }
 

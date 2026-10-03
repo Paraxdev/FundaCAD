@@ -7,6 +7,7 @@
 mod band;
 mod cells;
 mod check;
+mod memo;
 mod neighbours;
 mod run;
 mod surface;
@@ -52,14 +53,17 @@ pub use check::checked_solid;
 /// a slot. `follow` lets the faces that run smoothly into a lone face follow
 /// it where the new size would leave them behind.
 pub fn resize(part: &Shape, faces: &[Shape], d: f64, follow: bool) -> Resize {
+    crate::bench::phase("resize", || resize_in(part, faces, d, follow))
+}
+
+fn resize_in(part: &Shape, faces: &[Shape], d: f64, follow: bool) -> Resize {
     let Some(first) = faces.first() else { return Resize::Failed };
     if d.abs() < 1e-9 {
         return Resize::Built(part.clone());
     }
-    let adj = FaceAdjacency::new(part);
-    let group = same_surface(&adj, first);
+    let memo::Around { group, nbs } = memo::around(part, first);
     if !faces.iter().all(|f| group.iter().any(|x| x.is_same(f))) {
-        return whole_run(part, &adj, faces, d);
+        return whole_run(part, &FaceAdjacency::new(part), faces, d);
     }
     let s = surf(first);
     if !s.analytic_curved() {
@@ -71,7 +75,6 @@ pub fn resize(part: &Shape, faces: &[Shape], d: f64, follow: bool) -> Resize {
     if let Some(f) = refusal::size_guard(&s, delta) {
         return Resize::Refused(f);
     }
-    let nbs = neighbours(&adj, &group);
     let lost = left_behind(&s, &nbs, delta);
     if lost.is_empty() {
         return cells::cells(part, &group, &s, &nbs, delta, cut).into();
@@ -139,8 +142,7 @@ pub fn plain_cells(part: &Shape, face: &Shape, d: f64) -> Resize {
 /// A face meets another one tangentially, so a kernel offset of it alone
 /// would drag that one along or leave a step.
 pub fn has_tangent_neighbour(part: &Shape, face: &Shape) -> bool {
-    let adj = FaceAdjacency::new(part);
-    neighbours(&adj, &same_surface(&adj, face)).iter().any(|n| n.kind == Some(EdgeKind::Tangent))
+    memo::around(part, face).nbs.iter().any(|n| n.kind == Some(EdgeKind::Tangent))
 }
 
 pub fn resize_invalid() -> Fail {
@@ -189,9 +191,7 @@ pub fn describe(part: &Shape, face: &Shape) -> Option<ResizeInfo> {
         _ => return None,
     };
     let cave = concave(face, &s)?;
-    let adj = FaceAdjacency::new(part);
-    let group = same_surface(&adj, face);
-    let nbs = neighbours(&adj, &group);
+    let memo::Around { group, nbs } = memo::around(part, face);
     let sweep: f64 = group
         .iter()
         .filter_map(|f| f.as_face()?.uv_bounds().ok())
@@ -203,7 +203,7 @@ pub fn describe(part: &Shape, face: &Shape) -> Option<ResizeInfo> {
         .into_iter()
         .find(|(d, _)| tangents.iter().any(|t| !left_behind(&s, std::slice::from_ref(*t), *d).is_empty()))
         .map(|(_, w)| w);
-    let run = if tangents.is_empty() { group.clone() } else { tangent_run(&adj, &group) };
+    let run = if tangents.is_empty() { group.clone() } else { tangent_run(&FaceAdjacency::new(part), &group) };
     let closed = !tangents.is_empty() && run::closed(part, &run, face);
     Some(ResizeInfo {
         kind,
