@@ -185,6 +185,22 @@ fn shrinking_the_slot_end_with_tangent_faces_kept_is_refused() {
     assert!(message.contains("2 flat faces") && message.contains("Tangent faces follow"), "{message}");
 }
 
+#[test]
+fn a_slot_end_grown_past_the_whole_body_says_so_under_both_features() {
+    let mut pushed = through("f6");
+    feature(&mut pushed, "f6")["distance"] = json!(-100);
+    let f6 = c1()["features"][5].clone();
+    let offset = add(
+        through("f5"),
+        json!({"id": "f6", "type": "offsetFace", "faces": f6["face"], "distance": -100, "body": "body1"}),
+    );
+    for raw in [&pushed, &offset] {
+        let (code, message) = code_of(raw, "f6");
+        assert_eq!(code.as_deref(), Some("pastBody"), "{message}");
+        assert!(message.contains("runs past the whole body") && message.contains("smaller radius"), "{message}");
+    }
+}
+
 const SLOT_FACES: [[f64; 3]; 4] = [[0.0, 9.125, 20.0], [0.0, -16.875, 20.0], [0.0, 0.0, 18.0], [0.0, 0.0, 22.0]];
 
 #[test]

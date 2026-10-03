@@ -43,6 +43,9 @@ pub(super) fn apply(body: &Shape, keep: &[Shape], cut: bool, e: &Expect) -> Resu
     let a = memo::volume(body);
     let vols: Vec<f64> = keep.iter().map(kernel::volume).collect();
     let cells: f64 = vols.iter().sum();
+    if cut && cells >= a * (1.0 - 1e-6) {
+        return Err(Bad::Refused(refusal::past_body(matches!(e.surf, Surf::Cone { .. }))));
+    }
     let want = if cut { a - cells } else { a + cells };
     let tools = kernel::compound(keep);
     let glued = crate::bench::phase("resize_glued", || {
@@ -59,6 +62,7 @@ pub(super) fn apply(body: &Shape, keep: &[Shape], cut: bool, e: &Expect) -> Resu
     });
     if let Some((out, v)) = glued {
         if let Ok(done) = crate::bench::phase("resize_check", || checked(body, &out, cut, Some((a, v)), e)) {
+            memo::count(|s| s.glued += 1);
             return Ok(done);
         }
     }

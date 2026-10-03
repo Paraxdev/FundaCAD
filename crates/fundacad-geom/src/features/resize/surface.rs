@@ -180,14 +180,20 @@ pub(super) fn concave(face: &Shape, s: &Surf) -> Option<bool> {
     Some(n.dot(s.away(p)) < 0.0)
 }
 
+/// How near a face's offset has to be to a size to count as at it, tight
+/// enough that sizes `delta` apart are told apart.
+pub(super) fn tol_apart(delta: f64) -> f64 {
+    (delta.abs() / 2.0).min(1e-4)
+}
+
 /// Every face of `body` on the same family surface as `s`, offset by `size`.
-pub(super) fn faces_at(body: &Shape, s: &Surf, size: f64) -> Vec<Shape> {
+pub(super) fn faces_at(body: &Shape, s: &Surf, size: f64, tol: f64) -> Vec<Shape> {
     faces_of(body)
         .into_iter()
-        .filter(|f| s.offset_of(&surf(f)).is_some_and(|o| (o - size).abs() < 1e-4))
+        .filter(|f| s.offset_of(&surf(f)).is_some_and(|o| (o - size).abs() < tol))
         .collect()
 }
 
-pub(super) fn area_at(body: &Shape, s: &Surf, size: f64) -> f64 {
-    faces_at(body, s, size).iter().map(kernel::area).sum()
+pub(super) fn area_at(body: &Shape, s: &Surf, size: f64, tol: f64) -> f64 {
+    faces_at(body, s, size, tol).iter().map(kernel::area).sum()
 }
