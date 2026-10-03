@@ -358,6 +358,12 @@ impl Ctx {
         self.bodies.len() - 1
     }
 
+    /// Uses up the key of a body the feature would have made, so the bodies
+    /// after it keep their recorded ids.
+    pub fn skip_body_slot(&mut self) {
+        self.ids.key(None);
+    }
+
     pub fn require_active(&self, label: &str) -> FResult<usize> {
         if self.bodies.is_empty() {
             return Err(Fail::msg(format!("{label} needs an existing body")));
