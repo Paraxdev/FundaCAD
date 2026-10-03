@@ -37,13 +37,16 @@ function setup(reply: FaceAxisReply | null, pick: "planar" | "tangent" = "tangen
   let announced = 0;
   let status = "";
   const viewport = {
-    pickFacePlane: () => ({ origin: END, normal: [0, -1, 0], xdir: [1, 0, 0] }),
-    facePlanePick: () => ({ kind: pick, selector: { kind: "face", by: "nearest", point: END }, at: END }),
+    facePlanePick: () => ({
+      kind: pick,
+      def: { origin: END, normal: [0, -1, 0], xdir: [1, 0, 0] },
+      selector: { kind: "face", by: "nearest", point: END },
+      at: END,
+    }),
     faceIdToBodyId: () => "body1",
     faceIdNear: (p: Vec3) => ids.get(p.join()) ?? null,
     selectOnlyFace: (id: number) => { selected.length = 0; selected.push(id); announced++; },
-    selectFaces: (list: number[]) => { for (const id of list) if (!selected.includes(id)) selected.push(id); },
-    onSelectionChange: () => { announced++; },
+    selectOnlyFaces: (list: number[]) => { selected.length = 0; selected.push(...list); announced++; },
   };
   const store = {
     document: { features: [] },
@@ -76,14 +79,33 @@ describe("Select tangent faces", () => {
     expect(s.asked).toEqual([{ face: { kind: "face", by: "nearest", point: END }, body: "body1" }]);
   });
 
+  it("joins the open menu in place rather than opening it again", async () => {
+    const s = setup(slotEndReply(RUN));
+    s.menus.openFaceMenu(100, 100, s.hit);
+    const menu = useContextMenuStore();
+    const epoch = menu.epoch;
+    const before = [...menu.items];
+    await settle();
+    expect(menu.open).toBe(true);
+    expect(menu.epoch).toBe(epoch);
+    expect(menu.items.filter((i) => i.label !== "Select tangent faces")).toEqual(before);
+    expect(menu.items.length).toBe(before.length + 1);
+  });
+
   it("selects the whole slot loop from one slot end, the clicked face first", async () => {
     const s = setup(slotEndReply(RUN));
     s.menus.openFaceMenu(100, 100, s.hit);
     await settle();
     useContextMenuStore().items.find((i) => i.label === "Select tangent faces")!.onClick!();
     expect(s.selected).toEqual([10, 11, 12, 13]);
-    expect(s.announced()).toBeGreaterThan(1);
+    expect(s.announced()).toBe(1);
     expect(s.status()).toBe("Selected 4 tangent faces");
+  });
+
+  it("offers Sketch on this face on a round face, on its tangent plane", async () => {
+    const s = setup(slotEndReply(RUN));
+    s.menus.openFaceMenu(100, 100, s.hit);
+    expect(useContextMenuStore().items.find((i) => i.label === "Sketch on this face")?.disabled).toBe(false);
   });
 
   it("is not offered for a round face with no tangent run", async () => {

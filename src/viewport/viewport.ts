@@ -3380,9 +3380,14 @@ export class Viewport {
   /** Select exactly the given B-rep face (clears any prior selection). Used by the
    *  right-click "Delete Face" menu so the face-delete path has a definite target. */
   selectOnlyFace(faceId: number) {
+    this.selectOnlyFaces([faceId]);
+  }
+
+  /** Select exactly these faces as one change, announced once. */
+  selectOnlyFaces(faceIds: readonly number[]) {
     this.highlighter?.clearSelection();
     this.edgeScope = { scope: "chain", reason: "tangent" };
-    this.highlighter?.toggleSelectFace(faceId);
+    for (const f of new Set(faceIds)) this.highlighter?.toggleSelectFace(f);
     this.onSelectionChange?.();
     this.requestRender();
   }

@@ -2,7 +2,8 @@
 // Along axis switch is offered, which way it starts, and where the arrow stands.
 
 import { describe, it, expect } from "vitest";
-import { anchorOnAxis, initialDirection, offeredAxis, offeredResize } from "../../src/features/pressPullAxis";
+import { anchorOnAxis, initialDirection, offeredAxis, offeredResize, resizeAxis } from "../../src/features/pressPullAxis";
+import type { FaceAxisReply } from "../../src/geometry/client";
 
 const ceiling = { axis: { origin: [0, 0, 22.5], dir: [0, 0, -1] }, hole: true, sameAsNormal: false } as const;
 
@@ -130,5 +131,27 @@ describe("offeredResize", () => {
     expect(offeredResize(curved("sphere", { size: 4, centre: [0, Number.NaN, 0] }), all)).toBeNull();
     expect(offeredResize(curved("cone", { size: 1 }), all)).toBeNull();
     expect(offeredResize(curved("torus", { size: 0 }), all)).toBeNull();
+  });
+});
+
+describe("resizeAxis", () => {
+  const reply = (axis: unknown): FaceAxisReply =>
+    ({
+      reason: "none",
+      resize: {
+        kind: "cylinder", size: 2, full: false, concave: true, axis, contact: 2,
+        tangent: { faces: 2, lostWhen: "shrink", run: [], closed: true, followable: true },
+      },
+    }) as FaceAxisReply;
+
+  it("reads the engine's axis with a unit direction", () => {
+    expect(resizeAxis(reply({ origin: [0, 7.125, 20], dir: [-3, 0, 0] }))).toEqual({ origin: [0, 7.125, 20], dir: [-1, 0, 0] });
+  });
+
+  it("has none for a sphere, a malformed axis or no reply", () => {
+    expect(resizeAxis(reply(undefined))).toBeNull();
+    expect(resizeAxis(reply({ origin: [0, NaN, 0], dir: [1, 0, 0] }))).toBeNull();
+    expect(resizeAxis(reply({ origin: [0, 0, 0], dir: [0, 0, 0] }))).toBeNull();
+    expect(resizeAxis(null)).toBeNull();
   });
 });

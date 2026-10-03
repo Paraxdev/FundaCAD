@@ -6,6 +6,7 @@
 // owns the gesture. NOT toolBusy for that gate, though: picking a body raises
 // the Move gizmo by itself, so a plain busy test meant right-clicking a body
 // you had already selected opened no menu at all. See Engine.toolOwnsScreen.
+import { markRaw } from "vue";
 import type { DocumentStore } from "../document/store";
 import type { Viewport } from "../viewport/viewport";
 import type { SketchMode } from "../sketch/sketchMode";
@@ -125,12 +126,12 @@ export function createContextMenus(deps: ContextMenusDeps) {
   }
 
   function openFaceMenu(x: number, y: number, hit: FaceHit) {
-    const plane = viewport.pickFacePlane(x, y); // null on curved faces
+    const facePick = viewport.facePlanePick(x, y);
+    const plane = facePick?.def ?? null;
     // The same anchor the plane picker hands startSketch, so a sketch begun from
     // the right-click menu follows its face too. Planar only: a tangent plane on
     // a cylinder is a different plane at every point, so there is nothing for a
     // rebuild to re-derive.
-    const facePick = viewport.facePlanePick(x, y);
     const anchor = facePick && facePick.kind === "planar"
       ? { selector: facePick.selector, at: facePick.at } : null;
     const bodyId = viewport.faceIdToBodyId(hit.faceId);
@@ -164,37 +165,35 @@ export function createContextMenus(deps: ContextMenusDeps) {
       { label: "Delete face (heal)", danger: true, onClick: unlessBusy(() => { viewport.selectOnlyFace(hit.faceId); deleteSelectedFace(); }) },
     ];
     contextMenu(x, y, items);
-    if (facePick?.kind !== "planar") offerTangentFaces(x, y, hit, items);
+    if (facePick?.kind !== "planar") offerTangentFaces(hit);
   }
 
   /** "Select tangent faces" beside "Select coplanar faces", once the engine has
    *  named a tangent run for the face. The menu opens without waiting for it,
-   *  so the entry joins the menu still open, never a later one. */
-  function offerTangentFaces(x: number, y: number, hit: FaceHit, items: CtxItem[]) {
+   *  so the entry joins the menu still open, never a later one, and joins it in
+   *  place: opening it again would drop the row under the pointer. */
+  function offerTangentFaces(hit: FaceHit) {
     const menu = useContextMenuStore();
     const epoch = menu.epoch;
     const face = { kind: "face" as const, by: "nearest" as const, point: hit.point };
     void store.faceAxis(face, viewport.faceIdToBodyId(hit.faceId)).then((reply) => {
       const run = reply?.resize?.tangent?.run;
       if (!Array.isArray(run) || run.length < 2 || !menu.open || menu.epoch !== epoch) return;
-      const at = items.findIndex((i) => i.label === "Select coplanar faces") + 1;
       const item: CtxItem = {
         label: "Select tangent faces",
         onClick: unlessBusy(() => {
-          const others = new Set<number>();
+          const ids = new Set([hit.faceId]);
           for (const p of run) {
             const id = viewport.faceIdNear(p);
-            if (id !== null && id !== hit.faceId) others.add(id);
+            if (id !== null) ids.add(id);
           }
-          viewport.selectOnlyFace(hit.faceId);
-          // selectFaces paints without announcing, and selectOnlyFace announced one face
-          viewport.selectFaces([...others]);
-          viewport.onSelectionChange?.();
-          const n = others.size + 1;
-          setStatus(`Selected ${n} tangent face${n === 1 ? "" : "s"}`, "");
+          viewport.selectOnlyFaces([...ids]);
+          setStatus(`Selected ${ids.size} tangent face${ids.size === 1 ? "" : "s"}`, "");
         }),
       };
-      contextMenu(x, y, [...items.slice(0, at), item, ...items.slice(at)]);
+      const items = menu.items;
+      const at = items.findIndex((i) => i.label === "Select coplanar faces") + 1;
+      menu.items = markRaw([...items.slice(0, at), item, ...items.slice(at)]);
     });
   }
 
