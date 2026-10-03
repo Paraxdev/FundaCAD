@@ -144,6 +144,24 @@ watch(
   { flush: "post" },
 );
 
+// A row added to a menu that is already open (an answer from the engine that
+// came late) can push the last row past the bottom edge. Only that overflow is
+// corrected, so the rows under the pointer stay where they are otherwise.
+watch(
+  () => s.items,
+  async () => {
+    const opened = s.epoch;
+    if (!s.open || !placed.value) return;
+    await nextTick();
+    const r = menuEl.value?.getBoundingClientRect();
+    if (!r || !s.open || !placed.value || opened !== s.epoch) return;
+    if (r.bottom > window.innerHeight) {
+      pos.value = { x: pos.value.x, y: Math.max(4, window.innerHeight - r.height - 4) };
+    }
+  },
+  { flush: "post" },
+);
+
 // closing (from an item click, dismissContextMenu(), a doc change...) must also
 // drop the global listeners
 watch(
