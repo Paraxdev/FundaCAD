@@ -63,6 +63,7 @@ pub fn duplicate(ctx: &mut Ctx, m: &Move) -> FResult {
                 "duplicate",
                 "target body already consumed or missing",
             );
+            ctx.skip_body_slot();
             continue;
         };
         let copy = kernel::copy(ctx.bodies[i].shape())?;
