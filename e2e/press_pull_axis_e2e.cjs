@@ -6,7 +6,8 @@
 //   1. Picking the cone floor offers "Along axis" beside the value and starts
 //      on it, since the face is the end of a hole; the arrow stands on the
 //      hole's axis and points up it.
-//   2. The switch goes to "Along normal" and back, and the arrow follows.
+//   2. The switch goes to "Along normal", where the cone reads an Offset, and
+//      back, and the arrow follows.
 //   3. Dragging the arrow into the part and committing stores a press/pull
 //      with direction "axis" and a negative distance that builds cleanly.
 //
@@ -122,7 +123,12 @@ const polygon = (pts) => pts.map((p, i) => line(`l${i}`, p, pts[(i + 1) % pts.le
   t = await tool();
   b = await button();
   check("the switch goes to Along normal", b && !b.on && b.text === "Along normal" && t.direction === "normal", { b, t });
-  check("and the Angle field comes back", await angleShown());
+  const offset = await page.evaluate(() => {
+    const box = [...document.querySelectorAll(".dim-input")].find((b) => b.style.display !== "none");
+    const toggle = box?.querySelector(".dim-toggle");
+    return { name: box?.querySelector(".dim-name")?.textContent ?? null, mode: !!toggle && toggle.style.display !== "none" };
+  });
+  check("and along the normal the cone reads an Offset, with no angle or mode", offset.name === "Offset" && !offset.mode && !(await angleShown()), offset);
   await settle();
   await shot("02_along_normal");
   await flip();

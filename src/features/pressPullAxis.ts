@@ -6,7 +6,7 @@
 // engine decides which faces have an axis (features/axis_push.rs), so the arrow
 // and the build cannot disagree about it.
 
-import type { FaceAxisReply } from "../geometry/client";
+import type { FaceAxisReply, FaceResize } from "../geometry/client";
 import type { PressPullDirection, Vec3 } from "../types";
 import type { RoundTangent } from "./radialDrag";
 
@@ -50,25 +50,34 @@ export function anchorOnAxis(point: Vec3, axis: HoleAxis): Vec3 {
   return [o[0] + d[0] * t, o[1] + d[1] * t, o[2] + d[2] * t];
 }
 
-/** What the engine says about resizing a cylindrical face, exact where the
- *  mesh fit is not. */
+/** What the engine says about resizing a curved face, exact where the mesh
+ *  fit is not. */
 export interface OfferedResize {
+  kind: FaceResize["kind"];
+  /** the radius, the tube radius on a torus, 0 on a cone */
   radius: number;
   full: boolean;
   concave: boolean;
   /** the radius where a neighbour would first be left behind, or null */
   contact: number | null;
   tangent: RoundTangent;
+  /** a sphere's centre */
+  centre?: Vec3;
 }
 
 const LOST_WHEN = new Set([null, "shrink", "grow"]);
 
-/** The cylinder resize in a faceAxis reply, or null: none, another kind of
- *  face, or a malformed reply. */
-export function offeredResize(reply: FaceAxisReply | null): OfferedResize | null {
+/** The resize in a faceAxis reply, or null: none, a kind not asked for, or a
+ *  malformed reply. */
+export function offeredResize(
+  reply: FaceAxisReply | null,
+  kinds: readonly FaceResize["kind"][] = ["cylinder"],
+): OfferedResize | null {
   const r = reply?.resize;
-  if (!r || typeof r !== "object" || r.kind !== "cylinder") return null;
-  if (typeof r.size !== "number" || !Number.isFinite(r.size) || !(r.size > 0)) return null;
+  if (!r || typeof r !== "object" || !kinds.includes(r.kind)) return null;
+  if (typeof r.size !== "number" || !Number.isFinite(r.size)) return null;
+  if (r.kind === "cone" ? r.size !== 0 : !(r.size > 0)) return null;
+  if (r.kind === "sphere" && !finite(r.centre)) return null;
   if (typeof r.full !== "boolean" || typeof r.concave !== "boolean") return null;
   const contact = r.contact ?? null;
   if (contact !== null && (typeof contact !== "number" || !Number.isFinite(contact) || contact < 0)) return null;
@@ -78,10 +87,12 @@ export function offeredResize(reply: FaceAxisReply | null): OfferedResize | null
   if (!Array.isArray(t.run) || !t.run.every(finite)) return null;
   if (typeof t.closed !== "boolean" || typeof t.followable !== "boolean") return null;
   return {
+    kind: r.kind,
     radius: r.size,
     full: r.full,
     concave: r.concave,
     contact,
     tangent: { faces: t.faces, lostWhen: t.lostWhen ?? null, run: t.run, closed: t.closed, followable: t.followable },
+    ...(r.kind === "sphere" ? { centre: r.centre } : {}),
   };
 }

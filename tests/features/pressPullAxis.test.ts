@@ -70,6 +70,7 @@ describe("offeredResize", () => {
 
   it("reads a slot end's exact radius, wrap and tangent run", () => {
     expect(offeredResize(slotEnd)).toEqual({
+      kind: "cylinder",
       radius: 2,
       full: false,
       concave: true,
@@ -108,5 +109,26 @@ describe("offeredResize", () => {
     expect(bad({}, { run: "here" })).toBeNull();
     expect(bad({}, { closed: 1 })).toBeNull();
     expect(bad({}, { followable: undefined })).toBeNull();
+  });
+
+  const curved = (kind: "sphere" | "cone" | "torus", patch: Record<string, unknown> = {}) =>
+    ({ ...slotEnd, resize: { ...slotEnd.resize, kind, full: false, contact: null, ...patch } }) as never;
+
+  it("reads a sphere, a cone and a torus when asked for them", () => {
+    const all = ["sphere", "cone", "torus"] as const;
+    expect(offeredResize(curved("sphere", { size: 4, centre: [0, 0, 10] }), all)).toMatchObject({ kind: "sphere", radius: 4, centre: [0, 0, 10] });
+    expect(offeredResize(curved("cone", { size: 0 }), all)).toMatchObject({ kind: "cone", radius: 0 });
+    expect(offeredResize(curved("torus", { size: 1.5 }), all)).toMatchObject({ kind: "torus", radius: 1.5 });
+    expect(offeredResize(curved("torus", { size: 1.5 }), all)?.centre).toBeUndefined();
+  });
+
+  it("still offers only a cylinder unless asked, and refuses a malformed sphere or cone", () => {
+    const all = ["sphere", "cone", "torus"] as const;
+    expect(offeredResize(curved("sphere", { size: 4, centre: [0, 0, 10] }))).toBeNull();
+    expect(offeredResize(slotEnd, all)).toBeNull();
+    expect(offeredResize(curved("sphere", { size: 4 }), all)).toBeNull();
+    expect(offeredResize(curved("sphere", { size: 4, centre: [0, Number.NaN, 0] }), all)).toBeNull();
+    expect(offeredResize(curved("cone", { size: 1 }), all)).toBeNull();
+    expect(offeredResize(curved("torus", { size: 0 }), all)).toBeNull();
   });
 });

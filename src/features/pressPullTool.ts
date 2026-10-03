@@ -15,6 +15,7 @@
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore, RebuildState } from "../document/store";
+import type { FaceAxisReply } from "../geometry/client";
 import type { Feature, PressPullDirection, PressPullMode, Selector, Vec3 } from "../types";
 import { DimInput, type DimChoice, type DimChoices, type DimFieldDef, type DimToggleDef } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
@@ -29,7 +30,7 @@ import {
   type DragHandle,
 } from "./manipulator";
 import { draftAngle, draftDelta } from "./draftMath";
-import { COLLAPSE_FRACTION, radialDrag, type RoundFace } from "./radialDrag";
+import { COLLAPSE_FRACTION, facetNormalAt, radialDrag, roundFromResize, type RoundFace } from "./radialDrag";
 import {
   defaultQuantity,
   deltaForSize,
@@ -87,6 +88,8 @@ const QUANTITIES: (DimChoice & { id: SizeQuantity })[] = [
   { id: "offset", label: "Offset", word: "Offset" },
 ];
 
+const CURVED = ["cylinder", "sphere", "cone", "torus"] as const;
+
 const MODES: PressPullMode[] = ["auto", "join", "cut", "new", "intersect"];
 const MODE_LABEL: Record<PressPullMode, string> = { auto: "Auto", join: "Join", cut: "Cut", new: "New", intersect: "Intersect" };
 
@@ -109,6 +112,12 @@ export class PressPullTool {
   private round: RoundFace | null = null;
   /** the radius where a tangent neighbour would first be left behind */
   private contact: number | null = null;
+  /** The engine's reading of a lone curved face the mesh fit did not take as a
+   *  cylinder: a sphere, a cone or a torus, or a cylinder it missed. */
+  private curve: OfferedResize | null = null;
+  /** that face as a round face, a cylinder or a sphere, which it reads as
+   *  along the normal; null on a cone or a torus */
+  private curveRound: RoundFace | null = null;
   /** Some selected face is round, so the push resizes rather than slides:
    *  no taper, no boolean mode and no up to. Outlives `round` when a Ctrl-click
    *  adds a face outside its tangent run. */
@@ -310,21 +319,24 @@ export class PressPullTool {
       if (hit && hit.bodyId === this.bodyId) {
         e.preventDefault();
         e.stopImmediatePropagation();
+        const was = this.boxShape();
+        const curved = this.curve !== null;
         this.faces.push(hit.selector);
         this.faceIds.push(hit.faceId);
         // The axis was the first face's; the faces share one arrow from here.
         this.axisAsk++;
         this.holeAxis = null;
+        this.curve = null;
+        this.curveRound = null;
         if (this.directionBtn) this.directionBtn.style.display = "none";
         if (this.direction === "axis") this.setDirection("normal");
-        const was = { resizing: this.resizing, round: this.round !== null };
-        if (this.viewport.roundFaceAt(hit.faceId, hit.anchor)) this.resizing = true;
+        if (curved || this.viewport.roundFaceAt(hit.faceId, hit.anchor)) this.resizing = true;
         if (this.round && !this.inTangentRun()) this.dropRound();
         if (this.resizing) {
           this.mode = "auto";
           this.taper = 0;
         }
-        if (was.resizing !== this.resizing || was.round !== (this.round !== null)) this.showBox();
+        if (was !== this.boxShape()) this.showBox();
         else this.syncToggle();
         this.refreshPreview(true);
       }
@@ -442,6 +454,8 @@ export class PressPullTool {
     this.bodyId = bodyId;
     this.round = round;
     this.contact = null;
+    this.curve = null;
+    this.curveRound = null;
     this.quantity = defaultQuantity(round?.full !== false);
     this.quantityPicked = false;
     this.resizing = round !== null || (faceIds.length > 1 && faceIds.some((id) => this.viewport.roundFaceAt(id, anchor) !== null));
@@ -500,7 +514,7 @@ export class PressPullTool {
   }
 
   private fieldLabel(): { label: string; icon?: string } {
-    if (!this.round) return { label: "D" };
+    if (!this.round) return { label: this.slant ? "Offset" : "D" };
     const { label, icon } = QUANTITIES.find((q) => q.id === this.quantity)!;
     return icon ? { label, icon } : { label };
   }
@@ -545,7 +559,7 @@ export class PressPullTool {
    *  full one to go) or how far it moves, the travelled distance on any other. */
   private readout(): number {
     const r = this.round;
-    if (!r) return Math.abs(this.value);
+    if (!r) return this.slant ? this.value : Math.abs(this.value);
     return sizeReadout(this.quantity, r.radius, this.value, r.solidInside, this.full);
   }
 
@@ -636,6 +650,12 @@ export class PressPullTool {
     this.guideAxis = null;
     this.guideSpan = null;
     if (!round || faceId === undefined) return;
+    if (round.centre) {
+      // A sphere has no axis to draw, only the size line out from its centre.
+      this.guideAxis = { origin: round.cylinder.point, dir: round.cylinder.axis };
+      this.guideSpan = [0, 0];
+      return;
+    }
     for (const t of this.viewport.faceTriangles(faceId)) {
       for (const v of [t.a, t.b, t.c]) this.roundPoints.push([v.x, v.y, v.z]);
     }
@@ -735,7 +755,8 @@ export class PressPullTool {
   private refreshGhost() {
     const r = this.round;
     const k = this.neutral ? null : this.keyOf(this.buildFeature());
-    if (!r || this.pickingTarget || this.shownFeature || this.removing || k === null || this.refused.has(k)) {
+    // The ghost moves a cap off an axis, which a sphere does not have.
+    if (!r || r.centre || this.pickingTarget || this.shownFeature || this.removing || k === null || this.refused.has(k)) {
       this.viewport.clearPressPullGhost();
       return;
     }
@@ -757,10 +778,11 @@ export class PressPullTool {
   /** A size for the prompt, said the way the field reads it. */
   private sizeText(value: number): string {
     const r = this.round;
-    if (!r) return fmtLength(Math.abs(value));
+    const signed = `${value < 0 ? "-" : "+"}${fmtLength(Math.abs(value))}`;
+    if (!r) return this.slant ? signed : fmtLength(Math.abs(value));
     const d = radialDrag(r.radius, value, r.solidInside, this.full);
     if (d.mode === "remove") return "it removed";
-    if (this.quantity === "offset") return `${value < 0 ? "-" : "+"}${fmtLength(Math.abs(value))}`;
+    if (this.quantity === "offset") return signed;
     return this.quantity === "diameter" ? `⌀${fmtLength(d.diameter)}` : `R${fmtLength(d.radius)}`;
   }
 
@@ -797,6 +819,7 @@ export class PressPullTool {
         ? `Drag or type ${ask} · ${this.removalText(r)} removes it · Esc`
         : `Drag or type ${ask} · Esc`);
     }
+    if (this.slant) return setPrompt("Drag or type how far it moves, negative cuts · Esc");
     if (this.faces.length > 1) return setPrompt(`${this.faces.length} faces · drag or type a distance · click to commit · Esc`);
     setPrompt("Drag or type a value, negative cuts · click a face to stop at it · Esc");
   }
@@ -1010,10 +1033,10 @@ export class PressPullTool {
     const ask = ++this.axisAsk;
     void this.store.faceAxis(face, bodyId).then((reply) => {
       if (ask !== this.axisAsk || !this.active || this.phase !== "drag") return;
-      if (this.round) {
-        this.adoptResize(offeredResize(reply), resizeAxis(reply));
-        return;
-      }
+      const r = offeredResize(reply, CURVED);
+      if (this.round && r?.kind === "cylinder") return this.adoptResize(r, resizeAxis(reply));
+      if (r && this.adoptCurve(r, reply)) return;
+      if (this.round) return;
       this.holeAxis = offeredAxis(reply);
       if (!this.holeAxis) return;
       if (this.directionBtn) this.directionBtn.style.display = "";
@@ -1036,9 +1059,64 @@ export class PressPullTool {
     else this.refreshPreview(true);
   }
 
-  private setDirection(d: PressPullDirection) {
+  /** A face the mesh did not fit as a cylinder, read from the engine's answer.
+   *  False when there is nothing in it to read. */
+  private adoptCurve(r: OfferedResize, reply: FaceAxisReply | null): boolean {
+    const was = this.boxShape();
+    const at = this.faceAnchor;
+    const round = roundFromResize(r, resizeAxis(reply), [at.x, at.y, at.z]);
+    const normal = round ? round.radial : facetNormalAt(this.viewport.faceTriangles(this.faceIds[0] ?? -1), at);
+    if (!normal || (r.kind === "cylinder" || r.kind === "sphere") !== (round !== null)) return false;
+    this.curve = r;
+    this.curveRound = round;
+    this.round = null;
+    this.faceNormal.copy(normal).normalize();
+    this.contact = r.contact;
+    if (!this.quantityPicked) this.quantity = defaultQuantity(r.full);
+    // A round end of a hole still slides down it; a cylinder never did.
+    this.holeAxis = r.kind === "cylinder" ? null : offeredAxis(reply);
+    if (this.directionBtn) this.directionBtn.style.display = this.holeAxis ? "" : "none";
+    this.setDirection(initialDirection(this.holeAxis), was);
+    return true;
+  }
+
+  /** A sphere, a cone or a torus read the way the push now goes: along the
+   *  normal it resizes, about a sphere's centre or by an offset on a cone or a
+   *  torus; along a hole's axis it slides like any end of a hole. */
+  private applyCurve() {
+    if (!this.curve) return;
+    const along = this.direction === "normal";
+    const round = along ? this.curveRound : null;
+    if (round !== this.round) this.seedGuides(round, this.faceIds[0]);
+    this.round = round;
+    this.resizing = along;
+    if (along) {
+      this.mode = "auto";
+      this.taper = 0;
+    }
+  }
+
+  /** A cone or a torus offset along its normal where it was picked: it has no
+   *  one size to read, so the field says how far it moves. */
+  private get slant(): boolean {
+    const k = this.curve?.kind;
+    return (k === "cone" || k === "torus") && this.faces.length === 1 && this.direction === "normal";
+  }
+
+  /** What decides the fields and the switch the value box shows. */
+  private boxShape(): string {
+    return `${this.resizing} ${this.round !== null} ${this.slant}`;
+  }
+
+  private setDirection(d: PressPullDirection, was = this.boxShape()) {
     const axis = this.holeAxis;
     this.direction = d === "axis" && axis ? "axis" : "normal";
+    this.applyCurve();
+    if (this.boxShape() !== was) {
+      // A size and a slide are different numbers, so the drag starts over.
+      this.value = 0;
+      this.showBox();
+    }
     if (this.directionBtn) {
       this.directionBtn.textContent = DIRECTION_LABEL[this.direction];
       this.directionBtn.classList.toggle("on", this.direction === "axis");
@@ -1150,7 +1228,7 @@ export class PressPullTool {
       this.store.setPreview(null);
       this.enginePreviewOn = false;
     }
-    const reselect = this.round && feature.type === "press-pull" && this.faces.length === 1
+    const reselect = (this.round || this.slant) && feature.type === "press-pull" && this.faces.length === 1
       ? this.faceAnchor.clone().addScaledVector(this.axis, this.value)
       : null;
     this.store.addFeature(feature);
@@ -1225,6 +1303,8 @@ export class PressPullTool {
     this.value = 0;
     this.round = null;
     this.contact = null;
+    this.curve = null;
+    this.curveRound = null;
     this.resizing = false;
     this.axisAsk++;
     this.holeAxis = null;

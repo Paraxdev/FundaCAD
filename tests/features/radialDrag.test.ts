@@ -2,13 +2,17 @@
 // that shrinks when you drag it open), and where the resize stops being a resize.
 
 import { describe, it, expect } from "vitest";
+import * as THREE from "three";
 import {
   COLLAPSE_FRACTION,
   collapseDiameter,
   deltaForDiameter,
   deltaForRadius,
+  facetNormalAt,
   radialDrag,
+  roundFromResize,
 } from "../../src/features/radialDrag";
+import type { OfferedResize } from "../../src/features/pressPullAxis";
 
 describe("radialDrag", () => {
   it("reads the drag as a diameter, not a radius", () => {
@@ -112,5 +116,65 @@ describe("radialDrag", () => {
     for (const [inside, target, distance] of table) {
       expect(radialDrag(2, deltaForRadius(2, target), inside, false).distance).toBeCloseTo(distance, 9);
     }
+  });
+});
+
+describe("roundFromResize", () => {
+  const tangent = { faces: 0, lostWhen: null, run: [], closed: false, followable: false };
+  const read = (kind: OfferedResize["kind"], extra: Partial<OfferedResize> = {}): OfferedResize =>
+    ({ kind, radius: 4, full: false, concave: true, contact: null, tangent, ...extra });
+  const near = (v: THREE.Vector3 | number[]) => (Array.isArray(v) ? v : v.toArray()).map((c) => Math.round(c * 1e9) / 1e9 + 0);
+
+  it("reads a sphere about its centre, the arrow pointing away from it", () => {
+    const r = roundFromResize(read("sphere", { centre: [0, 0, 10] }), null, [0, 3, 6]);
+    expect(r).not.toBeNull();
+    expect(r!.centre).toEqual([0, 0, 10]);
+    expect(near(r!.radial)).toEqual([0, 0.6, -0.8]);
+    expect(r!.radius).toBe(4);
+    expect(r!.solidInside).toBe(false);
+    expect(r!.full).toBe(false);
+    // The guide line runs through the centre square to the arrow, so the size line starts there.
+    expect(r!.cylinder.point).toEqual([0, 0, 10]);
+    expect(Math.abs(new THREE.Vector3(...r!.cylinder.axis).dot(r!.radial))).toBeLessThan(1e-9);
+  });
+
+  it("a ball reads with the material inside it", () => {
+    expect(roundFromResize(read("sphere", { centre: [0, 0, 0], concave: false }), null, [4, 0, 0])!.solidInside).toBe(true);
+  });
+
+  it("reads a cylinder about the engine's axis", () => {
+    const r = roundFromResize(read("cylinder", { full: true }), { origin: [0, 0, 0], dir: [0, 0, 1] }, [0, 4, 7]);
+    expect(near(r!.radial)).toEqual([0, 1, 0]);
+    expect(r!.centre).toBeUndefined();
+    expect(r!.full).toBe(true);
+  });
+
+  it("has no round face for a cone or a torus, or a point with no direction away", () => {
+    expect(roundFromResize(read("cone", { radius: 0 }), { origin: [0, 0, 0], dir: [0, 0, 1] }, [1, 0, 1])).toBeNull();
+    expect(roundFromResize(read("torus"), { origin: [0, 0, 0], dir: [0, 0, 1] }, [5, 0, 0])).toBeNull();
+    expect(roundFromResize(read("sphere", { centre: [1, 2, 3] }), null, [1, 2, 3])).toBeNull();
+    expect(roundFromResize(read("cylinder"), null, [0, 4, 0])).toBeNull();
+  });
+});
+
+describe("facetNormalAt", () => {
+  const V = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+
+  it("takes the facet under the point, not the face's average", () => {
+    // Two facets of a cone round its axis, the average of which points up it.
+    const left = new THREE.Triangle(V(-2, 0, 0), V(-1, -1, 1), V(-1, 1, 1));
+    const right = new THREE.Triangle(V(2, 0, 0), V(1, 1, 1), V(1, -1, 1));
+    const n = facetNormalAt([left, right], V(1.3, 0, 0.6))!;
+    expect(n.x).toBeCloseTo(Math.SQRT1_2, 9);
+    expect(n.y).toBeCloseTo(0, 9);
+    expect(n.z).toBeCloseTo(Math.SQRT1_2, 9);
+    expect(facetNormalAt([left, right], V(-1.3, 0, 0.6))!.x).toBeCloseTo(-Math.SQRT1_2, 9);
+  });
+
+  it("skips a degenerate facet and has nothing for no facets", () => {
+    const sliver = new THREE.Triangle(V(0, 0, 0), V(0, 0, 0), V(1, 0, 0));
+    const flat = new THREE.Triangle(V(-5, -5, 0), V(5, -5, 0), V(0, 5, 0));
+    expect(facetNormalAt([sliver, flat], V(0, 0, 0))!.toArray()).toEqual([0, 0, 1]);
+    expect(facetNormalAt([], V(0, 0, 0))).toBeNull();
   });
 });

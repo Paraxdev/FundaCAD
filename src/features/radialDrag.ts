@@ -13,8 +13,9 @@
 // that cannot run headless, and these are the functions that can be wrong in a
 // way a user notices.
 
-import type * as THREE from "three";
-import type { Cylinder } from "./planeMath";
+import * as THREE from "three";
+import { planeXDir, radialAt, unit, type Cylinder } from "./planeMath";
+import type { OfferedResize } from "./pressPullAxis";
 import type { Vec3 } from "../types";
 
 /** Faces that run smoothly into a round face, as the engine reports them. */
@@ -44,6 +45,55 @@ export interface RoundFace {
   full?: boolean;
   /** null until the engine has answered, the mesh cannot tell */
   tangent?: RoundTangent | null;
+  /** Set on a sphere, whose size is measured from this point. `cylinder` is
+   *  then a line through it square to `radial`, so a size guide drawn about
+   *  that line runs out from the centre. */
+  centre?: Vec3;
+}
+
+/** The round face the engine describes, standing at `at`: a cylinder about its
+ *  exact axis, or a sphere about its centre. Null for a cone or a torus, which
+ *  have no one size to read, and for a point on the axis or at the centre. */
+export function roundFromResize(r: OfferedResize, axis: { origin: Vec3; dir: Vec3 } | null, at: Vec3): RoundFace | null {
+  let cylinder: Cylinder;
+  let radial: Vec3 | null;
+  if (r.kind === "cylinder" && axis) {
+    cylinder = { axis: axis.dir, point: axis.origin, radius: r.radius };
+    radial = radialAt(cylinder, at);
+  } else if (r.kind === "sphere" && r.centre) {
+    const c = r.centre;
+    radial = unit([at[0] - c[0], at[1] - c[1], at[2] - c[2]]);
+    const across = radial && planeXDir(radial);
+    if (!across) return null;
+    cylinder = { axis: across, point: c, radius: r.radius };
+  } else {
+    return null;
+  }
+  if (!radial) return null;
+  return {
+    cylinder,
+    radius: r.radius,
+    solidInside: !r.concave,
+    radial: new THREE.Vector3(radial[0], radial[1], radial[2]),
+    full: r.full,
+    tangent: r.tangent,
+    ...(r.kind === "sphere" ? { centre: r.centre } : {}),
+  };
+}
+
+/** The outward normal of the facet nearest `at`, the direction a cone or a
+ *  torus is offset along where it was picked. The face's average normal is no
+ *  use there, round a full cone it cancels to the axis. */
+export function facetNormalAt(tris: readonly THREE.Triangle[], at: THREE.Vector3): THREE.Vector3 | null {
+  const p = new THREE.Vector3();
+  let best: THREE.Triangle | null = null;
+  let bestD = Infinity;
+  for (const t of tris) {
+    if (t.getArea() < 1e-12) continue;
+    const d = t.closestPointToPoint(at, p).distanceToSquared(at);
+    if (d < bestD) { bestD = d; best = t; }
+  }
+  return best ? best.getNormal(new THREE.Vector3()) : null;
 }
 
 /** Below this fraction of its original radius, a FULL round face is treated as
