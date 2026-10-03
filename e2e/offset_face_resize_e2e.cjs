@@ -84,8 +84,8 @@ const HOLE_WALL = [0, 7.125 + 3.3690784184224394, 13.015];
       field: box?.querySelector("input")?.value ?? null,
       toggle: toggle ? { text: toggle.textContent, on: toggle.classList.contains("on"), shown: toggle.style.display !== "none" } : null,
       problem: box?.querySelector(".dim-problem")?.textContent ?? null,
-      refused: t.refusalShown,
-      shown: t.shownFeature ? { distance: t.shownFeature.distance, followTangent: t.shownFeature.followTangent } : null,
+      refused: t.outcomes.refusal,
+      shown: t.outcomes.shownFeature ? { distance: t.outcomes.shownFeature.distance, followTangent: t.outcomes.shownFeature.followTangent } : null,
       rides: t.gizmo ? t.gizmo.position.distanceTo(at) : null,
       guides: !!t.guides?.axisLine && !!t.guides?.sizeLine,
       held: window.store.buildState.heldRefusal?.code ?? null,
@@ -159,7 +159,7 @@ const HOLE_WALL = [0, 7.125 + 3.3690784184224394, 13.015];
   check("the arrow is under the pointer where it is drawn", g.hit);
   await walk(g.pos, 0.6);
   await settle();
-  await page.waitForFunction(() => window.__fundacad.faceOffset.shownFeature != null, null, { timeout: 120000 }).catch(() => {});
+  await page.waitForFunction(() => window.__fundacad.faceOffset.outcomes.shownFeature != null, null, { timeout: 120000 }).catch(() => {});
   t = await tool();
   check("the drag grew the end", t.value >= 0.6 && t.value < 1.2, t.value);
   check("an engine preview of the bigger bore is on screen", t.shown && t.shown.distance < 0 && t.shown.followTangent === false && t.refused === null, t);
@@ -173,7 +173,7 @@ const HOLE_WALL = [0, 7.125 + 3.3690784184224394, 13.015];
   // --- 3. on in past R 2 is refused, the grown end held ------------------------
   await walk(g.pos, -0.2);
   await settle();
-  await page.waitForFunction(() => window.__fundacad.faceOffset.refusalShown !== null, null, { timeout: 120000 }).catch(() => {});
+  await page.waitForFunction(() => window.__fundacad.faceOffset.outcomes.refusal !== null, null, { timeout: 120000 }).catch(() => {});
   t = await tool();
   check("dragged in past R 2 it is refused", t.value <= -0.2 && t.refused !== null && t.held === "tangentLost", t);
   check("the refusal is in the box", !!t.problem && /Tangent faces follow/.test(t.problem), t.problem);

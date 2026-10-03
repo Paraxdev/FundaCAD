@@ -87,7 +87,7 @@ const HOLE_WALL = [0, 7.125 + 3.3690784184224394, 13.015];
       label: name ? (name.title || name.textContent) : null,
       field: b?.querySelector("input")?.value ?? null,
       problem: b?.querySelector(".dim-problem")?.textContent ?? null,
-      shown: t.shownFeature ? { distance: t.shownFeature.distance, followTangent: t.shownFeature.followTangent } : null,
+      shown: t.outcomes.shownFeature ? { distance: t.outcomes.shownFeature.distance, followTangent: t.outcomes.shownFeature.followTangent } : null,
       prompt: document.querySelector("#prompt")?.textContent ?? "",
     };
   });
@@ -120,7 +120,7 @@ const HOLE_WALL = [0, 7.125 + 3.3690784184224394, 13.015];
     row.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0 }));
   }, word);
   const waitShown = (distance) => page.waitForFunction(
-    (d) => window.pressPull.shownFeature?.distance === d, distance, { timeout: 120000 }).catch(() => {});
+    (d) => window.pressPull.outcomes.shownFeature?.distance === d, distance, { timeout: 120000 }).catch(() => {});
 
   // --- 1. the slot end reads R and its name is a menu ---------------------------
   await select(SLOT_END);

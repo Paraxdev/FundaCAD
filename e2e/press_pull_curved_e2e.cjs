@@ -114,8 +114,8 @@ const TORUS = [
       axis: r(t.axis),
       anchor: r(t.anchor),
       problem: box?.querySelector(".dim-problem")?.textContent ?? null,
-      refused: t.refusalShown,
-      shown: t.shownFeature ? { type: t.shownFeature.type, distance: t.shownFeature.distance } : null,
+      refused: t.outcomes.refusal,
+      shown: t.outcomes.shownFeature ? { type: t.outcomes.shownFeature.type, distance: t.outcomes.shownFeature.distance } : null,
       previewError: window.store.previewError,
       held: window.store.buildState.heldRefusal?.code ?? null,
       sizeLine: !!t.guides?.sizeLine,
@@ -174,6 +174,17 @@ const TORUS = [
   const vDimple = await volume();
   await look([30, -30, 34], [0, 0, 8]);
   await page.waitForTimeout(400);
+  // The bare selection, before any tool or answer from the engine.
+  const bare = await page.evaluate((p) => {
+    const v = window.viewport;
+    v.clearSelection?.();
+    v.selectFaces([v.faceIdNear(p)]);
+    const f = v.selectedFacesForPressPull();
+    return f && { normal: f.normal.toArray(), anchor: f.anchor.toArray() };
+  }, [0, 0, 8]);
+  const bareAway = bare && unit([bare.anchor[0], bare.anchor[1], bare.anchor[2] - 14]);
+  check("the selection handle already points away from the centre", !!bare &&
+    bare.normal.every((c, i) => Math.abs(c - bareAway[i]) < 1e-2), bare);
   await select([0, 0, 8]);
   let t = await tool();
   check("the dimple reads as a sphere", t.active && t.kind === "sphere", t);
@@ -188,7 +199,7 @@ const TORUS = [
   const hit = await drag(1, { release: false });
   check("the arrow is under the pointer where it is drawn", hit);
   await settle();
-  await page.waitForFunction(() => window.pressPull.shownFeature != null, null, { timeout: 120000 }).catch(() => {});
+  await page.waitForFunction(() => window.pressPull.outcomes.shownFeature != null, null, { timeout: 120000 }).catch(() => {});
   t = await tool();
   check("dragging out grows it, a cut through the engine", t.value >= 1 && t.shown && t.shown.distance < 0 && t.previewError === null && t.refused === null, t);
   check("the field reads the new radius", Math.abs(Number(t.field) - (6 + t.value)) < 0.005, t);
@@ -212,12 +223,12 @@ const TORUS = [
   await typeValue("8");
   await page.waitForTimeout(300);
   await settle();
-  await page.waitForFunction(() => window.pressPull.shownFeature != null, null, { timeout: 120000 }).catch(() => {});
+  await page.waitForFunction(() => window.pressPull.outcomes.shownFeature != null, null, { timeout: 120000 }).catch(() => {});
   const vEight = await volume();
   await typeValue("3");
   await page.waitForTimeout(300);
   await settle();
-  await page.waitForFunction(() => window.pressPull.refusalShown !== null, null, { timeout: 120000 }).catch(() => {});
+  await page.waitForFunction(() => window.pressPull.outcomes.refusal !== null, null, { timeout: 120000 }).catch(() => {});
   t = await tool();
   check("R 3 is refused in the box", !!t.problem && t.refused !== null && t.held !== null, t);
   check("and R 8 is held on screen", Math.abs((await volume()) - vEight) < 1e-6 * vEight && t.shown && Math.abs(t.shown.distance + (8 - (6 - grownTo))) < 1e-6, { v: await volume(), vEight, shown: t.shown });
@@ -242,7 +253,7 @@ const TORUS = [
   await shot("05_countersink");
   await drag(-0.5, { release: false });
   await settle();
-  await page.waitForFunction(() => window.pressPull.shownFeature != null, null, { timeout: 120000 }).catch(() => {});
+  await page.waitForFunction(() => window.pressPull.outcomes.shownFeature != null, null, { timeout: 120000 }).catch(() => {});
   t = await tool();
   check("dragging in cuts the countersink wider", t.value <= -0.5 && t.shown && t.shown.distance < 0 && t.previewError === null, t);
   check("the field reads the signed offset", Number(t.field) < 0, t.field);
@@ -270,7 +281,7 @@ const TORUS = [
   await typeValue("-0.5");
   await page.waitForTimeout(300);
   await settle();
-  await page.waitForFunction(() => window.pressPull.shownFeature != null, null, { timeout: 120000 }).catch(() => {});
+  await page.waitForFunction(() => window.pressPull.outcomes.shownFeature != null, null, { timeout: 120000 }).catch(() => {});
   t = await tool();
   check("-0.5 previews through the engine", t.shown && t.shown.distance === -0.5 && t.previewError === null && t.refused === null, t);
   const vTo = await volume();
