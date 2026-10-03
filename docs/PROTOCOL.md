@@ -350,6 +350,28 @@ Reply, either the axis or why the face has none:
 { "reason": "the walls around the face do not all run along one axis" }
 ```
 
+Either reply also carries `resize` when the face is a cylinder, cone, sphere or
+torus, which is what the tool reads a resize in (R or diameter) and decides whether to
+offer Tangent faces follow from:
+```jsonc
+"resize": {
+  "kind": "cylinder",          // "cylinder" | "cone" | "sphere" | "torus"
+  "size": 2.0,                 // radius, tube radius, or 0 for a cone
+  "full": false,               // goes all the way round, from the face's own UV range
+  "concave": true,             // the outward normal looks at the axis: a bore, a slot end
+  "axis": { "origin": [x,y,z], "dir": [x,y,z] },   // absent on a sphere
+  "centre": [x,y,z],           // a sphere only
+  "contact": 2.0,              // the size where a neighbour would first be left behind, or null
+  "tangent": {
+    "faces": 2,                // faces that run smoothly into it
+    "lostWhen": "shrink",      // "shrink" | "grow" | null: which way leaves them behind
+    "run": [[x,y,z], ...],     // a point inside each face of its tangent run, itself included
+    "closed": true,            // the run closes into one loop of planes and cylinders along its axis
+    "followable": true         // followTangent can carry the run along
+  }
+}
+```
+
 ### `stress`
 
 A linear static stress analysis of one body, in mm, N and MPa. Display only: the

@@ -317,3 +317,68 @@ fn the_face_axis_op_reports_the_hole() {
     };
     assert!(got.get("reason").is_some(), "the flank has no axis: {got:?}");
 }
+
+const C1: &str = include_str!("press_pull/c1_slot_end.json");
+
+/// c1 before its three press/pulls on the upper slot's +Y end.
+fn c1_slot() -> Value {
+    let mut raw: Value = serde_json::from_str(C1).expect("the c1 document");
+    raw["features"].as_array_mut().unwrap().truncate(5);
+    raw
+}
+
+const SLOT_END: [f64; 3] = [-8.216, 9.032, 20.601];
+
+fn face_axis(document: Value, point: [f64; 3]) -> serde_json::Map<String, Value> {
+    let req = json!({"document": document, "body": "body1",
+                     "face": {"kind": "face", "by": "nearest", "point": point}});
+    let JobResult::Json(got) = face_axis_result(req.as_object().unwrap(), &NoWatch) else {
+        panic!("a json reply");
+    };
+    got
+}
+
+#[test]
+fn the_face_axis_op_reports_how_a_slot_end_resizes() {
+    let got = face_axis(c1_slot(), SLOT_END);
+    let resize = &got["resize"];
+    assert_eq!(resize["kind"], json!("cylinder"), "{got:?}");
+    assert_eq!(resize["size"], json!(2.0), "{got:?}");
+    assert_eq!(resize["full"], json!(false), "{got:?}");
+    assert_eq!(resize["concave"], json!(true), "{got:?}");
+    assert_eq!(resize["contact"], json!(2.0), "{got:?}");
+    let dir = resize["axis"]["dir"].as_array().expect("an axis");
+    assert!((dir[0].as_f64().unwrap().abs() - 1.0).abs() < 1e-6, "{got:?}");
+    let tangent = &resize["tangent"];
+    assert_eq!(tangent["faces"], json!(2), "{got:?}");
+    assert_eq!(tangent["lostWhen"], json!("shrink"), "{got:?}");
+    assert_eq!(tangent["closed"], json!(true), "{got:?}");
+    assert_eq!(tangent["followable"], json!(true), "{got:?}");
+    assert_eq!(tangent["run"].as_array().map(Vec::len), Some(4), "{got:?}");
+}
+
+#[test]
+fn the_face_axis_op_reports_a_round_hole_as_full_with_no_tangent_faces() {
+    let block = [[0.0, 0.0], [10.0, 0.0], [10.0, 12.0], [0.0, 12.0]];
+    let bore = [[0.0, 4.0], [3.0, 4.0], [3.0, 13.0], [0.0, 13.0]];
+    let got = face_axis(turned(&block, &bore, None), [3.0, 0.0, 8.0]);
+    let resize = &got["resize"];
+    assert_eq!(resize["kind"], json!("cylinder"), "{got:?}");
+    assert_eq!(resize["size"], json!(3.0), "{got:?}");
+    assert_eq!(resize["full"], json!(true), "{got:?}");
+    assert_eq!(resize["concave"], json!(true), "{got:?}");
+    assert_eq!(resize["tangent"]["faces"], json!(0), "{got:?}");
+    assert_eq!(resize["tangent"]["lostWhen"], Value::Null, "{got:?}");
+    assert_eq!(resize["tangent"]["followable"], json!(false), "{got:?}");
+}
+
+#[test]
+fn the_face_axis_op_reports_resize_info_beside_a_reason_too() {
+    let got = face_axis(spike(None), [30.0, 0.0, 2.0]);
+    assert!(got.get("reason").is_some(), "{got:?}");
+    assert!(got.get("resize").is_none(), "a flat face has no size: {got:?}");
+
+    let got = face_axis(c1_slot(), SLOT_END);
+    assert!(got.get("reason").is_some(), "a slot end has no hole axis: {got:?}");
+    assert_eq!(got["resize"]["tangent"]["faces"], json!(2), "{got:?}");
+}
