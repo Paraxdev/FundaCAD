@@ -26,8 +26,9 @@ import { axisDragDistance, createDragHandle, HANDLE_LENGTH, handleScale, type Dr
 import { CanvasGesture } from "./canvasGesture";
 import { commitDecision } from "./edgeDragMath";
 import { deltaForDiameter, deltaForRadius, radialDrag, type RoundFace } from "./radialDrag";
-import { offeredResize, type OfferedResize } from "./pressPullAxis";
-import { axialSpan, ResizeGuides, resizeAxis, type GuideAxis } from "./resizeGuides";
+import { offeredResize, resizeAxis, type OfferedResize, type ResizeAxis } from "./pressPullAxis";
+import { featureKey, PreviewOutcomes } from "./previewOutcomes";
+import { axialSpan, ResizeGuides } from "./resizeGuides";
 
 export type FaceOffsetMode = "offsetFace" | "thicken" | "shell";
 
@@ -75,7 +76,7 @@ export class FaceOffsetTool {
   private gizmo: THREE.Group | null = null;
   private handle: DragHandle | null = null;
   private guides = new ResizeGuides();
-  private guideAxis: GuideAxis | null = null;
+  private guideAxis: ResizeAxis | null = null;
   private guideSpan: [number, number] | null = null;
   private roundPoints: Vec3[] = [];
   private hovering = false;
@@ -87,12 +88,7 @@ export class FaceOffsetTool {
 
   private previewTimer: number | null = null;
   private unsubBuild: (() => void) | null = null;
-  /** Our previewed feature the model on screen was built with, null when it
-   *  shows none. A refused offset keeps it on screen (setPreview's hold). */
-  private shownFeature: Feature | null = null;
-  private refused = new Map<string, string>();
-  private built = new Set<string>();
-  private refusalShown: string | null = null;
+  private outcomes = new PreviewOutcomes(/^(Offset face|Thicken|Shell)[^:]*:\s*/i);
 
   private dim = new DimInput();
   private onDone: ((id: string | null) => void) | null = null;
@@ -233,14 +229,14 @@ export class FaceOffsetTool {
 
   private prompt() {
     if (this.phase !== "drag") return;
-    if (this.refusalShown) {
+    if (this.outcomes.refusal) {
       const held = this.held;
       const then = this.dim.isUserDriven("distance")
         ? `type another ${this.quantity}`
         : held !== null && Math.abs(held) >= MIN_OFFSET
           ? `keeping ${this.sizeText(held)}`
           : "drag back";
-      setPrompt(`${this.refusalShown} · ${then} · Esc`);
+      setPrompt(`${this.outcomes.refusal} · ${then} · Esc`);
       return;
     }
     const moves = this.followMoves();
@@ -269,7 +265,7 @@ export class FaceOffsetTool {
     this.phase = "drag";
     this.value = 0;
     this.previewId = this.store.nextId();
-    this.forgetOutcomes();
+    this.outcomes.forget();
     this.viewport.clearHover();
     this.buildGizmo();
     this.seedGuides(this.round, faceIds[0]);
@@ -297,7 +293,7 @@ export class FaceOffsetTool {
     this.dim.show([{ name: "distance", ...this.fieldLabel(), kind: "length" }], () => this.commit(), () => this.cancel(),
       toggle, undefined, () => this.onTyped());
     // The box says only what this tool judged, held refusals included.
-    this.dim.showOwnProblem(this.refusalShown);
+    this.dim.showOwnProblem(this.outcomes.refusal);
     this.syncToggle();
     this.dim.updateFromCursor({ distance: this.readout() });
   }
@@ -398,7 +394,7 @@ export class FaceOffsetTool {
       this.handle?.paint({
         hot: this.hovering || this.grabbing,
         tone: sign < 0 && this.mode !== "shell" ? "cut" : "idle",
-        refused: this.refusalShown !== null,
+        refused: this.outcomes.refusal !== null,
       });
       this.placeGuides(at);
       const s = this.viewport.projectToScreen(at);
@@ -443,7 +439,7 @@ export class FaceOffsetTool {
     this.setGuideAxis({ origin: round.cylinder.point, dir: round.cylinder.axis });
   }
 
-  private setGuideAxis(axis: GuideAxis) {
+  private setGuideAxis(axis: ResizeAxis) {
     this.guideAxis = axis;
     this.guideSpan = axialSpan(this.roundPoints, axis);
   }
@@ -457,7 +453,7 @@ export class FaceOffsetTool {
   }
 
   /** The engine's exact size, wrap and tangent run replace the mesh's guess. */
-  private adoptResize(r: OfferedResize | null, axis: GuideAxis | null) {
+  private adoptResize(r: OfferedResize | null, axis: ResizeAxis | null) {
     const round = this.round;
     if (!round || !r) return;
     if (axis) this.setGuideAxis(axis);
@@ -529,20 +525,6 @@ export class FaceOffsetTool {
     return Math.abs(this.value) < MIN_OFFSET;
   }
 
-  private keyOf(f: Feature): string {
-    const rest: Record<string, unknown> = { ...f };
-    delete rest.id;
-    return JSON.stringify(rest);
-  }
-
-  /** Everything about an offset except how far, so a value held from earlier
-   *  in the drag still answers the same question. */
-  private questionOf(f: Feature): string {
-    const rest: Record<string, unknown> = { ...f };
-    for (const k of ["id", "distance", "thickness"]) delete rest[k];
-    return JSON.stringify(rest);
-  }
-
   /** The drag value a sent feature was built from. */
   private valueOf(f: Feature): number | null {
     if (f.type === "offsetFace" && typeof f.distance === "number") {
@@ -555,42 +537,19 @@ export class FaceOffsetTool {
 
   /** The value the model on screen was built at for the current question, or null. */
   private get held(): number | null {
-    const f = this.shownFeature;
-    if (!f) return null;
-    return this.questionOf(f) === this.questionOf(this.buildFeature()) ? this.valueOf(f) : null;
+    const f = this.outcomes.shownFor(this.buildFeature(), ["distance", "thickness"]);
+    return f ? this.valueOf(f) : null;
   }
 
-  private forgetOutcomes() {
-    this.shownFeature = null;
-    this.refused = new Map();
-    this.built = new Set();
-  }
-
-  /** Record what the kernel said about the offset it was SENT, which during a
-   *  fast drag is often not the one on the handle any more. */
   private noteBuildOutcome(s: RebuildState) {
-    const sent = s.previewBuilt?.find((f) => f.id === this.previewId) ?? null;
-    const held = s.heldRefusal?.featureId === this.previewId ? s.heldRefusal : null;
-    if (!sent) this.shownFeature = null;
-    else if (held) this.refused.set(this.keyOf(sent), refusalText(held.message));
-    else if (s.errorFeatureId != null || !s.errorMessage) {
-      this.shownFeature = sent;
-      this.built.add(this.keyOf(sent));
-    }
+    this.outcomes.note(s, this.previewId);
     this.refreshRefusal();
   }
 
-  /** Paint the refusal, or take it down, on the handle, the value box and the
-   *  prompt. It stays up until a value builds, so the box does not flicker
-   *  while the next answer is on its way. */
+  /** Paint the refusal, or take it down, on the handle, the value box and the prompt. */
   private refreshRefusal() {
-    let reason: string | null = null;
-    if (!this.neutral) {
-      const k = this.keyOf(this.buildFeature());
-      reason = this.refused.get(k) ?? (this.built.has(k) ? null : this.refusalShown);
-    }
-    if (reason === this.refusalShown) return;
-    this.refusalShown = reason;
+    if (!this.outcomes.refresh(this.neutral ? null : featureKey(this.buildFeature()))) return;
+    const reason = this.outcomes.refusal;
     this.dim.showOwnProblem(reason);
     this.handle?.paint({ refused: reason !== null });
     this.viewport.requestRender();
@@ -619,7 +578,7 @@ export class FaceOffsetTool {
       this.store.setPreview(null);
     } else {
       const f = this.buildFeature();
-      if (!this.refused.has(this.keyOf(f))) this.store.setPreview(f, { hold: true });
+      if (!this.outcomes.isRefused(featureKey(f))) this.store.setPreview(f, { hold: true });
     }
     this.refreshRefusal();
   }
@@ -700,11 +659,11 @@ export class FaceOffsetTool {
       setPrompt(this.round ? `The ${this.quantity} is unchanged` : "Nothing to commit yet");
       return;
     }
-    const k = this.keyOf(this.buildFeature());
+    const k = featureKey(this.buildFeature());
     const decision = commitDecision({
       value: Math.round(this.value * 1000) / 1000,
-      verdict: this.refused.has(k) ? "refused" : this.built.has(k) ? "builds" : "unknown",
-      settled: this.shownFeature !== null && this.keyOf(this.shownFeature) === k,
+      verdict: this.outcomes.verdict(k),
+      settled: this.outcomes.settled(k),
       shown: this.held,
       typed,
       meaningful: (x) => Math.abs(x) >= MIN_OFFSET,
@@ -732,7 +691,7 @@ export class FaceOffsetTool {
     this.clearPreviewTimer();
     this.unsubBuild?.();
     this.unsubBuild = null;
-    this.forgetOutcomes();
+    this.outcomes.clear();
     this.store.setPreview(null);
     this.dim.hide();
     this.guides.clear();
@@ -750,7 +709,6 @@ export class FaceOffsetTool {
     this.contact = null;
     this.axisAsk++;
     this.toggleKind = null;
-    this.refusalShown = null;
     setPrompt(null);
   }
 
@@ -761,9 +719,4 @@ export class FaceOffsetTool {
     this.gizmo = null;
     this.handle = null;
   }
-}
-
-/** The engine's refusal, without the feature name it leads with. */
-function refusalText(message: string): string {
-  return message.replace(/^(Offset face|Thicken|Shell)[^:]*:\s*/i, "");
 }

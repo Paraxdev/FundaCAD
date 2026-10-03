@@ -47,10 +47,13 @@ import {
   initialDirection,
   offeredAxis,
   offeredResize,
+  resizeAxis,
   type HoleAxis,
   type OfferedResize,
+  type ResizeAxis,
 } from "./pressPullAxis";
-import { axialSpan, ResizeGuides, resizeAxis, type GuideAxis } from "./resizeGuides";
+import { featureKey, PreviewOutcomes } from "./previewOutcomes";
+import { axialSpan, ResizeGuides } from "./resizeGuides";
 
 /** Steepest taper the tool offers, degrees, just under the engine's 89 fold limit. */
 const MAX_PP_TAPER = 88;
@@ -144,7 +147,7 @@ export class PressPullTool {
   private gizmo: THREE.Group | null = null;
   private guides = new ResizeGuides();
   /** the round face's axis and its span along it, the mesh fit's until the engine answers */
-  private guideAxis: GuideAxis | null = null;
+  private guideAxis: ResizeAxis | null = null;
   private guideSpan: [number, number] | null = null;
   private roundPoints: Vec3[] = [];
   private handle: DragHandle | null = null;
@@ -174,14 +177,8 @@ export class PressPullTool {
 
   private previewTimer: number | null = null;
   private unsubBuild: (() => void) | null = null;
-  /** Our previewed feature the model on screen was built with, null when it
-   *  shows none. A refused push keeps it on screen (setPreview's hold). */
-  private shownFeature: Feature | null = null;
-  /** What the kernel said about each push sent this gesture, by keyOf. */
-  private refused = new Map<string, string>();
-  private built = new Set<string>();
-  /** the refusal painted on the handle, box and prompt */
-  private refusalShown: string | null = null;
+  /** What the kernel said about each push sent this gesture. */
+  private outcomes = new PreviewOutcomes(/^Press\/Pull[^:]*:\s*/i);
 
   private dim = new DimInput();
   private onDone: ((id: string | null) => void) | null = null;
@@ -470,7 +467,7 @@ export class PressPullTool {
     this.value = 0;
     this.taper = 0;
     this.previewId = this.store.nextId();
-    this.forgetOutcomes();
+    this.outcomes.forget();
     this.viewport.clearHover();
     this.buildGizmo();
     this.mode = "auto";
@@ -610,7 +607,7 @@ export class PressPullTool {
       this.handle?.paint({
         hot: this.hovering || this.grabbing,
         tone: sign < 0 ? "cut" : "idle",
-        refused: this.refusalShown !== null,
+        refused: this.outcomes.refusal !== null,
       });
       this.placeTaperArc(dir, k);
       this.placeGuides(at);
@@ -673,7 +670,7 @@ export class PressPullTool {
     this.setGuideAxis({ origin: round.cylinder.point, dir: round.cylinder.axis });
   }
 
-  private setGuideAxis(axis: GuideAxis) {
+  private setGuideAxis(axis: ResizeAxis) {
     this.guideAxis = axis;
     this.guideSpan = axialSpan(this.roundPoints, axis);
   }
@@ -693,21 +690,6 @@ export class PressPullTool {
     return !!r && radialDrag(r.radius, this.value, r.solidInside, this.full).mode === "remove";
   }
 
-  /** One push, everything but its id. */
-  private keyOf(f: Feature): string {
-    const rest: Record<string, unknown> = { ...f };
-    delete rest.id;
-    return JSON.stringify(rest);
-  }
-
-  /** Everything about a push except how far, so a size held from earlier in
-   *  the drag still answers the same question. */
-  private questionOf(f: Feature): string {
-    const rest: Record<string, unknown> = { ...f };
-    for (const k of ["id", "type", "distance", "operation"]) delete rest[k];
-    return JSON.stringify(rest);
-  }
-
   /** The drag value a sent feature was built from. */
   private valueOf(f: Feature): number | null {
     const r = this.round;
@@ -718,43 +700,21 @@ export class PressPullTool {
 
   /** The value the model on screen was built at for the current question, or null. */
   private get shown(): number | null {
-    const f = this.shownFeature;
-    if (!f) return null;
-    return this.questionOf(f) === this.questionOf(this.buildFeature()) ? this.valueOf(f) : null;
+    const f = this.outcomes.shownFor(this.buildFeature(), ["type", "distance", "operation"]);
+    return f ? this.valueOf(f) : null;
   }
 
-  private forgetOutcomes() {
-    this.shownFeature = null;
-    this.refused = new Map();
-    this.built = new Set();
-  }
-
-  /** Record what the kernel said about the push it was SENT, which during a
-   *  fast drag is often not the one on the handle any more. */
   private noteBuildOutcome(s: RebuildState) {
-    const sent = s.previewBuilt?.find((f) => f.id === this.previewId) ?? null;
-    const held = s.heldRefusal?.featureId === this.previewId ? s.heldRefusal : null;
-    if (!sent) this.shownFeature = null;
-    else if (held) this.refused.set(this.keyOf(sent), refusalText(held.message));
-    else if (s.errorFeatureId != null || !s.errorMessage) {
-      this.shownFeature = sent;
-      this.built.add(this.keyOf(sent));
-    }
+    this.outcomes.note(s, this.previewId);
     this.refreshGhost();
     this.refreshRefusal();
   }
 
-  /** Paint the refusal, or take it down, on the handle, the value box and the
-   *  prompt. A refusal stays up until a value builds, so the box does not
-   *  flicker while the next answer is on its way. */
+  /** Paint the refusal, or take it down, on the handle, the value box and the prompt. */
   private refreshRefusal() {
-    let reason: string | null = null;
-    if (!this.neutral && !this.pickingTarget) {
-      const k = this.keyOf(this.buildFeature());
-      reason = this.refused.get(k) ?? (this.built.has(k) ? null : this.refusalShown);
-    }
-    if (reason === this.refusalShown) return;
-    this.refusalShown = reason;
+    const k = this.neutral || this.pickingTarget ? null : featureKey(this.buildFeature());
+    if (!this.outcomes.refresh(k)) return;
+    const reason = this.outcomes.refusal;
     this.dim.showOwnProblem(reason);
     this.handle?.paint({ refused: reason !== null });
     this.viewport.requestRender();
@@ -769,8 +729,8 @@ export class PressPullTool {
     // A whole run moves each face along its own normal, a wall included, by the kernel's push.
     const run = !!r && this.faces.length > 1;
     const along = run || (!r && this.slant) ? "normal" : r;
-    const k = this.neutral ? null : this.keyOf(this.buildFeature());
-    if (!along || this.pickingTarget || this.shownFeature || this.removing || k === null || this.refused.has(k)) {
+    const k = this.neutral ? null : featureKey(this.buildFeature());
+    if (!along || this.pickingTarget || this.outcomes.shownFeature || this.removing || k === null || this.outcomes.isRefused(k)) {
       this.viewport.clearPressPullGhost();
       return;
     }
@@ -811,14 +771,14 @@ export class PressPullTool {
   private promptNow() {
     if (this.phase !== "drag" || this.pickingTarget) return;
     const r = this.round;
-    if (this.refusalShown) {
+    if (this.outcomes.refusal) {
       const shown = this.shown;
       const then = this.dim.isUserDriven("distance")
         ? `type another ${r ? this.quantity : "distance"}`
         : shown !== null && Math.abs(shown) >= MIN_PUSH
           ? `keeping ${this.sizeText(shown)}`
           : "drag back";
-      setPrompt(`${this.refusalShown} · ${then} · Esc`);
+      setPrompt(`${this.outcomes.refusal} · ${then} · Esc`);
       return;
     }
     if (r) {
@@ -876,7 +836,7 @@ export class PressPullTool {
     }
     const f = this.buildFeature();
     // A push already refused is not asked again; the model keeps the last one that built.
-    if (!this.refused.has(this.keyOf(f))) {
+    if (!this.outcomes.isRefused(featureKey(f))) {
       this.store.setPreview(f, { hold: true });
       this.enginePreviewOn = true;
     }
@@ -1074,7 +1034,7 @@ export class PressPullTool {
   }
 
   /** The engine's exact size, wrap and tangent run replace the mesh's guess. */
-  private adoptResize(r: OfferedResize | null, axis: GuideAxis | null) {
+  private adoptResize(r: OfferedResize | null, axis: ResizeAxis | null) {
     const round = this.round;
     if (!round || !r) return;
     if (axis) this.setGuideAxis(axis);
@@ -1239,11 +1199,11 @@ export class PressPullTool {
       setPrompt(this.round ? `The ${this.quantity === "offset" ? "size" : this.quantity} is unchanged` : "Nothing to commit yet");
       return;
     }
-    const k = this.keyOf(this.buildFeature());
+    const k = featureKey(this.buildFeature());
     const decision = commitDecision({
       value: this.size(),
-      verdict: this.refused.has(k) ? "refused" : this.built.has(k) ? "builds" : "unknown",
-      settled: this.shownFeature !== null && this.keyOf(this.shownFeature) === k,
+      verdict: this.outcomes.verdict(k),
+      settled: this.outcomes.settled(k),
       shown: this.shown,
       typed,
       meaningful: (x) => Math.abs(x) >= MIN_PUSH,
@@ -1305,8 +1265,7 @@ export class PressPullTool {
     this.clearPreviewTimer();
     this.unsubBuild?.();
     this.unsubBuild = null;
-    this.forgetOutcomes();
-    this.refusalShown = null;
+    this.outcomes.clear();
     this.toggleKind = null;
     this.viewport.clearPressPullGhost();
     this.viewport.setPeek(null);
@@ -1350,9 +1309,4 @@ export class PressPullTool {
     this.gizmo = null;
     this.handle = null;
   }
-}
-
-/** The engine's refusal of a push, without the feature name it leads with. */
-function refusalText(message: string): string {
-  return message.replace(/^Press\/Pull[^:]*:\s*/i, "");
 }

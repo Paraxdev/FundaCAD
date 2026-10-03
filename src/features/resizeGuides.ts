@@ -3,37 +3,18 @@
 // whole diameter on a full round, so the size being set reads on the model.
 
 import * as THREE from "three";
-import type { FaceAxisReply } from "../geometry/client";
 import type { Vec3 } from "../types";
 import { themeColor } from "../viewport/themeColors";
 import { HANDLE_IDLE } from "./manipulator";
-import { anchorOnAxis } from "./pressPullAxis";
-
-export interface GuideAxis {
-  origin: Vec3;
-  /** unit */
-  dir: Vec3;
-}
+import { anchorOnAxis, type ResizeAxis } from "./pressPullAxis";
 
 /** How far the axis line runs past the face, as a fraction of the face's length. */
 export const AXIS_OVERHANG = 0.15;
 
 const DASH_PX = 5;
 
-const finite = (v: unknown): v is Vec3 =>
-  Array.isArray(v) && v.length === 3 && v.every((c) => typeof c === "number" && Number.isFinite(c));
-
-/** The exact axis of a resize in a faceAxis reply, or null. */
-export function resizeAxis(reply: FaceAxisReply | null): GuideAxis | null {
-  const a = reply?.resize?.axis;
-  if (!a || !finite(a.origin) || !finite(a.dir)) return null;
-  const n = Math.hypot(a.dir[0], a.dir[1], a.dir[2]);
-  if (!(n > 1e-9)) return null;
-  return { origin: a.origin, dir: [a.dir[0] / n, a.dir[1] / n, a.dir[2] / n] };
-}
-
 /** Where `points` start and end along the axis, measured from its origin. */
-export function axialSpan(points: readonly Vec3[], axis: GuideAxis): [number, number] | null {
+export function axialSpan(points: readonly Vec3[], axis: ResizeAxis): [number, number] | null {
   const [ox, oy, oz] = axis.origin;
   const [dx, dy, dz] = axis.dir;
   let lo = Infinity;
@@ -47,7 +28,7 @@ export function axialSpan(points: readonly Vec3[], axis: GuideAxis): [number, nu
 }
 
 /** The axis line over a face's span, longer by `overhang` of it, split evenly between the ends. */
-export function axisLine(axis: GuideAxis, span: readonly [number, number], overhang = AXIS_OVERHANG): [Vec3, Vec3] {
+export function axisLine(axis: ResizeAxis, span: readonly [number, number], overhang = AXIS_OVERHANG): [Vec3, Vec3] {
   const pad = ((span[1] - span[0]) * overhang) / 2;
   const at = (t: number): Vec3 => [
     axis.origin[0] + axis.dir[0] * t,
@@ -59,7 +40,7 @@ export function axisLine(axis: GuideAxis, span: readonly [number, number], overh
 
 /** The dashed size line ending at the handle: from the axis foot for a radius,
  *  from the opposite wall through the axis for a diameter. */
-export function sizeLine(handle: Vec3, axis: GuideAxis, full: boolean): [Vec3, Vec3] {
+export function sizeLine(handle: Vec3, axis: ResizeAxis, full: boolean): [Vec3, Vec3] {
   const f = anchorOnAxis(handle, { ...axis, hole: false });
   if (!full) return [f, handle];
   return [[2 * f[0] - handle[0], 2 * f[1] - handle[1], 2 * f[2] - handle[2]], handle];
@@ -73,7 +54,7 @@ export interface GuideHost {
 }
 
 export interface GuideState {
-  axis: GuideAxis;
+  axis: ResizeAxis;
   span: readonly [number, number];
   handle: THREE.Vector3;
   full: boolean;

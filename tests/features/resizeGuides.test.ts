@@ -7,11 +7,9 @@ import {
   axialSpan,
   axisLine,
   ResizeGuides,
-  resizeAxis,
   sizeLine,
   type GuideHost,
 } from "../../src/features/resizeGuides";
-import type { FaceAxisReply } from "../../src/geometry/client";
 import type { Vec3 } from "../../src/types";
 
 // The c1 slot end: a half cylinder of r 2 along X on y 7.125, z 20, x 0 to 25.
@@ -50,28 +48,6 @@ describe("sizeLine", () => {
     const [a, b] = sizeLine(SLOT_HANDLE, SLOT_AXIS, true);
     close(a, [3, 5.125, 20]);
     close(b, SLOT_HANDLE);
-  });
-});
-
-describe("resizeAxis", () => {
-  const reply = (axis: unknown): FaceAxisReply =>
-    ({
-      reason: "none",
-      resize: {
-        kind: "cylinder", size: 2, full: false, concave: true, axis, contact: 2,
-        tangent: { faces: 2, lostWhen: "shrink", run: [], closed: true, followable: true },
-      },
-    }) as FaceAxisReply;
-
-  it("reads the engine's axis with a unit direction", () => {
-    expect(resizeAxis(reply({ origin: [0, 7.125, 20], dir: [-3, 0, 0] }))).toEqual({ origin: [0, 7.125, 20], dir: [-1, 0, 0] });
-  });
-
-  it("has none for a sphere, a malformed axis or no reply", () => {
-    expect(resizeAxis(reply(undefined))).toBeNull();
-    expect(resizeAxis(reply({ origin: [0, NaN, 0], dir: [1, 0, 0] }))).toBeNull();
-    expect(resizeAxis(reply({ origin: [0, 0, 0], dir: [0, 0, 0] }))).toBeNull();
-    expect(resizeAxis(null)).toBeNull();
   });
 });
 

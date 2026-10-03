@@ -65,6 +65,21 @@ export interface OfferedResize {
   centre?: Vec3;
 }
 
+export interface ResizeAxis {
+  origin: Vec3;
+  /** unit */
+  dir: Vec3;
+}
+
+/** The exact axis of a resize in a faceAxis reply, or null. */
+export function resizeAxis(reply: FaceAxisReply | null): ResizeAxis | null {
+  const a = reply?.resize?.axis;
+  if (!a || !finite(a.origin) || !finite(a.dir)) return null;
+  const n = Math.hypot(a.dir[0], a.dir[1], a.dir[2]);
+  if (!(n > 1e-9)) return null;
+  return { origin: a.origin, dir: [a.dir[0] / n, a.dir[1] / n, a.dir[2] / n] };
+}
+
 const LOST_WHEN = new Set([null, "shrink", "grow"]);
 
 /** The resize in a faceAxis reply, or null: none, a kind not asked for, or a
