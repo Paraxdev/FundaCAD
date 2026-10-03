@@ -359,6 +359,11 @@ export function installViewportWiring(e: Engine): void {
     } else if (faces?.round) {
       setPrompt(roundFacePrompt({ radius: faces.round.radius, full: faces.round.full !== false }));
       askExactRound(faces.selectors[0]!, faces.bodyId, faces.faceIds[0]!);
+    } else if (faces?.lead) {
+      setPrompt(
+        `${plural(faces.faceIds.length, "face")} selected, drag the handle to resize them as one ` +
+          `if they run smoothly together, or push them · Esc to clear`,
+      );
     } else if (faces?.faceIds.length) {
       setPrompt(
         `${plural(faces.faceIds.length, "face")} selected, drag the handle to push or pull ` +
