@@ -464,7 +464,9 @@ function previewField(
   } else {
     if (previewOpenFor !== null) store.endEditPreview(false); // a different row
     previewOpenFor = next.id;
-    store.beginEditPreview(next.id, next);
+    // A typed number picks no geometry, so nothing after the feature has to roll
+    // away: an exploded assembly keeps its parts where they are while typing.
+    store.beginEditPreview(next.id, next, { inPlace: true });
   }
 }
 

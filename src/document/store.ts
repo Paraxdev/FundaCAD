@@ -38,6 +38,7 @@ import { extrasEmpty, trialConfiguration } from "../params/extras";
 import type { FieldKind } from "./numFields";
 import { writeTarget } from "./numFields";
 import { markReceived, markSent } from "../diagnostics/rebuildTiming";
+import { featureMeta } from "../ui/featureMeta";
 
 /** An expression typed on a sketch dimension while the sketch was OPEN, the
  *  dim isn't in the document until the sketch commits, so the binding travels
@@ -1211,8 +1212,35 @@ export class DocumentStore {
     const own = this.editPreview
       ? [this.editPreview.id]
       : (this.preview ?? []).map((f) => f.id);
-    return own.includes(failed) ? this.build.errorMessage : null;
+    if (own.includes(failed)) return this.build.errorMessage;
+    return this.editPreview?.inPlace ? this.downstreamRefusal(this.editPreview.id) : null;
   }
+
+  /** An in-place edit keeps the features after it, so a value that breaks one
+   *  of them is the edit's refusal too. featureError is only the most downstream
+   *  failure, so the edited feature's own refusal is looked for here as well. */
+  private downstreamRefusal(editedId: string): string | null {
+    if (this.build.heldRefusal) return null;
+    const errs = this.build.result?.featureErrors ?? [];
+    const own = errs.find((e) => e.feature_id === editedId);
+    if (own) return own.message;
+    const features = this.doc.features;
+    const at = features.findIndex((f) => f.id === editedId);
+    if (at < 0) return null;
+    let first: { index: number; message: string } | null = null;
+    for (const e of errs) {
+      if (!e.feature_id || this.committedFailures.has(e.feature_id)) continue;
+      const index = features.findIndex((f) => f.id === e.feature_id);
+      if (index > at && (!first || index < first.index)) first = { index, message: e.message };
+    }
+    if (!first) return null;
+    const f = features[first.index]!;
+    const name = (f as { name?: string }).name?.trim() || featureMeta(f).label;
+    return `${name} fails with this value: ${first.message}`;
+  }
+  /** Features the last build without a preview already failed, so an in-place
+   *  edit is not blamed for them. */
+  private committedFailures = new Set<string>();
   /** reorder: move feature `id` to position `toIndex` in the timeline. */
   moveFeature(id: string, toIndex: number) {
     this.mutate((d) => {
@@ -2149,6 +2177,11 @@ export class DocumentStore {
       };
     }
     const fe = reply.result.featureError;
+    if (sent.features === null) {
+      this.committedFailures = new Set(
+        (reply.result.featureErrors ?? []).flatMap((e) => (e.feature_id ? [e.feature_id] : [])),
+      );
+    }
     return {
       ...done,
       result: reply.result,
