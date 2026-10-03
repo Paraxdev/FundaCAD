@@ -25,6 +25,7 @@ use super::axis_push;
 use super::blend::ops as blend_ops;
 use super::boolean::combine;
 use super::extrude::prisms;
+use super::resize::{self, Bad, Resize};
 use super::solid_ops::{
     faces_of, guard_offsetable, offsettable_curved, resolve_field, surface_type,
 };
@@ -68,14 +69,6 @@ fn vertices(shape: &Shape) -> Vec<DVec3> {
         .filter_map(kernel::bbox)
         .map(|b| dvec3(b[0], b[1], b[2]))
         .collect()
-}
-
-/// `_clamp_cylinder`: an inward push stops at 90% of the radius.
-fn clamp_cylinder(face: &Shape, d: f64) -> f64 {
-    match FaceEnt::new(face.clone()).ok().and_then(|f| f.radius) {
-        Some(r) if r > 1e-6 => d.clamp(-0.9 * r, 0.9 * r),
-        _ => d,
-    }
 }
 
 /// `_clamp_planar`: an inward push stops at 90% of the body's extent along the normal.
@@ -299,8 +292,82 @@ fn sweep_press_pull(part: &Shape, face: &Shape, d: f64) -> FResult<Shape> {
     Ok(out)
 }
 
+fn built(r: Resize) -> FResult<Shape> {
+    match r {
+        Resize::Built(out) => Ok(out),
+        Resize::Refused(f) => Err(f),
+        Resize::Failed => Err(resize::resize_invalid()),
+    }
+}
+
+/// A cylinder, cone, sphere or torus face resized about its own axis or
+/// centre. Where that cannot be built, a face nothing runs smoothly into is
+/// offset by the kernel instead, as far as asked and checked the same way.
+fn resize_round(part: &Shape, face: &Shape, d: f64, follow: bool) -> FResult<Shape> {
+    let r = match resize::resize(part, std::slice::from_ref(face), d, follow) {
+        // Adding material never cuts a body apart. A sphere fused with the
+        // shell around it comes back as two solids, which is the kernel's doing.
+        Resize::Refused(Fail::Value { code: Some("cutsApart"), .. }) if d > 0.0 => Resize::Failed,
+        r => r,
+    };
+    match r {
+        Resize::Failed if !resize::has_tangent_neighbour(part, face) => {
+            let out = offset_faces(part, &[(face.clone(), d)]).map_err(|_| resize::resize_invalid())?;
+            match resize::checked_solid(part, &out, d < 0.0) {
+                Ok(out) => Ok(out),
+                Err(Bad::Refused(f)) => Err(f),
+                Err(Bad::Failed) => Err(resize::resize_invalid()),
+            }
+        }
+        r => built(r),
+    }
+}
+
+/// The selected faces that together are every face of one closed tangent
+/// run, such as all four faces of a slot, each run to be resized once, and
+/// which of `faces` that leaves nothing to do for: the run's faces, and the
+/// faces on the same surface as a round face picked before them, which move
+/// with it.
+fn whole_runs(part: &Shape, faces: &[Shape]) -> (Vec<Vec<Shape>>, Vec<bool>) {
+    let n = faces.len();
+    let mut taken = vec![false; n];
+    let mut runs = Vec::new();
+    if n < 2 {
+        return (runs, taken);
+    }
+    for i in 0..n {
+        if taken[i] || !offsettable_curved(surface_type(&faces[i])) {
+            continue;
+        }
+        let Some(info) = resize::describe(part, &faces[i]) else { continue };
+        let on = |p: &DVec3| {
+            (0..n).find(|&j| kernel::distance_to_point(&faces[j], p.to_array()).is_some_and(|d| d < 1e-6))
+        };
+        let hits: Vec<Option<usize>> = info.tangent.run.iter().map(on).collect();
+        if info.tangent.faces == 0 {
+            hits.into_iter().flatten().filter(|&j| j != i).for_each(|j| taken[j] = true);
+            continue;
+        }
+        let Some(hits) = hits.into_iter().collect::<Option<Vec<usize>>>() else { continue };
+        if !info.tangent.closed {
+            continue;
+        }
+        let mut run: Vec<Shape> = Vec::new();
+        for j in hits {
+            if !run.iter().any(|f| f.is_same(&faces[j])) {
+                run.push(faces[j].clone());
+            }
+        }
+        for (k, f) in faces.iter().enumerate() {
+            taken[k] |= run.iter().any(|r| r.is_same(f));
+        }
+        runs.push(run);
+    }
+    (runs, taken)
+}
+
 /// `_press_pull`.
-fn press_pull_shape(part: &Shape, face: &Shape, d: f64, clamp: bool, taper: f64) -> FResult<Shape> {
+fn press_pull_shape(part: &Shape, face: &Shape, d: f64, clamp: bool, taper: f64, follow: bool) -> FResult<Shape> {
     if d.abs() < 1e-9 {
         return Ok(part.clone());
     }
@@ -328,15 +395,7 @@ fn press_pull_shape(part: &Shape, face: &Shape, d: f64, clamp: bool, taper: f64)
         return fused(part, &prism, dd > 0.0);
     }
     if offsettable_curved(t) {
-        let dd = if matches!(t, Some(SurfaceType::Cylinder | SurfaceType::Cone)) {
-            clamp_cylinder(face, d)
-        } else {
-            d
-        };
-        if let Ok(out) = offset_faces(part, &[(face.clone(), dd)]) {
-            return Ok(out);
-        }
-        return thicken_press_pull(part, face, dd).or_else(|_| sweep_press_pull(part, face, dd));
+        return resize_round(part, face, d, follow);
     }
     // A wrapping surface of revolution thickens both ways and a BSpline only
     // outward; the inward BSpline case is where OCCT was measured to crash.
@@ -489,9 +548,32 @@ pub fn press_pull(ctx: &mut Ctx, f: &PressPull) -> FResult {
         .to_owned();
     let along_axis = f.direction.as_ref().is_some_and(|d| d.as_str() == "axis");
     let targets: Option<Vec<String>> = f.targets.clone();
+    let follow = f.follow_tangent.unwrap_or(true);
     let mut act_shape = ctx.bodies[act].shape().clone();
     let mut warned = false;
-    for sel in &sels {
+    let mut skip = vec![false; sels.len()];
+    if mode == "auto" && target.is_none() && !along_axis && sels.len() > 1 {
+        let mut quiet = Resolver::new(None, Some(&f.id));
+        let start: Option<Vec<Shape>> = sels
+            .iter()
+            .map(|sel| quiet.face_selectors(&act_shape, &fundacad_core::schema::OneOrMany::One(sel.clone())).ok()?.into_iter().next())
+            .collect();
+        let (runs, taken) = start.map(|s| whole_runs(&act_shape, &s)).unwrap_or_default();
+        if taken.len() == sels.len() {
+            skip = taken;
+        }
+        for run in runs {
+            let out = built(resize::resize(&act_shape, &run, dist, follow))?;
+            if !warned && dist < 0.0 && broke_through(&act_shape, &out, &kernel::compound(&run)) {
+                warned = true;
+                let name = ctx.bodies[act].name.clone();
+                ctx.advise(&f.id, "brokeThrough", format!("the offset broke through the outside of {name}"));
+            }
+            act_shape = out;
+            ctx.set_shape(act, act_shape.clone());
+        }
+    }
+    for (sel, _) in sels.iter().zip(&skip).filter(|(_, s)| !**s) {
         if mode != "auto" {
             if let Some(i) = named.and_then(|id| ctx.find_body(id)) {
                 act = i;
@@ -531,7 +613,7 @@ pub fn press_pull(ctx: &mut Ctx, f: &PressPull) -> FResult {
         let out = if along_axis {
             axis_push::push_along_axis(&act_shape, &src, d)?
         } else {
-            press_pull_shape(&act_shape, &src, d, false, taper)?
+            press_pull_shape(&act_shape, &src, d, false, taper, follow)?
         };
         let may_break_out = along_axis || surface_type(&src) != Some(SurfaceType::Plane);
         if !warned && d < 0.0 && may_break_out && broke_through(&act_shape, &out, &src) {
@@ -613,28 +695,54 @@ pub fn offset_face(ctx: &mut Ctx, f: &OffsetFace) -> FResult {
     if d == 0.0 {
         return Err(Fail::msg("Offset face: distance must not be 0"));
     }
-    let pairs: Vec<(Shape, f64)> = faces
-        .iter()
-        .map(|fc| {
-            let dd = if surface_type(fc) == Some(SurfaceType::Cylinder) {
-                clamp_cylinder(fc, d)
-            } else {
-                clamp_planar(&part, fc, d)
-            };
-            (fc.clone(), dd)
-        })
-        .collect();
-    if let Ok(out) = offset_faces(&part, &pairs) {
-        ctx.set_shape(act, out);
-        return Ok(());
-    }
-    // One BRepOffset pass refuses every face if one fails, so go face by face.
+    let follow = f.follow_tangent.unwrap_or(true);
+    let round = faces.iter().any(|fc| offsettable_curved(surface_type(fc)));
+    let sels = f.faces.as_slice();
+    let mut skip = vec![false; sels.len()];
     let mut shape = part;
-    for sel in f.faces.as_slice() {
+    let mut warned = false;
+    if round {
+        let mut quiet = Resolver::new(None, Some(&f.id));
+        let picked: Vec<Vec<Shape>> = sels
+            .iter()
+            .map(|sel| quiet.face_selectors(&shape, &fundacad_core::schema::OneOrMany::One(sel.clone())).unwrap_or_default())
+            .collect();
+        let flat: Vec<Shape> = picked.iter().flatten().cloned().collect();
+        let (runs, taken) = whole_runs(&shape, &flat);
+        let mut at = 0;
+        for (i, p) in picked.iter().enumerate() {
+            skip[i] = !p.is_empty() && taken[at..at + p.len()].iter().all(|t| *t);
+            at += p.len();
+        }
+        for run in runs {
+            let out = built(resize::resize(&shape, &run, d, follow))?;
+            if !warned && d < 0.0 && broke_through(&shape, &out, &kernel::compound(&run)) {
+                warned = true;
+            }
+            shape = out;
+        }
+    } else {
+        let pairs: Vec<(Shape, f64)> = faces.iter().map(|fc| (fc.clone(), clamp_planar(&shape, fc, d))).collect();
+        if let Ok(out) = offset_faces(&shape, &pairs) {
+            ctx.set_shape(act, out);
+            return Ok(());
+        }
+    }
+    // Otherwise face by face, since one BRepOffset pass refuses every face if one fails.
+    for (sel, _) in sels.iter().zip(&skip).filter(|(_, s)| !**s) {
         let one = fundacad_core::schema::OneOrMany::One(sel.clone());
         for fc in resolve_field(ctx, &f.id, &shape, &one)? {
-            shape = press_pull_shape(&shape, &fc, d, true, 0.0)?;
+            let out = press_pull_shape(&shape, &fc, d, true, 0.0, follow)?;
+            let curved = surface_type(&fc) != Some(SurfaceType::Plane);
+            if !warned && d < 0.0 && curved && broke_through(&shape, &out, &fc) {
+                warned = true;
+            }
+            shape = out;
         }
+    }
+    if warned {
+        let name = ctx.bodies[act].name.clone();
+        ctx.advise(&f.id, "brokeThrough", format!("the offset broke through the outside of {name}"));
     }
     ctx.set_shape(act, shape);
     Ok(())

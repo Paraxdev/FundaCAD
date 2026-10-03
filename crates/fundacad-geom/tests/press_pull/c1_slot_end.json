@@ -1,0 +1,252 @@
+{
+  "parameters": {},
+  "features": [
+    {
+      "id": "f1",
+      "type": "sketch",
+      "plane": "XY",
+      "entities": [
+        {
+          "type": "rectangle",
+          "id": "e0",
+          "width": 50,
+          "height": 50,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "point",
+          "id": "e1",
+          "x": 0,
+          "y": 0,
+          "construction": true
+        }
+      ],
+      "constraints": [
+        {
+          "type": "fix",
+          "e": "e1",
+          "p": 0
+        }
+      ]
+    },
+    {
+      "id": "f2",
+      "type": "extrude",
+      "sketch": "f1",
+      "distance": 26.03,
+      "operation": "new",
+      "regions": [
+        [
+          0,
+          0,
+          0
+        ]
+      ],
+      "hiddenBodies": []
+    },
+    {
+      "id": "f3",
+      "type": "fillet",
+      "edges": [
+        {
+          "kind": "edge",
+          "by": "nearest",
+          "point": [
+            -25,
+            -25,
+            13.015000343322754
+          ],
+          "body": "body1"
+        },
+        {
+          "kind": "edge",
+          "by": "nearest",
+          "point": [
+            -25,
+            0,
+            26.030000686645508
+          ],
+          "body": "body1"
+        },
+        {
+          "kind": "edge",
+          "by": "nearest",
+          "point": [
+            0,
+            -25,
+            26.030000686645508
+          ],
+          "body": "body1"
+        }
+      ],
+      "radius": 14.25,
+      "profile": 0.84
+    },
+    {
+      "id": "f4",
+      "type": "sketch",
+      "plane": {
+        "origin": [
+          25,
+          0,
+          0
+        ],
+        "normal": [
+          1,
+          0,
+          0
+        ],
+        "xdir": [
+          0,
+          1,
+          0
+        ]
+      },
+      "face": {
+        "kind": "face",
+        "by": "nearest",
+        "point": [
+          25,
+          -19.49424934387207,
+          23.373015721638996
+        ],
+        "body": "body1"
+      },
+      "at": [
+        25,
+        -19.49424934387207,
+        23.373015721638996
+      ],
+      "entities": [
+        {
+          "type": "circle",
+          "id": "e2",
+          "radius": 3.3690784184224394,
+          "x": 7.125,
+          "y": 13.015000343322754
+        },
+        {
+          "type": "slot",
+          "id": "e4",
+          "x1": -14.875,
+          "y1": 20,
+          "x2": 7.125,
+          "y2": 20,
+          "width": 4
+        },
+        {
+          "type": "slot",
+          "id": "e5",
+          "x1": -3.875,
+          "y1": 4,
+          "x2": -14.875,
+          "y2": 4,
+          "width": 3.7799997329711914
+        }
+      ],
+      "patterns": [
+        {
+          "id": "p3",
+          "type": "patternRect",
+          "sources": [
+            "e2"
+          ],
+          "countX": 3,
+          "countY": 1,
+          "spacingX": 11,
+          "spacingY": 15,
+          "angle": 180
+        }
+      ]
+    },
+    {
+      "id": "f5",
+      "type": "extrude",
+      "sketch": "f4",
+      "distance": -69.767,
+      "operation": "cut",
+      "regions": [
+        [
+          25,
+          7.125,
+          13.015000343322754
+        ],
+        [
+          25,
+          -4.208333333333333,
+          19.939393939393938
+        ],
+        [
+          25,
+          -9.208333333333336,
+          4.057272723226836
+        ],
+        [
+          25,
+          -3.8750000000000004,
+          13.015000343322757
+        ],
+        [
+          25,
+          -14.874999999999998,
+          13.015000343322757
+        ]
+      ],
+      "hiddenBodies": []
+    },
+    {
+      "id": "f6",
+      "type": "press-pull",
+      "face": {
+        "kind": "face",
+        "by": "nearest",
+        "point": [
+          -8.216239929199219,
+          9.03162129720052,
+          20.600666046142578
+        ]
+      },
+      "distance": -0.65,
+      "operation": "cut",
+      "body": "body1"
+    },
+    {
+      "id": "f7",
+      "type": "press-pull",
+      "face": {
+        "kind": "face",
+        "by": "nearest",
+        "point": [
+          -8.227249145507812,
+          9.739289601643879,
+          20.422793070475258
+        ]
+      },
+      "distance": -0.7,
+      "operation": "cut",
+      "body": "body1"
+    },
+    {
+      "id": "f8",
+      "type": "press-pull",
+      "face": {
+        "kind": "face",
+        "by": "nearest",
+        "point": [
+          -8.211769739786783,
+          10.398188591003418,
+          20.703941345214844
+        ]
+      },
+      "distance": 0.75,
+      "operation": "join",
+      "body": "body1"
+    }
+  ],
+  "bodyIds": {
+    "f2:0": "body1"
+  },
+  "paramDefs": {},
+  "version": 9
+}

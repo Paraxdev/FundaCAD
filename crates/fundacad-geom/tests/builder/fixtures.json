@@ -16521,26 +16521,24 @@
    "bodies": [
     {
      "bbox": [
-      -30.707106781186546,
-      -30.707106781186546,
-      -0.7071067811865483,
-      30.707106781186546,
-      30.707106781186546,
+      -30.0,
+      -30.0,
+      0.0,
+      30.0,
+      30.0,
       5.0
      ],
      "faceOwners": [
       "r",
-      "o",
-      "o",
-      "o",
+      "r",
       "r",
       "r"
      ],
-     "faces": 6,
+     "faces": 4,
      "id": "body1",
      "name": "Body1",
      "solids": 1,
-     "volume": 14209.227426541755
+     "volume": 14128.71291532326
     }
    ],
    "bodyIds": {
@@ -16548,7 +16546,13 @@
    },
    "datumPlanes": {},
    "diagnostics": [],
-   "errors": []
+   "errors": [
+    {
+     "code": "faceVanishes",
+     "feature_id": "o",
+     "message": "at that size the face disappears"
+    }
+   ]
   }
  },
  "off_cylinder_in": {
