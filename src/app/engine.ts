@@ -417,7 +417,13 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   Object.assign(e, createSelection(e));
   Object.assign(e, createDocumentActions(e));
   e.store.onRewind(endPickSession);
-  e.store.onOpen(() => { if (e.sketch.active) e.sketch.cancel(); });
+  e.store.onOpen(() => {
+    if (e.sketch.active) e.sketch.cancel();
+    // Left selected, a face is found again by position in the next document's model.
+    e.dropBodyGizmo();
+    e.viewport.clearSelection();
+    e.viewport.setSelectedBodies([]);
+  });
 
   return e;
 }

@@ -2222,8 +2222,7 @@ export class Viewport {
     this.streaming = false;
     this.streamMemo = null;
     this.model = null;
-    this.highlighter?.dispose();
-    this.highlighter = null;
+    this.dropHighlighter();
     this.lastResult = null;
     this.picker.invalidate();
     this.requestRender();
@@ -2458,6 +2457,20 @@ export class Viewport {
     this.seamSkipped = got.skipped;
   }
 
+  /** The selection goes with the model, and the handle and prompt standing on it
+   *  only leave when told. */
+  private dropHighlighter() {
+    const h = this.highlighter;
+    if (!h) return;
+    const picked = h.getSelectedFaces().length + h.getSelectedEdges().length > 0;
+    const bodies = h.getSelectedBodies().length > 0;
+    h.dispose();
+    this.highlighter = null;
+    this.edgeScope = { scope: "chain", reason: "tangent" };
+    if (picked) this.onSelectionChange?.();
+    if (bodies) this.onBodySelectionChange?.("restore");
+  }
+
   clearModel() {
     this.setStressOverlay(null);
     this.clearFaceMarks();
@@ -2471,8 +2484,7 @@ export class Viewport {
       for (const d of edgeObjects(this.model)) this.scene.modelGroup.remove(d.object);
       disposeModel(this.model);
       this.model = null;
-      this.highlighter?.dispose();
-      this.highlighter = null;
+      this.dropHighlighter();
     }
     this.targetGridZ = 0; // no model → grid back on the world XY plane
     this.rig.setContentBox(new THREE.Box3());
