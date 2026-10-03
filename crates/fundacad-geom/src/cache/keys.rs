@@ -133,7 +133,7 @@ pub fn param_closure(params: &serde_json::Map<String, Value>) -> HashMap<String,
 }
 
 /// `_feature_scope`: the raw values of the parameters the feature reaches,
-/// and the hidden bodies for a legacy extrude that reads live visibility.
+/// and the hidden bodies for a feature that reads live visibility.
 pub fn feature_scope(
     f: &Value,
     params: &serde_json::Map<String, Value>,
@@ -167,13 +167,22 @@ pub fn feature_scope(
         .filter_map(|n| params.get(&n).map(|v| (n, v.clone())))
         .collect();
     let mut scope = canonical(&Value::Object(scoped));
-    let legacy_extrude = f.get("type").and_then(Value::as_str) == Some("extrude")
-        && f.get("hiddenBodies").is_none();
-    if legacy_extrude {
+    if reads_visibility(f) {
         scope.push('|');
         scope.push_str(hidden_json);
     }
     scope
+}
+
+/// A boolean that falls back to `ctx.hidden_bodies` skips hidden targets, so
+/// its result moves with the eye states. Only an extrude stores its own set.
+fn reads_visibility(f: &Value) -> bool {
+    let ty = f.get("type").and_then(Value::as_str);
+    if ty == Some("extrude") {
+        return f.get("hiddenBodies").is_none();
+    }
+    ty == Some("press-pull")
+        || f.get("operation").and_then(Value::as_str).is_some_and(|op| op != "new")
 }
 
 /// `_env_sig`: everything outside the document that shapes geometry. The
@@ -240,7 +249,15 @@ pub fn chain_keys(
         k = if plugin.is_empty() {
             hash_hex(&[k.as_bytes(), sig.as_bytes(), scope.as_bytes()])
         } else {
-            hash_hex(&[k.as_bytes(), sig.as_bytes(), scope.as_bytes(), b"|plugin:", plugin.as_bytes()])
+            hash_hex(&[
+                k.as_bytes(),
+                sig.as_bytes(),
+                scope.as_bytes(),
+                b"|plugin:",
+                plugin.as_bytes(),
+                b"|",
+                hidden_json.as_bytes(),
+            ])
         };
         keys.push(k.clone());
     }
@@ -314,13 +331,33 @@ mod tests {
     }
 
     #[test]
-    fn only_a_legacy_extrude_reads_visibility() {
+    fn an_extrude_reads_visibility_only_without_its_own_set() {
         let p = serde_json::Map::new();
         let c = HashMap::new();
         let legacy = json!({"id": "e", "type": "extrude"});
         let captured = json!({"id": "e", "type": "extrude", "hiddenBodies": []});
         assert_ne!(feature_scope(&legacy, &p, &c, "[\"body1\"]"), feature_scope(&legacy, &p, &c, "[]"));
         assert_eq!(feature_scope(&captured, &p, &c, "[\"body1\"]"), feature_scope(&captured, &p, &c, "[]"));
+    }
+
+    #[test]
+    fn a_boolean_without_its_own_hidden_set_reads_visibility() {
+        let p = serde_json::Map::new();
+        let c = HashMap::new();
+        let reads = |f: Value| feature_scope(&f, &p, &c, "[\"body1\"]") != feature_scope(&f, &p, &c, "[]");
+        assert!(reads(json!({"id": "b", "type": "box", "operation": "join"})));
+        assert!(reads(json!({"id": "r", "type": "revolve", "operation": "cut"})));
+        assert!(reads(json!({"id": "p", "type": "press-pull"})));
+        assert!(!reads(json!({"id": "b", "type": "box", "operation": "new"})));
+        assert!(!reads(json!({"id": "b", "type": "box"})));
+        assert!(!reads(json!({"id": "e", "type": "extrude", "operation": "cut", "hiddenBodies": []})));
+        let plugins = HashMap::from([("texture".into(), "v1".into())]);
+        let doc = |vis: Value| json!({"bodyVisibility": vis, "features": [{"id": "t", "type": "texture"}]});
+        let mut memo = HashMap::new();
+        assert_ne!(
+            chain_keys(&doc(json!({"body1": false})), "env", &plugins, &mut memo),
+            chain_keys(&doc(json!({})), "env", &plugins, &mut memo)
+        );
     }
 
     #[test]

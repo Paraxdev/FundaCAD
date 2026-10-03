@@ -387,3 +387,21 @@ fn import_metadata_and_diagnostics_survive_a_disk_resume() {
     }
     assert!(!cold(&mismatch)["diagnostics"].as_array().unwrap().is_empty());
 }
+
+#[test]
+fn hiding_a_join_target_is_not_served_the_cached_join() {
+    let mut cache = RebuildCache::new(None);
+    let base = json!({"features": [
+        {"id": "b1", "type": "box", "length": 10, "width": 10, "height": 10, "operation": "new"},
+        {"id": "b2", "type": "box", "length": 4, "width": 4, "height": 20, "operation": "join"},
+        {"id": "b3", "type": "box", "length": 2, "width": 2, "height": 2, "operation": "new"},
+    ]});
+    let (shown, _) = warm(&mut cache, &base);
+    assert_eq!(shown["bodies"].as_array().map(Vec::len), Some(2));
+    let mut hidden = base.clone();
+    hidden["bodyVisibility"] = json!({"body1": false});
+    let (got, replayed) = warm(&mut cache, &hidden);
+    assert!(replayed.contains(&1), "the join was not replayed: {replayed:?}");
+    assert_eq!(got, cold(&hidden));
+    assert_eq!(got["bodies"].as_array().map(Vec::len), Some(3));
+}
