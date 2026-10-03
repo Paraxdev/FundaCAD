@@ -10,7 +10,7 @@
 // path still work: a sketch dimension re-serialising one entity, and a feature
 // field going through the unit-agnostic parser.
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
 import { mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
@@ -28,7 +28,9 @@ import {
 } from "../../../plugins/FundaCAD.Texture/textureForm";
 import type { Engine } from "../../../src/app/engine";
 import { valueProblem } from "../../../src/document/numFields";
-import type { CadDocument, Feature } from "../../../src/types";
+import { DocumentStore } from "../../../src/document/store";
+import type { GeometryBackend } from "../../../src/geometry/client";
+import type { CadDocument, Feature, RebuildReply } from "../../../src/types";
 
 /** Register the Texture plugin's description of its own feature type.
  *
@@ -580,5 +582,54 @@ describe("FeatureProperties", () => {
       features: [{ id: "t1", type: "texture", kind: "knurl", profile: "round", depth: 0.4, scale: 2, sharpness: 0.5 } as unknown as Feature],
     });
     expect(labels(render(round, "t1"))).toContain("Sharp");
+  });
+});
+
+describe("FeatureProperties typed preview", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.useFakeTimers();
+  });
+  afterEach(() => void vi.useRealTimers());
+
+  it("keeps the features after the one being typed into built around the live value", async () => {
+    // The field report: typing into a box's Height in an exploded assembly
+    // rolled every later move and boolean away until Enter.
+    const backend = {
+      async rebuild(): Promise<RebuildReply> {
+        return { ok: true, result: { mesh: { positions: [], indices: [], faceIds: [] }, edges: [], bbox: null, bodies: [] } } as unknown as RebuildReply;
+      },
+      async init() {},
+      onStatus() { return () => {}; },
+      connected: true,
+    } as unknown as GeometryBackend;
+    const store = new DocumentStore(backend, {
+      parameters: {},
+      features: [
+        { id: "bx", type: "box", length: 20, width: 20, height: 20 },
+        { id: "mv", type: "move", dx: 40, dy: 0, dz: 0, rx: 0, ry: 0, rz: 0, bodies: ["body1"] },
+        { id: "cut", type: "boolean", operation: "cut", target: "body2", tools: ["body1"] },
+      ] as Feature[],
+    });
+    const engine = {
+      store,
+      bridge: { docVersion: ref(0), buildVersion: ref(0), editPreviewVersion: ref(0) },
+      tools: { targetEdit: { active: false, editingId: null, field: null, start: () => true } },
+      toolBusy: () => false,
+    } as unknown as Engine;
+    const w = mount(FeatureProperties, {
+      props: { featureId: "bx", unit: "mm" },
+      global: { provide: { [ENGINE as symbol]: engine } },
+    });
+    const row = w.findAll(".param-row").find((r) => r.find("label").text().startsWith("Height"))!;
+    const input = row.find("input");
+    input.element.value = "120";
+    await input.trigger("input");
+    await vi.advanceTimersByTimeAsync(300);
+    expect(store.editPreviewId).toBe("bx");
+    const built = store.builtDocument().features;
+    expect(built.map((f) => f.id)).toEqual(["bx", "mv", "cut"]);
+    expect((built[0] as { height: number }).height).toBe(120);
+    w.unmount();
   });
 });
