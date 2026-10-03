@@ -258,19 +258,77 @@ export const FULL_SWEEP = 2 * Math.PI - Math.PI / 4;
 /** How far round its axis a face's points reach, in radians: 2π less the widest
  *  angular gap between them. 0 with fewer than two points off the axis. */
 export function arcSweep(cyl: Cylinder, points: readonly Vec3[]): number {
+  return arcOf(cyl, points)?.sweep ?? 0;
+}
+
+/** The arc a face's points cover round the axis: where it starts, measured in
+ *  the frame (u, v) square to the axis, and how far on it reaches. */
+function arcOf(cyl: Cylinder, points: readonly Vec3[]): { u: Vec3; v: Vec3; start: number; sweep: number } | null {
   const u = planeXDir(cyl.axis);
-  if (!u) return 0;
+  if (!u) return null;
   const v = cross(cyl.axis, u);
   const angles: number[] = [];
   for (const p of points) {
     const r = radialAt(cyl, p);
     if (r) angles.push(Math.atan2(dot(r, v), dot(r, u)));
   }
-  if (angles.length < 2) return 0;
+  if (angles.length < 2) return null;
   angles.sort((a, b) => a - b);
   let gap = (angles[0] as number) + 2 * Math.PI - (angles[angles.length - 1] as number);
-  for (let i = 1; i < angles.length; i++) gap = Math.max(gap, (angles[i] as number) - (angles[i - 1] as number));
-  return 2 * Math.PI - gap;
+  let start = angles[0] as number;
+  for (let i = 1; i < angles.length; i++) {
+    const g = (angles[i] as number) - (angles[i - 1] as number);
+    if (g > gap) {
+      gap = g;
+      start = angles[i] as number;
+    }
+  }
+  return { u, v, start, sweep: 2 * Math.PI - gap };
+}
+
+/** Where a handle stands on a round face, ON the cylinder rather than on the
+ *  chords strung inside it: at the crown of a partial arc, where the radius
+ *  reads, or round a full one at the angle of the `click`, else of `seed`.
+ *  Along the axis it stands level with the click, clamped to the face, or
+ *  halfway along without one. `radial` is the outward direction there. */
+export function roundStand(
+  cyl: Cylinder, points: readonly Vec3[], full: boolean, click: Vec3 | null, seed: Vec3,
+): { point: Vec3; radial: Vec3 } | null {
+  const arc = arcOf(cyl, points);
+  if (!arc) return null;
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const p of points) {
+    const t = dot(sub(p, cyl.point), cyl.axis);
+    lo = Math.min(lo, t);
+    hi = Math.max(hi, t);
+  }
+  const t = click ? Math.min(hi, Math.max(lo, dot(sub(click, cyl.point), cyl.axis))) : (lo + hi) / 2;
+  let radial: Vec3 | null;
+  if (full) {
+    radial = radialAt(cyl, click ?? seed);
+    if (!radial) return null;
+  } else {
+    const a = arc.start + arc.sweep / 2;
+    radial = add(scale(arc.u, Math.cos(a)), scale(arc.v, Math.sin(a)));
+  }
+  return { point: add(add(cyl.point, scale(cyl.axis, t)), scale(radial, cyl.radius)), radial };
+}
+
+/** Whether `p` lies on the cylinder within `tol`, and along it no further than
+ *  `tol` past the face's points. */
+export function onRoundFace(cyl: Cylinder, points: readonly Vec3[], p: Vec3, tol: number): boolean {
+  const rel = sub(p, cyl.point);
+  const t = dot(rel, cyl.axis);
+  if (Math.abs(length(sub(rel, scale(cyl.axis, t))) - cyl.radius) > tol) return false;
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const q of points) {
+    const s = dot(sub(q, cyl.point), cyl.axis);
+    lo = Math.min(lo, s);
+    hi = Math.max(hi, s);
+  }
+  return t >= lo - tol && t <= hi + tol;
 }
 
 /** Does the material lie INSIDE this cylindrical face, a shaft or boss, rather

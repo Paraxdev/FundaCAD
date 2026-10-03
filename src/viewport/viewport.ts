@@ -93,8 +93,8 @@ import { clickTakes, DwellIntent, type SelectPolicy } from "./clickIntent";
 import { getHoverDwellMs } from "../ui/interactionPrefs";
 import { edgesOnFace, faceEdgeTol, faceSurface, type Tri } from "./faceEdges";
 import { remapSelection, remapStreamedSelection, shouldAnnounce } from "./selectionMemo";
-import { arcSweep, cylinderFromFace, FULL_SWEEP, radialAt, solidInsideCylinder } from "../features/planeMath";
-import type { RoundFace } from "../features/radialDrag";
+import { arcSweep, cylinderFromFace, FULL_SWEEP, isPlanarFace, onRoundFace, radialAt, roundStand, solidInsideCylinder, type Cylinder } from "../features/planeMath";
+import { facetNormalAt, type RoundFace } from "../features/radialDrag";
 import type { Plane3, PlaneDef, RebuildResult, Selector, Vec3 } from "../types";
 import { dragStep } from "./dragStep";
 import { faceSketchPlane } from "../sketch/sketchView";
@@ -743,11 +743,14 @@ export class Viewport {
     this.edgeClick = hit?.kind === "edge" && !mods.additive
       ? { edge: hit.edge, at: this.nearestOnEdge(hit.edge, e.clientX, e.clientY) }
       : null;
+    if (!mods.additive) this.faceClick = hit?.kind === "face" ? hit.point : null;
     this.applyPick(hit, mods);
   }
 
   /** The one edge last picked by a plain click, and where on it the click landed. */
   private edgeClick: { edge: EdgeRef; at: [number, number, number] | null } | null = null;
+  /** Where the face picked by the last plain click was hit. */
+  private faceClick: Vec3 | null = null;
 
   /** Where the single selected edge was clicked, null when it was not picked by a click. */
   selectedEdgeClickPoint(): [number, number, number] | null {
@@ -1936,8 +1939,14 @@ export class Viewport {
   }
 
   /** A by:"nearest" selector per selected face plus the first face's normal and anchor.
-   *  `round` is set for a lone cylindrical face, making the drag a resize. */
-  selectedFacesForPressPull(): { selectors: Selector[]; faceIds: number[]; normal: THREE.Vector3; anchor: THREE.Vector3; bodyId: string | null; round: RoundFace | null } | null {
+   *  `round` is set for a lone cylindrical face, making the drag a resize, and
+   *  `lead` for the first of several when it is one, which resize as one when
+   *  they all run smoothly into it. On a round face the anchor stands on the
+   *  surface and the normal is the outward one there. */
+  selectedFacesForPressPull(): {
+    selectors: Selector[]; faceIds: number[]; normal: THREE.Vector3; anchor: THREE.Vector3;
+    bodyId: string | null; round: RoundFace | null; lead: RoundFace | null;
+  } | null {
     if (!this.highlighter || !this.model) return null;
     const faces = this.highlighter.getSelectedFaces();
     if (faces.length === 0) return null;
@@ -1947,23 +1956,46 @@ export class Viewport {
     });
     const first = faces[0];
     if (first === undefined) return null;
-    const anchor = this.faceCentroidWorld(first);
+    let anchor = this.faceCentroidWorld(first);
+    let normal = this.faceNormalWorld(first);
+    let round: RoundFace | null = null;
+    const fit = this.roundFit(first);
+    const stand = fit && roundStand(fit.cylinder, fit.points, fit.full, this.faceClickOn(fit), [anchor.x, anchor.y, anchor.z]);
+    if (fit && stand) {
+      anchor = new THREE.Vector3(...stand.point);
+      round = this.roundFrom(fit, stand.radial);
+      normal = round.radial.clone().multiplyScalar(round.solidInside ? 1 : -1);
+    } else {
+      const tris = this.faceTriangles(first);
+      const normals = tris.map((t) => t.getNormal(new THREE.Vector3()).toArray() as Vec3);
+      // A sphere, a cone or a torus: the normal where the handle stands, the
+      // same one the tool settles on, never the average, which round a closed
+      // face points along its axis or nowhere.
+      const at = !isPlanarFace(normals) ? facetNormalAt(tris, anchor) : null;
+      if (at) normal = at;
+    }
     return {
       selectors,
       faceIds: [...faces],
-      normal: this.faceNormalWorld(first),
+      normal,
       anchor,
       bodyId: this.faceIdToBodyId(first),
-      // Only when ONE face is selected. A multi-face press/pull shares a single
-      // distance along a single normal; a diameter is a property of one face and
-      // has no meaning spread across several.
-      round: faces.length === 1 ? this.roundFaceAt(first, anchor) : null,
+      // A multi-face press/pull shares a single distance along a single normal;
+      // a diameter is a property of one face and has no meaning spread across several.
+      round: faces.length === 1 ? round : null,
+      lead: faces.length > 1 ? round : null,
     };
   }
 
   /** The cylinder a face lies on, or null. Not from faceNormalWorld: a closed
    *  cylinder's facet normals average to zero. */
   roundFaceAt(faceId: number, at: THREE.Vector3): RoundFace | null {
+    const fit = this.roundFit(faceId);
+    const radial = fit && radialAt(fit.cylinder, [at.x, at.y, at.z]);
+    return fit && radial ? this.roundFrom(fit, radial) : null;
+  }
+
+  private roundFit(faceId: number): { cylinder: Cylinder; solidInside: boolean; points: Vec3[]; full: boolean } | null {
     const tris = this.faceTriangles(faceId);
     if (tris.length < 3) return null;
     const points: Vec3[] = [];
@@ -1978,16 +2010,26 @@ export class Viewport {
     if (!cylinder) return null;
     const solidInside = solidInsideCylinder(cylinder, points, normals);
     if (solidInside === null) return null;
-    const radial = radialAt(cylinder, [at.x, at.y, at.z]);
-    if (!radial) return null;
+    return { cylinder, solidInside, points, full: arcSweep(cylinder, points) > FULL_SWEEP };
+  }
+
+  private roundFrom(fit: { cylinder: Cylinder; solidInside: boolean; full: boolean }, radial: Vec3): RoundFace {
     return {
-      cylinder,
-      radius: cylinder.radius,
-      solidInside,
+      cylinder: fit.cylinder,
+      radius: fit.cylinder.radius,
+      solidInside: fit.solidInside,
       radial: new THREE.Vector3(radial[0], radial[1], radial[2]),
-      full: arcSweep(cylinder, points) > FULL_SWEEP,
+      full: fit.full,
       tangent: null,
     };
+  }
+
+  /** Where the face selected by the last plain click was hit, when that point
+   *  lies on this round face. */
+  private faceClickOn(fit: { cylinder: Cylinder; points: Vec3[] }): Vec3 | null {
+    const at = this.faceClick;
+    if (!at) return null;
+    return onRoundFace(fit.cylinder, fit.points, at, Math.max(0.05 * fit.cylinder.radius, 1e-3)) ? at : null;
   }
 
   /** The sketch plane of the selected planar face, so "click a face, press S" skips the
@@ -3373,8 +3415,8 @@ export class Viewport {
   }
 
   // --- drag previews, all of them in ghosts.ts ------------------------------
-  setPressPullGhost(faceIds: number[], distance: number, round?: RoundFace | null) {
-    this.ghosts.setPressPullGhost(faceIds, distance, round);
+  setPressPullGhost(faceIds: number[], distance: number, along?: RoundFace | "normal" | null) {
+    this.ghosts.setPressPullGhost(faceIds, distance, along);
   }
   clearPressPullGhost() {
     this.ghosts.clearPressPullGhost();

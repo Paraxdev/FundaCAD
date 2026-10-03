@@ -177,4 +177,24 @@ describe("facetNormalAt", () => {
     expect(facetNormalAt([sliver, flat], V(0, 0, 0))!.toArray()).toEqual([0, 0, 1]);
     expect(facetNormalAt([], V(0, 0, 0))).toBeNull();
   });
+
+  // A pointed cone, apex at (0, 0, 8) over a ring of radius 6 at z 0, as a
+  // fan of facets that all meet at the apex.
+  const fan = (n: number) => Array.from({ length: n }, (_, i) => {
+    const a = (2 * Math.PI * i) / n, b = (2 * Math.PI * (i + 1)) / n;
+    return new THREE.Triangle(V(6 * Math.cos(a), 6 * Math.sin(a), 0), V(6 * Math.cos(b), 6 * Math.sin(b), 0), V(0, 0, 8));
+  });
+
+  it("points a pick at a cone's apex up its axis, not along one facet of the fan", () => {
+    const n = facetNormalAt(fan(24), V(0.02, -0.01, 7.97))!;
+    expect(n.x).toBeCloseTo(0, 9);
+    expect(n.y).toBeCloseTo(0, 9);
+    expect(n.z).toBeCloseTo(1, 9);
+  });
+
+  it("reads the facet itself away from the apex", () => {
+    const tris = fan(24);
+    const mid = tris[3]!.getMidpoint(new THREE.Vector3());
+    expect(facetNormalAt(tris, mid)!.toArray()).toEqual(tris[3]!.getNormal(new THREE.Vector3()).toArray());
+  });
 });
