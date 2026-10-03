@@ -213,7 +213,7 @@ export function installRebuildBridge(e: Engine): void {
           // the toast is a dead end.
           const amb = repairableDiagFor(s.result?.diagnostics, id);
           const action = amb?.at
-            ? { label: "Re-pick face", onClick: () => e.starters.repickReference(id, amb.at!) }
+            ? { label: amb.kind === "edge" ? "Re-pick edge" : "Re-pick face", onClick: () => e.starters.repickReference(id, amb.at!, amb.kind) }
             : { label: "Show", onClick: () => e.selectFeature(id) };
           // A kernel refusal is usually about the geometry it was handed, so the
           // console entry carries the whole report, not just the sentence.

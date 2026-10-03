@@ -1149,11 +1149,16 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
 
   // One-shot face picker: highlight the face under the cursor, return its selector
   // on click (Esc cancels). Reused by Shell (open face) and Draft (taper face).
-  function pickFaceInteractive(promptText: string, onPick: (sel: Selector, normal: Vec3 | null) => void) {
-    if (toolBusy()) return;
+  // False when it could not open.
+  function pickFaceInteractive(
+    promptText: string,
+    onPick: (sel: Selector, normal: Vec3 | null) => void,
+    onCancel?: () => void,
+  ): boolean {
+    if (toolBusy()) return false;
     if (!hasBody()) {
       setStatus("Create or import a body first", "");
-      return;
+      return false;
     }
     setPlanePick(true);
     viewport.suspendPicking = true;
@@ -1175,10 +1180,14 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       const normal: Vec3 | null = n ? [n.x, n.y, n.z] : null;
       requestAnimationFrame(() => onPick(sel, normal));
     };
-    const onEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") cleanup();
+    const cancel = () => {
+      cleanup();
+      onCancel?.();
     };
-    const releaseTree = awaitTreePick((pick) => treePickRefusal(pick, "a face, pick it in the view"), () => cleanup());
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") cancel();
+    };
+    const releaseTree = awaitTreePick((pick) => treePickRefusal(pick, "a face, pick it in the view"), cancel);
     const cleanup = () => {
       releaseTree();
       setPlanePick(false);
@@ -1192,6 +1201,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     canvas.addEventListener("pointermove", onMove);
     canvas.addEventListener("pointerdown", onDown, true);
     window.addEventListener("keydown", onEsc, true);
+    return true;
   }
 
   // One-shot EDGE picker, the twin of pickFaceInteractive above. Every model edge
@@ -1201,11 +1211,12 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   function pickEdgeInteractive(
     promptText: string,
     onPick: (sel: Selector, points: readonly Vec3[]) => void,
-  ) {
-    if (toolBusy()) return;
+    onCancel?: () => void,
+  ): boolean {
+    if (toolBusy()) return false;
     if (!hasBody()) {
       setStatus("Create or import a body first", "");
-      return;
+      return false;
     }
     setPlanePick(true);
     viewport.suspendPicking = true;
@@ -1223,10 +1234,14 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       const pts = hit.edge.points.map((q) => [q[0], q[1], q[2]] as Vec3);
       requestAnimationFrame(() => onPick(hit.selector, pts));
     };
-    const onEsc = (e: KeyboardEvent) => {
-      if (e.key === "Escape") cleanup();
+    const cancel = () => {
+      cleanup();
+      onCancel?.();
     };
-    const releaseTree = awaitTreePick((pick) => treePickRefusal(pick, "an edge, pick it in the view"), () => cleanup());
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") cancel();
+    };
+    const releaseTree = awaitTreePick((pick) => treePickRefusal(pick, "an edge, pick it in the view"), cancel);
     const cleanup = () => {
       releaseTree();
       setPlanePick(false);
@@ -1241,6 +1256,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     canvas.addEventListener("pointermove", onMove);
     canvas.addEventListener("pointerdown", onDown, true);
     window.addEventListener("keydown", onEsc, true);
+    return true;
   }
 
   // Repair an ambiguous saved reference: the rebuild refused to guess between two
@@ -1264,23 +1280,77 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       setStatus("That reference has already changed, nothing to re-pick", "");
       return;
     }
+    if (toolBusy()) return;
     const wantsEdge = kind === "edge";
+    let ended = false;
+    let waiting: (() => void) | null = null;
+    const onWaitEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") end();
+    };
+    const stopWaiting = () => {
+      if (!waiting) return;
+      waiting();
+      waiting = null;
+      window.removeEventListener("keydown", onWaitEsc, true);
+      setPlanePick(false);
+      setPrompt(null);
+    };
+    function end() {
+      if (ended) return;
+      ended = true;
+      stopWaiting();
+      if (store.editPreviewId === featureId) store.endEditPreview();
+    }
     const apply = (sel: Selector, normal: Vec3 | null) => {
       // Re-read the feature: the pick is async, and the doc may have moved under
       // us (undo, another edit). Re-locating also re-validates the site.
       const cur = store.document.features.find((f) => f.id === featureId);
-      if (!cur) return;
-      const site2 = findSelectorAt(cur, at);
-      if (!site2) {
-        setStatus("That reference has already changed, nothing to re-pick", "");
+      const site2 = cur ? findSelectorAt(cur, at) : null;
+      if (!cur || !site2) {
+        if (cur) setStatus("That reference has already changed, nothing to re-pick", "");
+        end();
         return;
       }
       const next = repickedSelector(cur, site2, sel, normal);
       store.updateFeature(featureId, replaceSelectorAt(cur, site2, next));
+      end();
       if (next !== sel) settleRepickedExtent(featureId, next);
     };
-    if (wantsEdge) pickEdgeInteractive("Pick the edge to use · Esc", (sel) => apply(sel, null));
-    else pickFaceInteractive("Pick the face to use · Esc", apply);
+    const pick = () => {
+      const opened = wantsEdge
+        ? pickEdgeInteractive("Pick the edge to use · Esc", (sel) => apply(sel, null), end)
+        : pickFaceInteractive("Pick the face to use · Esc", apply, end);
+      if (!opened) end();
+    };
+    // The saved selector resolves where the feature sits in the history, so the
+    // pick has to be taken on the model rolled back to it. The finished model
+    // carries every later move and boolean, and a point taken there can be far off.
+    const shown = store.buildState.result;
+    let started = false;
+    waiting = store.onBuild((s) => {
+      if (s.building) {
+        started = true;
+        return;
+      }
+      // previewBuilt is null for a build sent before the rollback was asked for.
+      if (!started || !s.previewBuilt || !waiting) return;
+      stopWaiting();
+      if (store.editPreviewId !== featureId) {
+        ended = true;
+        return;
+      }
+      // A refused build keeps the last mesh, which is still the finished model.
+      if (!s.result || s.result === shown) {
+        setStatus("Could not roll back to that feature to re-pick", "error");
+        end();
+        return;
+      }
+      pick();
+    });
+    setPlanePick(true);
+    setPrompt("Rolling back to re-pick…");
+    window.addEventListener("keydown", onWaitEsc, true);
+    store.beginEditPreview(featureId);
   }
 
   // Only the engine measures a tracked face's extent, so a re-picked hole face
