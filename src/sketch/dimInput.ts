@@ -90,6 +90,51 @@ export function swallowRelease(pointerId: number | undefined): void {
   window.addEventListener("pointerdown", done, opts);
 }
 
+export interface ScreenPoint {
+  x: number;
+  y: number;
+}
+
+export interface ScreenRect {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
+/** Clear space between an arrow's tip and the box, in px. */
+const PAST_GAP = 10;
+
+/** Where a box of `size` goes past an arrow's tip: beyond the tip along the
+ *  arrow, else beside the tip, else behind the arrow's base, whichever first
+ *  fits in `bounds`; clamped into them when none does. `dir` runs from the
+ *  base to the tip in px. */
+export function pastTip(
+  tip: ScreenPoint,
+  dir: ScreenPoint,
+  size: { w: number; h: number },
+  bounds: ScreenRect,
+  gap = PAST_GAP,
+): { left: number; top: number } {
+  const n = Math.hypot(dir.x, dir.y);
+  // An arrow end on to the view has no direction on screen, so the box goes where the cursor's would.
+  const [dx, dy] = n > 1 ? [dir.x / n, dir.y / n] : [Math.SQRT1_2, Math.SQRT1_2];
+  const { w, h } = size;
+  const place = (from: ScreenPoint, sx: number, sy: number) => {
+    const reach = gap + (Math.abs(sx) * w) / 2 + (Math.abs(sy) * h) / 2;
+    return { left: from.x + sx * reach - w / 2, top: from.y + sy * reach - h / 2 };
+  };
+  const base = { x: tip.x - (n > 1 ? dir.x : 0), y: tip.y - (n > 1 ? dir.y : 0) };
+  const tries = [place(tip, dx, dy), place(tip, -dy, dx), place(tip, dy, -dx), place(base, -dx, -dy)];
+  const fits = (p: { left: number; top: number }) =>
+    p.left >= bounds.left && p.top >= bounds.top && p.left + w <= bounds.right && p.top + h <= bounds.bottom;
+  const first = tries[0]!;
+  return tries.find(fits) ?? {
+    left: Math.max(bounds.left, Math.min(first.left, bounds.right - w)),
+    top: Math.max(bounds.top, Math.min(first.top, bounds.bottom - h)),
+  };
+}
+
 export class DimInput {
   private root: HTMLDivElement;
   private fields: Field[] = [];
@@ -663,6 +708,14 @@ export class DimInput {
   position(screenX: number, screenY: number) {
     this.root.style.left = `${screenX + 16}px`;
     this.root.style.top = `${screenY + 16}px`;
+  }
+
+  /** Stand the box clear past an arrow's tip, `dir` being the arrow from base
+   *  to tip on screen, kept inside `bounds`. */
+  positionPast(tip: ScreenPoint, dir: ScreenPoint, bounds: ScreenRect) {
+    const at = pastTip(tip, dir, { w: this.root.offsetWidth, h: this.root.offsetHeight }, bounds);
+    this.root.style.left = `${Math.round(at.left)}px`;
+    this.root.style.top = `${Math.round(at.top)}px`;
   }
 
   /** Centre the box on a screen point rather than beside the cursor. */
