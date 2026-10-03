@@ -1486,13 +1486,13 @@
   "offset_face_chamfered_rim": {
    "bbox": {
     "max": [
-     30.0,
-     29.992658301,
+     29.0,
+     28.992903024,
      5.0
     ],
     "min": [
-     -29.970636796,
-     -29.992658301,
+     -28.971615569,
+     -28.992903024,
      0.0
     ]
    },
@@ -1500,7 +1500,7 @@
    "errors": [],
    "fatal": false,
    "volumes": {
-    "body1": 13239.95525
+    "body1": 13193.16099
    }
   },
   "offset_face_freeform_fails": {
@@ -2654,7 +2654,8 @@
   "rules": "body count and body ids exact; each body's mesh volume (signed tetra sum) within max(volumeRel * |python|, volumeFloor); every bbox corner within max(bboxAbs, bboxRelOfDiagonal * python bbox diagonal); the ordered (feature id, error class) list exact, an error class being the message with every number masked as # and whitespace collapsed, after the repository root is replaced by $REPO. An import fixture is imported through the engine's own import op first; the reply's fields other than geom must equal python's.",
   "rustRecorded": [
    "chamfer_corner_three_edges",
-   "fillet_tangent_edges_off"
+   "fillet_tangent_edges_off",
+   "offset_face_chamfered_rim"
   ],
   "tolerances": {
    "bboxAbs": 0.0001,
