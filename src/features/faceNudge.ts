@@ -21,13 +21,17 @@ export interface FacePreselection {
   anchor: THREE.Vector3;
   /** set when the face is a lone cylinder, the drag resizes it instead */
   round?: RoundFace | null;
+  /** the first of several faces when it is a cylinder, which may resize them as one */
+  lead?: RoundFace | null;
 }
 
 /** The placement for a face selection, or null when there is none.
  *
  *  A multi-face selection gets ONE handle, standing on the first face and
  *  pointing along its normal, again matching the tool, which pushes every
- *  selected face by the one distance measured along that same first normal.
+ *  selected face by the one distance measured along that same first normal,
+ *  or away from the axis when the first face is round, since a whole slot
+ *  picked face by face resizes as that face does.
  *
  *  On a round face the arrow points AWAY FROM THE AXIS rather than along the
  *  face normal, because the drag it arms is a resize. Away from the axis on a
@@ -41,7 +45,7 @@ export function faceNudgePlacement(
   onGrab: (clientX: number, clientY: number) => void,
 ): NudgePlacement | null {
   if (!pre) return null;
-  const axis = (pre.round?.radial ?? pre.normal).clone().normalize();
+  const axis = ((pre.round ?? pre.lead)?.radial ?? pre.normal).clone().normalize();
   if (axis.lengthSq() < 0.5) return null; // degenerate normal, nothing to point along
   return {
     anchor: pre.anchor.clone(),

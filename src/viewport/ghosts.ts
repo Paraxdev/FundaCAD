@@ -82,16 +82,21 @@ export class GhostLayer {
   // on commit). For each selected face we offset its triangles by distance·normal
   // (the cap) and raise walls from the face's boundary edges → a translucent prism.
   private ppGhost: THREE.Mesh | null = null;
-  /** `round` makes the offset RADIAL and per-vertex instead of one constant
-   *  vector: a resized cylinder is not a translated one, and its face normal is
-   *  the average that cancels to nothing anyway. `distance` is then the outward
-   *  radial delta (bigger = away from the axis), not the kernel's signed push. */
-  setPressPullGhost(faceIds: number[], distance: number, round?: RoundFace | null) {
+  /** `along` a round face makes the offset RADIAL and per-vertex instead of
+   *  one constant vector: a resized cylinder is not a translated one, and its
+   *  face normal is the average that cancels to nothing anyway. `distance` is
+   *  then the outward radial delta (bigger = away from the axis, or from a
+   *  sphere's centre), not the kernel's signed push. `along` "normal" offsets
+   *  each vertex along the surface normal there, a cone or a torus offset by
+   *  the kernel's signed push. */
+  setPressPullGhost(faceIds: number[], distance: number, along?: RoundFace | "normal" | null) {
     this.clearPressPullGhost();
     const model = this.host.model();
     if (!model || faceIds.length === 0 || Math.abs(distance) < 1e-4) return;
     const out: number[] = [];
     const push = (v: THREE.Vector3) => out.push(v.x, v.y, v.z);
+    const round = along && along !== "normal" ? along : null;
+    const centre = round?.centre ? new THREE.Vector3(...round.centre) : null;
     for (const faceId of faceIds) {
       // per-body model: resolve the face's owning body and read its own buffers
       // (vertex indices below are body-local, consistent with wv()'s source).
@@ -99,25 +104,42 @@ export class GhostLayer {
       const triIdx = body?.faceTriangles.get(faceId);
       if (!body || !triIdx || triIdx.length === 0) continue;
       const pos = body.mesh.geometry.getAttribute("position");
+      const nrm = along === "normal" ? body.mesh.geometry.getAttribute("normal") : null;
       const index = body.mesh.geometry.getIndex()!;
       const mw = body.mesh.matrixWorld;
+      const nm = new THREE.Matrix3().getNormalMatrix(mw);
       const wv = (vi: number) => new THREE.Vector3().fromBufferAttribute(pos, vi).applyMatrix4(mw);
-      const flat = round ? null : this.host.faceNormalWorld(faceId).multiplyScalar(distance);
-      const moved = (v: THREE.Vector3) => {
-        if (flat) return v.clone().add(flat);
-        const r = round && radialAt(round.cylinder, [v.x, v.y, v.z]);
-        return r ? v.clone().addScaledVector(new THREE.Vector3(r[0], r[1], r[2]), distance) : v.clone();
+      const flat = along ? null : this.host.faceNormalWorld(faceId).multiplyScalar(distance);
+      const moved = (vi: number, facet: THREE.Vector3) => {
+        const v = wv(vi);
+        if (flat) return v.add(flat);
+        if (!round) {
+          const n = nrm ? new THREE.Vector3().fromBufferAttribute(nrm, vi).applyMatrix3(nm) : null;
+          if (!n || n.lengthSq() < 1e-12) return v.addScaledVector(facet, distance);
+          n.normalize();
+          return v.addScaledVector(n.dot(facet) < 0 ? n.negate() : n, distance);
+        }
+        if (centre) {
+          const d = v.clone().sub(centre);
+          return d.lengthSq() > 1e-12 ? v.addScaledVector(d.normalize(), distance) : v;
+        }
+        const r = radialAt(round.cylinder, [v.x, v.y, v.z]);
+        return r ? v.addScaledVector(new THREE.Vector3(r[0], r[1], r[2]), distance) : v;
       };
       const tris: [number, number, number][] = triIdx.map(
         (t) => [index.getX(t * 3), index.getX(t * 3 + 1), index.getX(t * 3 + 2)] as [number, number, number],
       );
       // cap (the face at its new size / position)
+      const tri = new THREE.Triangle();
+      const facet = new THREE.Vector3();
       for (const [i0, i1, i2] of tris) {
-        push(moved(wv(i0))); push(moved(wv(i1))); push(moved(wv(i2)));
+        tri.set(wv(i0), wv(i1), wv(i2)).getNormal(facet);
+        push(moved(i0, facet)); push(moved(i1, facet)); push(moved(i2, facet));
       }
-      // A resized round face keeps its neighbours on their own surfaces, so a
-      // wall from its old boundary would draw a step the result does not have.
-      if (round) continue;
+      // A resized or offset curved face keeps its neighbours on their own
+      // surfaces, so a wall from its old boundary would draw a step the result
+      // does not have.
+      if (along) continue;
       // boundary walls: an edge interior to the face appears in two triangles
       // (toggled out); a boundary edge appears once (kept).
       const edges = new Map<string, [number, number]>();
@@ -129,7 +151,7 @@ export class GhostLayer {
       for (const [i0, i1, i2] of tris) { bump(i0, i1); bump(i1, i2); bump(i2, i0); }
       for (const [a, b] of edges.values()) {
         const A = wv(a), B = wv(b);
-        const Ao = moved(A), Bo = moved(B);
+        const Ao = moved(a, facet), Bo = moved(b, facet);
         push(A); push(B); push(Bo);
         push(A); push(Bo); push(Ao);
       }

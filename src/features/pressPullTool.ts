@@ -224,7 +224,7 @@ export class PressPullTool {
     this.gesture.attach();
 
     if (pre) {
-      this.beginDrag(pre.selectors, pre.faceIds, pre.anchor, pre.normal, pre.bodyId, pre.round);
+      this.beginDrag(pre.selectors, pre.faceIds, pre.anchor, pre.normal, pre.bodyId, pre.round ?? pre.lead);
       if (opts?.grabAt) this.grabHandle(opts.grabAt.x, opts.grabAt.y);
     } else {
       setPrompt("Click a face · Ctrl-click adds more");
@@ -476,7 +476,7 @@ export class PressPullTool {
     this.mode = "auto";
     this.showBox();
     const lone = faces[0];
-    if (faces.length === 1 && lone) this.askAxis(lone, bodyId);
+    if (lone && (faces.length === 1 || round)) this.askAxis(lone, bodyId);
     const s = this.viewport.projectToScreen(this.anchor);
     this.dim.position(s.x, s.y);
     this.unsubBuild ??= this.store.onBuild((st) => {
@@ -761,17 +761,21 @@ export class PressPullTool {
     this.promptNow();
   }
 
-  /** The instant cap of a resize, until the engine's own preview is on screen.
-   *  Only over the model it was picked on: a preview renumbers the faces. */
+  /** The instant cap of a resize or of a cone or torus offset, until the
+   *  engine's own preview is on screen. Only over the model it was picked on:
+   *  a preview renumbers the faces. */
   private refreshGhost() {
     const r = this.round;
+    // A whole run moves each face along its own normal, a wall included, by the kernel's push.
+    const run = !!r && this.faces.length > 1;
+    const along = run || (!r && this.slant) ? "normal" : r;
     const k = this.neutral ? null : this.keyOf(this.buildFeature());
-    // The ghost moves a cap off an axis, which a sphere does not have.
-    if (!r || r.centre || this.pickingTarget || this.shownFeature || this.removing || k === null || this.refused.has(k)) {
+    if (!along || this.pickingTarget || this.shownFeature || this.removing || k === null || this.refused.has(k)) {
       this.viewport.clearPressPullGhost();
       return;
     }
-    this.viewport.setPressPullGhost(this.faceIds, this.value, r);
+    const push = run ? radialDrag(r.radius, this.value, r.solidInside, this.full).distance : this.value;
+    this.viewport.setPressPullGhost(this.faceIds, push, along);
   }
 
   /** How many faces Tangent faces follow will move at this size, 0 when it
@@ -1026,6 +1030,14 @@ export class PressPullTool {
     this.contact = null;
   }
 
+  /** Several faces that turned out not to be one round face's run push as one. */
+  private leaveRun() {
+    const was = this.boxShape();
+    this.dropRound();
+    if (was !== this.boxShape()) this.showBox();
+    this.refreshPreview(true);
+  }
+
   /** The "Along normal / Along axis" switch, hidden until the engine says the
    *  face has an axis. A fresh one per showing of the box, which clears its own. */
   private directionButton(): HTMLButtonElement {
@@ -1051,6 +1063,7 @@ export class PressPullTool {
       if (ask !== this.axisAsk || !this.active || this.phase !== "drag") return;
       const r = offeredResize(reply, CURVED);
       if (this.round && r?.kind === "cylinder") return this.adoptResize(r, resizeAxis(reply));
+      if (this.faces.length > 1) return this.leaveRun();
       if (r && this.adoptCurve(r, reply)) return;
       if (this.round) return;
       this.holeAxis = offeredAxis(reply);
@@ -1067,6 +1080,7 @@ export class PressPullTool {
     if (axis) this.setGuideAxis(axis);
     this.round = { ...round, radius: r.radius, full: r.full, solidInside: !r.concave, tangent: r.tangent };
     this.contact = r.contact;
+    if (this.faces.length > 1 && !this.inTangentRun()) return this.leaveRun();
     if (!this.quantityPicked) this.quantity = defaultQuantity(r.full);
     this.dim.setChoice("distance", this.quantity);
     this.dim.updateFromCursor({ distance: this.readout() });

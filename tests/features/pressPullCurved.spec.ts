@@ -184,7 +184,8 @@ describe("press/pull on a sphere, a cone or a torus", () => {
       expect(previews.at(-1)).toMatchObject({ type: "press-pull", distance: -1.5, operation: "cut" });
       expect(previews.at(-1)).not.toHaveProperty("mode");
       expect(previews.at(-1)).not.toHaveProperty("taper");
-      expect(ghost).not.toHaveBeenCalled();
+      // The cap answers at once, grown about the centre, before the engine does.
+      expect(ghost).toHaveBeenLastCalledWith([7], 1.5, expect.objectContaining({ centre: [0, 0, 10] }));
       expect(usePromptStore().text).toMatch(/type a radius/);
     });
 
@@ -211,11 +212,12 @@ describe("press/pull on a sphere, a cone or a torus", () => {
     const countersink: FaceAxisReply = { ...NO_AXIS, resize: cone };
 
     it("reads an offset along the facet picked, with no taper, mode or up to", async () => {
-      const { t, canvas, previews, added } = await started([0, 1, 0], [0, 0, 1], countersink);
+      const { t, canvas, previews, added, ghost } = await started([0, 1, 0], [0, 0, 1], countersink);
       expect(box()).toMatchObject({ names: ["Offset"], value: "0", toggle: null });
       expect(dirOf(t)).toEqual([0, 0, 1]);
       dragTo(t, canvas, -0.8);
       expect(box().value).toBe("-0.8");
+      expect(ghost).toHaveBeenLastCalledWith([7], -0.8, "normal");
       expect(previews.at(-1)).toMatchObject({ type: "press-pull", distance: -0.8, operation: "cut" });
       expect(usePromptStore().text).toMatch(/how far it moves, negative cuts/);
       document.querySelector(".dim-input input")!.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));

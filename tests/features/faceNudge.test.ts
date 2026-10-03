@@ -83,6 +83,16 @@ describe("faceNudgePlacement", () => {
     expect(place?.axis({} as never).toArray()).toEqual([0, 1, 0]);
   });
 
+  it("points a whole slot picked face by face away from its first end's axis", () => {
+    // The tool reads such a selection as that end's radius, so the arrow
+    // already points the way a bigger radius goes.
+    const place = faceNudgePlacement(
+      { ...pre([0, -1, 0]), round: null, lead: round([0, 1, 0], false) },
+      () => {},
+    );
+    expect(place?.axis({} as never).toArray()).toEqual([0, 1, 0]);
+  });
+
   it("falls back to the normal when the face is not round", () => {
     const place = faceNudgePlacement({ ...pre([0, 3, 0]), round: null }, () => {});
     expect(place?.axis({} as never).toArray()).toEqual([0, 1, 0]);

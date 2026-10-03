@@ -81,9 +81,16 @@ export function roundFromResize(r: OfferedResize, axis: { origin: Vec3; dir: Vec
   };
 }
 
-/** The outward normal of the facet nearest `at`, the direction a cone or a
- *  torus is offset along where it was picked. The face's average normal is no
- *  use there, round a full cone it cancels to the axis. */
+/** How close to a mesh vertex `at` must lie, as a fraction of the facet's
+ *  size, to read the normal of the vertex rather than of the one facet. */
+const VERTEX_SNAP = 0.2;
+
+/** The outward normal of the surface where it was picked, the direction a
+ *  cone or a torus is offset along. The face's average normal is no use there,
+ *  round a full cone it cancels to the axis. Usually the nearest facet's; near
+ *  a vertex the angle weighted mean of every facet meeting there, so a pick at
+ *  a cone's apex points along its axis rather than along whichever facet of
+ *  the fan happened to be nearest. */
 export function facetNormalAt(tris: readonly THREE.Triangle[], at: THREE.Vector3): THREE.Vector3 | null {
   const p = new THREE.Vector3();
   let best: THREE.Triangle | null = null;
@@ -93,7 +100,26 @@ export function facetNormalAt(tris: readonly THREE.Triangle[], at: THREE.Vector3
     const d = t.closestPointToPoint(at, p).distanceToSquared(at);
     if (d < bestD) { bestD = d; best = t; }
   }
-  return best ? best.getNormal(new THREE.Vector3()) : null;
+  if (!best) return null;
+  const own = best.getNormal(new THREE.Vector3());
+  const corner = [best.a, best.b, best.c].reduce((m, v) => (v.distanceToSquared(at) < m.distanceToSquared(at) ? v : m));
+  const size = Math.sqrt(best.getArea());
+  if (corner.distanceTo(at) > VERTEX_SNAP * size) return own;
+  const same = 1e-4 * size;
+  const sum = new THREE.Vector3();
+  const n = new THREE.Vector3();
+  const e1 = new THREE.Vector3();
+  const e2 = new THREE.Vector3();
+  for (const t of tris) {
+    if (t.getArea() < 1e-12) continue;
+    const vs = [t.a, t.b, t.c];
+    const i = vs.findIndex((v) => v.distanceTo(corner) <= same);
+    if (i < 0) continue;
+    e1.subVectors(vs[(i + 1) % 3]!, vs[i]!);
+    e2.subVectors(vs[(i + 2) % 3]!, vs[i]!);
+    sum.addScaledVector(t.getNormal(n), e1.angleTo(e2));
+  }
+  return sum.length() > 1e-6 ? sum.normalize() : own;
 }
 
 /** Below this fraction of its original radius, a FULL round face is treated as
