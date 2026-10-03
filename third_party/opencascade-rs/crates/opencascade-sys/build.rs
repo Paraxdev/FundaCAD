@@ -402,10 +402,55 @@ which takes about twenty minutes.
     }
 }
 
+/// The Visual Studio generator cmake-rs would pick, to be named in its place.
+/// Left to pick it itself, cmake-rs hands the build the compiler's own flags
+/// as its Release flags with every /O taken out, which compiles the kernel
+/// with no optimisation at all. Given a generator it leaves CMake's alone.
+#[cfg(feature = "builtin")]
+fn msvc_generator() -> Option<&'static str> {
+    use cc::windows_registry::{find_vs_version, VsVers};
+
+    if !std::env::var("TARGET").unwrap().contains("msvc")
+        || std::env::var_os("CMAKE_GENERATOR").is_some()
+    {
+        return None;
+    }
+    match find_vs_version() {
+        Ok(VsVers::Vs18) => Some("Visual Studio 18 2026"),
+        Ok(VsVers::Vs17) => Some("Visual Studio 17 2022"),
+        Ok(VsVers::Vs16) => Some("Visual Studio 16 2019"),
+        Ok(VsVers::Vs15) => Some("Visual Studio 15 2017"),
+        _ => None,
+    }
+}
+
+/// A cached Release flags line that carries no optimisation.
+#[cfg(feature = "builtin")]
+fn unoptimised_flags(line: &str) -> bool {
+    ["CMAKE_C_FLAGS_RELEASE:", "CMAKE_CXX_FLAGS_RELEASE:"].iter().any(|var| {
+        line.strip_prefix(var).is_some_and(|rest| {
+            let flags = rest.split_once('=').map_or("", |(_, value)| value);
+            !flags.split_whitespace().any(|f| f.starts_with("/O") || f.starts_with("-O"))
+        })
+    })
+}
+
+/// An MSVC kernel compiled without optimisation, which is rebuilt once.
+#[cfg(feature = "builtin")]
+fn kernel_unoptimised(root: &std::path::Path) -> bool {
+    if !std::env::var("TARGET").unwrap().contains("msvc")
+        || root.join(STATE_DIR).join("release-flags").exists()
+    {
+        return false;
+    }
+    std::fs::read_to_string(root.join("build").join("CMakeCache.txt"))
+        .is_ok_and(|cache| cache.lines().any(unoptimised_flags))
+}
+
 /// Builds and installs the kernel into `root` unless a complete one is there.
 #[cfg(feature = "builtin")]
 fn build_kernel_into(root: &std::path::Path) {
-    if kernel_config_dir(root).is_some() {
+    if kernel_config_dir(root).is_some() && !kernel_unoptimised(root) {
         return;
     }
     refuse_foreign_kernel(root);
@@ -438,7 +483,13 @@ directory named OCCT to build one there.
     let lock = std::fs::File::create(state.join("kernel.lock")).unwrap();
     lock.lock().unwrap();
     if kernel_config_dir(root).is_some() {
-        return;
+        if !kernel_unoptimised(root) {
+            return;
+        }
+        println!(
+            "cargo:warning=the OpenCASCADE kernel in {} was compiled without optimisation, rebuilding it once, about twenty minutes",
+            root.display()
+        );
     }
     let installing = state.join("installing");
     std::fs::write(&installing, "").unwrap();
@@ -449,15 +500,42 @@ directory named OCCT to build one there.
     // build tree into the user package registry unless this is set, and
     // occt-sys passes no defines of ours, so it goes in a seeded cache.
     let cache = build.join("CMakeCache.txt");
-    let seeded = std::fs::read_to_string(&cache).unwrap_or_default();
+    let cached = std::fs::read_to_string(&cache).unwrap_or_default();
+    let generator = msvc_generator();
+    // Release flags an earlier build cached without optimisation would be
+    // kept as they are, so they go and CMake fills in its own. An entry goes
+    // with the comment above it, CMake refuses a cache with a comment left over.
+    let mut seeded = String::new();
+    let mut comment = String::new();
+    for line in cached.lines() {
+        if line.starts_with("//") {
+            comment.push_str(line);
+            comment.push('\n');
+        } else if generator.is_some() && unoptimised_flags(line) {
+            comment.clear();
+        } else {
+            seeded.push_str(&std::mem::take(&mut comment));
+            seeded.push_str(line);
+            seeded.push('\n');
+        }
+    }
+    seeded.push_str(&comment);
     if !seeded.contains("CMAKE_EXPORT_NO_PACKAGE_REGISTRY") {
-        let line = "CMAKE_EXPORT_NO_PACKAGE_REGISTRY:BOOL=ON\n";
-        std::fs::write(&cache, seeded + line).unwrap();
+        seeded.push_str("CMAKE_EXPORT_NO_PACKAGE_REGISTRY:BOOL=ON\n");
+    }
+    if seeded != cached {
+        std::fs::write(&cache, seeded).unwrap();
     }
 
     let out_dir = std::env::var_os("OUT_DIR").unwrap();
     std::env::set_var("OUT_DIR", &fake_out);
+    if let Some(generator) = generator {
+        std::env::set_var("CMAKE_GENERATOR", generator);
+    }
     let built = std::panic::catch_unwind(occt_sys::build_occt);
+    if generator.is_some() {
+        std::env::remove_var("CMAKE_GENERATOR");
+    }
     std::env::set_var("OUT_DIR", out_dir);
     forget_registered_build(&build);
     if let Err(panic) = built {
@@ -465,6 +543,8 @@ directory named OCCT to build one there.
     }
 
     std::fs::remove_file(&installing).unwrap();
+    // Whatever flags this build came out with, it is not rebuilt for them again.
+    std::fs::write(state.join("release-flags"), "").unwrap();
     if kernel_config_dir(root).is_none() {
         panic!("OpenCASCADE was built but {} holds no complete install", root.display());
     }

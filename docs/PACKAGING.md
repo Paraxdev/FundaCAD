@@ -98,6 +98,13 @@ finds or builds the kernel like this:
   rustup MSVC toolchain; a `cargo` that defaults to `windows-gnu` (a GNU rustup
   default, or another Rust install earlier on PATH) builds that target, which the build script refuses because that
   kernel crashes in ordinary fillets.
+- **Optimisation on Windows.** The `cmake` crate, left to pick the Visual
+  Studio generator itself, replaces the Release flags with the compiler's own
+  minus every `/O`, which compiled the kernel with no optimisation at all. The
+  build script names that same generator, so CMake's Release flags
+  (`/O2 /Ob2`) stay in place. A kernel built the old way is recognised by the
+  flags in its `build/CMakeCache.txt` and rebuilt once, which a cargo warning
+  announces; the `release-flags` stamp in `.fundacad` keeps that to once.
 - **CMake 4.** `CMAKE_POLICY_VERSION_MINIMUM=3.5` (set by the root
   `.cargo/config.toml`) lets CMake 4 configure OCCT 7.8.1, whose declared
   minimum it otherwise refuses.
