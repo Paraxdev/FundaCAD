@@ -251,6 +251,100 @@ export function radialAt(cyl: Cylinder, at: Vec3): Vec3 | null {
   return unit(sub(rel, scale(cyl.axis, dot(rel, cyl.axis))));
 }
 
+/** How far a mesh on a sphere may sit off the fitted one, as a fraction of its
+ *  radius. Tight, since the vertices lie on the surface: a torus patch must miss. */
+const SPHERE_TOLERANCE = 1e-3;
+/** cos of how far a facet's normal may lean off the line through the centre. */
+const SPHERE_FACET_DOT = 0.95;
+
+/** The centre of the sphere a face's mesh lies on, by least squares, or null
+ *  when it does not lie on one. `points` are the triangles' corners in order
+ *  and `normals` one per triangle.
+ *
+ *  A cone meshed as two rings, or as an apex and a ring, lies on a sphere
+ *  exactly, facet normals included, so the fit alone reads every countersink
+ *  and drill point as one. What a cone never has is corners inside its
+ *  boundary in more than one place, and a sphere with a row to spare does. */
+export function sphereCentreFromFace(points: readonly Vec3[], normals: readonly Vec3[]): Vec3 | null {
+  const p0 = points[0];
+  if (!p0 || points.length < 4) return null;
+  // |p|² = 2 p·c + k, solved about p0 so large coordinates keep their digits.
+  const m = [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]];
+  const b = [0, 0, 0, 0];
+  for (const p of points) {
+    const q = sub(p, p0);
+    const row = [2 * q[0], 2 * q[1], 2 * q[2], 1];
+    const rhs = dot(q, q);
+    for (let i = 0; i < 4; i++) {
+      b[i]! += row[i]! * rhs;
+      for (let j = 0; j < 4; j++) m[i]![j]! += row[i]! * row[j]!;
+    }
+  }
+  const scaleOf = Math.max(...m.map((r, i) => Math.abs(r[i]!)));
+  for (let c = 0; c < 4; c++) {
+    let best = c;
+    for (let r = c + 1; r < 4; r++) if (Math.abs(m[r]![c]!) > Math.abs(m[best]![c]!)) best = r;
+    if (Math.abs(m[best]![c]!) < 1e-9 * scaleOf) return null;
+    [m[c], m[best]] = [m[best]!, m[c]!];
+    [b[c], b[best]] = [b[best]!, b[c]!];
+    for (let r = c + 1; r < 4; r++) {
+      const f = m[r]![c]! / m[c]![c]!;
+      for (let j = c; j < 4; j++) m[r]![j]! -= f * m[c]![j]!;
+      b[r]! -= f * b[c]!;
+    }
+  }
+  const x = [0, 0, 0, 0];
+  for (let r = 3; r >= 0; r--) {
+    let s = b[r]!;
+    for (let j = r + 1; j < 4; j++) s -= m[r]![j]! * x[j]!;
+    x[r] = s / m[r]![r]!;
+  }
+  const local: Vec3 = [x[0]!, x[1]!, x[2]!];
+  const radius = Math.sqrt(Math.max(0, x[3]! + dot(local, local)));
+  if (!(radius > 0)) return null;
+  const off = points.reduce((s, p) => {
+    const d = Math.hypot(...sub(sub(p, p0), local)) - radius;
+    return s + d * d;
+  }, 0);
+  if (Math.sqrt(off / points.length) > SPHERE_TOLERANCE * radius) return null;
+  const centre = add(p0, local);
+  for (let t = 0; t < normals.length; t++) {
+    const a = points[3 * t], b2 = points[3 * t + 1], c = points[3 * t + 2];
+    if (!a || !b2 || !c) break;
+    const mid = scale(add(a, add(b2, c)), 1 / 3);
+    const out = unit(sub(mid, centre));
+    const n = normals[t]!;
+    // A sliver of no area has no normal to hold against the centre.
+    if (dot(n, n) < 0.25) continue;
+    if (!out || Math.abs(dot(out, n)) < SPHERE_FACET_DOT) return null;
+  }
+  return innerCorners(points) > 1 ? centre : null;
+}
+
+/** How many distinct corners of a triangle mesh touch no boundary edge. */
+function innerCorners(points: readonly Vec3[]): number {
+  const key = (p: Vec3) => `${p[0].toFixed(5)},${p[1].toFixed(5)},${p[2].toFixed(5)}`;
+  const uses = new Map<string, number>();
+  const edges: [string, string][] = [];
+  for (let i = 0; i + 2 < points.length; i += 3) {
+    const k = [key(points[i]!), key(points[i + 1]!), key(points[i + 2]!)];
+    for (let e = 0; e < 3; e++) {
+      const a = k[e]!, b = k[(e + 1) % 3]!;
+      if (a === b) continue;
+      const id = a < b ? `${a}|${b}` : `${b}|${a}`;
+      if (!uses.has(id)) edges.push([a, b]);
+      uses.set(id, (uses.get(id) ?? 0) + 1);
+    }
+  }
+  const corners = new Set<string>();
+  const onBoundary = new Set<string>();
+  for (const [a, b] of edges) {
+    corners.add(a).add(b);
+    if (uses.get(a < b ? `${a}|${b}` : `${b}|${a}`) === 1) onBoundary.add(a).add(b);
+  }
+  return corners.size - onBoundary.size;
+}
+
 /** A sweep above this is a full round. Short of 2π because a tessellated ring's
  *  vertices leave one chord's angle uncovered, and a coarse ring's chord is wide. */
 export const FULL_SWEEP = 2 * Math.PI - Math.PI / 4;

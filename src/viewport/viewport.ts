@@ -93,7 +93,7 @@ import { clickTakes, DwellIntent, type SelectPolicy } from "./clickIntent";
 import { getHoverDwellMs } from "../ui/interactionPrefs";
 import { edgesOnFace, faceEdgeTol, faceSurface, type Tri } from "./faceEdges";
 import { remapSelection, remapStreamedSelection, shouldAnnounce } from "./selectionMemo";
-import { arcSweep, cylinderFromFace, FULL_SWEEP, isPlanarFace, onRoundFace, radialAt, roundStand, solidInsideCylinder, type Cylinder } from "../features/planeMath";
+import { arcSweep, cylinderFromFace, FULL_SWEEP, isPlanarFace, onRoundFace, radialAt, roundStand, solidInsideCylinder, sphereCentreFromFace, unit, type Cylinder } from "../features/planeMath";
 import { facetNormalAt, type RoundFace } from "../features/radialDrag";
 import type { Plane3, PlaneDef, RebuildResult, Selector, Vec3 } from "../types";
 import { dragStep } from "./dragStep";
@@ -1971,7 +1971,14 @@ export class Viewport {
       // A sphere, a cone or a torus: the normal where the handle stands, the
       // same one the tool settles on, never the average, which round a closed
       // face points along its axis or nowhere.
-      const at = !isPlanarFace(normals) ? facetNormalAt(tris, anchor) : null;
+      const curved = !isPlanarFace(normals);
+      // A sphere resizes about its centre, so its handle points out from there
+      // on a dimple too, where the face's own normal points in.
+      const centre = curved
+        ? sphereCentreFromFace(tris.flatMap((t) => [t.a.toArray(), t.b.toArray(), t.c.toArray()] as Vec3[]), normals)
+        : null;
+      const out = centre && unit([anchor.x - centre[0], anchor.y - centre[1], anchor.z - centre[2]]);
+      const at = out ? new THREE.Vector3(...out) : curved ? facetNormalAt(tris, anchor) : null;
       if (at) normal = at;
     }
     return {
