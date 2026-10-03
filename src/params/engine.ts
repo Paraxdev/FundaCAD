@@ -260,7 +260,7 @@ export function boundParam(doc: CadDocument, target: ParamTarget): string | null
   return null;
 }
 
-function sameTarget(a: ParamTarget, b: ParamTarget): boolean {
+export function sameTarget(a: ParamTarget, b: ParamTarget): boolean {
   if (a.kind !== b.kind) return false;
   switch (a.kind) {
     case "feature": return b.kind === "feature" && a.feature === b.feature && a.field === b.field;
