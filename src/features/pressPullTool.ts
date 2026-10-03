@@ -14,11 +14,11 @@
 
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
-import type { DocumentStore } from "../document/store";
+import type { DocumentStore, RebuildState } from "../document/store";
 import type { Feature, PressPullDirection, PressPullMode, Selector } from "../types";
-import { DimInput, type DimToggleDef } from "../sketch/dimInput";
+import { DimInput, type DimFieldDef, type DimToggleDef } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
-import { snap } from "../ui/units";
+import { fmtLength, snap } from "../ui/units";
 import {
   axisDragDistance,
   createDragHandle,
@@ -28,10 +28,18 @@ import {
   type DragHandle,
 } from "./manipulator";
 import { draftAngle, draftDelta } from "./draftMath";
-import { collapseDiameter, deltaForDiameter, radialDrag, type RoundFace } from "./radialDrag";
+import { collapseDiameter, deltaForDiameter, deltaForRadius, radialDrag, type RoundFace } from "./radialDrag";
 import { CanvasGesture } from "./canvasGesture";
-import { previewVerdict } from "./previewVerdict";
-import { anchorOnAxis, DIRECTION_LABEL, initialDirection, offeredAxis, type HoleAxis } from "./pressPullAxis";
+import { commitDecision } from "./edgeDragMath";
+import {
+  anchorOnAxis,
+  DIRECTION_LABEL,
+  initialDirection,
+  offeredAxis,
+  offeredResize,
+  type HoleAxis,
+  type OfferedResize,
+} from "./pressPullAxis";
 
 /** Steepest taper the tool offers, degrees, just under the engine's 89 fold limit. */
 const MAX_PP_TAPER = 88;
@@ -39,6 +47,11 @@ const MAX_PP_TAPER = 88;
 const PP_TAPER_MIN = 1;
 /** How far above the pushed face the taper arc floats, in pixels. */
 const PP_TAPER_ABOVE_PX = 48;
+/** A drag or a keystroke waits this long for the value to hold still before
+ *  the engine is asked, as the fillet drag does. */
+const PREVIEW_DEBOUNCE_MS = 150;
+/** Under this a push is no push at all, the same floor commit uses. */
+const MIN_PUSH = 1e-3;
 
 /** A deterministic unit vector lying IN the plane of a face with the given
  *  normal: world X projected onto the plane, or world Y where the face points
@@ -73,10 +86,20 @@ export class PressPullTool {
   private axis = new THREE.Vector3(0, 0, 1); // drag axis (unit) = face outward normal, or the outward radial on a round face
   private quat = new THREE.Quaternion(); // Y -> current arrow direction
   private value = 0; // signed distance in mm (+ along the axis / out, − in)
-  /** Set when a lone CYLINDRICAL face is selected: the drag then resizes it
-   *  rather than moving it, `value` is the radial delta, and the readout speaks
-   *  diameters. Null for every other face, where nothing changes. */
+  /** Set when a lone CYLINDRICAL face is selected, or a run of faces it runs
+   *  smoothly into: the drag then resizes it rather than moving it, `value` is
+   *  the radial delta, and the readout is a diameter on a full round and a
+   *  radius on a partial arc. Null for every other selection. */
   private round: RoundFace | null = null;
+  /** the radius where a tangent neighbour would first be left behind */
+  private contact: number | null = null;
+  /** Some selected face is round, so the push resizes rather than slides:
+   *  no taper, no boolean mode and no up to. Outlives `round` when a Ctrl-click
+   *  adds a face outside its tangent run. */
+  private resizing = false;
+  /** Tangent faces follow, remembered for the session. */
+  private follow = true;
+  private toggleKind: "mode" | "follow" | null = null;
   private mode: PressPullMode = "auto";
   /** Along the axis only once the engine has said the face has one worth
    *  offering (`holeAxis`); the button stays hidden until then. */
@@ -106,8 +129,7 @@ export class PressPullTool {
   private taperGrabbing = false;
   private taperGrabProj = 0;
   private taperGrabInset = 0;
-  /** true while the exact solid is previewed through the engine, so the switch
-   *  to a round resize knows to clear it and restore the ghost. */
+  /** true while our push is appended to the build as the live preview */
   private enginePreviewOn = false;
   /** true when this drag began on the passive selection handle rather than on
    *  our own gizmo, a one-press gesture, so releasing it finishes (see onUp). */
@@ -116,6 +138,17 @@ export class PressPullTool {
   private grabProj = 0; // axis projection at grab start
   private downPos = { x: 0, y: 0 };
   private downOnGizmo = false;
+
+  private previewTimer: number | null = null;
+  private unsubBuild: (() => void) | null = null;
+  /** Our previewed feature the model on screen was built with, null when it
+   *  shows none. A refused push keeps it on screen (setPreview's hold). */
+  private shownFeature: Feature | null = null;
+  /** What the kernel said about each push sent this gesture, by keyOf. */
+  private refused = new Map<string, string>();
+  private built = new Set<string>();
+  /** the refusal painted on the handle, box and prompt */
+  private refusalShown: string | null = null;
 
   private dim = new DimInput();
   private onDone: ((id: string | null) => void) | null = null;
@@ -209,6 +242,7 @@ export class PressPullTool {
       const stepped = snap(raw, this.viewport.snapStep(this.anchor, e.shiftKey));
       if (stepped === this.value) return; // same step, don't re-trigger an OCCT rebuild
       this.value = stepped;
+      this.dim.takeOver("distance");
       this.dim.updateFromCursor({ distance: this.readout() });
       this.refreshPreview();
       return;
@@ -259,8 +293,16 @@ export class PressPullTool {
         this.holeAxis = null;
         if (this.directionBtn) this.directionBtn.style.display = "none";
         if (this.direction === "axis") this.setDirection("normal");
-        this.refreshPreview();
-        setPrompt(`${this.faces.length} faces · drag or type a distance · click to commit · Esc`);
+        const was = { resizing: this.resizing, round: this.round !== null };
+        if (this.viewport.roundFaceAt(hit.faceId, hit.anchor)) this.resizing = true;
+        if (this.round && !this.inTangentRun()) this.dropRound();
+        if (this.resizing) {
+          this.mode = "auto";
+          this.taper = 0;
+        }
+        if (was.resizing !== this.resizing || was.round !== (this.round !== null)) this.showBox();
+        else this.syncToggle();
+        this.refreshPreview(true);
       }
       return;
     }
@@ -304,6 +346,8 @@ export class PressPullTool {
     }
     if (this.grabbing) {
       this.grabbing = false;
+      // commit and cancel both want the kernel already chasing where the drag ended
+      this.flushPreviewNow();
       const release = fluentRelease({
         fluent: this.fluentGrab,
         moved:
@@ -312,7 +356,7 @@ export class PressPullTool {
         // read here so a drag that ended back at the face cancels out of a tool
         // the user never explicitly opened, instead of parking them in it with
         // a "nothing to commit" prompt.
-        meaningful: Math.abs(this.value) >= 1e-3,
+        meaningful: !this.neutral,
       });
       // Cleared BEFORE dispatching, not in cleanup: commit() can decline and
       // leave the tool alive (an unreadable number in the field), and a stale
@@ -334,7 +378,7 @@ export class PressPullTool {
     // Never on a round face: "up to" answers how FAR to travel, and a resize is
     // not travelling anywhere. Offering it would read the click as a target and
     // commit a distance the user never asked for.
-    const hit = this.round ? null : this.viewport.pickFaceForPressPull(e.clientX, e.clientY);
+    const hit = this.resizing ? null : this.viewport.pickFaceForPressPull(e.clientX, e.clientY);
     if (hit && !this.faceIds.includes(hit.faceId)) {
       this.upTo = hit.selector;
       this.commitUpTo();
@@ -349,18 +393,17 @@ export class PressPullTool {
         this.pickingTarget = false;
         // restore the distance field T-mode hid (audit bug #2: leaving it
         // active let Enter commit a plain distance mid-target-pick)
-        this.dim.show([{ name: "distance", label: "D", kind: "length" }], () => this.commit(), () => this.cancel(),
-          this.round ? undefined : this.modeToggle(), this.directionButton());
-        this.dim.updateFromCursor({ distance: Math.abs(this.value) });
-        setPrompt("Drag or type a value · click a face to stop at it · click to commit · Esc");
+        this.showBox();
+        this.refreshPreview(true);
         return;
       }
       this.cancel();
       return;
     }
-    if ((e.key === "t" || e.key === "T") && this.phase === "drag" && !this.pickingTarget && !this.round) {
+    if ((e.key === "t" || e.key === "T") && this.phase === "drag" && !this.pickingTarget && !this.resizing) {
       this.pickingTarget = true;
       this.dim.hide(); // Enter must not commit a plain distance while picking
+      this.clearPreviewTimer();
       this.viewport.clearPressPullGhost();
       this.viewport.setPeek(null);
       setPrompt("Click the face to stop at · Esc");
@@ -374,6 +417,8 @@ export class PressPullTool {
     this.pickingTarget = false;
     this.bodyId = bodyId;
     this.round = round;
+    this.contact = null;
+    this.resizing = round !== null || (faceIds.length > 1 && faceIds.some((id) => this.viewport.roundFaceAt(id, anchor) !== null));
     this.anchor.copy(anchor);
     this.axis.copy(round?.radial ?? normal).normalize();
     this.faceAnchor.copy(anchor);
@@ -384,46 +429,74 @@ export class PressPullTool {
     this.value = 0;
     this.taper = 0;
     this.previewId = this.store.nextId();
+    this.forgetOutcomes();
     this.viewport.clearHover();
     this.buildGizmo();
-    // The ∠ taper field rides beside the distance for a PLANAR push, the only one
-    // that leans a wall. A round resize has no wall to lean, so it is left off.
     this.mode = "auto";
-    this.dim.show(
-      round
-        ? [{ name: "distance", label: "D", kind: "length" }]
-        : [{ name: "distance", label: "D", kind: "length" }, { name: "taper", label: "Angle", icon: "angle", kind: "angle" }],
-      () => this.commit(), () => this.cancel(),
-      round ? undefined : this.modeToggle(),
-      this.directionButton(),
-    );
-    if (!round) this.dim.updateFromCursor({ taper: 0 });
+    this.showBox();
     const lone = faces[0];
-    if (!round && faces.length === 1 && lone) this.askAxis(lone, bodyId);
+    if (faces.length === 1 && lone) this.askAxis(lone, bodyId);
     const s = this.viewport.projectToScreen(this.anchor);
     this.dim.position(s.x, s.y);
-    // A round face opens showing the size it ALREADY is, not a zero, the field
-    // is a diameter here, and the current one is the number you are about to
-    // edit. A flat face opens at 0 because there the field is a travel.
-    this.dim.updateFromCursor({ distance: this.readout() });
-    setPrompt(
-      round
-        ? `Drag or type a diameter · under ${collapseDiameter(round.radius).toFixed(2)}mm removes it · Esc`
-        : "Drag or type a value, negative cuts · click a face to stop at it · Esc",
-    );
+    this.unsubBuild ??= this.store.onBuild((st) => {
+      if (st.building || !st.result || this.phase !== "drag") return;
+      this.noteBuildOutcome(st);
+    });
+    this.promptNow();
     this.gesture.frame();
   }
 
-  /** What the heads-up field shows for the current drag: a DIAMETER on a round
-   *  face (the size it would become, 0 while the drag is asking for it to go),
-   *  the travelled distance on any other. */
+  /** The value box for the current selection. The ∠ taper field rides beside
+   *  the distance for a push that slides, the only one that leans a wall; a
+   *  resize has none, and its free switch is Tangent faces follow instead of
+   *  the boolean mode. */
+  private showBox() {
+    const defs: DimFieldDef[] = [{ name: "distance", ...this.fieldLabel(), kind: "length" }];
+    if (!this.resizing) defs.push({ name: "taper", label: "Angle", icon: "angle", kind: "angle" });
+    this.toggleKind = !this.resizing ? "mode" : this.round ? "follow" : null;
+    const toggle = this.toggleKind === "mode" ? this.modeToggle() : this.toggleKind === "follow" ? this.followToggle() : undefined;
+    this.dim.show(defs, () => this.commit(), () => this.cancel(), toggle, this.directionButton(), () => this.onTyped());
+    this.syncToggle();
+    // A round face opens showing the size it ALREADY is, not a zero, the field
+    // is a size here, and the current one is the number you are about to edit.
+    // A flat face opens at 0 because there the field is a travel.
+    this.dim.updateFromCursor({ distance: this.readout(), ...(this.resizing ? {} : { taper: this.taper }) });
+  }
+
+  private get full(): boolean {
+    return this.round?.full !== false;
+  }
+
+  private fieldLabel(): { label: string; icon?: string } {
+    return !this.round ? { label: "D" } : this.full ? { label: "Diameter", icon: "diameter" } : { label: "R" };
+  }
+
+  /** What the heads-up field shows for the current drag: the size a round face
+   *  would become, a diameter on a full round (0 while the drag is asking for
+   *  it to go) and a radius on a partial arc, the travelled distance on any other. */
   private readout(): number {
-    return this.round ? radialDrag(this.round.radius, this.value, this.round.solidInside).diameter : Math.abs(this.value);
+    const r = this.round;
+    if (!r) return Math.abs(this.value);
+    const d = radialDrag(r.radius, this.value, r.solidInside, this.full);
+    return this.full ? d.diameter : d.radius;
   }
 
   /** The inverse: a number the user TYPED into that field, read back as a drag. */
   private fromReadout(v: number): number {
-    return this.round ? deltaForDiameter(this.round.radius, v) : v;
+    const r = this.round;
+    if (!r) return v;
+    return this.full ? deltaForDiameter(r.radius, v) : deltaForRadius(r.radius, v);
+  }
+
+  private negativeSize(): string {
+    return `a ${this.full ? "diameter" : "radius"} can't be negative`;
+  }
+
+  /** Typing a size is absolute, so a minus sign is a mistake to say at once. */
+  private onTyped() {
+    if (!this.round) return;
+    const v = this.dim.getValue("distance");
+    if (v != null && v < 0) this.dim.flag(this.negativeSize());
   }
 
   /** keep the handle a constant on-screen size, point it the way we're dragging,
@@ -444,14 +517,14 @@ export class PressPullTool {
       this.handle?.paint({
         hot: this.hovering || this.grabbing,
         tone: sign < 0 ? "cut" : "idle",
-        refused: this.enginePreviewOn && this.store.previewError !== null,
+        refused: this.refusalShown !== null,
       });
       this.placeTaperArc(dir, k);
       const s = this.viewport.projectToScreen(at);
       this.dim.position(s.x, s.y);
       if (!this.grabbing && this.dim.isUserDriven("distance")) {
         const v = this.dim.getValue("distance");
-        if (v != null) {
+        if (v != null && !(this.round && v < 0)) {
           // the field is the truth: typed sign is preferred (out = +, cut = −). The old
           // code re-applied the drag's sign onto |v|, so a typed "-2" after an
           // outward drag silently JOINED 2 instead of cutting.
@@ -476,34 +549,201 @@ export class PressPullTool {
     }
   }
 
-  /** The exact solid through the engine for every push but a round resize. A
-   *  flat face carries the faces around it along their own slopes, which no
-   *  straight ghost can draw. `hold` keeps the last push that built on screen
-   *  while the kernel refuses this one, the way fillet does. */
-  private refreshPreview() {
+  /** The value as the feature stores it. */
+  private size(): number {
+    return Math.round(this.value * 1000) / 1000;
+  }
+
+  /** Nothing to push: the drag sits on the face, and is not removing it. */
+  private get neutral(): boolean {
+    return Math.abs(this.value) < MIN_PUSH && !this.removing;
+  }
+
+  private get removing(): boolean {
+    const r = this.round;
+    return !!r && radialDrag(r.radius, this.value, r.solidInside, this.full).mode === "remove";
+  }
+
+  /** One push, everything but its id. */
+  private keyOf(f: Feature): string {
+    const rest: Record<string, unknown> = { ...f };
+    delete rest.id;
+    return JSON.stringify(rest);
+  }
+
+  /** Everything about a push except how far, so a size held from earlier in
+   *  the drag still answers the same question. */
+  private questionOf(f: Feature): string {
+    const rest: Record<string, unknown> = { ...f };
+    for (const k of ["id", "type", "distance", "operation"]) delete rest[k];
+    return JSON.stringify(rest);
+  }
+
+  /** The drag value a sent feature was built from. */
+  private valueOf(f: Feature): number | null {
+    const r = this.round;
+    if (f.type === "deleteFace") return r ? -r.radius : null;
+    if (f.type !== "press-pull" || typeof f.distance !== "number") return null;
+    return r ? (r.solidInside ? f.distance : -f.distance) : f.distance;
+  }
+
+  /** The value the model on screen was built at for the current question, or null. */
+  private get shown(): number | null {
+    const f = this.shownFeature;
+    if (!f) return null;
+    return this.questionOf(f) === this.questionOf(this.buildFeature()) ? this.valueOf(f) : null;
+  }
+
+  private forgetOutcomes() {
+    this.shownFeature = null;
+    this.refused = new Map();
+    this.built = new Set();
+  }
+
+  /** Record what the kernel said about the push it was SENT, which during a
+   *  fast drag is often not the one on the handle any more. */
+  private noteBuildOutcome(s: RebuildState) {
+    const sent = s.previewBuilt?.find((f) => f.id === this.previewId) ?? null;
+    const held = s.heldRefusal?.featureId === this.previewId ? s.heldRefusal : null;
+    if (!sent) this.shownFeature = null;
+    else if (held) this.refused.set(this.keyOf(sent), refusalText(held.message));
+    else if (s.errorFeatureId != null || !s.errorMessage) {
+      this.shownFeature = sent;
+      this.built.add(this.keyOf(sent));
+    }
+    this.refreshGhost();
+    this.refreshRefusal();
+  }
+
+  /** Paint the refusal, or take it down, on the handle, the value box and the
+   *  prompt. A refusal stays up until a value builds, so the box does not
+   *  flicker while the next answer is on its way. */
+  private refreshRefusal() {
+    let reason: string | null = null;
+    if (!this.neutral && !this.pickingTarget) {
+      const k = this.keyOf(this.buildFeature());
+      reason = this.refused.get(k) ?? (this.built.has(k) ? null : this.refusalShown);
+    }
+    if (reason === this.refusalShown) return;
+    this.refusalShown = reason;
+    this.dim.showOwnProblem(reason);
+    this.handle?.paint({ refused: reason !== null });
+    this.viewport.requestRender();
+    this.promptNow();
+  }
+
+  /** The instant cap of a resize, until the engine's own preview is on screen.
+   *  Only over the model it was picked on: a preview renumbers the faces. */
+  private refreshGhost() {
+    const r = this.round;
+    const k = this.neutral ? null : this.keyOf(this.buildFeature());
+    if (!r || this.pickingTarget || this.shownFeature || this.removing || k === null || this.refused.has(k)) {
+      this.viewport.clearPressPullGhost();
+      return;
+    }
+    this.viewport.setPressPullGhost(this.faceIds, this.value, r);
+  }
+
+  /** How many faces Tangent faces follow will move at this size, 0 when it
+   *  does not engage. */
+  private followMoves(): number {
+    const r = this.round;
+    const t = r?.tangent;
+    if (!r || !t || !this.followOffered() || !this.follow || !t.lostWhen || !t.followable) return 0;
+    const next = r.radius + this.value;
+    const contact = this.contact ?? r.radius;
+    const lost = t.lostWhen === "shrink" ? next < contact - 1e-6 : next > contact + 1e-6;
+    return lost ? Math.max(1, t.run.length - 1, t.faces) : 0;
+  }
+
+  /** A size for the prompt, said the way the field reads it. */
+  private sizeText(value: number): string {
+    const r = this.round;
+    if (!r) return fmtLength(Math.abs(value));
+    const d = radialDrag(r.radius, value, r.solidInside, this.full);
+    if (d.mode === "remove") return "it removed";
+    return this.full ? `⌀${fmtLength(d.diameter)}` : `R${fmtLength(d.radius)}`;
+  }
+
+  private promptNow() {
+    if (this.phase !== "drag" || this.pickingTarget) return;
+    const r = this.round;
+    if (this.refusalShown) {
+      const shown = this.shown;
+      const then = this.dim.isUserDriven("distance")
+        ? `type another ${r ? (this.full ? "diameter" : "radius") : "distance"}`
+        : shown !== null && Math.abs(shown) >= MIN_PUSH
+          ? `keeping ${this.sizeText(shown)}`
+          : "drag back";
+      setPrompt(`${this.refusalShown} · ${then} · Esc`);
+      return;
+    }
+    if (r) {
+      // Nothing to ghost once the drag is asking for the face to GO; the
+      // readout dropping to 0 and this line are what say so.
+      if (this.removing) return setPrompt("Release to remove this face · drag back to keep it · Esc");
+      const moves = this.followMoves();
+      if (moves > 0) {
+        return setPrompt(`Moves the ${moves === 1 ? "face that runs" : `${moves} faces that run`} smoothly into it · Esc`);
+      }
+      return setPrompt(this.full
+        ? `Drag or type a diameter · under ${collapseDiameter(r.radius).toFixed(2)}mm removes it · Esc`
+        : "Drag or type a radius · Esc");
+    }
+    if (this.faces.length > 1) return setPrompt(`${this.faces.length} faces · drag or type a distance · click to commit · Esc`);
+    setPrompt("Drag or type a value, negative cuts · click a face to stop at it · Esc");
+  }
+
+  /** The exact solid through the engine for every push. A flat face carries the
+   *  faces around it along their own slopes and a round one re-trims its
+   *  neighbours, which no ghost can draw. `hold` keeps the last push that built
+   *  on screen while the kernel refuses this one, the way fillet does. A drag
+   *  or a keystroke waits for the value to hold still; a discrete change goes
+   *  `now`. */
+  private refreshPreview(now = false) {
     this.syncPeek();
-    if (!this.round) {
-      this.viewport.clearPressPullGhost();
-      this.store.setPreview(this.buildFeature(), { hold: true });
-      this.enginePreviewOn = true;
+    this.refreshGhost();
+    this.refreshRefusal();
+    this.promptNow();
+    this.clearPreviewTimer();
+    if (now) {
+      this.pushPreview();
       return;
     }
-    if (this.enginePreviewOn) {
-      this.store.setPreview(null);
+    this.previewTimer = window.setTimeout(() => {
+      this.previewTimer = null;
+      this.pushPreview();
+    }, PREVIEW_DEBOUNCE_MS);
+  }
+
+  private pushPreview() {
+    if (!this.active || this.phase !== "drag" || this.pickingTarget) return;
+    if (this.neutral) {
+      if (this.enginePreviewOn) this.store.setPreview(null);
       this.enginePreviewOn = false;
-    }
-    // Nothing to ghost once the drag is asking for the face to GO: the honest
-    // preview of a removal is the healed body, which needs the kernel. The
-    // readout dropping to 0 and the prompt saying so is what carries it instead.
-    if (this.round && radialDrag(this.round.radius, this.value, this.round.solidInside).mode === "remove") {
-      this.viewport.clearPressPullGhost();
-      setPrompt("Release to remove this face · drag back to keep it · Esc");
+      this.refreshRefusal();
       return;
     }
-    if (this.round) {
-      setPrompt(`Drag or type a diameter · under ${collapseDiameter(this.round.radius).toFixed(2)}mm removes it · Esc`);
+    const f = this.buildFeature();
+    // A push already refused is not asked again; the model keeps the last one that built.
+    if (!this.refused.has(this.keyOf(f))) {
+      this.store.setPreview(f, { hold: true });
+      this.enginePreviewOn = true;
     }
-    this.viewport.setPressPullGhost(this.faceIds, this.value, this.round);
+    this.refreshRefusal();
+  }
+
+  /** Ask the engine right away when a debounce is pending. */
+  private flushPreviewNow() {
+    if (this.previewTimer == null) return;
+    this.clearPreviewTimer();
+    this.pushPreview();
+  }
+
+  private clearPreviewTimer() {
+    if (this.previewTimer == null) return;
+    window.clearTimeout(this.previewTimer);
+    this.previewTimer = null;
   }
 
   /** A cut with its own tool body previews inside the body it cuts, so that
@@ -538,11 +778,11 @@ export class PressPullTool {
         : gizmo && rc.intersectObjects(gizmo.children, false).length > 0 ? "push" : null);
   }
 
-  /** A taper is offered only where a wall exists to lean: a PLANAR by-distance
-   *  push with real travel. A round resize has no wall, an up-to push lands on a
-   *  chosen surface that a lean would miss, and a target-pick is mid-question. */
+  /** A taper is offered only where a wall exists to lean: a by-distance push
+   *  that slides, with real travel. A resize has no wall, an up-to push lands on
+   *  a chosen surface that a lean would miss, and a target-pick is mid-question. */
   private canTaper(): boolean {
-    return !this.round && !this.upTo && !this.pickingTarget && this.direction === "normal" && Math.abs(this.value) >= PP_TAPER_MIN;
+    return !this.resizing && !this.upTo && !this.pickingTarget && this.direction === "normal" && Math.abs(this.value) >= PP_TAPER_MIN;
   }
 
   /** Float the curved taper arc above the pushed face, swinging in the plane the
@@ -591,9 +831,53 @@ export class PressPullTool {
         this.mode = MODES[(MODES.indexOf(this.mode) + 1) % MODES.length] ?? "auto";
         this.dim.setToggle(this.mode !== "auto");
         this.dim.setToggleLabel(MODE_LABEL[this.mode]);
-        this.refreshPreview();
+        this.refreshPreview(true);
       },
     };
+  }
+
+  private followToggle(): DimToggleDef {
+    return {
+      label: "Tangent faces follow",
+      title: "On, the faces that run smoothly into this one move with it once it is too small or too big for them to meet it, so a slot narrows as one; off, that size is refused",
+      initial: this.follow,
+      onChange: (on) => {
+        this.follow = on;
+        this.refreshPreview(true);
+      },
+    };
+  }
+
+  /** Tangent faces follow applies to one round face with faces running into it. */
+  private followOffered(): boolean {
+    return this.faces.length === 1 && (this.round?.tangent?.faces ?? 0) > 0;
+  }
+
+  private syncToggle() {
+    if (this.toggleKind === "follow") this.dim.setToggleHidden(!this.followOffered());
+  }
+
+  /** Every selected face lies in the first round face's tangent run, so the
+   *  selection still resizes as one, a whole slot picked face by face. */
+  private inTangentRun(): boolean {
+    const run = this.round?.tangent?.run;
+    if (!run?.length) return false;
+    const ids = new Set(run.map((p) => this.viewport.faceIdNear(p)));
+    return this.faceIds.every((id) => ids.has(id));
+  }
+
+  /** The selection no longer resizes as one round face: read the drag as a
+   *  signed push along the first face's outward normal, the arrow kept in place. */
+  private dropRound() {
+    const r = this.round;
+    if (!r) return;
+    const out = r.solidInside ? 1 : -1;
+    this.value *= out;
+    this.grabValue *= out;
+    this.axis.copy(r.radial).multiplyScalar(out).normalize();
+    this.faceNormal.copy(this.axis);
+    this.round = null;
+    this.contact = null;
   }
 
   /** The "Along normal / Along axis" switch, hidden until the engine says the
@@ -619,11 +903,29 @@ export class PressPullTool {
     const ask = ++this.axisAsk;
     void this.store.faceAxis(face, bodyId).then((reply) => {
       if (ask !== this.axisAsk || !this.active || this.phase !== "drag") return;
+      if (this.round) {
+        this.adoptResize(offeredResize(reply));
+        return;
+      }
       this.holeAxis = offeredAxis(reply);
       if (!this.holeAxis) return;
       if (this.directionBtn) this.directionBtn.style.display = "";
       if (initialDirection(this.holeAxis) === "axis") this.setDirection("axis");
     });
+  }
+
+  /** The engine's exact size, wrap and tangent run replace the mesh's guess. */
+  private adoptResize(r: OfferedResize | null) {
+    const round = this.round;
+    if (!round || !r) return;
+    this.round = { ...round, radius: r.radius, full: r.full, solidInside: !r.concave, tangent: r.tangent };
+    this.contact = r.contact;
+    const { label, icon } = this.fieldLabel();
+    this.dim.setFieldLabel("distance", label, icon);
+    this.dim.updateFromCursor({ distance: this.readout() });
+    this.syncToggle();
+    if (this.neutral) this.promptNow();
+    else this.refreshPreview(true);
   }
 
   private setDirection(d: PressPullDirection) {
@@ -647,7 +949,7 @@ export class PressPullTool {
       this.grabValue = this.value;
       this.grabProj = axisDragDistance(this.viewport, this.lastPointer.x, this.lastPointer.y, this.anchor, this.axis);
     }
-    this.refreshPreview();
+    this.refreshPreview(true);
   }
 
   private buildFeature(): Feature {
@@ -657,7 +959,7 @@ export class PressPullTool {
     // Del key produces, so a shrunk-away hole heals exactly as a deleted one
     // does, and until this moment nothing has been committed at all, which is
     // what lets the user drag back out of it.
-    const round = this.round && radialDrag(this.round.radius, this.value, this.round.solidInside);
+    const round = this.round && radialDrag(this.round.radius, this.value, this.round.solidInside, this.full);
     if (round?.mode === "remove") {
       return {
         id: this.previewId,
@@ -673,13 +975,14 @@ export class PressPullTool {
       face,
       distance: v,
       operation: v >= 0 ? "join" : "cut",
-      ...(this.mode !== "auto" && !this.round ? { mode: this.mode } : {}),
+      ...(this.mode !== "auto" && !this.resizing ? { mode: this.mode } : {}),
       ...(this.direction === "axis" && !this.round ? { direction: "axis" as const } : {}),
+      ...(this.followOffered() ? { followTangent: this.follow } : {}),
       ...(this.bodyId != null ? { body: this.bodyId } : {}),
       ...(this.upTo ? { upTo: this.upTo } : {}),
       // Taper rides a planar by-distance push only; the engine ignores it on a
       // curved face and on an up-to push, and it is written only when it bites.
-      ...(!this.round && !this.upTo && this.direction === "normal" && Math.abs(this.taper) >= 0.05
+      ...(!this.resizing && !this.upTo && this.direction === "normal" && Math.abs(this.taper) >= 0.05
         ? { taper: Math.round(this.taper * 1000) / 1000 }
         : {}),
     };
@@ -688,20 +991,15 @@ export class PressPullTool {
   private commit() {
     if (this.phase !== "drag") return this.cancel();
     const v = this.dim.getValue("distance");
-    if (v == null && this.dim.isUserDriven("distance")) {
+    const typed = this.dim.isUserDriven("distance");
+    if (v == null && typed) {
       // the field holds unparseable text, committing the stale drag value
       // instead would be a silent wrong-number surprise
       setPrompt("That number can't be read · Esc");
       return;
     }
-    // Typed sign is preferred (out = +, cut = −), but ONLY when the user actually
-    // typed. While dragging, the field displays |value| (line ~106), so reading
-    // it back unguarded strips a dragged cut's sign and commits a JOIN, the
-    // mirror image of the typed-"-2"-after-outward-drag bug this line fixed.
-    if (v != null && this.dim.isUserDriven("distance")) this.value = this.fromReadout(v);
-    if (Math.abs(this.value) < 1e-3) {
-      // keep the tool alive: silently cancelling here read as "nothing happened"
-      setPrompt(this.round ? "The diameter is unchanged" : "Nothing to commit yet");
+    if (typed && v != null && this.round && v < 0) {
+      this.dim.flag(this.negativeSize());
       return;
     }
     // A typed ∠ is the truth for the taper, the same rule the distance follows.
@@ -709,20 +1007,43 @@ export class PressPullTool {
     if (tv != null && this.dim.isUserDriven("taper")) {
       this.taper = Math.max(-MAX_PP_TAPER, Math.min(MAX_PP_TAPER, tv));
     }
-    const verdict = previewVerdict(this.store);
-    if (verdict.kind === "refused") {
-      setPrompt(`Press/Pull refused: ${verdict.reason} · drag back or Esc`);
+    // Typed sign is preferred (out = +, cut = −), but ONLY when the user actually
+    // typed. While dragging, the field displays |value|, so reading it back
+    // unguarded strips a dragged cut's sign and commits a JOIN, the mirror image
+    // of the typed-"-2"-after-outward-drag bug this line fixed.
+    const want = typed && v != null ? this.fromReadout(v) : this.value;
+    if (Math.abs(want - this.value) > 1e-6) {
+      this.value = want;
+      this.refreshPreview(true);
+    } else {
+      this.flushPreviewNow();
+    }
+    if (this.neutral) {
+      // keep the tool alive: silently cancelling here read as "nothing happened"
+      setPrompt(this.round ? `The ${this.full ? "diameter" : "radius"} is unchanged` : "Nothing to commit yet");
       return;
     }
+    const k = this.keyOf(this.buildFeature());
+    const decision = commitDecision({
+      value: this.size(),
+      verdict: this.refused.has(k) ? "refused" : this.built.has(k) ? "builds" : "unknown",
+      settled: this.shownFeature !== null && this.keyOf(this.shownFeature) === k,
+      shown: this.shown,
+      typed,
+      meaningful: (x) => Math.abs(x) >= MIN_PUSH,
+    });
+    if (decision.action === "stay") return this.promptNow();
+    if (decision.action === "cancel") return this.cancel();
+    this.value = decision.value;
     const feature = this.buildFeature();
-    // Drop the live tapered preview before the real add: it carries the same id,
-    // so building both at once would duplicate it.
+    // Drop the live preview before the real add: it carries the same id, so
+    // building both at once would duplicate it.
     if (this.enginePreviewOn) {
       this.store.setPreview(null);
       this.enginePreviewOn = false;
     }
     this.store.addFeature(feature);
-    if (verdict.kind === "wait") this.store.verifyCommit(feature.id, "Press/Pull");
+    if (decision.unverified) this.store.verifyCommit(feature.id, "Press/Pull");
     this.cleanup();
     this.onDone?.(feature.id);
   }
@@ -745,6 +1066,12 @@ export class PressPullTool {
     const el = this.viewport.domElement;
     this.gesture.detach();
     el.style.cursor = "default";
+    this.clearPreviewTimer();
+    this.unsubBuild?.();
+    this.unsubBuild = null;
+    this.forgetOutcomes();
+    this.refusalShown = null;
+    this.toggleKind = null;
     this.viewport.clearPressPullGhost();
     this.viewport.setPeek(null);
     if (this.enginePreviewOn) {
@@ -765,6 +1092,8 @@ export class PressPullTool {
     this.hovering = false;
     this.value = 0;
     this.round = null;
+    this.contact = null;
+    this.resizing = false;
     this.axisAsk++;
     this.holeAxis = null;
     this.direction = "normal";
@@ -779,4 +1108,9 @@ export class PressPullTool {
     this.gizmo = null;
     this.handle = null;
   }
+}
+
+/** The engine's refusal of a push, without the feature name it leads with. */
+function refusalText(message: string): string {
+  return message.replace(/^Press\/Pull[^:]*:\s*/i, "");
 }

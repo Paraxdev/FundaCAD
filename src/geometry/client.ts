@@ -99,9 +99,30 @@ export type PatternAxisReply =
 /** The `faceAxis` op: `dir` points out of the material, `hole` marks the round
  *  end of a bore on the bore's own axis, `sameAsNormal` a flat face square to
  *  the axis, which moves the same either way. */
-export type FaceAxisReply =
+export type FaceAxisReply = (
   | { axis: { origin: [number, number, number]; dir: [number, number, number] }; hole: boolean; sameAsNormal?: boolean }
-  | { reason: string };
+  | { reason: string }
+) & { resize?: FaceResize };
+
+/** How a cylinder, cone, sphere or torus face resizes (docs/PROTOCOL.md, faceAxis). */
+export interface FaceResize {
+  kind: "cylinder" | "cone" | "sphere" | "torus";
+  /** radius, tube radius, or 0 for a cone */
+  size: number;
+  full: boolean;
+  concave: boolean;
+  axis?: { origin: Vec3; dir: Vec3 };
+  centre?: Vec3;
+  /** the size where a neighbour would first be left behind */
+  contact: number | null;
+  tangent: {
+    faces: number;
+    lostWhen: "shrink" | "grow" | null;
+    run: Vec3[];
+    closed: boolean;
+    followable: boolean;
+  };
+}
 
 /** A material preset the engine knows by name, or one typed in (MPa, and
  *  g/cm3 for the density gravity needs). */

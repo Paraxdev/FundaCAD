@@ -145,17 +145,22 @@ export type CommitDecision =
  *  one on Enter is not a thing to do silently. A value the kernel has not
  *  answered for yet commits at once, `unverified`, and the store undoes it if
  *  the kernel then refuses it (DocumentStore.verifyCommit): confirming never
- *  waits on the kernel. */
+ *  waits on the kernel.
+ *
+ *  `meaningful` says whether a shown value is worth committing, a blend size
+ *  by default; a signed press/pull distance passes its own. */
 export function commitDecision(o: {
   value: number;
   verdict: BlendVerdict;
   settled: boolean;
   shown: number | null;
   typed: boolean;
+  meaningful?: (v: number) => boolean;
 }): CommitDecision {
   if (o.verdict === "refused") {
     if (o.typed) return { action: "stay" };
-    return o.shown != null && o.shown >= MIN_EDGE_VALUE
+    const meaningful = o.meaningful ?? ((v: number) => v >= MIN_EDGE_VALUE);
+    return o.shown != null && meaningful(o.shown)
       ? { action: "commit", value: o.shown }
       : { action: "cancel" };
   }

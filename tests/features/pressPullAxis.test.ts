@@ -2,7 +2,7 @@
 // Along axis switch is offered, which way it starts, and where the arrow stands.
 
 import { describe, it, expect } from "vitest";
-import { anchorOnAxis, initialDirection, offeredAxis } from "../../src/features/pressPullAxis";
+import { anchorOnAxis, initialDirection, offeredAxis, offeredResize } from "../../src/features/pressPullAxis";
 
 const ceiling = { axis: { origin: [0, 0, 22.5], dir: [0, 0, -1] }, hole: true, sameAsNormal: false } as const;
 
@@ -45,5 +45,68 @@ describe("anchorOnAxis", () => {
     expect(x).toBeCloseTo(3);
     expect(y).toBeCloseTo(0);
     expect(z).toBeCloseTo(3);
+  });
+});
+
+describe("offeredResize", () => {
+  const slotEnd = {
+    reason: "the walls around the face do not all run along one axis",
+    resize: {
+      kind: "cylinder" as const,
+      size: 2,
+      full: false,
+      concave: true,
+      axis: { origin: [0, 7.125, 20] as [number, number, number], dir: [1, 0, 0] as [number, number, number] },
+      contact: 2,
+      tangent: {
+        faces: 2,
+        lostWhen: "shrink" as const,
+        run: [[0, 9.125, 20], [0, 0, 18], [0, 0, 22], [0, -16.875, 20]] as [number, number, number][],
+        closed: true,
+        followable: true,
+      },
+    },
+  };
+
+  it("reads a slot end's exact radius, wrap and tangent run", () => {
+    expect(offeredResize(slotEnd)).toEqual({
+      radius: 2,
+      full: false,
+      concave: true,
+      contact: 2,
+      tangent: slotEnd.resize.tangent,
+    });
+  });
+
+  it("reads a round hole with nothing running into it", () => {
+    const hole = { ...slotEnd, resize: { ...slotEnd.resize, size: 3.369, full: true, contact: null, tangent: { faces: 0, lostWhen: null, run: [[0, 0, 0]] as [number, number, number][], closed: false, followable: false } } };
+    expect(offeredResize(hole)).toMatchObject({ radius: 3.369, full: true, contact: null, tangent: { faces: 0, lostWhen: null } });
+  });
+
+  it("offers nothing for a face that is not a cylinder, or a reply with no resize", () => {
+    expect(offeredResize({ ...slotEnd, resize: { ...slotEnd.resize, kind: "sphere" as const } })).toBeNull();
+    expect(offeredResize({ reason: "flat" })).toBeNull();
+    expect(offeredResize(null)).toBeNull();
+  });
+
+  it("rejects a malformed reply rather than resizing from it", () => {
+    const bad = (patch: Record<string, unknown>, tangent: Record<string, unknown> = {}) =>
+      offeredResize({ ...slotEnd, resize: { ...slotEnd.resize, ...patch, tangent: { ...slotEnd.resize.tangent, ...tangent } } } as never);
+    expect(bad({ size: 0 })).toBeNull();
+    expect(bad({ size: -2 })).toBeNull();
+    expect(bad({ size: Number.NaN })).toBeNull();
+    expect(bad({ size: "2" })).toBeNull();
+    expect(bad({ full: "no" })).toBeNull();
+    expect(bad({ concave: undefined })).toBeNull();
+    expect(bad({ contact: -1 })).toBeNull();
+    expect(bad({ contact: Number.POSITIVE_INFINITY })).toBeNull();
+    expect(offeredResize({ ...slotEnd, resize: { ...slotEnd.resize, tangent: null } } as never)).toBeNull();
+    expect(bad({}, { faces: 1.5 })).toBeNull();
+    expect(bad({}, { faces: -1 })).toBeNull();
+    expect(bad({}, { lostWhen: "sideways" })).toBeNull();
+    expect(bad({}, { run: [[0, Number.NaN, 0]] })).toBeNull();
+    expect(bad({}, { run: "here" })).toBeNull();
+    expect(bad({}, { closed: 1 })).toBeNull();
+    expect(bad({}, { followable: undefined })).toBeNull();
   });
 });
