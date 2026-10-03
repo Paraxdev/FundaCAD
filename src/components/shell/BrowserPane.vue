@@ -529,7 +529,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
   // body list, the assembly walk and the palette are all work with no output.
   const show = (s: BrowserSection) => sectionVisible(filter.value, s);
 
-  const errId = store.buildState.errorFeatureId;
+  const errId = store.buildState.heldRefusal ? null : store.buildState.errorFeatureId;
   const bodies = bodyList();
   const sketches = featuresOf(doc.features, "sketch");
   const datums = featuresOf(doc.features, "datumPlane");

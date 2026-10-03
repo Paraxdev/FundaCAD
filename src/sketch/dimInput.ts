@@ -148,8 +148,13 @@ export function pastTip(
   // An arrow end on to the view has no direction on screen, so the box goes where the cursor's would.
   const [dx, dy] = n > 1 ? [dir.x / n, dir.y / n] : [Math.SQRT1_2, Math.SQRT1_2];
   const { w, h } = size;
+  // Out along the arrow only until the nearest edge clears the tip by `gap`, so
+  // a wide box does not slide far off a slanted arrow.
   const place = (from: ScreenPoint, sx: number, sy: number) => {
-    const reach = gap + (Math.abs(sx) * w) / 2 + (Math.abs(sy) * h) / 2;
+    const reach = Math.min(
+      Math.abs(sx) > 1e-9 ? (w / 2 + gap) / Math.abs(sx) : Infinity,
+      Math.abs(sy) > 1e-9 ? (h / 2 + gap) / Math.abs(sy) : Infinity,
+    );
     return { left: from.x + sx * reach - w / 2, top: from.y + sy * reach - h / 2 };
   };
   const base = { x: tip.x - (n > 1 ? dir.x : 0), y: tip.y - (n > 1 ? dir.y : 0) };
@@ -809,7 +814,12 @@ export class DimInput {
   /** Stand the box clear past an arrow's tip, `dir` being the arrow from base
    *  to tip on screen, kept inside `bounds`. */
   positionPast(tip: ScreenPoint, dir: ScreenPoint, bounds: ScreenRect) {
-    const at = pastTip(tip, dir, { w: this.root.offsetWidth, h: this.root.offsetHeight }, bounds);
+    const p = this.problem;
+    const size = {
+      w: Math.max(this.root.offsetWidth, p ? p.offsetLeft + p.offsetWidth : 0),
+      h: Math.max(this.root.offsetHeight, p ? p.offsetTop + p.offsetHeight : 0),
+    };
+    const at = pastTip(tip, dir, size, bounds);
     this.root.style.left = `${Math.round(at.left)}px`;
     this.root.style.top = `${Math.round(at.top)}px`;
   }

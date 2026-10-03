@@ -16,6 +16,7 @@ import { saveRenderedImage } from "../../io/files";
 import { setRenderPref } from "../../ui/renderPrefs";
 import { isRenderLowPower } from "../../viewport/render";
 import { toast } from "../../ui/toast";
+import { featureFailures } from "../../ui/featureNotes";
 import type { ProjectionMode } from "../../viewport/cameras";
 import IconButton from "../ui/IconButton.vue";
 import Icon from "./Icon.vue";
@@ -127,11 +128,7 @@ function runAndRefresh(action: string) {
   pulse.value++;
 }
 
-const errorCount = useBuildValue((b) => {
-  const ids = new Set((b.result?.featureErrors ?? []).map((e) => e.feature_id).filter(Boolean));
-  if (b.errorFeatureId) ids.add(b.errorFeatureId);
-  return ids.size;
-});
+const errorCount = useBuildValue((b) => featureFailures({ ...b, featureErrors: b.result?.featureErrors }).size);
 
 function enablePerformanceMode() {
   shell.closePopover();

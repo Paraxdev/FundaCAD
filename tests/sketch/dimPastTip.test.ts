@@ -7,6 +7,7 @@ import { pastTip, type ScreenRect } from "../../src/sketch/dimInput";
 
 const VIEW: ScreenRect = { left: 0, top: 0, right: 1400, bottom: 900 };
 const BOX = { w: 160, h: 30 };
+const PAST = 10;
 
 function clearOfArrow(at: { left: number; top: number }, base: { x: number; y: number }, tip: { x: number; y: number }): boolean {
   for (let i = 0; i <= 20; i++) {
@@ -66,5 +67,20 @@ describe("pastTip", () => {
     const tiny: ScreenRect = { left: 10, top: 10, right: 200, bottom: 50 };
     const at = pastTip({ x: 100, y: 30 }, { x: 45, y: 0 }, BOX, tiny);
     expect(inside(at, tiny)).toBe(true);
+  });
+
+  it("keeps a wide box, one carrying a refusal, right past a slanted tip", () => {
+    const wide = { w: 316, h: 120 };
+    const base = { x: 600, y: 400 };
+    const tip = { x: 632, y: 432 };
+    const at = pastTip(tip, { x: 32, y: 32 }, wide, VIEW);
+    const dx = Math.max(at.left - tip.x, 0, tip.x - (at.left + wide.w));
+    const dy = Math.max(at.top - tip.y, 0, tip.y - (at.top + wide.h));
+    expect(Math.hypot(dx, dy)).toBeLessThanOrEqual(PAST);
+    for (let i = 0; i <= 20; i++) {
+      const x = base.x + ((tip.x - base.x) * i) / 20;
+      const y = base.y + ((tip.y - base.y) * i) / 20;
+      expect(x >= at.left && x <= at.left + wide.w && y >= at.top && y <= at.top + wide.h).toBe(false);
+    }
   });
 });

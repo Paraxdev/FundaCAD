@@ -13,7 +13,7 @@ import { featureMeta } from "../../ui/featureMeta";
 import Icon from "./Icon.vue";
 import { contextMenu } from "../../ui/menu";
 import { buildProgress, CANCEL_DELAY_MS, historyShowsBusy, historyShowsEmpty, waitLabel } from "../../ui/buildProgress";
-import { featureNotes } from "../../ui/featureNotes";
+import { featureFailures, featureNotes } from "../../ui/featureNotes";
 import { gapIndexIn } from "../../ui/trackGaps";
 import { getUnit, onUnitChange } from "../../ui/units";
 import FeatureProperties from "./FeatureProperties.vue";
@@ -105,12 +105,7 @@ const suppressed = useDocValue(() => new Set(features.value.filter((f) => store.
 
 /** Every failing feature this build: id -> message. Continue-past-errors can
  *  yield several; fall back to the single legacy error field. */
-const errors = useBuildValue((b) => {
-  const m = new Map<string, string>();
-  for (const e of b.result?.featureErrors ?? []) if (e.feature_id) m.set(e.feature_id, e.message);
-  if (b.errorFeatureId && !m.has(b.errorFeatureId)) m.set(b.errorFeatureId, b.errorMessage ?? "failed");
-  return m;
-});
+const errors = useBuildValue((b) => featureFailures({ ...b, featureErrors: b.result?.featureErrors }));
 /** Every feature that BUILT but had something to say: id -> reason. The rule
  *  itself is in ui/featureNotes.ts, where it can be read and tested on its own;
  *  this is the wiring. */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { circleDiameter, describeSelection, polylineLength, type Pt3 } from "../../src/ui/selectionMeasure";
+import { circleDiameter, describeSelection, polylineLength, roundFacePrompt, type Pt3 } from "../../src/ui/selectionMeasure";
 
 const circle = (r: number, n = 64, z = 5): Pt3[] =>
   Array.from({ length: n + 1 }, (_, i) => {
@@ -43,5 +43,15 @@ describe("selection measure", () => {
   it("gives a partial arc its radius, not a diameter", () => {
     expect(describeSelection({ count: 1, noun: "face", plural: "faces", roundFace: { radius: 2, full: false } })).toBe("1 face · R2 mm");
     expect(describeSelection({ count: 1, noun: "face", plural: "faces", roundFace: { radius: 2, full: true } })).toBe("1 face · ⌀4 mm");
+  });
+
+  it("prompts a partial arc by its radius and offers removal only on a full wrap", () => {
+    const partial = roundFacePrompt({ radius: 2, full: false });
+    expect(partial).toContain("(R2 mm)");
+    expect(partial).not.toContain("⌀");
+    expect(partial).not.toMatch(/remove/);
+    const full = roundFacePrompt({ radius: 3.369, full: true });
+    expect(full).toContain("(⌀6.74 mm)");
+    expect(full).toContain("drag it away to nothing to remove it");
   });
 });

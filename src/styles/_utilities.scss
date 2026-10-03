@@ -77,10 +77,6 @@ button.finish:hover {
 .dim-input {
   position: fixed;
   display: flex;
-  /* Wraps so a kernel refusal can take a full line of its own under the row.
-     Nothing else in the cluster ever wraps: the fields are a few characters
-     each and the buttons are fixed. */
-  flex-wrap: wrap;
   gap: var(--s-1);
   z-index: 200;
   pointer-events: auto;
@@ -94,9 +90,14 @@ button.finish:hover {
    
    Wide enough for a real sentence. These messages name the measurement that is
    wrong and the one it is wrong against, which is what makes them worth showing
-   at all, and truncating one to fit leaves the half that says "cannot". */
+   at all, and truncating one to fit leaves the half that says "cannot".
+   Hung under the row rather than in it, so a long one wraps at its own cap
+   instead of widening the box and pushing it off the arrow it belongs to. */
 .dim-problem {
-  flex-basis: 100%;
+  position: absolute;
+  top: calc(100% + var(--s-1));
+  left: 0;
+  width: max-content;
   max-width: 264px;
   font-size: 10px;
   font-weight: 600;

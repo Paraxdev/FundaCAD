@@ -259,4 +259,43 @@ describe("press/pull on a sphere, a cone or a torus", () => {
     await started([0, 0, 1], [0, 0, 1], { reason: "flat" });
     expect(box()).toMatchObject({ names: ["D", "Angle"], toggle: "Auto" });
   });
+
+  describe("a cylinder of radius 3 above the face, its axis along X", () => {
+    const hole = (full: boolean): FaceAxisReply =>
+      ({ ...NO_AXIS, resize: resize({ kind: "cylinder", size: 3, concave: true, full, axis: { origin: [0, 0, 3], dir: [1, 0, 0] } }) });
+    const prompt = () => usePromptStore().text ?? "";
+    const type = (text: string) => {
+      const input = document.querySelector<HTMLInputElement>(".dim-input input")!;
+      input.value = text;
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    };
+
+    it("a partial arc reads R and is never offered for removal", async () => {
+      const { t, canvas } = await started([0, 0, 1], [0, 0, 1], hole(false));
+      expect(box().names).toEqual(["R"]);
+      expect(prompt()).not.toMatch(/remove/);
+      dragTo(t, canvas, -2.9);
+      expect(prompt()).not.toMatch(/remove/);
+    });
+
+    it("a full wrap says where it goes, below the offset that removes it", async () => {
+      await started([0, 0, 1], [0, 0, 1], hole(true));
+      expect(box().names).toEqual(["Diameter"]);
+      expect(prompt()).toMatch(/under ⌀0\.6 mm removes it/);
+      type("+0.5");
+      expect(prompt()).toMatch(/below -2\.7 mm removes it/);
+      expect(prompt()).not.toMatch(/past/);
+    });
+
+    it("a refused typed radius never says release to remove", async () => {
+      const { t, canvas } = await started([0, 0, 1], [0, 0, 1], hole(true));
+      dragTo(t, canvas, -2.9);
+      expect(prompt()).toMatch(/Release to remove this face/);
+      type("r-2");
+      expect(prompt()).not.toMatch(/remove/);
+      expect(prompt()).toMatch(/A radius can't be negative · type another radius/);
+      type("r");
+      expect(prompt()).not.toMatch(/remove/);
+    });
+  });
 });

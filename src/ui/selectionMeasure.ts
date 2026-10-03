@@ -1,6 +1,8 @@
 // The one-line readout for what is selected: how many, and for edges and round
 // faces the numbers you would otherwise reach for Measure to get.
 
+import { shallowRef } from "vue";
+
 export type Pt3 = readonly [number, number, number];
 
 /** Total length of a polyline. */
@@ -34,13 +36,35 @@ export function circleDiameter(points: readonly Pt3[], tol = 0.01): number | nul
 
 const mm = (v: number) => `${Number(v.toFixed(2))} mm`;
 
+export interface RoundSize {
+  radius: number;
+  /** all the way round */
+  full: boolean;
+}
+
+/** The engine's exact size and wrap of the lone selected round face, once it
+ *  has answered, so every readout of it agrees with the press/pull field
+ *  rather than with the mesh's guess. */
+export const exactRound = shallowRef<(RoundSize & { faceId: number }) | null>(null);
+
+/** A diameter all the way round, a radius on a partial arc. */
+export function roundSize({ radius, full }: RoundSize): string {
+  return full ? `⌀${mm(radius * 2)}` : `R${mm(radius)}`;
+}
+
+/** The prompt for a selected round face; only a full wrap can be dragged away. */
+export function roundFacePrompt(round: RoundSize): string {
+  return `Round face selected (${roundSize(round)}), drag the handle to resize it` +
+    `${round.full ? " · drag it away to nothing to remove it" : ""} · Esc to clear`;
+}
+
 /** "1 edge · 300.74 mm · ⌀95.73 mm", "3 faces", "1 face · ⌀50 mm", "1 face · R2 mm". */
 export function describeSelection(input: {
   count: number;
   noun: string;
   plural: string;
   edges?: readonly (readonly Pt3[])[];
-  roundFace?: { radius: number; full: boolean } | null;
+  roundFace?: RoundSize | null;
 }): string {
   if (input.count <= 0) return "";
   const parts = [`${input.count} ${input.count === 1 ? input.noun : input.plural}`];
@@ -49,8 +73,7 @@ export function describeSelection(input: {
     const d = input.edges.length === 1 ? circleDiameter(input.edges[0]!) : null;
     if (d !== null) parts.push(`⌀${mm(d)}`);
   } else if (input.roundFace) {
-    const { radius, full } = input.roundFace;
-    parts.push(full ? `⌀${mm(radius * 2)}` : `R${mm(radius)}`);
+    parts.push(roundSize(input.roundFace));
   }
   return parts.join(" · ");
 }
