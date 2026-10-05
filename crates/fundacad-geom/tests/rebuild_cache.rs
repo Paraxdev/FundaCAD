@@ -405,3 +405,25 @@ fn hiding_a_join_target_is_not_served_the_cached_join() {
     assert_eq!(got, cold(&hidden));
     assert_eq!(got["bodies"].as_array().map(Vec::len), Some(3));
 }
+
+#[test]
+fn the_eye_of_a_named_target_does_not_move_the_cached_cut() {
+    let base = json!({"features": [
+        {"id": "b1", "type": "box", "length": 10, "width": 10, "height": 10, "operation": "new"},
+        {"id": "b2", "type": "box", "length": 4, "width": 4, "height": 20, "operation": "cut", "targets": ["body1"]},
+        {"id": "b3", "type": "box", "length": 2, "width": 2, "height": 2, "operation": "new"},
+    ]});
+    let mut hidden = base.clone();
+    hidden["bodyVisibility"] = json!({"body1": false});
+    let reference = cold(&base);
+    assert_eq!(reference["bodies"][0][5], json!(840.0), "the fixture's cut is not the box less the post");
+    assert_eq!(cold(&hidden), reference, "a cold build left the hidden target uncut");
+    for (first, second) in [(&base, &hidden), (&hidden, &base)] {
+        let mut cache = RebuildCache::new(None);
+        let (built, _) = warm(&mut cache, first);
+        assert_eq!(built, reference);
+        let (toggled, replayed) = warm(&mut cache, second);
+        assert!(replayed.is_empty(), "an eye toggle replayed {replayed:?}");
+        assert_eq!(toggled, reference);
+    }
+}

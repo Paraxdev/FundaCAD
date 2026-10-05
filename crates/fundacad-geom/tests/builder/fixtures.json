@@ -5770,7 +5770,7 @@
    "errors": [
     {
      "feature_id": "e",
-     "message": "Cut removed nothing, the extrude doesn't reach any body. Drag the other way, or use Join."
+     "message": "Cut removed nothing, the only body it reaches was hidden when the extrude was made. Drag the other way, or make the extrude again with the body shown."
     }
    ]
   }

@@ -378,7 +378,9 @@ one-shot calls is not a session, use `--script`, which is either a JSON array of
   body ids, on any `extrude`, `revolve`, `loft`, `sweep`, `thicken`, `box`,
   `cylinder` or `sphere` whose operation is not `new`, as soon as more than one
   body exists. Found by an agent building a two-half spool: an oversized cut tool
-  reached across and took material out of a body it had never named.
+  reached across and took material out of a body it had never named. A body
+  named in `targets` is acted on whether or not it is hidden in the app, only a
+  feature that names none leaves hidden bodies alone.
 - **A feature can only reference features above it in the timeline.**
 - **A sketch outline can be written as a `polyline`**, a list of points with
   `closed: true`, and a rectangle by two corners with `from` and `to`. Neither is
