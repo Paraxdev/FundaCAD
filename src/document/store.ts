@@ -33,6 +33,7 @@ import { documentShapeProblem, UnreadableDocumentError } from "./documentShape";
 import { forgetStaleJoins, joinSignatures } from "./bodyIds";
 import { canonicalMirrorPlanes } from "./mirrorPlane";
 import { normalizeStressStudy } from "./stressStudy";
+import { readsBodyVisibility } from "./readsVisibility";
 import * as params from "../params/engine";
 import { extrasEmpty, trialConfiguration } from "../params/extras";
 import type { FieldKind } from "./numFields";
@@ -1346,7 +1347,7 @@ export class DocumentStore {
   isBodyVisible(id: string): boolean {
     return this.bodyVis.get(id) ?? true;
   }
-  /** show/hide a body; re-emits the build so the viewport re-renders (no rebuild). */
+  /** show/hide a body; re-emits the build so the viewport re-renders. */
   setBodyVisibility(id: string, visible: boolean) {
     this.setBodiesVisibility(new Map([[id, visible]]));
   }
@@ -1369,27 +1370,25 @@ export class DocumentStore {
       this.emitBuild(); // isolate may just have flipped even though no id's visibility did
       return;
     }
-    this.markDirty();
-    this.emitBuild();
+    // Display only, unless some feature acts on whatever is shown when it builds.
+    const shown = () => {
+      this.markDirty();
+      this.emitBuild();
+      if (this.doc.features.some(readsBodyVisibility)) this.scheduleRebuild(true);
+    };
+    shown();
     this.pushOverlayUndo({
       undo: () => {
         for (const [id, was] of prior) {
           if (was === undefined) this.bodyVis.delete(id); else this.bodyVis.set(id, was);
         }
-        this.markDirty();
-        this.emitBuild();
+        shown();
       },
       redo: () => {
         for (const [id] of prior) this.bodyVis.set(id, vis.get(id)!);
-        this.markDirty();
-        this.emitBuild();
+        shown();
       },
     });
-    // Display only, unless a legacy extrude without hiddenBodies still reads the live map.
-    const legacy = this.doc.features.some(
-      (f) => f.type === "extrude" && !("hiddenBodies" in f),
-    );
-    if (legacy) this.scheduleRebuild(true);
   }
 
   /** Body ids currently hidden by the user, captured into new boolean
@@ -2050,8 +2049,8 @@ export class DocumentStore {
     }
     if (this.preview) features.push(...this.preview);
     features = features.map(withoutDisplayName);
-    // Body visibility travels with the rebuild so the engine can keep hidden
-    // bodies out of extrude booleans (a hidden body is protected from edits).
+    // Body visibility travels with the rebuild: a join, cut or intersect that
+    // names no targets leaves hidden bodies alone.
     const bodyVisibility = this.bodyVis.size ? Object.fromEntries(this.bodyVis.entries()) : undefined;
     return {
       parameters: this.doc.parameters, features,
