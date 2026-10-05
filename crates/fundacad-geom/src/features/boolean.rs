@@ -160,8 +160,40 @@ fn retried_in_slices(
     None
 }
 
+const HIDDEN_PROBES: usize = 4;
+
+/// Whether cutting `tool` out of `body` takes material, by the measure the cut
+/// itself is held to. Overlapping bounding boxes do not say so: a ring's box
+/// holds everything inside the ring.
+fn cut_bites(body: &Shape, tool: &Shape, tool_vol: f64) -> bool {
+    let Ok(left) = kernel::serial_bool(body, &[tool], BoolKind::Cut) else {
+        return false;
+    };
+    let removed = kernel::volume_precise(body).abs() - kernel::volume_precise(&left).abs();
+    removed >= noop_eps(tool_vol) || kernel::count(&left, Kind::Solid) > kernel::count(body, Kind::Solid)
+}
+
+/// What a cut that removed nothing tells the user. `unseen` counts the hidden
+/// bodies it would have taken material from, and `recorded` says they come
+/// from the extrude's own `hiddenBodies`, which showing a body now does not
+/// change.
+fn cut_missed(extrude: bool, unseen: usize, recorded: bool) -> &'static str {
+    match (unseen, recorded) {
+        (0, _) if extrude => "Cut removed nothing, the extrude doesn't reach any body. Drag the other way, or use Join.",
+        (0, _) => "Cut removed nothing, the shape doesn't reach any body. Move it into one, or use Join.",
+        (1, false) => "Cut removed nothing, the only body it reaches is hidden. Show it, or name it as the target.",
+        (_, false) => "Cut removed nothing, the only bodies it reaches are hidden. Show one, or name it as the target.",
+        (1, true) => "Cut removed nothing, the only body it reaches was hidden when the extrude was made. Drag the other way, or make the extrude again with the body shown.",
+        (_, true) => "Cut removed nothing, the only bodies it reaches were hidden when the extrude was made. Drag the other way, or make the extrude again with one shown.",
+    }
+}
+
 /// `_combine`: merge a solid a feature made the way its `operation` and
 /// `targets` ask. `name` labels a new body; a join keeps its target's name.
+///
+/// Named `targets` are acted on hidden or not. Without them the feature acts
+/// on every body it reaches that is not in `hidden`, which is the live eye
+/// states when the caller records no set of its own.
 pub fn combine(
     ctx: &mut Ctx,
     feature_id: &str,
@@ -172,8 +204,12 @@ pub fn combine(
     name: Option<&str>,
 ) -> FResult {
     let op = operation.map_or("new", Operation::as_str);
-    let hidden = hidden.unwrap_or_else(|| ctx.hidden_bodies.clone());
     let targets = targets.filter(|t| !t.is_empty());
+    let recorded = hidden.is_some();
+    let hidden = match targets {
+        Some(_) => HashSet::new(),
+        None => hidden.unwrap_or_else(|| ctx.hidden_bodies.clone()),
+    };
     let name = name.map(str::to_owned);
     if op == "new" {
         ctx.new_body(solid, name, None);
@@ -197,14 +233,13 @@ pub fn combine(
         }
         candidates.retain(|&i| targets.contains(&ctx.bodies[i].id));
     }
+    let (skipped, candidates): (Vec<usize>, Vec<usize>) =
+        candidates.into_iter().partition(|&i| hidden.contains(&ctx.bodies[i].id));
     let hits: Vec<usize> = crate::bench::phase("combine_bbox", || {
         let solid_box = kernel::bbox(&solid);
         candidates
             .into_iter()
-            .filter(|&i| {
-                let b = &ctx.bodies[i];
-                !hidden.contains(&b.id) && overlap(kernel::bbox(b.shape()), solid_box)
-            })
+            .filter(|&i| overlap(kernel::bbox(ctx.bodies[i].shape()), solid_box))
             .collect()
     });
     let prism_signed = signed_vol(&solid);
@@ -372,9 +407,20 @@ pub fn combine(
                     }
                 }
                 if !healed {
-                    return Err(Fail::msg(
-                        "Cut removed nothing, the extrude doesn't reach any body. Drag the other way, or use Join.",
-                    ));
+                    // No shown body lost anything, whether or not its box met
+                    // the tool's, so the hidden ones are asked directly. Two
+                    // are enough to pick the wording, and the probes are
+                    // capped because a missed preview pays for each one.
+                    let solid_box = kernel::bbox(&solid);
+                    let unseen = skipped
+                        .iter()
+                        .filter(|&&i| overlap(kernel::bbox(ctx.bodies[i].shape()), solid_box))
+                        .take(HIDDEN_PROBES)
+                        .filter(|&&i| cut_bites(ctx.bodies[i].shape(), &solid, prism_vol))
+                        .take(2)
+                        .count();
+                    let extrude = ctx.timeline.iter().any(|s| s.id == feature_id && s.kind == "extrude");
+                    return Err(Fail::msg(cut_missed(extrude, unseen, recorded)));
                 }
             }
             let cut_ids = results.iter().map(|(i, _, _)| ctx.bodies[*i].id.clone()).collect();

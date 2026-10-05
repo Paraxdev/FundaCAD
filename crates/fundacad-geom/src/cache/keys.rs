@@ -174,12 +174,17 @@ pub fn feature_scope(
     scope
 }
 
-/// A boolean that falls back to `ctx.hidden_bodies` skips hidden targets, so
-/// its result moves with the eye states. Only an extrude stores its own set.
+/// A join, cut or intersect that names no `targets` skips the hidden bodies it
+/// reaches, so its result moves with the eye states. One that names them acts
+/// on them hidden or not, and an extrude that stores its own `hiddenBodies`
+/// reads that set, not the live one. A null there is read as absent.
 fn reads_visibility(f: &Value) -> bool {
+    if f.get("targets").and_then(Value::as_array).is_some_and(|t| !t.is_empty()) {
+        return false;
+    }
     let ty = f.get("type").and_then(Value::as_str);
     if ty == Some("extrude") {
-        return f.get("hiddenBodies").is_none();
+        return f.get("hiddenBodies").map_or(true, Value::is_null);
     }
     ty == Some("press-pull")
         || f.get("operation").and_then(Value::as_str).is_some_and(|op| op != "new")
@@ -340,11 +345,51 @@ mod tests {
         assert_eq!(feature_scope(&captured, &p, &c, "[\"body1\"]"), feature_scope(&captured, &p, &c, "[]"));
     }
 
-    #[test]
-    fn a_boolean_without_its_own_hidden_set_reads_visibility() {
+    fn reads(f: Value) -> bool {
         let p = serde_json::Map::new();
         let c = HashMap::new();
-        let reads = |f: Value| feature_scope(&f, &p, &c, "[\"body1\"]") != feature_scope(&f, &p, &c, "[]");
+        feature_scope(&f, &p, &c, "[\"body1\"]") != feature_scope(&f, &p, &c, "[]")
+    }
+
+    #[test]
+    fn a_feature_that_names_its_targets_does_not_read_visibility() {
+        let named = json!(["body1"]);
+        assert!(!reads(json!({"id": "l", "type": "loft", "operation": "cut", "targets": named})));
+        assert!(!reads(json!({"id": "r", "type": "revolve", "operation": "cut", "targets": named})));
+        assert!(!reads(json!({"id": "b", "type": "box", "operation": "join", "targets": named})));
+        assert!(!reads(json!({"id": "s", "type": "sweep", "operation": "intersect", "targets": named})));
+        assert!(!reads(json!({"id": "p", "type": "press-pull", "mode": "cut", "targets": named})));
+        assert!(!reads(json!({"id": "e", "type": "extrude", "operation": "cut", "targets": named})));
+        assert!(!reads(json!({"id": "e", "type": "extrude", "operation": "cut", "targets": named, "hiddenBodies": ["body1"]})));
+        for none in [json!([]), Value::Null] {
+            assert!(reads(json!({"id": "l", "type": "loft", "operation": "cut", "targets": none})), "{none}");
+            assert!(reads(json!({"id": "p", "type": "press-pull", "mode": "cut", "targets": none})), "{none}");
+            assert!(reads(json!({"id": "e", "type": "extrude", "operation": "cut", "targets": none})), "{none}");
+        }
+        let doc = |vis: Value| json!({"bodyVisibility": vis, "features": [
+            {"id": "a", "type": "box"},
+            {"id": "c", "type": "loft", "operation": "cut", "targets": named},
+            {"id": "z", "type": "box"},
+        ]});
+        let mut memo = HashMap::new();
+        let mut keys = |vis: Value, plugins: &HashMap<String, String>| chain_keys(&doc(vis), "env", plugins, &mut memo);
+        let none = HashMap::new();
+        assert_eq!(keys(json!({"body1": false}), &none), keys(json!({}), &none));
+        assert_eq!(keys(json!({"body1": false}), &none), keys(json!({"body1": true}), &none));
+        // A plugin hands combine targets of its own choosing, so its key keeps the eye states.
+        let plugins = HashMap::from([("loft".into(), "v1".into())]);
+        let (hidden, shown) = (keys(json!({"body1": false}), &plugins), keys(json!({}), &plugins));
+        assert_eq!(hidden[0], shown[0]);
+        assert_ne!(hidden[1], shown[1]);
+    }
+
+    #[test]
+    fn a_null_hidden_set_on_an_extrude_still_reads_visibility() {
+        assert!(reads(json!({"id": "e", "type": "extrude", "operation": "cut", "hiddenBodies": null})));
+    }
+
+    #[test]
+    fn a_boolean_without_its_own_hidden_set_reads_visibility() {
         assert!(reads(json!({"id": "b", "type": "box", "operation": "join"})));
         assert!(reads(json!({"id": "r", "type": "revolve", "operation": "cut"})));
         assert!(reads(json!({"id": "p", "type": "press-pull"})));

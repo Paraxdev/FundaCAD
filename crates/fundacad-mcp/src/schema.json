@@ -158,7 +158,7 @@
     "taper": "optional Num, degrees. Leans every wall in as the extrude climbs, so one feature makes an angled boss, a countersink, or a draw-ready wall. Positive narrows the far face (the way a part pulls out of a mould), negative widens it (an undercut). Must be between -89 and 89. Absent or 0 is a straight prism",
     "regions": "optional; A 3D point INSIDE the closed sketch area you mean, in world mm. A sketch with several closed areas (a ring, a plate with holes, two separate outlines) needs one point per area you want. Omit `regions` entirely to use the whole sketch.",
     "region": "legacy single-area form of `regions`",
-    "hiddenBodies": "optional list of body ids the boolean must not touch (written by the app)"
+    "hiddenBodies": "optional list of body ids the boolean must not touch unless `targets` names them (written by the app)"
    },
    "example": {
     "id": "ex1",

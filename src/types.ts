@@ -330,7 +330,7 @@ export type CoreFeature =
       // face, with holes, and unions them). `region` is the legacy single-area form.
       regions?: [number, number, number][];
       region?: [number, number, number];
-      // Bodies hidden at creation, excluded from its boolean; eye toggles later are display only.
+      // Bodies hidden at creation, excluded from its boolean unless `targets` names them.
       hiddenBodies?: string[];
       // The bodies the boolean may touch; absent means every visible overlapping body.
       targets?: string[];
