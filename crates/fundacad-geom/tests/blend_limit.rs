@@ -237,6 +237,33 @@ fn a_boss_rim_rounded_past_the_boss_refuses() {
     built(&doc(features, Some(fillet([10.0, 0.0, 15.0], 4.99))));
 }
 
+/// A post 3 tall leaning in 20 degrees on a plate 4 thick, under a 45 degree
+/// seat cone. Rounded past the post's foot, the ball still rests on the cone
+/// while its centre is out under the plate, and its other contact would dig a
+/// groove into the plate round the post.
+#[test]
+fn a_seat_round_past_the_post_foot_refuses() {
+    let lean = 20f64.to_radians();
+    let foot = 11.25 + 3.0 * lean.tan();
+    let pts = [[0.0, 0.0], [30.0, 0.0], [30.0, 4.0], [foot, 4.0], [11.25, 7.0], [5.0, 13.25], [0.0, 13.25]];
+    let features = turned(&pts, pts.len(), [0.0, 0.0]);
+    // The contact reaches the foot where the ball's tangent length is the post's slope.
+    let fits = 3.0 / lean.cos() / ((PI / 4.0 - lean) / 2.0).tan();
+    assert!((fits - 14.4006).abs() < 1e-3, "{fits}");
+    for r in [14.5, 23.25] {
+        let (msg, code, _) = refused(&doc(features.clone(), Some(fillet([11.25, 0.0, 7.0], r))));
+        assert_eq!(code.as_deref(), Some("blendTooLarge"), "{r}: {msg}");
+        assert!(msg.contains("into the body") && msg.contains("up to 14.4mm"), "{r}: {msg}");
+    }
+    // At the size offered the plate round the post is whole.
+    let (out, _) = built(&doc(features, Some(fillet([11.25, 0.0, 7.0], 14.4))));
+    let ring = kernel::polygon_face(&[[foot + 0.01, 0.0, 1.0], [15.0, 0.0, 1.0], [15.0, 0.0, 3.99], [foot + 0.01, 0.0, 3.99]])
+        .and_then(|f| kernel::revolve(&f, [0.0; 3], [0.0, 0.0, 1.0], 360.0))
+        .expect("ring");
+    let kept = kernel::volume(&kernel::boolean_op(&out, &[&ring], BoolKind::Common).expect("common"));
+    assert!((kept - kernel::volume(&ring)).abs() < 1e-6 * kernel::volume(&ring), "plate under the foot {kept}");
+}
+
 /// Two 20 x 20 plates 4 thick joined by a neck 20 long and 4 wide.
 fn neck_plate() -> Vec<Value> {
     shouldered_neck(0.0)
