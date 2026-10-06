@@ -566,6 +566,9 @@ jobs:
           else
             printf '\nThis build does not update itself, so take a new installer from this page when you want a newer one.\n' >> notes.md
           fi
+          # The SourceForge mirror's download button, which a hand edit added
+          # once and every rebuild of the notes then dropped.
+          printf '\n[![Download FundaCAD](https://a.fsdn.com/con/app/sf-download-button)](https://sourceforge.net/projects/fundacad/files/beta/)\n' >> notes.md
 
           # Move the rolling tag onto this commit (create it if it is missing),
           # so the release attached to it never stops existing. GitHub refuses
