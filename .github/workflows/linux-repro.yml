@@ -89,7 +89,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           FUNDACAD_MCP_MODE: standalone
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq libwebkit2gtk-4.1-0 libayatana-appindicator3-1 > /dev/null
+          sudo timeout -k 10 300 apt-get update -qq && sudo apt-get install -y -qq libwebkit2gtk-4.1-0 libayatana-appindicator3-1 > /dev/null
           gh release download beta -R ${{ github.repository }} -p "FundaCAD-linux-x86_64.deb"
           dpkg-deb -x FundaCAD-linux-x86_64.deb app
           find app -type f -perm -u+x | head -n 20
