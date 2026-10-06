@@ -177,6 +177,36 @@ fn a_dense_candidate_set_is_capped_with_a_message() {
     assert!(res["pairs"].as_array().unwrap().len() <= 2);
 }
 
+/// The engine ends a job that goes a minute without a beat as stalled, and a
+/// pair's common is one silent kernel call.
+#[test]
+fn the_pair_sweep_beats_the_stall_watchdog() {
+    use fundacad_geom::builder::Watch;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+
+    struct Beats(Arc<AtomicUsize>);
+    impl Watch for Beats {
+        fn heartbeat(&self) -> Option<fundacad_geom::heartbeat::Beat> {
+            let n = self.0.clone();
+            Some(Arc::new(move || {
+                n.fetch_add(1, Ordering::Relaxed);
+            }))
+        }
+    }
+    let doc = json!({"features": (0..4).flat_map(|i| [
+        json!({"id": format!("s{i}"), "type": "sketch", "plane": "XY",
+               "entities": [{"type": "rectangle", "width": 20, "height": 20, "x": i * 2, "y": 0}]}),
+        json!({"id": format!("e{i}"), "type": "extrude", "sketch": format!("s{i}"), "distance": 20}),
+    ]).collect::<Vec<_>>()});
+    let mut req = Map::new();
+    req.insert("document".into(), doc);
+    let beats = Arc::new(AtomicUsize::new(0));
+    let res = json_of(inspect::interference_result(&req, &Beats(beats.clone())));
+    assert_eq!(res["pairs"].as_array().unwrap().len(), 6);
+    assert!(beats.load(Ordering::Relaxed) >= 6, "{} beats over 6 pairs", beats.load(Ordering::Relaxed));
+}
+
 #[test]
 fn both_ops_answer_over_the_protocol() {
     use fundacad_engine::{Engine, Outbox};
