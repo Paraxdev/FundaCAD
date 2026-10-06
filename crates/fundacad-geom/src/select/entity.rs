@@ -287,7 +287,7 @@ fn fp_num(fp: &Map<String, Value>, key: &str) -> FResult<Option<f64>> {
 }
 
 /// `fp.get(key) and entity_type != fp[key]`.
-fn type_differs(fp: &Map<String, Value>, key: &str, name: &str) -> bool {
+pub fn type_differs(fp: &Map<String, Value>, key: &str, name: &str) -> bool {
     truthy(fp.get(key)) && fp.get(key).and_then(Value::as_str) != Some(name)
 }
 
