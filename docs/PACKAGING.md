@@ -56,6 +56,20 @@ Bundles land under `src-tauri/target/release/bundle/`: `.AppImage`, `.deb` and
 Windows. CI also publishes `src-tauri/target/release/fundacad.exe` as the
 portable Windows download.
 
+The release publishes each of them under one fixed name with no version in it,
+so every build replaces the same files and the SourceForge mirror that copies
+the release keeps one file per download instead of one per build:
+
+| Platform | Files on the `beta` release |
+| --- | --- |
+| Linux | `FundaCAD-linux-x86_64.AppImage`, `.deb`, `.rpm`, `.flatpak` |
+| Windows | `FundaCAD-windows-x64-setup.exe`, `FundaCAD-windows-x64.msi`, `FundaCAD-windows-x64-portable.exe` |
+| macOS | `FundaCAD-macos-arm64.dmg`, `FundaCAD-macos-arm64.app.tar.gz` (updater) |
+
+Signatures are the same name plus `.sig`; `latest.json` and the
+`plugin-<id>.zip` bundles keep their names. The version is in the release
+title and notes.
+
 ## The OpenCASCADE kernel
 
 The build script of `opencascade-sys` (`third_party/opencascade-rs/crates/opencascade-sys/build.rs`)

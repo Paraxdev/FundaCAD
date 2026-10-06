@@ -25,7 +25,7 @@ fundacad_deps_check() {
   # carries WebKitGTK and GTK, so it needs nothing from the system.
   local flatpak="Use the FundaCAD Flatpak instead, which brings its own WebKitGTK:
   $FUNDACAD_RELEASES
-  flatpak install --user ./FundaCAD_<version>_x86_64.flatpak"
+  flatpak install --user ./FundaCAD-linux-x86_64.flatpak"
   if [ "$id" = nixos ]; then
     hint="NixOS cannot load these libraries from the AppImage.
 $flatpak"
