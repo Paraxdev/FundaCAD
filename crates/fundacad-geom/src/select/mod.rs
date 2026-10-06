@@ -18,7 +18,7 @@ pub mod tracked;
 pub mod tuning;
 
 use std::cmp::Ordering;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use fundacad_core::schema::{OneOrMany, Selector};
 use glam::DVec3;
@@ -30,7 +30,7 @@ use crate::builder::{Ctx, FResult, Fail};
 use crate::kernel;
 use entity::{
     circle_groups, edge_cost, edges_of, face_cost, faces_of, key_bits, key_cmp, need, num,
-    py_round, unit, vector, EdgeEnt, FaceEnt, Key,
+    py_round, type_differs, unit, vector, EdgeEnt, FaceEnt, Key,
 };
 pub use plane::plane_fallback_reason;
 pub use tuning::Tuning;
@@ -198,12 +198,35 @@ impl<'a> Resolver<'a> {
         if let Value::Array(list) = sel {
             let mut seen = HashSet::new();
             let mut out = Vec::new();
+            let mut picked_from: HashMap<[u64; 4], Vec<DVec3>> = HashMap::new();
             for s in list {
+                let from = matched_mid(s);
                 for e in self.edge_ents(part, s)? {
-                    if seen.insert(key_bits(&e.dedup_key())) {
+                    let key = key_bits(&e.dedup_key());
+                    if let Some(p) = from {
+                        picked_from.entry(key).or_default().push(p);
+                    }
+                    if seen.insert(key) {
                         out.push(e);
                     }
                 }
+            }
+            // A match never refuses, so references whose edges were deleted all
+            // settle on whichever edge is left. Two that share an edge neither
+            // was picked near say the edge is not theirs. One alone cannot be
+            // told from an edge that moved, and is kept.
+            let mut gone = 0;
+            out.retain(|e| {
+                let from = picked_from.get(&key_bits(&e.dedup_key())).map_or(&[][..], Vec::as_slice);
+                let stale = from.len() >= 2 && from.iter().all(|p| far_from(e, *p, None));
+                if stale {
+                    gone += from.len();
+                }
+                !stale
+            });
+            if gone > 0 {
+                let reason = format!("{gone} references share one edge far from where they were picked, their edges are gone");
+                self.push("edge", 0, 0.0, true, Some(Value::from(reason)), None, None, None);
             }
             return Ok(out);
         }
@@ -272,6 +295,17 @@ impl<'a> Resolver<'a> {
                     edges.retain(|e| e.curve == CurveType::Circle);
                 }
                 let (best, conf, lossy, reason) = self.match_edge(part, &edges, fp, nth_of(m))?;
+                // An edge that moved keeps its kind of curve. The best match being
+                // another kind, far from the pick, is the edge having gone.
+                let other_kind = best.is_some_and(|i| {
+                    let e = &edges[i];
+                    type_differs(fp, "curve", e.curve_name())
+                        && matched_mid(sel).is_some_and(|p| far_from(e, p, fp.get("length").and_then(Value::as_f64)))
+                });
+                if other_kind {
+                    self.push("edge", 0, 0.0, true, Some(Value::from(GONE)), None, None, None);
+                    return Ok(Vec::new());
+                }
                 self.push(
                     "edge",
                     usize::from(best.is_some()),
@@ -625,6 +659,29 @@ fn union_face_edges(faces: &[FaceEnt]) -> FResult<Vec<EdgeEnt>> {
         }
     }
     Ok(out)
+}
+
+/// How far from an edge, in its own lengths, a fingerprint can sit and still
+/// have been picked on it.
+const GONE_REACH: f64 = 0.25;
+
+const GONE: &str = "the edge this was picked on is gone";
+
+/// Whether `p` is further from `e` than a pick on it could have drifted. The
+/// picked edge's own length sets the reach where it is known, an unrelated
+/// edge's would stretch it.
+fn far_from(e: &EdgeEnt, p: DVec3, picked_len: Option<f64>) -> bool {
+    let reach = GONE_REACH * picked_len.filter(|l| *l > 0.0).unwrap_or(e.length);
+    sa::distance_to_point(&e.shape, p.to_array()).is_some_and(|d| d.0 > reach)
+}
+
+/// Where a `match` edge selector was picked, the midpoint in its fingerprint.
+fn matched_mid(sel: &Value) -> Option<DVec3> {
+    let m = sel.as_object()?;
+    if m.get("by").and_then(Value::as_str) != Some("match") || m.get("kind").and_then(Value::as_str) == Some("face") {
+        return None;
+    }
+    finite3(m.get("fp")?.get("mid")).map(DVec3::from)
 }
 
 /// `_resolve_one`: the lowest cost, never a refusal. A runner-up within
