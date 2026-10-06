@@ -65,6 +65,20 @@ This file starts on 2026-08-03. For anything before that, see the
   deflection under the cursor and pins readouts to the part.
 - **Stress samples.** `examples/stress` has a wall bracket and a lever on a
   pin, each with its supports, loads and material set up, to open and run.
+- **Stress loads and supports placed with a click.** A load on part of a face,
+  the crook of a hook or the seat of a screw, used to need that face cut first
+  so there was a face to select. Now Place on a load's or a support's row arms
+  it, and a click on the body puts a spot there, drawn as an orb: the load or
+  the hold acts on the body's surface inside it. Drag the orb's rim, or type
+  the radius, to size it, and Shift click to place several. A spot stays on
+  the side of a thin wall it was put on. Whole faces still go in from a
+  selection, and one row can have both. Over MCP, `stress` takes the same
+  thing as `spots`, each a point and a radius.
+- **The bodies a cut or join acts on, in its properties.** An extrude, revolve,
+  sweep, loft, thicken or press/pull that joins, cuts or intersects now shows
+  a Bodies acted on row. Empty, it acts on every shown body it reaches, as
+  before. Naming the bodies there keeps it on them whether or not they are
+  shown, which is what the engine's refusal about a hidden body asks for.
 - **Merging overlapping sketch shapes over MCP.** The new `sketch_merge` tool
   replaces closed shapes of a sketch that overlap or touch, rectangles,
   circles, polygons, slots and loops of lines and arcs, with the outline of

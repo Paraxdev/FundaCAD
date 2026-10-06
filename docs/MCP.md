@@ -227,6 +227,16 @@ hole's axis through (0, 0, 0), a slider leaves a hole free to turn, add another
 support`. A refusal about a support or a load names it the way the app's panel
 does and then by its place in your request, `support 1 (supports[0])`.
 
+A load, or a fixed support, on a place that has no face of its own takes
+`spots` in place of `faces`, each `{at: [x, y, z], radius}`: the body's surface
+within `radius` mm of the point `at`, as far as it stays connected to the
+point, so a spot on one side of a thin wall does not reach the other side. A
+force is spread over the spot by area like over a face, and a pressure pushes
+into it. A load in the crook of a hook is
+`{"spots": [{"at": [12, 0, 3.5], "radius": 4}], "force": [0, 0, -50]}`, with no
+face split for it first. A spot smaller than the elements is taken as about
+one of them, with a warning, and one that is nowhere near the body is refused.
+
 `gravity: true` pulls with 9.81 m/s2 along -Z, or give `[gx, gy, gz]` in m/s2.
 It needs the material's density in g/cm3: the presets carry one (PLA 1.24,
 PETG 1.27, ABS 1.04, ASA 1.07, PA12 nylon 1.01, PC 1.20, aluminium 6061-T6

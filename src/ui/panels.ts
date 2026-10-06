@@ -18,10 +18,10 @@ import { getUnit, toDisplay, displayRound } from "./units";
 import { usePanelsStore, type PanelRow, type ClashRow, type ClearanceRow, type StressProbePin } from "../stores/panels";
 import {
   AXES, LOAD_MARK_COLOR, SUPPORT_COLORS, SUPPORT_KINDS,
-  areaCentre, autoDeformScale, buildStressRequest, deformSliderMax, emptyFaceSet, forceDirection, formatStressResult,
-  intoDirection, newSetup, panelMessage, pinAxisSegment, pressureSites, probeLabel, probeValues, setupFromStudy,
-  studyFromSetup, swingScale,
-  type ForceDirection, type StressFaceSet, type StressLoadSetup, type Tri,
+  areaCentre, autoDeformScale, buildStressRequest, defaultSpotRadius, deformSliderMax, emptyFaceSet, forceDirection,
+  formatStressResult, intoDirection, newSetup, panelMessage, pinAxisSegment, pressureSites, probeLabel, probeValues,
+  sameTarget, setupFromStudy, studyFromSetup, swingScale,
+  type ForceDirection, type StressFaceSet, type StressLoadSetup, type StressTarget, type Tri,
 } from "./stress";
 import type { AxisDirection, Selector, StressStudy, StressSupportType, Vec3 } from "../types";
 import { isVec3 } from "../document/stressStudy";
@@ -35,6 +35,8 @@ export interface StressGlyphsApi {
   setModel(m: StressGlyphModel): void;
   setProbe(on: boolean): void;
   setProbePins(pins: Pick<StressProbePin, "tri" | "weights" | "label">[]): void;
+  /** Place mode with the orb a click would put down, or null to end it. */
+  setPlacing?(p: { color: number; radius: number } | null): void;
   dispose(): void;
 }
 
@@ -186,6 +188,8 @@ export function createPanels(deps: PanelsDeps) {
   let glyphs: StressGlyphsApi | null = null;
   // A load's force and direction from before a drag of its arrow, for Esc.
   const dragOrigin = new Map<number, Pick<StressLoadSetup, "direction" | "custom" | "force">>();
+  // A spot's radius from before a drag of its rim, for Esc.
+  let radiusOrigin: number | null = null;
   // The Animate toggle's frame loop.
   let animRaf = 0;
   // Where the gravity arrow stands, for the build it was measured on.
@@ -242,7 +246,7 @@ export function createPanels(deps: PanelsDeps) {
     else loadStudy(store.stressStudy, seed ?? null);
     glyphs ??= deps.stressGlyphs?.(glyphHandlers) ?? null;
     // Before the marks, so a saved face that is gone has the last word.
-    setStatus("Stress: select faces, then set them as a support or as a load's faces", "");
+    setStatus("Stress: press Place on a support or a load and click the body, or select faces and set them", "");
     refreshStressMarks();
   }
 
@@ -447,21 +451,33 @@ export function createPanels(deps: PanelsDeps) {
   }
 
   function glyphModel(): StressGlyphModel {
-    const m: StressGlyphModel = { forces: [], pressures: [], gravity: null, pins: [] };
+    const m: StressGlyphModel = { forces: [], pressures: [], gravity: null, pins: [], spots: [] };
     const s = panels.stress?.setup;
     if (!s || !s.body || !bodyOnModel() || !store.isBodyVisible(s.body)) return m;
+    for (const x of s.supports) {
+      for (const [index, spot] of (x.spots ?? []).entries()) {
+        if (drawable(spot.radius)) m.spots!.push({ target: { support: x.id }, index, at: spot.at, radius: spot.radius, color: SUPPORT_COLORS[x.type] });
+      }
+    }
     for (const l of s.loads) {
-      if (!l.faces.faceIds.length) continue;
+      const spots = l.spots ?? [];
+      for (const [index, spot] of spots.entries()) {
+        if (drawable(spot.radius)) m.spots!.push({ target: { load: l.id }, index, at: spot.at, radius: spot.radius, color: LOAD_MARK_COLOR });
+      }
+      if (!l.faces.faceIds.length && !spots.length) continue;
       const { tris, normals } = trianglesOf(l.faces.faceIds);
       if (l.kind === "pressure") {
         // A negative pressure pulls: its arrows leave the faces.
         const pull = Number(l.pressure) < 0;
-        for (const p of pressureSites(tris, normals, 12)) {
+        const sites = pressureSites(tris, normals, 12);
+        for (const spot of spots) if (spot.normal) sites.push({ at: spot.at, dir: negate(spot.normal) });
+        for (const p of sites) {
           m.pressures.push(pull ? { at: p.at, dir: negate(p.dir), pull } : p);
         }
         continue;
       }
-      const anchor = areaCentre(tris);
+      // On its faces when it has any, else on its first spot.
+      const anchor = areaCentre(tris) ?? spots[0]?.at ?? null;
       const dir = forceDirection(l);
       if (!anchor || typeof dir === "string") continue;
       // The sign of the force is part of its direction: the arrow points the
@@ -471,7 +487,7 @@ export function createPanels(deps: PanelsDeps) {
       const flip = force < 0;
       m.forces.push({
         loadId: l.id, anchor, dir: flip ? negate(dir) : dir, force: Math.abs(force),
-        direction: flip ? oppositeDirection(l.direction) : l.direction, into: intoDirection(l.faces),
+        direction: flip ? oppositeDirection(l.direction) : l.direction, into: intoDirection(l.faces, l.spots),
       });
     }
     if (s.gravity.on) {
@@ -496,6 +512,11 @@ export function createPanels(deps: PanelsDeps) {
 
   function negate(v: Vec3): Vec3 {
     return [-v[0] + 0, -v[1] + 0, -v[2] + 0];
+  }
+
+  /** A radius the user is retyping reads as "" for a moment. */
+  function drawable(radius: unknown): radius is number {
+    return typeof radius === "number" && Number.isFinite(radius) && radius > 0;
   }
 
   /** The name of the way opposite `d`: the other end of an axis, or a custom
@@ -538,7 +559,96 @@ export function createPanels(deps: PanelsDeps) {
     leaveProbe() {
       setStressProbe(false);
     },
+    placeSpot(hit, more) {
+      const d = panels.stress;
+      const target = d?.placing;
+      if (!d || !target) return;
+      if (!hit.body) return;
+      if (d.setup.body && d.setup.body !== hit.body) {
+        setStatus(
+          bodyOnModel()
+            ? "Stress: that is another body than the one analysed, click the analysed body"
+            : "Stress: the body analysed is not on the current model, pick another body first",
+          "",
+        );
+        return;
+      }
+      if (!d.setup.body) panels.setStressBody(hit.body);
+      const radius = spotRadiusFor(hit.body);
+      panels.addStressSpot(target, { at: hit.at.map(round4) as Vec3, radius, normal: hit.normal.map(round4) as Vec3 });
+      setStatus(`Stress: ${rowName(target)}: a spot of radius ${radius} mm, drag its rim to size it`, "");
+      if (!more) stopPlacing();
+    },
+    leavePlacing() {
+      stopPlacing();
+    },
+    spotRadius(target, index, radius) {
+      const spot = panels.stressRow(target)?.spots?.[index];
+      if (!spot) return;
+      radiusOrigin ??= spot.radius;
+      spot.radius = radius;
+    },
+    spotRadiusEnd(target, index, cancelled) {
+      const was = radiusOrigin;
+      radiusOrigin = null;
+      const spot = panels.stressRow(target)?.spots?.[index];
+      if (cancelled && spot && was !== null) spot.radius = was;
+    },
   };
+
+  function round4(v: number): number {
+    return Math.round(v * 1e4) / 1e4 + 0;
+  }
+
+  /** A row as the panel names it, "Support 2" or "Load 1". */
+  function rowName(target: StressTarget): string {
+    const s = panels.stress?.setup;
+    if ("support" in target) return `Support ${(s?.supports.findIndex((x) => x.id === target.support) ?? 0) + 1}`;
+    return `Load ${(s?.loads.findIndex((l) => l.id === target.load) ?? 0) + 1}`;
+  }
+
+  /** The radius a new spot gets: the last one placed in this setup, as the
+   *  next is usually meant the same size, else one in proportion to the body. */
+  function spotRadiusFor(body: string): number {
+    const s = panels.stress?.setup;
+    const placed = [...(s?.supports ?? []), ...(s?.loads ?? [])].flatMap((x) => x.spots ?? []);
+    const last = placed[placed.length - 1];
+    if (last && drawable(last.radius)) return last.radius;
+    const box = viewport.bodyProperties([body])?.bbox;
+    return defaultSpotRadius(box && !box.isEmpty() ? box.min.distanceTo(box.max) : NaN);
+  }
+
+  /** Arm one row: the next click on the body puts a spot there. Pressing the
+   *  same row's Place again, or Esc, disarms it. The result's colours come off
+   *  first, as the click is on the body and not on them. */
+  function placeStressSpot(target: StressTarget) {
+    const d = panels.stress;
+    if (!d) return;
+    if (sameTarget(d.placing, target)) {
+      stopPlacing();
+      return;
+    }
+    const row = panels.stressRow(target);
+    if (!row) return;
+    if (d.probe) setStressProbe(false);
+    if (d.colours === "shown") setStressColours(false);
+    const body = bodyOnModel();
+    panels.setStressPlacing(target);
+    const color = "support" in target ? SUPPORT_COLORS[(row as { type: StressSupportType }).type] : LOAD_MARK_COLOR;
+    const radius = body ? spotRadiusFor(body) : defaultSpotRadius(NaN);
+    glyphs?.setPlacing?.({ color, radius });
+    setStatus(`Stress: click the body where ${rowName(target)} ${"support" in target ? "holds it" : "pushes"}, Shift click to place several, Esc to stop`, "");
+  }
+
+  function stopPlacing() {
+    if (!panels.stress?.placing) return;
+    panels.setStressPlacing(null);
+    glyphs?.setPlacing?.(null);
+  }
+
+  function removeStressSpot(target: StressTarget, index: number) {
+    panels.removeStressSpot(target, index);
+  }
 
   /** The selected faces as a face set, each selector stamped with its body,
    *  or why they cannot be one. */
@@ -614,6 +724,7 @@ export function createPanels(deps: PanelsDeps) {
   }
 
   function removeStressSupport(supportId: number) {
+    if (sameTarget(panels.stress?.placing ?? null, { support: supportId })) stopPlacing();
     panels.removeStressSupport(supportId);
     refreshStressMarks();
   }
@@ -631,6 +742,7 @@ export function createPanels(deps: PanelsDeps) {
   }
 
   function removeStressLoad(loadId: number) {
+    if (sameTarget(panels.stress?.placing ?? null, { load: loadId })) stopPlacing();
     panels.removeStressLoad(loadId);
     refreshStressMarks();
   }
@@ -717,6 +829,7 @@ export function createPanels(deps: PanelsDeps) {
       setStatus("Stress: run the analysis first, then probe its result", "");
       return;
     }
+    if (on) stopPlacing();
     if (on && d.colours !== "shown") {
       setStressColours(true);
       // The model changed since the Run, and putting the colours back found
@@ -759,6 +872,7 @@ export function createPanels(deps: PanelsDeps) {
     }
     const seq = ++runSeq;
     const epoch = docEpoch;
+    stopPlacing();
     panels.stressStarted();
     clearResult();
     refreshStressMarks();
@@ -845,7 +959,8 @@ export function createPanels(deps: PanelsDeps) {
     showProperties, closeProperties, showInterference, closeInterference,
     showOverhangSettings, closeOverhangSettings,
     showStress, closeStress, runStress, cancelStress, stressBodies, setStressBody,
-    setStressFacesFromSelection, addStressSupport, removeStressSupport, setStressSupportType,
+    setStressFacesFromSelection, placeStressSpot, removeStressSpot, addStressSupport, removeStressSupport,
+    setStressSupportType,
     addStressLoad, removeStressLoad, setStressColours, refreshStressMarks,
     setStressDeformation, setStressAnimate, setStressProbe, removeStressProbe,
   };

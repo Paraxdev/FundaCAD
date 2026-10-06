@@ -1,7 +1,8 @@
 <script setup lang="ts">
-// Inspect → Stress: a linear static analysis of one body. The user picks faces
-// in the view and sets them as supports (fixed, pinned or sliding) or as a
-// load's faces, chooses a material, gravity if it matters, and runs it; the
+// Inspect → Stress: a linear static analysis of one body. The user places a
+// support or a load on the body with a click (a spot, drawn as an orb), or
+// picks faces in the view and sets them as supports (fixed, pinned or sliding)
+// or as a load's faces, chooses a material, gravity if it matters, and runs it; the
 // result reads out here with a colour legend while the view shows the body
 // coloured by von Mises stress, deformed to taste, with probes pinned on it
 // (see ui/panels.ts runStress). The setup is saved with the document.
@@ -21,7 +22,8 @@ import { usePanelsStore } from "../../stores/panels";
 import FloatingPanel from "./FloatingPanel.vue";
 import {
   CUSTOM_MATERIAL, FORCE_DIRECTIONS, GRAVITY_DIRECTIONS, GRAVITY_MARK_COLOR, LOAD_MARK_COLOR, STRESS_MATERIALS,
-  SUPPORT_COLORS, SUPPORT_KINDS, cssHex, deformLabel, faceCountLabel, legendGradient,
+  SUPPORT_COLORS, SUPPORT_KINDS, cssHex, deformLabel, faceCountLabel, legendGradient, sameTarget,
+  type StressTarget,
 } from "../../ui/stress";
 import { displayRound } from "../../ui/units";
 import type { StressSupportType } from "../../types";
@@ -108,6 +110,10 @@ function fmt(v: number): string {
   return String(displayRound(v));
 }
 
+function placing(target: StressTarget): boolean {
+  return sameTarget(panels.stress?.placing ?? null, target);
+}
+
 function onSupportType(id: number, e: Event) {
   engine.ui.panels.setStressSupportType(id, (e.target as HTMLSelectElement).value as StressSupportType);
 }
@@ -150,13 +156,28 @@ function close() {
             </select>
           </div>
           <div class="measure-row stress-faces">
-            <span class="measure-k stress-count">{{ faceCountLabel(x.faces) }}</span>
+            <span class="measure-k stress-count">{{ faceCountLabel(x.faces, x.spots) }}</span>
             <span class="measure-v stress-face-actions">
-              <button type="button" class="btn stress-set-support" @click="engine.ui.panels.setStressFacesFromSelection({ support: x.id })">Set from selection</button>
+              <button
+                type="button" class="btn stress-place-support" :class="{ active: placing({ support: x.id }) }"
+                title="Click the body where it is held, no face of its own needed"
+                @click="engine.ui.panels.placeStressSpot({ support: x.id })"
+              >{{ placing({ support: x.id }) ? "Placing…" : "Place" }}</button>
+              <button
+                type="button" class="btn stress-set-support" title="Hold the whole of the faces selected in the view"
+                @click="engine.ui.panels.setStressFacesFromSelection({ support: x.id })"
+              >From selection</button>
               <button
                 v-if="setup.supports.length > 1" type="button" class="btn stress-remove-support" title="Remove this support"
                 @click="engine.ui.panels.removeStressSupport(x.id)"
               >Remove</button>
+            </span>
+          </div>
+          <div v-for="(spot, k) in x.spots ?? []" :key="'ss' + x.id + '-' + k" class="measure-row stress-spot">
+            <span class="measure-k">Spot {{ k + 1 }} radius</span>
+            <span class="measure-v">
+              <input v-model.number="spot.radius" class="measure-number stress-spot-radius" type="number" min="0" step="any" /> mm
+              <button type="button" class="btn stress-remove-spot" title="Remove this spot" @click="engine.ui.panels.removeStressSpot({ support: x.id }, k)">Remove</button>
             </span>
           </div>
         </template>
@@ -174,14 +195,29 @@ function close() {
             </select>
           </div>
           <div class="measure-row stress-faces">
-            <span class="measure-k stress-count">{{ faceCountLabel(l.faces) }}</span>
+            <span class="measure-k stress-count">{{ faceCountLabel(l.faces, l.spots) }}</span>
             <span class="measure-v stress-face-actions">
-              <button type="button" class="btn stress-set-load" @click="engine.ui.panels.setStressFacesFromSelection({ load: l.id })">Set from selection</button>
+              <button
+                type="button" class="btn stress-place-load" :class="{ active: placing({ load: l.id }) }"
+                title="Click the body where it pushes, no face of its own needed"
+                @click="engine.ui.panels.placeStressSpot({ load: l.id })"
+              >{{ placing({ load: l.id }) ? "Placing…" : "Place" }}</button>
+              <button
+                type="button" class="btn stress-set-load" title="Push on the whole of the faces selected in the view"
+                @click="engine.ui.panels.setStressFacesFromSelection({ load: l.id })"
+              >From selection</button>
               <!-- Down to no load at all: a body under gravity alone is a study. -->
               <button
                 type="button" class="btn stress-remove-load" title="Remove this load"
                 @click="engine.ui.panels.removeStressLoad(l.id)"
               >Remove</button>
+            </span>
+          </div>
+          <div v-for="(spot, k) in l.spots ?? []" :key="'ls' + l.id + '-' + k" class="measure-row stress-spot">
+            <span class="measure-k">Spot {{ k + 1 }} radius</span>
+            <span class="measure-v">
+              <input v-model.number="spot.radius" class="measure-number stress-spot-radius" type="number" min="0" step="any" /> mm
+              <button type="button" class="btn stress-remove-spot" title="Remove this spot" @click="engine.ui.panels.removeStressSpot({ load: l.id }, k)">Remove</button>
             </span>
           </div>
           <template v-if="l.kind === 'force'">
@@ -328,8 +364,9 @@ function close() {
 
       <div class="measure-hint">
         <template v-if="panels.stress.probe">Hover the body to read it, click to pin a probe, Esc to stop.</template>
+        <template v-else-if="panels.stress.placing">Click the body to put the spot there, Shift click to place several, Esc to stop.</template>
         <template v-else-if="panels.stress.colours === 'shown'">Hide the colours to pick faces on the body.</template>
-        <template v-else>Select faces in the view, then set them here. Drag a force's arrow tip to aim and size it.</template>
+        <template v-else>Press Place and click the body where it is held or pushed, or select whole faces and use From selection. Drag an orb's rim to size it, a force's arrow tip to aim and size it.</template>
         Results are linear and approximate.
       </div>
     </template>
@@ -365,9 +402,15 @@ function close() {
   margin-left: 2px;
 }
 /* A face set's row: its count on the left, wrapping when it says what the view
-   cannot show, and its buttons on the right. */
+   cannot show, and its buttons on the right, under it when they do not fit. */
 .stress-faces {
+  flex-wrap: wrap;
   align-items: center;
+}
+.stress-spot .measure-v {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
 }
 .stress-count {
   min-width: 0;

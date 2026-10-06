@@ -2,9 +2,9 @@ import { defineStore } from "pinia";
 import { markRaw, ref } from "vue";
 import {
   emptyFaceSet, newLoad, newSetup, newSupport, nextId,
-  type StressFaceSet, type StressResultView, type StressSetup,
+  type StressFaceSet, type StressResultView, type StressSetup, type StressTarget,
 } from "../ui/stress";
-import type { StressSupportType, Vec3 } from "../types";
+import type { StressSpot, StressSupportType, Vec3 } from "../types";
 
 /** A key/value readout line. */
 export interface PanelRow {
@@ -81,6 +81,8 @@ export interface StressData {
   /** Probe mode, and the points pinned with it. */
   probe: boolean;
   pins: StressProbePin[];
+  /** The row whose next click on the body places a spot, null when none is. */
+  placing: StressTarget | null;
 }
 
 /** The floating "measure-panel" popups. Each is independent, Properties and
@@ -115,7 +117,7 @@ export const usePanelsStore = defineStore("panels", () => {
   function fresh(setup: StressSetup): StressData {
     return {
       setup, running: false, requestId: null, result: null, error: null, colours: "none",
-      deform: null, probe: false, pins: [],
+      deform: null, probe: false, pins: [], placing: null,
     };
   }
 
@@ -136,8 +138,33 @@ export const usePanelsStore = defineStore("panels", () => {
     const s = stress.value?.setup;
     if (!s || s.body === body) return;
     s.body = body;
-    for (const x of s.supports) x.faces = emptyFaceSet();
-    for (const l of s.loads) l.faces = emptyFaceSet();
+    for (const x of [...s.supports, ...s.loads]) {
+      x.faces = emptyFaceSet();
+      delete x.spots;
+    }
+  }
+
+  function stressRow(target: StressTarget) {
+    const s = stress.value?.setup;
+    if (!s) return undefined;
+    return "support" in target ? s.supports.find((x) => x.id === target.support) : s.loads.find((l) => l.id === target.load);
+  }
+
+  function addStressSpot(target: StressTarget, spot: StressSpot) {
+    const row = stressRow(target);
+    if (row) row.spots = [...(row.spots ?? []), spot];
+  }
+
+  function removeStressSpot(target: StressTarget, index: number) {
+    const row = stressRow(target);
+    if (!row?.spots) return;
+    const left = row.spots.filter((_, i) => i !== index);
+    if (left.length) row.spots = left;
+    else delete row.spots;
+  }
+
+  function setStressPlacing(target: StressTarget | null) {
+    if (stress.value) stress.value.placing = target;
   }
 
   function setStressSupportFaces(supportId: number, faces: StressFaceSet) {
@@ -228,7 +255,7 @@ export const usePanelsStore = defineStore("panels", () => {
     properties, interference, overhang, params, stress,
     showProperties, showInterference,
     showStress, replaceStressSetup, setStressBody, setStressSupportFaces, addStressSupport, removeStressSupport,
-    setStressLoadFaces, addStressLoad, removeStressLoad,
+    setStressLoadFaces, addStressLoad, removeStressLoad, stressRow, addStressSpot, removeStressSpot, setStressPlacing,
     stressStarted, stressSent, stressFinished, clearStressResult, setStressColours,
     setStressDeform, setStressProbe, addStressPin, removeStressPin,
   };
