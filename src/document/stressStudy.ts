@@ -11,7 +11,7 @@
 // that is not an object, or a support of a kind nobody knows, means the value
 // is something other than a study.
 
-import type { AxisDirection, Selector, StressStudy, StressSupportType } from "../types";
+import type { AxisDirection, Selector, StressSpot, StressStudy, StressSupportType } from "../types";
 
 export const AXIS_DIRECTIONS: readonly AxisDirection[] = ["-Z", "+Z", "+X", "-X", "+Y", "-Y"];
 export const SUPPORT_TYPES: readonly StressSupportType[] = ["fixed", "pinned", "slider"];
@@ -27,6 +27,8 @@ export const STUDY_DEFAULTS = {
   nu: 0.35,
   yield: 40,
   density: 1.2,
+  /** mm, a spot's radius when the file's is not a size. */
+  radius: 5,
 } as const;
 
 const isRecord = (v: unknown): v is Record<string, unknown> =>
@@ -78,6 +80,26 @@ function faces(v: unknown): Selector[] | null {
   return structuredClone(v) as Selector[];
 }
 
+/** The spots of a support or a load, none for a missing list. A spot with no
+ *  point is unreadable, as a place silently missing would change the answer;
+ *  a radius that is not a size falls back like any other number. */
+function spots(v: unknown): StressSpot[] | null {
+  if (v === undefined || v === null) return [];
+  if (!Array.isArray(v)) return null;
+  const out: StressSpot[] = [];
+  for (const s of v) {
+    if (!isRecord(s) || !isVec3(s["at"])) return null;
+    const r = num(s["radius"], STUDY_DEFAULTS.radius);
+    const n = s["normal"];
+    out.push({
+      at: [...s["at"]],
+      radius: r > 0 ? r : STUDY_DEFAULTS.radius,
+      ...(isVec3(n) ? { normal: [...n] as [number, number, number] } : {}),
+    });
+  }
+  return out;
+}
+
 function id(v: unknown, i: number): number {
   return typeof v === "number" && Number.isInteger(v) && v > 0 ? v : i + 1;
 }
@@ -104,8 +126,9 @@ export function normalizeStressStudy(raw: unknown): StressStudy | null {
     const type = s["type"] ?? "fixed";
     if (!SUPPORT_TYPES.includes(type as StressSupportType)) return null;
     const f = faces(s["faces"]);
-    if (!f) return null;
-    supports.push({ id: id(s["id"], i), type: type as StressSupportType, faces: f });
+    const at = spots(s["spots"]);
+    if (!f || !at) return null;
+    supports.push({ id: id(s["id"], i), type: type as StressSupportType, faces: f, ...(at.length ? { spots: at } : {}) });
   }
 
   const loads: StressStudy["loads"] = [];
@@ -116,13 +139,15 @@ export function normalizeStressStudy(raw: unknown): StressStudy | null {
     const direction = l["direction"] ?? "into";
     if (typeof direction !== "string" || !LOAD_DIRECTIONS.has(direction)) return null;
     const f = faces(l["faces"]);
-    if (!f) return null;
+    const at = spots(l["spots"]);
+    if (!f || !at) return null;
     const c = Array.isArray(l["custom"]) ? (l["custom"] as unknown[]) : [];
     const d = STUDY_DEFAULTS.custom;
     loads.push({
       id: id(l["id"], i),
       kind,
       faces: f,
+      ...(at.length ? { spots: at } : {}),
       force: num(l["force"], STUDY_DEFAULTS.force),
       direction: direction as StressStudy["loads"][number]["direction"],
       custom: [num(c[0], d[0]), num(c[1], d[1]), num(c[2], d[2])],

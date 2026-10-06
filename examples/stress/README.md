@@ -35,6 +35,12 @@ stands in for a stop.
    the body, the supports, the load, gravity and the material.
 3. Press Run.
 
+To try a load of your own, press Place on a load's row and click the body
+where it pushes. That puts a spot there, drawn as an orb: the load acts on the
+surface inside it, so no face has to be split for it first. Drag the orb's rim
+to size it. Place on a support's row holds the body on a spot the same way,
+which suits a screw's seat. From selection is still there for a whole face.
+
 ## Over MCP
 
 `doc_open` the file, `build`, then call `stress` with the study's supports,
@@ -48,6 +54,10 @@ loads, gravity and material. For the bracket:
 ```
 
 The selectors are the ones under `stress` in the file, unchanged.
+
+A load on a place with no face of its own takes `spots` in place of `faces`,
+each a point on the body and a radius in mm:
+`{"spots": [{"at": [60, 0, 12], "radius": 4}], "force": [0, 0, -30]}`.
 
 ## What a run gives
 

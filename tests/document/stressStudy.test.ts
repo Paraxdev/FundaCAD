@@ -175,3 +175,28 @@ describe("the store keeps the study with the document", () => {
     expect(store.stressStudy).toBeNull();
   });
 });
+
+describe("spots in a study", () => {
+  const withSpots = (spots: unknown): unknown => {
+    const s = structuredClone(study) as unknown as { loads: { spots?: unknown }[] };
+    s.loads[0]!.spots = spots;
+    return s;
+  };
+
+  it("are read back, a missing normal and all", () => {
+    const spots = [{ at: [50, 0, 5], radius: 3, normal: [0, 0, 1] }, { at: [40, 0, 5], radius: 2 }];
+    expect(normalizeStressStudy(withSpots(spots))!.loads[0]!.spots).toEqual(spots);
+  });
+
+  it("are left out of a row that has none", () => {
+    expect("spots" in normalizeStressStudy(withSpots([]))!.loads[0]!).toBe(false);
+    expect("spots" in normalizeStressStudy(structuredClone(study))!.supports[0]!).toBe(false);
+  });
+
+  it("forgive a radius that is not a size, but not a spot with no point", () => {
+    expect(normalizeStressStudy(withSpots([{ at: [1, 2, 3], radius: "wide" }]))!.loads[0]!.spots).toEqual([{ at: [1, 2, 3], radius: 5 }]);
+    expect(normalizeStressStudy(withSpots([{ at: [1, 2, 3], radius: -1 }]))!.loads[0]!.spots).toEqual([{ at: [1, 2, 3], radius: 5 }]);
+    expect(normalizeStressStudy(withSpots([{ radius: 3 }]))).toBeNull();
+    expect(normalizeStressStudy(withSpots({ at: [1, 2, 3], radius: 3 }))).toBeNull();
+  });
+});
