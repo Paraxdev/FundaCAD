@@ -5,9 +5,8 @@
 > and `legacy` is kept only as a record of it. FundaCAD continues on the Rust
 > engine, built from [`main`](https://github.com/Paraxdev/fundacad/tree/main)
 > and published as the
-> [rolling beta](https://github.com/Paraxdev/fundacad/releases/tag/beta).
-> The last Python engine installers stay on the
-> [legacy-final release](https://github.com/Paraxdev/fundacad/releases/tag/legacy-final).
+> [rolling beta](https://github.com/Paraxdev/fundacad/releases/tag/beta),
+> which is the only FundaCAD release.
 
 Free, open source parametric CAD for 3D printing. Sketch it, constrain it, model
 it, and export STEP, STL or 3MF. Windows, macOS and Linux.
@@ -53,47 +52,9 @@ the goal is it to make this a personalized version of a CAD with features I like
 
 ## Install
 
-The last Python engine installers for Windows, macOS (Apple Silicon) and Linux
-are on the
-[legacy-final release](https://github.com/Paraxdev/fundacad/releases/tag/legacy-final),
-and nothing newer will be built from this branch. For current builds, take the
-Rust engine from the [beta release](https://github.com/Paraxdev/fundacad/releases/tag/beta).
-
-On Windows there is also a **portable zip** (`…_x64_portable.zip`). Unzip it
-anywhere and run `fundacad.exe`: no installer, no admin rights, and several builds
-can sit side by side. It carries the same files the installer lays down,
-including the Python geometry engine, so it needs nothing else beyond the
-WebView2 runtime that Windows 11 and an up-to-date Windows 10 already have.
-Portable means no installer rather than no traces: preferences still live in
-your user profile.
-
-The builds are **not code signed**, so each OS says so in its own way:
-
-- **Windows**, SmartScreen shows "Windows protected your PC". Choose **More
-  info**, then **Run anyway**. The portable build says it too, on first run.
-- **macOS**, Gatekeeper may report the app as damaged. It is not; that is what
-  an unsigned app looks like to a current macOS. Clear the quarantine flag once,
-  after moving it to Applications:
-  ```bash
-  xattr -dr com.apple.quarantine /Applications/FundaCAD.app
-  ```
-- **Linux**, the AppImage needs `chmod +x` and nothing else, and is the one to
-  reach for when the others give trouble: it carries its own WebKitGTK.
-
-  The `.deb` and `.rpm` are built on Ubuntu 22.04, so they depend on the
-  WebKitGTK that ships from there on: `libwebkit2gtk-4.1-0`. That means
-  **Ubuntu 22.04 or newer, or Debian 12 or newer**. Install the `.deb` with apt
-  and not with `dpkg -i`, because dpkg only *reports* a missing dependency
-  while apt goes and fetches it:
-
-  ```bash
-  sudo apt install ./FundaCAD_0.1.38_amd64.deb
-  ```
-
-  Distributions carrying only the older `libwebkit2gtk-4.0-37`, or only the
-  newer `libwebkitgtk-6.0-4`, cannot satisfy that dependency under the name the
-  package asks for, and there the AppImage is the answer rather than installing
-  WebKitGTK by hand.
+This branch has no installers any more. Every FundaCAD build is on the
+[beta release](https://github.com/Paraxdev/fundacad/releases/tag/beta), the
+Rust engine built from `main`, and the Python engine documents open there.
 
 ## Build
 
