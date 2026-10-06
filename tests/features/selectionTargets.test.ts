@@ -84,6 +84,19 @@ describe("targetsFor", () => {
     const holes = { ...body, features: ["h"] } as Feature;
     expect(targetsFor(holes)).toEqual([]);
   });
+
+  it("offers the bodies acted on only where the feature joins, cuts or intersects", () => {
+    const fields = (f: object) => targetsFor(f as Feature).map((t) => t.field);
+    expect(fields({ id: "e", type: "extrude", sketch: "s", distance: 5, operation: "new" })).toEqual(["regions"]);
+    expect(fields({ id: "e", type: "extrude", sketch: "s", distance: 5, operation: "cut" })).toEqual(["regions", "targets"]);
+    expect(fields({ id: "l", type: "loft", profiles: [] })).toEqual([]);
+    expect(fields({ id: "l", type: "loft", profiles: [], operation: "join" })).toEqual(["targets"]);
+    // A press/pull in its automatic mode moves the face of its own body.
+    expect(fields({ id: "p", type: "press-pull", distance: 2, operation: "cut" })).toEqual(["face"]);
+    expect(fields({ id: "p", type: "press-pull", distance: 2, operation: "cut", mode: "auto" })).toEqual(["face"]);
+    expect(fields({ id: "p", type: "press-pull", distance: 2, operation: "cut", mode: "new" })).toEqual(["face"]);
+    expect(fields({ id: "p", type: "press-pull", distance: 2, operation: "cut", mode: "cut" })).toEqual(["face", "targets"]);
+  });
 });
 
 describe("reading a target the document actually contains", () => {
@@ -280,6 +293,6 @@ describe("profile targets", () => {
   it("leaves loft out, because its profiles are pairs and not points", () => {
     // A row reporting "3 areas" while dropping which sketch each came from is a
     // row that cannot be written back.
-    expect(targetsOf("loft")).toHaveLength(0);
+    expect(targetsOf("loft").filter((t) => t.kind === "area")).toHaveLength(0);
   });
 });
