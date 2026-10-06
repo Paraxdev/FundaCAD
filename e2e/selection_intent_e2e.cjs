@@ -36,7 +36,7 @@ const check = (name, ok, detail) => {
     window.WebSocket = P;
   }, TOKEN);
 
-  await page.goto("http://localhost:5173/");
+  await page.goto(process.env.SC_URL || "http://localhost:5173/");
   await page.waitForTimeout(3500);
   const modal = await page.$(".modal-close");
   if (modal) { await modal.click(); await page.waitForTimeout(400); }
@@ -152,6 +152,8 @@ const check = (name, ok, detail) => {
         for (let y = r.top + 20; y < r.bottom - 20; y += 14) {
           if (window.viewport.bodyIdAt(x, y) !== id) continue;
           if (window.__fundacad.move.hitHandle?.(x, y)) continue;
+          // The rail and the cards float over the canvas, and a click there is theirs.
+          if (document.elementFromPoint(x, y) !== window.viewport.domElement) continue;
           return { x, y };
         }
       }
