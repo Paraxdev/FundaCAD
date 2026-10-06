@@ -104,7 +104,7 @@ The builds are **not code signed**, so each OS says so in its own way:
   from the downloaded file:
 
   ```bash
-  flatpak install --user ./FundaCAD_1.0.217_x86_64.flatpak
+  flatpak install --user ./FundaCAD-linux-x86_64.flatpak
   flatpak run dev.fundacad.app
   ```
 
@@ -123,7 +123,7 @@ The builds are **not code signed**, so each OS says so in its own way:
   while apt goes and fetches it:
 
   ```bash
-  sudo apt install ./FundaCAD_1.0.217_amd64.deb
+  sudo apt install ./FundaCAD-linux-x86_64.deb
   ```
 
   Distributions carrying only the older `libwebkit2gtk-4.0-37`, or only the
