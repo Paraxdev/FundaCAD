@@ -282,9 +282,12 @@ struct Side {
     return std::make_pair(q, normal_uv(u, v));
   }
 
-  bool contains(const gp_Pnt &pnt, double tol) {
+  // A point off the surface counts by where it projects, unless `off` says how
+  // far from the surface it may lie.
+  bool contains(const gp_Pnt &pnt, double tol, double off = -1.0) {
     GeomAPI_ProjectPointOnSurf proj(pnt, surf);
     if (proj.NbPoints() == 0) return false;
+    if (off >= 0 && proj.LowerDistance() > off) return false;
     double u, v;
     proj.LowerDistanceParameters(u, v);
     TopAbs_State st = BRepClass_FaceClassifier(face, gp_Pnt2d(u, v), tol).State();
@@ -1366,8 +1369,12 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
   // lies above it. Sunk in the body, a ball whose contact runs past a face's
   // end into material digs into another part (a boss rim into the plate under
   // it); one whose centre is out in the air is cutting the corner from outside,
-  // a thin rim carved deeper, whatever its contact passes through. A fill's is
-  // clamped to its faces instead (face_limits). A curved
+  // a thin rim carved deeper, whatever its contact passes through. Unless it
+  // still rests on the other face: then it is rounding the edge and digs the
+  // same groove, its centre out only because the body is thinner than the ball
+  // (a seat cone's post into the plate it stands on). A side taken as its
+  // tangent plane is no rest, its contact lies off the surface however it
+  // projects. A fill's is clamped to its faces instead (face_limits). A curved
   // meridian keeps its surface while the ball rests on the face, past it the
   // blend follows its tangent plane at the edge, like a flat face whose
   // contact runs past its end; on the far side of the tube the ball would land
@@ -1395,16 +1402,18 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
     for (const Frame &f : probes) {
       set_frame(f);
       Contacts c = contacts(f.P, f.T, sides, s, chamfer, sz, sz2, g2);
-      Opt<bool> sunk;
+      bool on[2];
+      for (int j = 0; j < 2; ++j) on[j] = sides[j]->contains(c.Q[j], fuzz);
+      if (on[0] && on[1]) continue;
+      if (!body) body.reset(new BRepClass3d_SolidClassifier(shape));
+      int held = on[0] ? 0 : on[1] ? 1 : -1;
+      if (held < 0 || !sides[held]->contains(c.Q[held], fuzz, std::max(fuzz, 1e-4 * sz))) {
+        gp_Pnt centre = c.C ? P(*c.C) : P((V(c.Q[0]) + V(c.Q[1])).Multiplied(0.5));
+        body->Perform(centre, fuzz);
+        if (body->State() != TopAbs_IN) continue;
+      }
       for (int j = 0; j < 2; ++j) {
-        if (sides[j]->contains(c.Q[j], fuzz)) continue;
-        if (!body) body.reset(new BRepClass3d_SolidClassifier(shape));
-        if (!sunk) {
-          gp_Pnt centre = c.C ? P(*c.C) : P((V(c.Q[0]) + V(c.Q[1])).Multiplied(0.5));
-          body->Perform(centre, fuzz);
-          sunk = body->State() == TopAbs_IN;
-        }
-        if (!*sunk) break;
+        if (on[j]) continue;
         body->Perform(c.Q[j], fuzz);
         if (body->State() == TopAbs_IN) return Misfit::IntoBody;
       }
