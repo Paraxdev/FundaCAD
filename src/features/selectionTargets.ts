@@ -80,13 +80,22 @@ export interface TargetField {
  *  Declaration order is row order, and it is the order the feature reads in:
  *  what is kept before what is consumed, what is operated on before what it is
  *  operated with. */
+/** The bodies a join, cut or intersect acts on. Empty is the usual case and is
+ *  not "none": the feature then acts on every shown body it reaches, so hiding
+ *  a body changes what it builds. Naming the bodies here ends that, which is
+ *  the remedy the engine's own refusal offers ("name it as the target"). */
+const ACTS_ON: TargetField = {
+  field: "targets", label: "Bodies acted on", kind: "body", shape: "bodyId", arity: "many",
+  whenEmpty: "every shown body it reaches",
+};
+
 export const FEATURE_TARGETS: Partial<Record<FeatureType, readonly TargetField[]>> = {
   // Fillet and chamfer are the case this exists for. A blend is a set of edges
   // and a size, the size has been editable since the value rows, and the set has
   // never been.
   fillet: [{ field: "edges", label: "Edges", kind: "edge", shape: "selector", arity: "many" }],
   chamfer: [{ field: "edges", label: "Edges", kind: "edge", shape: "selector", arity: "many" }],
-  "press-pull": [{ field: "face", label: "Face", kind: "face", shape: "selector", arity: "one" }],
+  "press-pull": [{ field: "face", label: "Face", kind: "face", shape: "selector", arity: "one" }, ACTS_ON],
   deleteFace: [{ field: "face", label: "Face", kind: "face", shape: "selector", arity: "one" }],
   // Shell's empty set is not "no faces", it is a sealed hollow, a legitimate
   // and quite different part.
@@ -98,7 +107,7 @@ export const FEATURE_TARGETS: Partial<Record<FeatureType, readonly TargetField[]
   thicken: [{
     field: "faces", label: "Faces", kind: "face", shape: "selector", arity: "many",
     whenEmpty: "the whole body",
-  }],
+  }, ACTS_ON],
   draft: [{ field: "faces", label: "Faces", kind: "face", shape: "selector", arity: "many" }],
   hole: [{ field: "face", label: "Face", kind: "face", shape: "selector", arity: "one" }],
   // Two body targets with opposite fates, so they are labelled by fate. Which
@@ -131,11 +140,13 @@ export const FEATURE_TARGETS: Partial<Record<FeatureType, readonly TargetField[]
   extrude: [{
     field: "regions", label: "Profile", kind: "area", shape: "regionPoint",
     arity: "many", whenEmpty: "the whole sketch", alsoReads: "region",
-  }],
+  }, ACTS_ON],
   revolve: [{
     field: "regions", label: "Profile", kind: "area", shape: "regionPoint",
     arity: "many", whenEmpty: "the whole sketch",
-  }],
+  }, ACTS_ON],
+  sweep: [ACTS_ON],
+  loft: [ACTS_ON],
 };
 
 /** The targets this feature has, or an empty list.
@@ -162,11 +173,14 @@ export type TargetEntry = Selector | string | [number, number, number];
  *  wrote as a one-element array, and `split` spells its target two ways. A
  *  reader that trusted the declared arity would silently show an empty target
  *  for a legal document, which reads as "this feature acts on nothing". */
-/** `targetsOf` for one feature: a pattern that repeats features has no bodies. */
+/** `targetsOf` for one feature: a pattern that repeats features has no bodies,
+ *  and a feature that makes a body of its own acts on none. */
 export function targetsFor(f: Feature): readonly TargetField[] {
   const all = targetsOf(f.type);
-  const repeats = (f as { features?: string[] }).features;
-  return repeats?.length ? all.filter((t) => t.field !== "bodies") : all;
+  const { features: repeats, operation, mode } = f as { features?: string[]; operation?: string; mode?: string };
+  const how = f.type === "press-pull" ? mode ?? "auto" : operation ?? "new";
+  const combines = how !== "auto" && how !== "new";
+  return all.filter((t) => (t.field !== "bodies" || !repeats?.length) && (t !== ACTS_ON || combines));
 }
 
 export function readTarget(feature: Feature, t: TargetField): TargetEntry[] {
