@@ -7,8 +7,8 @@
 # workflow has no brew, vcpkg or apt OCCT step.
 #
 # `build-beta` + `release-beta` publish the rolling `beta` release and its
-# update feed from `main`. The retired Python engine is frozen on the `legacy`
-# branch, whose last build is the `legacy-final` release.
+# update feed from `main`. It is the only release. The retired Python engine is
+# frozen on the `legacy` branch, which publishes nothing.
 #
 # Scope: x86_64 Linux, Apple Silicon macOS, x86_64 Windows. (No Intel-mac / linux-arm64.)
 
@@ -373,9 +373,7 @@ jobs:
   # Its own plugin bundles, built by build-beta from the same commit as the
   # engine whose plugin host runs their geometry components. The app installs
   # plugins from this release (RELEASE_TAG in src/plugins/index.ts).
-  #
-  # The retired `alpha` release is kept for a transition period and gets a copy
-  # of this release's latest.json, see the end of the publish step.
+
   release-beta:
     needs: [build-beta, build-flatpak]
     # A failed Flatpak leaves it out of the release rather than holding the
@@ -495,9 +493,8 @@ jobs:
           > ### Read this first
           >
           > **This is FundaCAD 1.0 on the Rust geometry engine.** It replaces
-          > the Python engine, which is retired. Its last build stays on the
-          > [legacy-final](https://github.com/Paraxdev/fundacad/releases/tag/legacy-final)
-          > release and is no longer updated.
+          > the Python engine, which is retired, and this rolling beta is the
+          > only FundaCAD release.
           >
           > - If a model builds differently here than it did on the Python
           >   engine, a missing or changed face, a fillet that refuses, a
@@ -512,9 +509,8 @@ jobs:
           >   (MCP) gives the setup for Claude Code, Claude Desktop or any
           >   MCP host. An installed MCP server plugin is removed on first
           >   start.
-          > - Files open in both: documents saved here are ordinary `.funda`
-          >   files and open in the Python engine build, and the other way
-          >   round.
+          > - Documents saved by the Python engine build are ordinary
+          >   `.funda` files and open here.
 
           WARN
 
@@ -562,7 +558,7 @@ jobs:
             "$R" >> notes.md
           printf '\nThis build carries no Python runtime, so it is a fraction of the size of the Python engine builds.\n' >> notes.md
           if [ "$SELF_UPDATES" = yes ]; then
-            printf '\nInstalled copies update themselves from this release, copies of the retired alpha included.\n' >> notes.md
+            printf '\nInstalled copies update themselves from this release.\n' >> notes.md
           else
             printf '\nThis build does not update itself, so take a new installer from this page when you want a newer one.\n' >> notes.md
           fi
@@ -594,9 +590,7 @@ jobs:
           # the binaries replace the ones the old manifest names: take that
           # manifest down first, or an installed copy could fetch the new
           # bytes against the old signature and refuse the update.
-          for rel in beta alpha; do
-            gh release delete-asset "$rel" latest.json --repo "$R" --yes 2>/dev/null || true
-          done
+          gh release delete-asset beta latest.json --repo "$R" --yes 2>/dev/null || true
           gh release upload beta --repo "$R" --clobber $files
           if [ "$SELF_UPDATES" = yes ]; then
             gh release upload beta --repo "$R" --clobber latest.json
@@ -612,18 +606,6 @@ jobs:
                 printf '%s\n' "$keep" | grep -qxF "$asset" \
                   || gh release delete-asset beta "$asset" --repo "$R" --yes || true
               done
-
-          # Transition mirror for the retired `alpha` channel. Copies built
-          # before the rename read alpha/latest.json and install plugins from
-          # the alpha release, so that release is left as it is and only gets
-          # this same manifest, whose URLs and signatures name this beta
-          # release's assets. An alpha copy updates into a build that reads the
-          # beta feed, and never needs the alpha release again.
-          # To drop the mirror once the alpha installs have moved over: delete
-          # this block, then `gh release delete alpha --cleanup-tag --yes`.
-          if [ "$SELF_UPDATES" = yes ] && gh release view alpha --repo "$R" >/dev/null 2>&1; then
-            gh release upload alpha --repo "$R" --clobber latest.json
-          fi
 
   # Browser end-to-end checks for the imported-assembly Browser tree.
   #
