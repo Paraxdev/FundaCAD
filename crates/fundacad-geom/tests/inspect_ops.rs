@@ -270,3 +270,42 @@ fn a_summary_counts_without_measuring_and_places_shared_shapes() {
         assert_eq!(rep[1]["volume"], rep[0]["volume"]);
     }
 }
+
+#[test]
+fn the_volume_of_a_lofted_spline_body_is_the_precise_one() {
+    use fundacad_geom::kernel;
+    // An egg-shaped outline lofted to a wider one: the quick integration is
+    // off on such a body, by 3 percent on a real tray, and inspect reported it.
+    let outline = |id: &str, z: f64, k: f64| {
+        let poles: Vec<Value> = (0..24)
+            .map(|i| {
+                let a = f64::from(i) * std::f64::consts::TAU / 24.0;
+                let r = k * (40.0 + 8.0 * a.cos());
+                json!({"x": r * a.cos(), "y": 0.8 * r * a.sin()})
+            })
+            .collect();
+        json!({"id": id, "type": "sketch", "plane": {"origin": [0, 0, z], "normal": [0, 0, 1], "xdir": [1, 0, 0]},
+               "entities": [{"type": "bspline", "id": "c", "closed": true, "degree": 3, "poles": poles}]})
+    };
+    let doc = json!({"features": [
+        outline("low", 0.0, 1.0),
+        outline("high", 30.0, 1.25),
+        {"id": "tub", "type": "loft", "sketches": ["low", "high"], "operation": "new"},
+    ]});
+    let mut req = Map::new();
+    req.insert("document".into(), doc);
+    let (_, r) = inspect::rebuild_request(&req, &NoWatch).map_err(|_| ()).unwrap();
+    assert!(r.errors.is_empty(), "{:?}", r.errors.iter().map(|e| &e.message).collect::<Vec<_>>());
+    let shape = &r.bodies[0].shape;
+    let (quick, precise) = (kernel::volume(shape).abs(), kernel::volume_precise(shape).abs());
+    assert!((precise - quick).abs() > 1e-5 * precise, "this body no longer shows the gap: {quick} against {precise}");
+    let rep = inspect::inspect_bodies(
+        &[inspect::InspectBody { id: json!("b1"), name: json!("Tub"), shape: Some(shape) }],
+        false,
+        400,
+        800,
+    )
+    .unwrap();
+    let got = rep[0]["volume"].as_f64().unwrap().abs();
+    assert!((got - precise).abs() < 1e-3, "inspect says {got}, the body holds {precise} (quick {quick})");
+}
