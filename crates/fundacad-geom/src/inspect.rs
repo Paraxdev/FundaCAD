@@ -24,6 +24,8 @@ use crate::topo::{face_wraps, FaceAdjacency};
 pub const MAX_FACES: usize = 400;
 pub const MAX_EDGES: usize = 800;
 pub const MAX_INTERFERENCE_OPS: usize = 400;
+/// How long the pair sweep beats on its own, after that only a finished pair does.
+const SLOW_PAIR_BEATS: std::time::Duration = std::time::Duration::from_secs(300);
 
 /// The document of a request, rebuilt; the error reply when it cannot be.
 pub fn rebuild_request(req: &Map<String, Value>, watch: &dyn Watch) -> Result<(Value, Rebuild), JobResult> {
@@ -682,14 +684,22 @@ pub fn interference(bodies: &[BuiltBody], clearance: Option<f64>, max_ops: usize
         }
     }
     let cancel = watch.cancel_token();
-    let work = crate::par::Shared((bodies, &candidates));
-    let found = crate::par::map_indexed(candidates.len(), move |k| {
-        if cancel.as_ref().is_some_and(|c| c.is_cancelled()) {
-            return Clash::Clear;
-        }
-        let (bodies, candidates) = *work.get();
-        let (i, j) = candidates[k];
-        clash(&bodies[i], &bodies[j], threshold)
+    // A pair's common is one silent kernel call and the sweep has no feature or
+    // body to report, so without beats the engine ends it as stalled a minute in.
+    let work = crate::par::Shared((bodies, &candidates, crate::heartbeat::current()));
+    let found = crate::heartbeat::while_running(SLOW_PAIR_BEATS, || {
+        crate::par::map_indexed(candidates.len(), move |k| {
+            if cancel.as_ref().is_some_and(|c| c.is_cancelled()) {
+                return Clash::Clear;
+            }
+            let (bodies, candidates, beat) = work.get();
+            let (i, j) = candidates[k];
+            let hit = clash(&bodies[i], &bodies[j], threshold);
+            if let Some(b) = beat {
+                b();
+            }
+            hit
+        })
     });
     let (mut pairs, mut clearances) = (Vec::new(), Vec::new());
     for c in found {
@@ -718,6 +728,7 @@ pub fn interference(bodies: &[BuiltBody], clearance: Option<f64>, max_ops: usize
 
 /// The `interference` op.
 pub fn interference_result(req: &Map<String, Value>, watch: &dyn Watch) -> JobResult {
+    let _beat = crate::heartbeat::install(watch.heartbeat());
     let (_, r) = match rebuild_request(req, watch) {
         Ok(x) => x,
         Err(e) => return e,
