@@ -9,8 +9,14 @@
 //! Besides fixed faces, a support may be a slider (held along the face normal only) or a pin
 //! (a cylindrical face held towards its axis and along it, free to turn), and gravity may pull
 //! on the whole body with the material's density.
+//!
+//! A support or a load may also name `spots`, each a point with a radius: the part of the
+//! body's surface within the radius of the point. A spot needs no face of its own, so a load
+//! in the crook of a hook or a screw's patch on a wall plate is placed without splitting a
+//! face for it first. Spots are found on the volume mesh's boundary and given face ids of
+//! their own past the body's, so the solver takes them as it takes faces.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::time::Duration;
 
 use fundacad_engine::error_result;
@@ -303,12 +309,44 @@ fn named(what: &str, list: &str, i: usize) -> String {
     format!("{what} {} ({list}[{i}])", i + 1)
 }
 
+/// A part of the body's surface given by a point: what lies within `radius` of `at`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Spot {
+    at: [f64; 3],
+    radius: f64,
+}
+
+/// The `spots` of the support or load `at` names, none when it has no such key. `path` is
+/// where they sit in the request.
+fn spots_of(v: Option<&Value>, at: &str, path: &str) -> Result<Vec<Spot>, String> {
+    let list = match v {
+        None | Some(Value::Null) => return Ok(Vec::new()),
+        Some(Value::Array(a)) => a.iter().collect(),
+        Some(one) => vec![one],
+    };
+    let mut out = Vec::with_capacity(list.len());
+    for (i, spot) in list.iter().enumerate() {
+        let Some(p) = spot.get("at").and_then(vec3_of) else {
+            return Err(format!(
+                "{path}[{i}] of {at} must be {{at, radius}}, a point [x, y, z] on the body and a radius in mm, got {spot}"
+            ));
+        };
+        let radius = spot.get("radius").and_then(Value::as_f64);
+        let Some(radius) = radius.filter(|r| r.is_finite() && *r > 0.0) else {
+            return Err(format!(
+                "the radius of {path}[{i}] of {at} must be a number above 0 in mm"
+            ));
+        };
+        out.push(Spot { at: p, radius });
+    }
+    Ok(out)
+}
+
+/// A support of the request: how it holds, the faces it names and its spots.
+type SupportOf = (SupportKind, Vec<u32>, Vec<Spot>);
+
 /// The request's `supports`, each with its face ids. A missing type is fixed.
-fn supports_of(
-    shape: &Shape,
-    body_id: &str,
-    v: Option<&Value>,
-) -> Result<Vec<(SupportKind, Vec<u32>)>, String> {
+fn supports_of(shape: &Shape, body_id: &str, v: Option<&Value>) -> Result<Vec<SupportOf>, String> {
     let list = match v {
         None | Some(Value::Null) => Vec::new(),
         Some(Value::Array(a)) => a.iter().collect(),
@@ -331,9 +369,13 @@ fn supports_of(
                 ))
             }
         };
-        let Some(faces) = m.get("faces") else {
-            return Err(format!("{at} has no faces, give the faces it holds"));
-        };
+        let spots = spots_of(m.get("spots"), &at, &format!("supports[{i}].spots"))?;
+        let named = m.get("faces").filter(|f| !selector_list(f).is_empty());
+        if named.is_none() && spots.is_empty() {
+            return Err(format!(
+                "{at} has no faces, give the faces it holds, or spots to hold it at"
+            ));
+        }
         let check = match kind.trim().to_lowercase().as_str() {
             k @ ("fixed" | "pinned" | "slider") => k.to_string(),
             _ => {
@@ -342,13 +384,21 @@ fn supports_of(
                 ))
             }
         };
-        let faces = face_ids(
-            shape,
-            body_id,
-            faces,
-            &format!("support {}", i + 1),
-            &format!("supports[{i}].faces"),
-        )?;
+        if !spots.is_empty() && check != "fixed" {
+            return Err(format!(
+                "{at} is {check} and has spots, a spot is held every way, so make the support fixed or give it faces only"
+            ));
+        }
+        let faces = match named {
+            Some(faces) => face_ids(
+                shape,
+                body_id,
+                faces,
+                &format!("support {}", i + 1),
+                &format!("supports[{i}].faces"),
+            )?,
+            None => Vec::new(),
+        };
         let kind = match check.as_str() {
             "fixed" => SupportKind::Fixed,
             "slider" => SupportKind::Slider(faces.iter().map(|&f| slide_face(shape, f)).collect()),
@@ -379,7 +429,7 @@ fn supports_of(
                 SupportKind::Pinned(axes)
             }
         };
-        out.push((kind, faces));
+        out.push((kind, faces, spots));
     }
     Ok(out)
 }
@@ -494,13 +544,13 @@ fn vec3_of(v: &Value) -> Option<[f64; 3]> {
     Some(out)
 }
 
-/// The loads, which may be none when gravity is on.
+/// The loads, each with its spots, which may be none when gravity is on.
 fn loads_of(
     shape: &Shape,
     body_id: &str,
     v: Option<&Value>,
     gravity: bool,
-) -> Result<Vec<Load>, String> {
+) -> Result<Vec<(Load, Vec<Spot>)>, String> {
     let list = match v {
         None | Some(Value::Null) => Vec::new(),
         Some(Value::Array(a)) => a.iter().collect(),
@@ -508,22 +558,30 @@ fn loads_of(
     };
     if list.is_empty() && !gravity {
         return Err(
-            "there is no load, add a force or a pressure on a face, or turn gravity on".into(),
+            "there is no load, add a force or a pressure on a face or a spot, or turn gravity on"
+                .into(),
         );
     }
     let mut out = Vec::with_capacity(list.len());
     for (i, l) in list.iter().enumerate() {
         let at = named("load", "loads", i);
-        let Some(faces) = l.get("faces") else {
-            return Err(format!("{at} has no faces, give the faces it pushes on"));
+        let spots = spots_of(l.get("spots"), &at, &format!("loads[{i}].spots"))?;
+        let named = l.get("faces").filter(|f| !selector_list(f).is_empty());
+        let faces = match named {
+            Some(faces) => face_ids(
+                shape,
+                body_id,
+                faces,
+                &format!("load {}", i + 1),
+                &format!("loads[{i}].faces"),
+            )?,
+            None if !spots.is_empty() => Vec::new(),
+            None => {
+                return Err(format!(
+                    "{at} has no faces, give the faces it pushes on, or spots to push at"
+                ))
+            }
         };
-        let faces = face_ids(
-            shape,
-            body_id,
-            faces,
-            &format!("load {}", i + 1),
-            &format!("loads[{i}].faces"),
-        )?;
         let kind =
             match (l.get("force"), l.get("pressure")) {
                 (Some(f), None) => LoadKind::Force(vec3_of(f).ok_or_else(|| {
@@ -543,9 +601,212 @@ fn loads_of(
                     ))
                 }
             };
-        out.push(Load { faces, kind });
+        out.push((Load { faces, kind }, spots));
     }
     Ok(out)
+}
+
+/// A spot that caught fewer boundary triangles than this is smaller than the mesh can show.
+const SPOT_FEW: usize = 4;
+
+/// The volume mesh with every spot's part of its boundary under a face id of its own.
+struct Spotted {
+    mesh: TetMesh,
+    /// The ids each spot is made of, in the order the spots were given. Two spots that
+    /// overlap share the ids of what they both cover.
+    of_spot: Vec<Vec<u32>>,
+    /// The ids split off each of the body's faces, with the face itself while any of it is
+    /// left outside the spots.
+    of_face: HashMap<u32, Vec<u32>>,
+    /// The body's face each new id was split off, the first new id being `first`.
+    origin: Vec<u32>,
+    first: u32,
+    /// The spots too small for the mesh, by their place in the list.
+    small: Vec<usize>,
+}
+
+impl Spotted {
+    /// The face of the body an id lies on, itself for one of the body's own.
+    fn face(&self, id: u32) -> u32 {
+        id.checked_sub(self.first)
+            .and_then(|i| self.origin.get(i as usize).copied())
+            .unwrap_or(id)
+    }
+
+    /// The ids that cover face `id` of the body now.
+    fn spread(&self, id: u32) -> Vec<u32> {
+        self.of_face.get(&id).cloned().unwrap_or_else(|| vec![id])
+    }
+}
+
+/// The distance from `p` to the triangle `abc`, by the region of the triangle `p` is nearest.
+fn triangle_distance(p: [f64; 3], [a, b, c]: [[f64; 3]; 3]) -> f64 {
+    let (ab, ac, ap) = (sub(b, a), sub(c, a), sub(p, a));
+    let at = |v: f64, w: f64| {
+        let q = [0, 1, 2].map(|k| a[k] + ab[k] * v + ac[k] * w);
+        let d = sub(p, q);
+        dot(d, d).sqrt()
+    };
+    let (d1, d2) = (dot(ab, ap), dot(ac, ap));
+    if d1 <= 0.0 && d2 <= 0.0 {
+        return at(0.0, 0.0);
+    }
+    let bp = sub(p, b);
+    let (d3, d4) = (dot(ab, bp), dot(ac, bp));
+    if d3 >= 0.0 && d4 <= d3 {
+        return at(1.0, 0.0);
+    }
+    let vc = d1 * d4 - d3 * d2;
+    if vc <= 0.0 && d1 >= 0.0 && d3 <= 0.0 {
+        return at(d1 / (d1 - d3), 0.0);
+    }
+    let cp = sub(p, c);
+    let (d5, d6) = (dot(ab, cp), dot(ac, cp));
+    if d6 >= 0.0 && d5 <= d6 {
+        return at(0.0, 1.0);
+    }
+    let vb = d5 * d2 - d1 * d6;
+    if vb <= 0.0 && d2 >= 0.0 && d6 <= 0.0 {
+        return at(0.0, d2 / (d2 - d6));
+    }
+    let va = d3 * d6 - d5 * d4;
+    if va <= 0.0 && d4 - d3 >= 0.0 && d5 - d6 >= 0.0 {
+        let w = (d4 - d3) / ((d4 - d3) + (d5 - d6));
+        return at(1.0 - w, w);
+    }
+    let sum = va + vb + vc;
+    if sum == 0.0 {
+        return at(0.0, 0.0);
+    }
+    at(vb / sum, vc / sum)
+}
+
+/// Find each spot on the boundary of `mesh`: the triangle its point lies on, and from there
+/// every triangle reached across shared edges whose centre is within the radius. Growing it
+/// from the point keeps a spot on one side of a thin wall off the other side. `labels` name
+/// the spots in a refusal, `size` is the element size.
+fn spotted(
+    mesh: &TetMesh,
+    spots: &[Spot],
+    labels: &[String],
+    body_id: &str,
+    size: f64,
+) -> Result<Spotted, String> {
+    let centres: Vec<[f64; 3]> = mesh
+        .boundary
+        .iter()
+        .map(|t| {
+            let [a, b, c] = t.map(|i| mesh.nodes[i as usize]);
+            [0, 1, 2].map(|k| (a[k] + b[k] + c[k]) / 3.0)
+        })
+        .collect();
+    let away = |t: usize, p: [f64; 3]| {
+        let d = sub(centres[t], p);
+        dot(d, d).sqrt()
+    };
+    let mut by_edge: HashMap<(u32, u32), Vec<usize>> = HashMap::new();
+    for (i, t) in mesh.boundary.iter().enumerate() {
+        for k in 0..3 {
+            let (a, b) = (t[k], t[(k + 1) % 3]);
+            by_edge.entry((a.min(b), a.max(b))).or_default().push(i);
+        }
+    }
+    let mut inside: Vec<Vec<u32>> = vec![Vec::new(); mesh.boundary.len()];
+    let mut small = Vec::new();
+    for (s, spot) in spots.iter().enumerate() {
+        // By the distance to the triangle and not to its centre, which on a wall thinner
+        // than the elements can be nearer on the far side.
+        let reach: Vec<f64> = mesh
+            .boundary
+            .iter()
+            .map(|t| triangle_distance(spot.at, t.map(|i| mesh.nodes[i as usize])))
+            .collect();
+        let Some(seed) = (0..reach.len()).min_by(|&a, &b| reach[a].total_cmp(&reach[b])) else {
+            break;
+        };
+        let gap = reach[seed];
+        if gap > spot.radius + size {
+            let [x, y, z] = spot.at.map(|c| py_round(c, 3) + 0.0);
+            return Err(format!(
+                "{} is not on {body_id}, the body's surface is {gap:.3} mm from ({x}, {y}, {z}) and its radius is {:.3} mm, place it on the body again",
+                labels[s], spot.radius
+            ));
+        }
+        let mut seen = vec![false; centres.len()];
+        seen[seed] = true;
+        let mut queue = VecDeque::from([seed]);
+        let mut count = 0;
+        while let Some(t) = queue.pop_front() {
+            inside[t].push(s as u32);
+            count += 1;
+            let tri = mesh.boundary[t];
+            for k in 0..3 {
+                let (a, b) = (tri[k], tri[(k + 1) % 3]);
+                for &n in &by_edge[&(a.min(b), a.max(b))] {
+                    if !seen[n] && away(n, spot.at) <= spot.radius {
+                        seen[n] = true;
+                        queue.push_back(n);
+                    }
+                }
+            }
+        }
+        if count < SPOT_FEW {
+            small.push(s);
+        }
+    }
+
+    let first = mesh
+        .boundary_face
+        .iter()
+        .copied()
+        .max()
+        .map_or(0, |m| m + 1);
+    let mut ids: HashMap<(u32, Vec<u32>), u32> = HashMap::new();
+    let mut origin = Vec::new();
+    let mut out = mesh.clone();
+    let mut pairs = Vec::new();
+    for (t, within) in inside.iter().enumerate() {
+        if within.is_empty() {
+            continue;
+        }
+        let face = mesh.boundary_face[t];
+        let next = first + origin.len() as u32;
+        let id = *ids.entry((face, within.clone())).or_insert_with(|| {
+            origin.push(face);
+            next
+        });
+        out.boundary_face[t] = id;
+        pairs.extend(mesh.boundary[t].map(|n| (n, id)));
+    }
+    // A mesh without the list has its nodes on the faces of their triangles, tags and all.
+    if !out.node_faces.is_empty() {
+        out.node_faces.extend(pairs);
+        out.node_faces.sort_unstable();
+        out.node_faces.dedup();
+    }
+    let mut of_spot = vec![Vec::new(); spots.len()];
+    let mut of_face: HashMap<u32, Vec<u32>> = HashMap::new();
+    let mut made: Vec<(&(u32, Vec<u32>), &u32)> = ids.iter().collect();
+    made.sort_by_key(|m| *m.1);
+    for ((face, within), &id) in made {
+        for &s in within {
+            of_spot[s as usize].push(id);
+        }
+        of_face.entry(*face).or_default().push(id);
+    }
+    for (face, list) in &mut of_face {
+        if out.boundary_face.contains(face) {
+            list.insert(0, *face);
+        }
+    }
+    Ok(Spotted {
+        mesh: out,
+        of_spot,
+        of_face,
+        origin,
+        first,
+        small,
+    })
 }
 
 /// One vertex per position, so the faces that meet share the nodes along their common edge,
@@ -650,7 +911,7 @@ fn peak_place(
     let free = touching.iter().any(|&t| held_as(t).is_none());
     // A fixed face first, as the one whose edge stress grows most with refinement.
     let mut ways: Vec<&'static str> = touching.iter().filter_map(|&t| held_as(t)).collect();
-    ways.sort_by_key(|&w| w != "fixed");
+    ways.sort_by_key(|&w| !w.starts_with("fixed"));
     PeakPlace {
         face: areas.first().map(|a| a.0),
         support_edge: ways.first().copied().filter(|_| free),
@@ -1029,7 +1290,7 @@ fn analyse(
     let mut fixed = given_fixed.clone();
     // Every face any support holds, with how the first support to name it holds it.
     let mut held: Vec<(u32, &'static str)> = given_fixed.iter().map(|&f| (f, "fixed")).collect();
-    for (kind, faces) in &supports {
+    for (kind, faces, _) in &supports {
         if *kind == SupportKind::Fixed {
             fixed.extend(faces);
         }
@@ -1037,18 +1298,13 @@ fn analyse(
     }
     fixed.sort_unstable();
     fixed.dedup();
-    // A fixed face holds most, so it names the face whatever else holds it.
-    held.sort_by_key(|&(f, word)| (f, word != "fixed"));
-    held.dedup_by_key(|h| h.0);
     let loads = loads_of(&shape, id, req.get("loads"), gravity.is_some())?;
     // A fixed face does not move, so a load only on fixed faces goes straight into the
     // fixture and does nothing to the part.
     let dead: Vec<usize> = (0..loads.len())
         .filter(|&i| {
-            loads[i]
-                .faces
-                .iter()
-                .all(|f| fixed.binary_search(f).is_ok())
+            let (load, spots) = &loads[i];
+            spots.is_empty() && load.faces.iter().all(|f| fixed.binary_search(f).is_ok())
         })
         .collect();
     if dead.len() == loads.len() && gravity.is_none() {
@@ -1113,20 +1369,99 @@ fn analyse(
     )
     .map_err(|e| mesh_error_text(&e))?;
 
-    let (loads, origin) = exact_pressures(loads, &surface, &planar, &mesh);
+    // Every spot in one list, the supports' first, each with its name for a refusal.
+    let mut spots = Vec::new();
+    let mut labels = Vec::new();
+    let support_spots: Vec<usize> = supports.iter().map(|s| s.2.len()).collect();
+    for (i, (_, _, list)) in supports.iter().enumerate() {
+        spots.extend(list);
+        labels.extend(
+            (0..list.len())
+                .map(|k| format!("spot {} of {}", k + 1, named("support", "supports", i))),
+        );
+    }
+    let load_spots: Vec<usize> = loads.iter().map(|l| l.1.len()).collect();
+    for (i, (_, list)) in loads.iter().enumerate() {
+        spots.extend(list);
+        labels.extend(
+            (0..list.len()).map(|k| format!("spot {} of {}", k + 1, named("load", "loads", i))),
+        );
+    }
+    let spotted = if spots.is_empty() {
+        None
+    } else {
+        Some(spotted(&mesh, &spots, &labels, id, stats.size)?)
+    };
+    // The ids of the next `n` spots of the list, as one sorted set.
+    let mut next = 0;
+    let mut take = |n: usize| {
+        let ids = spotted.as_ref().map_or(Vec::new(), |s| {
+            let mut ids: Vec<u32> = s.of_spot[next..next + n].concat();
+            ids.sort_unstable();
+            ids.dedup();
+            ids
+        });
+        next += n;
+        ids
+    };
     let supports: Vec<Support> = supports
         .into_iter()
-        .map(|(kind, faces)| Support {
-            hold: match kind {
-                SupportKind::Fixed => Hold::Fixed,
-                SupportKind::Slider(surfaces) => Hold::Slider(surfaces),
-                SupportKind::Pinned(axes) => Hold::Pinned(axes),
-            },
-            faces,
+        .zip(&support_spots)
+        .map(|((kind, mut faces, _), &n)| {
+            let at = take(n);
+            held.extend(at.iter().map(|&f| (f, "fixed spot")));
+            faces.extend(at);
+            Support {
+                hold: match kind {
+                    SupportKind::Fixed => Hold::Fixed,
+                    SupportKind::Slider(surfaces) => Hold::Slider(surfaces),
+                    SupportKind::Pinned(axes) => Hold::Pinned(axes),
+                },
+                faces,
+            }
         })
         .collect();
+    let kinds: Vec<LoadKind> = loads.iter().map(|l| l.0.kind).collect();
+    let (mut loads, mut origin) = exact_pressures(
+        loads.into_iter().map(|l| l.0).collect(),
+        &surface,
+        &planar,
+        &mesh,
+    );
+    if let Some(s) = &spotted {
+        // A face a spot took part of is loaded through what is left of it and the parts
+        // the spots took, and held the way it was through them all.
+        for load in &mut loads {
+            load.faces = load.faces.iter().flat_map(|&f| s.spread(f)).collect();
+        }
+        let split: Vec<(u32, &'static str)> = held
+            .iter()
+            .filter(|h| h.0 < s.first)
+            .flat_map(|&(f, word)| s.spread(f).into_iter().map(move |id| (id, word)))
+            .collect();
+        held.extend(split);
+    }
+    for (i, &n) in load_spots.iter().enumerate() {
+        let at = take(n);
+        if at.is_empty() {
+            continue;
+        }
+        // A force is one total over its faces and spots together, a pressure pushes on
+        // each as it is.
+        match (kinds[i], origin.iter().position(|&o| o == i)) {
+            (LoadKind::Force(_), Some(k)) => loads[k].faces.extend(at),
+            (kind, _) => {
+                loads.push(Load { faces: at, kind });
+                origin.push(i);
+            }
+        }
+    }
+    // A fixed face or spot holds most, so it names the place whatever else holds it.
+    held.sort_by_key(|&(f, word)| (f, !word.starts_with("fixed")));
+    held.dedup_by_key(|h| h.0);
+    let solved = spotted.as_ref().map_or(&mesh, |s| &s.mesh);
     let problem = Problem {
-        mesh: &mesh,
+        mesh: solved,
         material: solve::Material {
             e: material.e,
             nu: material.nu,
@@ -1164,12 +1499,16 @@ fn analyse(
     }
     let peak = sol.max_von_mises;
     let peak_at = sol.nodes[sol.max_von_mises_node as usize];
-    let place = peak_place(&mesh, &sol, sol.max_von_mises_node, &held);
+    let mut place = peak_place(solved, &sol, sol.max_von_mises_node, &held);
+    if let Some(s) = &spotted {
+        place.face = place.face.map(|f| s.face(f));
+    }
     let at_inside_corner = inside_corners(&surface)
         .iter()
         .any(|s| segment_distance(peak_at, s) <= CORNER_REACH * stats.size);
     if peak > 0.0 && (at_inside_corner || place.support_edge.is_some()) {
         let spot = match place.support_edge {
+            Some("fixed spot") if !at_inside_corner => "where a fixed spot ends".to_string(),
             Some(word) if !at_inside_corner => format!("where a {word} face ends"),
             _ => "at a sharp inside corner".to_string(),
         };
@@ -1195,6 +1534,14 @@ fn analyse(
         warnings.push(format!(
             "{n} of the {which} faces got no elements, they are narrower than the element size and hold nothing"
         ));
+    }
+    if let Some(s) = &spotted {
+        for &i in &s.small {
+            warnings.push(format!(
+                "{} (radius {:.3} mm) is smaller than the elements ({:.3} mm), so it takes about one of them and the stress right at it is rough, use a larger radius or a smaller element size",
+                labels[i], spots[i].radius, stats.size
+            ));
+        }
     }
     if material.printed {
         warnings.push(

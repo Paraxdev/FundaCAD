@@ -393,7 +393,8 @@ same request gives the same answer every time.
   "gravity": true,       // optional: true is [0, 0, -9.81] m/s2, or [gx, gy, gz]
   "loads": [
     { "faces": [ /* face Selectors */ ], "force": [0, 0, -20] },  // N, the total, spread by area
-    { "faces": [ /* ... */ ], "pressure": 0.5 }                   // MPa, pushing into the faces
+    { "faces": [ /* ... */ ], "pressure": 0.5 },                  // MPa, pushing into the faces
+    { "spots": [ { "at": [12, 0, 3.5], "radius": 4 } ], "force": [0, 0, -50] }  // no face of its own
   ],
   "material": "PLA",     // optional, default PLA; a preset or {"E", "nu", "yield", "density", "name"}
   "size": 1.5,           // optional, element size in mm
@@ -424,6 +425,16 @@ same request gives the same answer every time.
   support` or `the body can still turn about the hole's axis through (x, y, z), a slider
   leaves a hole free to turn, add another support` (an axis that is no pin's and no round
   slider face's is named by its direction).
+- A load, or a fixed support, may give `spots` in place of `faces` or beside them, each
+  `{at, radius}`: the part of the body's surface within `radius` mm of the point `at`. A
+  spot is found on the boundary of the volume mesh: the triangle `at` lies on, then every
+  triangle reached across shared edges whose centre is within the radius, so a spot on one
+  side of a thin wall does not take the other side. A force is one total over a load's
+  faces and spots together, a pressure pushes into each. A face a spot takes part of is
+  still loaded and held whole by whatever names the face. A spot on a `pinned` or `slider`
+  support is refused, one more than its radius and an element away from the body is
+  refused as `spot 1 of load 1 (loads[0]) is not on body1`, and one that takes fewer than
+  four triangles runs with a warning that it is smaller than the elements.
 - `gravity` needs a density: the presets carry one, a custom material takes `density` in
   g/cm3, and without one the request is refused (`gravity needs the material's density in
   g/cm3`). The body force rho g (rho in t/mm3, g in mm/s2, so N per cubic mm) is spread by

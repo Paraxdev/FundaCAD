@@ -50,7 +50,7 @@ describe("supports and gravity in the request", () => {
     const s = ready();
     s.supports.push(newSupport(2, "pinned"));
     const r = buildStressRequest(s);
-    expect(!r.ok && r.message).toBe("set the faces of support 2 from a face selection");
+    expect(!r.ok && r.message).toBe("place support 2 on the body, or set its faces from a face selection");
     s.supports = [];
     const none = buildStressRequest(s);
     expect(!none.ok && none.message).toBe("add a support");
@@ -79,14 +79,14 @@ describe("supports and gravity in the request", () => {
     const s = ready();
     s.loads[0]!.faces = { selectors: [], faceIds: [], normalSum: [0, 0, 0], area: 0 };
     const off = buildStressRequest(s);
-    expect(!off.ok && off.message).toBe("set the faces of the load from a face selection");
+    expect(!off.ok && off.message).toBe("place the load on the body, or set its faces from a face selection");
     s.gravity.on = true;
     const r = buildStressRequest(s);
     expect(r.ok && r.options.loads).toEqual([]);
     expect(r.ok && r.options.gravity).toEqual([0, 0, -9.81]);
     s.loads[0]!.force = 40;
     const edited = buildStressRequest(s);
-    expect(!edited.ok && edited.message).toBe("set the faces of the load from a face selection");
+    expect(!edited.ok && edited.message).toBe("place the load on the body, or set its faces from a face selection");
   });
 
   it("refuses faces the current model lacks, naming their row", () => {

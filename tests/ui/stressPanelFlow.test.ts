@@ -173,6 +173,46 @@ describe("stress panel flow", () => {
     ]);
   });
 
+  it("places a load on the body with a click, with no face of its own, and runs with it", async () => {
+    const r = rig();
+    r.ui.showStress();
+    r.select([1]);
+    r.ui.setStressFacesFromSelection({ support: 1 });
+    const d = usePanelsStore().stress!;
+    r.ui.placeStressSpot({ load: 1 });
+    expect(d.placing).toEqual({ load: 1 });
+    expect(r.statuses.at(-1)).toMatch(/click the body where Load 1 pushes/);
+    // A click on another body is told so and places nothing.
+    r.handlers().placeSpot!({ at: [1, 1, 0], normal: [0, 0, 1], body: "b2" }, false);
+    expect(r.statuses.at(-1)).toMatch(/another body/);
+    expect(d.setup.loads[0]!.spots).toBeUndefined();
+    r.handlers().placeSpot!({ at: [5.00001, 5, 10], normal: [0, 0, 1], body: "b1" }, false);
+    expect(d.placing, "one click, one spot").toBeNull();
+    expect(d.setup.loads[0]!.spots).toEqual([{ at: [5, 5, 10], radius: 5, normal: [0, 0, 1] }]);
+    await flush();
+    const drawn = r.glyphModels.at(-1)!;
+    expect(drawn.spots).toEqual([{ target: { load: 1 }, index: 0, at: [5, 5, 10], radius: 5, color: 0xff9a2e }]);
+    expect(drawn.forces[0]).toMatchObject({ loadId: 1, anchor: [5, 5, 10], dir: [0, 0, -1] });
+    expect(r.study()!.loads[0]!.spots).toEqual([{ at: [5, 5, 10], radius: 5, normal: [0, 0, 1] }]);
+
+    // A drag of the rim sizes it, Esc puts it back, and the next spot starts at the last size.
+    r.handlers().spotRadius!({ load: 1 }, 0, 8);
+    r.handlers().spotRadiusEnd!({ load: 1 }, 0, true);
+    expect(d.setup.loads[0]!.spots![0]!.radius).toBe(5);
+    r.handlers().spotRadius!({ load: 1 }, 0, 2);
+    r.handlers().spotRadiusEnd!({ load: 1 }, 0, false);
+    r.ui.placeStressSpot({ load: 1 });
+    r.handlers().placeSpot!({ at: [2, 2, 10], normal: [0, 0, 1], body: "b1" }, true);
+    expect(d.placing, "Shift keeps placing").toEqual({ load: 1 });
+    r.handlers().leavePlacing!();
+    expect(d.placing).toBeNull();
+    expect(d.setup.loads[0]!.spots!.map((x) => x.radius)).toEqual([2, 2]);
+    r.ui.removeStressSpot({ load: 1 }, 1);
+
+    void r.ui.runStress();
+    expect(r.calls[0]!.opts.loads).toEqual([{ spots: [{ at: [5, 5, 10], radius: 2 }], force: [0, 0, -100] }]);
+  });
+
   it("refuses faces on another body than the one analysed", () => {
     const r = rig();
     setUp(r);

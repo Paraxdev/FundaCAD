@@ -255,8 +255,19 @@ pub fn stress() -> JsonObject {
                     `inspect` (detail:true, selectors:true), body included. One selector \
                     without a list is taken too. A face index is not a selector")})
     };
+    let spots = |what: &str| {
+        json!({"type": "array",
+               "items": {"type": "object", "properties": {
+                   "at": {"type": "array", "items": {"type": "number"},
+                          "description": "[x, y, z] in mm, a point on the body's surface"},
+                   "radius": {"type": "number", "description": "in mm, above 0"}},
+                   "required": ["at", "radius"]},
+               "description": format!(
+                   "{what}, in place of faces or beside them: each {{at, radius}} is the                     part of the body's surface within `radius` of the point `at`, as far as                     it stays connected to the point, so it does not reach through a thin                     wall. Needs no face of its own, e.g. the crook of a hook. Keep the                     radius above the element size")})
+    };
     let load = json!({"type": "object", "properties": {
         "faces": faces("the faces this load pushes on"),
+        "spots": spots("places this load pushes on"),
         "force": {"type": "array", "items": {"type": "number"},
                   "description": "[x, y, z] in N, the TOTAL force, spread over the faces by \
                                   area: [0, 0, -20] is 20 N (about 2 kg) pushing down"},
@@ -280,9 +291,12 @@ pub fn stress() -> JsonObject {
                                                       turn about it. slider: held across the \
                                                       face only, free to slide along it \
                                                       (frictionless)"},
-                             "faces": faces("the faces this support holds")}},
+                             "faces": faces("the faces this support holds"),
+                             "spots": spots("places a fixed support holds, e.g. under a \
+                                             screw head")}},
                          "description": "ways the part is held besides `fixed`, each {type, \
-                                         faces}. Together they must stop every slide and turn: \
+                                         faces} or, fixed only, {type, spots}. Together they \
+                                         must stop every slide and turn: \
                                          one pin leaves the turn about it, sliders alone leave \
                                          a slide, and the analysis says which motion is left"},
             "gravity": {"anyOf": [{"type": "boolean"},
@@ -292,7 +306,9 @@ pub fn stress() -> JsonObject {
                                         material's density, which the presets have"},
             "loads": {"anyOf": [{"type": "array", "items": load.clone()}, load],
                       "description": "what pushes on the part, each {faces, force} or {faces, \
-                                      pressure}, never both. One load without a list is taken \
+                                      pressure}, never both, with `spots` in place of `faces` \
+                                      for a place with no face of its own. One load without a \
+                                      list is taken \
                                       too. A load only on fixed faces does nothing to the part. \
                                       May be left out when `gravity` is on"},
             "material": {"type": ["string", "object"],

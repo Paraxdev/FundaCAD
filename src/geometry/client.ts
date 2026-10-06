@@ -133,7 +133,22 @@ export type StressMaterial = string | { E: number; nu: number; yield: number; de
  *  holds them along their normal only. */
 export interface StressSupport {
   type: "fixed" | "pinned" | "slider";
-  faces: Selector[];
+  faces?: Selector[];
+  /** A fixed support only. */
+  spots?: StressSpotArea[];
+}
+
+/** The body's surface within `radius` mm of the point `at`, for a support or a
+ *  load on a place with no face of its own. */
+export interface StressSpotArea {
+  at: Vec3;
+  radius: number;
+}
+
+/** What a load pushes on: faces, spots or both. */
+export interface StressLoadArea {
+  faces?: Selector[];
+  spots?: StressSpotArea[];
 }
 
 /** The `stress` op's options past the document and the body (docs/PROTOCOL.md).
@@ -144,7 +159,7 @@ export interface StressSupport {
 export interface StressOptions {
   fixed?: Selector[];
   supports?: StressSupport[];
-  loads: ({ faces: Selector[]; force: Vec3 } | { faces: Selector[]; pressure: number })[];
+  loads: (StressLoadArea & ({ force: Vec3 } | { pressure: number }))[];
   gravity?: boolean | Vec3;
   material: StressMaterial;
   size?: number;

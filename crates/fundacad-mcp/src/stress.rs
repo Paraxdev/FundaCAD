@@ -7,7 +7,9 @@
 //!
 //! Faces are held by `fixed` and by `supports` (fixed, pinned on a round face,
 //! or a slider held only across its face), and `gravity` adds the body's
-//! weight from the material's density.
+//! weight from the material's density. A support or a load may name `spots`
+//! in place of faces, each a point on the body with a radius, for a place that
+//! has no face of its own.
 
 use std::collections::HashMap;
 
@@ -18,9 +20,9 @@ use crate::render::{stress_color, Drawable, Rgb, Vec3};
 
 /// The keys a load takes. Anything else is a typo that would otherwise be
 /// dropped on the way to the engine.
-const LOAD_KEYS: [&str; 3] = ["faces", "force", "pressure"];
+const LOAD_KEYS: [&str; 4] = ["faces", "spots", "force", "pressure"];
 const MATERIAL_KEYS: [&str; 5] = ["E", "nu", "yield", "density", "name"];
-const SUPPORT_KEYS: [&str; 2] = ["type", "faces"];
+const SUPPORT_KEYS: [&str; 3] = ["type", "faces", "spots"];
 const SUPPORT_TYPES: [&str; 3] = ["fixed", "pinned", "slider"];
 const SELECTOR_HINT: &str = "take each face's selector from `inspect` with detail:true and selectors:true";
 
@@ -56,14 +58,46 @@ fn selectors(v: Option<&Value>, what: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// A spot or a list of them, each a point on the body and a radius. Whether
+/// there is one, as a support or a load with spots may leave its faces out.
+fn spots(v: Option<&Value>, what: &str) -> Result<bool, String> {
+    let list: Vec<&Value> = match v {
+        None | Some(Value::Null) => return Ok(false),
+        Some(Value::Array(a)) => a.iter().collect(),
+        Some(one) => vec![one],
+    };
+    for (i, spot) in list.iter().enumerate() {
+        let at = spot.get("at").and_then(Value::as_array);
+        let placed = at.is_some_and(|a| a.len() == 3 && a.iter().all(|x| finite(x).is_some()));
+        let sized = spot.get("radius").and_then(finite).is_some_and(|r| r > 0.0);
+        if !(placed && sized) {
+            return Err(format!(
+                "`{what}[{i}]` is {{at, radius}}, a point [x, y, z] on the body's surface and a radius in mm above 0, got {spot}"
+            ));
+        }
+    }
+    Ok(!list.is_empty())
+}
+
+/// The faces of a support or a load, which it may leave out when it has spots.
+fn faces_or_spots(m: &Map<String, Value>, at: &str) -> Result<bool, String> {
+    let spotted = spots(m.get("spots"), &format!("{at}.spots"))?;
+    if !(spotted && m.get("faces").is_none_or(Value::is_null)) {
+        selectors(m.get("faces"), &format!("{at}.faces"))?;
+    }
+    Ok(spotted)
+}
+
 fn load(v: &Value, at: &str) -> Result<(), String> {
     let Some(m) = v.as_object() else {
         return Err(format!("`{at}` is {{faces, force}} or {{faces, pressure}}, got {v}"));
     };
     if let Some(k) = m.keys().find(|k| !LOAD_KEYS.contains(&k.as_str())) {
-        return Err(format!("`{at}` takes no '{k}', a load takes faces and one of force or pressure"));
+        return Err(format!(
+            "`{at}` takes no '{k}', a load takes faces or spots and one of force or pressure"
+        ));
     }
-    selectors(m.get("faces"), &format!("{at}.faces"))?;
+    faces_or_spots(m, at)?;
     let force = m.get("force").filter(|f| !f.is_null());
     let pressure = m.get("pressure").filter(|p| !p.is_null());
     match (force, pressure) {
@@ -90,7 +124,7 @@ fn support(v: &Value, at: &str) -> Result<String, String> {
         return Err(format!("`{at}` is {{type, faces}}, a type of fixed, pinned or slider and the faces it holds, got {v}"));
     };
     if let Some(k) = m.keys().find(|k| !SUPPORT_KEYS.contains(&k.as_str())) {
-        return Err(format!("`{at}` takes no '{k}', a support takes type and faces"));
+        return Err(format!("`{at}` takes no '{k}', a support takes type and faces or spots"));
     }
     let kind = match m.get("type") {
         None | Some(Value::Null) => "fixed".to_string(),
@@ -101,7 +135,11 @@ fn support(v: &Value, at: &str) -> Result<String, String> {
             ))
         }
     };
-    selectors(m.get("faces"), &format!("{at}.faces"))?;
+    if faces_or_spots(m, at)? && kind != "fixed" {
+        return Err(format!(
+            "`{at}` is {kind} and has spots, a spot is held every way, so make it fixed or give it faces only"
+        ));
+    }
     Ok(format!("{at} ({kind})"))
 }
 
@@ -625,6 +663,35 @@ mod tests {
         .expect("supports alone");
         assert!(r.payload.get("fixed").is_none() && r.payload.get("gravity").is_none());
         assert_eq!(r.supports, vec!["supports[0] (slider)"]);
+    }
+
+    #[test]
+    fn spots_stand_in_for_faces_and_are_checked() {
+        let spot = json!({"at": [95, 0, 5], "radius": 4});
+        let r = request_of(&args(json!({
+            "body": "body1",
+            "supports": [{"spots": [{"at": [0, 0, 0], "radius": 3}]}],
+            "loads": {"spots": spot, "force": [0, 0, -5], "faces": null},
+        })))
+        .expect("spots alone");
+        assert_eq!(r.supports, vec!["supports[0] (fixed)"]);
+        assert_eq!(r.payload["loads"], json!([{"spots": spot, "force": [0, 0, -5]}]));
+
+        let refused = |patch: Value| {
+            let mut a = json!({"body": "body1", "fixed": face([-1.0, 0.0, 0.0]),
+                               "loads": [{"spots": [spot], "force": [0, 0, -1]}]});
+            for (k, v) in patch.as_object().expect("an object") {
+                a[k] = v.clone();
+            }
+            request_of(&args(a)).err().expect("refused")
+        };
+        assert!(refused(json!({"loads": [{"spots": [{"at": [0, 0], "radius": 2}], "force": [0, 0, -1]}]}))
+            .contains("`loads[0].spots[0]` is {at, radius}"));
+        assert!(refused(json!({"loads": [{"spots": [{"at": [0, 0, 0], "radius": 0}], "force": [0, 0, -1]}]}))
+            .contains("a radius in mm above 0"));
+        assert!(refused(json!({"loads": [{"spots": [], "force": [0, 0, -1]}]})).contains("`loads[0].faces` is missing"));
+        let slider = refused(json!({"supports": [{"type": "slider", "spots": [spot]}]}));
+        assert!(slider.contains("`supports[0]` is slider and has spots"), "{slider}");
     }
 
     #[test]

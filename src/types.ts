@@ -699,15 +699,27 @@ export type AxisDirection = "-Z" | "+Z" | "+X" | "-X" | "+Y" | "-Y";
  *  cylinder's axis while free to turn about it, or along the face normal only. */
 export type StressSupportType = "fixed" | "pinned" | "slider";
 
+/** A place on the analysed body given by a point, for a support or a load with
+ *  no face of its own: the body's surface within `radius` mm of `at`. `normal`
+ *  is the outward normal where it was placed, which "into the face" reads; a
+ *  spot written by hand or over MCP may have none. */
+export interface StressSpot {
+  at: [number, number, number];
+  radius: number;
+  normal?: [number, number, number];
+}
+
 /** A stress study as the document stores it. Units are mm, N, MPa and g/cm3;
- *  gravity is 9.81 m/s2 along its direction. */
+ *  gravity is 9.81 m/s2 along its direction. `spots` is left out of a support
+ *  or a load that has none. */
 export interface StressStudy {
   body: string | null;
-  supports: { id: number; type: StressSupportType; faces: Selector[] }[];
+  supports: { id: number; type: StressSupportType; faces: Selector[]; spots?: StressSpot[] }[];
   loads: {
     id: number;
     kind: "force" | "pressure";
     faces: Selector[];
+    spots?: StressSpot[];
     /** N, the total over the faces. */
     force: number;
     direction: "into" | AxisDirection | "custom";
