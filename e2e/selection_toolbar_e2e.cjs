@@ -46,7 +46,7 @@ const check = (name, ok, detail) => {
     window.WebSocket = P;
   }, TOKEN);
 
-  await page.goto("http://localhost:5173/");
+  await page.goto(process.env.SC_URL || "http://localhost:5173/");
   await page.waitForTimeout(3000);
   const modal = await page.$(".modal-close");
   if (modal) { await modal.click(); await page.waitForTimeout(400); }
@@ -188,9 +188,24 @@ const check = (name, ok, detail) => {
     window.viewport.setSelectedBodies([]);
     const c = window.viewport.bodiesCentroid([id]);
     const p = window.viewport.projectToScreen(c);
+    // A box's centre is drawn where three of its edges meet, and a click on an
+    // edge takes the edge. The nearest spot beside it that is plainly a face.
+    for (let rad = 12; rad < 120; rad += 6) {
+      for (let a = 0; a < 12; a++) {
+        const x = p.x + Math.cos(a * 0.52) * rad, y = p.y + Math.sin(a * 0.52) * rad;
+        if (window.viewport.bodyIdAt(x, y) === id && window.viewport.pickEntity(x, y)?.kind === "face" &&
+          document.elementFromPoint(x, y) === window.viewport.domElement) return { x, y };
+      }
+    }
     return { x: p.x, y: p.y };
   }, ids[0]);
-  await page.mouse.click(at.x, at.y);
+  // A click on arrival takes the body. Resting on it past the hover delay
+  // lights the face, and the click then takes that.
+  await page.mouse.move(at.x - 3, at.y);
+  await page.mouse.move(at.x, at.y);
+  await page.waitForTimeout(1300);
+  await page.mouse.down();
+  await page.mouse.up();
   await page.waitForTimeout(500);
   const faces = await page.evaluate(() => window.viewport.getSelectedFaceIds().length);
   bar = await barButtons();
