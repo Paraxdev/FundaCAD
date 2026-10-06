@@ -79,9 +79,8 @@ the goal is it to make this a personalized version of a CAD with features I like
 Prebuilt installers for Windows, macOS (Apple Silicon) and Linux are on the
 [beta release](https://github.com/Paraxdev/fundacad/releases/tag/beta),
 FundaCAD 1.0 on the Funda Engine, rebuilt from `main` on every green
-build. The Python engine is retired, and its last build stays on the
-[legacy-final release](https://github.com/Paraxdev/fundacad/releases/tag/legacy-final).
-Files open in both. These builds do not update themselves yet, so come back to
+build. It is the only release: the Python engine is retired, and its
+documents open here. These builds do not update themselves yet, so come back to
 the beta page for a newer one.
 
 To let an AI assistant (Claude Code, Claude Desktop or any MCP host) build and

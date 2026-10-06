@@ -54,6 +54,3 @@ code is available at the URLs listed. For any distributed binary build, the comp
 corresponding source of these libraries is also available from the project for a period of
 at least three (3) years upon request. FundaCAD's own source, which links OCCT statically,
 is public, so users may rebuild it with compatible modified versions of these libraries.
-
-The beta, built from the `legacy` branch, carries its own notice for the
-packages it bundles.
