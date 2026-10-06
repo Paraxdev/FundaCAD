@@ -67,6 +67,16 @@ fn mass(shape: &Shape, kind: i32) -> Option<(f64, [f64; 3])> {
     Some((o[0], [o[1], o[2], o[3]]))
 }
 
+/// The quick integration is up to 3 percent low on lofted spline faces, so the
+/// precise one is preferred wherever the two disagree by more than its own
+/// millionth. Where they agree the quick figure stands, which is build123d's.
+fn volume(shape: &Shape) -> Option<(f64, [f64; 3])> {
+    let (quick, centre) = mass(shape, 3)?;
+    let precise = crate::kernel::volume_precise(shape);
+    let differs = (precise - quick).abs() > 1e-6 * quick.abs().max(1e-9);
+    Some((if differs { precise } else { quick }, centre))
+}
+
 /// `_axis_of`: the axis of a cylinder, cone, torus or surface of revolution.
 fn axis_of(face: &Shape) -> Option<[f64; 3]> {
     let mut o = [0.0; 13];
@@ -235,7 +245,7 @@ fn measure(shape: &Shape) -> Local {
         }
     }
     Local {
-        volume: mass(shape, 3),
+        volume: volume(shape),
         area: mass(shape, 2),
         bbox: optimal_bbox(shape, &faces),
         faces: faces.len(),
