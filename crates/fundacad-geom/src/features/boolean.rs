@@ -205,7 +205,8 @@ pub fn combine(
 ) -> FResult {
     let op = operation.map_or("new", Operation::as_str);
     let targets = targets.filter(|t| !t.is_empty());
-    let recorded = hidden.is_some();
+    let extrude = ctx.timeline.iter().any(|s| s.id == feature_id && s.kind == "extrude");
+    let recorded = extrude && hidden.is_some();
     let hidden = match targets {
         Some(_) => HashSet::new(),
         None => hidden.unwrap_or_else(|| ctx.hidden_bodies.clone()),
@@ -419,7 +420,6 @@ pub fn combine(
                         .filter(|&&i| cut_bites(ctx.bodies[i].shape(), &solid, prism_vol))
                         .take(2)
                         .count();
-                    let extrude = ctx.timeline.iter().any(|s| s.id == feature_id && s.kind == "extrude");
                     return Err(Fail::msg(cut_missed(extrude, unseen, recorded)));
                 }
             }

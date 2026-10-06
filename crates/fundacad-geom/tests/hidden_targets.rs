@@ -204,3 +204,18 @@ fn a_cut_that_misses_only_calls_itself_an_extrude_when_it_is_one() {
         ["Cut removed nothing, the extrude doesn't reach any body. Drag the other way, or use Join."]
     );
 }
+
+#[test]
+fn a_press_pull_cut_reaches_the_hidden_body_it_pushes_from() {
+    // No targets: the body the face is on is named by `body`, and its eye
+    // does not keep the prism off it.
+    let doc = json!({"parameters": {}, "bodyVisibility": {"body1": false}, "bodyIds": {"block:0": "body1"}, "features": [
+        {"id": "block", "type": "box", "length": 20, "width": 20, "height": 20},
+        {"id": "pocket", "type": "press-pull", "body": "body1", "mode": "cut", "distance": -3,
+         "face": {"kind": "face", "by": "nearest", "point": [0, 0, 10]}},
+    ]});
+    let r = build(&doc);
+    assert!(r.errors.is_empty(), "{:?}", messages(&r));
+    let want = BLOCK - 20.0 * 20.0 * 3.0;
+    assert!((volume(&r, "body1") - want).abs() < 1e-6, "body1 is {}, not {want}", volume(&r, "body1"));
+}
