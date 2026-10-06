@@ -607,7 +607,11 @@ pub fn press_pull(ctx: &mut Ctx, f: &PressPull) -> FResult {
                 face_prism(&src, d, taper)?
             };
             let op = Operation::from(mode.as_str());
-            combine(ctx, &f.id, prism, Some(&op), targets.as_deref(), None, None)?;
+            // The body pushed from is named by the feature, so its eye does not
+            // keep the prism off it.
+            let mut hidden = ctx.hidden_bodies.clone();
+            hidden.remove(&ctx.bodies[act].id);
+            combine(ctx, &f.id, prism, Some(&op), targets.as_deref(), Some(hidden), None)?;
             continue;
         }
         let out = if along_axis {
