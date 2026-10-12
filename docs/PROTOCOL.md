@@ -560,7 +560,8 @@ Reply:
 ```
 
 - `kind` is `overhang`, `bridge`, `wall`, `floor`, `gap`, `fused` (two bodies printed
-  as one that would join) or `meshHole` (a face that did not triangulate).
+  as one that would join) or `meshHole` (a face without triangles, or two faces
+  meshed apart).
 - `face` and `other.face` are face indices, the `i` of `inspect` and the mesh
   `faceIds`. `other` is the facing face of a wall, floor, gap or fused pair, null
   otherwise.

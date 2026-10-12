@@ -662,18 +662,20 @@ fn thickness(
 }
 
 /// An edge only one triangle uses, on a body the B-rep calls closed: a face
-/// that did not triangulate, which an STL export would leave out too.
+/// with no triangles or two faces meshed apart, which an STL export has too.
+/// The face named is the lowest one on such an edge, so it is the same face
+/// on every run.
 fn mesh_hole(bi: usize, b: &Body, edges: &HashMap<EdgeKey, Vec<usize>>) -> Option<Finding> {
     let mut lo = [f64::INFINITY; 3];
     let mut hi = [f64::NEG_INFINITY; 3];
     let mut count = 0;
-    let mut face = 0;
+    let mut face = u32::MAX;
     for ((a, c), users) in edges {
         if users.len() != 1 {
             continue;
         }
         count += 1;
-        face = b.face[users[0]];
+        face = face.min(b.face[users[0]]);
         for p in [a, c] {
             let q = [p.0 as f64 / 1e5, p.1 as f64 / 1e5, p.2 as f64 / 1e5];
             for k in 0..3 {
@@ -805,7 +807,7 @@ fn line(f: &Finding, bodies: &[Body], s: &Settings) -> String {
             )
         }
         Kind::MeshHole => format!(
-            "the mesh has a hole near F{}: {} edges of it bound one triangle, a face did not triangulate and an STL export will have the hole too. {}",
+            "the mesh has a hole near F{}: {} edges of it bound one triangle, a face is missing or two faces do not meet there, and an STL export will have the hole too. {}",
             f.face,
             g_format(f.value),
             focus(f)
@@ -984,6 +986,20 @@ mod tests {
         let a = box_body("body1", [0.0; 3], [10.0; 3]);
         let b = box_body("body2", [10.1, 0.0, 0.0], [20.1, 10.0, 10.0]);
         assert!(run(&[a, b], &defaults(), false, &HashMap::new(), &|| false).is_empty());
+    }
+
+    #[test]
+    fn a_mesh_hole_names_its_lowest_face_every_time() {
+        // A box without its top: the four side faces each keep an open edge.
+        let (positions, indices, face_ids) = box_raw([0.0; 3], [20.0, 20.0, 10.0]);
+        let mesh = Mesh { id: "body1", name: "", positions: &positions, indices: &indices[..30], face_ids: &face_ids[..10] };
+        for _ in 0..20 {
+            let b = Body::new(&mesh, [0.0, 0.0, 1.0]);
+            let f = run(&[b], &defaults(), true, &HashMap::new(), &|| false);
+            let holes: Vec<&Finding> = f.iter().filter(|f| f.kind == Kind::MeshHole).collect();
+            assert_eq!(holes.len(), 1, "{f:?}");
+            assert_eq!((holes[0].face, holes[0].value), (0, 4.0));
+        }
     }
 
     #[test]
