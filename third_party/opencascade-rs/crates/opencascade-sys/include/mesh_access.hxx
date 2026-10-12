@@ -22,23 +22,30 @@
 #include <TopExp.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopLoc_Location.hxx>
+#include <TopTools_DataMapOfShapeShape.hxx>
 #include <TopTools_IndexedDataMapOfShapeListOfShape.hxx>
 #include <TopTools_IndexedMapOfShape.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Edge.hxx>
 #include <TopoDS_Face.hxx>
+#include <TopoDS_Iterator.hxx>
 #include <TopoDS_Shape.hxx>
 #include <gp_Pnt.hxx>
 #include <gp_Pnt2d.hxx>
 #include <gp_Vec.hxx>
+#include <algorithm>
 #include <cmath>
 #include <memory>
 #include <sstream>
+#include <unordered_set>
 #include <vector>
 
 class MeshAccess {
 public:
+  // The shape that is meshed and read: the body, with a face TShape it holds
+  // at several placements given a TShape of its own per placement.
   TopoDS_Shape shape;
+  std::vector<TopoDS_Face> untied;
   TopTools_IndexedMapOfShape faceMap;
   // build123d's faces() keeps the first position but the last occurrence of a
   // face met twice by the explorer, and the orientation it carries decides the
@@ -46,13 +53,92 @@ public:
   std::vector<TopoDS_Face> faces;
   TopTools_IndexedDataMapOfShapeListOfShape edgeFaces;
   std::vector<std::vector<TopoDS_Face>> edgeAncestors;
+
+  MeshAccess() = default;
+  MeshAccess(const MeshAccess &) = delete;
+  MeshAccess &operator=(const MeshAccess &) = delete;
+  // An untied face shares its edges with the body, which would keep the
+  // face's mesh alive on them.
+  ~MeshAccess() {
+    for (const TopoDS_Face &f : untied) {
+      try {
+        BRepTools::Clean(f);
+      } catch (...) {
+      }
+    }
+  }
 };
+
+struct MeshUntie {
+  std::unordered_set<const TopoDS_TShape *> seen;
+  TopTools_DataMapOfShapeShape placed;
+  std::vector<TopoDS_Face> made;
+};
+
+// `s` as its parent stores it, `up` the placement of that parent. A face keeps
+// one triangulation per TShape, but BRepMesh discretises the edges of every
+// placed copy on their own, and with a relative deflection (a share of the
+// edge's axis aligned box) a turned copy gets another number of points. So the
+// copies of a patterned body joined into this one would share the mesh of the
+// last one meshed and not meet their neighbours. A copy gets a face TShape of
+// its own over the same surface and the same edges.
+inline TopoDS_Shape mesh_access_untie(const TopoDS_Shape &s, const TopLoc_Location &up, MeshUntie &st) {
+  if (s.ShapeType() > TopAbs_FACE) {
+    return s;
+  }
+  const TopLoc_Location here = up * s.Location();
+  const auto rebuilt = [&](const std::vector<TopoDS_Shape> &kids) {
+    BRep_Builder b;
+    TopoDS_Shape c = s.EmptyCopied();
+    c.Location(TopLoc_Location());
+    c.Orientation(TopAbs_FORWARD);
+    for (const TopoDS_Shape &k : kids) {
+      b.Add(c, k);
+    }
+    c.Location(s.Location(), false);
+    c.Orientation(s.Orientation());
+    c.Closed(s.Closed());
+    return c;
+  };
+  std::vector<TopoDS_Shape> kids;
+  if (s.ShapeType() == TopAbs_FACE) {
+    const TopoDS_Shape key = s.Located(here, false);
+    if (const TopoDS_Shape *done = st.placed.Seek(key)) {
+      return done->Located(s.Location(), false).Oriented(s.Orientation());
+    }
+    if (st.seen.insert(s.TShape().get()).second) {
+      st.placed.Bind(key, s);
+      return s;
+    }
+    for (TopoDS_Iterator it(s, false, false); it.More(); it.Next()) {
+      kids.push_back(it.Value());
+    }
+    const TopoDS_Shape c = rebuilt(kids);
+    st.placed.Bind(key, c);
+    st.made.push_back(TopoDS::Face(c));
+    return c;
+  }
+  bool changed = false;
+  for (TopoDS_Iterator it(s, false, false); it.More(); it.Next()) {
+    kids.push_back(mesh_access_untie(it.Value(), here, st));
+    changed = changed || !kids.back().IsEqual(it.Value());
+  }
+  return changed ? rebuilt(kids) : s;
+}
 
 inline std::unique_ptr<MeshAccess> mesh_access_new(const TopoDS_Shape &shape) {
   std::unique_ptr<MeshAccess> m(new MeshAccess());
   m->shape = shape;
   try {
-    for (TopExp_Explorer ex(shape, TopAbs_FACE); ex.More(); ex.Next()) {
+    MeshUntie st;
+    const TopoDS_Shape own = mesh_access_untie(shape, TopLoc_Location(), st);
+    m->shape = own;
+    m->untied = st.made;
+  } catch (...) {
+    m->shape = shape;
+  }
+  try {
+    for (TopExp_Explorer ex(m->shape, TopAbs_FACE); ex.More(); ex.Next()) {
       const TopoDS_Face &f = TopoDS::Face(ex.Current());
       Standard_Integer i = m->faceMap.FindIndex(f);
       if (i == 0) {
@@ -62,7 +148,7 @@ inline std::unique_ptr<MeshAccess> mesh_access_new(const TopoDS_Shape &shape) {
         m->faces[i - 1] = f;
       }
     }
-    TopExp::MapShapesAndAncestors(shape, TopAbs_EDGE, TopAbs_FACE, m->edgeFaces);
+    TopExp::MapShapesAndAncestors(m->shape, TopAbs_EDGE, TopAbs_FACE, m->edgeFaces);
     for (Standard_Integer i = 1; i <= m->edgeFaces.Extent(); ++i) {
       std::vector<TopoDS_Face> anc;
       for (const TopoDS_Shape &s : m->edgeFaces.FindFromIndex(i)) {
@@ -79,17 +165,27 @@ inline std::unique_ptr<MeshAccess> mesh_access_new(const TopoDS_Shape &shape) {
   return m;
 }
 
-inline bool mesh_access_mesh(const TopoDS_Shape &shape, double linear, bool relative, double angular, bool parallel,
+inline bool mesh_access_mesh(const MeshAccess &m, double linear, bool relative, double angular, bool parallel,
                              bool clean_first) {
   try {
     if (clean_first) {
-      BRepTools::Clean(shape);
+      BRepTools::Clean(m.shape);
     }
-    BRepMesh_IncrementalMesh mesher(shape, linear, relative, angular, parallel);
+    BRepMesh_IncrementalMesh mesher(m.shape, linear, relative, angular, parallel);
     return mesher.IsDone();
   } catch (...) {
     return false;
   }
+}
+
+inline bool mesh_access_has_mesh(const MeshAccess &m) {
+  for (const TopoDS_Face &f : m.faces) {
+    TopLoc_Location loc;
+    if (!BRep_Tool::Triangulation(f, loc).IsNull()) {
+      return true;
+    }
+  }
+  return false;
 }
 
 inline std::unique_ptr<TopoDS_Shape> mesh_access_read_brep(rust::Str text) {
@@ -213,7 +309,13 @@ inline bool mesh_access_face_triangulation(const MeshAccess &m, int32_t face, bo
 // face then merges the boundary nodes that fall within its own UV tolerance of
 // each other, so along an edge shorter than that the faces stop agreeing. A
 // seam has one polygon per side, and both are read.
-inline bool mesh_access_edge_splits(const MeshAccess &m, rust::Vec<double> &out) {
+//
+// `uneven` counts the edges whose faces hold polygons of different lengths.
+// BRepMesh keeps a stored face mesh that is fine enough and judges every face
+// alone, so once another body sharing some of these faces was meshed at
+// another deflection, a kept face and a remeshed one disagree along their edge.
+inline bool mesh_access_edge_splits(const MeshAccess &m, rust::Vec<double> &out, int32_t &uneven) {
+  uneven = 0;
   try {
     struct Side {
       Handle(Poly_PolygonOnTriangulation) poly;
@@ -232,6 +334,7 @@ inline bool mesh_access_edge_splits(const MeshAccess &m, rust::Vec<double> &out)
     for (Standard_Integer i = 1; i <= m.edgeFaces.Extent(); ++i) {
       const TopoDS_Shape &e = m.edgeFaces.FindKey(i);
       sides.clear();
+      bool differ = false;
       for (const TopoDS_Face &f : m.edgeAncestors.at(i - 1)) {
         TopLoc_Location loc;
         const Handle(Poly_Triangulation) &tri = BRep_Tool::Triangulation(f, loc);
@@ -260,6 +363,7 @@ inline bool mesh_access_edge_splits(const MeshAccess &m, rust::Vec<double> &out)
       for (size_t j = 1; j < sides.size(); ++j) {
         const Standard_Integer n = sides[0].poly->NbNodes();
         if (sides[j].poly->NbNodes() != n) {
+          differ = true;
           continue;
         }
         for (Standard_Integer k = 1; k <= n; ++k) {
@@ -271,6 +375,7 @@ inline bool mesh_access_edge_splits(const MeshAccess &m, rust::Vec<double> &out)
           }
         }
       }
+      uneven += differ ? 1 : 0;
     }
     return true;
   } catch (...) {

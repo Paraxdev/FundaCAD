@@ -14,7 +14,7 @@ mod inner {
 
         pub fn mesh_access_new(shape: &TopoDS_Shape) -> UniquePtr<MeshAccess>;
         pub fn mesh_access_mesh(
-            shape: &TopoDS_Shape,
+            m: &MeshAccess,
             linear: f64,
             relative: bool,
             angular: f64,
@@ -36,7 +36,8 @@ mod inner {
             normals: &mut Vec<f64>,
         ) -> bool;
 
-        pub fn mesh_access_edge_splits(m: &MeshAccess, out: &mut Vec<f64>) -> bool;
+        pub fn mesh_access_edge_splits(m: &MeshAccess, out: &mut Vec<f64>, uneven: &mut i32) -> bool;
+        pub fn mesh_access_has_mesh(m: &MeshAccess) -> bool;
         pub fn mesh_access_edge_count(m: &MeshAccess) -> i32;
         pub fn mesh_access_edge_faces(m: &MeshAccess, edge: i32, out: &mut Vec<i32>);
         pub fn mesh_access_edge_degenerated(m: &MeshAccess, edge: i32) -> bool;

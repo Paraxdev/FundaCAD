@@ -4,7 +4,7 @@
 //! Mesh passes (plugin displacement) are not here, they wait for the plugin
 //! host.
 
-use opencascade::mesh_access::{self, MeshAccess};
+use opencascade::mesh_access::{self, EdgeSplits, MeshAccess};
 use opencascade::primitives::Shape;
 use std::collections::HashMap;
 
@@ -52,15 +52,21 @@ pub fn tessellate_with(
     params: MeshParams,
     displace: Option<Displacer<'_>>,
 ) -> Tessellation {
-    crate::bench::phase("brep_mesh", || {
-        mesh_access::mesh(
-            shape,
-            params.linear,
-            params.relative,
-            params.angular,
-            params.force_remesh,
-        )
-    });
+    let mesh = |clean: bool| {
+        crate::bench::phase("brep_mesh", || access.mesh(params.linear, params.relative, params.angular, clean));
+        crate::bench::phase("edge_splits", || access.edge_splits())
+    };
+    let kept = !params.force_remesh && access.has_mesh();
+    let mut edges = mesh(params.force_remesh);
+    let mut reach = split_reach(shape, &edges);
+    // BRepMesh keeps a stored face mesh that is fine enough, face by face. A
+    // face this body shares with another one (a kept original) may have been
+    // meshed again for that body since, and no longer meets its neighbours
+    // here. Only a mesh of the whole body made in one run is sure to.
+    if kept && outdated(&edges, reach) {
+        edges = mesh(true);
+        reach = split_reach(shape, &edges);
+    }
     let mut displaced: Vec<Option<super::passes::FaceMesh>> = match displace {
         Some(d) => {
             let work = crate::par::Shared(d);
@@ -68,7 +74,7 @@ pub fn tessellate_with(
         }
         None => Vec::new(),
     };
-    let join = crate::bench::phase("edge_splits", || SplitJoin::of(shape, access));
+    let join = reach.and_then(|r| SplitJoin::of(&edges, r));
     let mut out = Tessellation::default();
     let mut normals: Option<Vec<f64>> = None;
     for fid in 0..access.face_count() {
@@ -127,6 +133,22 @@ fn position_key(p: &[f64]) -> [u64; 3] {
     [0, 1, 2].map(|k| (p[k] + 0.0).to_bits())
 }
 
+/// `SPLIT_REACH` in mm for this body, `None` when its mesh has nothing to join.
+fn split_reach(shape: &Shape, found: &EdgeSplits) -> Option<f64> {
+    if found.pairs.is_empty() {
+        return None;
+    }
+    let (min, max) = mesh_bbox(shape, &[])?;
+    Some(SPLIT_REACH * norm(sub(max, min)))
+}
+
+/// Whether the faces of a mesh disagree along an edge the way faces meshed
+/// in different runs do: another number of points, or one step of the edge
+/// further apart than a fold leaves it.
+fn outdated(found: &EdgeSplits, reach: Option<f64>) -> bool {
+    found.uneven > 0 || reach.is_some_and(|r| found.pairs.iter().any(|p| !(norm(sub(p[0], p[1])) <= r)))
+}
+
 /// The points at which the kernel's mesher left the faces along an edge
 /// apart, each with the one point its group takes.
 ///
@@ -140,18 +162,13 @@ fn position_key(p: &[f64]) -> [u64; 3] {
 struct SplitJoin(HashMap<[u64; 3], [f64; 3]>);
 
 impl SplitJoin {
-    fn of(shape: &Shape, access: &MeshAccess) -> Option<Self> {
-        let splits = access.edge_splits();
-        if splits.is_empty() {
-            return None;
-        }
-        let (min, max) = mesh_bbox(shape, &[])?;
-        let join = Self::new(&splits, SPLIT_REACH * norm(sub(max, min)));
+    fn of(found: &EdgeSplits, reach: f64) -> Option<Self> {
+        let join = Self::new(found.pairs.iter().copied(), reach);
         (!join.0.is_empty()).then_some(join)
     }
 
     /// `splits` are the pairs the mesh holds for one step of one edge.
-    fn new(splits: &[[[f64; 3]; 2]], reach: f64) -> Self {
+    fn new(splits: impl IntoIterator<Item = [[f64; 3]; 2]>, reach: f64) -> Self {
         let mut ids: HashMap<[u64; 3], usize> = HashMap::new();
         let mut points: Vec<[f64; 3]> = Vec::new();
         let mut parent: Vec<usize> = Vec::new();
@@ -430,13 +447,23 @@ mod tests {
         let near = [[0.0, 0.0, 0.0], [1e-5, 0.0, 0.0]];
         // Too far apart to be one point the mesher folded.
         let far = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
-        let join = SplitJoin::new(&[far, near], 1e-4);
+        let join = SplitJoin::new([far, near], 1e-4);
         join.settle(&mut t.positions);
         join.drop_flat(&mut t);
         assert_eq!(t.positions[9..12], [0.0, 0.0, 0.0]);
         assert_eq!(t.positions[3..9], [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]);
         assert_eq!(t.indices, vec![0, 1, 2, 3, 4, 5]);
         assert_eq!(t.face_ids, vec![0, 1]);
+    }
+
+    #[test]
+    fn a_mesh_is_outdated_by_uneven_edges_or_a_step_too_far_apart_for_a_fold() {
+        let near = [[0.0; 3], [1e-5, 0.0, 0.0]];
+        let far = [[0.0; 3], [0.5, 0.0, 0.0]];
+        let found = |pairs: Vec<[[f64; 3]; 2]>, uneven| EdgeSplits { pairs, uneven };
+        assert!(!outdated(&found(vec![near], 0), Some(1e-4)));
+        assert!(outdated(&found(vec![near, far], 0), Some(1e-4)));
+        assert!(outdated(&found(Vec::new(), 1), None));
     }
 
     #[test]

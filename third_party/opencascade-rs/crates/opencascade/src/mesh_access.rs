@@ -6,13 +6,6 @@ use crate::primitives::Shape;
 use cxx::UniquePtr;
 use opencascade_sys::mesh_access as ffi;
 
-/// Run `BRepMesh_IncrementalMesh` on the shape, storing the triangulation on
-/// its faces. `clean_first` drops a stored triangulation, which is otherwise
-/// kept whenever it is finer than the request.
-pub fn mesh(shape: &Shape, linear: f64, relative: bool, angular: f64, clean_first: bool) -> bool {
-    ffi::mesh_access_mesh(&shape.inner, linear, relative, angular, true, clean_first)
-}
-
 /// Read a BREP from its text, the `BRepTools::Write` format.
 pub fn read_brep_str(text: &str) -> Option<Shape> {
     let inner = ffi::mesh_access_read_brep(text);
@@ -43,6 +36,17 @@ pub struct FaceTriangulation {
     pub normals: Vec<f64>,
 }
 
+/// Where the stored mesh of a shape does not meet along its edges.
+#[derive(Debug, Default, Clone)]
+pub struct EdgeSplits {
+    /// Every pair of points the mesh holds apart although they are the same
+    /// step of one edge on two faces, or on the two sides of a seam.
+    pub pairs: Vec<[[f64; 3]; 2]>,
+    /// Edges whose faces hold a different number of points for them: a face
+    /// mesh kept from an earlier run beside one made at another deflection.
+    pub uneven: usize,
+}
+
 pub struct MeshAccess {
     inner: UniquePtr<ffi::MeshAccess>,
     faces: usize,
@@ -60,6 +64,21 @@ impl MeshAccess {
             None => (0, 0),
         };
         Self { inner, faces, edges }
+    }
+
+    /// Run `BRepMesh_IncrementalMesh` on the shape, storing the triangulation
+    /// on its faces. `clean_first` drops a stored triangulation, which is
+    /// otherwise kept whenever it is finer than the request.
+    pub fn mesh(&self, linear: f64, relative: bool, angular: f64, clean_first: bool) -> bool {
+        self.inner
+            .as_ref()
+            .is_some_and(|m| ffi::mesh_access_mesh(m, linear, relative, angular, true, clean_first))
+    }
+
+    /// Whether any face holds a triangulation, one kept from an earlier run
+    /// until `mesh` is called here.
+    pub fn has_mesh(&self) -> bool {
+        self.inner.as_ref().is_some_and(ffi::mesh_access_has_mesh)
     }
 
     pub fn face_count(&self) -> usize {
@@ -112,16 +131,19 @@ impl MeshAccess {
         .then_some(t)
     }
 
-    /// Every pair of points the stored mesh holds apart although they are the
-    /// same step of one edge on two faces, or on the two sides of a seam.
     /// Empty when the faces agree along every edge.
-    pub fn edge_splits(&self) -> Vec<[[f64; 3]; 2]> {
+    pub fn edge_splits(&self) -> EdgeSplits {
         let mut v = Vec::new();
-        match self.inner.as_ref() {
-            Some(m) if ffi::mesh_access_edge_splits(m, &mut v) => {
-                v.chunks_exact(6).map(|c| [[c[0], c[1], c[2]], [c[3], c[4], c[5]]]).collect()
-            }
-            _ => Vec::new(),
+        let mut uneven = 0;
+        let Some(m) = self.inner.as_ref() else {
+            return EdgeSplits::default();
+        };
+        if !ffi::mesh_access_edge_splits(m, &mut v, &mut uneven) {
+            return EdgeSplits::default();
+        }
+        EdgeSplits {
+            pairs: v.chunks_exact(6).map(|c| [[c[0], c[1], c[2]], [c[3], c[4], c[5]]]).collect(),
+            uneven: uneven.max(0) as usize,
         }
     }
 
