@@ -5,9 +5,17 @@
 //! in an edge there, the solid a loft to the outline's mitre offset gives.
 //! `taper/ridge_outline.json` is the outline of the report, a band that follows
 //! the section of a freeform duct.
+//!
+//! The loose solid itself only shows on the body of the report, which is a
+//! user's part and not in the repo. The tests at the end run on it when
+//! `FUNDACAD_TAPER_DUCT_STEP` names a STEP file of that body, and pass without
+//! looking when it is unset.
+
+use std::sync::OnceLock;
 
 use fundacad_core::CadDocument;
 use fundacad_geom::builder::{self, NoWatch, Rebuild};
+use fundacad_geom::import::{self, blobstore::BlobStore};
 use fundacad_geom::kernel::{self, Kind};
 use serde_json::{json, Value};
 
@@ -359,4 +367,70 @@ fn an_inside_corner_tapers_to_an_edge_not_a_cone() {
     let (h, k) = (3.0f64, 30f64.to_radians().tan());
     let exact = 64.0 * h - 20.0 * k * h * h + 4.0 / 3.0 * k * k * h * h * h;
     assert!((m.volume - exact).abs() < 1e-6, "volume {} against {exact}", m.volume);
+}
+
+/// The body of the report with nothing else in the document, or nothing when
+/// the variable is unset.
+fn duct_body() -> Option<Vec<Value>> {
+    static BODY: OnceLock<Option<Value>> = OnceLock::new();
+    let feature = BODY.get_or_init(|| {
+        let path = std::env::var("FUNDACAD_TAPER_DUCT_STEP").ok()?;
+        let dir = std::env::temp_dir().join(format!("fundacad-taper-cut-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::env::set_var("FUNDACAD_BLOB_DIR", &dir);
+        let store = BlobStore::open(&dir).unwrap();
+        let mut f = import::import_geometry(&path, "step", &store).unwrap();
+        f.insert("id".into(), json!("duct"));
+        f.insert("type".into(), json!("import"));
+        f.insert("format".into(), json!("step"));
+        Some(Value::Object(f))
+    });
+    feature.clone().map(|f| vec![f])
+}
+
+fn no_split(r: &Rebuild) {
+    let split: Vec<&Value> = r.diagnostics.iter().filter(|d| d["code"] == "bodySplit").collect();
+    assert!(split.is_empty(), "{split:?}");
+}
+
+/// The report itself: the cut gave two solids, the tool loose in front of the
+/// wall, and removed 0.18 mm3.
+#[test]
+fn the_ridge_tapered_over_the_duct_it_follows_cuts_it_and_adds_nothing() {
+    let Some(body) = duct_body() else { return };
+    let pts = outline();
+    let before = measured(&build(body.clone()));
+    let r = build(with(body, tapered(&pts, Z, json!({"distance": RISE, "taper": 45}))));
+    // The loft to the exact mitre offset removes 370.415 here, the report's
+    // own loft to a hand drawn offset 378.8.
+    assert_cut(&before, &measured(&r), 370.4, 2.0);
+    no_split(&r);
+}
+
+#[test]
+fn six_points_of_the_ridge_with_one_inside_corner_on_the_duct_cut_one_solid() {
+    let Some(body) = duct_body() else { return };
+    let all = outline();
+    let pts: Vec<[f64; 2]> = [35, 36, 37, 56, 57, 58].iter().map(|&i| all[i]).collect();
+    let before = measured(&build(body.clone()));
+    let after = measured(&build(with(body, tapered(&pts, Z, json!({"distance": RISE, "taper": 45})))));
+    // The loft removes 28.036.
+    assert_cut(&before, &after, 28.04, 0.5);
+}
+
+/// Where a side of the band closes up the rounded tool came back, and with it
+/// a refusal after most of a minute or a cut said to have removed nothing.
+#[test]
+fn the_ridge_tapered_past_where_a_side_closes_up_still_cuts_the_duct() {
+    let Some(body) = duct_body() else { return };
+    let pts = outline();
+    let before = measured(&build(body.clone()));
+    // No loft reaches these to compare with. From 370.4 at 45 degrees the cut
+    // loses about 28 mm3 a degree.
+    for (distance, taper, want) in [(2.2, 45.0, 511.5), (1.9, 50.0, 231.9), (1.9, 60.0, 27.7)] {
+        let r = build(with(body.clone(), tapered(&pts, Z, json!({"distance": distance, "taper": taper}))));
+        assert!(r.errors.is_empty(), "{distance} by {taper}: {:?}", messages(&r));
+        assert_cut(&before, &measured(&r), want, 2.0);
+        no_split(&r);
+    }
 }
