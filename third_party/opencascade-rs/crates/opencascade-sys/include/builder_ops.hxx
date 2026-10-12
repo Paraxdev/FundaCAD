@@ -31,6 +31,7 @@
 #include <BRepGProp_Face.hxx>
 #include <BRepLib.hxx>
 #include <BRepLib_FindSurface.hxx>
+#include <BRepOffsetAPI_DraftAngle.hxx>
 #include <BRepOffsetAPI_MakeOffset.hxx>
 #include <BRepOffsetAPI_ThruSections.hxx>
 #include <BRepPrimAPI_MakeBox.hxx>
@@ -1427,8 +1428,41 @@ inline TopoDS_Wire bo_offset_wire(const TopoDS_Wire &w, double d) {
   return TopoDS::Wire(s);
 }
 
+// A straight prism with every side leaned about its own base edge, so two
+// sides that meet in a corner still meet in an edge. `angle` in radians, null
+// when the kernel will not lean them, as where the outline would lose an edge
+// before the far end.
+inline TopoDS_Shape bo_prism_draft(const TopoDS_Face &face, const gp_Vec &v, double angle) {
+  try {
+    BRepPrimAPI_MakePrism mk(face, v);
+    TopoDS_Shape prism = mk.Shape();
+    if (prism.ShapeType() != TopAbs_SOLID) return TopoDS_Shape();
+    const TopoDS_Shape first = mk.FirstShape(), last = mk.LastShape();
+    TopExp_Explorer vx(face, TopAbs_VERTEX);
+    if (!vx.More()) return TopoDS_Shape();
+    const gp_Dir dir(v);
+    const gp_Pln neutral(BRep_Tool::Pnt(TopoDS::Vertex(vx.Current())), dir);
+    BRepOffsetAPI_DraftAngle draft(prism);
+    for (TopExp_Explorer ex(prism, TopAbs_FACE); ex.More(); ex.Next()) {
+      if (ex.Current().IsSame(first) || ex.Current().IsSame(last)) continue;
+      draft.Add(TopoDS::Face(ex.Current()), dir, angle, neutral);
+      if (!draft.AddDone()) return TopoDS_Shape();
+    }
+    draft.Build();
+    if (!draft.IsDone()) return TopoDS_Shape();
+    TopoDS_Shape s = draft.Shape();
+    if (s.IsNull() || s.ShapeType() != TopAbs_SOLID || !BRepCheck_Analyzer(s).IsValid()) return TopoDS_Shape();
+    double straight = bo_volume(prism), leaned = bo_volume(s);
+    bool fits = angle > 0 ? leaned > 0 && leaned < straight : leaned > straight;
+    return fits ? s : TopoDS_Shape();
+  } catch (...) {
+    return TopoDS_Shape();
+  }
+}
+
 // Solid.extrude_taper: LocOpe_DPrism when it applies, else a loft between each
-// wire and its 2D offset at the far end, holes subtracted.
+// wire and its 2D offset at the far end, holes subtracted. bo_prism_draft
+// stands in where DPrism would round an inside corner.
 inline BoShape bo_prism_taper(const TopoDS_Shape &faceShape, double dx, double dy, double dz,
                               double taper, double ox, double oy, double oz, double xx, double xy,
                               double xz, double nx, double ny, double nz, bool dprism) {
@@ -1436,9 +1470,24 @@ inline BoShape bo_prism_taper(const TopoDS_Shape &faceShape, double dx, double d
       TopoDS_Face face = TopoDS::Face(faceShape);
       double len = std::sqrt(dx * dx + dy * dy + dz * dz);
       TopoDS_Wire outer = BRepTools::OuterWire(face);
+      const double rad = taper * M_PI / 180.0;
+      const gp_Vec along(dx, dy, dz);
       if (dprism) {
-        LocOpe_DPrism dp(face, len / std::cos(taper * M_PI / 180.0), taper * M_PI / 180.0);
-        return bo_own(dp.Shape());
+        LocOpe_DPrism dp(face, len / std::cos(rad), rad);
+        TopoDS_Shape round = dp.Shape();
+        // DPrism closes each inside corner of the outline with a sliver of a
+        // cone whose apex is the outline's own vertex. Where that apex lies
+        // on a freeform face of a body, the kernel finds no intersection
+        // curve for the sliver, and a cut hands back the body with the whole
+        // tool beside it. Leaned sides meet in an edge there, which is also
+        // what the loft below gives in every other direction.
+        TopTools_IndexedMapOfShape sides;
+        TopTools_IndexedMapOfShape rim;
+        TopExp::MapShapes(round, TopAbs_FACE, sides);
+        TopExp::MapShapes(outer, TopAbs_EDGE, rim);
+        if (sides.Extent() <= rim.Extent() + 2) return bo_own(round);
+        TopoDS_Shape sharp = bo_prism_draft(face, along, rad);
+        return bo_own(sharp.IsNull() ? round : sharp);
       }
       gp_Trsf toWorld = bo_plane_trsf(ox, oy, oz, xx, xy, xz, nx, ny, nz);
       gp_Trsf toLocal = toWorld.Inverted();
