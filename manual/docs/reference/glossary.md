@@ -1,208 +1,125 @@
 # Glossary
 
-The words this manual uses, grouped by what they are about and in alphabetical order
-within a group.
+Hover over an underlined word anywhere in the manual to see its meaning from this list.
 
-## Files and formats
+## Files
 
-**.funda.** FundaCAD's own document. It is readable text and keeps your sketches, features,
-parameters and history, so you can reopen it and carry on editing.
+**.funda.** FundaCAD's own readable document, which keeps your steps and history.
 
-**.fundab.** The same document stored as a smaller binary file. Save As offers both.
+**.fundab.** The same document as a smaller binary file that can repair itself.
 
-**3MF.** A triangle-mesh format that slicers open, offered next to STL in the Export window.
+**3MF.** A mesh format that slicers open.
 
-**Branch.** A separate line of versions inside one document. You branch off a version to try
-something without losing the line you were on.
+**Branch.** A separate line of versions inside one document.
 
-**GLB.** A binary 3D file (glTF) that viewers and web pages understand. The Export window
-offers it as a fourth type.
+**GLB.** A binary 3D file for viewers and web pages.
 
-**Linked document.** A document inserted with Insert Document in link mode. FundaCAD
-remembers the file it came from and can tell you when that file has changed.
+**Linked document.** A document inserted in link mode, so you can update it when the original changes.
 
-**Mesh.** A surface made of many small triangles. STL, 3MF and GLB files are meshes, and
-Import Mesh can bring one into a document.
+**Mesh.** A surface made of many small triangles, as in STL, 3MF and GLB files.
 
-**Recent files.** The list of documents you opened lately, shown in the welcome window.
+**STEP.** A file format that stores the exact solid, for handing parts to other CAD programs.
 
-**Recovery.** The automatic safety copy FundaCAD writes while a document has unsaved
-changes. If the app dies before you save, the copy is offered back at the next start.
+**STL.** The triangle mesh format almost every slicer reads.
 
-**STEP.** A file format that stores the exact solid instead of triangles, which makes it the
-way to hand a part to other CAD programs.
-
-**STL.** The triangle-mesh format almost every slicer reads. It is the default in the Export
-window.
-
-**Version.** A saved snapshot of the document with a short message, which you can compare
-with and return to.
+**Version.** A saved snapshot of the document that you can return to.
 
 ## Modelling
 
-**Body.** One solid shape in your model. A document can hold many bodies, and each one has a
-row in the Items card.
+**Body.** One solid shape in your model.
 
-**Boolean.** Combining bodies. Union merges two into one, Subtract removes one from another,
-and Intersect keeps only the part they share.
+**Boolean.** Combining bodies with Union, Subtract or Intersect.
 
-**Configuration.** A named set of parameter values, for example one for a small version of a
-part and one for a large version. The Extra Parameters plugin provides them.
+**Configuration.** A named set of parameter values, such as a small and a large version.
 
-**Cut.** An extrude or revolve that removes material from an existing body instead of adding
-to it.
+**Cut.** A step that removes material from a body.
 
-**Feature.** One step in building a part, such as a sketch, an extrude or a fillet. Every
-feature is a step in the History, and this manual mostly calls it a step.
+**Join.** A step that adds material to a body.
 
-**Folder.** A group of bodies in the Items card, which FundaCAD calls an element. Selecting
-a folder selects everything inside it.
+**Parameter.** A named number that steps can use.
 
-**History.** The list of steps in the order they are built, also called the timeline.
-Click a step to see and change its values.
+**Suppress.** Switching a step off without deleting it.
 
-**Items.** The card that lists everything in the document, with an eye on each row to show
-or hide it.
-
-**Join.** An extrude or revolve that adds material to a body that is already there.
-
-**Parameter.** A named number, like a wall thickness, that features can use. Change it once
-and everything that uses it is rebuilt.
-
-**Primitive.** A ready-made box, cylinder, cone, sphere or torus.
-
-**Rollback.** Dragging the marker in the History back to an earlier step, to see the model
-as it was then.
-
-**Suppress.** Switching a step off without deleting it. Unsuppress turns it back on.
-
-**Target.** The body a join, cut or intersect acts on. Naming it keeps the operation from
-touching other bodies it happens to overlap.
+**Target.** The body a join, cut or intersect acts on.
 
 ## Sketching
 
-**Constraint.** A rule that a sketch keeps true, such as two lines being parallel or a curve
-being tangent to another.
+**Constraint.** A rule a sketch keeps true, such as two lines being parallel.
 
-**Datum axis, datum plane, datum point.** Reference geometry you add yourself, to sketch on
-or to measure from.
+**Datum.** A reference plane, axis or point you add yourself.
 
-**Dimension.** A constraint with a number, such as a length or a diameter. A reference
-dimension only shows a measurement and does not control anything.
+**Dimension.** A constraint with a number, such as a length.
 
-**Entity.** A single piece of a sketch, such as one line, circle or arc.
+**Profile.** A closed outline in a sketch that a solid can be made from.
 
-**Offset plane.** A plane that sits parallel to another plane or a flat face, at a distance
-you choose.
-
-**Origin.** The point where the three axes meet.
-
-**Profile.** A closed outline in a sketch. Extrude, revolve and the other shape tools work
-from profiles.
-
-**Sketch.** A flat drawing on a plane or a face. It is the starting point for most solids.
-
-**Snap.** A setting in the sketch palette that makes the cursor jump to nearby points and
-to the grid while you draw.
+**Sketch.** A flat drawing on a plane or a face.
 
 ## Shapes
 
 **Chamfer.** A flat bevel cut along an edge.
 
-**Draft.** A small tilt added to a face so that it leans away from a chosen direction.
+**Draft.** A small tilt added to a face.
 
 **Edge.** The line where two faces meet.
 
-**Extrude.** Pushing a profile out into a solid, in a straight line.
+**Extrude.** Pushing a profile out into a solid.
 
-**Face.** One surface of a body, flat or curved.
+**Face.** One surface of a body.
 
 **Fillet.** A rounded edge.
 
-**Loft.** A shape that blends from one sketch to another, or through several.
+**Loft.** A shape that blends from one profile to another.
 
 **Mirror.** A copy of a body reflected across a plane.
 
-**Pattern.** Repeated copies, either in a line (linear) or around an axis (circular).
+**Pattern.** Repeated copies in a line or around an axis.
 
-**Press/Pull.** Moving a face in or out. The body grows or shrinks with it.
+**Press/Pull.** Moving a face in or out.
 
-**Revolve.** Spinning a profile around an axis, which is how you make a vase or a wheel.
+**Revolve.** Spinning a profile around an axis.
 
-**Shell.** Hollowing a body out to a given wall thickness, optionally leaving one or more
-faces open.
-
-**Split Body.** Cutting one body into pieces with a plane.
+**Shell.** Hollowing a body to a given wall thickness.
 
 **Sweep.** Pulling a profile along a path.
 
-**Taper.** A lean on the side walls of an extrude, set with the side handle on the arrow.
+**Thicken.** Giving a face a wall of its own.
 
-**Thicken.** Giving a face a wall of its own, with a thickness you choose.
+## Assemblies and inspecting
 
-**Vertex.** A corner point of a body.
+**Interference.** Where two bodies overlap.
 
-## Assemblies
+**Joint.** A rule that places one body against another.
 
-**Interference.** Where two bodies overlap. The Interference tool finds it.
+**Mechanism.** A set of joints with one body held fixed.
 
-**Joint.** A rule that places one body against another, face to face, with an optional
-slide and turn.
+**Overhang.** A face that leans too far to print without support.
 
-**Mechanism.** A set of joints between bodies, with one body held fixed, so you can drive a
-linkage with a single value.
+**Section.** A view that cuts the model open with a plane.
 
-## Inspecting
+**Stress.** An analysis of how one body bends and where it is strained.
 
-**Curvature.** A view that draws small combs along the edges, longer where the curve bends
-harder.
+## Render and plugins
 
-**Overhang.** A view that colours the faces which lean too far over to print without
-support, for a build direction and angle that you choose.
+**Bloom.** A soft halo around bright areas that does not light other objects.
 
-**Section.** A view that cuts the model open with a plane, so you can see inside it.
+**Glow.** A material setting that makes a body give off light.
 
-**Stress.** An analysis of one body. You mark where it is held and where it is loaded, and
-it shows where the material is strained and how much the part bends.
+**Material.** The finish of a body in the Render workspace.
 
-**Zebra.** A view that lays stripes over the surface. Where the stripes break or bunch up,
-the surface has a kink.
+**Node editor.** The graph where you build a surface finish from connected patterns.
 
-## Render
+**Workspace.** One of the two window modes, Model and Render.
 
-**Bloom.** A soft halo around bright areas of the picture. It is an effect on the image and
-does not light up other objects.
+**MCP.** The connection that lets an AI assistant build and check parts.
 
-**Glow.** The material setting that makes a body or a face give off light, which also falls
-on the parts next to it.
+**Plugin.** An optional add-on that brings extra tools.
 
-**Material.** The finish of a body in the Render workspace, such as glass or brushed metal.
+## Viewport
 
-**Node editor.** The graph in the Render workspace where you build a surface finish by
-connecting patterns like noise, scratches and bands.
+**Command palette.** A search box for every command, opened with Ctrl+K.
 
-**Workspace.** One of the two modes of the window, Model and Render. A switch in the title
-bar moves between them.
+**Gizmo.** The handles shown while you move or turn something.
 
-## Plugins and AI
+**Wireframe.** Showing only the edges of the model.
 
-**Funda Engine.** The part of FundaCAD that works out the shapes.
-
-**Grant.** A permission a plugin asks for, such as reading the document. Preferences,
-Plugins lists each one in a plain sentence.
-
-**MCP.** The connection that lets an AI assistant build and inspect parts in FundaCAD. It is
-built in, and setup is in Preferences.
-
-**Plugin.** An optional add-on that brings extra tools to the app, such as the screws
-library or the texture tool.
-
-## Viewport and input
-
-**Command palette.** A search box for every command in the app. Press Ctrl+K.
-
-**Gizmo.** The handles shown on a body or sketch while you move and turn it.
-
-**Wireframe.** Showing only the edges of the model. Shift+X toggles it.
-
-**X-ray.** Seeing through the model so you can select what is behind. X toggles it.
+**X-ray.** Seeing through the model to select what is behind.
