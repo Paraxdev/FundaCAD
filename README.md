@@ -51,43 +51,11 @@ the goal is it to make this a personalized version of a CAD with features I like
   <img src="assets/readme/render-materials.png" width="900" alt="The Render workspace in FundaCAD with graphite, blue PETG, brass and aluminium materials">
 </p>
 
-## Features
-
-- **Parametric modelling with a feature history.** Extrude, revolve, loft,
-  sweep, fillet, chamfer, shell, draft, holes, threads, mirror, patterns,
-  split and booleans. Scrub back to any step, change it, and the part rebuilds.
-- **Constrained 2D sketches**, on a plane, a datum plane or the face of a body,
-  that follow that face when the model changes.
-- **Parameters** that drive dimensions, with sliders, groups and named
-  configurations through the Extra Parameters plugin.
-- **Made for 3D printing.** Export STL, 3MF and STEP, print-friendly hole
-  shapes and edge finishes that need no supports, real surface textures
-  (knurl, hex, voronoi, heightmaps), multi-material filament slots, a bed fit
-  check, and sending jobs to a printer on your network.
-- **Import STEP**, including large coloured assemblies, and keep working on them.
-- **A fastener library** of standard screws, nuts and washers to drop onto a face.
-- **3D mouse (SpaceMouse) and game controller** support, a Steam Deck included.
-- **AI assistants over MCP.** Claude or any MCP host can build, measure and edit
-  the model you have open.
-- **Plugins** for everything optional, each one asking for only what it needs.
-- **Themes**, dark, light, Dracula, Solarized, Noir tints and a colour-blind
-  safe one.
-- **Open file formats**, readable `.funda` JSON or the compact `.fundab`.
-
 ## Install
 
-Prebuilt installers for Windows, macOS (Apple Silicon) and Linux are on the
-[beta release](https://github.com/Paraxdev/fundacad/releases/tag/beta),
-FundaCAD 1.0 on the Funda Engine, rebuilt from `main` on every green
-build. It is the only release: the Python engine is retired, and its
-documents open here. These builds do not update themselves yet, so come back to
-the beta page for a newer one.
+find the binary for your OS on the rolling releases site 
+[beta release](https://github.com/Paraxdev/fundacad/releases/tag/beta)
 
-To let an AI assistant (Claude Code, Claude Desktop or any MCP host) build and
-edit models in the app, open **Preferences, AI assistants (MCP)**: the MCP
-server ships with the app, and that section gives the setup to paste.
-
-On Windows, `fundacad.exe` is a portable single contained exe. you may use it from anywhere, you just need WebView2 installed. win11 comes with it shipped and win10 includes it with newer updates.
 The builds are **not code signed**, so each OS says so in its own way:
 
 - **Windows**, SmartScreen shows "Windows protected your PC". Choose **More
@@ -98,7 +66,9 @@ The builds are **not code signed**, so each OS says so in its own way:
   ```bash
   xattr -dr com.apple.quarantine /Applications/FundaCAD.app
   ```
-- **Linux**, the Flatpak runs everywhere, NixOS, Fedora Silverblue and
+- **Linux**
+  
+  the Flatpak runs everywhere, NixOS, Fedora Silverblue and
   SteamOS included, because its runtime carries WebKitGTK and GTK. Install it
   from the downloaded file:
 
@@ -107,17 +77,8 @@ The builds are **not code signed**, so each OS says so in its own way:
   flatpak run dev.fundacad.app
   ```
 
-  It is sandboxed with access to your home folder. A SpaceMouse still needs
-  the udev rule from `packaging/99-spacemouse.rules` on the host.
 
-  The AppImage needs `chmod +x` and WebKitGTK 4.1 from your distribution. It
-  does not carry its own, because the bundled one left a blank window on
-  current systems; when it is missing, the AppImage says so and prints the
-  command that installs it.
-
-  The `.deb` and `.rpm` are built on Ubuntu 22.04, so they depend on the
-  WebKitGTK that ships from there on: `libwebkit2gtk-4.1-0`. That means
-  **Ubuntu 22.04 or newer, or Debian 12 or newer**. Install the `.deb` with apt
+  **Ubuntu 22.04 or newer, or Debian 12 or newer**: Install the `.deb` with apt
   and not with `dpkg -i`, because dpkg only *reports* a missing dependency
   while apt goes and fetches it:
 
@@ -136,6 +97,7 @@ Funda Engine (Rust) and the OpenCASCADE geometry kernel (C++) compiled into one
 executable. Running it from a checkout takes a handful of tools, one clone and
 one command. The very first build also compiles OpenCASCADE itself, which takes
 about twenty minutes; every build after that reuses it.
+
 
 ### 1. Install the tools
 
