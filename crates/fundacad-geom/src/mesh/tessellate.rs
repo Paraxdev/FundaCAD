@@ -135,7 +135,7 @@ fn position_key(p: &[f64]) -> [u64; 3] {
 
 /// `SPLIT_REACH` in mm for this body, `None` when its mesh has nothing to join.
 fn split_reach(shape: &Shape, found: &EdgeSplits) -> Option<f64> {
-    if found.pairs.is_empty() {
+    if found.pairs.is_empty() && found.unfilled.is_empty() {
         return None;
     }
     let (min, max) = mesh_bbox(shape, &[])?;
@@ -159,11 +159,20 @@ fn outdated(found: &EdgeSplits, reach: Option<f64>) -> bool {
 /// two no longer meet. Each group of points joined this way moves to the one
 /// met first, on every face that has a node there, and a triangle that loses
 /// its area to the move is dropped.
+///
+/// A face that small on every side (the sliver between a seam, a rim and a cut
+/// corner beside both) gets no triangles, or one where its outline needs five.
+/// It is one point of the mesh then, the points held around it form one group.
 struct SplitJoin(HashMap<[u64; 3], [f64; 3]>);
 
 impl SplitJoin {
     fn of(found: &EdgeSplits, reach: f64) -> Option<Self> {
-        let join = Self::new(found.pairs.iter().copied(), reach);
+        let lost = found
+            .unfilled
+            .iter()
+            .filter(|f| f.size <= reach)
+            .flat_map(|f| f.points.iter().skip(1).map(|p| [f.points[0], *p]));
+        let join = Self::new(found.pairs.iter().copied().chain(lost), reach);
         (!join.0.is_empty()).then_some(join)
     }
 
@@ -235,9 +244,11 @@ impl SplitJoin {
     }
 }
 
-/// How far apart two points of one edge step may be and still be joined, as a
-/// share of the body's diagonal. The folds measured stay under 2e-6 of it, a
-/// much wider gap is some other fault, and joining it would drag the mesh.
+/// How far apart two points of one edge step may be and still be joined, and
+/// how large a face the mesher did not fill may be and still count as a
+/// point, as a share of the body's diagonal. The folds measured stay under
+/// 2e-6 of it, a much wider gap is some other fault, and joining it would drag
+/// the mesh.
 const SPLIT_REACH: f64 = 1e-4;
 
 struct DisplayFace {
@@ -460,7 +471,7 @@ mod tests {
     fn a_mesh_is_outdated_by_uneven_edges_or_a_step_too_far_apart_for_a_fold() {
         let near = [[0.0; 3], [1e-5, 0.0, 0.0]];
         let far = [[0.0; 3], [0.5, 0.0, 0.0]];
-        let found = |pairs: Vec<[[f64; 3]; 2]>, uneven| EdgeSplits { pairs, uneven };
+        let found = |pairs: Vec<[[f64; 3]; 2]>, uneven| EdgeSplits { pairs, uneven, unfilled: Vec::new() };
         assert!(!outdated(&found(vec![near], 0), Some(1e-4)));
         assert!(outdated(&found(vec![near, far], 0), Some(1e-4)));
         assert!(outdated(&found(Vec::new(), 1), None));

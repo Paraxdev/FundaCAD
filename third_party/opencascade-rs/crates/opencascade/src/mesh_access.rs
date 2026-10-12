@@ -45,6 +45,17 @@ pub struct EdgeSplits {
     /// Edges whose faces hold a different number of points for them: a face
     /// mesh kept from an earlier run beside one made at another deflection.
     pub uneven: usize,
+    /// The faces the mesher left without triangles, or with fewer than can
+    /// fill their outline.
+    pub unfilled: Vec<UnfilledFace>,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct UnfilledFace {
+    /// The diagonal of the face's box.
+    pub size: f64,
+    /// The points the face and the faces around it hold along its edges.
+    pub points: Vec<[f64; 3]>,
 }
 
 pub struct MeshAccess {
@@ -142,9 +153,21 @@ impl MeshAccess {
         if !ffi::mesh_access_edge_splits(m, &mut v, &mut uneven) {
             return EdgeSplits::default();
         }
+        let mut flat = Vec::new();
+        let mut unfilled = Vec::new();
+        if ffi::mesh_access_unfilled_faces(m, &mut flat) {
+            let mut rest = flat.as_slice();
+            while let [size, n, tail @ ..] = rest {
+                let (points, after) = tail.split_at((3 * *n as usize).min(tail.len()));
+                let points = points.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect();
+                unfilled.push(UnfilledFace { size: *size, points });
+                rest = after;
+            }
+        }
         EdgeSplits {
             pairs: v.chunks_exact(6).map(|c| [[c[0], c[1], c[2]], [c[3], c[4], c[5]]]).collect(),
             uneven: uneven.max(0) as usize,
+            unfilled,
         }
     }
 

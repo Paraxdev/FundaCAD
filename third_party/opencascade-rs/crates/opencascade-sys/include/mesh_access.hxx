@@ -409,6 +409,74 @@ inline bool mesh_access_edge_splits(const MeshAccess &m, rust::Vec<double> &out,
   }
 }
 
+// Every face the mesher left without triangles, or with fewer than can fill
+// its outline (a mesh that uses its n nodes has n - 2 triangles or more), as
+// [d n x y z ...]: the diagonal of the face's own box, then the n points it
+// and the faces around it hold along its edges, placed like the nodes of
+// mesh_access_face_triangulation. The box is the surface's, a face can be far
+// larger than its outline.
+inline bool mesh_access_unfilled_faces(const MeshAccess &m, rust::Vec<double> &out) {
+  try {
+    std::vector<double> pts;
+    for (const TopoDS_Face &f : m.faces) {
+      TopLoc_Location own;
+      const Handle(Poly_Triangulation) &mine = BRep_Tool::Triangulation(f, own);
+      if (!mine.IsNull() && mine->NbTriangles() >= mine->NbNodes() - 2) {
+        continue;
+      }
+      Bnd_Box box;
+      BRepBndLib::Add(f, box, false);
+      if (box.IsVoid() || box.IsOpen()) {
+        continue;
+      }
+      pts.clear();
+      if (!mine.IsNull()) {
+        const gp_Trsf trsf = own.Transformation();
+        for (Standard_Integer k = 1; k <= mine->NbNodes(); ++k) {
+          const gp_Pnt p = mine->Node(k).Transformed(trsf);
+          pts.insert(pts.end(), {p.X(), p.Y(), p.Z()});
+        }
+      }
+      for (TopExp_Explorer ex(f, TopAbs_EDGE); ex.More(); ex.Next()) {
+        const Standard_Integer i = m.edgeFaces.FindIndex(ex.Current());
+        if (i == 0) {
+          continue;
+        }
+        for (const TopoDS_Face &g : m.edgeAncestors.at(i - 1)) {
+          TopLoc_Location loc;
+          const Handle(Poly_Triangulation) &tri = BRep_Tool::Triangulation(g, loc);
+          if (tri.IsNull() || g.IsSame(f)) {
+            continue;
+          }
+          const gp_Trsf trsf = loc.Transformation();
+          for (TopAbs_Orientation o : {TopAbs_FORWARD, TopAbs_REVERSED}) {
+            const Handle(Poly_PolygonOnTriangulation) &poly =
+                BRep_Tool::PolygonOnTriangulation(TopoDS::Edge(ex.Current().Oriented(o)), tri, loc);
+            if (poly.IsNull()) {
+              continue;
+            }
+            for (Standard_Integer k = 1; k <= poly->NbNodes(); ++k) {
+              if (poly->Node(k) < 1 || poly->Node(k) > tri->NbNodes()) {
+                continue;
+              }
+              const gp_Pnt p = tri->Node(poly->Node(k)).Transformed(trsf);
+              pts.insert(pts.end(), {p.X(), p.Y(), p.Z()});
+            }
+          }
+        }
+      }
+      out.push_back(std::sqrt(box.SquareExtent()));
+      out.push_back(static_cast<double>(pts.size() / 3));
+      for (double v : pts) {
+        out.push_back(v);
+      }
+    }
+    return true;
+  } catch (...) {
+    return false;
+  }
+}
+
 inline int32_t mesh_access_edge_count(const MeshAccess &m) { return static_cast<int32_t>(m.edgeAncestors.size()); }
 
 // The face index of every entry in the edge's ancestor list, a seam's face
