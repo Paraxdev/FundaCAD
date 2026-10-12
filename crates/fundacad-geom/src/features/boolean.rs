@@ -10,7 +10,7 @@ use opencascade::primitives::Shape;
 use serde_json::json;
 
 use crate::builder::{Ctx, FResult, Fail};
-use crate::kernel::{self, BoolKind, Kind};
+use crate::kernel::{self, BoolKind, KResult, Kind};
 
 /// A change smaller than this counts as nothing happening.
 fn noop_eps(reference: f64) -> f64 {
@@ -117,47 +117,44 @@ fn in_slices(solid: &Shape, n: usize) -> Vec<Shape> {
 ///
 /// `accept` judges a sliced result; without one, any real change in volume
 /// counts. A fuse needs its own test, because a fuse that merged nothing still
-/// reports the whole tool volume as added. `None` is the honest answer that the
-/// tool really does not reach.
+/// reports the whole tool volume as added. `Ok(None)` is the honest answer that
+/// the tool really does not reach. An `Err` is the kernel refusing every sliced
+/// attempt, which says nothing about reach and must not be read as a miss.
 fn retried_in_slices(
     shape: &Shape,
     tool: &Shape,
     kind: BoolKind,
     accept: Option<&dyn Fn(&Shape) -> bool>,
-) -> Option<Shape> {
-    for n in [2usize, 4] {
-        let pieces = in_slices(tool, n);
+) -> KResult<Option<Shape>> {
+    let changed = |s: &Shape| (vol(s) - vol(shape)).abs() > noop_eps(vol(shape));
+    sliced(shape, [2usize, 4].into_iter().map(|n| in_slices(tool, n)), accept.unwrap_or(&changed), &|a, b| {
+        kernel::serial_bool(a, &[b], kind)
+    })
+}
+
+/// `retried_in_slices` with the slicing and the boolean handed in.
+fn sliced(
+    shape: &Shape,
+    attempts: impl IntoIterator<Item = Vec<Shape>>,
+    accept: &dyn Fn(&Shape) -> bool,
+    boolean: &dyn Fn(&Shape, &Shape) -> KResult<Shape>,
+) -> KResult<Option<Shape>> {
+    let mut refused = None;
+    let mut ran = false;
+    for pieces in attempts {
         if pieces.len() < 2 {
-            return None;
+            break;
         }
-        let mut out = shape.clone();
-        let mut failed = false;
-        for piece in &pieces {
-            match kernel::serial_bool(&out, &[piece], kind) {
-                Ok(next) => out = next,
-                Err(_) => {
-                    failed = true;
-                    break;
-                }
-            }
-        }
-        if failed {
-            continue;
-        }
-        match accept {
-            Some(judge) => {
-                if judge(&out) {
-                    return Some(out);
-                }
-            }
-            None => {
-                if (vol(&out) - vol(shape)).abs() > noop_eps(vol(shape)) {
-                    return Some(out);
-                }
-            }
+        match pieces.iter().try_fold(shape.clone(), |out, piece| boolean(&out, piece)) {
+            Ok(out) if accept(&out) => return Ok(Some(out)),
+            Ok(_) => ran = true,
+            Err(e) => refused = Some(e),
         }
     }
-    None
+    match refused {
+        Some(e) if !ran => Err(e),
+        _ => Ok(None),
+    }
 }
 
 const HIDDEN_PROBES: usize = 4;
@@ -292,7 +289,7 @@ pub fn combine(
                     base = kernel::serial_bool(&base, &[ctx.bodies[i].shape()], BoolKind::Fuse)
                         .ok()?;
                 }
-                retried_in_slices(&base, &solid, BoolKind::Fuse, Some(&merged_properly))
+                retried_in_slices(&base, &solid, BoolKind::Fuse, Some(&merged_properly)).ok().flatten()
             };
             if merged_vol < hit_vol - noop_eps(hit_vol) {
                 // LESS than was there before. Nothing a union can legitimately
@@ -398,16 +395,22 @@ pub fn combine(
                 // sometimes, and the repair is to slice the tool. Try that
                 // before blaming the caller.
                 let mut healed = false;
+                let mut refused = None;
                 for (i, shape, measured) in &mut results {
-                    if let Some(fixed) =
-                        retried_in_slices(ctx.bodies[*i].shape(), &solid, BoolKind::Cut, None)
-                    {
-                        *shape = fixed;
-                        *measured = None;
-                        healed = true;
+                    match retried_in_slices(ctx.bodies[*i].shape(), &solid, BoolKind::Cut, None) {
+                        Ok(Some(fixed)) => {
+                            *shape = fixed;
+                            *measured = None;
+                            healed = true;
+                        }
+                        Ok(None) => {}
+                        Err(e) => refused = Some(e),
                     }
                 }
                 if !healed {
+                    if let Some(e) = refused {
+                        return Err(e.into());
+                    }
                     // No shown body lost anything, whether or not its box met
                     // the tool's, so the hidden ones are asked directly. Two
                     // are enough to pick the wording, and the probes are
@@ -599,5 +602,30 @@ fn truthy(v: &serde_json::Value) -> bool {
         serde_json::Value::String(s) => !s.is_empty(),
         serde_json::Value::Array(a) => !a.is_empty(),
         serde_json::Value::Object(o) => !o.is_empty(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::kernel::KernelError;
+
+    #[test]
+    fn a_sliced_retry_the_kernel_refuses_is_not_a_miss() {
+        let body = kernel::make_box(10.0, 10.0, 10.0).unwrap();
+        let halves = || vec![body.clone(), body.clone()];
+        let refuse = |_: &Shape, _: &Shape| Err(KernelError("BOPAlgo_ImpossibleResult".into()));
+        let untouched = |a: &Shape, _: &Shape| Ok(a.clone());
+        let got = sliced(&body, [halves(), halves()], &|_| true, &refuse);
+        assert_eq!(got.err().map(|e| e.0).as_deref(), Some("BOPAlgo_ImpossibleResult"));
+        // A slicing that ran and changed nothing is the tool not reaching,
+        // whatever an earlier one came to.
+        let asked = std::cell::Cell::new(0);
+        let refused_once = |a: &Shape, b: &Shape| {
+            asked.set(asked.get() + 1);
+            if asked.get() == 1 { refuse(a, b) } else { untouched(a, b) }
+        };
+        assert!(matches!(sliced(&body, [halves(), halves()], &|_| false, &refused_once), Ok(None)));
+        assert!(matches!(sliced(&body, [halves(), halves()], &|_| true, &untouched), Ok(Some(_))));
     }
 }
