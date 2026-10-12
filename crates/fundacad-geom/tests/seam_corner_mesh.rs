@@ -24,26 +24,32 @@ fn outline(points: [[f64; 2]; 4]) -> Vec<Value> {
 }
 
 /// A tube revolved about Z, its seam at azimuth 0, with a diamond cut through
-/// the wall whose top and bottom corners sit `offset` mm beside the seam.
-fn tube(offset: f64, patterned: bool) -> Value {
-    let diamond = outline([[offset, 10.0], [3.6 + offset, 13.6], [offset, 17.2], [-3.6 + offset, 13.6]]);
+/// the wall whose top and bottom corners sit `offset` mm beside the seam, the
+/// whole part `s` times the size.
+fn tube(offset: f64, patterned: bool, s: f64) -> Value {
+    let diamond = outline([
+        [offset, 10.0 * s],
+        [3.6 * s + offset, 13.6 * s],
+        [offset, 17.2 * s],
+        [-3.6 * s + offset, 13.6 * s],
+    ]);
     let mut features = vec![
         json!({"id": "tubeSk", "type": "sketch", "plane": "XZ",
-               "entities": outline([[41.74, 0.0], [43.74, 0.0], [43.74, 30.0], [41.74, 30.0]])}),
+               "entities": outline([[41.74 * s, 0.0], [43.74 * s, 0.0], [43.74 * s, 30.0 * s], [41.74 * s, 30.0 * s]])}),
         json!({"id": "tube", "type": "revolve", "sketch": "tubeSk", "axis": "Z", "angle": 360, "operation": "new"}),
     ];
     if patterned {
         // Drawn a quarter turn away, the pattern's second copy is the one at
         // the seam.
         features.push(json!({"id": "cutSk", "type": "sketch", "entities": diamond,
-            "plane": {"origin": [0, -38, 0], "normal": [0, -1, 0], "xdir": [1, 0, 0]}}));
-        features.push(json!({"id": "cut", "type": "extrude", "sketch": "cutSk", "distance": 9, "operation": "cut"}));
+            "plane": {"origin": [0, -38.0 * s, 0], "normal": [0, -1, 0], "xdir": [1, 0, 0]}}));
+        features.push(json!({"id": "cut", "type": "extrude", "sketch": "cutSk", "distance": 9.0 * s, "operation": "cut"}));
         features.push(json!({"id": "pat", "type": "patternCircular", "count": 4, "angle": 360, "axis": "Z",
             "features": ["cut"]}));
     } else {
         features.push(json!({"id": "cutSk", "type": "sketch", "entities": diamond,
-            "plane": {"origin": [38, 0, 0], "normal": [1, 0, 0], "xdir": [0, 1, 0]}}));
-        features.push(json!({"id": "cut", "type": "extrude", "sketch": "cutSk", "distance": 9, "operation": "cut"}));
+            "plane": {"origin": [38.0 * s, 0, 0], "normal": [1, 0, 0], "xdir": [0, 1, 0]}}));
+        features.push(json!({"id": "cut", "type": "extrude", "sketch": "cutSk", "distance": 9.0 * s, "operation": "cut"}));
     }
     json!({"parameters": {}, "features": features})
 }
@@ -85,7 +91,11 @@ fn mesh_holes(doc: &Value) -> Vec<Value> {
 }
 
 fn assert_whole(label: &str, offset: f64, patterned: bool) {
-    let raw = tube(offset, patterned);
+    assert_whole_at(label, offset, patterned, 1.0);
+}
+
+fn assert_whole_at(label: &str, offset: f64, patterned: bool, s: f64) {
+    let raw = tube(offset, patterned, s);
     let doc: CadDocument = serde_json::from_value(raw.clone()).expect("a document");
     let r = builder::rebuild(&doc, &raw, &NoWatch).expect("not cancelled");
     assert!(r.errors.is_empty(), "{label}: {:?}", r.errors);
@@ -129,4 +139,11 @@ fn a_cut_with_a_corner_on_the_seam_meshes_closed() {
     assert_whole("pattern, corner on the seam", 0.0, true);
     assert_whole("pattern, corner 1e-6 mm off the seam", 1e-6, true);
     assert_whole("direct cut, corner on the seam", 0.0, false);
+}
+
+#[test]
+fn a_part_a_few_mm_across_with_a_corner_beside_the_seam_meshes_closed() {
+    // At this size the short edge comes near the viewport's 1e-6 weld, which
+    // must find the faces already joined.
+    assert_whole_at("pattern at 1/20, corner 9.5e-7 mm off the seam", 9.5e-7, true, 0.05);
 }

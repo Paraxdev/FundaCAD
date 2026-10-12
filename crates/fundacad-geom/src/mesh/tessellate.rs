@@ -68,17 +68,27 @@ pub fn tessellate_with(
         }
         None => Vec::new(),
     };
+    let join = crate::bench::phase("edge_splits", || SplitJoin::of(shape, access));
     let mut out = Tessellation::default();
     let mut normals: Option<Vec<f64>> = None;
     for fid in 0..access.face_count() {
-        let Some(tri) = access.face_triangulation(fid, params.display) else {
+        let Some(mut tri) = access.face_triangulation(fid, params.display) else {
             continue;
         };
         if let Some(m) = displaced.get_mut(fid).and_then(Option::take) {
+            let from = out.positions.len();
             out.normals = normals.take();
             super::passes::append(&mut out, fid as u32, &m, params.display);
             normals = out.normals.take();
+            if let Some(j) = &join {
+                j.settle(&mut out.positions[from..]);
+            }
             continue;
+        }
+        // Before the display weld, which would fold a node away while it
+        // still sits apart from the point its neighbours take.
+        if let Some(j) = &join {
+            j.settle(&mut tri.nodes);
         }
         let flip = access.face_reversed(fid);
         let mut t: Vec<u32> = tri.triangles.iter().map(|&i| i.max(0) as u32).collect();
@@ -107,12 +117,9 @@ pub fn tessellate_with(
             .extend(std::iter::repeat(fid as u32).take(ntri));
     }
     out.normals = normals;
-    crate::bench::phase("edge_splits", || {
-        let splits = access.edge_splits();
-        if !splits.is_empty() {
-            join_split_edges(&mut out, &splits);
-        }
-    });
+    if let Some(j) = &join {
+        j.drop_flat(&mut out);
+    }
     out
 }
 
@@ -120,9 +127,8 @@ fn position_key(p: &[f64]) -> [u64; 3] {
     [0, 1, 2].map(|k| (p[k] + 0.0).to_bits())
 }
 
-/// Bring the faces along an edge back to the same points where the kernel's
-/// mesher left them apart, `splits` being the pairs it holds for one step of
-/// one edge.
+/// The points at which the kernel's mesher left the faces along an edge
+/// apart, each with the one point its group takes.
 ///
 /// BRepMesh gives every face its own copy of an edge's points, then folds the
 /// boundary nodes of a face that are within its UV tolerance of each other
@@ -131,81 +137,89 @@ fn position_key(p: &[f64]) -> [u64; 3] {
 /// two no longer meet. Each group of points joined this way moves to the one
 /// met first, on every face that has a node there, and a triangle that loses
 /// its area to the move is dropped.
-fn join_split_edges(out: &mut Tessellation, splits: &[[[f64; 3]; 2]]) {
-    let (mut min, mut max) = ([f64::INFINITY; 3], [f64::NEG_INFINITY; 3]);
-    for c in out.positions.chunks_exact(3) {
-        for k in 0..3 {
-            min[k] = min[k].min(c[k]);
-            max[k] = max[k].max(c[k]);
-        }
-    }
-    let reach = SPLIT_REACH * norm(sub(max, min));
+struct SplitJoin(HashMap<[u64; 3], [f64; 3]>);
 
-    let mut ids: HashMap<[u64; 3], usize> = HashMap::new();
-    let mut points: Vec<[f64; 3]> = Vec::new();
-    let mut parent: Vec<usize> = Vec::new();
-    fn root(parent: &mut [usize], mut i: usize) -> usize {
-        while parent[i] != i {
-            parent[i] = parent[parent[i]];
-            i = parent[i];
+impl SplitJoin {
+    fn of(shape: &Shape, access: &MeshAccess) -> Option<Self> {
+        let splits = access.edge_splits();
+        if splits.is_empty() {
+            return None;
         }
-        i
-    }
-    for pair in splits {
-        if !(norm(sub(pair[0], pair[1])) <= reach) {
-            continue;
-        }
-        let [a, b] = pair.map(|p| {
-            *ids.entry(position_key(&p)).or_insert_with(|| {
-                points.push(p);
-                parent.push(parent.len());
-                parent.len() - 1
-            })
-        });
-        let (a, b) = (root(&mut parent, a), root(&mut parent, b));
-        parent[a.max(b)] = a.min(b);
+        let (min, max) = mesh_bbox(shape, &[])?;
+        let join = Self::new(&splits, SPLIT_REACH * norm(sub(max, min)));
+        (!join.0.is_empty()).then_some(join)
     }
 
-    let mut moved = vec![false; out.positions.len() / 3];
-    for (i, c) in out.positions.chunks_exact_mut(3).enumerate() {
-        let Some(&id) = ids.get(&position_key(c)) else {
-            continue;
-        };
-        let to = root(&mut parent, id);
-        if to != id {
-            c.copy_from_slice(&points[to]);
-            moved[i] = true;
-        }
-    }
-    if !moved.contains(&true) {
-        return;
-    }
-    let at = |i: u32| position_key(&out.positions[3 * i as usize..3 * i as usize + 3]);
-    let keep: Vec<bool> = out
-        .indices
-        .chunks_exact(3)
-        .map(|t| {
-            if !t.iter().any(|&i| moved[i as usize]) {
-                return true;
+    /// `splits` are the pairs the mesh holds for one step of one edge.
+    fn new(splits: &[[[f64; 3]; 2]], reach: f64) -> Self {
+        let mut ids: HashMap<[u64; 3], usize> = HashMap::new();
+        let mut points: Vec<[f64; 3]> = Vec::new();
+        let mut parent: Vec<usize> = Vec::new();
+        fn root(parent: &mut [usize], mut i: usize) -> usize {
+            while parent[i] != i {
+                parent[i] = parent[parent[i]];
+                i = parent[i];
             }
-            let (a, b, c) = (at(t[0]), at(t[1]), at(t[2]));
-            a != b && b != c && c != a
-        })
-        .collect();
-    let mut kept = keep.iter();
-    out.indices = out
-        .indices
-        .chunks_exact(3)
-        .filter(|_| *kept.next().unwrap_or(&true))
-        .flatten()
-        .copied()
-        .collect();
-    let mut kept = keep.iter();
-    out.face_ids.retain(|_| *kept.next().unwrap_or(&true));
+            i
+        }
+        for pair in splits {
+            if !(norm(sub(pair[0], pair[1])) <= reach) {
+                continue;
+            }
+            let [a, b] = pair.map(|p| {
+                *ids.entry(position_key(&p)).or_insert_with(|| {
+                    points.push(p);
+                    parent.push(parent.len());
+                    parent.len() - 1
+                })
+            });
+            let (a, b) = (root(&mut parent, a), root(&mut parent, b));
+            parent[a.max(b)] = a.min(b);
+        }
+        Self(ids.into_iter().map(|(key, id)| (key, points[root(&mut parent, id)])).collect())
+    }
+
+    fn settle(&self, positions: &mut [f64]) {
+        for c in positions.chunks_exact_mut(3) {
+            if let Some(to) = self.0.get(&position_key(c)) {
+                c.copy_from_slice(to);
+            }
+        }
+    }
+
+    fn drop_flat(&self, out: &mut Tessellation) {
+        let joined: Vec<bool> =
+            out.positions.chunks_exact(3).map(|c| self.0.contains_key(&position_key(c))).collect();
+        let at = |i: u32| position_key(&out.positions[3 * i as usize..3 * i as usize + 3]);
+        let keep: Vec<bool> = out
+            .indices
+            .chunks_exact(3)
+            .map(|t| {
+                if !t.iter().any(|&i| joined[i as usize]) {
+                    return true;
+                }
+                let (a, b, c) = (at(t[0]), at(t[1]), at(t[2]));
+                a != b && b != c && c != a
+            })
+            .collect();
+        if !keep.contains(&false) {
+            return;
+        }
+        let mut kept = keep.iter();
+        out.indices = out
+            .indices
+            .chunks_exact(3)
+            .filter(|_| *kept.next().unwrap_or(&true))
+            .flatten()
+            .copied()
+            .collect();
+        let mut kept = keep.iter();
+        out.face_ids.retain(|_| *kept.next().unwrap_or(&true));
+    }
 }
 
 /// How far apart two points of one edge step may be and still be joined, as a
-/// share of the mesh's diagonal. The folds measured stay under 2e-6 of it, a
+/// share of the body's diagonal. The folds measured stay under 2e-6 of it, a
 /// much wider gap is some other fault, and joining it would drag the mesh.
 const SPLIT_REACH: f64 = 1e-4;
 
@@ -416,7 +430,9 @@ mod tests {
         let near = [[0.0, 0.0, 0.0], [1e-5, 0.0, 0.0]];
         // Too far apart to be one point the mesher folded.
         let far = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
-        join_split_edges(&mut t, &[far, near]);
+        let join = SplitJoin::new(&[far, near], 1e-4);
+        join.settle(&mut t.positions);
+        join.drop_flat(&mut t);
         assert_eq!(t.positions[9..12], [0.0, 0.0, 0.0]);
         assert_eq!(t.positions[3..9], [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]);
         assert_eq!(t.indices, vec![0, 1, 2, 3, 4, 5]);
