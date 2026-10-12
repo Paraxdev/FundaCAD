@@ -36,6 +36,7 @@ mod inner {
             normals: &mut Vec<f64>,
         ) -> bool;
 
+        pub fn mesh_access_edge_splits(m: &MeshAccess, out: &mut Vec<f64>) -> bool;
         pub fn mesh_access_edge_count(m: &MeshAccess) -> i32;
         pub fn mesh_access_edge_faces(m: &MeshAccess, edge: i32, out: &mut Vec<i32>);
         pub fn mesh_access_edge_degenerated(m: &MeshAccess, edge: i32) -> bool;

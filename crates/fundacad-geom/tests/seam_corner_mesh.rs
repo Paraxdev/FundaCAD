@@ -1,0 +1,132 @@
+//! A cut whose corner lands a few 1e-5 mm beside the seam of a revolved tube
+//! leaves edges that short between the seam and the corner. The kernel's
+//! mesher folds such an edge into one node on the cylinder and keeps its
+//! points on the flat wall beside it, so the two faces must be brought to the
+//! same nodes or the viewport, an STL and the printability check all get a
+//! mesh with holes.
+
+use fundacad_core::CadDocument;
+use fundacad_geom::builder::{self, NoWatch};
+use fundacad_geom::export;
+use fundacad_geom::kernel::{self, Kind};
+use fundacad_geom::mesh::{self, viewport_profile};
+use fundacad_geom::printcheck::op::printability_result;
+use fundacad_protocol::JobResult;
+use serde_json::{json, Map, Value};
+use std::collections::HashMap;
+
+fn line(id: &str, a: [f64; 2], b: [f64; 2]) -> Value {
+    json!({"type": "line", "id": id, "x1": a[0], "y1": a[1], "x2": b[0], "y2": b[1]})
+}
+
+fn outline(points: [[f64; 2]; 4]) -> Vec<Value> {
+    (0..4).map(|i| line(&format!("l{i}"), points[i], points[(i + 1) % 4])).collect()
+}
+
+/// A tube revolved about Z, its seam at azimuth 0, with a diamond cut through
+/// the wall whose top and bottom corners sit `offset` mm beside the seam.
+fn tube(offset: f64, patterned: bool) -> Value {
+    let diamond = outline([[offset, 10.0], [3.6 + offset, 13.6], [offset, 17.2], [-3.6 + offset, 13.6]]);
+    let mut features = vec![
+        json!({"id": "tubeSk", "type": "sketch", "plane": "XZ",
+               "entities": outline([[41.74, 0.0], [43.74, 0.0], [43.74, 30.0], [41.74, 30.0]])}),
+        json!({"id": "tube", "type": "revolve", "sketch": "tubeSk", "axis": "Z", "angle": 360, "operation": "new"}),
+    ];
+    if patterned {
+        // Drawn a quarter turn away, the pattern's second copy is the one at
+        // the seam.
+        features.push(json!({"id": "cutSk", "type": "sketch", "entities": diamond,
+            "plane": {"origin": [0, -38, 0], "normal": [0, -1, 0], "xdir": [1, 0, 0]}}));
+        features.push(json!({"id": "cut", "type": "extrude", "sketch": "cutSk", "distance": 9, "operation": "cut"}));
+        features.push(json!({"id": "pat", "type": "patternCircular", "count": 4, "angle": 360, "axis": "Z",
+            "features": ["cut"]}));
+    } else {
+        features.push(json!({"id": "cutSk", "type": "sketch", "entities": diamond,
+            "plane": {"origin": [38, 0, 0], "normal": [1, 0, 0], "xdir": [0, 1, 0]}}));
+        features.push(json!({"id": "cut", "type": "extrude", "sketch": "cutSk", "distance": 9, "operation": "cut"}));
+    }
+    json!({"parameters": {}, "features": features})
+}
+
+/// Triangle sides met an odd number of times or more than twice, corners
+/// joined by exact position.
+fn unpaired_sides<T: Copy + Into<f64>>(positions: &[T], indices: &[u32]) -> usize {
+    let mut ids: HashMap<[u64; 3], u32> = HashMap::new();
+    let node: Vec<u32> = positions
+        .chunks_exact(3)
+        .map(|c| {
+            let key = [0, 1, 2].map(|k| (c[k].into() + 0.0).to_bits());
+            let next = ids.len() as u32;
+            *ids.entry(key).or_insert(next)
+        })
+        .collect();
+    let mut sides: HashMap<(u32, u32), u32> = HashMap::new();
+    for t in indices.chunks_exact(3) {
+        let c = [node[t[0] as usize], node[t[1] as usize], node[t[2] as usize]];
+        if c[0] == c[1] || c[1] == c[2] || c[2] == c[0] {
+            continue;
+        }
+        for k in 0..3 {
+            let (a, b) = (c[k], c[(k + 1) % 3]);
+            *sides.entry((a.min(b), a.max(b))).or_insert(0) += 1;
+        }
+    }
+    sides.values().filter(|&&n| n != 2).count()
+}
+
+fn mesh_holes(doc: &Value) -> Vec<Value> {
+    let mut req = Map::new();
+    req.insert("document".into(), doc.clone());
+    let JobResult::Json(r) = printability_result(&req, &NoWatch) else {
+        panic!("expected a JSON result")
+    };
+    assert!(r.get("error").is_none(), "{r:?}");
+    r["findings"].as_array().unwrap().iter().filter(|f| f["kind"] == "meshHole").cloned().collect()
+}
+
+fn assert_whole(label: &str, offset: f64, patterned: bool) {
+    let raw = tube(offset, patterned);
+    let doc: CadDocument = serde_json::from_value(raw.clone()).expect("a document");
+    let r = builder::rebuild(&doc, &raw, &NoWatch).expect("not cancelled");
+    assert!(r.errors.is_empty(), "{label}: {:?}", r.errors);
+    assert_eq!(r.bodies.len(), 1, "{label}");
+    let shape = &r.bodies[0].shape;
+    let faces = kernel::count(shape, Kind::Face);
+
+    let view = mesh::body_payload(shape, "body1", "tube", 0.1, viewport_profile(1));
+    let mut seen = vec![false; faces];
+    for &f in &view.face_ids {
+        seen[f as usize] = true;
+    }
+    let bare = seen.iter().filter(|s| !**s).count();
+    let stl = export::export_mesh(shape, &export::mesh_options(None));
+    let stl32: Vec<f32> = stl.0.iter().map(|&v| v as f32).collect();
+    let got = (
+        bare,
+        unpaired_sides(&view.positions, &view.indices),
+        unpaired_sides(&stl32, &stl.1),
+        mesh_holes(&raw).len(),
+    );
+    assert_eq!(
+        got,
+        (0, 0, 0, 0),
+        "{label}: (faces without triangles, open sides in the viewport mesh, open sides in the STL, printability mesh holes) of {faces} faces"
+    );
+}
+
+#[test]
+fn a_patterned_cut_with_a_corner_beside_the_seam_meshes_closed() {
+    assert_whole("pattern, corner 1.9e-5 mm off the seam", 1.9e-5, true);
+}
+
+#[test]
+fn a_cut_with_a_corner_beside_the_seam_meshes_closed() {
+    assert_whole("direct cut, corner 1e-4 mm off the seam", 1e-4, false);
+}
+
+#[test]
+fn a_cut_with_a_corner_on_the_seam_meshes_closed() {
+    assert_whole("pattern, corner on the seam", 0.0, true);
+    assert_whole("pattern, corner 1e-6 mm off the seam", 1e-6, true);
+    assert_whole("direct cut, corner on the seam", 0.0, false);
+}

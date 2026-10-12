@@ -112,6 +112,19 @@ impl MeshAccess {
         .then_some(t)
     }
 
+    /// Every pair of points the stored mesh holds apart although they are the
+    /// same step of one edge on two faces, or on the two sides of a seam.
+    /// Empty when the faces agree along every edge.
+    pub fn edge_splits(&self) -> Vec<[[f64; 3]; 2]> {
+        let mut v = Vec::new();
+        match self.inner.as_ref() {
+            Some(m) if ffi::mesh_access_edge_splits(m, &mut v) => {
+                v.chunks_exact(6).map(|c| [[c[0], c[1], c[2]], [c[3], c[4], c[5]]]).collect()
+            }
+            _ => Vec::new(),
+        }
+    }
+
     /// The face index of every entry in the edge's ancestor list; a seam's
     /// face appears once per side.
     pub fn edge_faces(&self, edge: usize) -> Vec<usize> {
