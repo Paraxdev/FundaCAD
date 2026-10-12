@@ -484,9 +484,11 @@ pub fn serial_bool_known(
     Ok((out, unchanged.then_some(checked_vol)))
 }
 
-/// The check `serial_bool` holds its own result to, for a result made
-/// elsewhere: `result` when it could be what `kind` gives from these operands,
-/// the boolean done again when not, an error when that is no better.
+/// A test hook, nothing in the engine calls it: the check `serial_bool` holds
+/// its own result to, for a result made elsewhere. `result` when it could be
+/// what `kind` gives from these operands, the boolean done again when not, an
+/// error when that is no better.
+#[doc(hidden)]
 pub fn bool_checked(result: &Shape, base: &Shape, tools: &[&Shape], kind: BoolKind) -> KResult<Shape> {
     let t = compound(tools.iter().copied());
     let fuzz = operand_fuzz(base, tools);

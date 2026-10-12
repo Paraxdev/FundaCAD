@@ -776,12 +776,15 @@ inline TopoDS_Shape bo_checked(const TopoDS_Shape &result, const TopoDS_Shape &b
       return bop.Shape();
     }
   }
+  // A result that reaches outside is the kernel losing an intersection, which
+  // the retries below have not been seen to find again, and each is one more
+  // boolean on a body where one can take most of the stall clock.
+  if (!held) throw std::runtime_error("BOPAlgo_ImpossibleResult");
   // Volume integration of freeform faces is only good to about 1e-4 of the
   // body, so a result that misses by less than that is taken as it is, and an
   // inside out one is righted later by bo_unify_body.
   const double loose = 1e-3;
-  if (held && (bo_volume_plausible(kind, a, tv, r, loose) || bo_volume_plausible(kind, a, tv, -r, loose)))
-    return result;
+  if (bo_volume_plausible(kind, a, tv, r, loose) || bo_volume_plausible(kind, a, tv, -r, loose)) return result;
   // On a lofted freeform face the quick integration can miss by a percent, so
   // nothing is called impossible until every operand is measured closely.
   const double close = 1e-5;
@@ -789,7 +792,7 @@ inline TopoDS_Shape bo_checked(const TopoDS_Shape &result, const TopoDS_Shape &b
   tv.clear();
   for (TopTools_ListOfShape::Iterator it(tools); it.More(); it.Next()) tv.push_back(bo_volume_precise(it.Value()));
   double rp = bo_volume_precise(result);
-  if (held && (bo_volume_plausible(kind, a, tv, rp, close) || bo_volume_plausible(kind, a, tv, -rp, close))) {
+  if (bo_volume_plausible(kind, a, tv, rp, close) || bo_volume_plausible(kind, a, tv, -rp, close)) {
     if (out_vol) *out_vol = rp;
     return result;
   }
