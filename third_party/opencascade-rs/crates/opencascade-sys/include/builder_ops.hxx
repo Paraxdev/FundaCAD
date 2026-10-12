@@ -1781,7 +1781,7 @@ inline BoShape bo_prism_taper(const TopoDS_Shape &faceShape, double dx, double d
       try {
         if (dprism) {
           LocOpe_DPrism dp(face, len / std::cos(rad), rad);
-          first = dp.Shape();
+          first = bo_taper_sided(dp.Shape(), base, along);
           // DPrism closes each inside corner of the outline with a sliver of a
           // cone whose apex is the outline's own vertex. Where that apex lies
           // on a freeform face of a body, the kernel finds no intersection
