@@ -253,9 +253,10 @@ fn spline(id: &str, closed: bool, pts: &[[f64; 2]]) -> Value {
 /// Upwards the kernel hands a closed spline back as its solid with two loose
 /// faces it calls unsound, and leaves a vertex of the lens off its curve.
 /// Downwards it offsets each side of the lens in two. Each is the right solid
-/// and has to stay one.
+/// and has to stay one. The lens is drawn clockwise, and upwards it came out
+/// below its plane.
 #[test]
-fn a_spline_outline_tapers_both_ways() {
+fn a_spline_outline_tapers_both_ways_on_its_own_side() {
     let blob = json!([spline("b", true, &[[0.0, -20.0], [25.0, -18.0], [30.0, 5.0], [12.0, 28.0], [-15.0, 22.0], [-28.0, 0.0]])]);
     let lens = json!([
         spline("a", false, &[[0.0, 0.0], [5.0, 6.0], [15.0, 6.0], [20.0, 0.0]]),
@@ -266,7 +267,7 @@ fn a_spline_outline_tapers_both_ways() {
         let down = measured(&boss(outline.clone(), json!({"distance": -distance, "taper": taper})));
         assert_eq!((up.solids, down.solids), (1, 1), "{label}");
         assert!((up.volume - down.volume).abs() < 2e-3 * down.volume, "{label}: up {} down {}", up.volume, down.volume);
-        assert!((up.bbox[5] - up.bbox[2] - distance).abs() < 1e-6, "{label} up: {:?}", up.bbox);
+        assert!(up.bbox[2].abs() < 1e-6 && (up.bbox[5] - distance).abs() < 1e-6, "{label} up: {:?}", up.bbox);
         assert!(down.bbox[5].abs() < 1e-6 && (down.bbox[2] + distance).abs() < 1e-6, "{label} down: {:?}", down.bbox);
     }
 }

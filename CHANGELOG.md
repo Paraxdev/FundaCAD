@@ -371,8 +371,9 @@ This file starts on 2026-08-03. For anything before that, see the
   An outline with arcs or splines in it tapers downwards as it does upwards.
   Downwards, or off a face that looks down, a rounded rectangle tapered past
   its corner radius came out about 1 percent short and a spline outline with a
-  corner failed. A disc tapered past its tip was an hourglass and is the cone
-  now.
+  corner failed. Drawn clockwise, such an outline tapered upwards came out
+  below its sketch plane, and both ways gave only one half. A disc tapered
+  past its tip was an hourglass and is the cone now.
 
   Existing documents change on rebuild in those cases, and a little where an
   upward taper or a tapered press/pull runs over an inside corner of a
