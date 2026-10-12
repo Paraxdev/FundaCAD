@@ -355,6 +355,31 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Fixed
 
+- **A tapered extrude cuts what it should over an outline with inside corners.**
+  A tapered cut along a long concave outline could hand back the body with the
+  whole tool as a loose solid beside it and nothing removed, with no error.
+  Downwards or both ways the same outline failed with a bare `RuntimeError`,
+  and where a narrow part of the outline closed up before the far end the
+  result was an unsound or empty solid, a stalled kernel, or "Cut removed
+  nothing". The sides of a straight sided outline now meet in an edge at every
+  inside corner in either direction, a part of it that closes up ends in a
+  ridge while the rest tapers on, and a taper the kernel cannot build fails
+  with a sentence. A cut whose result reaches outside its body is refused, and
+  a cut the kernel refuses in every retry says so instead of claiming it
+  removed nothing.
+
+  An outline with arcs or splines in it tapers downwards as it does upwards.
+  Downwards, or off a face that looks down, a rounded rectangle tapered past
+  its corner radius came out about 1 percent short and a spline outline with a
+  corner failed. A disc tapered past its tip was an hourglass and is the cone
+  now.
+
+  Existing documents change on rebuild in those cases, and a little where an
+  upward taper or a tapered press/pull runs over an inside corner of a
+  straight sided outline: the corner was rounded with a sliver of a cone and
+  is an edge now, so an L outline at 30 degrees over 3 mm goes from 100.72 to
+  100.08 mm3 and has one face fewer.
+
 - **The AppImage says what to install when WebKitGTK is missing.** It uses the
   system's GTK and WebKitGTK, and without them it died with a bare loader
   error. It now lists the missing libraries and the install command for the
