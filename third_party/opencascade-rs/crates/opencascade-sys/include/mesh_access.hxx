@@ -16,6 +16,7 @@
 #include <BRep_Tool.hxx>
 #include <Bnd_Box.hxx>
 #include <GCPnts_QuasiUniformDeflection.hxx>
+#include <Poly_PolygonOnTriangulation.hxx>
 #include <Poly_Triangulation.hxx>
 #include <TopAbs.hxx>
 #include <TopExp.hxx>
@@ -197,6 +198,77 @@ inline bool mesh_access_face_triangulation(const MeshAccess &m, int32_t face, bo
           normals.push_back(d.X());
           normals.push_back(d.Y());
           normals.push_back(d.Z());
+        }
+      }
+    }
+    return true;
+  } catch (...) {
+    return false;
+  }
+}
+
+// Where the faces along an edge hold different points for the same step of the
+// edge's polygon, the two points as [x y z x y z], placed like the nodes of
+// mesh_access_face_triangulation. BRepMesh discretises an edge once, but every
+// face then merges the boundary nodes that fall within its own UV tolerance of
+// each other, so along an edge shorter than that the faces stop agreeing. A
+// seam has one polygon per side, and both are read.
+inline bool mesh_access_edge_splits(const MeshAccess &m, rust::Vec<double> &out) {
+  try {
+    struct Side {
+      Handle(Poly_PolygonOnTriangulation) poly;
+      Handle(Poly_Triangulation) tri;
+      gp_Trsf trsf;
+      bool ident;
+    };
+    const auto point = [](const Side &s, Standard_Integer k) {
+      gp_Pnt p = s.tri->Node(s.poly->Node(k));
+      if (!s.ident) {
+        p.Transform(s.trsf);
+      }
+      return p;
+    };
+    std::vector<Side> sides;
+    for (Standard_Integer i = 1; i <= m.edgeFaces.Extent(); ++i) {
+      const TopoDS_Shape &e = m.edgeFaces.FindKey(i);
+      sides.clear();
+      for (const TopoDS_Face &f : m.edgeAncestors.at(i - 1)) {
+        TopLoc_Location loc;
+        const Handle(Poly_Triangulation) &tri = BRep_Tool::Triangulation(f, loc);
+        if (tri.IsNull()) {
+          continue;
+        }
+        for (TopAbs_Orientation o : {TopAbs_FORWARD, TopAbs_REVERSED}) {
+          const Handle(Poly_PolygonOnTriangulation) &poly =
+              BRep_Tool::PolygonOnTriangulation(TopoDS::Edge(e.Oriented(o)), tri, loc);
+          if (poly.IsNull()) {
+            continue;
+          }
+          bool skip = false;
+          for (const Side &s : sides) {
+            skip = skip || s.poly == poly;
+          }
+          // Node() does not check its index in a release kernel.
+          for (Standard_Integer k = 1; k <= poly->NbNodes(); ++k) {
+            skip = skip || poly->Node(k) < 1 || poly->Node(k) > tri->NbNodes();
+          }
+          if (!skip) {
+            sides.push_back({poly, tri, loc.Transformation(), loc.IsIdentity()});
+          }
+        }
+      }
+      for (size_t j = 1; j < sides.size(); ++j) {
+        const Standard_Integer n = sides[0].poly->NbNodes();
+        if (sides[j].poly->NbNodes() != n) {
+          continue;
+        }
+        for (Standard_Integer k = 1; k <= n; ++k) {
+          const gp_Pnt a = point(sides[0], k), b = point(sides[j], k);
+          if (a.X() != b.X() || a.Y() != b.Y() || a.Z() != b.Z()) {
+            for (double v : {a.X(), a.Y(), a.Z(), b.X(), b.Y(), b.Z()}) {
+              out.push_back(v);
+            }
+          }
         }
       }
     }
