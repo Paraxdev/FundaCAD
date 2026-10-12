@@ -131,7 +131,8 @@ impl MeshAccess {
         .then_some(t)
     }
 
-    /// Empty when the faces agree along every edge.
+    /// Empty when the faces agree along every edge. A polygon found off its
+    /// edge has that distance recorded as its deflection on the way.
     pub fn edge_splits(&self) -> EdgeSplits {
         let mut v = Vec::new();
         let mut uneven = 0;

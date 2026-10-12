@@ -314,6 +314,10 @@ inline bool mesh_access_face_triangulation(const MeshAccess &m, int32_t face, bo
 // BRepMesh keeps a stored face mesh that is fine enough and judges every face
 // alone, so once another body sharing some of these faces was meshed at
 // another deflection, a kept face and a remeshed one disagree along their edge.
+//
+// A folded polygon gets its distance off the edge recorded as its deflection:
+// BRepCheck holds every stored polygon to the deflection it claims, and calls
+// the meshed shape invalid over a fold the mesher left unrecorded.
 inline bool mesh_access_edge_splits(const MeshAccess &m, rust::Vec<double> &out, int32_t &uneven) {
   uneven = 0;
   try {
@@ -330,11 +334,24 @@ inline bool mesh_access_edge_splits(const MeshAccess &m, rust::Vec<double> &out,
       }
       return p;
     };
+    const auto record = [&](const Side &s, const TopoDS_Shape &e) {
+      BRepAdaptor_Curve curve(TopoDS::Edge(e));
+      if (!s.poly->HasParameters() || !curve.Is3DCurve()) {
+        return;
+      }
+      double off = 0.0;
+      for (Standard_Integer k = 1; k <= s.poly->NbNodes(); ++k) {
+        off = std::max(off, point(s, k).Distance(curve.Value(s.poly->Parameter(k))));
+      }
+      if (off > s.poly->Deflection()) {
+        s.poly->Deflection(off);
+      }
+    };
     std::vector<Side> sides;
     for (Standard_Integer i = 1; i <= m.edgeFaces.Extent(); ++i) {
       const TopoDS_Shape &e = m.edgeFaces.FindKey(i);
       sides.clear();
-      bool differ = false;
+      bool differ = false, apart = false, folded = false;
       for (const TopoDS_Face &f : m.edgeAncestors.at(i - 1)) {
         TopLoc_Location loc;
         const Handle(Poly_Triangulation) &tri = BRep_Tool::Triangulation(f, loc);
@@ -356,6 +373,9 @@ inline bool mesh_access_edge_splits(const MeshAccess &m, rust::Vec<double> &out,
             skip = skip || poly->Node(k) < 1 || poly->Node(k) > tri->NbNodes();
           }
           if (!skip) {
+            for (Standard_Integer k = 2; k <= poly->NbNodes(); ++k) {
+              folded = folded || poly->Node(k) == poly->Node(k - 1);
+            }
             sides.push_back({poly, tri, loc.Transformation(), loc.IsIdentity()});
           }
         }
@@ -369,6 +389,7 @@ inline bool mesh_access_edge_splits(const MeshAccess &m, rust::Vec<double> &out,
         for (Standard_Integer k = 1; k <= n; ++k) {
           const gp_Pnt a = point(sides[0], k), b = point(sides[j], k);
           if (a.X() != b.X() || a.Y() != b.Y() || a.Z() != b.Z()) {
+            apart = true;
             for (double v : {a.X(), a.Y(), a.Z(), b.X(), b.Y(), b.Z()}) {
               out.push_back(v);
             }
@@ -376,6 +397,11 @@ inline bool mesh_access_edge_splits(const MeshAccess &m, rust::Vec<double> &out,
         }
       }
       uneven += differ ? 1 : 0;
+      if (apart || folded) {
+        for (const Side &s : sides) {
+          record(s, e);
+        }
+      }
     }
     return true;
   } catch (...) {
