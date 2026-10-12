@@ -37,6 +37,7 @@ mod inner {
         ) -> bool;
 
         pub fn mesh_access_edge_splits(m: &MeshAccess, out: &mut Vec<f64>, uneven: &mut i32) -> bool;
+        pub fn mesh_access_unfilled_faces(m: &MeshAccess, out: &mut Vec<f64>) -> bool;
         pub fn mesh_access_has_mesh(m: &MeshAccess) -> bool;
         pub fn mesh_access_edge_count(m: &MeshAccess) -> i32;
         pub fn mesh_access_edge_faces(m: &MeshAccess, edge: i32, out: &mut Vec<i32>);
