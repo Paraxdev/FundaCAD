@@ -143,6 +143,38 @@ fn the_ridge_tapered_into_a_plain_block_removes_what_the_loft_removes() {
 }
 
 #[test]
+fn the_ridge_tapered_downwards_is_the_same_solid_for_either_winding() {
+    let pts = outline();
+    let turned: Vec<[f64; 2]> = pts.iter().rev().copied().collect();
+    let before = measured(&build(block()));
+    for (label, outline) in [("as drawn", &pts), ("turned round", &turned)] {
+        let r = build(with(block(), tapered(outline, Z, json!({"distance": -RISE, "taper": 45}))));
+        assert!(r.errors.is_empty(), "{label}: {:?}", messages(&r));
+        assert_cut(&before, &measured(&r), 2147.217, 0.01);
+    }
+}
+
+#[test]
+fn the_ridge_tapered_both_ways_takes_two_ridges() {
+    let pts = outline();
+    let before = measured(&build(block()));
+    let r = build(with(block(), tapered(&pts, Z, json!({"distance": RISE, "taper": 45, "symmetric": true}))));
+    assert_cut(&before, &measured(&r), 2.0 * 2147.217, 0.02);
+}
+
+#[test]
+fn a_taper_the_outline_has_no_room_for_fails_with_a_sentence() {
+    // The band is 4.6 mm across at its narrowest, a 60 degree taper closes it
+    // 1.4 mm up.
+    let pts = outline();
+    let r = build(with(block(), tapered(&pts, Z, json!({"distance": -RISE, "taper": 60}))));
+    let msgs = messages(&r);
+    assert_eq!(msgs.len(), 1, "{msgs:?}");
+    assert!(msgs[0].contains("taper") && !msgs[0].contains("Error"), "{msgs:?}");
+    assert_eq!(kernel::count(&r.bodies[0].shape, Kind::Face), 6, "the block is left as it was");
+}
+
+#[test]
 fn a_tapered_square_is_still_the_plain_frustum() {
     let square = [[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]];
     let mut f = tapered(&square, 5.0, json!({"distance": 4, "taper": 30, "operation": "new"}));

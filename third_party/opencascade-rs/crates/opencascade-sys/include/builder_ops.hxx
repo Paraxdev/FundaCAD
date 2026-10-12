@@ -1462,7 +1462,8 @@ inline TopoDS_Shape bo_prism_draft(const TopoDS_Face &face, const gp_Vec &v, dou
 
 // Solid.extrude_taper: LocOpe_DPrism when it applies, else a loft between each
 // wire and its 2D offset at the far end, holes subtracted. bo_prism_draft
-// stands in where DPrism would round an inside corner.
+// stands in where DPrism would round an inside corner and where the offset
+// comes back empty.
 inline BoShape bo_prism_taper(const TopoDS_Shape &faceShape, double dx, double dy, double dz,
                               double taper, double ox, double oy, double oz, double xx, double xy,
                               double xz, double nx, double ny, double nz, bool dprism) {
@@ -1497,17 +1498,25 @@ inline BoShape bo_prism_taper(const TopoDS_Shape &faceShape, double dx, double d
       for (TopExp_Explorer ex(face, TopAbs_WIRE); ex.More(); ex.Next())
         if (!ex.Current().IsSame(outer)) wires.push_back(TopoDS::Wire(ex.Current()));
       std::vector<TopoDS_Shape> solids;
-      for (size_t i = 0; i < wires.size(); ++i) {
-        double flip = i > 0 ? -1.0 : 1.0;
-        TopoDS_Wire local = TopoDS::Wire(BRepBuilderAPI_Transform(wires[i], toLocal, true).Shape());
-        TopoDS_Wire off = bo_offset_wire(local, flip * amt);
-        TopoDS_Shape world = BRepBuilderAPI_Transform(off, toWorld, true).Shape();
-        world = world.Moved(TopLoc_Location(lift));
-        BRepOffsetAPI_ThruSections ts(true, false);
-        ts.AddWire(wires[i]);
-        ts.AddWire(TopoDS::Wire(world));
-        ts.Build();
-        solids.push_back(ts.Shape());
+      try {
+        for (size_t i = 0; i < wires.size(); ++i) {
+          double flip = i > 0 ? -1.0 : 1.0;
+          TopoDS_Wire local = TopoDS::Wire(BRepBuilderAPI_Transform(wires[i], toLocal, true).Shape());
+          TopoDS_Wire off = bo_offset_wire(local, flip * amt);
+          TopoDS_Shape world = BRepBuilderAPI_Transform(off, toWorld, true).Shape();
+          world = world.Moved(TopLoc_Location(lift));
+          BRepOffsetAPI_ThruSections ts(true, false);
+          ts.AddWire(wires[i]);
+          ts.AddWire(TopoDS::Wire(world));
+          ts.Build();
+          solids.push_back(ts.Shape());
+        }
+      } catch (...) {
+        // The kernel's mitre offset comes back empty for some long concave
+        // outlines at any distance.
+        TopoDS_Shape sharp = bo_prism_draft(face, along, rad);
+        if (sharp.IsNull()) throw std::runtime_error("Taper_NotDone");
+        return bo_own(sharp);
       }
       if (solids.size() == 1) return bo_own(solids[0]);
       BoShape tools = bo_compound_new();

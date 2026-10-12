@@ -92,6 +92,11 @@ fn translate_kernel_error(name: String) -> Fail {
              material or a join that loses it, so it was refused. It is usually a surface the \
              tool only grazes, moving the tool or the surface a little gets past it",
         ),
+        "Taper_NotDone" => Fail::msg(
+            "the kernel could not taper this outline by that angle over that distance. It is \
+             usually a narrow part of the outline closing up before the far end, a smaller \
+             taper or a shorter distance gets past it",
+        ),
         _ => Fail::Internal(name),
     }
 }
