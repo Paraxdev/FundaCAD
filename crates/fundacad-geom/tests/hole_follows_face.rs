@@ -380,7 +380,7 @@ fn a_face_already_drawn_measures_the_same_extent_as_one_built_fresh() {
             .unwrap()
     };
     assert_eq!(tracked::outline_extent(&top().shape, DVec3::Z), Some([-20.0, 20.0, -10.0, 10.0]));
-    assert!(opencascade::mesh_access::mesh(shape, 0.5, false, 0.5, true));
+    assert!(opencascade::mesh_access::MeshAccess::new(shape).mesh(0.5, false, 0.5, true));
     assert_eq!(tracked::outline_extent(&top().shape, DVec3::Z), Some([-20.0, 20.0, -10.0, 10.0]));
 }
 

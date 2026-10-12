@@ -25,7 +25,7 @@ use serde_json::{json, Map, Value};
 
 /// Bumped with the Python engine's `tessellate.py`'s CODE_VERSION whenever the payload
 /// changes for the same input, it keys the mesh artifact cache.
-pub const CODE_VERSION: u32 = 9;
+pub const CODE_VERSION: u32 = 10;
 
 /// A body as the payload loop sees it.
 #[derive(Default)]
