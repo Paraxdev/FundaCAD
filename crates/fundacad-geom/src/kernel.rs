@@ -733,7 +733,7 @@ pub fn prism_taper(
     dprism: bool,
 ) -> KResult<Shape> {
     let (o, x, n) = (plane.origin, plane.x, plane.z);
-    run("LocOpe_DPrism (tapered prism)", || format!("face={}, vector={d:?}, taper_deg={taper}, dprism={dprism}, plane={plane:?}", describe(face)), || ffi::bo_prism_taper(
+    run("tapered prism", || format!("face={}, vector={d:?}, taper_deg={taper}, dprism={dprism}, plane={plane:?}", describe(face)), || ffi::bo_prism_taper(
         face.raw(),
         d[0],
         d[1],
