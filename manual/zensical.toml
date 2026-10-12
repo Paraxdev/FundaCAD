@@ -8,31 +8,52 @@ repo_name = "Paraxdev/fundacad"
 nav = [
   { "Home" = "index.md" },
   { "Getting started" = ["start/install.md", "start/first-part.md"] },
-  { "Sketching" = ["sketch/drawing.md", "sketch/constraints.md", "sketch/patterns.md"] },
-  { "Modelling" = [
-    "model/create.md",
-    "model/modify.md",
-    "model/construct.md",
-    "model/bodies-and-tree.md",
-    "model/timeline.md",
-    "model/parameters.md",
+  { "Sketching" = [
+    { "Basics" = ["sketch/start.md", "sketch/shapes.md", "sketch/exact-sizes.md", "sketch/snapping.md", "sketch/edit.md", "sketch/project.md"] },
+    { "Rules" = ["sketch/constraints.md", "sketch/dimensions.md"] },
+    { "Repeating" = ["sketch/patterns.md", "sketch/hole-patterns.md"] },
   ] },
-  { "Inspect" = ["inspect/measure-and-section.md", "inspect/print-checks.md", "inspect/stress.md"] },
-  { "Render" = ["render/materials.md"] },
-  { "Files" = ["files/import-export.md", "files/documents.md"] },
+  { "Modelling" = [
+    { "Create" = ["model/extrude.md", "model/primitives.md", "model/revolve.md", "model/loft-sweep.md"] },
+    { "Modify" = [
+      "model/press-pull.md",
+      "model/fillet-chamfer.md",
+      "model/hole.md",
+      "model/move.md",
+      "model/scale-mirror.md",
+      "model/pattern.md",
+      "model/combine.md",
+      "model/split.md",
+      "model/shell.md",
+      "model/offset-face.md",
+      "model/draft.md",
+      "model/joint.md",
+    ] },
+    { "Construct" = ["model/construct.md"] },
+    { "Organise" = ["model/items.md", "model/picking.md"] },
+    { "History" = ["model/timeline.md", "model/suppress.md"] },
+    { "Parameters" = ["model/parameters.md", "model/expressions.md"] },
+  ] },
+  { "Inspect" = [
+    { "Look" = ["inspect/measure.md", "inspect/section.md", "inspect/properties.md", "inspect/interference.md"] },
+    { "Print checks" = ["inspect/overhang.md", "inspect/printability.md", "inspect/bed-fit.md"] },
+    { "Stress" = ["inspect/stress.md", "inspect/stress-results.md"] },
+  ] },
+  { "Render" = ["render/materials.md", "render/editing.md", "render/graph.md", "render/environment.md"] },
+  { "Files" = ["files/save.md", "files/versions.md", "files/link.md", "files/import.md", "files/export.md"] },
   { "Plugins" = [
     "plugins/index.md",
     "plugins/extra-parameters.md",
-    "plugins/gamepad.md",
-    "plugins/spacemouse.md",
-    "plugins/multicolor.md",
+    "plugins/screws.md",
+    "plugins/texture.md",
     "plugins/organic.md",
     "plugins/print-toolbox.md",
     "plugins/printing.md",
-    "plugins/screws.md",
-    "plugins/texture.md",
+    "plugins/multicolor.md",
+    "plugins/gamepad.md",
+    "plugins/spacemouse.md",
   ] },
-  { "AI assistants" = ["ai/connect.md"] },
+  { "AI assistants" = ["ai/connect.md", "ai/sharing.md"] },
   { "Reference" = ["reference/shortcuts.md", "reference/preferences.md", "reference/glossary.md"] },
 ]
 
@@ -56,11 +77,13 @@ toggle.icon = "lucide/moon"
 toggle.name = "Switch to light mode"
 
 [project.markdown_extensions]
+abbr = {}
 admonition = {}
 attr_list = {}
 md_in_html = {}
 tables = {}
 "pymdownx.details" = {}
+"pymdownx.snippets" = { auto_append = ["includes/glossary.md"] }
 "pymdownx.superfences" = {}
 "pymdownx.blocks.caption" = {}
 
