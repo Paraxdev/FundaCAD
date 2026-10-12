@@ -17,7 +17,11 @@ name: build
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "manual/**"
   pull_request:
+    paths-ignore:
+      - "manual/**"
   workflow_dispatch:
 
 jobs:
