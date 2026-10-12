@@ -679,9 +679,55 @@ inline bool bo_volume_plausible(int kind, double a, const std::vector<double> &t
 inline TopoDS_Shape bo_bool_run(const TopoDS_Shape &base, const TopTools_ListOfShape &tl, int kind, bool parallel,
                                 double fuzzy);
 
+// A cut only takes material away, so no vertex of its result lies outside the
+// base. The kernel breaks that by handing back the body with the whole tool
+// as one more solid or one more shell, and those sum to a volume a cut could
+// have given. Only a result with more solids or shells than the base is asked,
+// and of it only the vertices the base did not have. The base's box cannot
+// stand in for the point in solid test, a freeform face's control points reach
+// well past the face. The classifier calls a point a micron off such a face
+// outside whatever its tolerance, so outside only counts with a real gap.
+inline bool bo_cut_inside(const TopoDS_Shape &base, const TopoDS_Shape &result) {
+  try {
+    auto count = [](const TopoDS_Shape &s, TopAbs_ShapeEnum kind) {
+      TopTools_IndexedMapOfShape map;
+      TopExp::MapShapes(s, kind, map);
+      return map.Extent();
+    };
+    TopTools_IndexedMapOfShape solids, had, verts;
+    TopExp::MapShapes(base, TopAbs_SOLID, solids);
+    if (solids.Extent() == 0) return true;
+    if (count(result, TopAbs_SOLID) <= solids.Extent() && count(result, TopAbs_SHELL) <= count(base, TopAbs_SHELL))
+      return true;
+    TopExp::MapShapes(base, TopAbs_VERTEX, had);
+    TopExp::MapShapes(result, TopAbs_VERTEX, verts);
+    std::vector<std::unique_ptr<BRepClass3d_SolidClassifier>> where;
+    for (int k = 1; k <= solids.Extent(); ++k)
+      where.emplace_back(new BRepClass3d_SolidClassifier(solids(k)));
+    for (int i = 1; i <= verts.Extent(); ++i) {
+      if (had.Contains(verts(i))) continue;
+      const TopoDS_Vertex &v = TopoDS::Vertex(verts(i));
+      const gp_Pnt p = BRep_Tool::Pnt(v);
+      const double tol = std::max(1e-3, BRep_Tool::Tolerance(v));
+      bool held = false;
+      for (size_t k = 0; k < where.size() && !held; ++k) {
+        where[k]->Perform(p, tol);
+        held = where[k]->State() != TopAbs_OUT;
+      }
+      if (held) continue;
+      BRepExtrema_DistShapeShape gap(v, base);
+      if (gap.IsDone() && gap.Value() > std::max(1e-2, tol)) return false;
+    }
+    return true;
+  } catch (...) {
+    return true;  // unmeasurable, so it does not get a vote
+  }
+}
+
 // OCCT gets some coincident cylinders wrong with the operands one way round
 // and right the other (a cut that grows the body, a common of negative
 // volume), so an impossible result is redone with the operands swapped.
+// A cut that reaches outside its base is impossible whatever its volume.
 // `vols` is the base's signed volume then each tool's, when the caller has
 // them already; empty means measure here. `out_vol` gets the answer's.
 inline TopoDS_Shape bo_checked(const TopoDS_Shape &result, const TopoDS_Shape &base, const TopTools_ListOfShape &tools,
@@ -711,7 +757,9 @@ inline TopoDS_Shape bo_checked(const TopoDS_Shape &result, const TopoDS_Shape &b
     inside.Build();
     ok = inside.IsDone() && bo_volume(inside.Shape()) > sum - 1e-6 * (a + sum) - 1e-9;
   }
-  if (ok) return result;
+  auto contained = [&](const TopoDS_Shape &s) { return kind != 1 || !(a > 0) || bo_cut_inside(base, s); };
+  bool held = contained(result);
+  if (ok && held) return result;
   BOPAlgo_BOP bop;
   for (TopTools_ListOfShape::Iterator it(tools); it.More(); it.Next()) bop.AddArgument(it.Value());
   bop.AddTool(base);
@@ -722,7 +770,7 @@ inline TopoDS_Shape bo_checked(const TopoDS_Shape &result, const TopoDS_Shape &b
   auto good = [&](double v) { return bo_volume_plausible(kind, a, tv, v) && !(kind == 0 && v <= r); };
   if (!bop.HasErrors()) {
     double r2 = bo_volume(bop.Shape());
-    if (good(r2)) {
+    if (good(r2) && contained(bop.Shape())) {
       if (out_vol) *out_vol = r2;
       return bop.Shape();
     }
@@ -731,7 +779,8 @@ inline TopoDS_Shape bo_checked(const TopoDS_Shape &result, const TopoDS_Shape &b
   // body, so a result that misses by less than that is taken as it is, and an
   // inside out one is righted later by bo_unify_body.
   const double loose = 1e-3;
-  if (bo_volume_plausible(kind, a, tv, r, loose) || bo_volume_plausible(kind, a, tv, -r, loose)) return result;
+  if (held && (bo_volume_plausible(kind, a, tv, r, loose) || bo_volume_plausible(kind, a, tv, -r, loose)))
+    return result;
   // On a lofted freeform face the quick integration can miss by a percent, so
   // nothing is called impossible until every operand is measured closely.
   const double close = 1e-5;
@@ -739,7 +788,7 @@ inline TopoDS_Shape bo_checked(const TopoDS_Shape &result, const TopoDS_Shape &b
   tv.clear();
   for (TopTools_ListOfShape::Iterator it(tools); it.More(); it.Next()) tv.push_back(bo_volume_precise(it.Value()));
   double rp = bo_volume_precise(result);
-  if (bo_volume_plausible(kind, a, tv, rp, close) || bo_volume_plausible(kind, a, tv, -rp, close)) {
+  if (held && (bo_volume_plausible(kind, a, tv, rp, close) || bo_volume_plausible(kind, a, tv, -rp, close))) {
     if (out_vol) *out_vol = rp;
     return result;
   }
@@ -752,7 +801,7 @@ inline TopoDS_Shape bo_checked(const TopoDS_Shape &result, const TopoDS_Shape &b
       TopoDS_Shape s = bo_bool_run(base, tools, kind, parallel, f);
       double r3 = bo_volume_precise(s);
       bool changed = kind != 1 || r3 < a * (1 - 1e-6);
-      if (changed && bo_volume_plausible(kind, a, tv, r3, close) && !(kind == 0 && r3 <= rp)) {
+      if (changed && bo_volume_plausible(kind, a, tv, r3, close) && !(kind == 0 && r3 <= rp) && contained(s)) {
         if (out_vol) *out_vol = r3;
         return s;
       }

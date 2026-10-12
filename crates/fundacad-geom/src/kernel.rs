@@ -468,13 +468,7 @@ pub fn serial_bool_known(
     vols: &[f64],
 ) -> KResult<(Shape, Option<f64>)> {
     let t = compound(tools.iter().copied());
-    let mut ext: Option<f64> = extent(base);
-    for tool in tools {
-        if let Some(e) = extent(tool) {
-            ext = Some(ext.map_or(e, |m| m.max(e)));
-        }
-    }
-    let fuzz = pick_fuzz(ext);
+    let fuzz = operand_fuzz(base, tools);
     let k = kind as i32;
     let mut checked_vol = f64::NAN;
     let mut unchanged = false;
@@ -488,6 +482,28 @@ pub fn serial_bool_known(
         Ok(out)
     })?;
     Ok((out, unchanged.then_some(checked_vol)))
+}
+
+/// The check `serial_bool` holds its own result to, for a result made
+/// elsewhere: `result` when it could be what `kind` gives from these operands,
+/// the boolean done again when not, an error when that is no better.
+pub fn bool_checked(result: &Shape, base: &Shape, tools: &[&Shape], kind: BoolKind) -> KResult<Shape> {
+    let t = compound(tools.iter().copied());
+    let fuzz = operand_fuzz(base, tools);
+    let mut vol = f64::NAN;
+    run(kind.occt(), || bool_args(base, tools, fuzz), || {
+        ffi::bo_bool_check(result.raw(), base.raw(), t.raw(), kind as i32, true, fuzz, &[], &mut vol)
+    })
+}
+
+fn operand_fuzz(base: &Shape, tools: &[&Shape]) -> f64 {
+    let mut ext: Option<f64> = extent(base);
+    for tool in tools {
+        if let Some(e) = extent(tool) {
+            ext = Some(ext.map_or(e, |m| m.max(e)));
+        }
+    }
+    pick_fuzz(ext)
 }
 
 /// the Python engine's `pick_fuzz.py`.
