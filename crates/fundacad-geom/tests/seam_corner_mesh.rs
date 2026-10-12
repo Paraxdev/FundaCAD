@@ -27,11 +27,16 @@ fn outline(points: [[f64; 2]; 4]) -> Vec<Value> {
 /// the wall whose top and bottom corners sit `offset` mm beside the seam, the
 /// whole part `s` times the size.
 fn tube(offset: f64, patterned: bool, s: f64) -> Value {
+    tube_cut_to(offset, patterned, s, 17.2)
+}
+
+/// `tube` with the top corner of the cut at height `top`, 30 is the rim.
+fn tube_cut_to(offset: f64, patterned: bool, s: f64, top: f64) -> Value {
     let diamond = outline([
-        [offset, 10.0 * s],
-        [3.6 * s + offset, 13.6 * s],
-        [offset, 17.2 * s],
-        [-3.6 * s + offset, 13.6 * s],
+        [offset, (top - 7.2) * s],
+        [3.6 * s + offset, (top - 3.6) * s],
+        [offset, top * s],
+        [-3.6 * s + offset, (top - 3.6) * s],
     ]);
     let mut features = vec![
         json!({"id": "tubeSk", "type": "sketch", "plane": "XZ",
@@ -95,7 +100,10 @@ fn assert_whole(label: &str, offset: f64, patterned: bool) {
 }
 
 fn assert_whole_at(label: &str, offset: f64, patterned: bool, s: f64) {
-    let raw = tube(offset, patterned, s);
+    assert_whole_doc(label, tube(offset, patterned, s));
+}
+
+fn assert_whole_doc(label: &str, raw: Value) {
     let doc: CadDocument = serde_json::from_value(raw.clone()).expect("a document");
     let r = builder::rebuild(&doc, &raw, &NoWatch).expect("not cancelled");
     assert!(r.errors.is_empty(), "{label}: {:?}", r.errors);
@@ -135,10 +143,30 @@ fn a_cut_with_a_corner_beside_the_seam_meshes_closed() {
 }
 
 #[test]
-fn a_cut_with_a_corner_on_the_seam_meshes_closed() {
+fn a_cut_with_a_corner_on_the_seam_or_a_millionth_beside_it_meshes_closed() {
     assert_whole("pattern, corner on the seam", 0.0, true);
     assert_whole("pattern, corner 1e-6 mm off the seam", 1e-6, true);
     assert_whole("direct cut, corner on the seam", 0.0, false);
+}
+
+#[test]
+fn a_body_is_still_valid_after_its_mesh_folded_a_short_edge() {
+    // BRepCheck also holds every stored edge polygon to the deflection it
+    // claims, so a fold the mesher left unrecorded turns the body invalid for
+    // the features that check their input in a live session.
+    for (label, raw) in [
+        ("direct cut, corner 1e-4 mm off the seam", tube(1e-4, false, 1.0)),
+        ("pattern, corner at the rim 1.9e-5 mm off the seam", tube_cut_to(1.9e-5, true, 1.0, 30.0)),
+    ] {
+        let doc: CadDocument = serde_json::from_value(raw.clone()).expect("a document");
+        let r = builder::rebuild(&doc, &raw, &NoWatch).expect("not cancelled");
+        let shape = &r.bodies[0].shape;
+        assert!(matches!(shape.is_valid(), Ok(true)), "{label}: before any mesh");
+        mesh::body_payload(shape, "body1", "tube", 0.1, viewport_profile(1));
+        assert!(matches!(shape.is_valid(), Ok(true)), "{label}: after the viewport mesh");
+        export::export_mesh(shape, &export::mesh_options(None));
+        assert!(matches!(shape.is_valid(), Ok(true)), "{label}: after the export mesh");
+    }
 }
 
 #[test]
