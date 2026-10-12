@@ -1,0 +1,71 @@
+[project]
+site_name = "FundaCAD"
+site_url = "https://paraxdev.github.io/FundaCAD/"
+site_description = "The FundaCAD user manual"
+docs_dir = "docs"
+repo_url = "https://github.com/Paraxdev/fundacad"
+repo_name = "Paraxdev/fundacad"
+nav = [
+  { "Home" = "index.md" },
+  { "Getting started" = ["start/install.md", "start/first-part.md"] },
+  { "Sketching" = ["sketch/drawing.md", "sketch/constraints.md", "sketch/patterns.md"] },
+  { "Modelling" = [
+    "model/create.md",
+    "model/modify.md",
+    "model/construct.md",
+    "model/bodies-and-tree.md",
+    "model/timeline.md",
+    "model/parameters.md",
+  ] },
+  { "Inspect" = ["inspect/measure-and-section.md", "inspect/print-checks.md", "inspect/stress.md"] },
+  { "Render" = ["render/materials.md"] },
+  { "Files" = ["files/import-export.md", "files/documents.md"] },
+  { "Plugins" = [
+    "plugins/index.md",
+    "plugins/extra-parameters.md",
+    "plugins/gamepad.md",
+    "plugins/spacemouse.md",
+    "plugins/multicolor.md",
+    "plugins/organic.md",
+    "plugins/print-toolbox.md",
+    "plugins/printing.md",
+    "plugins/screws.md",
+    "plugins/texture.md",
+  ] },
+  { "AI assistants" = ["ai/connect.md"] },
+  { "Reference" = ["reference/shortcuts.md", "reference/preferences.md", "reference/glossary.md"] },
+]
+
+[project.theme]
+features = [
+  "navigation.tabs",
+  "navigation.sections",
+  "navigation.top",
+  "search.highlight",
+  "content.tooltips",
+]
+
+[[project.theme.palette]]
+scheme = "default"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+scheme = "slate"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to light mode"
+
+[project.markdown_extensions]
+admonition = {}
+attr_list = {}
+md_in_html = {}
+tables = {}
+"pymdownx.details" = {}
+"pymdownx.superfences" = {}
+"pymdownx.blocks.caption" = {}
+
+[project.markdown_extensions.toc]
+permalink = true
+
+[project.markdown_extensions."pymdownx.tabbed"]
+alternate_style = true

@@ -99,3 +99,6 @@ packaging/flatpak/fundacad.deb
 /build/
 /repo/
 *.flatpak
+
+# Zensical output of the user manual
+manual/site/

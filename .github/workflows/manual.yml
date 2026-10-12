@@ -1,0 +1,41 @@
+# The user manual (manual/, built with Zensical) on GitHub Pages.
+# One-time repo setting: Settings, Pages, Source = GitHub Actions.
+name: manual
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "manual/**"
+      - ".github/workflows/manual.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/configure-pages@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: pip install "zensical==0.0.69"
+      - run: zensical build --clean
+        working-directory: manual
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: manual/site
+      - uses: actions/deploy-pages@v5
+        id: deployment
