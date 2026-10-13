@@ -145,7 +145,7 @@ pub fn feature_scope(
             Value::String(s) if s.chars().count() <= 256 => refs.extend(identifiers(s)),
             Value::Object(m) => {
                 for (k, x) in m {
-                    if k != "nodes" && k != "parts" {
+                    if k != "nodes" && k != "parts" && k != "notes" {
                         walk(x, refs);
                     }
                 }
@@ -349,7 +349,8 @@ mod tests {
     #[test]
     fn part_names_stay_out_of_the_parameter_scope() {
         let f = json!({"id": "f1", "type": "import", "name": "Imported", "brep": "",
-            "nodes": [{"name": "Bracket t Left", "parent": null}], "parts": [{"node": 0, "faces": 6}]});
+            "nodes": [{"name": "Bracket t Left", "parent": null}], "parts": [{"node": 0, "faces": 6}],
+            "notes": ["Bracket t Left: 5 faces did not close into a solid and stay a surface, 4 open edges"]});
         let p5 = json!({"t": 5.0});
         let p6 = json!({"t": 6.0});
         let closure = param_closure(p5.as_object().unwrap());

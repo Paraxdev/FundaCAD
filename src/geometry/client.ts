@@ -1286,6 +1286,7 @@ export class Geometry implements GeometryBackend {
       geom: string; name: string; solid: boolean; faces: number; color?: string;
       nodes?: { name: string; parent: number | null; color?: string }[];
       parts?: { node: number; faces: number }[];
+      notes?: string[];
     }>("import", { path, format }, onStarted);
     if (msg.ok) {
       const r = msg.result;
@@ -1294,6 +1295,7 @@ export class Geometry implements GeometryBackend {
         ...(r.color !== undefined ? { color: r.color } : {}),
         ...(r.nodes !== undefined ? { nodes: r.nodes } : {}),
         ...(r.parts !== undefined ? { parts: r.parts } : {}),
+        ...(r.notes !== undefined ? { notes: r.notes } : {}),
       };
     }
     if (!msg.ok && msg.cancelled) return { ok: false, cancelled: true, message: "import cancelled" };

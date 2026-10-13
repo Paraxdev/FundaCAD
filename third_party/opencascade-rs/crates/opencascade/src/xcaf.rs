@@ -89,10 +89,19 @@ pub struct StepLeaf {
     pub product: Option<(String, Shape)>,
 }
 
+/// What sewing a product's loose faces left to say.
+pub struct StepNote {
+    pub node: usize,
+    /// The leaf it is about, None for all of the node.
+    pub leaf: Option<usize>,
+    pub text: String,
+}
+
 pub struct StepAssembly {
     pub nodes: Vec<StepNode>,
     pub leaves: Vec<StepLeaf>,
     pub roots: Vec<Shape>,
+    pub notes: Vec<StepNote>,
     pub is_assembly: bool,
     raw: UniquePtr<ffi::StepAssembly>,
 }
@@ -225,8 +234,16 @@ pub fn read_step_assembly_with(path: &Path, progress: &ProgressRange) -> Result<
     for i in 0..ffi::step_assembly_root_count(a) {
         roots.push(Shape { inner: ffi::step_assembly_root_shape(a, i)? });
     }
+    let mut notes = Vec::new();
+    for i in 0..ffi::step_assembly_note_count(a) {
+        notes.push(StepNote {
+            node: usize::try_from(ffi::step_assembly_note_node(a, i)?).unwrap_or(0),
+            leaf: usize::try_from(ffi::step_assembly_note_leaf(a, i)?).ok(),
+            text: ffi::step_assembly_note_text(a, i)?.to_string(),
+        });
+    }
     let is_assembly = ffi::step_assembly_is_assembly(a);
-    Ok(StepAssembly { nodes, leaves, roots, is_assembly, raw })
+    Ok(StepAssembly { nodes, leaves, roots, notes, is_assembly, raw })
 }
 
 /// Binary BREP, BinTools format V3 with triangles.

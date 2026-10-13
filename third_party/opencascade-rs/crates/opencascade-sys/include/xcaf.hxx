@@ -12,6 +12,7 @@
 #include <Message_Messenger.hxx>
 #include <Message_Printer.hxx>
 #include <Message_ProgressRange.hxx>
+#include <Message_ProgressScope.hxx>
 #include <Quantity_Color.hxx>
 #include <Quantity_ColorRGBA.hxx>
 #include <STEPCAFControl_Controller.hxx>
@@ -40,6 +41,7 @@
 #include <XCAFDoc_ShapeTool.hxx>
 #include <XSControl_WorkSession.hxx>
 #include <bindings_common.hxx>
+#include <step_loose.hxx>
 #include <cmath>
 #include <map>
 #include <memory>
@@ -230,9 +232,17 @@ public:
     TopoDS_Shape local;
     TopLoc_Location location;
   };
+  // What sewing a product's loose faces left to say, about leaf `leaf` or, when
+  // that is negative, about all of node `node`.
+  struct Note {
+    int32_t node;
+    int32_t leaf;
+    std::string text;
+  };
   std::vector<Node> nodes;
   std::vector<Leaf> leaves;
   std::vector<TopoDS_Shape> roots;
+  std::vector<Note> notes;
   bool is_assembly = false;
 };
 
@@ -243,6 +253,11 @@ struct StepAssemblyWalk {
   bool reads_faces;
   std::map<std::string, std::vector<std::vector<int32_t>>> face_cache;
   std::map<std::string, std::vector<int32_t>> solid_cache;
+  std::map<std::string, StepLooseRepair> loose_cache;
+  Message_ProgressScope *sewing = nullptr;
+  // What did not close is said before anything else, a reader of one note
+  // gets that one.
+  size_t open_notes = 0;
 
   static std::string entry(const TDF_Label &label) {
     TCollection_AsciiString e;
@@ -296,6 +311,24 @@ struct StepAssemblyWalk {
     return solid_cache.emplace(key, out).first->second;
   }
 
+  // Per product, so one placed many times is sewn once.
+  const StepLooseRepair &loose(const TDF_Label &referred) {
+    std::string key = entry(referred);
+    auto hit = loose_cache.find(key);
+    if (hit != loose_cache.end()) {
+      return hit->second;
+    }
+    StepLooseRepair fixed;
+    try {
+      fixed = step_loose_repair(
+          XCAFDoc_ShapeTool::GetShape(referred),
+          [this](const TopoDS_Shape &s) { return reads_faces ? xcaf_shape_color(colors, s) : -1; }, *sewing);
+    } catch (const Standard_Failure &) {
+      fixed = StepLooseRepair();
+    }
+    return loose_cache.emplace(key, fixed).first->second;
+  }
+
   void visit(const TDF_Label &label, int32_t parent, const TopLoc_Location &location) {
     TDF_Label referred = label;
     if (XCAFDoc_ShapeTool::IsReference(label)) {
@@ -322,6 +355,41 @@ struct StepAssemblyWalk {
 
     TopoDS_Shape shape = XCAFDoc_ShapeTool::GetShape(referred).Moved(location);
     std::vector<TopoDS_Shape> solids = xcaf_explore(shape, TopAbs_SOLID);
+    if (solids.empty()) {
+      const StepLooseRepair &fixed = loose(referred);
+      int32_t first = static_cast<int32_t>(tree.leaves.size());
+      for (size_t n = 0; n < fixed.notes.size(); ++n) {
+        const auto &note = fixed.notes[n];
+        StepAssembly::Note said{index, fixed.changed && note.first >= 0 ? first + note.first : -1, note.second};
+        if (n == 0 && fixed.open) {
+          tree.notes.insert(tree.notes.begin() + open_notes++, said);
+        } else {
+          tree.notes.push_back(said);
+        }
+      }
+      if (fixed.changed) {
+        for (size_t k = 0; k < fixed.pieces.size(); ++k) {
+          const StepLoosePiece &piece = fixed.pieces[k];
+          StepAssembly::Leaf leaf;
+          leaf.node = index;
+          leaf.shape = piece.shape.Moved(location);
+          leaf.solid_color = piece.color;
+          if (piece.solid) {
+            leaf.product = entry(referred) + "#" + std::to_string(k);
+            leaf.local = piece.shape;
+            leaf.location = location;
+          }
+          for (int32_t c : piece.face_colors) {
+            if (c >= 0) {
+              leaf.face_colors = piece.face_colors;
+              break;
+            }
+          }
+          tree.leaves.push_back(leaf);
+        }
+        return;
+      }
+    }
     const std::vector<std::vector<int32_t>> &by_solid = face_colors(referred);
     std::vector<int32_t> solid_cols;
     if (!solids.empty()) {
@@ -373,8 +441,11 @@ inline std::unique_ptr<StepAssembly> step_assembly_read(rust::Str path, int32_t 
   if (reader.ReadFile(file.c_str(), params) != IFSelect_RetDone) {
     throw std::runtime_error("could not read the STEP file (it may be truncated or not STEP)");
   }
-  if (!reader.Transfer(doc, progress)) {
-    if (progress.UserBreak()) {
+  // Sewing a product's loose faces polls the last of it, so a long one still
+  // shows it is alive and stops on a cancel.
+  Message_ProgressScope whole(progress, "STEP", 20);
+  if (!reader.Transfer(doc, whole.Next(19))) {
+    if (whole.UserBreak()) {
       throw std::runtime_error("cancelled");
     }
     throw std::runtime_error("the STEP file was read but contained no transferable shape");
@@ -385,6 +456,8 @@ inline std::unique_ptr<StepAssembly> step_assembly_read(rust::Str path, int32_t 
   TDF_LabelSequence styled;
   walk.colors->GetColors(styled);
   walk.reads_faces = styled.Length() > 0;
+  Message_ProgressScope sewing(whole.Next(1), "sewing", 1, true);
+  walk.sewing = &sewing;
 
   TDF_LabelSequence roots;
   walk.shapes->GetFreeShapes(roots);
@@ -394,8 +467,14 @@ inline std::unique_ptr<StepAssembly> step_assembly_read(rust::Str path, int32_t 
   for (int i = 1; i <= roots.Length(); ++i) {
     const TDF_Label &label = roots.Value(i);
     TopLoc_Location location;
-    tree->roots.push_back(XCAFDoc_ShapeTool::GetShape(xcaf_referred(label)).Moved(location));
+    TDF_Label referred = xcaf_referred(label);
     walk.visit(label, -1, location);
+    auto fixed = walk.loose_cache.find(StepAssemblyWalk::entry(referred));
+    bool sewn = fixed != walk.loose_cache.end() && fixed->second.changed && !XCAFDoc_ShapeTool::IsAssembly(referred);
+    tree->roots.push_back(sewn ? fixed->second.whole() : XCAFDoc_ShapeTool::GetShape(referred).Moved(location));
+  }
+  if (whole.UserBreak()) {
+    throw std::runtime_error("cancelled");
   }
   if (tree->nodes.size() > static_cast<size_t>(roots.Length()) || tree->leaves.size() > tree->nodes.size()) {
     tree->is_assembly = true;
@@ -432,6 +511,12 @@ inline std::unique_ptr<TopoDS_Shape> step_assembly_root_shape(const StepAssembly
   return std::unique_ptr<TopoDS_Shape>(new TopoDS_Shape(a.roots.at(i)));
 }
 inline bool step_assembly_is_assembly(const StepAssembly &a) { return a.is_assembly; }
+inline int32_t step_assembly_note_count(const StepAssembly &a) { return static_cast<int32_t>(a.notes.size()); }
+inline int32_t step_assembly_note_node(const StepAssembly &a, int32_t i) { return a.notes.at(i).node; }
+inline int32_t step_assembly_note_leaf(const StepAssembly &a, int32_t i) { return a.notes.at(i).leaf; }
+inline rust::String step_assembly_note_text(const StepAssembly &a, int32_t i) {
+  return rust::String(a.notes.at(i).text);
+}
 inline rust::String step_assembly_leaf_product(const StepAssembly &a, int32_t i) {
   return rust::String(a.leaves.at(i).product);
 }

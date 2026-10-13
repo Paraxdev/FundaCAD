@@ -694,7 +694,8 @@ Reply:
   "name": "MyPart",
   "color": "#rrggbb",          // omitted, not null, when the file carries no colour
   "nodes": [ { "name": "...", "parent": 0, "color": "#rrggbb" }, ... ],  // STEP assemblies only
-  "parts": [ { "node": 0, "faces": 12, "faceColors": "<packed>", "color": "#rrggbb" }, ... ]  // STEP assemblies only
+  "parts": [ { "node": 0, "faces": 12, "faceColors": "<packed>", "color": "#rrggbb" }, ... ],  // STEP assemblies only
+  "notes": [ "Housing 4: 5 faces did not close into a solid and stay a surface, 4 open edges" ]  // omitted when there is nothing to say
 }
 ```
 or `{ "error": { "message": "..." } }`. `geom` is a content hash into the durable blob
@@ -704,6 +705,21 @@ field, inline base64 BREP from before the blob store existed; a feature's own re
 prefers `geom` but falls back to `brep`, and a fresh `import` reply never writes `brep`
 again, `migrateGeometry` below one-way upgrades an old one.) Given a longer budget than
 a normal rebuild (mesh read + B-rep build can run longer).
+
+A STEP product that reads without a solid has its faces sewn at 0.001 mm, one
+group at a time, a group being what the file declared as one solid or one
+surface model. A group whose faces all end in closed shells becomes solids
+facing outward, so a file whose faces share no edge still imports as bodies
+that have a volume. A group that does not close stays one surface body, with
+its faces joined where they meet. A face with no area is replaced by the flat
+face across its outline or left out, and an edge the file draws away from its
+face is laid on it. An edge the file draws as a straight line where two curved
+faces meet stays where the file has it, and the solid says how many such edges
+it holds and how far off they are, because a section or a mesh can gap there.
+`notes` says each of these in a sentence led by the body's
+name, what did not close first. The app stores them on the feature, and every
+rebuild repeats them as `importNote` diagnostics. A product that already holds a solid is not sewn, and
+the geometry of a feature that is already stored is never touched.
 
 The engine peeks the file's own reported triangle count and refuse past 150,000 for
 STL/3MF, and past the same count once parsed for OBJ, before building any B-rep. GLB

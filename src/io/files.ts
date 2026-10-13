@@ -517,6 +517,7 @@ export async function importPath(store: DocumentStore, geometry: GeometryBackend
     // so an import with no tree produces exactly the feature it always did.
     ...(res.nodes !== undefined ? { nodes: res.nodes } : {}),
     ...(res.parts !== undefined ? { parts: res.parts } : {}),
+    ...(res.notes !== undefined ? { notes: res.notes } : {}),
   });
 
   // Say what the document will be like while the user is still deciding what to
