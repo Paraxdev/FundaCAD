@@ -363,11 +363,11 @@ onUnmounted(() => {
         <div class="sm-row">
           <label class="sm-radio">
             <input type="radio" name="sm-mode" :checked="mode === 'object'" @change="setMode('object')" />
-            Move object
+            Object mode
           </label>
           <label class="sm-radio">
             <input type="radio" name="sm-mode" :checked="mode === 'camera'" @change="setMode('camera')" />
-            Move camera
+            Camera mode
           </label>
         </div>
 
