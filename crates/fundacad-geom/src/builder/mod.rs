@@ -22,6 +22,7 @@ use serde_json::{json, Map, Value};
 
 use crate::features;
 use crate::kernel::{self, KernelError};
+use crate::soundness::Soundness;
 pub use fmt::{py_g, py_g_prec};
 pub use owners::Owners;
 pub use plane::PlaneRecord;
@@ -498,36 +499,58 @@ fn note_splits(ctx: &mut Ctx, fid: &str, rawf: &Value, pre: &[(u64, u64, Shape)]
     ctx.diagnostics.splice(at..at, notes);
 }
 
-/// Says so when a feature left a solid body with holes in its skin, edges that
-/// bound only one face. The volume of such a shell can still come out right,
-/// so no other check sees it. Judged over all the bodies the feature changed,
-/// made or consumed, since a join or split gives its result a new body: a body
-/// that was already open is not called out again for every later feature.
-fn note_open(ctx: &mut Ctx, fid: &str, pre: &[(u64, u64, Shape)]) {
-    let open = |s: &Shape| {
-        if kernel::count(s, kernel::Kind::Solid) == 0 { 0 } else { kernel::open_edge_count(s) }
-    };
+/// How much is wrong with a solid body, to tell a feature that made it worse
+/// from one that passed it on. A surface body counts nothing: an import that
+/// does not close and what thicken starts from are surfaces on purpose.
+fn unsoundness(s: &Soundness) -> usize {
+    let k = &s.skin;
+    if k.solids == 0 { 0 } else { k.open_edges + k.crowded_edges + k.flipped_edges + s.inward }
+}
+
+/// Says so when a feature left a solid body that is not closed and facing
+/// outward: holes in its skin (edges that bound only one face), an edge on
+/// more than two faces, faces that disagree about which side is inside, or the
+/// whole of it inside out. Its volume can still come out right, so no other
+/// check sees it, and every cut, join and measurement after it can be wrong.
+/// Judged over all the bodies the feature changed, made or consumed, since a
+/// join or split gives its result a new body: a body that was already at fault
+/// is not called out again for every later feature. Which way a body faces is
+/// only asked of one the feature made, a feature does not turn one over.
+fn note_unsound(ctx: &mut Ctx, fid: &str, pre: &[(u64, u64, Shape)]) {
     let now: HashSet<(u64, u64)> = ctx.bodies.iter().map(Body::identity).collect();
     let was: HashSet<(u64, u64)> = pre.iter().map(|(uid, generation, _)| (*uid, *generation)).collect();
-    let before: usize = pre
-        .iter()
-        .filter(|(uid, generation, _)| !now.contains(&(*uid, *generation)))
-        .map(|(_, _, s)| open(s))
-        .sum();
-    let changed: Vec<(&Body, usize)> = ctx
+    let known: HashSet<u64> = pre.iter().map(|(uid, _, _)| *uid).collect();
+    let changed: Vec<(&Body, Soundness)> = ctx
         .bodies
         .iter()
         .filter(|b| !was.contains(&b.identity()))
-        .map(|b| (b, open(&b.shape)))
-        .filter(|(_, n)| *n > 0)
+        .map(|b| {
+            let mut s = Soundness { skin: kernel::skin(&b.shape), inward: 0 };
+            if s.skin.solids > 0 && s.fault().is_none() && !known.contains(&b.uid) {
+                s.inward = kernel::inward_solids(&b.shape);
+            }
+            (b, s)
+        })
+        .filter(|(_, s)| unsoundness(s) > 0)
         .collect();
-    if changed.iter().map(|(_, n)| n).sum::<usize>() <= before {
+    if changed.is_empty() {
+        return;
+    }
+    let before: usize = pre
+        .iter()
+        .filter(|(uid, generation, _)| !now.contains(&(*uid, *generation)))
+        .map(|(_, _, s)| unsoundness(&crate::soundness::of(s)))
+        .sum();
+    if changed.iter().map(|(_, s)| unsoundness(s)).sum::<usize>() <= before {
         return;
     }
     let notes: Vec<Value> = changed
         .iter()
-        .map(|(b, n)| {
-            advisory(fid, "openShell", format!("{} is not a closed solid: {n} edge(s) bound only one face", b.name))
+        .filter_map(|(b, s)| {
+            let why = s.fault().unwrap_or_else(|| {
+                format!("{}, so a cut, a join or a measurement of it can come out wrong", crate::soundness::INSIDE_OUT)
+            });
+            Some(advisory(fid, s.code()?, format!("{} {why}", b.name)))
         })
         .collect();
     ctx.diagnostics.extend(notes);
@@ -1145,8 +1168,8 @@ pub fn rebuild_from(
                     crate::bench::phase("note_splits", || {
                         note_splits(&mut ctx, fid.unwrap_or(""), rawf, &pre_shapes);
                     });
-                    crate::bench::phase("note_open", || {
-                        note_open(&mut ctx, fid.unwrap_or(""), &pre_shapes);
+                    crate::bench::phase("note_unsound", || {
+                        note_unsound(&mut ctx, fid.unwrap_or(""), &pre_shapes);
                     });
                 }
                 if type_name == Some("sketch") {

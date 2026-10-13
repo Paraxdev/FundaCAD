@@ -163,6 +163,17 @@ Reply `result` is one of:
   because the candidate filter is taken against the cached normal and re-picking the
   same tilted face reproduces the same diagnostic; neither is `sealedVoid`, which
   describes a RESULT rather than a resolution and has no reference to re-pick.
+
+  An advisory (`lossy: false`) says in its `reason` what a feature left behind, on the
+  feature that did it and once, not on every feature after it. Its `code` is
+  `bodySplit` (a cut left a body in more pieces), or one of the four ways a solid body
+  stops being a closed solid that faces outward: `openShell` (edges that bound only one
+  face), `nonManifold` (an edge shared by more than two faces), `flippedFaces` (two
+  faces that disagree about which side is inside) and `insideOut` (closed, and all of
+  it facing inward). A cut, a join or a measurement of such a body can come out wrong
+  without failing, which is why the build says so. A surface body, one with no solid
+  in it, is not reported: an import that does not close and what a thicken starts
+  from are surfaces on purpose.
 - **Fatal**, nothing built at all: `{ "error": { "message": "...", "feature_id": "..." } }`.
 - **Stalled worker**, one operation ran past the stall timeout (60 s of no build
   progress): the engine returns

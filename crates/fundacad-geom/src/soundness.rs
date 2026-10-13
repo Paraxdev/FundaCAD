@@ -60,6 +60,23 @@ impl Soundness {
     pub fn inside_out(&self) -> bool {
         self.inward > 0 && self.fault().is_none()
     }
+
+    /// The diagnostic code of what is wrong with a solid body. None for a
+    /// sound one and for a surface, which is a state to model in, not a fault.
+    pub fn code(&self) -> Option<&'static str> {
+        let k = &self.skin;
+        if k.solids == 0 {
+            None
+        } else if k.open_edges > 0 {
+            Some("openShell")
+        } else if k.crowded_edges > 0 {
+            Some("nonManifold")
+        } else if k.flipped_edges > 0 {
+            Some("flippedFaces")
+        } else {
+            (self.inward > 0).then_some("insideOut")
+        }
+    }
 }
 
 /// What being inside out is, worded to follow the body's name.
