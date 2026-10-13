@@ -57,12 +57,12 @@ export async function activate(e: Engine): Promise<() => void> {
           before: "Help",
           items: [
             {
-              label: "SpaceMouse: Move Object",
+              label: "SpaceMouse: Object Mode",
               checked: () => getSpaceMouseMode() === "object",
               onClick: () => setSpaceMouseMode("object"),
             },
             {
-              label: "SpaceMouse: Move Camera",
+              label: "SpaceMouse: Camera Mode",
               checked: () => getSpaceMouseMode() === "camera",
               onClick: () => setSpaceMouseMode("camera"),
             },

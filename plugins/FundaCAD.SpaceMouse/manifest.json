@@ -3,12 +3,11 @@
   "name": "3D mouse",
   "version": "1.0.0",
   "kind": "builtin",
-  "summary": "Navigates the view, and moves what you have selected, with a 3D mouse.",
+  "summary": "Navigates the view with a 3D mouse.",
   "enabledByDefault": true,
   "grants": [
     "device.input",
-    "document.read",
-    "document.write"
+    "document.read"
   ],
   "formerIds": [
     "spacemouse"
