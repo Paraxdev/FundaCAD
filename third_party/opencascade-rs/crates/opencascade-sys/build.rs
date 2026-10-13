@@ -140,7 +140,7 @@ Set FUNDACAD_ALLOW_WINDOWS_GNU=1 to build it anyway.
 /// member of that name in the toolkit library listed here. A copy of the
 /// library with the member swapped is searched before the kernel's own, so the
 /// link itself does not change and neither does the shared kernel install.
-const OCCT_PATCHES: &[(&str, &str)] = &[("ShapeAnalysis_Surface", "TKShHealing")];
+const OCCT_PATCHES: &[(&str, &str)] = &[("ShapeAnalysis_Surface", "TKShHealing"), ("BRepBndLib", "TKTopAlgo")];
 
 fn patch_occt(occt: &OcctConfig) -> std::path::PathBuf {
     use std::path::{Path, PathBuf};
