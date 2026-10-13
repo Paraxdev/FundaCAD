@@ -2,7 +2,7 @@
 
 Every sketch, extrude and fillet adds a step to the History card, and the model is those steps run in order. Open a step, change a number, and everything after it rebuilds.
 
-<!-- shot: history-card | History card with one step open -->
+![The History card with the Extrude step open](../img/history-card.png)
 
 Click a step to open its values, and double-click to edit it with its own tool. Right-click for Edit, Rename, Suppress, Add condition and Delete, and press F2 to rename.
 

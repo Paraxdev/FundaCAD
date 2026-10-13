@@ -2,7 +2,7 @@
 
 The Items card lists everything in the document under Origin, Bodies and Sketches, plus sections for planes, datums and joints once you have some.
 
-<!-- shot: items-list | Items card with a folder, one body hidden -->
+![The Items card with a Hardware folder holding two bodies, one of them hidden](../img/items-list.png)
 
 Click selects a row, Ctrl+click adds one, and Shift+click takes a run. Double-click renames a body or edits a sketch. Ctrl+Alt+S shows or hides the card.
 

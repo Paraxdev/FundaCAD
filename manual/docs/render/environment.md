@@ -2,7 +2,7 @@
 
 The Environment tab sets the room the part sits in, and the Camera tab sets the lens.
 
-<!-- shot: render-camera-tab | Camera tab with Field of view slider -->
+![The Camera tab of the Render workspace with the Field of view slider](../img/render-camera-tab.png)
 
 Studio offers six lighting setups. A metal part reflects its room, so with none it looks nearly black, and Flat shows the shape most clearly. Bloom lets light spill off bright parts, and Shadows switches cast shadows.
 

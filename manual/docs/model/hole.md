@@ -2,7 +2,7 @@
 
 Hole drills holes into a flat face, ready for a screw.
 
-<!-- shot: hole-dialog | Hole box with Size M3 and Depth -->
+![The Hole box with size M3 and a through depth over a block](../img/hole-dialog.png)
 
 Click the face where the hole goes, then set the Size from M2 to M10, the Depth and the position. Type `through` as the depth to drill all the way. Click the face again for another hole, and press Enter to finish them all.
 
