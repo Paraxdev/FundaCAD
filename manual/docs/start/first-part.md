@@ -16,4 +16,4 @@ This makes a plate 40 mm by 20 mm and 5 mm thick, with a 6 mm hole, and exports 
 
 **Save and export.** Ctrl+S saves a `.funda` file that keeps the whole history. Ctrl+E opens the Export window, where STL with Millimeter and Medium suits most slicers.
 
-<!-- shot: first-part-export | Export window set to STL, Medium -->
+![The Export window with STL and Medium chosen](../img/first-part-export.png)

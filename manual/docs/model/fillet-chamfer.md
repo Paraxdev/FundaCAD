@@ -2,7 +2,7 @@
 
 Fillet (F) rounds an edge and Chamfer (B) cuts it at an angle.
 
-<!-- shot: fillet-edge | block edge rounded, radius box showing -->
+![A block edge being rounded, the radius box beside it](../img/fillet-edge.png)
 
 Click an edge, drag or type a size, and press Enter. Selecting a face first treats every edge around it. Tab swaps between fillet and chamfer without starting over.
 

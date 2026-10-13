@@ -2,7 +2,7 @@
 
 Press Ctrl+E, or choose File, Export, to send a part to a slicer or another program.
 
-<!-- shot: export-dialog | Export window set to STL, Medium -->
+![The Export window with STL and Medium chosen](../img/export-dialog.png)
 
 Type picks the format. STL and 3MF suit slicers, STEP keeps exact surfaces for other CAD programs, and GLB is for viewers. With several bodies you can export all in one file or one file per body.
 

@@ -2,7 +2,7 @@
 
 A sketch is a flat drawing on a plane or on a face. Most parts begin as one.
 
-<!-- shot: sketch-overview | open sketch with rail and palette -->
+![An open sketch on a block's top face, with the tool rail and the sketch palette](../img/sketch-overview.png)
 
 Press S and click one of the three origin planes, or any flat face of a body. If a flat face is already selected, the sketch opens on it straight away. XY is the floor, so a sketch there is a view from above.
 
