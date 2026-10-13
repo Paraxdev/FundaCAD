@@ -215,7 +215,7 @@ export interface PrintabilityOptions {
   layFlat?: true | Record<string, number>;
 }
 
-export type PrintabilityKind = "overhang" | "bridge" | "wall" | "floor" | "gap" | "fused" | "meshHole";
+export type PrintabilityKind = "overhang" | "bridge" | "wall" | "floor" | "gap" | "fused" | "meshHole" | "flatTriangle";
 
 /** One thing the check found. `face` is the body's own face index, the `i` of
  *  `inspect` and of a body's faceIds on the wire, which the viewport numbers
@@ -227,7 +227,8 @@ export interface PrintabilityFinding {
   face: number;
   other: { body: string; face: number } | null;
   /** Degrees past vertical for an overhang (90 a flat ceiling), the open mesh
-   *  edges for a meshHole, otherwise mm: a span, a thickness or a gap. */
+   *  edges for a meshHole, the triangles without area for a flatTriangle,
+   *  otherwise mm: a span, a thickness or a gap. */
   value: number;
   /** What a wall, floor, gap, fused pair or bridge was held to, mm; 0 otherwise. */
   limit: number;

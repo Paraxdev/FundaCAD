@@ -370,6 +370,7 @@ fn finding_json(f: &Finding, bodies: &[Body]) -> Value {
         Kind::Gap => "gap",
         Kind::Fused => "fused",
         Kind::MeshHole => "meshHole",
+        Kind::FlatTriangle => "flatTriangle",
     };
     json!({
         "kind": kind,

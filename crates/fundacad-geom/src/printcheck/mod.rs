@@ -297,6 +297,8 @@ pub enum Kind {
     /// Between two bodies, as one print.
     Fused,
     MeshHole,
+    /// A triangle without area the mesh still holds.
+    FlatTriangle,
 }
 
 #[derive(Debug, Clone)]
@@ -354,6 +356,7 @@ pub fn run(
     }
     if s.checks.open {
         for (bi, b) in bodies.iter().enumerate() {
+            out.extend(flat_triangles(bi, b));
             let closed = topo.get(&b.id).map_or(true, |t| t.open_edges == 0);
             if closed {
                 out.extend(mesh_hole(bi, b, &edges[bi]));
@@ -699,6 +702,44 @@ fn mesh_hole(bi: usize, b: &Body, edges: &HashMap<EdgeKey, Vec<usize>>) -> Optio
     })
 }
 
+/// The triangles without area a body's mesh still holds, by the measure
+/// mesh::flat removes them with. One finding a body, on the lowest face that
+/// has one.
+fn flat_triangles(bi: usize, b: &Body) -> Option<Finding> {
+    let limit = crate::mesh::flat::limit(b.pts.iter().flatten().copied());
+    let mut lo = [f64::INFINITY; 3];
+    let mut hi = [f64::NEG_INFINITY; 3];
+    let mut count = 0;
+    let mut face = u32::MAX;
+    for (t, &[x, y, z]) in b.tris.iter().enumerate() {
+        let p = [b.pts[x], b.pts[y], b.pts[z]];
+        if !crate::mesh::flat::is_flat(&p, limit) {
+            continue;
+        }
+        count += 1;
+        face = face.min(b.face[t]);
+        for q in p {
+            for k in 0..3 {
+                lo[k] = lo[k].min(q[k]);
+                hi[k] = hi[k].max(q[k]);
+            }
+        }
+    }
+    (count > 0).then(|| Finding {
+        kind: Kind::FlatTriangle,
+        body: bi,
+        face,
+        other: None,
+        value: count as f64,
+        area: 0.0,
+        low: 0.0,
+        at: [(lo[0] + hi[0]) / 2.0, (lo[1] + hi[1]) / 2.0, (lo[2] + hi[2]) / 2.0],
+        extent: diag(lo, hi),
+        note: String::new(),
+        limit: 0.0,
+    })
+}
+
 // --- the reply ------------------------------------------------------------------
 
 /// How many of each kind a body lists before the rest are only counted.
@@ -737,6 +778,7 @@ fn noun(kind: Kind, n: usize) -> String {
         Kind::Gap => ("narrow gap", "narrow gaps"),
         Kind::Fused => ("fused pair", "fused pairs"),
         Kind::MeshHole => ("mesh hole", "mesh holes"),
+        Kind::FlatTriangle => ("flat triangle", "flat triangles"),
     };
     format!("{n} {}", if n == 1 { one } else { many })
 }
@@ -812,6 +854,12 @@ fn line(f: &Finding, bodies: &[Body], s: &Settings) -> String {
             g_format(f.value),
             focus(f)
         ),
+        Kind::FlatTriangle => format!(
+            "the mesh has {} near F{}: two of its corners are one point or all three lie on one line, and a mesh tool may refuse an STL export over it. {}",
+            if f.value == 1.0 { "a triangle without area".to_string() } else { format!("{} triangles without area", g_format(f.value)) },
+            f.face,
+            focus(f)
+        ),
     }
 }
 
@@ -853,7 +901,7 @@ pub fn report(bodies: &[Body], findings: &[Finding], s: &Settings, header: &str,
             }
         }
         let mine: Vec<&Finding> = findings.iter().filter(|f| f.body == bi && f.kind != Kind::Fused).collect();
-        for kind in [Kind::Overhang, Kind::Bridge, Kind::Wall, Kind::Floor, Kind::Gap, Kind::MeshHole] {
+        for kind in [Kind::Overhang, Kind::Bridge, Kind::Wall, Kind::Floor, Kind::Gap, Kind::MeshHole, Kind::FlatTriangle] {
             let mut of: Vec<&&Finding> = mine.iter().filter(|f| f.kind == kind).collect();
             if of.is_empty() {
                 continue;
@@ -1000,6 +1048,29 @@ mod tests {
             assert_eq!(holes.len(), 1, "{f:?}");
             assert_eq!((holes[0].face, holes[0].value), (0, 4.0));
         }
+    }
+
+    #[test]
+    fn a_triangle_without_area_left_in_the_mesh_is_a_finding() {
+        // The last three triangles: two corners at one point (index 0 twice,
+        // then two nodes at one place), and three corners on one line.
+        let (mut positions, mut indices, mut face_ids) = box_raw([0.0; 3], [20.0, 20.0, 10.0]);
+        let whole = Mesh { id: "body1", name: "", positions: &positions, indices: &indices, face_ids: &face_ids };
+        let f = run(&[Body::new(&whole, [0.0, 0.0, 1.0])], &defaults(), true, &HashMap::new(), &|| false);
+        assert!(f.iter().all(|f| f.kind != Kind::FlatTriangle), "{f:?}");
+
+        let n = (positions.len() / 3) as u32;
+        positions.extend_from_slice(&[0.0, 0.0, 0.0, 5.0, 5.0, 2.0, 5.0, 5.0, 2.0, 10.0, 10.0, 4.0]);
+        indices.extend_from_slice(&[0, 0, n, n + 1, n + 2, n, n, n + 1, n + 3]);
+        face_ids.extend_from_slice(&[4, 3, 5]);
+        let mesh = Mesh { id: "body1", name: "", positions: &positions, indices: &indices, face_ids: &face_ids };
+        let bodies = [Body::new(&mesh, [0.0, 0.0, 1.0])];
+        let f = run(&bodies, &defaults(), true, &HashMap::new(), &|| false);
+        let flat: Vec<&Finding> = f.iter().filter(|f| f.kind == Kind::FlatTriangle).collect();
+        assert_eq!(flat.len(), 1, "{f:?}");
+        assert_eq!((flat[0].face, flat[0].value), (3, 3.0));
+        let text = report(&bodies, &f, &defaults(), "as modelled", &HashMap::new());
+        assert!(text.contains("3 triangles without area near F3"), "{text}");
     }
 
     #[test]

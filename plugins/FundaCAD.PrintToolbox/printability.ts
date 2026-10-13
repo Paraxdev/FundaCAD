@@ -64,6 +64,7 @@ export const KIND_COLORS: Record<PrintabilityKind, number> = {
   gap: 0x8bd450,
   fused: 0xe23b3b,
   meshHole: 0xf0e442,
+  flatTriangle: 0x8d6e63,
 };
 
 /** A tint as a CSS colour, for the legend's swatches. */
@@ -79,6 +80,7 @@ export const KIND_LABELS: Record<PrintabilityKind, string> = {
   gap: "Gap",
   fused: "Fused",
   meshHole: "Mesh hole",
+  flatTriangle: "Flat triangle",
 };
 
 export type PrintabilityRequest = { ok: true; options: PrintabilityOptions } | { ok: false; message: string };
@@ -183,6 +185,9 @@ export function findingText(f: PrintabilityFinding, nameOf: (id: string) => stri
     }
     case "meshHole":
       text = `Mesh has ${plural(Math.round(f.value), "open edge", "open edges")}`;
+      break;
+    case "flatTriangle":
+      text = `Mesh has ${plural(Math.round(f.value), "triangle", "triangles")} without area`;
       break;
     default:
       text = String(f.kind);
