@@ -199,7 +199,7 @@ function chipTitle(f: { id: string; type: string; inactive?: boolean }, i: numbe
     // that failed), so this reads as one line either way rather than as a
     // feature accused of two different things.
     (err ? `\nFailed: ${err}` : note ? `\nNote: ${note}` : "") +
-    "\nclick to edit · double-click to see the model as of here, Esc to go back · right-click for more"
+    "\nclick to select · double-click to edit, Esc to go back · right-click for more"
   );
 }
 
