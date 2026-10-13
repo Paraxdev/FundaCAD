@@ -81,6 +81,85 @@ fn edit_applies_everything_or_nothing_and_build_names_only_what_changed() {
     assert_eq!(r.text, "Updated bx1 (box): height = 10. 5 features in the timeline.");
 }
 
+/// A 10 mm cube from the origin as STL text: wound inside out, or its top left off.
+fn cube_stl(inside_out: bool, open: bool) -> String {
+    let q = [[0, 0, 0], [10, 0, 0], [10, 10, 0], [0, 10, 0], [0, 0, 10], [10, 0, 10], [10, 10, 10], [0, 10, 10]];
+    let facets = [
+        [0, 2, 1], [0, 3, 2], [0, 1, 5], [0, 5, 4], [1, 2, 6], [1, 6, 5],
+        [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7], [4, 5, 6], [4, 6, 7],
+    ];
+    let mut stl = String::from("solid cube\n");
+    for f in &facets[..if open { 10 } else { 12 }] {
+        let f = if inside_out { [f[0], f[2], f[1]] } else { *f };
+        stl.push_str("facet normal 0 0 0\nouter loop\n");
+        for i in f {
+            stl.push_str(&format!("vertex {} {} {}\n", q[i][0], q[i][1], q[i][2]));
+        }
+        stl.push_str("endloop\nendfacet\n");
+    }
+    stl + "endsolid cube\n"
+}
+
+/// The imported cube and a box centred on the origin, which share the 5 mm
+/// cube at the corner.
+fn with_a_box_on_its_corner(stl: String, name: &str) -> (Mcp, String) {
+    let mut mcp = session();
+    let r = mcp.call("doc_import", json!({"content": stl, "name": name, "encoding": "text"}));
+    assert!(!r.is_error, "{}", r.text);
+    let r = mcp.call("edit", json!({"ops": [
+        {"op": "add", "feature": {"type": "box", "length": 10, "width": 10, "height": 10}}
+    ], "build": true}));
+    assert!(!r.is_error, "{}", r.text);
+    (mcp, r.text)
+}
+
+#[test]
+fn an_inside_out_import_is_said_so_and_still_checked_right() {
+    let (mut mcp, _) = with_a_box_on_its_corner(cube_stl(true, false), "shell.stl");
+    let r = mcp.call("interference", json!({}));
+    assert!(r.text.contains("body1 \"shell\" / body2 \"Box\": 125 mm3 overlap, from (0, 0, 0) to (5, 5, 5)"), "{}", r.text);
+    assert!(!r.text.contains("NOT CHECKED"), "{}", r.text);
+    let r = mcp.call("inspect", json!({"body": "body1"}));
+    assert!(r.text.contains("vol 1000 mm3") && r.text.contains("! this body is inside out"), "{}", r.text);
+}
+
+#[test]
+fn a_body_that_is_not_a_solid_is_never_called_clear() {
+    let (mut mcp, built) = with_a_box_on_its_corner(cube_stl(false, true), "tray.stl");
+    assert!(built.contains("body1 \"tray\": 10.0 x 10.0 x 10.0 mm, 5 faces"), "no volume is given: {built}");
+    let r = mcp.call("interference", json!({}));
+    assert!(!r.is_error, "{}", r.text);
+    assert!(
+        r.text.starts_with(
+            "NOT CHECKED: 1 pair that may overlap, because one of the two bodies cannot be judged:\n  \
+             body1 \"tray\" is a surface, not a solid, so it has no inside\n\
+             No overlap among the pairs that were checked."
+        ),
+        "{}",
+        r.text
+    );
+    assert!(!r.text.contains("No bodies overlap"), "{}", r.text);
+    let r = mcp.call("section", json!({"axis": "Z", "at": 5, "bodies": ["body1"], "outline": false}));
+    assert!(r.text.contains("NOT A SOUND SOLID: body1 is a surface, not a solid, so it has no inside."), "{}", r.text);
+    // Swept: clear only where the box has moved out of the tray's reach.
+    let r = mcp.call("edit", json!({"ops": [
+        {"op": "param", "name": "slide", "expr": 0},
+        {"op": "add", "feature": {"type": "move", "dx": "slide", "bodies": ["body2"]}}
+    ]}));
+    assert!(!r.is_error, "{}", r.text);
+    let r = mcp.call("interference", json!({"sweep": {"param": "slide", "from": 0, "to": 40, "steps": 2}}));
+    assert!(r.text.contains("slide = 0: no overlap found (body1 not judged, its pairs not checked)"), "{}", r.text);
+    assert!(r.text.contains("slide = 40: clear"), "{}", r.text);
+    assert!(
+        r.text.contains(
+            "At 1 step a body could not be judged and its pairs were NOT CHECKED: \
+             body1 \"tray\" is a surface, not a solid, so it has no inside."
+        ),
+        "{}",
+        r.text
+    );
+}
+
 #[test]
 fn interference_reports_overlaps_and_gaps_and_sweeps_a_parameter() {
     let mut mcp = session();

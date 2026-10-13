@@ -181,6 +181,17 @@ pub fn warnings_for(body: &Value) -> Vec<String> {
             open.len()
         ));
     }
+    // An open body has its line above.
+    if let Some(why) = body.get("fault").and_then(Value::as_str).filter(|_| open.is_empty()) {
+        out.push(format!(
+            "this body {why}: it has no volume to give, and a cut, a join, an interference or a stress check of it cannot be trusted"
+        ));
+    } else if body.get("insideOut").and_then(Value::as_bool).unwrap_or(false) {
+        out.push(
+            "this body is inside out, its faces point into the material: a cut or a join with it can come out wrong"
+                .into(),
+        );
+    }
     let solids = body.get("solidCount").and_then(Value::as_i64).unwrap_or(1);
     if solids > 1 {
         out.push(format!("this body is {solids} solids that do not touch"));

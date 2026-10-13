@@ -315,7 +315,11 @@ Reply:
     { "a": "<bodyId>", "b": "<bodyId>", "aName": "...", "bName": "...",
       "distance": 0.1, "pointA": [x,y,z], "pointB": [x,y,z] }
   ],
-  "truncated": true, "message": "..."   // only present if the candidate-pair cap was hit
+  "truncated": true, "message": "...",   // only present if the candidate-pair cap was hit
+  "unchecked": [    // only present when a body of a candidate pair could not be judged
+    { "id": "<bodyId>", "name": "...", "reason": "has faces that point the wrong way, at 65 of its edges ..." }
+  ],
+  "uncheckedPairs": 2   // with "unchecked": the candidate pairs that were not tested
 }
 ```
 `pairs` has one entry per pair whose boolean intersection volume exceeds a small
@@ -330,6 +334,16 @@ call runs; the real per-pair work (a boolean or a distance search) is capped at
 reports `truncated`/`message` rather than running unbounded on a dense
 assembly. `clearance` omitted or 0 skips the near-miss pass entirely, callers
 that never asked for it pay nothing extra.
+
+The intersection means something only between closed solids that face outward, and
+the kernel answers for anything else without an error and wrong. So each body of a
+candidate pair is judged first. One that is inside out and otherwise sound is turned
+over on a copy and checked as any other. One that is a surface, has edges that bound
+one face or more than two, or has faces that disagree about which side is inside is
+listed in `unchecked`, with a `reason` worded to follow its name, and no pair with it
+is tested for overlap or for clearance: an empty `pairs` beside `unchecked` is not a
+clear result. A body whose box reaches no other is never listed, it overlaps nothing
+whatever it is.
 
 ### `faceAxis`
 
@@ -502,7 +516,7 @@ Reply:
   `maxElements`, held faces too narrow for any node to lie on them, and for plastics that
   printed parts are weaker across their layers.
 - A refusal is an ordinary error reply, `{"ok": false, "error": {"message"}}`: no body
-  or an unknown one, a body that is not one closed solid, no held face, no load (and no gravity) or
+  or an unknown one, a body that is not one closed solid facing outward, no held face, no load (and no gravity) or
   loads only on fixed faces, a selector that picks nothing, an unknown material or
   support type, a pinned support on a face that is not round, gravity without a
   density, a part too thin for the elements (allow more elements or use a smaller
@@ -576,8 +590,9 @@ Reply:
 - `findings` lists everything found on the mesh, ordered as `report` lists it: by
   body, by kind, the worst first, then the fused pairs. What the exact shape says is
   on the body instead: `openEdges` (edges that bound one face, an open shell),
-  `solids` (more than 1 is separate pieces) and `insideOut` (a closed shell whose
-  volume is negative). `bedFace` is the face a laid flat body sits on.
+  `solids` (more than 1 is separate pieces), `insideOut` (a closed shell whose
+  volume is negative) and `fault` (`inspect`'s, why the body is not closed solids,
+  null for one that is). `bedFace` is the face a laid flat body sits on.
 - With no body built, `bodies` and `findings` are empty, `report` says
   `Nothing built to check.` and `errors` says why, whatever `bodies` asked for.
 - A refusal is an ordinary error reply: a setting out of range, `up` and `layFlat`
@@ -605,6 +620,8 @@ Reply:
     "volume": 6283.19, "area": 1884.96, "centerOfMass": [x,y,z],
     "bbox": { "min": [...], "max": [...], "size": [...] },
     "faceCount": 3, "edgeCount": 3, "solidCount": 1,
+    "fault": "is not a closed solid, 4 of its edges bound only one face, so it has no inside",   // only when it has one
+    "insideOut": true,       // only when that is all that is wrong with it
     "faces": [ { "i": 0, "surface": "cylinder", "area": 1256.64,
                  "centroid": [...], "normal": [...], "point": [...],
                  "radius": 10.0, "axis": [0,0,1], "wraps": true,
@@ -631,6 +648,13 @@ Three fields are not measurements and matter more than the measurements:
   face a linear press/pull has no direction for. An edge with fewer than two
   ancestor faces (a mesh-import border, or a body whose shell doesn't close) carries
   `openBoundary` instead.
+
+- **`fault`** on a body that is not closed solids: a surface, edges that bound one
+  face or more than two, or faces that disagree about which side is inside. It is the
+  reason in words that follow the body's name, and `volume` is null beside it: what
+  such a skin integrates to is a number and not a volume. A body that is closed and
+  only faces inward carries `insideOut` instead, and its `volume` is what the skin
+  encloses.
 
 Failing features are REPORTED in `errors`, not raised: a document with one red
 feature still has bodies, and looking at what did build is the point.

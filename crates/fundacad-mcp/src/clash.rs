@@ -171,6 +171,15 @@ pub fn missing(r: &Value, asked: &[String]) -> Vec<String> {
         .collect()
 }
 
+/// The bodies the engine could not judge, each with why: a pair with one of
+/// them was tested for neither overlap nor clearance.
+pub fn unjudged(r: &Value) -> Vec<String> {
+    list(r, "unchecked")
+        .iter()
+        .map(|u| format!("{} {}", who(s(u, "id"), s(u, "name")), s(u, "reason")))
+        .collect()
+}
+
 /// The pairs within the clearance that do not overlap, nearest first.
 fn gaps(r: &Value) -> Vec<&Value> {
     let mut g: Vec<&Value> = list(r, "clearances").iter().collect();
@@ -183,9 +192,20 @@ fn gaps(r: &Value) -> Vec<&Value> {
 pub fn report(r: &Value, clearance: f64) -> String {
     let pairs = list(r, "pairs");
     let near = gaps(r);
+    let skipped = unjudged(r);
     let mut out = Vec::new();
+    if !skipped.is_empty() {
+        let n = r.get("uncheckedPairs").and_then(Value::as_u64).unwrap_or(0);
+        out.push(format!(
+            "NOT CHECKED: {n} pair{} that may overlap, because {} cannot be judged:",
+            if n == 1 { "" } else { "s" },
+            if skipped.len() == 1 { "one of the two bodies".to_string() } else { format!("{} bodies", skipped.len()) }
+        ));
+        out.extend(skipped.iter().map(|b| format!("  {b}")));
+    }
     if pairs.is_empty() {
-        out.push("No bodies overlap.".to_string());
+        // "No bodies overlap" is a claim about every pair, and some were not tested.
+        out.push(if skipped.is_empty() { "No bodies overlap." } else { "No overlap among the pairs that were checked." }.to_string());
     } else {
         out.push(format!("{} overlapping pair{}:", pairs.len(), if pairs.len() == 1 { "" } else { "s" }));
         for p in pairs {
@@ -244,6 +264,8 @@ pub fn sweep_report(param: &str, unit: &str, steps: &[Step], clearance: f64, ask
     let mut cut_steps = 0;
     // Asked-for bodies that were not there, and at which steps.
     let mut absent_at: Vec<(String, Vec<String>)> = Vec::new();
+    // Bodies that could not be judged, with why, and at which steps.
+    let mut unjudged_at: Vec<(String, Vec<String>)> = Vec::new();
     for st in steps {
         let r = match &st.reply {
             Ok(r) => r,
@@ -255,8 +277,9 @@ pub fn sweep_report(param: &str, unit: &str, steps: &[Step], clearance: f64, ask
         };
         let pairs = list(r, "pairs");
         let near = gaps(r);
+        let skipped = unjudged(r);
         let mut line = if pairs.is_empty() {
-            format!("{}: clear", at(st.value))
+            format!("{}: {}", at(st.value), if skipped.is_empty() { "clear" } else { "no overlap found" })
         } else {
             clashing.push(g_format(st.value));
             format!(
@@ -285,6 +308,16 @@ pub fn sweep_report(param: &str, unit: &str, steps: &[Step], clearance: f64, ask
             line.push_str(" (stopped early, not every pair checked)");
             if cut_short.is_none() {
                 cut_short = r.get("message").and_then(Value::as_str).map(str::to_string);
+            }
+        }
+        if !skipped.is_empty() {
+            let ids: Vec<&str> = list(r, "unchecked").iter().map(|u| s(u, "id")).collect();
+            line.push_str(&format!(" ({} not judged, its pairs not checked)", ids.join(", ")));
+            for b in skipped {
+                match unjudged_at.iter_mut().find(|(k, _)| *k == b) {
+                    Some((_, at)) => at.push(g_format(st.value)),
+                    None => unjudged_at.push((b, vec![g_format(st.value)])),
+                }
             }
         }
         let absent = missing(r, asked);
@@ -358,6 +391,15 @@ pub fn sweep_report(param: &str, unit: &str, steps: &[Step], clearance: f64, ask
             at.join(", ")
         ));
     }
+    // The same for a body the engine could not judge: "no overlaps" there is
+    // only about the other pairs.
+    for (body, at) in &unjudged_at {
+        summary.push_str(&format!(
+            " At {} step{} a body could not be judged and its pairs were NOT CHECKED: {body}.",
+            at.len(),
+            plural(at.len())
+        ));
+    }
     if cut_steps > 0 {
         summary.push_str(&format!(
             " At {cut_steps} step{} the check stopped early: {}",
@@ -425,6 +467,37 @@ mod tests {
         assert!(text.contains("Slider was not built at 1 step (press = 12 mm), so its pairs were not checked there."), "{text}");
         let none = sweep_report("press", "mm", &[Step { value: 0.0, reply: Err("x".into()) }], 1.0, &[]);
         assert!(none.starts_with("None of the 1 steps could be checked.\n"), "{none}");
+    }
+
+    #[test]
+    fn a_pair_that_was_not_tested_is_never_called_clear() {
+        let reason = "has faces that point the wrong way, at 65 of its edges the two faces disagree about which side is inside";
+        let r = json!({"pairs": [], "clearances": [], "uncheckedPairs": 1,
+                       "unchecked": [{"id": "body1", "name": "Echo Dot 2", "reason": reason}]});
+        let text = report(&r, 1.0);
+        assert!(!text.contains("No bodies overlap"), "{text}");
+        assert!(text.starts_with("NOT CHECKED: 1 pair that may overlap, because one of the two bodies cannot be judged:"), "{text}");
+        assert!(text.contains(&format!("  body1 \"Echo Dot 2\" {reason}")), "{text}");
+        assert!(text.contains("No overlap among the pairs that were checked."), "{text}");
+
+        let clear = json!({"pairs": [], "clearances": []});
+        assert!(report(&clear, 0.0).starts_with("No bodies overlap."));
+
+        let swept = sweep_report(
+            "press",
+            "mm",
+            &[Step { value: 0.0, reply: Ok(clear) }, Step { value: 4.0, reply: Ok(r) }],
+            0.0,
+            &[],
+        );
+        assert!(swept.contains("press = 0: clear\n"), "{swept}");
+        assert!(swept.contains("press = 4: no overlap found (body1 not judged, its pairs not checked)"), "{swept}");
+        assert!(
+            swept.contains(&format!(
+                "At 1 step a body could not be judged and its pairs were NOT CHECKED: body1 \"Echo Dot 2\" {reason}."
+            )),
+            "{swept}"
+        );
     }
 
     #[test]

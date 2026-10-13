@@ -1,0 +1,83 @@
+//! Whether a body is material an analysis can judge: closed solids whose
+//! faces point outward. A boolean, a volume or a section of anything else
+//! comes back without an error and wrong, so each analysis asks here first.
+
+use std::borrow::Cow;
+
+use opencascade::primitives::Shape;
+
+use crate::kernel::{self, Skin};
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Soundness {
+    pub skin: Skin,
+    /// Solids whose faces point into their material. Counted only when the
+    /// skin is clean, a mixed one has no single direction to ask about.
+    pub inward: usize,
+}
+
+pub fn of(shape: &Shape) -> Soundness {
+    let skin = kernel::skin(shape);
+    let mut s = Soundness { skin, inward: 0 };
+    if s.fault().is_none() {
+        s.inward = kernel::inward_solids(shape);
+    }
+    s
+}
+
+fn pick<'a>(n: usize, one: &'a str, many: &'a str) -> &'a str {
+    if n == 1 {
+        one
+    } else {
+        many
+    }
+}
+
+impl Soundness {
+    /// Why the body has no inside to judge, worded to follow its name. None
+    /// for a body that is only inside out, which `material` turns over.
+    pub fn fault(&self) -> Option<String> {
+        let k = &self.skin;
+        if k.solids == 0 {
+            return Some("is a surface, not a solid, so it has no inside".into());
+        }
+        let (n, why) = if k.open_edges > 0 {
+            let n = k.open_edges;
+            (n, format!("is not a closed solid, # {} only one face, so it has no inside", pick(n, "bounds", "bound")))
+        } else if k.crowded_edges > 0 {
+            let n = k.crowded_edges;
+            let shared = pick(n, "is", "are");
+            (n, format!("is not one clean solid, # {shared} shared by more than two faces, so it has no single inside"))
+        } else if k.flipped_edges > 0 {
+            let why = "has faces that point the wrong way, at # the two faces disagree about which side is inside";
+            (k.flipped_edges, why.to_owned())
+        } else {
+            return None;
+        };
+        Some(why.replace('#', &format!("{n} of its edges")))
+    }
+
+    pub fn inside_out(&self) -> bool {
+        self.inward > 0 && self.fault().is_none()
+    }
+}
+
+/// What being inside out is, worded to follow the body's name.
+pub const INSIDE_OUT: &str = "is inside out, its faces point into the material";
+
+/// The shape an analysis of material can work on: the body itself when it is
+/// sound, a copy turned outward when being inside out is all that is wrong
+/// with it, else why it cannot be judged, worded to follow the body's name.
+pub fn material(shape: &Shape) -> Result<Cow<'_, Shape>, String> {
+    let s = of(shape);
+    if let Some(why) = s.fault() {
+        return Err(why);
+    }
+    if s.inward == 0 {
+        return Ok(Cow::Borrowed(shape));
+    }
+    match kernel::turned_outward(shape) {
+        Ok(turned) if kernel::inward_solids(&turned) == 0 => Ok(Cow::Owned(turned)),
+        _ => Err(format!("{INSIDE_OUT}, and it could not be turned over")),
+    }
+}

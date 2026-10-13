@@ -34,6 +34,7 @@ pub mod plugins;
 pub mod projection;
 pub mod reply;
 pub mod select;
+pub mod soundness;
 pub mod stress;
 pub mod text;
 pub mod topo;

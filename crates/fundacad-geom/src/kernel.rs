@@ -291,6 +291,37 @@ pub fn open_edge_count(s: &Shape) -> usize {
     usize::try_from(ffi::bo_open_edge_count(s.raw())).unwrap_or(0)
 }
 
+/// What keeps a shape from being closed solids. All zero but `solids` for one
+/// that is; `open_edges` counts what `open_edge_count` does.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Skin {
+    pub solids: usize,
+    pub open_edges: usize,
+    /// Edges that bound more than two faces.
+    pub crowded_edges: usize,
+    /// Edges whose two faces disagree about which side is inside.
+    pub flipped_edges: usize,
+}
+
+pub fn skin(s: &Shape) -> Skin {
+    let mut n = [0i32; 4];
+    ffi::bo_skin_census(s.raw(), &mut n);
+    let [solids, open_edges, crowded_edges, flipped_edges] = n.map(|v| usize::try_from(v).unwrap_or(0));
+    Skin { solids, open_edges, crowded_edges, flipped_edges }
+}
+
+/// Solids of the shape whose faces point into their material. Only a shape
+/// whose `skin` is clean has one answer to this.
+pub fn inward_solids(s: &Shape) -> usize {
+    usize::try_from(ffi::bo_inward_solids(s.raw())).unwrap_or(0)
+}
+
+/// The shape with every inward solid turned over, its faces the same ones in
+/// the same order.
+pub fn turned_outward(s: &Shape) -> KResult<Shape> {
+    wrap(ffi::bo_turned_outward(s.raw()))
+}
+
 /// Whether `edge` lies in `face` only as a line drawn on it, not a side of it.
 pub fn edge_inside_face(face: &Shape, edge: &Shape) -> bool {
     ffi::bo_edge_inside_face(face.raw(), edge.raw())

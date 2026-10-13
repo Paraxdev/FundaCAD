@@ -34,6 +34,9 @@ mod inner {
         pub fn bo_euler_point(rx: f64, ry: f64, rz: f64, dx: f64, dy: f64, dz: f64, xyz: &mut [f64]);
         pub fn bo_void_count(s: &TopoDS_Shape) -> i32;
         pub fn bo_open_edge_count(s: &TopoDS_Shape) -> i32;
+        pub fn bo_skin_census(s: &TopoDS_Shape, out: &mut [i32]);
+        pub fn bo_inward_solids(s: &TopoDS_Shape) -> i32;
+        pub fn bo_turned_outward(s: &TopoDS_Shape) -> Result<UniquePtr<TopoDS_Shape>>;
         pub fn bo_edge_inside_face(face: &TopoDS_Shape, edge: &TopoDS_Shape) -> bool;
         pub fn bo_location_translation(s: &TopoDS_Shape, out: &mut [f64]);
 
