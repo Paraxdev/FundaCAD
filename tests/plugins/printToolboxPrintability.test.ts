@@ -72,6 +72,7 @@ describe("findingText", () => {
     expect(findingText(finding({ kind: "gap", value: 0.1, limit: 0.2 }), nameOf)).toBe("Gap 0.1 mm will fuse");
     expect(findingText(finding({ kind: "bridge", value: 14, limit: 10 }), nameOf)).toBe("Bridge 14 mm span (over 10)");
     expect(findingText(finding({ kind: "meshHole", value: 1 }), nameOf)).toBe("Mesh has 1 open edge");
+    expect(findingText(finding({ kind: "flatTriangle", value: 2 }), nameOf)).toBe("Mesh has 2 triangles without area");
   });
 
   it("names the other body of a fused pair, touching or close", () => {
@@ -85,7 +86,7 @@ describe("findingText", () => {
   });
 
   it("uses no dash as a sentence break", () => {
-    for (const kind of ["overhang", "bridge", "wall", "floor", "gap", "fused", "meshHole"] as const) {
+    for (const kind of ["overhang", "bridge", "wall", "floor", "gap", "fused", "meshHole", "flatTriangle"] as const) {
       expect(findingText(finding({ kind }), nameOf)).not.toMatch(/ - |\u2014/);
     }
   });

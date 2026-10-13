@@ -560,14 +560,16 @@ Reply:
 ```
 
 - `kind` is `overhang`, `bridge`, `wall`, `floor`, `gap`, `fused` (two bodies printed
-  as one that would join) or `meshHole` (a face without triangles, or two faces
-  meshed apart).
+  as one that would join), `meshHole` (a face without triangles, or two faces
+  meshed apart) or `flatTriangle` (triangles without area the mesh still holds,
+  the engine removes every one it can without opening the mesh).
 - `face` and `other.face` are face indices, the `i` of `inspect` and the mesh
   `faceIds`. `other` is the facing face of a wall, floor, gap or fused pair, null
   otherwise.
 - `value` is, for an overhang, its steepest lean past vertical in degrees (90 is a
   flat ceiling); for a bridge its span; for a wall, floor, gap or fused pair the
-  thickness or gap; all in mm; for a mesh hole the count of open mesh edges. `limit`
+  thickness or gap; all in mm; for a mesh hole the count of open mesh edges; for
+  flat triangles their count. `limit`
   is what a bridge, wall, floor, gap or fused pair was held to, 0 otherwise. `low` is
   an overhang's lowest point above the bed. `at` and `extent` are where to look and
   how big the region is.
