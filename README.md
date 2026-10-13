@@ -34,7 +34,7 @@ signed, so Windows and macOS will warn you on the first start. The
 - Check a part before printing: measure it, cut it open, look for overhangs and thin walls.
 - Render it with materials, glass and glowing parts in the Render workspace.
 - Add optional plugins, such as a screws library, texture tools and a printer connection.
-- Let an AI assistant build and check parts through the built-in MCP connection.
+- Let an AI assistant build and check parts through the built-in MCP connection. (can be turned off if you do not use any AI assistance or have no need for a separately running process)
 - Export STL, 3MF, STEP and GLB, and import STEP and meshes.
 
 ## Documentation
@@ -56,12 +56,21 @@ and takes about twenty minutes. The technical notes are in `docs/`.
 - [`docs/MCP.md`](docs/MCP.md), how an AI assistant connects and what it can do
 - [`docs/PLUGINS.md`](docs/PLUGINS.md), writing plugins and what they may reach
 
-## About the code
+## About the code / AI Disclosure
 
-Most of the code and tests here are written by AI. I decide what gets built, steer it, and use
-the app for real, because the goal is a CAD with the features I would love to have. Do not
-expect enterprise grade software, expect quick changes. The code is open and free, so ask an
-AI for a feature, or fork it and make your own.
+Most of the code and tests here are written by AI. I decide what gets built, steer it, and use the app actively.
+
+Im trying to apply real software engineering strategies and learnings to make sure the codebase and the features are a useless mess, and actively listening to any feedback that I get.
+
+
+You may use AI for creating features and creating pull requests,
+for those you are responsible for the AI output and ensure that it serves a usable quality.
+you must write at least one test that, if the feature allows it, ensures it has one "known good" case
+
+for creating issues and bug requests please read the AI output and ensure you can reproduce it, cheap incoherent bug reports may take a while to be understood and fixed.
+
+due to the nature of AI im very open to any issues and bug requests that may arrive, and take the highest priority of having em fixed. the goal is a coherent program that actually
+can show itself in daily use cases and be as flexible as an open source project can get.
 
 ## Licence
 
