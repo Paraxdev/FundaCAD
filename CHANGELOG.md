@@ -355,6 +355,21 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Fixed
 
+- **A body is measured as large as it is after a slanted cut through a spline
+  face.** A lofted or organic face that is cut off at a slant has surface left
+  over beyond the cut, and the exact bounding box counted that too. A revolve
+  87.48 mm across that only had material removed was reported 87.48 x 92.24 x
+  56.25 by `inspect`, the MCP build line and lay flat, and a block with a duct
+  lofted out through its wall measured 26 mm instead of 20. The same box picks
+  the bodies a join, cut or intersect without `targets` acts on, so a pad 2 mm
+  clear of that block was fused into it as a second loose solid with no error.
+  The box now follows the face as it is trimmed. The size the app shows and
+  fits the view to came from the mesh and was right.
+
+  Existing documents change on rebuild where a join, cut or intersect without
+  targets reached a body only through such a box: it now leaves that body
+  alone.
+
 - **A tapered extrude cuts what it should over an outline with inside corners.**
   A tapered cut along a long concave outline could hand back the body with the
   whole tool as a loose solid beside it and nothing removed, with no error.
