@@ -51,6 +51,11 @@ impl BlobStore {
         is_hash(digest).then(|| self.root.join(format!("{digest}.bbrep")))
     }
 
+    /// A blob of this name is stored. Its bytes are not read, so not verified.
+    pub fn has(&self, digest: &str) -> bool {
+        self.path_for(digest).is_some_and(|p| p.is_file())
+    }
+
     /// Stores `data` and returns the hash of exactly these bytes.
     pub fn put_bytes(&self, data: &[u8]) -> std::io::Result<String> {
         let digest = hash_bytes(data);
@@ -128,9 +133,10 @@ pub fn blob_op(
             let (mut have, mut missing) = (Vec::new(), Vec::new());
             for h in req.get("hashes").and_then(Value::as_array).into_iter().flatten() {
                 let Some(h) = h.as_str() else { continue };
-                match store.path_for(h) {
-                    Some(p) if p.is_file() => have.push(h.to_string()),
-                    _ => missing.push(h.to_string()),
+                if store.has(h) {
+                    have.push(h.to_string());
+                } else {
+                    missing.push(h.to_string());
                 }
             }
             out.insert("have".into(), json!(have));

@@ -11,7 +11,7 @@ pub mod keys;
 pub mod meshes;
 pub mod store;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
@@ -20,6 +20,7 @@ use fundacad_protocol::MeshResult;
 use serde_json::{json, Map, Value};
 
 use crate::builder::{self, Cancelled, Rebuild, Snapshot, State, Tap, Watch};
+use crate::import::blobstore::{self, BlobStore};
 use crate::mesh::{self, MeshBody};
 use checkpoint::{Modified, Persist};
 use store::GeomStore;
@@ -125,11 +126,15 @@ impl RebuildCache {
     }
 
     pub fn chain_keys(&mut self, raw: &Value) -> Vec<String> {
+        self.keys_given(raw, &absent_geometry(raw))
+    }
+
+    fn keys_given(&mut self, raw: &Value, absent: &BTreeSet<String>) -> Vec<String> {
         #[cfg(feature = "plugins")]
         let plugins = crate::plugins::feature_identities();
         #[cfg(not(feature = "plugins"))]
         let plugins = HashMap::new();
-        keys::chain_keys(raw, &self.env, &plugins, &mut self.brep_sigs)
+        keys::chain_keys(raw, &self.env, &plugins, absent, &mut self.brep_sigs)
     }
 
     /// `reset_cache` and the mesh cache: this process forgets, the disk does not.
@@ -151,7 +156,8 @@ impl RebuildCache {
 
     /// `rebuild_cached`.
     pub fn rebuild(&mut self, doc: &CadDocument, raw: &Value, watch: &dyn Watch) -> Result<Rebuild, Cancelled> {
-        let keys = self.chain_keys(raw);
+        let absent = absent_geometry(raw);
+        let keys = self.keys_given(raw, &absent);
         let n = keys.len();
         let mut resume: Option<(usize, Snapshot)> = None;
         let mut source = Source::Full;
@@ -226,8 +232,29 @@ impl RebuildCache {
                 written: 0,
             }),
         };
-        let r = builder::rebuild_from(doc, raw, watch, resume, &mut tap)?;
+        let built = builder::rebuild_from(doc, raw, watch, resume, &mut tap);
         let elapsed = began.elapsed();
+
+        // A blob that arrived, or was dropped as corrupt, while this built: the
+        // keys no longer say what the imports read, so nothing is kept under
+        // them, the checkpoints a cancelled build left included.
+        if absent_geometry(raw) != absent {
+            let replayed = std::mem::take(&mut tap.replayed);
+            drop(tap);
+            self.reset();
+            self.mesh_keys.clear();
+            if let Some(s) = &self.store {
+                s.purge(&keys);
+            }
+            self.stats = CacheStats {
+                source,
+                resumed_at: start,
+                replayed,
+                ..CacheStats::default()
+            };
+            return built;
+        }
+        let r = built?;
 
         let mut ring: Vec<Option<Snapshot>> = if source == Source::Ram {
             std::mem::take(&mut self.ring).into_iter().take(start).collect()
@@ -327,6 +354,21 @@ impl RebuildCache {
         self.stats.meshed = self.payloads.meshed;
         result
     }
+}
+
+/// The stored geometry the document's imports name and the blob store lacks.
+fn absent_geometry(raw: &Value) -> BTreeSet<String> {
+    let store = BlobStore {
+        root: blobstore::default_root(),
+    };
+    raw.get("features")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(keys::stored_geometry)
+        .filter(|g| !store.has(g))
+        .map(str::to_owned)
+        .collect()
 }
 
 /// The index of the first sketch holding a projected entity, builder.py's
