@@ -15,6 +15,9 @@ use fundacad_protocol::JobResult;
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
 
+#[path = "support/soup.rs"]
+mod soup;
+
 fn line(id: &str, a: [f64; 2], b: [f64; 2]) -> Value {
     json!({"type": "line", "id": id, "x1": a[0], "y1": a[1], "x2": b[0], "y2": b[1]})
 }
@@ -136,6 +139,13 @@ fn assert_whole_doc(label: &str, raw: Value) {
         (0, 0, 0, 0),
         "{label}: (faces without triangles, open sides in the viewport mesh, open sides in the STL, printability mesh holes) of {faces} faces"
     );
+    let flat = (soup::flat_triangles(&view.positions, &view.indices).len(), soup::flat_triangles(&stl32, &stl.1).len());
+    assert_eq!(flat, (0, 0), "{label}: triangles without area in (the viewport mesh, the STL)");
+    assert_eq!(
+        (soup::open_sides(&view.positions, &view.indices), soup::open_sides(&stl32, &stl.1)),
+        (0, 0),
+        "{label}: sides not met twice, once each way, in (the viewport mesh, the STL)"
+    );
 }
 
 #[test]
@@ -194,6 +204,8 @@ fn a_cut_with_a_corner_at_the_rim_beside_the_seam_meshes_closed() {
         let stl = export::export_mesh(shape, &export::mesh_options(None));
         let stl32: Vec<f32> = stl.0.iter().map(|&v| v as f32).collect();
         let got = (side_tally(&view.positions, &view.indices), side_tally(&stl32, &stl.1), mesh_holes(&raw).len());
+        let flat = (soup::flat_triangles(&view.positions, &view.indices).len(), soup::flat_triangles(&stl32, &stl.1).len());
+        assert_eq!(flat, (0, 0), "patterned {patterned}, corner {offset} mm off the seam: triangles without area in (the viewport mesh, the STL)");
         assert_eq!(
             got,
             ((0, cuts), (0, cuts), 0),

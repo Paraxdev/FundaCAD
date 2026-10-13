@@ -35,7 +35,8 @@ pub struct MeshParams {
 
 /// Mesh `shape` in parallel and read every face back, skipping a face with no
 /// triangulation. A reversed face has its winding flipped so facet normals
-/// point outward, and faces the mesher left apart along an edge are joined.
+/// point outward, faces the mesher left apart along an edge are joined, and
+/// no triangle without area is left (mesh::flat).
 pub fn tessellate(shape: &Shape, access: &MeshAccess, params: MeshParams) -> Tessellation {
     tessellate_with(shape, access, params, None)
 }
@@ -123,13 +124,11 @@ pub fn tessellate_with(
             .extend(std::iter::repeat(fid as u32).take(ntri));
     }
     out.normals = normals;
-    if let Some(j) = &join {
-        j.drop_flat(&mut out);
-    }
+    crate::bench::phase("flat_triangles", || super::flat::remove(&mut out));
     out
 }
 
-fn position_key(p: &[f64]) -> [u64; 3] {
+pub(super) fn position_key(p: &[f64]) -> [u64; 3] {
     [0, 1, 2].map(|k| (p[k] + 0.0).to_bits())
 }
 
@@ -158,12 +157,12 @@ fn outdated(found: &EdgeSplits, reach: Option<f64>) -> bool {
 /// 1e-5 mm beside a seam) one face folds and its neighbour does not, and the
 /// two no longer meet. Each group of points joined this way moves to the one
 /// met first, on every face that has a node there, and a triangle that loses
-/// its area to the move is dropped.
+/// its area to the move goes with the others that have none (mesh::flat).
 ///
 /// A face that small on every side (the sliver between a seam, a rim and a cut
 /// corner beside both) gets no triangles, or one where its outline needs five.
 /// It is one point of the mesh then, the points held around it form one group.
-struct SplitJoin(HashMap<[u64; 3], [f64; 3]>);
+pub(super) struct SplitJoin(HashMap<[u64; 3], [f64; 3]>);
 
 impl SplitJoin {
     fn of(found: &EdgeSplits, reach: f64) -> Option<Self> {
@@ -176,8 +175,9 @@ impl SplitJoin {
         (!join.0.is_empty()).then_some(join)
     }
 
-    /// `splits` are the pairs the mesh holds for one step of one edge.
-    fn new(splits: impl IntoIterator<Item = [[f64; 3]; 2]>, reach: f64) -> Self {
+    /// `splits` are pairs of points to make one, pairs further apart than
+    /// `reach` are left out.
+    pub(super) fn new(splits: impl IntoIterator<Item = [[f64; 3]; 2]>, reach: f64) -> Self {
         let mut ids: HashMap<[u64; 3], usize> = HashMap::new();
         let mut points: Vec<[f64; 3]> = Vec::new();
         let mut parent: Vec<usize> = Vec::new();
@@ -205,42 +205,12 @@ impl SplitJoin {
         Self(ids.into_iter().map(|(key, id)| (key, points[root(&mut parent, id)])).collect())
     }
 
-    fn settle(&self, positions: &mut [f64]) {
+    pub(super) fn settle(&self, positions: &mut [f64]) {
         for c in positions.chunks_exact_mut(3) {
             if let Some(to) = self.0.get(&position_key(c)) {
                 c.copy_from_slice(to);
             }
         }
-    }
-
-    fn drop_flat(&self, out: &mut Tessellation) {
-        let joined: Vec<bool> =
-            out.positions.chunks_exact(3).map(|c| self.0.contains_key(&position_key(c))).collect();
-        let at = |i: u32| position_key(&out.positions[3 * i as usize..3 * i as usize + 3]);
-        let keep: Vec<bool> = out
-            .indices
-            .chunks_exact(3)
-            .map(|t| {
-                if !t.iter().any(|&i| joined[i as usize]) {
-                    return true;
-                }
-                let (a, b, c) = (at(t[0]), at(t[1]), at(t[2]));
-                a != b && b != c && c != a
-            })
-            .collect();
-        if !keep.contains(&false) {
-            return;
-        }
-        let mut kept = keep.iter();
-        out.indices = out
-            .indices
-            .chunks_exact(3)
-            .filter(|_| *kept.next().unwrap_or(&true))
-            .flatten()
-            .copied()
-            .collect();
-        let mut kept = keep.iter();
-        out.face_ids.retain(|_| *kept.next().unwrap_or(&true));
     }
 }
 
@@ -460,7 +430,7 @@ mod tests {
         let far = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0]];
         let join = SplitJoin::new([far, near], 1e-4);
         join.settle(&mut t.positions);
-        join.drop_flat(&mut t);
+        super::super::flat::remove(&mut t);
         assert_eq!(t.positions[9..12], [0.0, 0.0, 0.0]);
         assert_eq!(t.positions[3..9], [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]);
         assert_eq!(t.indices, vec![0, 1, 2, 3, 4, 5]);
