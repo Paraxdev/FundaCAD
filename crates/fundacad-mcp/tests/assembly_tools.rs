@@ -115,7 +115,8 @@ fn with_a_box_on_its_corner(stl: String, name: &str) -> (Mcp, String) {
 
 #[test]
 fn an_inside_out_import_is_said_so_and_still_checked_right() {
-    let (mut mcp, _) = with_a_box_on_its_corner(cube_stl(true, false), "shell.stl");
+    let (mut mcp, built) = with_a_box_on_its_corner(cube_stl(true, false), "shell.stl");
+    assert!(built.contains("warning (f1): shell is inside out, its faces point into the material"), "{built}");
     let r = mcp.call("interference", json!({}));
     assert!(r.text.contains("body1 \"shell\" / body2 \"Box\": 125 mm3 overlap, from (0, 0, 0) to (5, 5, 5)"), "{}", r.text);
     assert!(!r.text.contains("NOT CHECKED"), "{}", r.text);
