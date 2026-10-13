@@ -2,7 +2,7 @@
 
 A dimension is a constraint with a number in it, such as a length of 40 mm.
 
-<!-- shot: sketch-dimension | Dimension tool on a rectangle edge -->
+![The Dimension tool on a rectangle edge with its value box](../img/sketch-dimension.png)
 
 Press D, click a line or circle, type the value and press Enter. Click two things for the distance between them. Double-click a number to change it later.
 

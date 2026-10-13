@@ -2,7 +2,7 @@
 
 Measure answers how long, how far apart or what angle, from things you click.
 
-<!-- shot: measure-two-holes | Measure panel after two hole edges -->
+![Measure panel showing the distance and angle between two hole edges](../img/measure-two-holes.png)
 
 Press I and click a face or edge to see its area or length. A second click shows the shortest distance, that distance split into X, Y and Z, the distance between centres and the angle between them. A third click starts over.
 

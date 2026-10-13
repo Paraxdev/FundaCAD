@@ -2,7 +2,7 @@
 
 Press ? in the app to see the same list. On a Mac, use Cmd for Ctrl. Single letters are ignored while you type in a box.
 
-<!-- shot: shortcuts-overlay | the shortcut list shown in the app -->
+![The keyboard shortcut list shown over the viewport](../img/shortcuts-overlay.png)
 
 | Key | In the model |
 | --- | --- |
@@ -40,6 +40,8 @@ Press ? in the app to see the same list. On a Mac, use Cmd for Ctrl. Single lett
 | Ctrl+, | Preferences |
 | Home | Fit the view |
 | Esc | Cancel the tool or clear the selection |
+
+![A part turning in the viewport as the right button is dragged](../img/orbit.gif)
 
 | Mouse | What it does |
 | --- | --- |

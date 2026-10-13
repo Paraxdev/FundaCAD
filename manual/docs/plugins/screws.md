@@ -2,7 +2,7 @@
 
 This plugin is a library of standard screws, nuts, washers and heat-set inserts. It is on by default, under Insert on the rail.
 
-<!-- shot: fasteners-window | Fasteners window with an M3 screw -->
+![Fasteners window with an M3 socket head cap screw selected, showing its preview and sizes](../img/fasteners-window.png)
 
 Search the Catalogue, for example `M4x20` or `socket`, and click a row to see a preview and a table with the clearance hole and tap drill size. You can change the length, the drive and the pitch.
 

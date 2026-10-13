@@ -2,7 +2,7 @@
 
 Saving overwrites the last file, while versions are checkpoints you can return to.
 
-<!-- shot: versions-panel | Versions panel with two saved versions -->
+![Versions panel listing two saved versions with their notes](../img/versions-panel.png)
 
 Open the Versions button at the edge of the viewport, type a note such as "thicker walls", and press Save version. Click a version to see what changed.
 

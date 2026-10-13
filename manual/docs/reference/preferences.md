@@ -2,7 +2,7 @@
 
 Preferences holds the settings that belong to you and not to a document. Open it from Edit, Preferences, or press Ctrl+,. Changes apply at once.
 
-<!-- shot: prefs-appearance | Appearance page with the theme list -->
+![Appearance page of Preferences](../img/prefs-appearance.png)
 
 Appearance sets the Theme, the icons and the Units. Units change the display only, because geometry is always stored in millimetres.
 
