@@ -2,6 +2,7 @@
 //! op (the Python engine's `inspect_model.py`, server.py `_inspect_job`) and the
 //! `interference` op (server.py `_interference_job`, `_min_distance`).
 
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -19,6 +20,7 @@ use crate::kernel::{self, BoolKind};
 use crate::mesh::{tessellate, MeshParams};
 use crate::select::entity::py_round;
 use crate::select::{edge_fingerprints, face_fingerprint};
+use crate::soundness::{self, Soundness};
 use crate::topo::{face_wraps, FaceAdjacency};
 
 pub const MAX_FACES: usize = 400;
@@ -196,6 +198,7 @@ struct Local {
     wraps: Vec<usize>,
     seams: Vec<usize>,
     open: Vec<usize>,
+    sound: Soundness,
 }
 
 fn union(boxes: impl IntoIterator<Item = Option<[f64; 6]>>) -> Option<[f64; 6]> {
@@ -246,8 +249,11 @@ fn measure(shape: &Shape) -> Local {
             open.push(k);
         }
     }
+    let sound = soundness::of(shape);
     Local {
-        volume: volume(shape),
+        // What a skin that does not close, or closes two ways, integrates to
+        // is a number and not a volume.
+        volume: if sound.fault().is_none() { volume(shape) } else { None },
         area: mass(shape, 2),
         bbox: optimal_bbox(shape, &faces),
         faces: faces.len(),
@@ -257,6 +263,7 @@ fn measure(shape: &Shape) -> Local {
         wraps,
         seams,
         open,
+        sound,
     }
 }
 
@@ -514,6 +521,11 @@ pub fn inspect_bodies_at(
         entry.insert("faceCount".into(), json!(local.faces));
         entry.insert("edgeCount".into(), json!(local.edges));
         entry.insert("solidCount".into(), json!(local.solids));
+        if let Some(why) = local.sound.fault() {
+            entry.insert("fault".into(), json!(why));
+        } else if local.sound.inside_out() {
+            entry.insert("insideOut".into(), json!(true));
+        }
         match level {
             Level::Plain => {}
             Level::Summary => {
@@ -624,13 +636,14 @@ enum Clash {
     Clear,
 }
 
-/// One pair of the sweep. Common runs on copies: BOPAlgo may raise the
+/// One pair of the sweep, `material` the two bodies as `soundness::material`
+/// hands them out. Common runs on copies: BOPAlgo may raise the
 /// tolerances of its arguments in place and meshing the result writes into
 /// faces it kept from them, so two pairs sharing a body cannot run at once on
 /// the originals, and the live bodies stay untouched.
-fn clash(a: &BuiltBody, b: &BuiltBody, threshold: Option<f64>) -> Clash {
-    let common = kernel::copy(&a.shape)
-        .and_then(|ca| kernel::copy(&b.shape).and_then(|cb| kernel::boolean_op(&ca, &[&cb], BoolKind::Common)))
+fn clash(a: &BuiltBody, b: &BuiltBody, material: (&Shape, &Shape), threshold: Option<f64>) -> Clash {
+    let common = kernel::copy(material.0)
+        .and_then(|ca| kernel::copy(material.1).and_then(|cb| kernel::boolean_op(&ca, &[&cb], BoolKind::Common)))
         .ok();
     let vol = common.as_ref().map_or(0.0, |c| kernel::volume(c).abs());
     match common {
@@ -664,7 +677,9 @@ fn clash(a: &BuiltBody, b: &BuiltBody, threshold: Option<f64>) -> Clash {
 }
 
 /// The pairwise sweep of `_interference_job`, `max_ops` candidate pairs at most,
-/// the pairs checked on the engine's threads and reported in row order.
+/// the pairs checked on the engine's threads and reported in row order. A
+/// body that is not closed solids is listed under `unchecked` with why, and no
+/// pair with it is tested: its common comes back without an error and wrong.
 pub fn interference(bodies: &[BuiltBody], clearance: Option<f64>, max_ops: usize, watch: &dyn Watch) -> Map<String, Value> {
     let boxes: Vec<[f64; 6]> = bodies.iter().map(|b| bbox(&b.shape)).collect();
     let threshold = clearance.filter(|t| *t > 0.0);
@@ -683,18 +698,35 @@ pub fn interference(bodies: &[BuiltBody], clearance: Option<f64>, max_ops: usize
             candidates.push((i, j));
         }
     }
+    // Only the bodies of a candidate pair are judged: one whose box clears
+    // every other overlaps none of them, whatever it is.
+    let beat = crate::heartbeat::current();
+    let mut material: Vec<Option<Result<Cow<'_, Shape>, String>>> = bodies.iter().map(|_| None).collect();
+    for &(i, j) in &candidates {
+        for k in [i, j] {
+            if material[k].is_none() {
+                material[k] = Some(soundness::material(&bodies[k].shape));
+                if let Some(b) = &beat {
+                    b();
+                }
+            }
+        }
+    }
     let cancel = watch.cancel_token();
     // A pair's common is one silent kernel call and the sweep has no feature or
     // body to report, so without beats the engine ends it as stalled a minute in.
-    let work = crate::par::Shared((bodies, &candidates, crate::heartbeat::current()));
+    let work = crate::par::Shared((bodies, &candidates, &material, beat));
     let found = crate::heartbeat::while_running(SLOW_PAIR_BEATS, || {
         crate::par::map_indexed(candidates.len(), move |k| {
             if cancel.as_ref().is_some_and(|c| c.is_cancelled()) {
                 return Clash::Clear;
             }
-            let (bodies, candidates, beat) = work.get();
+            let (bodies, candidates, material, beat) = work.get();
             let (i, j) = candidates[k];
-            let hit = clash(&bodies[i], &bodies[j], threshold);
+            let hit = match (&material[i], &material[j]) {
+                (Some(Ok(a)), Some(Ok(b))) => clash(&bodies[i], &bodies[j], (a.as_ref(), b.as_ref()), threshold),
+                _ => Clash::Clear,
+            };
             if let Some(b) = beat {
                 b();
             }
@@ -713,6 +745,20 @@ pub fn interference(bodies: &[BuiltBody], clearance: Option<f64>, max_ops: usize
     res.insert("pairs".into(), Value::Array(pairs));
     if threshold.is_some() {
         res.insert("clearances".into(), Value::Array(clearances));
+    }
+    let unchecked: Vec<Value> = bodies
+        .iter()
+        .zip(&material)
+        .filter_map(|(b, m)| match m {
+            Some(Err(why)) => Some(json!({"id": b.id, "name": b.name, "reason": why})),
+            _ => None,
+        })
+        .collect();
+    if !unchecked.is_empty() {
+        let judged = |k: usize| matches!(material[k], Some(Ok(_)));
+        let skipped = candidates.iter().filter(|&&(i, j)| !(judged(i) && judged(j))).count();
+        res.insert("unchecked".into(), Value::Array(unchecked));
+        res.insert("uncheckedPairs".into(), json!(skipped));
     }
     if truncated {
         res.insert("truncated".into(), json!(true));

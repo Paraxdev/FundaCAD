@@ -1261,6 +1261,15 @@ fn analyse(
             "{id} is not closed, {open} of its edges bound only one face, so it has no inside to analyse"
         ));
     }
+    let sound = crate::soundness::of(live);
+    if let Some(why) = sound.fault() {
+        return Err(format!("{id} {why}, the analysis needs one closed solid"));
+    }
+    // Not turned over here: the faces a support or a load names were picked
+    // on the body as it is, and a pressure pushes along their normals.
+    if sound.inside_out() {
+        return Err(format!("{id} {}, the analysis needs a solid that faces outward", crate::soundness::INSIDE_OUT));
+    }
     let shape =
         kernel::copy(live).map_err(|e| format!("{id} could not be copied for meshing, {e}"))?;
     let volume = kernel::volume(&shape).abs();

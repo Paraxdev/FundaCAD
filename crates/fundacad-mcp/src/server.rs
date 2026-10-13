@@ -1118,7 +1118,7 @@ The format comes from the extension unless given. A large STEP can take minutes:
 
     #[tool(
         name = "interference",
-        description = "Which bodies overlap, and by how much, without changing the document. Reports every overlapping pair with the overlap's volume and box, and pairs closer than `clearance` (default 1 mm) with their gap. `sweep` repeats the check at each value of a parameter, for a mechanism: {param:\"press\", from:0, to:12, steps:13} gives the clashes and the smallest gap at every step. Use this, not an intersect feature, to check fits and clearances.",
+        description = "Which bodies overlap, and by how much, without changing the document. Reports every overlapping pair with the overlap's volume and box, and pairs closer than `clearance` (default 1 mm) with their gap. `sweep` repeats the check at each value of a parameter, for a mechanism: {param:\"press\", from:0, to:12, steps:13} gives the clashes and the smallest gap at every step. A body that is not a closed solid (a surface, an open or badly joined shell, as some imports are) cannot be judged: it is listed under NOT CHECKED with why, and no pair with it is called clear. Use this, not an intersect feature, to check fits and clearances.",
         input_schema = crate::tools::interference()
     )]
     pub async fn t_interference(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
@@ -2387,7 +2387,7 @@ impl FundaCad {
             .call_meshed(
                 "rebuild",
                 call_args([
-                    ("document", Value::Object(doc)),
+                    ("document", Value::Object(doc.clone())),
                     ("revision", json!(1)),
                     ("tolerance", json!(crate::section::TOLERANCE)),
                 ]),
@@ -2415,6 +2415,7 @@ impl FundaCad {
         }
         let mut parts = Vec::new();
         let mut missed = Vec::new();
+        let mut cut_ids = Vec::new();
         for b in &bodies {
             if !wanted.is_empty() && !wanted.iter().any(|w| w == b.id() || *w == name_of(b)) {
                 continue;
@@ -2425,6 +2426,17 @@ impl FundaCad {
                 continue;
             }
             parts.push(crate::section::report(b.id(), &name_of(b), &plane, &cut, outline));
+            cut_ids.push(b.id().to_string());
+        }
+        // A section is read off the mesh, which draws a body that is not a
+        // closed solid as readily as one that is: only the exact shape knows.
+        let unsound = Self::unsound(&link, doc, &cut_ids).await;
+        for (part, id) in parts.iter_mut().zip(&cut_ids) {
+            if let Some(why) = unsound.get(id) {
+                part.push_str(&format!(
+                    "\n  NOT A SOUND SOLID: {id} {why}. This section can miss material or count a hole as material"
+                ));
+            }
         }
         let mut out = format!(
             "Section on {}, in-plane axes {} and {}:",
@@ -2571,6 +2583,32 @@ impl FundaCad {
             why.push_str(&failed.join("\n"));
         }
         Some(failure(why))
+    }
+}
+
+impl FundaCad {
+    /// Of `ids`, the bodies that are not closed solids facing outward, each
+    /// with why in words that follow its name. Empty when the engine cannot
+    /// be asked: the caller's answer stands as it would have.
+    async fn unsound(link: &EngineLink, doc: Doc, ids: &[String]) -> HashMap<String, String> {
+        let mut out = HashMap::new();
+        if ids.is_empty() {
+            return out;
+        }
+        let asked = call_args([("document", Value::Object(doc)), ("detail", json!(false)), ("bodies", json!(ids))]);
+        let Ok(reply) = link.call("inspect", asked).await else {
+            return out;
+        };
+        let bodies = reply.get("result").and_then(|r| r.get("bodies")).and_then(Value::as_array);
+        for b in bodies.map_or(&[][..], Vec::as_slice) {
+            let Some(id) = b.get("id").and_then(Value::as_str) else { continue };
+            if let Some(why) = b.get("fault").and_then(Value::as_str) {
+                out.insert(id.to_string(), why.to_string());
+            } else if b.get("insideOut").and_then(Value::as_bool).unwrap_or(false) {
+                out.insert(id.to_string(), "is inside out, its faces point into the material".to_string());
+            }
+        }
+        out
     }
 }
 

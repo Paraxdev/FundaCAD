@@ -326,6 +326,8 @@ pub struct Topology {
     pub open_edges: usize,
     pub solids: i64,
     pub volume: f64,
+    /// `soundness::Soundness::fault`, why the body is not closed solids.
+    pub fault: Option<String>,
 }
 
 /// Run the checks. `together` is an as-modelled check, where the bodies
@@ -889,6 +891,11 @@ pub fn report(bodies: &[Body], findings: &[Finding], s: &Settings, header: &str,
                         t.open_edges,
                         if t.open_edges == 1 { "" } else { "s" }
                     ));
+                }
+                // An open shell has its line above, in the words a print is read by.
+                if let Some(why) = t.fault.as_ref().filter(|_| t.open_edges == 0) {
+                    counts.push("not a sound solid".into());
+                    lines.push(format!("not a sound solid: it {why}; the findings below are read off its skin and can be wrong"));
                 }
                 if t.solids > 1 {
                     counts.push(format!("{} pieces", t.solids));

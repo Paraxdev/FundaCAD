@@ -64,6 +64,7 @@
 #include <GCPnts_QuasiUniformDeflection.hxx>
 #include <GeomAPI_ProjectPointOnSurf.hxx>
 #include <GeomLib_IsPlanarSurface.hxx>
+#include <IntCurvesFace_Intersector.hxx>
 #include <Geom_Surface.hxx>
 #include <LocOpe_DPrism.hxx>
 #include <Precision.hxx>
@@ -86,6 +87,7 @@
 #include <TopoDS_Compound.hxx>
 #include <TopoDS_Iterator.hxx>
 #include <TopoDS_Shape.hxx>
+#include <TopoDS_Solid.hxx>
 #include <gp_Ax2.hxx>
 #include <gp_Ax3.hxx>
 #include <gp_Circ.hxx>
@@ -93,8 +95,10 @@
 #include <gp_GTrsf.hxx>
 #include <gp_Lin.hxx>
 #include <gp_Pln.hxx>
+#include <gp_Pnt2d.hxx>
 #include <gp_Quaternion.hxx>
 #include <gp_Trsf.hxx>
+#include <gp_Vec.hxx>
 
 #include <algorithm>
 #include <atomic>
@@ -103,6 +107,7 @@
 #include <list>
 #include <mutex>
 #include <unordered_map>
+#include <utility>
 #include <cmath>
 #include <memory>
 #include <stdexcept>
@@ -423,6 +428,169 @@ inline int bo_open_edge_count(const TopoDS_Shape &s) {
       if (it.Value() == 1) ++open;
   }
   return open;
+}
+
+// What keeps a shape from being closed solids, counted into `out`: solids,
+// edges that bound one face, edges that bound more than two, and edges whose
+// two faces disagree about which side is inside (both run along the edge the
+// same way). Edges are read per solid and as bo_open_edge_count reads them,
+// so a seam bounds its face once each way.
+inline void bo_skin_census(const TopoDS_Shape &s, rust::Slice<int32_t> out) {
+  int32_t n[4] = {0, 0, 0, 0};
+  if (!s.IsNull()) {
+    TopTools_IndexedMapOfShape solids;
+    TopExp::MapShapes(s, TopAbs_SOLID, solids);
+    n[0] = solids.Extent();
+    typedef NCollection_DataMap<TopoDS_Shape, std::pair<int, int>, TopTools_ShapeMapHasher> Sides;
+    for (int k = 1; k <= solids.Extent(); ++k) {
+      Sides sides;
+      for (TopExp_Explorer f(solids(k), TopAbs_FACE); f.More(); f.Next()) {
+        TopAbs_Orientation fo = f.Current().Orientation();
+        if (fo != TopAbs_FORWARD && fo != TopAbs_REVERSED) continue;
+        for (TopExp_Explorer x(f.Current(), TopAbs_EDGE); x.More(); x.Next()) {
+          TopAbs_Orientation o = x.Current().Orientation();
+          if (o != TopAbs_FORWARD && o != TopAbs_REVERSED) continue;
+          if (BRep_Tool::Degenerated(TopoDS::Edge(x.Current()))) continue;
+          std::pair<int, int> *use = sides.ChangeSeek(x.Current());
+          if (!use) {
+            sides.Bind(x.Current(), std::make_pair(0, 0));
+            use = sides.ChangeSeek(x.Current());
+          }
+          ++(o == TopAbs_FORWARD ? use->first : use->second);
+        }
+      }
+      for (Sides::Iterator it(sides); it.More(); it.Next()) {
+        const int along = it.Value().first, against = it.Value().second;
+        if (along + against == 1) ++n[1];
+        else if (along + against > 2) ++n[2];
+        else if (along != against) ++n[3];
+      }
+    }
+  }
+  for (size_t i = 0; i < out.size() && i < 4; ++i) out[i] = n[i];
+}
+
+// The side `face` shows the outside at (u, v), by its own orientation.
+inline bool bo_face_out(const TopoDS_Face &face, double u, double v, gp_Pnt &at, gp_Vec &out) {
+  gp_Vec du, dv;
+  BRepAdaptor_Surface(face, false).D1(u, v, at, du, dv);
+  out = du.Crossed(dv);
+  if (out.Magnitude() < 1e-12) return false;
+  out.Normalize();
+  if (face.Orientation() == TopAbs_REVERSED) out.Reverse();
+  return true;
+}
+
+// Whether a closed solid's faces point into its material: 1 they do, 0 they
+// point out, -1 no line gave a clean answer. Asked where a line through one
+// of its faces leaves the solid for good: nothing of it lies beyond, so the
+// face there has to point onward. A line that leaves through an edge or grazes
+// the face is dropped for another. A face is only intersected where its box
+// meets the line, which keeps this to microseconds a face, where the volume
+// integral takes a hundred times that on an import.
+inline int bo_solid_inward(const TopoDS_Shape &solid) {
+  try {
+    std::vector<std::pair<TopoDS_Face, Bnd_Box>> faces;
+    Bnd_Box whole;
+    for (TopExp_Explorer f(solid, TopAbs_FACE); f.More(); f.Next()) {
+      TopAbs_Orientation o = f.Current().Orientation();
+      if (o != TopAbs_FORWARD && o != TopAbs_REVERSED) continue;
+      Bnd_Box box;
+      BRepBndLib::Add(f.Current(), box);
+      if (box.IsVoid()) continue;
+      whole.Add(box);
+      faces.emplace_back(TopoDS::Face(f.Current()), box);
+    }
+    if (faces.empty()) return -1;
+    const double reach = whole.CornerMin().Distance(whole.CornerMax()) + 1.0;
+    const double spots[6][2] = {{0.5, 0.5}, {0.31, 0.37}, {0.71, 0.63}, {0.23, 0.79}, {0.83, 0.29}, {0.41, 0.87}};
+    const gp_Dir axes[3] = {gp::DZ(), gp::DX(), gp::DY()};
+    for (int k = 0; k < 6; ++k) {
+      const TopoDS_Face &from = faces[k * faces.size() / 6].first;
+      double u0, u1, v0, v1;
+      BRepTools::UVBounds(from, u0, u1, v0, v1);
+      gp_Pnt start;
+      gp_Vec side;
+      bool found = false;
+      for (int j = 0; j < 6 && !found; ++j) {
+        const double *spot = spots[(k + j) % 6];
+        const double u = u0 + spot[0] * (u1 - u0), v = v0 + spot[1] * (v1 - v0);
+        found = BRepClass_FaceClassifier(from, gp_Pnt2d(u, v), 1e-7).State() == TopAbs_IN &&
+                bo_face_out(from, u, v, start, side);
+      }
+      if (!found) continue;
+      gp_Dir along = axes[0];
+      for (const gp_Dir &a : axes)
+        if (std::abs(side.Dot(gp_Vec(a))) > std::abs(side.Dot(gp_Vec(along)))) along = a;
+      const gp_Lin line(start, along);
+      const TopoDS_Face *last = nullptr;
+      double w = 0.0, lu = 0.0, lv = 0.0;
+      TopAbs_State state = TopAbs_UNKNOWN;
+      for (const std::pair<TopoDS_Face, Bnd_Box> &f : faces) {
+        if (f.second.IsOut(line)) continue;
+        IntCurvesFace_Intersector hit(f.first, 1e-7);
+        hit.Perform(line, -reach, reach);
+        if (!hit.IsDone()) continue;
+        for (int i = 1; i <= hit.NbPnt(); ++i) {
+          if (last && hit.WParameter(i) <= w) continue;
+          last = &f.first;
+          w = hit.WParameter(i);
+          lu = hit.UParameter(i);
+          lv = hit.VParameter(i);
+          state = hit.State(i);
+        }
+      }
+      if (!last || state != TopAbs_IN) continue;
+      gp_Pnt at;
+      gp_Vec out;
+      if (!bo_face_out(*last, lu, lv, at, out)) continue;
+      const double onward = out.Dot(gp_Vec(along));
+      if (std::abs(onward) < 0.05) continue;
+      return onward < 0.0 ? 1 : 0;
+    }
+  } catch (...) {
+  }
+  return -1;
+}
+
+// A line that says inward is held against the sign of the volume, which is
+// exact and slow: one crossing the intersector missed would otherwise turn a
+// sound solid over. Sound solids, nearly all there are, never pay for it.
+inline bool bo_faces_inward(const TopoDS_Shape &solid) {
+  return bo_solid_inward(solid) != 0 && bo_volume(solid) < 0.0;
+}
+
+// Solids of the shape whose faces point into their material. Only a solid
+// that bo_skin_census finds nothing wrong with has one answer to this.
+inline int bo_inward_solids(const TopoDS_Shape &s) {
+  if (s.IsNull()) return 0;
+  TopTools_IndexedMapOfShape solids;
+  TopExp::MapShapes(s, TopAbs_SOLID, solids);
+  int inward = 0;
+  for (int k = 1; k <= solids.Extent(); ++k) inward += bo_faces_inward(solids(k)) ? 1 : 0;
+  return inward;
+}
+
+inline TopoDS_Shape bo_outward_walk(const TopoDS_Shape &s) {
+  BRep_Builder b;
+  if (s.ShapeType() == TopAbs_SOLID) {
+    if (!bo_faces_inward(s)) return s;
+    TopoDS_Solid out;
+    b.MakeSolid(out);
+    for (TopoDS_Iterator it(s); it.More(); it.Next()) b.Add(out, it.Value().Reversed());
+    return out;
+  }
+  if (s.ShapeType() != TopAbs_COMPOUND && s.ShapeType() != TopAbs_COMPSOLID) return s;
+  TopoDS_Compound out;
+  b.MakeCompound(out);
+  for (TopoDS_Iterator it(s); it.More(); it.Next()) b.Add(out, bo_outward_walk(it.Value()));
+  return out;
+}
+
+// The shape with every inward solid's shells turned over. The faces are the
+// same ones in the same order, so an index into them holds on both.
+inline BoShape bo_turned_outward(const TopoDS_Shape &s) {
+  BO_GUARD(return bo_own(s.IsNull() ? s : bo_outward_walk(s));)
 }
 
 inline void bo_location_translation(const TopoDS_Shape &s, rust::Slice<double> out) {

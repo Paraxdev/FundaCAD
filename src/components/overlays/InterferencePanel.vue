@@ -52,7 +52,17 @@ function close() {
         <span class="measure-v">{{ c.v }}</span>
       </div>
       <div v-if="!panels.interference.clashes.length" class="measure-row">
-        <span class="measure-v">No overlapping bodies</span>
+        <span class="measure-v">{{
+          panels.interference.unchecked.length ? "No overlap among the pairs that were checked" : "No overlapping bodies"
+        }}</span>
+      </div>
+      <div
+        v-for="(u, i) in panels.interference.unchecked"
+        :key="'unchecked' + i"
+        class="measure-hint"
+        style="color: var(--accent-hot, #ff9a5c)"
+      >
+        Not checked: {{ u }}
       </div>
 
       <div class="measure-divider" />

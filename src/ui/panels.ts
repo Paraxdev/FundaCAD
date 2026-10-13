@@ -118,13 +118,17 @@ export function createPanels(deps: PanelsDeps) {
     }
     const pairs = res.pairs ?? [];
     const clearances = res.clearances ?? [];
+    const unchecked = (res.unchecked ?? []).map((u) => `${u.name} ${u.reason}`);
     const foundAny = pairs.length || clearances.length;
+    const notJudged = unchecked.length
+      ? `, ${unchecked.length} ${unchecked.length === 1 ? "body" : "bodies"} could not be checked`
+      : "";
     setStatus(
-      foundAny
+      (foundAny
         ? `${pairs.length} interference${pairs.length === 1 ? "" : "s"}` +
           (clearanceMm ? `, ${clearances.length} close pair${clearances.length === 1 ? "" : "s"}` : "")
-        : "No interferences found",
-      foundAny ? "error" : "connected",
+        : "No interferences found") + notJudged,
+      foundAny || unchecked.length ? "error" : "connected",
     );
     const unit = getUnit();
     const f = toDisplay(1);
@@ -146,6 +150,7 @@ export function createPanels(deps: PanelsDeps) {
         : "Interference",
       clashes,
       clearances: clearanceRows,
+      unchecked,
       ...(res.truncated ? { truncatedMessage: res.message } : {}),
     });
     viewport.setInterferenceOverlay(

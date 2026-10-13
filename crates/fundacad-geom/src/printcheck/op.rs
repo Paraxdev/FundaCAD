@@ -82,7 +82,12 @@ fn check(args: &Map<String, Value>, s: &Settings, built: &[BuiltBody], watch: &d
         };
         topo.insert(
             id,
-            Topology { open_edges, solids: b.get("solidCount").and_then(Value::as_i64).unwrap_or(1), volume },
+            Topology {
+                open_edges,
+                solids: b.get("solidCount").and_then(Value::as_i64).unwrap_or(1),
+                volume,
+                fault: b.get("fault").and_then(Value::as_str).map(str::to_owned),
+            },
         );
     }
     if stopped() {
@@ -194,6 +199,7 @@ fn check(args: &Map<String, Value>, s: &Settings, built: &[BuiltBody], watch: &d
                         "openEdges": t.open_edges,
                         "solids": t.solids,
                         "insideOut": t.volume < 0.0,
+                        "fault": t.fault,
                     })
                 })
                 .collect(),

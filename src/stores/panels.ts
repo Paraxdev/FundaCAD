@@ -41,6 +41,9 @@ export interface InterferenceData {
   clearances: ClearanceRow[];
   /** Set when the engine capped the candidate-pair sweep on a dense assembly. */
   truncatedMessage?: string;
+  /** Bodies that are not closed solids, each "name why": none of their pairs
+   *  was tested, so "no overlap" is not a claim about them. */
+  unchecked: string[];
 }
 
 /** The deformed shape drawn on the result's colours: the scale on the slider,

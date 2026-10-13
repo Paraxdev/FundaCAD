@@ -71,6 +71,23 @@ export interface ClearancePair {
   pointB: [number, number, number];
 }
 
+export interface InterferenceReply {
+  ok: boolean;
+  pairs?: ClashPair[];
+  clearances?: ClearancePair[];
+  truncated?: boolean;
+  message?: string;
+  unchecked?: UncheckedBody[];
+}
+
+/** A body an interference check could not judge, with why in words that
+ *  follow its name: no pair with it was tested. */
+export interface UncheckedBody {
+  id: string;
+  name: string;
+  reason: string;
+}
+
 /** Where a generated shape goes: its local origin to `origin`, its +Z along `zAxis`. */
 export interface ShapePlacement {
   origin: [number, number, number];
@@ -246,7 +263,7 @@ export interface PrintabilityReply {
   header: string;
   report: string;
   settings: { nozzle: number; layer: number; overhang: number; minGap: number; maxBridge: number; up: string | null; layFlat: boolean };
-  bodies: { id: string; name: string; up: Vec3; bed: number; bedFace: number | null; openEdges: number; solids: number; insideOut: boolean }[];
+  bodies: { id: string; name: string; up: Vec3; bed: number; bedFace: number | null; openEdges: number; solids: number; insideOut: boolean; fault?: string | null }[];
   findings: PrintabilityFinding[];
   errors?: { feature_id?: string; message: string }[];
 }
@@ -325,11 +342,12 @@ export interface GeometryBackend {
   // Pairwise interference (clash) check among the document's bodies. `clearance`
   // (mm) turns on the near-miss pass: pairs closer than that but not
   // overlapping come back in `clearances`. `truncated` marks a candidate-pair
-  // cap hit on a dense assembly, `message` explains it.
+  // cap hit on a dense assembly, `message` explains it. `unchecked` lists the
+  // bodies that are not closed solids: their pairs are in neither list.
   interference(
     doc: CadDocument,
     clearance?: number,
-  ): Promise<{ ok: boolean; pairs?: ClashPair[]; clearances?: ClearancePair[]; truncated?: boolean; message?: string }>;
+  ): Promise<InterferenceReply>;
   /** The axis a press/pull with `direction: "axis"` would move this face along,
    *  or why it has none. Null when the engine could not be asked. Optional, a
    *  test backend may not answer it. */
@@ -1338,11 +1356,8 @@ export class Geometry implements GeometryBackend {
     return { ok: false, message: msg.error?.message ?? "the shape could not be generated" };
   }
 
-  async interference(
-    doc: CadDocument,
-    clearance?: number,
-  ): Promise<{ ok: boolean; pairs?: ClashPair[]; clearances?: ClearancePair[]; truncated?: boolean; message?: string }> {
-    const msg = await this.call<{ pairs?: ClashPair[]; clearances?: ClearancePair[]; truncated?: boolean; message?: string }>(
+  async interference(doc: CadDocument, clearance?: number): Promise<InterferenceReply> {
+    const msg = await this.call<Omit<InterferenceReply, "ok">>(
       "interference",
       { document: doc, ...(clearance ? { clearance } : {}) },
     );
@@ -1353,6 +1368,7 @@ export class Geometry implements GeometryBackend {
         ...(r.pairs !== undefined ? { pairs: r.pairs } : {}),
         ...(r.clearances !== undefined ? { clearances: r.clearances } : {}),
         ...(r.truncated ? { truncated: true, message: r.message } : {}),
+        ...(r.unchecked?.length ? { unchecked: r.unchecked } : {}),
       };
     }
     return { ok: false, message: msg.error?.message };
