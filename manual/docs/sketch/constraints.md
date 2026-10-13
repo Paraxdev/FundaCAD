@@ -2,7 +2,7 @@
 
 A constraint is a rule the sketch keeps true, such as "this line stays horizontal". Change one size and everything that depends on it moves.
 
-<!-- shot: sketch-constraints | sketch with dimensions and Relations list -->
+![A dimensioned rectangle and the Relations list in the sketch palette](../img/sketch-constraints.png)
 
 Blue curves can still move, white curves are fully defined, and red means two rules disagree.
 

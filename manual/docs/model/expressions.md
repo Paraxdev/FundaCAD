@@ -2,7 +2,7 @@
 
 An expression is a small calculation you type where a number goes, such as `width / 2`.
 
-<!-- shot: expression-value | value box holding rib = width / 4 -->
+![The Extrude distance box holding rib = width / 4](../img/expression-value.png)
 
 Put a name and an equals sign first, as in `rib = width / 4`, to name the result. Units are mm, cm, in, deg and rad, so `1 in` is 25.4 mm. Without a unit, lengths are mm and angles are degrees.
 

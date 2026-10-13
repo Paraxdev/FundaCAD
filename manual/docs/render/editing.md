@@ -2,7 +2,7 @@
 
 Select a tile and the panel under the grid shows its settings.
 
-<!-- shot: render-material-sliders | material sliders for Metalness and Roughness -->
+![Material panel for Steel with Metalness, Roughness, Opacity, Glow and Clearcoat sliders](../img/render-material-sliders.png)
 
 Metalness runs from plastic to bare metal and Roughness from mirror to matte. A low Opacity gives glass, and Clearcoat adds a shiny layer like lacquer. Glow makes the material give off light that falls on its neighbours.
 

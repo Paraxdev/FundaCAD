@@ -27,7 +27,9 @@ const TOKEN = process.env.SC_TOKEN || "";
 const APP = process.env.SC_URL || "http://localhost:5173/";
 const ENGINE_PORT = process.env.SC_ENGINE_PORT || "8765";
 const EXE = process.env.SC_CHROME || "C:/Program Files/Google/Chrome/Application/chrome.exe";
-const OUT = path.resolve(__dirname, "..", "manual", "docs", "img");
+const OUT = process.env.SC_OUT || path.resolve(__dirname, "..", "manual", "docs", "img");
+// SC_FULL=1 ignores every crop, to find out where something sits on the screen.
+const FULL = !!process.env.SC_FULL;
 const W = 1440;
 const H = 900;
 
@@ -53,7 +55,7 @@ async function openPage(browser) {
   await page.goto(`${APP}?token=${TOKEN}`);
   await page.waitForFunction(() => !!window.store && !!window.viewport && !!window.sketch && !!window.geometry, null, { timeout: 60000 });
   // The frame-rate and round-trip readouts are diagnostics, not part of the product.
-  await page.addStyleTag({ content: "#fps,.roundtrip{display:none!important}" });
+  await page.addStyleTag({ content: "#fps,.roundtrip,.perf-warn-group{display:none!important}" });
   await sleep(1500);
   return { page, errors };
 }
@@ -103,6 +105,8 @@ function makeCtx(page, name) {
         ids.push(id);
         const out = { ...f, id };
         for (const k of ["sketch", "profile", "path"]) if (typeof out[k] === "number") out[k] = ids[out[k]];
+        if (out.features) out.features = out.features.map((i) => ids[i]);
+        if (out.profiles) out.profiles = out.profiles.map((q) => ({ ...q, sketch: ids[q.sketch] }));
         s.addFeature(out);
         const t0 = Date.now();
         while (Date.now() - t0 < 90000) {
@@ -163,7 +167,7 @@ function makeCtx(page, name) {
   ctx.still = async (file, clip) => {
     fs.mkdirSync(OUT, { recursive: true });
     const out = path.join(OUT, `${file}.png`);
-    await page.screenshot({ path: out, ...(clip ? { clip } : {}) });
+    await page.screenshot({ path: out, ...(clip && !FULL ? { clip } : {}) });
     ctx.made.push(`${file}.png`);
     console.log(`  ${file}.png`);
   };
@@ -728,6 +732,640 @@ const GIFS = {
     ctx.endRec("orbit");
   },
 };
+
+// ---------------------------------------------------- model, sketch pages ---
+
+const VIEW = { x: 410, y: 150, width: 660, height: 620 };
+const SKETCH = { x: 410, y: 100, width: 660, height: 700 };
+
+// Iso view of whatever is built, centred between the rail and the right column.
+async function showModel(ctx, zoom = -1) {
+  await ctx.view("iso", zoom);
+  await ctx.centre();
+  await ctx.clearSelection();
+  await ctx.park();
+}
+
+// Open a sketch on the XY plane the way the tutorial does.
+async function startSketch(ctx) {
+  const { page } = ctx;
+  await page.mouse.move(800, 500);
+  await page.keyboard.press("s");
+  await sleep(700);
+  await page.mouse.click(762, 602);
+  await page.waitForFunction(() => window.sketch.active, null, { timeout: 15000 });
+  await sleep(2000);
+}
+
+// A rectangle drawn with the mouse, tool back on select.
+async function drawRect(ctx, a = [640, 400], b = [880, 520]) {
+  const { page } = ctx;
+  await page.keyboard.press("r");
+  await ctx.clickAt(a[0], a[1]);
+  await ctx.move(b[0], b[1], 8);
+  await page.mouse.click(b[0], b[1]);
+  await sleep(400);
+  await page.keyboard.press("Escape");
+  await sleep(300);
+}
+
+// Click the history row named `label` so its value rows open.
+async function openStep(ctx, label) {
+  await ctx.page.getByText(label, { exact: true }).last().click();
+  await sleep(1000);
+  await ctx.park();
+}
+
+Object.assign(STILLS, {
+  async "combine-subtract"(ctx) {
+    await ctx.features([
+      { type: "box", length: 40, width: 30, height: 20, operation: "new" },
+      { type: "cylinder", radius: 8, height: 40, operation: "cut" },
+    ]);
+    await showModel(ctx);
+    await ctx.still("combine-subtract", VIEW);
+  },
+
+  async "primitive-cylinder"(ctx) {
+    await ctx.features([{ type: "cylinder", radius: 12, height: 30, operation: "new" }]);
+    await showModel(ctx, -2);
+    await openStep(ctx, "Cylinder");
+    await ctx.still("primitive-cylinder", { x: 540, y: 40, width: 890, height: 720 });
+  },
+
+  async "construct-planes"(ctx) {
+    await ctx.features([
+      ...block(),
+      { type: "datumPlane", plane: "XY", offset: 32, name: "Plane 1" },
+      { type: "datumAxis", origin: [0, 0, 0], dir: [0, 0, 1], name: "Axis 1" },
+    ]);
+    await showModel(ctx, -1);
+    await ctx.still("construct-planes", VIEW);
+  },
+
+  async "loft-adapter"(ctx) {
+    await ctx.features([
+      { type: "sketch", plane: "XY", entities: [{ type: "circle", id: "c1", x: 0, y: 0, radius: 14 }] },
+      { type: "sketch", plane: P([0, 0, 30], [0, 0, 1], [1, 0, 0]), entities: [{ type: "rectangle", id: "r1", x: 0, y: 0, width: 36, height: 36 }] },
+      { type: "loft", profiles: [{ sketch: 0, region: [0, 0, 0] }, { sketch: 1, region: [0, 0, 30] }], operation: "new" },
+    ]);
+    await showModel(ctx);
+    await ctx.still("loft-adapter", VIEW);
+  },
+
+  async "revolve-profile"(ctx) {
+    await ctx.features([
+      {
+        type: "sketch", plane: "XZ",
+        entities: [
+          { type: "line", x1: 0, y1: 0, x2: 14, y2: 0 },
+          { type: "line", x1: 14, y1: 0, x2: 20, y2: 15 },
+          { type: "line", x1: 20, y1: 15, x2: 10, y2: 40 },
+          { type: "line", x1: 10, y1: 40, x2: 14, y2: 50 },
+          { type: "line", x1: 14, y1: 50, x2: 0, y2: 50 },
+          { type: "line", x1: 0, y1: 50, x2: 0, y2: 0 },
+        ],
+      },
+      { type: "revolve", sketch: 0, axis: "Z", angle: 360, operation: "new", regions: [[5, 0, 20]] },
+    ]);
+    await showModel(ctx);
+    await ctx.still("revolve-profile", VIEW);
+  },
+
+  async "mirror-half"(ctx) {
+    await ctx.features([
+      { type: "sketch", plane: "XY", entities: [{ type: "rectangle", x: 20, y: 0, width: 24, height: 30 }] },
+      { type: "extrude", sketch: 0, distance: 14, operation: "new", regions: [[20, 0, 0]] },
+      { type: "sketch", plane: "XY", entities: [{ type: "rectangle", x: 12, y: 0, width: 8, height: 30 }] },
+      { type: "extrude", sketch: 2, distance: 34, operation: "join", regions: [[12, 0, 0]] },
+      { type: "mirror", plane: "YZ" },
+    ]);
+    await showModel(ctx);
+    await ctx.still("mirror-half", VIEW);
+  },
+
+  async "shell-mug"(ctx) {
+    await ctx.features([
+      { type: "cylinder", radius: 20, height: 36, operation: "new" },
+      { type: "shell", thickness: 3, faces: { kind: "face", by: "normal", dir: [0, 0, 1] } },
+    ]);
+    await showModel(ctx);
+    await ctx.still("shell-mug", VIEW);
+  },
+
+  async "split-body"(ctx) {
+    await ctx.features([
+      ...block(),
+      { type: "split", plane: "XZ", keep: "both" },
+    ]);
+    await showModel(ctx);
+    await ctx.still("split-body", VIEW);
+  },
+
+  async "offset-face"(ctx) {
+    await ctx.features([
+      ...block(),
+      { type: "offsetFace", faces: { kind: "face", by: "nearest", point: [20, 0, 10] }, distance: 10 },
+    ]);
+    await showModel(ctx);
+    await ctx.still("offset-face", VIEW);
+  },
+
+  async "pattern-holes"(ctx) {
+    await ctx.features([
+      { type: "sketch", plane: "XY", entities: [{ type: "rectangle", x: 0, y: 0, width: 80, height: 30 }] },
+      { type: "extrude", sketch: 0, distance: 6, operation: "new", regions: [[0, 0, 0]] },
+      { type: "sketch", plane: P([0, 0, 6], [0, 0, 1], [1, 0, 0]), entities: [{ type: "circle", x: -28, y: 0, radius: 3.5 }] },
+      { type: "extrude", sketch: 2, distance: -6, operation: "cut" },
+      { type: "patternLinear", count: 5, spacing: 14, axis: "X", features: [3] },
+    ]);
+    await showModel(ctx);
+    await ctx.still("pattern-holes", VIEW);
+  },
+
+  async "picking-face"(ctx) {
+    await ctx.features(block());
+    await showModel(ctx);
+    const p = await ctx.at([0, 0, 20]);
+    await ctx.hover(p.x, p.y);
+    await ctx.still("picking-face", VIEW);
+  },
+
+  async "move-gizmo"(ctx) {
+    await ctx.features(block());
+    await showModel(ctx, -2);
+    await ctx.page.evaluate(() => {
+      const ids = window.store.buildState.result.bodies.map((b) => b.id);
+      window.viewport.setSelectedBodies(ids);
+      window.__fundacad.handleAction("move");
+    });
+    await sleep(1200);
+    await ctx.park();
+    await ctx.still("move-gizmo", { x: 420, y: 200, width: 900, height: 580 });
+  },
+});
+
+Object.assign(STILLS, {
+  async "sketch-typed-size"(ctx) {
+    const { page } = ctx;
+    await startSketch(ctx);
+    await page.keyboard.press("r");
+    await ctx.clickAt(640, 400);
+    await ctx.move(880, 520, 8);
+    await sleep(300);
+    await page.keyboard.type("40");
+    await sleep(700);
+    await ctx.still("sketch-typed-size", { x: 540, y: 340, width: 640, height: 260 });
+    await page.keyboard.press("Escape");
+  },
+
+  async "sketch-dimension"(ctx) {
+    const { page } = ctx;
+    await startSketch(ctx);
+    await drawRect(ctx);
+    await page.keyboard.press("d");
+    const r = (await ctx.ents())[0];
+    const p = await ctx.sk(r.x, r.y - r.height / 2);
+    await ctx.hover(p.x, p.y);
+    await ctx.clickAt(p.x, p.y);
+    await sleep(500);
+    await ctx.still("sketch-dimension", { x: 520, y: 360, width: 640, height: 260 });
+    await page.keyboard.press("Escape");
+  },
+
+  async "sketch-constraints"(ctx) {
+    await startSketch(ctx);
+    await drawRect(ctx);
+    const { page } = ctx;
+    await page.keyboard.press("d");
+    let r = (await ctx.ents())[0];
+    let p = await ctx.sk(r.x, r.y - r.height / 2);
+    await ctx.clickAt(p.x, p.y);
+    await page.keyboard.type("40");
+    await page.keyboard.press("Enter");
+    await sleep(500);
+    r = (await ctx.ents())[0];
+    p = await ctx.sk(r.x + r.width / 2, r.y);
+    await ctx.clickAt(p.x, p.y);
+    await page.keyboard.type("20");
+    await page.keyboard.press("Enter");
+    await sleep(500);
+    await page.keyboard.press("Escape");
+    await ctx.park();
+    await ctx.still("sketch-constraints", { x: 560, y: 70, width: 860, height: 600 });
+  },
+
+  async "sketch-trim"(ctx) {
+    const { page } = ctx;
+    await startSketch(ctx);
+    await page.keyboard.press("l");
+    await ctx.clickAt(600, 520);
+    await ctx.move(900, 520, 6);
+    await page.mouse.click(900, 520);
+    await page.keyboard.press("Escape");
+    await page.keyboard.press("l");
+    await ctx.clickAt(760, 360);
+    await ctx.move(760, 640, 6);
+    await page.mouse.click(760, 640);
+    await page.keyboard.press("Escape");
+    await sleep(300);
+    await page.keyboard.press("t");
+    await ctx.hover(830, 520);
+    await ctx.still("sketch-trim", { x: 540, y: 300, width: 640, height: 400 });
+    await page.keyboard.press("Escape");
+  },
+
+  async "sketch-pattern"(ctx) {
+    const { page } = ctx;
+    await startSketch(ctx);
+    await page.evaluate(() => window.sketch.setTool("boltCircle"));
+    await sleep(400);
+    await ctx.clickAt(760, 500);
+    await ctx.move(900, 500, 8);
+    await sleep(600);
+    await ctx.still("sketch-pattern", { x: 540, y: 300, width: 520, height: 440 });
+    await page.keyboard.press("Escape");
+  },
+
+  async "sketch-pattern-rect"(ctx) {
+    const { page } = ctx;
+    await startSketch(ctx);
+    await drawRect(ctx, [600, 420], [680, 480]);
+    console.log("  ents", JSON.stringify(await ctx.ents()).slice(0, 120));
+    const r = (await ctx.ents())[0];
+    const top = await ctx.sk(r.x, r.y + r.height / 2);
+    await page.keyboard.press("Control+a");
+    await sleep(300);
+    await page.evaluate(() => window.sketch.setTool("patternRect"));
+    await sleep(400);
+    await ctx.clickAt(top.x, top.y);
+    await ctx.move(760, 520, 8);
+    await sleep(600);
+    await ctx.still("sketch-pattern-rect", SKETCH);
+    await page.keyboard.press("Escape");
+  },
+
+  async "sketch-project"(ctx) {
+    const { page } = ctx;
+    await ctx.features(block());
+    await ctx.view("iso", -1);
+    await ctx.centre();
+    await pickFace(ctx, [0, 0, 20]);
+    await page.keyboard.press("s");
+    await page.waitForFunction(() => window.sketch.active, null, { timeout: 15000 });
+    await sleep(2500);
+    await page.keyboard.press("p");
+    await sleep(500);
+    await ctx.clickAt(720, 470);
+    await sleep(800);
+    await page.keyboard.press("Enter");
+    await sleep(1500);
+    await ctx.park();
+    await ctx.still("sketch-project", { x: 420, y: 200, width: 700, height: 520 });
+  },
+
+  async "sketch-palette"(ctx) {
+    await startSketch(ctx);
+    await ctx.park();
+    await ctx.still("sketch-palette", { x: 1150, y: 60, width: 290, height: 620 });
+  },
+});
+
+Object.assign(STILLS, {
+  async "suppress-step"(ctx) {
+    const { page } = ctx;
+    await ctx.features([
+      ...block(),
+      { type: "cylinder", radius: 6, height: 40, operation: "cut" },
+    ]);
+    await showModel(ctx);
+    const row = () => page.locator("#timeline").getByText("Cylinder", { exact: true }).last();
+    await row().click({ button: "right" });
+    await sleep(600);
+    await page.getByText("Suppress", { exact: true }).first().click();
+    await ctx.settle(900);
+    await row().click({ button: "right" });
+    await sleep(700);
+    await ctx.still("suppress-step", { x: 1060, y: 20, width: 380, height: 520 });
+    await page.keyboard.press("Escape");
+  },
+});
+
+
+// ------------------------------------------------------------------ pass 2 --
+
+async function openPrefs(ctx, category) {
+  await ctx.page.keyboard.press("Control+Comma");
+  await ctx.page.waitForSelector(".prefs-panel", { timeout: 10000 });
+  await sleep(500);
+  if (category) {
+    await ctx.page.click(`.prefs-nav-btn[data-category="${category}"]`);
+    await sleep(600);
+  }
+  await ctx.page.mouse.move(700, 880);
+}
+
+Object.assign(STILLS, {
+  async "prefs-appearance"(ctx) {
+    await openPrefs(ctx, "appearance");
+    await ctx.still("prefs-appearance", await ctx.box(".prefs-panel", 6));
+  },
+  async "ai-live-document"(ctx) {
+    await openPrefs(ctx, "mcp");
+    await ctx.page.locator(".prefs-pane:visible .select-trigger, .prefs-pane:visible [role=combobox]").first().click();
+    await sleep(500);
+    await ctx.still("ai-live-document", { x: 230, y: 90, width: 980, height: 330 });
+  },
+  async "prefs-gamepad"(ctx) {
+    await openPrefs(ctx);
+    await ctx.page.click(".prefs-nav-btn:has-text(\"Game Controller\")");
+    await sleep(600);
+    await ctx.still("prefs-gamepad", await ctx.box(".prefs-panel", 6));
+  },
+  async "shortcuts-overlay"(ctx) {
+    await ctx.page.keyboard.press("Shift+Slash");
+    await sleep(900);
+    // The list is taller than the window, so it is shrunk to fit whole.
+    await ctx.page.addStyleTag({ content: ".shortcut-hud-card{zoom:.68}" });
+    await sleep(500);
+    await ctx.still("shortcuts-overlay", await ctx.box(".shortcut-hud-card", 8));
+  },
+});
+
+// ------------------------------------------------------------ panels (pass 2) --
+
+async function railPick(ctx, family, id) {
+  await ctx.page.click(`#toolrail [data-family="${family}"]`);
+  await sleep(500);
+  await ctx.page.click(`[data-pick="${id}"]`);
+  await sleep(1000);
+}
+
+// A block with a peg through it that is its own body.
+const overlapPair = () => [
+  { type: "box", length: 40, width: 30, height: 20, operation: "new" },
+  { type: "cylinder", radius: 8, height: 40, operation: "new" },
+];
+
+// A T shape: the cap hangs 15 mm out on both sides, so its underside needs support.
+const tee = () => [
+  { type: "sketch", plane: "XY", entities: [{ type: "rectangle", id: "r1", x: 0, y: 0, width: 20, height: 20 }] },
+  { type: "extrude", sketch: 0, distance: 20, operation: "new", regions: [[0, 0, 0]] },
+  { type: "sketch", plane: P([0, 0, 20], [0, 0, 1], [1, 0, 0]), entities: [{ type: "rectangle", id: "r2", x: 0, y: 0, width: 50, height: 20 }] },
+  { type: "extrude", sketch: 2, distance: 8, operation: "join", targets: ["body1"], regions: [[20, 0, 0]] },
+];
+
+async function closeHistory(ctx, keepToasts = false) {
+  await ctx.page.click("#timeline .float-card-close").catch(() => {});
+  if (!keepToasts) await ctx.page.addStyleTag({ content: ".toast-stack,.prompt{display:none!important}" });
+  await sleep(500);
+}
+
+async function hideRail(ctx) {
+  await ctx.page.addStyleTag({ content: "#toolrail{visibility:hidden!important}" });
+  await sleep(300);
+}
+
+// Slide the model sideways by dx screen pixels (negative is left).
+async function slide(ctx, dx) {
+  await ctx.page.evaluate((d) => {
+    const vp = window.viewport;
+    vp.rig.panScreen((-d * vp.pixelWorldSize(vp.rig.getTarget())) / vp.rig.viewScale(), 0);
+    vp.requestRender();
+  }, dx);
+  await sleep(600);
+}
+
+async function orbitDown(ctx, dy) {
+  const { page } = ctx;
+  await page.mouse.move(760, 450);
+  await page.mouse.down({ button: "right" });
+  await page.mouse.move(760, 450 + dy, { steps: 10 });
+  await page.mouse.up({ button: "right" });
+  await sleep(900);
+}
+
+// A stout L bracket, small enough that the stress mesh stays fine.
+const smallBracket = () => [
+  { type: "sketch", plane: "XY", entities: [{ type: "rectangle", x: 0, y: 0, width: 40, height: 30 }] },
+  { type: "extrude", sketch: 0, distance: 8, operation: "new" },
+  { type: "sketch", plane: P([-20, 0, 0], [1, 0, 0], [0, 1, 0]), entities: [{ type: "rectangle", x: 0, y: 19, width: 30, height: 22 }] },
+  { type: "extrude", sketch: 2, distance: 8, operation: "join", targets: ["body1"] },
+  { type: "sketch", plane: "XY", entities: [{ type: "circle", radius: 2.5, x: 8, y: 9 }, { type: "circle", radius: 2.5, x: 8, y: -9 }] },
+  { type: "extrude", sketch: 4, distance: 8, operation: "cut", targets: ["body1"] },
+];
+
+async function runStress(ctx) {
+  const { page } = ctx;
+  await ctx.features(smallBracket());
+  await closeHistory(ctx);
+  await ctx.view("iso", 0);
+  await slide(ctx, -100);
+  await railPick(ctx, "cat:INSPECT", "stress");
+  await page.getByRole("button", { name: "Place" }).first().click();
+  const a = await ctx.at([10, 9, 8]);
+  await ctx.clickAt(a.x, a.y);
+  await sleep(700);
+  await page.getByRole("button", { name: "Place" }).nth(1).click();
+  const l = await ctx.at([-12, 0, 24]);
+  await ctx.clickAt(l.x, l.y);
+  await sleep(700);
+  await page.getByRole("button", { name: "Run", exact: true }).click();
+  await page.waitForFunction(() => /safety|peak|Peak/i.test(document.body.innerText), null, { timeout: 90000 }).catch(async (e) => {
+    await page.screenshot({ path: path.join(OUT, "debug-stress.png") });
+    throw e;
+  });
+  await sleep(2500);
+  await page.getByRole("button", { name: "1x", exact: true }).click();
+  await ctx.park();
+  await sleep(800);
+}
+
+Object.assign(STILLS, {
+  async "interference-list"(ctx) {
+    await ctx.features(overlapPair());
+    await closeHistory(ctx);
+    await ctx.view("iso", 0);
+    await railPick(ctx, "cat:INSPECT", "interference");
+    await sleep(6000);
+    await ctx.park();
+    await hideRail(ctx);
+    await ctx.still("interference-list", { x: 440, y: 120, width: 750, height: 640 });
+  },
+  async "bed-fit-result"(ctx) {
+    await ctx.features(bracket());
+    await closeHistory(ctx, true);
+    await ctx.view("iso", 0);
+    await railPick(ctx, "cat:PRINT", "print-bed-fit-check");
+    await ctx.page.click("text=220 x 220 x 250");
+    await sleep(1500);
+    await ctx.park();
+    await hideRail(ctx);
+    await ctx.still("bed-fit-result", { x: 400, y: 150, width: 640, height: 700 });
+  },
+  async "overhang-red"(ctx) {
+    await ctx.features(tee());
+    await closeHistory(ctx);
+    await ctx.view("iso", 0);
+    await orbitDown(ctx, -140);
+    await ctx.page.evaluate(() => window.viewport.fitView());
+    await sleep(1500);
+    await ctx.centre();
+    await ctx.zoom(-2);
+    await railPick(ctx, "cat:INSPECT", "draft-analysis");
+    await sleep(2500);
+    await ctx.park();
+    await hideRail(ctx);
+    await ctx.still("overhang-red", { x: 330, y: 120, width: 850, height: 440 });
+  },
+  async "measure-two-holes"(ctx) {
+    await ctx.features(bracket());
+    await closeHistory(ctx);
+    await ctx.view("iso", 0);
+    await railPick(ctx, "cat:INSPECT", "measure");
+    const a = await ctx.at([2.75, 17, 8]);
+    await ctx.clickAt(a.x, a.y);
+    const b = await ctx.at([26.75, 17, 8]);
+    await ctx.clickAt(b.x, b.y);
+    await sleep(800);
+    await ctx.park();
+    await hideRail(ctx);
+    await ctx.still("measure-two-holes", { x: 400, y: 120, width: 790, height: 640 });
+  },
+  async "stress-bracket"(ctx) {
+    await runStress(ctx);
+    await ctx.page.addStyleTag({ content: ".measure-panel,#toolrail,.toolrail-hint{visibility:hidden!important}" });
+    await sleep(400);
+    await ctx.still("stress-bracket", { x: 280, y: 150, width: 580, height: 600 });
+  },
+  async "stress-results"(ctx) {
+    await runStress(ctx);
+    await hideRail(ctx);
+    await ctx.still("stress-results", { x: 290, y: 120, width: 900, height: 740 });
+  },
+
+});
+
+Object.assign(STILLS, {
+  async "save-as-dialog"(ctx) {
+    await ctx.features(plate());
+    await ctx.view("iso", 1);
+    await ctx.page.evaluate(() => window.__fundacad.handleAction("saveas"));
+    await sleep(1500);
+    await ctx.still("save-as-dialog", { x: 0, y: 0, width: W, height: H });
+  },
+  async "insert-document"(ctx) {
+    await ctx.features(plate());
+    await ctx.view("iso", 1);
+    await ctx.page.evaluate(() => window.__fundacad.handleAction("insert-document"));
+    await sleep(1500);
+    await ctx.still("insert-document", { x: 0, y: 0, width: W, height: H });
+  },
+  async "import-step"(ctx) {
+    await ctx.page.evaluate(() => window.__fundacad.handleAction("import"));
+    await sleep(1500);
+    await ctx.still("import-step", { x: 0, y: 0, width: W, height: H });
+  },
+  async "versions-panel"(ctx) {
+    const { page } = ctx;
+    await ctx.features(plate());
+    await ctx.view("iso", 1);
+    await closeHistory(ctx);
+    await page.click('[title^="Versions"]');
+    await sleep(800);
+    await page.fill('input[placeholder="What changed"]', "first plate");
+    await page.getByRole("button", { name: /Save version/ }).click();
+    await sleep(1200);
+    await ctx.features([{ type: "fillet", edges: [{ kind: "edge", by: "nearest", point: [20, 10, 5] }], radius: 3 }]);
+    await page.fill('input[placeholder="What changed"]', "rounded a corner");
+    await page.getByRole("button", { name: /Save version/ }).click();
+    await sleep(1500);
+    await ctx.park();
+    await ctx.still("versions-panel", { x: 1000, y: 290, width: 420, height: 280 });
+  },
+  async "fasteners-window"(ctx) {
+    await ctx.features(plate());
+    await ctx.view("iso", 1);
+    await railPick(ctx, "cat:INSERT", "fasteners");
+    await sleep(1000);
+    await ctx.page.locator("text=M3").first().click();
+    await sleep(2500);
+    await ctx.park();
+    await ctx.still("fasteners-window", { x: 280, y: 120, width: 900, height: 720 });
+  },
+  async "printing-menu"(ctx) {
+    await ctx.features(plate());
+    await ctx.view("iso", 1);
+    await ctx.page.click('#toolrail [data-family="cat:PRINT"]');
+    await sleep(800);
+    await ctx.still("printing-menu", { x: 280, y: 290, width: 480, height: 600 });
+  },
+  async "texture-knurl"(ctx) {
+    await ctx.features([{ type: "cylinder", radius: 12, height: 20, operation: "new" }]);
+    await ctx.view("iso", 0);
+    await railPick(ctx, "cat:MODIFY", "texture");
+    await ctx.page.getByText("Whole Body", { exact: true }).click();
+    await sleep(500);
+    await ctx.clickAt(600, 480);
+    await sleep(500);
+    await ctx.page.getByText("Add", { exact: true }).click();
+    await sleep(6000);
+    await ctx.park();
+    await ctx.still("texture-knurl", { x: 440, y: 40, width: 1000, height: 840 });
+  },
+  async "render-material-sliders"(ctx) {
+    const { page } = ctx;
+    await ctx.features(bracket());
+    await ctx.view("iso", 0);
+    await page.getByText("Render", { exact: true }).first().click();
+    await sleep(2500);
+    await page.getByText("Steel", { exact: true }).click();
+    await sleep(1500);
+    await page.getByText("Metalness").first().scrollIntoViewIfNeeded();
+    await ctx.park();
+    await sleep(600);
+    await ctx.still("render-material-sliders", { x: 1125, y: 40, width: 315, height: 850 });
+  },
+});
+
+Object.assign(STILLS, {
+  async "parameter-setup"(ctx) {
+    const { page } = ctx;
+    await ctx.features(plate());
+    await page.evaluate(() => { const s = window.store; s.addParam("width", "40"); s.addParam("gap", "0.4"); s.addParam("solidCore", "1", "count"); });
+    await sleep(2500);
+    await page.getByText("Edit", { exact: true }).first().click();
+    await sleep(500);
+    await page.getByText("Parameter Setup").click();
+    await sleep(1500);
+    await ctx.still("parameter-setup", { x: 570, y: 120, width: 620, height: 430 });
+  },
+  async "spacemouse-settings"(ctx) {
+    const { page } = ctx;
+    await page.getByText("View", { exact: true }).first().click();
+    await sleep(600);
+    await page.getByText("3D Mouse Settings").click();
+    await sleep(1500);
+    await ctx.still("spacemouse-settings", { x: 357, y: 50, width: 726, height: 800 });
+  },
+  async "expression-value"(ctx) {
+    const { page } = ctx;
+    await ctx.features([{ type: "sketch", plane: "XY", entities: [{ type: "rectangle", id: "r1", x: 0, y: 0, width: 40, height: 30 }] }]);
+    await page.evaluate(() => window.store.addParam("width", "40"));
+    await ctx.view("iso", 0);
+    await page.evaluate(() => window.__fundacad.handleAction("extrude"));
+    await sleep(1000);
+    const c = await ctx.at([0, 0, 0]);
+    await ctx.clickAt(c.x, c.y);
+    await sleep(1500);
+    await page.keyboard.type("rib = width / 4", { delay: 40 });
+    await sleep(800);
+    await ctx.still("expression-value", { x: 600, y: 330, width: 480, height: 240 });
+  },
+});
+
+Object.assign(STILLS, {
+});
 
 // --------------------------------------------------------------------- main --
 

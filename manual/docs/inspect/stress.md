@@ -2,7 +2,7 @@
 
 Stress shows how a part bends and where the material works hardest, so you can tell whether a bracket or clip will hold.
 
-<!-- shot: stress-bracket | bracket coloured blue to red by stress -->
+![An L bracket coloured blue to red by stress, with a load arrow on the upright](../img/stress-bracket.png)
 
 1. Open Inspect, pick Stress, and choose the body.
 2. Under Support 1, press Place and click near a screw hole. Add a support for each hole.

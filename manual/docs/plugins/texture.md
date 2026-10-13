@@ -2,7 +2,7 @@
 
 Surface Texture puts a pattern on a face or body as real shape, so your slicer receives what you see. It is on by default, under Modify on the rail.
 
-<!-- shot: texture-knurl | knurled knob with the Texture panel -->
+![A cylinder with a knurled surface and the Texture step's settings in the History card](../img/texture-knurl.png)
 
 Select the face around a knob and pick Texture. Choose Faces or Whole Body, open Kind and pick Knurl, set a small Depth, and press Add. Double-click the step later to reopen it, or delete it to get the smooth surface back.
 

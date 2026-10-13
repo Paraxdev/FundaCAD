@@ -2,7 +2,7 @@
 
 Shell hollows a body, and Thicken gives a face a wall of its own.
 
-<!-- shot: shell-mug | cylinder shelled into a mug -->
+![A cylinder hollowed into an open mug](../img/shell-mug.png)
 
 For Shell, click the faces that should open, then drag or type the wall thickness. A mug is a cylinder with its top shelled to a few millimetres.
 

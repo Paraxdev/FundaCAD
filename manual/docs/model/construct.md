@@ -2,7 +2,7 @@
 
 The Construct tools make reference geometry. It builds no solid, but it gives you somewhere to sketch or something to cut or spin around.
 
-<!-- shot: construct-planes | offset plane and datum axis on a block -->
+![A block with an offset plane above it and a vertical datum axis](../img/construct-planes.png)
 
 Offset Plane (O) is the one to know. Click a plane or flat face, drag the arrow or type a distance, and a sketch opens on the new plane.
 

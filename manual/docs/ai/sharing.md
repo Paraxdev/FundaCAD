@@ -2,7 +2,7 @@
 
 The Live document setting on the AI assistants page decides what an assistant may do with your open document.
 
-<!-- shot: ai-live-document | Live document setting, three choices -->
+![Live document setting open, offering Do not share, Share read only and Share and allow edits](../img/ai-live-document.png)
 
 Share, and allow edits lets the assistant change the document while you watch, and each change is one step Ctrl+Z can undo. Share, read only lets it look and measure. Do not share gives it a copy of its own.
 

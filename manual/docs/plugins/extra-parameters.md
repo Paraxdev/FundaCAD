@@ -2,7 +2,7 @@
 
 This plugin gives your [parameters](../model/parameters.md) sliders, groups, saved sets of values and warnings. It is on by default.
 
-<!-- shot: parameter-setup | Parameter Setup on the Controls tab -->
+![Parameter Setup dialog with Controls, Groups, Configurations and Checks](../img/parameter-setup.png)
 
 A Parameters section appears in the Items card once you have a parameter. A slider commits when you let go, so one drag is one undo step. Parameter Setup, from the section header, has four parts.
 

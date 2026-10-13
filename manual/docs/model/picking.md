@@ -2,7 +2,7 @@
 
 A click picks a body, and a second click on it picks the face under the cursor. Resting the pointer on a body lights up the face first.
 
-<!-- shot: picking-face | one face highlighted under the pointer -->
+<!-- shot: picking-face | top face of a block highlighted under the pointer -->
 
 Keys 1, 2 and 3 pick faces only, bodies only, or a body then its faces, which is the default. X sees through the model and Shift+X shows edges only.
 

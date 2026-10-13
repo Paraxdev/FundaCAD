@@ -2,7 +2,7 @@
 
 Scale resizes a body by a factor, so 2 doubles every dimension. Mirror reflects a body and joins it to the original.
 
-<!-- shot: mirror-half | half a bracket beside its mirror -->
+![One half of a bracket beside its mirrored copy](../img/mirror-half.png)
 
 Set the factor in the value rows of the Scale step. The X, Y and Z factor rows stretch one axis only.
 

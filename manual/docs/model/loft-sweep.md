@@ -2,7 +2,7 @@
 
 Loft blends between profiles, and Sweep pushes a profile along a path.
 
-<!-- shot: loft-adapter | circle lofted to a square above -->
+![A circle at the bottom lofted into a square at the top](../img/loft-adapter.png)
 
 For a loft, draw two sketches on different planes, such as a circle and a square. Choose Loft, click both profiles and press Enter, and you have a round to square adapter. Clicking a profile again drops it.
 
