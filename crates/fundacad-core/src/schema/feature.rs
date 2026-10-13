@@ -311,6 +311,8 @@ feature_struct!(
         #[serde(default, skip_serializing_if = "Option::is_none")] explode: Option<bool>,
         #[serde(default, with = "nullable", skip_serializing_if = "Option::is_none")] nodes: Option<Option<Vec<ImportNode>>>,
         #[serde(default, with = "nullable", skip_serializing_if = "Option::is_none")] parts: Option<Option<Vec<ImportPart>>>,
+        /// What the import had to say about the file, repeated by every build.
+        #[serde(default, skip_serializing_if = "Option::is_none")] notes: Option<Vec<String>>,
         #[serde(default, skip_serializing_if = "Option::is_none")] link: Option<ImportLink>,
         #[serde(default, skip_serializing_if = "Option::is_none")] generated_by: Option<GeneratedBy>,
     }

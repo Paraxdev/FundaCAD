@@ -234,6 +234,9 @@ fn base_name(f: &Import) -> &str {
 
 pub fn handle(ctx: &mut Ctx, f: &Import) -> FResult {
     let shape = import_shape(f)?;
+    for note in f.notes.iter().flatten() {
+        ctx.advise(&f.id, "importNote", note.clone());
+    }
     let base = base_name(f).to_owned();
     let nodes = non_empty(&f.nodes);
     if f.explode == Some(false) {

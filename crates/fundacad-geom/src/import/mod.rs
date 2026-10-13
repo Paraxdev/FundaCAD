@@ -58,18 +58,53 @@ pub struct Imported {
     pub fields: Map<String, Value>,
 }
 
+/// What sewing loose faces left to say, each sentence led by the name the
+/// build gives the body it is about. `names` is empty for a file that is one
+/// body, which the feature names.
+fn repair_notes(asm: &StepAssembly, names: &[String]) -> Vec<Value> {
+    let mut owned: HashMap<usize, usize> = HashMap::new();
+    for leaf in &asm.leaves {
+        *owned.entry(leaf.node).or_default() += 1;
+    }
+    let mut out: Vec<Value> = Vec::new();
+    for note in &asm.notes {
+        let text = match names.get(note.node) {
+            None => note.text.clone(),
+            Some(name) => match note.leaf.filter(|_| owned.get(&note.node).is_some_and(|&n| n > 1)) {
+                Some(leaf) => {
+                    let nth = asm.leaves[..=leaf.min(asm.leaves.len() - 1)].iter().filter(|l| l.node == note.node).count();
+                    format!("{name} {nth}: {}", note.text)
+                }
+                None => format!("{name}: {}", note.text),
+            },
+        };
+        // a product placed twice says its piece twice
+        if !out.iter().any(|v| v.as_str() == Some(text.as_str())) {
+            out.push(json!(text));
+        }
+    }
+    out
+}
+
 /// `_assembly_payload`: the leaves in order as one flat compound, their
 /// products as `nodes`, and one `parts` row per leaf.
 pub fn assembly_payload(asm: &StepAssembly) -> Imported {
-    let nodes: Vec<Value> = asm
+    let names: Vec<String> = asm
         .nodes
         .iter()
         .enumerate()
         .map(|(i, n)| {
-            let name = Some(clean(&n.name))
+            Some(clean(&n.name))
                 .filter(|s| !s.is_empty())
                 .or_else(|| Some(clean(&n.instance_name)).filter(|s| !s.is_empty()))
-                .unwrap_or_else(|| format!("Part {}", i + 1));
+                .unwrap_or_else(|| format!("Part {}", i + 1))
+        })
+        .collect();
+    let nodes: Vec<Value> = asm
+        .nodes
+        .iter()
+        .zip(&names)
+        .map(|(n, name)| {
             let mut m = Map::new();
             m.insert("name".into(), json!(name));
             m.insert("parent".into(), n.parent.map_or(Value::Null, |p| json!(p)));
@@ -135,6 +170,10 @@ pub fn assembly_payload(asm: &StepAssembly) -> Imported {
     let mut fields = Map::new();
     fields.insert("nodes".into(), Value::Array(nodes));
     fields.insert("parts".into(), Value::Array(parts));
+    let notes = repair_notes(asm, &names);
+    if !notes.is_empty() {
+        fields.insert("notes".into(), Value::Array(notes));
+    }
     Imported { shape, fields }
 }
 
@@ -155,6 +194,10 @@ pub fn read_step(path: &Path) -> Result<Imported, String> {
     if let Some(c) = color {
         fields.insert("color".into(), json!(hex(c)));
     }
+    let notes = repair_notes(&asm, &[]);
+    if !notes.is_empty() {
+        fields.insert("notes".into(), Value::Array(notes));
+    }
     let shape = if asm.roots.len() == 1 {
         let root = asm.roots.into_iter().next().unwrap_or_else(Shape::empty);
         canonical::canonicalize(&root).unwrap_or(root)
@@ -172,7 +215,7 @@ fn occt_message(e: &opencascade::Error) -> String {
 }
 
 /// `import_geometry`: read the file, store its geometry and answer
-/// `{geom, solid, faces, name, color?, nodes?, parts?}`.
+/// `{geom, solid, faces, name, color?, nodes?, parts?, notes?}`.
 pub fn import_geometry(path: &str, fmt: &str, store: &BlobStore) -> Result<Map<String, Value>, String> {
     let fmt = fmt.to_lowercase();
     let p = Path::new(path);

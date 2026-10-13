@@ -2784,7 +2784,7 @@ impl FundaCad {
         // no colour and no assembly tree must produce the feature it always
         // did, and a null is a different thing from absent to everything
         // downstream.
-        for key in ["color", "nodes", "parts"] {
+        for key in ["color", "nodes", "parts", "notes"] {
             if let Some(v) = res.get(key).filter(|v| !v.is_null()) {
                 feature.insert(key.into(), v.clone());
             }
@@ -2809,8 +2809,16 @@ impl FundaCad {
             Some(p) if !p.is_empty() => format!(", {} parts", p.len()),
             _ => String::new(),
         };
+        let notes: String = res
+            .get("notes")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .map(|n| format!("\nNote: {n}."))
+            .collect();
         let head = format!(
-            "Imported {source} as {fid}: '{name}', {kind}, {} faces{parts}.\nRun `build`, then \
+            "Imported {source} as {fid}: '{name}', {kind}, {} faces{parts}.{notes}\nRun `build`, then \
              `inspect` for its sizes and the selectors that address its faces and edges.",
             res.get("faces")
                 .map_or("?".to_string(), |f| py_num(Some(f)))

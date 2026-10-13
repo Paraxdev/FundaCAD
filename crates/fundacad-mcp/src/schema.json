@@ -1148,7 +1148,8 @@
     "name": "label",
     "geom": "content hash in the document blob store",
     "source": "the file it was read from, for reference",
-    "solid": "Bool, false means a surface body that cannot be cut"
+    "solid": "Bool, false means a surface body that cannot be cut",
+    "notes": "list of sentences the import wrote about the file, which body did not close into a solid for one. Every build repeats them as warnings"
    },
    "example": null,
    "notes": "The tool takes `path` when the file is one this machine can open, or `content` (the file itself, base64, with `name`) when you are holding the file and your host will not give you a path to it. A text format can go as it is with encoding \"text\". Inline, gzip it first: STEP is text and shrinks about tenfold, which is the difference between one message and ten. Still too big? Encode the WHOLE file once, split the text that comes out, and send the pieces with `part` and `parts`, quoting the `upload` id the first reply gives back. Do not encode each piece separately, the halves of a base64 string join back up and separately encoded pieces do not. Remember that content is written by YOU: every piece is a message of your own output, so past a handful of pieces the answer is to ask for a path rather than to keep typing. An imported body is ordinary geometry once it is in: `inspect` gives its faces and edges with selectors, and it can be cut, filleted and measured against like anything else. `solid: false` means the file did not close into a watertight solid, so a boolean against it will disappoint: say so rather than press on."

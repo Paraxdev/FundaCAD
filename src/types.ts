@@ -413,6 +413,9 @@ export type CoreFeature =
       nodes?: { name: string; parent: number | null; color?: string }[];
       // `color` is the colour styled on the part's solid, beside the product's.
       parts?: { node: number; faces: number; faceColors?: FaceColorRuns; color?: string }[];
+      // What the import had to say about the file, a body that did not close
+      // into a solid for one. Every build repeats them on this feature.
+      notes?: string[];
       // A body read in from another FundaCAD document that is kept in step with
       // it: the file, and a fingerprint of what it held when it was last read.
       link?: { path: string; stamp: string };
@@ -826,7 +829,8 @@ export type ImportReply =
       // present only for a STEP that carried a real assembly tree; see the
       // `import` feature above for what they mean
       nodes?: { name: string; parent: number | null; color?: string }[];
-      parts?: { node: number; faces: number; faceColors?: FaceColorRuns; color?: string }[] }
+      parts?: { node: number; faces: number; faceColors?: FaceColorRuns; color?: string }[];
+      notes?: string[] }
   // `cancelled` = the user stopped it. Distinct from a failure so the UI can
   // dismiss quietly instead of showing an error the user already knows about.
   | { ok: false; cancelled?: boolean; message: string };
