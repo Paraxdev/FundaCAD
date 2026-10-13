@@ -8,6 +8,7 @@
 //! RAM and disk payload caches plug in through `PayloadCache` (crate::cache).
 
 pub mod edges;
+pub mod flat;
 pub mod passes;
 pub mod profile;
 pub mod tessellate;
@@ -25,7 +26,7 @@ use serde_json::{json, Map, Value};
 
 /// Bumped with the Python engine's `tessellate.py`'s CODE_VERSION whenever the payload
 /// changes for the same input, it keys the mesh artifact cache.
-pub const CODE_VERSION: u32 = 10;
+pub const CODE_VERSION: u32 = 11;
 
 /// A body as the payload loop sees it.
 #[derive(Default)]

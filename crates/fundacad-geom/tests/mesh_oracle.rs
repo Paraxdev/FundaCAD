@@ -7,6 +7,9 @@ use opencascade::mesh_access;
 use serde_json::Value;
 use std::path::PathBuf;
 
+#[path = "support/soup.rs"]
+mod soup;
+
 const FIXTURES: [&str; 9] = [
     "box",
     "box_minus_cylinder",
@@ -126,6 +129,15 @@ fn viewport_mesh_matches_the_python_payload() {
             .filter(|(a, b)| a != b)
             .count();
 
+        let flat = soup::flat_triangles(&got.positions, &got.indices);
+        if !flat.is_empty() {
+            fail(format!("{} triangles without area, the first {:?}", flat.len(), flat[0]));
+        }
+        // thin_shell is a sheet, its rim is open by design.
+        let open = soup::open_sides(&got.positions, &got.indices);
+        if open > 0 && name != "thin_shell" {
+            fail(format!("{open} sides not met twice, once each way"));
+        }
         let (vol, area) = stats(&got.positions, &got.indices);
         let (wv, wa) = (f(&want["volume"]), f(&want["area"]));
         if ((vol - wv) / wv).abs() > 1e-3 {
