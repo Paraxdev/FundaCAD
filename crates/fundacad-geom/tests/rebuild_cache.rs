@@ -4,6 +4,7 @@
 
 use std::cell::RefCell;
 use std::path::PathBuf;
+use std::sync::OnceLock;
 use std::time::Duration;
 
 use fundacad_core::CadDocument;
@@ -11,7 +12,8 @@ use fundacad_geom::builder::{self, NoWatch, Rebuild, Watch};
 use fundacad_geom::cache::meshes::{Payloads, Tiered};
 use fundacad_geom::cache::store::GeomStore;
 use fundacad_geom::cache::{RebuildCache, Source};
-use fundacad_geom::import::{self, blobstore::BlobStore};
+use fundacad_geom::import::{self, blobstore, blobstore::BlobStore};
+use fundacad_geom::kernel;
 use fundacad_geom::measure;
 use fundacad_geom::reply;
 use fundacad_protocol::{JobResult, MeshResult, WireBody};
@@ -343,10 +345,21 @@ fn compute_all_purges_the_documents_checkpoints() {
     assert_eq!(replayed.len(), 6);
 }
 
+/// One blob folder for the whole file, the variable that names it is the
+/// process's: a test reads only the geometry it stored there itself.
+fn blob_dir() -> PathBuf {
+    static DIR: OnceLock<PathBuf> = OnceLock::new();
+    DIR.get_or_init(|| {
+        let blobs = scratch("blobs-shared");
+        std::fs::create_dir_all(&blobs).unwrap();
+        std::env::set_var("FUNDACAD_BLOB_DIR", &blobs);
+        blobs
+    })
+    .clone()
+}
+
 fn import_doc(fixture: &str, extra: Value) -> Value {
-    let blobs = scratch("blobs-shared");
-    std::fs::create_dir_all(&blobs).unwrap();
-    std::env::set_var("FUNDACAD_BLOB_DIR", &blobs);
+    let blobs = blob_dir();
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("../../tests/fixtures/{fixture}.step"));
     let store = BlobStore::open(&blobs).unwrap();
     let mut f = import::import_geometry(&path.to_string_lossy(), "step", &store).unwrap();
@@ -386,6 +399,95 @@ fn import_metadata_and_diagnostics_survive_a_disk_resume() {
         assert_eq!(got["bodies"].as_array().unwrap().len(), reference["bodies"].as_array().unwrap().len());
     }
     assert!(!cold(&mismatch)["diagnostics"].as_array().unwrap().is_empty());
+}
+
+/// A box imported from the blob store after a feature that needs nothing
+/// outside the document: the document, where its blob lives, and the blob.
+fn stored_box(length: f64) -> (Value, PathBuf, Vec<u8>) {
+    let bytes = opencascade::xcaf::to_bin_v3(&kernel::make_box(length, 4.0, 3.0).unwrap()).unwrap();
+    let geom = blobstore::hash_bytes(&bytes);
+    let raw = json!({"parameters": {}, "features": [
+        {"id": "f1", "type": "box", "length": 2, "width": 2, "height": 2, "operation": "new"},
+        {"id": "f2", "type": "import", "name": "Part", "geom": geom},
+        {"id": "f3", "type": "box", "length": 3, "width": 3, "height": 3, "operation": "new"},
+    ]});
+    (raw, blob_dir().join(format!("{geom}.bbrep")), bytes)
+}
+
+fn missing_geometry(sig: &Value) -> bool {
+    sig["errors"][0]["message"].as_str().is_some_and(|m| m.contains("missing from local storage"))
+}
+
+#[test]
+fn geometry_that_arrives_is_not_served_the_failure_cached_without_it() {
+    let (raw, blob, bytes) = stored_box(11.0);
+    let mut cache = RebuildCache::new(None);
+    let (without, _) = warm(&mut cache, &raw);
+    assert!(missing_geometry(&without), "the import built with no blob: {}", without["errors"]);
+    assert_eq!(without["bodies"].as_array().map(Vec::len), Some(2));
+
+    // What opening the .funda that carries the geometry does, with the engine still running.
+    std::fs::write(&blob, &bytes).unwrap();
+    let (with, replayed) = warm(&mut cache, &raw);
+    assert_eq!(with["errors"], json!([]), "the failure of before the geometry arrived was served from memory");
+    assert_eq!(replayed, [1, 2], "the features that never read the blob store replayed too");
+    assert_eq!(with, cold(&raw));
+    assert_eq!(with["bodies"].as_array().map(Vec::len), Some(3));
+}
+
+#[test]
+fn geometry_that_arrives_is_not_served_the_failure_checkpointed_without_it() {
+    let (raw, blob, bytes) = stored_box(12.0);
+    let root = scratch("arrives");
+    {
+        let mut cache = RebuildCache::new(Some(GeomStore::open(&root).unwrap()));
+        cache.budget_ms = 0.0;
+        cache.tip_after = Duration::ZERO;
+        let (without, _) = warm(&mut cache, &raw);
+        assert!(missing_geometry(&without), "the import built with no blob: {}", without["errors"]);
+        assert!(cache.stats.checkpoints_written >= 3);
+    }
+    std::fs::write(&blob, &bytes).unwrap();
+    let mut reopened = RebuildCache::new(Some(GeomStore::open(&root).unwrap()));
+    reopened.budget_ms = 0.0;
+    let (with, replayed) = warm(&mut reopened, &raw);
+    assert_eq!(with["errors"], json!([]), "the failure of before the geometry arrived was served from disk");
+    assert_eq!(reopened.stats.source, Source::Disk, "the box before the import was not resumed");
+    assert_eq!(replayed, [1, 2]);
+    assert_eq!(with, cold(&raw));
+
+    // Each state keeps its own checkpoints: the blob gone again is the failure again, and neither replays.
+    std::fs::remove_file(&blob).unwrap();
+    let mut third = RebuildCache::new(Some(GeomStore::open(&root).unwrap()));
+    let (gone, replayed) = warm(&mut third, &raw);
+    assert!(missing_geometry(&gone), "{}", gone["errors"]);
+    assert!(replayed.is_empty(), "replayed {replayed:?}");
+    std::fs::write(&blob, &bytes).unwrap();
+    let mut fourth = RebuildCache::new(Some(GeomStore::open(&root).unwrap()));
+    let (back, replayed) = warm(&mut fourth, &raw);
+    assert!(replayed.is_empty(), "replayed {replayed:?}");
+    assert_eq!(back, with);
+}
+
+#[test]
+fn a_corrupt_blob_replaced_is_not_served_the_failure_it_caused() {
+    let (raw, blob, bytes) = stored_box(13.0);
+    let root = scratch("corrupt-blob");
+    let mut cache = RebuildCache::new(Some(GeomStore::open(&root).unwrap()));
+    cache.budget_ms = 0.0;
+    cache.tip_after = Duration::ZERO;
+    std::fs::write(&blob, &bytes[..bytes.len() / 2]).unwrap();
+    let (torn, _) = warm(&mut cache, &raw);
+    assert!(missing_geometry(&torn), "the import built from half a blob: {}", torn["errors"]);
+    assert!(!blob.exists(), "the blob store kept bytes that do not hash to their name");
+
+    std::fs::write(&blob, &bytes).unwrap();
+    let (with, _) = warm(&mut cache, &raw);
+    assert_eq!(with["errors"], json!([]), "the failure the corrupt blob caused was served from memory");
+    assert_eq!(with, cold(&raw));
+    let mut reopened = RebuildCache::new(Some(GeomStore::open(&root).unwrap()));
+    let (again, _) = warm(&mut reopened, &raw);
+    assert_eq!(again, with, "the failure the corrupt blob caused was served from disk");
 }
 
 #[test]

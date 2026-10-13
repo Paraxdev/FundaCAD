@@ -216,14 +216,25 @@ pub fn env_sig() -> String {
     ])
 }
 
+/// The blob an import reads its geometry from, by content hash.
+pub fn stored_geometry(f: &Value) -> Option<&str> {
+    if f.get("type").and_then(Value::as_str) != Some("import") {
+        return None;
+    }
+    f.get("geom").and_then(Value::as_str).filter(|g| !g.is_empty())
+}
+
 /// `_chain_keys_scoped` over a document's features. `plugins` maps a feature
 /// type to the identity of the plugin bundle that runs it, so a checkpoint
 /// past a plugin feature is never served once that bundle changes, arrives or
-/// goes.
+/// goes. `absent` holds the hashes of `stored_geometry` the blob store lacks:
+/// an import of one fails, and that failure is not its answer once the blob
+/// is there.
 pub fn chain_keys(
     raw: &Value,
     env: &str,
     plugins: &HashMap<String, String>,
+    absent: &BTreeSet<String>,
     brep_sigs: &mut HashMap<String, String>,
 ) -> Vec<String> {
     let empty = serde_json::Map::new();
@@ -251,19 +262,14 @@ pub fn chain_keys(
             .and_then(Value::as_str)
             .and_then(|t| plugins.get(t))
             .map_or("", String::as_str);
-        k = if plugin.is_empty() {
-            hash_hex(&[k.as_bytes(), sig.as_bytes(), scope.as_bytes()])
-        } else {
-            hash_hex(&[
-                k.as_bytes(),
-                sig.as_bytes(),
-                scope.as_bytes(),
-                b"|plugin:",
-                plugin.as_bytes(),
-                b"|",
-                hidden_json.as_bytes(),
-            ])
-        };
+        let mut parts: Vec<&[u8]> = vec![k.as_bytes(), sig.as_bytes(), scope.as_bytes()];
+        if !plugin.is_empty() {
+            parts.extend([&b"|plugin:"[..], plugin.as_bytes(), b"|", hidden_json.as_bytes()]);
+        }
+        if stored_geometry(f).is_some_and(|g| absent.contains(g)) {
+            parts.push(b"|geom:absent");
+        }
+        k = hash_hex(&parts);
         keys.push(k.clone());
     }
     keys
@@ -300,11 +306,11 @@ mod tests {
             ]})
         };
         let mut memo = HashMap::new();
-        let k5 = chain_keys(&doc(5), "env", &HashMap::new(), &mut memo);
-        let k6 = chain_keys(&doc(6), "env", &HashMap::new(), &mut memo);
+        let k5 = chain_keys(&doc(5), "env", &HashMap::new(), &BTreeSet::new(), &mut memo);
+        let k6 = chain_keys(&doc(6), "env", &HashMap::new(), &BTreeSet::new(), &mut memo);
         assert_eq!(k5[..2], k6[..2]);
         assert_ne!(k5[2], k6[2]);
-        assert_ne!(chain_keys(&doc(5), "other", &HashMap::new(), &mut memo)[0], k5[0]);
+        assert_ne!(chain_keys(&doc(5), "other", &HashMap::new(), &BTreeSet::new(), &mut memo)[0], k5[0]);
     }
 
     #[test]
@@ -315,11 +321,29 @@ mod tests {
             {"id": "b", "type": "box", "length": 2, "width": 1, "height": 1},
         ]});
         let mut memo = HashMap::new();
-        let none = chain_keys(&doc, "env", &HashMap::new(), &mut memo);
-        let v1 = chain_keys(&doc, "env", &HashMap::from([("texture".into(), "v1".into())]), &mut memo);
-        let v2 = chain_keys(&doc, "env", &HashMap::from([("texture".into(), "v2".into())]), &mut memo);
+        let none = chain_keys(&doc, "env", &HashMap::new(), &BTreeSet::new(), &mut memo);
+        let v1 = chain_keys(&doc, "env", &HashMap::from([("texture".into(), "v1".into())]), &BTreeSet::new(), &mut memo);
+        let v2 = chain_keys(&doc, "env", &HashMap::from([("texture".into(), "v2".into())]), &BTreeSet::new(), &mut memo);
         assert_eq!(none[0], v1[0]);
         assert!(none[1] != v1[1] && v1[1] != v2[1] && v1[2] != v2[2]);
+    }
+
+    #[test]
+    fn absent_stored_geometry_moves_keys_from_its_import() {
+        let doc = json!({"features": [
+            {"id": "a", "type": "box", "length": 1, "width": 1, "height": 1},
+            {"id": "i", "type": "import", "geom": "ab12"},
+            {"id": "b", "type": "box", "length": 2, "width": 1, "height": 1, "geom": "cd34"},
+        ]});
+        let mut memo = HashMap::new();
+        let mut keys = |absent: &[&str]| {
+            let absent = absent.iter().map(|g| g.to_string()).collect();
+            chain_keys(&doc, "env", &HashMap::new(), &absent, &mut memo)
+        };
+        let (held, gone) = (keys(&[]), keys(&["ab12"]));
+        assert_eq!(held[0], gone[0]);
+        assert!(held[1] != gone[1] && held[2] != gone[2]);
+        assert_eq!(keys(&["cd34", "ef56"]), held, "a blob no import reads moved a key");
     }
 
     #[test]
@@ -372,7 +396,7 @@ mod tests {
             {"id": "z", "type": "box"},
         ]});
         let mut memo = HashMap::new();
-        let mut keys = |vis: Value, plugins: &HashMap<String, String>| chain_keys(&doc(vis), "env", plugins, &mut memo);
+        let mut keys = |vis: Value, plugins: &HashMap<String, String>| chain_keys(&doc(vis), "env", plugins, &BTreeSet::new(), &mut memo);
         let none = HashMap::new();
         assert_eq!(keys(json!({"body1": false}), &none), keys(json!({}), &none));
         assert_eq!(keys(json!({"body1": false}), &none), keys(json!({"body1": true}), &none));
@@ -400,8 +424,8 @@ mod tests {
         let doc = |vis: Value| json!({"bodyVisibility": vis, "features": [{"id": "t", "type": "texture"}]});
         let mut memo = HashMap::new();
         assert_ne!(
-            chain_keys(&doc(json!({"body1": false})), "env", &plugins, &mut memo),
-            chain_keys(&doc(json!({})), "env", &plugins, &mut memo)
+            chain_keys(&doc(json!({"body1": false})), "env", &plugins, &BTreeSet::new(), &mut memo),
+            chain_keys(&doc(json!({})), "env", &plugins, &BTreeSet::new(), &mut memo)
         );
     }
 
