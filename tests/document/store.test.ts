@@ -6,6 +6,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { DocumentStore, prefixFeatures } from "../../src/document/store";
 import type { CadDocument, Feature, RebuildReply, RebuildResult } from "../../src/types";
 import type { GeometryBackend } from "../../src/geometry/client";
+import { FINISH } from "../../src/document/materials";
 
 function stubBackend(
   rebuilds: CadDocument[],
@@ -605,6 +606,15 @@ describe("materials (what a body is made of, on screen)", () => {
     expect(store.materialFinishes()).toEqual({
       body1: { metalness: 0.1, roughness: 0.55, opacity: 1, emissive: 0.8, clearcoat: 0 },
     });
+  });
+
+  it("hands the viewport a body whose material differs only in its coat or node graph", () => {
+    const graph = { nodes: [{ id: "o", type: "output" as const }], output: "o" };
+    for (const extra of [{ clearcoat: 1 }, { surfaceGraph: graph }]) {
+      const id = store.addMaterial({ name: JSON.stringify(extra), color: "#123456", ...extra });
+      store.setBodiesMaterial(["body1"], id);
+      expect(store.materialFinishes(), JSON.stringify(extra)).toEqual({ body1: { ...FINISH, ...extra } });
+    }
   });
 
   it("merges an imported library by id rather than replacing it", () => {
