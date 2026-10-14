@@ -124,6 +124,16 @@ export function isShiny(f: BodyFinish): boolean {
   return f.emissive > 0 || f.metalness >= 0.5 || f.roughness < 0.3 || f.clearcoat > 0 || f.opacity < 1 || !!f.surfaceGraph;
 }
 
+/** A finish that draws exactly like a body with no material at all, so the
+ *  store can leave it out of the map it hands the viewport. Every field counts:
+ *  one left out here is a material whose only change is that field, and that
+ *  change never reaches the screen. */
+export function isDefaultFinish(f: BodyFinish): boolean {
+  return f.metalness === FINISH.metalness && f.roughness === FINISH.roughness
+    && f.opacity === FINISH.opacity && f.emissive === FINISH.emissive
+    && f.clearcoat === FINISH.clearcoat && !f.surface && !f.surfaceGraph;
+}
+
 export function finishOf(m: MaterialDef | undefined): BodyFinish {
   return {
     metalness: m?.metalness ?? FINISH.metalness,

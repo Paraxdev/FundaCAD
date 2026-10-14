@@ -25,7 +25,7 @@ import {
   withElementRemoved,
 } from "./elements";
 import {
-  type BodyFinish, FINISH, finishOf, freshMaterialName, type MaterialDef,
+  type BodyFinish, finishOf, freshMaterialName, isDefaultFinish, type MaterialDef,
   normalizeMaterial, slugId, STARTER_LIBRARY, uniqueId,
 } from "./materials";
 import { faceKey, parseFaceKey } from "./faceMaterials";
@@ -1613,13 +1613,7 @@ export class DocumentStore {
       const m = this.materials.find((x) => x.id === id);
       if (!m) continue;
       const f = finishOf(m);
-      if (
-        f.metalness === FINISH.metalness && f.roughness === FINISH.roughness
-        && f.opacity === FINISH.opacity && f.emissive === FINISH.emissive
-      ) {
-        continue;
-      }
-      out[body] = f;
+      if (!isDefaultFinish(f)) out[body] = f;
     }
     return out;
   }
