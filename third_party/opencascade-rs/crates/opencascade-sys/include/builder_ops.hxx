@@ -53,14 +53,10 @@
 #include <ElCLib.hxx>
 #include <GCE2d_MakeSegment.hxx>
 #include <Geom_Circle.hxx>
-#include <Geom_ConicalSurface.hxx>
-#include <Geom_Plane.hxx>
 #include <Geom_TrimmedCurve.hxx>
 #include <GC_MakeArcOfCircle.hxx>
 #include <GProp_GProps.hxx>
-#include <GeomAPI_IntSS.hxx>
 #include <GeomAPI_Interpolate.hxx>
-#include <GeomAPI_ProjectPointOnCurve.hxx>
 #include <Geom_BSplineCurve.hxx>
 #include <TColStd_Array1OfInteger.hxx>
 #include <TColStd_Array1OfReal.hxx>
@@ -84,7 +80,6 @@
 #include <TopLoc_Location.hxx>
 #include <NCollection_DataMap.hxx>
 #include <TopTools_HSequenceOfShape.hxx>
-#include <TopTools_IndexedDataMapOfShapeListOfShape.hxx>
 #include <TopTools_ShapeMapHasher.hxx>
 #include <TopTools_IndexedMapOfShape.hxx>
 #include <TopTools_ListOfShape.hxx>
@@ -96,7 +91,6 @@
 #include <gp_Ax2.hxx>
 #include <gp_Ax3.hxx>
 #include <gp_Circ.hxx>
-#include <gp_Cone.hxx>
 #include <gp_Elips.hxx>
 #include <gp_GTrsf.hxx>
 #include <gp_Lin.hxx>
@@ -1914,391 +1908,30 @@ inline TopoDS_Shape bo_taper_sided(const TopoDS_Shape &s, const gp_Pnt &o, const
   return BRepBuilderAPI_Transform(s, mirror, true).Shape();
 }
 
-// What a side of a tapered prism carries on as past a corner: its plane, or
-// the cone over an arc of the outline.
-struct BoTaperSide {
-  bool round = false;
-  gp_Pln plane;
-  gp_Cone cone;
-};
-
-// Where a side crosses the level z = top: a line through `at` along `dir`, or
-// a circle of radius `r` about `at`.
-struct BoTaperTrace {
-  bool round = false;
-  gp_XY at, dir;
-  double r = 0;
-};
-
-inline BoTaperTrace bo_taper_trace(const BoTaperSide &s, double top) {
-  BoTaperTrace t;
-  t.round = s.round;
-  if (s.round) {
-    const gp_Pnt apex = s.cone.Apex();
-    t.at = gp_XY(apex.X(), apex.Y());
-    t.r = std::abs((top - apex.Z()) * std::tan(s.cone.SemiAngle()));
-  } else {
-    const gp_Dir n = s.plane.Axis().Direction();
-    const gp_Pnt o = s.plane.Location();
-    const double flat = n.X() * n.X() + n.Y() * n.Y();
-    const double c = n.X() * o.X() + n.Y() * o.Y() + n.Z() * (o.Z() - top);
-    t.at = gp_XY(n.X() * c / flat, n.Y() * c / flat);
-    t.dir = gp_XY(-n.Y(), n.X()) / std::sqrt(flat);
-  }
-  return t;
-}
-
-// The crossing of two traces that lies nearest `by`, false when they miss.
-inline bool bo_taper_meet(const BoTaperTrace &a, const BoTaperTrace &b, const gp_XY &by, gp_XY &out) {
-  std::vector<gp_XY> hits;
-  if (!a.round && !b.round) {
-    const double den = a.dir.Crossed(b.dir);
-    if (std::abs(den) < 1e-9) return false;
-    hits.push_back(a.at + a.dir * ((b.at - a.at).Crossed(b.dir) / den));
-  } else if (a.round != b.round) {
-    const BoTaperTrace &line = a.round ? b : a, &ring = a.round ? a : b;
-    const gp_XY foot = line.at + line.dir * (ring.at - line.at).Dot(line.dir);
-    const double h2 = ring.r * ring.r - (foot - ring.at).SquareModulus();
-    if (h2 < -1e-12) return false;
-    const double h = std::sqrt(std::max(h2, 0.0));
-    hits.push_back(foot + line.dir * h);
-    hits.push_back(foot - line.dir * h);
-  } else {
-    const gp_XY d = b.at - a.at;
-    const double l = d.Modulus();
-    if (l < 1e-12) return false;
-    const double x = (l * l + a.r * a.r - b.r * b.r) / (2 * l), h2 = a.r * a.r - x * x;
-    if (h2 < -1e-12) return false;
-    const gp_XY u = d / l, n(-u.Y(), u.X());
-    const double h = std::sqrt(std::max(h2, 0.0));
-    hits.push_back(a.at + u * x + n * h);
-    hits.push_back(a.at + u * x - n * h);
-  }
-  out = hits[0];
-  for (const gp_XY &p : hits)
-    if ((p - by).Modulus() < (out - by).Modulus()) out = p;
-  return true;
-}
-
-// The edge two sides meet in, from the outline's corner to where their traces
-// cross at the far end: a line for two planes, else a conic. Two cones of one
-// lean about parallel axes meet in a plane too, their equations differ by a
-// term without a square.
-inline TopoDS_Edge bo_taper_ridge(const BoTaperSide &a, const BoTaperSide &b, const TopoDS_Vertex &from,
-                                  const TopoDS_Vertex &to) {
-  if (!a.round && !b.round) return BRepBuilderAPI_MakeEdge(from, to).Edge();
-  gp_Pln plane = a.round ? b.plane : a.plane;
-  if (a.round && b.round) {
-    const gp_Pnt p = a.cone.Apex(), q = b.cone.Apex();
-    const double k2 = std::pow(std::tan(a.cone.SemiAngle()), 2);
-    const double A = -2 * (p.X() - q.X()), B = -2 * (p.Y() - q.Y()), C = 2 * k2 * (p.Z() - q.Z());
-    const double D = p.X() * p.X() + p.Y() * p.Y() - q.X() * q.X() - q.Y() * q.Y() - k2 * (p.Z() * p.Z() - q.Z() * q.Z());
-    const double n = std::sqrt(A * A + B * B + C * C);
-    if (n < 1e-12) throw std::runtime_error("Taper_NotDone");
-    plane = gp_Pln(A / n, B / n, C / n, D / n);
-  }
-  GeomAPI_IntSS meet(new Geom_Plane(plane), new Geom_ConicalSurface(a.round ? a.cone : b.cone), 1e-9);
-  if (!meet.IsDone()) throw std::runtime_error("Taper_NotDone");
-  const gp_Pnt pf = BRep_Tool::Pnt(from), pt = BRep_Tool::Pnt(to);
-  for (int i = 1; i <= meet.NbLines(); ++i) {
-    const Handle(Geom_Curve) &c = meet.Line(i);
-    GeomAPI_ProjectPointOnCurve onFrom(pf, c), onTo(pt, c);
-    if (onFrom.NbPoints() == 0 || onTo.NbPoints() == 0) continue;
-    if (onFrom.LowerDistance() + onTo.LowerDistance() > 1e-6) continue;
-    const double u = onFrom.LowerDistanceParameter(), v = onTo.LowerDistanceParameter();
-    if (!c->IsPeriodic())
-      return u < v ? BRepBuilderAPI_MakeEdge(c, from, to, u, v).Edge() : BRepBuilderAPI_MakeEdge(c, to, from, v, u).Edge();
-    const double turn = c->Period();
-    const double d = v - u + (v < u ? turn : 0);
-    return d <= turn / 2 ? BRepBuilderAPI_MakeEdge(c, from, to, u, u + d).Edge()
-                         : BRepBuilderAPI_MakeEdge(c, to, from, v, v + turn - d).Edge();
-  }
-  throw std::runtime_error("Taper_NotDone");
-}
-
-// A side's trace at the level z = top between two vertices of it, the short
-// way round a cone.
-inline TopoDS_Edge bo_taper_level(const BoTaperSide &s, double top, const TopoDS_Vertex &from, const TopoDS_Vertex &to) {
-  if (!s.round) return BRepBuilderAPI_MakeEdge(from, to).Edge();
-  const gp_Pnt apex = s.cone.Apex();
-  const gp_Circ circ(gp_Ax2(gp_Pnt(apex.X(), apex.Y(), top), gp::DZ()),
-                     std::abs((top - apex.Z()) * std::tan(s.cone.SemiAngle())));
-  const double u = ElCLib::Parameter(circ, BRep_Tool::Pnt(from)), v = ElCLib::Parameter(circ, BRep_Tool::Pnt(to));
-  const double d = v - u + (v < u ? 2 * M_PI : 0);
-  Handle(Geom_Curve) c = new Geom_Circle(circ);
-  return d <= M_PI ? BRepBuilderAPI_MakeEdge(c, from, to, u, u + d).Edge()
-                   : BRepBuilderAPI_MakeEdge(c, to, from, v, v + 2 * M_PI - d).Edge();
-}
-
-// The piece of a side's surface inside a ring of edges.
-inline TopoDS_Face bo_taper_face(const BoTaperSide &s, const TopTools_ListOfShape &ring) {
-  BRepBuilderAPI_MakeWire mw;
-  mw.Add(ring);
-  if (!mw.IsDone()) throw std::runtime_error("Taper_NotDone");
-  Handle(Geom_Surface) surf;
-  if (s.round) surf = new Geom_ConicalSurface(s.cone);
-  else surf = new Geom_Plane(s.plane);
-  TopoDS_Wire w = mw.Wire();
-  for (int turn = 0; turn < 2; ++turn) {
-    BRepBuilderAPI_MakeFace mf(surf, w, turn == 0);
-    if (!mf.IsDone()) break;
-    ShapeFix_Face fix(mf.Face());
-    fix.Perform();
-    const TopoDS_Face f = fix.Face();
-    GProp_GProps g;
-    BRepGProp::SurfaceProperties(f, g);
-    if (g.Mass() > 0) return f;
-    // On a cone the kernel takes the ring the wrong way round at times and
-    // makes the face of everything outside it.
-    w = TopoDS::Wire(BRepTools::OuterWire(f).Reversed());
-  }
-  throw std::runtime_error("Taper_NotDone");
-}
-
-// `s`, a tapered prism standing on z = 0 and ending at z = top, with each
-// corner DPrism rounded brought to an edge. DPrism rounds with a sliver of a
-// cone between two generators from the outline's corner and an arc at the far
-// end. The sliver is replaced by its two neighbours carried on until they
-// meet: a plane or the cone over an arc as it is, a spline's side as the plane
-// that touches it along the generator. Null when a sliver does not reach the
-// far end whole, as where a side beside it closed up, when the sides would
-// meet more than 30 times the taper away, or when the edge they meet in runs
-// through another side, which shows as an unsound face at the far end.
-inline TopoDS_Shape bo_taper_sharpened(const TopoDS_Shape &s, double top) {
-  TopTools_IndexedMapOfShape solids;
-  TopExp::MapShapes(s, TopAbs_SOLID, solids);
-  if (solids.Extent() != 1) return TopoDS_Shape();
-  const TopoDS_Shape body = solids(1);
-  const double eps = 1e-6 * (1 + top);
-  auto leans = [](const TopoDS_Face &f, gp_Cone &cone) {
-    BRepAdaptor_Surface surf(f);
-    if (surf.GetType() != GeomAbs_Cone) return false;
-    cone = surf.Cone();
-    return std::abs(std::abs(cone.Axis().Direction().Z()) - 1) < 1e-9;
-  };
-  TopTools_IndexedDataMapOfShapeListOfShape owners;
-  TopExp::MapShapesAndAncestors(body, TopAbs_EDGE, TopAbs_FACE, owners);
-  std::vector<TopoDS_Face> kept, made;
-  NCollection_DataMap<TopoDS_Shape, TopTools_ListOfShape, TopTools_ShapeMapHasher> swap;
-  for (TopExp_Explorer fx(body, TopAbs_FACE); fx.More(); fx.Next()) {
-    const TopoDS_Face sliver = TopoDS::Face(fx.Current());
-    gp_Cone cone;
-    if (!leans(sliver, cone) || std::abs(cone.Apex().Z()) > eps) {
-      kept.push_back(sliver);
-      continue;
-    }
-    const gp_Pnt apex = cone.Apex();
-    TopoDS_Edge gen[2], arc;
-    int gens = 0;
-    for (TopExp_Explorer ex(sliver, TopAbs_EDGE); ex.More(); ex.Next()) {
-      const TopoDS_Edge e = TopoDS::Edge(ex.Current());
-      if (BRep_Tool::Degenerated(e)) continue;
-      BRepAdaptor_Curve c(e);
-      const double z0 = c.Value(c.FirstParameter()).Z(), z1 = c.Value(c.LastParameter()).Z();
-      const bool low0 = std::abs(z0) < eps, low1 = std::abs(z1) < eps;
-      const bool high0 = std::abs(z0 - top) < eps, high1 = std::abs(z1 - top) < eps;
-      if (high0 && high1 && arc.IsNull()) arc = e;
-      else if (((low0 && high1) || (high0 && low1)) && gens < 2) gen[gens++] = e;
-      else return TopoDS_Shape();
-    }
-    if (gens != 2 || arc.IsNull()) return TopoDS_Shape();
-    BoTaperSide side[2];
-    TopoDS_Vertex high[2], foot;
-    for (int i = 0; i < 2; ++i) {
-      TopoDS_Face beside;
-      int n = 0;
-      for (TopTools_ListOfShape::Iterator it(owners.FindFromKey(gen[i])); it.More(); it.Next())
-        if (!it.Value().IsSame(sliver)) {
-          beside = TopoDS::Face(it.Value());
-          ++n;
-        }
-      if (n != 1) return TopoDS_Shape();
-      TopoDS_Vertex a, b;
-      TopExp::Vertices(gen[i], a, b);
-      const bool rises = BRep_Tool::Pnt(b).Z() > BRep_Tool::Pnt(a).Z();
-      high[i] = rises ? b : a;
-      if (i == 0) foot = rises ? a : b;
-      BRepAdaptor_Surface surf(beside);
-      gp_Cone over;
-      if (surf.GetType() == GeomAbs_Plane) {
-        side[i].plane = surf.Plane();
-      } else if (leans(beside, over)) {
-        if (std::abs(over.Apex().Z()) <= eps) return TopoDS_Shape();
-        side[i].round = true;
-        side[i].cone = over;
-      } else {
-        const gp_Vec up(apex, BRep_Tool::Pnt(high[i]));
-        side[i].plane = gp_Pln(apex, gp_Dir(gp_Vec(-up.Y(), up.X(), 0).Crossed(up)));
-      }
-    }
-    BRepAdaptor_Curve round(arc);
-    const gp_Pnt mid = round.Value((round.FirstParameter() + round.LastParameter()) / 2);
-    const gp_XY corner(apex.X(), apex.Y());
-    gp_XY tip;
-    // The sides meet beyond the middle of the arc, seen from the corner.
-    if (!bo_taper_meet(bo_taper_trace(side[0], top), bo_taper_trace(side[1], top),
-                       corner + (gp_XY(mid.X(), mid.Y()) - corner) * 1.5, tip))
-      return TopoDS_Shape();
-    if ((tip - corner).Modulus() > 30 * top * std::abs(std::tan(cone.SemiAngle()))) return TopoDS_Shape();
-    const TopoDS_Vertex peak = BRepBuilderAPI_MakeVertex(gp_Pnt(tip.X(), tip.Y(), top)).Vertex();
-    const TopoDS_Edge ridge = bo_taper_ridge(side[0], side[1], foot, peak);
-    TopTools_ListOfShape level;
-    for (int i = 0; i < 2; ++i) {
-      const TopoDS_Edge e = bo_taper_level(side[i], top, high[i], peak);
-      level.Append(e);
-      TopTools_ListOfShape ring;
-      ring.Append(gen[i]);
-      ring.Append(e);
-      ring.Append(ridge);
-      made.push_back(bo_taper_face(side[i], ring));
-    }
-    swap.Bind(arc, level);
-  }
-  if (made.empty()) return body;
-  // DPrism leaves the ends of a spline's side off their curves by up to a
-  // tenth of a micron, and the new faces have to sew to them.
-  double loose = 1e-6;
-  for (TopExp_Explorer vx(body, TopAbs_VERTEX); vx.More(); vx.Next())
-    loose = std::max(loose, 2 * BRep_Tool::Tolerance(TopoDS::Vertex(vx.Current())));
-  BRepBuilderAPI_Sewing sew(std::min(loose, 1e-3));
-  for (const TopoDS_Face &f : kept) {
-    bool hit = false;
-    TopTools_ListOfShape ring;
-    for (TopExp_Explorer ex(f, TopAbs_EDGE); ex.More(); ex.Next()) {
-      if (!swap.IsBound(ex.Current())) {
-        ring.Append(ex.Current());
-        continue;
-      }
-      hit = true;
-      for (TopTools_ListOfShape::Iterator it(swap.Find(ex.Current())); it.More(); it.Next()) ring.Append(it.Value());
-    }
-    if (!hit) {
-      sew.Add(f);
-      continue;
-    }
-    BRepAdaptor_Surface surf(f);
-    TopTools_IndexedMapOfShape loops;
-    TopExp::MapShapes(f, TopAbs_WIRE, loops);
-    if (surf.GetType() != GeomAbs_Plane || loops.Extent() != 1) return TopoDS_Shape();
-    BoTaperSide lid;
-    lid.plane = surf.Plane();
-    const TopoDS_Face level = bo_taper_face(lid, ring);
-    if (!BRepCheck_Analyzer(level).IsValid()) return TopoDS_Shape();
-    sew.Add(level);
-  }
-  for (const TopoDS_Face &f : made) sew.Add(f);
-  sew.Perform();
-  const TopoDS_Shape shell = sew.SewedShape();
-  if (shell.IsNull() || shell.ShapeType() != TopAbs_SHELL) return TopoDS_Shape();
-  TopoDS_Solid solid = BRepBuilderAPI_MakeSolid(TopoDS::Shell(shell)).Solid();
-  BRepLib::OrientClosedSolid(solid);
-  return solid;
-}
-
-// The tapered prism as DPrism builds each loop of the face alone, a hole
-// leaning the other way and taken out of the outer loop's, with every corner
-// it rounded brought to an edge by bo_taper_sharpened. DPrism is only to be
-// had upwards off a face that looks up, so the face is turned to lie in XY
-// with `v` up, tapered there and turned back. `built` is the prism DPrism has
-// made of the face where it lies, to start from in place of a new one.
-// `rounded` is set when a loop was built and a corner of it could not be
-// brought to an edge.
-inline TopoDS_Shape bo_prism_sharp(const TopoDS_Face &face, const gp_Pnt &o, const gp_Vec &v, double angle,
-                                   const TopoDS_Shape &built, bool &rounded) {
+// DPrism where it is not to be had as the face lies, downwards or off a face
+// that looks down: the face is turned to lie in XY with `v` up, tapered there
+// and turned back. Unlike the loft it follows an arc or a spline of the
+// outline through a neighbour closing up.
+inline TopoDS_Shape bo_prism_turned(const TopoDS_Face &face, const gp_Pnt &o, const gp_Vec &v, double angle) {
   try {
-    const double len = v.Magnitude();
-    const gp_Vec rise(0, 0, len);
     gp_Trsf up;
     up.SetDisplacement(gp_Ax3(o, gp_Dir(v)), gp_Ax3(gp::XOY()));
     const TopoDS_Face flat = TopoDS::Face(BRepBuilderAPI_Transform(face, up, true).Shape());
-    const TopoDS_Wire outer = BRepTools::OuterWire(flat);
-    TopTools_IndexedMapOfShape loops;
-    TopExp::MapShapes(flat, TopAbs_WIRE, loops);
-    TopoDS_Shape whole;
-    BoShape holes = bo_compound_new();
-    bool holed = false;
-    for (int i = 1; i <= loops.Extent(); ++i) {
-      const bool hole = !loops(i).IsSame(outer);
-      const double a = hole ? -angle : angle;
-      TopoDS_Shape leaned;
-      if (loops.Extent() == 1 && !built.IsNull()) {
-        leaned = BRepBuilderAPI_Transform(built, up, true).Shape();
-      } else {
-        const TopoDS_Face loop = loops.Extent() == 1 ? flat : BRepBuilderAPI_MakeFace(gp_Pln(gp::XOY()), TopoDS::Wire(loops(i)), true).Face();
-        LocOpe_DPrism dp(loop, len / std::cos(a), a);
-        leaned = bo_taper_mended(bo_taper_sided(dp.Shape(), gp::Origin(), rise));
-      }
-      const TopoDS_Shape s = bo_taper_mended(bo_taper_sharpened(leaned, len));
-      if (s.IsNull()) {
-        TopTools_IndexedMapOfShape solids;
-        if (!leaned.IsNull()) TopExp::MapShapes(leaned, TopAbs_SOLID, solids);
-        rounded = solids.Extent() == 1 && BRepCheck_Analyzer(solids(1)).IsValid() && bo_taper_rounded(leaned, gp::Origin(), rise);
-        return TopoDS_Shape();
-      }
-      if (hole) {
-        bo_compound_add(*holes, s);
-        holed = true;
-      } else {
-        whole = s;
-      }
-    }
-    if (whole.IsNull()) return TopoDS_Shape();
-    if (holed) whole = *bo_boolean(whole, *holes, 1, true, 0.0, true);
-    // Turned back, a solid with an arc that closed up can fail the kernel's
-    // check by a vertex tolerance it passed lying flat.
-    return bo_taper_mended(BRepBuilderAPI_Transform(whole, up.Inverted(), true).Shape());
+    LocOpe_DPrism dp(flat, v.Magnitude() / std::cos(angle), angle);
+    const TopoDS_Shape s = BRepBuilderAPI_Transform(dp.Shape(), up.Inverted(), true).Shape();
+    return bo_taper_mended(bo_taper_sided(s, o, v));
   } catch (...) {
     return TopoDS_Shape();
   }
 }
 
-// What ends in a corner of the outline: 0 nothing but lines, 1 an arc, 2 a
-// spline. The loft joins the ends of such a side to the ends of its offset
-// with straight edges, so its face is not the cone or the leaned surface of
-// that side, and the corner is not where that surface meets its neighbour's:
-// a rectangle with a half round bump of 4 mm flared 30 degrees over 1.5 mm
-// came out 0.076 mm3 short. With a spline the loft is not taken at all:
-// the same bump as a spline came out 0.2 mm3 short and as a solid no STEP
-// file could be written of, and one of eleven poles as 406.9 mm3 drawn one
-// way round and 415.3 the other.
-inline int bo_outline_corner_curve(const TopoDS_Face &face) {
-  int most = 0;
-  for (TopExp_Explorer wx(face, TopAbs_WIRE); wx.More(); wx.Next()) {
-    std::vector<gp_Vec> in, out;
-    std::vector<int> kind;
-    for (BRepTools_WireExplorer ex(TopoDS::Wire(wx.Current()), face); ex.More(); ex.Next()) {
-      BRepAdaptor_Curve c(ex.Current());
-      gp_Pnt p;
-      gp_Vec a, b;
-      c.D1(c.FirstParameter(), p, a);
-      c.D1(c.LastParameter(), p, b);
-      if (a.Magnitude() < 1e-12 || b.Magnitude() < 1e-12) return 2;
-      a.Normalize();
-      b.Normalize();
-      const bool back = ex.Current().Orientation() == TopAbs_REVERSED;
-      in.push_back(back ? -b : a);
-      out.push_back(back ? -a : b);
-      kind.push_back(c.GetType() == GeomAbs_Line ? 0 : c.GetType() == GeomAbs_Circle ? 1 : 2);
-    }
-    const size_t n = in.size();
-    for (size_t i = 0; n > 1 && i < n; ++i) {
-      const size_t j = (i + 1) % n;
-      if (out[i].Crossed(in[j]).Magnitude() > 1e-4 || out[i].Dot(in[j]) < 0) most = std::max({most, kind[i], kind[j]});
-    }
-  }
-  return most;
-}
-
 // Solid.extrude_taper: LocOpe_DPrism when it applies, else a loft between each
 // wire and its 2D offset at the far end, holes subtracted. Either is taken
-// only when bo_taper_fits, and the loft first only of an outline it is exact
-// for, see bo_outline_corner_curve. Where DPrism rounded a corner, and where
-// neither fits, bo_prism_draft, then bo_prism_wedged and then bo_prism_sharp
-// stand in. Of those only the second can build an outline that closes up
-// before the far end, and only for straight sides. A solid with a rounded
-// corner is never handed out: with a spline in the outline too, a cut over a
-// freeform face came back refused, or with the whole tool's volume gone from
-// a body the tool only dipped into.
+// only when bo_taper_fits. Where DPrism rounded an inside corner, and where
+// neither fits, bo_prism_draft and then bo_prism_wedged stand in. Of those
+// only the last can build an outline that closes up before the far end, and
+// only for straight sides. A round one keeps DPrism's rounded corners, by
+// bo_prism_turned where the loft had it.
 inline BoShape bo_prism_taper(const TopoDS_Shape &faceShape, double dx, double dy, double dz,
                               double taper, double ox, double oy, double oz, double xx, double xy,
                               double xz, double nx, double ny, double nz, bool dprism) {
@@ -2374,21 +2007,19 @@ inline BoShape bo_prism_taper(const TopoDS_Shape &faceShape, double dx, double d
         first.Nullify();
       }
       first = bo_taper_mended(first);
-      const bool held = fits(first);
-      const int curve = dprism ? 0 : bo_outline_corner_curve(face);
-      if (preferred && curve == 0 && held) return bo_own(first);
+      if (preferred && fits(first)) return bo_own(first);
       TopoDS_Shape sharp = bo_prism_draft(face, along, rad);
       if (fits(sharp)) return bo_own(sharp);
       sharp = bo_prism_wedged(face, along, rad);
       if (fits(sharp)) return bo_own(sharp);
-      bool rounded = dprism && held && bo_taper_rounded(first, base, along);
-      if (curve == 0 && held && !rounded) return bo_own(first);
-      for (int from = dprism && held ? 0 : 1; from < 2; ++from) {
-        sharp = bo_prism_sharp(face, base, along, rad, from == 0 ? first : TopoDS_Shape(), rounded);
+      if (fits(first)) return bo_own(first);
+      TopTools_IndexedMapOfShape loops;
+      TopExp::MapShapes(face, TopAbs_WIRE, loops);
+      if (!dprism && rad > 0 && loops.Extent() == 1) {
+        sharp = bo_prism_turned(face, base, along, rad);
         if (fits(sharp)) return bo_own(sharp);
       }
-      if (curve == 1 && held) return bo_own(first);
-      throw std::runtime_error(rounded ? "Taper_Rounded" : "Taper_NotDone");)
+      throw std::runtime_error("Taper_NotDone");)
 }
 
 inline bool bo_face_has_holes(const TopoDS_Shape &f) { return bo_count(f, 3) > 1; }
