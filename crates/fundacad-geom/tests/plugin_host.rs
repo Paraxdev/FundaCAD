@@ -118,6 +118,7 @@ fn built(name: &str) -> bool {
     fundacad_geom::plugins::load();
     let p = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!("../../plugins/{name}/geometry.wasm"));
     if !p.is_file() {
+        assert!(std::env::var_os("CI").is_none(), "CI builds {name}'s geometry.wasm before the tests, it is missing");
         eprintln!("skipped: build {name} with scripts/build-plugin-wasm.py");
     }
     p.is_file()
@@ -172,6 +173,61 @@ fn a_texture_displaces_its_face_and_only_its_face() {
             assert_eq!(untouched(&a, face), untouched(&b, face), "face {face}");
         }
     }
+}
+
+fn rebuilt(features: &[Value]) -> fundacad_protocol::MeshResult {
+    let doc = json!({"parameters": {}, "features": features});
+    match fundacad_geom::jobs::rebuild_result(&doc, 0.1, &Default::default(), &NoWatch) {
+        fundacad_protocol::JobResult::Mesh(m) => m,
+        _ => panic!("a meshed reply"),
+    }
+}
+
+fn chamfered_box(distance: f64, texture: Value) -> Vec<Value> {
+    let mut f = block(20.0, 20.0, 10.0);
+    f.push(json!({"id": "c", "type": "chamfer", "edges": {"kind": "edge", "by": "all"}, "distance": distance}));
+    f.push(texture);
+    f
+}
+
+/// How far the vertices of the most refined face spread along `n`.
+fn textured_face_spread(m: &fundacad_protocol::MeshResult, n: [f64; 3]) -> f64 {
+    let Some(fundacad_protocol::WireBody::Full(b)) = m.bodies.first() else {
+        panic!("a full body");
+    };
+    let count = |face: u32| b.face_ids.iter().filter(|&&f| f == face).count();
+    let face = b.face_ids.iter().copied().max_by_key(|&f| count(f)).expect("triangles");
+    let along: Vec<f64> = b
+        .face_ids
+        .iter()
+        .enumerate()
+        .filter(|(_, &f)| f == face)
+        .flat_map(|(t, _)| b.indices[3 * t..3 * t + 3].iter())
+        .map(|&i| {
+            let p = &b.positions[3 * i as usize..3 * i as usize + 3];
+            f64::from(p[0]) * n[0] + f64::from(p[1]) * n[1] + f64::from(p[2]) * n[2]
+        })
+        .collect();
+    along.iter().copied().fold(f64::MIN, f64::max) - along.iter().copied().fold(f64::MAX, f64::min)
+}
+
+/// A knurl on one 1.41 mm wide chamfer face: every row of its lattice landed
+/// on a zero line of the pattern and every raised vertex sat on the pinned
+/// boundary, so the face stayed flat and nothing said so.
+#[test]
+fn a_texture_on_a_narrow_chamfer_raises_it() {
+    if !built("FundaCAD.Texture") {
+        return;
+    }
+    let m = rebuilt(&chamfered_box(
+        1.0,
+        json!({"id": "t", "type": "texture", "kind": "knurl", "depth": 0.4, "scale": 2.0,
+               "faces": face_at([9.5, 0.0, 9.5])}),
+    ));
+    assert!(m.fields.get("featureErrors").is_none(), "{:?}", m.fields.get("featureErrors"));
+    let h = std::f64::consts::FRAC_1_SQRT_2;
+    let spread = textured_face_spread(&m, [h, 0.0, h]);
+    assert!(spread > 0.1 && spread < 0.4 + 1e-3, "{spread}");
 }
 
 #[test]
