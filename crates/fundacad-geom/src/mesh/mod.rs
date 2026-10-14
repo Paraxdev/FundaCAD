@@ -191,6 +191,10 @@ fn body_payload_for(
     if b.normals.is_some() {
         payload.insert("normals".into(), Value::Null);
     }
+    let failed = claims.failures();
+    if !failed.is_empty() {
+        payload.insert(PASS_ERRORS.into(), Value::Array(failed));
+    }
     let sound = crate::bench::phase("soundness", || crate::soundness::of(shape));
     let fault = sound.fault().or_else(|| sound.inside_out().then(|| crate::soundness::INSIDE_OUT.to_owned()));
     if let Some(why) = fault {
@@ -199,6 +203,10 @@ fn body_payload_for(
     b.fields = payload;
     with_envelope(body, b)
 }
+
+/// The payload key a body's mesh pass failures ride on, through the mesh cache
+/// up to `mesh_result_full`, which lifts them off the bodies to the reply.
+pub const PASS_ERRORS: &str = "passErrors";
 
 /// `viewport_mesh.VIEWPORT_DENSITY_CAP`, a displaced face's triangle budget on
 /// screen; an export gets `export::EXPORT_DENSITY_CAP_PER_FACE`.
@@ -210,6 +218,8 @@ pub struct PassClaims {
     faces: Vec<Shape>,
     #[cfg(feature = "plugins")]
     claims: std::collections::HashMap<usize, crate::plugins::PassClaim>,
+    #[cfg(feature = "plugins")]
+    failures: std::sync::Mutex<Vec<crate::plugins::PassFailure>>,
 }
 
 impl PassClaims {
@@ -220,11 +230,16 @@ impl PassClaims {
                 return PassClaims {
                     faces: Vec::new(),
                     claims: Default::default(),
+                    failures: Default::default(),
                 };
             }
             let faces = crate::kernel::subshapes(shape, crate::kernel::Kind::Face);
-            let claims = crate::plugins::claim_faces(shape, &faces, specs);
-            PassClaims { faces, claims }
+            let (claims, failed) = crate::plugins::claim_faces(shape, &faces, specs);
+            PassClaims {
+                faces,
+                claims,
+                failures: std::sync::Mutex::new(failed),
+            }
         }
         #[cfg(not(feature = "plugins"))]
         {
@@ -262,12 +277,43 @@ impl PassClaims {
         #[cfg(feature = "plugins")]
         {
             let claim = self.claims.get(&k)?;
-            crate::plugins::displace_face(self.faces.get(k)?, claim, density_cap, split_creases)
+            match crate::plugins::displace_face(self.faces.get(k)?, claim, density_cap, split_creases) {
+                Ok(m) => Some(m),
+                Err(f) => {
+                    if let Ok(mut all) = self.failures.lock() {
+                        all.push(f);
+                    }
+                    None
+                }
+            }
         }
         #[cfg(not(feature = "plugins"))]
         {
             let _ = (k, density_cap, split_creases, &self.faces);
             None
+        }
+    }
+
+    /// The faces a pass could not texture so far, one entry per feature in the
+    /// order they first failed, as `{feature_id, message, faces}`.
+    pub fn failures(&self) -> Vec<Value> {
+        #[cfg(feature = "plugins")]
+        {
+            let all = self.failures.lock().map(|f| f.clone()).unwrap_or_default();
+            let mut out: Vec<(Option<String>, String, usize)> = Vec::new();
+            for f in all {
+                match out.iter_mut().find(|o| o.0 == f.feature_id) {
+                    Some(o) => o.2 += 1,
+                    None => out.push((f.feature_id, f.message, 1)),
+                }
+            }
+            out.into_iter()
+                .map(|(id, message, faces)| serde_json::json!({"feature_id": id, "message": message, "faces": faces}))
+                .collect()
+        }
+        #[cfg(not(feature = "plugins"))]
+        {
+            Vec::new()
         }
     }
 
@@ -541,10 +587,14 @@ pub fn mesh_result_full(
     let mut out = Vec::new();
     let mut boxes = Vec::new();
     let mut built = built_payloads(bodies, tolerance, profile, cache, on_body);
+    let mut failed = Vec::new();
     for (i, body) in bodies.iter().enumerate() {
-        let Some(full) = built[i].take() else {
+        let Some(mut full) = built[i].take() else {
             continue;
         };
+        if let Some(Value::Array(f)) = full.fields.remove(PASS_ERRORS) {
+            failed.extend(f);
+        }
         boxes.push(full.fields.get("bbox").cloned().unwrap_or(Value::Null));
         let tag = full.fields.get("etag").cloned().unwrap_or(Value::Null);
         if known.get(&body.id) == Some(&tag) {
@@ -559,6 +609,9 @@ pub fn mesh_result_full(
     fields.insert("protocol".into(), 2.into());
     fields.insert("bodies".into(), Value::Null);
     fields.insert("bbox".into(), union_bbox(&boxes));
+    if !failed.is_empty() {
+        fields.insert(PASS_ERRORS.into(), Value::Array(failed));
+    }
     MeshResult {
         fields,
         bodies: out,

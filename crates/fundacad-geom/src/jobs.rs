@@ -101,8 +101,12 @@ fn rebuild_with(
     match meshed {
         JobResult::Mesh(mut mesh) => {
             let bbox = mesh.fields.get("bbox").cloned().unwrap_or(Value::Null);
+            let failed = mesh.fields.remove(crate::mesh::PASS_ERRORS);
             let mut merged = fields;
             merged.insert("bbox".into(), bbox);
+            if let Some(Value::Array(failed)) = failed {
+                add_pass_errors(&mut merged, failed);
+            }
             for (k, v) in mesh.fields {
                 if !merged.contains_key(&k) {
                     merged.insert(k, v);
@@ -112,6 +116,39 @@ fn rebuild_with(
             JobResult::Mesh(mesh)
         }
         other => other,
+    }
+}
+
+/// Faces a mesh pass left plain, as `featureErrors` of the features that
+/// claimed them, so a texture that could not apply raises the error notice
+/// although its feature built.
+fn add_pass_errors(fields: &mut Map<String, Value>, failed: Vec<Value>) {
+    let errors: Vec<builder::FeatureError> = failed
+        .iter()
+        .map(|f| {
+            let faces = f.get("faces").and_then(Value::as_u64).unwrap_or(1);
+            let message = f.get("message").and_then(Value::as_str).unwrap_or("the mesh pass failed");
+            builder::FeatureError {
+                feature_id: f.get("feature_id").and_then(Value::as_str).map(str::to_owned),
+                message: if faces > 1 {
+                    format!("{message} ({faces} faces left plain)")
+                } else {
+                    message.to_owned()
+                },
+                code: Some("mesh-pass".into()),
+                detail: None,
+            }
+        })
+        .collect();
+    let Some(last) = errors.last() else {
+        return;
+    };
+    if !fields.contains_key("featureError") {
+        fields.insert("featureError".into(), last.wire());
+    }
+    let list = fields.entry("featureErrors").or_insert_with(|| Value::Array(Vec::new()));
+    if let Value::Array(list) = list {
+        list.extend(errors.iter().map(builder::FeatureError::wire_full));
     }
 }
 
