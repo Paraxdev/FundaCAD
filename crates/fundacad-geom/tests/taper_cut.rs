@@ -659,6 +659,49 @@ fn both_ways_and_a_pull_on_a_face_that_looks_down_give_the_same_solid() {
     assert!((m.bbox[2] + 1.5).abs() < 1e-6 && (m.bbox[5] - 5.0).abs() < 1e-6, "{:?}", m.bbox);
 }
 
+/// The arms of the rounded L are 4 mm wide and gone 2 mm up at 45 degrees, so
+/// the cone at its inside corner stops short of the far end and there is no
+/// edge to bring it to. It built with the cone.
+#[test]
+fn a_corner_the_taper_cannot_bring_to_an_edge_fails_with_a_sentence() {
+    for distance in [4.0, -4.0] {
+        let r = boss(rounded_ell(0.5), json!({"distance": distance, "taper": 45}));
+        let msgs = messages(&r);
+        assert_eq!(msgs.len(), 1, "{distance}: {msgs:?}");
+        assert!(msgs[0].contains("corner") && msgs[0].contains("taper") && !msgs[0].contains("Error"), "{distance}: {msgs:?}");
+        assert!(r.bodies.is_empty(), "{distance}: a body was made all the same");
+    }
+}
+
+/// The kernel has no sound tapered prism of this hump of eleven poles, and
+/// flared the loft stood in for it: 406.9 mm3 drawn one way round and 415.3
+/// the other, as a solid no STEP file could be written of. It gets the
+/// sentence and no body now.
+#[test]
+fn a_spline_the_kernel_cannot_lean_fails_with_a_sentence() {
+    let poles = [
+        [14.0, 10.0], [14.0, 11.0], [14.0, 12.0], [14.0, 13.0], [13.0, 16.0], [10.0, 17.0],
+        [7.0, 16.0], [6.0, 13.0], [6.0, 12.0], [6.0, 11.0], [6.0, 10.0],
+    ];
+    let outline = json!([
+        seg("a", [0.0, 0.0], [20.0, 0.0]),
+        seg("b", [20.0, 0.0], [20.0, 10.0]),
+        seg("c", [20.0, 10.0], [14.0, 10.0]),
+        spline("d", false, &poles),
+        seg("e", [6.0, 10.0], [0.0, 10.0]),
+        seg("f", [0.0, 10.0], [0.0, 0.0]),
+    ]);
+    for (winding, outline) in [("as drawn", outline.clone()), ("turned round", turned_round(&outline))] {
+        for distance in [1.5, -1.5] {
+            let r = boss(outline.clone(), json!({"distance": distance, "taper": -30}));
+            let msgs = messages(&r);
+            assert_eq!(msgs.len(), 1, "{winding}, {distance}: {msgs:?}");
+            assert!(msgs[0].contains("taper") && !msgs[0].contains("Error"), "{winding}, {distance}: {msgs:?}");
+            assert!(r.bodies.is_empty(), "{winding}, {distance}: a body was made all the same");
+        }
+    }
+}
+
 const KAPPA: f64 = 0.552_284_749_830_793_6;
 
 /// A block with a tunnel of 7.2 mm swept 150 degrees about Z at 30 mm, its
