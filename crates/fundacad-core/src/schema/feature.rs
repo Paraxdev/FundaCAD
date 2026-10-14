@@ -79,7 +79,7 @@ open_enum! {
     pub enum HoleExtent { Blind = "blind", Through = "through" }
 }
 open_enum! {
-    pub enum ImportFormat { Stl = "stl", ThreeMf = "3mf", Step = "step", Obj = "obj", Brep = "brep", Glb = "glb", Iges = "iges", Fcstd = "fcstd", Ply = "ply", Off = "off", Amf = "amf", Gltf = "gltf" }
+    pub enum ImportFormat { Stl = "stl", ThreeMf = "3mf", Step = "step", Obj = "obj", Brep = "brep", Glb = "glb", Iges = "iges", Fcstd = "fcstd", Ply = "ply", Off = "off", Amf = "amf", Gltf = "gltf", Vrml = "vrml", X3d = "x3d" }
 }
 open_enum! {
     pub enum SplitKeep { Top = "top", Bottom = "bottom", Both = "both" }
