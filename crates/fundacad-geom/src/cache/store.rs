@@ -14,6 +14,7 @@
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::SystemTime;
 
 use opencascade::primitives::Shape;
@@ -131,10 +132,13 @@ impl GeomStore {
         if let Some(parent) = dest.parent() {
             fs::create_dir_all(parent)?;
         }
+        // The clock alone names two writes of the same tick alike.
+        static NTH: AtomicU64 = AtomicU64::new(0);
         let nonce = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .map_or(0, |d| d.as_nanos());
-        let tmp = self.tmp.join(format!("{nonce:x}-{}.tmp", std::process::id()));
+        let nth = NTH.fetch_add(1, Ordering::Relaxed);
+        let tmp = self.tmp.join(format!("{nonce:x}-{}-{nth}.tmp", std::process::id()));
         let written = (|| {
             let mut f = fs::File::create(&tmp)?;
             f.write_all(data)?;
