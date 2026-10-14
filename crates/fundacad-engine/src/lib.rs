@@ -28,6 +28,27 @@ use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+static BUILD: std::sync::OnceLock<Value> = std::sync::OnceLock::new();
+
+/// The source this executable was built from, as `build_identity.rs` writes it
+/// into `FUNDACAD_BUILD`, answered in `ping` so a client holding two engines can
+/// tell whether they build a document the same way. Set by the executable, not
+/// this crate: a build script here would recompile fundacad-geom, which
+/// depends on this crate, on every commit.
+pub fn set_build(json: &str) {
+    if let Ok(build @ Value::Object(_)) = serde_json::from_str(json) {
+        let _ = BUILD.set(build);
+    }
+}
+
+fn pong() -> Value {
+    let mut pong = json!({ "pong": true });
+    if let Some(build) = BUILD.get() {
+        pong["build"] = build.clone();
+    }
+    pong
+}
+
 /// Where replies go. A stream's messages must reach the client back to back,
 /// so a transport sends the whole iterator under one lock.
 pub trait Outbox: Send + Sync + 'static {
@@ -339,7 +360,7 @@ impl Engine {
                 let hit = self.cancel(client, req.get("target"));
                 reply(envelope::cancel_ack(&id, hit));
             }
-            Some("ping") => reply(envelope::ok(&id, &json!({ "pong": true }))),
+            Some("ping") => reply(envelope::ok(&id, &pong())),
             Some(op) if live::is_session_op(op) => {
                 let mut session = self.live.lock().unwrap_or_else(|p| p.into_inner());
                 match live::session_reply(&mut session, &conn_id(client), op, &req) {

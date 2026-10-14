@@ -37,6 +37,9 @@ pub struct AppSession {
     pub port: u16,
     pub token: String,
     pub pid: Option<i64>,
+    /// What its engine said about its build when it answered the probe, the
+    /// `build` of a `ping` reply (docs/PROTOCOL.md). None before the probe.
+    pub build: Option<Value>,
 }
 
 /// The directory Tauri's `app_data_dir()` resolves to, without Tauri. Getting a
@@ -96,6 +99,7 @@ pub fn read_session_file(path: Option<&Path>) -> Option<AppSession> {
         port: port as u16,
         token: token.to_string(),
         pid: data.get("pid").and_then(Value::as_i64),
+        build: None,
     })
 }
 
@@ -104,8 +108,8 @@ pub fn read_session_file(path: Option<&Path>) -> Option<AppSession> {
 /// `ping` rather than a bare connect: the token is checked during the handshake,
 /// but a successful connect only proves SOMETHING accepted it. One round trip
 /// proves the other end speaks this protocol, which is what the caller is about
-/// to rely on.
-pub async fn probe(info: &AppSession, timeout: Duration) -> bool {
+/// to rely on. The reply, when it is one.
+pub async fn probe(info: &AppSession, timeout: Duration) -> Option<Value> {
     let call = async {
         let mut ws = crate::link::Socket::connect(info.port, &info.token).await.ok()?;
         let reply = ws
@@ -113,18 +117,17 @@ pub async fn probe(info: &AppSession, timeout: Duration) -> bool {
             .await
             .ok()?;
         let _ = ws.close().await;
-        Some(reply.get("result")?.get("pong")?.as_bool().unwrap_or(false))
+        let result = reply.get("result")?;
+        (result.get("pong") == Some(&Value::Bool(true))).then(|| result.clone())
     };
-    matches!(tokio::time::timeout(timeout, call).await, Ok(Some(true)))
+    tokio::time::timeout(timeout, call).await.ok().flatten()
 }
 
 /// The running app's session, or None. The file alone is never enough to act on
 /// and the probe alone has nowhere to dial, so the two are joined here.
 pub async fn find_running_app(path: Option<&Path>, timeout: Duration) -> Option<AppSession> {
-    let info = read_session_file(path)?;
-    if probe(&info, timeout).await {
-        Some(info)
-    } else {
-        None
-    }
+    let mut info = read_session_file(path)?;
+    let pong = probe(&info, timeout).await?;
+    info.build = pong.get("build").cloned();
+    Some(info)
 }

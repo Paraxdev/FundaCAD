@@ -323,6 +323,67 @@ async fn the_app_coming_back_is_found_again() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn a_private_engine_of_another_build_says_so() {
+    // Last week a document built differently here than in the app because the
+    // engine this server started was three days older than the app's, and
+    // nothing said so. This app's engine is a build no checkout has.
+    let _serial = serial();
+    let app = FakeEngine::start(|op, _req| match op {
+        "ping" => json!({"ok": true, "result": {"pong": true, "build": {
+            "commit": "0123456789abcdef0123456789abcdef01234567", "commitDate": "2020-01-02"}}}),
+        "session_state" => json!({"ok": true, "result": {
+            "attached": true, "revision": 7, "title": "the user's part",
+            "status": {"canEdit": true, "applied": []},
+            "document": {"features": [], "parameters": {}}}}),
+        _ => json!({"ok": true, "result": {}}),
+    });
+    let session = Session::published(&app);
+    let mut mcp = attached_process(&session.0);
+    assert!(!mcp.call("doc_get", json!({})).is_error);
+
+    app.die();
+    let _ = std::fs::remove_file(&session.0);
+    let edited = mcp.call("param_set", json!({"name": "w", "expr": 10}));
+    assert!(edited.text.contains("private copy"), "{}", edited.text);
+    assert!(
+        edited.text.contains("commit 0123456789ab of 2020-01-02"),
+        "never said the private engine is not FundaCAD's build: {}",
+        edited.text
+    );
+    let built = mcp.call("build", json!({}));
+    assert!(
+        built.text.contains("commit 0123456789ab of 2020-01-02"),
+        "a build on the private engine did not say it: {}",
+        built.text
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_window_of_another_build_that_is_not_sharing_is_named_on_a_build() {
+    // The work stays on the engine this server started, and the person opens
+    // the result in that window, so the two have to be the same build.
+    let _serial = serial();
+    let app = FakeEngine::start(|op, _req| match op {
+        "ping" => json!({"ok": true, "result": {"pong": true, "build": {
+            "commit": "0123456789abcdef0123456789abcdef01234567", "commitDate": "2020-01-02"}}}),
+        "session_state" => json!({"ok": true, "result": {"attached": false}}),
+        _ => json!({"ok": true, "result": {}}),
+    });
+    let _session = Session::published(&app);
+    std::env::set_var("FUNDACAD_ENGINE_CMD", common::engine_binary());
+    let srv = FundaCad::with_link(fundacad_mcp::link::EngineLink::private());
+    srv.probe_for_the_app().await;
+    assert!(!srv.is_live().await);
+    let built = common::text_of(&srv.t_build(Default::default()).await.expect("a reply"));
+    std::env::remove_var("FUNDACAD_ENGINE_CMD");
+    srv.shutdown().await;
+    assert!(
+        built.contains("commit 0123456789ab of 2020-01-02"),
+        "a build beside a window of another build did not say so: {built}"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn a_window_not_sharing_is_not_mistaken_for_a_lost_engine() {
     // The control: a window sharing nothing is a setting the user can flip, and
     // it must keep saying so rather than silently going private.

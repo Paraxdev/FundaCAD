@@ -123,6 +123,14 @@ token. It never competes with a running app and never touches what the user has
 open; an agent working this way works on its own copy and hands the result back
 as a `.funda` file. This is what it does when no window is open.
 
+A document can build differently on two builds of the engine, so each engine
+names the commit it was built from in its `ping` reply (docs/PROTOCOL.md). When
+the server works on an engine it started while it knows FundaCAD's engine is a
+different build, after the window it was attached to closed or when a window
+that opened after it started is not sharing, the note that the work went to a
+private copy and every `build` reply say so, naming both commits. In
+`standalone` it never looks for a window, so it has nothing to compare with.
+
 ### Choosing
 
 `FUNDACAD_MCP_MODE` takes:
