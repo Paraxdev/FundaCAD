@@ -136,6 +136,24 @@ fn a_solid_whose_faces_disagree_is_left_as_it_is() {
     );
 }
 
+/// The STEP reader holds the shell of a solid it turned outward reversed. It
+/// does the same to a solid whose faces disagree, which then faces no one way
+/// and measures a volume of either sign, so that one is not said to be turned.
+#[test]
+fn only_a_solid_the_reader_left_facing_outward_is_said_to_be_turned() {
+    let shape = |edit| brep_b64_to_shape(&unsound::cube_brep(edit)).unwrap_or_else(|_| panic!("decodes"));
+    let turned = shape(unsound::shell_reversed_faces_turned);
+    assert!((kernel::volume(&turned) - 1000.0).abs() < 1e-6, "{}", kernel::volume(&turned));
+    assert_eq!(kernel::reader_turned_solids(&turned), 1);
+
+    let mixed = shape(unsound::shell_reversed_four_faces_turned);
+    assert!(kernel::volume(&mixed) > 0.0, "{}", kernel::volume(&mixed));
+    assert!(kernel::skin(&mixed).flipped_edges > 0);
+    assert_eq!(kernel::reader_turned_solids(&mixed), 0);
+
+    assert_eq!(kernel::reader_turned_solids(&shape(unsound::sound)), 0);
+}
+
 /// The STEP reader turns a solid outward itself as it reads it, the import
 /// says which. It also mends a solid whose faces disagree and then turns that
 /// one too, which is OCCT's healing and not undone here.

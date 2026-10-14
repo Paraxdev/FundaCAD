@@ -51,6 +51,33 @@ pub fn one_face_turned(lines: &mut Vec<String>, at: &Records) {
     lines[at.shell] = format!("{turned}{}", &lines[at.shell][1..]);
 }
 
+fn faces_turned(lines: &mut [String], at: &Records, n: usize) {
+    let parts: Vec<String> = lines[at.shell]
+        .split(' ')
+        .enumerate()
+        .map(|(i, p)| match (i % 2 == 0 && i / 2 < n, p.strip_prefix('-'), p.strip_prefix('+')) {
+            (true, Some(rest), _) => format!("+{rest}"),
+            (true, _, Some(rest)) => format!("-{rest}"),
+            _ => p.to_owned(),
+        })
+        .collect();
+    lines[at.shell] = parts.join(" ");
+}
+
+/// How the STEP reader leaves a solid it turned outward: the shell held
+/// reversed and every face in it turned, so it faces out.
+pub fn shell_reversed_faces_turned(lines: &mut Vec<String>, at: &Records) {
+    inside_out(lines, at);
+    faces_turned(lines, at, 6);
+}
+
+/// The shell held reversed with four of its six faces turned, so its volume
+/// comes out positive while two faces still point in.
+pub fn shell_reversed_four_faces_turned(lines: &mut Vec<String>, at: &Records) {
+    inside_out(lines, at);
+    faces_turned(lines, at, 4);
+}
+
 /// Each edge of that face then bounds three.
 pub fn one_face_twice(lines: &mut Vec<String>, at: &Records) {
     let first: Vec<&str> = lines[at.shell].split(' ').take(2).collect();
