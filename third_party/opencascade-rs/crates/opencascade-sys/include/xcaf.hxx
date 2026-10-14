@@ -7,6 +7,8 @@
 #include "rust/cxx.h"
 #include <APIHeaderSection_MakeHeader.hxx>
 #include <IFSelect_ReturnStatus.hxx>
+#include <IGESCAFControl_Reader.hxx>
+#include <IGESControl_Controller.hxx>
 #include <Interface_Static.hxx>
 #include <Message.hxx>
 #include <Message_Messenger.hxx>
@@ -42,6 +44,7 @@
 #include <XSControl_WorkSession.hxx>
 #include <bindings_common.hxx>
 #include <step_loose.hxx>
+#include <cctype>
 #include <cmath>
 #include <map>
 #include <memory>
@@ -255,6 +258,8 @@ struct StepAssemblyWalk {
   std::map<std::string, std::vector<int32_t>> solid_cache;
   std::map<std::string, StepLooseRepair> loose_cache;
   Message_ProgressScope *sewing = nullptr;
+  // IGES has no products, its reader names each label after the shape type.
+  bool drop_placeholder_names = false;
   // What did not close is said before anything else, a reader of one note
   // gets that one.
   size_t open_notes = 0;
@@ -329,6 +334,63 @@ struct StepAssemblyWalk {
     return loose_cache.emplace(key, fixed).first->second;
   }
 
+  std::string name_of(const TDF_Label &label) const {
+    std::string name = xcaf_label_name(label);
+    if (drop_placeholder_names) {
+      std::string upper;
+      for (char c : name) {
+        upper.push_back(static_cast<char>(std::toupper(static_cast<unsigned char>(c))));
+      }
+      static const char *const kinds[] = {"COMPOUND", "COMPSOLID", "SOLID", "SHELL", "FACE",
+                                          "WIRE", "EDGE", "VERTEX", "SHAPE"};
+      for (const char *k : kinds) {
+        if (upper == k) {
+          return std::string();
+        }
+      }
+    }
+    return name;
+  }
+
+  // The sewn pieces of loose faces as leaves of node `index`, or false when
+  // sewing changed nothing and the faces stay as they are.
+  bool emit_repair(int32_t index, const StepLooseRepair &fixed, const std::string &key,
+                   const TopLoc_Location &location) {
+    int32_t first = static_cast<int32_t>(tree.leaves.size());
+    for (size_t n = 0; n < fixed.notes.size(); ++n) {
+      const auto &note = fixed.notes[n];
+      StepAssembly::Note said{index, fixed.changed && note.first >= 0 ? first + note.first : -1, note.second};
+      if (n == 0 && fixed.open) {
+        tree.notes.insert(tree.notes.begin() + open_notes++, said);
+      } else {
+        tree.notes.push_back(said);
+      }
+    }
+    if (fixed.changed) {
+      for (size_t k = 0; k < fixed.pieces.size(); ++k) {
+        const StepLoosePiece &piece = fixed.pieces[k];
+        StepAssembly::Leaf leaf;
+        leaf.node = index;
+        leaf.shape = piece.shape.Moved(location);
+        leaf.solid_color = piece.color;
+        if (piece.solid) {
+          leaf.product = key + "#" + std::to_string(k);
+          leaf.local = piece.shape;
+          leaf.location = location;
+        }
+        for (int32_t c : piece.face_colors) {
+          if (c >= 0) {
+            leaf.face_colors = piece.face_colors;
+            break;
+          }
+        }
+        tree.leaves.push_back(leaf);
+      }
+      return true;
+    }
+    return false;
+  }
+
   void visit(const TDF_Label &label, int32_t parent, const TopLoc_Location &location) {
     TDF_Label referred = label;
     if (XCAFDoc_ShapeTool::IsReference(label)) {
@@ -340,7 +402,7 @@ struct StepAssemblyWalk {
       color = xcaf_label_color(referred);
     }
     int32_t index = static_cast<int32_t>(tree.nodes.size());
-    tree.nodes.push_back({xcaf_label_name(referred) + std::string(1, '\0') + xcaf_label_name(label), parent, color});
+    tree.nodes.push_back({name_of(referred) + std::string(1, '\0') + name_of(label), parent, color});
 
     if (XCAFDoc_ShapeTool::IsAssembly(referred)) {
       tree.is_assembly = true;
@@ -355,40 +417,8 @@ struct StepAssemblyWalk {
 
     TopoDS_Shape shape = XCAFDoc_ShapeTool::GetShape(referred).Moved(location);
     std::vector<TopoDS_Shape> solids = xcaf_explore(shape, TopAbs_SOLID);
-    if (solids.empty()) {
-      const StepLooseRepair &fixed = loose(referred);
-      int32_t first = static_cast<int32_t>(tree.leaves.size());
-      for (size_t n = 0; n < fixed.notes.size(); ++n) {
-        const auto &note = fixed.notes[n];
-        StepAssembly::Note said{index, fixed.changed && note.first >= 0 ? first + note.first : -1, note.second};
-        if (n == 0 && fixed.open) {
-          tree.notes.insert(tree.notes.begin() + open_notes++, said);
-        } else {
-          tree.notes.push_back(said);
-        }
-      }
-      if (fixed.changed) {
-        for (size_t k = 0; k < fixed.pieces.size(); ++k) {
-          const StepLoosePiece &piece = fixed.pieces[k];
-          StepAssembly::Leaf leaf;
-          leaf.node = index;
-          leaf.shape = piece.shape.Moved(location);
-          leaf.solid_color = piece.color;
-          if (piece.solid) {
-            leaf.product = entry(referred) + "#" + std::to_string(k);
-            leaf.local = piece.shape;
-            leaf.location = location;
-          }
-          for (int32_t c : piece.face_colors) {
-            if (c >= 0) {
-              leaf.face_colors = piece.face_colors;
-              break;
-            }
-          }
-          tree.leaves.push_back(leaf);
-        }
-        return;
-      }
+    if (solids.empty() && emit_repair(index, loose(referred), entry(referred), location)) {
+      return;
     }
     const std::vector<std::vector<int32_t>> &by_solid = face_colors(referred);
     std::vector<int32_t> solid_cols;
@@ -425,6 +455,119 @@ struct StepAssemblyWalk {
   }
 };
 
+// The product tree of a transferred XCAF document. `iges` pools the free
+// roots that hold no solid and no name of their own and sews them as one,
+// since an IGES writer may put each face of a solid in a root of its own.
+inline std::unique_ptr<StepAssembly> xcaf_assembly_walk(const Handle(TDocStd_Document) &doc,
+                                                        Message_ProgressScope &whole, bool iges,
+                                                        const char *format) {
+  std::unique_ptr<StepAssembly> tree(new StepAssembly());
+  StepAssemblyWalk walk{*tree, XCAFDoc_DocumentTool::ShapeTool(doc->Main()),
+                        XCAFDoc_DocumentTool::ColorTool(doc->Main()), false, {}, {}};
+  walk.drop_placeholder_names = iges;
+  TDF_LabelSequence styled;
+  walk.colors->GetColors(styled);
+  walk.reads_faces = styled.Length() > 0;
+  Message_ProgressScope sewing(whole.Next(1), "sewing", 1, true);
+  walk.sewing = &sewing;
+
+  TDF_LabelSequence roots;
+  walk.shapes->GetFreeShapes(roots);
+  if (roots.Length() == 0) {
+    throw std::runtime_error(std::string("the ") + format + " file contains no shapes");
+  }
+  std::vector<bool> pooled(roots.Length() + 1, false);
+  BRep_Builder builder;
+  TopoDS_Compound pool;
+  builder.MakeCompound(pool);
+  int pool_count = 0;
+  if (iges) {
+    for (int i = 1; i <= roots.Length(); ++i) {
+      TDF_Label referred = xcaf_referred(roots.Value(i));
+      TopoDS_Shape shape = XCAFDoc_ShapeTool::GetShape(roots.Value(i));
+      if (!XCAFDoc_ShapeTool::IsAssembly(referred) && xcaf_explore(shape, TopAbs_SOLID).empty() &&
+          !xcaf_explore(shape, TopAbs_FACE).empty() && walk.name_of(referred).empty()) {
+        pooled[i] = true;
+        for (const TopoDS_Shape &f : xcaf_explore(shape, TopAbs_FACE)) {
+          builder.Add(pool, f);
+        }
+        ++pool_count;
+      }
+    }
+    if (pool_count < 2) {
+      std::fill(pooled.begin(), pooled.end(), false);
+    }
+  }
+  bool pool_done = false;
+  for (int i = 1; i <= roots.Length(); ++i) {
+    const TDF_Label &label = roots.Value(i);
+    // An IGES entity with a transformation is a free reference to its shape.
+    TopLoc_Location location = iges && XCAFDoc_ShapeTool::IsReference(label) ? XCAFDoc_ShapeTool::GetLocation(label)
+                                                                            : TopLoc_Location();
+    TDF_Label referred = xcaf_referred(label);
+    if (pooled[i]) {
+      if (pool_done) {
+        continue;
+      }
+      pool_done = true;
+      int32_t index = static_cast<int32_t>(tree->nodes.size());
+      tree->nodes.push_back({std::string(1, '\0'), -1, -1});
+      StepLooseRepair fixed;
+      try {
+        fixed = step_loose_repair(
+            pool, [&walk](const TopoDS_Shape &f) { return walk.reads_faces ? xcaf_shape_color(walk.colors, f) : -1; },
+            sewing);
+      } catch (const Standard_Failure &) {
+        fixed = StepLooseRepair();
+      }
+      if (walk.emit_repair(index, fixed, "pool", location)) {
+        tree->roots.push_back(fixed.whole());
+      } else {
+        StepAssembly::Leaf leaf;
+        leaf.node = index;
+        leaf.shape = pool;
+        leaf.solid_color = -1;
+        tree->leaves.push_back(leaf);
+        tree->roots.push_back(pool);
+      }
+      continue;
+    }
+    walk.visit(label, -1, location);
+    auto fixed = walk.loose_cache.find(StepAssemblyWalk::entry(referred));
+    bool sewn = fixed != walk.loose_cache.end() && fixed->second.changed && !XCAFDoc_ShapeTool::IsAssembly(referred);
+    tree->roots.push_back(sewn ? fixed->second.whole() : XCAFDoc_ShapeTool::GetShape(referred).Moved(location));
+  }
+  if (whole.UserBreak()) {
+    throw std::runtime_error("cancelled");
+  }
+  if (iges) {
+    // IGES colours entities, not parts, and OCCT 7.8 drops the colour of a
+    // face its transfer rebuilt. A part most of whose faces share one colour is that colour.
+    for (StepAssembly::Leaf &leaf : tree->leaves) {
+      int32_t common = -1;
+      size_t coloured = 0;
+      for (int32_t c : leaf.face_colors) {
+        coloured += c >= 0 ? 1 : 0;
+        if (c >= 0 && common >= 0 && c != common) {
+          common = -2;
+          break;
+        }
+        if (c >= 0 && common == -1) {
+          common = c;
+        }
+      }
+      if (leaf.solid_color < 0 && common >= 0 && coloured * 2 > leaf.face_colors.size()) {
+        leaf.solid_color = common;
+      }
+    }
+  }
+  size_t free_roots = iges ? 1 : static_cast<size_t>(roots.Length());
+  if (tree->nodes.size() > free_roots || tree->leaves.size() > tree->nodes.size()) {
+    tree->is_assembly = true;
+  }
+  return tree;
+}
+
 // `codepage` is a Resource_FormatType for the file's unescaped text, what
 // `read.step.codepage` would say, without touching that global.
 inline std::unique_ptr<StepAssembly> step_assembly_read(rust::Str path, int32_t codepage,
@@ -450,36 +593,28 @@ inline std::unique_ptr<StepAssembly> step_assembly_read(rust::Str path, int32_t 
     }
     throw std::runtime_error("the STEP file was read but contained no transferable shape");
   }
-  std::unique_ptr<StepAssembly> tree(new StepAssembly());
-  StepAssemblyWalk walk{*tree, XCAFDoc_DocumentTool::ShapeTool(doc->Main()),
-                        XCAFDoc_DocumentTool::ColorTool(doc->Main()), false, {}, {}};
-  TDF_LabelSequence styled;
-  walk.colors->GetColors(styled);
-  walk.reads_faces = styled.Length() > 0;
-  Message_ProgressScope sewing(whole.Next(1), "sewing", 1, true);
-  walk.sewing = &sewing;
+  return xcaf_assembly_walk(doc, whole, false, "STEP");
+}
 
-  TDF_LabelSequence roots;
-  walk.shapes->GetFreeShapes(roots);
-  if (roots.Length() == 0) {
-    throw std::runtime_error("the STEP file contains no shapes");
+inline std::unique_ptr<StepAssembly> iges_assembly_read(rust::Str path, const Message_ProgressRange &progress) {
+  std::string file(path.data(), path.size());
+  IGESControl_Controller::Init();
+  Handle(TDocStd_Document) doc = new TDocStd_Document(TCollection_ExtendedString("XCAF"));
+  IGESCAFControl_Reader reader;
+  reader.SetNameMode(true);
+  reader.SetColorMode(true);
+  reader.SetLayerMode(true);
+  if (reader.ReadFile(file.c_str()) != IFSelect_RetDone) {
+    throw std::runtime_error("could not read the IGES file (it may be truncated or not IGES)");
   }
-  for (int i = 1; i <= roots.Length(); ++i) {
-    const TDF_Label &label = roots.Value(i);
-    TopLoc_Location location;
-    TDF_Label referred = xcaf_referred(label);
-    walk.visit(label, -1, location);
-    auto fixed = walk.loose_cache.find(StepAssemblyWalk::entry(referred));
-    bool sewn = fixed != walk.loose_cache.end() && fixed->second.changed && !XCAFDoc_ShapeTool::IsAssembly(referred);
-    tree->roots.push_back(sewn ? fixed->second.whole() : XCAFDoc_ShapeTool::GetShape(referred).Moved(location));
+  Message_ProgressScope whole(progress, "IGES", 20);
+  if (!reader.Transfer(doc, whole.Next(19))) {
+    if (whole.UserBreak()) {
+      throw std::runtime_error("cancelled");
+    }
+    throw std::runtime_error("the IGES file was read but contained no transferable shape");
   }
-  if (whole.UserBreak()) {
-    throw std::runtime_error("cancelled");
-  }
-  if (tree->nodes.size() > static_cast<size_t>(roots.Length()) || tree->leaves.size() > tree->nodes.size()) {
-    tree->is_assembly = true;
-  }
-  return tree;
+  return xcaf_assembly_walk(doc, whole, true, "IGES");
 }
 
 inline int32_t step_assembly_node_count(const StepAssembly &a) { return static_cast<int32_t>(a.nodes.size()); }

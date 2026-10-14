@@ -195,9 +195,21 @@ pub fn read_step_assembly(path: &Path) -> Result<StepAssembly, Error> {
 pub fn read_step_assembly_with(path: &Path, progress: &ProgressRange) -> Result<StepAssembly, Error> {
     let codepage = std::fs::read(path).map_or(CODEPAGE_UTF8, |b| step_codepage(&b));
     let lock = step_lock();
-    let a = ffi::step_assembly_read(path_str(path)?, codepage, progress.raw())?;
+    let raw = ffi::step_assembly_read(path_str(path)?, codepage, progress.raw())?;
     drop(lock);
-    let raw = a;
+    assembly_from(raw)
+}
+
+/// An IGES file read like a STEP one: each free root with its name and colours,
+/// loose faces sewn into solids.
+pub fn read_iges_assembly_with(path: &Path, progress: &ProgressRange) -> Result<StepAssembly, Error> {
+    let lock = step_lock();
+    let raw = ffi::iges_assembly_read(path_str(path)?, progress.raw())?;
+    drop(lock);
+    assembly_from(raw)
+}
+
+fn assembly_from(raw: UniquePtr<ffi::StepAssembly>) -> Result<StepAssembly, Error> {
     let a = raw.as_ref().ok_or(Error::StepReadFailed)?;
     let mut nodes = Vec::new();
     for i in 0..ffi::step_assembly_node_count(a) {

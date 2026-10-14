@@ -33,6 +33,7 @@ mod inner {
             codepage: i32,
             progress: &Message_ProgressRange,
         ) -> Result<UniquePtr<StepAssembly>>;
+        pub fn iges_assembly_read(path: &str, progress: &Message_ProgressRange) -> Result<UniquePtr<StepAssembly>>;
         pub fn step_assembly_node_count(a: &StepAssembly) -> i32;
         pub fn step_assembly_node_names(a: &StepAssembly, i: i32) -> Result<Vec<u8>>;
         pub fn step_assembly_node_parent(a: &StepAssembly, i: i32) -> Result<i32>;
