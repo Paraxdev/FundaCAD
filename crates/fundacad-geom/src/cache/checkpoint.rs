@@ -6,6 +6,15 @@
 //! a plugin's mesh pass specs) is written from `Body` field by field, and read
 //! back the same way: a field left out here comes back empty on every reopen
 //! with nothing to notice it.
+//!
+//! A shape read back is not the shape written, to the last bit. A blob holds
+//! a location as twelve numbers that the kernel reads through
+//! `gp_Trsf::SetValues`, which works a scale out of the determinant and makes
+//! the matrix orthogonal again, so a face a rotation places can measure an ulp
+//! or two off what it measured when saved. Owners are keyed by a rounded
+//! measure, and a face sitting where the rounding goes either way would lose
+//! its owner. So they are also saved face by face, and keyed again on restore
+//! by what the faces read back measure.
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -16,7 +25,7 @@ use serde_json::{json, Map, Value};
 
 use super::keys::blob_key;
 use super::store::{Checkpoint, GeomStore, ManifestEntry};
-use crate::builder::{Body, FeatureError, ImportedMeta, Owners, PlaneRecord, Snapshot, State};
+use crate::builder::{owners, Body, FeatureError, ImportedMeta, Owners, PlaneRecord, Snapshot, State};
 
 /// Face, edge and vertex counts and the poles box rounded to 4 places.
 pub fn fingerprint(shape: &opencascade::primitives::Shape) -> Option<Value> {
@@ -84,6 +93,7 @@ impl Persist<'_> {
         let mut manifest = Vec::new();
         let mut fps = Vec::new();
         let mut owners = Map::new();
+        let mut face_owners = Map::new();
         for b in &snap.bodies {
             let key = match self.modified.get(&b.id) {
                 Some((ident, key)) if *ident == b.identity() => key.clone(),
@@ -97,6 +107,9 @@ impl Persist<'_> {
             };
             fps.push(fp);
             owners.insert(b.id.clone(), json!(b.owners));
+            if let Some(listed) = b.face_owners() {
+                face_owners.insert(b.id.clone(), json!(listed));
+            }
             manifest.push(ManifestEntry {
                 body_id: b.id.clone(),
                 name: b.name.clone(),
@@ -117,6 +130,7 @@ impl Persist<'_> {
             "diagnostics": snap.diagnostics,
             "ids": snap.id_events.iter().map(|e| json!([e.key, e.inherit, e.id])).collect::<Vec<_>>(),
             "owners": owners,
+            "face_owners": face_owners,
             "fps": fps,
         });
         let record = Checkpoint {
@@ -173,16 +187,27 @@ pub fn restore(store: &GeomStore, keys: &[String]) -> Option<(usize, Snapshot, M
         if !same_fingerprint(&fingerprint(&shape)?, want) {
             return None;
         }
-        let owners: Owners = state
-            .get("owners")
+        let listed: Option<Vec<Option<String>>> = state
+            .get("face_owners")
             .and_then(|o| o.get(&entry.body_id))
-            .and_then(|o| serde_json::from_value(o.clone()).ok())
-            .unwrap_or_default();
+            .and_then(|o| serde_json::from_value(o.clone()).ok());
+        let rekeyed = listed.as_deref().and_then(|l| owners::keyed(&shape, l));
+        // The keys as saved, for a body whose owners were not worked out for
+        // the shape it was saved with.
+        let listed = listed.filter(|_| rekeyed.is_some());
+        let owners: Owners = rekeyed.unwrap_or_else(|| {
+            state
+                .get("owners")
+                .and_then(|o| o.get(&entry.body_id))
+                .and_then(|o| serde_json::from_value(o.clone()).ok())
+                .unwrap_or_default()
+        });
         let mut body = Body::restored(
             entry.body_id.clone(),
             entry.name.clone(),
             shape,
             owners,
+            listed,
             ImportedMeta {
                 node_ref: entry.node_ref.clone(),
                 face_colors: entry.face_colors.clone(),
