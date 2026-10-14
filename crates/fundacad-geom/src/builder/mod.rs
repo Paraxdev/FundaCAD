@@ -532,11 +532,21 @@ fn note_splits(ctx: &mut Ctx, fid: &str, rawf: &Value, pre: &[(u64, u64, Shape)]
 }
 
 /// How much is wrong with a solid body, to tell a feature that made it worse
-/// from one that passed it on. A surface body counts nothing: an import that
-/// does not close and what thicken starts from are surfaces on purpose.
+/// from one that passed it on. A surface body counts nothing here, it is
+/// judged on its own below.
 fn unsoundness(s: &Soundness) -> usize {
     let k = &s.skin;
     if k.solids == 0 { 0 } else { k.open_edges + k.crowded_edges + k.flipped_edges + s.inward }
+}
+
+/// Features that bring in or copy a surface on purpose: an import that does
+/// not close, and a copy of a body that already was one, made from a body the
+/// copy leaves as it was.
+const KEEPS_SURFACES: [&str; 2] = ["import", "duplicate"];
+
+fn is_sound_solid(shape: &Shape) -> bool {
+    let s = crate::soundness::of(shape);
+    s.fault().is_none() && s.inward == 0
 }
 
 /// Says so when a feature left a solid body that is not closed and facing
@@ -548,7 +558,12 @@ fn unsoundness(s: &Soundness) -> usize {
 /// join or split gives its result a new body: a body that was already at fault
 /// is not called out again for every later feature. Which way a body faces is
 /// only asked of one the feature made, a feature does not turn one over.
-fn note_unsound(ctx: &mut Ctx, fid: &str, pre: &[(u64, u64, Shape)]) {
+///
+/// A body left with no solid in it is said so only when the feature was meant
+/// to give a solid and what it worked on was sound: a surface an import brings
+/// in, or one a feature was handed and passed on (what thicken starts from),
+/// is a state to model in.
+fn note_unsound(ctx: &mut Ctx, fid: &str, kind: Option<&str>, pre: &[(u64, u64, Shape)]) {
     let now: HashSet<(u64, u64)> = ctx.bodies.iter().map(Body::identity).collect();
     let was: HashSet<(u64, u64)> = pre.iter().map(|(uid, generation, _)| (*uid, *generation)).collect();
     let known: HashSet<u64> = pre.iter().map(|(uid, _, _)| *uid).collect();
@@ -563,30 +578,47 @@ fn note_unsound(ctx: &mut Ctx, fid: &str, pre: &[(u64, u64, Shape)]) {
             }
             (b, s)
         })
-        .filter(|(_, s)| unsoundness(s) > 0)
+        .filter(|(_, s)| unsoundness(s) > 0 || s.skin.solids == 0)
         .collect();
     if changed.is_empty() {
         return;
     }
-    let before: usize = pre
-        .iter()
-        .filter(|(uid, generation, _)| !now.contains(&(*uid, *generation)))
-        .map(|(_, _, s)| unsoundness(&crate::soundness::of(s)))
-        .sum();
-    if changed.iter().map(|(_, s)| unsoundness(s)).sum::<usize>() <= before {
-        return;
-    }
-    let notes: Vec<Value> = changed
-        .iter()
-        .filter_map(|(b, s)| {
+    let gone: Vec<&(u64, u64, Shape)> =
+        pre.iter().filter(|(uid, generation, _)| !now.contains(&(*uid, *generation))).collect();
+    let mut notes: Vec<Value> = Vec::new();
+    let faulty: Vec<&(&Body, Soundness)> = changed.iter().filter(|(_, s)| unsoundness(s) > 0).collect();
+    let worse = || {
+        let before: usize = gone.iter().map(|(_, _, s)| unsoundness(&crate::soundness::of(s))).sum();
+        faulty.iter().map(|(_, s)| unsoundness(s)).sum::<usize>() > before
+    };
+    if !faulty.is_empty() && worse() {
+        notes.extend(faulty.iter().filter_map(|(b, s)| {
             let why = s.fault().unwrap_or_else(|| {
                 format!("{}, so a cut, a join or a measurement of it can come out wrong", crate::soundness::INSIDE_OUT)
             });
             Some(advisory(fid, s.code()?, format!("{} {why}", b.name)))
-        })
-        .collect();
+        }));
+    }
+    if !kind.is_some_and(|k| KEEPS_SURFACES.contains(&k)) {
+        let alive: HashSet<u64> = ctx.bodies.iter().map(|b| b.uid).collect();
+        let surface = |b: &Body, s: &Soundness| s.skin.solids == 0 && kernel::count(&b.shape, kernel::Kind::Face) > 0;
+        for (b, _) in changed.iter().filter(|(b, s)| surface(b, s)) {
+            // A body that was there before came from itself and what the
+            // feature used up, a new one from everything the feature touched.
+            let mut from = gone
+                .iter()
+                .filter(|(uid, _, _)| !known.contains(&b.uid) || *uid == b.uid || !alive.contains(uid));
+            if from.all(|(_, _, s)| is_sound_solid(s)) {
+                notes.push(advisory(fid, "notSolid", format!("{} {}", b.name, NOT_SOLID)));
+            }
+        }
+    }
     ctx.diagnostics.extend(notes);
 }
+
+/// What a feature meant to give a solid left, worded to follow the body's name.
+const NOT_SOLID: &str =
+    "came out as a surface, not a solid, so it has no inside and a cut, a join or a measurement of it can come out wrong";
 
 /// Says which fields a built-in feature carries without reading them, so a
 /// misspelt `bodies` is not silently the active body.
@@ -1201,7 +1233,7 @@ pub fn rebuild_from(
                         note_splits(&mut ctx, fid.unwrap_or(""), rawf, &pre_shapes);
                     });
                     crate::bench::phase("note_unsound", || {
-                        note_unsound(&mut ctx, fid.unwrap_or(""), &pre_shapes);
+                        note_unsound(&mut ctx, fid.unwrap_or(""), type_name, &pre_shapes);
                     });
                 }
                 if type_name == Some("sketch") {
@@ -1417,5 +1449,81 @@ mod tests {
             vec!["body3", "body5"]
         );
         assert!(body_tokens("somebody12 body").is_empty());
+    }
+
+    fn before(ctx: &Ctx) -> Vec<(u64, u64, Shape)> {
+        ctx.bodies.iter().map(|b| (b.uid, b.generation, b.shape.clone())).collect()
+    }
+
+    fn cube_and_skin() -> (Shape, Shape) {
+        let cube = kernel::make_box(10.0, 10.0, 10.0).expect("cube");
+        let skin = kernel::subshapes(&cube, kernel::Kind::Shell).remove(0);
+        (cube, skin)
+    }
+
+    fn not_solid(ctx: &Ctx) -> Vec<(&str, &str)> {
+        ctx.diagnostics
+            .iter()
+            .filter(|d| d["code"] == "notSolid")
+            .map(|d| (d["feature_id"].as_str().unwrap_or(""), d["reason"].as_str().unwrap_or("")))
+            .collect()
+    }
+
+    /// No built-in feature is known to do this, which is why the build has to
+    /// say so when one does: everything after it is cut from a surface.
+    #[test]
+    fn a_feature_meant_to_give_a_solid_that_leaves_a_surface_says_so() {
+        let (cube, skin) = cube_and_skin();
+        let mut ctx = Ctx::detached();
+        let i = ctx.new_body(cube, Some("Bracket".into()), None);
+        let pre = before(&ctx);
+        ctx.set_shape(i, skin.clone());
+        note_unsound(&mut ctx, "fillet1", Some("fillet"), &pre);
+        let why = "Bracket came out as a surface, not a solid, so it has no inside and a cut, a join or a measurement of it can come out wrong";
+        assert_eq!(not_solid(&ctx), [("fillet1", why)]);
+
+        let mut ctx = Ctx::detached();
+        let pre = before(&ctx);
+        ctx.new_body(skin, Some("Lid".into()), None);
+        note_unsound(&mut ctx, "e1", Some("organicBody"), &pre);
+        assert_eq!(not_solid(&ctx).len(), 1, "{:?}", ctx.diagnostics);
+    }
+
+    #[test]
+    fn a_surface_brought_in_or_passed_on_is_not_said_to_be_one() {
+        let (cube, skin) = cube_and_skin();
+        let quiet = |ctx: &Ctx| assert!(not_solid(ctx).is_empty(), "{:?}", ctx.diagnostics);
+
+        let mut ctx = Ctx::detached();
+        let pre = before(&ctx);
+        ctx.new_body(skin.clone(), Some("Tray".into()), None);
+        note_unsound(&mut ctx, "imp", Some("import"), &pre);
+        quiet(&ctx);
+
+        let pre = before(&ctx);
+        ctx.set_shape(0, skin.clone());
+        note_unsound(&mut ctx, "mv", Some("mirror"), &pre);
+        quiet(&ctx);
+
+        let pre = before(&ctx);
+        ctx.new_body(skin.clone(), Some("Tray copy".into()), None);
+        note_unsound(&mut ctx, "dup", Some("duplicate"), &pre);
+        quiet(&ctx);
+
+        // A join that used the surface up passes on what it was handed.
+        let i = ctx.new_body(cube, Some("Bracket".into()), None);
+        let pre = before(&ctx);
+        ctx.bodies.remove(0);
+        ctx.set_shape(i - 1, skin);
+        note_unsound(&mut ctx, "j", Some("boolean"), &pre);
+        quiet(&ctx);
+
+        let mut ctx = Ctx::detached();
+        let (cube, _) = cube_and_skin();
+        let i = ctx.new_body(cube, Some("Spent".into()), None);
+        let pre = before(&ctx);
+        ctx.set_shape(i, Shape::empty());
+        note_unsound(&mut ctx, "c", Some("boolean"), &pre);
+        quiet(&ctx);
     }
 }

@@ -171,9 +171,11 @@ Reply `result` is one of:
   face), `nonManifold` (an edge shared by more than two faces), `flippedFaces` (two
   faces that disagree about which side is inside) and `insideOut` (closed, and all of
   it facing inward). A cut, a join or a measurement of such a body can come out wrong
-  without failing, which is why the build says so. A surface body, one with no solid
-  in it, is not reported: an import that does not close and what a thicken starts
-  from are surfaces on purpose.
+  without failing, which is why the build says so. A body with no solid in it at all
+  is `notSolid`, said only when the feature was meant to give a solid and the bodies
+  it worked on were closed solids facing outward: an import that does not close, a
+  copy of a surface, and a surface a later feature was handed and passed on (what a
+  thicken starts from) are surfaces on purpose and say nothing.
 - **Fatal**, nothing built at all: `{ "error": { "message": "...", "feature_id": "..." } }`.
 - **Stalled worker**, one operation ran past the stall timeout (60 s of no build
   progress): the engine returns
