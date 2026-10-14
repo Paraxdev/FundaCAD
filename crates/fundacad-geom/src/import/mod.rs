@@ -6,6 +6,7 @@
 
 pub mod blobstore;
 pub mod canonical;
+pub mod fcstd;
 pub mod gltf;
 pub mod mesh;
 
@@ -26,7 +27,7 @@ pub const MAX_IMPORT_FILE_BYTES: u64 = 256 * 1024 * 1024;
 pub const MAX_IMPORT_BREP_FILE_BYTES: u64 = 1024 * 1024 * 1024;
 
 pub fn import_size_cap(fmt: &str) -> u64 {
-    if matches!(fmt, "step" | "stp" | "brep" | "iges" | "igs") {
+    if matches!(fmt, "step" | "stp" | "brep" | "iges" | "igs" | "fcstd") {
         MAX_IMPORT_BREP_FILE_BYTES
     } else {
         MAX_IMPORT_FILE_BYTES
@@ -278,6 +279,7 @@ pub fn import_geometry(path: &str, fmt: &str, store: &BlobStore) -> Result<Map<S
     let imported = match fmt.as_str() {
         "step" | "stp" => read_step(p)?,
         "iges" | "igs" => read_iges(p)?,
+        "fcstd" => fcstd::read_fcstd(p)?,
         "brep" => outward(Imported {
             shape: Shape::read_brep_text(p).map_err(|e| e.to_string())?,
             fields: Map::new(),
