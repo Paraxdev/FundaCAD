@@ -53,6 +53,9 @@ export interface WireBodyFull {
   faceColorSlots?: (number | null)[];
   edges?: WireEdgeList;
   faceCount?: number;
+  /** Why the body is not a closed solid facing outward, worded to follow its
+   *  name. Absent for a sound body. */
+  fault?: string;
 }
 
 export interface WireBodyStub {
@@ -394,6 +397,7 @@ export class RebuildAssembly {
     if (p.faceOwners !== undefined) m.faceOwners = p.faceOwners;
     if (p.faceBands !== undefined) m.faceBands = p.faceBands;
     if (p.faceColorSlots !== undefined) m.faceColorSlots = p.faceColorSlots;
+    if (p.fault !== undefined) m.fault = p.fault;
 
     if (!this.written[i]) { this.written[i] = true; this.left--; }
     return true;

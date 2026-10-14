@@ -3022,7 +3022,7 @@ export class Viewport {
    *  over the triangles), surface area, and bounding box. */
   bodyProperties(
     ids: string[] | null,
-  ): { volume: number; area: number; com: THREE.Vector3; bbox: THREE.Box3; names: string[] } | null {
+  ): { volume: number; area: number; com: THREE.Vector3; bbox: THREE.Box3; ids: string[]; names: string[] } | null {
     if (!this.model) return null;
     const all = this.model.bodies;
     const bodies = ids && ids.length ? all.filter((b) => ids.includes(b.id)) : all;
@@ -3056,6 +3056,7 @@ export class Viewport {
       area,
       com,
       bbox,
+      ids: bodies.map((x) => x.id),
       names: bodies.map((x) => x.name),
     };
   }

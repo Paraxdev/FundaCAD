@@ -68,13 +68,21 @@ export function createPanels(deps: PanelsDeps) {
     if (!p) return;
     const unit = getUnit();
     const f = toDisplay(1);
+    // The mesh of a body that is not a sound solid has no inside, so a volume
+    // summed off it and the centre of mass weighted by it are wrong.
+    const faults = (store.buildState.result?.bodies ?? [])
+      .filter((b) => b.fault !== undefined && p.ids.includes(b.id))
+      .map((b) => `${b.name} ${b.fault}`);
+    const solid = faults.length === 0;
     const rows: PanelRow[] = [
-      { k: "Volume", v: `${displayRound(p.volume * f * f * f)} ${unit}³` },
+      ...(solid ? [{ k: "Volume", v: `${displayRound(p.volume * f * f * f)} ${unit}³` }] : []),
       { k: "Surface area", v: `${displayRound(p.area * f * f)} ${unit}²` },
-      {
-        k: "Center of mass",
-        v: `${displayRound(toDisplay(p.com.x))}, ${displayRound(toDisplay(p.com.y))}, ${displayRound(toDisplay(p.com.z))}`,
-      },
+      ...(solid
+        ? [{
+          k: "Center of mass",
+          v: `${displayRound(toDisplay(p.com.x))}, ${displayRound(toDisplay(p.com.y))}, ${displayRound(toDisplay(p.com.z))}`,
+        }]
+        : []),
       {
         k: "Bounding box",
         v:
@@ -86,9 +94,10 @@ export function createPanels(deps: PanelsDeps) {
     panels.showProperties({
       title: sel.length === 1 ? (p.names[0] ?? "") : sel.length ? `${sel.length} bodies` : "All bodies",
       rows,
-      raw: { volumeMm3: p.volume, areaMm2: p.area },
+      raw: solid ? { volumeMm3: p.volume, areaMm2: p.area } : null,
+      faults,
     });
-    viewport.setComMarker(p.com);
+    viewport.setComMarker(solid ? p.com : null);
   }
 
   /** Close Properties and drop its center-of-mass marker. The panel component

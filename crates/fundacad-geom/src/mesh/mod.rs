@@ -191,6 +191,11 @@ fn body_payload_for(
     if b.normals.is_some() {
         payload.insert("normals".into(), Value::Null);
     }
+    let sound = crate::bench::phase("soundness", || crate::soundness::of(shape));
+    let fault = sound.fault().or_else(|| sound.inside_out().then(|| crate::soundness::INSIDE_OUT.to_owned()));
+    if let Some(why) = fault {
+        payload.insert("fault".into(), Value::String(why));
+    }
     b.fields = payload;
     with_envelope(body, b)
 }
