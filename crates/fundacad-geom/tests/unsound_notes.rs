@@ -10,7 +10,7 @@ use fundacad_geom::kernel::{self, Kind};
 use serde_json::{json, Value};
 use unsound::{casing, inside_out, one_face_missing, one_face_turned, one_face_twice, shell_alone, sound, Edit};
 
-const CODES: [&str; 4] = ["openShell", "nonManifold", "flippedFaces", "insideOut"];
+const CODES: [&str; 5] = ["openShell", "nonManifold", "flippedFaces", "insideOut", "notSolid"];
 
 fn build(edit: Edit) -> Rebuild {
     unsound::build(json!([casing(edit)]))
@@ -79,6 +79,22 @@ fn the_build_says_a_solid_is_open() {
 fn the_build_does_not_call_a_surface_body_a_fault() {
     let r = build(shell_alone);
     assert_eq!(kernel::count(&r.bodies[0].shape, Kind::Solid), 0, "the fixture is a surface");
+    assert!(fault_notes(&r).is_empty(), "{:?}", r.diagnostics);
+}
+
+/// A surface a feature is handed and passes on is still the one that was
+/// brought in on purpose, whether moved, mirrored, patterned or copied.
+#[test]
+fn a_surface_passed_on_is_not_called_a_fault() {
+    let r = unsound::build(json!([
+        casing(shell_alone),
+        {"id": "mv", "type": "move", "dx": 3, "bodies": ["body1"]},
+        {"id": "mi", "type": "mirror", "plane": {"name": "YZ"}, "bodies": ["body1"]},
+        {"id": "pl", "type": "patternLinear", "count": 2, "spacing": 40, "axis": "Y", "bodies": ["body1"]},
+        {"id": "dup", "type": "duplicate", "dz": 30, "bodies": ["body1"]},
+    ]));
+    assert_eq!(r.bodies.len(), 2);
+    assert!(r.bodies.iter().all(|b| kernel::count(&b.shape, Kind::Solid) == 0), "the fixture is a surface");
     assert!(fault_notes(&r).is_empty(), "{:?}", r.diagnostics);
 }
 
