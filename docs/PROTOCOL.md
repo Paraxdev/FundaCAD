@@ -759,9 +759,14 @@ facing outward, so a file whose faces share no edge still imports as bodies
 that have a volume. A group that does not close stays one surface body, with
 its faces joined where they meet. A face with no area is replaced by the flat
 face across its outline or left out, and an edge the file draws away from its
-face is laid on it. An edge the file draws as a straight line where two curved
-faces meet stays where the file has it, and the solid says how many such edges
-it holds and how far off they are, because a section or a mesh can gap there.
+face is laid on it. An edge the file draws more than 0.001 mm from the faces it bounds,
+such as a straight line where two curved faces meet, is redrawn along the curve where
+those faces meet, between its own two corners; an outline that then runs the wrong way
+is turned and tolerances are reset. The redrawn solid is kept only when the kernel
+accepts it, its skin is closed and its exact volume agrees with a mesh of it, and the
+note says how many edges were redrawn and how far off they were. Otherwise the solid
+stays as the file has it and the note says how many edges are off, how far, and why
+they were not redrawn, because a section or a mesh can gap there.
 `notes` says each of these in a sentence led by the body's
 name, what did not close first. The app stores them on the feature, and every
 rebuild repeats them as `importNote` diagnostics. A product that already holds a solid is not sewn, and

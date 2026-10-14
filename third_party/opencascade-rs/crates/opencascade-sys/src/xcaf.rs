@@ -45,6 +45,9 @@ mod inner {
         pub fn step_assembly_root_count(a: &StepAssembly) -> i32;
         pub fn step_assembly_root_shape(a: &StepAssembly, i: i32) -> Result<UniquePtr<TopoDS_Shape>>;
         pub fn step_assembly_is_assembly(a: &StepAssembly) -> bool;
+        /// Edges of `shape` more than `limit` from a face they bound, the widest gap in `widest[0]`.
+        pub fn step_edges_away(shape: &TopoDS_Shape, limit: f64, widest: &mut [f64]) -> i32;
+        pub fn step_widest_tolerance(shape: &TopoDS_Shape) -> f64;
         pub fn step_assembly_note_count(a: &StepAssembly) -> i32;
         pub fn step_assembly_note_node(a: &StepAssembly, i: i32) -> Result<i32>;
         pub fn step_assembly_note_leaf(a: &StepAssembly, i: i32) -> Result<i32>;

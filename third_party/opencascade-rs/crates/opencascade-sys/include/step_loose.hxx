@@ -4,6 +4,7 @@
 // even where it declares a solid, because the reader finds nothing joining
 // them.
 
+#include <step_heal.hxx>
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepBuilderAPI_Copy.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
@@ -162,41 +163,6 @@ inline double step_loose_gap(const BRepAdaptor_Curve &curve, const Handle(Geom2d
     gap = std::max(gap, curve.Value(first + (last - first) * k / steps).Distance(surface->Value(uv.X(), uv.Y())));
   }
   return gap;
-}
-
-// How many edges of `shape` run more than `limit` from a face they bound, and
-// the widest such gap. A converter that draws a straight line where two curved
-// faces meet leaves these, and no sewing brings the line onto the faces.
-inline int step_loose_edges_away(const TopoDS_Shape &shape, double limit, double &widest) {
-  TopTools_IndexedDataMapOfShapeListOfShape faces_of;
-  TopExp::MapShapesAndAncestors(shape, TopAbs_EDGE, TopAbs_FACE, faces_of);
-  int away = 0;
-  for (int i = 1; i <= faces_of.Extent(); ++i) {
-    const TopoDS_Edge &edge = TopoDS::Edge(faces_of.FindKey(i));
-    if (BRep_Tool::Degenerated(edge)) {
-      continue;
-    }
-    double gap = 0.0;
-    try {
-      BRepAdaptor_Curve curve(edge);
-      for (TopTools_ListIteratorOfListOfShape it(faces_of.FindFromIndex(i)); it.More(); it.Next()) {
-        const TopoDS_Face &face = TopoDS::Face(it.Value());
-        double first = 0.0, last = 0.0;
-        Handle(Geom2d_Curve) on = BRep_Tool::CurveOnSurface(edge, face, first, last);
-        Handle(Geom_Surface) surface = BRep_Tool::Surface(face);
-        if (!on.IsNull() && !surface.IsNull()) {
-          gap = std::max(gap, step_loose_gap(curve, on, first, last, surface, 8));
-        }
-      }
-    } catch (const Standard_Failure &) {
-      continue;
-    }
-    if (gap > limit) {
-      ++away;
-      widest = std::max(widest, gap);
-    }
-  }
-  return away;
 }
 
 // One edge of a wire as the face runs along it, `from` to `to`.
@@ -506,6 +472,7 @@ inline StepLooseRepair step_loose_repair(const TopoDS_Shape &product,
     // body.
     std::vector<StepLoosePiece> solids;
     std::vector<std::string> checks, gaps;
+    bool all_healed = true;
     bool closes = !sewn.IsNull() && !TopExp_Explorer(sewn, TopAbs_FACE, TopAbs_SHELL).More();
     for (TopExp_Explorer ex(sewn, TopAbs_SHELL); closes && ex.More(); ex.Next()) {
       TopoDS_Solid solid;
@@ -514,13 +481,21 @@ inline StepLooseRepair step_loose_repair(const TopoDS_Shape &product,
         break;
       }
       StepLoosePiece piece;
+      for (TopExp_Explorer fx(solid, TopAbs_FACE); fx.More(); fx.Next()) {
+        piece.face_colors.push_back(color_now(fx.Current()));
+      }
+      StepHeal heal = step_heal(solid);
+      if (heal.healed) {
+        solid = heal.solid;
+      } else {
+        all_healed = false;
+      }
       piece.shape = solid;
       piece.solid = true;
       piece.color = unit_color;
       int wrong = 0;
       BRepCheck_Analyzer check(solid);
       for (TopExp_Explorer fx(solid, TopAbs_FACE); fx.More(); fx.Next()) {
-        piece.face_colors.push_back(color_now(fx.Current()));
         wrong += check.IsValid(fx.Current()) ? 0 : 1;
       }
       solids.push_back(piece);
@@ -534,17 +509,7 @@ inline StepLooseRepair step_loose_repair(const TopoDS_Shape &product,
       } else {
         checks.push_back(std::string());
       }
-      double widest = 0.0;
-      int away = step_loose_edges_away(solid, 10 * STEP_LOOSE_TOLERANCE, widest);
-      if (away > 0) {
-        char gap[32];
-        std::snprintf(gap, sizeof gap, "%.2g", widest);
-        gaps.push_back(step_loose_count(away, "edge") + " " + (away == 1 ? "is" : "are") + " drawn up to " + gap +
-                       " mm away from the faces " + (away == 1 ? "it bounds" : "they bound") +
-                       ", a section or a mesh of this body can gap there");
-      } else {
-        gaps.push_back(std::string());
-      }
+      gaps.push_back(step_heal_note(heal));
     }
     int32_t about = REST;
     if (closes && !solids.empty()) {
@@ -579,7 +544,8 @@ inline StepLooseRepair step_loose_repair(const TopoDS_Shape &product,
       notes.push_back({about, step_loose_count(left_out, "face") + " with no area " +
                                   (left_out == 1 ? "was" : "were") + " left out"});
     }
-    if (reseated > 0) {
+    // A healed solid redrew the edges these faces were laid on.
+    if (reseated > 0 && !(closes && all_healed)) {
       char gap[32];
       std::snprintf(gap, sizeof gap, "%.2g", moved);
       notes.push_back({about, step_loose_count(reseated, "face") + " " + (reseated == 1 ? "has" : "have") +
