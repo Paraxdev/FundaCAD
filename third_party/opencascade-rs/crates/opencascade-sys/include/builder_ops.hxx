@@ -54,6 +54,7 @@
 #include <GCE2d_MakeSegment.hxx>
 #include <Geom_Circle.hxx>
 #include <Geom_ConicalSurface.hxx>
+#include <Geom_Line.hxx>
 #include <Geom_Plane.hxx>
 #include <Geom_TrimmedCurve.hxx>
 #include <GC_MakeArcOfCircle.hxx>
@@ -611,6 +612,51 @@ inline TopoDS_Shape bo_only_shell(const TopoDS_Shape &solid) {
   return it.More() ? TopoDS_Shape() : shell;
 }
 
+inline bool bo_is_line(const TopoDS_Edge &e) {
+  double a, b;
+  Handle(Geom_Curve) c = BRep_Tool::Curve(e, a, b);
+  if (c.IsNull()) return false;
+  Handle(Geom_TrimmedCurve) t = Handle(Geom_TrimmedCurve)::DownCast(c);
+  return (t.IsNull() ? c : t->BasisCurve())->IsKind(STANDARD_TYPE(Geom_Line));
+}
+
+// The signed volume of a shape bounded by flat faces with straight edges, from
+// its corners alone, NaN when a face is curved or has a curved side. Each
+// side's corners in the order its face runs it add up to the face's area times
+// its outward normal, in any order of the sides, so no wire is walked. A mesh
+// import is all flat faces, which this measures exactly without the volume
+// integral.
+inline double bo_flat_volume(const TopoDS_Shape &s) {
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+  double six = 0.0;
+  for (TopExp_Explorer f(s, TopAbs_FACE); f.More(); f.Next()) {
+    TopAbs_Orientation fo = f.Current().Orientation();
+    if (fo != TopAbs_FORWARD && fo != TopAbs_REVERSED) continue;
+    TopLoc_Location loc;
+    Handle(Geom_Surface) surface = BRep_Tool::Surface(TopoDS::Face(f.Current()), loc);
+    if (surface.IsNull() || !surface->IsKind(STANDARD_TYPE(Geom_Plane))) return nan;
+    gp_XYZ area(0.0, 0.0, 0.0), on(0.0, 0.0, 0.0);
+    bool first = true;
+    for (TopExp_Explorer x(f.Current(), TopAbs_EDGE); x.More(); x.Next()) {
+      const TopoDS_Edge &e = TopoDS::Edge(x.Current());
+      if (BRep_Tool::Degenerated(e)) continue;
+      if (!bo_is_line(e)) return nan;
+      const gp_XYZ a = BRep_Tool::Pnt(TopExp::FirstVertex(e, true)).XYZ();
+      const gp_XYZ b = BRep_Tool::Pnt(TopExp::LastVertex(e, true)).XYZ();
+      if (first) on = a;
+      first = false;
+      area += a.Crossed(b);
+    }
+    six += area.Dot(on);
+  }
+  return six / 6.0;
+}
+
+inline double bo_signed_volume(const TopoDS_Shape &s) {
+  const double flat = bo_flat_volume(s);
+  return std::isnan(flat) ? bo_volume(s) : flat;
+}
+
 // Inward, one shell, and with nothing in its skin that leaves it more than one
 // way to face. A solid with a void is left alone, its shells could be wrong
 // one way each. Asked in that order, so a solid that faces outward pays for
@@ -650,8 +696,10 @@ inline BoShape bo_turned_clean_outward(const TopoDS_Shape &s, int32_t &turned) {
 }
 
 // Solids the STEP reader turned outward: their one shell is held reversed,
-// which no reader or writer gives an outward solid it did not turn. Only the
-// solid's children are visited, no geometry.
+// which only the reader's healing gives a solid read from a file, and they now
+// face outward with a clean skin. The reader also reverses the shell of a solid
+// whose faces disagree, which leaves it no more outward than before. Only the
+// solid's children are visited unless its shell is reversed.
 inline int bo_reader_turned_solids(const TopoDS_Shape &s) {
   if (s.IsNull()) return 0;
   TopTools_IndexedMapOfShape solids;
@@ -659,7 +707,10 @@ inline int bo_reader_turned_solids(const TopoDS_Shape &s) {
   int turned = 0;
   for (int k = 1; k <= solids.Extent(); ++k) {
     TopoDS_Shape shell = bo_only_shell(solids(k));
-    if (!shell.IsNull() && shell.Orientation() == TopAbs_REVERSED && !bo_faces_inward(solids(k))) ++turned;
+    if (shell.IsNull() || shell.Orientation() != TopAbs_REVERSED) continue;
+    int32_t n[4] = {1, 0, 0, 0};
+    bo_solid_skin(solids(k), n);
+    if (n[1] == 0 && n[2] == 0 && n[3] == 0 && bo_signed_volume(solids(k)) > 0.0) ++turned;
   }
   return turned;
 }
