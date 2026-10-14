@@ -926,7 +926,22 @@ deliberate cancel apart from a real crash.
 
 ### `ping`
 
-Liveness check with no side effects: `{ "op": "ping", "id": "..." }` -> `{ "pong": true }`.
+Liveness check with no side effects: `{ "op": "ping", "id": "..." }` -> `{ "pong": true, "build": {...} }`.
+
+`build` names the source the engine executable was built from, so a client holding two
+engines (the MCP server, with the app's and one it started) can tell whether they build a
+document the same way:
+
+```jsonc
+{ "commit": "<git commit>", "commitDate": "2026-10-13", "changes": "<16 hex digits>" }
+```
+
+`changes` is there only when the engine's source (`crates/` less `crates/fundacad-mcp`,
+`third_party/`, the workspace `Cargo.toml` and `Cargo.lock`) had uncommitted changes, and is
+a hash of them. `fundacad-engine` and `fundacad --engine` built from the same tree say the
+same thing (`crates/fundacad-engine/build_identity.rs`). An executable built without git
+answers `"build": {}` and an engine older than the field answers no `build`, and neither can
+be compared.
 
 ### Unknown op
 

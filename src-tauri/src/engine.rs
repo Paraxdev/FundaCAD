@@ -131,6 +131,7 @@ struct Worker {
 /// `fundacad-mcp` starts as its private engine, so a packaged app needs no
 /// second copy of the kernel for it.
 pub fn run_worker() -> ! {
+    fundacad_engine::set_build(env!("FUNDACAD_BUILD"));
     fundacad_geom::plugins::load();
     if std::env::args().nth(2).as_deref() == Some("--ws") {
         fundacad_engine::ws::run(fundacad_geom::jobs::GeomJobs)

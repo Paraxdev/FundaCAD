@@ -329,6 +329,9 @@ struct State {
     /// what changed. A 32-body assembly listed in full after every edit is
     /// most of an agent's context gone on bodies it did not touch.
     reported: Option<HashMap<String, (String, u64)>>,
+    /// The `build` FundaCAD's engine answered the last probe with, kept after
+    /// the app goes so work moved to a private engine can be compared with it.
+    app_build: Option<Value>,
 }
 
 impl State {
@@ -391,6 +394,7 @@ impl FundaCad {
                 mesh: Arc::default(),
                 built_for: None,
                 reported: None,
+                app_build: None,
             })),
             turn: Arc::new(Mutex::new(())),
             router: Arc::new(Self::tool_router()),
@@ -403,8 +407,9 @@ impl FundaCad {
     pub async fn attach(mode: Mode) -> Result<FundaCad, String> {
         let (link, app) = EngineLink::for_mode(mode, log).await?;
         let server = FundaCad::with_link(link);
-        if app.is_some() {
+        if let Some(app) = app {
             let mut st = server.state.lock().await;
+            st.app_build = app.build;
             let mut live = LiveLink::new();
             match live.pull(&st.link).await {
                 Ok(_) => {
@@ -533,6 +538,7 @@ impl FundaCad {
         else {
             return;
         };
+        self.state.lock().await.app_build = app.build.clone();
         let link = Arc::new(EngineLink::attach(app.port, app.token.clone()));
         let mut live = LiveLink::new();
         let doc = match live.pull(&link).await {
@@ -589,6 +595,20 @@ impl FundaCad {
             lost
         };
         lost.stop().await;
+    }
+
+    /// Said while working on an engine this server started that is not the
+    /// build of the FundaCAD it last reached, which is how a document comes to
+    /// build differently here than in the app.
+    async fn build_mismatch(&self) -> Option<String> {
+        let (link, app) = {
+            let st = self.state.lock().await;
+            if st.live.is_some() || st.link.attached {
+                return None;
+            }
+            (st.link.clone(), st.app_build.clone()?)
+        };
+        crate::link::build_mismatch(&app, &link.build().await?)
     }
 
     async fn engine_link(&self) -> Arc<EngineLink> {
@@ -1752,6 +1772,7 @@ impl FundaCad {
         if !problems.is_empty() {
             lines.push(format!("document problems: {}", problems.join("; ")));
         }
+        lines.extend(self.build_mismatch().await);
         // isError has to reflect a partial build, not just a total one: a body
         // that built beside a feature that failed is still a wrong document, and
         // an agent gating on isError alone must see that without string-matching
@@ -3086,11 +3107,13 @@ impl ServerHandler for FundaCad {
             // that this change did not reach it.
             if lost && mutates {
                 if let Ok(CallToolResponse::Complete(result)) = out {
-                    return Ok(CallToolResponse::Complete(append(
-                        result,
-                        "\n(FundaCAD's engine went away, so this was done on a private copy, not in the \
-                         open document. doc_save it to keep it, or reopen FundaCAD and do it again there.)",
-                    )));
+                    let mut note = "\n(FundaCAD's engine went away, so this was done on a private copy, not in the \
+                         open document. doc_save it to keep it, or reopen FundaCAD and do it again there.)"
+                        .to_string();
+                    if let Some(mismatch) = self.build_mismatch().await {
+                        note.push_str(&format!("\n{mismatch}"));
+                    }
+                    return Ok(CallToolResponse::Complete(append(result, &note)));
                 }
             }
             return out;

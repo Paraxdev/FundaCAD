@@ -45,6 +45,7 @@ const USAGE: &str = "usage:
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    fundacad_engine::set_build(env!("FUNDACAD_BUILD"));
     // server.py's startup `plugin_geometry.discover()`: the engine reads the
     // installed plugins' manifests, an eval or a library user has none.
     fundacad_geom::plugins::load();

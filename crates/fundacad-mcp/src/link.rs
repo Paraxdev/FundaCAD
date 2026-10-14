@@ -378,6 +378,9 @@ struct LinkState {
     child: Option<Child>,
     socket: Option<Socket>,
     next_id: u64,
+    /// The engine's `build` from its `ping`, `{}` when it gave none, None
+    /// until asked and again once a new engine process is started.
+    build: Option<Value>,
 }
 
 impl EngineLink {
@@ -524,6 +527,7 @@ impl EngineLink {
         cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
         cmd.kill_on_drop(true);
         let mut child = cmd.spawn()?;
+        state.build = None;
         // Drained for the life of the engine: a pipe nobody reads fills, and
         // the engine then blocks on its next log line. Our stdout is the MCP
         // protocol, so what it says goes to stderr, the host's log.
@@ -629,6 +633,17 @@ impl EngineLink {
         Err(io::Error::other("the engine could not be reached"))
     }
 
+    /// What the engine says about its build, asked once per engine process.
+    pub async fn build(&self) -> Option<Value> {
+        if let Some(known) = self.state.lock().await.build.clone() {
+            return Some(known);
+        }
+        let pong = self.call("ping", json!({})).await.ok()?;
+        let build = pong.get("result")?.get("build").cloned().unwrap_or_else(|| json!({}));
+        self.state.lock().await.build = Some(build.clone());
+        Some(build)
+    }
+
     /// The process id of the engine this link spawned, when it spawned one.
     pub async fn engine_pid(&self) -> Option<u32> {
         self.state.lock().await.child.as_ref().and_then(Child::id)
@@ -655,6 +670,37 @@ pub fn args(pairs: impl IntoIterator<Item = (&'static str, Value)>) -> Value {
         m.insert(k.into(), v);
     }
     Value::Object(m)
+}
+
+/// What to tell a person when the engine this server started is not the build
+/// FundaCAD's engine is, from the `build` each answered `ping` with. None when
+/// they are the same build, or when either cannot say.
+pub fn build_mismatch(app: &Value, private: &Value) -> Option<String> {
+    fn commit(b: &Value) -> Option<&str> {
+        b.get("commit").and_then(Value::as_str).filter(|c| !c.is_empty())
+    }
+    let (a, p) = (commit(app)?, commit(private)?);
+    if a == p && app.get("changes") == private.get("changes") {
+        return None;
+    }
+    let describe = |b: &Value, commit: &str| {
+        let mut out = format!("commit {}", commit.chars().take(12).collect::<String>());
+        if let Some(date) = b.get("commitDate").and_then(Value::as_str).filter(|d| !d.is_empty()) {
+            out.push_str(&format!(" of {date}"));
+        }
+        if let Some(changes) = b.get("changes").and_then(Value::as_str) {
+            out.push_str(&format!(" with uncommitted changes {}", changes.chars().take(8).collect::<String>()));
+        }
+        out
+    };
+    Some(format!(
+        "Note: the engine this MCP server started is not the build FundaCAD runs, so a document can \
+         build differently here than in the app. This engine is {}, FundaCAD's is {}. Rebuild this \
+         engine from the same source as the app, or use the MCP server that came with the app, then \
+         restart the MCP server.",
+        describe(private, p),
+        describe(app, a)
+    ))
 }
 
 #[cfg(windows)]
