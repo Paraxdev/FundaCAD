@@ -529,3 +529,74 @@ fn the_eye_of_a_named_target_does_not_move_the_cached_cut() {
         assert_eq!(toggled, reference);
     }
 }
+
+/// Each face's owner in face order, what a reply's `faceOwners` says.
+fn face_owners(r: &Rebuild) -> Vec<Vec<Option<String>>> {
+    r.bodies
+        .iter()
+        .map(|b| {
+            kernel::subshapes(&b.shape, kernel::Kind::Face)
+                .iter()
+                .map(|f| builder::owners::face_key(f).and_then(|k| b.owners.get(&k).cloned()))
+                .collect()
+        })
+        .collect()
+}
+
+fn built(raw: &Value) -> Rebuild {
+    builder::rebuild(&typed(raw), raw, &NoWatch).unwrap_or_else(|_| panic!("cancelled"))
+}
+
+/// A ring of tiles, each placed by a rotation, with their tops at z 0.25 where
+/// a face fingerprint rounds either way, then a slot through the first one. A
+/// rotation read back from a blob is not the one written to the last bit, so
+/// a restored tile measures a hair off the tile that was saved.
+fn tile_ring(slot: f64) -> Value {
+    json!({"parameters": {}, "features": [
+        {"id": "tile", "type": "box", "length": 4, "width": 1, "height": 0.5, "operation": "new"},
+        {"id": "out", "type": "move", "bodies": ["body1"], "dx": 20},
+        {"id": "ring", "type": "patternCircular", "bodies": ["body1"], "count": 29, "angle": 360, "axis": "Z"},
+        {"id": "slot", "type": "box", "length": 60, "width": slot, "height": 6, "operation": "cut", "targets": ["body1"]},
+    ]})
+}
+
+#[test]
+fn face_owners_survive_a_disk_resume_of_faces_measuring_on_a_rounding_tie() {
+    let root = scratch("ties");
+    let base = tile_ring(0.4);
+    let reference = face_owners(&built(&base));
+    assert!(reference[0].len() > 150, "the fixture lost its ring: {} faces", reference[0].len());
+    assert!(reference[0].iter().all(Option::is_some), "a cold build left a face without an owner");
+    {
+        let mut cache = RebuildCache::new(Some(GeomStore::open(&root).unwrap()));
+        cache.budget_ms = 0.0;
+        cache.tip_after = Duration::ZERO;
+        let first = cache.rebuild(&typed(&base), &base, &NoWatch).unwrap();
+        assert_eq!(face_owners(&first), reference);
+    }
+
+    let mut reopened = RebuildCache::new(Some(GeomStore::open(&root).unwrap()));
+    reopened.budget_ms = 0.0;
+    reopened.tip_after = Duration::ZERO;
+    let restored = reopened.rebuild(&typed(&base), &base, &NoWatch).unwrap();
+    assert_eq!(reopened.stats.source, Source::Disk);
+    assert!(reopened.stats.replayed.is_empty());
+    assert_eq!(face_owners(&restored), reference, "faces lost their owner in a rebuild answered from disk");
+
+    // The slot replays on the restored ring: the tiles it leaves alone keep the owner they had.
+    let edited = tile_ring(0.6);
+    let mut third = RebuildCache::new(Some(GeomStore::open(&root).unwrap()));
+    third.budget_ms = 0.0;
+    third.tip_after = Duration::ZERO;
+    let resumed = third.rebuild(&typed(&edited), &edited, &NoWatch).unwrap();
+    assert_eq!(third.stats.source, Source::Disk);
+    assert_eq!(third.stats.replayed, [3]);
+    assert_eq!(face_owners(&resumed), face_owners(&built(&edited)), "a feature replayed on a restored body owns faces it did not make");
+
+    // A checkpoint written from a restored body restores the same way.
+    let mut fourth = RebuildCache::new(Some(GeomStore::open(&root).unwrap()));
+    let again = fourth.rebuild(&typed(&edited), &edited, &NoWatch).unwrap();
+    assert_eq!(fourth.stats.source, Source::Disk);
+    assert!(fourth.stats.replayed.is_empty());
+    assert_eq!(face_owners(&again), face_owners(&built(&edited)), "faces lost their owner in the second restore");
+}

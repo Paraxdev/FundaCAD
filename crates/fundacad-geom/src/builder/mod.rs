@@ -12,6 +12,7 @@ pub mod plane;
 
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use fundacad_core::body_ids::{number, BodyIds, Event};
@@ -150,6 +151,9 @@ pub struct Body {
     pub name: String,
     shape: Shape,
     pub owners: Owners,
+    /// What `owners` says of each face in face order, and the generation of
+    /// the shape it was worked out for.
+    face_owners: Option<(u64, Arc<Vec<Option<String>>>)>,
     /// Mesh pass specs a plugin stashed, `plugin_geometry.BODY_KEY`.
     pub mesh_passes: Vec<Value>,
     /// The assembly tree node an import bound this body to, `<featureId>/<index>`.
@@ -171,15 +175,36 @@ impl Body {
         (self.uid, self.generation)
     }
 
-    /// A body read back from a checkpoint, under a new identity.
-    pub fn restored(id: String, name: String, shape: Shape, owners: Owners, meta: ImportedMeta) -> Body {
+    /// The owner of each face in face order, when the owners were last worked
+    /// out for the shape the body holds now. A face's place in that order is
+    /// the one thing about it a blob gives back exactly.
+    pub fn face_owners(&self) -> Option<&[Option<String>]> {
+        self.face_owners
+            .as_ref()
+            .filter(|(generation, _)| *generation == self.generation)
+            .map(|(_, listed)| listed.as_slice())
+    }
+
+    /// A body read back from a checkpoint, under a new identity. `listed` is
+    /// the `face_owners` it was saved with.
+    pub fn restored(
+        id: String,
+        name: String,
+        shape: Shape,
+        owners: Owners,
+        listed: Option<Vec<Option<String>>>,
+        meta: ImportedMeta,
+    ) -> Body {
+        let uid = NEXT_UID.fetch_add(1, Ordering::Relaxed) + 1;
+        let generation = NEXT_UID.fetch_add(1, Ordering::Relaxed) + 1;
         Body {
-            uid: NEXT_UID.fetch_add(1, Ordering::Relaxed) + 1,
-            generation: NEXT_UID.fetch_add(1, Ordering::Relaxed) + 1,
+            uid,
+            generation,
             id,
             name,
             shape,
             owners,
+            face_owners: listed.map(|l| (generation, Arc::new(l))),
             mesh_passes: Vec::new(),
             node_ref: meta.node_ref,
             face_colors: meta.face_colors,
@@ -355,6 +380,7 @@ impl Ctx {
             name,
             shape,
             owners: Owners::default(),
+            face_owners: None,
             mesh_passes: Vec::new(),
             node_ref: meta.node_ref.filter(|r| !r.is_empty()),
             face_colors: meta.face_colors,

@@ -44,6 +44,19 @@ pub fn face_key(face: &Shape) -> Option<String> {
     kernel::face_area_centre(face).map(|a| key(a[0], [a[1], a[2], a[3]]))
 }
 
+/// `listed`, the owner of each face of `shape` in face order, as the map
+/// `face_key` looks up: keyed by what the faces of this very shape measure.
+/// None when the shape does not hold that many faces.
+pub fn keyed(shape: &Shape, listed: &[Option<String>]) -> Option<Owners> {
+    let faces = kernel::subshapes(shape, Kind::Face);
+    if faces.len() != listed.len() {
+        return None;
+    }
+    let work = crate::par::Shared(&faces);
+    let keys = crate::par::map_indexed(faces.len(), move |i| face_key(&work.get()[i]));
+    Some(keys.into_iter().zip(listed).filter_map(|(k, o)| Some((k?, o.clone()?))).collect())
+}
+
 /// The fingerprint before rounding, so a move can transform its centre.
 fn face_raw(face: &Shape) -> Option<[f64; 4]> {
     kernel::face_area_centre(face)
@@ -125,7 +138,7 @@ pub fn update(
         raws[b][f] = Some(raw);
     }
 
-    let mut updates: Vec<(usize, Owners)> = Vec::new();
+    let mut updates: Vec<(usize, Owners, Vec<Option<String>>)> = Vec::new();
     let mut measured: Vec<(u64, Vec<(Shape, Option<[f64; 4]>)>)> = Vec::new();
     for ((&index, fs), rs) in changed.iter().zip(faces).zip(raws) {
         let b = &ctx.bodies[index];
@@ -166,28 +179,37 @@ pub fn update(
         }
         let mut owners = Owners::new();
         let mut fps = Vec::with_capacity(fs.len());
+        let mut keys = Vec::with_capacity(fs.len());
         for (face, raw) in fs.into_iter().zip(rs) {
             let raw = raw.flatten();
             let same = carried.get(&kernel::tshape_id(&face)).copied().flatten();
             fps.push((face, raw));
-            let Some(raw) = raw else { continue };
+            let Some(raw) = raw else {
+                keys.push(None);
+                continue;
+            };
             let fp = key(raw[0], [raw[1], raw[2], raw[3]]);
             let owner = same
                 .or_else(|| prior.get(&fp))
                 .or_else(|| all.iter().rev().find_map(|o| o.get(&fp)))
                 .cloned()
                 .unwrap_or_else(|| fid.to_owned());
-            owners.insert(fp, owner);
+            owners.insert(fp.clone(), owner);
+            keys.push(Some(fp));
         }
-        updates.push((index, owners));
+        // Read off the finished map: two faces that share a fingerprint share
+        // whichever owner the map ended up holding for it.
+        let listed = keys.iter().map(|k| k.as_ref().and_then(|k| owners.get(k).cloned())).collect();
+        updates.push((index, owners, listed));
         measured.push((b.uid, fps));
     }
     let live: std::collections::HashSet<u64> = ctx.bodies.iter().map(|b| b.uid).collect();
     ctx.face_fps.0.retain(|uid, _| live.contains(uid));
     ctx.face_fps.0.extend(measured);
-    for (index, owners) in updates {
+    for (index, owners, listed) in updates {
         if let Some(b) = ctx.bodies.get_mut(index) {
             b.owners = owners;
+            b.face_owners = Some((b.generation, std::sync::Arc::new(listed)));
         }
     }
 }
