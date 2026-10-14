@@ -478,26 +478,31 @@ fn notched_disc_section(d: f64) -> f64 {
 /// kernel's draft had them right already.
 #[test]
 fn an_arc_that_ends_in_a_corner_tapers_to_the_exact_solid_every_way() {
-    type Section = fn(f64) -> f64;
-    let outlines: [(&str, Value, Section); 4] = [
-        ("bump", bump(), bump_section),
-        ("bite", bite(), bite_section),
-        ("two discs", two_discs(), two_discs_section),
-        ("notched disc", notched_disc(), notched_disc_section),
-    ];
+    tapers_to_the_exact_solid_every_way("bump", bump(), bump_section);
+    tapers_to_the_exact_solid_every_way("bite", bite(), bite_section);
+    tapers_to_the_exact_solid_every_way("two discs", two_discs(), two_discs_section);
+}
+
+/// On Linux the kernel's tapered prism found the bisector of the arc's corner
+/// crossing one face and not the other, read past the end of its own list and
+/// took the whole process down with a segfault 1.5 up at 30 degrees.
+#[test]
+fn a_notched_disc_tapers_where_the_kernel_disagrees_with_itself() {
+    tapers_to_the_exact_solid_every_way("notched disc", notched_disc(), notched_disc_section);
+}
+
+fn tapers_to_the_exact_solid_every_way(name: &str, outline: Value, section: fn(f64) -> f64) {
     let k = 30f64.to_radians().tan();
-    for (name, outline, section) in &outlines {
-        for (winding, outline) in [("as drawn", outline.clone()), ("turned round", turned_round(outline))] {
-            for (distance, taper) in [(1.5, 30.0), (-1.5, 30.0), (1.5, -30.0), (-1.5, -30.0)] {
-                let label = format!("{name} {winding}, {distance} by {taper}");
-                let m = measured(&boss(outline.clone(), json!({"distance": distance, "taper": taper})));
-                let lean = if taper > 0.0 { k } else { -k };
-                let exact = integral(|z| section(lean * z), 1.5);
-                assert_eq!(m.solids, 1, "{label}");
-                assert!((m.volume - exact).abs() < 1e-5, "{label}: volume {} against {exact}", m.volume);
-                let (low, high) = if distance > 0.0 { (0.0, 1.5) } else { (-1.5, 0.0) };
-                assert!((m.bbox[2] - low).abs() < 1e-6 && (m.bbox[5] - high).abs() < 1e-6, "{label}: {:?}", m.bbox);
-            }
+    for (winding, outline) in [("as drawn", outline.clone()), ("turned round", turned_round(&outline))] {
+        for (distance, taper) in [(1.5, 30.0), (-1.5, 30.0), (1.5, -30.0), (-1.5, -30.0)] {
+            let label = format!("{name} {winding}, {distance} by {taper}");
+            let m = measured(&boss(outline.clone(), json!({"distance": distance, "taper": taper})));
+            let lean = if taper > 0.0 { k } else { -k };
+            let exact = integral(|z| section(lean * z), 1.5);
+            assert_eq!(m.solids, 1, "{label}");
+            assert!((m.volume - exact).abs() < 1e-5, "{label}: volume {} against {exact}", m.volume);
+            let (low, high) = if distance > 0.0 { (0.0, 1.5) } else { (-1.5, 0.0) };
+            assert!((m.bbox[2] - low).abs() < 1e-6 && (m.bbox[5] - high).abs() < 1e-6, "{label}: {:?}", m.bbox);
         }
     }
 }
