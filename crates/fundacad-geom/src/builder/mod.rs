@@ -99,12 +99,6 @@ fn translate_kernel_error(name: String) -> Fail {
              usually a narrow part of the outline closing up before the far end, a smaller \
              taper or a shorter distance gets past it",
         ),
-        "Taper_Rounded" => Fail::msg(
-            "the taper cannot bring a corner of this outline to an edge. The two sides that \
-             meet there close up, or run through another part of the outline, before the far \
-             end. A smaller taper or a shorter distance gets past it, and so does rounding that \
-             corner in the sketch",
-        ),
         _ => Fail::Internal(name),
     }
 }
