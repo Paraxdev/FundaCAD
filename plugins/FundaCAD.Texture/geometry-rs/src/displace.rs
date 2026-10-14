@@ -26,7 +26,15 @@ struct Geometry {
     t_v: Vec<V>,
 }
 
-fn displacement_geometry(face: &Shape, spec: &Spec, scale: f64, target_edge_mm: f64, cap: usize, flip: bool) -> Result<Geometry, String> {
+fn displacement_geometry(
+    face: &Shape,
+    spec: &Spec,
+    scale: f64,
+    target_edge_mm: f64,
+    cap: usize,
+    flip: bool,
+    plain_grid: bool,
+) -> Result<Geometry, String> {
     let t = face.triangulation().ok_or("the face has no triangulation")?;
     let base_pts: Vec<V> = t.positions.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect();
     let base_uv: Vec<P2> = t.uvs.chunks_exact(2).map(|c| [c[0], c[1]]).collect();
@@ -82,7 +90,7 @@ fn displacement_geometry(face: &Shape, spec: &Spec, scale: f64, target_edge_mm: 
             let v: Vec<f64> = pts.iter().map(|p| p[1]).collect();
             height::height_field(kind, spec, &u, &v, None, None)
         };
-        let lattice_first = phases.is_some() || cell_points.is_some();
+        let lattice_first = !plain_grid && (phases.is_some() || cell_points.is_some());
         let mut attempts = Vec::new();
         if lattice_first {
             attempts.push((phases.take(), cell_points.take(), true));
@@ -171,6 +179,92 @@ fn orient_windings(p: &[V], tris: &[Tri], normals: &[V]) -> Vec<Tri> {
         .collect()
 }
 
+fn transform(spec: &Spec, mut h: f64) -> f64 {
+    if spec.invert {
+        h = 1.0 - h;
+    }
+    match spec.direction.as_str() {
+        "in" => h - 1.0,
+        "both" => (h - 0.5) * 2.0,
+        _ => h,
+    }
+}
+
+/// The narrower of a face's two extents in the pattern's frame.
+fn narrow_width(geom: &Geometry) -> f64 {
+    let (ulo, uhi) = np::min_max(geom.u_mm.iter().copied());
+    let (vlo, vhi) = np::min_max(geom.v_mm.iter().copied());
+    (uhi - ulo).min(vhi - vlo)
+}
+
+/// A signed height below this share of the depth leaves a face looking flat.
+const VISIBLE: f64 = 0.01;
+
+/// The height field over one face geometry: the boundary taper times the
+/// slope mask, the spec the heights are sampled with and the signed heights.
+struct Heights {
+    taper: Vec<f64>,
+    slope: Option<Vec<f64>>,
+    spec_h: Spec,
+    use_tp: bool,
+    signed: Vec<f64>,
+}
+
+impl Heights {
+    fn of(geom: &Geometry, spec: &Spec, target_edge_mm: f64) -> Result<Heights, String> {
+        let kind = spec.kind.as_str();
+        let slope = chart::slope_mask(&geom.normals, spec);
+        let mut taper = geom.taper.clone();
+        if let Some(mask) = &slope {
+            for (t, s) in taper.iter_mut().zip(mask) {
+                *t *= s;
+            }
+        }
+        let mut spec_h = spec.clone();
+        if kind != "image" && !geom.lattice && geom.mean_edge > target_edge_mm * 1.25 {
+            spec_h.scale = 4.0 * geom.mean_edge;
+        }
+        let use_tp = geom.freeform && kind != "image" && (spec.projection == "triplanar" || spec.projection == "box");
+        let mut h = Heights {
+            taper,
+            slope,
+            spec_h,
+            use_tp,
+            signed: Vec::new(),
+        };
+        h.signed = h.at(geom, spec, 0.0, 0.0)?;
+        Ok(h)
+    }
+
+    /// The signed heights with the pattern shifted by `du`, `dv` mm.
+    fn at(&self, geom: &Geometry, spec: &Spec, du: f64, dv: f64) -> Result<Vec<f64>, String> {
+        let kind = spec.kind.as_str();
+        let raw = if self.use_tp {
+            let w = chart::tp_weights(&geom.normals, chart::tp_exponent(spec));
+            let pq: Vec<V> = (0..geom.pts.len())
+                .map(|i| v3::add(v3::add(geom.pts[i], v3::scale(geom.t_u[i], du)), v3::scale(geom.t_v[i], dv)))
+                .collect();
+            triplanar_field(kind, &self.spec_h, &pq, &w, spec.offset)?
+        } else {
+            let u_mm: Vec<f64> = geom.u_mm.iter().map(|u| u + spec.offset).collect();
+            let ur = np::min_max(u_mm.iter().copied());
+            let vr = np::min_max(geom.v_mm.iter().copied());
+            let uu: Vec<f64> = u_mm.iter().map(|u| u + du).collect();
+            let vv: Vec<f64> = geom.v_mm.iter().map(|v| v + dv).collect();
+            height::height_field_smoothed(kind, &self.spec_h, &uu, &vv, Some(ur), Some(vr))?
+        };
+        Ok(raw.into_iter().map(|h| transform(spec, h)).collect())
+    }
+
+    fn moves(&self) -> bool {
+        self.signed.iter().zip(&self.taper).any(|(s, t)| (s * t).abs() > VISIBLE)
+    }
+
+    fn masked_out(&self) -> bool {
+        self.slope.as_ref().is_some_and(|mask| mask.iter().all(|&m| m == 0.0))
+    }
+}
+
 /// `displace_face`: a flat mesh of one textured face with per vertex
 /// displaced normals. `bleed` is a grime neighbour's tag; `split_creases`
 /// (viewport only) hands a faceted profile back unshared, with each triangle's
@@ -199,78 +293,39 @@ pub fn displace_face(face: &Shape, spec_in: &Spec, bleed: bool, density_cap: u32
     if kind == "image" && spec.image.is_none() {
         spec.image = Some(std::rc::Rc::new(crate::image::load(spec.image_path.as_deref().unwrap_or(""))?));
     }
-    let geom = displacement_geometry(face, &spec, scale, target_edge_mm, cap, flip)?;
-    let mut taper = geom.taper.clone();
-    if let Some(slope) = chart::slope_mask(&geom.normals, &spec) {
-        for (t, s) in taper.iter_mut().zip(slope) {
-            *t *= s;
-        }
-    }
-    let mut spec_h = spec.clone();
-    if kind != "image" && !geom.lattice && geom.mean_edge > target_edge_mm * 1.25 {
-        spec_h.scale = 4.0 * geom.mean_edge;
-    }
-    let offset = spec.offset;
-    let invert = spec.invert;
-    let direction = spec.direction.clone();
-    let transform = |mut h: f64| -> f64 {
-        if invert {
-            h = 1.0 - h;
-        }
-        match direction.as_str() {
-            "in" => h - 1.0,
-            "both" => (h - 0.5) * 2.0,
-            _ => h,
-        }
-    };
-    let use_tp = geom.freeform && kind != "image" && (spec.projection == "triplanar" || spec.projection == "box");
-    let n = geom.pts.len();
-    let signed_at: Box<dyn Fn(f64, f64) -> Result<Vec<f64>, String>> = if use_tp {
-        let w = chart::tp_weights(&geom.normals, chart::tp_exponent(&spec));
-        let g = &geom;
-        let sh = &spec_h;
-        let k = kind.clone();
-        let tf = &transform;
-        Box::new(move |du: f64, dv: f64| {
-            let pq: Vec<V> = (0..n)
-                .map(|i| v3::add(v3::add(g.pts[i], v3::scale(g.t_u[i], du)), v3::scale(g.t_v[i], dv)))
-                .collect();
-            Ok(triplanar_field(&k, sh, &pq, &w, offset)?.into_iter().map(tf).collect())
-        })
-    } else {
-        let u_mm: Vec<f64> = if offset != 0.0 {
-            geom.u_mm.iter().map(|u| u + offset).collect()
-        } else {
-            geom.u_mm.clone()
-        };
-        let ur = np::min_max(u_mm.iter().copied());
-        let vr = np::min_max(geom.v_mm.iter().copied());
-        let g = &geom;
-        let sh = &spec_h;
-        let k = kind.clone();
-        let tf = &transform;
-        Box::new(move |du: f64, dv: f64| {
-            let uu: Vec<f64> = u_mm.iter().map(|u| u + du).collect();
-            let vv: Vec<f64> = g.v_mm.iter().map(|v| v + dv).collect();
-            Ok(height::height_field_smoothed(&k, sh, &uu, &vv, Some(ur), Some(vr))?
-                .into_iter()
-                .map(tf)
-                .collect())
-        })
-    };
-    let signed = signed_at(0.0, 0.0)?;
     let depth = spec.depth * spec.amplitude;
+    let mut geom = displacement_geometry(face, &spec, scale, target_edge_mm, cap, flip, false)?;
+    let mut heights = Heights::of(&geom, &spec, target_edge_mm)?;
+    if depth != 0.0 && !heights.moves() && !heights.masked_out() {
+        // A narrow face whose lattice rows all land on the pattern's zero
+        // lines, or one with no interior vertex off the pinned boundary.
+        let width = narrow_width(&geom);
+        for across in [4.0, 8.0] {
+            let edge = (target_edge_mm * 0.5).min(width / across).max(0.02);
+            geom = displacement_geometry(face, &spec, scale, edge, cap, flip, true)?;
+            heights = Heights::of(&geom, &spec, target_edge_mm)?;
+            if heights.moves() {
+                break;
+            }
+        }
+        if !bleed && !heights.moves() {
+            return Err(format!(
+                "the {kind} pattern at scale {scale} mm leaves a face {width:.2} mm wide flat, lower the scale or leave this face out"
+            ));
+        }
+    }
+    let n = geom.pts.len();
     let disp: Vec<V> = (0..n)
-        .map(|i| v3::add(geom.pts[i], v3::scale(geom.normals[i], depth * signed[i] * taper[i])))
+        .map(|i| v3::add(geom.pts[i], v3::scale(geom.normals[i], depth * heights.signed[i] * heights.taper[i])))
         .collect();
-    let eps = (spec_h.scale / 16.0).max(1e-3);
-    let (up, um) = (signed_at(eps, 0.0)?, signed_at(-eps, 0.0)?);
-    let (vp, vm) = (signed_at(0.0, eps)?, signed_at(0.0, -eps)?);
+    let eps = (heights.spec_h.scale / 16.0).max(1e-3);
+    let (up, um) = (heights.at(&geom, &spec, eps, 0.0)?, heights.at(&geom, &spec, -eps, 0.0)?);
+    let (vp, vm) = (heights.at(&geom, &spec, 0.0, eps)?, heights.at(&geom, &spec, 0.0, -eps)?);
     let disp_normals: Vec<V> = (0..n)
         .map(|i| {
             let dhdu = (up[i] - um[i]) / (2.0 * eps);
             let dhdv = (vp[i] - vm[i]) / (2.0 * eps);
-            let s = depth * taper[i];
+            let s = depth * heights.taper[i];
             let grad = v3::scale(v3::add(v3::scale(geom.t_u[i], dhdu), v3::scale(geom.t_v[i], dhdv)), s);
             let dn = v3::sub(geom.normals[i], grad);
             let mut ln = v3::norm(dn);

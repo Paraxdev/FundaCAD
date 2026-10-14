@@ -41,7 +41,7 @@ pub use fundacad::plugin::{feature, kernel};
 /// Bumped on ANY change to the displacement's output, as texture.py's
 /// CODE_VERSION is; it keys the mesh caches. The two halves share the number
 /// because they make the same mesh.
-pub const CODE_VERSION: u32 = 11;
+pub const CODE_VERSION: u32 = 12;
 
 const BLEED: &str = "bleed";
 
