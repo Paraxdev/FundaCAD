@@ -103,6 +103,10 @@ fn the_extension_decides_the_format() {
         (".igs", "iges"),
         (".IGES", "iges"),
         (".FCStd", "fcstd"),
+        (".ply", "ply"),
+        (".OFF", "off"),
+        (".amf", "amf"),
+        (".gltf", "gltf"),
     ] {
         assert_eq!(upload::import_format(&format!("part{ext}")), want, "{ext}");
     }
