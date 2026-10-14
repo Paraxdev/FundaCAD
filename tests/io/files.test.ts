@@ -46,6 +46,8 @@ describe("extToImportFormat", () => {
     expect(extToImportFormat("/tmp/a.ply")).toBe("ply");
     expect(extToImportFormat("/tmp/a.off")).toBe("off");
     expect(extToImportFormat("/tmp/a.amf")).toBe("amf");
+    expect(extToImportFormat("/tmp/a.wrl")).toBe("vrml");
+    expect(extToImportFormat("/tmp/a.x3d")).toBe("x3d");
   });
 
   it("is case-insensitive", () => {
@@ -67,7 +69,8 @@ describe("IMPORT_EXTS", () => {
   it("offers only extensions the import reads as themselves", () => {
     for (const ext of IMPORT_EXTS) {
       const fmt = extToImportFormat(`/tmp/a.${ext}`);
-      expect(fmt === "step" ? ["step", "stp"] : [fmt, fmt === "iges" ? "igs" : fmt]).toContain(ext.toLowerCase());
+      const spellings: Record<string, string[]> = { step: ["step", "stp"], iges: ["iges", "igs"], vrml: ["wrl", "wrz"], x3d: ["x3d", "x3dz"] };
+      expect(spellings[fmt] ?? [fmt]).toContain(ext.toLowerCase());
     }
   });
 });

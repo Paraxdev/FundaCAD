@@ -107,6 +107,8 @@ fn the_extension_decides_the_format() {
         (".OFF", "off"),
         (".amf", "amf"),
         (".gltf", "gltf"),
+        (".wrl", "vrml"),
+        (".x3d", "x3d"),
     ] {
         assert_eq!(upload::import_format(&format!("part{ext}")), want, "{ext}");
     }

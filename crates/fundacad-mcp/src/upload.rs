@@ -23,7 +23,7 @@ use serde_json::{Map, Value};
 
 /// What `doc_import` will read. The same set the app's file pickers offer, and
 /// the same names the engine's importer switches on.
-pub const IMPORT_FORMATS: &[&str] = &["step", "stl", "3mf", "obj", "brep", "glb", "gltf", "iges", "fcstd", "ply", "off", "amf"];
+pub const IMPORT_FORMATS: &[&str] = &["step", "stl", "3mf", "obj", "brep", "glb", "gltf", "iges", "fcstd", "ply", "off", "amf", "vrml", "x3d"];
 
 /// How much file may arrive inline, summed over every piece of one upload. A
 /// TRANSPORT limit, not the reader's: the engine keeps its own per-format cap
@@ -83,7 +83,7 @@ const ARCHIVE_SUFFIXES: &[(&str, &str, Option<&str>)] = &[
 ];
 
 /// Spellings the file pickers accept that are not the format's own name.
-const FORMAT_ALIASES: &[(&str, &str)] = &[("stp", "step"), ("igs", "iges")];
+const FORMAT_ALIASES: &[(&str, &str)] = &[("stp", "step"), ("igs", "iges"), ("wrl", "vrml"), ("wrz", "vrml"), ("x3dz", "x3d")];
 
 /// Read and written in multiples of 4, so that a base64 spool splits at
 /// character boundaries the decoder can take one block at a time. Padding only

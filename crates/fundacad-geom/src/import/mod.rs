@@ -12,6 +12,7 @@ pub mod gltf;
 pub mod mesh;
 pub mod off;
 pub mod ply;
+pub mod x3d;
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -260,6 +261,24 @@ fn from_assembly(asm: StepAssembly) -> Imported {
     Imported { shape, fields }
 }
 
+/// A text file as read, or unpacked when it is gzip (.wrz, .x3dz), capped at
+/// the import size limit.
+fn text_maybe_gzipped(data: Vec<u8>) -> Result<String, String> {
+    use std::io::Read;
+    if !data.starts_with(&[0x1f, 0x8b]) {
+        return Ok(String::from_utf8_lossy(&data).into_owned());
+    }
+    let mut out = Vec::new();
+    flate2::read::GzDecoder::new(data.as_slice())
+        .take(MAX_IMPORT_FILE_BYTES + 1)
+        .read_to_end(&mut out)
+        .map_err(|e| format!("couldn't unpack this gzip file ({e})"))?;
+    if out.len() as u64 > MAX_IMPORT_FILE_BYTES {
+        return Err(format!("the file unpacks past {} MiB, too large to import", MAX_IMPORT_FILE_BYTES / (1024 * 1024)));
+    }
+    Ok(String::from_utf8_lossy(&out).into_owned())
+}
+
 fn occt_message(e: &opencascade::Error) -> String {
     match e {
         opencascade::Error::Occt(m) => m.clone(),
@@ -321,6 +340,15 @@ pub fn import_geometry(path: &str, fmt: &str, store: &BlobStore) -> Result<Map<S
             let data = std::fs::read(p).map_err(|e| e.to_string())?;
             let obj = if fmt == "ply" { ply::read_ply(&data)? } else { off::read_off(&String::from_utf8_lossy(&data))? };
             outward(mesh::finish_objects(vec![obj])?)
+        }
+        "vrml" | "x3d" => {
+            let text = text_maybe_gzipped(std::fs::read(p).map_err(|e| e.to_string())?)?;
+            let (objs, notes) = if fmt == "vrml" { x3d::read_vrml(&text)? } else { x3d::read_x3d(&text)? };
+            let mut imported = mesh::finish_objects(objs)?;
+            if !notes.is_empty() {
+                imported.fields.insert("notes".into(), json!(notes));
+            }
+            outward(imported)
         }
         "amf" => {
             let (objs, notes) = amf::read_amf(std::fs::read(p).map_err(|e| e.to_string())?)?;

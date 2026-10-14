@@ -353,3 +353,69 @@ fn ply_and_off_answer_as_the_stl_oracle_does() {
         }
     }
 }
+
+fn metres(v: [f32; 3], dx: f32) -> String {
+    format!("{} {} {}", (v[0] + dx) / 1000.0, v[2] / 1000.0, -v[1] / 1000.0)
+}
+
+/// Two cubes in metres, Y up: one DEF named and red, one placed by a
+/// Transform and used again further along.
+fn wrl() -> String {
+    let pts: Vec<String> = V.iter().map(|&v| metres(v, 0.0)).collect();
+    let idx: Vec<String> = Q.iter().map(|q| format!("{} {} {} {} -1", q[0], q[1], q[2], q[3])).collect();
+    format!(
+        "#VRML V2.0 utf8\n# comment\nWorldInfo {{ title \"two cubes\" info [ \"a\" \"b\" ] }}\n\
+         PROTO Unused [ field SFFloat x 1 ] {{ Group {{ }} }}\n\
+         DEF Red Transform {{ children [ Shape {{ appearance Appearance {{ material Material {{ diffuseColor 1 0 0 }} }}\n\
+         geometry DEF Cube IndexedFaceSet {{ coord Coordinate {{ point [ {} ] }} coordIndex [ {} ] }} }} ] }}\n\
+         DEF Moved Transform {{ translation 0.02 0 0 children Shape {{ geometry USE Cube }} }}\n\
+         Shape {{ geometry Sphere {{ radius 1 }} }}\n\
+         ROUTE A.b TO C.d\n",
+        pts.join(", "),
+        idx.join(", ")
+    )
+}
+
+fn x3d() -> String {
+    let pts: Vec<String> = V.iter().map(|&v| metres(v, 0.0)).collect();
+    let tri: Vec<String> = T.iter().map(|t| format!("{} {} {}", t[0], t[1], t[2])).collect();
+    format!(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<X3D profile=\"Interchange\" version=\"3.3\"><head><meta name=\"a\" content=\"b\"/></head><Scene>\
+         <Transform DEF=\"Red\"><Shape><Appearance><Material diffuseColor=\"1 0 0\"/></Appearance>\
+         <IndexedTriangleSet DEF=\"Cube\" index=\"{}\"><Coordinate point=\"{}\"/></IndexedTriangleSet></Shape></Transform>\
+         <Transform DEF=\"Moved\" translation=\"0.02 0 0\" rotation=\"0 1 0 1.5707963267948966\" center=\"0.005 0.005 -0.005\">\
+         <Shape><IndexedTriangleSet USE=\"Cube\"/></Shape></Transform></Scene></X3D>\n",
+        tri.join(" "),
+        pts.join(" ")
+    )
+}
+
+#[test]
+fn vrml_and_x3d_scenes_become_one_body_per_top_node() {
+    for (name, fmt, text) in [("two.wrl", "vrml", wrl()), ("two.x3d", "x3d", x3d())] {
+        let reply = import_as(&write(name, text.as_bytes()), fmt).unwrap();
+        assert_eq!(reply["solid"], json!(true), "{name}");
+        assert_eq!(reply["parts"][0]["color"], json!("#ff0000"), "{name}");
+        let b = build(reply, fmt);
+        let names: Vec<&str> = b.bodies.iter().map(|b| b.name.as_str()).collect();
+        assert_eq!(names, ["Red", "Moved"], "{name}");
+        for body in &b.bodies {
+            assert!((kernel::volume(&body.shape) - 1000.0).abs() < 1e-2, "{name}: metres to mm");
+        }
+        let bb = kernel::bbox(&b.bodies[1].shape).unwrap();
+        assert!((bb[0] - 20.0).abs() < 1e-3 && (bb[2]).abs() < 1e-3 && (bb[5] - 10.0).abs() < 1e-3, "{name}: {bb:?}");
+    }
+}
+
+#[test]
+fn a_vrml_scene_says_what_it_skipped_and_v1_is_refused() {
+    let reply = import_as(&write("skips.wrl", wrl().as_bytes()), "vrml").unwrap();
+    let notes = reply["notes"].to_string();
+    assert!(notes.contains("Sphere") && notes.contains("ROUTE or PROTO"), "{notes}");
+    let e = import_as(&write("old.wrl", b"#VRML V1.0 ascii\nSeparator { }\n"), "vrml").unwrap_err();
+    assert!(e.contains("VRML 1.0"), "{e}");
+    let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+    gz.write_all(wrl().as_bytes()).unwrap();
+    let reply = import_as(&write("packed.wrl", &gz.finish().unwrap()), "vrml").unwrap();
+    assert_eq!(reply["parts"].as_array().map(Vec::len), Some(2));
+}
