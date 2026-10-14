@@ -148,6 +148,9 @@ fn patch_occt(occt: &OcctConfig) -> std::path::PathBuf {
 
     println!("cargo:rerun-if-changed=occt-patch");
     let out = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("occt-patched");
+    // This directory is searched before the kernel's own, so a toolkit copy left
+    // from a patch since dropped would still be linked.
+    let _ = std::fs::remove_dir_all(&out);
     std::fs::create_dir_all(&out).unwrap();
     let msvc = std::env::var("TARGET").unwrap().contains("msvc");
 
