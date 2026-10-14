@@ -5,8 +5,11 @@
 
 import { describe, it, expect } from "vitest";
 import * as THREE from "three";
-import { BodyFinishLayer, type FinishOverlays } from "../../src/viewport/bodyFinish";
+import { BodyFinishLayer, type FinishOverlays, sameFinishMap } from "../../src/viewport/bodyFinish";
+import { applyGlassLook, applyThinFilm, setRenderLowPower } from "../../src/viewport/render";
+import { previewKey } from "../../src/viewport/materialPreview";
 import type { BodyMesh, ModelView } from "../../src/viewport/render";
+import { type BodyFinish, FINISH, finishOf } from "../../src/document/materials";
 
 function body(id: string): BodyMesh {
   const geo = new THREE.BufferGeometry();
@@ -39,7 +42,7 @@ describe("BodyFinishLayer peek", () => {
     const a = body("a");
     const b = body("b");
     const f = layer([a, b]);
-    f.bodyFinish = { a: { metalness: 0.1, roughness: 0.5, opacity: 1, emissive: 0.6, clearcoat: 0 } };
+    f.bodyFinish = { a: { ...FINISH, roughness: 0.5, emissive: 0.6 } };
     f.apply(base);
     const before = { a: look(a), b: look(b) };
     expect(before.a.glow).toBeGreaterThan(0);
@@ -69,8 +72,85 @@ describe("BodyFinishLayer peek", () => {
   it("keeps a body the user made fainter than the peek at its own opacity", () => {
     const a = body("a");
     const f = layer([a]);
-    f.bodyFinish = { a: { metalness: 0.1, roughness: 0.5, opacity: 0.1, emissive: 0, clearcoat: 0 } };
+    f.bodyFinish = { a: { ...FINISH, roughness: 0.5, opacity: 0.1 } };
     f.apply({ ...base, peek: new Set(["a"]) });
     expect(mat(a).opacity).toBeCloseTo(0.1);
+  });
+});
+
+// One case per field: a field missing from a key makes its edit a silent no op.
+const OPTICS: Partial<BodyFinish>[] = [
+  { ior: 2.42 }, { thickness: 20 }, { dispersion: 5 }, { attenuationColor: "#2a8f6a" },
+  { attenuationDistance: 15 }, { iridescence: 0.6 }, { specularColor: "#ffd0a0" },
+];
+
+describe("glass and thin film reach the screen", () => {
+  const glass: BodyFinish = { ...FINISH, metalness: 0, roughness: 0.05, opacity: 0.25 };
+
+  it("counts a change to any one optical field as a different finish", () => {
+    for (const d of OPTICS) {
+      expect(sameFinishMap({ a: glass }, { a: { ...glass, ...d } }), JSON.stringify(d)).toBe(false);
+    }
+    expect(sameFinishMap({ a: glass }, { a: { ...glass } })).toBe(true);
+  });
+
+  it("renders a new swatch for a change to any one optical field", () => {
+    const m = { id: "g", name: "G", color: "#cfe4ee", metalness: 0, roughness: 0.05, opacity: 0.25 };
+    for (const d of OPTICS) expect(previewKey({ ...m, ...d }), JSON.stringify(d)).not.toBe(previewKey(m));
+  });
+
+  it("copies IOR, thickness, tint and dispersion onto a glass material", () => {
+    const m = new THREE.MeshPhysicalMaterial();
+    const f = finishOf({
+      id: "d", name: "D", color: "#ffffff", metalness: 0, opacity: 0.1,
+      ior: 2.42, thickness: 12, dispersion: 5, attenuationColor: "#2a8f6a", attenuationDistance: 20,
+    });
+    expect(applyGlassLook(m, f, false)).toBe(true);
+    expect([m.ior, m.thickness, m.dispersion, m.attenuationDistance]).toEqual([2.42, 12, 5, 20]);
+    expect(m.attenuationColor.getHexString()).toBe("2a8f6a");
+    expect(m.transmission).toBeGreaterThan(0);
+    expect(m.transparent).toBe(false);
+  });
+
+  it("keeps an old glass at the look it always had", () => {
+    const m = new THREE.MeshPhysicalMaterial();
+    applyGlassLook(m, glass, false);
+    expect([m.ior, m.thickness, m.dispersion, m.attenuationDistance]).toEqual([1.5, 3, 0, Infinity]);
+    expect(m.attenuationColor.getHexString()).toBe("ffffff");
+  });
+
+  it("drops to plain alpha on a ghost and on a weak machine, dispersion and film with it", () => {
+    const f: BodyFinish = { ...glass, dispersion: 5, iridescence: 0.6 };
+    for (const [ghost, low] of [[true, false], [false, true]] as const) {
+      setRenderLowPower(false);
+      const m = new THREE.MeshPhysicalMaterial();
+      expect(applyGlassLook(m, f, false)).toBe(true);
+      applyThinFilm(m, f, false);
+      expect(m.dispersion * m.iridescence).toBeGreaterThan(0);
+      setRenderLowPower(low);
+      expect(applyGlassLook(m, f, ghost)).toBe(false);
+      applyThinFilm(m, f, ghost);
+      expect([m.transmission, m.dispersion, m.iridescence]).toEqual([0, 0, 0]);
+    }
+    setRenderLowPower(false);
+  });
+
+  it("leaves a plain Standard material alone", () => {
+    const m = new THREE.MeshStandardMaterial();
+    const before = JSON.stringify(m.toJSON());
+    expect(applyGlassLook(m, { ...glass, dispersion: 5 }, false)).toBe(false);
+    applyThinFilm(m, { ...glass, iridescence: 1, specularColor: "#ff0000" }, false);
+    expect(JSON.stringify(m.toJSON())).toBe(before);
+  });
+
+  it("puts the thin film and highlight tint on, and takes them off for a ghost", () => {
+    const m = new THREE.MeshPhysicalMaterial();
+    const f: BodyFinish = { ...FINISH, iridescence: 0.6, specularColor: "#ffd0a0" };
+    applyThinFilm(m, f, false);
+    expect(m.iridescence).toBe(0.6);
+    expect(m.specularColor.getHexString()).toBe("ffd0a0");
+    applyThinFilm(m, f, true);
+    expect(m.iridescence).toBe(0);
+    expect(m.specularColor.getHexString()).toBe("ffffff");
   });
 });

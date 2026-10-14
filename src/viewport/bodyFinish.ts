@@ -4,7 +4,7 @@
 // material cannot undo each other depending on which ran last.
 
 import * as THREE from "three";
-import { applyClearcoat, applyGlassLook, isRenderLowPower, type BodyMesh, type ModelView } from "./render";
+import { applyClearcoat, applyGlassLook, applyThinFilm, isRenderLowPower, type BodyMesh, type ModelView } from "./render";
 import type { SceneBundle } from "./scene";
 import { type BodyFinish, FINISH, isShiny } from "../document/materials";
 import { applySurface, applySurfaceGraph, cloneWithoutSurface, graphKey, surfaceKey } from "./proceduralSurface";
@@ -23,6 +23,7 @@ const STALE_OPACITY = 0.16;
 /** A tool looking into a body: fainter than solid so what it previews inside
  *  reads, solid enough that the body's own faces still do. */
 const PEEK_OPACITY = 0.4;
+const DEFAULT_FINISH: BodyFinish = { ...FINISH };
 
 interface EmitterPatch { key: string; e: AreaEmitter; glow: number; color: THREE.Color }
 
@@ -38,20 +39,24 @@ export function sameStringMap(
   return true;
 }
 
+/** Every field of a finish that changes how it is drawn, as one string. The
+ *  finish map comparison, the per-face material slots and the swatch cache all
+ *  key on it, so a new field added here reaches all three at once. */
+export function finishKey(f: BodyFinish): string {
+  return [
+    f.metalness, f.roughness, f.opacity, f.emissive, f.clearcoat,
+    f.ior, f.thickness, f.attenuationColor ?? "", f.attenuationDistance, f.dispersion,
+    f.iridescence, f.specularColor ?? "", surfaceKey(f.surface), graphKey(f.surfaceGraph),
+  ].join("|");
+}
+
 export function sameFinishMap(a: Record<string, BodyFinish>, b: Record<string, BodyFinish>): boolean {
   const ka = Object.keys(a);
   if (ka.length !== Object.keys(b).length) return false;
   for (const k of ka) {
     const x = a[k];
     const y = b[k];
-    if (
-      !y || !x || x.metalness !== y.metalness || x.roughness !== y.roughness
-      || x.opacity !== y.opacity || x.emissive !== y.emissive
-      || x.clearcoat !== y.clearcoat || surfaceKey(x.surface) !== surfaceKey(y.surface)
-      || graphKey(x.surfaceGraph) !== graphKey(y.surfaceGraph)
-    ) {
-      return false;
-    }
+    if (!y || !x || finishKey(x) !== finishKey(y)) return false;
   }
   return true;
 }
@@ -143,10 +148,12 @@ export class BodyFinishLayer {
       const glow = ghost ? 0 : (f?.emissive ?? FINISH.emissive);
       mat.emissive.set(glow > 0 ? (this.bodyPaint[b.id] ?? 0xffffff) : 0x000000);
       mat.emissiveIntensity = glow * MAX_EMISSIVE_INTENSITY;
-      applyClearcoat(mat, ghost ? 0 : (f?.clearcoat ?? FINISH.clearcoat));
+      const bf = f ?? DEFAULT_FINISH;
+      applyClearcoat(mat, ghost ? 0 : bf.clearcoat);
+      applyThinFilm(mat, bf, ghost);
       if (!ghost && f?.surfaceGraph) applySurfaceGraph(mat, f.surfaceGraph);
       else applySurface(mat, ghost ? undefined : f?.surface);
-      if (!applyGlassLook(mat, f ? f.opacity : 1, f ? f.metalness : FINISH.metalness, ghost)) {
+      if (!applyGlassLook(mat, bf, ghost)) {
         const opacity = ghost ? Math.min(f ? f.opacity : 1, ghostOpacity) : f ? f.opacity : 1;
         mat.transparent = opacity < 1;
         mat.opacity = opacity;
@@ -167,9 +174,10 @@ export class BodyFinishLayer {
           fm.emissive.set(fglow > 0 ? (extra.colors[i] ?? 0xffffff) : 0x000000);
           fm.emissiveIntensity = fglow * MAX_EMISSIVE_INTENSITY;
           applyClearcoat(fm, ghost ? 0 : ff.clearcoat);
+          applyThinFilm(fm, ff, ghost);
           if (!ghost && ff.surfaceGraph) applySurfaceGraph(fm, ff.surfaceGraph);
           else applySurface(fm, ghost ? undefined : ff.surface);
-          if (!applyGlassLook(fm, ff.opacity, ff.metalness, ghost)) {
+          if (!applyGlassLook(fm, ff, ghost)) {
             const fo = ghost ? Math.min(ff.opacity, ghostOpacity) : ff.opacity;
             fm.transparent = fo < 1;
             fm.opacity = fo;
@@ -319,13 +327,10 @@ export class BodyFinishLayer {
     }
     const sorted = [...fids].sort((x, y) => x - y);
     // Every field that changes how a face is drawn must be in the key, or an edit
-    // to it leaves `sig` equal and is never applied. Mirror sameFinishMap.
+    // to it leaves `sig` equal and is never applied.
     const slotKey = (fid: number) => {
       const f = this.faceFinish[fid]!;
-      return [
-        f.metalness, f.roughness, f.opacity, f.emissive, f.clearcoat,
-        surfaceKey(f.surface), graphKey(f.surfaceGraph), this.facePaint[fid] ?? "",
-      ].join("|");
+      return `${finishKey(f)}|${this.facePaint[fid] ?? ""}`;
     };
     const sig = `${base.uuid};${sorted.map((f) => `${f}:${slotKey(f)}`).join(",")}`;
     if (held?.sig === sig) return;

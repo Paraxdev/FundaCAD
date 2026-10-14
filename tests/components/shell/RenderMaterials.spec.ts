@@ -21,6 +21,7 @@ const LIBRARY: MaterialDef[] = [
   { id: "m-brass", name: "Brass", color: "#b5a642", metalness: 1, roughness: 0.3 },
   { id: "m-gold", name: "Gold", color: "#d4af37", metalness: 1, roughness: 0.3 },
   { id: "m-steel", name: "Steel", color: "#888888", metalness: 1, roughness: 0.4 },
+  { id: "m-glass", name: "Glass", color: "#cfe4ee", metalness: 0, roughness: 0.05, opacity: 0.25 },
 ];
 
 function makeEngine() {
@@ -135,5 +136,31 @@ describe("RenderMaterials Applied badge", () => {
     await tile("m-gold").trigger("click");
     await poll();
     expect(badged()).toEqual([]);
+  });
+});
+
+describe("RenderMaterials glass controls", () => {
+  it("shows them for a see-through material only, and the IOR chips write the index", async () => {
+    await tile("m-brass").trigger("click");
+    await poll();
+    expect(w.find("[data-glass]").exists()).toBe(false);
+    await tile("m-glass").trigger("click");
+    await poll();
+    expect(w.find("[data-glass]").exists()).toBe(true);
+    await w.get('[data-ior="1.33"]').trigger("click");
+    expect(fake.store.updateMaterial).toHaveBeenLastCalledWith("m-glass", { ior: 1.33 });
+    await w.get('[data-ior="2.42"]').trigger("click");
+    expect(fake.store.updateMaterial).toHaveBeenLastCalledWith("m-glass", { ior: 2.42 });
+  });
+
+  it("brings a tint depth along with the first tint colour, since a tint without one does nothing", async () => {
+    await tile("m-glass").trigger("click");
+    await poll();
+    const tint = w.get('[data-field="attenuationColor"]');
+    (tint.element as HTMLInputElement).value = "#2a8f6a";
+    await tint.trigger("input");
+    expect(fake.store.updateMaterial).toHaveBeenLastCalledWith("m-glass", {
+      attenuationColor: "#2a8f6a", attenuationDistance: 20,
+    });
   });
 });

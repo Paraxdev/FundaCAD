@@ -563,7 +563,7 @@ describe("materials (what a body is made of, on screen)", () => {
     store.setFacesMaterial([{ body: "body1", face: 2 }], "m-glass");
     store.removeMaterial("m-glass");
     expect(store.faceMaterialId("body1", 2)).toBeUndefined();
-    expect(store.toJSON()).not.toContain("m-glass");
+    expect(store.toJSON()).not.toContain("\"m-glass\"");
   });
 
   it("clears every face of a body in one gesture, and only that body", () => {
@@ -587,7 +587,7 @@ describe("materials (what a body is made of, on screen)", () => {
     // Aluminium is metallic, so it has a finish worth sending.
     store.setBodiesMaterial(["body1"], "m-aluminium");
     expect(store.materialFinishes()).toEqual({
-      body1: { metalness: 0.9, roughness: 0.35, opacity: 1, emissive: 0, clearcoat: 0 },
+      body1: { ...FINISH, metalness: 0.9, roughness: 0.35 },
     });
     expect(store.materialPaint()).toEqual({ body1: "#b8bcc0" });
 
@@ -604,17 +604,24 @@ describe("materials (what a body is made of, on screen)", () => {
     const lit = store.addMaterial({ name: "Lit", color: "#42e07a", emissive: 0.8 });
     store.setBodiesMaterial(["body1"], lit);
     expect(store.materialFinishes()).toEqual({
-      body1: { metalness: 0.1, roughness: 0.55, opacity: 1, emissive: 0.8, clearcoat: 0 },
+      body1: { ...FINISH, emissive: 0.8 },
     });
   });
 
-  it("hands the viewport a body whose material differs only in its coat or node graph", () => {
+  it("hands the viewport a body whose material differs only in coat, film, optics or graph", () => {
     const graph = { nodes: [{ id: "o", type: "output" as const }], output: "o" };
-    for (const extra of [{ clearcoat: 1 }, { surfaceGraph: graph }]) {
+    for (const extra of [{ clearcoat: 1 }, { iridescence: 0.5 }, { ior: 1.33 }, { surfaceGraph: graph }]) {
       const id = store.addMaterial({ name: JSON.stringify(extra), color: "#123456", ...extra });
       store.setBodiesMaterial(["body1"], id);
       expect(store.materialFinishes(), JSON.stringify(extra)).toEqual({ body1: { ...FINISH, ...extra } });
     }
+  });
+
+  it("keeps an edited glass field instead of dropping it on the way in", () => {
+    store.setBodiesMaterial(["body1"], "m-glass");
+    store.updateMaterial("m-glass", { ior: 1.33, thickness: 20, dispersion: 5, attenuationColor: "#2a8f6a" });
+    const f = store.materialFinishes()["body1"]!;
+    expect([f.ior, f.thickness, f.dispersion, f.attenuationColor]).toEqual([1.33, 20, 5, "#2a8f6a"]);
   });
 
   it("merges an imported library by id rather than replacing it", () => {
