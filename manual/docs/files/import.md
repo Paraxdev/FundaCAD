@@ -8,4 +8,6 @@ FundaCAD reads STL, 3MF, STEP, OBJ and GLB, and the file arrives as a new body. 
 
 Some converters write a STEP file as loose faces that only touch. FundaCAD joins them, and a part that closes becomes a solid you can cut and measure. A part that stays open comes in as a surface, and the import's chip in the history says how many edges are still open.
 
+A part whose faces all point inward, which some exporters write for a mirrored part, comes in turned the right way out, and the import's chip says so. A part imported before this keeps its faces as they were stored, and its chip still warns that it is inside out.
+
 File, Open also accepts these formats. A `.funda` file replaces what you have open, after asking.

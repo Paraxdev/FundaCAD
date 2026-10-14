@@ -322,6 +322,22 @@ pub fn turned_outward(s: &Shape) -> KResult<Shape> {
     wrap(ffi::bo_turned_outward(s.raw()))
 }
 
+/// The shape with each inward solid turned over that has nothing else wrong
+/// with its skin, and how many it turned. With none, the shape itself.
+pub fn turned_outward_where_clean(s: &Shape) -> (Shape, usize) {
+    let mut turned = 0i32;
+    match wrap(ffi::bo_turned_clean_outward(s.raw(), &mut turned)) {
+        Ok(out) if turned > 0 => (out, usize::try_from(turned).unwrap_or(0)),
+        _ => (s.clone(), 0),
+    }
+}
+
+/// How many of the shape's solids the STEP reader found facing inward and
+/// turned outward as it read them.
+pub fn reader_turned_solids(s: &Shape) -> usize {
+    usize::try_from(ffi::bo_reader_turned_solids(s.raw())).unwrap_or(0)
+}
+
 /// Whether `edge` lies in `face` only as a line drawn on it, not a side of it.
 pub fn edge_inside_face(face: &Shape, edge: &Shape) -> bool {
     ffi::bo_edge_inside_face(face.raw(), edge.raw())

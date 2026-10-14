@@ -758,6 +758,18 @@ name, what did not close first. The app stores them on the feature, and every
 rebuild repeats them as `importNote` diagnostics. A product that already holds a solid is not sewn, and
 the geometry of a feature that is already stored is never touched.
 
+A closed solid that faces into its material is turned outward before it is stored,
+with a note such as `1 solid was inside out, its faces pointed into the material, so
+it was turned outward`, led by the part's name in an assembly. The STEP reader turns
+such a solid as it reads it, and the import finds the ones it turned by the shell it
+holds reversed, without touching geometry; for a mesh (STL, 3MF, OBJ, GLB) or a BREP
+file the import checks each solid itself. Outside STEP, a solid whose faces disagree
+with each other about which side is inside, or that has a void, is left as the file
+has it, and the build reports it. The STEP reader mends a solid whose faces disagree
+and then turns it, so a STEP file brings that one in mended, with the same note. A document whose blob is
+already stored keeps it as it is, inside out or not: a face selector saved against it
+carries the normal it had, and the build keeps reporting it as `insideOut`.
+
 The engine peeks the file's own reported triangle count and refuse past 150,000 for
 STL/3MF, and past the same count once parsed for OBJ, before building any B-rep. GLB
 import additionally refuses a file whose glTF keeps geometry in a buffer other than the

@@ -114,9 +114,33 @@ fn with_a_box_on_its_corner(stl: String, name: &str) -> (Mcp, String) {
 }
 
 #[test]
-fn an_inside_out_import_is_said_so_and_still_checked_right() {
+fn an_inside_out_import_is_turned_outward_and_said_so() {
     let (mut mcp, built) = with_a_box_on_its_corner(cube_stl(true, false), "shell.stl");
-    assert!(built.contains("warning (f1): shell is inside out, its faces point into the material"), "{built}");
+    assert!(
+        built.contains("warning (f1): 1 solid was inside out, its faces pointed into the material, so it was turned outward"),
+        "{built}"
+    );
+    assert!(!built.contains("its faces point into the material"), "{built}");
+    let r = mcp.call("interference", json!({}));
+    assert!(r.text.contains("body1 \"shell\" / body2 \"Box\": 125 mm3 overlap, from (0, 0, 0) to (5, 5, 5)"), "{}", r.text);
+    let r = mcp.call("inspect", json!({"body": "body1"}));
+    assert!(r.text.contains("vol 1000 mm3") && !r.text.contains("inside out"), "{}", r.text);
+}
+
+/// A document saved before imports were turned keeps the inside out cube it
+/// stored, so the build and the tools still have to say so and answer right.
+#[test]
+fn a_stored_inside_out_body_is_said_so_and_still_checked_right() {
+    use base64::Engine as _;
+    let brep = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/fixtures/inside_out_cube.brep")).unwrap();
+    let mut mcp = session();
+    let r = mcp.call("edit", json!({"ops": [
+        {"op": "add", "feature": {"type": "import", "name": "shell", "format": "brep",
+                                  "brep": base64::engine::general_purpose::STANDARD.encode(brep)}},
+        {"op": "add", "feature": {"type": "box", "length": 10, "width": 10, "height": 10}}
+    ], "build": true}));
+    assert!(!r.is_error, "{}", r.text);
+    assert!(r.text.contains("warning (f1): shell is inside out, its faces point into the material"), "{}", r.text);
     let r = mcp.call("interference", json!({}));
     assert!(r.text.contains("body1 \"shell\" / body2 \"Box\": 125 mm3 overlap, from (0, 0, 0) to (5, 5, 5)"), "{}", r.text);
     assert!(!r.text.contains("NOT CHECKED"), "{}", r.text);

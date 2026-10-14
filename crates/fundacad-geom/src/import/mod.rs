@@ -16,7 +16,7 @@ use fundacad_core::face_colors;
 use fundacad_engine::error_result;
 use fundacad_protocol::JobResult;
 use opencascade::primitives::Shape;
-use opencascade::xcaf::{self, StepAssembly};
+use opencascade::xcaf::{self, StepAssembly, StepNote};
 use serde_json::{json, Map, Value};
 
 use crate::kernel::{self, Kind};
@@ -61,13 +61,13 @@ pub struct Imported {
 /// What sewing loose faces left to say, each sentence led by the name the
 /// build gives the body it is about. `names` is empty for a file that is one
 /// body, which the feature names.
-fn repair_notes(asm: &StepAssembly, names: &[String]) -> Vec<Value> {
+fn repair_notes(asm: &StepAssembly, names: &[String], turned: &[StepNote]) -> Vec<Value> {
     let mut owned: HashMap<usize, usize> = HashMap::new();
     for leaf in &asm.leaves {
         *owned.entry(leaf.node).or_default() += 1;
     }
     let mut out: Vec<Value> = Vec::new();
-    for note in &asm.notes {
+    for note in asm.notes.iter().chain(turned) {
         let text = match names.get(note.node) {
             None => note.text.clone(),
             Some(name) => match note.leaf.filter(|_| owned.get(&note.node).is_some_and(|&n| n > 1)) {
@@ -84,6 +84,36 @@ fn repair_notes(asm: &StepAssembly, names: &[String]) -> Vec<Value> {
         }
     }
     out
+}
+
+/// What turning `n` inside out solids outward says.
+fn turned_text(n: usize) -> String {
+    if n == 1 {
+        "1 solid was inside out, its faces pointed into the material, so it was turned outward".into()
+    } else {
+        format!("{n} solids were inside out, their faces pointed into the material, so they were turned outward")
+    }
+}
+
+/// A mesh or BREP file's shape with its inside out solids turned outward, and
+/// what that says. The STEP reader turns a solid outward itself, see
+/// `reader_turned`. A document that already holds a shape keeps it as stored,
+/// a face selector saved against it carries the normal it had.
+fn outward(imported: Imported) -> Imported {
+    let (shape, n) = crate::bench::phase("turn_outward", || kernel::turned_outward_where_clean(&imported.shape));
+    if n == 0 {
+        return imported;
+    }
+    let mut fields = imported.fields;
+    fields.insert("notes".into(), json!([turned_text(n)]));
+    Imported { shape, fields }
+}
+
+/// What the STEP reader turning the solids of `shape` outward says, about the
+/// body `node` and `leaf` name.
+fn reader_turned(shape: &Shape, node: usize, leaf: Option<usize>) -> Option<StepNote> {
+    let n = kernel::reader_turned_solids(shape);
+    (n > 0).then(|| StepNote { node, leaf, text: turned_text(n) })
 }
 
 /// `_assembly_payload`: the leaves in order as one flat compound, their
@@ -119,7 +149,9 @@ pub fn assembly_payload(asm: &StepAssembly) -> Imported {
     let mut canonical_of: HashMap<String, Option<(Shape, Colors)>> = HashMap::new();
     let mut leaves: Vec<Option<Shape>> = Vec::with_capacity(asm.leaves.len());
     let mut parts = Vec::with_capacity(asm.leaves.len());
+    let mut turned: Vec<StepNote> = Vec::new();
     for (i, leaf) in asm.leaves.iter().enumerate() {
+        turned.extend(reader_turned(&leaf.shape, leaf.node, Some(i)));
         let mut colors = leaf.face_colors.clone();
         let mut placed = None;
         match &leaf.product {
@@ -170,7 +202,7 @@ pub fn assembly_payload(asm: &StepAssembly) -> Imported {
     let mut fields = Map::new();
     fields.insert("nodes".into(), Value::Array(nodes));
     fields.insert("parts".into(), Value::Array(parts));
-    let notes = repair_notes(asm, &names);
+    let notes = repair_notes(asm, &names, &turned);
     if !notes.is_empty() {
         fields.insert("notes".into(), Value::Array(notes));
     }
@@ -194,7 +226,9 @@ pub fn read_step(path: &Path) -> Result<Imported, String> {
     if let Some(c) = color {
         fields.insert("color".into(), json!(hex(c)));
     }
-    let notes = repair_notes(&asm, &[]);
+    let n: usize = asm.roots.iter().map(kernel::reader_turned_solids).sum();
+    let turned: Vec<StepNote> = (n > 0).then(|| StepNote { node: 0, leaf: None, text: turned_text(n) }).into_iter().collect();
+    let notes = repair_notes(&asm, &[], &turned);
     if !notes.is_empty() {
         fields.insert("notes".into(), Value::Array(notes));
     }
@@ -231,10 +265,10 @@ pub fn import_geometry(path: &str, fmt: &str, store: &BlobStore) -> Result<Map<S
     fundacad_engine::sysmem::refuse_if_memory_is_short(size, None)?;
     let imported = match fmt.as_str() {
         "step" | "stp" => read_step(p)?,
-        "brep" => Imported {
+        "brep" => outward(Imported {
             shape: Shape::read_brep_text(p).map_err(|e| e.to_string())?,
             fields: Map::new(),
-        },
+        }),
         "stl" | "3mf" | "obj" => {
             if let Some(ntri) = mesh::peek_triangle_count(p, &fmt).filter(|&n| n > mesh::MAX_IMPORT_TRIANGLES) {
                 return Err(mesh::too_dense_error(ntri));
@@ -244,7 +278,7 @@ pub fn import_geometry(path: &str, fmt: &str, store: &BlobStore) -> Result<Map<S
                 "3mf" => mesh::read_3mf(p)?,
                 _ => mesh::read_obj(p)?,
             };
-            Imported { shape, fields: Map::new() }
+            outward(Imported { shape, fields: Map::new() })
         }
         "glb" => {
             let shape = mesh::read_glb(p)?;
@@ -252,7 +286,7 @@ pub fn import_geometry(path: &str, fmt: &str, store: &BlobStore) -> Result<Map<S
             if let Some(c) = std::fs::read(p).ok().and_then(|d| mesh::glb_dominant_color(&d)) {
                 fields.insert("color".into(), json!(c));
             }
-            Imported { shape, fields }
+            outward(Imported { shape, fields })
         }
         other => return Err(format!("unsupported import format: {other}")),
     };
