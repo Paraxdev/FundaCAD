@@ -545,15 +545,34 @@ pub struct PassClaim {
     pub tag: String,
 }
 
+/// A mesh pass that could not texture a face it claimed, for the feature's
+/// error notice. The face is meshed plainly instead.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PassFailure {
+    pub feature_id: Option<String>,
+    pub message: String,
+}
+
+impl PassFailure {
+    fn of(spec: &Value, message: String) -> PassFailure {
+        PassFailure {
+            feature_id: spec.get("feature_id").and_then(Value::as_str).map(str::to_owned),
+            message,
+        }
+    }
+}
+
 /// `plugin_geometry.resolve` over every spec on a body, as face index in
-/// `faces` order to the claim on it. A later spec is preferred over a face an earlier one
-/// also claimed, timeline order whichever plugins the two come from.
+/// `faces` order to the claim on it, and the specs that failed to resolve.
+/// A later spec is preferred over a face an earlier one also claimed,
+/// timeline order whichever plugins the two come from.
 pub fn claim_faces(
     shape: &opencascade::primitives::Shape,
     faces: &[opencascade::primitives::Shape],
     specs: &[Value],
-) -> HashMap<usize, PassClaim> {
+) -> (HashMap<usize, PassClaim>, Vec<PassFailure>) {
     let mut out = HashMap::new();
+    let mut failed = Vec::new();
     let mut reg = current();
     for spec in specs {
         let name = spec.get("pass").and_then(Value::as_str).unwrap_or("");
@@ -577,42 +596,45 @@ pub fn claim_faces(
                     }
                 }
             }
-            Err(e) => eprintln!("[plugin-geometry] resolving {name:?} failed: {e}"),
+            Err(e) => {
+                eprintln!("[plugin-geometry] resolving {name:?} failed: {e}");
+                failed.push(PassFailure::of(spec, e));
+            }
         }
     }
-    out
+    (out, failed)
 }
 
-/// One claimed face displaced by the pass that claimed it, `None` when the
-/// pass failed, which leaves the face as the kernel meshed it. The face must
-/// have just been meshed: the pass reads its stored triangulation.
+/// One claimed face displaced by the pass that claimed it, or why it could
+/// not be, which leaves the face as the kernel meshed it. The face must have
+/// just been meshed: the pass reads its stored triangulation.
 pub fn displace_face(
     face: &opencascade::primitives::Shape,
     claim: &PassClaim,
     density_cap: u32,
     split_creases: bool,
-) -> Option<FaceMesh> {
+) -> Result<FaceMesh, PassFailure> {
     let name = claim.spec.get("pass").and_then(Value::as_str).unwrap_or("");
+    let fail = |e: String| {
+        eprintln!("[{name}] a face fell back to flat: {e}");
+        PassFailure::of(&claim.spec, e)
+    };
     // Out of the lock, so the faces of a body displace on several threads.
     let c = {
         let mut reg = registry();
-        let i = pass_owner(&mut reg, name)?;
-        let Loaded::Ready(c) = &reg.entries[i].loaded else {
-            return None;
-        };
-        c.clone()
+        let loaded = pass_owner(&mut reg, name).and_then(|i| match &reg.entries[i].loaded {
+            Loaded::Ready(c) => Some(c.clone()),
+            _ => None,
+        });
+        loaded.ok_or_else(|| fail(format!("no loaded plugin serves the {name:?} mesh pass")))?
     };
-    match c.displace(name, face, &claim.spec, &claim.tag, density_cap, split_creases) {
-        Ok(m) => Some(FaceMesh {
+    c.displace(name, face, &claim.spec, &claim.tag, density_cap, split_creases)
+        .map(|m| FaceMesh {
             positions: m.positions,
             indices: m.indices,
             normals: m.normals,
-        }),
-        Err(e) => {
-            eprintln!("[{name}] a face fell back to flat: {e}");
-            None
-        }
-    }
+        })
+        .map_err(fail)
 }
 
 #[cfg(test)]

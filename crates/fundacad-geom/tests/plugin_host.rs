@@ -230,6 +230,44 @@ fn a_texture_on_a_narrow_chamfer_raises_it() {
     assert!(spread > 0.1 && spread < 0.4 + 1e-3, "{spread}");
 }
 
+/// A 0.42 mm chamfer lies in one flat land of a 2 mm knurl, so no mesh can
+/// raise it: the face stays plain and the feature says why, from a cached
+/// mesh too, although its rebuild had nothing to report.
+#[test]
+fn a_texture_that_leaves_its_face_flat_says_so() {
+    if !built("FundaCAD.Texture") {
+        return;
+    }
+    let features = chamfered_box(
+        0.3,
+        json!({"id": "t", "type": "texture", "kind": "knurl", "depth": 0.4, "scale": 2.0,
+               "faces": face_at([9.85, 0.0, 9.85])}),
+    );
+    let doc = json!({"parameters": {}, "features": features});
+    let mut cache = fundacad_geom::cache::RebuildCache::new(None);
+    for pass in ["fresh", "cached"] {
+        let m = match fundacad_geom::jobs::rebuild_result_cached(&doc, 0.1, &Default::default(), &NoWatch, &mut cache) {
+            fundacad_protocol::JobResult::Mesh(m) => m,
+            _ => panic!("a meshed reply"),
+        };
+        let errors = m.fields.get("featureErrors").and_then(Value::as_array).cloned().unwrap_or_default();
+        assert_eq!(errors.len(), 1, "{pass}: {errors:?}");
+        assert_eq!(errors[0]["feature_id"], "t", "{pass}");
+        assert_eq!(errors[0]["code"], "mesh-pass", "{pass}");
+        assert_eq!(
+            errors[0]["message"],
+            "the knurl pattern at scale 2 mm leaves a face 0.42 mm wide flat, lower the scale or leave this face out",
+            "{pass}"
+        );
+        assert_eq!(m.fields["featureError"]["feature_id"], "t", "{pass}");
+        assert!(m.fields.get("passErrors").is_none(), "{pass}");
+        let Some(fundacad_protocol::WireBody::Full(b)) = m.bodies.first() else {
+            panic!("{pass}: a full body");
+        };
+        assert!(b.fields.get("passErrors").is_none(), "{pass}");
+    }
+}
+
 #[test]
 fn a_bad_texture_value_is_the_features_error() {
     if !built("FundaCAD.Texture") {
