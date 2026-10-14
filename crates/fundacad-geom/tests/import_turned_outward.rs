@@ -40,27 +40,36 @@ fn imported(path: &PathBuf, fmt: &str) -> Map<String, Value> {
     import::import_geometry(&path.to_string_lossy(), fmt, &store).unwrap()
 }
 
-/// A 10 mm cube as an STL file, its triangles wound clockwise seen from
-/// outside when `inside_out`.
-fn cube_stl(inside_out: bool) -> PathBuf {
-    let q = [[0, 0, 0], [10, 0, 0], [10, 10, 0], [0, 10, 0], [0, 0, 10], [10, 0, 10], [10, 10, 10], [0, 10, 10]];
+/// Cubes as one STL file, each given as its lowest corner, its size and
+/// whether its triangles wind clockwise seen from outside.
+fn cubes_stl(cubes: &[([f64; 3], f64, bool)], name: &str) -> PathBuf {
+    let q = [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0], [0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]];
     let facets = [
         [0, 2, 1], [0, 3, 2], [0, 1, 5], [0, 5, 4], [1, 2, 6], [1, 6, 5],
         [2, 3, 7], [2, 7, 6], [3, 0, 4], [3, 4, 7], [4, 5, 6], [4, 6, 7],
     ];
-    let mut stl = String::from("solid cube\n");
-    for f in facets {
-        let f = if inside_out { [f[0], f[2], f[1]] } else { f };
-        stl.push_str("facet normal 0 0 0\nouter loop\n");
-        for i in f {
-            stl.push_str(&format!("vertex {} {} {}\n", q[i][0], q[i][1], q[i][2]));
+    let mut stl = String::from("solid cubes\n");
+    for &(at, size, inside_out) in cubes {
+        for f in facets {
+            let f = if inside_out { [f[0], f[2], f[1]] } else { f };
+            stl.push_str("facet normal 0 0 0\nouter loop\n");
+            for i in f {
+                let p: Vec<String> = (0..3).map(|k| format!("{}", at[k] + size * f64::from(q[i][k]))).collect();
+                stl.push_str(&format!("vertex {}\n", p.join(" ")));
+            }
+            stl.push_str("endloop\nendfacet\n");
         }
-        stl.push_str("endloop\nendfacet\n");
     }
-    stl.push_str("endsolid cube\n");
-    let path = blob_dir().join(if inside_out { "inward.stl" } else { "outward.stl" });
+    stl.push_str("endsolid cubes\n");
+    let path = blob_dir().join(name);
     std::fs::write(&path, stl).unwrap();
     path
+}
+
+/// A 10 mm cube as an STL file, its triangles wound clockwise seen from
+/// outside when `inside_out`.
+fn cube_stl(inside_out: bool) -> PathBuf {
+    cubes_stl(&[([0.0; 3], 10.0, inside_out)], if inside_out { "inward.stl" } else { "outward.stl" })
 }
 
 /// The feature the app writes from an import reply.
@@ -134,6 +143,40 @@ fn a_solid_whose_faces_disagree_is_left_as_it_is() {
             "mixed has faces that point the wrong way, at 4 of its edges the two faces disagree about which side is inside"
         )]
     );
+}
+
+/// A hollow part comes in as one solid with its void as a second shell, kept
+/// as one body when the import is not split into its parts. Wound inside out
+/// as a whole, both shells are turned. With only its outside wound the wrong
+/// way its shells disagree, and it is left for the build to warn about.
+#[test]
+fn a_hollow_mesh_is_turned_only_when_all_of_it_faces_inward() {
+    let whole = cubes_stl(&[([0.0; 3], 10.0, true), ([2.0; 3], 6.0, false)], "hollow_inward.stl");
+    let mut reply = imported(&whole, "stl");
+    assert_eq!(said(&reply), [TURNED]);
+    reply.insert("explode".into(), json!(false));
+    let r = build(reply, "stl");
+    faces_outward(&r.bodies[0].shape, 784.0);
+    assert_eq!(warnings(&r), [("importNote", TURNED)]);
+
+    let outside = cubes_stl(&[([0.0; 3], 10.0, true), ([2.0; 3], 6.0, true)], "hollow_outside_inward.stl");
+    let mut reply = imported(&outside, "stl");
+    assert!(said(&reply).is_empty(), "{:?}", said(&reply));
+    reply.insert("explode".into(), json!(false));
+    let r = build(reply, "stl");
+    assert!(kernel::volume(&r.bodies[0].shape) < 0.0, "a solid whose shells disagree was turned");
+}
+
+#[test]
+fn parts_of_one_mesh_wound_inside_out_are_all_turned() {
+    let two = cubes_stl(&[([0.0; 3], 10.0, true), ([20.0, 0.0, 0.0], 10.0, true)], "two_inward.stl");
+    let reply = imported(&two, "stl");
+    let notes = said(&reply);
+    assert!(notes.len() == 1 && notes[0].ends_with("turned outward"), "{notes:?}");
+    let r = build(reply, "stl");
+    let volume: f64 = r.bodies.iter().map(|b| kernel::volume(&b.shape)).sum();
+    assert!((volume - 2000.0).abs() < 1e-6, "volume {volume}");
+    assert!(r.bodies.iter().all(|b| kernel::inward_solids(&b.shape) == 0), "a part still faces inward");
 }
 
 /// The STEP reader holds the shell of a solid it turned outward reversed. It

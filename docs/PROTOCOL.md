@@ -761,12 +761,15 @@ the geometry of a feature that is already stored is never touched.
 A closed solid that faces into its material is turned outward before it is stored,
 with a note such as `1 solid was inside out, its faces pointed into the material, so
 it was turned outward`, led by the part's name in an assembly. The STEP reader turns
-such a solid as it reads it, and the import finds the ones it turned by the shell it
-holds reversed, without touching geometry; for a mesh (STL, 3MF, OBJ, GLB) or a BREP
-file the import checks each solid itself. Outside STEP, a solid whose faces disagree
-with each other about which side is inside, or that has a void, is left as the file
-has it, and the build reports it. The STEP reader mends a solid whose faces disagree
-and then turns it, so a STEP file brings that one in mended, with the same note. A document whose blob is
+such a solid as it reads it, holding its shell reversed, and the import counts a
+solid with a reversed shell that now faces outward with a clean skin; a file that
+faces outward pays nothing for this. For a mesh (STL, 3MF, OBJ, GLB) or a BREP file
+the import checks each solid itself, and a solid with voids is turned when every one
+of its shells faces the wrong way. A solid whose faces disagree with each other
+about which side is inside, or whose shells do, is left as the file has it and the
+build reports it. The STEP reader mends some solids whose faces disagree and then
+turns them, which come in mended with the same note; one it reverses but cannot
+mend gets no note and keeps the build's warning. A document whose blob is
 already stored keeps it as it is, inside out or not: a face selector saved against it
 carries the normal it had, and the build keeps reporting it as `insideOut`.
 
