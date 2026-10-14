@@ -17,8 +17,11 @@ export interface PropertiesData {
   rows: PanelRow[];
   /** Unrounded mm/mm2/mm3 values, for the filament estimate to compute from
    *  live as the user changes material/infill, without a unit-display round
-   *  trip through the formatted rows above. */
-  raw: { volumeMm3: number; areaMm2: number };
+   *  trip through the formatted rows above. Null when a measured body is not a
+   *  sound solid, it has no volume to estimate from. */
+  raw: { volumeMm3: number; areaMm2: number } | null;
+  /** Each measured body that is not a sound solid, its name and the engine's reason. */
+  faults: string[];
 }
 
 /** One overlapping pair, keeping the body ids so clicking the row can select

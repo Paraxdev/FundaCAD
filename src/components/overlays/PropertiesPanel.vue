@@ -62,64 +62,72 @@ function close() {
         <span class="measure-v">{{ r.v }}</span>
       </div>
 
-      <div class="measure-divider" />
-
-      <div class="measure-row">
-        <span class="measure-k">Material</span>
-        <select class="measure-select" v-model="prefs.materialId" @change="commit('materialId')">
-          <option v-for="m in MATERIAL_PRESETS" :key="m.id" :value="m.id">{{ m.label }} ({{ m.density }} g/cm³)</option>
-          <option :value="CUSTOM_MATERIAL_ID">Custom…</option>
-        </select>
-      </div>
-      <div v-if="prefs.materialId === CUSTOM_MATERIAL_ID" class="measure-row">
-        <span class="measure-k">Density</span>
-        <span class="measure-v">
-          <input
-            class="measure-number"
-            type="number" min="0.1" max="30" step="0.01"
-            v-model.number="prefs.customDensity"
-            @change="commit('customDensity')"
-          /> g/cm³
-        </span>
-      </div>
-      <div class="measure-row">
-        <span class="measure-k">Infill</span>
-        <span class="measure-v">
-          <input
-            type="range" min="0" max="100" step="5"
-            v-model.number="prefs.infillPct"
-            @change="commit('infillPct')"
-            style="vertical-align: middle; margin-right: 6px"
-          />{{ prefs.infillPct }}%
-        </span>
-      </div>
-      <div class="measure-row">
-        <span class="measure-k">Wall thickness</span>
-        <span class="measure-v">
-          <input
-            class="measure-number"
-            type="number" min="0" max="20" step="0.1"
-            v-model.number="prefs.wallThicknessMm"
-            @change="commit('wallThicknessMm')"
-          /> mm
-        </span>
-      </div>
-
-      <template v-if="estimates && massG !== null">
+      <template v-if="panels.properties.faults.length">
         <div class="measure-divider" />
-        <div class="measure-row">
-          <span class="measure-k">Mass, estimate</span>
-          <span class="measure-v">{{ displayRound(massG) }} g</span>
-        </div>
-        <div v-for="e in estimates" :key="e.diameter" class="measure-row">
-          <span class="measure-k">Filament, {{ e.diameter }}mm</span>
-          <span class="measure-v">{{ displayRound(e.lengthM) }} m</span>
-        </div>
+        <div class="measure-hint" style="color: var(--accent-hot, #ff9a5c)">Not a sound solid, so no volume or mass:</div>
+        <div v-for="(why, i) in panels.properties.faults" :key="'fault' + i" class="measure-hint">{{ why }}</div>
       </template>
 
-      <div class="measure-hint">
-        Estimate: solid volume at 100% infill; below that, shell (area × wall) plus infill share of the rest · Esc to close
-      </div>
+      <template v-if="panels.properties.raw">
+        <div class="measure-divider" />
+
+        <div class="measure-row">
+          <span class="measure-k">Material</span>
+          <select class="measure-select" v-model="prefs.materialId" @change="commit('materialId')">
+            <option v-for="m in MATERIAL_PRESETS" :key="m.id" :value="m.id">{{ m.label }} ({{ m.density }} g/cm³)</option>
+            <option :value="CUSTOM_MATERIAL_ID">Custom…</option>
+          </select>
+        </div>
+        <div v-if="prefs.materialId === CUSTOM_MATERIAL_ID" class="measure-row">
+          <span class="measure-k">Density</span>
+          <span class="measure-v">
+            <input
+              class="measure-number"
+              type="number" min="0.1" max="30" step="0.01"
+              v-model.number="prefs.customDensity"
+              @change="commit('customDensity')"
+            /> g/cm³
+          </span>
+        </div>
+        <div class="measure-row">
+          <span class="measure-k">Infill</span>
+          <span class="measure-v">
+            <input
+              type="range" min="0" max="100" step="5"
+              v-model.number="prefs.infillPct"
+              @change="commit('infillPct')"
+              style="vertical-align: middle; margin-right: 6px"
+            />{{ prefs.infillPct }}%
+          </span>
+        </div>
+        <div class="measure-row">
+          <span class="measure-k">Wall thickness</span>
+          <span class="measure-v">
+            <input
+              class="measure-number"
+              type="number" min="0" max="20" step="0.1"
+              v-model.number="prefs.wallThicknessMm"
+              @change="commit('wallThicknessMm')"
+            /> mm
+          </span>
+        </div>
+
+        <template v-if="estimates && massG !== null">
+          <div class="measure-divider" />
+          <div class="measure-row">
+            <span class="measure-k">Mass, estimate</span>
+            <span class="measure-v">{{ displayRound(massG) }} g</span>
+          </div>
+          <div v-for="e in estimates" :key="e.diameter" class="measure-row">
+            <span class="measure-k">Filament, {{ e.diameter }}mm</span>
+            <span class="measure-v">{{ displayRound(e.lengthM) }} m</span>
+          </div>
+        </template>
+
+        <div class="measure-hint">
+          Estimate: solid volume at 100% infill; below that, shell (area × wall) plus infill share of the rest · Esc to close
+        </div>
+      </template>
     </template>
   </FloatingPanel>
 </template>

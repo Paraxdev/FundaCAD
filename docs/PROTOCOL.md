@@ -202,9 +202,17 @@ or a **full payload**, when the client's `known` etag for that body is stale or 
   "faceIds": [ /* per-triangle face id, local to this body */ ],
   "faceOwners": [ /* per-face owner id or null, for feature highlighting */ ],
   "edges": [ { "points": [...], "body": "b1", "smooth": true } ],  // "smooth" present only when the edge's two faces meet tangentially
-  "faceCount": 12
+  "faceCount": 12,
+  "fault": "is not a closed solid, 4 of its edges bound only one face, so it has no inside"
 }
 ```
+`fault` is present only for a body that is not a closed solid facing outward: an
+open shell, an edge shared by more than two faces, faces that disagree about which
+side is inside, an inside out solid or a surface. It says why, worded to follow the
+body's name, in the same words as `inspect`'s `fault` (plus `"is inside out, its
+faces point into the material"`, which inspect turns over to answer instead). The app
+shows it in place of the body's volume and mass. A sound body's payload has no such key.
+
 `nodeRef` (an imported part's `"<import feature id>/<manifest node index>"`),
 `faceColors` (a packed per-face colour string) and `partColor` (a whole-body hex
 colour) are optional envelope fields that can appear on EITHER shape, stub or full,
@@ -220,7 +228,8 @@ client resyncs with one full request.
 
 `etag` only ever needs to compare equal, its VALUE carries no meaning to the client.
 The engine hashes the payload itself (blake2b-128 of
-`positions`/`normals`/`indices`/`faceIds`/`edges`, 32 hex digits, envelope fields like
+`positions`/`normals`/`indices`/`faceIds`/`edges` and every other payload field, such as
+`faceOwners`, `bbox` and `fault`, 32 hex digits, envelope fields like
 `id`/`name`/colours excluded), so identical geometry gets the same etag even across a
 worker restart that emptied every cache, not just within one running worker's.
 
