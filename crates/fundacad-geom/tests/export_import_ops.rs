@@ -189,8 +189,8 @@ fn step_round_trips_through_export_and_import() {
     let r = c.call(json!({"id": 3, "op": "import", "format": "STEP", "path": fixture}));
     assert_eq!(r["result"]["parts"][0], json!({"node": 1, "faces": 6, "color": "#e51919"}));
 
-    let r = c.call(json!({"id": 4, "op": "import", "format": "iges", "path": fixture}));
-    assert_eq!(r, json!({"id": 4, "ok": false, "error": {"message": "unsupported import format: iges"}}));
+    let r = c.call(json!({"id": 4, "op": "import", "format": "3dm", "path": fixture}));
+    assert_eq!(r, json!({"id": 4, "ok": false, "error": {"message": "unsupported import format: 3dm"}}));
 }
 
 /// Every undirected edge of the model's triangles, with how many use it.
