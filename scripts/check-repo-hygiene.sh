@@ -53,14 +53,15 @@ done
 # Allowed: the synthetic bench fixture the perf harness needs, the generated
 # assembly-tree fixtures (boxes emitted by tools/gen_asm_fixtures.py — no real
 # geometry, reproducible from source), the loose face fixtures written by
-# crates/fundacad-geom/tests/step/gen_loose_faces.py, and third_party sample
+# crates/fundacad-geom/tests/step/gen_loose_faces.py, the inside out boxes
+# written by crates/fundacad-geom/tests/step/gen_inside_out.py, and third_party sample
 # models that ship with vendored code. The stress samples in examples/stress
 # are allowed too: small parts modelled from parameters so the Stress panel has
 # something to open. Add to this list only for files that are genuinely
 # synthetic or already public.
 echo "checking for tracked CAD models…"
 models=$(git ls-files -- '*.funda' '*.fundab' '*.neocad' '*.sindri' '*.3mf' '*.stl' '*.step' '*.stp' 2>/dev/null \
-  | grep -vE '^(tests/fixtures/textured_box\.funda$|tests/fixtures/asm_[a-z_]+\.step$|tests/fixtures/loose_faces_[a-z_]+\.step$|examples/stress/[a-z0-9-]+\.funda$|third_party/)' || true)
+  | grep -vE '^(tests/fixtures/textured_box\.funda$|tests/fixtures/asm_[a-z_]+\.step$|tests/fixtures/loose_faces_[a-z_]+\.step$|tests/fixtures/inside_out_[a-z_]+\.step$|examples/stress/[a-z0-9-]+\.funda$|third_party/)' || true)
 if [ -n "$models" ]; then
   note "tracked CAD model — is this a real part in a public repo?:"
   printf '%s\n' "$models" | sed 's/^/    /'

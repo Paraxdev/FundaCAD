@@ -436,6 +436,33 @@ inline int bo_open_edge_count(const TopoDS_Shape &s) {
   return open;
 }
 
+// The edges of one solid counted into n[1..3] as bo_skin_census counts them.
+inline void bo_solid_skin(const TopoDS_Shape &solid, int32_t n[4]) {
+  typedef NCollection_DataMap<TopoDS_Shape, std::pair<int, int>, TopTools_ShapeMapHasher> Sides;
+  Sides sides;
+  for (TopExp_Explorer f(solid, TopAbs_FACE); f.More(); f.Next()) {
+    TopAbs_Orientation fo = f.Current().Orientation();
+    if (fo != TopAbs_FORWARD && fo != TopAbs_REVERSED) continue;
+    for (TopExp_Explorer x(f.Current(), TopAbs_EDGE); x.More(); x.Next()) {
+      TopAbs_Orientation o = x.Current().Orientation();
+      if (o != TopAbs_FORWARD && o != TopAbs_REVERSED) continue;
+      if (BRep_Tool::Degenerated(TopoDS::Edge(x.Current()))) continue;
+      std::pair<int, int> *use = sides.ChangeSeek(x.Current());
+      if (!use) {
+        sides.Bind(x.Current(), std::make_pair(0, 0));
+        use = sides.ChangeSeek(x.Current());
+      }
+      ++(o == TopAbs_FORWARD ? use->first : use->second);
+    }
+  }
+  for (Sides::Iterator it(sides); it.More(); it.Next()) {
+    const int along = it.Value().first, against = it.Value().second;
+    if (along + against == 1) ++n[1];
+    else if (along + against > 2) ++n[2];
+    else if (along != against) ++n[3];
+  }
+}
+
 // What keeps a shape from being closed solids, counted into `out`: solids,
 // edges that bound one face, edges that bound more than two, and edges whose
 // two faces disagree about which side is inside (both run along the edge the
@@ -447,31 +474,7 @@ inline void bo_skin_census(const TopoDS_Shape &s, rust::Slice<int32_t> out) {
     TopTools_IndexedMapOfShape solids;
     TopExp::MapShapes(s, TopAbs_SOLID, solids);
     n[0] = solids.Extent();
-    typedef NCollection_DataMap<TopoDS_Shape, std::pair<int, int>, TopTools_ShapeMapHasher> Sides;
-    for (int k = 1; k <= solids.Extent(); ++k) {
-      Sides sides;
-      for (TopExp_Explorer f(solids(k), TopAbs_FACE); f.More(); f.Next()) {
-        TopAbs_Orientation fo = f.Current().Orientation();
-        if (fo != TopAbs_FORWARD && fo != TopAbs_REVERSED) continue;
-        for (TopExp_Explorer x(f.Current(), TopAbs_EDGE); x.More(); x.Next()) {
-          TopAbs_Orientation o = x.Current().Orientation();
-          if (o != TopAbs_FORWARD && o != TopAbs_REVERSED) continue;
-          if (BRep_Tool::Degenerated(TopoDS::Edge(x.Current()))) continue;
-          std::pair<int, int> *use = sides.ChangeSeek(x.Current());
-          if (!use) {
-            sides.Bind(x.Current(), std::make_pair(0, 0));
-            use = sides.ChangeSeek(x.Current());
-          }
-          ++(o == TopAbs_FORWARD ? use->first : use->second);
-        }
-      }
-      for (Sides::Iterator it(sides); it.More(); it.Next()) {
-        const int along = it.Value().first, against = it.Value().second;
-        if (along + against == 1) ++n[1];
-        else if (along + against > 2) ++n[2];
-        else if (along != against) ++n[3];
-      }
-    }
+    for (int k = 1; k <= solids.Extent(); ++k) bo_solid_skin(solids(k), n);
   }
   for (size_t i = 0; i < out.size() && i < 4; ++i) out[i] = n[i];
 }
@@ -597,6 +600,68 @@ inline TopoDS_Shape bo_outward_walk(const TopoDS_Shape &s) {
 // same ones in the same order, so an index into them holds on both.
 inline BoShape bo_turned_outward(const TopoDS_Shape &s) {
   BO_GUARD(return bo_own(s.IsNull() ? s : bo_outward_walk(s));)
+}
+
+// The solid's shell when it has one and nothing else, a null shape otherwise.
+inline TopoDS_Shape bo_only_shell(const TopoDS_Shape &solid) {
+  TopoDS_Iterator it(solid);
+  if (!it.More() || it.Value().ShapeType() != TopAbs_SHELL) return TopoDS_Shape();
+  TopoDS_Shape shell = it.Value();
+  it.Next();
+  return it.More() ? TopoDS_Shape() : shell;
+}
+
+// Inward, one shell, and with nothing in its skin that leaves it more than one
+// way to face. A solid with a void is left alone, its shells could be wrong
+// one way each. Asked in that order, so a solid that faces outward pays for
+// one line.
+inline bool bo_cleanly_inward(const TopoDS_Shape &solid) {
+  if (!bo_faces_inward(solid) || bo_only_shell(solid).IsNull()) return false;
+  int32_t n[4] = {1, 0, 0, 0};
+  bo_solid_skin(solid, n);
+  return n[1] == 0 && n[2] == 0 && n[3] == 0;
+}
+
+inline TopoDS_Shape bo_clean_outward_walk(const TopoDS_Shape &s, int32_t &turned) {
+  BRep_Builder b;
+  if (s.ShapeType() == TopAbs_SOLID) {
+    if (!bo_cleanly_inward(s)) return s;
+    ++turned;
+    TopoDS_Solid out;
+    b.MakeSolid(out);
+    for (TopoDS_Iterator it(s); it.More(); it.Next()) b.Add(out, it.Value().Reversed());
+    return out;
+  }
+  if (s.ShapeType() != TopAbs_COMPOUND && s.ShapeType() != TopAbs_COMPSOLID) return s;
+  const int32_t was = turned;
+  TopoDS_Compound out;
+  b.MakeCompound(out);
+  for (TopoDS_Iterator it(s); it.More(); it.Next()) b.Add(out, bo_clean_outward_walk(it.Value(), turned));
+  return turned == was ? s : TopoDS_Shape(out);
+}
+
+// bo_turned_outward for only the solids that are closed and clean, with
+// `turned` how many it turned. A solid whose faces disagree with each other
+// has no one way to face and is left as it is. With none turned the shape
+// comes back as itself, so what it writes does not change.
+inline BoShape bo_turned_clean_outward(const TopoDS_Shape &s, int32_t &turned) {
+  turned = 0;
+  BO_GUARD(return bo_own(s.IsNull() ? s : bo_clean_outward_walk(s, turned));)
+}
+
+// Solids the STEP reader turned outward: their one shell is held reversed,
+// which no reader or writer gives an outward solid it did not turn. Only the
+// solid's children are visited, no geometry.
+inline int bo_reader_turned_solids(const TopoDS_Shape &s) {
+  if (s.IsNull()) return 0;
+  TopTools_IndexedMapOfShape solids;
+  TopExp::MapShapes(s, TopAbs_SOLID, solids);
+  int turned = 0;
+  for (int k = 1; k <= solids.Extent(); ++k) {
+    TopoDS_Shape shell = bo_only_shell(solids(k));
+    if (!shell.IsNull() && shell.Orientation() == TopAbs_REVERSED && !bo_faces_inward(solids(k))) ++turned;
+  }
+  return turned;
 }
 
 inline void bo_location_translation(const TopoDS_Shape &s, rust::Slice<double> out) {

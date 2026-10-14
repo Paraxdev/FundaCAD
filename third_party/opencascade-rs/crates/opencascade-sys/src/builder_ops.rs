@@ -37,6 +37,8 @@ mod inner {
         pub fn bo_skin_census(s: &TopoDS_Shape, out: &mut [i32]);
         pub fn bo_inward_solids(s: &TopoDS_Shape) -> i32;
         pub fn bo_turned_outward(s: &TopoDS_Shape) -> Result<UniquePtr<TopoDS_Shape>>;
+        pub fn bo_reader_turned_solids(s: &TopoDS_Shape) -> i32;
+        pub fn bo_turned_clean_outward(s: &TopoDS_Shape, turned: &mut i32) -> Result<UniquePtr<TopoDS_Shape>>;
         pub fn bo_edge_inside_face(face: &TopoDS_Shape, edge: &TopoDS_Shape) -> bool;
         pub fn bo_location_translation(s: &TopoDS_Shape, out: &mut [f64]);
 
