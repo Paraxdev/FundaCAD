@@ -161,7 +161,7 @@ impl Vrml<'_> {
         }
         let kind = tok.to_string();
         if self.t.next() != Some("{") {
-            return Err(bad("VRML", format!("'{kind}' is not followed by a node body")));
+            return Err(bad("VRML", format!("'{kind}' has no '{{' after it")));
         }
         self.depth += 1;
         if self.depth > 256 {
