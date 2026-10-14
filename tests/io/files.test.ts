@@ -42,6 +42,10 @@ describe("extToImportFormat", () => {
     expect(extToImportFormat("/tmp/a.igs")).toBe("iges");
     expect(extToImportFormat("/tmp/a.iges")).toBe("iges");
     expect(extToImportFormat("/tmp/a.fcstd")).toBe("fcstd");
+    expect(extToImportFormat("/tmp/a.gltf")).toBe("gltf");
+    expect(extToImportFormat("/tmp/a.ply")).toBe("ply");
+    expect(extToImportFormat("/tmp/a.off")).toBe("off");
+    expect(extToImportFormat("/tmp/a.amf")).toBe("amf");
   });
 
   it("is case-insensitive", () => {
