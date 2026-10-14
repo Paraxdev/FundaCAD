@@ -2257,7 +2257,10 @@ inline TopoDS_Shape bo_prism_sharp(const TopoDS_Face &face, const gp_Pnt &o, con
 // with straight edges, so its face is not the cone or the leaned surface of
 // that side, and the corner is not where that surface meets its neighbour's:
 // a rectangle with a half round bump of 4 mm flared 30 degrees over 1.5 mm
-// came out 0.076 mm3 short.
+// came out 0.076 mm3 short. With a spline the loft is not taken at all:
+// the same bump as a spline came out 0.2 mm3 short and as a solid no STEP
+// file could be written of, and one of eleven poles as 406.9 mm3 drawn one
+// way round and 415.3 the other.
 inline int bo_outline_corner_curve(const TopoDS_Face &face) {
   int most = 0;
   for (TopExp_Explorer wx(face, TopAbs_WIRE); wx.More(); wx.Next()) {
@@ -2292,8 +2295,10 @@ inline int bo_outline_corner_curve(const TopoDS_Face &face) {
 // for, see bo_outline_corner_curve. Where DPrism rounded a corner, and where
 // neither fits, bo_prism_draft, then bo_prism_wedged and then bo_prism_sharp
 // stand in. Of those only the second can build an outline that closes up
-// before the far end, and only for straight sides. Where none of them does,
-// the solid with the rounded corner or the loft is all there is.
+// before the far end, and only for straight sides. A solid with a rounded
+// corner is never handed out: with a spline in the outline too, a cut over a
+// freeform face came back refused, or with the whole tool's volume gone from
+// a body the tool only dipped into.
 inline BoShape bo_prism_taper(const TopoDS_Shape &faceShape, double dx, double dy, double dz,
                               double taper, double ox, double oy, double oz, double xx, double xy,
                               double xz, double nx, double ny, double nz, bool dprism) {
@@ -2382,8 +2387,8 @@ inline BoShape bo_prism_taper(const TopoDS_Shape &faceShape, double dx, double d
         sharp = bo_prism_sharp(face, base, along, rad, from == 0 ? first : TopoDS_Shape(), rounded);
         if (fits(sharp)) return bo_own(sharp);
       }
-      if (held) return bo_own(first);
-      throw std::runtime_error("Taper_NotDone");)
+      if (curve == 1 && held) return bo_own(first);
+      throw std::runtime_error(rounded ? "Taper_Rounded" : "Taper_NotDone");)
 }
 
 inline bool bo_face_has_holes(const TopoDS_Shape &f) { return bo_count(f, 3) > 1; }
