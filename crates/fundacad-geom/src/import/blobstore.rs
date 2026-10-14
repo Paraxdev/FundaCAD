@@ -5,6 +5,7 @@ use blake2::digest::{Update, VariableOutput};
 use blake2::Blake2bVar;
 use std::io::{Read, Seek, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 pub fn hash_bytes(data: &[u8]) -> String {
     let mut h = Blake2bVar::new(16).expect("16 is a valid blake2b digest size");
@@ -81,10 +82,14 @@ impl BlobStore {
 }
 
 fn atomic_write(dir: &Path, dest: &Path, data: &[u8]) -> std::io::Result<()> {
+    // The clock alone names two writes of the same tick alike, and one then
+    // publishes the other's bytes under its own hash.
+    static NTH: AtomicU64 = AtomicU64::new(0);
     let nonce = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_nanos());
-    let tmp = dir.join(format!("{:032x}{}.tmp", nonce, std::process::id()));
+    let nth = NTH.fetch_add(1, Ordering::Relaxed);
+    let tmp = dir.join(format!("{:032x}{}-{nth}.tmp", nonce, std::process::id()));
     let written = (|| {
         let mut f = std::fs::File::create(&tmp)?;
         f.write_all(data)?;
@@ -269,5 +274,25 @@ mod tests {
         let r = blob_op("blobRead", &req(json!({"hash": h})), &to).unwrap();
         assert_eq!(r["missing"], json!(true));
         assert!(blob_op("blobRead", &req(json!({"hash": "../../etc"})), &to).is_err());
+    }
+
+    #[test]
+    fn blobs_stored_at_the_same_moment_each_read_back() {
+        let store = std::sync::Arc::new(scratch("together"));
+        for round in 0..50u32 {
+            let put: Vec<_> = (0..8u32)
+                .map(|i| {
+                    let store = store.clone();
+                    std::thread::spawn(move || {
+                        let data: Vec<u8> = format!("blob {round} {i}").repeat(64).into_bytes();
+                        (store.put_bytes(&data).unwrap(), data)
+                    })
+                })
+                .collect();
+            for t in put {
+                let (h, data) = t.join().unwrap();
+                assert_eq!(store.get_bytes(&h).as_deref(), Some(&data[..]), "round {round}");
+            }
+        }
     }
 }
