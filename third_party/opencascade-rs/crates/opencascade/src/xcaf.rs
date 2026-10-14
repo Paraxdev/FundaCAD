@@ -246,6 +246,19 @@ pub fn read_step_assembly_with(path: &Path, progress: &ProgressRange) -> Result<
     Ok(StepAssembly { nodes, leaves, roots, notes, is_assembly, raw })
 }
 
+/// How many edges of `shape` lie more than `limit` from a face they bound, and
+/// the widest such gap.
+pub fn edges_away(shape: &Shape, limit: f64) -> (usize, f64) {
+    let mut widest = [0.0];
+    let n = ffi::step_edges_away(&shape.inner, limit, &mut widest);
+    (usize::try_from(n).unwrap_or(0), widest[0])
+}
+
+/// The widest tolerance of an edge or corner of `shape`.
+pub fn widest_tolerance(shape: &Shape) -> f64 {
+    ffi::step_widest_tolerance(&shape.inner)
+}
+
 /// Binary BREP, BinTools format V3 with triangles.
 pub fn to_bin_v3(shape: &Shape) -> Result<Vec<u8>, Error> {
     shape.to_brep_bytes(

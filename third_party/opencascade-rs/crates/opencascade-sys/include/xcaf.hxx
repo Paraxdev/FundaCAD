@@ -511,6 +511,15 @@ inline std::unique_ptr<TopoDS_Shape> step_assembly_root_shape(const StepAssembly
   return std::unique_ptr<TopoDS_Shape>(new TopoDS_Shape(a.roots.at(i)));
 }
 inline bool step_assembly_is_assembly(const StepAssembly &a) { return a.is_assembly; }
+inline int32_t step_edges_away(const TopoDS_Shape &shape, double limit, rust::Slice<double> widest) {
+  double w = 0.0;
+  int32_t n = step_heal_edges_away(shape, limit, w);
+  if (widest.size() > 0) {
+    widest[0] = w;
+  }
+  return n;
+}
+inline double step_widest_tolerance(const TopoDS_Shape &shape) { return step_heal_widest_tolerance(shape); }
 inline int32_t step_assembly_note_count(const StepAssembly &a) { return static_cast<int32_t>(a.notes.size()); }
 inline int32_t step_assembly_note_node(const StepAssembly &a, int32_t i) { return a.notes.at(i).node; }
 inline int32_t step_assembly_note_leaf(const StepAssembly &a, int32_t i) { return a.notes.at(i).leaf; }
