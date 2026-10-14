@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { DocumentStore } from "../../src/document/store";
 import type { GeometryBackend } from "../../src/geometry/client";
 
-import { describeImportCapability, extToFormat, extToImportFormat, importedBodyCount, looksLikeContainer } from "../../src/io/files";
+import { IMPORT_EXTS, describeImportCapability, extToFormat, extToImportFormat, importedBodyCount, looksLikeContainer } from "../../src/io/files";
 
 // Both mappers are TOTAL, an unrecognised extension silently becomes "step"
 // rather than erroring. That is deliberate (the save dialog can hand back a bare
@@ -39,10 +39,15 @@ describe("extToImportFormat", () => {
     expect(extToImportFormat("/tmp/a.obj")).toBe("obj");
     expect(extToImportFormat("/tmp/a.brep")).toBe("brep");
     expect(extToImportFormat("/tmp/a.glb")).toBe("glb");
+    expect(extToImportFormat("/tmp/a.igs")).toBe("iges");
+    expect(extToImportFormat("/tmp/a.iges")).toBe("iges");
+    expect(extToImportFormat("/tmp/a.fcstd")).toBe("fcstd");
   });
 
   it("is case-insensitive", () => {
     expect(extToImportFormat("/tmp/A.GLB")).toBe("glb");
+    expect(extToImportFormat("/tmp/A.IGS")).toBe("iges");
+    expect(extToImportFormat("/home/me/Bracket.FCStd")).toBe("fcstd");
   });
 });
 
@@ -54,6 +59,15 @@ describe("extToImportFormat", () => {
 // unit-tested here and the wiring is left to the browser harness.
 // NOT COVERED by any unit test: that welcome.ts actually skips forgetRecent on
 // the "newerFormat" outcome. Stated rather than implied.
+describe("IMPORT_EXTS", () => {
+  it("offers only extensions the import reads as themselves", () => {
+    for (const ext of IMPORT_EXTS) {
+      const fmt = extToImportFormat(`/tmp/a.${ext}`);
+      expect(fmt === "step" ? ["step", "stp"] : [fmt, fmt === "iges" ? "igs" : fmt]).toContain(ext.toLowerCase());
+    }
+  });
+});
+
 describe("looksLikeContainer", () => {
   // 0x50 0x4b 0x03 0x04 = "PK\x03\x04", a ZIP local-file header, followed by
   // bytes that are invalid UTF-8 (0xff 0xfe ...), i.e. a realistic prefix.

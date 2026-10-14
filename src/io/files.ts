@@ -129,9 +129,9 @@ export async function openDocument(
       // MCAD-style: Open takes our document AND mesh/CAD files (imported as a
       // body), routed by extension below, so users can just "open" an STL.
       filters: [
-        { name: "All supported", extensions: [DOC_EXT, BINARY_DOC_EXT, ...LEGACY_DOC_EXTS, "json", "stl", "3mf", "step", "stp", "obj", "glb"] },
+        { name: "All supported", extensions: [DOC_EXT, BINARY_DOC_EXT, ...LEGACY_DOC_EXTS, "json", ...IMPORT_EXTS] },
         { name: "FundaCAD Document", extensions: [DOC_EXT, BINARY_DOC_EXT, ...LEGACY_DOC_EXTS, "json"] },
-        { name: "Mesh / CAD", extensions: ["stl", "3mf", "step", "stp", "obj", "glb"] },
+        { name: "Mesh / CAD", extensions: IMPORT_EXTS },
       ],
     });
     if (typeof path !== "string") return;
@@ -403,7 +403,10 @@ export function extToFormat(path: string): ExportFormat {
 // owns is written by that plugin's exporter in the geometry engine, reached
 // through GeometryBackend.exportWith.
 
-/** Import an external mesh / B-rep file (STL / 3MF / STEP / OBJ) as a new body.
+// FreeCAD writes .FCStd, and GTK file dialogs on Linux match case.
+export const IMPORT_EXTS = ["stl", "3mf", "step", "stp", "iges", "igs", "brep", "fcstd", "FCStd", "obj", "glb"];
+
+/** Import an external mesh / B-rep file (STL / 3MF / STEP / IGES / FreeCAD / OBJ) as a new body.
  *  The engine reads the file by path and returns an embeddable BREP payload, so
  *  this needs the native app (a real filesystem path), like export. */
 export async function importModel(store: DocumentStore, geometry: GeometryBackend) {
@@ -420,10 +423,13 @@ export async function importModel(store: DocumentStore, geometry: GeometryBacken
   const path = await open({
     multiple: false,
     filters: [
-      { name: "All supported", extensions: ["stl", "3mf", "step", "stp", "obj", "glb"] },
+      { name: "All supported", extensions: IMPORT_EXTS },
       { name: "STL", extensions: ["stl"] },
       { name: "3MF", extensions: ["3mf"] },
       { name: "STEP", extensions: ["step", "stp"] },
+      { name: "IGES", extensions: ["iges", "igs"] },
+      { name: "BREP", extensions: ["brep"] },
+      { name: "FreeCAD", extensions: ["fcstd", "FCStd"] },
       { name: "OBJ", extensions: ["obj"] },
       { name: "GLB (glTF)", extensions: ["glb"] },
     ],
@@ -476,7 +482,7 @@ export function importedBodyCount(res: { parts?: { node: number; faces: number }
 
 /** Import the file at `path`: read it, add the feature, adopt what it looked
  *  like. The whole of an import except choosing the file, which is why the
- *  dialog above and the open-a-dropped-file path below both end here.
+ *  dialog above and the Open dialog both end here.
  *
  *  Exported for the harness that has a path and no dialog (e2e/*.cjs). Not a
  *  second door: it is the same one, minus the picker. */
@@ -673,6 +679,8 @@ export function extToImportFormat(path: string): ImportFormat {
   if (ext === "obj") return "obj";
   if (ext === "brep") return "brep";
   if (ext === "glb") return "glb";
+  if (ext === "iges" || ext === "igs") return "iges";
+  if (ext === "fcstd") return "fcstd";
   return "step";  // TOTAL, like extToFormat above, see the note there
 }
 
