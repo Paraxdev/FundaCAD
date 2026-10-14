@@ -98,6 +98,27 @@ fn a_surface_passed_on_is_not_called_a_fault() {
     assert!(fault_notes(&r).is_empty(), "{:?}", r.diagnostics);
 }
 
+/// A union is meant to give a solid, but one handed two surfaces leaves a
+/// surface from them, whether it uses the tool up or keeps it.
+#[test]
+fn a_surface_made_from_surfaces_is_not_said_to_be_one() {
+    let mut lid = casing(shell_alone);
+    lid["id"] = json!("imp2");
+    lid["name"] = json!("Lid");
+    for keep in [false, true] {
+        let r = unsound::build(json!([
+            casing(shell_alone),
+            lid,
+            {"id": "mv", "type": "move", "dx": 5, "bodies": ["body2"]},
+            {"id": "un", "type": "boolean", "operation": "union", "target": "body1", "tools": ["body2"], "keepTools": keep},
+        ]));
+        assert_eq!(r.bodies.len(), if keep { 2 } else { 1 });
+        assert_eq!(kernel::count(&r.bodies[0].shape, Kind::Solid), 0, "the union is not a surface");
+        assert!(kernel::count(&r.bodies[0].shape, Kind::Face) > 6, "the union did not take the lid in");
+        assert!(fault_notes(&r).is_empty(), "keepTools {keep}: {:?}", r.diagnostics);
+    }
+}
+
 /// A later feature that leaves the body as it found it does not repeat the note.
 #[test]
 fn a_fault_is_said_once_on_the_feature_that_brought_it() {
