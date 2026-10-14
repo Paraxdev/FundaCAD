@@ -657,15 +657,44 @@ inline double bo_signed_volume(const TopoDS_Shape &s) {
   return std::isnan(flat) ? bo_volume(s) : flat;
 }
 
-// Inward, one shell, and with nothing in its skin that leaves it more than one
-// way to face. A solid with a void is left alone, its shells could be wrong
-// one way each. Asked in that order, so a solid that faces outward pays for
-// one line.
+// Every shell of the solid faces into its material: the outermost ones, and a
+// void shell inside one of them, each held the other way round from how it
+// should be. Asked only of a solid found facing inward, the rare one.
+inline bool bo_every_shell_inward(const TopoDS_Shape &solid) {
+  std::vector<std::pair<double, Bnd_Box>> shells;
+  for (TopoDS_Iterator it(solid); it.More(); it.Next()) {
+    if (it.Value().ShapeType() != TopAbs_SHELL) return false;
+    Bnd_Box box;
+    BRepBndLib::Add(it.Value(), box);
+    shells.emplace_back(bo_signed_volume(it.Value()), box);
+  }
+  for (size_t i = 0; i < shells.size(); ++i) {
+    if (shells[i].second.IsVoid()) return false;
+    double x0, y0, z0, x1, y1, z1;
+    shells[i].second.Get(x0, y0, z0, x1, y1, z1);
+    int around = 0;
+    for (size_t j = 0; j < shells.size(); ++j) {
+      if (j == i || shells[j].second.IsVoid()) continue;
+      double a0, b0, c0, a1, b1, c1;
+      shells[j].second.Get(a0, b0, c0, a1, b1, c1);
+      if (a0 < x0 && b0 < y0 && c0 < z0 && a1 > x1 && b1 > y1 && c1 > z1) ++around;
+    }
+    const bool solid_side = around % 2 == 0;
+    if (solid_side ? shells[i].first >= 0.0 : shells[i].first <= 0.0) return false;
+  }
+  return !shells.empty();
+}
+
+// Inward with nothing in its skin that leaves it more than one way to face,
+// and with a void, each of its shells inward. Asked in that order, so a solid
+// that faces outward pays for the cheapest test that says so.
 inline bool bo_cleanly_inward(const TopoDS_Shape &solid) {
-  if (!bo_faces_inward(solid) || bo_only_shell(solid).IsNull()) return false;
+  const double flat = bo_flat_volume(solid);
+  if (std::isnan(flat) ? !bo_faces_inward(solid) : flat >= 0.0) return false;
   int32_t n[4] = {1, 0, 0, 0};
   bo_solid_skin(solid, n);
-  return n[1] == 0 && n[2] == 0 && n[3] == 0;
+  if (n[1] != 0 || n[2] != 0 || n[3] != 0) return false;
+  return !bo_only_shell(solid).IsNull() || bo_every_shell_inward(solid);
 }
 
 inline TopoDS_Shape bo_clean_outward_walk(const TopoDS_Shape &s, int32_t &turned) {
