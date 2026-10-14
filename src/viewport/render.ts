@@ -8,7 +8,7 @@ import type { RebuildResult } from "../types";
 import { disposeObject } from "./dispose";
 import { scheduleRaycastIndex } from "./raycastIndex";
 import { BodyEdges, EDGE_IDLE_COLOR, EDGE_IDLE_WIDTH, type EdgeRef } from "./edgeLines";
-import { FINISH } from "../document/materials";
+import { type BodyFinish, FINISH } from "../document/materials";
 import { removeSelectionGlows } from "./selectionGlow";
 import { weldByFace } from "./weld";
 
@@ -543,11 +543,6 @@ export function bodyMaterials(body: BodyMesh): THREE.MeshStandardMaterial[] {
   return list.filter((x): x is THREE.MeshStandardMaterial => x instanceof THREE.MeshStandardMaterial);
 }
 
-// mm of virtual wall a glass body refracts through. Fixed rather than measured:
-// transmission's bend scales with thickness, and a few mm reads as glass across
-// the range of sizes a printed part runs to without a per-body measurement.
-export const GLASS_THICKNESS = 3;
-
 // How glossy the clear lacquer itself is (its own roughness, not the base's). A
 // low value is a wet, hard, freshly-waxed coat, which is what a clearcoat is for.
 export const CLEARCOAT_ROUGHNESS = 0.08;
@@ -591,33 +586,44 @@ export function isRenderLowPower(): boolean {
  *  Toggling transmission across zero flips the USE_TRANSMISSION shader define, so
  *  it recompiles the material, done only on the crossing, and applyBodyFinish
  *  runs on material CHANGES, not per frame, so the recompile is not a per-frame
- *  cost. */
-export function applyGlassLook(
-  mat: THREE.MeshStandardMaterial,
-  opacity: number,
-  metalness: number,
-  ghost: boolean,
-): boolean {
+ *  cost. Dispersion flips its own define, three bumps the version for it. */
+export function applyGlassLook(mat: THREE.MeshStandardMaterial, f: BodyFinish, ghost: boolean): boolean {
   const phys = mat as THREE.MeshPhysicalMaterial;
   if (!(phys as { isMeshPhysicalMaterial?: boolean }).isMeshPhysicalMaterial) return false;
-  const glassy = !ghost && !renderLowPower && opacity < 1 && metalness < 0.5;
+  const glassy = !ghost && !renderLowPower && f.opacity < 1 && f.metalness < 0.5;
   const was = phys.transmission > 0;
+  phys.ior = f.ior;
   if (glassy) {
     // A clearer material (lower opacity) transmits more; the +0.25 keeps even a
     // frosted 0.6 visibly glassy, since flat alpha at that opacity already read
     // as glass and transmission must not look LESS clear than the fade it replaces.
-    phys.transmission = Math.min(1, 1 - opacity + 0.25);
-    phys.ior = 1.5;
-    phys.thickness = GLASS_THICKNESS;
+    phys.transmission = Math.min(1, 1 - f.opacity + 0.25);
+    phys.thickness = f.thickness;
+    phys.attenuationColor.set(f.attenuationColor ?? 0xffffff);
+    // The document keeps 0 for "never", three wants Infinity, which JSON cannot hold.
+    phys.attenuationDistance = f.attenuationDistance > 0 ? f.attenuationDistance : Infinity;
+    phys.dispersion = f.dispersion;
     phys.transparent = false; // transmission carries the see-through, not alpha
     phys.opacity = 1;
     phys.depthWrite = true;
   } else {
     phys.transmission = 0;
     phys.thickness = 0;
+    phys.attenuationColor.set(0xffffff);
+    phys.attenuationDistance = Infinity;
+    phys.dispersion = 0;
   }
   if (was !== glassy) phys.needsUpdate = true;
   return glassy;
+}
+
+/** A soap-bubble film and a tinted highlight. Physical-PBR only, like clearcoat,
+ *  and the film is dropped on a weak machine and on a ghost. */
+export function applyThinFilm(mat: THREE.MeshStandardMaterial, f: BodyFinish, ghost: boolean): void {
+  const phys = mat as THREE.MeshPhysicalMaterial;
+  if (!(phys as { isMeshPhysicalMaterial?: boolean }).isMeshPhysicalMaterial) return;
+  phys.iridescence = ghost || renderLowPower ? 0 : f.iridescence;
+  phys.specularColor.set(!ghost && f.specularColor ? f.specularColor : 0xffffff);
 }
 
 function disposeBody(body: BodyMesh) {

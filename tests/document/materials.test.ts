@@ -26,6 +26,7 @@ import {
   type MaterialDef,
   uniqueId,
   finishLabel,
+  isDefaultFinish,
 } from "../../src/document/materials";
 
 describe("asHex", () => {
@@ -49,6 +50,29 @@ describe("finishOf", () => {
     expect(finishOf({ id: "a", name: "A", color: "#fff", roughness: 0.1 })).toEqual({
       ...FINISH, roughness: 0.1,
     });
+  });
+
+  it("carries the glass fields and leaves absent colours absent", () => {
+    const f = finishOf({ id: "a", name: "A", color: "#fff", ior: 1.33, attenuationColor: "#2a8f6a" });
+    expect(f.ior).toBe(1.33);
+    expect(f.thickness).toBe(3);
+    expect(f.attenuationColor).toBe("#2a8f6a");
+    expect("specularColor" in f).toBe(false);
+  });
+});
+
+describe("isDefaultFinish", () => {
+  it("is true only when nothing about the finish differs from no material", () => {
+    expect(isDefaultFinish(finishOf(undefined))).toBe(true);
+    const plain = { id: "a", name: "A", color: "#fff" };
+    for (const extra of [
+      { clearcoat: 1 }, { ior: 1.33 }, { thickness: 9 }, { attenuationColor: "#00ff00" }, { attenuationDistance: 5 },
+      { dispersion: 1 }, { iridescence: 0.5 }, { specularColor: "#ff0000" },
+      { surface: { kind: "noise" as const, scale: 4, amount: 0.5 } },
+      { surfaceGraph: { nodes: [{ id: "o", type: "output" as const }], output: "o" } },
+    ]) {
+      expect(isDefaultFinish(finishOf({ ...plain, ...extra })), JSON.stringify(extra)).toBe(false);
+    }
   });
 });
 
@@ -88,6 +112,34 @@ describe("normalizeMaterial", () => {
     expect(normalizeMaterial({ name: "Glazed", color: "#eeeeee", clearcoat: 1 })!.clearcoat).toBe(1);
     expect(normalizeMaterial({ name: "Glazed", color: "#eeeeee", clearcoat: 5 })!.clearcoat).toBe(1); // clamped
     expect("clearcoat" in normalizeMaterial({ name: "Plain", color: "#eeeeee", clearcoat: 0 })!).toBe(false);
+  });
+
+  it("carries the glass and thin film fields, clamped to what they can mean", () => {
+    const optics = {
+      ior: 2.42, thickness: 12, dispersion: 5, attenuationColor: "#2A8F6A", attenuationDistance: 20,
+      iridescence: 0.6, specularColor: "#ffd0a0",
+    };
+    expect(normalizeMaterial({ id: "d", name: "D", color: "#ffffff", ...optics })).toEqual({
+      id: "d", name: "D", color: "#ffffff", ...optics, attenuationColor: "#2a8f6a",
+    });
+    const wild = normalizeMaterial({
+      id: "w", name: "W", color: "#ffffff",
+      ior: 9, thickness: -4, dispersion: 40, attenuationDistance: 1e9, iridescence: 3,
+      attenuationColor: "green", specularColor: 7,
+    })!;
+    expect(wild).toEqual({
+      id: "w", name: "W", color: "#ffffff", ior: 2.5, thickness: 0, dispersion: 10, attenuationDistance: 1000,
+      iridescence: 1,
+    });
+    expect(normalizeMaterial({ id: "l", name: "L", color: "#ffffff", ior: 0.5 })!.ior).toBe(1);
+  });
+
+  it("omits every glass field at its default, so an old glass reads back as it was", () => {
+    const old = { id: "m-glass", name: "Glass", color: "#cfe4ee", metalness: 0, roughness: 0.05, opacity: 0.25 };
+    expect(normalizeMaterial({
+      ...old, ior: 1.5, thickness: 3, dispersion: 0, attenuationDistance: 0, iridescence: 0,
+    })).toEqual(old);
+    expect(normalizeMaterial(old)).toEqual(old);
   });
 
   it("carries a valid procedural surface and drops a broken one", () => {

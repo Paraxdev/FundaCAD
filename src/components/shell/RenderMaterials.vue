@@ -23,6 +23,7 @@ import { toast } from "../../ui/toast";
 import { exportMaterialLibrary, importMaterialLibrary } from "../../io/files";
 import { finishLabel, finishOf, type MaterialDef, type SurfaceSpec } from "../../document/materials";
 import { materialPreview, onPreviewsChanged } from "../../viewport/materialPreview";
+import { isRenderLowPower } from "../../viewport/render";
 import { beginMaterialDrag, endMaterialDrag, MATERIAL_MIME } from "../../ui/materialDrag";
 import { onRenderPrefsChange, renderPrefs } from "../../ui/renderPrefs";
 import SurfaceNodeEditor from "./SurfaceNodeEditor.vue";
@@ -216,7 +217,9 @@ function addMaterial() {
 /** Push one edited field. Every control calls this, so there is one place where
  *  a value becomes a document change. */
 function set(
-  field: "name" | "color" | "metalness" | "roughness" | "opacity" | "emissive" | "clearcoat",
+  field: "name" | "color" | "metalness" | "roughness" | "opacity" | "emissive" | "clearcoat"
+    | "ior" | "thickness" | "attenuationDistance" | "dispersion" | "iridescence"
+    | "attenuationColor" | "specularColor",
   raw: string,
 ) {
   const m = selected.value;
@@ -230,8 +233,34 @@ function set(
     store.updateMaterial(m.id, { color: raw });
     return;
   }
+  if (field === "attenuationColor") {
+    // A tint with no depth would do nothing, so the first pick brings one along.
+    const depth = finishOf(m).attenuationDistance > 0 ? {} : { attenuationDistance: TINT_DEPTH };
+    store.updateMaterial(m.id, { attenuationColor: raw || undefined, ...(raw ? depth : {}) } as MaterialPatch);
+    return;
+  }
+  if (field === "specularColor") {
+    store.updateMaterial(m.id, { specularColor: raw || undefined } as MaterialPatch);
+    return;
+  }
   const n = Number.parseFloat(raw);
   if (Number.isFinite(n)) store.updateMaterial(m.id, { [field]: n });
+}
+
+const IOR_PRESETS = [
+  { label: "Water", ior: 1.33 },
+  { label: "Glass", ior: 1.5 },
+  { label: "Crystal", ior: 2.0 },
+  { label: "Diamond", ior: 2.42 },
+] as const;
+const TINT_DEPTH = 20;
+// An undefined field is how a patch removes it, which exactOptionalPropertyTypes does not allow.
+type MaterialPatch = Partial<Omit<MaterialDef, "id">>;
+
+/** Glass controls only where the viewport draws glass: see-through and not metal. */
+function isGlass(m: MaterialDef): boolean {
+  const f = finishOf(m);
+  return f.opacity < 1 && f.metalness < 0.5;
 }
 
 // --- procedural surface: pick a generator, then tune it. A separate path from
@@ -503,6 +532,100 @@ async function doImport() {
           @input="set('clearcoat', ($event.target as HTMLInputElement).value)"
         />
       </label>
+      <label class="prefs-row">
+        <span class="prefs-label">Thin film</span>
+        <input
+          class="sm-slider"
+          data-field="iridescence"
+          type="range" min="0" max="1" step="0.01"
+          :value="finishOf(selected).iridescence"
+          @input="set('iridescence', ($event.target as HTMLInputElement).value)"
+        />
+      </label>
+      <div class="prefs-row">
+        <span class="prefs-label">Highlight tint</span>
+        <input
+          class="mats-color"
+          data-field="specularColor"
+          type="color"
+          :value="selected.specularColor ?? '#ffffff'"
+          @input="set('specularColor', ($event.target as HTMLInputElement).value)"
+        />
+        <button v-if="selected.specularColor" class="rd-chip" @click="set('specularColor', '')">Clear</button>
+      </div>
+
+      <!-- Glass: how light bends and colours on its way through. -->
+      <div v-if="isGlass(selected)" class="rd-surface" data-glass>
+        <span class="prefs-label">Glass</span>
+        <div class="rd-chips" role="group" aria-label="Index of refraction">
+          <button
+            v-for="p in IOR_PRESETS"
+            :key="p.label"
+            class="rd-chip"
+            :class="{ active: finishOf(selected).ior === p.ior }"
+            :data-ior="p.ior"
+            @click="set('ior', String(p.ior))"
+          >{{ p.label }}</button>
+        </div>
+        <label class="prefs-row">
+          <span class="prefs-label">IOR {{ finishOf(selected).ior.toFixed(2) }}</span>
+          <input
+            class="sm-slider"
+            data-field="ior"
+            type="range" min="1" max="2.5" step="0.01"
+            :value="finishOf(selected).ior"
+            @input="set('ior', ($event.target as HTMLInputElement).value)"
+          />
+        </label>
+        <label class="prefs-row">
+          <span class="prefs-label">Thickness {{ finishOf(selected).thickness }} mm</span>
+          <input
+            class="sm-slider"
+            data-field="thickness"
+            type="range" min="0.5" max="50" step="0.5"
+            :value="finishOf(selected).thickness"
+            @input="set('thickness', ($event.target as HTMLInputElement).value)"
+          />
+        </label>
+        <label class="prefs-row">
+          <span class="prefs-label">Dispersion</span>
+          <input
+            class="sm-slider"
+            data-field="dispersion"
+            type="range" min="0" max="10" step="0.1"
+            :value="finishOf(selected).dispersion"
+            @input="set('dispersion', ($event.target as HTMLInputElement).value)"
+          />
+        </label>
+        <div v-if="finishOf(selected).dispersion > 0 && finishOf(selected).thickness < 10" class="sm-hint">
+          Dispersion fans the colours out over the distance light travels, raise Thickness to see it.
+        </div>
+        <div class="prefs-row">
+          <span class="prefs-label">Tint</span>
+          <input
+            class="mats-color"
+            data-field="attenuationColor"
+            type="color"
+            :value="selected.attenuationColor ?? '#ffffff'"
+            @input="set('attenuationColor', ($event.target as HTMLInputElement).value)"
+          />
+          <button v-if="selected.attenuationColor" class="rd-chip" @click="set('attenuationColor', '')">Clear</button>
+        </div>
+        <label v-if="selected.attenuationColor" class="prefs-row">
+          <span class="prefs-label">Tint depth {{ finishOf(selected).attenuationDistance }} mm</span>
+          <input
+            class="sm-slider"
+            data-field="attenuationDistance"
+            type="range" min="1" max="200" step="1"
+            :value="finishOf(selected).attenuationDistance"
+            @input="set('attenuationDistance', ($event.target as HTMLInputElement).value)"
+          />
+        </label>
+        <div class="sm-hint">Roughness frosts the glass.</div>
+        <div v-if="isRenderLowPower()" class="sm-hint">
+          Performance mode draws glass as plain see-through, so these show once it is off.
+        </div>
+      </div>
 
       <!-- Procedural surface: a generator plus a few knobs. Triplanar (no UVs),
            driving roughness, a bump and a tint, see viewport/proceduralSurface.ts. -->

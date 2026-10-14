@@ -23,7 +23,8 @@
 
 import * as THREE from "three";
 import { finishOf, type MaterialDef } from "../document/materials";
-import { applyClearcoat, applyGlassLook } from "./render";
+import { applyClearcoat, applyGlassLook, applyThinFilm } from "./render";
+import { finishKey } from "./bodyFinish";
 import { LruCache } from "../lib/lruCache";
 
 /** Rendered at this many pixels square, then shown at whatever size the CSS
@@ -37,8 +38,7 @@ const SIZE = 160;
  *  id: a copy of a material is not a second render, and RENAMING one is not a
  *  cache miss. */
 export function previewKey(m: MaterialDef): string {
-  const f = finishOf(m);
-  return [m.color, f.metalness, f.roughness, f.opacity, f.emissive, f.clearcoat].join("|");
+  return `${m.color}|${finishKey(finishOf(m))}`;
 }
 
 interface Rig {
@@ -176,9 +176,10 @@ export function materialPreview(m: MaterialDef): string | null {
   r.material.metalness = f.metalness;
   r.material.roughness = f.roughness;
   applyClearcoat(r.material, f.clearcoat);
+  applyThinFilm(r.material, f, false);
   // A clear, non-metal finish previews as real glass too (refraction against the
   // room environment), so the swatch matches what the body will look like.
-  if (!applyGlassLook(r.material, f.opacity, f.metalness, false)) {
+  if (!applyGlassLook(r.material, f, false)) {
     r.material.opacity = f.opacity;
     r.material.transparent = f.opacity < 1;
     r.material.depthWrite = f.opacity >= 1;

@@ -89,6 +89,26 @@ export interface MaterialDef {
    *  sheen) and adds the hard bright highlight of the coat on top. A physical-PBR
    *  feature, so it is dropped on the lightweight render like glass is. */
   clearcoat?: number;
+  /** Index of refraction of a see-through finish, 1 (air) to 2.5. Water 1.33,
+   *  glass 1.5, diamond 2.42. */
+  ior?: number;
+  /** mm of material light travels through on a see-through finish. Refraction,
+   *  tint and dispersion all grow with it, a few mm reads as a window pane. */
+  thickness?: number;
+  /** "#rrggbb" colour light turns into as it travels through, the green of a
+   *  thick bottle. Absent is clear. */
+  attenuationColor?: string;
+  /** mm after which light has fully taken on attenuationColor. 0 means never,
+   *  which is what absent means too. */
+  attenuationDistance?: number;
+  /** 0..10. How far apart the colours of refracted light fan out, the fire of
+   *  a cut diamond. Needs some thickness to be seen. */
+  dispersion?: number;
+  /** 0..1. A thin film over the surface, the rainbow of a soap bubble or an
+   *  oil slick. Works on any finish, not only see-through ones. */
+  iridescence?: number;
+  /** "#rrggbb" tint of the highlight a non-metal reflects. Absent is white. */
+  specularColor?: string;
   /** Procedural surface detail (noise / scratches / brushed / wear). Absent for
    *  a plain material. The single-generator form the picker writes. */
   surface?: SurfaceSpec;
@@ -101,7 +121,10 @@ export interface MaterialDef {
  *  in this app has always been drawn with (see viewport/render.ts). Sharing the
  *  numbers is what makes "no material" and "a material that says nothing about
  *  its finish" the same picture instead of two nearly identical ones. */
-export const FINISH = { metalness: 0.1, roughness: 0.55, opacity: 1, emissive: 0, clearcoat: 0 } as const;
+export const FINISH = {
+  metalness: 0.1, roughness: 0.55, opacity: 1, emissive: 0, clearcoat: 0,
+  ior: 1.5, thickness: 3, attenuationDistance: 0, dispersion: 0, iridescence: 0,
+} as const;
 
 /** The four numbers the renderer wants, never undefined, so the render path has
  *  no branches in it. Named because it now travels: the store hands a map of
@@ -112,6 +135,13 @@ export interface BodyFinish {
   opacity: number;
   emissive: number;
   clearcoat: number;
+  ior: number;
+  thickness: number;
+  attenuationDistance: number;
+  dispersion: number;
+  iridescence: number;
+  attenuationColor?: string;
+  specularColor?: string;
   /** Carried straight through when a material has one, so the viewport can build
    *  the procedural shader. Undefined is the common case. */
   surface?: SurfaceSpec;
@@ -121,7 +151,8 @@ export interface BodyFinish {
 /** A finish that can throw a highlight bright enough to bloom. A node graph is
  *  counted as shiny because it can drive emission. */
 export function isShiny(f: BodyFinish): boolean {
-  return f.emissive > 0 || f.metalness >= 0.5 || f.roughness < 0.3 || f.clearcoat > 0 || f.opacity < 1 || !!f.surfaceGraph;
+  return f.emissive > 0 || f.metalness >= 0.5 || f.roughness < 0.3 || f.clearcoat > 0 || f.iridescence > 0 || f.opacity < 1
+    || !!f.surfaceGraph;
 }
 
 /** A finish that draws exactly like a body with no material at all, so the
@@ -131,7 +162,10 @@ export function isShiny(f: BodyFinish): boolean {
 export function isDefaultFinish(f: BodyFinish): boolean {
   return f.metalness === FINISH.metalness && f.roughness === FINISH.roughness
     && f.opacity === FINISH.opacity && f.emissive === FINISH.emissive
-    && f.clearcoat === FINISH.clearcoat && !f.surface && !f.surfaceGraph;
+    && f.clearcoat === FINISH.clearcoat && f.ior === FINISH.ior
+    && f.thickness === FINISH.thickness && f.attenuationDistance === FINISH.attenuationDistance
+    && f.dispersion === FINISH.dispersion && f.iridescence === FINISH.iridescence
+    && !f.attenuationColor && !f.specularColor && !f.surface && !f.surfaceGraph;
 }
 
 export function finishOf(m: MaterialDef | undefined): BodyFinish {
@@ -141,6 +175,13 @@ export function finishOf(m: MaterialDef | undefined): BodyFinish {
     opacity: m?.opacity ?? FINISH.opacity,
     emissive: m?.emissive ?? FINISH.emissive,
     clearcoat: m?.clearcoat ?? FINISH.clearcoat,
+    ior: m?.ior ?? FINISH.ior,
+    thickness: m?.thickness ?? FINISH.thickness,
+    attenuationDistance: m?.attenuationDistance ?? FINISH.attenuationDistance,
+    dispersion: m?.dispersion ?? FINISH.dispersion,
+    iridescence: m?.iridescence ?? FINISH.iridescence,
+    ...(m?.attenuationColor ? { attenuationColor: m.attenuationColor } : {}),
+    ...(m?.specularColor ? { specularColor: m.specularColor } : {}),
     ...(m?.surface ? { surface: m.surface } : {}),
     ...(m?.surfaceGraph ? { surfaceGraph: m.surfaceGraph } : {}),
   };
@@ -202,6 +243,18 @@ export const STARTER_LIBRARY: readonly MaterialDef[] = Object.freeze([
   { id: "m-rubber", name: "Rubber", color: "#1d1f22", metalness: 0.0, roughness: 0.95 },
   { id: "m-wood", name: "Wood", color: "#9a6b3f", metalness: 0.0, roughness: 0.8 },
   { id: "m-glass", name: "Glass", color: "#cfe4ee", metalness: 0.0, roughness: 0.05, opacity: 0.25 },
+  // Glass family: frosted is rough glass, tinted takes its colour from depth
+  // rather than from its surface, and diamond is thick enough for its
+  // dispersion to fan the colours out.
+  { id: "m-glass-frosted", name: "Glass, frosted", color: "#e6eef2", metalness: 0.0, roughness: 0.5, opacity: 0.3 },
+  {
+    id: "m-glass-tinted", name: "Glass, tinted", color: "#d8efe6", metalness: 0.0, roughness: 0.05, opacity: 0.2,
+    thickness: 12, attenuationColor: "#2a8f6a", attenuationDistance: 20,
+  },
+  {
+    id: "m-diamond", name: "Diamond", color: "#f4f8fb", metalness: 0.0, roughness: 0, opacity: 0.1,
+    ior: 2.42, thickness: 12, dispersion: 5,
+  },
   { id: "m-acrylic", name: "Acrylic, clear", color: "#dfeaf0", metalness: 0.0, roughness: 0.15, opacity: 0.45 },
   // The one entry that is not a material you could hold: a lit indicator. It is
   // in the starter library because the emissive slider is otherwise a control
@@ -227,8 +280,9 @@ export function asHex(raw: unknown): string | null {
   return HEX.test(t) ? `#${t.replace(/^#/, "").toLowerCase()}` : null;
 }
 
-const clamp01 = (v: unknown): number | undefined =>
-  typeof v === "number" && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : undefined;
+const clampRange = (v: unknown, lo: number, hi: number): number | undefined =>
+  typeof v === "number" && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : undefined;
+const clamp01 = (v: unknown): number | undefined => clampRange(v, 0, 1);
 
 /** One entry of a library file as this app understands it, or null.
  *
@@ -261,6 +315,22 @@ export function normalizeMaterial(raw: unknown, index = 0): MaterialDef | null {
   if (opacity !== undefined && opacity !== FINISH.opacity) out.opacity = opacity;
   if (emissive !== undefined && emissive !== FINISH.emissive) out.emissive = emissive;
   if (clearcoat !== undefined && clearcoat !== FINISH.clearcoat) out.clearcoat = clearcoat;
+  const ior = clampRange(r["ior"], 1, 2.5);
+  const thickness = clampRange(r["thickness"], 0, 200);
+  const attenuationDistance = clampRange(r["attenuationDistance"], 0, 1000);
+  const dispersion = clampRange(r["dispersion"], 0, 10);
+  const iridescence = clamp01(r["iridescence"]);
+  if (ior !== undefined && ior !== FINISH.ior) out.ior = ior;
+  if (thickness !== undefined && thickness !== FINISH.thickness) out.thickness = thickness;
+  const attenuationColor = asHex(r["attenuationColor"]);
+  if (attenuationColor) out.attenuationColor = attenuationColor;
+  if (attenuationDistance !== undefined && attenuationDistance !== FINISH.attenuationDistance) {
+    out.attenuationDistance = attenuationDistance;
+  }
+  if (dispersion !== undefined && dispersion !== FINISH.dispersion) out.dispersion = dispersion;
+  if (iridescence !== undefined && iridescence !== FINISH.iridescence) out.iridescence = iridescence;
+  const specularColor = asHex(r["specularColor"]);
+  if (specularColor) out.specularColor = specularColor;
   const surface = normalizeSurface(r["surface"]);
   if (surface) out.surface = surface;
   const graph = normalizeGraph(r["surfaceGraph"]);
