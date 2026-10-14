@@ -1,6 +1,9 @@
-//! Binary glTF triangles, world placed, in Z up millimetres: what
+//! glTF triangles, binary or text,, world placed, in Z up millimetres: what
 //! `mesh_import._read_glb` gets from `RWGltf_CafReader`, which the static
 //! kernel is built without (it needs RapidJSON).
+
+use std::borrow::Cow;
+use std::path::{Component, Path, PathBuf};
 
 use serde_json::Value;
 
@@ -53,8 +56,8 @@ fn local_matrix(node: &Value) -> Mat4 {
 }
 
 struct Doc<'a> {
-    json: Value,
-    bin: &'a [u8],
+    json: &'a Value,
+    buffers: &'a [Cow<'a, [u8]>],
 }
 
 impl Doc<'_> {
@@ -72,9 +75,8 @@ impl Doc<'_> {
             return Ok(vec![0.0; count * width]);
         };
         let view = self.arr("bufferViews").get(view_index as usize).ok_or_else(bad)?;
-        if view.get("buffer").and_then(Value::as_u64).unwrap_or(0) != 0 {
-            return Err("this glTF keeps its geometry in an external buffer, only a self-contained .glb imports".into());
-        }
+        let buffer = view.get("buffer").and_then(Value::as_u64).unwrap_or(0) as usize;
+        let bin = self.buffers.get(buffer).ok_or_else(|| format!("this glTF refers to buffer {buffer}, which it does not carry"))?;
         let size = match kind {
             5120 | 5121 => 1,
             5122 | 5123 => 2,
@@ -88,7 +90,7 @@ impl Doc<'_> {
         for i in 0..count {
             for c in 0..width {
                 let at = start + i * stride + c * size;
-                let b = self.bin.get(at..at + size).ok_or_else(bad)?;
+                let b = bin.get(at..at + size).ok_or_else(bad)?;
                 out.push(match kind {
                     5126 => f64::from(f32::from_le_bytes([b[0], b[1], b[2], b[3]])),
                     5125 => f64::from(u32::from_le_bytes([b[0], b[1], b[2], b[3]])),
@@ -103,9 +105,8 @@ impl Doc<'_> {
     }
 }
 
-/// Every triangle primitive of the default scene, node transforms applied,
-/// then metres scaled by `mm_per_unit` and Y up turned Z up.
-pub fn read_glb(data: &[u8], mm_per_unit: f64) -> Result<(Vec<f64>, Vec<u32>), String> {
+/// A GLB's JSON chunk and its BIN chunk, which stands for buffer 0.
+pub fn split_glb(data: &[u8]) -> Result<(Value, &[u8]), String> {
     let bad = || "couldn't read this glTF file, it may be corrupt or not a .glb".to_string();
     if data.len() < 20 || data[0..4] != *b"glTF" {
         return Err(bad());
@@ -124,7 +125,99 @@ pub fn read_glb(data: &[u8], mm_per_unit: f64) -> Result<(Vec<f64>, Vec<u32>), S
         }
         at += 8 + len;
     }
-    let doc = Doc { json, bin };
+    Ok((json, bin))
+}
+
+pub fn read_glb(data: &[u8], mm_per_unit: f64) -> Result<(Vec<f64>, Vec<u32>), String> {
+    let (json, bin) = split_glb(data)?;
+    read_gltf(&json, &[Cow::Borrowed(bin)], mm_per_unit)
+}
+
+fn percent_decode(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        let hex = b.get(i + 1..i + 3).and_then(|h| std::str::from_utf8(h).ok()).and_then(|h| u8::from_str_radix(h, 16).ok());
+        match (b[i], hex) {
+            (b'%', Some(v)) => {
+                out.push(v);
+                i += 3;
+            }
+            (c, _) => {
+                out.push(c);
+                i += 1;
+            }
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// A buffer `uri` of a .gltf in `dir`: inline base64, or a file in that
+/// folder or below it, never one elsewhere.
+fn buffer_bytes(uri: &str, dir: &Path, budget: &mut u64) -> Result<Vec<u8>, String> {
+    use base64::Engine as _;
+    if let Some(rest) = uri.strip_prefix("data:") {
+        let (_, b64) = rest.split_once(";base64,").ok_or("this glTF has an inline buffer that is not base64")?;
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(b64.trim())
+            .map_err(|_| "this glTF has an inline buffer that is not valid base64".to_string())?;
+        *budget = budget.saturating_sub(bytes.len() as u64);
+        return Ok(bytes);
+    }
+    let outside = || format!("this glTF reads its buffer '{uri}' from outside the file's folder, which is refused");
+    let rel = percent_decode(uri).replace('\\', "/");
+    if rel.contains(':') || rel.starts_with('/') {
+        return Err(outside());
+    }
+    let mut clean = PathBuf::new();
+    for c in Path::new(&rel).components() {
+        match c {
+            Component::Normal(p) => clean.push(p),
+            Component::CurDir => {}
+            Component::ParentDir if clean.pop() => {}
+            _ => return Err(outside()),
+        }
+    }
+    let missing = |e: std::io::Error| format!("this glTF's buffer file '{uri}' could not be read next to it ({e})");
+    let real = dir.join(&clean).canonicalize().map_err(missing)?;
+    if !real.starts_with(dir.canonicalize().map_err(missing)?) {
+        return Err(outside());
+    }
+    let len = std::fs::metadata(&real).map_err(missing)?.len();
+    if len > *budget {
+        return Err(format!(
+            "this glTF's buffers are too large to import (limit {} MiB)",
+            super::MAX_IMPORT_FILE_BYTES / (1024 * 1024)
+        ));
+    }
+    *budget -= len;
+    std::fs::read(&real).map_err(missing)
+}
+
+/// A text .gltf and the buffers it names.
+pub fn load_gltf(path: &Path) -> Result<(Value, Vec<Cow<'static, [u8]>>), String> {
+    let text = std::fs::read(path).map_err(|e| e.to_string())?;
+    let json: Value =
+        serde_json::from_slice(&text).map_err(|_| "couldn't read this glTF file, it is not glTF JSON".to_string())?;
+    let dir = path.parent().filter(|d| !d.as_os_str().is_empty()).unwrap_or(Path::new("."));
+    let mut budget = super::MAX_IMPORT_FILE_BYTES;
+    let mut buffers = Vec::new();
+    for b in json.get("buffers").and_then(Value::as_array).into_iter().flatten() {
+        let uri = b
+            .get("uri")
+            .and_then(Value::as_str)
+            .ok_or("this glTF has a buffer without a uri, only a .glb carries one inside")?;
+        buffers.push(Cow::Owned(buffer_bytes(uri, dir, &mut budget)?));
+    }
+    Ok((json, buffers))
+}
+
+/// Every triangle primitive of the default scene, node transforms applied,
+/// then metres scaled by `mm_per_unit` and Y up turned Z up.
+pub fn read_gltf(json: &Value, buffers: &[Cow<'_, [u8]>], mm_per_unit: f64) -> Result<(Vec<f64>, Vec<u32>), String> {
+    let bad = || "couldn't read this glTF file, it may be corrupt or not a .glb".to_string();
+    let doc = Doc { json, buffers };
 
     let nodes = doc.arr("nodes");
     let roots: Vec<usize> = match doc.arr("scenes").get(doc.json.get("scene").and_then(Value::as_u64).unwrap_or(0) as usize) {

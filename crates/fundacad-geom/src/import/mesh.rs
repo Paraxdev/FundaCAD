@@ -291,7 +291,10 @@ pub fn glb_dominant_color(data: &[u8]) -> Option<String> {
         return None;
     }
     let jlen = u32::from_le_bytes(data[12..16].try_into().ok()?) as usize;
-    let doc: serde_json::Value = serde_json::from_slice(data.get(20..20 + jlen)?).ok()?;
+    gltf_dominant_color(&serde_json::from_slice(data.get(20..20 + jlen)?).ok()?)
+}
+
+pub fn gltf_dominant_color(doc: &serde_json::Value) -> Option<String> {
     let materials = doc.get("materials")?.as_array().filter(|m| !m.is_empty())?;
     let empty = Vec::new();
     let accessors = doc.get("accessors").and_then(|a| a.as_array()).unwrap_or(&empty);
@@ -394,6 +397,118 @@ pub fn sew_triangles(pos: &[f64], idx: &[u32]) -> Result<Shape, String> {
     finish_mesh(vec![occ::sew_triangles(&soup, &flat).map_err(occt)?])
 }
 
+/// One named, coloured triangle soup of a scene file, millimetres, Z up.
+#[derive(Default)]
+pub struct MeshObject {
+    pub name: Option<String>,
+    pub color: Option<[u8; 3]>,
+    pub pos: Vec<f64>,
+    pub idx: Vec<u32>,
+}
+
+/// The colour that the most triangles carry, `None` when none carries one.
+pub fn dominant_color(colors: impl Iterator<Item = Option<[u8; 3]>>) -> Option<[u8; 3]> {
+    let mut count: IndexMap<[u8; 3], usize> = IndexMap::new();
+    for c in colors.flatten() {
+        *count.entry(c).or_insert(0) += 1;
+    }
+    let mut best = None;
+    let mut top = 0;
+    for (c, n) in count {
+        if n > top {
+            top = n;
+            best = Some(c);
+        }
+    }
+    best
+}
+
+/// A 0..1 channel, or 0..255 when any channel of the colour is above 1.
+pub fn unit_color(c: [f64; 3]) -> [u8; 3] {
+    let scale = if c.iter().any(|&v| v > 1.0) { 1.0 } else { 255.0 };
+    c.map(|v| (v * scale).round_ties_even().clamp(0.0, 255.0) as u8)
+}
+
+/// Each object sewn, unified and cleaned on its own, so two objects that touch
+/// stay two bodies. One object answers its shape and colour, several answer a
+/// compound with `nodes` and `parts` as the assembly readers do.
+pub fn finish_objects(objs: Vec<MeshObject>) -> Result<super::Imported, String> {
+    let objs: Vec<MeshObject> = objs.into_iter().filter(|o| o.idx.len() >= 3).collect();
+    if objs.is_empty() {
+        return Err("no geometry found in the mesh file".into());
+    }
+    let ntri: u64 = objs.iter().map(|o| (o.idx.len() / 3) as u64).sum();
+    if ntri > MAX_IMPORT_TRIANGLES {
+        return Err(too_dense_error(ntri));
+    }
+    let mut soups = Vec::with_capacity(objs.len());
+    for o in &objs {
+        let pos32: Vec<f32> = o.pos.iter().map(|&v| v as f32).collect();
+        if o.idx.iter().any(|&i| i as usize * 3 + 2 >= pos32.len()) {
+            return Err("a triangle references a vertex that does not exist".into());
+        }
+        soups.push(pos32);
+    }
+    facet_gate(distinct(objs.iter().zip(&soups).flat_map(|(o, p)| written_normals(p, &o.idx[..o.idx.len() / 3 * 3]))))?;
+    let mut shapes = Vec::with_capacity(objs.len());
+    for (o, pos32) in objs.iter().zip(&soups) {
+        let idx = &o.idx[..o.idx.len() / 3 * 3];
+        let soup: Vec<f64> = idx
+            .iter()
+            .flat_map(|&i| {
+                let i = i as usize * 3;
+                [f64::from(pos32[i]), f64::from(pos32[i + 1]), f64::from(pos32[i + 2])]
+            })
+            .collect();
+        let flat: Vec<u32> = (0..idx.len() as u32).collect();
+        let shape = occ::unify(&occ::sew_triangles(&soup, &flat).map_err(occt)?).map_err(occt)?;
+        shapes.push(refacet_clean(&shape, REFACET_TOL).unwrap_or(shape));
+    }
+    let faces: Vec<usize> = shapes.iter().map(|s| kernel::count(s, Kind::Face)).collect();
+    let total: usize = faces.iter().sum();
+    if total > MAX_IMPORT_TOTAL_FACES {
+        return Err(format!(
+            "This mesh is too dense to import ({} faces across {} {}, the limit is {}).              Decimate or retopologise it first (fewer triangles), then import.",
+            thousands(total),
+            thousands(shapes.len()),
+            if shapes.len() == 1 { "object" } else { "objects" },
+            thousands(MAX_IMPORT_TOTAL_FACES)
+        ));
+    }
+    let hex = |c: [u8; 3]| serde_json::json!(super::hex(c));
+    let mut fields = serde_json::Map::new();
+    if shapes.len() == 1 {
+        if let Some(c) = objs[0].color {
+            fields.insert("color".into(), hex(c));
+        }
+        let shape = shapes.pop().unwrap_or_else(Shape::empty);
+        return Ok(super::Imported { shape, fields });
+    }
+    let nodes: Vec<serde_json::Value> = objs
+        .iter()
+        .enumerate()
+        .map(|(i, o)| {
+            let name = o.name.as_deref().map(super::clean).filter(|n| !n.is_empty());
+            serde_json::json!({"name": name.unwrap_or_else(|| format!("Object {}", i + 1)), "parent": null})
+        })
+        .collect();
+    let parts: Vec<serde_json::Value> = objs
+        .iter()
+        .zip(&faces)
+        .enumerate()
+        .map(|(i, (o, &n))| {
+            let mut part = serde_json::json!({"node": i, "faces": n});
+            if let Some(c) = o.color {
+                part["color"] = hex(c);
+            }
+            part
+        })
+        .collect();
+    fields.insert("nodes".into(), serde_json::Value::Array(nodes));
+    fields.insert("parts".into(), serde_json::Value::Array(parts));
+    Ok(super::Imported { shape: kernel::compound(shapes.iter()), fields })
+}
+
 pub fn read_stl(path: &Path) -> Result<Shape, String> {
     let data = std::fs::read(path).map_err(|e| e.to_string())?;
     facet_gate(stl_distinct_normals(&data))?;
@@ -422,9 +537,20 @@ pub fn read_obj(path: &Path) -> Result<Shape, String> {
 /// `_read_glb` then the shared sew path.
 pub fn read_glb(path: &Path) -> Result<Shape, String> {
     let data = std::fs::read(path).map_err(|e| e.to_string())?;
-    let (mut pos, mut idx) = super::gltf::read_glb(&data, 1000.0)?;
+    let (json, bin) = super::gltf::split_glb(&data)?;
+    sew_gltf(&json, &[std::borrow::Cow::Borrowed(bin)])
+}
+
+/// A text .gltf through the GLB path, and its dominant colour.
+pub fn read_gltf(path: &Path) -> Result<(Shape, Option<String>), String> {
+    let (json, buffers) = super::gltf::load_gltf(path)?;
+    Ok((sew_gltf(&json, &buffers)?, gltf_dominant_color(&json)))
+}
+
+fn sew_gltf(json: &serde_json::Value, buffers: &[std::borrow::Cow<'_, [u8]>]) -> Result<Shape, String> {
+    let (mut pos, mut idx) = super::gltf::read_gltf(json, buffers, 1000.0)?;
     if super::gltf::max_extent(&pos) > GLB_MM_AS_UNITS_ABOVE {
-        (pos, idx) = super::gltf::read_glb(&data, 1.0)?;
+        (pos, idx) = super::gltf::read_gltf(json, buffers, 1.0)?;
     }
     let ntri = idx.len() / 3;
     if ntri as u64 > MAX_IMPORT_TRIANGLES {

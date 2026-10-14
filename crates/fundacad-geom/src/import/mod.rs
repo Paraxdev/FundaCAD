@@ -4,11 +4,14 @@
 //!
 //! Not here yet: the free memory guard.
 
+pub mod amf;
 pub mod blobstore;
 pub mod canonical;
 pub mod fcstd;
 pub mod gltf;
 pub mod mesh;
+pub mod off;
+pub mod ply;
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -106,7 +109,10 @@ fn outward(imported: Imported) -> Imported {
         return imported;
     }
     let mut fields = imported.fields;
-    fields.insert("notes".into(), json!([turned_text(n)]));
+    let notes = fields.entry("notes").or_insert_with(|| json!([]));
+    if let Some(list) = notes.as_array_mut() {
+        list.push(json!(turned_text(n)));
+    }
     Imported { shape, fields }
 }
 
@@ -302,6 +308,27 @@ pub fn import_geometry(path: &str, fmt: &str, store: &BlobStore) -> Result<Map<S
                 fields.insert("color".into(), json!(c));
             }
             outward(Imported { shape, fields })
+        }
+        "gltf" => {
+            let (shape, color) = mesh::read_gltf(p)?;
+            let mut fields = Map::new();
+            if let Some(c) = color {
+                fields.insert("color".into(), json!(c));
+            }
+            outward(Imported { shape, fields })
+        }
+        "ply" | "off" => {
+            let data = std::fs::read(p).map_err(|e| e.to_string())?;
+            let obj = if fmt == "ply" { ply::read_ply(&data)? } else { off::read_off(&String::from_utf8_lossy(&data))? };
+            outward(mesh::finish_objects(vec![obj])?)
+        }
+        "amf" => {
+            let (objs, notes) = amf::read_amf(std::fs::read(p).map_err(|e| e.to_string())?)?;
+            let mut imported = mesh::finish_objects(objs)?;
+            if !notes.is_empty() {
+                imported.fields.insert("notes".into(), json!(notes));
+            }
+            outward(imported)
         }
         other => return Err(format!("unsupported import format: {other}")),
     };
