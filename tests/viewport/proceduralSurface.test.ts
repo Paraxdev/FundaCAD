@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { applySurface, cloneWithoutSurface, compileGraph, graphKey } from "../../src/viewport/proceduralSurface";
+import { applySurface, applySurfaceGraph, cloneWithoutSurface, compileGraph, graphKey } from "../../src/viewport/proceduralSurface";
 import type { SurfaceGraph } from "../../src/document/materials";
 
 // The compiler turns a node graph into the GLSL `sGraph` function. These check
@@ -133,5 +133,63 @@ describe("cloneWithoutSurface", () => {
     expect(() => applySurface(face, spec)).not.toThrow();
     expect(face.userData.surfUniforms!.uSurfColor.value).toBeInstanceOf(THREE.Color);
     expect(face.userData.surfUniforms).not.toBe(base.userData.surfUniforms);
+  });
+});
+
+// three reuses a compiled program whenever customProgramCacheKey repeats, and its
+// default key is onBeforeCompile's source text, which is the same for every graph.
+describe("program cache key", () => {
+  const empty: SurfaceGraph = { output: "out", nodes: [{ id: "out", type: "output" }] };
+  const wired: SurfaceGraph = {
+    output: "out",
+    nodes: [{ id: "n", type: "noise" }, { id: "out", type: "output", in: { bump: "n" } }],
+  };
+  const stockKey = new THREE.MeshPhysicalMaterial().customProgramCacheKey();
+
+  it("gives each graph its own key, so an edit recompiles", () => {
+    const m = new THREE.MeshPhysicalMaterial();
+    applySurfaceGraph(m, empty);
+    const k1 = m.customProgramCacheKey();
+    applySurfaceGraph(m, wired);
+    expect(m.customProgramCacheKey()).not.toBe(k1);
+    const other = new THREE.MeshPhysicalMaterial();
+    applySurfaceGraph(other, wired);
+    expect(other.customProgramCacheKey()).toBe(m.customProgramCacheKey());
+  });
+
+  it("keeps one picker key across slider values and differs from graph and stock", () => {
+    const m = new THREE.MeshPhysicalMaterial();
+    applySurface(m, { kind: "noise", scale: 4, amount: 0.5 });
+    const pick = m.customProgramCacheKey();
+    applySurface(m, { kind: "voronoi", scale: 9, amount: 0.2 });
+    expect(m.customProgramCacheKey()).toBe(pick);
+    expect(pick).not.toBe(stockKey);
+    const g = new THREE.MeshPhysicalMaterial();
+    applySurfaceGraph(g, wired);
+    expect(g.customProgramCacheKey()).not.toBe(pick);
+    expect(g.customProgramCacheKey()).not.toBe(stockKey);
+  });
+
+  it("gives back the stock key when the surface is removed or cloned away", () => {
+    const m = new THREE.MeshPhysicalMaterial();
+    applySurfaceGraph(m, wired);
+    expect(cloneWithoutSurface(m).customProgramCacheKey()).toBe(stockKey);
+    applySurfaceGraph(m, undefined);
+    expect(m.customProgramCacheKey()).toBe(stockKey);
+    applySurface(m, { kind: "noise", scale: 4, amount: 0.5 });
+    applySurface(m, undefined);
+    expect(m.customProgramCacheKey()).toBe(stockKey);
+  });
+
+  it("releases the superseded graph program on an edit", () => {
+    const m = new THREE.MeshPhysicalMaterial();
+    let disposed = 0;
+    m.addEventListener("dispose", () => { disposed++; });
+    applySurfaceGraph(m, empty);
+    expect(disposed).toBe(0);
+    applySurfaceGraph(m, wired);
+    expect(disposed).toBe(1);
+    applySurfaceGraph(m, wired);
+    expect(disposed).toBe(1);
   });
 });

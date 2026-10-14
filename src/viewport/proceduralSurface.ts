@@ -120,6 +120,20 @@ type Physical = THREE.MeshStandardMaterial & {
   userData: { surfKey?: string; surfUniforms?: Record<string, THREE.IUniform> };
 };
 
+// three reuses a compiled program whenever customProgramCacheKey repeats, and its
+// default is onBeforeCompile's source text, which is the same closure for every
+// graph, so each surface names its own program. Without a surface the own
+// overrides go and the material shares the stock program again.
+function setProgramKey(m: THREE.Material, key: string | undefined): void {
+  const own = m as { onBeforeCompile?: unknown; customProgramCacheKey?: unknown };
+  if (key === undefined) {
+    delete own.onBeforeCompile;
+    delete own.customProgramCacheKey;
+  } else {
+    m.customProgramCacheKey = () => key;
+  }
+}
+
 /** Material.clone JSON-copies userData (the Color uniform turns into a plain
  *  object) but not onBeforeCompile, so a clone has to shed the surface state. */
 export function cloneWithoutSurface<T extends THREE.Material>(mat: T): T {
@@ -138,9 +152,10 @@ export function applySurface(mat: THREE.Material, spec: SurfaceSpec | undefined)
     if (spec && m.userData.surfUniforms) writeUniforms(m.userData.surfUniforms, spec);
     return;
   }
+  if (m.userData.surfKey?.startsWith("g:")) m.dispose();
   m.userData.surfKey = key;
   if (!spec) {
-    m.onBeforeCompile = () => {};
+    setProgramKey(m, undefined);
     delete m.userData.surfUniforms;
     if (had) m.needsUpdate = true;
     return;
@@ -176,6 +191,7 @@ float sPickHeight(vec3 wp, vec3 wn){ return sGen(wp, wn, uSurfKind, uSurfScale, 
         "#include <normal_fragment_begin>\n" + bumpGLSL("sPickHeight(P, wn)", "uSurfBump"),
       );
   };
+  setProgramKey(m, "surf-pick");
   m.needsUpdate = true;
 }
 
@@ -183,13 +199,16 @@ float sPickHeight(vec3 wp, vec3 wn){ return sGen(wp, wn, uSurfKind, uSurfScale, 
 export function applySurfaceGraph(mat: THREE.Material, graph: SurfaceGraph | undefined): void {
   const m = mat as Physical;
   const key = graphKey(graph);
-  const had = !!m.userData.surfKey;
-  if (m.userData.surfKey === key) return;
+  const prev = m.userData.surfKey;
+  if (prev === key) return;
+  // A graph bakes its params into the GLSL, so every edit is a new program; the
+  // dispose event makes the renderer let go of the one this edit supersedes.
+  if (prev?.startsWith("g:")) m.dispose();
   m.userData.surfKey = key;
   delete m.userData.surfUniforms;
   if (!graph) {
-    m.onBeforeCompile = () => {};
-    if (had) m.needsUpdate = true;
+    setProgramKey(m, undefined);
+    if (prev) m.needsUpdate = true;
     return;
   }
   const compiled = compileGraph(graph);
@@ -210,6 +229,7 @@ export function applySurfaceGraph(mat: THREE.Material, graph: SurfaceGraph | und
         "#include <normal_fragment_begin>\n" + bumpGLSL("sGraph(P, wn).bump", "sO.bumpAmt"),
       );
   };
+  setProgramKey(m, key);
   m.needsUpdate = true;
 }
 
