@@ -109,6 +109,8 @@ fn the_extension_decides_the_format() {
         (".gltf", "gltf"),
         (".wrl", "vrml"),
         (".x3d", "x3d"),
+        (".xbf", "xbf"),
+        (".stpz", "step"),
     ] {
         assert_eq!(upload::import_format(&format!("part{ext}")), want, "{ext}");
     }
@@ -642,6 +644,20 @@ async fn stpz_is_a_zipped_step_by_name() {
         json!({"content": b64(&a_zip(&[("asm.stp", step)])), "name": "asm.stpz"}),
     )
     .await;
+    assert_eq!(engine.calls()[0].payload["format"], json!("step"));
+    assert_eq!(engine.calls()[0].saw.as_deref(), Some(&step[..]));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_gzip_stpz_is_unpacked_as_gzip() {
+    let _serial = serial();
+    // What FreeCAD and KiCad write under the same suffix.
+    let step = b"ISO-10303-21;\nEND-ISO-10303-21;\n";
+    let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+    std::io::Write::write_all(&mut gz, step).unwrap();
+    let (srv, engine) = server_with(part_reply());
+    let out = run(&srv, json!({"content": b64(&gz.finish().unwrap()), "name": "asm.stpz"})).await;
+    assert!(!is_error(&out), "{}", text_of(&out));
     assert_eq!(engine.calls()[0].payload["format"], json!("step"));
     assert_eq!(engine.calls()[0].saw.as_deref(), Some(&step[..]));
 }

@@ -6,7 +6,9 @@ Use File, Import Mesh, or Import Mesh under Insert on the rail.
 
 FundaCAD reads STEP, IGES, BREP, FreeCAD files, STL, 3MF, OBJ, PLY, OFF, AMF, glTF (.glb or .gltf), VRML 2.0 (.wrl) and X3D (.x3d), and the file arrives as a new body. A STEP file is the better choice when you have one, because it keeps real faces and edges to pick. A STEP assembly comes in as one body per part, with its colours as materials.
 
-An IGES file comes in the same way, one body per named part with its colours. A FreeCAD file brings in what was showing when it was saved, one body per object, named as in FreeCAD.
+A compressed STEP file (.stpz, .step.gz or .stp.gz) reads like the STEP file inside it.
+
+An IGES file comes in the same way, one body per named part with its colours, and so does an OCCT XBF document (.xbf), scaled to millimetres when it was saved in another unit. A FreeCAD file brings in what was showing when it was saved, one body per object, named as in FreeCAD.
 
 An AMF file comes in as one body per object, with the object's name and colour. A PLY or OFF file is one body, coloured with the colour most of its faces carry. A .gltf file reads its buffers from inside itself or from files in its own folder, never from anywhere else. glTF, VRML and X3D files do not say what their unit is, so FundaCAD asks each time, with your last choice first. A VRML or X3D scene comes in as one body per top level node, named by its DEF name. Spheres, cylinders, text and linked files in a scene are skipped, and the chip says how many.
 

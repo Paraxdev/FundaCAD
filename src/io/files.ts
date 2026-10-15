@@ -405,9 +405,9 @@ export function extToFormat(path: string): ExportFormat {
 // through GeometryBackend.exportWith.
 
 // FreeCAD writes .FCStd, and GTK file dialogs on Linux match case.
-export const IMPORT_EXTS = ["stl", "3mf", "step", "stp", "iges", "igs", "brep", "fcstd", "FCStd", "obj", "ply", "off", "amf", "glb", "gltf", "wrl", "wrz", "x3d", "x3dz"];
+export const IMPORT_EXTS = ["stl", "3mf", "step", "stp", "stpz", "gz", "xbf", "iges", "igs", "brep", "fcstd", "FCStd", "obj", "ply", "off", "amf", "glb", "gltf", "wrl", "wrz", "x3d", "x3dz"];
 
-/** Import an external mesh / B-rep file (STL / 3MF / STEP / IGES / FreeCAD / OBJ / PLY / OFF / AMF / glTF / VRML / X3D) as a new body.
+/** Import an external mesh / B-rep file (STL / 3MF / STEP / IGES / XBF / FreeCAD / OBJ / PLY / OFF / AMF / glTF / VRML / X3D) as a new body.
  *  The engine reads the file by path and returns an embeddable BREP payload, so
  *  this needs the native app (a real filesystem path), like export. */
 export async function importModel(store: DocumentStore, geometry: GeometryBackend) {
@@ -427,9 +427,10 @@ export async function importModel(store: DocumentStore, geometry: GeometryBacken
       { name: "All supported", extensions: IMPORT_EXTS },
       { name: "STL", extensions: ["stl"] },
       { name: "3MF", extensions: ["3mf"] },
-      { name: "STEP", extensions: ["step", "stp"] },
+      { name: "STEP", extensions: ["step", "stp", "stpz", "gz"] },
       { name: "IGES", extensions: ["iges", "igs"] },
       { name: "BREP", extensions: ["brep"] },
+      { name: "OCCT XBF", extensions: ["xbf"] },
       { name: "FreeCAD", extensions: ["fcstd", "FCStd"] },
       { name: "OBJ", extensions: ["obj"] },
       { name: "PLY", extensions: ["ply"] },
@@ -685,11 +686,14 @@ export async function reportError(msg: string, detail?: string) {
 }
 
 export function extToImportFormat(path: string): ImportFormat {
-  const ext = path.split(".").pop()?.toLowerCase();
+  const parts = path.toLowerCase().split(".");
+  if (parts.length > 2 && parts[parts.length - 1] === "gz") parts.pop();
+  const ext = parts.pop();
   if (ext === "stl") return "stl";
   if (ext === "3mf") return "3mf";
   if (ext === "obj") return "obj";
   if (ext === "brep") return "brep";
+  if (ext === "xbf") return "xbf";
   if (ext === "glb") return "glb";
   if (ext === "iges" || ext === "igs") return "iges";
   if (ext === "fcstd") return "fcstd";
