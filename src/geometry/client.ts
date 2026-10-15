@@ -328,7 +328,7 @@ export interface GeometryBackend {
   // `import` feature). Path-based: the engine reads the file directly.
   // `onStarted` receives the request id, so a caller that may later cancel
   // can target THIS op rather than whatever ran most recently.
-  importGeometry(path: string, format: ImportFormat, onStarted?: (id: string) => void): Promise<ImportReply>;
+  importGeometry(path: string, format: ImportFormat, onStarted?: (id: string) => void, unit?: string): Promise<ImportReply>;
   /** A solid from a shape generator a plugin's geometry component registered with
    *  the engine (docs/PLUGINS.md). "mesh" is for a preview;
    *  "store" writes the solid to the blob store, and an `import` feature carrying the
@@ -1299,13 +1299,13 @@ export class Geometry implements GeometryBackend {
     return { ok: false, message: msg.error?.message };
   }
 
-  async importGeometry(path: string, format: ImportFormat, onStarted?: (id: string) => void): Promise<ImportReply> {
+  async importGeometry(path: string, format: ImportFormat, onStarted?: (id: string) => void, unit?: string): Promise<ImportReply> {
     const msg = await this.call<{
       geom: string; name: string; solid: boolean; faces: number; color?: string;
       nodes?: { name: string; parent: number | null; color?: string }[];
       parts?: { node: number; faces: number }[];
-      notes?: string[];
-    }>("import", { path, format }, onStarted);
+      notes?: string[]; unit?: string;
+    }>("import", { path, format, ...(unit ? { unit } : {}) }, onStarted);
     if (msg.ok) {
       const r = msg.result;
       return {
@@ -1314,6 +1314,7 @@ export class Geometry implements GeometryBackend {
         ...(r.nodes !== undefined ? { nodes: r.nodes } : {}),
         ...(r.parts !== undefined ? { parts: r.parts } : {}),
         ...(r.notes !== undefined ? { notes: r.notes } : {}),
+        ...(r.unit !== undefined ? { unit: r.unit } : {}),
       };
     }
     if (!msg.ok && msg.cancelled) return { ok: false, cancelled: true, message: "import cancelled" };

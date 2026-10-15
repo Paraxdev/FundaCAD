@@ -181,6 +181,25 @@ async fn a_plain_part_carries_no_colour_and_no_tree() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn a_unit_goes_to_the_engine_and_is_kept_on_the_feature() {
+    let _serial = serial();
+    let (srv, engine) = server_with(json!({"ok": true, "result": {
+        "geom": "abc123", "solid": true, "faces": 6, "name": "cube", "unit": "inch"}}));
+    let path = a_file(".glb");
+    run(&srv, json!({"path": path.to_string_lossy(), "unit": "inch"})).await;
+    let _ = std::fs::remove_file(&path);
+    assert_eq!(engine.calls()[0].payload["unit"], json!("inch"));
+    assert_eq!(features(&srv).await[0]["unit"], json!("inch"));
+
+    let (srv, engine) = server_with(part_reply());
+    let path = a_file(".glb");
+    run(&srv, json!({"path": path.to_string_lossy()})).await;
+    let _ = std::fs::remove_file(&path);
+    assert!(engine.calls()[0].payload.get("unit").is_none());
+    assert!(features(&srv).await[0].get("unit").is_none());
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn an_assembly_keeps_its_tree_and_a_glb_its_colour() {
     let _serial = serial();
     // `color` and `parts` as the real engine actually sends them (a hex

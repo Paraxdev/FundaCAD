@@ -62,6 +62,8 @@ pub fn doc_import() -> JsonObject {
                                        every piece after it"},
             "format": {"type": "string", "enum": IMPORT_FORMATS,
                        "description": "override what the extension says"},
+            "unit": {"type": "string", "enum": ["mm", "cm", "m", "inch"],
+                     "description": "what one unit of a glTF, GLB, VRML or X3D file is, which those formats leave open. Metres when left out"},
             "at": {"type": "integer",
                    "description": "timeline position, appended by default"}
         }),

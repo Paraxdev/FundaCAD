@@ -540,9 +540,10 @@ impl Walk {
     }
 }
 
-/// Each top level node of the scene as one object, Y up metres turned Z up
-/// millimetres by the glTF rule.
-fn objects(top: Vec<Rc<Node>>, mut notes: Vec<String>) -> (Vec<MeshObject>, Vec<String>) {
+/// Each top level node of the scene as one object, Y up turned Z up
+/// millimetres. `mm_per_unit` is the file's unit when the importer was told,
+/// else metres by the glTF rule.
+fn objects(top: Vec<Rc<Node>>, mut notes: Vec<String>, mm_per_unit: Option<f64>) -> (Vec<MeshObject>, Vec<String>) {
     let mut out = Vec::new();
     let mut skipped: HashMap<String, usize> = HashMap::new();
     for n in top {
@@ -562,22 +563,22 @@ fn objects(top: Vec<Rc<Node>>, mut notes: Vec<String>) -> (Vec<MeshObject>, Vec<
         notes.push(format!("{n} {k} node{} skipped, only triangle geometry and boxes are read", if n == 1 { " was" } else { "s were" }));
     }
     let all: Vec<f64> = out.iter().flat_map(|o| o.pos.iter().copied()).collect();
-    let scale = if super::gltf::max_extent(&all) * 1000.0 > super::mesh::GLB_MM_AS_UNITS_ABOVE { 1.0 } else { 1000.0 };
+    let scale = mm_per_unit.unwrap_or(if super::gltf::max_extent(&all) * 1000.0 > super::mesh::GLB_MM_AS_UNITS_ABOVE { 1.0 } else { 1000.0 });
     for o in &mut out {
         o.pos = o.pos.chunks_exact(3).flat_map(|p| [p[0] * scale, -p[2] * scale, p[1] * scale]).collect();
     }
     (out, notes)
 }
 
-pub fn read_vrml(text: &str) -> Result<(Vec<MeshObject>, Vec<String>), String> {
+pub fn read_vrml(text: &str, mm_per_unit: Option<f64>) -> Result<(Vec<MeshObject>, Vec<String>), String> {
     let (top, skipped) = parse_vrml(text)?;
     let mut notes = Vec::new();
     if !skipped.is_empty() {
         notes.push(format!("{} ROUTE or PROTO statement{} skipped", skipped.len(), if skipped.len() == 1 { " was" } else { "s were" }));
     }
-    Ok(objects(top, notes))
+    Ok(objects(top, notes, mm_per_unit))
 }
 
-pub fn read_x3d(xml: &str) -> Result<(Vec<MeshObject>, Vec<String>), String> {
-    Ok(objects(parse_x3d(xml)?, Vec::new()))
+pub fn read_x3d(xml: &str, mm_per_unit: Option<f64>) -> Result<(Vec<MeshObject>, Vec<String>), String> {
+    Ok(objects(parse_x3d(xml)?, Vec::new(), mm_per_unit))
 }

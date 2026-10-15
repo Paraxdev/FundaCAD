@@ -289,6 +289,13 @@ fn occt_message(e: &opencascade::Error) -> String {
 /// `import_geometry`: read the file, store its geometry and answer
 /// `{geom, solid, faces, name, color?, nodes?, parts?, notes?}`.
 pub fn import_geometry(path: &str, fmt: &str, store: &BlobStore) -> Result<Map<String, Value>, String> {
+    import_geometry_in(path, fmt, store, None)
+}
+
+/// `import_geometry` with the unit the user said a glTF, VRML or X3D file is
+/// in, `mm`, `cm`, `m` or `inch`. Without one those read as metres, the spec.
+pub fn import_geometry_in(path: &str, fmt: &str, store: &BlobStore, unit: Option<&str>) -> Result<Map<String, Value>, String> {
+    let mm_per_unit = unit.map(mesh::mm_per_unit_name).transpose()?;
     let fmt = fmt.to_lowercase();
     let p = Path::new(path);
     let size = std::fs::metadata(p).map_or(0, |m| m.len());
@@ -321,7 +328,7 @@ pub fn import_geometry(path: &str, fmt: &str, store: &BlobStore) -> Result<Map<S
             outward(Imported { shape, fields: Map::new() })
         }
         "glb" => {
-            let shape = mesh::read_glb(p)?;
+            let shape = mesh::read_glb(p, mm_per_unit)?;
             let mut fields = Map::new();
             if let Some(c) = std::fs::read(p).ok().and_then(|d| mesh::glb_dominant_color(&d)) {
                 fields.insert("color".into(), json!(c));
@@ -329,7 +336,7 @@ pub fn import_geometry(path: &str, fmt: &str, store: &BlobStore) -> Result<Map<S
             outward(Imported { shape, fields })
         }
         "gltf" => {
-            let (shape, color) = mesh::read_gltf(p)?;
+            let (shape, color) = mesh::read_gltf(p, mm_per_unit)?;
             let mut fields = Map::new();
             if let Some(c) = color {
                 fields.insert("color".into(), json!(c));
@@ -343,7 +350,7 @@ pub fn import_geometry(path: &str, fmt: &str, store: &BlobStore) -> Result<Map<S
         }
         "vrml" | "x3d" => {
             let text = text_maybe_gzipped(std::fs::read(p).map_err(|e| e.to_string())?)?;
-            let (objs, notes) = if fmt == "vrml" { x3d::read_vrml(&text)? } else { x3d::read_x3d(&text)? };
+            let (objs, notes) = if fmt == "vrml" { x3d::read_vrml(&text, mm_per_unit)? } else { x3d::read_x3d(&text, mm_per_unit)? };
             let mut imported = mesh::finish_objects(objs)?;
             if !notes.is_empty() {
                 imported.fields.insert("notes".into(), json!(notes));
@@ -383,6 +390,9 @@ pub fn import_geometry(path: &str, fmt: &str, store: &BlobStore) -> Result<Map<S
     for (k, v) in imported.fields {
         out.insert(k, v);
     }
+    if let (Some(u), "glb" | "gltf" | "vrml" | "x3d") = (unit, fmt.as_str()) {
+        out.insert("unit".into(), json!(u));
+    }
     Ok(out)
 }
 
@@ -400,7 +410,7 @@ pub fn import_result(req: &Map<String, Value>) -> JobResult {
                 "could not store the imported geometry ({e}). Check free disk space and permissions on the FundaCAD data directory."
             )
         })
-        .and_then(|store| import_geometry(path, fmt, &store));
+        .and_then(|store| import_geometry_in(path, fmt, &store, req.get("unit").and_then(Value::as_str)));
     match result {
         Ok(m) => JobResult::Json(m),
         Err(message) => error_result(&message),
