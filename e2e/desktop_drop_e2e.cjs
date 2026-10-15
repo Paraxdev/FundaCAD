@@ -5,7 +5,8 @@
 //   1. A file drag shows the drop hint and leaving the window hides it.
 //   2. A dropped STL lands as one import step.
 //   3. A dropped .funda replaces the document and the title takes its name.
-//   4. A dropped .txt is refused with an error notice naming it.
+//   4. A dropped .txt is refused with an error notice naming it, and an
+//      unreadable .funda imports nothing that was dropped with it.
 //   5. Two STLs dropped together become two import steps.
 //   6. A material drag is left alone by the file handler.
 //
@@ -134,6 +135,20 @@ endsolid ${name}
   const notice = await page.evaluate(() => document.querySelector(".err-notice")?.textContent ?? "");
   check("an error notice names it", /a\.txt/.test(notice), notice.trim());
   check("nothing was added", (await page.evaluate(() => window.store.document.features.length)) === featuresBefore);
+
+  console.log("4b. an unreadable .funda with an STL");
+  const keptBefore = await page.evaluate(() => ({
+    name: window.store.fileName, types: window.store.document.features.map((f) => f.type),
+  }));
+  await drag("drop", [{ name: "broken.funda", text: "not a document" }, { name: "late.stl", text: STL("late") }]);
+  await page.waitForTimeout(500);
+  const discardBroken = await page.$("button:has-text('Discard')");
+  if (discardBroken) await discardBroken.click();
+  await settle();
+  const kept = await page.evaluate(() => ({
+    name: window.store.fileName, types: window.store.document.features.map((f) => f.type),
+  }));
+  check("the open document stays and the STL is not imported into it", JSON.stringify(kept) === JSON.stringify(keptBefore), JSON.stringify(kept));
 
   console.log("5. two STLs together");
   await drag("drop", [{ name: "first.stl", text: STL("first") }, { name: "second.stl", text: STL("second") }]);
