@@ -630,22 +630,27 @@ inline std::unique_ptr<StepAssembly> xbf_assembly_read(rust::Str path, const Mes
   BinXCAFDrivers::DefineFormat(app);
   Handle(TDocStd_Document) doc;
   Message_ProgressScope whole(progress, "XBF", 20);
-  PCDM_ReaderStatus status = app->Open(TCollection_ExtendedString(file.c_str(), Standard_True), doc, whole.Next(19));
   struct Closer {
-    Handle(TDocStd_Application) app;
-    Handle(TDocStd_Document) doc;
+    Handle(TDocStd_Application) &app;
+    Handle(TDocStd_Document) &doc;
     ~Closer() {
       if (!doc.IsNull() && doc->IsOpened()) {
         app->Close(doc);
       }
     }
   } closer{app, doc};
+  const std::string unreadable = "could not read the XBF file (it may be truncated or not an OCCT XBF document";
+  PCDM_ReaderStatus status = PCDM_RS_OpenError;
+  try {
+    status = app->Open(TCollection_ExtendedString(file.c_str(), Standard_True), doc, whole.Next(19));
+  } catch (const Standard_Failure &) {
+    throw std::runtime_error(unreadable + ")");
+  }
   if (status != PCDM_RS_OK || doc.IsNull()) {
     if (whole.UserBreak()) {
       throw std::runtime_error("cancelled");
     }
-    throw std::runtime_error("could not read the XBF file (it may be truncated or not an OCCT XBF document, status " +
-                             std::to_string(static_cast<int>(status)) + ")");
+    throw std::runtime_error(unreadable + ", status " + std::to_string(static_cast<int>(status)) + ")");
   }
   if (!XCAFDoc_DocumentTool::IsXCAFDocument(doc)) {
     throw std::runtime_error("this XBF file holds no XCAF shapes");

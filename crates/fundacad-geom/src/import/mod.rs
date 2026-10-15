@@ -237,9 +237,22 @@ pub fn read_iges(path: &Path) -> Result<Imported, String> {
 
 /// An OCCT binary XCAF document, read like STEP, in millimetres.
 pub fn read_xbf(path: &Path) -> Result<Imported, String> {
+    const UNREADABLE: &str = "could not read the XBF file (it may be truncated or not an OCCT XBF document)";
+    let mut magic = [0u8; 7];
+    let mut opened = std::fs::File::open(path).map_err(|e| e.to_string())?;
+    if std::io::Read::read_exact(&mut opened, &mut magic).is_err() || &magic != b"BINFILE" {
+        return Err(UNREADABLE.into());
+    }
+    drop(opened);
     let progress = crate::cancel::progress_beating();
-    let asm = crate::bench::phase("xbf_read", || xcaf::read_xbf_assembly_with(path, &progress.start()))
-        .map_err(|e| occt_message(&e))?;
+    let asm = crate::bench::phase("xbf_read", || xcaf::read_xbf_assembly_with(path, &progress.start())).map_err(|e| {
+        // OCCT can fail on a damaged file with something that is neither a
+        // Standard_Failure nor a std::exception, which the bridge can only call unknown.
+        match occt_message(&e) {
+            m if m == "unknown C++ exception" => UNREADABLE.to_string(),
+            m => m,
+        }
+    })?;
     Ok(from_assembly(asm))
 }
 
@@ -273,6 +286,11 @@ fn from_assembly(asm: StepAssembly) -> Imported {
 
 /// A text file as read, or unpacked when it is gzip (.wrz, .x3dz), capped at
 /// the import size limit.
+fn is_gzip(p: &Path) -> bool {
+    let mut magic = [0u8; 2];
+    std::fs::File::open(p).and_then(|mut f| std::io::Read::read_exact(&mut f, &mut magic)).is_ok() && magic == [0x1f, 0x8b]
+}
+
 fn text_maybe_gzipped(data: Vec<u8>) -> Result<String, String> {
     use std::io::Read;
     if !data.starts_with(&[0x1f, 0x8b]) {
@@ -318,6 +336,12 @@ pub fn import_geometry_in(path: &str, fmt: &str, store: &BlobStore, unit: Option
         ));
     }
     fundacad_engine::sysmem::refuse_if_memory_is_short(size, None)?;
+    if !matches!(fmt.as_str(), "step" | "stp" | "stpz" | "vrml" | "x3d") && is_gzip(p) {
+        return Err(format!(
+            "this {} file is gzip compressed, only STEP, VRML and X3D import compressed. Unpack it and import the file inside.",
+            fmt.to_uppercase()
+        ));
+    }
     let imported = match fmt.as_str() {
         "step" | "stp" | "stpz" => match unpack_step(p, MAX_IMPORT_BREP_FILE_BYTES)? {
             Some(unpacked) => {
