@@ -41,6 +41,8 @@ describe("an Onshape link", () => {
       `http://cad.onshape.com/documents/${D}/w/${W}/e/${E}`,
       `https://evil.com/documents/${D}/w/${W}/e/${E}`,
       `https://evilonshape.com/documents/${D}/w/${W}/e/${E}`,
+      `https://onshape.com/documents/${D}/w/${W}/e/${E}`,
+      `https://a.b.onshape.com/documents/${D}/w/${W}/e/${E}`,
       `https://cad.onshape.com.evil.net/documents/${D}/w/${W}/e/${E}`,
       `https://onshape.com@evil.com/documents/${D}`,
       `https://cad.onshape.com/documents/${D.slice(1)}/w/${W}/e/${E}`,
