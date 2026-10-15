@@ -22,6 +22,7 @@ mod inner {
         pub fn bo_subshapes(s: &TopoDS_Shape, kind: i32) -> UniquePtr<CxxVector<TopoDS_Shape>>;
         pub fn bo_count(s: &TopoDS_Shape, kind: i32) -> i32;
         pub fn bo_copy(s: &TopoDS_Shape) -> Result<UniquePtr<TopoDS_Shape>>;
+        pub fn bo_copy_topology(s: &TopoDS_Shape) -> Result<UniquePtr<TopoDS_Shape>>;
 
         pub fn bo_volume(s: &TopoDS_Shape) -> f64;
         pub fn bo_volume_precise(s: &TopoDS_Shape) -> f64;

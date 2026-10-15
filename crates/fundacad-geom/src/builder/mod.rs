@@ -181,6 +181,14 @@ impl Body {
         (self.uid, self.generation)
     }
 
+    /// The same body over a copy of its shape. OCCT algorithms write p-curves
+    /// and tolerances into the shapes they are handed, and a body the rebuild
+    /// cache keeps is handed to every rebuild that resumes from it.
+    pub fn detached(&self) -> Body {
+        let shape = kernel::copy_topology(&self.shape).unwrap_or_else(|_| self.shape.clone());
+        Body { shape, ..self.clone() }
+    }
+
     /// The owner of each face in face order, when the owners were last worked
     /// out for the shape the body holds now. A face's place in that order is
     /// the one thing about it a blob gives back exactly.

@@ -207,6 +207,11 @@ inline BoShape bo_copy(const TopoDS_Shape &s) {
   BO_GUARD(BRepBuilderAPI_Copy c(s); return bo_own(c.Shape());)
 }
 
+// New topology over the same curves, surfaces and meshes.
+inline BoShape bo_copy_topology(const TopoDS_Shape &s) {
+  BO_GUARD(BRepBuilderAPI_Copy c(s, false, true); return bo_own(c.Shape());)
+}
+
 // --- measurement ------------------------------------------------------------
 
 inline double bo_volume(const TopoDS_Shape &s) {

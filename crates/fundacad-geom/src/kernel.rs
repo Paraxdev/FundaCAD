@@ -147,6 +147,12 @@ pub fn copy(s: &Shape) -> KResult<Shape> {
     run("BRepBuilderAPI_Copy", || format!("shape={}", describe(s)), || ffi::bo_copy(s.raw()))
 }
 
+/// New vertices, edges and faces over the same curves, surfaces and meshes,
+/// so p-curves and tolerances written into the copy never reach `s`.
+pub fn copy_topology(s: &Shape) -> KResult<Shape> {
+    run("BRepBuilderAPI_Copy", || format!("shape={}", describe(s)), || ffi::bo_copy_topology(s.raw()))
+}
+
 pub fn volume(s: &Shape) -> f64 {
     ffi::bo_volume(s.raw())
 }

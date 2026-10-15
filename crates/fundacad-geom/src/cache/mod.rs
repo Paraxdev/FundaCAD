@@ -177,7 +177,9 @@ impl RebuildCache {
         if common > 0 {
             if let Some(Some(snap)) = self.ring.get(common - 1) {
                 if builder::ids_resumable(doc, snap) {
-                    resume = Some((common, snap.clone()));
+                    let mut snap = snap.clone();
+                    snap.bodies = snap.bodies.iter().map(builder::Body::detached).collect();
+                    resume = Some((common, snap));
                     source = Source::Ram;
                 }
             }
