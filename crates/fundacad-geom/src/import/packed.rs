@@ -23,12 +23,38 @@ impl Drop for Unpacked {
     }
 }
 
+const PREFIX: &str = "fundacad-unpacked-";
+
+/// Unpacked files a killed engine left behind. An hour is far past any read,
+/// so a file that old is not one another engine is still reading.
+fn sweep_stale(dir: &Path) {
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    let hour = std::time::Duration::from_secs(3600);
+    for entry in entries.flatten() {
+        let stale = entry.file_name().to_string_lossy().starts_with(PREFIX)
+            && entry.metadata().and_then(|m| m.modified()).is_ok_and(|t| t.elapsed().is_ok_and(|age| age > hour));
+        if stale {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
+}
+
 fn temp_step() -> Result<(Unpacked, File), String> {
     static NEXT: AtomicUsize = AtomicUsize::new(0);
-    let n = NEXT.fetch_add(1, Ordering::Relaxed);
-    let path = std::env::temp_dir().join(format!("fundacad-unpacked-{}-{n}.step", std::process::id()));
-    let file = File::create(&path).map_err(|e| format!("couldn't unpack the STEP file into the temp folder ({e})"))?;
-    Ok((Unpacked { path }, file))
+    let dir = std::env::temp_dir();
+    sweep_stale(&dir);
+    let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.subsec_nanos());
+    let failed = |e: std::io::Error| format!("couldn't unpack the STEP file into the temp folder ({e})");
+    for tries_left in (0..16).rev() {
+        let n = NEXT.fetch_add(1, Ordering::Relaxed);
+        let path = dir.join(format!("{PREFIX}{}-{nanos:08x}-{n}.step", std::process::id()));
+        match File::create_new(&path) {
+            Ok(file) => return Ok((Unpacked { path }, file)),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists && tries_left > 0 => {}
+            Err(e) => return Err(failed(e)),
+        }
+    }
+    unreachable!("the last try returns")
 }
 
 fn too_large(cap: u64) -> String {
