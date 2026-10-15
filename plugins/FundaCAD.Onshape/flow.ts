@@ -36,7 +36,7 @@ export async function importFromOnshape(store: DocumentStore, geometry: Geometry
       const path = await store.runBusy(`Exporting ${studio.name} from Onshape`, () =>
         downloadStep(client, studio, { sleep, now: Date.now }),
       );
-      const name = path.split(/[\/]/).pop()!;
+      const name = path.split(/[\\/]/).pop()!;
       try {
         await importPath(store, geometry, path, undefined, {
           source: sourceOf({ ...link, wvm: studio.wvm, wvmid: studio.wvmid, eid: studio.eid }),
