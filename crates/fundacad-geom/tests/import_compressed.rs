@@ -154,3 +154,16 @@ fn a_step_file_is_not_read_as_xbf() {
     let e = try_import(&fixture("asm_flat.step"), "xbf").unwrap_err();
     assert!(e.contains("XBF"), "{e}");
 }
+
+#[test]
+fn a_part_two_roots_share_is_scaled_once() {
+    let r = build(imported("shared_inch.xbf", "xbf"), "xbf");
+    assert_eq!(r.bodies.len(), 2);
+    let inch: f64 = 25.4;
+    for (body, x) in r.bodies.iter().zip([0.0, 5.0 * inch]) {
+        let got = kernel::volume(&body.shape);
+        assert!((got - inch.powi(3)).abs() < 0.5, "{}: volume {got}, want {}", body.name, inch.powi(3));
+        let b = kernel::bbox(&body.shape).unwrap();
+        assert!((b[0] - x).abs() < 1e-3, "{}: min x {}, want {x}", body.name, b[0]);
+    }
+}

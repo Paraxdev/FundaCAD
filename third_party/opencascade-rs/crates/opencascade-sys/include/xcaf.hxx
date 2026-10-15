@@ -653,10 +653,10 @@ inline std::unique_ptr<StepAssembly> xbf_assembly_read(rust::Str path, const Mes
   Standard_Real mm = 1.0;
   if (XCAFDoc_DocumentTool::GetLengthUnit(doc, mm, UnitsMethods_LengthUnit_Millimeter) && mm > 0.0 &&
       std::abs(mm - 1.0) > 1e-9) {
-    TDF_LabelSequence roots;
-    XCAFDoc_DocumentTool::ShapeTool(doc->Main())->GetFreeShapes(roots);
-    for (Standard_Integer i = 1; i <= roots.Length(); ++i) {
-      XCAFDoc_Editor::RescaleGeometry(roots.Value(i), mm);
+    // Given the shape tool's own label, OCCT scales every product once. Root
+    // by root, a product two roots share would be scaled twice.
+    if (!XCAFDoc_Editor::RescaleGeometry(XCAFDoc_DocumentTool::ShapeTool(doc->Main())->Label(), mm)) {
+      throw std::runtime_error("could not scale this XBF file to millimetres");
     }
   }
   std::unique_ptr<StepAssembly> tree = xcaf_assembly_walk(doc, whole, false, "XBF");
