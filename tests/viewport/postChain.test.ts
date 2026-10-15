@@ -53,7 +53,7 @@ function fakeComposer() {
   };
 }
 
-function chain() {
+function chain(lowPower: boolean) {
   const scene = new THREE.Scene();
   let target: unknown = null;
   let ratio = 2;
@@ -74,7 +74,7 @@ function chain() {
     clear: () => cleared.push({ target, color: clear.clone() }),
     render: (s: unknown) => direct.push(s),
   } as unknown as THREE.WebGLRenderer;
-  const post = new PostChain(renderer, scene, () => false);
+  const post = new PostChain(renderer, scene, () => false, () => lowPower);
   const f = fakeComposer();
   (post as unknown as { composer: unknown }).composer = f.composer;
   return { post, f, clears, cleared, direct, clear, setRatio: (r: number) => { ratio = r; } };
@@ -83,7 +83,7 @@ function chain() {
 describe("PostChain composer frames", () => {
   it("clears the composer's target with the inverse tone mapped background, glass with the plain one", () => {
     setRenderPref("bloom", 0.4);
-    const c = chain();
+    const c = chain(false);
     const bg = c.clear.clone();
     c.post.render(new THREE.PerspectiveCamera());
     expect(c.f.calls).toContain("render");
@@ -96,6 +96,29 @@ describe("PostChain composer frames", () => {
       [c.f.readBuffer, bg.getHex()],
       [null, bg.getHex()],
     ]);
+    setRenderPref("bloom", DEFAULT_RENDER.bloom);
+  });
+
+  it("keeps bloom on while the camera moves unless the machine is on a low power tier", () => {
+    setRenderPref("bloom", 0.4);
+    const live = chain(false);
+    live.post.render(new THREE.PerspectiveCamera(), true);
+    expect(live.f.calls).toContain("render");
+    const low = chain(true);
+    low.post.render(new THREE.PerspectiveCamera(), true);
+    expect(low.f.calls).not.toContain("render");
+    setRenderPref("bloom", DEFAULT_RENDER.bloom);
+  });
+
+  it("follows the renderer's pixel ratio", () => {
+    setRenderPref("bloom", 0.4);
+    const c = chain(false);
+    const camera = new THREE.PerspectiveCamera();
+    c.post.render(camera);
+    c.setRatio(0.75);
+    c.post.render(camera);
+    c.post.render(camera);
+    expect(c.f.calls.filter((s) => s.startsWith("ratio"))).toEqual(["ratio 2", "ratio 0.75"]);
     setRenderPref("bloom", DEFAULT_RENDER.bloom);
   });
 });

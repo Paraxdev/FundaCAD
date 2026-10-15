@@ -298,6 +298,7 @@ export class Viewport {
       groundZ: () => (this.scene.grid.group.visible ? this.targetGridZ : null),
     });
     this.installPointer();
+    this.scene.post.onReady = () => this.requestRender();
     // Re-applied on theme changes too: the default ground is a theme token.
     this.scene.applyRenderPrefs();
     onRenderPrefsChange(() => {
