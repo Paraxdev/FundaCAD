@@ -11,13 +11,17 @@
 #include <BRepGProp_Face.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
 #include <BRepTools.hxx>
+#include <BRepTools_Modifier.hxx>
 #include <BRep_Builder.hxx>
 #include <BRep_Tool.hxx>
 #include <GeomAbs_SurfaceType.hxx>
+#include <Geom2d_Curve.hxx>
 #include <Geom_Surface.hxx>
 #include <Poly_Triangulation.hxx>
+#include <ShapeBuild_ReShape.hxx>
 #include <ShapeCustom.hxx>
 #include <ShapeCustom_Surface.hxx>
+#include <ShapeCustom_SweptToElementary.hxx>
 #include <ShapeFix_Face.hxx>
 #include <ShapeFix_Shape.hxx>
 #include <ShapeFix_Solid.hxx>
@@ -25,6 +29,7 @@
 #include <TopExp.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopLoc_Location.hxx>
+#include <TopTools_DataMapOfShapeShape.hxx>
 #include <TopTools_IndexedMapOfShape.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Compound.hxx>
@@ -62,8 +67,32 @@ inline rust::Vec<int32_t> canonical_surface_types(const TopoDS_Shape &shape) {
   return out;
 }
 
+// BRepTools_Modifier::CreateOtherVertices asks NewCurve2d with a null NewF,
+// which OCCT's version dereferences (a segfault on Linux, a swallowed access
+// violation on Windows). Its answer there is always true with the pcurve
+// copied, so give that without reading NewF.
+class canonical_SafeSweptToElementary : public ShapeCustom_SweptToElementary {
+public:
+  Standard_Boolean NewCurve2d(const TopoDS_Edge &E, const TopoDS_Face &F, const TopoDS_Edge &NewE,
+                              const TopoDS_Face &NewF, Handle(Geom2d_Curve) &C, Standard_Real &Tol) override {
+    if (!NewF.IsNull()) {
+      return ShapeCustom_SweptToElementary::NewCurve2d(E, F, NewE, NewF, C, Tol);
+    }
+    Standard_Real f, l;
+    C = BRep_Tool::CurveOnSurface(E, F, f, l);
+    if (!C.IsNull()) {
+      C = Handle(Geom2d_Curve)::DownCast(C->Copy());
+    }
+    Tol = BRep_Tool::Tolerance(E);
+    return Standard_True;
+  }
+};
+
 inline std::unique_ptr<TopoDS_Shape> canonical_swept_to_elementary(const TopoDS_Shape &shape) {
-  TopoDS_Shape out = ShapeCustom::SweptToElementary(shape);
+  Handle(ShapeCustom_SweptToElementary) modification = new canonical_SafeSweptToElementary();
+  TopTools_DataMapOfShapeShape context;
+  BRepTools_Modifier modifier;
+  TopoDS_Shape out = ShapeCustom::ApplyModifier(shape, modification, context, modifier);
   return std::unique_ptr<TopoDS_Shape>(out.IsNull() ? nullptr : new TopoDS_Shape(out));
 }
 
