@@ -167,3 +167,39 @@ fn a_part_two_roots_share_is_scaled_once() {
         assert!((b[0] - x).abs() < 1e-3, "{}: min x {}, want {x}", body.name, b[0]);
     }
 }
+
+#[test]
+fn a_file_that_is_not_xbf_says_so() {
+    let xbf = std::fs::read(fixture("two_parts.xbf")).unwrap();
+    let gz = {
+        let mut e = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+        e.write_all(&xbf).unwrap();
+        e.finish().unwrap()
+    };
+    let noise: Vec<u8> = (0..4096u32).map(|i| (i.wrapping_mul(2_654_435_761) >> 13) as u8).collect();
+    let cases = [
+        ("empty.xbf", Vec::new()),
+        ("noise.xbf", noise),
+        ("packed.xbf", gz),
+        ("header.xbf", xbf[..16].to_vec()),
+        ("half.xbf", xbf[..xbf.len() / 2].to_vec()),
+    ];
+    for (name, bytes) in cases {
+        let path = blob_dir().join(name);
+        std::fs::write(&path, bytes).unwrap();
+        let e = try_import(&path, "xbf").unwrap_err();
+        assert!(e.contains("XBF") && !e.contains("unknown"), "{name}: {e}");
+    }
+}
+
+#[test]
+fn a_gzip_copy_of_a_format_read_plain_says_so() {
+    let path = blob_dir().join("cube.stl.gz");
+    let mut e = flate2::write::GzEncoder::new(std::fs::File::create(&path).unwrap(), flate2::Compression::default());
+    e.write_all(b"solid cube\nendsolid cube\n").unwrap();
+    e.finish().unwrap();
+    for fmt in ["stl", "xbf", "brep", "iges"] {
+        let e = try_import(&path, fmt).unwrap_err();
+        assert!(e.contains("gzip"), "{fmt}: {e}");
+    }
+}
