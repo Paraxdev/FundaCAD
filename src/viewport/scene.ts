@@ -7,6 +7,7 @@ import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment
 import { stickyFact } from "../diagnostics/breadcrumbs";
 import { gridStep } from "../sketch/planeGrid";
 import { isRenderLowPower, setRenderLowPower } from "./render";
+import { composerClearColor, DISPLAY_COLOR_GLSL, displayColorUniforms, followComposer, setComposing } from "./composerColor";
 import { BACKGROUND_COLOR, bloomSettings, renderPrefs } from "../ui/renderPrefs";
 import { POTATO_PIXEL_RATIO, PotatoDraw } from "./potato";
 import { isSoftwareRendererName, setSoftwareRenderer } from "../ui/glassBlur";
@@ -112,6 +113,7 @@ export class AdaptiveGrid {
         uCenter: { value: new THREE.Vector2() },
         uMinor: { value: new THREE.Color(0x3a414d) },
         uMajorC: { value: new THREE.Color(0x5c6b7a) },
+        ...displayColorUniforms(),
       },
       vertexShader: /* glsl */ `
         varying vec2 vWorld;
@@ -121,7 +123,7 @@ export class AdaptiveGrid {
           gl_Position = projectionMatrix * viewMatrix * wp;
         }
       `,
-      fragmentShader: /* glsl */ `
+      fragmentShader: DISPLAY_COLOR_GLSL + /* glsl */ `
         varying vec2 vWorld;
         uniform float uCell;
         uniform float uMajor;
@@ -146,10 +148,11 @@ export class AdaptiveGrid {
           float d = length(vWorld - uCenter);
           a *= 1.0 - smoothstep(uHalf * 0.6, uHalf * 0.98, d);
           if (a <= 0.002) discard;
-          gl_FragColor = vec4(col, a);
+          gl_FragColor = displayOverGround(col, a);
         }
       `,
     });
+    followComposer(this.mat);
     this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), this.mat);
     this.mesh.renderOrder = -2;
     this.mesh.frustumCulled = false; // recentred on the target every frame, always in view
@@ -455,6 +458,8 @@ export class PostChain {
   private potato: PotatoDraw | null = null;
   private motionDraw: PotatoDraw | null = null;
   private size = new THREE.Vector2(1, 1);
+  private clearWas = new THREE.Color();
+  private clearNow = new THREE.Color();
   private camera: THREE.Camera | null = null;
   /** How far in front of the camera is sharp, in world units. Written by the
    *  viewport once per frame from the orbit distance, because that is the point
@@ -576,7 +581,26 @@ export class PostChain {
         u["maxblur"]!.value = p.focusBlur * 0.012;
       }
     }
-    composer.render();
+    // The RenderPass does not clear, this does. The OutputPass tone maps the
+    // clear, so it is the inverse of the tone mapper. Then the plain colour again
+    // with the target still bound: WebGLState caches a clear value converted for
+    // the target bound at setClearColor (sRGB for the canvas), and the
+    // transmission buffer of any glass clears from that cache, in linear.
+    const r = this.renderer;
+    r.getClearColor(this.clearWas);
+    const alpha = r.getClearAlpha();
+    r.setRenderTarget(composer.readBuffer);
+    r.setClearColor(composerClearColor(this.clearWas, r.toneMapping, r.toneMappingExposure, this.clearNow), alpha);
+    r.clear();
+    r.setClearColor(this.clearWas, alpha);
+    setComposing(true, this.clearWas);
+    try {
+      composer.render();
+    } finally {
+      setComposing(false);
+      r.setRenderTarget(null);
+      r.setClearColor(this.clearWas, alpha);
+    }
   }
 
   private async loadPasses() {
@@ -611,6 +635,7 @@ export class PostChain {
     composer.setSize(this.size.x, this.size.y);
     const camera = this.camera ?? new THREE.PerspectiveCamera();
     const render = new RenderPass(this.scene, camera);
+    render.clear = false;
     const b = bloomSettings(renderPrefs().bloom);
     const bloom = new UnrealBloomPass(this.size.clone(), b.strength, b.radius, b.threshold);
     // BEFORE the bloom, deliberately. Blur first and bloom second is a light
