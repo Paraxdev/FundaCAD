@@ -49,8 +49,10 @@ pub mod bundle;
 pub mod data;
 pub mod files;
 pub mod handed;
+pub mod keystore;
 pub mod launch;
 pub mod localnet;
+pub mod web;
 
 use bundle::{
     allowed_bundle_url, extract_into, grants_match, is_official_url, now_secs, safe_id, sha256_hex,
@@ -126,6 +128,12 @@ pub(crate) fn plugins_root(app: &AppHandle) -> Result<PathBuf, String> {
         .join("plugins");
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     Ok(dir)
+}
+
+/// What the person agreed to for an installed plugin, or None when it is not installed.
+pub(crate) fn consented_of(app: &AppHandle, id: &str) -> Option<bundle::Consented> {
+    let dir = plugins_root(app).ok()?.join(safe_id(id).ok()?);
+    read_record(&dir).map(|r| r.consented)
 }
 
 fn read_record(dir: &Path) -> Option<Installed> {

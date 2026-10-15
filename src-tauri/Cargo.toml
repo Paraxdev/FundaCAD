@@ -41,6 +41,8 @@ sha2 = "0.10"
 # Binary payloads cross Tauri IPC as base64 strings (a JSON Vec<u8> would be
 # pathological at ~1 MB); the plugin commands use this.
 base64 = "0.22"
+# Plugin secrets such as API keys live in the OS credential store (plugins/keystore.rs).
+keyring = { version = "3", features = ["apple-native", "windows-native", "sync-secret-service"] }
 # The geometry engine, a worker process of this same executable (engine.rs).
 # The geometry crate links OpenCASCADE statically.
 fundacad-protocol = { path = "../crates/fundacad-protocol" }

@@ -46,6 +46,7 @@ describe("the plugins this build offers", () => {
       "FundaCAD.ExtraParameters",
       "FundaCAD.Gamepad",
       "FundaCAD.MultiColor",
+      "FundaCAD.Onshape",
       "FundaCAD.Organic",
       "FundaCAD.PrintToolbox",
       "FundaCAD.Printing",

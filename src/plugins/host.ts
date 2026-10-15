@@ -118,6 +118,9 @@ export { choose, listModal } from "../ui/choice";
 export { reportError } from "../io/files";
 /** A text file the person picks to write or to read, a download or an upload in a browser. */
 export { openTextFile, saveTextFile } from "../io/files";
+// A file a plugin downloaded goes through the same import as one the person
+// picked. `source` is what the feature records instead of the local path.
+export { importPath } from "../io/files";
 /** A breadcrumb that survives twenty later toasts, for a bug report. */
 export { stickyFact } from "../diagnostics/breadcrumbs";
 
