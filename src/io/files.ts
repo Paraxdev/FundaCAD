@@ -86,7 +86,7 @@ export async function saveDocumentAs(store: DocumentStore) {
         { name: "FundaCAD Document (JSON)", extensions: [DOC_EXT, ...LEGACY_DOC_EXTS] },
         { name: "FundaCAD Binary Document (smaller)", extensions: [BINARY_DOC_EXT] },
       ],
-      defaultPath: store.filePath ?? `${store.fileName}.${DOC_EXT}`,
+      defaultPath: store.filePath ?? (isDocumentExt(store.fileName.split(".").pop()?.toLowerCase()) ? store.fileName : `${store.fileName}.${DOC_EXT}`),
     });
     if (path) {
       const err = await writeContainer(store, path);
@@ -151,16 +151,38 @@ export async function openDocument(
 
 /** Open a document the app has as text with no path, picked in a browser or
  *  dropped on the window. */
-export async function openDocumentText(store: DocumentStore, name: string, text: string) {
+export async function openDocumentText(store: DocumentStore, name: string, text: string): Promise<OpenOutcome> {
   try {
     store.load(text);
-    // No real path, but the name is enough for the title bar to show what is
-    // open and drop the unsaved marker, same as a Tauri Open does.
-    store.markSaved(name);
-    await warnAboutMissingPlugins(store);
   } catch (e) {
     await reportUnreadable(e);
+    return "unreadable";
   }
+  // No real path, but the name is enough for the title bar to show what is
+  // open and drop the unsaved marker, same as a Tauri Open does.
+  store.markSaved(name);
+  await warnAboutMissingPlugins(store);
+  return "ok";
+}
+
+/** Open a dropped document the app has as a File with no path. The desktop app
+ *  reads it in Rust like an Open does, so embedded geometry reaches the blob
+ *  store and a binary .fundab opens; a plain browser reads it as text. */
+export async function openDocumentBytes(store: DocumentStore, file: File, geometry?: GeometryBackend): Promise<OpenOutcome> {
+  if (!isTauri()) return openDocumentText(store, file.name, await file.text());
+  const { invoke } = await import("@tauri-apps/api/core");
+  let opened: OpenedDocument;
+  try {
+    const r = await invoke<{ document: string; repairedShards: number; usedBackupIndex: boolean; wasContainer: boolean }>(
+      "container_open_bytes",
+      new Uint8Array(await file.arrayBuffer()),
+    );
+    opened = { text: r.document, wasContainer: r.wasContainer, repaired: r.repairedShards > 0 || r.usedBackupIndex };
+  } catch (e) {
+    await reportError(`Couldn't open ${file.name}: ${errMsg(e)}`);
+    return "unreadable";
+  }
+  return finishOpen(store, file.name, opened, geometry, null);
 }
 
 /** What happened when we tried to open a document.
@@ -259,21 +281,18 @@ export async function openDocumentAtPath(
   path: string,
   geometry?: GeometryBackend,
 ): Promise<OpenOutcome> {
-  const base = path.split(/[\\/]/).pop();
+  const base = path.split(/[\\/]/).pop() ?? path;
   const { invoke } = await import("@tauri-apps/api/core");
-  let text: string;
-  let wasContainer = false;
-  let repaired = false;
+  let opened: OpenedDocument;
   try {
-    wasContainer = await invoke<boolean>("container_is_container", { path });
+    const wasContainer = await invoke<boolean>("container_is_container", { path });
     // JSON goes through Rust too: it carries embedded geometry that has to reach
     // the blob store before the first rebuild asks for it.
-    const opened = await invoke<{ document: string; repairedShards: number; usedBackupIndex: boolean }>(
+    const r = await invoke<{ document: string; repairedShards: number; usedBackupIndex: boolean }>(
       "container_open_checked",
       { path },
     );
-    text = opened.document;
-    repaired = opened.repairedShards > 0 || opened.usedBackupIndex;
+    opened = { text: r.document, wasContainer, repaired: r.repairedShards > 0 || r.usedBackupIndex };
   } catch (e) {
     // Rust's container errors are already user-facing sentences (a newer
     // container format, a damaged archive, geometry that does not match its
@@ -281,6 +300,23 @@ export async function openDocumentAtPath(
     await reportError(`Couldn't open ${base}: ${errMsg(e)}`);
     return "unreadable";
   }
+  return finishOpen(store, base, opened, geometry, path);
+}
+
+interface OpenedDocument {
+  text: string;
+  wasContainer: boolean;
+  repaired: boolean;
+}
+
+/** Load a document Rust has read. `path` is null for one dropped as bytes. */
+async function finishOpen(
+  store: DocumentStore,
+  base: string,
+  { text, wasContainer, repaired }: OpenedDocument,
+  geometry: GeometryBackend | undefined,
+  path: string | null,
+): Promise<OpenOutcome> {
   // One-way v4 -> v5, done on the PARSED text before `load()` rather than by
   // patching the store afterwards: patching would record an undo entry, mark a
   // freshly-opened document dirty, and fire a second rebuild. If anything here
@@ -303,13 +339,15 @@ export async function openDocumentAtPath(
     await reportUnreadable(e);
     return "unreadable";
   }
-  store.markSaved(path); // freshly opened == clean, with a known path
+  // freshly opened == clean
+  if (path) store.markSaved(path);
+  else store.markOpenedWithoutPath(base);
   // AFTER markSaved, so a document that needs a plugin still opens CLEAN. The
   // notice is about what this build can do with the file, never about the file
   // having been changed, and a freshly-opened document marked dirty would offer
   // to save over the original on the way out.
   await warnAboutMissingPlugins(store);
-  noteRecent(path);
+  if (path) noteRecent(path);
   if (geometry) void import("./fundaLinks").then((m) => m.checkLinks(store, geometry));
   if (repaired) {
     const { toast } = await import("../ui/toast");
@@ -415,11 +453,8 @@ export const IMPORT_EXTS = ["stl", "3mf", "step", "stp", "stpz", "gz", "xbf", "i
  *  this needs the native app (a real filesystem path), like export. */
 export async function importModel(store: DocumentStore, geometry: GeometryBackend) {
   if (!isTauri()) {
-    // The engine's import op takes a path on disk and reads the file itself
-    // (see import.rs: "a request needs a path and a format"), there is no
-    // inline-bytes protocol for it the way the MCP server's upload spools one to
-    // a temp file first. A browser file input hands us bytes, not a path, so a
-    // real fallback here would need an engine change, not a UI one.
+    // Only a drop reaches the engine's bytes form of import (importFileBytes),
+    // this picker has no browser file input behind it.
     await reportError("Import needs the desktop app: a browser tab has no filesystem path to give the engine to read.");
     return;
   }
