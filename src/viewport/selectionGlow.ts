@@ -17,6 +17,7 @@
 
 import * as THREE from "three";
 import { themeColor } from "./themeColors";
+import { DISPLAY_COLOR_GLSL, displayColorUniforms, followComposer } from "./composerColor";
 
 // cameraPosition / modelMatrix / normal / position are all built into a
 // THREE.ShaderMaterial (prepended for us), so they are used here undeclared.
@@ -49,7 +50,7 @@ const FRAG = /* glsl */ `
       : normalize(cameraPosition - vW);
     float f = pow(1.0 - clamp(dot(normalize(vN), v), 0.0, 1.0), 2.4);
     float a = clamp((uFill + uRim * f) * uFade, 0.0, 1.0);
-    gl_FragColor = vec4(uColor, a);
+    gl_FragColor = vec4(displayColor(uColor), a);
   }
 `;
 
@@ -80,9 +81,10 @@ function glowMaterial(kind: GlowKind): THREE.ShaderMaterial {
         uFill: { value: fill },
         uRim: { value: rim },
         uFade: { value: 1 },
+        ...displayColorUniforms(),
       },
       vertexShader: VERT,
-      fragmentShader: FRAG,
+      fragmentShader: DISPLAY_COLOR_GLSL + FRAG,
       transparent: true,
       // Draw on top of the shaded body without writing depth, so the coincident
       // overlay never z-fights and never occludes the edge lines that sit above it.
@@ -90,6 +92,7 @@ function glowMaterial(kind: GlowKind): THREE.ShaderMaterial {
       side: THREE.FrontSide,
       blending: THREE.NormalBlending,
     });
+    followComposer(mat);
     materials.set(kind, mat);
   }
   (mat.uniforms.uColor!.value as THREE.Color).set(themeColor("--accent", 0x4bf9bc));

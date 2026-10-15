@@ -7,13 +7,14 @@
 
 import * as THREE from "three";
 import type { ModelView } from "./render";
+import { DISPLAY_COLOR_GLSL, displayColorUniforms, followComposer } from "./composerColor";
 
 /** A reflective zebra material: black/white bands follow the reflected view
  *  vector, so kinks/curvature discontinuities show as broken or bunched stripes.
  *  Uses three's built-in `cameraPosition` uniform, no per-frame updates needed. */
 export function makeZebraMaterial(frequency = 7): THREE.ShaderMaterial {
-  return new THREE.ShaderMaterial({
-    uniforms: { uFreq: { value: frequency } },
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { uFreq: { value: frequency }, ...displayColorUniforms() },
     side: THREE.DoubleSide,
     // keep edge lines crisp on top, matching the standard model material
     polygonOffset: true,
@@ -28,7 +29,7 @@ export function makeZebraMaterial(frequency = 7): THREE.ShaderMaterial {
         vP = wp.xyz;
         gl_Position = projectionMatrix * viewMatrix * wp;
       }`,
-    fragmentShader: /* glsl */ `
+    fragmentShader: DISPLAY_COLOR_GLSL + /* glsl */ `
       uniform float uFreq;
       varying vec3 vN;
       varying vec3 vP;
@@ -38,9 +39,11 @@ export function makeZebraMaterial(frequency = 7): THREE.ShaderMaterial {
         vec3 R = reflect(-V, N);
         float band = step(0.5, fract(R.z * uFreq));
         vec3 col = mix(vec3(0.06), vec3(0.93), band);
-        gl_FragColor = vec4(col, 1.0);
+        gl_FragColor = vec4(displayColor(col), 1.0);
       }`,
   });
+  followComposer(mat);
+  return mat;
 }
 
 /** Build a curvature-comb overlay for every edge of the model: at each interior
