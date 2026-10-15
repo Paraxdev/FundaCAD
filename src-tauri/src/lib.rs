@@ -265,6 +265,7 @@ pub fn run() {
         container::container_save,
         container::container_open,
         container::container_open_checked,
+        container::container_open_bytes,
         container::container_verify,
         container::container_is_container,
         plugins::plugin_list,

@@ -5,6 +5,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const calls: string[] = [];
 let discard = true;
+let openOutcome = "ok";
 vi.mock("../../src/app/documentActions", () => ({
   mayDiscard: vi.fn(async () => { calls.push("ask"); return discard; }),
 }));
@@ -12,8 +13,8 @@ vi.mock("../../src/io/files", async (importOriginal) => {
   const real = await importOriginal<typeof import("../../src/io/files")>();
   return {
     ...real,
-    openDocumentAtPath: vi.fn(async (_s: unknown, path: string) => { calls.push(`open ${path}`); return "ok"; }),
-    openDocumentText: vi.fn(async (_s: unknown, name: string, text: string) => { calls.push(`open ${name} ${text}`); }),
+    openDocumentAtPath: vi.fn(async (_s: unknown, path: string) => { calls.push(`open ${path}`); return openOutcome; }),
+    openDocumentBytes: vi.fn(async (_s: unknown, file: File) => { calls.push(`open bytes ${file.name}`); return openOutcome; }),
     importPath: vi.fn(async (_s: unknown, _g: unknown, path: string) => { calls.push(`import ${path}`); }),
     importFileBytes: vi.fn(async (_s: unknown, _g: unknown, file: File) => { calls.push(`import bytes ${file.name}`); }),
     reportError: vi.fn(async (msg: string) => { calls.push(`error ${msg}`); }),
@@ -31,7 +32,7 @@ const confText = Object.values(import.meta.glob("../../src-tauri/tauri.conf.json
 
 const engine = { store: {}, sketch: { hasUncommittedEdits: false }, geometry: {} } as never;
 
-beforeEach(() => { calls.length = 0; discard = true; });
+beforeEach(() => { calls.length = 0; discard = true; openOutcome = "ok"; });
 
 describe("routeDroppedName", () => {
   it("imports every format the import picker accepts, in any case", () => {
@@ -40,7 +41,8 @@ describe("routeDroppedName", () => {
       expect(routeDroppedName(`PART.${ext.toUpperCase()}`)).toBe("import");
     }
     expect(routeDroppedName("a.FCStd")).toBe("import");
-    expect(routeDroppedName("C:\Users\me\b.Stl")).toBe("import");
+    expect(routeDroppedName(String.raw`C:\Users\me\b.Stl`)).toBe("import");
+    expect(routeDroppedName(String.raw`C:\docs.funda\notes`)).toBe("reject");
   });
 
   it("opens every document extension", () => {
@@ -79,7 +81,7 @@ describe("takeDroppedFiles", () => {
     const file = new File(['{"features":[]}'], "a.funda");
     const stl = new File(["solid x\nendsolid x\n"], "b.stl");
     await takeDroppedFiles(engine, [{ name: "a.funda", file }, { name: "b.stl", path: null, file: stl }]);
-    expect(calls).toEqual(["ask", 'open a.funda {"features":[]}', "import bytes b.stl"]);
+    expect(calls).toEqual(["ask", "open bytes a.funda", "import bytes b.stl"]);
   });
 
   it("names every refused file and does nothing else when all are refused", async () => {

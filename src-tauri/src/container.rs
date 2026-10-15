@@ -139,6 +139,37 @@ pub async fn container_open_checked(app: tauri::AppHandle, path: String) -> Resu
     Ok(OpenedDocument { document, repaired_shards: report.repaired_shards, used_backup_index: report.used_backup_index })
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenedDroppedDocument {
+    pub document: String,
+    pub repaired_shards: u64,
+    pub used_backup_index: bool,
+    pub was_container: bool,
+}
+
+/// `container_open_checked` for a document dropped on a webview that does not
+/// say where it lives, so the page has its bytes only. They arrive as the raw
+/// IPC body, a large binary document would not survive a JSON array.
+#[tauri::command]
+pub async fn container_open_bytes(
+    app: tauri::AppHandle,
+    request: tauri::ipc::Request<'_>,
+) -> Result<OpenedDroppedDocument, String> {
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+        return Err("the dropped document did not arrive as bytes".into());
+    };
+    let blobs = blob_dir(&app)?;
+    let meshes = mesh_dir(&app)?;
+    let opened = open_document_bytes(bytes, &blobs, Some(&meshes))?;
+    Ok(OpenedDroppedDocument {
+        document: opened.document,
+        repaired_shards: opened.report.repaired_shards,
+        used_backup_index: opened.report.used_backup_index,
+        was_container: opened.was_container,
+    })
+}
+
 /// Check a format 2 file end to end without opening it.
 #[tauri::command]
 pub async fn container_verify(path: String) -> Result<fundacad_format::fnda::RepairReport, String> {

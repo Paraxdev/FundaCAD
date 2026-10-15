@@ -361,6 +361,25 @@ pub fn open_document_checked(
     crate::json_doc::read_json_document(path, blob_dir).map(|doc| (doc, crate::fnda::RepairReport::default()))
 }
 
+/// What `open_document_bytes` read.
+pub struct OpenedBytes {
+    pub document: String,
+    pub report: crate::fnda::RepairReport,
+    pub was_container: bool,
+}
+
+/// `open_document_checked` for a document the caller holds as bytes with no
+/// path, like a file dropped on a webview that does not name its paths. The
+/// readers need a seekable file, so the bytes are staged in a temp file first.
+pub fn open_document_bytes(bytes: &[u8], blob_dir: &Path, mesh_dir: Option<&Path>) -> Result<OpenedBytes, String> {
+    let staged = std::env::temp_dir().join(format!("fundacad-open-{}.tmp", uuid_hex()));
+    std::fs::write(&staged, bytes).map_err(|e| format!("could not stage the document for opening ({e})"))?;
+    let was_container = looks_like_container(&staged);
+    let opened = open_document_checked(&staged, blob_dir, mesh_dir);
+    let _ = std::fs::remove_file(&staged);
+    opened.map(|(document, report)| OpenedBytes { document, report, was_container })
+}
+
 fn copy_into<W: Write + Seek>(z: &mut zip::ZipWriter<W>, src: &Path) -> Result<(), String> {
     let mut f = File::open(src).map_err(|e| format!("{}: {e}", src.display()))?;
     std::io::copy(&mut f, z).map_err(|e| e.to_string())?;
@@ -812,6 +831,28 @@ mod tests {
         std::fs::write(&p, br#"{"version": 4, "features": []}"#).unwrap();
         assert!(!looks_like_container(&p));
         assert!(read_manifest(&p).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_document_held_as_bytes_publishes_its_geometry_like_one_opened_by_path() {
+        let dir = tmpdir("bytes");
+        let data: Vec<u8> = (0..50_000u32).map(|i| (i.wrapping_mul(2654435761) >> 24) as u8).collect();
+        let h = hash_bytes(&data);
+        let blobs = BTreeMap::from([(h.clone(), blob(&dir, "g.bin", &data))]);
+        let doc = format!(r#"{{"version":9,"features":[{{"id":"im","type":"import","geom":"{h}"}}]}}"#);
+
+        for (name, binary) in [("part.funda", false), ("part.fundab", true)] {
+            let dest = dir.join(name);
+            write_document(&dest, &doc, &blobs, &BTreeMap::new(), "test").unwrap();
+            let store = dir.join(format!("store-{name}"));
+            let opened = open_document_bytes(&std::fs::read(&dest).unwrap(), &store, None).unwrap();
+            let got: serde_json::Value = serde_json::from_str(&opened.document).unwrap();
+            let want: serde_json::Value = serde_json::from_str(&doc).unwrap();
+            assert_eq!(got, want, "{name}: the document without its geometry map");
+            assert_eq!(opened.was_container, binary, "{name}");
+            assert_eq!(std::fs::read(store.join(format!("{h}.bbrep"))).unwrap(), data, "{name}: geometry published");
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

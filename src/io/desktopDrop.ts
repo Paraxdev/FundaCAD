@@ -1,6 +1,6 @@
 import type { Engine } from "../app/engine";
 import { mayDiscard } from "../app/documentActions";
-import { importFileBytes, importPath, openDocumentAtPath, openDocumentText, reportError } from "./files";
+import { importFileBytes, importPath, openDocumentAtPath, openDocumentBytes, reportError } from "./files";
 import { describeDropLeftovers, planDrop } from "./dropRouting";
 
 /** A file dropped on the window: a real path when the desktop app could find
@@ -23,7 +23,7 @@ export async function takeDroppedFiles(e: DropEngine, items: readonly DroppedFil
     // was meant to open, not to the one that stayed.
     if (!(await mayDiscard(e, `Discard unsaved changes and open ${doc.name}?`))) return;
     if (doc.path) await openDocumentAtPath(e.store, doc.path, e.geometry);
-    else if (doc.file) await openDocumentText(e.store, doc.name, await doc.file.text());
+    else if (doc.file) await openDocumentBytes(e.store, doc.file, e.geometry);
   }
   for (const item of plan.imports) {
     if (item.path) await importPath(e.store, e.geometry, item.path);

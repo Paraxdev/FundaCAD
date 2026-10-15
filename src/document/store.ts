@@ -231,6 +231,7 @@ export class DocumentStore {
   private busyListeners = new Set<BusyListener>();
   private metaListeners = new Set<MetaListener>();
   private path: string | null = null; // current file path (null = unsaved)
+  private pathlessName: string | null = null;
   private isDirty = false; // unsaved changes since last save/open/new
   private rollback: number | null = null; // # of active features (null = all); timeline marker
   private suppressed = new Set<string>(); // feature ids skipped on rebuild (suppress)
@@ -486,12 +487,22 @@ export class DocumentStore {
   }
   /** display name: the file's basename, or "Untitled". */
   get fileName(): string {
-    if (!this.path) return "Untitled";
+    if (!this.path) return this.pathlessName ?? "Untitled";
     return this.path.split(/[\\/]/).pop() || this.path;
   }
   /** mark the document as saved/opened at `path` (clears the dirty flag). */
   markSaved(path: string) {
     this.path = path;
+    this.pathlessName = null;
+    this.isDirty = false;
+    this.emitMeta();
+  }
+  /** A document opened from bytes the desktop app could not place on disk: it
+   *  shows `name`, and Save asks where to write it instead of writing to a bare
+   *  name relative to the app's working directory. */
+  markOpenedWithoutPath(name: string) {
+    this.path = null;
+    this.pathlessName = name;
     this.isDirty = false;
     this.emitMeta();
   }
@@ -537,6 +548,7 @@ export class DocumentStore {
     this.repo = null;
     this.stress = null;
     this.path = null;
+    this.pathlessName = null;
     this.isDirty = false;
     this.discardModelForReplacement();
     this.emitDoc();
