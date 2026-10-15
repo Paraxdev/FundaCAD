@@ -23,6 +23,17 @@ pub const MAX_IMPORT_TOTAL_FACES: usize = 60_000;
 pub const MAX_IMPORT_SCAN_BYTES: u64 = 64 * 1024 * 1024;
 pub const MAX_IMPORT_FACET_DIRECTIONS: usize = 20_000;
 pub const GLB_MM_AS_UNITS_ABOVE: f64 = 10_000.0;
+
+/// Millimetres in one unit of the import picker's choices.
+pub fn mm_per_unit_name(unit: &str) -> Result<f64, String> {
+    match unit {
+        "mm" => Ok(1.0),
+        "cm" => Ok(10.0),
+        "m" => Ok(1000.0),
+        "inch" => Ok(25.4),
+        other => Err(format!("the unit '{other}' is not known, use mm, cm, m or inch")),
+    }
+}
 const REFACET_TOL: f64 = 0.12;
 
 type Triangles = (Vec<f64>, Vec<u32>);
@@ -535,23 +546,26 @@ pub fn read_obj(path: &Path) -> Result<Shape, String> {
 }
 
 /// `_read_glb` then the shared sew path.
-pub fn read_glb(path: &Path) -> Result<Shape, String> {
+pub fn read_glb(path: &Path, mm_per_unit: Option<f64>) -> Result<Shape, String> {
     let data = std::fs::read(path).map_err(|e| e.to_string())?;
     let (json, bin) = super::gltf::split_glb(&data)?;
-    sew_gltf(&json, &[std::borrow::Cow::Borrowed(bin)])
+    sew_gltf(&json, &[std::borrow::Cow::Borrowed(bin)], mm_per_unit)
 }
 
 /// A text .gltf through the GLB path, and its dominant colour.
-pub fn read_gltf(path: &Path) -> Result<(Shape, Option<String>), String> {
+pub fn read_gltf(path: &Path, mm_per_unit: Option<f64>) -> Result<(Shape, Option<String>), String> {
     let (json, buffers) = super::gltf::load_gltf(path)?;
-    Ok((sew_gltf(&json, &buffers)?, gltf_dominant_color(&json)))
+    Ok((sew_gltf(&json, &buffers, mm_per_unit)?, gltf_dominant_color(&json)))
 }
 
-fn sew_gltf(json: &serde_json::Value, buffers: &[std::borrow::Cow<'_, [u8]>]) -> Result<Shape, String> {
-    let (mut pos, mut idx) = super::gltf::read_gltf(json, buffers, 1000.0)?;
-    if super::gltf::max_extent(&pos) > GLB_MM_AS_UNITS_ABOVE {
-        (pos, idx) = super::gltf::read_gltf(json, buffers, 1.0)?;
-    }
+fn sew_gltf(json: &serde_json::Value, buffers: &[std::borrow::Cow<'_, [u8]>], mm_per_unit: Option<f64>) -> Result<Shape, String> {
+    let (pos, idx) = match mm_per_unit {
+        Some(mm) => super::gltf::read_gltf(json, buffers, mm)?,
+        None => {
+            let metres = super::gltf::read_gltf(json, buffers, 1000.0)?;
+            if super::gltf::max_extent(&metres.0) > GLB_MM_AS_UNITS_ABOVE { super::gltf::read_gltf(json, buffers, 1.0)? } else { metres }
+        }
+    };
     let ntri = idx.len() / 3;
     if ntri as u64 > MAX_IMPORT_TRIANGLES {
         return Err(format!(

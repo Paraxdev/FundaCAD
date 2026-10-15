@@ -419,3 +419,32 @@ fn a_vrml_scene_says_what_it_skipped_and_v1_is_refused() {
     let reply = import_as(&write("packed.wrl", &gz.finish().unwrap()), "vrml").unwrap();
     assert_eq!(reply["parts"].as_array().map(Vec::len), Some(2));
 }
+
+#[test]
+fn a_unit_chosen_at_import_scales_gltf_vrml_and_x3d() {
+    let store = BlobStore::open(&dir().join("blobs")).unwrap();
+    // The files hold a 0.01 unit cube, 10 mm when a unit is a metre.
+    let cases = [
+        ("unit.glb", "glb", glb()),
+        ("unit.gltf", "gltf", {
+            use base64::Engine as _;
+            let uri = format!("data:application/octet-stream;base64,{}", base64::engine::general_purpose::STANDARD.encode(gltf_buffer()));
+            serde_json::to_vec(&gltf_json(&uri)).unwrap()
+        }),
+        ("unit.wrl", "vrml", wrl().into_bytes()),
+        ("unit.x3d", "x3d", x3d().into_bytes()),
+    ];
+    for (name, fmt, bytes) in cases {
+        let path = write(name, &bytes);
+        for (unit, side) in [("m", 10.0_f64), ("cm", 0.1), ("inch", 0.254)] {
+            let reply = import::import_geometry_in(&path.to_string_lossy(), fmt, &store, Some(unit)).unwrap();
+            assert_eq!(reply["unit"], json!(unit), "{name}");
+            let b = build(reply, fmt);
+            let v = kernel::volume(&b.bodies[0].shape);
+            assert!((v / side.powi(3) - 1.0).abs() < 1e-4, "{name} in {unit}: {v}");
+        }
+        let e = import::import_geometry_in(&path.to_string_lossy(), fmt, &store, Some("furlong")).unwrap_err();
+        assert!(e.contains("furlong"), "{e}");
+        assert!(!import_as(&path, fmt).unwrap().contains_key("unit"), "{name}");
+    }
+}

@@ -2794,15 +2794,13 @@ impl FundaCad {
             }
         };
 
+        let mut import_args = vec![("path", json!(path.to_string_lossy())), ("format", json!(fmt))];
+        if let Some(unit) = args.get("unit").and_then(Value::as_str) {
+            import_args.push(("unit", json!(unit)));
+        }
         let link = self.engine_link().await;
         let reply = link
-            .call(
-                "import",
-                call_args([
-                    ("path", json!(path.to_string_lossy())),
-                    ("format", json!(fmt)),
-                ]),
-            )
+            .call("import", call_args(import_args))
             .await;
         if let Some(id) = &upload_id {
             self.state.lock().await.drop_upload(id);
@@ -2843,7 +2841,7 @@ impl FundaCad {
         // no colour and no assembly tree must produce the feature it always
         // did, and a null is a different thing from absent to everything
         // downstream.
-        for key in ["color", "nodes", "parts", "notes"] {
+        for key in ["color", "nodes", "parts", "notes", "unit"] {
             if let Some(v) = res.get(key).filter(|v| !v.is_null()) {
                 feature.insert(key.into(), v.clone());
             }

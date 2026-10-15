@@ -15,6 +15,7 @@ import { UnreadableDocumentError } from "../document/documentShape";
 import { noteRecent } from "./recentFiles";
 import { BINARY_DOC_EXT, DOC_EXT, LEGACY_DOC_EXTS, isDocumentExt } from "./documentExt";
 import { announceImportedBody } from "../plugins/contrib";
+import { askImportUnit, asksForUnit, type ImportUnit } from "./importUnit";
 import {
   asHex, materialsForColors, nodeColors, parseLibrary, serializeLibrary,
 } from "../document/materials";
@@ -491,15 +492,20 @@ export function importedBodyCount(res: { parts?: { node: number; faces: number }
  *
  *  Exported for the harness that has a path and no dialog (e2e/*.cjs). Not a
  *  second door: it is the same one, minus the picker. */
-export async function importPath(store: DocumentStore, geometry: GeometryBackend, path: string) {
+export async function importPath(store: DocumentStore, geometry: GeometryBackend, path: string, unit?: ImportUnit) {
   const fmt = extToImportFormat(path);
+  if (asksForUnit(fmt) && !unit) {
+    const picked = await askImportUnit(fmt);
+    if (!picked) return;
+    unit = picked;
+  }
   // runBusy is what makes the operation VISIBLE and stoppable: an import used to
   // run with no busy state at all, so the timeline showed nothing and there was
   // nothing for a Cancel button to attach to. onStarted hands back the request
   // id so a cancel targets this import specifically.
   const res = await store.runBusy(
     `Importing ${path.split(/[\\/]/).pop() ?? "file"}`,
-    (onStarted) => geometry.importGeometry(path, fmt, onStarted),
+    (onStarted) => geometry.importGeometry(path, fmt, onStarted, unit),
   );
   if (!res.ok) {
     if (res.cancelled) {
@@ -529,6 +535,7 @@ export async function importPath(store: DocumentStore, geometry: GeometryBackend
     ...(res.nodes !== undefined ? { nodes: res.nodes } : {}),
     ...(res.parts !== undefined ? { parts: res.parts } : {}),
     ...(res.notes !== undefined ? { notes: res.notes } : {}),
+    ...(res.unit !== undefined ? { unit: res.unit } : {}),
   });
 
   // Say what the document will be like while the user is still deciding what to

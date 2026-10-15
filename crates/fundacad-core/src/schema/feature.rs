@@ -315,6 +315,8 @@ feature_struct!(
         #[serde(default, skip_serializing_if = "Option::is_none")] notes: Option<Vec<String>>,
         #[serde(default, skip_serializing_if = "Option::is_none")] link: Option<ImportLink>,
         #[serde(default, skip_serializing_if = "Option::is_none")] generated_by: Option<GeneratedBy>,
+        /// The unit a glTF, VRML or X3D file was read in, for the record, the geometry is already stored in mm.
+        #[serde(default, skip_serializing_if = "Option::is_none")] unit: Option<String>,
     }
 );
 
