@@ -110,6 +110,22 @@ describe("PostChain composer frames", () => {
     setRenderPref("bloom", DEFAULT_RENDER.bloom);
   });
 
+  it("keeps a light ground below the bloom threshold at the top of the slider", () => {
+    setRenderPref("bloom", 1);
+    for (const hex of [0xeee8d5, 0xf4f5f7, 0xffffff, ...Object.values(BACKGROUND_COLOR)]) {
+      const c = chain(false);
+      c.clear.set(hex);
+      const bloom = { enabled: true, strength: 0, radius: 0, threshold: 0, setSize: () => {} };
+      (c.post as unknown as { bloom: unknown }).bloom = bloom;
+      c.post.render(new THREE.PerspectiveCamera());
+      const ground = c.cleared[0]!.color;
+      const luma = 0.2126729 * ground.r + 0.7151522 * ground.g + 0.072175 * ground.b;
+      // smoothWidth of UnrealBloomPass's high pass is 0.01, above that a texel blooms in full.
+      expect(bloom.threshold, `#${hex.toString(16)}`).toBeGreaterThan(luma + 0.01);
+    }
+    setRenderPref("bloom", DEFAULT_RENDER.bloom);
+  });
+
   it("follows the renderer's pixel ratio", () => {
     setRenderPref("bloom", 0.4);
     const c = chain(false);

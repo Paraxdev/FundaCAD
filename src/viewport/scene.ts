@@ -7,7 +7,7 @@ import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment
 import { stickyFact } from "../diagnostics/breadcrumbs";
 import { gridStep } from "../sketch/planeGrid";
 import { isRenderLowPower, setRenderLowPower } from "./render";
-import { composerClearColor, DISPLAY_COLOR_GLSL, displayColorUniforms, followComposer, setComposing } from "./composerColor";
+import { composerClearColor, DISPLAY_COLOR_GLSL, displayColorUniforms, followComposer, setComposing, thresholdAboveGround } from "./composerColor";
 import { BACKGROUND_COLOR, bloomSettings, renderPrefs } from "../ui/renderPrefs";
 import { POTATO_PIXEL_RATIO, PotatoDraw } from "./potato";
 import { isSoftwareRendererName, setSoftwareRenderer } from "../ui/glassBlur";
@@ -562,13 +562,17 @@ export class PostChain {
       }
     }
     const p = renderPrefs();
+    const r = this.renderer;
+    r.getClearColor(this.clearWas);
+    const alpha = r.getClearAlpha();
+    composerClearColor(this.clearWas, r.toneMapping, r.toneMappingExposure, this.clearNow);
     if (this.bloom) {
       this.bloom.enabled = want.bloom;
       if (want.bloom) {
         const b = bloomSettings(p.bloom);
         this.bloom.strength = b.strength;
         this.bloom.radius = b.radius;
-        this.bloom.threshold = b.threshold;
+        this.bloom.threshold = thresholdAboveGround(b.threshold, this.clearNow);
       }
     }
     if (this.bokeh) {
@@ -599,11 +603,8 @@ export class PostChain {
     // with the target still bound: WebGLState caches a clear value converted for
     // the target bound at setClearColor (sRGB for the canvas), and the
     // transmission buffer of any glass clears from that cache, in linear.
-    const r = this.renderer;
-    r.getClearColor(this.clearWas);
-    const alpha = r.getClearAlpha();
     r.setRenderTarget(composer.readBuffer);
-    r.setClearColor(composerClearColor(this.clearWas, r.toneMapping, r.toneMappingExposure, this.clearNow), alpha);
+    r.setClearColor(this.clearNow, alpha);
     r.clear();
     r.setClearColor(this.clearWas, alpha);
     setComposing(true, this.clearWas);

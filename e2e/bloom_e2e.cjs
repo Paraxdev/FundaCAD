@@ -118,7 +118,8 @@ const maxDelta = (a, b) => Math.max(...a.map((v, i) => Math.abs(v - b[i])));
       fs.writeFileSync(path.join(OUT, name + ".png"), buf);
       return buf;
     };
-    // bg is a patch of ground between the side cards at 1200 x 800, its median steps over the grid lines.
+    // bg is a patch of ground right of the model at 1200 x 800, far enough that the
+    // glow of the rod's top at bloom 1 does not reach it, its median steps over the grid lines.
     const glassBoxes = () => page.evaluate(() => {
       const v = window.viewport, cam = v.rig.active, r = v.scene.renderer.domElement.getBoundingClientRect();
       const P = (x, y, z) => {
@@ -126,32 +127,40 @@ const maxDelta = (a, b) => Math.max(...a.map((v, i) => Math.abs(v - b[i])));
         return [Math.round(r.left + ((p.x + 1) / 2) * r.width), Math.round(r.top + ((1 - p.y) / 2) * r.height)];
       };
       const sq = ([x, y], h) => [x - h, y - h, x + h, y + h];
-      return { rod: sq(P(0, 0, 55), 3), box: sq(P(22, -22, 20), 8), bg: [440, 70, 520, 110], ground: [300, 420, 400, 560] };
+      return { rod: sq(P(0, 0, 55), 3), box: sq(P(22, -22, 20), 8), bg: [940, 600, 1040, 680], ground: [300, 420, 400, 560] };
     });
 
-    // 1. The background and the glass, bloom off and on, for each ground.
-    for (const ground of ["theme", "dark", "grey", "light"]) {
-      await setPref("background", ground);
+    const setTheme = (id) => page.evaluate(async (id) => {
+      (await import("/src/ui/theme.ts")).setTheme(id);
+    }, id);
+    // 1. The background and the glass, bloom off and on, for each ground, at the
+    // default amount and at the top of the slider, where the threshold is lowest.
+    const grounds = [["theme"], ["dark"], ["grey"], ["light"], ["theme", "solarized-light"]];
+    for (const [bg, theme] of grounds) for (const amount of [0.4, 1]) {
+      const ground = theme ? `${bg}_${theme}` : bg;
+      if (theme) await setTheme(theme);
+      await setPref("background", bg);
       await setPref("bloom", 0);
       await settle();
       const at = await glassBoxes();
       const off = await shot(`bg_${ground}_bloom0`);
       const directOn = await page.evaluate(() => window.__frames.at(-1).composed);
-      await setPref("bloom", 0.4);
+      await setPref("bloom", amount);
       await settle();
-      const on = await shot(`bg_${ground}_bloom04`);
+      const on = await shot(`bg_${ground}_bloom${amount}`);
       const composerOn = await page.evaluate(() => window.__frames.at(-1).composed);
-      check(`${ground}: bloom 0 draws direct, 0.4 through the composer`, !directOn && composerOn, `composed ${directOn} then ${composerOn}`);
+      check(`${ground}: bloom 0 draws direct, ${amount} through the composer`, !directOn && composerOn, `composed ${directOn} then ${composerOn}`);
       const [bgOff] = await measure(off, [at.bg], "median");
       const [bgOn] = await measure(on, [at.bg], "median");
-      check(`${ground}: background identical with bloom on`, maxDelta(bgOff, bgOn) <= 1, `${bgOff} vs ${bgOn}`);
+      check(`${ground}: background identical with bloom ${amount}`, maxDelta(bgOff, bgOn) <= 1, `${bgOff} vs ${bgOn}`);
       const [gridOff] = await measure(off, [at.ground], "mean");
       const [gridOn] = await measure(on, [at.ground], "mean");
-      check(`${ground}: grid lines identical with bloom on`, maxDelta(gridOff, gridOn) <= 1.5, `mean ${gridOff} vs ${gridOn}`);
+      check(`${ground}: grid lines identical with bloom ${amount}`, maxDelta(gridOff, gridOn) <= 1.5, `mean ${gridOff} vs ${gridOn}`);
       const [rodOff, boxOff] = await measure(off, [at.rod, at.box]);
       const [rodOn, boxOn] = await measure(on, [at.rod, at.box]);
-      console.log(`    ${ground}: rod ${rodOff} -> ${rodOn}, box face ${boxOff} -> ${boxOn}`);
+      console.log(`    ${ground} at ${amount}: rod ${rodOff} -> ${rodOn}, box face ${boxOff} -> ${boxOn}`);
       check(`${ground}: glass box face keeps its colour with bloom on`, maxDelta(boxOff, boxOn) <= 4, `${boxOff} vs ${boxOn}`);
+      if (theme) await setTheme("fundacad");
     }
     await setPref("background", "theme");
 

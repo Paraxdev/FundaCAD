@@ -17,6 +17,15 @@ export function composerClearColor(
   return out.setRGB(x[0]! / e, x[1]! / e, x[2]! / e, THREE.LinearSRGBColorSpace);
 }
 
+/** The bloom threshold, raised above the composer's clear so the ground never
+ *  blooms. A light ground cleared with the inverse of the tone mapper sits near
+ *  or above the top of the slider's threshold. The weights are the high pass
+ *  shader's `luminance`. */
+export function thresholdAboveGround(threshold: number, clear: THREE.Color): number {
+  const luma = 0.2126729 * clear.r + 0.7151522 * clear.g + 0.072175 * clear.b;
+  return Math.max(threshold, luma + 0.05);
+}
+
 const START = 0.8 - 0.04;
 const DESATURATION = 0.15;
 
