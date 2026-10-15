@@ -668,6 +668,8 @@ export class PostChain {
     // does in the material shader, and this pass is where they happen instead.
     // Without it the whole viewport comes back washed out and over-bright.
     composer.addPass(new OutputPass());
+    // addPass sized the glow in device pixels, setSize keeps it at CSS size.
+    bloom.setSize(this.size.x, this.size.y);
     this.bloom = bloom;
     this.bokeh = bokeh;
     this.composer = composer;

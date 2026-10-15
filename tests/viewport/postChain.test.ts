@@ -126,6 +126,25 @@ describe("PostChain composer frames", () => {
     setRenderPref("bloom", DEFAULT_RENDER.bloom);
   });
 
+  it("sizes the glow at CSS size when the chain is built at a pixel ratio above 1", async () => {
+    const c = chain(false);
+    const r = c.post as unknown as { renderer: Record<string, unknown>; passes: unknown; composer: unknown; build(): void; bloom: { renderTargetBright: { width: number } } };
+    r.renderer.getSize = (v: THREE.Vector2) => v.set(600, 400);
+    const [{ EffectComposer }, { RenderPass }, { UnrealBloomPass }, { BokehPass }, { OutputPass }] = await Promise.all([
+      import("three/examples/jsm/postprocessing/EffectComposer.js"),
+      import("three/examples/jsm/postprocessing/RenderPass.js"),
+      import("three/examples/jsm/postprocessing/UnrealBloomPass.js"),
+      import("three/examples/jsm/postprocessing/BokehPass.js"),
+      import("three/examples/jsm/postprocessing/OutputPass.js"),
+    ]);
+    r.passes = { EffectComposer, RenderPass, UnrealBloomPass, BokehPass, OutputPass };
+    r.composer = null;
+    c.post.setSize(600, 400);
+    r.build();
+    // UnrealBloomPass halves what setSize gets: 300 at CSS size, 600 at the ratio of 2.
+    expect(r.bloom.renderTargetBright.width).toBe(300);
+  });
+
   it("follows the renderer's pixel ratio", () => {
     setRenderPref("bloom", 0.4);
     const c = chain(false);
@@ -136,5 +155,14 @@ describe("PostChain composer frames", () => {
     c.post.render(camera);
     expect(c.f.calls.filter((s) => s.startsWith("ratio"))).toEqual(["ratio 2", "ratio 0.75"]);
     setRenderPref("bloom", DEFAULT_RENDER.bloom);
+  });
+});
+
+describe("three internals the composer clear relies on", () => {
+  // The transmission pass clears from the value WebGLState cached at the last
+  // setClearColor, converted for the target bound then, and only a GPU shows it.
+  // Bumping three means running e2e/bloom_e2e.cjs on a GPU Chrome, then this number.
+  it("is still the three release e2e/bloom_e2e.cjs was run against", () => {
+    expect(THREE.REVISION).toBe("180");
   });
 });
