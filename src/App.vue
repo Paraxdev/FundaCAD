@@ -9,6 +9,7 @@ import ContextMenuHost from "./components/overlays/ContextMenuHost.vue";
 import TargetEditPanel from "./components/overlays/TargetEditPanel.vue";
 import ConsolePanel from "./components/overlays/ConsolePanel.vue";
 import AreaFilterChip from "./components/overlays/AreaFilterChip.vue";
+import DropHint from "./components/overlays/DropHint.vue";
 import CommandPalette from "./components/overlays/CommandPalette.vue";
 import ToolRail from "./components/shell/ToolRail.vue";
 import TimelineBar from "./components/shell/TimelineBar.vue";
@@ -126,6 +127,7 @@ watch(() => ui.sketchActive, () => shell.closeDrawer());
   <ContextMenuHost />
   <ConsolePanel />
   <AreaFilterChip />
+  <DropHint />
   <CommandPalette />
 
   <!-- Floating "measure-panel" popups. Independent of one another: Properties

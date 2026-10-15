@@ -10,6 +10,7 @@ pub use fundacad_format::{fnda, json_doc};
 pub mod plugins;
 pub mod session_file;
 mod spacemouse;
+mod drop_paths;
 // WebKitGTK only exists on Linux; macOS and Windows use WKWebView and WebView2.
 #[cfg(target_os = "linux")]
 mod webkit;
@@ -315,6 +316,9 @@ pub fn run() {
             // and counting it would eat into the timeout.
             app.manage(FrontendReady(std::sync::atomic::AtomicBool::new(false)));
             watch_frontend_load(app.handle().clone());
+            if let Some(w) = app.get_webview_window("main") {
+                drop_paths::install(&w);
+            }
             Ok(())
         })
         .build(tauri::generate_context!())

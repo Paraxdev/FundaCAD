@@ -193,6 +193,51 @@ fn step_round_trips_through_export_and_import() {
     assert_eq!(r, json!({"id": 4, "ok": false, "error": {"message": "unsupported import format: dwg"}}));
 }
 
+#[test]
+fn an_import_sent_as_bytes_reads_like_one_sent_by_path() {
+    use base64::Engine as _;
+    blob_dir();
+    let c = Client::new();
+    let dir = scratch("bytes");
+    let path = p(&dir, "two.step");
+    let r = c.call(json!({"id": 1, "op": "export", "document": two_bodies(), "format": "step", "path": path}));
+    assert_eq!(r["ok"], true, "{r}");
+    let data = base64::engine::general_purpose::STANDARD.encode(std::fs::read(&path).unwrap());
+    let r = c.call(json!({"id": 2, "op": "import", "format": "step", "name": "Dropped \u{00dc}ber: part.step", "data": data}));
+    assert_eq!(r["ok"], true, "{r}");
+    let res = &r["result"];
+    assert_eq!(res["name"], "Dropped \u{00dc}ber_ part");
+    assert_eq!(res["faces"], 7);
+    assert_eq!(res["parts"].as_array().unwrap().len(), 2);
+    let spool = format!("fundacad-drop-{}-", std::process::id());
+    let left: Vec<_> = std::fs::read_dir(std::env::temp_dir())
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_name().to_string_lossy().starts_with(&spool))
+        .collect();
+    assert!(left.is_empty(), "spool left behind: {left:?}");
+
+    let r = c.call(json!({"id": 3, "op": "import", "format": "stl", "name": "x.stl", "data": "not base64 !!"}));
+    assert_eq!(r["ok"], false, "{r}");
+    assert!(r["error"]["message"].as_str().unwrap().contains("x.stl"), "{r}");
+    let r = c.call(json!({"id": 4, "op": "import", "format": "stl"}));
+    assert_eq!(r, json!({"id": 4, "ok": false, "error": {"message": "import: a request needs a path or data, and a format"}}));
+
+    let gz = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/asm_colors.step.gz");
+    let data = base64::engine::general_purpose::STANDARD.encode(std::fs::read(gz).unwrap());
+    let r = c.call(json!({"id": 5, "op": "import", "format": "step", "name": "asm_colors.step.gz", "data": data}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert_eq!(r["result"]["name"], "asm_colors");
+
+    let wrl = "#VRML V2.0 utf8\nShape { geometry IndexedFaceSet { coord Coordinate { point [ \
+        0 0 0, 0.01 0 0, 0.01 0.01 0, 0 0.01 0, 0 0 0.01, 0.01 0 0.01, 0.01 0.01 0.01, 0 0.01 0.01 ] } \
+        coordIndex [ 0 3 2 1 -1, 4 5 6 7 -1, 0 1 5 4 -1, 1 2 6 5 -1, 2 3 7 6 -1, 3 0 4 7 -1 ] } }\n";
+    let data = base64::engine::general_purpose::STANDARD.encode(wrl);
+    let r = c.call(json!({"id": 6, "op": "import", "format": "vrml", "name": "cube.wrl", "data": data, "unit": "cm"}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert_eq!(r["result"]["unit"], "cm");
+}
+
 /// Every undirected edge of the model's triangles, with how many use it.
 fn edge_uses(model: &str) -> std::collections::HashMap<(u32, u32), usize> {
     let mut uses = std::collections::HashMap::new();

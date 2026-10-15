@@ -329,6 +329,9 @@ export interface GeometryBackend {
   // `onStarted` receives the request id, so a caller that may later cancel
   // can target THIS op rather than whatever ran most recently.
   importGeometry(path: string, format: ImportFormat, onStarted?: (id: string) => void, unit?: string): Promise<ImportReply>;
+  /** The same import from the file's bytes, base64, for a caller with no path
+   *  (a file dropped on a browser tab). Optional, a test backend may lack it. */
+  importBytes?(name: string, format: ImportFormat, data: string, onStarted?: (id: string) => void, unit?: string): Promise<ImportReply>;
   /** A solid from a shape generator a plugin's geometry component registered with
    *  the engine (docs/PLUGINS.md). "mesh" is for a preview;
    *  "store" writes the solid to the blob store, and an `import` feature carrying the
@@ -1299,13 +1302,21 @@ export class Geometry implements GeometryBackend {
     return { ok: false, message: msg.error?.message };
   }
 
-  async importGeometry(path: string, format: ImportFormat, onStarted?: (id: string) => void, unit?: string): Promise<ImportReply> {
+  importGeometry(path: string, format: ImportFormat, onStarted?: (id: string) => void, unit?: string): Promise<ImportReply> {
+    return this.importRequest({ path, format, ...(unit ? { unit } : {}) }, onStarted);
+  }
+
+  importBytes(name: string, format: ImportFormat, data: string, onStarted?: (id: string) => void, unit?: string): Promise<ImportReply> {
+    return this.importRequest({ name, format, data, ...(unit ? { unit } : {}) }, onStarted);
+  }
+
+  private async importRequest(req: object, onStarted?: (id: string) => void): Promise<ImportReply> {
     const msg = await this.call<{
       geom: string; name: string; solid: boolean; faces: number; color?: string;
       nodes?: { name: string; parent: number | null; color?: string }[];
       parts?: { node: number; faces: number }[];
       notes?: string[]; unit?: string;
-    }>("import", { path, format, ...(unit ? { unit } : {}) }, onStarted);
+    }>("import", req, onStarted);
     if (msg.ok) {
       const r = msg.result;
       return {
