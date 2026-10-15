@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { WebRequest, WebResponse } from "../../plugins/FundaCAD.Onshape/client";
 
 const h = vi.hoisted(() => ({
@@ -46,12 +46,14 @@ function reply(status: number, body?: unknown, extra: Partial<WebResponse> = {})
 }
 
 function fakeStore() {
+  const aborts: (AbortController | undefined)[] = [];
   const store = {
-    runBusy: (_label: string, fn: (onStarted: (id: string) => void) => Promise<unknown>) => {
+    runBusy: (_label: string, fn: (onStarted: (id: string) => void) => Promise<unknown>, opts?: { abort?: AbortController }) => {
+      aborts.push(opts?.abort);
       return fn(() => {});
     },
   };
-  return { store: store as never };
+  return { store: store as never, aborts };
 }
 
 function onshape(state: () => string, savedAt: string) {
@@ -71,6 +73,7 @@ beforeEach(() => {
   h.reportError.mockClear();
   h.removeDownload.mockClear();
 });
+afterEach(() => vi.useRealTimers());
 
 describe("importing from an Onshape link", () => {
   it.each([
@@ -83,5 +86,23 @@ describe("importing from an Onshape link", () => {
     expect(h.reportError).not.toHaveBeenCalled();
     expect(h.importPath).toHaveBeenCalledWith(store, expect.anything(), savedAt, undefined, expect.anything());
     expect(h.removeDownload).toHaveBeenCalledWith("Part_Studio_1.step");
+  });
+
+  it("stops polling Onshape when the busy row's Cancel is pressed", async () => {
+    vi.useFakeTimers();
+    onshape(() => "ACTIVE", "/x/Part_Studio_1.step");
+    const { store, aborts } = fakeStore();
+    const done = importFromOnshape(store, {} as never);
+    const polls = () => h.seen.filter((r) => r.url.includes("/api/translations/")).length;
+    await vi.waitFor(() => expect(polls()).toBeGreaterThan(1), { timeout: 5000 });
+    const abort = aborts.at(-1);
+    expect(abort).toBeInstanceOf(AbortController);
+    abort!.abort();
+    const atCancel = polls();
+    for (let i = 0; i < 20; i++) await vi.advanceTimersByTimeAsync(5000);
+    await done;
+    expect(polls()).toBe(atCancel);
+    expect(h.importPath).not.toHaveBeenCalled();
+    expect(h.reportError).not.toHaveBeenCalled();
   });
 });
