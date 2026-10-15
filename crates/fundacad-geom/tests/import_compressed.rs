@@ -203,3 +203,16 @@ fn a_gzip_copy_of_a_format_read_plain_says_so() {
         assert!(e.contains("gzip"), "{fmt}: {e}");
     }
 }
+
+#[test]
+fn an_unpacked_step_a_killed_engine_left_is_swept() {
+    let stale = std::env::temp_dir().join(format!("fundacad-unpacked-left-{}.step", std::process::id()));
+    let fresh = stale.with_extension("fresh.step");
+    let two_hours = std::time::SystemTime::now() - std::time::Duration::from_secs(7200);
+    std::fs::File::create(&stale).unwrap().set_modified(two_hours).unwrap();
+    std::fs::File::create(&fresh).unwrap();
+    drop(import::unpack_step(&fixture("asm_colors.stpz"), u64::MAX).unwrap().unwrap());
+    assert!(!stale.exists());
+    assert!(fresh.exists());
+    std::fs::remove_file(fresh).unwrap();
+}
