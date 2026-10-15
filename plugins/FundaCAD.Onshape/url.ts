@@ -12,8 +12,9 @@ export interface OnshapeLink {
 const ID = "[0-9a-f]{24}";
 const PATH = new RegExp(`^/documents/(${ID})(?:/([wvm])/(${ID})(?:/e/(${ID}))?)?/?$`);
 
+/** One label under onshape.com, the rule the manifest's `.onshape.com` grants in the app. */
 export function isOnshapeHost(host: string): boolean {
-  return host === "onshape.com" || host.endsWith(".onshape.com");
+  return /^[^.]+\.onshape\.com$/i.test(host);
 }
 
 export function parseOnshapeUrl(text: string): OnshapeLink | { error: string } {
