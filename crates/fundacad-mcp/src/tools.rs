@@ -48,7 +48,7 @@ pub fn doc_import() -> JsonObject {
             "compression": {"type": "string", "enum": ["gzip", "zip", "none"],
                             "description": "what `content` is wrapped in, before encoding. \
                                             Implied by a name ending .gz, .zip or .stpz, and \
-                                            gzip is recognised on sight"},
+                                            gzip is recognised on sight, whatever the name says"},
             "name": {"type": "string",
                      "description": "what the file is called, e.g. \"bracket.step\" or \
                                      \"bracket.step.gz\", which is where `content` gets its \

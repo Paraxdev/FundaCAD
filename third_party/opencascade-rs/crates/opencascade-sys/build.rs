@@ -29,6 +29,10 @@ const OCCT_LIBS: &[&str] = &[
     "TKCAF",
     "TKLCAF",
     "TKXCAF",
+    // OCCT XBF documents.
+    "TKBinXCAF",
+    "TKBin",
+    "TKBinL",
     // XCAFDoc and XCAFApp pull the OCAF application and presentation layers.
     "TKCDF",
     "TKVCAF",

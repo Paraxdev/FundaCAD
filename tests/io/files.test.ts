@@ -48,6 +48,16 @@ describe("extToImportFormat", () => {
     expect(extToImportFormat("/tmp/a.amf")).toBe("amf");
     expect(extToImportFormat("/tmp/a.wrl")).toBe("vrml");
     expect(extToImportFormat("/tmp/a.x3d")).toBe("x3d");
+    expect(extToImportFormat("/tmp/a.xbf")).toBe("xbf");
+  });
+
+  it("reads a gzip copy as the format inside it", () => {
+    expect(extToImportFormat("/tmp/a.stpz")).toBe("step");
+    expect(extToImportFormat("/tmp/a.step.gz")).toBe("step");
+    expect(extToImportFormat("/tmp/a.stp.gz")).toBe("step");
+    expect(extToImportFormat("/tmp/a.wrl.gz")).toBe("vrml");
+    expect(extToImportFormat("/tmp/A.X3D.GZ")).toBe("x3d");
+    expect(extToImportFormat("/tmp/my.part.v2.step.gz")).toBe("step");
   });
 
   it("is case-insensitive", () => {
@@ -69,7 +79,7 @@ describe("IMPORT_EXTS", () => {
   it("offers only extensions the import reads as themselves", () => {
     for (const ext of IMPORT_EXTS) {
       const fmt = extToImportFormat(`/tmp/a.${ext}`);
-      const spellings: Record<string, string[]> = { step: ["step", "stp"], iges: ["iges", "igs"], vrml: ["wrl", "wrz"], x3d: ["x3d", "x3dz"] };
+      const spellings: Record<string, string[]> = { step: ["step", "stp", "stpz", "gz"], iges: ["iges", "igs"], vrml: ["wrl", "wrz"], x3d: ["x3d", "x3dz"] };
       expect(spellings[fmt] ?? [fmt]).toContain(ext.toLowerCase());
     }
   });

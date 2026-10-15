@@ -209,6 +209,15 @@ pub fn read_iges_assembly_with(path: &Path, progress: &ProgressRange) -> Result<
     assembly_from(raw)
 }
 
+/// An OCCT binary XCAF document (.xbf) read like a STEP one, scaled to
+/// millimetres when it says another unit.
+pub fn read_xbf_assembly_with(path: &Path, progress: &ProgressRange) -> Result<StepAssembly, Error> {
+    let lock = step_lock();
+    let raw = ffi::xbf_assembly_read(path_str(path)?, progress.raw())?;
+    drop(lock);
+    assembly_from(raw)
+}
+
 fn assembly_from(raw: UniquePtr<ffi::StepAssembly>) -> Result<StepAssembly, Error> {
     let a = raw.as_ref().ok_or(Error::StepReadFailed)?;
     let mut nodes = Vec::new();

@@ -6,6 +6,7 @@
 
 #include "rust/cxx.h"
 #include <APIHeaderSection_MakeHeader.hxx>
+#include <BinXCAFDrivers.hxx>
 #include <IFSelect_ReturnStatus.hxx>
 #include <IGESCAFControl_Reader.hxx>
 #include <IGESControl_Controller.hxx>
@@ -15,6 +16,7 @@
 #include <Message_Printer.hxx>
 #include <Message_ProgressRange.hxx>
 #include <Message_ProgressScope.hxx>
+#include <PCDM_ReaderStatus.hxx>
 #include <Quantity_Color.hxx>
 #include <Quantity_ColorRGBA.hxx>
 #include <STEPCAFControl_Controller.hxx>
@@ -31,15 +33,18 @@
 #include <TDF_LabelSequence.hxx>
 #include <TDF_Tool.hxx>
 #include <TDataStd_Name.hxx>
+#include <TDocStd_Application.hxx>
 #include <TDocStd_Document.hxx>
 #include <TopAbs.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopLoc_Location.hxx>
 #include <TopoDS_Shape.hxx>
+#include <UnitsMethods_LengthUnit.hxx>
 #include <XCAFApp_Application.hxx>
 #include <XCAFDoc_ColorTool.hxx>
 #include <XCAFDoc_ColorType.hxx>
 #include <XCAFDoc_DocumentTool.hxx>
+#include <XCAFDoc_Editor.hxx>
 #include <XCAFDoc_ShapeTool.hxx>
 #include <XSControl_WorkSession.hxx>
 #include <bindings_common.hxx>
@@ -615,6 +620,52 @@ inline std::unique_ptr<StepAssembly> iges_assembly_read(rust::Str path, const Me
     throw std::runtime_error("the IGES file was read but contained no transferable shape");
   }
   return xcaf_assembly_walk(doc, whole, true, "IGES");
+}
+
+// A fresh application per read keeps the XCAFApp singleton, which the STEP
+// and IGES readers share, out of it.
+inline std::unique_ptr<StepAssembly> xbf_assembly_read(rust::Str path, const Message_ProgressRange &progress) {
+  std::string file(path.data(), path.size());
+  Handle(TDocStd_Application) app = new TDocStd_Application();
+  BinXCAFDrivers::DefineFormat(app);
+  Handle(TDocStd_Document) doc;
+  Message_ProgressScope whole(progress, "XBF", 20);
+  PCDM_ReaderStatus status = app->Open(TCollection_ExtendedString(file.c_str(), Standard_True), doc, whole.Next(19));
+  struct Closer {
+    Handle(TDocStd_Application) app;
+    Handle(TDocStd_Document) doc;
+    ~Closer() {
+      if (!doc.IsNull() && doc->IsOpened()) {
+        app->Close(doc);
+      }
+    }
+  } closer{app, doc};
+  if (status != PCDM_RS_OK || doc.IsNull()) {
+    if (whole.UserBreak()) {
+      throw std::runtime_error("cancelled");
+    }
+    throw std::runtime_error("could not read the XBF file (it may be truncated or not an OCCT XBF document, status " +
+                             std::to_string(static_cast<int>(status)) + ")");
+  }
+  if (!XCAFDoc_DocumentTool::IsXCAFDocument(doc)) {
+    throw std::runtime_error("this XBF file holds no XCAF shapes");
+  }
+  Standard_Real mm = 1.0;
+  if (XCAFDoc_DocumentTool::GetLengthUnit(doc, mm, UnitsMethods_LengthUnit_Millimeter) && mm > 0.0 &&
+      std::abs(mm - 1.0) > 1e-9) {
+    TDF_LabelSequence roots;
+    XCAFDoc_DocumentTool::ShapeTool(doc->Main())->GetFreeShapes(roots);
+    for (Standard_Integer i = 1; i <= roots.Length(); ++i) {
+      XCAFDoc_Editor::RescaleGeometry(roots.Value(i), mm);
+    }
+  }
+  std::unique_ptr<StepAssembly> tree = xcaf_assembly_walk(doc, whole, false, "XBF");
+  // An XCAF document keeps each part as a free shape of its own, as IGES does,
+  // so two of them are two parts rather than one body.
+  if (tree->nodes.size() > 1) {
+    tree->is_assembly = true;
+  }
+  return tree;
 }
 
 inline int32_t step_assembly_node_count(const StepAssembly &a) { return static_cast<int32_t>(a.nodes.size()); }

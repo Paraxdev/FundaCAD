@@ -23,7 +23,7 @@ use serde_json::{Map, Value};
 
 /// What `doc_import` will read. The same set the app's file pickers offer, and
 /// the same names the engine's importer switches on.
-pub const IMPORT_FORMATS: &[&str] = &["step", "stl", "3mf", "obj", "brep", "glb", "gltf", "iges", "fcstd", "ply", "off", "amf", "vrml", "x3d"];
+pub const IMPORT_FORMATS: &[&str] = &["step", "stl", "3mf", "obj", "brep", "glb", "gltf", "iges", "fcstd", "ply", "off", "amf", "vrml", "x3d", "xbf"];
 
 /// How much file may arrive inline, summed over every piece of one upload. A
 /// TRANSPORT limit, not the reader's: the engine keeps its own per-format cap
@@ -74,7 +74,8 @@ pub const UPLOAD_IDLE_SECONDS: u64 = 30 * 60;
 
 /// Extensions that wrap a file rather than being one, and what is inside when
 /// the name is all there is to go on. `.stpZ` is ISO 10303-21's own spelling
-/// for a zipped STEP and carries no inner extension to read.
+/// for a zipped STEP and carries no inner extension to read, though FreeCAD
+/// and KiCad write it gzip, which the sniff in `unpack` catches.
 const ARCHIVE_SUFFIXES: &[(&str, &str, Option<&str>)] = &[
     ("gz", "gzip", None),
     ("gzip", "gzip", None),
@@ -615,8 +616,10 @@ pub fn unpack(up: &mut Upload) -> Result<PathBuf, UploadError> {
     let payload = up.dir.join("payload");
     decode_spool(up, &payload)?;
     let mut compression = up.compression.clone();
-    if compression.is_none() && up.sniff {
-        compression = sniff_compression(&payload).map(str::to_string);
+    if up.sniff {
+        if let Some(seen) = sniff_compression(&payload) {
+            compression = Some(seen.to_string());
+        }
     }
     let final_path = up.dir.join(&up.filename);
     let Some(compression) = compression else {

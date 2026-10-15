@@ -11,6 +11,7 @@ pub mod fcstd;
 pub mod gltf;
 pub mod mesh;
 pub mod off;
+pub mod packed;
 pub mod ply;
 pub mod x3d;
 
@@ -26,12 +27,13 @@ use serde_json::{json, Map, Value};
 
 use crate::kernel::{self, Kind};
 use blobstore::BlobStore;
+pub use packed::unpack_step;
 
 pub const MAX_IMPORT_FILE_BYTES: u64 = 256 * 1024 * 1024;
 pub const MAX_IMPORT_BREP_FILE_BYTES: u64 = 1024 * 1024 * 1024;
 
 pub fn import_size_cap(fmt: &str) -> u64 {
-    if matches!(fmt, "step" | "stp" | "brep" | "iges" | "igs" | "fcstd") {
+    if matches!(fmt, "step" | "stp" | "stpz" | "xbf" | "brep" | "iges" | "igs" | "fcstd") {
         MAX_IMPORT_BREP_FILE_BYTES
     } else {
         MAX_IMPORT_FILE_BYTES
@@ -233,6 +235,14 @@ pub fn read_iges(path: &Path) -> Result<Imported, String> {
     Ok(from_assembly(asm))
 }
 
+/// An OCCT binary XCAF document, read like STEP, in millimetres.
+pub fn read_xbf(path: &Path) -> Result<Imported, String> {
+    let progress = crate::cancel::progress_beating();
+    let asm = crate::bench::phase("xbf_read", || xcaf::read_xbf_assembly_with(path, &progress.start()))
+        .map_err(|e| occt_message(&e))?;
+    Ok(from_assembly(asm))
+}
+
 fn from_assembly(asm: StepAssembly) -> Imported {
     if asm.is_assembly {
         return crate::bench::phase("assembly_payload", || assembly_payload(&asm));
@@ -309,7 +319,15 @@ pub fn import_geometry_in(path: &str, fmt: &str, store: &BlobStore, unit: Option
     }
     fundacad_engine::sysmem::refuse_if_memory_is_short(size, None)?;
     let imported = match fmt.as_str() {
-        "step" | "stp" => read_step(p)?,
+        "step" | "stp" | "stpz" => match unpack_step(p, MAX_IMPORT_BREP_FILE_BYTES)? {
+            Some(unpacked) => {
+                let size = std::fs::metadata(unpacked.path()).map_or(0, |m| m.len());
+                fundacad_engine::sysmem::refuse_if_memory_is_short(size, None)?;
+                read_step(unpacked.path())?
+            }
+            None => read_step(p)?,
+        },
+        "xbf" => read_xbf(p)?,
         "iges" | "igs" => read_iges(p)?,
         "fcstd" => fcstd::read_fcstd(p)?,
         "brep" => outward(Imported {
@@ -377,11 +395,7 @@ pub fn import_geometry_in(path: &str, fmt: &str, store: &BlobStore, unit: Option
             "could not store the imported geometry ({e}). Check free disk space and permissions on the FundaCAD data directory."
         )
     })?;
-    let name = p
-        .file_stem()
-        .map(|s| s.to_string_lossy().into_owned())
-        .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| "Imported".into());
+    let name = body_name(p);
     let mut out = Map::new();
     out.insert("geom".into(), json!(geom));
     out.insert("solid".into(), json!(kernel::count(&imported.shape, Kind::Solid) > 0));
@@ -394,6 +408,23 @@ pub fn import_geometry_in(path: &str, fmt: &str, store: &BlobStore, unit: Option
         out.insert("unit".into(), json!(u));
     }
     Ok(out)
+}
+
+/// The file name without its extension, and without the inner one of a
+/// gzip copy (part.step.gz, part.wrl.gz).
+fn body_name(p: &Path) -> String {
+    let file = p.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    let mut stem = Path::new(&file).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
+    if file.to_lowercase().ends_with(".gz") {
+        if let Some(inner) = Path::new(&stem).file_stem().map(|s| s.to_string_lossy().into_owned()) {
+            stem = inner;
+        }
+    }
+    if stem.is_empty() {
+        "Imported".into()
+    } else {
+        stem
+    }
 }
 
 /// The `import` op.
