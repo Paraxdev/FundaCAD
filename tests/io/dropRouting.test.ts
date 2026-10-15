@@ -89,6 +89,18 @@ describe("takeDroppedFiles", () => {
     expect(calls).toEqual(["error Nothing was imported, FundaCAD cannot read a.txt, b.docx."]);
   });
 
+  it("imports nothing when the dropped document does not open", async () => {
+    for (const outcome of ["unreadable", "newerFormat"]) {
+      calls.length = 0;
+      openOutcome = outcome;
+      await takeDroppedFiles(engine, named("a.funda", "b.stl"));
+      expect(calls).toEqual(["ask", "open D:/in/a.funda"]);
+      calls.length = 0;
+      await takeDroppedFiles(engine, [{ name: "a.funda", file: new File(["x"], "a.funda") }, ...named("b.stl")]);
+      expect(calls).toEqual(["ask", "open bytes a.funda"]);
+    }
+  });
+
   it("drops the whole drop when the discard prompt is cancelled", async () => {
     discard = false;
     await takeDroppedFiles(engine, named("a.funda", "b.stl"));

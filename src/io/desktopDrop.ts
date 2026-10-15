@@ -1,6 +1,6 @@
 import type { Engine } from "../app/engine";
 import { mayDiscard } from "../app/documentActions";
-import { importFileBytes, importPath, openDocumentAtPath, openDocumentBytes, reportError } from "./files";
+import { importFileBytes, importPath, openDocumentAtPath, openDocumentBytes, reportError, type OpenOutcome } from "./files";
 import { describeDropLeftovers, planDrop } from "./dropRouting";
 
 /** A file dropped on the window: a real path when the desktop app could find
@@ -22,8 +22,12 @@ export async function takeDroppedFiles(e: DropEngine, items: readonly DroppedFil
     // Cancelling drops the whole drop: its imports belong to the document that
     // was meant to open, not to the one that stayed.
     if (!(await mayDiscard(e, `Discard unsaved changes and open ${doc.name}?`))) return;
-    if (doc.path) await openDocumentAtPath(e.store, doc.path, e.geometry);
-    else if (doc.file) await openDocumentBytes(e.store, doc.file, e.geometry);
+    let outcome: OpenOutcome = "unreadable";
+    if (doc.path) outcome = await openDocumentAtPath(e.store, doc.path, e.geometry);
+    else if (doc.file) outcome = await openDocumentBytes(e.store, doc.file, e.geometry);
+    // The open already said why. Importing now would land in the document the
+    // user just chose to discard.
+    if (outcome !== "ok") return;
   }
   for (const item of plan.imports) {
     if (item.path) await importPath(e.store, e.geometry, item.path);

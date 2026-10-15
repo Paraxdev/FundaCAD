@@ -81,4 +81,19 @@ describe("a document dropped as bytes in the desktop app", () => {
     store.newDocument();
     expect(store.fileName).toBe("Untitled");
   });
+
+  it("keeps the open document and imports nothing when Rust refuses it", async () => {
+    reply = () => { throw "This document is damaged and cannot be opened."; };
+    const { takeDroppedFiles } = await import("../../src/io/desktopDrop");
+    const { store, engine, importBytes } = setup();
+    await takeDroppedFiles(engine, [
+      { name: "bad.funda", path: null, file: new File(["junk"], "bad.funda") },
+      { name: "b.stl", path: null, file: new File(["solid x\nendsolid x\n"], "b.stl") },
+    ]);
+
+    expect(reported).toEqual(["Couldn't open bad.funda: This document is damaged and cannot be opened."]);
+    expect(importBytes).not.toHaveBeenCalled();
+    expect(store.filePath).toBe("D:/work/previous.funda");
+    expect(store.document.parameters).toEqual({});
+  });
 });
