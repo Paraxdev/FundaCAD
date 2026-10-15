@@ -1,6 +1,7 @@
 // Cheaper frames while the camera moves, on a machine too slow to move it at full
-// quality. A reduced level draws the canvas at a lower pixel ratio, with 1px edge
-// lines and without the bloom and blur passes (PostChain). When the canvas
+// quality. A reduced level draws the canvas at a lower pixel ratio, and on a low
+// power tier (performance mode included) also with 1px edge lines and without the
+// bloom and blur passes (PostChain). When the canvas
 // shrinks and grows back is the viewport's call (Viewport.applyMotionScale).
 //
 // Note: it is the canvas that shrinks, not an offscreen target. Under SwiftShader

@@ -222,7 +222,7 @@ describe("PotatoDraw, lines only", () => {
 });
 
 describe("PostChain and potato mode", () => {
-  function chain(potatoOn: () => boolean) {
+  function chain(potatoOn: () => boolean, lowPower = () => false) {
     const scene = new THREE.Scene();
     const draws: { scene: THREE.Scene; target: unknown }[] = [];
     let current: unknown = null;
@@ -232,7 +232,7 @@ describe("PostChain and potato mode", () => {
       setRenderTarget: (t: unknown) => { current = t; },
       render: (s: THREE.Scene) => { draws.push({ scene: s, target: current }); },
     } as unknown as THREE.WebGLRenderer;
-    return { scene, draws, post: new PostChain(renderer, scene, potatoOn) };
+    return { scene, draws, post: new PostChain(renderer, scene, potatoOn, lowPower) };
   }
 
   it("draws the potato way only while its switch says so, so a still can lift it", () => {
@@ -251,9 +251,9 @@ describe("PostChain and potato mode", () => {
     setRenderPref("bloom", DEFAULT_RENDER.bloom);
   });
 
-  it("draws a motion frame straight to the canvas with thin lines and no passes", () => {
+  it("draws a low power motion frame straight to the canvas with thin lines and no passes", () => {
     setRenderPref("bloom", 1);
-    const c = chain(() => false);
+    const c = chain(() => false, () => true);
     const { edges } = rig();
     c.scene.add(edges.object);
     const lines: number[] = [];

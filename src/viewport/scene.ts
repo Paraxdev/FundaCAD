@@ -458,6 +458,7 @@ export class PostChain {
   private potato: PotatoDraw | null = null;
   private motionDraw: PotatoDraw | null = null;
   private size = new THREE.Vector2(1, 1);
+  private composerRatio = 0;
   private clearWas = new THREE.Color();
   private clearNow = new THREE.Color();
   private camera: THREE.Camera | null = null;
@@ -475,7 +476,11 @@ export class PostChain {
     private renderer: THREE.WebGLRenderer,
     private scene: THREE.Scene,
     private potatoOn: () => boolean = () => renderPrefs().potatoMode,
+    private lowPower: () => boolean = isRenderLowPower,
   ) {}
+
+  /** Asked for a frame once the passes have loaded, so bloom does not wait on the next input. */
+  onReady: () => void = () => {};
 
   /** How many samples the offscreen buffer takes, or 0 when there is no buffer
    *  because bloom is off and the canvas is being drawn straight to.
@@ -501,6 +506,7 @@ export class PostChain {
   setSize(w: number, h: number) {
     this.size.set(Math.max(1, w), Math.max(1, h));
     this.composer?.setSize(this.size.x, this.size.y);
+    // At CSS size on purpose: the glow's width is in texels and was tuned there.
     this.bloom?.setSize(this.size.x, this.size.y);
   }
 
@@ -512,8 +518,9 @@ export class PostChain {
     return { bloom: bloomWanted(p.bloom, this.bloomable), blur: p.focusBlur > 0 };
   }
 
-  /** `motion` is a camera frame on a machine that cannot keep up: 1px edge lines
-   *  and no passes, until the view settles and draws in full again. */
+  /** `motion` is a camera frame on a machine that cannot keep up. On a low power
+   *  tier (performance mode included) it draws 1px edge lines and no passes until
+   *  the view settles, otherwise the full look stays on while the camera moves. */
   render(camera: THREE.Camera, motion = false) {
     if (this.potatoOn()) {
       (this.potato ??= new PotatoDraw()).render(this.renderer, this.scene, camera, renderPrefs().brightness);
@@ -526,7 +533,7 @@ export class PostChain {
       this.potato.dispose();
       this.potato = null;
     }
-    if (motion) {
+    if (motion && this.lowPower()) {
       (this.motionDraw ??= new PotatoDraw(true)).render(this.renderer, this.scene, camera);
       return;
     }
@@ -581,6 +588,12 @@ export class PostChain {
         u["maxblur"]!.value = p.focusBlur * 0.012;
       }
     }
+    const pr = this.renderer.getPixelRatio();
+    if (pr !== this.composerRatio) {
+      this.composerRatio = pr;
+      composer.setPixelRatio(pr);
+      this.bloom?.setSize(this.size.x, this.size.y);
+    }
     // The RenderPass does not clear, this does. The OutputPass tone maps the
     // clear, so it is the inverse of the tone mapper. Then the plain colour again
     // with the target still bound: WebGLState caches a clear value converted for
@@ -616,6 +629,7 @@ export class PostChain {
       import("three/examples/jsm/postprocessing/OutputPass.js"),
     ]);
     this.passes = { EffectComposer, RenderPass, UnrealBloomPass, BokehPass, OutputPass };
+    this.onReady();
   }
 
   /** Synchronous once the modules are in, so a still can build the chain on the spot. */
@@ -632,6 +646,7 @@ export class PostChain {
       stencilBuffer: true,
     });
     const composer = new EffectComposer(this.renderer, buffer);
+    this.composerRatio = this.renderer.getPixelRatio();
     composer.setSize(this.size.x, this.size.y);
     const camera = this.camera ?? new THREE.PerspectiveCamera();
     const render = new RenderPass(this.scene, camera);
