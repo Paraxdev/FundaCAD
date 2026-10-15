@@ -493,7 +493,13 @@ export function importedBodyCount(res: { parts?: { node: number; faces: number }
  *
  *  Exported for the harness that has a path and no dialog (e2e/*.cjs). Not a
  *  second door: it is the same one, minus the picker. */
-export async function importPath(store: DocumentStore, geometry: GeometryBackend, path: string, unit?: ImportUnit) {
+export async function importPath(
+  store: DocumentStore,
+  geometry: GeometryBackend,
+  path: string,
+  unit?: ImportUnit,
+  opts: { source?: string } = {},
+) {
   const fmt = extToImportFormat(path);
   if (asksForUnit(fmt) && !unit) {
     const picked = await askImportUnit(fmt);
@@ -528,7 +534,7 @@ export async function importPath(store: DocumentStore, geometry: GeometryBackend
     format: fmt,
     name: res.name,
     geom: res.geom,
-    source: path,
+    source: opts.source ?? path,
     solid: res.solid,
     ...(res.color !== undefined ? { color: res.color } : {}),
     // the file's assembly tree, when it had one. Spread the same way `color` is,

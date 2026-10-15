@@ -1,0 +1,15 @@
+{
+  "id": "FundaCAD.Onshape",
+  "name": "Onshape link",
+  "version": "1.0.0",
+  "kind": "builtin",
+  "summary": "Imports the part studios of an Onshape document from its link, with your own API keys.",
+  "enabledByDefault": true,
+  "grants": [
+    "document.write",
+    "network"
+  ],
+  "hosts": [
+    ".onshape.com"
+  ]
+}

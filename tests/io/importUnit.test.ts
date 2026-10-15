@@ -91,4 +91,13 @@ describe("importPath with a unit", () => {
     expect(calls[0]![3]).toBeUndefined();
     expect(store.document.features[0]).not.toHaveProperty("unit");
   });
+
+  it("records the source a downloader names instead of its temp file", async () => {
+    const { be } = backend();
+    const store = new DocumentStore(be, { parameters: {}, features: [] });
+    await importPath(store, be, "C:/data/downloads/Bracket.step");
+    expect(store.document.features[0]).toHaveProperty("source", "C:/data/downloads/Bracket.step");
+    await importPath(store, be, "C:/data/downloads/Bracket.step", undefined, { source: "https://cad.onshape.com/documents/x" });
+    expect(store.document.features[1]).toHaveProperty("source", "https://cad.onshape.com/documents/x");
+  });
 });

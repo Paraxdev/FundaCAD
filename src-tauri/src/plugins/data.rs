@@ -30,7 +30,7 @@ fn app_data(app: &AppHandle) -> Result<PathBuf, String> {
     app.path().app_data_dir().map_err(|e| format!("no app data directory: {e}"))
 }
 
-fn data_dir(app: &AppHandle, plugin: &str) -> Result<PathBuf, String> {
+pub(crate) fn data_dir(app: &AppHandle, plugin: &str) -> Result<PathBuf, String> {
     let dir = app_data(app)?.join("plugin-data").join(safe_id(plugin)?);
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     Ok(dir)
