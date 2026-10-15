@@ -153,6 +153,17 @@ describe("RenderMaterials glass controls", () => {
     expect(fake.store.updateMaterial).toHaveBeenLastCalledWith("m-glass", { ior: 2.42 });
   });
 
+  it("names the see-through amount Transmission and writes it back as opacity", async () => {
+    await tile("m-glass").trigger("click");
+    await poll();
+    const slider = w.get('[data-field="transmission"]');
+    expect(slider.element.closest("label")?.textContent).toContain("Transmission");
+    expect((slider.element as HTMLInputElement).value).toBe("0.75");
+    (slider.element as HTMLInputElement).value = "0.9";
+    await slider.trigger("input");
+    expect(fake.store.updateMaterial).toHaveBeenLastCalledWith("m-glass", { opacity: 0.1 });
+  });
+
   it("brings a tint depth along with the first tint colour, since a tint without one does nothing", async () => {
     await tile("m-glass").trigger("click");
     await poll();

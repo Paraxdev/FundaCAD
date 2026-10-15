@@ -247,6 +247,15 @@ function set(
   if (Number.isFinite(n)) store.updateMaterial(m.id, { [field]: n });
 }
 
+// Transmission is how the panel names the see-through amount; the document keeps it as opacity.
+function transmissionOf(m: MaterialDef): number {
+  return Math.round((1 - finishOf(m).opacity) * 100) / 100;
+}
+function setTransmission(raw: string) {
+  const t = Number.parseFloat(raw);
+  if (Number.isFinite(t)) set("opacity", String(Math.round((1 - t) * 100) / 100));
+}
+
 const IOR_PRESETS = [
   { label: "Water", ior: 1.33 },
   { label: "Glass", ior: 1.5 },
@@ -499,12 +508,13 @@ async function doImport() {
         />
       </label>
       <label class="prefs-row">
-        <span class="prefs-label">Opacity</span>
+        <span class="prefs-label">Transmission</span>
         <input
           class="sm-slider"
           type="range" min="0" max="1" step="0.01"
-          :value="finishOf(selected).opacity"
-          @input="set('opacity', ($event.target as HTMLInputElement).value)"
+          data-field="transmission"
+          :value="transmissionOf(selected)"
+          @input="setTransmission(($event.target as HTMLInputElement).value)"
         />
       </label>
       <label class="prefs-row">
