@@ -51,6 +51,7 @@ import {
 } from "./transformGizmo";
 import { CanvasGesture } from "./canvasGesture";
 import { RotateDial } from "../viewport/rotateDial";
+import { overlayMaterial } from "../viewport/overlayMaterial";
 import { createSlimRing, ringLook, type SlimRing } from "./slimRing";
 
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
@@ -748,7 +749,7 @@ export class MoveTool {
       const dir = this.frame[i];
       if (!a || !dir || !hs) continue;
       if (hs.axes.includes(i)) {
-        const mat = new THREE.MeshBasicMaterial({ color: a.color, depthTest: false, depthWrite: false });
+        const mat = overlayMaterial(new THREE.MeshBasicMaterial({ color: a.color, depthTest: false, depthWrite: false }));
         const shaft = new THREE.Mesh(
           new THREE.CylinderGeometry(ARROW_SHAFT_R, ARROW_SHAFT_R, ARROW_SHAFT, 12), mat);
         shaft.position.y = ARROW_SHAFT / 2;
@@ -785,9 +786,9 @@ export class MoveTool {
       }
 
       if (hs.cubes.includes(i)) {
-        const cmat = new THREE.MeshBasicMaterial({
+        const cmat = overlayMaterial(new THREE.MeshBasicMaterial({
           color: a.color, depthTest: false, depthWrite: false,
-        });
+        }));
         const cube = new THREE.Mesh(
           new THREE.BoxGeometry(SCALE_BOX, SCALE_BOX, SCALE_BOX), cmat,
         );
@@ -830,9 +831,9 @@ export class MoveTool {
       g.add(quad, phit);
       this.planes.push({ mesh: quad, hit: phit, mat: pmat, axis: i });
     }
-    const omat = new THREE.MeshBasicMaterial({
+    const omat = overlayMaterial(new THREE.MeshBasicMaterial({
       color: ORIGIN_IDLE, depthTest: false, depthWrite: false,
-    });
+    }));
     const dot = new THREE.Mesh(new THREE.SphereGeometry(ORIGIN_R, 20, 14), omat);
     dot.renderOrder = 1000; // over the arrows' roots, which meet here
     dot.userData.origin = true;

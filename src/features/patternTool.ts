@@ -59,6 +59,7 @@ import {
   type PickedAxis,
 } from "./patternAxis";
 import { CanvasGesture } from "./canvasGesture";
+import { overlayMaterial } from "../viewport/overlayMaterial";
 
 export type PatternKind = "linear" | "circular";
 
@@ -512,7 +513,7 @@ export class PatternTool {
     this.gizmo = g;
     for (let i = 0; i < AXES.length; i++) {
       const a = AXES[i]!;
-      const mat = new THREE.MeshBasicMaterial({ color: a.color, depthTest: false });
+      const mat = overlayMaterial(new THREE.MeshBasicMaterial({ color: a.color, depthTest: false }));
       const arrow = new THREE.Group();
       const shaft = new THREE.Mesh(new THREE.CylinderGeometry(1.1, 1.1, 34, 10), mat);
       shaft.position.y = 17;
@@ -567,7 +568,6 @@ export class PatternTool {
       // rather than hidden, because an axis you cannot see is an axis you cannot
       // switch to.
       a.mat.opacity = chosen ? 1 : 0.45;
-      a.mat.transparent = !chosen;
     }
     // Below and right of the gizmo, not on top of it: the three arrows ARE the
     // control here, and a value panel over them is a panel over the thing you

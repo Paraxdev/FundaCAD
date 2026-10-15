@@ -100,6 +100,7 @@ import { dragStep } from "./dragStep";
 import { faceSketchPlane } from "../sketch/sketchView";
 import { viewSideNormal } from "./viewFlight";
 import { themeColor } from "./themeColors";
+import { overlayMaterial } from "./overlayMaterial";
 import { AreaBox } from "./areaBox";
 import { buildFaceMarker, disposeFaceMarker } from "./sketchFaceMarker";
 import { auditIsClean, auditLine, auditScene } from "../diagnostics/sceneAudit";
@@ -1085,12 +1086,12 @@ export class Viewport {
       this.requestRender();
       return;
     }
-    this.pickMarkMat ??= new THREE.MeshBasicMaterial({
+    this.pickMarkMat ??= overlayMaterial(new THREE.MeshBasicMaterial({
       color: themeColor("--accent", 0xff7a3c), depthTest: false, depthWrite: false,
-    });
-    this.liveMarkMat ??= new THREE.MeshBasicMaterial({
+    }));
+    this.liveMarkMat ??= overlayMaterial(new THREE.MeshBasicMaterial({
       color: 0x64d2ff, depthTest: false, depthWrite: false,
-    });
+    }));
     const group = new THREE.Group();
     group.renderOrder = 998;
     const at = new THREE.Vector3();
@@ -3583,7 +3584,6 @@ export class Viewport {
     }
     for (const d of edgeObjects(this.model)) {
       d.material.opacity = on ? SKETCH_DIM_EDGE_OPACITY : 1;
-      d.material.transparent = true;
     }
     this.requestRender();
   }

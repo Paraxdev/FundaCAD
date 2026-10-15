@@ -19,6 +19,7 @@ import * as THREE from "three";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
+import { overlayMaterial } from "./overlayMaterial";
 import type { RebuildResult } from "../types";
 import type { TangentEdges } from "../ui/renderPrefs";
 
@@ -93,13 +94,14 @@ export class BodyEdges {
 
     // ONE material for the whole body. Its own colour stays white; the per-edge
     // colour arrives as an instance colour and is multiplied by it.
-    this.material = new LineMaterial({
+    // An outline, not a body: kept out of what glass refracts.
+    this.material = overlayMaterial(new LineMaterial({
       color: 0xffffff,
       vertexColors: true,
       linewidth: EDGE_IDLE_WIDTH,
       worldUnits: false,
       depthTest: true,
-    });
+    }));
     this.material.resolution.copy(resolution);
     this.object = new LineSegments2(new LineSegmentsGeometry(), this.material);
     this.object.name = "edges";
@@ -281,7 +283,6 @@ export class BodyEdges {
     this.object.quaternion.identity();
     this.object.scale.set(1, 1, 1);
     this.material.clippingPlanes = null;
-    this.material.transparent = false;
     this.material.opacity = 1;
     this.material.color.setHex(0xffffff);
     this.material.linewidth = EDGE_IDLE_WIDTH;

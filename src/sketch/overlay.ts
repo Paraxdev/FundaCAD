@@ -9,6 +9,7 @@
 
 import * as THREE from "three";
 import { disposeObject3D } from "../lib/disposer";
+import { overlayMaterial } from "../viewport/overlayMaterial";
 import { asFeature } from "../types";
 import type { CadDocument, PlaneDef, PlaneSpec } from "../types";
 import { planeOf } from "../document/planeOf";
@@ -56,18 +57,18 @@ function lineMat(color: number): THREE.LineBasicMaterial {
     // depthTest:false (the grid/model edges, which use depthTest:true, render
     // fine). The coplanar grids + the dimmed model all have depthWrite:false, so
     // these lines never z-fight, they just paint on top via renderOrder.
-    m = new THREE.LineBasicMaterial({ color, depthTest: true });
+    m = overlayMaterial(new THREE.LineBasicMaterial({ color, depthTest: true }));
     lineMats.set(color, m);
   }
   return m;
 }
 // construction geometry: dashed orange (referenceable, not a profile)
-const CONSTRUCTION_MAT = new THREE.LineDashedMaterial({
+const CONSTRUCTION_MAT = overlayMaterial(new THREE.LineDashedMaterial({
   color: 0xffa64d,
   dashSize: 1.6,
   gapSize: 1.0,
   depthTest: true,
-});
+}));
 // alignment guides: the snap marker's amber, dashed and dimmed. The dash is
 // short and the gap long so a guide reads as an aid rather than as a drawn line
 // even when it runs the width of the screen.
@@ -159,7 +160,7 @@ export class SketchOverlay {
 
     this.snapMarker = new THREE.Mesh(
       new THREE.RingGeometry(0.6, 1.0, 16),
-      new THREE.MeshBasicMaterial({ color: 0xffaa33, depthTest: true }),
+      overlayMaterial(new THREE.MeshBasicMaterial({ color: 0xffaa33, depthTest: true })),
     );
     this.snapMarker.renderOrder = 30;
     this.snapMarker.visible = false;
