@@ -145,18 +145,21 @@ export async function openDocument(
     }
   } else {
     const picked = await uploadText();
-    if (picked && (await mayReplace())) {
-      try {
-        store.load(picked.text);
-        // No real path in a plain browser (this came from a file input, not a
-        // filesystem), but the picked name is enough for the title bar to show
-        // what is open and drop the unsaved marker, same as a Tauri Open does.
-        store.markSaved(picked.name);
-        await warnAboutMissingPlugins(store);
-      } catch (e) {
-        await reportUnreadable(e);
-      }
-    }
+    if (picked && (await mayReplace())) await openDocumentText(store, picked.name, picked.text);
+  }
+}
+
+/** Open a document the app has as text with no path, picked in a browser or
+ *  dropped on the window. */
+export async function openDocumentText(store: DocumentStore, name: string, text: string) {
+  try {
+    store.load(text);
+    // No real path, but the name is enough for the title bar to show what is
+    // open and drop the unsaved marker, same as a Tauri Open does.
+    store.markSaved(name);
+    await warnAboutMissingPlugins(store);
+  } catch (e) {
+    await reportUnreadable(e);
   }
 }
 
@@ -503,6 +506,52 @@ export async function importPath(
   opts: { source?: string } = {},
 ) {
   const fmt = extToImportFormat(path);
+  await importWith(store, path, fmt, (onStarted, u) => geometry.importGeometry(path, fmt, onStarted, u), { ...opts, unit });
+}
+
+/** Files above this cannot reach the engine as one base64 message, its frame
+ *  cap is 128 MiB. */
+export const MAX_DROPPED_IMPORT_BYTES = 90 * 1024 * 1024;
+
+/** Import a file the app has as bytes only, like one dropped on a browser tab.
+ *  Its `source` is the bare name, there is no path to remember. */
+export async function importFileBytes(store: DocumentStore, geometry: GeometryBackend, file: File, unit?: ImportUnit) {
+  const fmt = extToImportFormat(file.name);
+  const importBytes = geometry.importBytes?.bind(geometry);
+  if (!importBytes) {
+    await reportError(`Couldn't import ${file.name}: this geometry backend reads files by path only.`);
+    return;
+  }
+  if (file.size > MAX_DROPPED_IMPORT_BYTES) {
+    await reportError(`Couldn't import ${file.name}: it is ${Math.round(file.size / 1048576)} MB, a dropped file can be 90 MB at most here. Use File > Import in the desktop app.`);
+    return;
+  }
+  await importWith(
+    store,
+    file.name,
+    fmt,
+    async (onStarted, u) => importBytes(file.name, fmt, bytesToBase64(new Uint8Array(await file.arrayBuffer())), onStarted, u),
+    { unit, retryable: false },
+  );
+}
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let bin = "";
+  const CHUNK = 0x8000;
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(bin);
+}
+
+async function importWith(
+  store: DocumentStore,
+  path: string,
+  fmt: ImportFormat,
+  read: (onStarted: (id: string) => void, unit?: ImportUnit) => ReturnType<GeometryBackend["importGeometry"]>,
+  opts: { unit?: ImportUnit | undefined; source?: string; retryable?: boolean } = {},
+) {
+  let unit = opts.unit;
   if (asksForUnit(fmt) && !unit) {
     const picked = await askImportUnit(fmt);
     if (!picked) return;
@@ -514,7 +563,7 @@ export async function importPath(
   // id so a cancel targets this import specifically.
   const res = await store.runBusy(
     `Importing ${path.split(/[\\/]/).pop() ?? "file"}`,
-    (onStarted) => geometry.importGeometry(path, fmt, onStarted, unit),
+    (onStarted) => read(onStarted, unit),
   );
   if (!res.ok) {
     if (res.cancelled) {
@@ -522,7 +571,7 @@ export async function importPath(
       // document. The path is remembered in SESSION state only, a placeholder
       // feature would persist into the saved document and reference a path that
       // may not exist on another machine.
-      lastCancelledImport = path;
+      lastCancelledImport = opts.retryable === false ? null : path;
       return;
     }
     await reportError(`Couldn't import ${path.split(/[\\/]/).pop()}: ${res.message ?? "unreadable file"}`);

@@ -73,6 +73,12 @@ zip = { version = "4", default-features = false, features = ["deflate-flate2"] }
 # zlib; feature unification is additive and cannot change updater behaviour.
 flate2 = "1"
 
+# The paths of files dropped on the window (drop_paths.rs). The versions wry
+# already links, so these add nothing to the build.
+[target.'cfg(windows)'.dependencies]
+webview2-com = "0.38"
+windows-core = "0.61"
+
 [dev-dependencies]
 fundacad-core = { path = "../crates/fundacad-core" }
 

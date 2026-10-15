@@ -455,13 +455,15 @@ fn body_name(p: &Path) -> String {
     }
 }
 
-/// The `import` op.
+/// The `import` op. A request carries a `path` the engine reads, or the file
+/// itself as base64 `data` with its `name`, for a client that has bytes and no
+/// path, like a file dropped on a browser tab.
 pub fn import_result(req: &Map<String, Value>) -> JobResult {
-    let (Some(path), Some(fmt)) = (
-        req.get("path").and_then(Value::as_str),
-        req.get("format").and_then(Value::as_str),
-    ) else {
-        return error_result("import: a request needs a path and a format");
+    let fmt = req.get("format").and_then(Value::as_str);
+    let path = req.get("path").and_then(Value::as_str);
+    let data = req.get("data").and_then(Value::as_str);
+    let Some(fmt) = fmt.filter(|_| path.is_some() || data.is_some()) else {
+        return error_result("import: a request needs a path or data, and a format");
     };
     let result = BlobStore::open(blobstore::default_root())
         .map_err(|e| {
@@ -469,11 +471,65 @@ pub fn import_result(req: &Map<String, Value>) -> JobResult {
                 "could not store the imported geometry ({e}). Check free disk space and permissions on the FundaCAD data directory."
             )
         })
-        .and_then(|store| import_geometry_in(path, fmt, &store, req.get("unit").and_then(Value::as_str)));
+        .and_then(|store| {
+            let unit = req.get("unit").and_then(Value::as_str);
+            match (path, data) {
+                (Some(path), _) => import_geometry_in(path, fmt, &store, unit),
+                (None, Some(data)) => {
+                    let name = req.get("name").and_then(Value::as_str).unwrap_or("");
+                    import_bytes(name, data, fmt, &store, unit)
+                }
+                (None, None) => unreachable!(),
+            }
+        });
     match result {
         Ok(m) => JobResult::Json(m),
         Err(message) => error_result(&message),
     }
+}
+
+/// A file name safe to create on any filesystem, keeping everything else so
+/// the import is named after what the user dropped.
+fn spool_name(name: &str, fmt: &str) -> String {
+    let base = name.trim().rsplit(['/', '\\']).next().unwrap_or("");
+    let cleaned: String = base
+        .chars()
+        .map(|c| if c.is_control() || r#"<>:"|?*"#.contains(c) { '_' } else { c })
+        .collect();
+    let cleaned = cleaned.trim_end_matches(['.', ' ']).to_string();
+    if cleaned.trim_matches('.').is_empty() {
+        format!("imported.{fmt}")
+    } else {
+        cleaned
+    }
+}
+
+fn import_bytes(
+    name: &str,
+    data: &str,
+    fmt: &str,
+    store: &BlobStore,
+    unit: Option<&str>,
+) -> Result<Map<String, Value>, String> {
+    use base64::Engine as _;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let file = spool_name(name, fmt);
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(data.as_bytes())
+        .map_err(|e| format!("{file} arrived damaged ({e})"))?;
+    let dir = std::env::temp_dir().join(format!(
+        "fundacad-drop-{}-{}",
+        std::process::id(),
+        NEXT.fetch_add(1, Ordering::Relaxed)
+    ));
+    std::fs::create_dir_all(&dir).map_err(|e| format!("could not stage {file} for import ({e})"))?;
+    let path = dir.join(&file);
+    let result = std::fs::write(&path, &bytes)
+        .map_err(|e| format!("could not stage {file} for import ({e})"))
+        .and_then(|()| import_geometry_in(&path.to_string_lossy(), fmt, store, unit));
+    let _ = std::fs::remove_dir_all(&dir);
+    result
 }
 
 pub fn blob_result(op: &str, req: &Map<String, Value>) -> JobResult {
