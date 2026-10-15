@@ -109,6 +109,17 @@ fn iges_faces_written_one_by_one_sew_into_one_solid() {
     holds(&r.bodies[0].shape, BRACKET_VOLUME - std::f64::consts::PI * 9.0 * 8.0);
 }
 
+// face_soup.igs stores its hole as a surface of revolution.
+#[test]
+fn an_iges_revolved_hole_turns_into_a_cylinder() {
+    let p = opencascade::progress::Progress::new(|| false);
+    let asm = opencascade::xcaf::read_iges_assembly_with(&fixture("face_soup.igs"), &p.start()).unwrap();
+    let swept = opencascade::canonical::swept_to_elementary(&asm.roots[0]).unwrap().unwrap();
+    let kinds = opencascade::canonical::surface_types(&swept).unwrap();
+    assert!(kinds.contains(&"GeomAbs_Cylinder"), "{kinds:?}");
+    assert!(!kinds.contains(&"GeomAbs_SurfaceOfRevolution"), "{kinds:?}");
+}
+
 #[test]
 fn a_step_file_is_not_read_as_iges() {
     let store = BlobStore::open(blob_dir()).unwrap();
