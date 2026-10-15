@@ -499,8 +499,37 @@ fn spool_name(name: &str, fmt: &str) -> String {
     let cleaned = cleaned.trim_end_matches(['.', ' ']).to_string();
     if cleaned.trim_matches('.').is_empty() {
         format!("imported.{fmt}")
+    } else if is_reserved_on_windows(&cleaned) {
+        format!("_{cleaned}")
     } else {
         cleaned
+    }
+}
+
+/// CON.stl and friends name a device on Windows whatever the extension.
+fn is_reserved_on_windows(name: &str) -> bool {
+    let stem = name.split('.').next().unwrap_or("").trim_end().to_ascii_uppercase();
+    matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || (stem.len() == 4
+            && (stem.starts_with("COM") || stem.starts_with("LPT"))
+            && stem.as_bytes()[3].is_ascii_digit())
+}
+
+#[cfg(test)]
+mod spool_tests {
+    use super::spool_name;
+
+    #[test]
+    fn a_dropped_name_is_kept_unless_the_filesystem_cannot_hold_it() {
+        assert_eq!(spool_name("part.step", "step"), "part.step");
+        assert_eq!(spool_name(r"C:\in\a:b?.stl", "stl"), "a_b_.stl");
+        assert_eq!(spool_name("...", "stl"), "imported.stl");
+        for reserved in ["CON.stl", "con.STL", "nul.tar.step", "COM1.stl", "lpt9.3mf", "AUX"] {
+            assert!(spool_name(reserved, "stl").starts_with('_'), "{reserved}");
+        }
+        for fine in ["CONSOLE.stl", "COMX.stl", "com10.stl", "my con.stl"] {
+            assert_eq!(spool_name(fine, "stl"), fine);
+        }
     }
 }
 
