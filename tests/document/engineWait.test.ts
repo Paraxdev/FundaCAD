@@ -71,6 +71,20 @@ describe("a rebuild queued behind another client's job", () => {
     await done;
   });
 
+  it("aborts an op that passed an AbortController instead of cancelling on the engine", async () => {
+    const { be, cancels } = backend();
+    const store = new DocumentStore(be, doc());
+    const abort = new AbortController();
+    let release = () => {};
+    const done = store.runBusy("Downloading", () => new Promise<void>((r) => { release = r; }), { abort });
+    expect(await store.cancelBusy()).toBe(true);
+    expect(abort.signal.aborted).toBe(true);
+    expect(cancels).toEqual([]);
+    release();
+    await done;
+    expect(await store.cancelBusy()).toBe(false);
+  });
+
   it("drops a frame that lands when nothing is busy", () => {
     const { be, frame } = backend();
     const store = new DocumentStore(be, doc());

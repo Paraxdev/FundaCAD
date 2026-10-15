@@ -402,13 +402,15 @@ export class DocumentStore {
   }
 
   /** Run a cancellable backend op with busy state. `onStarted` hands back the request
-   *  id, since a rebuild started meanwhile would otherwise be "most recent". */
+   *  id, since a rebuild started meanwhile would otherwise be "most recent". An op
+   *  that never reaches the engine passes `abort`, which Cancel then aborts. */
   async runBusy<T>(
     label: string,
     fn: (onStarted: (id: string) => void) => Promise<T>,
-    opts: { rebuild?: boolean } = {},
+    opts: { rebuild?: boolean; abort?: AbortController } = {},
   ): Promise<T> {
     this.busy = { ...IDLE_BUSY, active: true, label, rebuild: opts.rebuild === true };
+    this.busyAbort = opts.abort ?? null;
     this.emitBusy();
     try {
       return await fn((id) => {
@@ -416,15 +418,21 @@ export class DocumentStore {
         this.emitBusy();
       });
     } finally {
+      if (this.busyAbort === (opts.abort ?? null)) this.busyAbort = null;
       this.busy = IDLE_BUSY;
       this.emitBusy();
     }
   }
+  private busyAbort: AbortController | null = null;
 
   /** Stop the busy op, if any. Resolves to whether anything was stopped, false
    *  covers both "nothing running" and "the engine had already finished". */
   async cancelBusy(): Promise<boolean> {
     if (!this.busy.active) return false;
+    if (this.busyAbort) {
+      this.busyAbort.abort();
+      return true;
+    }
     // No id yet means the request has not gone out, undefined falls back to the client's lastHeavyId.
     return (await this.geometry.cancel?.(this.busy.id ?? undefined)) ?? false;
   }

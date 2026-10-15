@@ -59,5 +59,7 @@ The unit tests run against a fake Onshape. With a real account:
    imports every part studio.
 6. Preferences, Onshape, Forget keys, then a wrong secret: expect "Onshape
    refused the keys".
-7. "is not one of the hosts this plugin may reach" means Onshape redirected
+7. Press Cancel while "Exporting <part studio> from Onshape" shows: no error,
+   no new feature, and the downloads folder is empty.
+8. "is not one of the hosts this plugin may reach" means Onshape redirected
    the download off `*.onshape.com`, and that host needs adding.
