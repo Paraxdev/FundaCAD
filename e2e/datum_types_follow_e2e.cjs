@@ -164,6 +164,12 @@ const shifted = (v) => (Array.isArray(v) ? v.map((n) => n + OFF) : v + OFF);
       ref: (f) => f.through?.kind === "angle" && f.angle === 45,
       at: (r, id) => r.planes[id]?.origin,
       want: [[20, 0, 10], [40, 0, 10]],
+      // The engine turns the same way as the plane the app drew on the click.
+      agree: (f, r) => {
+        const n = r.planes[f.id]?.normal;
+        const c = f.plane?.normal;
+        return !!n && !!c && n[0] * c[0] + n[1] * c[1] + n[2] * c[2] > 0.999;
+      },
     },
     {
       name: "axis where the +X face meets the top face",
@@ -192,6 +198,7 @@ const shifted = (v) => (Array.isArray(v) ? v.map((n) => n + OFF) : v + OFF);
     const ok = (got, want) => (Array.isArray(want) ? close(got, want) : Math.abs(got - want) < 1e-3);
     check("sits on the reference at len 40", ok(c.at(before, f.id), w40), fmt(c.at(before, f.id)));
     check("follows the reference to len 80", ok(c.at(after, f.id), w80), fmt(c.at(after, f.id)));
+    if (c.agree) check("turns the way the app drew it", c.agree(f, before), fmt(before.planes[f.id]?.normal) + " vs " + fmt(f.plane?.normal));
     check("no errors", after.errors.length === 0, JSON.stringify(after.errors.map((e) => e.message)));
     if (process.env.SC_DEBUG) console.log(JSON.stringify({ f, before: [before.planes[f.id], before.marks[f.id]], after: [after.planes[f.id], after.marks[f.id]], diag: after.diagnostics.filter((d) => d.feature_id === f.id) }));
     await page.screenshot({ path: `${OUT}/${c.action}.png` });

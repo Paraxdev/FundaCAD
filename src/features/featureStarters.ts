@@ -556,7 +556,9 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
             return;
           }
           const angle = 45;
-          const u = unit(line.dir);
+          const hinge = matchEdge(points, sel);
+          // The engine turns about the fingerprint's direction, so this cache does too.
+          const u = unit((hinge as { fp?: { dir?: Vec3 } }).fp?.dir ?? line.dir);
           const n0 = asDef(spec).normal;
           if (!u) return;
           const r = (angle * Math.PI) / 180;
@@ -568,7 +570,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
           const id = store.nextId();
           store.addFeature({
             id, type: "datumPlane", plane: def, name: "Angled plane",
-            angle, through: { kind: "angle", edge: matchEdge(points, sel), from },
+            angle, through: { kind: "angle", edge: hinge, from },
           } as Feature);
           selectFeature(id, false);
         });
