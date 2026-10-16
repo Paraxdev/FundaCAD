@@ -14,7 +14,7 @@ const base = (over: Partial<InferLineInput>): InferLineInput => ({
   id: NEW_ENTITY, start: V(0, 0), end: V(10, 10), endKind: "free", entities: [], step: 0, tolDeg: 3, nearMm: 100, smart: true, ...over,
 });
 const types = (r: { relations: { type: string }[] }) => r.relations.map((c) => c.type);
-const join = (e1: string, p1: number, e2: string, p2: number) => ({ type: "coincident", e1, p1, e2, p2 });
+const join = (e1: string, p1: number, e2: string, p2: number) => ({ type: "coincident", e1, p1, e2, p2, snap: true });
 
 describe("line inference", () => {
   const A = line("A", 0, 0, 34.641, 20); // 30 degrees
