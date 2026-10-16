@@ -23,6 +23,9 @@ class FakeTracer implements TracerBackend {
   updateCamera() { this.calls.push("camera"); }
   reset() { this.calls.push("reset"); }
   renderSample() {}
+  readonly denoised = false;
+  present() { return false; }
+  setDenoise() {}
   samples() { return new Promise<number>(() => {}); }
   dispose() { this.calls.push("dispose"); }
   onFault() {}

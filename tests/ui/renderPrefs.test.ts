@@ -72,6 +72,7 @@ describe("asRenderPrefs", () => {
       viewModeRender: DEFAULT_RENDER.viewModeRender,
       matcapStyle: DEFAULT_RENDER.matcapStyle,
       matcapTint: DEFAULT_RENDER.matcapTint,
+      denoise: DEFAULT_RENDER.denoise,
     });
   });
 
@@ -218,5 +219,18 @@ describe("matcap look", () => {
     expect(renderPrefs().matcapStyle).toBe("metal");
     setRenderPref("matcapStyle", DEFAULT_RENDER.matcapStyle);
     setRenderPref("matcapTint", DEFAULT_RENDER.matcapTint);
+  });
+});
+
+describe("path traced denoise", () => {
+  it("defaults to the standard weights and keeps only a known level", () => {
+    expect(DEFAULT_RENDER.denoise).toBe("standard");
+    expect(asRenderPrefs({ denoise: "high" }).denoise).toBe("high");
+    expect(asRenderPrefs({ denoise: "ultra" }).denoise).toBe("standard");
+    setRenderPref("denoise", "off");
+    expect(renderPrefs().denoise).toBe("off");
+    setRenderPref("denoise", "max" as never);
+    expect(renderPrefs().denoise).toBe("off");
+    setRenderPref("denoise", DEFAULT_RENDER.denoise);
   });
 });

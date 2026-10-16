@@ -15,7 +15,7 @@ import { onMounted, onUnmounted, ref } from "vue";
 import {
   ENVIRONMENTS_LIST, MAX_BRIGHTNESS, MIN_BRIGHTNESS,
   onRenderPrefsChange, performanceModeOn, renderPrefs, setRenderPref,
-  type Background, type Environment,
+  type Background, type Denoise, type Environment,
 } from "../../ui/renderPrefs";
 import { DEFAULT_KEY } from "../../viewport/keyLight";
 import { formatTurn } from "../../viewport/rotateDial";
@@ -36,6 +36,11 @@ const BACKGROUNDS: { id: Background; label: string }[] = [
 ];
 
 const pickEnv = (id: Environment) => setRenderPref("environment", id);
+const DENOISES: { id: Denoise; label: string }[] = [
+  { id: "off", label: "Off" },
+  { id: "standard", label: "Standard" },
+  { id: "high", label: "High quality" },
+];
 const aimKey = () => {
   const tool = engine.tools.lightAim;
   if (tool.active) {
@@ -162,6 +167,24 @@ const onBloom = (e: Event) =>
       <div class="sm-hint">
         Ground every part with a real cast shadow from the key light, not just the
         soft light an emissive part throws. Off on the lightweight render.
+      </div>
+    </section>
+
+    <section class="rd-section">
+      <h3 class="rd-head">Denoise</h3>
+      <div class="rd-chips" role="group" aria-label="Denoise">
+        <button
+          v-for="d in DENOISES"
+          :key="d.id"
+          class="rd-chip"
+          :class="{ active: prefs.denoise === d.id }"
+          :data-denoise="d.id"
+          @click="setRenderPref('denoise', d.id)"
+        >{{ d.label }}</button>
+      </div>
+      <div class="sm-hint">
+        Path traced cleans the grain out of the finished picture. High quality
+        takes a few seconds longer.
       </div>
     </section>
 

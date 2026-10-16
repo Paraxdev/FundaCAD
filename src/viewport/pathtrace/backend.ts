@@ -3,6 +3,7 @@
 // viewport noticing.
 
 import type * as THREE from "three";
+import type { Denoise } from "../../ui/renderPrefs";
 import type { TraceLens } from "./camera";
 
 export interface TraceLight {
@@ -53,7 +54,16 @@ export interface TracerBackend {
    *  field, null a pinhole. */
   updateCamera(camera: THREE.Camera, lens: TraceLens | null): void;
   reset(): void;
-  renderSample(): void;
+  /** Gathers one more frame of samples; `samples` is the count so far, which
+   *  sets how hard the image is filtered on its way to the screen. */
+  renderSample(samples: number): void;
+  /** At the cap: runs the final denoise and crossfades to it. False once
+   *  nothing is left to draw, so the GPU can idle. */
+  present(now: number): boolean;
+  /** The image on screen is the denoised one. */
+  readonly denoised: boolean;
+  /** Swaps the denoise weights; the samples gathered are kept. */
+  setDenoise(level: Denoise): void;
   /** Samples gathered per pixel since the last reset. */
   samples(): Promise<number>;
   dispose(): void;

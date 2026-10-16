@@ -24,6 +24,10 @@ class FakeTracer implements TracerBackend {
   updateCamera() { this.calls.push("camera"); }
   reset() { this.calls.push("reset"); }
   renderSample() { this.calls.push("sample"); }
+  more = true;
+  denoised = false;
+  present() { this.calls.push("present"); return this.more; }
+  setDenoise(level: string) { this.calls.push(`denoise:${level}`); }
   samples() { return new Promise<number>((r) => this.pending.push(r)); }
   dispose() { this.calls.push("dispose"); }
   onFault(cb: (why: string) => void) { this.faultCb = cb; }
@@ -107,11 +111,61 @@ describe("path trace host", () => {
     t.answer(256);
     await flush();
     t.calls.length = 0;
+    t.more = false;
     host.tick(frame());
     host.tick(frame());
     expect(host.state).toBe("done");
     expect(t.calls).not.toContain("sample");
     expect(host.shown).toBe(true);
+  });
+
+  it("keeps presenting at the cap until the denoise settles, then idles", async () => {
+    const { host, t } = await started();
+    host.tick(frame());
+    t.answer(256);
+    await flush();
+    t.calls.length = 0;
+    host.tick(frame());
+    host.tick(frame());
+    expect(host.state).toBe("done");
+    expect(t.calls).toEqual(["present", "present"]);
+    t.more = false;
+    t.denoised = true;
+    host.tick(frame());
+    t.calls.length = 0;
+    host.tick(frame());
+    host.tick(frame());
+    expect(t.calls).toEqual([]);
+    expect(host.denoised).toBe(true);
+  });
+
+  it("a new denoise level presents again at the cap without restarting the samples", async () => {
+    const { host, t } = await started();
+    host.tick(frame());
+    t.answer(256);
+    await flush();
+    t.more = false;
+    host.tick(frame());
+    t.calls.length = 0;
+    host.tick(frame({}, 1000, { denoise: "high" }));
+    expect(t.calls).toEqual(["denoise:high", "present"]);
+    expect(host.samples).toBe(256);
+  });
+
+  it("presents again at the next cap after a camera move", async () => {
+    const { host, t } = await started();
+    host.tick(frame());
+    t.answer(256);
+    await flush();
+    t.more = false;
+    host.tick(frame());
+    host.tick(frame({}, 1010, { cameraChanged: true }));
+    host.tick(frame({}, 1015));
+    t.answer(256);
+    await flush();
+    t.calls.length = 0;
+    host.tick(frame({}, 1020));
+    expect(t.calls).toContain("present");
   });
 
   it("shows Realtime and spends nothing while moving or paused", async () => {

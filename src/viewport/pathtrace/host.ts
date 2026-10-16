@@ -3,6 +3,7 @@
 // scene and the camera, and traces only while traceState says so.
 
 import type * as THREE from "three";
+import type { Denoise } from "../../ui/renderPrefs";
 import { SAMPLE_CAP, type TraceLook, type TracerBackend } from "./backend";
 import type { TraceLens } from "./camera";
 import { armGuard, clearGuard } from "./guard";
@@ -39,6 +40,7 @@ export interface TraceFrame {
   lens: () => TraceLens | null;
   /** Evaluates procedural surfaces for the mirror's vertex colours. */
   bake?: SurfaceBaker;
+  denoise?: Denoise;
 }
 
 export function lookSignature(l: TraceLook): string {
@@ -88,6 +90,9 @@ export class PathTraceHost {
   private size = { w: 0, h: 0, ratio: 0 };
   private refusedSig = "";
   private offSince = 0;
+  /** At the cap the final denoise and its crossfade are drawn, then nothing. */
+  private settled = false;
+  private denoiseLevel: Denoise | "" = "";
   /** The pending arm write, so a clear always lands after it. */
   private guardWrite: Promise<void> | null = null;
 
@@ -107,6 +112,10 @@ export class PathTraceHost {
 
   get backendName(): string {
     return this.backend?.name ?? "";
+  }
+
+  get denoised(): boolean {
+    return this.shown && (this.backend?.denoised ?? false);
   }
 
   tick(f: TraceFrame) {
@@ -145,10 +154,16 @@ export class PathTraceHost {
       this.restart();
       this.cameraDirty = false;
     }
-    if (s === "trace") {
-      b.renderSample();
-      this.poll(b);
+    const level = f.denoise ?? "standard";
+    if (level !== this.denoiseLevel) {
+      b.setDenoise(level);
+      this.denoiseLevel = level;
+      this.settled = false;
     }
+    if (s === "trace") {
+      b.renderSample(this.samples);
+      this.poll(b);
+    } else if (!this.settled && this.samples >= SAMPLE_CAP) this.settled = !b.present(f.now);
     this.show(this.samples > 0);
   }
 
@@ -160,6 +175,7 @@ export class PathTraceHost {
 
   private restart() {
     this.samples = 0;
+    this.settled = false;
     this.gen.bump();
     this.backend?.reset();
   }
@@ -222,6 +238,7 @@ export class PathTraceHost {
         st.pointerEvents = "none";
         this.webglCanvas.style.position = "relative";
         this.backend = b;
+        this.denoiseLevel = "";
         this.sceneDirty = this.cameraDirty = true;
         this.hasScene = false;
         this.size = { w: 0, h: 0, ratio: 0 };

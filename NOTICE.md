@@ -29,6 +29,11 @@ distributing FundaCAD under its own terms.
 
 - **three.js**, MIT, https://github.com/mrdoob/three.js
 - **camera-controls**, MIT, https://github.com/yomotsu/camera-controls
+- **three-gpu-pathtracer** (Path traced), MIT, https://github.com/gkjohnson/three-gpu-pathtracer
+- **oidn-web** (the Path traced denoise), MIT, https://github.com/pissang/oidn-web, with
+  **@petamoriken/float16**, MIT
+- **Open Image Denoise weights** (src/viewport/pathtrace/weights, `rt_hdr_calb_cnrm_small`
+  and `rt_hdr_calb_cnrm_large`), Apache-2.0, https://github.com/RenderKit/oidn-weights
 - **Tauri** and official plugins (`tauri`, `tauri-plugin-fs`, `tauri-plugin-dialog`,
   `@tauri-apps/*`), MIT OR Apache-2.0, https://github.com/tauri-apps/tauri
 - **hidapi** (Rust crate), MIT, https://github.com/ruabmbua/hidapi-rs
