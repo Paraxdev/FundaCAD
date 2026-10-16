@@ -2932,6 +2932,7 @@ export class SketchMode {
       nearMm: this.planeMmPerPx() * hitPx(120),
       smart: this.gridSnap && !h?.noSnap,
       typedAngle: this.dim.isUserDriven("angle"),
+      typedLength: this.dim.isUserDriven("length"),
     });
   }
 

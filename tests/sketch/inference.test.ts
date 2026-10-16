@@ -174,3 +174,22 @@ describe("arc inference", () => {
     expect(off.relations).toEqual([]);
   });
 });
+
+describe("a typed size fixes the end", () => {
+  const L = line("L", 0, 0, 40, 0);
+  const onMid = { start: V(5, 30), end: V(20, 0), endKind: "midpoint" as const, endRef: { entity: "L", at: "mid" as const }, entities: [L] };
+
+  it("a typed length drops the midpoint, on-curve and join the hovered end would take", () => {
+    expect(inferLineRelations(base({ ...onMid, typedLength: true })).relations).toEqual([]);
+    const on = inferLineRelations(base({ ...onMid, end: V(12, 0), endKind: "curve", endRef: { entity: "L", at: "curve" }, typedLength: true }));
+    expect(on.relations).toEqual([]);
+    const pt = inferLineRelations(base({ ...onMid, end: V(0, 0), endKind: "endpoint", endRef: { entity: "L", at: 0 }, typedLength: true }));
+    expect(pt.relations).toEqual([]);
+  });
+
+  it("a typed angle drops them too, and the start join stays", () => {
+    expect(inferLineRelations(base({ ...onMid, typedAngle: true })).relations).toEqual([]);
+    const r = inferLineRelations(base({ ...onMid, start: V(0, 10), startRef: { entity: "L", at: 0 }, typedLength: true }));
+    expect(r.relations).toEqual([join(NEW_ENTITY, 0, "L", 0)]);
+  });
+});
