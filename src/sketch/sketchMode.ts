@@ -51,6 +51,7 @@ import { tooEdgeOn } from "./planeGraze";
 import { toast } from "../ui/toast";
 import { contextMenu, dismissContextMenu, type CtxItem } from "../ui/menu";
 import { dropSeparatedJoins } from "./joins";
+import { sketchToolKey } from "./toolKeys";
 import { ConstraintTools, CONSTRAINT_TOOLS, nearestRectSide, type ConstraintHost, type ConstraintOption, type ConstraintPick } from "./constraintTools";
 import { PatternFlow, PATTERN_TOOLS, ENTITY_PATTERNS, type PatternHost } from "./patternFlow";
 import { DimFlow, type DimHost } from "./dimFlow";
@@ -2807,17 +2808,10 @@ export class SketchMode {
         return;
       }
     }
-    // tool shortcuts inside the sketch
-    const k = e.key.toLowerCase();
     // Q and E fall through to the global keymap (Press/Pull, Extrude).
-    if (k === "l") this.setTool("line");
-    else if (k === "r") this.setTool("rectangle");
-    else if (k === "c") this.setTool("circle");
-    else if (k === "a" && this.tool === "arc") this.setTangentArc(!this.tangentArc);
-    else if (k === "a") this.setTool("arc");
-    else if (k === "t") this.setTool("trim");
-    else if (k === "o") this.setTool("offset");
-    else if (k === "p") this.setTool("project");
+    const t = sketchToolKey(e, this.tool);
+    if (t === "tangent-arc") this.setTangentArc(!this.tangentArc);
+    else if (t) this.setTool(t);
   }
 
   // --- geometry per tool -------------------------------------------------
