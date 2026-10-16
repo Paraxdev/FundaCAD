@@ -1,35 +1,23 @@
-// Interactive Thread: click a round face, and the thread that belongs on it
-// appears, the ISO coarse pitch for that diameter, running the length of the
-// face, cut the right way round for a shank or a bore.
+// Interactive Thread: click a round face, and a 60 degree thread appears on it,
+// the ISO coarse pitch for that diameter, running the length of the face, cut
+// the right way round for a shank or a bore.
 //
-// It writes two features, because that is honestly what a thread is here: the
-// meridian profile as a sketch, and the climbing revolve that sweeps it
-// (builder._screw_revolve). Both stay in the timeline and both stay editable,
-// the pitch, the arc and the operation are ordinary value rows afterwards, and
-// the profile is an ordinary sketch. Nothing about the thread is a special case
-// the rest of the app has to know about, which is why there is no `thread`
-// feature type.
+// It writes one `thread` feature, which finds its face again on every build,
+// so a hole whose diameter is edited later is threaded again at the new size.
+// Hand, starts and a print clearance are value rows on the feature afterwards.
+// Standard sizes (ISO fine, UNC, UNF, Tr, ACME) come from the Screws plugin.
 //
 // The drag sets the LENGTH, along the axis, from the end of the face the thread
 // starts at: pull it back to thread only part of a shank. Pitch is typed.
 //
-// It is previewed in two registers, and the split is the same one the revolve's
-// pitch arrow makes for the same reason. While the hand is moving there is a
-// dashed helix: the actual curve the engine will sweep along, drawn from the
-// same arithmetic (screwMath), so it costs nothing per frame and cannot drift
-// from what gets built. When the value settles there is the REAL thing, cut by
-// the kernel, in the timeline position it will occupy. A twenty turn thread is a
-// real sweep through OCCT and rebuilding it every frame would make the drag
-// lurch; drawing only the curve would leave the user guessing whether a groove
-// that coarse can be cut at all, which is the question they are actually asking.
-//
-// Before this the tool showed NOTHING while it was being sized. A face was
-// picked, a number moved in a box, and the thread appeared on commit.
+// While the hand is moving there is a dashed helix drawn from the same
+// arithmetic the engine sweeps along (screwMath), cheap per frame; when the
+// value settles the real thread is cut by the kernel as a preview.
 
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore } from "../document/store";
-import type { Feature, PlaneDef, SketchEntity } from "../types";
+import type { Feature, Selector } from "../types";
 import { DimInput } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
 import { toast } from "../ui/toast";
@@ -37,7 +25,7 @@ import { snap } from "../ui/units";
 import { axisDragDistance } from "./manipulator";
 import { screwPath } from "./screwMath";
 import {
-  MIN_THREAD_TURNS, coarsePitchFor, threadAngleDeg, threadProfile, threadTurns,
+  MIN_THREAD_TURNS, coarsePitchFor, grooveProfile, threadAngleDeg, threadTurns,
 } from "./threadMath";
 import { CanvasGesture } from "./canvasGesture";
 
@@ -56,6 +44,7 @@ export class ThreadTool {
   private origin = new THREE.Vector3(); // point ON the axis where the thread begins
   private radial = new THREE.Vector3(1, 0, 0); // unit, perpendicular to the axis
   private radius = 0;
+  private face: Selector | null = null;
   private external = true;
   private pitch = 1;
   private length = 0;
@@ -104,7 +93,7 @@ export class ThreadTool {
 
     const pre = this.viewport.selectedFacesForPressPull();
     if (pre && pre.round && pre.faceIds.length === 1 && pre.faceIds[0] != null) {
-      this.beginSize(pre.faceIds[0], pre.round.radius, pre.round.solidInside,
+      this.beginSize(withBody(pre.selectors[0]!, pre.bodyId), pre.faceIds[0], pre.round.radius, pre.round.solidInside,
         pre.round.cylinder.axis, pre.round.cylinder.point, pre.round.radial);
       return;
     }
@@ -145,7 +134,7 @@ export class ThreadTool {
       }
       e.preventDefault();
       e.stopImmediatePropagation();
-      this.beginSize(hit.faceId, round.radius, round.solidInside,
+      this.beginSize(withBody(hit.selector, hit.bodyId), hit.faceId, round.radius, round.solidInside,
         round.cylinder.axis, round.cylinder.point, round.radial);
       return;
     }
@@ -180,7 +169,7 @@ export class ThreadTool {
    *  cylinder it lies on, which end of it the thread starts at, and which way the
    *  material is. */
   private beginSize(
-    faceId: number, radius: number, solidInside: boolean,
+    face: Selector, faceId: number, radius: number, solidInside: boolean,
     axis: readonly [number, number, number], point: readonly [number, number, number],
     radial: THREE.Vector3,
   ) {
@@ -207,6 +196,7 @@ export class ThreadTool {
     this.axis.copy(d);
     this.origin.copy(p).addScaledVector(d, lo);
     this.radius = radius;
+    this.face = face;
     this.external = solidInside;
     this.maxLength = hi - lo;
     this.pitch = coarsePitchFor(2 * radius);
@@ -317,35 +307,16 @@ export class ThreadTool {
     }
   }
 
-  /** The profile sketch + the climbing revolve that sweeps it. */
   private buildFeatures(): Feature[] | null {
-    const profile = threadProfile(this.radius, this.pitch, this.external);
-    if (!profile) return null;
-    const angle = threadAngleDeg(this.length, this.pitch);
-    if (!(angle > 0)) return null;
-    // A meridian plane: it CONTAINS the axis, so the sketch's own +X is radial
-    // (out from the axis) and its +Y is the axis direction, which is the frame
-    // threadProfile answers in, so its numbers go in untouched.
-    const normal = new THREE.Vector3().crossVectors(this.axis, this.radial).normalize();
-    const plane: PlaneDef = {
-      origin: [this.origin.x, this.origin.y, this.origin.z],
-      normal: [normal.x, normal.y, normal.z],
-      xdir: [this.radial.x, this.radial.y, this.radial.z],
-    };
-    const entities: SketchEntity[] = profile.map((a, i) => {
-      const b = profile[(i + 1) % profile.length]!;
-      return { type: "line", x1: a.x, y1: a.y, x2: b.x, y2: b.y } as SketchEntity;
-    });
-    const sketchId = this.store.nextId();
-    const revolveId = `${sketchId}t`; // distinct from nextId(), which cannot see the un-added sketch
-    return [
-      { id: sketchId, type: "sketch", plane, entities, name: "Thread profile" } as Feature,
-      {
-        id: revolveId, type: "revolve", sketch: sketchId,
-        axis: { origin: [this.origin.x, this.origin.y, this.origin.z], dir: [this.axis.x, this.axis.y, this.axis.z] },
-        angle, pitch: this.pitch, operation: "cut",
-      } as Feature,
-    ];
+    const profile = grooveProfile(this.radius, this.pitch, this.external);
+    if (!profile || !this.face) return null;
+    const thread = {
+      id: this.store.nextId(), type: "thread", face: this.face, profile, pitch: this.pitch,
+      starts: 1, hand: "right", operation: "cut",
+      axis: [this.axis.x, this.axis.y, this.axis.z],
+      ...(this.length < this.maxLength - 1e-6 ? { length: Math.round(this.length * 1e4) / 1e4 } : {}),
+    } as Feature;
+    return [thread];
   }
 
   private commit() {
@@ -402,6 +373,10 @@ export class ThreadTool {
     this.phase = "pick";
     setPrompt(null);
   }
+}
+
+function withBody(sel: Selector, body: string | null): Selector {
+  return body && !("body" in sel && sel.body) ? ({ ...sel, body } as Selector) : sel;
 }
 
 /** Any unit vector perpendicular to `d`, the fallback meridian when the cursor's

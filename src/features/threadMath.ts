@@ -118,3 +118,19 @@ export const MIN_THREAD_TURNS = 1;
 function round3(v: number): number {
   return Math.round(v * 1000) / 1000;
 }
+
+/** The groove a core `thread` feature sweeps, as `[into, along]` with `into`
+ *  measured from the face into the material: 60 degree flanks, 0.6134P deep, a
+ *  P/8 flat at the root, and the open side run out past the face by the same
+ *  breakout as above. Null when the groove would reach the axis of a shank. */
+export function grooveProfile(radius: number, pitch: number, external: boolean): [number, number][] | null {
+  if (!(radius > 0) || !(pitch > 0) || !Number.isFinite(radius) || !Number.isFinite(pitch)) return null;
+  const depth = pitch * THREAD_DEPTH_RATIO;
+  if (external && depth >= radius - BREAKOUT_FLOOR) return null;
+  const tan30 = Math.tan(Math.PI / 6);
+  const floor = pitch / 16;
+  const breakout = Math.max(BREAKOUT_FLOOR, depth * BREAKOUT_RATIO);
+  const out = floor + (depth + breakout) * tan30;
+  const r5 = (v: number) => Math.round(v * 1e5) / 1e5;
+  return [[-breakout, -out], [depth, -floor], [depth, floor], [-breakout, out]].map(([a, b]) => [r5(a!), r5(b!)]);
+}
