@@ -157,6 +157,28 @@ describe("SketchDimLayer", () => {
     expect(store.dimSelected).toBe(0);
   });
 
+  it("opens no editor when the geometry under a badge took the press and the badges were rebuilt", async () => {
+    // overlapPick selects the line under the badge, and a new selection rebuilds
+    // every label, so the click that follows lands on a fresh item that never
+    // heard the press was claimed. The editor it opened held focus and ate the
+    // constraint keys pressed next.
+    mount(SketchDimLayer, { attachTo: document.body });
+    const d = dims();
+    d.show([], plane, [extra()]);
+    await nextTick();
+    const store = useSketchAnnotationStore();
+    store.dimHooks = {
+      overlapPick: () => { d.show([], plane, [extra()]); return true; },
+      planePoint: () => null,
+      labelMenu: () => {},
+    };
+    labels()[0]!.dispatchEvent(new PointerEvent("pointerdown", { button: 0, bubbles: true }));
+    await nextTick();
+    labels()[0]!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await nextTick();
+    expect(labels()[0]!.querySelector("input")).toBeNull();
+  });
+
   // --- presentation --------------------------------------------------------
   it("marks up driven, formula-bound and solver-flagged labels", async () => {
     mount(SketchDimLayer, { attachTo: document.body });
