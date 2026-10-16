@@ -592,7 +592,7 @@ impl Walker<'_> {
             "MESH" => mesh_entity(out, layer, m, e),
             "INSERT" => self.insert(e, m, layer),
             "3DSOLID" | "BODY" | "REGION" | "SURFACE" => *out.acis.entry(e.kind.clone()).or_default() += 1,
-            other => *out.skipped.entry(other.to_string()).or_default() += 1 + e.subs.len() * usize::from(other == "INSERT"),
+            other => *out.skipped.entry(other.to_string()).or_default() += 1,
         }
         if e.kind == "INSERT" && !e.subs.is_empty() {
             *self.out.skipped.entry("ATTRIB".into()).or_default() += e.subs.len();
