@@ -94,7 +94,7 @@ export type { Viewport } from "../viewport/viewport";
 export type { CtxItem, MenuDef, MenuItem } from "../ui/menu";
 
 // --- what the buttons and keys do (contributions need the input.remap grant) ---
-export { openMenuAt, dismissRadialMenu } from "../ui/menu";
+export { openMenuAt, dismissRadialMenu, radialMenuOpen } from "../ui/menu";
 export type { MenuAtOptions } from "../ui/menu";
 export type { RadialTrigger } from "../ui/radialMenu";
 export { DEFAULT_BINDINGS, bindingKeys, bindingRows, pointerBindings, validateBindings } from "../viewport/navigator/bindings";

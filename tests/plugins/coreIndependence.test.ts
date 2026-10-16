@@ -92,6 +92,7 @@ const CAPABILITIES: Record<string, (path: string) => boolean> = {
   "the 3D printing toolbox": (p) => p.includes("/plugins/FundaCAD.PrintToolbox/"),
   "the fastener library": (p) => p.includes("/plugins/FundaCAD.Screws/"),
   "node bodies": (p) => p.includes("/plugins/FundaCAD.Organic/"),
+  "the mouse and key presets": (p) => p.includes("/plugins/FundaCAD.Navigation/"),
 };
 
 /** Static import specifiers in a file, skipping `import type` (erased) and

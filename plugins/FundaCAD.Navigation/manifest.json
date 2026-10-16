@@ -1,0 +1,12 @@
+{
+  "id": "FundaCAD.Navigation",
+  "name": "Mouse and keys",
+  "version": "1.0.0",
+  "kind": "builtin",
+  "summary": "Choose which mouse button orbits and pans, add a radial menu, and move keyboard shortcuts.",
+  "enabledByDefault": false,
+  "grants": [
+    "input.remap",
+    "document.read"
+  ]
+}

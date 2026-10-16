@@ -87,6 +87,7 @@ describe("the plugins in this repository", () => {
       "FundaCAD.ExtraParameters",
       "FundaCAD.Gamepad",
       "FundaCAD.MultiColor",
+      "FundaCAD.Navigation",
       "FundaCAD.Onshape",
       "FundaCAD.Organic",
       "FundaCAD.PrintToolbox",

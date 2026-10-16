@@ -48,6 +48,8 @@ const MARKERS = [
   ["FundaCAD.ExtraParameters", "save the current values as"],
   ["FundaCAD.PrintToolbox", "select the flat floor of each counterbore"],
   ["FundaCAD.Screws", "Make a custom one from this"],
+  ["FundaCAD.Navigation", "Middle orbits, Shift+middle pans"],
+  ["FundaCAD.Navigation", "fundacad.navigation.plugin"],
 ];
 
 if (!existsSync(dir)) {
