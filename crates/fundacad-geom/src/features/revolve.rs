@@ -137,7 +137,7 @@ fn unit(a: [f64; 3]) -> [f64; 3] {
 
 /// revolve_feature.py `_screw_revolve`: a pipe sweep along a helix whose
 /// binormal is pinned to the axis, so each section stays a meridian section.
-fn screw_revolve(
+pub(super) fn screw_revolve(
     profile: &Shape,
     origin: [f64; 3],
     dir: [f64; 3],

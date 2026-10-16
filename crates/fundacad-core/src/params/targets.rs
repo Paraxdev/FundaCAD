@@ -86,6 +86,16 @@ pub const FEATURE_NUM_FIELDS: &[(&str, &[(&str, FieldKind)])] = &[
         ],
     ),
     (
+        "thread",
+        &[
+            ("pitch", Length),
+            ("starts", Count),
+            ("offset", Length),
+            ("length", Length),
+            ("clearance", Length),
+        ],
+    ),
+    (
         "patternRect",
         &[
             ("countX", Count),
@@ -144,6 +154,7 @@ pub const INT_FIELDS: &[(&str, f64)] = &[
     ("countX", 1.0),
     ("countY", 1.0),
     ("rings", 1.0),
+    ("starts", 1.0),
     ("seed", f64::NEG_INFINITY),
 ];
 

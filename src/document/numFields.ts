@@ -49,6 +49,10 @@ export const FEATURE_NUM_FIELDS: Partial<Record<Feature["type"], [string, string
   offsetFace: [["distance", "Distance", "length"]],
   thicken: [["thickness", "Thickness", "length"]],
   draft: [["angle", "Angle", "angle"]],
+  thread: [
+    ["pitch", "Pitch", "length"], ["starts", "Starts", "count"], ["offset", "Offset", "length"],
+    ["length", "Length", "length"], ["clearance", "Print clearance", "length"],
+  ],
   hole: [
     ["diameter", "Diameter", "length"], ["depth", "Depth", "length"],
     ["cbDiameter", "Counterbore diameter", "length"], ["cbDepth", "Counterbore depth", "length"],
@@ -226,6 +230,7 @@ export const INT_FIELDS: Record<string, number> = {
   countX: 1,
   countY: 1,
   rings: 1,
+  starts: 1,
   seed: -Infinity,
 };
 

@@ -18,6 +18,7 @@ mod loft_sweep;
 pub mod pattern;
 mod primitives;
 mod revolve;
+mod thread;
 pub mod sketch;
 mod press_pull;
 pub mod resize;
@@ -59,6 +60,7 @@ fn handle(ctx: &mut Ctx, f: &Feature) -> FResult {
         Feature::Revolve(r) => revolve::handle(ctx, r),
         Feature::Boolean(b) => boolean::do_boolean(ctx, b),
         Feature::Hole(h) => hole::handle(ctx, h),
+        Feature::Thread(t) => thread::handle(ctx, t),
         Feature::Fillet(b) => blend::fillet(ctx, b),
         Feature::Chamfer(b) => blend::chamfer(ctx, b),
         Feature::Loft(l) => loft_sweep::loft(ctx, l),

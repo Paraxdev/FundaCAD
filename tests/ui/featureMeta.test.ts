@@ -32,6 +32,7 @@ const DRAWN_BY_APP: Record<FeatureType, "app"> = {
   chamfer: "app",
   "press-pull": "app",
   hole: "app",
+  thread: "app",
   deleteFace: "app",
   mirror: "app",
   revolve: "app",

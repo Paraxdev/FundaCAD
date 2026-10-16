@@ -64,6 +64,7 @@ export const FEATURE_META: Partial<Record<FeatureType, FeatureMeta>> = {
   thicken: { icon: "thicken", label: "Thicken" },
   draft: { icon: "draft", label: "Draft" },
   hole: { icon: "hole", label: "Hole" },
+  thread: { icon: "thread", label: "Thread" },
   patternRect: { icon: "patternRect", label: "Rect Pattern" },
   patternLinear: { icon: "patternLinear", label: "Linear Pattern" },
   patternCircular: { icon: "patternCircular", label: "Circular Pattern" },
