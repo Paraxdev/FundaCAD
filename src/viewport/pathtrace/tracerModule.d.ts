@@ -8,6 +8,7 @@ declare module "three-gpu-pathtracer/webgpu" {
     minSamples: number;
     fadeDuration: number;
     renderScale: number;
+    frameBudget: number;
     synchronizeRenderSize: boolean;
     setScene(scene: Scene, camera: Camera): void;
     setCamera(camera: Camera): void;

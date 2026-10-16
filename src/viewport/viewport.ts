@@ -72,6 +72,7 @@ import { traceEnvironment, type TraceHemi } from "./pathtrace/environment";
 import { composerClearColor } from "./composerColor";
 import { clearGuard, guardSet } from "./pathtrace/guard";
 import { PathTraceHost } from "./pathtrace/host";
+import { watchPower, type PowerState } from "./pathtrace/power";
 import type { SurfaceBaker } from "./pathtrace/mirror";
 import { createSurfaceBaker, webglSurfaceShade } from "./pathtrace/surfaceBake";
 import { describeProbe, probeWebGpu, type GpuProbe } from "./pathtrace/probe";
@@ -335,6 +336,11 @@ export class Viewport {
       if (this.viewModeNow === "pathtraced") chooseViewMode("realtime", this.renderTier);
       this.onTraceNotice?.(why);
     };
+    watchPower((p) => {
+      this.power = p;
+      this.trace.setPower(p);
+      this.requestRender();
+    });
     void this.bootPathTrace();
     this.syncViewMode();
     onWorkspaceChange(() => this.syncViewMode());
@@ -934,6 +940,7 @@ export class Viewport {
   }
 
   private trace!: PathTraceHost;
+  private power: PowerState = { discharging: false, minimised: false };
   private traceBaker: SurfaceBaker | null = null;
   private gpu: GpuProbe | null = null;
   private tierListeners = new Set<() => void>();
@@ -4063,7 +4070,7 @@ export class Viewport {
         now,
         inputs: {
           mode: this.viewModeNow,
-          visible: document.visibilityState === "visible",
+          visible: document.visibilityState === "visible" && !this.power.minimised,
           stillMs: now - this.lastMovedAt,
           dragging: this.gizmoDragging,
           sectioned: this.sectioned,

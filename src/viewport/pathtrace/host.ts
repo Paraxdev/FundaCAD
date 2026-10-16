@@ -5,6 +5,7 @@
 import type * as THREE from "three";
 import type { Denoise } from "../../ui/renderPrefs";
 import { SAMPLE_CAP, type TraceLook, type TracerBackend } from "./backend";
+import { costProfile, FrameBudget, renderScaleFor } from "./budget";
 import type { TraceLens } from "./camera";
 import { armGuard, clearGuard } from "./guard";
 import { BlasCache, type BlasBuilder } from "./blasCache";
@@ -57,6 +58,11 @@ function lensSignature(l: TraceLens | null): string {
 
 export type CreateTracer = () => Promise<TracerBackend>;
 
+export interface Power {
+  /** On battery and not charging. */
+  discharging: boolean;
+}
+
 export class PathTraceHost {
   state: TraceState = "off";
   shown = false;
@@ -95,6 +101,15 @@ export class PathTraceHost {
   private denoiseLevel: Denoise | "" = "";
   /** The pending arm write, so a clear always lands after it. */
   private guardWrite: Promise<void> | null = null;
+  private power: Power = { discharging: false };
+  private cap = SAMPLE_CAP;
+  private renderScale = 0;
+  private budget = new FrameBudget(Infinity);
+  /** The last frame is still on the GPU; the next waits for it, so a slow GPU
+   *  is never queued more work than it finishes. */
+  private inFlight = false;
+  private measured: number | null = null;
+  private budgetSent = false;
 
   constructor(
     private webglCanvas: HTMLCanvasElement,
@@ -121,7 +136,7 @@ export class PathTraceHost {
   tick(f: TraceFrame) {
     if (f.cameraChanged) this.cameraDirty = true;
     if (f.sceneMaybeChanged) this.sceneDirty = true;
-    const s = this.disabled ? "off" : traceState({ ...f.inputs, samples: this.samples, cap: SAMPLE_CAP });
+    const s = this.disabled ? "off" : traceState({ ...f.inputs, samples: this.samples, cap: this.cap });
     if (s !== this.state) {
       this.state = s;
       this.onStateChange?.(s);
@@ -160,11 +175,40 @@ export class PathTraceHost {
       this.denoiseLevel = level;
       this.settled = false;
     }
+    if (this.measured !== null) {
+      if (this.budget.frame(this.measured, f.now)) b.setFrameBudget(this.budget.budget);
+      this.measured = null;
+    }
     if (s === "trace") {
-      b.renderSample(this.samples);
+      if (!this.inFlight) this.traceFrame(b);
       this.poll(b);
-    } else if (!this.settled && this.samples >= SAMPLE_CAP) this.settled = !b.present(f.now);
+    } else if (!this.settled && this.samples >= this.cap) this.settled = !b.present(f.now);
     this.show(this.samples > 0);
+  }
+
+  private traceFrame(b: TracerBackend) {
+    const gen = this.gen.current;
+    // Frames before the first sample carry the pipeline compiles, seconds
+    // long, which say nothing about what a frame costs.
+    const timed = this.sawSample;
+    const land = (ms: number | null) => {
+      if (this.backend !== b) return;
+      this.inFlight = false;
+      if (ms !== null && timed && this.gen.isCurrent(gen)) this.measured = ms;
+    };
+    const done = b.renderSample(this.samples);
+    this.inFlight = true;
+    done.then(land, () => land(null));
+  }
+
+  /** Battery lowers the cap, the work per frame and the resolution. */
+  setPower(p: Power) {
+    if (p.discharging === this.power.discharging) return;
+    this.power = { ...p };
+    this.cap = costProfile(p).cap;
+    this.backend?.setCap(this.cap);
+    this.size = { w: 0, h: 0, ratio: 0 };
+    this.cameraDirty = true;
   }
 
   private show(on: boolean) {
@@ -237,7 +281,13 @@ export class PathTraceHost {
         st.position = "absolute";
         st.pointerEvents = "none";
         this.webglCanvas.style.position = "relative";
+        b.setCap(this.cap);
         this.backend = b;
+        this.inFlight = false;
+        this.measured = null;
+        this.renderScale = 0;
+        this.budget = new FrameBudget(Infinity);
+        this.budgetSent = false;
         this.denoiseLevel = "";
         this.sceneDirty = this.cameraDirty = true;
         this.hasScene = false;
@@ -261,6 +311,18 @@ export class PathTraceHost {
     if (w === this.size.w && h === this.size.h && ratio === this.size.ratio) return;
     this.size = { w, h, ratio };
     b.setSize(Math.max(1, w), Math.max(1, h), ratio);
+    const scale = renderScaleFor({ cssHeight: h, dpr: globalThis.devicePixelRatio || 1, discharging: this.power.discharging });
+    if (scale !== this.renderScale) {
+      this.renderScale = scale;
+      b.setRenderScale(scale);
+    }
+    const before = this.budget.budget;
+    const px = Math.floor(Math.max(1, w) * ratio * scale) * Math.floor(Math.max(1, h) * ratio * scale);
+    this.budget.setLimit(px, costProfile(this.power).budgetScale);
+    if (this.budget.budget !== before || !this.budgetSent) {
+      b.setFrameBudget(this.budget.budget);
+      this.budgetSent = true;
+    }
     this.cameraDirty = true;
   }
 

@@ -22,7 +22,10 @@ class FakeTracer implements TracerBackend {
   updateLook() { this.calls.push("look"); }
   updateCamera() { this.calls.push("camera"); }
   reset() { this.calls.push("reset"); }
-  renderSample() {}
+  renderSample() { return Promise.resolve(1); }
+  setFrameBudget() {}
+  setRenderScale() {}
+  setCap() {}
   readonly denoised = false;
   present() { return false; }
   setDenoise() {}
