@@ -1144,7 +1144,7 @@
   "import": {
    "summary": "A body read from a geometry file. Use the `doc_import` TOOL, never feature_add: `geom` is a content hash in the blob store, and only the import itself can put the geometry there, so a hand-written one names a blob that does not exist.",
    "fields": {
-    "format": "\"stl\" | \"3mf\" | \"step\" | \"obj\" | \"brep\" | \"glb\"",
+    "format": "\"stl\" | \"3mf\" | \"step\" | \"obj\" | \"brep\" | \"glb\" | \"dxf\"",
     "name": "label",
     "geom": "content hash in the document blob store",
     "source": "the file it was read from, for reference",
@@ -1152,7 +1152,7 @@
     "notes": "list of sentences the import wrote about the file, which body did not close into a solid for one. Every build repeats them as warnings"
    },
    "example": null,
-   "notes": "The tool takes `path` when the file is one this machine can open, or `content` (the file itself, base64, with `name`) when you are holding the file and your host will not give you a path to it. A text format can go as it is with encoding \"text\". Inline, gzip it first: STEP is text and shrinks about tenfold, which is the difference between one message and ten. Still too big? Encode the WHOLE file once, split the text that comes out, and send the pieces with `part` and `parts`, quoting the `upload` id the first reply gives back. Do not encode each piece separately, the halves of a base64 string join back up and separately encoded pieces do not. Remember that content is written by YOU: every piece is a message of your own output, so past a handful of pieces the answer is to ask for a path rather than to keep typing. An imported body is ordinary geometry once it is in: `inspect` gives its faces and edges with selectors, and it can be cut, filleted and measured against like anything else. `solid: false` means the file did not close into a watertight solid, so a boolean against it will disappoint: say so rather than press on."
+   "notes": "A DXF drawing adds one plain sketch per layer on XY instead of a body, and an import feature only for its 3D faces. The tool takes `path` when the file is one this machine can open, or `content` (the file itself, base64, with `name`) when you are holding the file and your host will not give you a path to it. A text format can go as it is with encoding \"text\". Inline, gzip it first: STEP is text and shrinks about tenfold, which is the difference between one message and ten. Still too big? Encode the WHOLE file once, split the text that comes out, and send the pieces with `part` and `parts`, quoting the `upload` id the first reply gives back. Do not encode each piece separately, the halves of a base64 string join back up and separately encoded pieces do not. Remember that content is written by YOU: every piece is a message of your own output, so past a handful of pieces the answer is to ask for a path rather than to keep typing. An imported body is ordinary geometry once it is in: `inspect` gives its faces and edges with selectors, and it can be cut, filleted and measured against like anything else. `solid: false` means the file did not close into a watertight solid, so a boolean against it will disappoint: say so rather than press on."
   },
   "organic": {
    "summary": "A smooth, rounded solid from sized nodes (Node Bodies plugin): each chain of nodes becomes one limb lofted through them, a node on no chain is an ellipsoid, and everything fuses into one body.",
