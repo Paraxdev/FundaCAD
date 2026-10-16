@@ -39,6 +39,19 @@ export function parseNumberField(
   return { error: problem };
 }
 
+/** The value an arrow key moves a number to: `times` steps of its declared
+ *  step (1 for an integer without one), onto the step grid and inside its
+ *  limits. Null when the property declares nothing to step by. */
+export function stepNumber(p: NumberSetting, v: number, times: number): number | null {
+  const step = p.step ?? (p.integer ? 1 : undefined);
+  if (!step || !(step > 0)) return null;
+  // Rounded to 1e-9 so 0.1 steps read back as 0.3, not 0.30000000000000004.
+  let next = Math.round((Math.round(v / step) + times) * step * 1e9) / 1e9;
+  if (p.min !== undefined) next = Math.max(p.min, next);
+  if (p.max !== undefined) next = Math.min(p.max, next);
+  return p.integer ? Math.round(next) : next;
+}
+
 const MODIFIER_KEYS = new Set(["Control", "Shift", "Alt", "Meta"]);
 
 /** A key press written the way the shortcut sheet writes one, "Ctrl+Shift+K",

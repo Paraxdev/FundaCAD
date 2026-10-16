@@ -5,7 +5,7 @@
 
 import { computed, onUnmounted, ref, shallowRef, watch, type Component } from "vue";
 import { settingMatches, type NumberSetting, type PluginSettings, type SettingProp } from "../../plugins/settings";
-import { keyCombo, numberText, parseNumberField, unitLabel } from "../../plugins/settingsInput";
+import { keyCombo, numberText, parseNumberField, stepNumber, unitLabel } from "../../plugins/settingsInput";
 import { getUnit, onUnitChange } from "../../ui/units";
 import Icon from "../shell/Icon.vue";
 
@@ -78,6 +78,17 @@ function commitNumber(p: NumberSetting) {
   if ("error" in r) return;
   drafts.value = withoutKey(drafts.value, p.key);
   store(p, r.value);
+}
+
+function arrowNumber(p: NumberSetting, ev: KeyboardEvent) {
+  const draft = drafts.value[p.key];
+  const typed = draft === undefined ? null : parseNumberField(p, draft, unit.value);
+  const from = typed && "value" in typed ? typed.value : (values.value[p.key] as number);
+  const next = stepNumber(p, from, (ev.key === "ArrowUp" ? 1 : -1) * (ev.shiftKey ? 10 : 1));
+  if (next === null) return;
+  ev.preventDefault();
+  drafts.value = withoutKey(drafts.value, p.key);
+  store(p, next);
 }
 
 function withoutKey<T>(o: Record<string, T>, k: string): Record<string, T> {
@@ -160,6 +171,8 @@ const isDefault = (p: SettingProp) => {
                 @input="typeNumber(p, ($event.target as HTMLInputElement).value)"
                 @change="commitNumber(p)"
                 @keydown.enter="commitNumber(p)"
+                @keydown.up="arrowNumber(p, $event)"
+                @keydown.down="arrowNumber(p, $event)"
               />
               <span v-if="unitLabel(p, unit)" class="plugset-unit">{{ unitLabel(p, unit) }}</span>
             </template>
