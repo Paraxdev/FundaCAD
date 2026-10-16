@@ -4,6 +4,7 @@
 // neither may land on the geometry the viewport draws and picks with.
 
 import * as THREE from "three";
+import { traceMaterialFrom, traceMaterialKey } from "./materials";
 
 /** Trees build in workers, but every edit still repacks the tracer's buffers
  *  on the main thread, about 0.22 us per triangle (0.45 s at 2 M, 0.7 s at 3 M,
@@ -14,29 +15,6 @@ interface Owned { baseColors?: Float32Array; baseVersion?: number }
 
 export function isTracedBody(o: THREE.Object3D): o is THREE.Mesh {
   return (o as THREE.Mesh).isMesh === true && !!o.userData.owner && o.visible;
-}
-
-function physicalFrom(src: THREE.Material, vertexColors: boolean): THREE.MeshPhysicalMaterial {
-  return copyPhysical(new THREE.MeshPhysicalMaterial(), src, vertexColors);
-}
-
-function copyPhysical(m: THREE.MeshPhysicalMaterial, src: THREE.Material, vertexColors: boolean): THREE.MeshPhysicalMaterial {
-  m.vertexColors = vertexColors;
-  const s = src as Partial<THREE.MeshPhysicalMaterial>;
-  if (s.color) m.color.copy(s.color);
-  if (s.emissive) m.emissive.copy(s.emissive);
-  m.emissiveIntensity = s.emissiveIntensity ?? 1;
-  m.metalness = s.metalness ?? 0;
-  m.roughness = s.roughness ?? 0.5;
-  m.transmission = s.transmission ?? 0;
-  m.ior = s.ior ?? 1.5;
-  m.thickness = s.thickness ?? 0;
-  m.clearcoat = s.clearcoat ?? 0;
-  m.clearcoatRoughness = s.clearcoatRoughness ?? 0;
-  m.opacity = src.opacity;
-  m.transparent = src.transparent;
-  m.side = src.side;
-  return m;
 }
 
 /** `withIndex` false leaves the index off until the body's tree lands, which
@@ -82,11 +60,11 @@ export function refreshMirrorMaterials(mirror: THREE.Mesh, src: THREE.Mesh) {
   const had = Array.isArray(mirror.material) ? mirror.material : [mirror.material];
   if (had.length !== from.length || !had.every((m) => m instanceof THREE.MeshPhysicalMaterial)) {
     had.forEach((m) => m.dispose());
-    const made = from.map((m) => physicalFrom(m, colors));
+    const made = from.map((m) => traceMaterialFrom(m, colors));
     mirror.material = Array.isArray(src.material) ? made : made[0]!;
     return;
   }
-  had.forEach((m, i) => copyPhysical(m as THREE.MeshPhysicalMaterial, from[i]!, colors));
+  had.forEach((m, i) => traceMaterialFrom(from[i]!, colors, m as THREE.MeshPhysicalMaterial));
 }
 export function countTriangles(bodies: THREE.Mesh[]): number {
   let n = 0;
@@ -135,7 +113,7 @@ export function transformSignature(bodies: THREE.Mesh[]): string {
 }
 
 export function materialSignature(bodies: THREE.Mesh[]): string {
-  return bodies.map((b) => (Array.isArray(b.material) ? b.material : [b.material]).map(materialKey).join("+")).join("|");
+  return bodies.map((b) => (Array.isArray(b.material) ? b.material : [b.material]).map(traceMaterialKey).join("+")).join("|");
 }
 
 /** highlight.setBase bumps baseVersion whenever it rewrites the base colours. */
@@ -151,14 +129,6 @@ function sampleSum(a: ArrayLike<number> | undefined): number {
   return s;
 }
 
-function materialKey(m: THREE.Material): string {
-  const s = m as Partial<THREE.MeshPhysicalMaterial>;
-  return [
-    m.uuid, m.version, s.color?.getHex(), s.emissive?.getHex(), s.emissiveIntensity, s.metalness, s.roughness,
-    s.transmission, s.clearcoat, m.opacity,
-  ].join(".");
-}
-
 /** Changes when what the tracer would see changes, and not on a hover: hover
  *  tints the vertex colour buffer, the mirror reads the base colours. */
 export function sceneSignature(bodies: THREE.Mesh[]): string {
@@ -169,7 +139,7 @@ export function sceneSignature(bodies: THREE.Mesh[]): string {
     b.updateWorldMatrix(true, false);
     parts.push([
       b.id, g.id, (g.getAttribute("position") as THREE.BufferAttribute).version ?? 0, g.index?.version ?? -1,
-      mats.map(materialKey).join("+"),
+      mats.map(traceMaterialKey).join("+"),
       sampleSum(b.matrixWorld.elements),
       sampleSum((b.userData.owner as Owned).baseColors),
     ].join(":"));
