@@ -331,3 +331,18 @@ fn a_plane_at_an_angle_turns_one_way_about_its_edge_and_keeps_turning_past_90() 
         assert!(near(r.normal, want), "angle {a}: {r:?} want {want:?}");
     }
 }
+
+/// At radius 25 the point picked on the side at radius 5 sits nearer a cap.
+#[test]
+fn an_axis_from_a_cylinder_keeps_the_round_face_when_the_radius_grows_past_the_pick() {
+    let d = |r: f64| json!({"parameters": {"r": r}, "features": [
+        {"id": "c", "type": "cylinder", "radius": "r", "height": 30},
+        {"id": "mv", "type": "move", "dx": 4},
+        {"id": "ax", "type": "datumAxis", "origin": [4, 0, 0], "dir": [0, 0, 1], "through": {"kind": "cylinder",
+         "face": {"kind": "face", "by": "nearest", "point": [9, 0, 0], "body": "body1"}}},
+    ]});
+    let r = build(d(25.0));
+    let o = mark(&r, "ax", "origin");
+    assert!((o[0] - 4.0).abs() < 1e-6 && o[1].abs() < 1e-6 && mark(&r, "ax", "dir")[2].abs() > 1.0 - 1e-6, "{}", r.datum_marks["ax"]);
+    assert!(!r.diagnostics.iter().any(|d| d["feature_id"] == "ax" && d["code"] == "referenceNotFound"), "{:?}", r.diagnostics);
+}

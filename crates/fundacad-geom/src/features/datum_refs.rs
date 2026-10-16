@@ -8,6 +8,7 @@ use opencascade::primitives::Shape;
 use opencascade::select_access::{self as sa, CurveType, SurfaceType};
 use serde_json::Value;
 
+use super::solid_ops::faces_of;
 use super::face_anchor::{agree_with, cylinder_axis, plane_from_point_normal, unit, with_x_dir, Placement};
 use crate::builder::plane::{named, plane_of, PlaneRef};
 use crate::builder::{missing_reference, Ctx, FResult};
@@ -79,6 +80,22 @@ impl<'c> Look<'c> {
             Some(d) if ent.curve == CurveType::Line => Some((ent.mid, d)),
             _ => self.miss("edge", sel),
         }
+    }
+
+    /// A face picked by a point can hand over a cap once the radius or length
+    /// changes a lot, so a face that is not round falls back to the round face
+    /// whose surface passes nearest the point.
+    fn round_face_axis(&mut self, sel: &Selector) -> Option<(DVec3, DVec3)> {
+        if let Some((o, d, _)) = self.face(sel).and_then(|s| cylinder_axis(&s)) {
+            return Some((o, d));
+        }
+        let at = serde_json::to_value(sel).ok().and_then(|v| v.get("point").and_then(arr3))?;
+        let off = |(o, d, r): (DVec3, DVec3, f64)| ((at - o).reject_from(d).length() - r).abs();
+        faces_of(&self.part(sel)?)
+            .iter()
+            .filter_map(cylinder_axis)
+            .min_by(|a, b| off(*a).total_cmp(&off(*b)))
+            .map(|(o, d, _)| (o, d))
     }
 
     /// A datum named by id has to be above this feature, or it is refused
@@ -347,7 +364,7 @@ pub fn axis_through(ctx: &mut Ctx, f: &DatumAxis, through: &AxisThrough) -> FRes
             (Some(a), Some(b)) => unit(b - a).map(|d| (a, d)),
             _ => None,
         },
-        AxisThrough::Cylinder { face } => look.face(face).and_then(|s| cylinder_axis(&s)).map(|(o, d, _)| (o, d)),
+        AxisThrough::Cylinder { face } => look.round_face_axis(face),
         AxisThrough::Planes { a, b } => match (look.plane(a)?, look.plane(b)?) {
             (Some((oa, na)), Some((ob, nb))) => {
                 let u = na.cross(nb);
