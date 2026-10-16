@@ -69,7 +69,8 @@ pub fn building(id: &Value, feature: i64, meshed: i64, mesh_total: i64) -> Strin
     }))
 }
 
-/// `{"id", "status": "importing", "phase", "label", "pct"}`.
+/// `{"id", "status": "importing", "phase", "label", "pct"}`. `phase` is an
+/// [`crate::import_stage`], `pct` is -1 while the stage has no fraction.
 pub fn importing(id: &Value, phase: i64, label: &str, pct: i64) -> String {
     pyjson::to_string(&json!({
         "id": id, "status": "importing", "phase": phase, "label": label, "pct": pct,

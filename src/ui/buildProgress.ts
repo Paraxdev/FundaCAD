@@ -52,6 +52,22 @@ export function waitLabel(w: EngineWait): string {
   return `Waiting: ${who} is ${WAIT_DOING[w.op] ?? "working"}`;
 }
 
+/** The busy line under the history: what the op is, the stage it is in, and
+ *  whether to draw its bar, `pct` wide or indeterminate when null. An op that
+ *  reports no stages gets no bar. */
+export function busyLine(b: Pick<BusyState, "label" | "stage" | "pct" | "waiting">): {
+  text: string;
+  detail: string | null;
+  bar: boolean;
+  pct: number | null;
+} {
+  if (b.waiting) return { text: waitLabel(b.waiting), detail: null, bar: false, pct: null };
+  if (b.stage === null) {
+    return { text: b.pct === null ? b.label : `${b.label} ${b.pct}%`, detail: null, bar: false, pct: null };
+  }
+  return { text: b.label, detail: b.pct === null ? b.stage : `${b.stage} ${b.pct}%`, bar: true, pct: b.pct };
+}
+
 /** The history's empty state. A rebuild of a document with no features has
  *  no steps to show even while it waits on the engine; an import into one does. */
 export function historyShowsEmpty(featureCount: number, busy: Pick<BusyState, "active" | "rebuild">): boolean {

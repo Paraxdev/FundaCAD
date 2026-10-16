@@ -12,7 +12,7 @@ import { useShellStore } from "../../stores/shell";
 import { featureMeta } from "../../ui/featureMeta";
 import Icon from "./Icon.vue";
 import { contextMenu } from "../../ui/menu";
-import { buildProgress, CANCEL_DELAY_MS, historyShowsBusy, historyShowsEmpty, waitLabel } from "../../ui/buildProgress";
+import { buildProgress, busyLine, CANCEL_DELAY_MS, historyShowsBusy, historyShowsEmpty } from "../../ui/buildProgress";
 import { featureFailures, featureNotes } from "../../ui/featureNotes";
 import { gapIndexIn } from "../../ui/trackGaps";
 import { getUnit, onUnitChange } from "../../ui/units";
@@ -150,11 +150,7 @@ const chip = computed(() =>
     ? { label: "waiting…", pct: 0 }
     : buildProgress(progress.value.progress, progress.value.meshed, progress.value.meshTotal, features.value.length),
 );
-const busyText = computed(() => {
-  const b = busy.value;
-  if (b.waiting) return waitLabel(b.waiting);
-  return b.pct === null ? b.label : `${b.label} ${b.pct}%`;
-});
+const line = computed(() => busyLine(busy.value));
 
 // Cancelling is not instant (the engine kills the worker and spawns a fresh
 // one), so the button disables itself in flight, a second press would target
@@ -540,7 +536,21 @@ function openMenu(e: MouseEvent, id: string, i: number) {
          and mouseup fires no click at all, so one press in eight was swallowed
          by the once-a-second re-render); Vue patches in place, so the hazard is
          gone, but keeping them out here also keeps focus and the CSS. -->
-    <div class="timeline-busy" :class="{ hidden: !showCancel }">{{ busyText }}</div>
+    <div class="timeline-busy" :class="{ hidden: !showCancel }">
+      <span class="busy-text" :title="line.text">{{ line.text }}</span>
+      <template v-if="line.bar">
+        <span class="busy-stage">{{ line.detail }}</span>
+        <span
+          class="busy-bar"
+          :class="{ indeterminate: line.pct === null }"
+          role="progressbar"
+          :aria-valuenow="line.pct ?? undefined"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          :aria-label="line.detail ?? undefined"
+        ><i :style="line.pct === null ? undefined : { width: `${line.pct}%` }"></i></span>
+      </template>
+    </div>
     <button
       class="timeline-cancel"
       :class="{ hidden: !showCancel }"
