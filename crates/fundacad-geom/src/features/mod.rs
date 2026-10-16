@@ -5,6 +5,7 @@ pub mod blend;
 pub(crate) mod boolean;
 mod cleanup;
 mod datum;
+mod datum_refs;
 mod defeature;
 mod extent;
 mod extrude;
@@ -49,7 +50,7 @@ fn handle(ctx: &mut Ctx, f: &Feature) -> FResult {
         Feature::Mirror(m) => transform::mirror(ctx, m),
         Feature::RemoveBody(r) => transform::remove_body(ctx, r),
         Feature::DatumPlane(d) => datum::datum_plane(ctx, d),
-        Feature::DatumPoint(_) => Ok(()),
+        Feature::DatumPoint(d) => datum_refs::datum_point(ctx, d),
         Feature::Joint(j) => joint::handle(ctx, j),
         Feature::Mechanism(m) => mechanism::handle(ctx, m),
         Feature::DatumAxis(d) => datum::datum_axis(ctx, d),

@@ -83,9 +83,11 @@ pub fn datum_plane(ctx: &Ctx, name: &str) -> FResult<(DVec3, DVec3)> {
 pub fn point(ctx: &Ctx, label: &str, p: &PointRef) -> FResult<DVec3> {
     match p {
         PointRef::Datum(id) => ctx
-            .points
+            .datum_marks
             .get(id)
-            .map(|p| v3(*p))
+            .and_then(|m| m.get("position")?.as_array().cloned())
+            .and_then(|a| Some(dvec3(a.first()?.as_f64()?, a.get(1)?.as_f64()?, a.get(2)?.as_f64()?)))
+            .or_else(|| ctx.points.get(id).map(|p| v3(*p)))
             .ok_or_else(|| missing(format!("{label}: datum point {id} does not exist"))),
         PointRef::Vertex { point, body } => {
             let at = dvec3(point[0].get(), point[1].get(), point[2].get());

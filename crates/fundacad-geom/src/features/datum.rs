@@ -25,9 +25,14 @@ pub fn datum_plane(ctx: &mut Ctx, f: &DatumPlane) -> FResult {
         .as_deref()
         .filter(|p| !p.is_empty() && *p != f.id)
         .and_then(|p| ctx.datums.get(p).copied());
-    let spec = match parent {
-        Some(rec) => PlaneRef::Record(rec),
-        None => match face_anchor_plane(ctx, &f.id, f.face.as_ref(), f.at.as_ref(), &f.plane, "Plane") {
+    let followed = match &f.through {
+        Some(t) => super::datum_refs::plane_through(ctx, f, t)?,
+        None => None,
+    };
+    let spec = match (followed, parent) {
+        (Some(p), _) => PlaneRef::Record(p.record()),
+        (None, Some(rec)) => PlaneRef::Record(rec),
+        (None, None) => match face_anchor_plane(ctx, &f.id, f.face.as_ref(), f.at.as_ref(), &f.plane, "Plane") {
             Some(p) => PlaneRef::Record(p.record()),
             None => PlaneRef::from(&f.plane),
         },
@@ -91,6 +96,12 @@ fn clean(v: DVec3) -> DVec3 {
 /// rebuild, `origin` and `dir` being the fallback cache. Resolution is global
 /// across bodies, a body id can come to name a different piece.
 pub fn datum_axis(ctx: &mut Ctx, f: &DatumAxis) -> FResult {
+    if let Some(t) = &f.through {
+        if let Some((o, d)) = super::datum_refs::axis_through(ctx, f, t)? {
+            ctx.datum_marks.insert(f.id.clone(), json!({"kind": "axis", "origin": o.to_array(), "dir": d.to_array()}));
+        }
+        return Ok(());
+    }
     let Some(sel) = f.axis_edge.clone() else {
         return Ok(());
     };

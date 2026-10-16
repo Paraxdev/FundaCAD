@@ -43,7 +43,7 @@ impl Placement {
     }
 }
 
-fn unit(v: DVec3) -> Option<DVec3> {
+pub(crate) fn unit(v: DVec3) -> Option<DVec3> {
     let n = v.length();
     (n >= EPS).then(|| v / n)
 }
@@ -57,7 +57,7 @@ fn plane_x_dir(n: DVec3) -> Option<DVec3> {
     unit(r - n * r.dot(n))
 }
 
-fn plane_from_point_normal(point: DVec3, normal: DVec3) -> Option<Placement> {
+pub(crate) fn plane_from_point_normal(point: DVec3, normal: DVec3) -> Option<Placement> {
     let n = unit(normal)?;
     let x = plane_x_dir(n)?;
     Some(Placement {
@@ -67,7 +67,7 @@ fn plane_from_point_normal(point: DVec3, normal: DVec3) -> Option<Placement> {
     })
 }
 
-fn with_x_dir(p: Placement, hint: DVec3) -> Placement {
+pub(crate) fn with_x_dir(p: Placement, hint: DVec3) -> Placement {
     let Some(n) = unit(DVec3::from_array(p.normal)) else {
         return p;
     };
@@ -81,7 +81,7 @@ fn with_x_dir(p: Placement, hint: DVec3) -> Placement {
     }
 }
 
-fn agree_with(p: Placement, reference: DVec3) -> Placement {
+pub(crate) fn agree_with(p: Placement, reference: DVec3) -> Placement {
     let (Some(r), Some(n)) = (unit(reference), unit(DVec3::from_array(p.normal))) else {
         return p;
     };
@@ -148,7 +148,7 @@ fn nearest_cylinder_face(part: &Shape, sel: &Value) -> Option<Shape> {
     best.map(|b| b.1)
 }
 
-fn cylinder_axis(face: &Shape) -> Option<(DVec3, DVec3, f64)> {
+pub(crate) fn cylinder_axis(face: &Shape) -> Option<(DVec3, DVec3, f64)> {
     let mut o = [0.0; 7];
     match ffi::sk_cylinder_axis(face.raw(), &mut o) {
         Ok(true) => Some((

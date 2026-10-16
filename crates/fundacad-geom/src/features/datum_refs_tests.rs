@@ -1,0 +1,238 @@
+use crate::builder::{self, NoWatch};
+use serde_json::{json, Value};
+
+fn build(doc: Value) -> builder::Rebuild {
+    let typed = serde_json::from_value(doc.clone()).expect("the document parses");
+    let r = builder::rebuild(&typed, &doc, &NoWatch).expect("not cancelled");
+    assert!(r.errors.is_empty(), "{:?}", r.errors.iter().map(|e| &e.message).collect::<Vec<_>>());
+    r
+}
+
+fn near(a: [f64; 3], b: [f64; 3]) -> bool {
+    (0..3).all(|i| (a[i] - b[i]).abs() < 1e-6)
+}
+
+fn mark(r: &builder::Rebuild, id: &str, key: &str) -> [f64; 3] {
+    let v = &r.datum_marks[id][key];
+    [0, 1, 2].map(|i| v[i].as_f64().unwrap_or(f64::NAN))
+}
+
+/// A 20 x 20 box of length `l` along X, centred, then the datums: its +X
+/// face sits at x = l/2, so every reference made at l = 40 moves with l.
+fn doc(l: f64, datums: Value) -> Value {
+    let mut features = vec![json!({"id": "b", "type": "box", "length": "len", "width": 20, "height": 20})];
+    features.extend(datums.as_array().cloned().unwrap_or_default());
+    json!({"parameters": {"len": l}, "features": features})
+}
+
+fn plus_x_face() -> Value {
+    json!({"kind": "face", "by": "tracked", "point": [20, 0, 0], "normal": [1, 0, 0], "body": "body1"})
+}
+
+fn top_face() -> Value {
+    json!({"kind": "face", "by": "tracked", "point": [0, 0, 10], "normal": [0, 0, 1], "body": "body1"})
+}
+
+/// An edge of the box as it was at l = 40, by fingerprint.
+fn edge(mid: [f64; 3], dir: [f64; 3], length: f64) -> Value {
+    json!({"kind": "edge", "by": "match", "fp": {"mid": mid, "dir": dir, "length": length, "curve": "line"}, "body": "body1"})
+}
+
+fn vertical_edge(y: f64) -> Value {
+    edge([20.0, y, 0.0], [0.0, 0.0, 1.0], 20.0)
+}
+
+fn top_edge_of_plus_x() -> Value {
+    edge([20.0, 0.0, 10.0], [0.0, 1.0, 0.0], 20.0)
+}
+
+fn plane(id: &str, through: Value, extra: Value) -> Value {
+    let mut f = json!({"id": id, "type": "datumPlane",
+        "plane": {"origin": [0, 0, 0], "normal": [1, 0, 0], "xdir": [0, 1, 0]}, "through": through});
+    if let (Some(o), Some(e)) = (f.as_object_mut(), extra.as_object()) {
+        o.extend(e.clone());
+    }
+    f
+}
+
+fn origin_x(r: &builder::Rebuild, id: &str) -> f64 {
+    r.datum_planes[id].origin[0]
+}
+
+#[test]
+fn a_midplane_of_a_face_and_a_world_plane_follows_the_face() {
+    let d = |l| doc(l, json!([plane("m", json!({"kind": "mid", "a": {"face": plus_x_face()}, "b": {"plane": "YZ"}}), json!({}))]));
+    assert!((origin_x(&build(d(40.0)), "m") - 10.0).abs() < 1e-6);
+    let r = build(d(80.0));
+    assert!((origin_x(&r, "m") - 20.0).abs() < 1e-6, "{:?}", r.datum_planes["m"]);
+    assert!(near(r.datum_planes["m"].normal, [1.0, 0.0, 0.0]));
+}
+
+#[test]
+fn a_midplane_of_two_datum_planes_follows_a_parent_edit() {
+    let d = |off: f64| json!({"parameters": {"off": off}, "features": [
+        {"id": "p", "type": "datumPlane", "plane": "YZ", "offset": "off"},
+        plane("m", json!({"kind": "mid", "a": {"plane": "p"}, "b": {"plane": "YZ"}}), json!({})),
+    ]});
+    assert!((origin_x(&build(d(10.0)), "m") - 5.0).abs() < 1e-6);
+    assert!((origin_x(&build(d(30.0)), "m") - 15.0).abs() < 1e-6);
+}
+
+#[test]
+fn a_plane_through_three_points_follows_the_face_they_sit_on() {
+    let d = |l| doc(l, json!([plane("p3", json!({"kind": "points", "points": [
+        {"face": plus_x_face()},
+        {"edge": vertical_edge(10.0), "end": "mid"},
+        {"edge": top_edge_of_plus_x(), "t": 0.25},
+    ]}), json!({}))]));
+    assert!((origin_x(&build(d(40.0)), "p3") - 20.0).abs() < 1e-6);
+    let r = build(d(80.0));
+    assert!((origin_x(&r, "p3") - 40.0).abs() < 1e-6, "{:?}", r.datum_planes["p3"]);
+    assert!(near(r.datum_planes["p3"].normal, [1.0, 0.0, 0.0]), "faces the cached side");
+}
+
+#[test]
+fn a_datum_point_on_an_edge_end_follows_it() {
+    let d = |l| doc(l, json!([
+        {"id": "pt", "type": "datumPoint", "point": [20, 10, 10],
+         "at": {"edge": vertical_edge(10.0), "end": "end", "point": [20, 10, 10]}},
+    ]));
+    assert!(near(mark(&build(d(40.0)), "pt", "position"), [20.0, 10.0, 10.0]));
+    let r = build(d(80.0));
+    assert!(near(mark(&r, "pt", "position"), [40.0, 10.0, 10.0]), "{}", r.datum_marks["pt"]);
+}
+
+#[test]
+fn a_datum_point_at_a_face_centre_follows_the_face() {
+    let d = |l| doc(l, json!([{"id": "pt", "type": "datumPoint", "point": [20, 0, 0], "at": {"face": plus_x_face()}}]));
+    assert!(near(mark(&build(d(80.0)), "pt", "position"), [40.0, 0.0, 0.0]));
+}
+
+#[test]
+fn a_two_point_axis_follows_both_points() {
+    let d = |l| doc(l, json!([
+        {"id": "ax", "type": "datumAxis", "origin": [20, 0, 0], "dir": [0, 0, 1], "through": {"kind": "points",
+         "a": {"face": plus_x_face()}, "b": {"edge": top_edge_of_plus_x(), "end": "mid"}}},
+    ]));
+    let r = build(d(80.0));
+    assert!(near(mark(&r, "ax", "origin"), [40.0, 0.0, 0.0]) && near(mark(&r, "ax", "dir"), [0.0, 0.0, 1.0]), "{}", r.datum_marks["ax"]);
+}
+
+#[test]
+fn an_axis_from_a_cylinder_follows_a_move_and_ignores_the_radius() {
+    let d = |r: f64, dx: f64| json!({"parameters": {"r": r, "dx": dx}, "features": [
+        {"id": "c", "type": "cylinder", "radius": "r", "height": 30},
+        {"id": "mv", "type": "move", "dx": "dx"},
+        {"id": "ax", "type": "datumAxis", "origin": [0, 0, 0], "dir": [0, 0, 1], "through": {"kind": "cylinder",
+         "face": {"kind": "face", "by": "nearest", "point": [5, 0, 0], "body": "body1"}}},
+    ]});
+    let r = build(d(5.0, 0.0));
+    assert!(mark(&r, "ax", "origin")[0].abs() < 1e-6 && near(mark(&r, "ax", "dir"), [0.0, 0.0, 1.0]), "{}", r.datum_marks["ax"]);
+    let r = build(d(6.0, 4.0));
+    assert!((mark(&r, "ax", "origin")[0] - 4.0).abs() < 1e-6, "{}", r.datum_marks["ax"]);
+}
+
+#[test]
+fn an_axis_where_two_planes_meet_follows_the_face() {
+    let d = |l| doc(l, json!([
+        {"id": "ax", "type": "datumAxis", "origin": [20, 0, 0], "dir": [0, 1, 0], "through": {"kind": "planes",
+         "a": {"face": plus_x_face()}, "b": {"plane": "XY"}}},
+    ]));
+    let r = build(d(80.0));
+    let (o, dir) = (mark(&r, "ax", "origin"), mark(&r, "ax", "dir"));
+    assert!((o[0] - 40.0).abs() < 1e-6 && o[2].abs() < 1e-6 && near(dir, [0.0, 1.0, 0.0]), "{}", r.datum_marks["ax"]);
+}
+
+#[test]
+fn a_plane_normal_to_an_edge_sits_at_its_fraction_and_follows_a_length_change() {
+    let top = edge([0.0, 10.0, 10.0], [1.0, 0.0, 0.0], 40.0);
+    let d = |l| doc(l, json!([plane("n", json!({"kind": "normalToEdge", "edge": top}), json!({"t": 0.25}))]));
+    let r = build(d(40.0));
+    assert!(near(r.datum_planes["n"].origin, [-10.0, 10.0, 10.0]), "{:?}", r.datum_planes["n"]);
+    assert!(near(r.datum_planes["n"].normal, [1.0, 0.0, 0.0]));
+    assert!(near(build(d(80.0)).datum_planes["n"].origin, [-20.0, 10.0, 10.0]));
+}
+
+#[test]
+fn a_plane_normal_to_an_edge_at_a_vertex_follows_the_vertex() {
+    let top = edge([0.0, 10.0, 10.0], [1.0, 0.0, 0.0], 40.0);
+    let d = |l| doc(l, json!([plane("n", json!({"kind": "normalToEdge", "edge": top,
+        "vertex": {"edge": vertical_edge(10.0), "end": "end", "point": [20, 10, 10]}}), json!({}))]));
+    let r = build(d(80.0));
+    assert!(near(r.datum_planes["n"].origin, [40.0, 10.0, 10.0]), "{:?}", r.datum_planes["n"]);
+}
+
+#[test]
+fn a_plane_through_two_parallel_or_crossing_edges_follows_them() {
+    let d = |l, b: Value| doc(l, json!([plane("e2", json!({"kind": "twoEdges", "a": vertical_edge(10.0), "b": b}), json!({}))]));
+    for b in [vertical_edge(-10.0), top_edge_of_plus_x()] {
+        assert!((origin_x(&build(d(40.0, b.clone())), "e2") - 20.0).abs() < 1e-6);
+        let r = build(d(80.0, b));
+        assert!((origin_x(&r, "e2") - 40.0).abs() < 1e-6 && near(r.datum_planes["e2"].normal, [1.0, 0.0, 0.0]), "{:?}", r.datum_planes["e2"]);
+    }
+}
+
+#[test]
+fn skew_edges_keep_the_cached_plane_and_say_so() {
+    let r = build(doc(40.0, json!([plane("e2", json!({"kind": "twoEdges",
+        "a": vertical_edge(10.0), "b": edge([0.0, -10.0, 10.0], [1.0, 0.0, 0.0], 40.0)}), json!({}))])));
+    assert!(near(r.datum_planes["e2"].origin, [0.0, 0.0, 0.0]));
+    assert!(r.diagnostics.iter().any(|d| d["feature_id"] == "e2"), "{:?}", r.diagnostics);
+}
+
+#[test]
+fn a_plane_at_an_angle_about_an_edge_turns_from_its_face_and_follows_it() {
+    let d = |l: f64, a: f64| json!({"parameters": {"len": l, "a": a}, "features": [
+        {"id": "b", "type": "box", "length": "len", "width": 20, "height": 20},
+        {"id": "an", "type": "datumPlane", "plane": {"origin": [0, 0, 10], "normal": [0, 0, 1], "xdir": [1, 0, 0]},
+         "angle": "a", "through": {"kind": "angle", "edge": top_edge_of_plus_x(), "from": {"face": top_face()}}},
+    ]});
+    let flat = build(d(40.0, 0.0)).datum_planes["an"];
+    assert!(near(flat.normal, [0.0, 0.0, 1.0]) && (flat.origin[2] - 10.0).abs() < 1e-6, "{flat:?}");
+    let (s, c) = (30f64.to_radians().sin(), 30f64.to_radians().cos());
+    let r = build(d(80.0, 30.0)).datum_planes["an"];
+    let n = r.normal;
+    assert!((n[0].abs() - s).abs() < 1e-6 && (n[2] - c).abs() < 1e-6 && n[1].abs() < 1e-6, "{r:?}");
+    assert!(near(r.origin, [40.0, 0.0, 10.0]), "on the moved edge: {r:?}");
+}
+
+#[test]
+fn a_lost_reference_keeps_the_cache_with_a_diagnostic_and_no_error() {
+    let gone = json!({"kind": "face", "by": "tracked", "point": [20, 0, 0], "normal": [1, 0, 0], "body": "body9"});
+    let r = build(doc(40.0, json!([
+        plane("m", json!({"kind": "mid", "a": {"face": gone}, "b": {"plane": "YZ"}}), json!({})),
+        {"id": "pt", "type": "datumPoint", "point": [1, 2, 3], "at": {"face": gone}},
+    ])));
+    assert!(near(r.datum_planes["m"].origin, [0.0, 0.0, 0.0]));
+    assert!(!r.datum_marks.contains_key("pt"));
+    for id in ["m", "pt"] {
+        assert!(r.diagnostics.iter().any(|d| d["feature_id"] == id), "{id}: {:?}", r.diagnostics);
+    }
+}
+
+#[test]
+fn a_datum_without_references_serialises_back_unchanged() {
+    for f in [
+        json!({"id": "p", "type": "datumPlane", "plane": {"origin": [0, 0, 5], "normal": [0, 0, 1], "xdir": [1, 0, 0]}, "offset": 2}),
+        json!({"id": "pt", "type": "datumPoint", "point": [1, 2, 3]}),
+        json!({"id": "ax", "type": "datumAxis", "origin": [0, 0, 0], "dir": [0, 0, 1]}),
+    ] {
+        let typed: fundacad_core::schema::Feature = serde_json::from_value(f.clone()).expect("parses");
+        assert_eq!(serde_json::to_value(&typed).expect("serialises"), f);
+    }
+}
+
+#[test]
+fn an_extrude_up_to_a_followed_datum_point_reaches_where_it_is_now() {
+    let d = |l| doc(l, json!([
+        {"id": "pt", "type": "datumPoint", "point": [20, 0, 0], "at": {"face": plus_x_face()}},
+        {"id": "dp", "type": "datumPlane", "plane": "YZ", "offset": 100},
+        {"id": "sk", "type": "sketch", "plane": "YZ", "planeId": "dp",
+         "entities": [{"type": "rectangle", "x": 30, "y": 0, "width": 5, "height": 5}]},
+        {"id": "e", "type": "extrude", "sketch": "sk", "distance": 1, "endType": "upToPoint", "upToPoint": "pt"},
+    ]));
+    let r = build(d(80.0));
+    let boxes: Vec<[f64; 6]> = r.bodies.iter().filter_map(|b| crate::kernel::bbox(&b.shape)).collect();
+    let near_end = boxes.iter().filter(|b| b[1] > 25.0).map(|b| b[0]).fold(f64::MAX, f64::min);
+    assert!((near_end - 40.0).abs() < 1e-6, "the extrude ends at the moved point: {boxes:?}");
+}

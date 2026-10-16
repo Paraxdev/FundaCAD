@@ -1051,6 +1051,9 @@
     "tiltX": "optional Num, degrees about the reference x axis through the shifted point, right handed",
     "tiltY": "optional Num, degrees about the y axis as tiltX left it",
     "spin": "optional Num, degrees about the normal as both tilts left it, turns the plane's own x and y",
+    "through": "optional object that rebuilds the plane from model references every rebuild, preferred over `planeId` and `face`; `plane` is then only the cache. `kind` is one of: mid {a, b} halfway between two planes (their bisector when they cross); points {points: [3 PointAt]}; normalToEdge {edge, vertex?} normal to an edge at `t` or at a PointAt vertex; twoEdges {a, b} through two parallel or crossing coplanar straight edges; angle {edge, from} through a straight edge, turned `angle` degrees from the plane `from`. A plane reference is {\"face\": Selector} for a flat face or {\"plane\": \"XY\"|\"XZ\"|\"YZ\"|datum plane id}. A PointAt is {\"edge\": Selector, \"end\": \"start\"|\"end\"|\"mid\"} or {\"edge\": Selector, \"t\": 0..1}, either with an optional \"point\": [x,y,z] where it was, {\"face\": Selector} for its centre, or {\"datum\": point id}",
+    "t": "optional Num 0..1, where along the edge a normalToEdge plane sits, default 0.5",
+    "angle": "optional Num, degrees an angle plane turns about its edge from `from`, right handed about the edge",
     "name": "optional label"
    },
    "example": {
@@ -1059,13 +1062,14 @@
     "plane": "XY",
     "offset": 25
    },
-   "notes": "Placement is reference frame, then shiftX/shiftY/offset along the reference's own axes, then tiltX, tiltY and spin in that order about the resulting point. Every number is relative to the reference, so the plane follows its parent datum or face and every value can be a parameter name. A plane 20 mm above XY leaning 30 degrees: {\"plane\":\"XY\", \"offset\":20, \"tiltX\":30}."
+   "notes": "Placement is reference frame, then shiftX/shiftY/offset along the reference's own axes, then tiltX, tiltY and spin in that order about the resulting point. Every number is relative to the reference, so the plane follows its parent datum or face and every value can be a parameter name. A plane 20 mm above XY leaning 30 degrees: {\"plane\":\"XY\", \"offset\":20, \"tiltX\":30}. Planes that follow the model: midplane {\"through\":{\"kind\":\"mid\",\"a\":{\"face\":<sel>},\"b\":{\"plane\":\"YZ\"}}}, normal to an edge {\"t\":0.25,\"through\":{\"kind\":\"normalToEdge\",\"edge\":<sel>}}, through two edges {\"through\":{\"kind\":\"twoEdges\",\"a\":<sel>,\"b\":<sel>}}, at an angle {\"angle\":30,\"through\":{\"kind\":\"angle\",\"edge\":<sel>,\"from\":{\"face\":<sel>}}}. Traps: every selector needs its `body`, take it from `inspect`; an edge picked `by: nearest` is lost once the part grows, prefer `by: match` fingerprints for edges and `tracked` for flat faces; `t` is a fraction of the edge's parameter range, close to but not exactly arc length on a spline; skew edges and an edge normal to `from` are refused; a reference that stops resolving keeps `plane` and adds a diagnostic, so set `plane` to where it is now; the pose fields (offset, tilts, spin) still apply on top."
   },
   "datumPoint": {
    "summary": "A reference point in space, a marker with no geometry that other features and the user can snap to.",
    "fields": {
     "point": "[x,y,z] in world mm",
-    "name": "optional label"
+    "name": "optional label",
+    "at": "optional PointAt the point follows every rebuild, with `point` the cache: {\"edge\": Selector, \"end\": \"start\"|\"end\"|\"mid\"} or {\"edge\": Selector, \"t\": 0..1} (add \"point\": [x,y,z] where it was), {\"face\": Selector} for the face centre, or {\"datum\": point id}"
    },
    "example": {
     "id": "dp1",
@@ -1075,7 +1079,8 @@
      0,
      25
     ]
-   }
+   },
+   "notes": "A followed point is published as a datum mark and an extrude's upToPoint or startPoint {\"datum\"} reads where it is now. Traps: selectors need `body`; edge ends pick by `point` when an edit reverses the edge, so write it; a lost reference keeps `point` and adds a diagnostic."
   },
   "datumAxis": {
    "summary": "A reference axis, an infinite construction line a circular pattern can turn about with {\"datum\": \"<id>\"}. Revolve, mirror and joints do not read datum axes.",
@@ -1083,6 +1088,7 @@
     "origin": "[x,y,z], a point on the line",
     "dir": "[x,y,z], its direction; need not be unit length",
     "axisEdge": "optional Selector anchoring the axis to a straight model EDGE; the engine re-resolves that edge every rebuild so the axis FOLLOWS the part, and origin/dir stay as the cache it falls back to",
+    "through": "optional object the axis follows every rebuild, preferred over `axisEdge`; `kind` is points {a, b} (two PointAt, see datumPoint.at), cylinder {face} the axis of a cylindrical face, or planes {a, b} where two planes meet ({\"face\": Selector} or {\"plane\": name or datum id}). origin/dir stay as the cache",
     "name": "optional label"
    },
    "example": {
@@ -1098,7 +1104,8 @@
      0,
      1
     ]
-   }
+   },
+   "notes": "Axis of a hole: {\"origin\":[0,0,0],\"dir\":[0,0,1],\"through\":{\"kind\":\"cylinder\",\"face\":<sel>}}. Traps: two parallel planes have no line and are refused; the direction keeps the sign of the cached `dir`."
   },
   "patternLinear": {
    "summary": "Repeat bodies along an axis.",
