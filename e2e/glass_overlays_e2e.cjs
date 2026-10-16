@@ -137,34 +137,55 @@ const check = (name, ok, detail) => {
     });
     return out;
   });
-  // Centroid of pixels where the handle's dominant channel stands out, robust
-  // to the glass tint. The green handles face the camera in Front view.
-  const centroids = async (png) => page.evaluate(async ([b64, ms]) => {
-    const img = new Image();
-    img.src = "data:image/png;base64," + b64;
-    await img.decode();
-    const c = document.createElement("canvas");
-    c.width = img.width; c.height = img.height;
-    const g = c.getContext("2d");
-    g.drawImage(img, 0, 0);
+  // Centroid of the handle's own pixels: those the gizmo changes (against a shot
+  // with it hidden) whose dominant channel stands out, so a body of the same hue
+  // refracted behind it never counts. The green handles face the camera in Front view.
+  const centroids = async (png, bare) => page.evaluate(async ([b64, bareB64, ms]) => {
+    const pixels = async (src) => {
+      const img = new Image();
+      img.src = "data:image/png;base64," + src;
+      await img.decode();
+      const c = document.createElement("canvas");
+      c.width = img.width; c.height = img.height;
+      const g = c.getContext("2d");
+      g.drawImage(img, 0, 0);
+      return g;
+    };
+    const g = await pixels(b64), gb = await pixels(bareB64);
     return ms.map((m) => {
       const ch = m.color.startsWith("ff") ? 0 : 2;
       const r = 22, d = g.getImageData(m.x - r, m.y - r, 2 * r, 2 * r).data;
+      const e = gb.getImageData(m.x - r, m.y - r, 2 * r, 2 * r).data;
       let n = 0, sx = 0, sy = 0;
       for (let i = 0; i < d.length; i += 4) {
         const o = [0, 1, 2].filter((k) => k !== ch).map((k) => d[i + k]);
-        if (d[i + ch] - (o[0] + o[1]) / 2 > 35) { n++; sx += (i / 4) % (2 * r); sy += Math.floor(i / 4 / (2 * r)); }
+        const changed = [0, 1, 2].some((k) => Math.abs(d[i + k] - e[i + k]) > 24);
+        if (changed && d[i + ch] - (o[0] + o[1]) / 2 > 35) { n++; sx += (i / 4) % (2 * r); sy += Math.floor(i / 4 / (2 * r)); }
       }
       return { ...m, n, cx: n ? m.x - r + sx / n : null, cy: n ? m.y - r + sy / n : null };
     });
-  }, [png.toString("base64"), marks.filter((m) => !m.color.startsWith("5ad1"))]);
+  }, [png.toString("base64"), bare.toString("base64"), marks.filter((m) => !m.color.startsWith("5ad1"))]);
+  const withoutGizmo = async (name) => {
+    await page.evaluate(async () => {
+      window.viewport.scene.scene.traverse((o) => { if (o.renderOrder === 999 && o.visible) { o.visible = false; o.userData.e2eHidden = true; } });
+      window.viewport.requestRender(); await new Promise((r) => setTimeout(r, 500));
+    });
+    const png = await page.screenshot({ path: path.join(OUT, `${TAG}_${name}.png`) });
+    await page.evaluate(async () => {
+      window.viewport.scene.scene.traverse((o) => { if (o.userData.e2eHidden) { o.visible = true; delete o.userData.e2eHidden; } });
+      window.viewport.requestRender(); await new Promise((r) => setTimeout(r, 500));
+    });
+    return png;
+  };
 
   const withGlass = await page.screenshot({ path: path.join(OUT, `${TAG}_selected_gizmo.png`) });
+  const withGlassBare = await withoutGizmo("selected_nogizmo");
   await page.evaluate(() => { const s = window.store; s.setBodiesMaterial(["body2"], s.addMaterial({ name: "plain", color: "#8899aa" })); });
   await page.waitForTimeout(800);
   await page.evaluate(async () => { window.viewport.requestRender(); await new Promise((r) => setTimeout(r, 500)); });
   const opaque = await page.screenshot({ path: path.join(OUT, `${TAG}_noglass.png`) });
-  const a = await centroids(withGlass), b = await centroids(opaque);
+  const opaqueBare = await withoutGizmo("noglass_nogizmo");
+  const a = await centroids(withGlass, withGlassBare), b = await centroids(opaque, opaqueBare);
   fs.writeFileSync(path.join(OUT, `${TAG}_marks.json`), JSON.stringify({ glass: a, opaque: b }, null, 1));
   for (let i = 0; i < a.length; i++) {
     const p = a[i], q = b[i];

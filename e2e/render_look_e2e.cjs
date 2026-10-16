@@ -9,12 +9,14 @@
 // judge whether it looks better.
 //
 // Usage (from the repo root, with vite on 5173 + engine on 8765 (`fundacad-engine --ws`)):
-//   SC_TOKEN=<engine token> node e2e/render_look_e2e.cjs [outDir]
+//   SC_TOKEN=<engine token> [SC_URL=http://localhost:5173/] [SC_ENGINE_PORT=8765] node e2e/render_look_e2e.cjs [outDir]
 const { chromium } = require("playwright-core");
 const fs = require("fs");
 const path = require("path");
 
 const TOKEN = process.env.SC_TOKEN || "";
+const URL = process.env.SC_URL || "http://localhost:5173/";
+const PORT = process.env.SC_ENGINE_PORT || "8765";
 const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const OUT = path.resolve(process.argv[2] || "render_shots");
 if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
@@ -32,18 +34,19 @@ const check = (name, ok, detail) => {
   });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
   page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
-  await page.addInitScript((t) => {
+  await page.addInitScript(([port, t]) => {
     const N = window.WebSocket;
     class P extends N {
       constructor(u, p) {
-        const s = String(u).replace(/([?&])token=[^&]*/, `$1token=${t}`);
+        let s = String(u).replace("127.0.0.1:8765", "127.0.0.1:" + port);
+        s = s.replace(/([?&])token=[^&]*/, `$1token=${t}`);
         super(s.includes("token=") ? s : s + (s.includes("?") ? "&" : "?") + "token=" + t, p);
       }
     }
     window.WebSocket = P;
-  }, TOKEN);
+  }, [PORT, TOKEN]);
 
-  await page.goto("http://localhost:5173/");
+  await page.goto(URL);
   await page.waitForTimeout(3000);
   const modal = await page.$(".modal-close");
   if (modal) { await modal.click(); await page.waitForTimeout(400); }
