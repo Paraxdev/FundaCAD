@@ -36,7 +36,7 @@ export async function takeDroppedFiles(e: DropEngine, items: readonly DroppedFil
   if (leftovers) await reportError(leftovers);
 }
 
-function carriesFiles(ev: DragEvent): boolean {
+function carriesFileType(ev: DragEvent): boolean {
   return !!ev.dataTransfer && Array.from(ev.dataTransfer.types).includes("Files");
 }
 
@@ -89,7 +89,14 @@ async function collect(files: File[]): Promise<DroppedFile[]> {
 export function installDesktopDrop(e: DropEngine, hint: (shown: boolean) => void): () => void {
   let depth = 0;
   let queue: Promise<void> = Promise.resolve();
+  // Chromium lists "Files" on the drag of an <img>, a material swatch among
+  // them, so the types alone cannot tell it from a desktop file. A drag from
+  // outside never fires dragstart in this window.
+  let inPage = false;
+  const carriesFiles = (ev: DragEvent) => !inPage && carriesFileType(ev);
   const hide = () => { depth = 0; hint(false); };
+  const onStart = () => { inPage = true; };
+  const onEnd = () => { inPage = false; hide(); };
 
   const onEnter = (ev: DragEvent) => {
     if (!carriesFiles(ev)) return;
@@ -109,7 +116,10 @@ export function installDesktopDrop(e: DropEngine, hint: (shown: boolean) => void
     if (depth === 0) hide();
   };
   const onDrop = (ev: DragEvent) => {
-    if (!carriesFiles(ev)) return;
+    if (!carriesFiles(ev)) {
+      inPage = false;
+      return;
+    }
     // Always cancelled for a file drag, or the webview navigates to the file.
     ev.preventDefault();
     hide();
@@ -121,16 +131,18 @@ export function installDesktopDrop(e: DropEngine, hint: (shown: boolean) => void
   };
 
   const opts = { capture: true };
+  window.addEventListener("dragstart", onStart, opts);
   window.addEventListener("dragenter", onEnter, opts);
   window.addEventListener("dragover", onOver, opts);
   window.addEventListener("dragleave", onLeave, opts);
   window.addEventListener("drop", onDrop, opts);
-  window.addEventListener("dragend", hide, opts);
+  window.addEventListener("dragend", onEnd, opts);
   return () => {
+    window.removeEventListener("dragstart", onStart, opts);
     window.removeEventListener("dragenter", onEnter, opts);
     window.removeEventListener("dragover", onOver, opts);
     window.removeEventListener("dragleave", onLeave, opts);
     window.removeEventListener("drop", onDrop, opts);
-    window.removeEventListener("dragend", hide, opts);
+    window.removeEventListener("dragend", onEnd, opts);
   };
 }
