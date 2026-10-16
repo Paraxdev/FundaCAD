@@ -52,6 +52,7 @@ function makeSketch(tool: string) {
     dimFlow: { picking: false, plan: null, resetDimPicks() {} },
     constraintTools: { hasPending: () => false, resetPending() {} },
     overlay: { setPreview() {} },
+    inferTag: { hide() {} },
     textPanel: { hide() {} },
     projectPanel: { hide() {} },
     viewport: { hoverEntity() {}, domElement: {} },

@@ -65,6 +65,9 @@ import { INFER_TOL_DEG } from "./inferLine";
 import { sketchLockHolds, viewSquareToPlane } from "./sketchView";
 import { InferTag, SnapTag } from "./snapTag";
 
+/** Tools that record a point on curve relation when an end snaps onto a curve. */
+const CURVE_SNAP_TOOLS: ReadonlySet<string> = new Set(["line", "arc"]);
+
 export type SketchTool =
   | "select"
   | "line"
@@ -707,6 +710,7 @@ export class SketchMode {
     this.active = false;
     if (!this.viewSquare) { this.viewSquare = true; this.onViewSquare?.(true); }
     this.base = null;
+    this.inferTag.hide();
     this.chainStart = null;
     this.originPin = null;
     this.arcStart = null;
@@ -742,6 +746,7 @@ export class SketchMode {
     const preselected = t === "dimension" ? [...this.selected] : [];
     this.tool = t;
     this.base = null;
+    this.inferTag.hide();
     this.chainStart = null;
     this.originPin = null;
     this.arcStart = null;
@@ -2744,6 +2749,7 @@ export class SketchMode {
       }
       if (action === "cancel-geometry") {
         this.base = null;
+        this.inferTag.hide();
         this.chainStart = null;
         this.originPin = null;
         this.arcStart = null;
@@ -3007,7 +3013,7 @@ export class SketchMode {
       this.gridSnap ? this.snapStep() : 0,
       // snap()'s own 10 px reach, widened for a finger.
       hitPx(10),
-      this.gridSnap && this.tool !== "select" ? this.curves : [],
+      this.gridSnap && CURVE_SNAP_TOOLS.has(this.tool) ? this.curves : [],
     );
     this.lastHit = { p: res.point.clone(), raw: p2d.clone(), kind: res.kind, ref: res.ref };
     return {
@@ -3507,6 +3513,7 @@ export class SketchMode {
     this.restore(s);
     this.selected.clear();
     this.base = null;
+    this.inferTag.hide();
     this.chainStart = null;
     this.originPin = null;
     this.arcStart = null;
