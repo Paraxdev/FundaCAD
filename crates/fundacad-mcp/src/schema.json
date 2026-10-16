@@ -166,7 +166,7 @@
     "startFace": "Selector of a FLAT face the start moves to (startType \"face\"). Use a tracked selector from `inspect` and set its `body`, so the start follows the face when an edit above moves it",
     "startPlane": "a datum plane id, or \"XY\", \"XZ\", \"YZ\" (startType \"plane\")",
     "startPoint": "a datumPoint id, or {\"point\": [x, y, z], \"body\": \"body1\"} for the vertex of that body nearest the point (startType \"point\")",
-    "endType": "optional, where side one stops: \"distance\" (the default, `distance`), \"upToFace\" (`upToFace`), \"upToPlane\" (`upToPlane`), \"upToPoint\" (`upToPoint`) or \"throughAll\" (past every body it may touch, `targets` when set; the sign of `distance` picks the way). Up to a target, `distance` is not read and the way is towards the target",
+    "endType": "optional, where side one stops: \"distance\" (the default, `distance`), \"upToFace\" (`upToFace`), \"upToPlane\" (`upToPlane`), \"upToPoint\" (`upToPoint`) or \"throughAll\" (past every body it may touch, `targets` when set; the sign of `distance` picks the way, with `symmetric` each side goes through on its own). Up to a target, `distance` is not read and the way is towards the target",
     "upToFace": "Selector of a FLAT face parallel to the sketch to stop at (endType \"upToFace\"), tracked and with `body` set, so the end follows the face",
     "upToPlane": "a datum plane id, or \"XY\", \"XZ\", \"YZ\" (endType \"upToPlane\")",
     "upToPoint": "a datumPoint id, or {\"point\": [x, y, z], \"body\": \"body1\"} for the nearest vertex of that body (endType \"upToPoint\"); the end is the plane through it parallel to the sketch",
@@ -174,7 +174,7 @@
     "twoSided": "optional bool; adds a second side going the other way, with its own `distance2`, `taper2` and `endType2`. Cannot be combined with `symmetric`",
     "distance2": "Num, how far side two goes the other way (twoSided)",
     "taper2": "optional Num, degrees, side two's taper (twoSided)",
-    "endType2": "optional, side two's end, the same choices as `endType`, with `upToFace2`, `upToPlane2`, `upToPoint2` and `endOffset2`"
+    "endType2": "optional, side two's end, always the other way from side one, the same choices as `endType`, with `upToFace2`, `upToPlane2`, `upToPoint2` and `endOffset2`"
    },
    "example": {
     "id": "ex1",
@@ -297,7 +297,7 @@
     "upTo": "optional Selector naming a target face to stop at, instead of using `distance`. A tracked selector resolves on its own `body`, so it can name a face of ANOTHER body and follows it when an edit above moves it; a `by: \"nearest\"` point is frozen and stops following once the target moves away",
     "upToPlane": "optional, a datum plane id or \"XY\", \"XZ\", \"YZ\" to stop at, instead of `upTo`",
     "upToPoint": "optional, a datumPoint id, or {\"point\": [x, y, z], \"body\": \"body1\"} for the nearest vertex of that body; the face stops level with it",
-    "upToOffset": "optional Num, mm along the push past the up to target: negative stops short of it",
+    "upToOffset": "optional Num, mm along the push past the up to target: negative stops short of it. A target the face already touches moves nothing and leaves an `upToReached` note, a positive offset still pushes",
     "taper": "optional Num, degrees. Leans a PLANAR push's walls as they travel (a moulded boss, an angled pocket); positive narrows the far end. Must be between -89 and 89. Ignored on a curved face and on an `upTo` push. Absent or 0 is a straight push",
     "direction": "optional, \"normal\" (the default) or \"axis\". \"axis\" moves the face along the line the faces around it run along instead of along its own normal, so the cone, cap or flat floor at the end of a hole slides down the hole: negative makes the hole deeper, positive shallower, and the end keeps its shape where an offset along the normal would widen it. Every face bordering the pushed one must be a wall along that line, a cylinder parallel to it or a flat wall containing it, or the feature is refused. The line is a round wall's axis, else the face's own axis, else where two flat walls meet. `taper` is ignored with \"axis\"",
     "followTangent": "optional bool, default true. When a cylinder, cone, sphere or torus face is resized so that faces running smoothly into it would no longer meet it (a slot end made narrower than the slot), true moves that whole closed run with it so the slot narrows as one, false refuses and names those faces. Ignored on flat faces and with a non-auto mode"
