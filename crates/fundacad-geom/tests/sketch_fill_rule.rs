@@ -72,3 +72,40 @@ fn the_fill_rule_survives_a_round_trip_through_the_document() {
     let back = serde_json::to_value(&doc).unwrap();
     assert_eq!(back["features"][0]["fillRule"], "evenodd");
 }
+
+fn ringed_glyphs(fill_rule: Option<&str>) -> (Rebuild, f64) {
+    let mut entities = Vec::new();
+    for k in 0..30 {
+        let (cx, cy) = (f64::from(k % 6) * 30.0, f64::from(k / 6) * 30.0);
+        for (r, tag) in [(10.0, "o"), (5.0, "i")] {
+            let p = |j: i32| {
+                let a = f64::from(j) * std::f64::consts::TAU / 8.0;
+                (cx + r * a.cos(), cy + r * a.sin())
+            };
+            for j in 0..8 {
+                let (a, b) = (p(j), p(j + 1));
+                entities.push(json!({"id": format!("{tag}{k}_{j}"), "type": "line", "x1": a.0, "y1": a.1, "x2": b.0, "y2": b.1}));
+            }
+        }
+    }
+    let mut sketch = json!({"id": "s", "type": "sketch", "plane": "XY", "entities": entities});
+    if let Some(r) = fill_rule {
+        sketch["fillRule"] = json!(r);
+    }
+    let extrude = json!({"id": "x", "type": "extrude", "sketch": "s", "distance": 2, "operation": "new"});
+    let t = std::time::Instant::now();
+    let r = rebuild(json!({"version": 6, "parameters": {}, "features": [sketch, extrude]}));
+    (r, t.elapsed().as_secs_f64())
+}
+
+#[test]
+fn evenodd_costs_about_what_the_plain_fill_does_on_many_glyphs() {
+    let (plain, plain_s) = ringed_glyphs(None);
+    let (odd, odd_s) = ringed_glyphs(Some("evenodd"));
+    let octagon = |r: f64| 2.0 * r * r * std::f64::consts::SQRT_2;
+    let (solids, _, volume) = totals(&odd);
+    assert_eq!(solids, 30);
+    near(volume, 30.0 * 2.0 * (octagon(10.0) - octagon(5.0)), 1e-6, "thirty rings");
+    near(totals(&plain).2, 30.0 * 2.0 * octagon(10.0), 1e-6, "thirty discs");
+    assert!(odd_s < 5.0 * plain_s + 1.0, "evenodd {odd_s:.2} s, plain {plain_s:.2} s");
+}
