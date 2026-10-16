@@ -31,6 +31,7 @@ import type { Axis3, AxisSpec, Feature, JointMode, MechanismJoint, PlaneDef, Pla
 import { edgeMatchSelectorFrom } from "../viewport/edgeMatch";
 import type { Hit } from "../viewport/picking";
 import { isDrivable, nextJointId, NO_DRIVE } from "../document/mechanism";
+import { upgradeFace } from "./holeFace";
 import { findSelectorAt, repickedExtent, repickedSelector, replaceSelectorAt } from "./repickReference";
 import { awaitTreePick, treePickRefusal } from "../ui/treePick";
 import { deferPick } from "./deferPick";
@@ -384,7 +385,9 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   }
 
   function planeOfPick(spec: PlaneSpec, face: FacePlanePick | null, datumId: string | null): PlaneOf | null {
-    if (face) return face.kind === "planar" ? { face: face.selector } : null;
+    // Tracked rather than nearest: once the part grows, the picked point can
+    // sit nearer a neighbouring face than the one it was picked on.
+    if (face) return face.kind === "planar" ? { face: upgradeFace(face.selector, face.def.normal) } : null;
     if (datumId) return { plane: datumId };
     return typeof spec === "string" ? { plane: spec } : null;
   }
