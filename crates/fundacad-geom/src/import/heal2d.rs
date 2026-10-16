@@ -50,6 +50,24 @@ fn quadratic_roots(a: f64, b: f64, c: f64) -> Vec<f64> {
     vec![(-b - s) / (2.0 * a), (-b + s) / (2.0 * a)]
 }
 
+/// The arc from `a` through `m` to `e`, turning the way `sweep` does.
+fn arc_through(a: P, m: P, e: P, sweep: f64) -> Option<Seg> {
+    let d = 2.0 * (a[0] * (m[1] - e[1]) + m[0] * (e[1] - a[1]) + e[0] * (a[1] - m[1]));
+    let span = dist(a, m).max(dist(m, e)).max(dist(a, e));
+    if d.abs() <= 1e-12 * span * span {
+        return None;
+    }
+    let (a2, m2, e2) = (a[0] * a[0] + a[1] * a[1], m[0] * m[0] + m[1] * m[1], e[0] * e[0] + e[1] * e[1]);
+    let c = [
+        (a2 * (m[1] - e[1]) + m2 * (e[1] - a[1]) + e2 * (a[1] - m[1])) / d,
+        (a2 * (e[0] - m[0]) + m2 * (a[0] - e[0]) + e2 * (m[0] - a[0])) / d,
+    ];
+    let a0 = (a[1] - c[1]).atan2(a[0] - c[0]);
+    let turn = ((e[1] - c[1]).atan2(e[0] - c[0]) - a0).rem_euclid(TAU);
+    let sweep = if sweep > 0.0 { turn } else { turn - TAU };
+    Some(Seg::Arc { c, r: dist(a, c), a0, sweep })
+}
+
 impl Seg {
     pub fn at(&self, t: f64) -> P {
         match *self {
@@ -127,13 +145,21 @@ impl Seg {
         }
     }
 
-    /// Moves the two ends, keeping a curve's inner control points.
+    /// Moves the two ends, keeping a curve's inner control points, or an
+    /// arc's middle point.
     pub fn with_ends(&self, s: P, e: P) -> Seg {
         match *self {
             Seg::Line(..) => Seg::Line(s, e),
             Seg::Quad(_, b, _) => Seg::Quad(s, b, e),
             Seg::Cubic(_, b, c, _) => Seg::Cubic(s, b, c, e),
-            arc => arc,
+            Seg::Arc { c, r, sweep, .. } if dist(s, e) <= 1e-3 * r => {
+                if s == e {
+                    Seg::Arc { c, r, a0: (s[1] - c[1]).atan2(s[0] - c[0]), sweep: TAU.copysign(sweep) }
+                } else {
+                    *self
+                }
+            }
+            Seg::Arc { sweep, .. } => arc_through(s, self.at(0.5), e, sweep).unwrap_or(Seg::Line(s, e)),
         }
     }
 
@@ -301,6 +327,8 @@ pub fn close_sub(sub: &mut Sub, tol: &Tol, fill: bool) -> (bool, bool) {
             sub.segs[0] = first.with_ends(e, first.end());
         } else if g > tol.join {
             sub.segs.push(Seg::Line(e, s));
+        } else {
+            sub.segs[n] = last.with_ends(last.start(), s);
         }
         out.0 = g > tol.join && !sub.closed;
     } else if fill || sub.closed {
