@@ -267,10 +267,10 @@
     }
   ],
   "featureNumFields": {
-    "extrude": [["distance", "length"], ["taper", "angle"]],
+    "extrude": [["distance", "length"], ["taper", "angle"], ["startOffset", "length"], ["endOffset", "length"], ["distance2", "length"], ["taper2", "angle"], ["endOffset2", "length"]],
     "fillet": [["radius", "length"], ["profile", "count"]],
     "chamfer": [["distance", "length"], ["distance2", "length"]],
-    "press-pull": [["distance", "length"], ["taper", "angle"]],
+    "press-pull": [["distance", "length"], ["taper", "angle"], ["upToOffset", "length"]],
     "revolve": [["angle", "angle"], ["pitch", "length"]],
     "datumPlane": [["offset", "length"], ["tiltX", "angle"], ["tiltY", "angle"], ["spin", "angle"], ["shiftX", "length"], ["shiftY", "length"]],
     "box": [["length", "length"], ["width", "length"], ["height", "length"]],

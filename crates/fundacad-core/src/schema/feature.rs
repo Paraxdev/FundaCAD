@@ -136,7 +136,41 @@ feature_struct!(Extrude {
     #[serde(default, skip_serializing_if = "Option::is_none")] targets: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")] symmetric: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")] taper: Option<Num>,
+    /// Absent means `sketch`; `offset`, `face`, `plane` or `point` move the start.
+    #[serde(default, skip_serializing_if = "Option::is_none")] start_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")] start_offset: Option<Num>,
+    #[serde(default, skip_serializing_if = "Option::is_none")] start_face: Option<Selector>,
+    #[serde(default, skip_serializing_if = "Option::is_none")] start_plane: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")] start_point: Option<PointRef>,
+    /// Absent means `distance`; else `upToFace`, `upToPlane`, `upToPoint` or `throughAll`.
+    #[serde(default, skip_serializing_if = "Option::is_none")] end_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")] up_to_face: Option<Selector>,
+    #[serde(default, skip_serializing_if = "Option::is_none")] up_to_plane: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")] up_to_point: Option<PointRef>,
+    /// Along the travel past an up to target, negative stops short of it.
+    #[serde(default, skip_serializing_if = "Option::is_none")] end_offset: Option<Num>,
+    /// A second side opposite the first, with its own end and taper.
+    #[serde(default, skip_serializing_if = "Option::is_none")] two_sided: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")] distance2: Option<Num>,
+    #[serde(default, skip_serializing_if = "Option::is_none")] taper2: Option<Num>,
+    #[serde(default, skip_serializing_if = "Option::is_none")] end_type2: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")] up_to_face2: Option<Selector>,
+    #[serde(default, skip_serializing_if = "Option::is_none")] up_to_plane2: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")] up_to_point2: Option<PointRef>,
+    #[serde(default, skip_serializing_if = "Option::is_none")] end_offset2: Option<Num>,
 });
+
+/// A datum point's id, or a model vertex: the vertex of `body` nearest `point`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum PointRef {
+    Datum(String),
+    Vertex {
+        point: Vec3,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        body: Option<String>,
+    },
+}
 
 feature_struct!(
     /// `profile`: -1 chamfer, 0 circular, +1 sharp corner.
@@ -167,6 +201,11 @@ feature_struct!(PressPull {
     #[serde(default, skip_serializing_if = "Option::is_none")] operation: Option<Operation>,
     #[serde(default, skip_serializing_if = "Option::is_none")] body: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")] up_to: Option<Selector>,
+    /// A datum plane id or XY, XZ, YZ, an `upTo` alternative.
+    #[serde(default, skip_serializing_if = "Option::is_none")] up_to_plane: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")] up_to_point: Option<PointRef>,
+    /// Along the push past the up to target, negative stops short of it.
+    #[serde(default, skip_serializing_if = "Option::is_none")] up_to_offset: Option<Num>,
     #[serde(default, skip_serializing_if = "Option::is_none")] taper: Option<Num>,
     #[serde(default, skip_serializing_if = "Option::is_none")] mode: Option<PressPullMode>,
     /// Absent means `normal`.

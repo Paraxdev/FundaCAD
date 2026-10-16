@@ -150,6 +150,7 @@
   },
   "extrude": {
    "summary": "Push a sketch profile along the sketch plane normal.",
+   "notes": "A groove that leaves a 2 mm floor whatever the block's height: {\"id\": \"gr\", \"type\": \"extrude\", \"sketch\": \"sk2\", \"distance\": -1, \"operation\": \"cut\", \"targets\": [\"body1\"], \"endType\": \"upToFace\", \"upToFace\": {\"kind\": \"face\", \"by\": \"tracked\", \"point\": [0, 0, -5], \"normal\": [0, 0, -1], \"body\": \"body1\"}, \"endOffset\": -2}. Traps: `endOffset` is measured along the travel, so a floor is NEGATIVE. Up to and start targets must be flat and parallel to the sketch for now, anything else is refused. Always set `body` on a face selector, without it the newest body is searched. `symmetric` and `twoSided` are exclusive. A target lying on the start, or an offset reaching back past it, is an error, never an empty body.",
    "fields": {
     "sketch": "the id of a sketch feature",
     "distance": "Num, signed; negative goes the other way",
@@ -159,7 +160,21 @@
     "taper": "optional Num, degrees. Leans every wall in as the extrude climbs, so one feature makes an angled boss, a countersink, or a draw-ready wall. Positive narrows the far face (the way a part pulls out of a mould), negative widens it (an undercut). Must be between -89 and 89. Absent or 0 is a straight prism",
     "regions": "optional; A 3D point INSIDE the closed sketch area you mean, in world mm. A sketch with several closed areas (a ring, a plate with holes, two separate outlines) needs one point per area you want. Omit `regions` entirely to use the whole sketch.",
     "region": "legacy single-area form of `regions`",
-    "hiddenBodies": "optional list of body ids the boolean must not touch unless `targets` names them (written by the app)"
+    "hiddenBodies": "optional list of body ids the boolean must not touch unless `targets` names them (written by the app)",
+    "startType": "optional, where the profile starts: \"sketch\" (the default, the sketch plane), \"offset\" (the sketch plane moved by `startOffset`), \"face\" (`startFace`), \"plane\" (`startPlane`) or \"point\" (`startPoint`). A start face or plane must be parallel to the sketch",
+    "startOffset": "optional Num, mm along the sketch normal, added to whatever `startType` gives",
+    "startFace": "Selector of a FLAT face the start moves to (startType \"face\"). Use a tracked selector from `inspect` and set its `body`, so the start follows the face when an edit above moves it",
+    "startPlane": "a datum plane id, or \"XY\", \"XZ\", \"YZ\" (startType \"plane\")",
+    "startPoint": "a datumPoint id, or {\"point\": [x, y, z], \"body\": \"body1\"} for the vertex of that body nearest the point (startType \"point\")",
+    "endType": "optional, where side one stops: \"distance\" (the default, `distance`), \"upToFace\" (`upToFace`), \"upToPlane\" (`upToPlane`), \"upToPoint\" (`upToPoint`) or \"throughAll\" (past every body it may touch, `targets` when set; the sign of `distance` picks the way). Up to a target, `distance` is not read and the way is towards the target",
+    "upToFace": "Selector of a FLAT face parallel to the sketch to stop at (endType \"upToFace\"), tracked and with `body` set, so the end follows the face",
+    "upToPlane": "a datum plane id, or \"XY\", \"XZ\", \"YZ\" (endType \"upToPlane\")",
+    "upToPoint": "a datumPoint id, or {\"point\": [x, y, z], \"body\": \"body1\"} for the nearest vertex of that body (endType \"upToPoint\"); the end is the plane through it parallel to the sketch",
+    "endOffset": "optional Num, mm along the travel past an up to target: negative stops short (leaves a floor), positive goes past",
+    "twoSided": "optional bool; adds a second side going the other way, with its own `distance2`, `taper2` and `endType2`. Cannot be combined with `symmetric`",
+    "distance2": "Num, how far side two goes the other way (twoSided)",
+    "taper2": "optional Num, degrees, side two's taper (twoSided)",
+    "endType2": "optional, side two's end, the same choices as `endType`, with `upToFace2`, `upToPlane2`, `upToPoint2` and `endOffset2`"
    },
    "example": {
     "id": "ex1",
@@ -279,7 +294,10 @@
     "mode": "optional \"auto\" (the default: move the face itself, as described in the notes), or \"join\", \"cut\", \"new\" or \"intersect\": sweep the face into a prism along its normal (along the axis with `direction` \"axis\") by `distance` and combine that prism with the body, or with `targets`",
     "targets": "optional list of body ids the prism of a non-auto `mode` is combined with, as on extrude; default every shown body the prism reaches, and the body pushed from whether or not it is shown",
     "body": "optional body id; default the active body. The selectors' own `body` is NOT read here",
-    "upTo": "optional Selector naming a target face to stop at, instead of using `distance`",
+    "upTo": "optional Selector naming a target face to stop at, instead of using `distance`. A tracked selector resolves on its own `body`, so it can name a face of ANOTHER body and follows it when an edit above moves it; a `by: \"nearest\"` point is frozen and stops following once the target moves away",
+    "upToPlane": "optional, a datum plane id or \"XY\", \"XZ\", \"YZ\" to stop at, instead of `upTo`",
+    "upToPoint": "optional, a datumPoint id, or {\"point\": [x, y, z], \"body\": \"body1\"} for the nearest vertex of that body; the face stops level with it",
+    "upToOffset": "optional Num, mm along the push past the up to target: negative stops short of it",
     "taper": "optional Num, degrees. Leans a PLANAR push's walls as they travel (a moulded boss, an angled pocket); positive narrows the far end. Must be between -89 and 89. Ignored on a curved face and on an `upTo` push. Absent or 0 is a straight push",
     "direction": "optional, \"normal\" (the default) or \"axis\". \"axis\" moves the face along the line the faces around it run along instead of along its own normal, so the cone, cap or flat floor at the end of a hole slides down the hole: negative makes the hole deeper, positive shallower, and the end keeps its shape where an offset along the normal would widen it. Every face bordering the pushed one must be a wall along that line, a cylinder parallel to it or a flat wall containing it, or the feature is refused. The line is a round wall's axis, else the face's own axis, else where two flat walls meet. `taper` is ignored with \"axis\"",
     "followTangent": "optional bool, default true. When a cylinder, cone, sphere or torus face is resized so that faces running smoothly into it would no longer meet it (a slot end made narrower than the slot), true moves that whole closed run with it so the slot narrows as one, false refuses and names those faces. Ignored on flat faces and with a non-auto mode"

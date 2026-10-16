@@ -6,6 +6,7 @@ pub(crate) mod boolean;
 mod cleanup;
 mod datum;
 mod defeature;
+mod extent;
 mod extrude;
 mod joint;
 mod mechanism;

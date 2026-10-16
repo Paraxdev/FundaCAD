@@ -27,10 +27,21 @@ use FieldKind::{Angle, Count, Length};
 /// tests/vectors/params.json holds the app's table, and both sides are checked
 /// against it.
 pub const FEATURE_NUM_FIELDS: &[(&str, &[(&str, FieldKind)])] = &[
-    ("extrude", &[("distance", Length), ("taper", Angle)]),
+    (
+        "extrude",
+        &[
+            ("distance", Length),
+            ("taper", Angle),
+            ("startOffset", Length),
+            ("endOffset", Length),
+            ("distance2", Length),
+            ("taper2", Angle),
+            ("endOffset2", Length),
+        ],
+    ),
     ("fillet", &[("radius", Length), ("profile", Count)]),
     ("chamfer", &[("distance", Length), ("distance2", Length)]),
-    ("press-pull", &[("distance", Length), ("taper", Angle)]),
+    ("press-pull", &[("distance", Length), ("taper", Angle), ("upToOffset", Length)]),
     ("revolve", &[("angle", Angle), ("pitch", Length)]),
     (
         "datumPlane",
