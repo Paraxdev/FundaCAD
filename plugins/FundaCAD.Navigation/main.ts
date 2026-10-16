@@ -6,7 +6,7 @@ import { SHORTCUTS, allCommands, contribute, keyHint, openMenuAt, radialMenuOpen
 import type { Engine, PointerGesture, RadialTrigger } from "fundacad";
 import NavigationSection from "./NavigationSection.vue";
 import { PLUGIN_ID, RADIAL_ACTION, contextOf, keymapFor, radialItems, tableFor } from "./navigation";
-import { navState, onConfigChange } from "./state";
+import { navState, onConfigChange, settings } from "./state";
 
 export async function activate(e: Engine): Promise<() => void> {
   const stops: (() => void)[] = [];
@@ -70,7 +70,7 @@ export async function activate(e: Engine): Promise<() => void> {
 
   stops.push(
     contribute(PLUGIN_ID, {
-      settings: [{ key: "navigation", title: "Mouse and keys", component: NavigationSection }],
+      settings: [{ key: "navigation", settings, component: NavigationSection }],
       actions: {
         [RADIAL_ACTION]: () => {
           if (radialMenuOpen()) return;

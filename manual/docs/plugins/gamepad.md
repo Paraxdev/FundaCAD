@@ -2,7 +2,7 @@
 
 This plugin lets you move around the model with a game controller. It is on by default and does nothing until one is connected.
 
-![Game Controller page of Preferences with speed sliders](../img/prefs-gamepad.png)
+![The Game controller row in Preferences, Plugins, with its settings open](../img/prefs-gamepad.png)
 
 Plug it in and press any button, because FundaCAD only notices a controller after its first press. The left stick pans, the right stick rotates, and the triggers zoom.
 

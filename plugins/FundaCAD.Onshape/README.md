@@ -20,7 +20,8 @@ key.
 
 Onshape API keys, created at dev-portal.onshape.com/keys with read access. They
 are kept in the system's credential store (`plugin_secret_*`), never in a file,
-the document or the log. Preferences, Onshape forgets them.
+the document or the log. Settings under this plugin's row in Preferences >
+Plugins forgets them.
 
 Each request is signed the way Onshape's reference client does it: HMAC-SHA256
 over method, nonce, date, content type, path and query, lowercased. The test
@@ -57,7 +58,7 @@ The unit tests run against a fake Onshape. With a real account:
    `plugin-data/FundaCAD.Onshape/downloads` folder is empty afterwards.
 5. Try a `/v/<version>/e/<element>` link and a link with no `/e/`, which
    imports every part studio.
-6. Preferences, Onshape, Forget keys, then a wrong secret: expect "Onshape
+6. Preferences > Plugins, Onshape, Settings, Forget keys, then a wrong secret: expect "Onshape
    refused the keys".
 7. Press Cancel while "Exporting <part studio> from Onshape" shows: no error,
    no new feature, and the downloads folder is empty.

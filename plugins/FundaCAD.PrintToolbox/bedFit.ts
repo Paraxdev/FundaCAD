@@ -2,7 +2,7 @@
 // what uniform scale would make it fit. Display-only, no feature, no History
 // row: just a toast telling you before you slice it and find out the hard way.
 
-import { readSetting } from "fundacad";
+import { definePluginSettings, readSetting, type SettingsSchema } from "fundacad";
 
 export type Vec3 = readonly [number, number, number];
 
@@ -53,26 +53,59 @@ function isVec3(v: unknown): v is Vec3 {
   return Array.isArray(v) && v.length === 3 && v.every((n) => typeof n === "number" && Number.isFinite(n) && n > 0);
 }
 
-export function loadBedFitSetting(): BedFitSetting {
-  try {
+function parseOld(raw: string): BedFitSetting {
+  const o = JSON.parse(raw) as Partial<BedFitSetting>;
+  const presetId = typeof o.presetId === "string" && BED_PRESETS.some((p) => p.id === o.presetId)
+    ? o.presetId : DEFAULT_SETTING.presetId;
+  const customSize = isVec3(o.customSize) ? o.customSize : DEFAULT_SETTING.customSize;
+  return { presetId, customSize };
+}
+
+const custom = (key: string, label: string, i: number) =>
+  ({
+    key, type: "number", label, unit: "length", group: "Bed fit check", min: 1, max: 5000,
+    default: DEFAULT_SETTING.customSize[i]!, visibleWhen: (v: Record<string, unknown>) => v.presetId === "custom",
+  }) as const;
+
+export const BED_SETTINGS: SettingsSchema = {
+  version: 1,
+  props: [
+    {
+      key: "presetId",
+      type: "enum",
+      label: "Printer bed",
+      group: "Bed fit check",
+      description: "The bed Bed Fit Check measures against. Picking one in the check changes it here too.",
+      default: DEFAULT_SETTING.presetId,
+      options: BED_PRESETS.map((p) => ({ id: p.id, label: p.label })),
+    },
+    custom("customX", "Custom bed width", 0),
+    custom("customY", "Custom bed depth", 1),
+    custom("customZ", "Custom bed height", 2),
+  ],
+  legacy: () => {
     const raw = readSetting(KEY);
-    if (!raw) return DEFAULT_SETTING;
-    const o = JSON.parse(raw) as Partial<BedFitSetting>;
-    const presetId = typeof o.presetId === "string" && BED_PRESETS.some((p) => p.id === o.presetId)
-      ? o.presetId : DEFAULT_SETTING.presetId;
-    const customSize = isVec3(o.customSize) ? o.customSize : DEFAULT_SETTING.customSize;
-    return { presetId, customSize };
-  } catch {
-    return DEFAULT_SETTING;
-  }
+    if (!raw) return null;
+    const old = parseOld(raw);
+    const [customX, customY, customZ] = old.customSize;
+    return { presetId: old.presetId, customX, customY, customZ };
+  },
+};
+
+export const bedSettings = definePluginSettings("FundaCAD.PrintToolbox", BED_SETTINGS);
+
+export function loadBedFitSetting(): BedFitSetting {
+  const v = bedSettings.all();
+  return { presetId: v.presetId as string, customSize: [v.customX as number, v.customY as number, v.customZ as number] };
 }
 
 export function saveBedFitSetting(setting: BedFitSetting): void {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(setting));
-  } catch {
-    /* private mode / no storage: the choice just doesn't survive the session */
-  }
+  bedSettings.set("presetId", setting.presetId);
+  if (!isVec3(setting.customSize)) return;
+  const [customX, customY, customZ] = setting.customSize;
+  bedSettings.set("customX", customX);
+  bedSettings.set("customY", customY);
+  bedSettings.set("customZ", customZ);
 }
 
 /** The bed size a setting resolves to: the preset's fixed size, or the stored custom one. */

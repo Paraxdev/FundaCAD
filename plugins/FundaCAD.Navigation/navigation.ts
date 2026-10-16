@@ -1,7 +1,7 @@
 // The presets, the radial menu's items and the moved keys, and how they are
 // kept. Pure apart from storage, so the tests can read every rule here.
 
-import { readSetting, type CtxItem, type PointerBinding, type ShortcutOverride } from "fundacad";
+import { readSetting, type CtxItem, type PointerBinding, type SettingsSchema, type ShortcutOverride } from "fundacad";
 
 export const PLUGIN_ID = "FundaCAD.Navigation";
 /** Not "fundacad.navigation": the core's own navigation preferences use it. */
@@ -145,21 +145,48 @@ export function parseConfig(raw: string | null): NavConfig {
   return cfg;
 }
 
-export function loadConfig(): NavConfig {
-  try {
-    return parseConfig(readSetting(STORAGE_KEY));
-  } catch {
-    return structuredClone(DEFAULT_CONFIG);
-  }
+/** The config the app's settings store holds, made whole. */
+export function configOf(values: Record<string, unknown>): NavConfig {
+  return parseConfig(JSON.stringify(values));
 }
 
-export function saveConfig(cfg: NavConfig) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(cfg));
-  } catch {
-    /* no storage, the change still holds for this session */
-  }
-}
+export const SETTINGS: SettingsSchema = {
+  version: 1,
+  props: [
+    {
+      key: "preset",
+      type: "enum",
+      label: "Mouse buttons",
+      description:
+        "The left button alone always selects. On Linux the window manager may take Alt+drag to move the window before the app sees it; the middle button presets avoid that.",
+      default: DEFAULT_CONFIG.preset,
+      options: PRESETS.map((p) => ({ id: p.id, label: p.label })),
+    },
+    {
+      key: "radial",
+      type: "boolean",
+      label: "Radial menu",
+      group: "Radial menu",
+      description: `A ring of commands at the cursor, chosen by what you are doing. Hold the trigger, move towards a command and let go, or tap the key and click. Its key is ${RADIAL_KEY.toUpperCase()} unless you move it below.`,
+      default: DEFAULT_CONFIG.radial,
+    },
+    {
+      key: "radialDrag",
+      type: "enum",
+      label: "Mouse trigger",
+      group: "Radial menu",
+      default: DEFAULT_CONFIG.radialDrag,
+      options: RADIAL_DRAGS,
+      visibleWhen: (v) => v.radial === true,
+    },
+    { key: "items", type: "data", default: DEFAULT_CONFIG.items, parse: (v) => configOf({ items: v }).items },
+    { key: "keys", type: "data", default: DEFAULT_CONFIG.keys, parse: (v) => configOf({ keys: v }).keys },
+  ],
+  legacy: () => {
+    const raw = readSetting(STORAGE_KEY);
+    return raw ? { ...parseConfig(raw) } : null;
+  },
+};
 
 export function presetOf(cfg: NavConfig): Preset {
   return PRESETS.find((p) => p.id === cfg.preset) ?? PRESETS[0]!;

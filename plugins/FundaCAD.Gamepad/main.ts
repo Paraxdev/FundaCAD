@@ -18,6 +18,7 @@ import {
   motionOf,
   parseKey,
   pressed,
+  settings,
   type Binding,
 } from "./gamepad";
 import { padState } from "./state";
@@ -133,7 +134,7 @@ export async function activate(e: Engine): Promise<() => void> {
 
   stops.push(
     contribute("FundaCAD.Gamepad", {
-      settings: [{ key: "gamepad", title: "Game Controller", component: GamepadSection }],
+      settings: [{ key: "gamepad", settings, component: GamepadSection }],
     }),
   );
 

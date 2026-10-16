@@ -1,4 +1,5 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { MemoryStorage } from "./memoryStorage";
 import {
   bedFit, bedFitMessage, bedSizeOf, parseCustomBedSize, BED_PRESETS,
 } from "../../plugins/FundaCAD.PrintToolbox/bedFit";
@@ -72,5 +73,26 @@ describe("parseCustomBedSize", () => {
 
   it("rejects infinity", () => {
     expect(parseCustomBedSize(220, 220, Infinity).ok).toBe(false);
+  });
+});
+
+describe("the bed choice as a setting", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  });
+
+  it("adopts the old key once and shows the custom size only for Custom", async () => {
+    const store = new MemoryStorage();
+    store.setItem("fundacad.printToolbox.bedFit", JSON.stringify({ presetId: "custom", customSize: [80, 90, 100] }));
+    vi.stubGlobal("localStorage", store);
+    vi.resetModules();
+    const m = await import("../../plugins/FundaCAD.PrintToolbox/bedFit");
+    expect(m.loadBedFitSetting()).toEqual({ presetId: "custom", customSize: [80, 90, 100] });
+    const customX = m.BED_SETTINGS.props.find((p) => p.key === "customX")!;
+    expect(customX.visibleWhen!({ presetId: "custom" })).toBe(true);
+    expect(customX.visibleWhen!({ presetId: "256" })).toBe(false);
+    m.saveBedFitSetting({ presetId: "300", customSize: [80, 90, 100] });
+    expect(JSON.parse(store.getItem("fundacad.pluginSettings.FundaCAD.PrintToolbox")!).values.presetId).toBe("300");
   });
 });
