@@ -35,7 +35,8 @@ import { SolverUnavailable } from "./solver";
 import { resolveRealEntities, toSketchEntity } from "./resolve";
 import { applyDrivingDimsDirect, waitsForSolver, dimAnchor, drivenBadges, drivingDimFor, findDrivingDim, type DrivingDim } from "./directDims";
 import { expandPattern, reflectedRect, translated } from "./pattern";
-import { candidatesFromEntities, dragSnap, originCandidate, settleOriginPin, showsSnapMarker, snap, type OriginPinRequest, type SnapGuide, type SnapKind, type SnapCandidate } from "./snap";
+import { candidatesFromEntities, curvesFromEntities, dragSnap, originCandidate, settleOriginPin, showsSnapMarker, snap, type OriginPinRequest, type SnapGuide, type SnapKind, type SnapCandidate, type SnapCurve, type SnapRef } from "./snap";
+import { bindNew, inferArcRelations, inferLineRelations, NEW_ENTITY, tangentArcMid, tangentFrom, type InferResult } from "./inferRelations";
 import type { ResolvedEntity } from "./snap";
 import { hitPx } from "../input/pointerKind";
 import { detectRegions, entityPolyline, profileBounds, rectCorners, rectFromThreePoints } from "./region";
@@ -60,9 +61,9 @@ import { sketchEntityTarget, type SketchGizmoHost } from "../features/sketchMove
 import { sketchEscapeAction } from "./escapeLayers";
 import { escapeClaimed } from "../ui/escapeClaim";
 import { gridReach, gridStep, SketchPlaneGrid, snapLatticeStep } from "./planeGrid";
-import { INFER_TOL_DEG, inferLineDirection } from "./inferLine";
+import { INFER_TOL_DEG } from "./inferLine";
 import { sketchLockHolds, viewSquareToPlane } from "./sketchView";
-import { SnapTag } from "./snapTag";
+import { InferTag, SnapTag } from "./snapTag";
 
 export type SketchTool =
   | "select"
@@ -190,6 +191,15 @@ export class SketchMode {
   private modelPlaneEdges: PlaneEdge<ModelEdge>[] = [];
   private entities: ResolvedEntity[] = [];
   private candidates: SnapCandidate[] = []; // cached; rebuilt when entities change
+  private curves: SnapCurve[] = [];
+  /** What the last snapAt caught, so a click commits what the hover previewed. */
+  private lastHit: { p: THREE.Vector2; raw: THREE.Vector2; kind: SnapKind; ref?: SnapRef | undefined } | null = null;
+  private baseRef: SnapRef | null = null;
+  private arcStartRef: SnapRef | null = null;
+  private arcEndRef: SnapRef | null = null;
+  /** Arc tool: the second click ends an arc tangent to the line or arc it started on. */
+  private tangentArc = false;
+  private inferTag = new InferTag();
   private base: THREE.Vector2 | null = null; // pending first point
   private chainStart: THREE.Vector2 | null = null; // first point of a line chain
   private originPin: OriginPinRequest | null = null;
@@ -465,6 +475,7 @@ export class SketchMode {
       planePoint: (e) => this.planePoint(e),
       afterModify: () => this.afterModify(),
       setDrivingDimension: (c) => this.setDrivingDimension(c),
+      addConstraints: (cs) => { this.constraints.push(...cs); },
       planeEdges: () => this.modelPlaneEdges,
       projectModelEdges: (edges) => this.projectFlow.projectModelEdges(edges),
       emphasiseModelEdges: (edges) => this.viewport.emphasiseEdges(edges),
@@ -475,7 +486,6 @@ export class SketchMode {
     this.projectPanel.onChange = () => {
       this.viewport.hoverEntity(null);
       this.overlay.setPreview([]);
-      addConstraints: (cs) => { this.constraints.push(...cs); },
       this.viewport.requestRender();
     };
   }
@@ -860,6 +870,7 @@ export class SketchMode {
       [...this.entities, ...derived],
       this.evenOdd,
     );
+    this.curves = curvesFromEntities(this.entities);
     this.candidates = [
       ...candidatesFromEntities([...this.entities, ...derived]),
       ...this.faceAnchorCandidates(),
@@ -1666,7 +1677,7 @@ export class SketchMode {
       if (this.pickPatternSources(this.planePoint(e) ?? p)) return;
       return this.patternClick(p);
     }
-    if (this.tool === "arc") return this.arcClick(p);
+    if (this.tool === "arc") return this.arcClick(p, hit.ref ?? null);
     if (this.tool === "spline") return this.splineClick(p);
     if (this.tool === "bspline") return this.bsplineClick(p);
     if (this.tool === "point") return this.pointClick(p);
@@ -1701,6 +1712,7 @@ export class SketchMode {
 
     if (!this.base) {
       this.base = p.clone();
+      this.baseRef = hit.ref ?? null;
       if (this.tool === "line") this.chainStart = p.clone(); // remember loop start
       this.showDimFields();
       return;
@@ -1710,28 +1722,35 @@ export class SketchMode {
   }
 
   // 3-point arc: click start, click end, then click the point it passes through
-  private arcClick(p: THREE.Vector2) {
+  private arcClick(p: THREE.Vector2, ref: SnapRef | null = null) {
+    const tangent = !this.arcEnd ? this.tangentArcFrom() : null;
     if (!this.arcStart) {
       this.arcStart = p.clone();
+      this.arcStartRef = ref;
+    } else if (tangent) {
+      const m = tangentArcMid(this.arcStart, tangent.dir, p);
+      if (!m) { toast("That point is straight ahead, a tangent arc needs it off to one side"); return; }
+      this.arcEnd = p.clone();
+      this.arcEndRef = ref;
+      this.arcClick(m);
     } else if (!this.arcEnd) {
       this.arcEnd = p.clone();
+      this.arcEndRef = ref;
     } else {
       const a = this.arcStart;
       const b = this.arcEnd;
-      const ent: ResolvedEntity = {
-        type: "arc",
-        id: newEntityId(),
-        x1: a.x,
-        y1: a.y,
-        x2: b.x,
-        y2: b.y,
-        mx: p.x,
-        my: p.y,
-      };
+      const id = newEntityId();
+      const geom = { x1: a.x, y1: a.y, x2: b.x, y2: b.y, mx: p.x, my: p.y };
+      const inf = inferArcRelations(id, geom, this.arcStartRef, this.arcEndRef, this.entities, INFER_TOL_DEG, this.gridSnap);
+      const ent: ResolvedEntity = { type: "arc", id, ...geom, mx: inf.mid.x, my: inf.mid.y };
       if (this.constructionMode) ent.construction = true;
       this.entities.push(ent);
+      this.constraints.push(...inf.relations);
+      this.showInfer(null);
       this.arcStart = null;
       this.arcEnd = null;
+      this.arcStartRef = null;
+      this.arcEndRef = null;
       this.refreshActive();
       this.overlay.setPreview([]);
       this.requestSolve(); // include the arc in the solve (updates DOF colour)
@@ -2632,7 +2651,9 @@ export class SketchMode {
     }
 
     if (this.base) {
-      const geom = this.computeGeometry(this.base, hit.p);
+      const inferred = this.tool === "line" ? this.inferLine(hit.p) : null;
+      this.showInfer(inferred);
+      const geom = this.computeGeometry(this.base, inferred?.end ?? hit.p);
       this.dim.updateFromCursor(geom.dims);
       if (this.tool === "circle" && geom.entity?.type === "circle") {
         // The diameter is drawn through the centre along the drag, and its field
@@ -2778,6 +2799,7 @@ export class SketchMode {
     if (k === "l") this.setTool("line");
     else if (k === "r") this.setTool("rectangle");
     else if (k === "c") this.setTool("circle");
+    else if (k === "a" && this.tool === "arc") this.setTangentArc(!this.tangentArc);
     else if (k === "a") this.setTool("arc");
     else if (k === "t") this.setTool("trim");
     else if (k === "o") this.setTool("offset");
@@ -2838,6 +2860,9 @@ export class SketchMode {
 
   private commitFromCursor(cursor: THREE.Vector2) {
     if (!this.base) return;
+    const inferred = this.tool === "line" ? this.inferLine(cursor) : null;
+    if (inferred) cursor = inferred.end;
+    this.showInfer(null);
     const { entity } = this.computeGeometry(this.base, cursor);
     if (this.isDegenerate(entity)) {
       toast("Too small to draw, click somewhere else to set its size");
@@ -2855,17 +2880,14 @@ export class SketchMode {
       const end = new THREE.Vector2(entity.x2, entity.y2);
       // clicked back on the start point → close the loop and end the chain
       const closing = this.chainStart != null && end.distanceTo(this.chainStart) < 1e-3;
-      // Infer horizontal or vertical. The closing segment was not aimed, so it gets
-      // exact axes only, without the three degree guess. A typed angle is preferred.
-      if (!this.dim.isUserDriven("angle")) {
-        this.inferLineConstraint(entity, closing ? 0 : INFER_TOL_DEG);
-      }
+      if (inferred) this.constraints.push(...bindNew(inferred.relations, entity.id));
       if (closing) {
         this.base = null;
         this.chainStart = null;
         this.dim.hide();
       } else {
         this.base = new THREE.Vector2(entity.x2, entity.y2); // snapped endpoint
+        this.baseRef = { entity: entity.id, at: 1 };
         this.showDimFields();
       }
     } else {
@@ -2879,23 +2901,37 @@ export class SketchMode {
     this.onState?.();
   }
 
-  /** Record horizontal/vertical on a freshly drawn line (mainstream MCAD's
-   *  auto-constrain). The grid decides when it can; otherwise a few degrees of
-   *  tolerance does. See inferLine.ts for why the order matters. */
-  private inferLineConstraint(e: ResolvedEntity, tolDeg = INFER_TOL_DEG) {
-    if (e.type !== "line") return;
-    const dir = inferLineDirection(
-      e.x1, e.y1, e.x2, e.y2,
-      this.gridSnap ? this.snapStep() : 0,
-      tolDeg,
-    );
-    if (dir === "horizontal") {
-      e.y2 = e.y1; // exactly horizontal
-      this.constraints.push({ type: "horizontal", line: e.id });
-    } else if (dir === "vertical") {
-      e.x2 = e.x1; // exactly vertical
-      this.constraints.push({ type: "vertical", line: e.id });
+  /** What the line from `base` to `cursor` will be recorded with, judged from
+   *  what the cursor snapped to. The preview and the commit both ask this. The
+   *  closing segment of a chain was not aimed, so it gets exact axes only. */
+  private inferLine(cursor: THREE.Vector2): InferResult | null {
+    if (!this.base) return null;
+    const closing = this.chainStart != null && cursor.distanceTo(this.chainStart) < 1e-3;
+    const h = this.lastHit && this.lastHit.p.distanceTo(cursor) < 1e-9 ? this.lastHit : null;
+    return inferLineRelations({
+      id: NEW_ENTITY,
+      start: this.base,
+      startRef: this.baseRef,
+      end: cursor,
+      raw: h?.raw,
+      endKind: h?.kind ?? "free",
+      endRef: h?.ref,
+      entities: this.entities,
+      step: this.gridSnap ? this.snapStep() : 0,
+      tolDeg: closing ? 0 : INFER_TOL_DEG,
+      smart: this.gridSnap,
+      typedAngle: this.dim.isUserDriven("angle"),
+    });
+  }
+
+  /** The relation icons beside the cursor and the dashed line they come from. */
+  private showInfer(inf: InferResult | null) {
+    if (!inf || !inf.glyphs.length) {
+      this.inferTag.hide();
+      return;
     }
+    this.inferTag.show(inf.glyphs, inf.relations.map((r) => r.type), this.viewport.projectToScreen(this.plane.to3D(inf.end.x, inf.end.y)));
+    if (inf.hints.length) this.overlay.setGuides(inf.hints, this.plane, this.planeMmPerPx());
   }
 
   /** A typed size during creation (the live W/H/⌀ fields) becomes the same
@@ -2959,7 +2995,10 @@ export class SketchMode {
     if (!world) return null;
     const p2d = this.plane.to2D(world);
     // Hold Ctrl to suppress snapping for fine placement (raw cursor position).
-    if (noSnap) return { p: p2d, kind: "free" as SnapKind, world, guides: [] as SnapGuide[], label: undefined };
+    if (noSnap) {
+      this.lastHit = { p: p2d.clone(), raw: p2d.clone(), kind: "free" };
+      return { p: p2d, kind: "free" as SnapKind, world, guides: [] as SnapGuide[], label: undefined, ref: undefined as SnapRef | undefined };
+    }
     const res = snap(
       p2d,
       this.candidates, // cached; rebuilt only when entities change
@@ -2967,8 +3006,11 @@ export class SketchMode {
       this.gridSnap ? this.snapStep() : 0,
       // snap()'s own 10 px reach, widened for a finger.
       hitPx(10),
+      this.gridSnap && this.tool !== "select" ? this.curves : [],
     );
+    this.lastHit = { p: res.point.clone(), raw: p2d.clone(), kind: res.kind, ref: res.ref };
     return {
+      ref: res.ref,
       p: res.point,
       kind: res.kind,
       world: this.plane.to3D(res.point.x, res.point.y),
@@ -3335,6 +3377,7 @@ export class SketchMode {
         case "coincident": return endIds.has(c.e1) && endIds.has(c.e2) && at(c.e1, c.p1) && at(c.e2, c.p2);
         case "concentric": return roundIds.has(c.c1) && roundIds.has(c.c2);
         case "midpoint": return endIds.has(c.e) && at(c.e, c.p) && hasLineOperand(c.line);
+        case "pointOnCurve": return endIds.has(c.e) && at(c.e, c.p) && (lineIds.has(c.curve) || roundIds.has(c.curve));
         case "symmetric": return endIds.has(c.e1) && endIds.has(c.e2) && at(c.e1, c.p1) && at(c.e2, c.p2) && hasLineOperand(c.line);
         case "radius": return roundIds.has(c.e);
         case "p2pDistance": case "hDistance": case "vDistance": return refIds.has(c.e1) && refIds.has(c.e2) && at(c.e1, c.p1) && at(c.e2, c.p2);
@@ -3807,7 +3850,31 @@ export class SketchMode {
   }
 
   /** preview while drawing an arc: chord after 1st click, arc after 2nd */
+  /** The direction a tangent arc leaves its start along, when the mode is on and
+   *  the arc started on the end of a line or arc. */
+  private tangentArcFrom() {
+    return this.tangentArc && this.arcStart ? tangentFrom(NEW_ENTITY, this.arcStartRef, this.entities) : null;
+  }
+
+  /** Arc tool: switch the tangent arc mode (A again while the arc tool is armed). */
+  setTangentArc(on: boolean) {
+    this.tangentArc = on;
+    toast(on ? "Tangent arc: start on the end of a line or arc, then click where it ends" : "Three point arc");
+  }
+
   private arcPreview(cursor: THREE.Vector2) {
+    const t = !this.arcEnd ? this.tangentArcFrom() : null;
+    const m = t && this.arcStart ? tangentArcMid(this.arcStart, t.dir, cursor) : null;
+    if (t && m && this.arcStart) {
+      const a = this.arcStart;
+      this.overlay.setPreview([
+        this.entityCurve({ type: "arc", id: "", x1: a.x, y1: a.y, x2: cursor.x, y2: cursor.y, mx: m.x, my: m.y }),
+      ]);
+      const rel = t.relation.type === "collinear" ? { type: "tangent2" as const, a: NEW_ENTITY, b: t.relation.l1 } : t.relation;
+      this.showInfer({ end: cursor, relations: [rel], glyphs: ["tangent"], hints: [] });
+      return;
+    }
+    this.showInfer(null);
     if (this.arcStart && !this.arcEnd) {
       const a = this.arcStart;
       this.overlay.setPreview([

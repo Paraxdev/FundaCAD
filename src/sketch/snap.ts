@@ -16,7 +16,23 @@ export type SnapKind =
   | "midpoint"
   | "center"
   | "control"
+  | "curve"
   | "align";
+
+/** Which piece of geometry a snap caught: an endpoint index (dimPoint numbering),
+ *  a line's midpoint, or the nearest point on a curve. Only set for sketch
+ *  entities the solver can hold a relation to. */
+export interface SnapRef {
+  entity: string;
+  at: number | "mid" | "curve";
+}
+
+/** A curve the cursor can land on anywhere along, for the on-curve snap. */
+export type SnapCurve =
+  | { entity: string; kind: "line"; x1: number; y1: number; x2: number; y2: number }
+  | { entity: string; kind: "circle"; cx: number; cy: number; r: number }
+  // a0 to a1 counterclockwise, radians
+  | { entity: string; kind: "arc"; cx: number; cy: number; r: number; a0: number; a1: number };
 
 export interface SnapCandidate {
   p: THREE.Vector2;
@@ -27,6 +43,7 @@ export interface SnapCandidate {
   /** Names for the lines through this anchor along the sketch's own x and y, for
    *  a cursor that lines up with it on one of them ("X Axis"). */
   lineLabels?: { x: string; y: string } | undefined;
+  ref?: SnapRef | undefined;
 }
 
 /** One alignment guide: the anchor the cursor lined up WITH, and which of that
@@ -44,6 +61,7 @@ export interface SnapResult {
    *  every kind but "align". */
   guides: SnapGuide[];
   label?: string | undefined;
+  ref?: SnapRef | undefined;
 }
 
 export function snap(
@@ -52,6 +70,7 @@ export function snap(
   toScreen: (p: THREE.Vector2) => { x: number; y: number },
   gridStep: number,
   pixelTol = 10,
+  curves: readonly SnapCurve[] = [],
 ): SnapResult {
   const rawScreen = toScreen(raw);
   const screenGap = (p: THREE.Vector2) => {
@@ -91,7 +110,20 @@ export function snap(
     if (dy <= pixelTol && (!alignY || dy < alignY.d)) alignY = { c, d: dy };
   }
 
-  if (best) return { point: best.p.clone(), kind: best.kind, guides: [], label: snapLabel(best) };
+  if (best) return { point: best.p.clone(), kind: best.kind, guides: [], label: snapLabel(best), ref: best.ref };
+
+  // On a curve, below every point anchor and above alignment: lying on a line
+  // the user can see is a stronger statement than lining up with a corner.
+  let onCurve: { p: THREE.Vector2; d: number; entity: string } | null = null;
+  for (const cv of curves) {
+    const f = nearestOnCurve(cv, raw);
+    if (!f) continue;
+    const d = screenGap(f);
+    if (d <= pixelTol && (!onCurve || d < onCurve.d)) onCurve = { p: f, d, entity: cv.entity };
+  }
+  if (onCurve) {
+    return { point: onCurve.p, kind: "curve", guides: [], label: "On Curve", ref: { entity: onCurve.entity, at: "curve" } };
+  }
 
   // THE GRID'S ANSWER, ONE AXIS AT A TIME.
   //
@@ -135,7 +167,7 @@ export function snap(
     // outside the round tolerance the point pass used. Snapping to it is right;
     // reporting it as an alignment with two zero-length guides is not.
     if (alignX && alignY && alignX.c === alignY.c) {
-      return { point: alignX.c.p.clone(), kind: alignX.c.kind, guides: [], label: snapLabel(alignX.c) };
+      return { point: alignX.c.p.clone(), kind: alignX.c.kind, guides: [], label: snapLabel(alignX.c), ref: alignX.c.ref };
     }
     const guides: SnapGuide[] = [];
     if (alignX) guides.push({ from: alignX.c.p.clone(), axis: "x" });
@@ -303,19 +335,59 @@ export function dragSnap(
   return res.kind === "endpoint" || res.kind === "midpoint" || res.kind === "center" || res.kind === "control" ? res : null;
 }
 
+/** The nearest point of `cv` to `q`, or null when it falls past an arc's ends. */
+export function nearestOnCurve(cv: SnapCurve, q: THREE.Vector2): THREE.Vector2 | null {
+  if (cv.kind === "line") {
+    const dx = cv.x2 - cv.x1, dy = cv.y2 - cv.y1;
+    const L2 = dx * dx + dy * dy;
+    if (L2 < 1e-18) return null;
+    const t = Math.min(1, Math.max(0, ((q.x - cv.x1) * dx + (q.y - cv.y1) * dy) / L2));
+    return new THREE.Vector2(cv.x1 + t * dx, cv.y1 + t * dy);
+  }
+  const vx = q.x - cv.cx, vy = q.y - cv.cy;
+  const len = Math.hypot(vx, vy);
+  if (len < 1e-12 || !(cv.r > 0)) return null;
+  if (cv.kind === "arc") {
+    const tau = 2 * Math.PI;
+    const sweep = (((cv.a1 - cv.a0) % tau) + tau) % tau;
+    const along = (((Math.atan2(vy, vx) - cv.a0) % tau) + tau) % tau;
+    if (along > sweep) return null;
+  }
+  return new THREE.Vector2(cv.cx + (vx / len) * cv.r, cv.cy + (vy / len) * cv.r);
+}
+
+/** On-curve snap targets: native lines, circles and arcs, the curves a
+ *  pointOnCurve relation can hold a point to. */
+export function curvesFromEntities(entities: ResolvedEntity[]): SnapCurve[] {
+  const out: SnapCurve[] = [];
+  for (const e of entities) {
+    if (e.type === "line") out.push({ entity: e.id, kind: "line", x1: e.x1, y1: e.y1, x2: e.x2, y2: e.y2 });
+    else if (e.type === "circle") out.push({ entity: e.id, kind: "circle", cx: e.x, cy: e.y, r: e.radius });
+    else if (e.type === "arc") {
+      const r = asRound(e);
+      if (!r) continue;
+      const ang = (x: number, y: number) => Math.atan2(y - r.y, x - r.x);
+      const ccw = (e.mx - e.x1) * (e.y2 - e.my) - (e.my - e.y1) * (e.x2 - e.mx) > 0;
+      const [a0, a1] = ccw ? [ang(e.x1, e.y1), ang(e.x2, e.y2)] : [ang(e.x2, e.y2), ang(e.x1, e.y1)];
+      out.push({ entity: e.id, kind: "arc", cx: r.x, cy: r.y, r: r.r, a0, a1 });
+    }
+  }
+  return out;
+}
+
 /** snap candidates from resolved sketch entities (numbers, not params) */
 export function candidatesFromEntities(
   entities: ResolvedEntity[],
 ): SnapCandidate[] {
   const out: SnapCandidate[] = [];
-  const add = (x: number, y: number, kind: SnapKind, priority: number) =>
-    out.push({ p: new THREE.Vector2(x, y), kind, priority });
+  const add = (x: number, y: number, kind: SnapKind, priority: number, ref?: SnapRef) =>
+    out.push({ p: new THREE.Vector2(x, y), kind, priority, ...(ref ? { ref } : {}) });
 
   for (const e of entities) {
     if (e.type === "line") {
-      add(e.x1, e.y1, "endpoint", 100);
-      add(e.x2, e.y2, "endpoint", 100);
-      add((e.x1 + e.x2) / 2, (e.y1 + e.y2) / 2, "midpoint", 80);
+      add(e.x1, e.y1, "endpoint", 100, { entity: e.id, at: 0 });
+      add(e.x2, e.y2, "endpoint", 100, { entity: e.id, at: 1 });
+      add((e.x1 + e.x2) / 2, (e.y1 + e.y2) / 2, "midpoint", 80, { entity: e.id, at: "mid" });
     } else if (e.type === "rectangle") {
       // Through rectCorners rather than +-hw/+-hh, so a ROTATED rectangle snaps
       // to where it is drawn. Computing corners inline here is how the two would
@@ -332,8 +404,8 @@ export function candidatesFromEntities(
     } else if (e.type === "circle") {
       add(e.x, e.y, "center", 90);
     } else if (e.type === "arc") {
-      add(e.x1, e.y1, "endpoint", 100);
-      add(e.x2, e.y2, "endpoint", 100);
+      add(e.x1, e.y1, "endpoint", 100, { entity: e.id, at: 0 });
+      add(e.x2, e.y2, "endpoint", 100, { entity: e.id, at: 1 });
       add(e.mx, e.my, "midpoint", 80);
     } else if (e.type === "spline") {
       for (const p of e.points) add(p.x, p.y, "endpoint", 100); // fit points snap

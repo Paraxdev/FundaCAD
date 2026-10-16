@@ -209,6 +209,8 @@ export type SketchConstraint =
   | { type: "concentric"; c1: string; c2: string }
   // midpoint: a point (endpoint of `e`/`p`) sits at the midpoint of a line
   | { type: "midpoint"; e: string; p: number; line: string }
+  // pointOnCurve: an endpoint of `e`/`p` lies on a line, circle or arc
+  | { type: "pointOnCurve"; e: string; p: number; curve: string }
   // symmetric: two endpoints mirror across a line (the symmetry axis)
   | { type: "symmetric"; e1: string; p1: number; e2: string; p2: number; line: string }
   // angle: driving included angle (DEGREES) between two lines (solver works in radians)

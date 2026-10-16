@@ -48,6 +48,8 @@ export type SConstraint =
   | { id: string; type: "equalRadiusAA"; a1: string; a2: string }
   | { id: string; type: "pointOnLine"; p: PointId; line: string }
   | { id: string; type: "pointOnPerpBisector"; p: PointId; line: string }
+  | { id: string; type: "pointOnCircle"; p: PointId; circle: string }
+  | { id: string; type: "pointOnArc"; p: PointId; arc: string }
   | { id: string; type: "symmetric"; a: PointId; b: PointId; line: string }
   // --- edge-to-edge (rim) distances -----------------------------------------
   // `round1`/`round2`/`round` name a CIRCLE OR ARC primitive: planegcs's Arc
@@ -268,6 +270,10 @@ function toGcsConstraint(c: SConstraint): any {
       return { id: c.id, type: "equal_radius_aa", a1_id: c.a1, a2_id: c.a2 };
     case "pointOnLine":
       return { id: c.id, type: "point_on_line_pl", p_id: c.p, l_id: c.line };
+    case "pointOnCircle":
+      return { id: c.id, type: "point_on_circle", p_id: c.p, c_id: c.circle };
+    case "pointOnArc":
+      return { id: c.id, type: "point_on_arc", p_id: c.p, a_id: c.arc };
     case "pointOnPerpBisector":
       return { id: c.id, type: "point_on_perp_bisector_pl", p_id: c.p, l_id: c.line };
     case "symmetric":

@@ -1,0 +1,131 @@
+// What a line or arc being drawn is recorded with, decided before the click.
+import { describe, it, expect } from "vitest";
+import * as THREE from "three";
+import { bindNew, inferArcRelations, inferLineRelations, NEW_ENTITY, tangentArcMid, type InferLineInput } from "../../src/sketch/inferRelations";
+import { leaveDirection } from "../../src/sketch/inferRelations";
+import type { ResolvedEntity } from "../../src/sketch/snap";
+
+const V = (x: number, y: number) => new THREE.Vector2(x, y);
+const line = (id: string, x1: number, y1: number, x2: number, y2: number): ResolvedEntity => ({ type: "line", id, x1, y1, x2, y2 });
+const deg = (d: number) => (d * Math.PI) / 180;
+const polar = (o: THREE.Vector2, len: number, d: number) => V(o.x + len * Math.cos(deg(d)), o.y + len * Math.sin(deg(d)));
+
+const base = (over: Partial<InferLineInput>): InferLineInput => ({
+  id: NEW_ENTITY, start: V(0, 0), end: V(10, 10), endKind: "free", entities: [], step: 0, tolDeg: 3, smart: true, ...over,
+});
+const types = (r: { relations: { type: string }[] }) => r.relations.map((c) => c.type);
+
+describe("line inference", () => {
+  const A = line("A", 0, 0, 34.641, 20); // 30 degrees
+  const start = V(34.641, 20);
+
+  it("continuing a line within the tolerance is collinear and lands exactly on its direction", () => {
+    const raw = polar(start, 30, 31.5);
+    const r = inferLineRelations(base({ start, startRef: { entity: "A", at: 1 }, end: raw, raw, entities: [A] }));
+    expect(r.relations).toEqual([{ type: "collinear", l1: "A", l2: NEW_ENTITY }]);
+    const a = Math.atan2(r.end.y - start.y, r.end.x - start.x);
+    expect(a).toBeCloseTo(Math.atan2(20, 34.641), 9);
+    expect(r.glyphs).toEqual(["collinear"]);
+  });
+
+  it("leaving an arc end along its tangent records tangent2", () => {
+    // eighth arc from (10,0) round to 45 degrees, centre origin, ends heading 135 degrees
+    const e = polar(V(0, 0), 10, 45), m = polar(V(0, 0), 10, 22.5);
+    const R: ResolvedEntity = { type: "arc", id: "R", x1: 10, y1: 0, x2: e.x, y2: e.y, mx: m.x, my: m.y };
+    const raw = polar(e, 20, 136.5);
+    const r = inferLineRelations(base({ start: e, startRef: { entity: "R", at: 1 }, end: raw, raw, entities: [R] }));
+    expect(r.relations).toEqual([{ type: "tangent2", a: NEW_ENTITY, b: "R" }]);
+    expect(Math.atan2(r.end.y - e.y, r.end.x - e.x)).toBeCloseTo(deg(135), 9);
+    expect(r.glyphs).toEqual(["tangent"]);
+  });
+
+  it("horizontal is preferred over a collinear continuation of a horizontal line", () => {
+    const H = line("H", 0, 0, 40, 0);
+    const raw = V(80, 1);
+    const r = inferLineRelations(base({ start: V(40, 0), startRef: { entity: "H", at: 1 }, end: raw, raw, entities: [H] }));
+    expect(types(r)).toEqual(["horizontal"]);
+    expect(r.end.y).toBe(0);
+  });
+
+  it("parallel and perpendicular to a nearby line, with its hint line", () => {
+    const par = inferLineRelations(base({ start: V(0, 50), end: polar(V(0, 50), 30, 32), entities: [A] }));
+    expect(par.relations).toEqual([{ type: "parallel", l1: "A", l2: NEW_ENTITY }]);
+    expect(Math.atan2(par.end.y - 50, par.end.x)).toBeCloseTo(deg(30), 4);
+    expect(par.hints).toHaveLength(1);
+    const per = inferLineRelations(base({ start: V(0, 50), end: polar(V(0, 50), 30, 118.5), entities: [A] }));
+    expect(per.relations).toEqual([{ type: "perpendicular", l1: "A", l2: NEW_ENTITY }]);
+  });
+
+  it("nothing outside the tolerance", () => {
+    const r = inferLineRelations(base({ start: V(0, 50), end: polar(V(0, 50), 30, 40), entities: [A] }));
+    expect(r.relations).toEqual([]);
+    expect(r.glyphs).toEqual([]);
+  });
+
+  it("ending on a midpoint records midpoint, on a curve records pointOnCurve, and neither moves the end", () => {
+    const L = line("L", 0, 0, 40, 0);
+    const end = V(20, 0);
+    const mid = inferLineRelations(base({ start: V(5, 30), end, endKind: "midpoint", endRef: { entity: "L", at: "mid" }, entities: [L] }));
+    expect(mid.relations).toEqual([{ type: "midpoint", e: NEW_ENTITY, p: 1, line: "L" }]);
+    expect(mid.end).toEqual(end);
+    const on = inferLineRelations(base({ start: V(5, 30), end: V(12, 0), endKind: "curve", endRef: { entity: "L", at: "curve" }, entities: [L] }));
+    expect(on.relations).toEqual([{ type: "pointOnCurve", e: NEW_ENTITY, p: 1, curve: "L" }]);
+    const start = inferLineRelations(base({ start: V(20, 0), startRef: { entity: "L", at: "mid" }, end: V(30, 25), entities: [L] }));
+    expect(start.relations).toEqual([{ type: "midpoint", e: NEW_ENTITY, p: 0, line: "L" }]);
+  });
+
+  it("an end on an anchor gets only an exact axis, never a guessed one", () => {
+    const L = line("L", 0, 0, 40, 0);
+    const r = inferLineRelations(base({ start: V(0, 30), end: V(1, 0), endKind: "endpoint", endRef: { entity: "L", at: 0 }, entities: [L] }));
+    expect(r.relations).toEqual([]);
+  });
+
+  it("with Snap off only the horizontal and vertical rules are left", () => {
+    const raw = polar(start, 30, 31.5);
+    const off = inferLineRelations(base({ start, startRef: { entity: "A", at: 1 }, end: raw, raw, entities: [A], smart: false }));
+    expect(off.relations).toEqual([]);
+    const mid = inferLineRelations(base({ start: V(5, 30), end: V(20, 0), endKind: "midpoint", endRef: { entity: "A", at: "mid" }, entities: [A], smart: false }));
+    expect(mid.relations).toEqual([]);
+    const h = inferLineRelations(base({ start: V(0, 0), end: V(50, 1), smart: false }));
+    expect(types(h)).toEqual(["horizontal"]);
+  });
+
+  it("a typed angle takes no direction guess", () => {
+    const r = inferLineRelations(base({ start: V(0, 0), end: V(50, 1), typedAngle: true }));
+    expect(r.relations).toEqual([]);
+  });
+
+  it("bindNew names the committed entity", () => {
+    expect(bindNew([{ type: "collinear", l1: "A", l2: NEW_ENTITY }], "B")).toEqual([{ type: "collinear", l1: "A", l2: "B" }]);
+  });
+});
+
+describe("arc inference", () => {
+  const L = line("L", 0, 0, 20, 0);
+
+  it("a tangent arc leaves the line along its direction and ends on the click", () => {
+    const m = tangentArcMid(V(20, 0), V(1, 0), V(30, 10))!;
+    const arc: ResolvedEntity = { type: "arc", id: "X", x1: 20, y1: 0, x2: 30, y2: 10, mx: m.x, my: m.y };
+    const d = leaveDirection(arc, 0)!;
+    expect(d.x).toBeCloseTo(1, 9);
+    expect(d.y).toBeCloseTo(0, 9);
+    expect(tangentArcMid(V(20, 0), V(1, 0), V(40, 0))).toBeNull();
+  });
+
+  it("a three point arc started nearly tangent is bent tangent and records tangent2", () => {
+    // a 2 degree miss of the tangent arc through (30,10)
+    const exact = tangentArcMid(V(20, 0), V(1, 0), V(30, 10))!;
+    const off = exact.clone().sub(V(20, 0)).rotateAround(V(0, 0), deg(1)).add(V(20, 0));
+    const r = inferArcRelations("X", { x1: 20, y1: 0, x2: 30, y2: 10, mx: off.x, my: off.y }, { entity: "L", at: 1 }, null, [L], 3, true);
+    expect(r.relations).toEqual([{ type: "tangent2", a: "X", b: "L" }]);
+    expect(r.mid.distanceTo(exact)).toBeLessThan(1e-9);
+  });
+
+  it("a three point arc well off the tangent records nothing, and Snap off records nothing", () => {
+    const r = inferArcRelations("X", { x1: 20, y1: 0, x2: 30, y2: 10, mx: 22, my: 8 }, { entity: "L", at: 1 }, null, [L], 3, true);
+    expect(r.relations).toEqual([]);
+    const exact = tangentArcMid(V(20, 0), V(1, 0), V(30, 10))!;
+    const off = inferArcRelations("X", { x1: 20, y1: 0, x2: 30, y2: 10, mx: exact.x, my: exact.y }, { entity: "L", at: 1 }, null, [L], 3, false);
+    expect(off.relations).toEqual([]);
+  });
+});
