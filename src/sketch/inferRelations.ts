@@ -28,6 +28,7 @@ export interface InferLineInput {
   /** The Snap toggle: off leaves only the exact horizontal and vertical rules. */
   smart: boolean;
   typedAngle?: boolean;
+  typedLength?: boolean;
 }
 
 export interface InferResult {
@@ -158,7 +159,9 @@ export function inferLineRelations(inp: InferLineInput): InferResult {
     if (r0) relations.push(r0);
   }
   const anchored = !!inp.endRef || ANCHORED.has(inp.endKind);
-  if (smart && anchored) {
+  // A typed length or angle puts the end where the number says, not where the
+  // cursor hovered, so a relation to the hovered point would drag the line off it.
+  if (smart && anchored && !inp.typedAngle && !inp.typedLength) {
     const r1 = pointRelation(id, 1, inp.endRef, entities);
     if (r1) relations.push(r1);
   }
