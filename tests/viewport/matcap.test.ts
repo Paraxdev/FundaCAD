@@ -2,9 +2,9 @@
 // left behind afterwards is exactly what was there before.
 import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
-import { MATCAP_GAIN, MatcapDraw, studioMatcap } from "../../src/viewport/matcap";
+import { MATCAP_GAIN, MatcapDraw, matcapPixels, matcapTexture, studioMatcap } from "../../src/viewport/matcap";
 import { PostChain } from "../../src/viewport/scene";
-import { DEFAULT_RENDER, setRenderPref } from "../../src/ui/renderPrefs";
+import { DEFAULT_RENDER, MATCAP_STYLES, setRenderPref } from "../../src/ui/renderPrefs";
 
 interface Seen {
   body: THREE.Material;
@@ -143,6 +143,39 @@ describe("MatcapDraw", () => {
     d.dispose();
     for (const s of twins) expect(s).toHaveBeenCalledTimes(1);
     expect(d.held).toBe(0);
+  });
+
+  it("makes each matcap once and gives each style its own look", () => {
+    for (const id of MATCAP_STYLES) expect(matcapTexture(id)).toBe(matcapTexture(id));
+    expect(matcapTexture("metal")).not.toBe(matcapTexture("clay"));
+    const mid = (id: (typeof MATCAP_STYLES)[number]) => matcapPixels(id, 8).slice((4 * 8 + 4) * 4, (4 * 8 + 4) * 4 + 3).join();
+    expect(new Set(MATCAP_STYLES.map(mid)).size).toBe(MATCAP_STYLES.length);
+  });
+
+  it("swaps the sphere on the same twin when the style changes", () => {
+    const r = rig();
+    const d = new MatcapDraw();
+    d.render(r.renderer, r.scene, r.camera, 1, { style: "studio", tint: true });
+    d.render(r.renderer, r.scene, r.camera, 1, { style: "metal", tint: true });
+    const twin = r.seen[1]!.body as THREE.MeshMatcapMaterial;
+    expect(r.seen[1]!.body).toBe(r.seen[0]!.body);
+    expect(twin.matcap).toBe(matcapTexture("metal"));
+    expect(d.held).toBe(2);
+  });
+
+  it("shows plain white and no vertex colours or map when body colours are off", () => {
+    const r = rig();
+    const d = new MatcapDraw();
+    d.render(r.renderer, r.scene, r.camera, 1, { style: "studio", tint: false });
+    const plain = r.seen[0]!.body as THREE.MeshMatcapMaterial;
+    expect(plain.color.r).toBeCloseTo(MATCAP_GAIN, 6);
+    expect(plain.color.g).toBeCloseTo(MATCAP_GAIN, 6);
+    expect(plain.vertexColors).toBe(false);
+    expect(plain.map).toBeNull();
+    d.render(r.renderer, r.scene, r.camera, 1, { style: "studio", tint: true });
+    const tinted = r.seen[1]!.body as THREE.MeshMatcapMaterial;
+    expect(tinted.vertexColors).toBe(true);
+    expect(tinted.color.g).toBeCloseTo(new THREE.Color(0x336699).g * MATCAP_GAIN, 6);
   });
 
   it("makes the matcap once", () => {

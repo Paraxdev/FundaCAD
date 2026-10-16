@@ -70,6 +70,8 @@ describe("asRenderPrefs", () => {
       keyElevation: DEFAULT_RENDER.keyElevation,
       viewModeModel: DEFAULT_RENDER.viewModeModel,
       viewModeRender: DEFAULT_RENDER.viewModeRender,
+      matcapStyle: DEFAULT_RENDER.matcapStyle,
+      matcapTint: DEFAULT_RENDER.matcapTint,
     });
   });
 
@@ -197,5 +199,24 @@ describe("potato mode", () => {
     expect(cameraFlightsOn()).toBe(false);
     setRenderPref("potatoMode", false);
     expect(cameraFlightsOn()).toBe(flights);
+  });
+});
+
+describe("matcap look", () => {
+  it("keeps a known style and a real boolean, and falls back otherwise", () => {
+    expect(asRenderPrefs({ matcapStyle: "wax", matcapTint: false })).toMatchObject({ matcapStyle: "wax", matcapTint: false });
+    const bad = asRenderPrefs({ matcapStyle: "chrome", matcapTint: "no" });
+    expect(bad.matcapStyle).toBe(DEFAULT_RENDER.matcapStyle);
+    expect(bad.matcapTint).toBe(DEFAULT_RENDER.matcapTint);
+  });
+
+  it("saves a choice per user and refuses a bad one", () => {
+    setRenderPref("matcapStyle", "metal");
+    setRenderPref("matcapTint", false);
+    expect(renderPrefs()).toMatchObject({ matcapStyle: "metal", matcapTint: false });
+    setRenderPref("matcapStyle", "nope" as never);
+    expect(renderPrefs().matcapStyle).toBe("metal");
+    setRenderPref("matcapStyle", DEFAULT_RENDER.matcapStyle);
+    setRenderPref("matcapTint", DEFAULT_RENDER.matcapTint);
   });
 });

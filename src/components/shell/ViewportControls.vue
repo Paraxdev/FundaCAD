@@ -13,7 +13,8 @@ import { useDialogStore } from "../../stores/dialogs";
 import { useSketchPaletteStore } from "../../stores/sketchPalette";
 import { fmtLength, getUnit, onUnitChange, setUnit, asUnit, type Unit } from "../../ui/units";
 import { saveRenderedImage } from "../../io/files";
-import { onRenderPrefsChange, setRenderPref } from "../../ui/renderPrefs";
+import { MATCAP_STYLES, onRenderPrefsChange, renderPrefs, setRenderPref, type MatcapStyle } from "../../ui/renderPrefs";
+import { matcapSwatchUrl } from "../../ui/matcapSwatch";
 import { VIEW_MODES, pathTracedBlock, type ViewMode } from "../../ui/viewMode";
 import { isRenderLowPower } from "../../viewport/render";
 import { toast } from "../../ui/toast";
@@ -131,7 +132,11 @@ function runAndRefresh(action: string) {
 
 // The tier is read again on every prefs change, after the viewport has applied it.
 const tier = ref(engine.viewport.renderTier);
-const offTier = onRenderPrefsChange(() => { tier.value = engine.viewport.renderTier; });
+const matcap = ref({ style: renderPrefs().matcapStyle, tint: renderPrefs().matcapTint });
+const offTier = onRenderPrefsChange(() => {
+  tier.value = engine.viewport.renderTier;
+  matcap.value = { style: renderPrefs().matcapStyle, tint: renderPrefs().matcapTint };
+});
 onUnmounted(offTier);
 const viewModes = computed(() => VIEW_MODES.map((v) => {
   const block = v.id === "pathtraced" ? pathTracedBlock(tier.value) : null;
@@ -323,6 +328,24 @@ async function screenshot() {
     <Popover v-if="isOpen('display')" :anchor="anchorOf('display')" side="left" kind="vc-pop" @close="shell.closePopover()">
       <div class="pop-section">Shading</div>
       <ChoiceList :options="viewModeChoices" :model-value="ui.viewMode" @update:model-value="pickViewMode" />
+      <template v-if="ui.viewMode === 'matcap'">
+        <div class="matcap-swatches" role="group" aria-label="Matcap">
+          <button
+            v-for="m in MATCAP_STYLES"
+            :key="m"
+            type="button"
+            class="matcap-swatch"
+            :class="{ active: matcap.style === m }"
+            :title="m"
+            :aria-label="m"
+            :aria-pressed="matcap.style === m"
+            :data-matcap="m"
+            :style="{ backgroundImage: `url(${matcapSwatchUrl(m)})` }"
+            @click="setRenderPref('matcapStyle', m as MatcapStyle)"
+          ></button>
+        </div>
+        <Toggle :model-value="matcap.tint" label="Tint with body colors" @update:model-value="setRenderPref('matcapTint', $event)" />
+      </template>
       <div class="pop-rule"></div>
       <Toggle :model-value="ui.xray" label="X-Ray" @update:model-value="engine.handleAction('toggle-xray')" />
       <Toggle :model-value="ui.wireframe" label="Wireframe" @update:model-value="engine.handleAction('toggle-wireframe')" />
