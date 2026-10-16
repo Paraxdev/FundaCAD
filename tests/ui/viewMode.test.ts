@@ -2,13 +2,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_RENDER, renderPrefs, setRenderPref } from "../../src/ui/renderPrefs";
 import { setWorkspace } from "../../src/ui/workspace";
 import {
-  PATH_TRACING_AUTO, PATH_TRACING_LATER, PATH_TRACING_OFF, asViewMode, chooseViewMode,
+  PATH_TRACING_AUTO, PATH_TRACING_NO_GPU, PATH_TRACING_OFF, asViewMode, bootViewMode, chooseViewMode,
   effectiveViewMode, nextViewMode, pathTracedBlock, savedViewMode,
 } from "../../src/ui/viewMode";
 
-const fast = { lowPower: false, auto: false };
-const perf = { lowPower: true, auto: false };
-const weak = { lowPower: true, auto: true };
+const fast = { lowPower: false, auto: false, webgpu: true };
+const perf = { lowPower: true, auto: false, webgpu: true };
+const weak = { lowPower: true, auto: true, webgpu: true };
+const noGpu = { lowPower: false, auto: false, webgpu: false };
+const probing = { lowPower: false, auto: false };
 
 afterEach(() => {
   setWorkspace("model");
@@ -64,25 +66,46 @@ describe("view mode state", () => {
   });
 });
 
-describe("Path traced while there is no tracer", () => {
-  it("cannot be chosen, and a saved one draws as Realtime", () => {
-    expect(chooseViewMode("pathtraced", fast)).toBe(false);
-    expect(savedViewMode()).toBe("realtime");
+describe("Path traced", () => {
+  it("can be chosen on a WebGPU machine and Z cycles through it", () => {
+    expect(pathTracedBlock(fast)).toBeNull();
+    expect(chooseViewMode("pathtraced", fast)).toBe(true);
+    expect(savedViewMode()).toBe("pathtraced");
+    expect(effectiveViewMode(fast)).toBe("pathtraced");
+    expect(nextViewMode("realtime", 1, fast)).toBe("pathtraced");
+    expect(nextViewMode("pathtraced", 1, fast)).toBe("matcap");
+    expect(nextViewMode("matcap", -1, fast)).toBe("pathtraced");
+  });
+
+  it("is greyed where the web view has no WebGPU", () => {
+    expect(pathTracedBlock(noGpu)).toEqual({
+      reason: "nogpu", tooltip: "Path tracing needs WebGPU, which this system's web view does not have yet",
+    });
+    expect(PATH_TRACING_NO_GPU).toBe("Path tracing needs WebGPU, which this system's web view does not have yet");
+    expect(chooseViewMode("pathtraced", noGpu)).toBe(false);
+    expect(nextViewMode("realtime", 1, noGpu)).toBe("matcap");
+  });
+
+  it("waits for the probe without forgetting a saved choice", () => {
+    expect(pathTracedBlock(probing)?.reason).toBe("probing");
     setRenderPref("viewModeModel", "pathtraced");
-    expect(effectiveViewMode(fast)).toBe("realtime");
+    expect(effectiveViewMode(probing)).toBe("realtime");
+    expect(savedViewMode()).toBe("pathtraced");
+    expect(effectiveViewMode(fast)).toBe("pathtraced");
+  });
+
+  it("drops to Realtime in performance mode and comes back when it is off", () => {
+    setRenderPref("viewModeModel", "pathtraced");
     expect(effectiveViewMode(perf)).toBe("realtime");
-  });
-
-  it("is skipped by Z and Shift+Z", () => {
-    expect(nextViewMode("realtime", 1, fast)).toBe("matcap");
-    expect(nextViewMode("matcap", 1, fast)).toBe("realtime");
-    expect(nextViewMode("matcap", -1, fast)).toBe("realtime");
+    expect(effectiveViewMode(weak)).toBe("realtime");
+    expect(savedViewMode()).toBe("pathtraced");
+    expect(effectiveViewMode(fast)).toBe("pathtraced");
+    expect(chooseViewMode("pathtraced", perf)).toBe(false);
     expect(nextViewMode("realtime", -1, perf)).toBe("matcap");
+    expect(nextViewMode("realtime", 1, perf)).toBe("matcap");
   });
 
-  it("says why, in the performance mode wording on a low power tier", () => {
-    expect(pathTracedBlock(fast)).toEqual({ reason: "later", tooltip: "Path tracing arrives in a later update" });
-    expect(PATH_TRACING_LATER).toBe("Path tracing arrives in a later update");
+  it("says why, in the performance mode wording first on a low power tier", () => {
     expect(pathTracedBlock(perf)!.tooltip).toBe(
       "To avoid crashes or unintentional freezes path tracing has been turned off. To re-enable, turn off performance mode.",
     );
@@ -91,5 +114,26 @@ describe("Path traced while there is no tracer", () => {
       + " This computer was detected as low powered, so turning off performance mode may not lift it.",
     );
     expect(pathTracedBlock(weak)!.tooltip).toBe(`${PATH_TRACING_OFF} ${PATH_TRACING_AUTO}`);
+    expect(pathTracedBlock({ lowPower: true, auto: false, webgpu: false })!.tooltip).toBe(PATH_TRACING_OFF);
+    expect(pathTracedBlock({ lowPower: true, auto: true })!.reason).toBe("perf");
+  });
+});
+
+describe("after GPU faults", () => {
+  it("stays off for the session and draws Realtime", () => {
+    const broken = { ...fast, traceFault: true };
+    expect(pathTracedBlock(broken)?.reason).toBe("fault");
+    setRenderPref("viewModeModel", "pathtraced");
+    expect(effectiveViewMode(broken)).toBe("realtime");
+    expect(pathTracedBlock({ ...perf, traceFault: true })?.reason).toBe("perf");
+  });
+});
+
+describe("crash guard", () => {
+  it("opens in Realtime with a notice when the last start of the tracer died", () => {
+    expect(bootViewMode("pathtraced", () => true)).toEqual({ mode: "realtime", notice: true });
+    expect(bootViewMode("pathtraced", () => false)).toEqual({ mode: "pathtraced", notice: false });
+    expect(bootViewMode("matcap", () => true)).toEqual({ mode: "matcap", notice: false });
+    expect(bootViewMode("pathtraced", () => { throw new Error("no storage"); })).toEqual({ mode: "pathtraced", notice: false });
   });
 });

@@ -27,6 +27,7 @@
     "camera-controls": "^2.10.1",
     "pinia": "4.0.2",
     "three": "^0.186.1",
+    "three-gpu-pathtracer": "0.0.27",
     "three-mesh-bvh": "^0.9.16",
     "vue": "3.5.43"
   },

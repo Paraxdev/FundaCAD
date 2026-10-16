@@ -23,7 +23,6 @@ if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
 fs.mkdirSync(OUT, { recursive: true });
 
 const PERF_TIP = "To avoid crashes or unintentional freezes path tracing has been turned off. To re-enable, turn off performance mode.";
-const LATER_TIP = "Path tracing arrives in a later update";
 
 let failures = 0;
 function check(ok, what, detail) {
@@ -115,7 +114,9 @@ function check(ok, what, detail) {
 
     let s = await state();
     check(s.mode === "realtime" && s.pressed.join() === "realtime", "opens on Realtime", s);
-    check(s.ptDisabled === "true" && s.ptTitle === LATER_TIP, "Path traced is greyed with the later update tooltip", s.ptTitle);
+    await page.waitForFunction(() => window.viewport.renderTier.webgpu !== undefined, null, { timeout: 10000 });
+    s = await state();
+    check(s.ptDisabled !== "true" && s.ptTitle === "Path traced (Z)", "Path traced is offered on a WebGPU Chrome", s.ptTitle);
     const titles = await page.$$eval("[data-view-mode]", (bs) => bs.map((b) => b.getAttribute("title")));
     check(titles[0] === "Matcap (Z)" && titles[1] === "Realtime (Z)", "button titles", titles);
     await shotBar("buttons-realtime.png");
@@ -125,9 +126,26 @@ function check(ok, what, detail) {
     const rt1 = await snap();
     const programsBefore = await page.evaluate(() => window.viewport.scene.renderer.info.programs.length);
 
-    await page.click('[data-view-mode="pathtraced"]', { force: true });
+    await page.click('[data-view-mode="pathtraced"]');
     s = await state();
-    check(s.mode === "realtime", "a click on the greyed Path traced changes nothing", s.mode);
+    check(s.mode === "pathtraced" && s.post === "pathtraced", "Path traced button", s);
+    const traced = await page.waitForFunction(() => {
+      const t = window.viewport.traceStatus;
+      return t.samples >= 64 && t.shown ? t : null;
+    }, null, { timeout: 90000, polling: 100 }).then((h) => h.jsonValue(), (e) => ({ error: String(e) }));
+    check(traced.samples >= 64 && traced.shown, "Path traced reaches 64 samples and shows them", traced);
+    await shotView("pathtraced-64.png");
+    const capped = await page.waitForFunction(() => (window.viewport.traceStatus.state === "done" ? window.viewport.traceStatus : null), null, { timeout: 120000, polling: 200 })
+      .then((h) => h.jsonValue(), (e) => ({ error: String(e) }));
+    check(capped.state === "done" && capped.samples >= 256, "the tracer stops at the sample cap", capped);
+    check(JSON.stringify(await materialIds()) === JSON.stringify(before), "body materials are the same objects in Path traced");
+    await page.evaluate(async () => (await import("/src/ui/renderPrefs.ts")).setRenderPref("performanceMode", true));
+    await page.waitForTimeout(300);
+    s = await state();
+    check(s.mode === "realtime" && s.ptDisabled === "true" && s.ptTitle?.startsWith(PERF_TIP), "performance mode drops Path traced to Realtime", s);
+    await page.evaluate(async () => (await import("/src/ui/renderPrefs.ts")).setRenderPref("performanceMode", false));
+    await page.waitForTimeout(300);
+    await page.click('[data-view-mode="realtime"]');
 
     await page.click('[data-view-mode="matcap"]');
     s = await state();

@@ -39,6 +39,7 @@ import { StutterWatch } from "./stutterWatch";
 import { MotionQuality } from "./motionQuality";
 import { GpuFence } from "./gpuFence";
 import { sceneStats } from "../diagnostics/sceneStats";
+import { crumb } from "../diagnostics/breadcrumbs";
 import {
   makeZebraMaterial,
   buildCurvatureCombs,
@@ -63,8 +64,13 @@ import { awaitTreePick, treePickRefusal } from "../ui/treePick";
 import type { DocumentStore } from "../document/store";
 import type { BodyFinish } from "../document/materials";
 import { BodyFinishLayer, sameFinishMap, sameStringMap } from "./bodyFinish";
-import { onRenderPrefsChange, renderPrefs } from "../ui/renderPrefs";
-import { effectiveViewMode, type RenderTier, type ViewMode } from "../ui/viewMode";
+import { onRenderPrefsChange, renderPrefs, setRenderPref } from "../ui/renderPrefs";
+import { bootViewMode, chooseViewMode, effectiveViewMode, type RenderTier, type ViewMode } from "../ui/viewMode";
+import type { TraceLight } from "./pathtrace/backend";
+import { clearGuard, guardSet } from "./pathtrace/guard";
+import { PathTraceHost } from "./pathtrace/host";
+import { describeProbe, probeWebGpu, type GpuProbe } from "./pathtrace/probe";
+import type { TraceState } from "./pathtrace/state";
 import { onWorkspaceChange } from "../ui/workspace";
 import { invalidateThemeColors } from "./themeColors";
 import { onThemeChange } from "../ui/theme";
@@ -306,6 +312,14 @@ export class Viewport {
     this.scene.post.onReady = () => this.requestRender();
     // Re-applied on theme changes too: the default ground is a theme token.
     this.scene.applyRenderPrefs();
+    this.trace = new PathTraceHost(canvas);
+    this.trace.onShownChange = (on) => {
+      this.scene.post.traceShown = on;
+      this.requestRender();
+    };
+    this.trace.onStateChange = (st) => this.onTraceStateChange?.(st);
+    this.trace.onFault = (why, off) => this.dropTrace(why, off);
+    void this.bootPathTrace();
     this.syncViewMode();
     onWorkspaceChange(() => this.syncViewMode());
     onRenderPrefsChange(() => {
@@ -895,7 +909,83 @@ export class Viewport {
   }
 
   get renderTier(): RenderTier {
-    return { lowPower: isRenderLowPower(), auto: this.scene.lowPower };
+    return {
+      lowPower: isRenderLowPower(),
+      auto: this.scene.lowPower,
+      webgpu: this.gpu ? this.gpu.webgpu : undefined,
+      traceFault: this.trace?.disabled ?? false,
+    };
+  }
+
+  private trace!: PathTraceHost;
+  private gpu: GpuProbe | null = null;
+  private tierListeners = new Set<() => void>();
+  /** A GPU fault dropped the view to Realtime; `off` once Path traced is off for the session. */
+  onTraceFault: ((why: string, off: boolean) => void) | null = null;
+  onTraceNotice: ((message: string) => void) | null = null;
+  onTraceStateChange: ((s: TraceState) => void) | null = null;
+
+  /** The tier changes without a prefs change once the WebGPU probe lands or
+   *  the tracer faults, so the chrome listens here as well. */
+  onRenderTierChange(fn: () => void): () => void {
+    this.tierListeners.add(fn);
+    return () => this.tierListeners.delete(fn);
+  }
+
+  get traceStatus(): { state: TraceState; samples: number; shown: boolean; backend: string; gpu: string; note: string } {
+    const t = this.trace;
+    return { state: t.state, samples: t.samples, shown: t.shown, backend: t.backendName, gpu: describeProbe(this.gpu), note: t.note };
+  }
+
+  private tierChanged() {
+    this.syncViewMode();
+    for (const fn of this.tierListeners) fn();
+    this.requestRender();
+  }
+
+  private async bootPathTrace() {
+    const [probe, died] = await Promise.all([probeWebGpu(), guardSet().catch(() => false)]);
+    let notice = false;
+    for (const key of ["viewModeModel", "viewModeRender"] as const) {
+      const b = bootViewMode(renderPrefs()[key], () => died);
+      if (b.notice) {
+        setRenderPref(key, b.mode);
+        notice = true;
+      }
+    }
+    if (died) clearGuard();
+    if (notice) this.onTraceNotice?.("FundaCAD closed while path tracing was starting, so the view opened in Realtime");
+    this.gpu = probe;
+    crumb(describeProbe(probe));
+    this.tierChanged();
+  }
+
+  private dropTrace(why: string, off: boolean) {
+    if (this.viewModeNow === "pathtraced") chooseViewMode("realtime", this.renderTier);
+    this.onTraceFault?.(why, off);
+    this.tierChanged();
+  }
+
+  private traceLook() {
+    const r = this.scene.renderer;
+    const lights: TraceLight[] = [];
+    this.scene.scene.traverseVisible((o) => {
+      const l = o as THREE.DirectionalLight;
+      if (!l.isDirectionalLight || l.intensity <= 0) return;
+      lights.push({
+        color: l.color.clone(),
+        intensity: l.intensity,
+        position: l.getWorldPosition(new THREE.Vector3()),
+        target: l.target.getWorldPosition(new THREE.Vector3()),
+      });
+    });
+    return {
+      lights,
+      background: r.getClearColor(new THREE.Color()),
+      brightness: renderPrefs().brightness,
+      toneMapping: r.toneMapping,
+      exposure: r.toneMappingExposure,
+    };
   }
 
   /** Draw the mode saved for the current workspace. Only the draw changes:
@@ -3917,6 +4007,23 @@ export class Viewport {
       const moved = this.rig.update(dt);
       const resized = this.applyMotionScale(moved, now);
       if (resized === "changed" || (resized === "wait" && moved)) this.requestRender();
+      this.trace.tick({
+        now,
+        inputs: {
+          mode: this.viewModeNow,
+          visible: document.visibilityState === "visible",
+          stillMs: now - this.lastMovedAt,
+          sectioned: this.sectioned,
+          xray: this.xray,
+          wireframe: this.wireframe,
+          sketchOpen: this.sketchDimmed,
+        },
+        camera: this.rig.active,
+        cameraChanged: moved,
+        sceneMaybeChanged: this.needsRender,
+        root: this.scene.scene,
+        look: () => this.traceLook(),
+      });
       // Render-on-demand: skip the (relatively expensive) grid rebuild + GPU
       // draw entirely when nothing changed, camera didn't move, no mutation
       // flagged requestRender(), and we've drained the post-mutation linger.

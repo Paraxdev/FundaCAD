@@ -12,6 +12,7 @@ import { BACKGROUND_COLOR, bloomSettings, renderPrefs } from "../ui/renderPrefs"
 import { GlassBackPass, glassBodyCount } from "./glassThickness";
 import { POTATO_PIXEL_RATIO, PotatoDraw } from "./potato";
 import { MatcapDraw } from "./matcap";
+import { OverlayDraw } from "./pathtrace/overlayDraw";
 import type { ViewMode } from "../ui/renderPrefs";
 import { isSoftwareRendererName, setSoftwareRenderer } from "../ui/glassBlur";
 import { buildRoom, disposeRoom } from "./environments";
@@ -466,8 +467,12 @@ export class PostChain {
   private glassPass: GlassBackPass | null = null;
   private motionDraw: PotatoDraw | null = null;
   private matcap: MatcapDraw | null = null;
+  private overlay: OverlayDraw | null = null;
   /** Written by the viewport. Potato mode is preferred over it. */
   viewMode: ViewMode = "realtime";
+  /** Written by the viewport: the traced canvas under this one has an image to
+   *  show, so this frame draws only what sits on top of it. */
+  traceShown = false;
   private size = new THREE.Vector2(1, 1);
   private composerRatio = 0;
   private clearWas = new THREE.Color();
@@ -493,7 +498,11 @@ export class PostChain {
   /** Whether this frame draws shadow maps at all. While it does not, the
    *  viewport stops recording caster changes, so the maps are redrawn on return. */
   get drawsShadows(): boolean {
-    return this.potatoOn() || this.viewMode !== "matcap";
+    return this.potatoOn() || (this.viewMode !== "matcap" && !this.tracing);
+  }
+
+  private get tracing(): boolean {
+    return this.viewMode === "pathtraced" && this.traceShown;
   }
 
   /** Asked for a frame once the passes have loaded, so bloom does not wait on the next input. */
@@ -559,6 +568,14 @@ export class PostChain {
         style: renderPrefs().matcapStyle,
         tint: renderPrefs().matcapTint,
       });
+      return;
+    }
+    if (this.overlay && !this.tracing) {
+      this.overlay.dispose();
+      this.overlay = null;
+    }
+    if (this.tracing && !forceRealtime) {
+      (this.overlay ??= new OverlayDraw()).render(this.renderer, this.scene, camera);
       return;
     }
     if (motion && this.lowPower()) {
