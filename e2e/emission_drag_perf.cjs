@@ -5,8 +5,9 @@
 // per frame, the way the slider lands after its per-frame coalescing. Wants a GPU
 // Chrome, the frame numbers are meaningless on a software rasteriser.
 //
-//   engine --ws, vite on 5173, then
+//   engine --ws, vite, then
 //   SC_TOKEN=<engine token> node e2e/emission_drag_perf.cjs [N=1000] [K=300]
+// SC_URL (default http://localhost:5173/) and SC_ENGINE_PORT (default 8765) pick the setup.
 //
 // Before the emitter cache a step on K=300 held the main thread 67 to 100 ms and
 // the first glow froze for about 2 s; see the numbers printed for the current tree.
@@ -14,6 +15,8 @@
 const { chromium } = require("playwright-core");
 
 const TOKEN = process.env.SC_TOKEN || "";
+const APP = process.env.SC_URL || "http://localhost:5173/";
+const ENGINE_PORT = process.env.SC_ENGINE_PORT || "8765";
 const N = +(process.argv[2] || 1000);
 const K = +(process.argv[3] || 300);
 if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
@@ -27,7 +30,13 @@ if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
   try {
     const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
     page.on("pageerror", (e) => console.error("PAGE ERROR:", e.message));
-    await page.goto(`http://localhost:5173/?token=${TOKEN}`);
+    await page.addInitScript((ws) => {
+      const W = window.WebSocket;
+      window.WebSocket = class extends W {
+        constructor(u, p) { super(String(u).replace(":8765", `:${ws}`), p); }
+      };
+    }, ENGINE_PORT);
+    await page.goto(`${APP}?token=${TOKEN}`);
     await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });
     await page.waitForTimeout(1500);
     const modal = await page.$(".modal-close");
