@@ -3,6 +3,7 @@
 
 import * as THREE from "three";
 import type { ResolvedEntity } from "./snap";
+import type { SketchConstraint } from "../types";
 import { entitySegments, polygonPoints } from "./region";
 import { newEntityId } from "./id";
 import { arcCenterRadius } from "./arc";
@@ -277,6 +278,14 @@ export function filletCorner(
   out[iB] = newB;
   out.push(arc);
   return out;
+}
+
+/** The two tangencies that keep a fillet a fillet once either line is moved:
+ *  `res` is filletCorner's answer, whose last entity is the new arc. */
+export function filletTangents(ents: ResolvedEntity[], iA: number, iB: number, res: ResolvedEntity[]): SketchConstraint[] {
+  const A = ents[iA], B = ents[iB], arc = res[res.length - 1];
+  if (!A || !B || arc?.type !== "arc") return [];
+  return [{ type: "tangent2", a: A.id, b: arc.id }, { type: "tangent2", a: B.id, b: arc.id }];
 }
 
 /** Signed offset of a cursor position from an entity, in exactly the terms

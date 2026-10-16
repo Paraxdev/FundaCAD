@@ -24,7 +24,7 @@ import type { DimInput } from "./dimInput";
 import type { SketchTool } from "./sketchMode";
 import type { ResolvedEntity } from "./snap";
 import {
-  pickEntity, trimEntity, filletCorner, chamferCorner, offsetEntity, offsetChain,
+  pickEntity, trimEntity, filletCorner, filletTangents, chamferCorner, offsetEntity, offsetChain,
   signedOffsetAt, breakAt, extendLine, breakLink, PROJECTED_FIXED_MSG,
   type OffsetResult,
 } from "./modify";
@@ -57,6 +57,8 @@ export interface ModifyHost {
   afterModify(): void;
   /** promote a measured dimension to a driving one, the offset distance */
   setDrivingDimension(c: SketchConstraint): void;
+  /** record geometric relations, banked with the geometry by afterModify */
+  addConstraints(cs: SketchConstraint[]): void;
   /** exact model edges lying in the sketch plane, the ones offset may take */
   planeEdges(): readonly PlaneEdge<ModelEdge>[];
   /** land these model edges as projected entities, see ProjectFlow.projectModelEdges */
@@ -207,8 +209,12 @@ export class ModifyFlow {
   }
   private applyFillet(iA: number, iB: number) {
     const r = this.host.dim().getValue("radius") ?? 2;
-    const res = filletCorner(this.host.entities(), iA, iB, r);
-    if (res) this.host.setEntities(res);
+    const before = this.host.entities();
+    const res = filletCorner(before, iA, iB, r);
+    if (res) {
+      this.host.setEntities(res);
+      this.host.addConstraints(filletTangents(before, iA, iB, res));
+    }
     this.filletFirst = null;
     this.host.dim().hide();
     this.host.afterModify();

@@ -475,6 +475,7 @@ export class SketchMode {
     this.projectPanel.onChange = () => {
       this.viewport.hoverEntity(null);
       this.overlay.setPreview([]);
+      addConstraints: (cs) => { this.constraints.push(...cs); },
       this.viewport.requestRender();
     };
   }
