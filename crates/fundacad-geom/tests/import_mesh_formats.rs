@@ -448,3 +448,60 @@ fn a_unit_chosen_at_import_scales_gltf_vrml_and_x3d() {
         assert!(!import_as(&path, fmt).unwrap().contains_key("unit"), "{name}");
     }
 }
+
+fn fbx_fixture(name: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("../../tests/fixtures/fbx_{name}.fbx"))
+}
+
+fn assert_near(got: [f64; 6], want: [f64; 6], tol: f64, what: &str) {
+    assert!(got.iter().zip(want).all(|(g, w)| (g - w).abs() < tol), "{what}: {got:?} vs {want:?}");
+}
+
+#[test]
+fn fbx_mesh_nodes_become_named_coloured_bodies() {
+    let reply = import_as(&fbx_fixture("blender_two"), "fbx").unwrap();
+    assert_eq!(reply["solid"], json!(true), "{reply:?}");
+    let parts = reply["parts"].as_array().unwrap();
+    assert_eq!(parts.len(), 3);
+    assert_eq!(parts[0]["color"], json!("#ff0000"));
+    assert_eq!(parts[1]["color"], json!("#0000ff"));
+    assert!(parts[2].get("color").is_none_or(Value::is_null), "{:?}", parts[2]);
+    let notes = reply["notes"].to_string();
+    assert!(notes.contains("1 camera and 1 light were skipped"), "{notes}");
+    let b = build(reply, "fbx");
+    let names: Vec<&str> = b.bodies.iter().map(|b| b.name.as_str()).collect();
+    assert_eq!(names, ["Left", "Right", "Top"]);
+    for (body, want) in b.bodies.iter().zip([8000.0, 8000.0, 1000.0]) {
+        assert!((kernel::volume(&body.shape) - want).abs() < 1e-2, "{}: centimetres to mm", body.name);
+    }
+    let rot = 10.0 * (30f64.to_radians().cos() + 30f64.to_radians().sin());
+    assert_near(kernel::bbox(&b.bodies[0].shape).unwrap(), [-10.0, -10.0, 0.0, 10.0, 10.0, 20.0], 1e-3, "Left");
+    assert_near(kernel::bbox(&b.bodies[1].shape).unwrap(), [50.0 - rot, -rot, 0.0, 50.0 + rot, rot, 20.0], 1e-3, "Right");
+    let top = kernel::bbox(&b.bodies[2].shape).unwrap();
+    assert!((top[2] - 35.0).abs() < 1e-3 && (top[5] - 45.0).abs() < 1e-3, "Top sits in Right's frame: {top:?}");
+}
+
+#[test]
+fn ascii_fbx_6_and_7_read_their_unit_and_y_up() {
+    for (name, lo_x) in [("ascii74", 254.0), ("ascii61", 254.0), ("mirror74", 0.0)] {
+        let reply = import_as(&fbx_fixture(name), "fbx").unwrap();
+        assert_cube(&reply, name);
+        assert_eq!(color(&reply), "#00ff00", "{name}");
+        let b = build(reply, "fbx");
+        let vol = kernel::volume(&b.bodies[0].shape);
+        assert!((vol / 254f64.powi(3) - 1.0).abs() < 1e-6, "{name}: {vol}");
+        assert_near(kernel::bbox(&b.bodies[0].shape).unwrap(), [lo_x, -254.0, 0.0, lo_x + 254.0, 0.0, 254.0], 1e-3, name);
+    }
+}
+
+#[test]
+fn fbx_without_a_unit_reads_centimetres() {
+    let b = build(import_as(&fbx_fixture("nounit74"), "fbx").unwrap(), "fbx");
+    assert_near(kernel::bbox(&b.bodies[0].shape).unwrap(), [100.0, -100.0, 0.0, 200.0, 0.0, 100.0], 1e-3, "nounit");
+}
+
+#[test]
+fn a_file_that_is_not_fbx_says_so() {
+    let e = import_as(&write("not.fbx", b"solid nothing\nendsolid\n"), "fbx").unwrap_err();
+    assert!(e.contains("FBX"), "{e}");
+}

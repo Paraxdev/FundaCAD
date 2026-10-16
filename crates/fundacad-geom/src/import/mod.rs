@@ -8,6 +8,7 @@ pub mod amf;
 pub mod blobstore;
 pub mod canonical;
 pub mod dxf;
+pub mod fbx;
 pub mod fcstd;
 pub mod gltf;
 pub mod ifc;
@@ -406,6 +407,14 @@ pub fn import_geometry_in(path: &str, fmt: &str, store: &BlobStore, unit: Option
         }
         "amf" => {
             let (objs, notes) = amf::read_amf(std::fs::read(p).map_err(|e| e.to_string())?)?;
+            let mut imported = mesh::finish_objects(objs)?;
+            if !notes.is_empty() {
+                imported.fields.insert("notes".into(), json!(notes));
+            }
+            outward(imported)
+        }
+        "fbx" => {
+            let (objs, notes) = fbx::read_fbx(&std::fs::read(p).map_err(|e| e.to_string())?)?;
             let mut imported = mesh::finish_objects(objs)?;
             if !notes.is_empty() {
                 imported.fields.insert("notes".into(), json!(notes));
