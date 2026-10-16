@@ -53,7 +53,9 @@ distributing FundaCAD under its own terms.
   **roxmltree**, **typed-path**, **sha1**, **sha2**, **digest**, **hybrid-array**, **const-oid**,
   **block-buffer**, **crypto-common**, **jobserver** and **pkg-config**, MIT OR Apache-2.0
 - **ifc-lite-core**, **ifc-lite-geometry** and **ifc-lite-processing** (the IFC reader),
-  MPL-2.0, source at https://github.com/LTplus-AG/ifc-lite; **nalgebra**, **simba** and
+  MPL-2.0, source at https://github.com/LTplus-AG/ifc-lite, and the test model
+  tests/fixtures/ifc_revit_wall_openings.ifc, its issue_098_wall_V5C.ifc with the exporter
+  comment and a user id removed, MPL-2.0; **nalgebra**, **simba** and
   **approx**, Apache-2.0; **earcutr**, ISC; **geometry-predicates**, **i_float**, **i_key_sort**,
   **i_shape**, **i_tree** and **nom**, MIT; **i_overlay**, **glam**, **bnum**, **fast-float2**,
   **jpeg-decoder**, **png**, **num-bigint**, **num-integer**, **num-rational**, **lexical-core**
