@@ -83,6 +83,14 @@ export const SHORTCUTS: Shortcut[] = [
   { key: "home", action: "fit", context: "global", label: "Fit view" },
   { key: "home", shift: true, action: "reset-camera", context: "global", label: "Reset camera" },
   { key: "f6", action: "fit", context: "global", label: "Fit view" },
+  { key: "arrowleft", action: "view-step-left", context: "global", label: "Turn the view left 15°" },
+  { key: "arrowright", action: "view-step-right", context: "global", label: "Turn the view right 15°" },
+  { key: "arrowup", action: "view-step-up", context: "global", label: "Tilt the view up 15°" },
+  { key: "arrowdown", action: "view-step-down", context: "global", label: "Tilt the view down 15°" },
+  { key: "arrowleft", shift: true, action: "view-step-left-fine", context: "global", label: "Turn the view left 5°" },
+  { key: "arrowright", shift: true, action: "view-step-right-fine", context: "global", label: "Turn the view right 5°" },
+  { key: "arrowup", shift: true, action: "view-step-up-fine", context: "global", label: "Tilt the view up 5°" },
+  { key: "arrowdown", shift: true, action: "view-step-down-fine", context: "global", label: "Tilt the view down 5°" },
   { key: "?", action: "shortcut-help", context: "global", label: "Shortcut help" },
   { key: "z", action: "viewmode-cycle", context: "global", label: "Next view mode" },
   { key: "z", shift: true, action: "viewmode-cycle-back", context: "global", label: "Previous view mode" },
@@ -94,7 +102,8 @@ export const SHORTCUTS: Shortcut[] = [
  *  drifting is exactly the failure this file exists to prevent: a cheat sheet
  *  that advertises a key nothing binds. */
 export function formatShortcut(s: Shortcut): string {
-  const k = s.key.length === 1 ? s.key.toUpperCase() : s.key.charAt(0).toUpperCase() + s.key.slice(1);
+  const name = s.key.replace(/^arrow/, "");
+  const k = name.length === 1 ? name.toUpperCase() : name.charAt(0).toUpperCase() + name.slice(1);
   return `${s.ctrl ? "Ctrl+" : ""}${s.shift ? "Shift+" : ""}${k}`;
 }
 

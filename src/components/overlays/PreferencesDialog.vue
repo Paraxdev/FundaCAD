@@ -39,6 +39,7 @@ import { asIconPackId, getIconPack, iconPacks, onIconPackChange, setIconPack } f
 import { asUnit, getUnit, onUnitChange, setUnit } from "../../ui/units";
 import { motionOn, onMotionChange, setMotion } from "../../ui/motion";
 import {
+  asOrbitPivot,
   asTouchpadScroll,
   asWheelDevice,
   getDetectedWheel,
@@ -148,6 +149,11 @@ const WHEEL_DEVICES = [
   { id: "touchpad", label: "Touchpad" },
   { id: "mouse", label: "Mouse" },
 ];
+const ORBIT_PIVOTS = [
+  { id: "auto", label: "Under cursor" },
+  { id: "origin", label: "Origin" },
+  { id: "selection", label: "Selection" },
+];
 const TOUCHPAD_SCROLL = [
   { id: "orbit", label: "Orbits" },
   { id: "pan", label: "Pans" },
@@ -217,6 +223,7 @@ function onMotion(ev: Event) { setMotion((ev.target as HTMLInputElement).checked
 const checked = (ev: Event) => (ev.target as HTMLInputElement).checked;
 function onInertia(ev: Event) { setNavPrefs({ inertia: checked(ev) }); }
 function pickWheelDevice(id: string) { const v = asWheelDevice(id); if (v) setNavPrefs({ wheelDevice: v }); }
+function pickOrbitPivot(id: string) { const v = asOrbitPivot(id); if (v) setNavPrefs({ orbitPivot: v }); }
 function pickTouchpadScroll(id: string) { const v = asTouchpadScroll(id); if (v) setNavPrefs({ touchpadScroll: v }); }
 function onSmoothing(ev: Event) { setNavPrefs({ smoothTime: Number.parseFloat(value(ev)) }); }
 function onClassicCamera(ev: Event) {
@@ -435,6 +442,28 @@ function onClassicCamera(ev: Event) {
                 How long a zoom or a drag takes to catch up with the hand. 0 follows the
                 mouse exactly; whatever it is set to, the point under the cursor stays
                 under it on every frame.
+              </p>
+            </div>
+            <div class="pref-card">
+              <div class="pref-head">
+                <span class="pref-title">Orbit pivot</span>
+                <div id="prefs-orbit-pivot" class="pref-seg" role="radiogroup" aria-label="Orbit pivot">
+                  <button
+                    v-for="p in ORBIT_PIVOTS"
+                    :key="p.id"
+                    type="button"
+                    role="radio"
+                    :aria-checked="nav.orbitPivot === p.id"
+                    :class="{ on: nav.orbitPivot === p.id }"
+                    @click="pickOrbitPivot(p.id)"
+                  >{{ p.label }}</button>
+                </div>
+              </div>
+              <p class="pref-hint">
+                What a drag turns the view about. Under cursor takes the model point you
+                press on, Origin always turns about the world origin, and Selection about
+                the centre of what is selected (under the cursor while nothing is). The
+                arrow keys turn about the same point, 15° a press, 5° with Shift.
               </p>
             </div>
             <div class="pref-card">

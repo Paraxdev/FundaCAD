@@ -4,6 +4,7 @@
 
 import * as THREE from "three";
 import CameraControls from "camera-controls";
+import { stepAngles } from "./viewStep";
 import { frameRotation, pivotProbes, pivotShift, viewQuaternion } from "./orbitPivot";
 import { anchorDolly, groundAnchor, orthoZoomStep } from "./zoomAnchor";
 import { ease, flightSeconds, worthFlying } from "./viewFlight";
@@ -809,6 +810,11 @@ export function createLegacyRig(
     orbitBy(az, pol) {
       controls.rotate(az, pol, false);
     },
+    stepView(dir, fine) {
+      const [az, pol] = stepAngles(dir, fine);
+      controls.rotate(az, pol, false);
+    },
+    setPivotSource() {},
     rotateTo(azimuth, polar, animate = false) {
       controls.rotateTo(azimuth, polar, animate);
     },
