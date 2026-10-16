@@ -96,7 +96,10 @@ const check = (name, ok, detail) => {
   await click(...par);
   // the first click landed on the Origin, which pins a fixed point there
   let added = (await newCons(before)).filter((c) => c.type !== "fix");
+  const joins = added.filter((c) => c.type === "coincident");
+  added = added.filter((c) => c.type !== "coincident");
   check("the chain recorded horizontal, vertical, parallel", JSON.stringify(added.map((c) => c.type)) === '["horizontal","vertical","parallel"]', JSON.stringify(added));
+  check("and a coincident on each of its two joins", joins.length === 2 && joins.every((c) => c.p1 === 0 && c.p2 === 1), JSON.stringify(joins));
   const all = await ents();
   const l3 = all[all.length - 1];
   const ang = (Math.atan2(l3.y2 - l3.y1, l3.x2 - l3.x1) * 180) / Math.PI;
@@ -125,7 +128,7 @@ const check = (name, ok, detail) => {
   await click(70, -50, -3);
   await page.keyboard.press("Escape");
   added = await newCons(before);
-  check("tangent2, midpoint and pointOnCurve were recorded", JSON.stringify(added.map((c) => c.type)) === '["tangent2","midpoint","pointOnCurve"]', JSON.stringify(added));
+  check("the arc end join, tangent2, midpoint and pointOnCurve were recorded", JSON.stringify(added.map((c) => c.type)) === '["coincident","tangent2","midpoint","pointOnCurve"]', JSON.stringify(added));
   const onEnd = (await ents()).at(-1);
   check("the on-curve end sits on the circle", Math.abs(Math.hypot(onEnd.x2 - 70, onEnd.y2 + 60) - 10) < 1e-6, JSON.stringify(onEnd));
   const nBefore = (await ents()).length, cBefore = (await cons()).length;
@@ -142,8 +145,13 @@ const check = (name, ok, detail) => {
   await page.keyboard.type("5");
   await page.keyboard.press("Enter");
   await page.waitForTimeout(600);
-  added = await newCons(before);
+  // the fillet pulls the corner apart, so its recorded join goes and the list is not just appended to
+  const had = new Set(before.map((c) => JSON.stringify(c)));
+  const now = await cons();
+  added = now.filter((c) => !had.has(JSON.stringify(c)));
+  const gone = before.filter((c) => !now.some((d) => JSON.stringify(d) === JSON.stringify(c)));
   check("a sketch fillet records its two tangencies", added.length === 2 && added.every((c) => c.type === "tangent2"), JSON.stringify(added));
+  check("and drops the corner join it pulled apart", gone.length === 1 && gone[0].type === "coincident", JSON.stringify(gone));
   before = await cons();
   await tool("arc");
   await page.keyboard.press("a");
@@ -153,7 +161,8 @@ const check = (name, ok, detail) => {
   await page.screenshot({ path: path.join(OUT, "si-3-tangent-arc.png") });
   await click(l3.x2 + 5, l3.y2 + 20);
   added = await newCons(before);
-  check("the tangent arc records tangent2 to the parallel line", added.length === 1 && added[0].type === "tangent2" && added[0].b === l3.id, JSON.stringify(added));
+  check("the tangent arc records its join and tangent2 to the parallel line",
+    added.length === 2 && added[0].type === "coincident" && added[0].e2 === l3.id && added[1].type === "tangent2" && added[1].b === l3.id, JSON.stringify(added));
   await page.keyboard.press("a");
 
   // 4. snap off
