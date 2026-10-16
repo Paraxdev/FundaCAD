@@ -324,18 +324,9 @@ export class ConstraintTools {
       add("Tangent", "tangent", chain((a, b) => ({ type: "tangent2", a: a.id, b: b.id })));
     }
 
-    if (all(hasPt)) {
-      // concentric already says "same centre"; a redundant Coincident on round
-      // centres would just confuse the relations list
-      if (!all(isRnd)) {
-        add("Coincident", "coincident", chain((a, b) => ({ type: "coincident", e1: a.id, p1: a.point!, e2: b.id, p2: b.point! })));
-      }
-      add("Align horizontally", "horizontal", chain((a, b) => ({ type: "horizontalPoints", e1: a.id, p1: a.point!, e2: b.id, p2: b.point! })));
-      add("Align vertically", "vertical", chain((a, b) => ({ type: "verticalPoints", e1: a.id, p1: a.point!, e2: b.id, p2: b.point! })));
-    }
-
     if (ops.length === 2) {
-      // a point with a curve, either way round
+      // a point with a curve, either way round, ahead of Coincident so I on a
+      // point and a circle puts the point on the rim, not on the centre
       for (const [pt, cv] of [[first, rest[0]!], [rest[0]!, first]] as const) {
         if (pt.point === null || !cv.kind || baseId(cv.id) === pt.id) continue;
         const p = pt.point;
@@ -346,6 +337,16 @@ export class ConstraintTools {
         add(centre ? (cv.kind === "line" ? "Centre on line" : "Centre on curve") : "On curve", "coincident", [{ type: "pointOnCurve", e: pt.id, p, curve: cv.id }]);
         if (cv.kind === "line") add(centre ? "Centre at midpoint" : "Midpoint", "midpoint", [{ type: "midpoint", e: pt.id, p, line: cv.id }]);
       }
+    }
+
+    if (all(hasPt)) {
+      // concentric already says "same centre"; a redundant Coincident on round
+      // centres would just confuse the relations list
+      if (!all(isRnd)) {
+        add("Coincident", "coincident", chain((a, b) => ({ type: "coincident", e1: a.id, p1: a.point!, e2: b.id, p2: b.point! })));
+      }
+      add("Align horizontally", "horizontal", chain((a, b) => ({ type: "horizontalPoints", e1: a.id, p1: a.point!, e2: b.id, p2: b.point! })));
+      add("Align vertically", "vertical", chain((a, b) => ({ type: "verticalPoints", e1: a.id, p1: a.point!, e2: b.id, p2: b.point! })));
     }
 
     if (ops.length === 3) {
