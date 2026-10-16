@@ -19,15 +19,19 @@ import type { DocumentStore } from "../../src/document/store";
 import type { Viewport } from "../../src/viewport/viewport";
 
 type Lists = { opaque: string[]; transmissive: string[]; transparent: string[] };
+// three r186 push() reads camera.reversedDepth, @types/three 0.186 still lists six arguments.
+type RenderList = Omit<THREE.WebGLRenderList, "push"> & {
+  push(...args: [...Parameters<THREE.WebGLRenderList["push"]>, camera: { reversedDepth: boolean }]): void;
+};
 
 function sort(root: THREE.Object3D): Lists {
-  const list = new (WebGLRenderList as unknown as new () => THREE.WebGLRenderList)();
+  const list = new (WebGLRenderList as unknown as new () => RenderList)();
   list.init();
   root.traverse((o) => {
     const { material, geometry } = o as THREE.Mesh;
     if (!material || !geometry) return;
     for (const m of Array.isArray(material) ? material : [material]) {
-      if (m.visible) list.push(o, geometry, m, 0, 0, null);
+      if (m.visible) list.push(o, geometry, m, 0, 0, null, { reversedDepth: false });
     }
   });
   const names = (items: THREE.RenderItem[]) =>

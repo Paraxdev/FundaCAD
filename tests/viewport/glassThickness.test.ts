@@ -96,10 +96,24 @@ describe("applyGlassLook thickness", () => {
 });
 
 describe("three internals the auto glass relies on", () => {
-  // The glass chunk is a copy of three 0.180's transmission_fragment and the tail
+  // The glass chunk is a copy of three 0.186's transmission_fragment and the tail
   // of getIBLVolumeRefraction. Bumping three means diffing those two chunks.
+  it("passes the same material fields and normal transform as three's transmission_fragment", () => {
+    const args = (src: string, fn: string) => {
+      const m = src.match(new RegExp("=\\s*" + fn + "\\(([^;]*)\\);"));
+      return m?.[1] ? m[1].split(",").map((a) => a.trim()) : [];
+    };
+    const normalFn = (src: string) => src.match(/vec3 n = (\w+)\( normal, viewMatrix \)/)?.[1];
+    const stock = THREE.ShaderChunk.transmission_fragment;
+    const shader = { fragmentShader: THREE.ShaderLib.physical.fragmentShader, uniforms: {} };
+    patchGlassShader(shader, { value: 1 });
+    const ours = args(shader.fragmentShader, "fcVolumeRefraction");
+    expect(ours.slice(0, 6)).toEqual(args(stock, "getIBLVolumeRefraction").slice(0, 6));
+    expect(normalFn(shader.fragmentShader)).toBe(normalFn(stock));
+  });
+
   it("still has the includes the patch replaces", () => {
-    expect(THREE.REVISION).toBe("180");
+    expect(THREE.REVISION).toBe("186");
     const shader = { fragmentShader: THREE.ShaderLib.physical.fragmentShader, uniforms: {} };
     expect(shader.fragmentShader).toContain("#include <transmission_pars_fragment>");
     expect(shader.fragmentShader).toContain("#include <transmission_fragment>");

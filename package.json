@@ -26,13 +26,13 @@
     "@tauri-apps/plugin-updater": "^2.10.1",
     "camera-controls": "^2.10.1",
     "pinia": "4.0.2",
-    "three": "^0.180.0",
-    "three-mesh-bvh": "^0.9.14",
+    "three": "^0.186.1",
+    "three-mesh-bvh": "^0.9.16",
     "vue": "3.5.43"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2",
-    "@types/three": "^0.180.0",
+    "@types/three": "^0.186.0",
     "@vitejs/plugin-vue": "6.0.8",
     "@vitest/coverage-v8": "^4.1.10",
     "@vue/test-utils": "^2.4.11",
