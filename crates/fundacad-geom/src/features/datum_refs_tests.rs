@@ -236,3 +236,45 @@ fn an_extrude_up_to_a_followed_datum_point_reaches_where_it_is_now() {
     let near_end = boxes.iter().filter(|b| b[1] > 25.0).map(|b| b[0]).fold(f64::MAX, f64::min);
     assert!((near_end - 40.0).abs() < 1e-6, "the extrude ends at the moved point: {boxes:?}");
 }
+
+#[test]
+fn a_reference_to_a_datum_further_down_is_refused_and_says_so() {
+    let d = json!({"parameters": {}, "features": [
+        plane("m", json!({"kind": "mid", "a": {"plane": "p"}, "b": {"plane": "YZ"}}), json!({})),
+        {"id": "ax", "type": "datumAxis", "origin": [0, 0, 0], "dir": [0, 0, 1], "through": {"kind": "points",
+         "a": {"datum": "pt"}, "b": {"datum": "pt2"}}},
+        {"id": "p", "type": "datumPlane", "plane": "YZ", "offset": 10},
+        {"id": "pt", "type": "datumPoint", "point": [0, 0, 0]},
+        {"id": "pt2", "type": "datumPoint", "point": [0, 0, 5]},
+    ]});
+    let typed = serde_json::from_value(d.clone()).expect("the document parses");
+    let r = builder::rebuild(&typed, &d, &NoWatch).expect("not cancelled");
+    for (id, later) in [("m", "p"), ("ax", "pt")] {
+        let e = r.errors.iter().find(|e| e.feature_id.as_deref() == Some(id));
+        let msg = e.map(|e| e.message.as_str()).unwrap_or("");
+        assert!(msg.contains("comes after") && msg.contains(later), "{id}: {:?}", r.errors);
+    }
+}
+
+#[test]
+fn a_lost_reference_names_the_selector_so_it_can_be_picked_again() {
+    let mut gone = vertical_edge(10.0);
+    gone["body"] = json!("body9");
+    let mut gone_face = plus_x_face();
+    gone_face["body"] = json!("body9");
+    let r = build(doc(40.0, json!([
+        plane("n", json!({"kind": "normalToEdge", "edge": gone}), json!({})),
+        {"id": "pt", "type": "datumPoint", "point": [1, 2, 3], "at": {"face": gone_face}},
+    ])));
+    let repick = |id: &str| {
+        r.diagnostics
+            .iter()
+            .find(|d| d["feature_id"] == id && d["code"] == "referenceNotFound")
+            .cloned()
+            .unwrap_or(Value::Null)
+    };
+    assert_eq!(repick("n")["kind"], "edge", "{:?}", r.diagnostics);
+    assert_eq!(repick("n")["at"], json!([20.0, 10.0, 0.0]));
+    assert_eq!(repick("pt")["kind"], "face", "{:?}", r.diagnostics);
+    assert_eq!(repick("pt")["at"], json!([20.0, 0.0, 0.0]));
+}
