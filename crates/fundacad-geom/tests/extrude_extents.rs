@@ -209,6 +209,52 @@ fn symmetric_still_doubles_the_distance() {
     near(b[5], 2.0, "above");
 }
 
+fn slot(z: f64, extra: Value) -> Rebuild {
+    let mut f = block();
+    f.push(sketch_at(z));
+    let mut e = json!({"operation": "cut", "targets": ["body1"], "endType": "throughAll"});
+    for (k, v) in extra.as_object().unwrap() {
+        e[k] = v.clone();
+    }
+    f.push(extrude(e));
+    build(json!({"h": 10, "dz": 0}), f)
+}
+
+#[test]
+fn symmetric_through_all_goes_through_on_each_side() {
+    let full = 40.0 * 20.0 * 10.0 - 4.0 * 20.0 * 10.0;
+    let inside = slot(4.0, json!({"symmetric": true}));
+    ok(&inside);
+    near(vol(&inside, 0), full, "sketch inside the block");
+    let above = slot(7.0, json!({"symmetric": true}));
+    ok(&above);
+    near(vol(&above, 0), full, "sketch above the block");
+}
+
+#[test]
+fn two_sided_through_all_on_side_two_goes_the_other_way() {
+    let kept = 40.0 * 20.0 * 10.0 - 4.0 * 20.0 * 6.0;
+    let bare = slot(0.0, json!({"distance": 1, "twoSided": true, "endType": "distance", "endType2": "throughAll"}));
+    ok(&bare);
+    near(vol(&bare, 0), kept, "distance2 omitted");
+    let set = slot(0.0, json!({"distance": 1, "twoSided": true, "endType": "distance", "endType2": "throughAll", "distance2": 0.5}));
+    ok(&set);
+    near(vol(&set, 0), kept, "distance2 set");
+}
+
+#[test]
+fn a_target_on_the_start_still_takes_its_offset() {
+    let top = json!({"kind": "face", "by": "tracked", "point": [0, 0, 5], "normal": [0, 0, 1], "body": "body1"});
+    let mut f = block();
+    f.push(small_sketch_at(5.0));
+    f.push(extrude(json!({"endType": "upToFace", "upToFace": top, "endOffset": 2})));
+    let r = build(json!({"h": 10, "dz": 0}), f);
+    ok(&r);
+    let b = bbox(&r, 1);
+    near(b[2], 5.0, "start");
+    near(b[5], 7.0, "offset end");
+}
+
 #[test]
 fn unreachable_targets_are_errors_never_empty_bodies() {
     let side = build(json!({}), vec![small_sketch_at(0.0), extrude(json!({"endType": "upToPlane", "upToPlane": "XZ"}))]);
