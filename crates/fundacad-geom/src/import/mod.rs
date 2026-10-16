@@ -8,6 +8,8 @@ pub mod amf;
 pub mod blobstore;
 pub mod canonical;
 pub mod dxf;
+pub mod heal2d;
+pub mod svg;
 pub mod fbx;
 pub mod fcstd;
 pub mod gltf;
@@ -424,6 +426,7 @@ pub fn import_geometry_in(path: &str, fmt: &str, store: &BlobStore, unit: Option
         }
         "3ds" => outward(mesh::finish_objects(threeds::read_3ds(&std::fs::read(p).map_err(|e| e.to_string())?)?)?),
         "dxf" => return import_dxf(p, store),
+        "svg" => return import_svg(p),
         other => return Err(format!("unsupported import format: {other}")),
     };
     let mut out = store_imported(imported, p, store)?;
@@ -461,6 +464,39 @@ fn import_dxf(p: &Path, store: &BlobStore) -> Result<Map<String, Value>, String>
         out.insert("sketches".into(), Value::Array(sketches));
     }
     out.insert("unit".into(), json!(read.unit));
+    Ok(out)
+}
+
+/// An SVG answers `sketches` only, each with `fillRule: "evenodd"` when its
+/// outlines were healed into the boundary of the filled area.
+fn import_svg(p: &Path) -> Result<Map<String, Value>, String> {
+    let read = svg::read_svg(&std::fs::read(p).map_err(|e| e.to_string())?)?;
+    if read.sketches.is_empty() {
+        let mut msg = "this SVG has no paths or shapes to import".to_string();
+        if let Some(n) = read.notes.first() {
+            msg.push_str(&format!(", {n}"));
+        }
+        return Err(msg);
+    }
+    let name = body_name(p);
+    let sketches: Vec<Value> = read
+        .sketches
+        .into_iter()
+        .map(|s| {
+            let mut v = json!({"name": s.name.unwrap_or_else(|| name.clone()), "entities": s.entities});
+            if s.evenodd {
+                v["fillRule"] = json!("evenodd");
+            }
+            v
+        })
+        .collect();
+    let mut out = Map::new();
+    out.insert("name".into(), json!(name));
+    if !read.notes.is_empty() {
+        out.insert("notes".into(), json!(read.notes));
+    }
+    out.insert("sketches".into(), Value::Array(sketches));
+    out.insert("unit".into(), json!("mm"));
     Ok(out)
 }
 

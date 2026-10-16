@@ -28,6 +28,9 @@ thiserror = "1"
 zip = { version = "4", default-features = false, features = ["deflate-flate2"] }
 flate2 = "1"
 quick-xml = "0.37"
+# SVG import: the XML tree and the path, transform and length grammars, all f64.
+roxmltree = "0.21"
+svgtypes = "0.15"
 # Pinned exactly: its generated bindings are tied to the bundled ufbx.c it compiles.
 ufbx = "=0.11.5"
 # Rhino .3dm reader, pure Rust. Pinned: a young crate, a new release is checked against tests/import_rhino.rs first.

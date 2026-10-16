@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" width="40mm" height="40mm" viewBox="0 0 160 160">
+<defs>
+  <linearGradient id="grad"><stop offset="0" stop-color="#f00"/><stop offset="1" stop-color="#00f"/></linearGradient>
+  <filter id="blur"><feGaussianBlur stdDeviation="2"/></filter>
+  <clipPath id="clip"><rect x="0" y="0" width="5" height="5"/></clipPath>
+  <path id="d" d="M0,0 h8 v8 h-8 z"/>
+</defs>
+<g inkscape:groupmode="layer" inkscape:label="Base" id="layer1">
+  <rect x="10" y="10" width="140" height="40" rx="8" fill="url(#grad)"/>
+  <text x="20" y="30">LOGO</text>
+  <image x="0" y="0" width="10" height="10" href="data:image/png;base64,AAAA"/>
+  <rect x="20" y="20" width="4" height="4" fill="#fff" filter="url(#blur)"/>
+  <rect x="30" y="20" width="4" height="4" fill="#fff" clip-path="url(#clip)"/>
+  <rect x="0" y="0" width="500" height="500" style="display:none"/>
+</g>
+<g inkscape:groupmode="layer" inkscape:label="Marks" id="layer2" transform="translate(0,60) scale(2)">
+  <g transform="rotate(30 10 10)"><circle cx="10" cy="10" r="5"/></g>
+  <ellipse cx="30" cy="10" rx="6" ry="3"/>
+  <rect x="45" y="5" width="10" height="10" transform="skewX(20)" style="fill:#000"/>
+  <g transform="matrix(1,0.5,0,1,60,0)"><polygon points="0,0 8,0 0,8"/></g>
+  <use xlink:href="#d" x="5" y="25"/>
+  <polyline points="25,25 35,25 30,35"/>
+  <polygon points="45,25 55,25 55,35 45,35"/>
+  <line x1="60" y1="25" x2="70" y2="35" stroke="#000" fill="none"/>
+</g>
+</svg>

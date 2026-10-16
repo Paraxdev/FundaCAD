@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="30mm" height="30mm" viewBox="0 0 30 30">
+<rect x="0" y="0" width="20" height="20"/>
+<path d="M0,0 h20 v20 h-20 z"/>
+<rect x="10" y="10" width="20" height="20"/>
+</svg>

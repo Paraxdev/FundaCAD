@@ -79,7 +79,7 @@ open_enum! {
     pub enum HoleExtent { Blind = "blind", Through = "through" }
 }
 open_enum! {
-    pub enum ImportFormat { Stl = "stl", ThreeMf = "3mf", Step = "step", Obj = "obj", Brep = "brep", Glb = "glb", Iges = "iges", Fcstd = "fcstd", Ply = "ply", Off = "off", Amf = "amf", Gltf = "gltf", Vrml = "vrml", X3d = "x3d", Xbf = "xbf", Rhino = "3dm", Ifc = "ifc", Dxf = "dxf", Fbx = "fbx", ThreeDs = "3ds" }
+    pub enum ImportFormat { Stl = "stl", ThreeMf = "3mf", Step = "step", Obj = "obj", Brep = "brep", Glb = "glb", Iges = "iges", Fcstd = "fcstd", Ply = "ply", Off = "off", Amf = "amf", Gltf = "gltf", Vrml = "vrml", X3d = "x3d", Xbf = "xbf", Rhino = "3dm", Ifc = "ifc", Dxf = "dxf", Fbx = "fbx", ThreeDs = "3ds", Svg = "svg" }
 }
 open_enum! {
     /// Which areas of a sketch's closed outlines are filled: absent fills every
