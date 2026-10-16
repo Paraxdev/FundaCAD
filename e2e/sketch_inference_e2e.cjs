@@ -56,6 +56,8 @@ const check = (name, ok, detail) => {
       { type: "arc", id: "K", x1: 100, y1: 0, x2: k.x, y2: k.y, mx: 90 + 10 * Math.cos(Math.PI / 8), my: 10 * Math.sin(Math.PI / 8) },
       { type: "line", id: "M", x1: 0, y1: -40, x2: 40, y2: -40 },
       { type: "circle", id: "C", x: 70, y: -60, radius: 10 },
+      { type: "line", id: "P", x1: -60, y1: 100, x2: -20, y2: 100 },
+      { type: "line", id: "G", x1: -60, y1: -80, x2: 60, y2: -80 },
     ] });
     await window.store.rebuildNow();
   }, k);
@@ -208,6 +210,53 @@ const check = (name, ok, detail) => {
   await hover(70, -50, -3);
   const circleKind = await page.evaluate(() => window.sketch.lastHit?.kind);
   check("the circle tool does not snap onto a curve", circleKind !== "curve", circleKind);
+  await tool("select");
+
+  // 6. a typed length keeps no relation to the hovered end
+  await tool("line");
+  before = await cons();
+  await click(-55, 130);
+  await hover(-40, 100);
+  check("hovering a midpoint shows midpoint before the length is typed", (await tag()) === "midpoint", await tag());
+  await page.keyboard.type("50");
+  await page.keyboard.press("Enter");
+  await page.waitForTimeout(600);
+  await page.keyboard.press("Escape");
+  added = await newCons(before);
+  const typedLine = (await ents()).at(-1);
+  check("a typed length records no midpoint", !added.some((c) => c.type === "midpoint"), JSON.stringify(added));
+  check("and the solved line keeps the typed 50 mm", Math.abs(Math.hypot(typedLine.x2 - typedLine.x1, typedLine.y2 - typedLine.y1) - 50) < 1e-6, JSON.stringify(typedLine));
+
+  // 7. the lattice is preferred over a curve it lies on
+  const step = await page.evaluate(() => window.sketch.snapStep());
+  const mmpp = await page.evaluate(() => window.sketch.planeMmPerPx());
+  const lx = Math.round(-20 / step) * step, sy = Math.round(-50 / step) * step;
+  await tool("line");
+  before = await cons();
+  await click(lx, sy);
+  await hover(lx + 2 * mmpp, -80, 2);
+  const gridHit = await page.evaluate(() => ({ p: window.sketch.lastHit.p.toArray(), kind: window.sketch.lastHit.kind, ref: window.sketch.lastHit.ref }));
+  check("a cursor just off a grid aligned line lands on the lattice point and names the curve",
+    gridHit.p[0] === lx && gridHit.p[1] === -80 && gridHit.ref?.at === "curve", JSON.stringify(gridHit));
+  await page.mouse.click(...(await page.evaluate(([x, y, d]) => { const s = window.viewport.projectToScreen(window.sketch.plane.to3D(x, y)); return [s.x, s.y + d]; }, [lx + 2 * mmpp, -80, 2])));
+  await page.waitForTimeout(400);
+  await page.keyboard.press("Escape");
+  added = await newCons(before);
+  check("the line dropped from a grid point records vertical and on curve",
+    added.some((c) => c.type === "vertical") && added.some((c) => c.type === "pointOnCurve"), JSON.stringify(added));
+
+  // 8. the tangent arc mode shows a prompt and ends with the tool
+  const prompt = () => page.evaluate(() => document.querySelector("#prompt")?.textContent ?? "");
+  await tool("arc");
+  await page.keyboard.press("a");
+  check("A in the arc tool shows the tangent arc prompt", /Tangent arc/.test(await prompt()), await prompt());
+  await tool("line");
+  check("changing tool clears the prompt and the mode", !/Tangent arc/.test(await prompt()) && (await page.evaluate(() => window.sketch.tangentArc)) === false, await prompt());
+  await tool("arc");
+  await page.keyboard.press("a");
+  check("and A arms it again", /Tangent arc/.test(await prompt()) && (await page.evaluate(() => window.sketch.tangentArc)) === true);
+  await page.keyboard.press("a");
+  check("A again takes the prompt away", !/Tangent arc/.test(await prompt()), await prompt());
   await tool("select");
 
   console.log(failures ? `${failures} FAILED` : "ALL PASS");
