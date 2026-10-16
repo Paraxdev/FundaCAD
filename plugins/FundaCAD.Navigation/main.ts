@@ -26,14 +26,17 @@ export async function activate(e: Engine): Promise<() => void> {
   const onKeyUp = (ev: KeyboardEvent) => {
     if (ev.key.toLowerCase() === held) held = null;
   };
-  window.addEventListener("pointermove", onPointer, true);
-  window.addEventListener("keydown", onKeyDown, true);
-  window.addEventListener("keyup", onKeyUp, true);
-  stops.push(() => {
-    window.removeEventListener("pointermove", onPointer, true);
-    window.removeEventListener("keydown", onKeyDown, true);
-    window.removeEventListener("keyup", onKeyUp, true);
-  });
+  let listening = false;
+  const listen = (on: boolean) => {
+    if (on === listening) return;
+    listening = on;
+    const method = on ? "addEventListener" : "removeEventListener";
+    window[method]("pointermove", onPointer as EventListener, true);
+    window[method]("keydown", onKeyDown as EventListener, true);
+    window[method]("keyup", onKeyUp as EventListener, true);
+    if (!on) held = null;
+  };
+  stops.push(() => listen(false));
 
   const label = (id: string) =>
     allCommands().find((c) => c.id === id)?.label ?? SHORTCUTS.find((s) => s.action === id)?.label ?? id;
@@ -49,6 +52,7 @@ export async function activate(e: Engine): Promise<() => void> {
   const apply = () => {
     remapOff?.();
     remapOff = null;
+    listen(navState.cfg.radial);
     const { table, problem } = tableFor(navState.cfg);
     try {
       remapOff = contribute(PLUGIN_ID, { pointerBindings: table, onPointerGesture: onGesture, keymap: keymapFor(navState.cfg) });
