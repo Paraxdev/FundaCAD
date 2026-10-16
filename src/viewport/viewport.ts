@@ -71,7 +71,7 @@ import { lensFor, type TraceLens } from "./pathtrace/camera";
 import { traceEnvironment, type TraceHemi } from "./pathtrace/environment";
 import { composerClearColor } from "./composerColor";
 import { clearGuard, guardSet } from "./pathtrace/guard";
-import { PathTraceHost } from "./pathtrace/host";
+import { PathTraceHost, type PictureRequest } from "./pathtrace/host";
 import { watchPower, type PowerState } from "./pathtrace/power";
 import type { SurfaceBaker } from "./pathtrace/mirror";
 import { createSurfaceBaker, webglSurfaceShade } from "./pathtrace/surfaceBake";
@@ -956,9 +956,24 @@ export class Viewport {
     return () => this.tierListeners.delete(fn);
   }
 
-  get traceStatus(): { state: TraceState; samples: number; shown: boolean; denoised: boolean; backend: string; gpu: string; note: string } {
+  get traceStatus(): { state: TraceState; samples: number; shown: boolean; denoised: boolean; backend: string; gpu: string; note: string; picturing: boolean } {
     const t = this.trace;
-    return { state: t.state, samples: t.samples, shown: t.shown, denoised: t.denoised, backend: t.backendName, gpu: describeProbe(this.gpu), note: t.note };
+    return {
+      state: t.state, samples: t.samples, shown: t.shown, denoised: t.denoised, backend: t.backendName, gpu: describeProbe(this.gpu),
+      note: t.note, picturing: t.picturing,
+    };
+  }
+
+  /** The size of a traced picture at `scale`, or null when Path traced is not running. */
+  tracedPictureSize(scale: number): { width: number; height: number } | null {
+    return this.viewModeNow === "pathtraced" ? this.trace.pictureSize(scale) : null;
+  }
+
+  /** The view path traced to `samples` and denoised with the large weights, as
+   *  a PNG data URL; null when Path traced is not running. */
+  renderTracedPicture(o: PictureRequest): Promise<string | null> {
+    if (this.viewModeNow !== "pathtraced") return Promise.resolve(null);
+    return this.trace.picture(o).finally(() => this.requestRender());
   }
 
   private tierChanged() {

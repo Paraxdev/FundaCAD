@@ -23,6 +23,7 @@ class FakeTracer implements TracerBackend {
   updateLook() { this.calls.push("look"); }
   updateCamera() { this.calls.push("camera"); }
   reset() { this.calls.push("reset"); }
+  readonly maxTextureSize = 8192;
   frameMs = 5;
   /** Set to hold renderSample's GPU time until `land()`. */
   holdFrames = false;
@@ -36,6 +37,13 @@ class FakeTracer implements TracerBackend {
   setFrameBudget(n: number) { this.calls.push(`budget:${n}`); }
   setRenderScale(n: number) { this.calls.push(`scale:${n}`); }
   setCap(n: number) { this.calls.push(`cap:${n}`); }
+  pictureDone: ((url: string) => void) | null = null;
+  pictureSize = { width: 0, height: 0, samples: 0 };
+  picture(o: { width: number; height: number; samples: number }) {
+    this.calls.push("picture");
+    this.pictureSize = { width: o.width, height: o.height, samples: o.samples };
+    return new Promise<string>((r) => (this.pictureDone = r));
+  }
   more = true;
   denoised = false;
   present() { this.calls.push("present"); return this.more; }
@@ -386,6 +394,21 @@ describe("path trace host", () => {
     expect(t.calls.filter((c) => c.startsWith("budget:"))).toEqual(["budget:262144"]);
   });
 
+  it("times no frame after a restart until its first sample", async () => {
+    const { host, t } = await started();
+    host.tick(frame());
+    t.answer(5);
+    await flush();
+    host.tick(frame({}, 1000, { cameraChanged: true }));
+    await flush();
+    t.frameMs = 2500;
+    for (let i = 0; i < 8; i++) {
+      host.tick(frame({}, 1100 + i * 16));
+      await flush();
+    }
+    expect(t.calls.filter((c) => c.startsWith("budget:"))).toEqual(["budget:262144"]);
+  });
+
   it("hands a slow GPU a smaller frame budget", async () => {
     const { host, t } = await started();
     host.tick(frame());
@@ -421,5 +444,32 @@ describe("path trace host", () => {
     host.tick(frame());
     expect(t.calls.at(-1) === "cap:256" || t.calls.includes("cap:256")).toBe(true);
     expect(host.state).toBe("trace");
+  });
+
+  it("a traced picture holds the tracer and gives it back with a restart", async () => {
+    const { host, t } = await started();
+    host.tick(frame());
+    t.answer(10);
+    await flush();
+    host.tick(frame());
+    expect(host.shown).toBe(true);
+    const shot = host.picture({ scale: 2, samples: 16 });
+    expect(host.shown).toBe(false);
+    expect(t.pictureSize).toEqual({ width: 1600, height: 1200, samples: 16 });
+    t.calls.length = 0;
+    host.tick(frame({}, 1100, { cameraChanged: true }));
+    host.tick(frame({ mode: "realtime" }, 1200));
+    expect(t.calls).toEqual([]);
+    t.pictureDone!("data:image/png;base64,AAAA");
+    expect(await shot).toBe("data:image/png;base64,AAAA");
+    host.tick(frame());
+    expect(t.calls.filter((c) => c === "reset")).toHaveLength(1);
+    expect(t.calls).toContain("camera");
+    expect(t.calls).toContain("sample");
+  });
+
+  it("takes no traced picture outside Path traced", async () => {
+    const host = new PathTraceHost(glCanvas, async () => new FakeTracer());
+    expect(await host.picture({ scale: 1, samples: 16 })).toBeNull();
   });
 });

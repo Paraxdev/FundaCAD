@@ -64,6 +64,11 @@ export interface TracerBackend {
   setRenderScale(scale: number): void;
   /** Samples per pixel where tracing stops. */
   setCap(samples: number): void;
+  readonly maxTextureSize: number;
+  /** Traces the current scene and camera at `width` x `height` until
+   *  `samples`, denoises it with the large weights and returns a PNG data URL.
+   *  The viewport's own image is gone afterwards: the caller restarts it. */
+  picture(o: PictureOptions): Promise<string>;
   /** At the cap: runs the final denoise and crossfades to it. False once
    *  nothing is left to draw, so the GPU can idle. */
   present(now: number): boolean;
@@ -76,6 +81,14 @@ export interface TracerBackend {
   dispose(): void;
   /** A GPU error or a lost device; the viewport drops to Realtime. */
   onFault(cb: (why: string) => void): void;
+}
+
+export interface PictureOptions {
+  width: number;
+  height: number;
+  samples: number;
+  signal?: AbortSignal;
+  onProgress?: (samples: number) => void;
 }
 
 export const SAMPLE_CAP = 256;

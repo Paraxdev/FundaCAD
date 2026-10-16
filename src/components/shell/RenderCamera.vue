@@ -8,6 +8,7 @@
 
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useEngine } from "../../app/engineKey";
+import { useUiStore } from "../../stores/ui";
 import { toast } from "../../ui/toast";
 import { saveRenderedImage } from "../../io/files";
 import {
@@ -15,10 +16,21 @@ import {
 } from "../../ui/renderPrefs";
 
 const engine = useEngine();
+const ui = useUiStore();
 const prefs = ref({ ...renderPrefs() });
 let off: (() => void) | null = null;
-onMounted(() => { off = onRenderPrefsChange(() => { prefs.value = { ...renderPrefs() }; }); });
-onUnmounted(() => off?.());
+// The tracer can be ready without its state changing, so the offer is re-read now and then.
+const tick = ref(0);
+let timer: ReturnType<typeof setInterval> | null = null;
+onMounted(() => {
+  off = onRenderPrefsChange(() => { prefs.value = { ...renderPrefs() }; });
+  timer = setInterval(() => tick.value++, 1000);
+});
+onUnmounted(() => {
+  off?.();
+  if (timer) clearInterval(timer);
+  abort?.abort();
+});
 
 /** How many times the viewport's own size the saved picture is. Not a pixel
  *  count, because the frame is whatever shape the window is and a fixed width
@@ -32,9 +44,32 @@ const saving = ref(false);
  *  screenshot of a CAD package; on for anybody who wants exactly that. */
 const edges = ref(false);
 
+/** Path traced pictures: samples per pixel, then the large denoise weights. */
+const SAMPLES = [64, 256, 1024];
+const samples = ref(256);
+const tracedWanted = ref(true);
+const progress = ref(0);
+const tracing = ref(false);
+let abort: AbortController | null = null;
+
+const tracedSize = computed(() => {
+  void tick.value;
+  void ui.traceState;
+  void ui.viewMode;
+  return engine.viewport.tracedPictureSize(scale.value);
+});
+const traced = computed(() => tracedWanted.value && tracedSize.value !== null);
+
 const shotSize = computed(() => {
+  const t = traced.value ? tracedSize.value : null;
+  if (t) return `${t.width} × ${t.height}`;
   const c = engine.canvas.getBoundingClientRect();
   return `${Math.round(c.width * scale.value)} × ${Math.round(c.height * scale.value)}`;
+});
+
+const buttonText = computed(() => {
+  if (!saving.value) return "Save picture…";
+  return tracing.value ? `Cancel, ${progress.value} of ${samples.value} samples` : "Rendering…";
 });
 
 const onFov = (e: Event) =>
@@ -44,14 +79,39 @@ const onBlur = (e: Event) =>
 const onAperture = (e: Event) =>
   setRenderPref("aperture", Number.parseFloat((e.target as HTMLSelectElement).value));
 
+async function render(): Promise<string | null> {
+  if (traced.value) {
+    abort = new AbortController();
+    progress.value = 0;
+    tracing.value = true;
+    try {
+      const url = await engine.viewport.renderTracedPicture({
+        scale: scale.value, samples: samples.value, signal: abort.signal, onProgress: (n) => { progress.value = n; },
+      });
+      if (url) return url;
+    } catch (e) {
+      if ((e as Error).name !== "AbortError") toast(`The traced picture failed: ${(e as Error).message}`);
+      return null;
+    } finally {
+      abort = null;
+      tracing.value = false;
+    }
+  }
+  // Rendered BEFORE the dialog, and read as a string, because the pixels are
+  // only valid in the same task as the render that produced them. Awaiting a
+  // file dialog first would hand the writer a blank canvas.
+  return engine.viewport.renderStill(scale.value, { edges: edges.value, realtime: true });
+}
+
 async function takePicture() {
-  if (saving.value) return;
+  if (saving.value) {
+    abort?.abort();
+    return;
+  }
   saving.value = true;
   try {
-    // Rendered BEFORE the dialog, and read as a string, because the pixels are
-    // only valid in the same task as the render that produced them. Awaiting a
-    // file dialog first would hand the writer a blank canvas.
-    const url = engine.viewport.renderStill(scale.value, { edges: edges.value, realtime: true });
+    const url = await render();
+    if (!url) return;
     const base = engine.store.fileName === "Untitled" ? "render" : engine.store.fileName;
     const path = await saveRenderedImage(url, `${base}.png`);
     if (path) toast(`Saved ${path}`);
@@ -131,7 +191,23 @@ async function takePicture() {
         >{{ s }}×</button>
       </div>
       <div class="sm-hint">{{ shotSize }} pixels, the view as it is framed now.</div>
-      <label class="prefs-row">
+      <template v-if="tracedSize">
+        <label class="prefs-row">
+          <span class="prefs-label">Path traced</span>
+          <input id="rd-traced" type="checkbox" :checked="tracedWanted" @change="tracedWanted = !tracedWanted" />
+        </label>
+        <div v-if="traced" class="rd-chips" role="group" aria-label="Samples">
+          <button
+            v-for="n in SAMPLES"
+            :key="n"
+            class="rd-chip"
+            :class="{ active: samples === n }"
+            :data-samples="n"
+            @click="samples = n"
+          >{{ n }}</button>
+        </div>
+      </template>
+      <label v-if="!traced" class="prefs-row">
         <span class="prefs-label">Edge lines</span>
         <input id="rd-edges" type="checkbox" :checked="edges" @change="edges = !edges" />
       </label>
@@ -139,9 +215,13 @@ async function takePicture() {
         <button
           id="rd-take-picture"
           class="btn btn-primary"
-          :disabled="saving"
+          :disabled="saving && !tracing"
           @click="takePicture()"
-        >{{ saving ? "Rendering…" : "Save picture…" }}</button>
+        >{{ buttonText }}</button>
+      </div>
+      <div v-if="traced" class="sm-hint">
+        Traced to the samples picked, then cleaned with the high quality denoise.
+        More samples take longer and keep finer detail. Edge lines are not traced.
       </div>
       <div class="sm-hint">
         The grid, the origin arrows and the sketch planes are left out: they are

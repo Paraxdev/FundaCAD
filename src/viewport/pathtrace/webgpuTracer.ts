@@ -4,7 +4,8 @@
 
 import * as THREE from "three";
 import type { Denoise } from "../../ui/renderPrefs";
-import { SAMPLE_CAP, type TraceLook, type TraceScene, type TracerBackend } from "./backend";
+import { SAMPLE_CAP, type PictureOptions, type TraceLook, type TraceScene, type TracerBackend } from "./backend";
+import { FrameBudget } from "./budget";
 import { repackInPlace, type SwappableBvhData } from "./bvhSwap";
 import { traceCameraFor, type TraceLens } from "./camera";
 import { backgroundTexture } from "./environment";
@@ -21,10 +22,11 @@ type TslModule = typeof import("three/tsl");
 const MAX_BOUNCES = 6;
 
 interface GpuQueueDevice {
-  limits: { maxStorageBufferBindingSize: number; maxBufferSize: number };
+  limits: { maxStorageBufferBindingSize: number; maxBufferSize: number; maxTextureDimension2D: number };
   queue: { onSubmittedWorkDone(): Promise<void> };
 }
 
+const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
 
 /** The WebGPU floor every adapter grants without asking. */
 const DEFAULT_STORAGE_BINDING = 128 * 1024 * 1024;
@@ -63,6 +65,7 @@ export class WebGpuTracer implements TracerBackend {
   private oidn: OidnPass | null = null;
   private final = new FinalDenoise(null);
   maxStorageBytes = DEFAULT_STORAGE_BINDING;
+  maxTextureSize = 8192;
   private cap = SAMPLE_CAP;
   private device: GpuQueueDevice | null = null;
 
@@ -114,6 +117,7 @@ export class WebGpuTracer implements TracerBackend {
     if (device) {
       this.device = device;
       this.maxStorageBytes = Math.min(device.limits.maxStorageBufferBindingSize, device.limits.maxBufferSize);
+      this.maxTextureSize = device.limits.maxTextureDimension2D;
     }
     const t = new tracerMod.WebGPUPathTracer(r);
     // Mirrors carry what the tracer reads; a generated tangent would cost 16 B
@@ -373,6 +377,58 @@ export class WebGpuTracer implements TracerBackend {
     const g = this.guides!;
     const filtered = this.atrous.run(raw, g.textures[0]!, g.textures[1]!, samples);
     if (filtered) this.blit(raw, filtered, mix);
+  }
+
+  async picture(o: PictureOptions): Promise<string> {
+    const r = this.renderer;
+    const t = this.tracer;
+    if (!r || !t || !this.camera) throw new Error("Path tracing is not running");
+    const was = { ratio: r.getPixelRatio(), size: r.getSize(new THREE.Vector2()), scale: t.renderScale, budget: t.frameBudget, level: this.level };
+    const cancelled = () => new DOMException("The picture was cancelled", "AbortError");
+    r.setPixelRatio(1);
+    r.setSize(o.width, o.height, false);
+    t.renderScale = 1;
+    t.maxSamples = o.samples;
+    if (this.level !== "high") this.setDenoise("high");
+    this.reset();
+    const budget = new FrameBudget(o.width * o.height);
+    try {
+      let n = 0;
+      while (n < o.samples) {
+        if (o.signal?.aborted) throw cancelled();
+        // One frame per display frame, each inside the budget, so the UI keeps
+        // drawing and no dispatch runs long enough to trip the driver watchdog.
+        await nextFrame();
+        if (this.disposed) throw new Error("Path tracing stopped");
+        t.frameBudget = budget.budget;
+        const t0 = performance.now();
+        t.renderSample();
+        const ms = await this.gpuTime(t0);
+        // The first frames at the picture's size compile and allocate.
+        if (n > 0) budget.frame(ms, performance.now());
+        n = (await t.getSampleCountsAsync()).min;
+        o.onProgress?.(Math.min(n, o.samples));
+      }
+      const raw = this.internals._pathTracer.outputTarget;
+      const pass = this.oidn;
+      const clean = pass && (await pass.run()) ? pass.texture : null;
+      if (o.signal?.aborted) throw cancelled();
+      if (this.disposed) throw new Error("Path tracing stopped");
+      // Read in the same task as the draw: a WebGPU canvas is blank to
+      // toDataURL once the frame has been presented.
+      this.blit(raw, clean ?? raw, clean ? 1 : 0);
+      return this.canvas.toDataURL("image/png");
+    } finally {
+      if (!this.disposed) {
+        t.renderScale = was.scale;
+        t.maxSamples = this.cap;
+        t.frameBudget = was.budget;
+        if (this.level !== was.level) this.setDenoise(was.level);
+        r.setPixelRatio(was.ratio);
+        r.setSize(was.size.x, was.size.y, false);
+        this.reset();
+      }
+    }
   }
 
   async samples(): Promise<number> {

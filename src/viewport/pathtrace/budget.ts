@@ -98,3 +98,13 @@ export function renderScaleFor(p: { cssHeight: number; dpr: number; discharging:
   const device = p.discharging || dpr > 1.5 || p.cssHeight * dpr > 1440 ? 0.5 : 0.75;
   return Math.min(1, (device * dpr) / Math.min(dpr, 1));
 }
+
+/** About a 4K frame: the tracer keeps several float targets of the picture's
+ *  size, and the denoiser more. */
+export const MAX_PICTURE_PIXELS = 3840 * 2160;
+
+/** The multiple of the view a traced picture is taken at, at most `scale`. */
+export function tracedPictureScale(w: number, h: number, scale: number, maxDimension: number): number {
+  const k = Math.min(scale, Math.sqrt(MAX_PICTURE_PIXELS / (w * h)), maxDimension / Math.max(w, h));
+  return Math.floor(k * 1000) / 1000;
+}

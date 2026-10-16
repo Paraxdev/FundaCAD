@@ -5,7 +5,7 @@
 import type * as THREE from "three";
 import type { Denoise } from "../../ui/renderPrefs";
 import { SAMPLE_CAP, type TraceLook, type TracerBackend } from "./backend";
-import { costProfile, FrameBudget, renderScaleFor } from "./budget";
+import { costProfile, FrameBudget, renderScaleFor, tracedPictureScale } from "./budget";
 import type { TraceLens } from "./camera";
 import { armGuard, clearGuard } from "./guard";
 import { BlasCache, type BlasBuilder } from "./blasCache";
@@ -63,10 +63,20 @@ export interface Power {
   discharging: boolean;
 }
 
+export interface PictureRequest {
+  /** Multiple of the viewport's size, lowered to what the GPU can hold. */
+  scale: number;
+  samples: number;
+  signal?: AbortSignal;
+  onProgress?: (samples: number) => void;
+}
+
 export class PathTraceHost {
   state: TraceState = "off";
   shown = false;
   samples = 0;
+  /** A traced picture holds the tracer. */
+  picturing = false;
   /** Set after a second GPU fault; Path traced stays off until restart. */
   disabled = false;
   note = "";
@@ -141,6 +151,10 @@ export class PathTraceHost {
       this.state = s;
       this.onStateChange?.(s);
     }
+    if (this.picturing) {
+      this.offSince = 0;
+      return this.show(false);
+    }
     if (s === "off") {
       this.refusedSig = "";
       this.idle(f.now);
@@ -188,9 +202,9 @@ export class PathTraceHost {
 
   private traceFrame(b: TracerBackend) {
     const gen = this.gen.current;
-    // Frames before the first sample carry the pipeline compiles, seconds
-    // long, which say nothing about what a frame costs.
-    const timed = this.sawSample;
+    // Frames before the first sample of a restart carry the pipeline compiles
+    // and uploads, seconds long, which say nothing about what a frame costs.
+    const timed = this.samples > 0;
     const land = (ms: number | null) => {
       if (this.backend !== b) return;
       this.inFlight = false;
@@ -209,6 +223,36 @@ export class PathTraceHost {
     this.backend?.setCap(this.cap);
     this.size = { w: 0, h: 0, ratio: 0 };
     this.cameraDirty = true;
+  }
+
+  /** The size a traced picture at `scale` comes out at, or null while none can be taken. */
+  pictureSize(scale: number): { width: number; height: number } | null {
+    const b = this.backend;
+    if (!b || !this.hasScene || this.state === "off") return null;
+    const w = Math.max(1, this.webglCanvas.clientWidth);
+    const h = Math.max(1, this.webglCanvas.clientHeight);
+    const k = tracedPictureScale(w, h, scale, b.maxTextureSize);
+    return { width: Math.round(w * k), height: Math.round(h * k) };
+  }
+
+  /** A traced still of the view as the tracer has it, or null when Path traced
+   *  is not running. Holds the tracer until done, then restarts the viewport's trace. */
+  async picture(o: PictureRequest): Promise<string | null> {
+    const b = this.backend;
+    const size = this.pictureSize(o.scale);
+    if (!b || !size || this.picturing) return null;
+    this.picturing = true;
+    this.show(false);
+    try {
+      const { scale: _, ...rest } = o;
+      return await b.picture({ ...rest, ...size });
+    } finally {
+      this.picturing = false;
+      if (this.backend === b) {
+        this.size = { w: 0, h: 0, ratio: 0 };
+        this.cameraDirty = true;
+      }
+    }
   }
 
   private show(on: boolean) {
