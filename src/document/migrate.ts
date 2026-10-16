@@ -103,8 +103,14 @@ import { nextDName, sameTarget } from "../params/engine";
 // it is a better failure than the alternative, since a silently skipped boolean
 // leaves the tool bodies sitting inside the part looking like geometry.
 
+// v9 -> v10: `datumPlane.through`, `datumPoint.at` and `datumAxis.through`, the
+// model references a midplane, 3 point plane, datum point or axis is rebuilt
+// from. The resolved numbers are still written beside them as the cache. Stamped
+// for the reason v7 was: an older build ignores the references and the datum
+// silently stops following the part.
+
 /** Document file-format version (bump when the on-disk shape changes incompatibly). */
-export const FORMAT_VERSION = 9;
+export const FORMAT_VERSION = 10;
 
 export function migrateDocument(parsed: CadDocument): string[] {
   const version = parsed.version ?? 1;

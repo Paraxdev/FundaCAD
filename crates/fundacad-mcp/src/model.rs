@@ -25,7 +25,7 @@ use serde_json::{json, Map, Value};
 
 pub type Doc = Map<String, Value>;
 
-pub const FORMAT_VERSION: i64 = 9;
+pub const FORMAT_VERSION: i64 = 10;
 
 /// An edit that would leave the document unbuildable. Returned BEFORE anything
 /// is written, so a refused edit changes nothing.
