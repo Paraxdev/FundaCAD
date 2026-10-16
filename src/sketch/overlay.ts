@@ -112,6 +112,8 @@ const FILL_MAT = new THREE.MeshBasicMaterial({
   depthWrite: false,
   ...FILL_OFFSET,
 });
+// A hole of an even-odd sketch draws nothing until hovered or selected.
+const FILL_HOLE_MAT = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0, depthWrite: false });
 const FILL_HOVER_MAT = new THREE.MeshBasicMaterial({
   color: FILL_COLOR,
   transparent: true,
@@ -297,16 +299,19 @@ export class SketchOverlay {
     plane: SketchPlane,
     sketchId = "__active__",
     textEnts: ResolvedEntity[] = [],
+    evenOdd = false,
   ) {
     this.clearGroup(this.activeFills);
     this.activeRegions = [];
+    const filled = evenOdd ? evenOddFilled(regions) : null;
     const withGlyphs: WorldRegion[] = [
-      ...regions.map((region) => ({
+      ...regions.map((region, i) => ({
         sketchId,
         region,
         plane,
         centroid3D: plane.to3D(region.centroid.x, region.centroid.y),
         interior3D: plane.to3D(region.interior.x, region.interior.y),
+        ...(filled && !filled[i] ? { hole: true } : {}),
       })),
       ...this.glyphWorldRegions(textEnts, plane, sketchId),
     ];
@@ -320,7 +325,7 @@ export class SketchOverlay {
   private fillMaterial(wr: WorldRegion): THREE.MeshBasicMaterial {
     if (this.isRegionSelected(wr)) return FILL_SELECTED_MAT;
     if (this.isHovered(wr)) return FILL_HOVER_MAT;
-    return FILL_MAT;
+    return wr.hole ? FILL_HOLE_MAT : FILL_MAT;
   }
   /** A region is hover-lit if the cursor is on it, or on any sibling in its group
    *  (so hovering one glyph highlights the whole text it belongs to). */

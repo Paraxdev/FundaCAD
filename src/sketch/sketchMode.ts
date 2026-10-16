@@ -209,6 +209,7 @@ export class SketchMode {
   private relHover = new Set<string>();
   private constraints: SketchConstraint[] = []; // persistent constraints (solved)
   private patterns: SketchPattern[] = []; // associative pattern definitions
+  private evenOdd = false;
   private lastDof = -1;
   private dragFrom: THREE.Vector2 | null = null; // grabbed point's current position
   // A grabbed point that never moves past 4px is a click, which selects its entity.
@@ -519,10 +520,12 @@ export class SketchMode {
     this.overlay.clearRegionSelection(); // fresh session: drop any stale area selection
     this.lastDof = -1;
     this.conflict = false;
+    this.evenOdd = false;
     if (editId) {
       const f = store.document.features.find((x) => x.id === editId);
       const sk = asFeature(f, "sketch");
       if (sk) {
+        this.evenOdd = sk.fillRule === "evenodd";
         // real entities only, derived pattern copies are NEVER stored in
         // this.entities (see derivedEntities()); doing so would persist them
         // as real geometry on the next finish() and bake in duplicates (§1.2).
@@ -853,6 +856,7 @@ export class SketchMode {
       this.plane,
       this.editingId ?? "__active__",
       [...this.entities, ...derived],
+      this.evenOdd,
     );
     this.candidates = [
       ...candidatesFromEntities([...this.entities, ...derived]),
