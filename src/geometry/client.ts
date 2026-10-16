@@ -303,6 +303,7 @@ export interface GeometryBackend {
     // the others ignore them.
     opts?: {
       body?: string;
+      bodies?: string[];
       separate?: boolean;
       palette?: { name: string; color: string; material?: string }[];
       bodyColors?: Record<string, number>;
@@ -1240,6 +1241,7 @@ export class Geometry implements GeometryBackend {
     path: string,
     opts: {
       body?: string;
+      bodies?: string[];
       separate?: boolean;
       palette?: { name: string; color: string; material?: string }[];
       bodyColors?: Record<string, number>;
@@ -1250,7 +1252,7 @@ export class Geometry implements GeometryBackend {
     const msg = await this.call<{ path?: string; paths?: string[]; warnings?: { message: string; feature_id?: string }[] }>(
       "export",
       {
-        document: doc, format, path, body: opts.body, separate: opts.separate,
+        document: doc, format, path, body: opts.body, bodies: opts.bodies, separate: opts.separate,
         // GLB writes one material per body from these; the engine defaults both
         // to empty, so other formats are unaffected by sending them.
         palette: opts.palette, bodyColors: opts.bodyColors, mesh: opts.mesh,

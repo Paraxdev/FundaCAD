@@ -262,6 +262,45 @@ describe("export runs as a cancellable busy op", () => {
     });
   });
 
+  it("starts from the selected bodies and exports only those", async () => {
+    let asked: { scope?: string; selected?: readonly string[] } = {};
+    vi.doMock("../../src/stores/exportDialog", async () => {
+      const { DEFAULT_SETTINGS } = await import("../../src/io/exportSettings");
+      return {
+        useExportDialogStore: () => ({
+          open: async (what: { scope?: string; selected?: readonly string[] }) => {
+            asked = what;
+            return { settings: { ...DEFAULT_SETTINGS, format: "stl" }, scope: what.scope };
+          },
+        }),
+      };
+    });
+    let sent: { body?: string | undefined; bodies?: string[] | undefined; separate?: boolean | undefined } = {};
+    let path = "";
+    const { backend, store } = storeWith(async (_d, _f, p, opts) => {
+      sent = { body: opts?.body, bodies: opts?.bodies, separate: opts?.separate };
+      path = p;
+      return { ok: true, path: p };
+    });
+    (store as unknown as { build: { result: unknown } }).build.result = {
+      mesh: { positions: [] },
+      bodies: ["body1", "body2", "body3"].map((id) => ({ id, name: id })),
+    };
+    const saved: string[] = [];
+    vi.doMock("@tauri-apps/plugin-dialog", () => ({
+      save: async (o: { defaultPath: string }) => { saved.push(o.defaultPath); return savePath; },
+      open: async () => null,
+      message: async (m: string) => void reported.push(m),
+    }));
+    const { exportModel } = await import("../../src/io/files");
+    await exportModel(store, backend, ["body3", "body1", "body9"]);
+    expect(asked.scope).toBe("selected");
+    expect(asked.selected).toEqual(["body1", "body3"]);
+    expect(sent).toEqual({ body: undefined, bodies: ["body1", "body3"], separate: undefined });
+    expect(path).toBe(savePath);
+    expect(saved[0]).toMatch(/^parts_\d{14}\.stl$/);
+  });
+
   it("clears busy even when the backend throws", async () => {
     const { backend, store } = storeWith(async () => { throw new Error("socket died"); });
     const { exportModel } = await import("../../src/io/files");

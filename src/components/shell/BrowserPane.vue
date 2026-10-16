@@ -37,7 +37,7 @@ import { useShellStore } from "../../stores/shell";
 import { contextMenu } from "../../ui/menu";
 import {
   bodyExtraMenu, buildBodyTree, collectGroupBodyIds, elementMoveMenu, elementPath,
-  importColorMenu, materialMenu, type BodyRef, type TreeGroup,
+  importColorMenu, importTrees, materialMenu, type BodyRef, type TreeGroup,
 } from "../../ui/browserTree";
 import { adoptImportedColors } from "../../io/files";
 import { ancestryOf } from "../../document/elements";
@@ -367,16 +367,6 @@ function bodyList(): { id: string; name: string; nodeRef?: string }[] {
     }));
   }
   return (result?.mesh.positions.length ?? 0) > 0 ? [{ id: "body1", name: "Body1" }] : [];
-}
-
-/** featureId → the assembly manifest an import feature carries. */
-function importTrees(doc: CadDocument): Map<string, { name: string; parent: number | null }[]> {
-  const trees = new Map<string, { name: string; parent: number | null }[]>();
-  for (const f of doc.features) {
-    const nodes = (f as { nodes?: { name: string; parent: number | null }[] }).nodes;
-    if (f.type === "import" && nodes) trees.set(f.id, nodes);
-  }
-  return trees;
 }
 
 /** The whole body tree: the user's elements over whatever structure the imports

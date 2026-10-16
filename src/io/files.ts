@@ -9,7 +9,11 @@ import { asFeature } from "../types";
 import type { GeometryBackend } from "../geometry/client";
 import type { CadDocument, ExportFormat, Feature, ImportFormat } from "../types";
 import { clearRecovery } from "./recovery";
-import { exportFileName, FORMATS, isMeshFormat, lastExportDir, meshWire, rememberExportDir, saveExportSettings } from "./exportSettings";
+import {
+  exportFileName, exportScopeFromSelection, FORMATS, isMeshFormat, lastExportDir, meshWire, rememberExportDir,
+  saveExportSettings,
+} from "./exportSettings";
+import { buildBodyTree, importTrees } from "../ui/browserTree";
 import { referencedGeometry } from "../document/versions";
 import { UnreadableDocumentError } from "../document/documentShape";
 import { noteRecent } from "./recentFiles";
@@ -360,12 +364,15 @@ async function finishOpen(
   return "ok";
 }
 
-export async function exportModel(store: DocumentStore, geometry: GeometryBackend) {
-  const bodies = store.buildState.result?.bodies ?? [];
+/** `selected` is the viewport's selection as body ids, where the picker starts. */
+export async function exportModel(store: DocumentStore, geometry: GeometryBackend, selected: readonly string[] = []) {
+  const built = store.buildState.result?.bodies ?? [];
+  const bodies = built.map((b) => ({ id: b.id, name: store.bodyName(b.id) ?? b.name }));
+  const docName = store.fileName === "Untitled" ? "" : store.fileName.replace(/\.[^.]+$/, "");
+  const { groups } = buildBodyTree(built, importTrees(store.document), store.bodyElements, store.bodyElementMap());
+  const start = exportScopeFromSelection(selected, bodies, groups, docName);
   const { useExportDialogStore } = await import("../stores/exportDialog");
-  const choice = await useExportDialogStore().open(
-    bodies.map((b) => ({ id: b.id, name: store.bodyName(b.id) ?? b.name })),
-  );
+  const choice = await useExportDialogStore().open({ bodies, scope: start.scope, selected: start.selected });
   if (!choice) return;
   const { settings, scope } = choice;
   saveExportSettings(settings);
@@ -377,13 +384,15 @@ export async function exportModel(store: DocumentStore, geometry: GeometryBacken
     await reportError("Export needs the desktop app: a browser tab has no filesystem path to give the engine to write to.");
     return;
   }
-  const opts: { body?: string; separate?: boolean } = {};
-  if (scope === "separate") opts.separate = true;
-  else if (scope !== "all") opts.body = scope;
+  const opts: { body?: string; bodies?: string[]; separate?: boolean } = {};
+  if (scope === "separate" || scope === "selected-separate") opts.separate = true;
+  if (scope === "selected" || scope === "selected-separate") opts.bodies = start.selected;
+  else if (scope !== "all" && scope !== "separate") opts.body = scope;
 
   const kind = FORMATS.find((f) => f.value === settings.format) ?? FORMATS[0]!;
-  const docName = store.fileName === "Untitled" ? "" : store.fileName.replace(/\.[^.]+$/, "");
-  const base = opts.body ? store.bodyName(opts.body) ?? docName : docName || (opts.separate ? "parts" : "part");
+  const base = opts.body
+    ? store.bodyName(opts.body) ?? docName
+    : (opts.bodies ? start.base : docName) || (opts.separate || opts.bodies ? "parts" : "part");
   const name = exportFileName(base, kind.ext);
   const dir = lastExportDir();
   const { save } = await import("@tauri-apps/plugin-dialog");

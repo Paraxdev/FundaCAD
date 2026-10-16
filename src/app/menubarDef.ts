@@ -65,7 +65,7 @@ export function buildMenubar(e: Engine): MenuDef[] {
         { label: "Save", shortcut: "Ctrl+S", onClick: () => void saveDocument(e.store) },
         { label: "Save As…", shortcut: "Ctrl+Shift+S", onClick: () => void saveDocumentAs(e.store) },
         { separator: true, label: "" },
-        { label: "Export…", shortcut: "Ctrl+E", onClick: () => void exportModel(e.store, e.geometry) },
+        { label: "Export…", shortcut: "Ctrl+E", onClick: () => void exportModel(e.store, e.geometry, e.viewport.selectionBodyIds()) },
       ],
     },
     {
