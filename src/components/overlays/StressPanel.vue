@@ -20,6 +20,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { usePanelsStore } from "../../stores/panels";
 import FloatingPanel from "./FloatingPanel.vue";
+import NumberBox from "../shell/NumberBox.vue";
 import {
   CUSTOM_MATERIAL, FORCE_DIRECTIONS, GRAVITY_DIRECTIONS, GRAVITY_MARK_COLOR, LOAD_MARK_COLOR, STRESS_MATERIALS,
   SUPPORT_COLORS, SUPPORT_KINDS, cssHex, deformLabel, faceCountLabel, legendGradient, sameTarget,
@@ -94,18 +95,6 @@ const bodyChoice = computed({
   set: (v: string) => engine.ui.panels.setStressBody(v || null),
 });
 
-// Blank means the engine picks the size, so the input is text-like: an empty
-// field is null, not 0. In mm whatever the display unit, as the engine's
-// warnings about the size quote it.
-const sizeText = computed({
-  get: () => (setup.value?.size == null ? "" : String(setup.value.size)),
-  set: (v: string) => {
-    if (!setup.value) return;
-    const t = String(v).trim();
-    setup.value.size = t === "" ? null : Number(t);
-  },
-});
-
 function fmt(v: number): string {
   return String(displayRound(v));
 }
@@ -176,7 +165,7 @@ function close() {
           <div v-for="(spot, k) in x.spots ?? []" :key="'ss' + x.id + '-' + k" class="measure-row stress-spot">
             <span class="measure-k">Spot {{ k + 1 }} radius</span>
             <span class="measure-v">
-              <input v-model.number="spot.radius" class="measure-number stress-spot-radius" type="number" min="0" step="any" /> mm
+              <NumberBox v-model="spot.radius" class="measure-number stress-spot-radius" /> mm
               <button type="button" class="btn stress-remove-spot" title="Remove this spot" @click="engine.ui.panels.removeStressSpot({ support: x.id }, k)">Remove</button>
             </span>
           </div>
@@ -216,14 +205,14 @@ function close() {
           <div v-for="(spot, k) in l.spots ?? []" :key="'ls' + l.id + '-' + k" class="measure-row stress-spot">
             <span class="measure-k">Spot {{ k + 1 }} radius</span>
             <span class="measure-v">
-              <input v-model.number="spot.radius" class="measure-number stress-spot-radius" type="number" min="0" step="any" /> mm
+              <NumberBox v-model="spot.radius" class="measure-number stress-spot-radius" /> mm
               <button type="button" class="btn stress-remove-spot" title="Remove this spot" @click="engine.ui.panels.removeStressSpot({ load: l.id }, k)">Remove</button>
             </span>
           </div>
           <template v-if="l.kind === 'force'">
             <div class="measure-row">
               <span class="measure-k">Force</span>
-              <span class="measure-v"><input v-model.number="l.force" class="measure-number stress-force" type="number" step="any" /> N</span>
+              <span class="measure-v"><NumberBox v-model="l.force" class="measure-number stress-force" /> N</span>
             </div>
             <div class="measure-row">
               <span class="measure-k">Direction</span>
@@ -234,13 +223,13 @@ function close() {
             <div v-if="l.direction === 'custom'" class="measure-row">
               <span class="measure-k">X, Y, Z</span>
               <span class="measure-v">
-                <input v-for="k in 3" :key="k" v-model.number="l.custom[k - 1]" class="measure-number stress-xyz" type="number" step="any" :title="String(l.custom[k - 1])" />
+                <NumberBox v-for="k in 3" :key="k" v-model="l.custom[k - 1]" class="measure-number stress-xyz" :title="String(l.custom[k - 1])" />
               </span>
             </div>
           </template>
           <div v-else class="measure-row">
             <span class="measure-k">Pressure</span>
-            <span class="measure-v"><input v-model.number="l.pressure" class="measure-number" type="number" step="any" /> MPa</span>
+            <span class="measure-v"><NumberBox v-model="l.pressure" class="measure-number" /> MPa</span>
           </div>
         </template>
         <div class="measure-row">
@@ -272,25 +261,25 @@ function close() {
         <template v-else>
           <div class="measure-row">
             <span class="measure-k">E</span>
-            <span class="measure-v"><input v-model.number="setup.custom.E" class="measure-number" type="number" min="0" step="any" /> MPa</span>
+            <span class="measure-v"><NumberBox v-model="setup.custom.E" class="measure-number" /> MPa</span>
           </div>
           <div class="measure-row">
             <span class="measure-k">Poisson's ratio</span>
-            <span class="measure-v"><input v-model.number="setup.custom.nu" class="measure-number" type="number" min="0" max="0.49" step="0.01" /></span>
+            <span class="measure-v"><NumberBox v-model="setup.custom.nu" class="measure-number" /></span>
           </div>
           <div class="measure-row">
             <span class="measure-k">Yield</span>
-            <span class="measure-v"><input v-model.number="setup.custom.yield" class="measure-number" type="number" min="0" step="any" /> MPa</span>
+            <span class="measure-v"><NumberBox v-model="setup.custom.yield" class="measure-number" /> MPa</span>
           </div>
           <div class="measure-row">
             <span class="measure-k">Density</span>
-            <span class="measure-v"><input v-model.number="setup.custom.density" class="measure-number stress-density" type="number" min="0" step="any" /> g/cm³</span>
+            <span class="measure-v"><NumberBox v-model="setup.custom.density" class="measure-number stress-density" /> g/cm³</span>
           </div>
         </template>
         <div class="measure-row">
           <span class="measure-k">Element size</span>
           <span class="measure-v">
-            <input v-model="sizeText" class="measure-number stress-size" type="number" min="0" step="any" placeholder="auto" /> mm
+            <NumberBox v-model="setup.size" nullable class="measure-number stress-size" placeholder="auto" /> mm
           </span>
         </div>
         <div v-if="panels.stress.result" class="measure-row">

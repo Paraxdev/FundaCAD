@@ -323,6 +323,20 @@ export function measureError(raw: string, displayUnit: UnitDef | null, params: R
   }
 }
 
+/** A plain number box read through the shared grammar, as a drop-in for
+ *  `Number.parseFloat`: NaN for blank or unparseable text, so a caller's own
+ *  fallback keeps working. Bare numbers are taken as they are, a written unit
+ *  is folded into mm or degrees. */
+export function fieldNumber(raw: string): number {
+  return tryParseMeasure(raw, null)?.value ?? Number.NaN;
+}
+
+/** The inline message for a number box. Blank is not an error, the form has
+ *  its own fallback for that. */
+export function fieldError(raw: string): string | null {
+  return raw.trim() === "" ? null : measureError(raw, null);
+}
+
 // --- showing one back --------------------------------------------------------
 
 /** How many decimals a value is worth SHOWING at, and the one thing that earns

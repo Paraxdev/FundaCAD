@@ -7,6 +7,7 @@
 
 import { describe, it, expect } from "vitest";
 import {
+  fieldNumber, fieldError,
   commonUnits,
   formatMeasure,
   roundForDisplay,
@@ -345,5 +346,25 @@ describe("normalise, which is the part that can be wrong quietly", () => {
   it("keeps operators, parens and names untouched", () => {
     expect(normalise("width/2").expr).toBe("width/2");
     expect(normalise("max(1;2)").expr).toBe("max(1;2)");
+  });
+});
+
+describe("fieldNumber / fieldError", () => {
+  it("reads arithmetic, fractions, units and a decimal comma", () => {
+    expect(fieldNumber("2*5")).toBe(10);
+    expect(fieldNumber("1/2")).toBe(0.5);
+    expect(fieldNumber("1 in")).toBeCloseTo(25.4, 9);
+    expect(fieldNumber("2,5")).toBe(2.5);
+  });
+
+  it("is NaN for blank and for text that is not a value", () => {
+    expect(fieldNumber("")).toBeNaN();
+    expect(fieldNumber("abc")).toBeNaN();
+  });
+
+  it("has no error for blank, a message for nonsense", () => {
+    expect(fieldError("")).toBeNull();
+    expect(fieldError("3*4")).toBeNull();
+    expect(fieldError("3*")).toEqual(expect.any(String));
   });
 });

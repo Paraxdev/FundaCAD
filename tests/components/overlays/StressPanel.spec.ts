@@ -88,6 +88,25 @@ describe("StressPanel", () => {
     expect(p.stress!.setup.size).toBeNull();
   });
 
+  it("reads arithmetic into the number boxes and flags text that is not a value", async () => {
+    await mounted();
+    const p = usePanelsStore();
+    p.showStress("b1");
+    await flushPromises();
+    p.stress!.setup.material = "Custom";
+    await flushPromises();
+    const density = q(".stress-density") as HTMLInputElement;
+    density.value = "3/2";
+    density.dispatchEvent(new Event("input"));
+    expect(p.stress!.setup.custom.density).toBe(1.5);
+    density.value = "3/";
+    density.dispatchEvent(new Event("input"));
+    await flushPromises();
+    expect(p.stress!.setup.custom.density).toBe(1.5);
+    expect(density.classList.contains("input-error")).toBe(true);
+    expect(density.title).not.toBe("");
+  });
+
   it("keeps the body while a Run is out, sizes in mm, and toggles the colours", async () => {
     const { panels } = await mounted();
     const p = usePanelsStore();

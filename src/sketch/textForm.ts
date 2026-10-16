@@ -7,6 +7,8 @@
 // reach, happy-dom has no layout, so the panel's measured placement is not
 // testable, but the clamp that decides where it is ASKED to go is.
 
+import { fieldError, fieldNumber } from "../ui/measure";
+
 export interface TextValues {
   text: string;
   font?: string;
@@ -50,17 +52,27 @@ export function initialTextForm(initial: Partial<TextValues>): TextForm {
   };
 }
 
+/** The message under each number box that holds text the shared parser rejects. */
+export function textFormErrors(f: TextForm): Partial<Record<"height" | "angle" | "boxWidth", string>> {
+  const out: Partial<Record<"height" | "angle" | "boxWidth", string>> = {};
+  for (const k of ["height", "angle", "boxWidth"] as const) {
+    const e = fieldError(f[k]);
+    if (e) out[k] = e;
+  }
+  return out;
+}
+
 export function toTextValues(f: TextForm): TextValues {
-  const box = parseFloat(f.boxWidth);
+  const box = fieldNumber(f.boxWidth);
   return {
     text: f.text,
     ...(f.font ? { font: f.font } : {}),
     // `|| 10` and `|| 0` are the empty-field fallbacks, not defaults: NaN would
     // reach the engine as null and fail the build.
-    height: parseFloat(f.height) || 10,
+    height: fieldNumber(f.height) || 10,
     style: styleOf(f.bold, f.italic),
     align: f.align,
-    angle: parseFloat(f.angle) || 0,
+    angle: fieldNumber(f.angle) || 0,
     ...(box > 0 ? { boxWidth: box } : {}),
   };
 }

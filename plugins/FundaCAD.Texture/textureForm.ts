@@ -20,6 +20,7 @@
 import type {
   ChoiceField, Feature, FieldKind, FileField, Num, Selector, TargetField, ToggleField,
 } from "fundacad";
+import { fieldError, fieldNumber } from "fundacad";
 
 export type TextureKind =
   | "knurl" | "hex" | "waves" | "ribs" | "voronoi" | "noise" | "image"
@@ -403,36 +404,51 @@ export function initialTextureForm(initial: Partial<TextureValues>): TextureForm
 }
 
 /** Parse a numeric field, clamp to [lo, hi], and fall back to `def` when it is
- *  blank or unparseable. Unlike `parseFloat(x) || def`, a real 0 survives. */
+ *  blank or unparseable. Unlike `fieldNumber(x) || def`, a real 0 survives. */
 function clampOr(s: string, def: number, lo: number, hi: number): number {
-  const n = parseFloat(s);
+  const n = fieldNumber(s);
   return Number.isNaN(n) ? def : Math.max(lo, Math.min(hi, n));
+}
+
+const NUMBER_FIELDS = [
+  "depth", "scale", "angle", "sharpness", "seed", "offset", "edgeBlend", "grime", "smooth",
+  "seamBlend", "seamBand", "amplitude", "slopeMin", "slopeMax", "targetEdge", "triBudget",
+] as const satisfies readonly (keyof TextureForm)[];
+
+/** The message for each number box whose text the shared parser rejects. */
+export function textureFormErrors(f: TextureForm): Partial<Record<(typeof NUMBER_FIELDS)[number], string>> {
+  const out: Partial<Record<(typeof NUMBER_FIELDS)[number], string>> = {};
+  for (const k of NUMBER_FIELDS) {
+    const e = fieldError(f[k]);
+    if (e) out[k] = e;
+  }
+  return out;
 }
 
 export function toTextureValues(f: TextureForm): TextureValues {
   return {
     kind: f.kind,
-    depth: parseFloat(f.depth) || 0.4,
-    scale: parseFloat(f.scale) || 2,
-    angle: parseFloat(f.angle) || 0,
-    offset: parseFloat(f.offset) || 0,
-    sharpness: parseFloat(f.sharpness) || 0,
+    depth: fieldNumber(f.depth) || 0.4,
+    scale: fieldNumber(f.scale) || 2,
+    angle: fieldNumber(f.angle) || 0,
+    offset: fieldNumber(f.offset) || 0,
+    sharpness: fieldNumber(f.sharpness) || 0,
     profile: f.profile,
-    boundaryInset: Math.max(0, parseFloat(f.edgeBlend) || 0),
-    grime: Math.max(0, parseFloat(f.grime) || 0),
-    smooth: Math.max(0, Math.min(1, parseFloat(f.smooth) || 0)),
+    boundaryInset: Math.max(0, fieldNumber(f.edgeBlend) || 0),
+    grime: Math.max(0, fieldNumber(f.grime) || 0),
+    smooth: Math.max(0, Math.min(1, fieldNumber(f.smooth) || 0)),
     projection: f.projection,
-    seamBlend: Math.max(0, Math.min(1, parseFloat(f.seamBlend) || 0)),
-    seamBand: Math.max(0, Math.min(1, parseFloat(f.seamBand) || 0)),
+    seamBlend: Math.max(0, Math.min(1, fieldNumber(f.seamBlend) || 0)),
+    seamBand: Math.max(0, Math.min(1, fieldNumber(f.seamBand) || 0)),
     // clamp with a NaN-safe fallback, not `|| default`, so a legitimate 0
     // amplitude is not read back as full depth
     amplitude: clampOr(f.amplitude, 1, 0, 1),
     slopeMin: clampOr(f.slopeMin, 0, 0, 180),
     slopeMax: clampOr(f.slopeMax, 180, 0, 180),
-    targetEdge: Math.max(0, parseFloat(f.targetEdge) || 0),
-    triBudget: Math.max(0, Math.round(parseFloat(f.triBudget) || 0)),
+    targetEdge: Math.max(0, fieldNumber(f.targetEdge) || 0),
+    triBudget: Math.max(0, Math.round(fieldNumber(f.triBudget) || 0)),
     direction: f.direction,
-    seed: parseFloat(f.seed) || 1,
+    seed: fieldNumber(f.seed) || 1,
     invert: f.invert,
     ...(f.imagePath ? { imagePath: f.imagePath } : {}),
     ...(f.colorSlot !== "" ? { colorSlot: Number(f.colorSlot) } : {}),

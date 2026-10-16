@@ -4,6 +4,7 @@
 // number gets a message beside the fields instead of a silently-kept default.
 
 import { onMounted, onUnmounted, ref } from "vue";
+import { fieldError, fieldNumber } from "fundacad";
 import { ModalFrame } from "fundacad/ui";
 import { parseCustomBedSize } from "./bedFit";
 import type { CustomBedRequest } from "./customBedDialog";
@@ -16,10 +17,17 @@ const height = ref(String(props.req.initial[2]));
 const error = ref("");
 
 function confirm() {
+  const bad = [["Width", width.value], ["Depth", depth.value], ["Height", height.value]]
+    .map(([label, raw]) => [label, fieldError(raw!)] as const)
+    .find(([, e]) => e);
+  if (bad) {
+    error.value = `${bad[0]}: ${bad[1]}`;
+    return;
+  }
   const result = parseCustomBedSize(
-    Number.parseFloat(width.value),
-    Number.parseFloat(depth.value),
-    Number.parseFloat(height.value),
+    fieldNumber(width.value),
+    fieldNumber(depth.value),
+    fieldNumber(height.value),
   );
   if (!result.ok) {
     error.value = result.message;
@@ -53,7 +61,7 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
         <span class="prefs-label">Width</span>
         <span style="display: flex; align-items: center; gap: var(--s-2)">
           <input
-            v-model="width" class="sm-input" style="flex: 1; min-width: 0" type="number" min="0" step="1"
+            v-model="width" class="sm-input" style="flex: 1; min-width: 0" type="text" inputmode="decimal"
             data-testid="bed-custom-width" autofocus
           />
           <span style="width: 22px; font-size: 12px; color: var(--text-dim)">mm</span>
@@ -62,14 +70,14 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
       <label class="prefs-row" style="grid-template-columns: 70px 1fr">
         <span class="prefs-label">Depth</span>
         <span style="display: flex; align-items: center; gap: var(--s-2)">
-          <input v-model="depth" class="sm-input" style="flex: 1; min-width: 0" type="number" min="0" step="1" data-testid="bed-custom-depth" />
+          <input v-model="depth" class="sm-input" style="flex: 1; min-width: 0" type="text" inputmode="decimal" data-testid="bed-custom-depth" />
           <span style="width: 22px; font-size: 12px; color: var(--text-dim)">mm</span>
         </span>
       </label>
       <label class="prefs-row" style="grid-template-columns: 70px 1fr">
         <span class="prefs-label">Height</span>
         <span style="display: flex; align-items: center; gap: var(--s-2)">
-          <input v-model="height" class="sm-input" style="flex: 1; min-width: 0" type="number" min="0" step="1" data-testid="bed-custom-height" />
+          <input v-model="height" class="sm-input" style="flex: 1; min-width: 0" type="text" inputmode="decimal" data-testid="bed-custom-height" />
           <span style="width: 22px; font-size: 12px; color: var(--text-dim)">mm</span>
         </span>
       </label>

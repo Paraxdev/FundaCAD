@@ -7,7 +7,7 @@
 import { describe, it, expect } from "vitest";
 import {
   ANGLE_KINDS, SEED_KINDS, TEXTURE_KINDS, TEXTURE_KIND_GROUPS,
-  basename, initialTextureForm, sharpnessLabel, textureRows, toTextureValues,
+  basename, initialTextureForm, sharpnessLabel, textureFormErrors, textureRows, toTextureValues,
 } from "../../plugins/FundaCAD.Texture/textureForm";
 
 describe("textureRows", () => {
@@ -197,5 +197,20 @@ describe("basename", () => {
     expect(basename("C:\\images\\bump.png")).toBe("bump.png");
     expect(basename("/home/u/bump.png")).toBe("bump.png");
     expect(basename("bump.png")).toBe("bump.png");
+  });
+});
+
+describe("number boxes read the shared measure grammar", () => {
+  it("evaluates arithmetic, fractions and a decimal comma", () => {
+    const f = { ...initialTextureForm({}), depth: "0,2*2", scale: "1/4", angle: "90/2" };
+    const v = toTextureValues(f);
+    expect(v.depth).toBeCloseTo(0.4, 12);
+    expect(v.scale).toBe(0.25);
+    expect(v.angle).toBe(45);
+  });
+
+  it("reports unparseable text per field and nothing for blank", () => {
+    const f = { ...initialTextureForm({}), depth: "2*", grime: "" };
+    expect(Object.keys(textureFormErrors(f))).toEqual(["depth"]);
   });
 });
