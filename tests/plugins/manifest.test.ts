@@ -165,6 +165,13 @@ describe("the install screen's two lists", () => {
     expect(describeGrants(reader).cannot).toContain("Use the internet");
   });
 
+  it("says when a plugin may change what the mouse buttons and keys do", () => {
+    const remap = ok({ ...base, grants: ["input.remap"] });
+    expect(remap.grants).toEqual(["input.remap"]);
+    expect(describeGrants(remap).can).toContain("Change what your mouse buttons and keys do");
+    expect(describeGrants(reader).cannot).toContain("Change what your mouse buttons and keys do");
+  });
+
   it("keeps quiet about the permissions nobody would be reassured by", () => {
     // ui.panel has no "cannot" line on purpose. A list padded with "cannot add
     // a panel" is a list that gets skimmed, and the ones worth reading are in

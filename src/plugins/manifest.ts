@@ -29,6 +29,7 @@ export const GRANTS = [
   "network",
   "network.local",
   "device.input",
+  "input.remap",
   "ui.panel",
   "process.spawn",
 ] as const;
@@ -83,6 +84,10 @@ const COPY: Record<Grant, GrantCopy> = {
   "device.input": {
     can: "Read the 3D mouse or other input device you have plugged in",
     cannot: "Read any device you plug in",
+  },
+  "input.remap": {
+    can: "Change what your mouse buttons and keys do",
+    cannot: "Change what your mouse buttons and keys do",
   },
   "ui.panel": { can: "Add a panel to the window" },
   "process.spawn": {

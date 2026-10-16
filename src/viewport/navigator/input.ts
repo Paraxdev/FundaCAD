@@ -1,8 +1,10 @@
 // Pointer, wheel and touch input for the navigator.
 //
-// The left button is never taken: selection and every tool's handles live on
-// it. Right orbits (pans while Shift is held or the orbit is locked), middle
-// pans. The pointer is captured for the drag, and pointerup, pointercancel and
+// The buttons follow the active binding table (bindings.ts): by default right
+// orbits (pans while Shift is held or the orbit is locked), middle pans, and the
+// left button is never taken. A table may claim the left button with a
+// modifier held; that press, its moves and its release are then swallowed
+// before any tool sees them, unless a tool owns the left button. The pointer is captured for the drag, and pointerup, pointercancel and
 // lostpointercapture all end it, so a drag that leaves the window or is taken
 // by the system cannot leave a gesture running.
 //
@@ -18,6 +20,11 @@
 // claims the press (preventDefault) owns the drag, otherwise the view orbits.
 
 import type { Navigator } from "./navigator";
+import { CLICK_SLOP_PX } from "./navigator";
+import {
+  leftButtonOwned, pointerBindings, resolvePointer, startPointerGesture,
+  type PointerBinding,
+} from "./bindings";
 import { WheelClassifier, type WheelKind } from "./wheelKind";
 
 export type WheelDevice = "auto" | WheelKind;
@@ -80,7 +87,12 @@ export function bindInput(dom: HTMLElement, nav: Navigator, prefs: InputPrefs): 
   const now = () => clock() / 1000;
 
   // --- mouse and pen ------------------------------------------------------------
-  let mouse: { id: number; mask: number; t: number } | null = null;
+  let mouse: {
+    id: number; mask: number; t: number; b: PointerBinding;
+    x0: number; y0: number; travelled: boolean; claimed: boolean;
+  } | null = null;
+  /** The last right press, so a native menu can be let through or held back. */
+  let rightPress: { menu: boolean; upAt: number } | null = null;
 
   const capture = (id: number) => {
     try { dom.setPointerCapture?.(id); } catch { /* capture is a nicety */ }
@@ -316,16 +328,62 @@ export function bindInput(dom: HTMLElement, nav: Navigator, prefs: InputPrefs): 
     else touchEnd(e);
   };
 
+  const startMouse = (e: PointerEvent, b: PointerBinding, claimed: boolean) => {
+    const [x, y] = local(e);
+    mouse = {
+      id: e.pointerId, mask: BUTTON_MASK[e.button]!, t: now(), b,
+      x0: e.clientX, y0: e.clientY, travelled: false, claimed,
+    };
+    capture(e.pointerId);
+    if (b.drag === "orbit") nav.beginOrbit(x, y);
+    else if (b.drag === "pan") nav.beginPan(x, y);
+    else if (b.drag === "zoom") nav.beginZoom(x, y);
+  };
+
+  const noteRight = (e: PointerEvent) => {
+    if (e.button !== 2) return;
+    if (e.type === "pointerdown") rightPress = { menu: resolvePointer(pointerBindings(), e)?.click === "menu", upAt: Infinity };
+    else if (e.type === "pointerup" && rightPress) rightPress.upAt = clock();
+  };
+
+  /** A modifier+left binding takes the press here, in capture, ahead of every
+   *  tool; middle and right are read in onDown, as they always were. */
+  const onMouseCapture = (e: PointerEvent) => {
+    if (e.pointerType === "touch" || replayed.has(e)) return;
+    noteRight(e);
+    if (e.type === "pointerdown") {
+      if (e.button !== 0 || mouse || leftButtonOwned()) return;
+      const b = resolvePointer(pointerBindings(), e);
+      if (!b) return;
+      startMouse(e, b, true);
+      swallow(e);
+      return;
+    }
+    if (!mouse?.claimed || e.pointerId !== mouse.id) return;
+    if (e.type === "pointermove") onMove(e);
+    else onEnd(e);
+    swallow(e);
+  };
+
   const onDown = (e: PointerEvent) => {
     if (e.pointerType === "touch") return;
     if (e.button !== 1 && e.button !== 2) return;
+    if (e.button === 1) e.preventDefault(); // no autoscroll, no paste on Linux
     if (mouse) return; // a second button during a drag changes nothing
-    const [x, y] = local(e);
-    if (e.button === 1) e.preventDefault(); // no autoscroll
-    mouse = { id: e.pointerId, mask: BUTTON_MASK[e.button]!, t: now() };
-    capture(e.pointerId);
-    if (e.button === 2 && !e.shiftKey) nav.beginOrbit(x, y);
-    else nav.beginPan(x, y);
+    const b = resolvePointer(pointerBindings(), e);
+    if (b) startMouse(e, b, false);
+  };
+
+  const sendMenu = (x: number, y: number) => {
+    const Ctor = typeof MouseEvent === "function" ? MouseEvent : null;
+    if (!Ctor || typeof dom.dispatchEvent !== "function") return;
+    const ev = new Ctor("contextmenu", {
+      bubbles: true, cancelable: true, composed: true,
+      clientX: x, clientY: y, button: 2, buttons: 0,
+      view: typeof window !== "undefined" ? window : null,
+    });
+    replayed.set(ev, "menu");
+    dom.dispatchEvent(ev);
   };
 
   const onMove = (e: PointerEvent) => {
@@ -336,6 +394,15 @@ export function bindInput(dom: HTMLElement, nav: Navigator, prefs: InputPrefs): 
     if (typeof e.buttons === "number" && (e.buttons & mouse.mask) === 0) {
       endMouse();
       return;
+    }
+    if (!mouse.travelled && Math.hypot(e.clientX - mouse.x0, e.clientY - mouse.y0) > CLICK_SLOP_PX) {
+      mouse.travelled = true;
+      if (mouse.b.drag === "gesture") {
+        const g = { x: mouse.x0, y: mouse.y0, pointerId: mouse.id, button: mouse.b.button };
+        endMouse();
+        startPointerGesture(g);
+        return;
+      }
     }
     const t = now();
     const dt = t - mouse.t;
@@ -350,7 +417,12 @@ export function bindInput(dom: HTMLElement, nav: Navigator, prefs: InputPrefs): 
       if (e.type === "lostpointercapture" && fingers.has(e.pointerId) && owner === "nav") touchEnd(e);
       return;
     }
-    if (mouse && e.pointerId === mouse.id) endMouse();
+    if (!mouse || e.pointerId !== mouse.id) return;
+    const { b, travelled } = mouse;
+    endMouse();
+    // The browser opens a right button's menu itself; any other menu button
+    // gets one sent, which every menu in the app already answers.
+    if (e.type === "pointerup" && !travelled && b.click === "menu" && b.button !== "right") sendMenu(e.clientX, e.clientY);
   };
 
   // --- wheel --------------------------------------------------------------------------
@@ -418,6 +490,10 @@ export function bindInput(dom: HTMLElement, nav: Navigator, prefs: InputPrefs): 
   const onContext = (e: Event) => {
     e.preventDefault();
     if (systemsOwn(e)) e.stopImmediatePropagation();
+    else if (!replayed.has(e) && (e as MouseEvent).button === 2 && rightPress && !rightPress.menu
+      && clock() - rightPress.upAt < NATIVE_MENU_GRACE_MS) {
+      e.stopImmediatePropagation(); // the right button is not the menu button now
+    }
   };
   const onDblclick = (e: Event) => {
     if (systemsOwn(e)) e.stopImmediatePropagation();
@@ -425,6 +501,7 @@ export function bindInput(dom: HTMLElement, nav: Navigator, prefs: InputPrefs): 
 
   const touchTypes = ["pointerdown", "pointermove", "pointerup", "pointercancel"] as const;
   for (const t of touchTypes) dom.addEventListener(t, onTouchCapture as EventListener, true);
+  for (const t of touchTypes) dom.addEventListener(t, onMouseCapture as EventListener, true);
   dom.addEventListener("contextmenu", onContext, true);
   dom.addEventListener("dblclick", onDblclick, true);
   dom.addEventListener("pointerdown", onDown);
@@ -442,6 +519,7 @@ export function bindInput(dom: HTMLElement, nav: Navigator, prefs: InputPrefs): 
     dispose() {
       clearPress();
       for (const t of touchTypes) dom.removeEventListener(t, onTouchCapture as EventListener, true);
+      for (const t of touchTypes) dom.removeEventListener(t, onMouseCapture as EventListener, true);
       dom.removeEventListener("contextmenu", onContext, true);
       dom.removeEventListener("dblclick", onDblclick, true);
       dom.removeEventListener("pointerdown", onDown);

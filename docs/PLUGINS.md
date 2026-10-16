@@ -80,6 +80,7 @@ that is no.
 | `network` | Connect to *(the hosts it names)* |
 | `network.local` | Talk to devices on your local network |
 | `device.input` | Read the 3D mouse or other input device you have plugged in |
+| `input.remap` | Change what your mouse buttons and keys do |
 | `ui.panel` | Add a panel to the window |
 | `process.spawn` | Start other programs on your computer |
 
@@ -93,7 +94,7 @@ table, so the reassuring half cannot go stale while the alarming half stays
 current. Hand-written reassurance goes stale silently and in the direction that
 hurts.
 
-## The nine plugins this project publishes
+## The plugins this project publishes
 
 | id | what it is | asks for | kind |
 | --- | --- | --- | --- |
@@ -106,6 +107,7 @@ hurts.
 | `FundaCAD.MultiColor` | filament slots, per body and per texture colour | `document.read`, `document.write` | `builtin` |
 | `FundaCAD.Organic` | node bodies: rounded solids from sized nodes linked into smooth limbs | `document.read`, `document.write` | `builtin` |
 | `FundaCAD.Texture` | a printed surface texture on picked faces or a whole body | `document.read`, `document.write`, `files.read` | `builtin` |
+| `FundaCAD.Navigation` | mouse button presets, an opt-in radial menu and a shortcut rebinding panel | `input.remap`, `document.read` | `builtin` |
 
 **THE APP SHIPS NONE OF THEM.** Every one is a zip on a release, installed like
 anybody else's, and a fresh install runs nothing but the app. Three of them used
@@ -261,11 +263,22 @@ with everything it adds, and gets back the removal:
 | `tools` | a modeling tool: what it consumes, and whether it is running |
 | `features` | how a feature type is drawn and edited |
 | `icons` | a mark for a verb the app does not have |
+| `pointerBindings` | which button and modifiers orbit, pan, zoom, open the menu or start a gesture (needs `input.remap`) |
+| `onPointerGesture` | called when a binding's gesture drag starts, with the press point and pointer id |
+| `keymap` | keys moved to other actions, contributed ones included (needs `input.remap`) |
 
 Four things this deliberately is not. There is no generic "run this on event X".
 There is no way to replace a core behaviour: `app/actions.ts` reaches its own
 `switch` before it asks the table, so a contribution naming `save` is inert, and
-that is the order of the code rather than a check that could be forgotten. There
+that is the order of the code rather than a check that could be forgotten. The
+one exception is what the mouse buttons and keys do. `pointerBindings` and
+`keymap` replace the default binding table and move keys, and they come with
+three rules: the default lives in core, one plugin's table is active at a time
+(a second plugin contributing one is refused, not silently preferred), and
+removing the plugin restores the default. `contribute` refuses both without the
+`input.remap` grant. Selection is not rebindable, the left button alone always
+selects, and the keys handled before the table (undo, save, Escape, Tab, `?`)
+cannot be taken. The `?nav=legacy` camera ignores the table. There
 is no way to read another plugin's contributions except `service()`, which hands
 back an opaque value the app never looks inside, the same arrangement as grant
 strings, which Rust compares without knowing what one means. And the table names
