@@ -315,3 +315,19 @@ fn a_plane_normal_to_a_circle_sits_at_an_edited_fraction() {
         }
     }
 }
+
+/// The edge's fingerprint runs +Y, so a positive angle turns the top face's
+/// normal toward +X, and on past 90 degrees without flipping back.
+#[test]
+fn a_plane_at_an_angle_turns_one_way_about_its_edge_and_keeps_turning_past_90() {
+    let d = |a: f64| json!({"parameters": {"a": a}, "features": [
+        {"id": "b", "type": "box", "length": 40, "width": 20, "height": 20},
+        {"id": "an", "type": "datumPlane", "plane": {"origin": [20, 0, 10], "normal": [0, 0, 1], "xdir": [1, 0, 0]},
+         "angle": "a", "through": {"kind": "angle", "edge": top_edge_of_plus_x(), "from": {"face": top_face()}}},
+    ]});
+    for a in [30.0, -30.0, 150.0] {
+        let r = build(d(a)).datum_planes["an"];
+        let want = [f64::sin(f64::to_radians(a)), 0.0, f64::cos(f64::to_radians(a))];
+        assert!(near(r.normal, want), "angle {a}: {r:?} want {want:?}");
+    }
+}

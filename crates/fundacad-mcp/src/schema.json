@@ -518,7 +518,7 @@
     "imagePath": "optional path of the image; required with kind \"image\"",
     "angle": "optional Num, degrees, default 0",
     "offset": "optional Num, default 0",
-    "sharpness": "optional Num, default 0.5, counted in the direction the cached `plane` normal points where it sits on the edge",
+    "sharpness": "optional Num, default 0.5",
     "seed": "optional whole Num, default 0",
     "octaves": "optional whole Num, 1 to 6, default 3",
     "invert": "optional bool",
@@ -1052,8 +1052,8 @@
     "tiltY": "optional Num, degrees about the y axis as tiltX left it",
     "spin": "optional Num, degrees about the normal as both tilts left it, turns the plane's own x and y",
     "through": "optional object that rebuilds the plane from model references every rebuild, preferred over `planeId` and `face`; `plane` is then only the cache. `kind` is one of: mid {a, b} halfway between two planes (their bisector when they cross); points {points: [3 PointAt]}; normalToEdge {edge, vertex?} normal to an edge at `t` or at a PointAt vertex; twoEdges {a, b} through two parallel or crossing coplanar straight edges; angle {edge, from} through a straight edge, turned `angle` degrees from the plane `from`. A plane reference is {\"face\": Selector} for a flat face or {\"plane\": \"XY\"|\"XZ\"|\"YZ\"|datum plane id}. A PointAt is {\"edge\": Selector, \"end\": \"start\"|\"end\"|\"mid\"} or {\"edge\": Selector, \"t\": 0..1}, either with an optional \"point\": [x,y,z] where it was, {\"face\": Selector} for its centre, or {\"datum\": point id}",
-    "t": "optional Num 0..1, where along the edge a normalToEdge plane sits, default 0.5",
-    "angle": "optional Num, degrees an angle plane turns about its edge from `from`, right handed about the edge",
+    "t": "optional Num 0..1, where along the edge a normalToEdge plane sits, default 0.5, counted in the direction the cached `plane` normal points where it sits on the edge",
+    "angle": "optional Num, degrees an angle plane turns about its edge from `from`, right handed about the edge fingerprint's `dir` (the kernel's edge direction for other selectors)",
     "name": "optional label"
    },
    "example": {

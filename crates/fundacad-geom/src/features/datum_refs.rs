@@ -272,9 +272,22 @@ pub fn plane_through(ctx: &mut Ctx, f: &DatumPlane, through: &PlaneThrough) -> F
             }
             _ => None,
         },
+        // Turned about the fingerprint's direction, not the kernel's, so the
+        // sense of the angle is the app's and survives an edit reversing the
+        // edge; the normal is not flipped toward the cache, so an angle past
+        // 90 degrees keeps turning a sketch on it instead of mirroring it.
         PlaneThrough::Angle { edge, from } => match (look.line(edge), look.plane(from)?) {
             (Some((o, d)), Some((_, nr))) => {
-                unit(nr - d * d.dot(nr)).and_then(|np| settle(Some(o), o, rotate(np, d, angle), &cached))
+                let d = match fp_vec(edge, "dir") {
+                    Some(s) if d.dot(s) < 0.0 => -d,
+                    _ => d,
+                };
+                unit(nr - d * d.dot(nr))
+                    .and_then(|np| plane_from_point_normal(o, rotate(np, d, angle)))
+                    .map(|mut p| {
+                        p.origin = o.to_array();
+                        with_x_dir(p, DVec3::from(cached.x))
+                    })
             }
             _ => None,
         },
