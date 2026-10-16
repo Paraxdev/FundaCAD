@@ -298,12 +298,67 @@ feature_struct!(
         #[serde(default, skip_serializing_if = "Option::is_none")] spin: Option<Num>,
         #[serde(default, skip_serializing_if = "Option::is_none")] shift_x: Option<Num>,
         #[serde(default, skip_serializing_if = "Option::is_none")] shift_y: Option<Num>,
+        /// Model references the base plane is rebuilt from, ahead of `planeId`
+        /// and `face`, with `plane` as the cache when one stops resolving.
+        #[serde(default, skip_serializing_if = "Option::is_none")] through: Option<PlaneThrough>,
+        /// Fraction 0..1 along the edge of a `normalToEdge` plane.
+        #[serde(default, skip_serializing_if = "Option::is_none")] t: Option<Num>,
+        /// Degrees about the edge of an `angle` plane.
+        #[serde(default, skip_serializing_if = "Option::is_none")] angle: Option<Num>,
     }
 );
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum PlaneThrough {
+    /// Halfway between two planes, their bisector when they cross.
+    Mid { a: PlaneOf, b: PlaneOf },
+    Points { points: Vec<PointAt> },
+    /// Normal to `edge` at the datum's `t`, or at `vertex` when given.
+    #[serde(rename_all = "camelCase")]
+    NormalToEdge {
+        edge: Selector,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        vertex: Option<PointAt>,
+    },
+    /// Through two parallel or crossing coplanar edges.
+    TwoEdges { a: Selector, b: Selector },
+    /// Through `edge`, turned the datum's `angle` from the plane `from`.
+    Angle { edge: Selector, from: PlaneOf },
+}
+
+/// A plane a datum is built from: a flat face, or XY, XZ, YZ or a datum plane id.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum PlaneOf {
+    Face { face: Selector },
+    Named { plane: String },
+}
+
+/// A point a datum is built from. On an edge: `end` is start, end or mid, else
+/// `t` is a fraction 0..1; `point` is where it was, which picks the end
+/// meant when an edit reverses the edge. On a face, its centre.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum PointAt {
+    Edge {
+        edge: Selector,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        end: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        t: Option<Num>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        point: Option<Vec3>,
+    },
+    Face { face: Selector },
+    Datum { datum: String },
+}
 
 feature_struct!(DatumPoint {
     point: Vec3,
     #[serde(default, skip_serializing_if = "Option::is_none")] name: Option<String>,
+    /// The model point it follows, `point` being the cache.
+    #[serde(default, skip_serializing_if = "Option::is_none")] at: Option<PointAt>,
 });
 
 feature_struct!(DatumAxis {
@@ -311,7 +366,18 @@ feature_struct!(DatumAxis {
     dir: Vec3,
     #[serde(default, skip_serializing_if = "Option::is_none")] name: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")] axis_edge: Option<Selector>,
+    #[serde(default, skip_serializing_if = "Option::is_none")] through: Option<AxisThrough>,
 });
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum AxisThrough {
+    Points { a: PointAt, b: PointAt },
+    /// The axis of a cylindrical face.
+    Cylinder { face: Selector },
+    /// Where two planes meet.
+    Planes { a: PlaneOf, b: PlaneOf },
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ImportNode {
