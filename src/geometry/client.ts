@@ -2,7 +2,7 @@
 // One request/response per message, matched by `id`. Calls made before the
 // transport opens are queued and flushed on open; the transport reconnects.
 
-import type { CadDocument, EdgeFingerprint, ExportFormat, F32Wire, MeshExportOptions, Feature, ImportFormat, ImportReply, PlaneSpec, ProjectedCurve, ProjectedSource, RebuildReply, RebuildResult, Selector, U32Wire, Vec3 } from "../types";
+import type { CadDocument, EdgeFingerprint, ExportFormat, F32Wire, MeshExportOptions, Feature, ImportFormat, ImportReply, PlaneSpec, ProjectedCurve, ProjectedSource, RebuildReply, RebuildResult, Selector, SketchEntity, U32Wire, Vec3 } from "../types";
 import { RebuildAssembly, manifestFromBodies } from "./assembly";
 import { pipe, pipeFault } from "../diagnostics/pipelineLog";
 import { EngineTransport, type GeometryTransport } from "./transport";
@@ -1312,10 +1312,11 @@ export class Geometry implements GeometryBackend {
 
   private async importRequest(req: object, onStarted?: (id: string) => void): Promise<ImportReply> {
     const msg = await this.call<{
-      geom: string; name: string; solid: boolean; faces: number; color?: string;
+      geom?: string; name: string; solid?: boolean; faces?: number; color?: string;
       nodes?: { name: string; parent: number | null; color?: string }[];
       parts?: { node: number; faces: number }[];
       notes?: string[]; unit?: string;
+      sketches?: { name: string; entities: SketchEntity[] }[];
     }>("import", req, onStarted);
     if (msg.ok) {
       const r = msg.result;
@@ -1326,6 +1327,7 @@ export class Geometry implements GeometryBackend {
         ...(r.parts !== undefined ? { parts: r.parts } : {}),
         ...(r.notes !== undefined ? { notes: r.notes } : {}),
         ...(r.unit !== undefined ? { unit: r.unit } : {}),
+        ...(r.sketches !== undefined ? { sketches: r.sketches } : {}),
       };
     }
     if (!msg.ok && msg.cancelled) return { ok: false, cancelled: true, message: "import cancelled" };
