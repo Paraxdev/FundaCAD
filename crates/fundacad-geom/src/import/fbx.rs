@@ -14,7 +14,7 @@ pub fn read_fbx(data: &[u8]) -> Result<(Vec<MeshObject>, Vec<String>), String> {
             front: CoordinateAxis::NegativeY,
         },
         target_unit_meters: 0.001,
-        space_conversion: SpaceConversion::ModifyGeometry,
+        space_conversion: SpaceConversion::TransformRoot,
         ignore_animation: true,
         ignore_embedded: true,
         ..Default::default()
