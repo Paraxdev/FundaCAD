@@ -5,7 +5,7 @@
 import * as THREE from "three";
 import type { SketchConstraint } from "../types";
 import { asRound } from "./entityDims";
-import { inferLineDirection } from "./inferLine";
+import { inferLineDirection, onLattice } from "./inferLine";
 import type { ResolvedEntity, SnapKind, SnapRef } from "./snap";
 
 export interface InferLineInput {
@@ -22,6 +22,9 @@ export interface InferLineInput {
   /** Live grid lattice, 0 when grid snapping is off. */
   step: number;
   tolDeg: number;
+  /** How far, in mm, a line may be from the start or the cursor and still be
+   *  offered as a parallel or perpendicular reference. */
+  nearMm: number;
   /** The Snap toggle: off leaves only the exact horizontal and vertical rules. */
   smart: boolean;
   typedAngle?: boolean;
@@ -103,6 +106,42 @@ export function tangentFrom(id: string, ref: SnapRef | null | undefined, entitie
   return { dir: leave.negate(), relation };
 }
 
+/** Within this a lattice end counts as lying on a guessed direction. */
+const EXACT_DEG = 1e-6;
+
+function distToSegment(q: THREE.Vector2, a: THREE.Vector2, b: THREE.Vector2): number {
+  const ab = b.clone().sub(a);
+  const l2 = ab.lengthSq();
+  const t = l2 > 0 ? Math.min(1, Math.max(0, q.clone().sub(a).dot(ab) / l2)) : 0;
+  return q.distanceTo(a.clone().addScaledVector(ab, t));
+}
+
+/** Tangent continuation of the curve the line starts on, else parallel or
+ *  perpendicular to a line within `nearMm` of the start or the cursor. */
+function guessDirection(
+  id: string, start: THREE.Vector2, cursor: THREE.Vector2, draw: THREE.Vector2,
+  startRef: SnapRef | null | undefined, entities: readonly ResolvedEntity[], tol: number, nearMm: number,
+): { dir: THREE.Vector2; relation: SketchConstraint; hint?: [THREE.Vector2, THREE.Vector2] } | null {
+  const tan = tangentFrom(id, startRef, entities);
+  if (tan && angleBetween(draw, tan.dir) <= tol) return tan;
+  let bestErr = tol, pick: { a: THREE.Vector2; b: THREE.Vector2; lineId: string; dir: THREE.Vector2; kind: "parallel" | "perpendicular" } | null = null;
+  for (const e of entities) {
+    if (e.type !== "line" || e.id === id) continue;
+    const a = new THREE.Vector2(e.x1, e.y1), b = new THREE.Vector2(e.x2, e.y2);
+    if (Math.min(distToSegment(start, a, b), distToSegment(cursor, a, b)) > nearMm) continue;
+    const d = b.clone().sub(a);
+    if (d.lengthSq() < 1e-18) continue;
+    d.normalize();
+    const n = new THREE.Vector2(-d.y, d.x);
+    for (const [kind, dir] of [["parallel", d], ["perpendicular", n]] as const) {
+      const err = Math.min(angleBetween(draw, dir), 180 - angleBetween(draw, dir));
+      if (err <= bestErr) { bestErr = err; pick = { a, b, lineId: e.id, dir, kind }; }
+    }
+  }
+  if (!pick) return null;
+  return { dir: pick.dir, relation: { type: pick.kind, l1: pick.lineId, l2: id }, hint: [pick.a, pick.b] };
+}
+
 export function inferLineRelations(inp: InferLineInput): InferResult {
   const { id, start, entities, smart } = inp;
   let end = inp.end.clone();
@@ -127,31 +166,18 @@ export function inferLineRelations(inp: InferLineInput): InferResult {
       else end.x = start.x;
       relations.push({ type: hv, line: id });
     } else if (smart && !anchored && tol > 0) {
-      const raw = inp.raw ?? end;
+      // A lattice end is the user's choice: a guess may only name a direction
+      // the snapped end already lies on, never move it off the lattice.
+      const gridded = inp.step > 0 && [start.x, start.y, end.x, end.y].every((v) => onLattice(v, inp.step));
+      const raw = gridded ? end.clone() : (inp.raw ?? end);
       const draw = raw.clone().sub(start);
+      const within = gridded ? EXACT_DEG : tol;
       if (draw.lengthSq() > 1e-12) {
-        const tan = tangentFrom(id, inp.startRef, entities);
-        if (tan && angleBetween(draw, tan.dir) <= tol) {
-          end = along(start, tan.dir, raw);
-          relations.push(tan.relation);
-        } else {
-          let bestErr = tol, pick: { line: Extract<ResolvedEntity, { type: "line" }>; dir: THREE.Vector2; kind: "parallel" | "perpendicular" } | null = null;
-          for (const e of entities) {
-            if (e.type !== "line" || e.id === id) continue;
-            const d = new THREE.Vector2(e.x2 - e.x1, e.y2 - e.y1);
-            if (d.lengthSq() < 1e-18) continue;
-            d.normalize();
-            const n = new THREE.Vector2(-d.y, d.x);
-            for (const [kind, dir] of [["parallel", d], ["perpendicular", n]] as const) {
-              const err = Math.min(angleBetween(draw, dir), 180 - angleBetween(draw, dir));
-              if (err <= bestErr) { bestErr = err; pick = { line: e, dir, kind }; }
-            }
-          }
-          if (pick) {
-            end = along(start, pick.dir, raw);
-            relations.push({ type: pick.kind, l1: pick.line.id, l2: id });
-            hints.push([new THREE.Vector2(pick.line.x1, pick.line.y1), new THREE.Vector2(pick.line.x2, pick.line.y2)]);
-          }
+        const guess = guessDirection(id, start, raw, draw, inp.startRef, entities, within, inp.nearMm);
+        if (guess) {
+          if (!gridded) end = along(start, guess.dir, raw);
+          relations.push(guess.relation);
+          if (guess.hint) hints.push(guess.hint);
         }
       }
     }

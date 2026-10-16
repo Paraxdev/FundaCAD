@@ -193,7 +193,7 @@ export class SketchMode {
   private candidates: SnapCandidate[] = []; // cached; rebuilt when entities change
   private curves: SnapCurve[] = [];
   /** What the last snapAt caught, so a click commits what the hover previewed. */
-  private lastHit: { p: THREE.Vector2; raw: THREE.Vector2; kind: SnapKind; ref?: SnapRef | undefined } | null = null;
+  private lastHit: { p: THREE.Vector2; raw: THREE.Vector2; kind: SnapKind; ref?: SnapRef | undefined; noSnap?: boolean } | null = null;
   private baseRef: SnapRef | null = null;
   private arcStartRef: SnapRef | null = null;
   private arcEndRef: SnapRef | null = null;
@@ -2919,7 +2919,8 @@ export class SketchMode {
       entities: this.entities,
       step: this.gridSnap ? this.snapStep() : 0,
       tolDeg: closing ? 0 : INFER_TOL_DEG,
-      smart: this.gridSnap,
+      nearMm: this.planeMmPerPx() * hitPx(120),
+      smart: this.gridSnap && !h?.noSnap,
       typedAngle: this.dim.isUserDriven("angle"),
     });
   }
@@ -2996,7 +2997,7 @@ export class SketchMode {
     const p2d = this.plane.to2D(world);
     // Hold Ctrl to suppress snapping for fine placement (raw cursor position).
     if (noSnap) {
-      this.lastHit = { p: p2d.clone(), raw: p2d.clone(), kind: "free" };
+      this.lastHit = { p: p2d.clone(), raw: p2d.clone(), kind: "free", noSnap: true };
       return { p: p2d, kind: "free" as SnapKind, world, guides: [] as SnapGuide[], label: undefined, ref: undefined as SnapRef | undefined };
     }
     const res = snap(
