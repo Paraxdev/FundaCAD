@@ -1250,7 +1250,7 @@ export class Viewport {
 
   /** A corner, edge middle, face centre or bare surface under the cursor. Only edge
    *  ends and middles are offered, never mesher samples (ranking in pointSnap.ts). */
-  pointAt(clientX: number, clientY: number): { p: THREE.Vector3; kind: ModelPointKind } | null {
+  pointAt(clientX: number, clientY: number): { p: THREE.Vector3; kind: ModelPointKind; edge?: PointCandidate["edge"] } | null {
     if (!this.model) return null;
     const cands: PointCandidate[] = [];
     for (const e of this.model.edges) {
@@ -1258,10 +1258,12 @@ export class Viewport {
       const pts = e.points;
       const first = pts[0];
       const last = pts[pts.length - 1];
-      if (first) cands.push({ p: [first[0], first[1], first[2]], kind: "vertex" });
-      if (last) cands.push({ p: [last[0], last[1], last[2]], kind: "vertex" });
+      const line = pts.map((q) => [q[0], q[1], q[2]] as [number, number, number]);
+      const on = (end: "start" | "end" | "mid") => ({ points: line, body: e.body, end });
+      if (first) cands.push({ p: [first[0], first[1], first[2]], kind: "vertex", edge: on("start") });
+      if (last) cands.push({ p: [last[0], last[1], last[2]], kind: "vertex", edge: on("end") });
       const mid = polylineMidpoint3(pts);
-      if (mid) cands.push({ p: mid, kind: "midpoint" });
+      if (mid) cands.push({ p: mid, kind: "midpoint", edge: on("mid") });
     }
     // The face under the cursor contributes its own centre and, as the last
     // resort, the exact spot the ray struck it.
@@ -1281,7 +1283,9 @@ export class Viewport {
       // A fingertip covers more of the screen than a cursor, so the snap reach grows with it.
       POINT_SNAP_PX * hitScale(),
     );
-    return best ? { p: new THREE.Vector3(best.p[0], best.p[1], best.p[2]), kind: best.kind } : null;
+    return best
+      ? { p: new THREE.Vector3(best.p[0], best.p[1], best.p[2]), kind: best.kind, ...(best.edge ? { edge: best.edge } : {}) }
+      : null;
   }
 
   private pointScratch = new THREE.Vector3();
@@ -2226,6 +2230,11 @@ export class Viewport {
     const fit = this.roundFit(faceId);
     const radial = fit && radialAt(fit.cylinder, [at.x, at.y, at.z]);
     return fit && radial ? this.roundFrom(fit, radial) : null;
+  }
+
+  /** The cylinder a round face lies on, or null for any other face. */
+  faceCylinder(faceId: number): Cylinder | null {
+    return this.roundFit(faceId)?.cylinder ?? null;
   }
 
   private roundFit(faceId: number): { cylinder: Cylinder; solidInside: boolean; points: Vec3[]; full: boolean } | null {

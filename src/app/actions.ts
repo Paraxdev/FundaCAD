@@ -164,6 +164,21 @@ export function createActions(e: Engine): (action: string) => void {
       case "datum-axis-edge":
         e.starters.createDatumAxisOnEdge();
         break;
+      case "plane-normal-edge":
+        e.starters.createPlaneNormalToEdge();
+        break;
+      case "plane-two-edges":
+        e.starters.createPlaneThroughEdges();
+        break;
+      case "plane-angle":
+        e.starters.createPlaneAtAngle();
+        break;
+      case "axis-cylinder":
+        e.starters.createAxisFromCylinder();
+        break;
+      case "axis-planes":
+        e.starters.createAxisFromPlanes();
+        break;
       case "import":
         void importModel(e.store, e.geometry);
         break;

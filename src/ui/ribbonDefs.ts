@@ -123,6 +123,9 @@ export const MODEL: Group[] = [
           { action: "datum-plane", label: "Datum Plane", iconName: "datumPlane" },
           { action: "midplane", label: "Midplane", iconName: "midplane" },
           { action: "plane-points", label: "Plane, 3 Pts", iconName: "planePoints" },
+          { action: "plane-normal-edge", label: "Normal to Edge", iconName: "datumPlane" },
+          { action: "plane-two-edges", label: "Plane, 2 Edges", iconName: "datumPlane" },
+          { action: "plane-angle", label: "Plane at Angle", iconName: "datumPlane" },
         ],
       },
       {
@@ -131,6 +134,8 @@ export const MODEL: Group[] = [
           { action: "datum-point", label: "Datum Point", iconName: "datumPoint" },
           { action: "datum-axis", label: "Datum Axis", iconName: "datumAxis" },
           { action: "datum-axis-edge", label: "Axis on Edge", iconName: "datumAxis" },
+          { action: "axis-cylinder", label: "Axis of Cylinder", iconName: "datumAxis" },
+          { action: "axis-planes", label: "Axis, 2 Planes", iconName: "datumAxis" },
         ],
       },
     ],

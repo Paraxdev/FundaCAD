@@ -103,8 +103,16 @@ export function featureNumFields(
   return common.length ? [...base, ...common] : base;
 }
 
+// Only on the datum plane forms that read them: `t` a fraction 0..1 along the
+// edge (dimensionless, so "count"), `angle` the turn about the edge.
+const DATUM_REF_FIELDS: [string, string, FieldKind][] = [["t", "Position", "count"], ["angle", "Angle", "angle"]];
+
 function typeNumFields(type: string, values?: Record<string, unknown>): readonly [string, string, FieldKind][] {
   const own = FEATURE_NUM_FIELDS[type as Feature["type"]];
+  if (own && type === "datumPlane" && values) {
+    const extra = DATUM_REF_FIELDS.filter(([field]) => values[field] !== undefined);
+    return extra.length ? [...own, ...extra] : own;
+  }
   if (own) return own;
   const contributed = contributedFeature(type)?.numFields;
   if (contributed) return typeof contributed === "function" ? contributed(values ?? {}) : contributed;

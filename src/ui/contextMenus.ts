@@ -23,6 +23,7 @@ import { BOOLEAN_COMMANDS } from "../features/booleanOps";
 import { keyHint } from "../input/shortcuts";
 import type { Feature, PlaneDef } from "../types";
 import type { EdgeHit, FaceHit } from "../viewport/picking";
+import type { FacePlanePick } from "../features/facePlanePick";
 
 export interface ContextMenusDeps {
   store: DocumentStore;
@@ -51,6 +52,7 @@ export interface ContextMenusDeps {
   setLastAction: (action: string) => void;
   startCutByPlane: (planeId: string) => void | Promise<void>;
   offsetPlaneFromFace: (face: PlaneDef, parentId?: string) => void;
+  axisFromRoundFace: (face: FacePlanePick | null) => void;
 }
 
 export function createContextMenus(deps: ContextMenusDeps) {
@@ -74,6 +76,7 @@ export function createContextMenus(deps: ContextMenusDeps) {
     setLastAction,
     startCutByPlane,
     offsetPlaneFromFace,
+    axisFromRoundFace,
   } = deps;
 
   /** Wrap a menu item that starts a tool or mutates the DOCUMENT: the click runs
@@ -120,6 +123,8 @@ export function createContextMenus(deps: ContextMenusDeps) {
       // routed through handleAction so "Repeat <command>" records them
       { label: "Fillet", shortcut: keyHint("fillet"), onClick: unlessBusy(() => { viewport.selectOnlyEdge(hit.edge); handleAction("fillet"); }) },
       { label: "Chamfer", shortcut: keyHint("chamfer"), onClick: unlessBusy(() => { viewport.selectOnlyEdge(hit.edge); handleAction("chamfer"); }) },
+      { label: "Plane normal to edge", onClick: unlessBusy(() => { viewport.selectOnlyEdge(hit.edge); handleAction("plane-normal-edge"); }) },
+      { label: "Plane at angle", onClick: unlessBusy(() => { viewport.selectOnlyEdge(hit.edge); handleAction("plane-angle"); }) },
       { separator: true, label: "" },
       { label: "Measure from here", shortcut: keyHint("measure"), onClick: unlessBusy(() => { setLastAction("measure"); measure.startWith(hit); }) },
     ]);
@@ -151,6 +156,9 @@ export function createContextMenus(deps: ContextMenusDeps) {
         }),
       },
       { label: "Offset plane from face", shortcut: keyHint("offset-plane"), disabled: !plane, onClick: unlessBusy(() => { if (plane) offsetPlaneFromFace(plane); }) },
+      ...(facePick?.kind === "tangent"
+        ? [{ label: "Axis of cylinder", onClick: unlessBusy(() => axisFromRoundFace(facePick)) }]
+        : []),
       { separator: true, label: "" },
       ...(owner
         ? [{ label: `${isInspectorEditable(owner.type) ? "Edit" : "Select"} ${ownerLabel}`, onClick: unlessBusy(() => editFeature(owner.id)) }]
