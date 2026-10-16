@@ -9,7 +9,7 @@
 use std::collections::HashMap;
 use std::f64::consts::PI;
 
-use fundacad_core::schema::{Num, ProjectedCurve, SketchEntity, SketchFeature, SketchPattern};
+use fundacad_core::schema::{FillRule, Num, ProjectedCurve, SketchEntity, SketchFeature, SketchPattern};
 use opencascade::primitives::Shape;
 
 use super::face_anchor::{face_anchor_plane, Placement};
@@ -813,6 +813,30 @@ fn faces_from_edges(edges: &[Shape]) -> Vec<Shape> {
     out
 }
 
+/// The arrangement cells inside an odd number of the outlines.
+fn evenodd_cells(cells: &[Shape], outlines: &[Shape], edges: &[Shape]) -> Vec<Shape> {
+    let boxes: Vec<Option<[f64; 6]>> = outlines.iter().map(kernel::bbox).collect();
+    let boundary = kernel::compound(edges);
+    let margin = 1e-6 * kernel::bbox_diagonal(&boundary).max(1.0);
+    let clear = |x: f64, y: f64| kernel::distance_to_point(&boundary, [x, y, 0.0]).is_some_and(|d| d > margin);
+    let mut kept = Vec::new();
+    for cell in cells.iter().flat_map(|c| kernel::subshapes(c, Kind::Face)) {
+        let Some([x, y]) = inside_point_by(&cell, |x, y| kernel::face_contains(&cell, [x, y, 0.0], 1e-7), clear) else {
+            continue;
+        };
+        let depth = outlines
+            .iter()
+            .zip(&boxes)
+            .filter(|(o, b)| b.is_some_and(|b| x >= b[0] - 1e-7 && x <= b[3] + 1e-7 && y >= b[1] - 1e-7 && y <= b[4] + 1e-7)
+                && kernel::face_contains(o, [x, y, 0.0], 1e-7))
+            .count();
+        if depth % 2 == 1 {
+            kept.push(cell);
+        }
+    }
+    kept
+}
+
 fn fuse_all(faces: &[Shape]) -> FResult<Shape> {
     match faces {
         [] => Err(Fail::Internal("ValueError".into())),
@@ -928,14 +952,16 @@ pub fn build(ctx: &Ctx, f: &SketchFeature, followed: Option<Placement>) -> FResu
     if !edges.is_empty() {
         faces.extend(faces_from_edges(&edges));
     }
+    let cells = if all_edges.is_empty() { Vec::new() } else { kernel::subdivide(&all_edges) };
+    if matches!(f.fill_rule, Some(FillRule::EvenOdd)) && !faces.is_empty() {
+        faces = evenodd_cells(&cells, &faces, &all_edges);
+    }
     faces.extend(text_local.iter().cloned());
 
     let mut located: Vec<Shape> = Vec::new();
-    if !all_edges.is_empty() {
-        for cell in kernel::subdivide(&all_edges) {
-            let placed = plane.locate(&cell)?;
-            located.extend(kernel::subshapes(&placed, Kind::Face));
-        }
+    for cell in &cells {
+        let placed = plane.locate(cell)?;
+        located.extend(kernel::subshapes(&placed, Kind::Face));
     }
     for tf in &text_local {
         located.extend(kernel::subshapes(&plane.locate(tf)?, Kind::Face));
@@ -1348,8 +1374,13 @@ fn inside_point(face: &Shape, avoid: &[Shape]) -> Option<[f64; 2]> {
     let good = |x: f64, y: f64| {
         kernel::face_contains(face, [x, y, 0.0], 1e-7) && !avoid.iter().any(|a| kernel::face_contains(a, [x, y, 0.0], 1e-7))
     };
+    inside_point_by(face, good, |_, _| true)
+}
+
+/// `good` is tested on every scan sample, `strict` only on the candidates.
+fn inside_point_by(face: &Shape, good: impl Fn(f64, f64) -> bool, strict: impl Fn(f64, f64) -> bool) -> Option<[f64; 2]> {
     let c = kernel::face_area_centre(face)?;
-    if good(c[1], c[2]) {
+    if good(c[1], c[2]) && strict(c[1], c[2]) {
         return Some([c[1], c[2]]);
     }
     let b = kernel::bbox(face)?;
@@ -1373,7 +1404,7 @@ fn inside_point(face: &Shape, avoid: &[Shape]) -> Option<[f64; 2]> {
         }
     }
     runs.sort_by(|a, b| b.0.total_cmp(&a.0));
-    runs.into_iter().map(|(_, p)| p).find(|p| good(p[0], p[1]))
+    runs.into_iter().map(|(_, p)| p).find(|p| good(p[0], p[1]) && strict(p[0], p[1]))
 }
 
 /// The areas closed shapes bound: a rectangle, circle or ellipse each its own,

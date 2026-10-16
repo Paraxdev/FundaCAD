@@ -82,6 +82,11 @@ open_enum! {
     pub enum ImportFormat { Stl = "stl", ThreeMf = "3mf", Step = "step", Obj = "obj", Brep = "brep", Glb = "glb", Iges = "iges", Fcstd = "fcstd", Ply = "ply", Off = "off", Amf = "amf", Gltf = "gltf", Vrml = "vrml", X3d = "x3d", Xbf = "xbf", Rhino = "3dm", Ifc = "ifc", Dxf = "dxf", Fbx = "fbx", ThreeDs = "3ds" }
 }
 open_enum! {
+    /// Which areas of a sketch's closed outlines are filled: absent fills every
+    /// outline, `evenodd` the areas inside an odd number of them.
+    pub enum FillRule { EvenOdd = "evenodd" }
+}
+open_enum! {
     pub enum SplitKeep { Top = "top", Bottom = "bottom", Both = "both" }
 }
 
@@ -115,6 +120,7 @@ feature_struct!(
         #[serde(default, skip_serializing_if = "Option::is_none")] constraints: Option<Vec<SketchConstraint>>,
         #[serde(default, skip_serializing_if = "Option::is_none")] patterns: Option<Vec<SketchPattern>>,
         #[serde(default, skip_serializing_if = "Option::is_none")] name: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] fill_rule: Option<FillRule>,
     }
 );
 
