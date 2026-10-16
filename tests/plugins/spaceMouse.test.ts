@@ -152,6 +152,24 @@ describe("its settings", () => {
     expect((await start(store)).getSpaceMouseMode()).toBe("camera");
   });
 
+  it("keeps a fractional share when a binding or another field changes", async () => {
+    const m = await start(new MemoryStorage());
+    expect(m.settings.set("panPercent", 12.5)).toBeNull();
+    m.setSpaceMouseConfig({ bind: { zoom: { src: "ty", invert: true } } as never });
+    m.setSpaceMouseConfig({ deadzone: 30 });
+    expect(m.settings.get("panPercent")).toBe(12.5);
+    expect(m.settings.get("deadzone")).toBe(30);
+  });
+
+  it("adopts an old sensitivity as its exact share, not a rounded one", async () => {
+    const store = new MemoryStorage();
+    // the old rotate slider stepped by 1e-7, a share of 2.2e-6 that is not a whole percent
+    store.setItem("fundacad.spacemouse.config", JSON.stringify({ sensVersion: 2, orbitSens: 0.0000023 }));
+    const m = await start(store);
+    expect(m.settings.get("orbitPercent")).toBeCloseTo(104.545454, 5);
+    expect(m.getSpaceMouseConfig().orbitSens).toBeCloseTo(0.0000023, 15);
+  });
+
   it("writes nothing on a machine that never stored anything", async () => {
     const store = new MemoryStorage();
     const m = await start(store);
