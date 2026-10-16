@@ -13,8 +13,10 @@ default mouse and keys back.
 | Middle orbits, Ctrl+middle pans | Middle drag | Ctrl+middle drag | Shift+middle drag, wheel | Right click |
 | Alt+left orbits | Alt+left or right drag | Alt+Shift+left, Shift+right or middle drag | Alt+Ctrl+left drag, wheel | Right click |
 
-The left button alone always selects, in every preset. Alt+left steps aside
-while a tool is running, because some tools read Alt+drag themselves.
+The left button alone always selects, in every preset. Alt+left orbits with a
+body selected and inside a sketch too. It steps aside only for the datum pose
+and light aim dials and a sketch pattern being placed, which read Alt
+themselves.
 
 On Linux, some window managers take Alt+drag to move the window before the app
 sees it. Pick a middle button preset there, or change the window manager's

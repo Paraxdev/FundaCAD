@@ -18,7 +18,7 @@ import type { Engine } from "./engine";
  *  runs by reading this predicate back. */
 export function createToolBusy(
   e: Engine,
-): Pick<Engine, "toolBusy" | "toolOwnsScreen" | "dropBodyGizmo" | "raiseBodyGizmo" | "restoreBodyGizmo" | "hasBody"> {
+): Pick<Engine, "toolBusy" | "toolOwnsScreen" | "dropBodyGizmo" | "raiseBodyGizmo" | "restoreBodyGizmo" | "hasBody" | "altLeftOwned"> {
   // ONE predicate, read two ways. The only difference is whether the Move
   // gizmo counts, and it is spelled as a parameter rather than as a second list
   // so the other fifteen entries can never drift apart.
@@ -73,6 +73,10 @@ export function createToolBusy(
     },
     // True when the current rebuild produced a solid body (something to modify).
     hasBody: () => (e.store.buildState.result?.mesh.positions.length ?? 0) > 0,
+    // The datum pose and light aim dials take Alt on the grab as "no snapping",
+    // and a pattern being placed takes it as a free sweep.
+    altLeftOwned: () =>
+      e.tools.datumPose.active || e.tools.lightAim.active || (e.sketch.active && e.sketch.patternPending()),
   };
 }
 

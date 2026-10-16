@@ -3188,6 +3188,10 @@ export class SketchMode {
   }
 
   /** Has the view rolled the sketch plane too far edge-on to draw on? */
+  patternPending(): boolean {
+    return this.patternFlow.hasPending();
+  }
+
   planeTooEdgeOn(): boolean {
     const d = this.viewport.viewDirection();
     const n = this.plane.plane.normal;

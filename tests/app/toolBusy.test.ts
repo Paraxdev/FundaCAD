@@ -23,12 +23,14 @@ function fakeEngine(over: {
   move?: boolean;
   extrude?: boolean;
   sketch?: boolean;
+  pattern?: boolean;
+  datumPose?: boolean;
   mode?: "faces" | "bodies";
 } = {}) {
   let cancelled = 0;
   const off = { active: false };
   const e = {
-    sketch: { active: over.sketch ?? false },
+    sketch: { active: over.sketch ?? false, patternPending: () => over.pattern ?? false },
     planePick: false,
     viewport: { selecting: over.mode ?? "bodies" },
     store: { buildState: { result: null } },
@@ -36,7 +38,7 @@ function fakeEngine(over: {
       extrude: { active: over.extrude ?? false },
       move: { active: over.move ?? false, cancel: () => { cancelled++; } },
       edgeFeature: off, pressPull: off, faceOffset: off, draft: off, thread: off, hole: off,
-      loft: off, planeOffset: off, datumPose: off, lightAim: off, pattern: off, measure: off, targetEdit: off,
+      loft: off, planeOffset: off, datumPose: { active: over.datumPose ?? false }, lightAim: off, pattern: off, measure: off, targetEdit: off,
       revolvePitch: off, joint: off, mechanism: off, section: { picking: false },
     },
   } as unknown as Engine;
@@ -145,5 +147,20 @@ describe("restoreWhenIdle", () => {
     h.s.busy = false;
     h.step(3);
     expect(h.s.raised).toBe(0);
+  });
+});
+
+describe("altLeftOwned, which lets an Alt+left orbit binding step aside", () => {
+  it("stays false over a body selection and in an open sketch, where Alt+left must orbit", () => {
+    // A body selection raises the Move gizmo, so toolBusy is true here.
+    const selected = createToolBusy(fakeEngine({ move: true }).e);
+    expect(selected.toolBusy()).toBe(true);
+    expect(selected.altLeftOwned()).toBe(false);
+    expect(createToolBusy(fakeEngine({ sketch: true }).e).altLeftOwned()).toBe(false);
+  });
+
+  it("is true for the tools that read Alt on a left press", () => {
+    expect(createToolBusy(fakeEngine({ datumPose: true }).e).altLeftOwned()).toBe(true);
+    expect(createToolBusy(fakeEngine({ sketch: true, pattern: true }).e).altLeftOwned()).toBe(true);
   });
 });

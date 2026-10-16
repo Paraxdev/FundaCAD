@@ -185,6 +185,10 @@ export interface Engine {
   restoreBodyGizmo(): void;
   /** True when the current rebuild produced a solid body (something to modify). */
   hasBody(): boolean;
+  /** True while a tool reads Alt on a left press, so an Alt+left orbit binding
+   *  steps aside for it. Narrower than toolBusy on purpose: a body selection or
+   *  an open sketch must still orbit. */
+  altLeftOwned(): boolean;
   planePick: boolean;
 
   /** Read-only accessor over the selection store, write it with selectFeature. */
@@ -405,7 +409,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
 
   // --- predicates the UI wiring below depends on ---
   Object.assign(e, createToolBusy(e));
-  setLeftButtonOwner(() => e.toolBusy());
+  setLeftButtonOwner(() => e.altLeftOwned());
   Object.assign(e, createSketchVisibility(e));
   // The overlay declared this hook and nothing ever assigned it, so its default
   // ("everything is visible") stood: a sketch hidden from the browser tree kept

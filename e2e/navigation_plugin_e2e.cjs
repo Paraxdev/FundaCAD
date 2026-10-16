@@ -119,7 +119,46 @@ const check = (label, ok, detail = "") => {
   const picked = await page.evaluate(() => window.viewport.getSelectedBodies().length + window.viewport.getSelectedFaceIds().length);
   check("a plain left click still selects", picked > 0, `selected ${picked}`);
   await page.keyboard.press("Escape");
+  await settle();
+
+  // A body selection raises the Move gizmo, so the app reads as busy here.
+  await page.evaluate(() => window.viewport.setSelectionMode("bodies"));
+  await page.evaluate(([x, y]) => window.viewport.selectBodyAt(x, y, false), [box.cx, box.cy]);
+  await settle();
+  const busy = await page.evaluate(() => window.__fundacad.toolBusy());
+  c0 = await camera();
+  await page.keyboard.down("Alt");
+  await drag("left", 160, 30);
+  await page.keyboard.up("Alt");
+  check("Alt+left orbits with a body selected", (await camera()) !== c0, `toolBusy ${busy}`);
+  const kept = await page.evaluate(() => window.viewport.getSelectedBodies().length);
+  check("and keeps the selection", kept === 1, `selected ${kept}`);
+  await page.keyboard.press("Escape");
+  await settle();
+
+  await page.evaluate(() => window.viewport.setSelectionMode("faces"));
+  await page.mouse.click(box.cx, box.cy);
+  await settle();
+  await page.evaluate(() => window.__fundacad.handleAction("sketch"));
+  await page.waitForTimeout(2000);
+  const inSketch = await page.evaluate(() => !!window.sketch.active);
+  check("a sketch opened", inSketch);
+  c0 = await camera();
+  await page.keyboard.down("Alt");
+  await drag("left", 160, 30);
+  await page.keyboard.up("Alt");
+  check("Alt+left orbits inside a sketch", (await camera()) !== c0);
+
+  // A sketch opens on Rectangle, which offers no menu; Select does.
   await config({ preset: "middle-shift" });
+  await page.evaluate(() => window.sketch.setTool("select"));
+  await page.mouse.click(box.cx + 40, box.cy + 40, { button: "right" });
+  await page.waitForTimeout(400);
+  check("a right click opens the sketch menu in a middle orbit preset", !!(await page.$(".context-menu")));
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+  await page.evaluate(() => window.sketch.cancel());
+  await settle();
 
   // --- the radial menu ---------------------------------------------------------------
   const ITEMS = ["shortcut-help", "fit", "measure", "toggle-wireframe", "reset-camera", "sketch"];
