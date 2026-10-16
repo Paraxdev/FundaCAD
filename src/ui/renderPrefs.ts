@@ -131,6 +131,10 @@ export type ViewMode = "matcap" | "realtime" | "pathtraced";
 export const MATCAP_STYLES = ["studio", "clay", "metal", "wax"] as const;
 export type MatcapStyle = (typeof MATCAP_STYLES)[number];
 
+/** How Path traced cleans its noise: off, the small denoise weights, or the large ones. */
+export const DENOISE_LEVELS = ["off", "standard", "high"] as const;
+export type Denoise = (typeof DENOISE_LEVELS)[number];
+
 export interface RenderPrefs {
   environment: Environment;
   background: Background;
@@ -184,6 +188,7 @@ export interface RenderPrefs {
   /** Matcap's sphere, and whether it keeps body colours (false is plain). */
   matcapStyle: MatcapStyle;
   matcapTint: boolean;
+  denoise: Denoise;
 }
 
 /** What the f-stop numbers mean to the blur pass, and the range the control
@@ -225,6 +230,7 @@ export const DEFAULT_RENDER: RenderPrefs = {
   viewModeRender: "realtime",
   matcapStyle: "studio",
   matcapTint: true,
+  denoise: "standard",
 };
 
 export const MIN_BRIGHTNESS = 0.4;
@@ -258,6 +264,10 @@ export function asViewMode(v: unknown): ViewMode | null {
 
 export function asMatcapStyle(v: unknown): MatcapStyle | null {
   return MATCAP_STYLES.includes(v as MatcapStyle) ? (v as MatcapStyle) : null;
+}
+
+export function asDenoise(v: unknown): Denoise | null {
+  return DENOISE_LEVELS.includes(v as Denoise) ? (v as Denoise) : null;
 }
 
 export function asTangentEdges(v: unknown): TangentEdges | null {
@@ -335,6 +345,7 @@ export function asRenderPrefs(v: unknown): RenderPrefs {
     viewModeRender: asViewMode(o["viewModeRender"]) ?? DEFAULT_RENDER.viewModeRender,
     matcapStyle: asMatcapStyle(o["matcapStyle"]) ?? DEFAULT_RENDER.matcapStyle,
     matcapTint: typeof o["matcapTint"] === "boolean" ? o["matcapTint"] : DEFAULT_RENDER.matcapTint,
+    denoise: asDenoise(o["denoise"]) ?? DEFAULT_RENDER.denoise,
   };
 }
 
@@ -374,7 +385,8 @@ export function setRenderPref<K extends keyof RenderPrefs>(key: K, value: Render
                           : key === "viewModeModel" || key === "viewModeRender" ? asViewMode(value)
                             : key === "matcapStyle" ? asMatcapStyle(value)
                               : key === "matcapTint" ? (typeof value === "boolean" ? value : null)
-                                : asBrightness(value);
+                                : key === "denoise" ? asDenoise(value)
+                                  : asBrightness(value);
   if (ok === null || current[key] === ok) return;
   // A fresh object rather than a mutation, so a subscriber may hold the result
   // of renderPrefs() and compare identity to decide it must redraw.

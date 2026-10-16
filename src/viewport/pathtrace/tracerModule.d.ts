@@ -21,6 +21,10 @@ declare module "three-gpu-pathtracer/webgpu" {
     getSampleCountsAsync(): Promise<{ min: number; max: number; avg: number }>;
     dispose(): void;
   }
+  export class OIDNDenoiser {
+    constructor(options: { initUNetFromURL: unknown; auxWeightsUrl: string; colorWeightsUrl?: string });
+    init(renderer: unknown): void;
+  }
 }
 
 declare module "three-gpu-pathtracer/src/objects/PhysicalCamera.js" {

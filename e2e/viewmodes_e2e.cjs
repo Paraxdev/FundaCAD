@@ -137,6 +137,32 @@ function check(ok, what, detail) {
     const capped = await page.waitForFunction(() => (window.viewport.traceStatus.state === "done" ? window.viewport.traceStatus : null), null, { timeout: 120000, polling: 200 })
       .then((h) => h.jsonValue(), (e) => ({ error: String(e) }));
     check(capped.state === "done" && capped.samples >= 256, "the tracer stops at the sample cap", capped);
+    const status = () => page.evaluate(() => window.viewport.traceStatus);
+    const setDenoise = (v) => page.evaluate(async (d) => (await import("/src/ui/renderPrefs.ts")).setRenderPref("denoise", d), v);
+    const waitDenoised = () => page.waitForFunction(() => window.viewport.traceStatus.denoised, null, { timeout: 60000, polling: 100 })
+      .then(() => status(), (e) => ({ error: String(e) }));
+    const t0 = Date.now();
+    const den = await waitDenoised();
+    check(den.denoised === true && den.state === "done", "the final denoise lands at the cap", { ...den, ms: Date.now() - t0 });
+    await shotView("pathtraced-256-denoised.png");
+    await setDenoise("off");
+    await page.waitForTimeout(300);
+    const raw = await status();
+    check(!raw.denoised && raw.samples >= 256, "denoise off shows the raw samples without tracing again", raw);
+    await shotView("pathtraced-256-raw.png");
+    // The tracer restarts on any camera or scene change; restart() is the same reset without moving the view.
+    const at16 = async (name) => {
+      await page.evaluate(() => window.viewport.trace.restart());
+      const h = await page.waitForFunction(() => (window.viewport.traceStatus.samples >= 16 ? window.viewport.traceStatus : null), null, { timeout: 60000, polling: 16 });
+      const st = await h.jsonValue();
+      await page.screenshot({ path: path.join(OUT, name), clip: { x: 0, y: 40, width: 1400, height: 860 } });
+      return st;
+    };
+    console.log("raw at", (await at16("pathtraced-16-raw.png")).samples, "samples");
+    await setDenoise("standard");
+    console.log("filtered at", (await at16("pathtraced-16-filtered.png")).samples, "samples");
+    const again = await waitDenoised();
+    check(again.denoised === true, "the denoise runs again after a restart", again);
     check(JSON.stringify(await materialIds()) === JSON.stringify(before), "body materials are the same objects in Path traced");
     await page.evaluate(async () => (await import("/src/ui/renderPrefs.ts")).setRenderPref("performanceMode", true));
     await page.waitForTimeout(300);

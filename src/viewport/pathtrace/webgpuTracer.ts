@@ -3,10 +3,15 @@
 // first time Path traced is picked.
 
 import * as THREE from "three";
+import type { Denoise } from "../../ui/renderPrefs";
 import { SAMPLE_CAP, type TraceLook, type TraceScene, type TracerBackend } from "./backend";
 import { repackInPlace, type SwappableBvhData } from "./bvhSwap";
 import { traceCameraFor, type TraceLens } from "./camera";
 import { backgroundTexture } from "./environment";
+import { FinalDenoise } from "./denoise";
+import { OidnPass, type OidnLike } from "./oidnPass";
+import smallWeights from "./weights/rt_hdr_calb_cnrm_small.tza?url";
+import largeWeights from "./weights/rt_hdr_calb_cnrm_large.tza?url";
 
 type WebGpuModule = typeof import("three/webgpu");
 type TracerModule = typeof import("three-gpu-pathtracer/webgpu");
@@ -16,7 +21,11 @@ const MAX_BOUNCES = 6;
 /** The WebGPU floor every adapter grants without asking. */
 const DEFAULT_STORAGE_BINDING = 128 * 1024 * 1024;
 
+interface BlitMaterial { opacity: number; transition: number; fromTexture: THREE.Texture | null; texture: THREE.Texture | null }
+
 interface TracerInternals {
+  _blitQuad: { material: BlitMaterial; render(r: unknown): void };
+  _pathTracer: { outputTarget: THREE.Texture };
   _bvhData?: SwappableBvhData & { textureAtlas: { setTextures(r: unknown, t: unknown): void }; textures: unknown };
   _renderer: unknown;
   scene: THREE.Scene;
@@ -32,6 +41,13 @@ export class WebGpuTracer implements TracerBackend {
   private camera: THREE.Camera | null = null;
   private faultCbs: ((why: string) => void)[] = [];
   private disposed = false;
+  private tracerMod: TracerModule | null = null;
+  /** The screen holds a denoised image that the samples underneath no longer match. */
+  private showsDenoise = false;
+  private initUNetFromURL: unknown = null;
+  private level: Denoise = "standard";
+  private oidn: OidnPass | null = null;
+  private final = new FinalDenoise(null);
   maxStorageBytes = DEFAULT_STORAGE_BINDING;
 
   constructor() {
@@ -48,7 +64,9 @@ export class WebGpuTracer implements TracerBackend {
   }
 
   async init() {
-    const [gpu, tracerMod] = await Promise.all([import("three/webgpu"), import("three-gpu-pathtracer/webgpu")]);
+    const [gpu, tracerMod, oidnWeb] = await Promise.all([import("three/webgpu"), import("three-gpu-pathtracer/webgpu"), import("oidn-web")]);
+    this.tracerMod = tracerMod;
+    this.initUNetFromURL = oidnWeb.initUNetFromURL;
     // Above the 128 MiB floor when the adapter offers more, so a model of a few
     // million triangles fits its attribute buffer.
     const nav = globalThis.navigator as unknown as { gpu?: { requestAdapter(): Promise<{ limits: Record<string, number> } | null> } };
@@ -84,6 +102,65 @@ export class WebGpuTracer implements TracerBackend {
     t.minSamples = 0;
     t.fadeDuration = 0;
     this.tracer = t;
+    this.setDenoise(this.level);
+  }
+
+  private get internals(): TracerInternals {
+    return this.tracer as unknown as TracerInternals;
+  }
+
+  setDenoise(level: Denoise) {
+    this.level = level;
+    if (!this.tracer || !this.tracerMod) return;
+    this.oidn?.dispose();
+    this.oidn = null;
+    if (level !== "off") {
+      const d = new this.tracerMod.OIDNDenoiser({
+        initUNetFromURL: this.initUNetFromURL,
+        auxWeightsUrl: level === "high" ? largeWeights : smallWeights,
+      });
+      d.init(this.renderer);
+      this.oidn = new OidnPass(d as unknown as OidnLike, () => ({
+        scene: this.scene,
+        camera: this.camera,
+        color: this.internals._pathTracer.outputTarget,
+      }));
+    }
+    this.final.setPass(this.oidn);
+  }
+
+  get denoised(): boolean {
+    return this.final.denoised;
+  }
+
+  present(now: number): boolean {
+    const step = this.final.step(now);
+    const raw = this.internals._pathTracer.outputTarget;
+    const to = this.oidn?.texture;
+    if (step.mix !== null && to) {
+      this.blit(raw, to, step.mix);
+      this.showsDenoise = true;
+    } else if (this.showsDenoise && !this.final.denoised) {
+      this.blit(raw, raw, 0);
+      this.showsDenoise = false;
+    }
+    return step.more;
+  }
+
+  /** Redraws the canvas through the tracer's own blit, so tone mapping and
+   *  exposure match its frames; `mix` crossfades from `from` to `to`. */
+  private blit(from: THREE.Texture, to: THREE.Texture, mix: number) {
+    const r = this.renderer as unknown as { autoClear: boolean; setRenderTarget(t: null): void };
+    const q = this.internals._blitQuad;
+    const autoClear = r.autoClear;
+    r.setRenderTarget(null);
+    r.autoClear = true;
+    q.material.opacity = 1;
+    q.material.transition = mix;
+    q.material.fromTexture = from;
+    q.material.texture = to;
+    q.render(r);
+    r.autoClear = autoClear;
   }
 
   setSize(cssWidth: number, cssHeight: number, pixelRatio: number) {
@@ -163,11 +240,13 @@ export class WebGpuTracer implements TracerBackend {
   }
 
   reset() {
+    this.final.reset();
     this.tracer?.reset();
   }
 
-  renderSample() {
+  renderSample(_samples: number) {
     this.tracer?.renderSample();
+    this.showsDenoise = false;
   }
 
   async samples(): Promise<number> {
@@ -187,6 +266,8 @@ export class WebGpuTracer implements TracerBackend {
   dispose() {
     this.disposed = true;
     this.disposeLights();
+    this.oidn?.dispose();
+    this.oidn = null;
     this.tracer?.dispose();
     this.renderer?.dispose();
     this.tracer = null;
