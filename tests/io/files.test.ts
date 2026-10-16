@@ -51,6 +51,8 @@ describe("extToImportFormat", () => {
     expect(extToImportFormat("/tmp/a.xbf")).toBe("xbf");
     expect(extToImportFormat("/tmp/a.3dm")).toBe("3dm");
     expect(extToImportFormat("/tmp/Logo.3DM")).toBe("3dm");
+    expect(extToImportFormat("/tmp/house.ifc")).toBe("ifc");
+    expect(extToImportFormat("/tmp/HOUSE.IFC")).toBe("ifc");
   });
 
   it("reads a gzip copy as the format inside it", () => {
