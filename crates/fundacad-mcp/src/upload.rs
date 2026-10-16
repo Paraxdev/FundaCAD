@@ -23,7 +23,7 @@ use serde_json::{Map, Value};
 
 /// What `doc_import` will read. The same set the app's file pickers offer, and
 /// the same names the engine's importer switches on.
-pub const IMPORT_FORMATS: &[&str] = &["step", "stl", "3mf", "obj", "brep", "glb", "gltf", "iges", "fcstd", "ply", "off", "amf", "vrml", "x3d", "xbf", "3dm", "ifc", "dxf"];
+pub const IMPORT_FORMATS: &[&str] = &["step", "stl", "3mf", "obj", "brep", "glb", "gltf", "iges", "fcstd", "ply", "off", "amf", "vrml", "x3d", "xbf", "3dm", "ifc", "dxf", "fbx"];
 
 /// How much file may arrive inline, summed over every piece of one upload. A
 /// TRANSPORT limit, not the reader's: the engine keeps its own per-format cap
