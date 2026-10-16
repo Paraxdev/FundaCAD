@@ -3,32 +3,40 @@
 #include "rust/cxx.h"
 #include <bindings_common.hxx>
 
+#include <BRepAdaptor_Curve.hxx>
 #include <BRepAdaptor_Surface.hxx>
 #include <BRepBuilderAPI_Copy.hxx>
 #include <BRepCheck_Analyzer.hxx>
 #include <BRepFilletAPI_MakeChamfer.hxx>
 #include <BRepFilletAPI_MakeFillet.hxx>
+#include <BRepLib.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
 #include <BRepTools.hxx>
+#include <BRepTools_ReShape.hxx>
 #include <BRep_Builder.hxx>
 #include <BRep_Tool.hxx>
 #include <GeomAPI_ProjectPointOnSurf.hxx>
 #include <Geom_Surface.hxx>
 #include <Poly_Triangulation.hxx>
+#include <Standard_Failure.hxx>
 #include <TopAbs.hxx>
 #include <TopExp.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopLoc_Location.hxx>
 #include <TopTools_IndexedDataMapOfShapeListOfShape.hxx>
 #include <TopTools_ListOfShape.hxx>
+#include <TopTools_MapOfShape.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Compound.hxx>
 #include <TopoDS_Iterator.hxx>
+#include <TopoDS_Vertex.hxx>
 #include <gp_Pnt.hxx>
 #include <gp_Vec.hxx>
 
+#include <algorithm>
 #include <cmath>
 #include <memory>
+#include <utility>
 #include <vector>
 
 using BlShape = std::unique_ptr<TopoDS_Shape>;
@@ -39,6 +47,91 @@ inline std::vector<TopoDS_Shape> bl_children(const TopoDS_Shape &s) {
   if (s.IsNull()) return out;
   for (TopoDS_Iterator it(s); it.More(); it.Next()) out.push_back(it.Value());
   return out;
+}
+
+// BRepFilletAPI can close the seam between two surface pieces of one round
+// with an edge flagged degenerated whose ends on its face lie millimetres
+// apart, one vertex as wide as the gap standing in for both. BRepCheck takes
+// it, but a mesher fans every face there to that vertex. Each such edge gets a
+// vertex at each end; a true pole has both ends on one point and stays.
+inline TopoDS_Shape bl_split_false_degenerate(const TopoDS_Shape &shape) {
+  const double tol = 1e-4;
+  const double shortest = 1e-2;
+  try {
+    TopTools_IndexedDataMapOfShapeListOfShape e2f, v2e;
+    TopExp::MapShapesAndAncestors(shape, TopAbs_EDGE, TopAbs_FACE, e2f);
+    TopExp::MapShapesAndAncestors(shape, TopAbs_VERTEX, TopAbs_EDGE, v2e);
+    BRep_Builder bb;
+    BRepTools_ReShape rs;
+    TopTools_MapOfShape touched;
+    bool split = false;
+    for (int i = 1; i <= e2f.Extent(); ++i) {
+      const TopoDS_Edge &ed = TopoDS::Edge(e2f.FindKey(i));
+      if (!BRep_Tool::Degenerated(ed) || e2f.FindFromIndex(i).IsEmpty()) continue;
+      const TopoDS_Face &f = TopoDS::Face(e2f.FindFromIndex(i).First());
+      BRepAdaptor_Curve c(ed, f);
+      const double t0 = c.FirstParameter(), t1 = c.LastParameter();
+      const gp_Pnt p0 = c.Value(t0), p1 = c.Value(t1);
+      if (p0.Distance(p1) <= std::max(shortest, 10.0 * BRep_Tool::Tolerance(ed))) continue;
+      const TopoDS_Vertex v = TopExp::FirstVertex(ed);
+      if (v.IsNull() || !v.IsSame(TopExp::LastVertex(ed)) || touched.Contains(v)) continue;
+      const TopTools_ListOfShape &around = v2e.FindFromKey(v);
+      bool clean = true;
+      for (TopTools_ListOfShape::Iterator it(around); it.More() && clean; it.Next()) {
+        const TopoDS_Edge &oe = TopoDS::Edge(it.Value());
+        if (oe.IsSame(ed)) continue;
+        clean = !BRep_Tool::Degenerated(oe) && !touched.Contains(oe) &&
+                !TopExp::FirstVertex(oe).IsSame(TopExp::LastVertex(oe));
+      }
+      if (!clean) continue;
+
+      TopoDS_Vertex va, vb;
+      bb.MakeVertex(va, p0, tol);
+      bb.MakeVertex(vb, p1, tol);
+      TopoDS_Edge ne = TopoDS::Edge(ed.EmptyCopied().Oriented(TopAbs_FORWARD));
+      bb.Degenerated(ne, false);
+      bb.Add(ne, va.Oriented(TopAbs_FORWARD));
+      bb.Add(ne, vb.Oriented(TopAbs_REVERSED));
+      bb.UpdateVertex(va, t0, ne, tol);
+      bb.UpdateVertex(vb, t1, ne, tol);
+      if (!BRepLib::BuildCurve3d(ne, 1e-5)) continue;
+
+      std::vector<std::pair<TopoDS_Shape, TopoDS_Shape>> swaps{{ed.Oriented(TopAbs_FORWARD), ne}};
+      for (TopTools_ListOfShape::Iterator it(around); it.More(); it.Next()) {
+        const TopoDS_Edge &oe = TopoDS::Edge(it.Value());
+        if (oe.IsSame(ed)) continue;
+        BRepAdaptor_Curve cc(oe);
+        TopoDS_Edge n2 = TopoDS::Edge(oe.EmptyCopied().Oriented(TopAbs_FORWARD));
+        for (TopExp_Explorer x(oe.Oriented(TopAbs_FORWARD), TopAbs_VERTEX); x.More(); x.Next()) {
+          const TopoDS_Vertex &ov = TopoDS::Vertex(x.Current());
+          if (!ov.IsSame(v)) {
+            bb.Add(n2, ov);
+            continue;
+          }
+          const double par = BRep_Tool::Parameter(ov, oe);
+          const gp_Pnt q = cc.Value(par);
+          const TopoDS_Vertex &nv = q.Distance(p0) < q.Distance(p1) ? va : vb;
+          bb.Add(n2, nv.Oriented(ov.Orientation()));
+          bb.UpdateVertex(nv, par, n2, tol);
+        }
+        swaps.emplace_back(oe.Oriented(TopAbs_FORWARD), n2);
+      }
+      for (const auto &s : swaps) {
+        rs.Replace(s.first, s.second);
+        touched.Add(s.first);
+      }
+      touched.Add(v);
+      split = true;
+    }
+    if (!split) return shape;
+    TopoDS_Shape out = rs.Apply(shape);
+    BRepLib::SameParameter(out, 1e-5, false);
+    BRepLib::UpdateTolerances(out, false);
+    if (!BRepCheck_Analyzer(out).IsValid()) return shape;
+    return out;
+  } catch (const Standard_Failure &) {
+    return shape;
+  }
 }
 
 // status: 0 built, 1 not done, 2 built but BRepCheck calls it invalid. Not
@@ -57,7 +150,7 @@ inline BlShape blend_fillet(const TopoDS_Shape &shape, const TopoDS_Shape &edges
     for (int i = 1; i <= mk.NbFaultyVertices(); ++i) b.Add(at, mk.FaultyVertex(i));
     return BlShape(new TopoDS_Shape(at));
   }
-  TopoDS_Shape out = mk.Shape();
+  TopoDS_Shape out = bl_split_false_degenerate(mk.Shape());
   status = BRepCheck_Analyzer(out).IsValid() ? 0 : 2;
   return BlShape(new TopoDS_Shape(out));
 }
@@ -79,7 +172,7 @@ inline BlShape blend_chamfer(const TopoDS_Shape &shape, const TopoDS_Shape &edge
     status = 1;
     return BlShape(new TopoDS_Shape());
   }
-  TopoDS_Shape out = mk.Shape();
+  TopoDS_Shape out = bl_split_false_degenerate(mk.Shape());
   status = BRepCheck_Analyzer(out).IsValid() ? 0 : 2;
   return BlShape(new TopoDS_Shape(out));
 }
