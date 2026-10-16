@@ -15,6 +15,7 @@ export interface CtxItem {
    *  host can reserve one fixed gutter and drop a real icon in it. */
   checked?: boolean;
   swatch?: string; // small color chip before the label (palette flyouts)
+  icon?: string; // an Icon name, drawn before the label and in a radial ring
   children?: CtxItem[]; // one-level flyout submenu, opens on hover
   /** Called as the pointer enters (true) and leaves (false) this row.
    *
