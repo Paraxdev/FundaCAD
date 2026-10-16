@@ -446,6 +446,14 @@ pub fn export_result(req: &Map<String, Value>, watch: &dyn Watch) -> JobResult {
     JobResult::Json(export_built(req, doc, format, path, &r.bodies, &r.errors))
 }
 
+/// The format name an exporter dispatches on: lower case, and `stp` is STEP.
+fn export_format(format: &str) -> String {
+    match format.to_lowercase().as_str() {
+        "stp" => "step".into(),
+        other => other.into(),
+    }
+}
+
 pub fn export_built(
     req: &Map<String, Value>,
     doc: &Value,
@@ -464,7 +472,7 @@ pub fn export_built(
         return m;
     }
     let mut exporter = Exporter {
-        format: format.to_lowercase(),
+        format: export_format(format),
         opts: mesh_options(req.get("mesh")),
         palette: req.get("palette").and_then(Value::as_array).cloned().unwrap_or_default(),
         body_colors: req.get("bodyColors").and_then(Value::as_object).cloned().unwrap_or_default(),
@@ -481,7 +489,7 @@ pub fn export_built(
             mesh_passes: &b.mesh_passes,
         })
         .collect();
-    if format.eq_ignore_ascii_case("step") && built.iter().any(|b| !b.mesh_passes.is_empty()) {
+    if exporter.format == "step" && built.iter().any(|b| !b.mesh_passes.is_empty()) {
         // Generic on purpose: true for whichever plugin put the displacement there.
         exporter.warnings.push(json!({
             "message": "surface displacement from a plugin is not represented in STEP exports"
