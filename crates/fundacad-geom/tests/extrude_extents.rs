@@ -316,14 +316,24 @@ fn a_press_pull_up_to_a_plane_or_a_point_with_an_offset() {
 }
 
 #[test]
-fn a_press_pull_up_to_a_stale_nearest_point_is_not_a_silent_no_op() {
+fn a_press_pull_up_to_a_target_on_the_face_keeps_the_body_and_says_so() {
     let sel = json!({"kind": "face", "by": "nearest", "point": [0, 0, 19]});
     let r = build(json!({"z2": 20}), two_blocks(json!({"upTo": sel.clone()})));
     ok(&r);
     near(bbox(&r, 0)[5], 19.0, "near target");
     let r = build(json!({"z2": 40}), two_blocks(json!({"upTo": sel})));
-    let followed = r.errors.is_empty() && (bbox(&r, 0)[5] - 39.0).abs() < 1e-3;
-    assert!(followed || !r.errors.is_empty(), "moved nothing and said nothing");
+    ok(&r);
+    near(bbox(&r, 0)[5], 5.0, "a target on the face keeps the body as it was");
+    let said = r.diagnostics.iter().any(|d| d["code"] == "upToReached");
+    assert!(said, "moved nothing and said nothing: {:?}", r.diagnostics);
+}
+
+#[test]
+fn a_press_pull_offset_from_a_target_on_the_face_still_pushes() {
+    let own_top = json!({"kind": "face", "by": "tracked", "point": [0, 0, 5], "normal": [0, 0, 1], "body": "body1"});
+    let r = build(json!({"z2": 20}), two_blocks(json!({"upTo": own_top, "upToOffset": 2})));
+    ok(&r);
+    near(bbox(&r, 0)[5], 7.0, "offset past the face");
 }
 
 #[test]
