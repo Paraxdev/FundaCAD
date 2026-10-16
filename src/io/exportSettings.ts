@@ -120,3 +120,33 @@ export function saveExportSettings(s: ExportSettings) {
     // a blocked store only costs remembering the choice
   }
 }
+
+const LAST_DIR_KEY = "fundacad.exportDir";
+
+/** A default export file name that no earlier export took: the base, then the
+ *  local date and time to the second, `bracket_2026-10-16_11-42-07.stl`. */
+export function exportFileName(base: string, ext: string, now: Date = new Date()): string {
+  // Windows refuses these in a file name, and a trailing dot or space.
+  const safe = base.replace(/[<>:"/\|?*\u0000-\u001f]/g, "_").replace(/[. ]+$/, "").trim() || "part";
+  const p = (n: number) => String(n).padStart(2, "0");
+  const stamp = `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}_${p(now.getHours())}-${p(now.getMinutes())}-${p(now.getSeconds())}`;
+  return `${safe}_${stamp}.${ext}`;
+}
+
+export function lastExportDir(): string | null {
+  try {
+    return localStorage.getItem(LAST_DIR_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function rememberExportDir(path: string) {
+  const cut = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+  if (cut <= 0) return;
+  try {
+    localStorage.setItem(LAST_DIR_KEY, path.slice(0, cut));
+  } catch {
+    // a blocked store only costs opening the dialog in the default folder
+  }
+}

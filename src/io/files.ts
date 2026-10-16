@@ -9,7 +9,7 @@ import { asFeature } from "../types";
 import type { GeometryBackend } from "../geometry/client";
 import type { CadDocument, ExportFormat, Feature, ImportFormat } from "../types";
 import { clearRecovery } from "./recovery";
-import { FORMATS, isMeshFormat, meshWire, saveExportSettings } from "./exportSettings";
+import { exportFileName, FORMATS, isMeshFormat, lastExportDir, meshWire, rememberExportDir, saveExportSettings } from "./exportSettings";
 import { referencedGeometry } from "../document/versions";
 import { UnreadableDocumentError } from "../document/documentShape";
 import { noteRecent } from "./recentFiles";
@@ -381,13 +381,18 @@ export async function exportModel(store: DocumentStore, geometry: GeometryBacken
   else if (scope !== "all") opts.body = scope;
 
   const kind = FORMATS.find((f) => f.value === settings.format) ?? FORMATS[0]!;
+  const docName = store.fileName === "Untitled" ? "" : store.fileName.replace(/\.[^.]+$/, "");
+  const base = opts.body ? store.bodyName(opts.body) ?? docName : docName || (opts.separate ? "parts" : "part");
+  const name = exportFileName(base, kind.ext);
+  const dir = lastExportDir();
   const { save } = await import("@tauri-apps/plugin-dialog");
   const path = await save({
     filters: [{ name: kind.label, extensions: kind.value === "step" ? ["step", "stp"] : [kind.ext] }],
     // "separate" derives one file per body as "<base>-<body>.<ext>", so name the base.
-    defaultPath: `${opts.separate ? "parts" : "part"}.${kind.ext}`,
+    defaultPath: dir ? `${dir}/${name}` : name,
   });
   if (!path) return;
+  rememberExportDir(path);
   const fmt = settings.format;
   // GLB carries one material per body, so it needs the palette and each body's
   // slot; the other formats ignore both.
