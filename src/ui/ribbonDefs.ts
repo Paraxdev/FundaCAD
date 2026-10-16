@@ -291,20 +291,24 @@ export const SKETCH: Group[] = [
     items: [
       {
         label: "Constrain",
-        children: [
-          { action: "horizontal", label: "Horizontal", iconName: "horizontal" },
-          { action: "vertical", label: "Vertical", iconName: "vertical" },
-          { action: "parallel", label: "Parallel", iconName: "parallel" },
-          { action: "perpendicular", label: "Perpendic.", iconName: "perpendicular" },
-          { action: "equal", label: "Equal", iconName: "equal" },
-          { action: "tangent", label: "Tangent", iconName: "tangent" },
-          { action: "coincident", label: "Coincident", iconName: "coincident" },
-          { action: "concentric", label: "Concentric", iconName: "concentric" },
-          { action: "midpoint", label: "Midpoint", iconName: "midpoint" },
-          { action: "collinear", label: "Collinear", iconName: "collinear" },
-          { action: "symmetric", label: "Symmetric", iconName: "symmetric" },
-          { action: "fix", label: "Fix", iconName: "fix" },
-        ],
+        // the hint is read from the keymap, as for the booleans, since some carry Shift
+        children: ([
+          ["horizontal", "Horizontal"],
+          ["vertical", "Vertical"],
+          ["parallel", "Parallel"],
+          ["perpendicular", "Perpendic."],
+          ["equal", "Equal"],
+          ["tangent", "Tangent"],
+          ["coincident", "Coincident"],
+          ["concentric", "Concentric"],
+          ["midpoint", "Midpoint"],
+          ["collinear", "Collinear"],
+          ["symmetric", "Symmetric"],
+          ["fix", "Fix"],
+        ] as const).map(([action, label]) => {
+          const key = keyHint(action);
+          return { action, label, iconName: action, ...(key !== undefined ? { key } : {}) };
+        }),
       },
     ],
   },

@@ -82,7 +82,9 @@ export function createActions(e: Engine): (action: string) => void {
     // sketch MODIFY tools only make sense inside a sketch
     if (action in SKETCH_MODIFY) {
       const tool = SKETCH_MODIFY[action];
-      if (e.sketch.active) { if (tool) e.sketch.setTool(tool); }
+      if (e.sketch.active) {
+        if (tool && !e.sketch.applySelectedConstraint(tool)) e.sketch.setTool(tool);
+      }
       else e.setStatus("Enter a sketch to use modify tools", "");
       return;
     }
