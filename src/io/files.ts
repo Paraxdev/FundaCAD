@@ -453,7 +453,7 @@ export function extToFormat(path: string): ExportFormat {
 
 /** Lower case only, every lookup lower-cases the name first (dropRouting, the
  *  two mappers above). */
-export const IMPORT_EXTS = ["stl", "3mf", "step", "stp", "stpz", "gz", "xbf", "iges", "igs", "brep", "fcstd", "3dm", "ifc", "dxf", "obj", "ply", "off", "amf", "glb", "gltf", "wrl", "wrz", "x3d", "x3dz"];
+export const IMPORT_EXTS = ["stl", "3mf", "step", "stp", "stpz", "gz", "xbf", "iges", "igs", "brep", "fcstd", "3dm", "ifc", "dxf", "obj", "ply", "off", "amf", "glb", "gltf", "wrl", "wrz", "x3d", "x3dz", "fbx"];
 
 // FreeCAD writes .FCStd.
 const MIXED_CASE_EXTS = ["FCStd"];
@@ -470,7 +470,7 @@ export function dialogExts(exts: readonly string[]): string[] {
   return [...out];
 }
 
-/** Import an external mesh / B-rep file (STL / 3MF / STEP / IGES / XBF / FreeCAD / OBJ / PLY / OFF / AMF / glTF / VRML / X3D) as a new body.
+/** Import an external mesh / B-rep file (STL / 3MF / STEP / IGES / XBF / FreeCAD / OBJ / PLY / OFF / AMF / glTF / VRML / X3D / FBX) as a new body.
  *  The engine reads the file by path and returns an embeddable BREP payload, so
  *  this needs the native app (a real filesystem path), like export. */
 export async function importModel(store: DocumentStore, geometry: GeometryBackend) {
@@ -502,6 +502,7 @@ export async function importModel(store: DocumentStore, geometry: GeometryBacken
       { name: "glTF", extensions: dialogExts(["glb", "gltf"]) },
       { name: "VRML", extensions: dialogExts(["wrl", "wrz"]) },
       { name: "X3D", extensions: dialogExts(["x3d", "x3dz"]) },
+      { name: "FBX (Maya, 3ds Max)", extensions: dialogExts(["fbx"]) },
     ],
   });
   if (typeof path !== "string") return;
@@ -815,6 +816,7 @@ export function extToImportFormat(path: string): ImportFormat {
   if (ext === "amf") return "amf";
   if (ext === "wrl" || ext === "wrz") return "vrml";
   if (ext === "x3d" || ext === "x3dz") return "x3d";
+  if (ext === "fbx") return "fbx";
   return "step";  // TOTAL, like extToFormat above, see the note there
 }
 
