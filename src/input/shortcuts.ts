@@ -60,6 +60,19 @@ export const SHORTCUTS: Shortcut[] = [
   // (handleAction already finishes an active sketch before any 3D command)
   { key: "e", action: "extrude", context: "sketch", label: "Finish & Extrude" },
   { key: "q", action: "presspull", context: "sketch", label: "Finish & Press/Pull" },
+  // With a fitting selection these apply at once, otherwise they arm the tool.
+  { key: "h", action: "horizontal", context: "sketch", label: "Horizontal" },
+  { key: "v", action: "vertical", context: "sketch", label: "Vertical" },
+  { key: "i", action: "coincident", context: "sketch", label: "Coincident or on curve" },
+  { key: "g", action: "tangent", context: "sketch", label: "Tangent" },
+  { key: "n", action: "perpendicular", context: "sketch", label: "Perpendicular" },
+  { key: "p", shift: true, action: "parallel", context: "sketch", label: "Parallel" },
+  { key: "e", shift: true, action: "equal", context: "sketch", label: "Equal" },
+  { key: "l", shift: true, action: "collinear", context: "sketch", label: "Collinear" },
+  { key: "c", shift: true, action: "concentric", context: "sketch", label: "Concentric" },
+  { key: "m", shift: true, action: "midpoint", context: "sketch", label: "Midpoint" },
+  { key: "s", shift: true, action: "symmetric", context: "sketch", label: "Symmetric" },
+  { key: "f", shift: true, action: "fix", context: "sketch", label: "Fix" },
   // sketch-start conveniences from model mode (L/C/R/A/P start a sketch with that tool)
   { key: "l", action: "line", context: "model", label: "Sketch: Line" },
   { key: "c", action: "circle", context: "model", label: "Sketch: Circle" },
