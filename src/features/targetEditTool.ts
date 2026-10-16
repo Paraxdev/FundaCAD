@@ -31,6 +31,7 @@ import type { EdgeRef } from "../viewport/edgeLines";
 import type { DocumentStore } from "../document/store";
 import type { Selector } from "../types";
 import { setPrompt } from "../ui/prompt";
+import { trackedFace } from "./holeFace";
 import {
   pointOf,
   readTarget,
@@ -278,6 +279,12 @@ export class TargetEditTool {
    *  unlike its centroid on an annular one. */
   private pickAt(x: number, y: number, t: TargetField): TargetEntry | null {
     if (t.kind === "body") return this.viewport.bodyIdAt(x, y);
+    if (t.kind === "face" && t.tracked) {
+      const at = this.viewport.pickFaceForPressPull(x, y);
+      if (!at) return null;
+      const { anchor: a, normal: n } = at;
+      return trackedFace([a.x, a.y, a.z], [n.x, n.y, n.z], at.bodyId);
+    }
     const hit = this.viewport.pickEntity(x, y);
     if (!hit) return null;
     if (t.kind === "edge") return hit.kind === "edge" ? hit.selector : null;

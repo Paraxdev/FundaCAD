@@ -121,13 +121,85 @@ const PLANES: ChoiceOption[] = [
   { value: "YZ", label: "YZ" },
 ];
 
+const EXTRUDE_STARTS: ChoiceOption[] = [
+  { value: "sketch", label: "Sketch plane" },
+  { value: "offset", label: "Offset" },
+  { value: "face", label: "Face" },
+  { value: "plane", label: "Plane" },
+  { value: "point", label: "Point" },
+];
+
+const EXTRUDE_ENDS: ChoiceOption[] = [
+  { value: "distance", label: "Distance" },
+  { value: "upToFace", label: "Up to face" },
+  { value: "upToPlane", label: "Up to plane" },
+  { value: "upToPoint", label: "Up to point" },
+  { value: "throughAll", label: "Through all" },
+];
+
+const END_TITLE = "Up to a target ignores the distance and goes towards the target; the end offset runs past it, negative stops short";
+
+/** The planes and points a document offers a start or end row: the three base
+ *  planes and every datum plane, or every datum point, as the row's options. */
+export function datumChoices(field: string, features: readonly Feature[]): ChoiceOption[] | null {
+  if (/^(startPlane|upToPlane2?)$/.test(field)) {
+    const datums = features.filter((f) => f.type === "datumPlane")
+      .map((f) => ({ value: f.id, label: (f as { name?: string }).name || f.id }));
+    return [...PLANES, ...datums];
+  }
+  if (/^(startPoint|upToPoint2?)$/.test(field)) {
+    return features.filter((f) => f.type === "datumPoint")
+      .map((f) => ({ value: f.id, label: (f as { name?: string }).name || f.id }));
+  }
+  return null;
+}
+
+/** Which start and end rows an extrude reads, given its start and end types. */
+function extrudeFieldApplies(field: string, v: Record<string, unknown>): boolean {
+  const start = (v.startType as string) || "sketch";
+  const end = (v.endType as string) || "distance";
+  const end2 = (v.endType2 as string) || "distance";
+  const two = v.twoSided === true;
+  switch (field) {
+    case "startOffset": return start !== "sketch" || v.startOffset !== undefined;
+    case "startFace": return start === "face";
+    case "startPlane": return start === "plane";
+    case "startPoint": return start === "point";
+    case "distance": return !end.startsWith("upTo");
+    case "upToFace": return end === "upToFace";
+    case "upToPlane": return end === "upToPlane";
+    case "upToPoint": return end === "upToPoint";
+    case "endOffset": return end.startsWith("upTo");
+    case "symmetric": return !two;
+    case "twoSided": return v.symmetric !== true;
+    case "distance2": return two && !end2.startsWith("upTo");
+    case "taper2": case "endType2": return two;
+    case "upToFace2": return two && end2 === "upToFace";
+    case "upToPlane2": return two && end2 === "upToPlane";
+    case "upToPoint2": return two && end2 === "upToPoint";
+    case "endOffset2": return two && end2.startsWith("upTo");
+    default: return true;
+  }
+}
+
 export const FEATURE_CHOICE_FIELDS: Partial<Record<FeatureType, ChoiceField[]>> = {
   // Three commands make the feature, and the row edits it afterwards. Nothing
   // asks which boolean you want, so this is the only place the answer is ever
   // typed by hand, which is exactly what the row is for: changing your mind
   // should not mean deleting the feature and re-picking the bodies.
   boolean: [{ field: "operation", label: "Operation", options: BOOLEAN_KINDS, fallback: "union" }],
-  extrude: [{ field: "operation", label: "Operation", options: BOOLEAN_OPS, fallback: "new" }],
+  extrude: [
+    { field: "operation", label: "Operation", options: BOOLEAN_OPS, fallback: "new" },
+    { field: "startType", label: "Start", options: EXTRUDE_STARTS, fallback: "sketch" },
+    { field: "startPlane", label: "Start plane", options: PLANES, fallback: "XY" },
+    { field: "startPoint", label: "Start point", options: [], fallback: "" },
+    { field: "endType", label: "End", options: EXTRUDE_ENDS, fallback: "distance", title: END_TITLE },
+    { field: "upToPlane", label: "Up to plane", options: PLANES, fallback: "XY" },
+    { field: "upToPoint", label: "Up to point", options: [], fallback: "" },
+    { field: "endType2", label: "End 2", options: EXTRUDE_ENDS, fallback: "distance", title: END_TITLE },
+    { field: "upToPlane2", label: "Up to plane 2", options: PLANES, fallback: "XY" },
+    { field: "upToPoint2", label: "Up to point 2", options: [], fallback: "" },
+  ],
   revolve: [
     { field: "operation", label: "Operation", options: BOOLEAN_OPS, fallback: "new" },
     { field: "axis", label: "Axis", options: AXES, fallback: "Z" },
@@ -226,7 +298,10 @@ export const FEATURE_TOGGLE_FIELDS: Partial<Record<FeatureType, ToggleField[]>> 
   // Both ways off the sketch plane, `distance` each way. The row an extrude made
   // on a datum plane inside a body wants, and the one thing about an extrude's
   // direction that a saved feature could not previously be talked out of.
-  extrude: [{ field: "symmetric", label: "Symmetric", fallback: false }],
+  extrude: [
+    { field: "symmetric", label: "Symmetric", fallback: false },
+    { field: "twoSided", label: "Two sided", fallback: false },
+  ],
   thicken: [{ field: "symmetric", label: "Symmetric", fallback: false }],
   fillet: [{ field: "tangentEdges", label: "Include Tangent Edges", fallback: true }],
   chamfer: [{ field: "tangentEdges", label: "Include Tangent Edges", fallback: true }],
@@ -261,6 +336,10 @@ export function fieldApplies(
   if (type === "chamfer" && field === "distance2") return values.chamferType === "twoDistance";
   if (type === "fillet" && field === "profile") return values.continuity !== "G2";
   if (type === "hole") return holeFieldApplies(field, values);
+  if (type === "extrude") return extrudeFieldApplies(field, values);
+  if (type === "press-pull" && field === "upToOffset") {
+    return values.upTo != null || values.upToPlane != null || values.upToPoint != null;
+  }
   if (type === "mechanism") return mechanismFieldApplies(field, values);
   // The tool writes followTangent only for a round face with tangent neighbours, so its
   // absence is how a feature says the switch has nothing to act on.
