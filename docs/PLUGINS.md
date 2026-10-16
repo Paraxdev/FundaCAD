@@ -759,8 +759,11 @@ only while it is open), Onshape's keys in the credential store.
 
 **Storage is the app's.** One localStorage key per plugin,
 `fundacad.pluginSettings.<id>`, holding `{ version, values }`. Two plugins
-cannot read or overwrite each other's values, and contributing a handle made
-for another id is refused. It is synchronous on purpose: plugins read their
+never share a key, and contributing a handle made for another id is refused.
+That is a convention between builtin plugins, not a wall: they run in the
+app's own process with its localStorage, so `definePluginSettings` trusts the
+id it is given. The wall is the sandbox, where `settings_get` takes no id and
+the host answers for the calling plugin. It is synchronous on purpose: plugins read their
 options at module scope, before anything async has run. Secrets do not belong
 here; a plugin with keys keeps them in the credential store
 (`plugin_secret_*`) and draws them with its own component.
@@ -773,7 +776,9 @@ others alone.
 
 **Old keys.** `legacy()` returns whatever the plugin kept before this existed.
 It is called once, only while nothing is stored under the new key, and its
-result is written there. It lives in the plugin, never in the app, because
+result is written there. Remove with "Remove forgets its settings" ticked
+leaves a marker under the key instead of deleting it, so a reinstall starts on
+the defaults and does not read the old keys again. It lives in the plugin, never in the app, because
 `scripts/check-no-plugin-code.mjs` fails the build if a plugin's storage key
 reaches the shipped app.
 
