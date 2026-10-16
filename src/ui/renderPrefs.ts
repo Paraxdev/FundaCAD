@@ -105,7 +105,9 @@ export const DEFAULT_BLOOM = 0.4;
  *  an ordinary highlight. That is what makes leaving it on by default defensible. */
 export function bloomSettings(amount: number): { strength: number; radius: number; threshold: number } {
   const a = Math.min(1, Math.max(0, amount));
-  return { strength: a * 0.85, radius: 0.3 + a * 0.3, threshold: 2.0 - a * 1.2 };
+  // Squared since three r186: its UnrealBloomPass glow grows linearly with strength,
+  // r180's grew with its square, and 0.7 * a^2 matched r180 at every slider position.
+  return { strength: 0.7 * a * a, radius: 0.3 + a * 0.3, threshold: 2.0 - a * 1.2 };
 }
 
 /** What the material's 0..1 Emission slider means in the renderer.
