@@ -16,6 +16,7 @@ import { noteRecent } from "./recentFiles";
 import { BINARY_DOC_EXT, DOC_EXT, LEGACY_DOC_EXTS, isDocumentExt } from "./documentExt";
 import { announceImportedBody } from "../plugins/contrib";
 import { askImportUnit, asksForUnit, type ImportUnit } from "./importUnit";
+import { importFeatures } from "./importSketches";
 import {
   asHex, materialsForColors, nodeColors, parseLibrary, serializeLibrary,
 } from "../document/materials";
@@ -452,7 +453,7 @@ export function extToFormat(path: string): ExportFormat {
 
 /** Lower case only, every lookup lower-cases the name first (dropRouting, the
  *  two mappers above). */
-export const IMPORT_EXTS = ["stl", "3mf", "step", "stp", "stpz", "gz", "xbf", "iges", "igs", "brep", "fcstd", "3dm", "ifc", "obj", "ply", "off", "amf", "glb", "gltf", "wrl", "wrz", "x3d", "x3dz"];
+export const IMPORT_EXTS = ["stl", "3mf", "step", "stp", "stpz", "gz", "xbf", "iges", "igs", "brep", "fcstd", "3dm", "ifc", "dxf", "obj", "ply", "off", "amf", "glb", "gltf", "wrl", "wrz", "x3d", "x3dz"];
 
 // FreeCAD writes .FCStd.
 const MIXED_CASE_EXTS = ["FCStd"];
@@ -493,6 +494,7 @@ export async function importModel(store: DocumentStore, geometry: GeometryBacken
       { name: "FreeCAD", extensions: dialogExts(["fcstd"]) },
       { name: "Rhino 3DM", extensions: dialogExts(["3dm"]) },
       { name: "IFC (buildings)", extensions: dialogExts(["ifc"]) },
+      { name: "DXF (AutoCAD)", extensions: dialogExts(["dxf"]) },
       { name: "OBJ", extensions: dialogExts(["obj"]) },
       { name: "PLY", extensions: dialogExts(["ply"]) },
       { name: "OFF", extensions: dialogExts(["off"]) },
@@ -634,23 +636,17 @@ async function importWith(
     return;
   }
   lastCancelledImport = null;
-  const id = store.nextId();
-  store.addFeature({
-    id,
-    type: "import",
-    format: fmt,
-    name: res.name,
-    geom: res.geom,
-    source: opts.source ?? path,
-    solid: res.solid,
-    ...(res.color !== undefined ? { color: res.color } : {}),
-    // the file's assembly tree, when it had one. Spread the same way `color` is,
-    // so an import with no tree produces exactly the feature it always did.
-    ...(res.nodes !== undefined ? { nodes: res.nodes } : {}),
-    ...(res.parts !== undefined ? { parts: res.parts } : {}),
-    ...(res.notes !== undefined ? { notes: res.notes } : {}),
-    ...(res.unit !== undefined ? { unit: res.unit } : {}),
-  });
+  const features = importFeatures(res, { format: fmt, source: opts.source ?? path, taken: store.document.features.map((f) => f.id) });
+  store.addFeatures(features);
+  const imported = features.find((f) => f.type === "import");
+  if (!imported) {
+    if (res.notes?.length) {
+      const { toast } = await import("../ui/toast");
+      toast(res.notes.join(". "), { kind: "info" });
+    }
+    return;
+  }
+  const id = imported.id;
 
   // Say what the document will be like while the user is still deciding what to
   // do with it, rather than letting them discover it as a freeze and conclude
@@ -812,6 +808,7 @@ export function extToImportFormat(path: string): ImportFormat {
   if (ext === "fcstd") return "fcstd";
   if (ext === "3dm") return "3dm";
   if (ext === "ifc") return "ifc";
+  if (ext === "dxf") return "dxf";
   if (ext === "gltf") return "gltf";
   if (ext === "ply") return "ply";
   if (ext === "off") return "off";

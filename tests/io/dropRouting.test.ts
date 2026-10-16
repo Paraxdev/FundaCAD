@@ -35,6 +35,11 @@ const engine = { store: {}, sketch: { hasUncommittedEdits: false }, geometry: {}
 beforeEach(() => { calls.length = 0; discard = true; openOutcome = "ok"; });
 
 describe("routeDroppedName", () => {
+  it("imports a DXF drawing in any case", () => {
+    expect(IMPORT_EXTS).toContain("dxf");
+    expect(routeDroppedName("plate.DXF")).toBe("import");
+  });
+
   it("imports every format the import picker accepts, in any case", () => {
     for (const ext of IMPORT_EXTS) {
       expect(routeDroppedName(`part.${ext}`)).toBe("import");
