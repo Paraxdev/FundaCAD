@@ -112,19 +112,6 @@ export function snap(
 
   if (best) return { point: best.p.clone(), kind: best.kind, guides: [], label: snapLabel(best), ref: best.ref };
 
-  // On a curve, below every point anchor and above alignment: lying on a line
-  // the user can see is a stronger statement than lining up with a corner.
-  let onCurve: { p: THREE.Vector2; d: number; entity: string } | null = null;
-  for (const cv of curves) {
-    const f = nearestOnCurve(cv, raw);
-    if (!f) continue;
-    const d = screenGap(f);
-    if (d <= pixelTol && (!onCurve || d < onCurve.d)) onCurve = { p: f, d, entity: cv.entity };
-  }
-  if (onCurve) {
-    return { point: onCurve.p, kind: "curve", guides: [], label: "On Curve", ref: { entity: onCurve.entity, at: "curve" } };
-  }
-
   // THE GRID'S ANSWER, ONE AXIS AT A TIME.
   //
   // Each axis is tested on its OWN, which is the whole of it: this rounded both
@@ -154,6 +141,28 @@ export function snap(
       y: screenGap(new THREE.Vector2(raw.x, gy)) <= pixelTol ? gy : null,
     };
   };
+
+  // On a curve, below every point anchor and above alignment: lying on a line
+  // the user can see is a stronger statement than lining up with a corner.
+  // A lattice point the curve passes through is preferred over the nearest point
+  // on it, so a grid aligned line still takes the grid's coordinates.
+  let onCurve: { p: THREE.Vector2; d: number; cv: SnapCurve } | null = null;
+  for (const cv of curves) {
+    const f = nearestOnCurve(cv, raw);
+    if (!f) continue;
+    const d = screenGap(f);
+    if (d <= pixelTol && (!onCurve || d < onCurve.d)) onCurve = { p: f, d, cv };
+  }
+  if (onCurve) {
+    const g = gridAxis();
+    let point = onCurve.p;
+    if (g.x !== null || g.y !== null) {
+      const lattice = new THREE.Vector2(g.x ?? point.x, g.y ?? point.y);
+      const back = nearestOnCurve(onCurve.cv, lattice);
+      if (back && back.distanceTo(lattice) <= 1e-9 * Math.max(1, gridStep)) point = lattice;
+    }
+    return { point, kind: "curve", guides: [], label: "On Curve", ref: { entity: onCurve.cv.entity, at: "curve" } };
+  }
 
   // ALIGNMENT, above the grid and below a point.
   //

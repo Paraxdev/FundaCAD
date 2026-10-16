@@ -167,3 +167,27 @@ describe("menu relations the solver holds", () => {
     expect(refAt(60.1, 0)).toEqual({ entity: "P", at: 0 });
   });
 });
+
+describe("the grid is preferred over a curve it lies on", () => {
+  const ents = [line("A", 0, 0, 100, 0), line("D", 0, 0, 100, 100)];
+  const curves = snapMod.curvesFromEntities(ents);
+
+  it("a lattice point on a line is taken and still records the curve", () => {
+    const r = snap(new THREE.Vector2(30.3, 0.2), [], toScreen, 5, 10, curves.slice(0, 1));
+    expect(r.point.toArray()).toEqual([30, 0]);
+    expect(r.ref).toEqual({ entity: "A", at: "curve" });
+  });
+
+  it("a lattice point on a diagonal is taken", () => {
+    const r = snap(new THREE.Vector2(30.2, 29.8), [], toScreen, 5, 10, curves.slice(1));
+    expect(r.point.toArray()).toEqual([30, 30]);
+    expect(r.ref).toEqual({ entity: "D", at: "curve" });
+  });
+
+  it("a lattice that misses the curve leaves the cursor on the curve", () => {
+    const r = snap(new THREE.Vector2(33.4, 0.3), [], toScreen, 5, 10, curves.slice(0, 1));
+    expect(r.point.y).toBe(0);
+    expect(r.point.x).toBeCloseTo(33.4, 9);
+    expect(r.ref).toEqual({ entity: "A", at: "curve" });
+  });
+});
