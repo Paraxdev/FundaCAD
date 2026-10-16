@@ -8,7 +8,7 @@ use std::f64::consts::TAU;
 use indexmap::IndexMap;
 use serde_json::{json, Value};
 
-use super::mesh::MeshObject;
+use super::mesh::{MeshObject, MAX_IMPORT_TRIANGLES};
 
 pub const MAX_SKETCH_ENTITIES: usize = 20_000;
 const BINARY_SENTINEL: &[u8] = b"AutoCAD Binary DXF\r\n\x1a\0";
@@ -378,6 +378,7 @@ struct Out {
     xrefs: usize,
     loops: usize,
     count: usize,
+    tris: usize,
 }
 
 const FLAT: f64 = 1e-9;
@@ -387,6 +388,10 @@ fn xy(p: [f64; 3]) -> P2 {
 }
 
 impl Out {
+    fn full(&self) -> bool {
+        self.count > MAX_SKETCH_ENTITIES || self.tris as u64 > MAX_IMPORT_TRIANGLES
+    }
+
     fn push(&mut self, layer: &str, e: E) {
         self.count += 1;
         self.layers.entry(layer.to_string()).or_default().push(e);
@@ -507,6 +512,7 @@ impl Out {
                 if f[0] != f[k] && f[k] != f[k + 1] && f[0] != f[k + 1] {
                     #[allow(clippy::cast_possible_truncation)]
                     idx.extend([f[0], f[k], f[k + 1]].map(|i| base + i as u32));
+                    self.tris += 1;
                 }
             }
         }
@@ -522,6 +528,9 @@ struct Walker<'a> {
 impl Walker<'_> {
     fn walk(&mut self, ents: &[Ent], m: &Mat, inherit: Option<&str>) {
         for e in ents {
+            if self.out.full() {
+                return;
+            }
             if e.i(67, 0) == 1 {
                 continue;
             }
@@ -670,8 +679,11 @@ impl Walker<'_> {
         #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
         let (cols, rows) = (e.i(70, 1).max(1) as usize, e.i(71, 1).max(1) as usize);
         self.stack.push(name);
-        for r in 0..rows {
+        'array: for r in 0..rows {
             for c in 0..cols {
+                if self.out.full() {
+                    break 'array;
+                }
                 #[allow(clippy::cast_precision_loss)]
                 let step = translate([c as f64 * e.f(44, 0.0), r as f64 * e.f(45, 0.0), 0.0]);
                 self.walk(&block.ents, &mul(&mul(&head, &step), &tail), Some(layer));
@@ -1044,8 +1056,12 @@ pub fn read_dxf(data: &[u8]) -> Result<DxfRead, String> {
     let o = walker.out;
     if o.count > MAX_SKETCH_ENTITIES {
         return Err(format!(
-            "this DXF has {} lines and curves, more than the {MAX_SKETCH_ENTITIES} a sketch stays usable with. Split the drawing in the source app and import the part you need",
-            o.count
+            "this DXF has more than {MAX_SKETCH_ENTITIES} lines and curves, too many for a usable sketch. Split the drawing in the source app and import the part you need"
+        ));
+    }
+    if o.tris as u64 > MAX_IMPORT_TRIANGLES {
+        return Err(format!(
+            "this DXF has more than {MAX_IMPORT_TRIANGLES} 3D face triangles, too many to import as editable bodies. Split the drawing in the source app and import the part you need"
         ));
     }
     let mut notes = Vec::new();
@@ -1109,6 +1125,27 @@ mod tests {
 
     fn close(a: P2, b: P2) -> bool {
         (a[0] - b[0]).hypot(a[1] - b[1]) < 1e-9
+    }
+
+    fn dxf(insunits: i64, block: &str, entities: &str) -> Vec<u8> {
+        let mut t = format!("0\nSECTION\n2\nHEADER\n9\n$INSUNITS\n70\n{insunits}\n0\nENDSEC\n");
+        t += &format!("0\nSECTION\n2\nBLOCKS\n0\nBLOCK\n8\n0\n2\nB\n70\n0\n10\n0\n20\n0\n30\n0\n{block}0\nENDBLK\n0\nENDSEC\n");
+        t += &format!("0\nSECTION\n2\nENTITIES\n{entities}0\nENDSEC\n0\nEOF\n");
+        t.into_bytes()
+    }
+
+    const UNIT_LINE: &str = "0\nLINE\n8\n0\n10\n0\n20\n0\n30\n0\n11\n1\n21\n0\n31\n0\n";
+    const UNIT_FACE: &str = "0\n3DFACE\n8\n0\n10\n0\n20\n0\n30\n0\n11\n1\n21\n0\n31\n0\n12\n0\n22\n1\n32\n0\n13\n0\n23\n1\n33\n0\n";
+    const HUGE_ARRAY: &str = "0\nINSERT\n8\nL\n2\nB\n10\n0\n20\n0\n30\n0\n70\n30000\n71\n30000\n44\n2\n45\n2\n";
+
+    #[test]
+    fn a_huge_insert_array_stops_at_the_cap() {
+        for block in [UNIT_LINE, UNIT_FACE] {
+            let t = std::time::Instant::now();
+            let err = read_dxf(&dxf(4, block, HUGE_ARRAY)).err().expect("a 30000 x 30000 array must be refused");
+            assert!(err.contains("more than"), "{err}");
+            assert!(t.elapsed().as_secs_f64() < 5.0, "took {:?}", t.elapsed());
+        }
     }
 
     #[test]
