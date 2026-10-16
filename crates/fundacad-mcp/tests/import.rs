@@ -116,6 +116,7 @@ fn the_extension_decides_the_format() {
         (".FBX", "fbx"),
         (".3DS", "3ds"),
         (".DXF", "dxf"),
+        (".svg", "svg"),
         (".stpz", "step"),
     ] {
         assert_eq!(upload::import_format(&format!("part{ext}")), want, "{ext}");
@@ -327,6 +328,23 @@ async fn a_dxf_adds_one_sketch_per_layer_and_no_body() {
     assert_eq!(fs[0]["entities"].as_array().unwrap().len(), 2);
     let said = text_of(&out);
     assert!(said.contains("2 sketches") && said.contains("'Plate', 2 entities") && said.contains("1 TEXT"), "{said}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_svg_sketch_keeps_its_fill_rule_so_an_extrude_leaves_the_holes() {
+    let _serial = serial();
+    let (srv, engine) = server_with(json!({"ok": true, "result": {"name": "logo", "unit": "mm",
+        "sketches": [{"name": "logo", "fillRule": "evenodd", "entities": [line("e1")]}]}}));
+    let path = a_file(".svg");
+    let out = run(&srv, json!({"path": path.to_string_lossy()})).await;
+    let _ = std::fs::remove_file(&path);
+    assert!(!is_error(&out), "{}", text_of(&out));
+    assert_eq!(engine.calls()[0].payload["format"], json!("svg"));
+    let fs = features(&srv).await;
+    assert_eq!(fs.len(), 1);
+    assert_eq!(fs[0]["fillRule"], json!("evenodd"));
+    let said = text_of(&out);
+    assert!(said.contains("holes stay open"), "{said}");
 }
 
 #[tokio::test(flavor = "multi_thread")]
