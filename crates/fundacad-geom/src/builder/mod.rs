@@ -271,6 +271,8 @@ pub struct Ctx {
     /// `patterned`, so a document without feature patterns holds no tools.
     pub tools: HashMap<String, Vec<ToolRecord>>,
     pub patterned: HashSet<String>,
+    /// Each datum point by id, read from the document before the build.
+    pub points: HashMap<String, [f64; 3]>,
     /// Every feature of the document in order, for naming one in a message.
     pub timeline: Vec<Step>,
     /// The bodies this feature moved rigidly, for face provenance to follow.
@@ -326,6 +328,7 @@ impl Ctx {
             projections: Vec::new(),
             tools: HashMap::new(),
             patterned: HashSet::new(),
+            points: HashMap::new(),
             timeline: Vec::new(),
             rigid_moves: Vec::new(),
             ids: BodyIds::new(None),
@@ -357,6 +360,7 @@ impl Ctx {
             projections: Vec::new(),
             tools: HashMap::new(),
             patterned: HashSet::new(),
+            points: HashMap::new(),
             timeline: Vec::new(),
             rigid_moves: Vec::new(),
             ids: BodyIds::new(None),
@@ -1103,6 +1107,7 @@ pub fn rebuild_from(
         projections: Vec::new(),
         tools: HashMap::new(),
         patterned: HashSet::new(),
+        points: HashMap::new(),
         timeline: Vec::new(),
         rigid_moves: Vec::new(),
         ids: BodyIds::new(recorded.clone()),
@@ -1120,6 +1125,13 @@ pub fn rebuild_from(
         .filter_map(features::pattern_sources)
         .flatten()
         .cloned()
+        .collect();
+    ctx.points = features
+        .iter()
+        .filter_map(|f| match f {
+            Feature::DatumPoint(p) => Some((p.id.clone(), [p.point[0].get(), p.point[1].get(), p.point[2].get()])),
+            _ => None,
+        })
         .collect();
     ctx.timeline = raw_features
         .iter()

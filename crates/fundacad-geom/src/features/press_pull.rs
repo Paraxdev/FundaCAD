@@ -16,12 +16,12 @@ use opencascade::modify::{OffsetJoin, OffsetOptions};
 use opencascade::primitives::{Shape, ShapeType, SurfaceType};
 use opencascade::progress::ProgressRange;
 use opencascade::query::PointState;
-use opencascade::select_access as sa;
 use opencascade::shape_io::BrepWriteOptions;
 use opencascade_sys as ffi;
 use serde_json::Value;
 
 use super::axis_push;
+use super::extent;
 use super::blend::ops as blend_ops;
 use super::boolean::combine;
 use super::extrude::prisms;
@@ -452,54 +452,30 @@ fn truthy(v: &Value) -> bool {
     }
 }
 
-/// The plane (point, normal) an `upTo` target contributes.
-fn up_to_plane(ctx: &mut Ctx, f: &PressPull, act: usize, up: &Value) -> FResult<(DVec3, DVec3)> {
-    let point = (up.get("by").and_then(Value::as_str) == Some("nearest"))
-        .then(|| up.get("point"))
-        .flatten()
-        .filter(|p| !p.is_null());
-    let mut target: Option<Shape> = None;
-    if let Some(p) = point {
-        let xyz: Vec<f64> = p
-            .as_array()
-            .ok_or_else(|| Fail::Internal("TypeError".into()))?
-            .iter()
-            .map(|c| c.as_f64().ok_or_else(|| Fail::Internal("TypeError".into())))
-            .collect::<FResult<_>>()?;
-        let [x, y, z] = xyz[..] else {
-            return Err(Fail::Internal("TypeError".into()));
-        };
-        let mut best: Option<(f64, Shape)> = None;
-        for b in &ctx.bodies {
-            for fc in kernel::subshapes(b.shape(), Kind::Face) {
-                let d = sa::distance_to_point(&fc, [x, y, z]).map_or(f64::INFINITY, |r| r.0);
-                if best.as_ref().map_or(true, |(bd, _)| d < *bd) {
-                    best = Some((d, fc));
-                }
-            }
+/// The point an up to target passes through, and its normal; a point target
+/// has none and is measured along the push.
+fn up_to_target(ctx: &mut Ctx, f: &PressPull, act: usize, up: Option<&Value>) -> FResult<Option<(DVec3, Option<DVec3>)>> {
+    if up.is_some() {
+        if let Some(sel) = &f.up_to {
+            let face = extent::face(ctx, &f.id, "Press/Pull", sel, Some(act))
+                .map_err(|_| Fail::msg("Press/Pull: the 'up to' target surface wasn't found"))?;
+            let (c, n) = extent::face_plane(&face);
+            return Ok(Some((c, Some(n))));
         }
-        target = best.map(|b| b.1);
     }
-    let target = match target {
-        Some(t) => Some(t),
-        None => {
-            let part = ctx.bodies[act].shape().clone();
-            Resolver::new(Some(&mut ctx.diagnostics), Some(&f.id))
-                .faces(&part, up)?
-                .into_iter()
-                .next()
-        }
-    };
-    let Some(target) = target else {
-        return Err(Fail::msg(
-            "Press/Pull: the 'up to' target surface wasn't found",
-        ));
-    };
-    Ok((centre(&target), normal(&target)))
+    if let Some(name) = f.up_to_plane.as_deref().filter(|p| !p.is_empty()) {
+        let (c, n) = extent::datum_plane(ctx, name)?;
+        return Ok(Some((c, Some(n))));
+    }
+    if let Some(p) = &f.up_to_point {
+        return Ok(Some((extent::point(ctx, "Press/Pull", p)?, None)));
+    }
+    Ok(None)
 }
 
 /// `_distance_to_target`, travelling along `dir` from `c`.
-fn distance_to_target(c: DVec3, dir: DVec3, point: DVec3, n: DVec3) -> FResult<f64> {
+fn distance_to_target(c: DVec3, dir: DVec3, point: DVec3, n: Option<DVec3>) -> FResult<f64> {
+    let n = n.unwrap_or(dir);
     let denom = dir.dot(n);
     if denom.abs() < 1e-6 {
         return Err(Fail::msg(
@@ -526,10 +502,8 @@ pub fn press_pull(ctx: &mut Ctx, f: &PressPull) -> FResult {
         .transpose()
         .map_err(|_| Fail::Internal("TypeError".into()))?
         .filter(truthy);
-    let target = match &up {
-        Some(up) => Some(up_to_plane(ctx, f, act, up)?),
-        None => None,
-    };
+    let target = up_to_target(ctx, f, act, up.as_ref())?;
+    let reach_offset = ctx.val_or(f.up_to_offset.as_ref(), 0.0)?;
     let dist = ctx.val(&f.distance)?;
     let taper = ctx.val_or(f.taper.as_ref(), 0.0)?;
     if taper != 0.0 && !(-89.0 < taper && taper < 89.0) {
@@ -573,6 +547,7 @@ pub fn press_pull(ctx: &mut Ctx, f: &PressPull) -> FResult {
             ctx.set_shape(act, act_shape.clone());
         }
     }
+    let mut moved = false;
     for (sel, _) in sels.iter().zip(&skip).filter(|(_, s)| !**s) {
         if mode != "auto" {
             if let Some(i) = named.and_then(|id| ctx.find_body(id)) {
@@ -597,6 +572,16 @@ pub fn press_pull(ctx: &mut Ctx, f: &PressPull) -> FResult {
             Some((p, n)) => distance_to_target(centre(&src), normal(&src), p, n)?,
             None => dist,
         };
+        let d = if target.is_some() && reach_offset != 0.0 {
+            let pushed = d + d.signum() * reach_offset;
+            if d.abs() < 1e-9 || pushed * d.signum() < 0.0 {
+                return Err(Fail::msg("Press/Pull: the 'up to' offset reaches back past the face"));
+            }
+            pushed
+        } else {
+            d
+        };
+        moved |= d.abs() >= 1e-9;
         if mode != "auto" {
             if d.abs() < 1e-9 {
                 continue;
@@ -625,8 +610,19 @@ pub fn press_pull(ctx: &mut Ctx, f: &PressPull) -> FResult {
             let name = ctx.bodies[act].name.clone();
             ctx.advise(&f.id, "brokeThrough", format!("the offset broke through the outside of {name}"));
         }
+        if target.is_some() && kernel::subshapes(&out, Kind::Solid).is_empty() {
+            return Err(Fail::msg(format!(
+                "Press/Pull: the push leaves nothing of {}",
+                ctx.bodies[act].name
+            )));
+        }
         act_shape = out;
         ctx.set_shape(act, act_shape.clone());
+    }
+    if target.is_some() && !moved {
+        return Err(Fail::msg(
+            "Press/Pull: the face already lies on the 'up to' target, pick a target away from it",
+        ));
     }
     Ok(())
 }
