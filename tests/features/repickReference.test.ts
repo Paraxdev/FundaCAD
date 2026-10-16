@@ -103,3 +103,30 @@ describe("re-picking a hole's face", () => {
     expect(repickedExtent(hole(filled), filled, rec([22, 3, 5]))).toBeNull();
   });
 });
+
+describe("re-picking a datum reference", () => {
+  const matchEdge = { kind: "edge", by: "match", fp: { mid: [20, 10, 0], dir: [0, 0, 1], length: 20, curve: "line" }, body: "body1" } as unknown as Selector;
+  const face = { kind: "face", by: "tracked", point: [20, 0, 0], normal: [1, 0, 0], body: "body1" } as unknown as Selector;
+  const plane = {
+    id: "p3", type: "datumPlane", plane: { origin: [0, 0, 0], normal: [1, 0, 0], xdir: [0, 1, 0] },
+    through: { kind: "points", points: [{ face }, { edge: matchEdge, end: "end" }, { datum: "pt" }] },
+  } as unknown as Feature;
+
+  it("finds a nested edge by its fingerprint's middle and a face by its point", () => {
+    expect(findSelectorAt(plane, [20, 10, 0])).toEqual({ field: "through", index: null, path: ["points", 1, "edge"] });
+    expect(findSelectorAt(plane, [20, 0, 0])).toEqual({ field: "through", index: null, path: ["points", 0, "face"] });
+    const axis = { id: "a", type: "datumAxis", origin: [0, 0, 0], dir: [0, 0, 1], axisEdge: near([1, 2, 3]) } as unknown as Feature;
+    expect(findSelectorAt(axis, [1, 2, 3])).toEqual({ field: "axisEdge", index: null });
+  });
+
+  it("swaps only that selector, written as a fingerprint that keeps following", () => {
+    const site = findSelectorAt(plane, [20, 10, 0])!;
+    const picked = { kind: "edge", by: "nearest", point: [40, 10, 0], body: "body1" } as Selector;
+    const next = repickedSelector(plane, site, picked, null, [[40, 10, -10], [40, 10, 10]]);
+    expect(next).toMatchObject({ by: "match", body: "body1", fp: { mid: [40, 10, 0], length: 20, curve: "line" } });
+    const patch = replaceSelectorAt(plane, site, next) as { through: { points: unknown[] } };
+    expect(patch.through.points[1]).toEqual({ edge: next, end: "end" });
+    expect(patch.through.points[0]).toEqual({ face });
+    expect((plane as unknown as { through: { points: { edge?: unknown }[] } }).through.points[1]!.edge).toBe(matchEdge);
+  });
+});

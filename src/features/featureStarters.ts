@@ -1471,7 +1471,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       stopWaiting();
       if (store.editPreviewId === featureId) store.endEditPreview();
     }
-    const apply = (sel: Selector, normal: Vec3 | null) => {
+    const apply = (sel: Selector, normal: Vec3 | null, edgePoints?: readonly Vec3[]) => {
       // Re-read the feature: the pick is async, and the doc may have moved under
       // us (undo, another edit). Re-locating also re-validates the site.
       const cur = store.document.features.find((f) => f.id === featureId);
@@ -1481,14 +1481,14 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
         end();
         return;
       }
-      const next = repickedSelector(cur, site2, sel, normal);
+      const next = repickedSelector(cur, site2, sel, normal, edgePoints);
       store.updateFeature(featureId, replaceSelectorAt(cur, site2, next));
       end();
       if (next !== sel) settleRepickedExtent(featureId, next);
     };
     const pick = () => {
       const opened = wantsEdge
-        ? pickEdgeInteractive("Pick the edge to use · Esc", (sel) => apply(sel, null), end)
+        ? pickEdgeInteractive("Pick the edge to use · Esc", (sel, pts) => apply(sel, null, pts), end)
         : pickFaceInteractive("Pick the face to use · Esc", apply, end);
       if (!opened) end();
     };

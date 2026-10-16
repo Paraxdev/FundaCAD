@@ -9,8 +9,8 @@ use opencascade::select_access::{self as sa, CurveType, SurfaceType};
 use serde_json::Value;
 
 use super::face_anchor::{agree_with, cylinder_axis, plane_from_point_normal, unit, with_x_dir, Placement};
-use crate::builder::plane::{plane_of, PlaneRef};
-use crate::builder::{Ctx, FResult};
+use crate::builder::plane::{named, plane_of, PlaneRef};
+use crate::builder::{missing_reference, Ctx, FResult};
 use crate::kernel::{self, Frame};
 use crate::select::{entity::EdgeEnt, Resolver};
 
@@ -21,9 +21,31 @@ struct Look<'c> {
     ctx: &'c Ctx,
     id: &'c str,
     notes: Vec<Value>,
+    missed: Option<(&'static str, [f64; 3])>,
 }
 
-impl Look<'_> {
+impl<'c> Look<'c> {
+    fn new(ctx: &'c Ctx, id: &'c str) -> Self {
+        Look { ctx, id, notes: Vec::new(), missed: None }
+    }
+
+    fn done(self) -> Lost {
+        (self.notes, self.missed)
+    }
+
+    /// Keeps the first selector that gave nothing usable, by the point the
+    /// re-pick flow finds it with: its stored point, or a fingerprint's middle.
+    fn miss<T>(&mut self, kind: &'static str, sel: &Selector) -> Option<T> {
+        if self.missed.is_none() {
+            let v = serde_json::to_value(sel).unwrap_or(Value::Null);
+            let at = v.get("point").or_else(|| v.get("fp").and_then(|fp| fp.get("mid")));
+            if let Some(at) = at.and_then(arr3) {
+                self.missed = Some((kind, at.to_array()));
+            }
+        }
+        None
+    }
+
     fn part(&self, sel: &Selector) -> Option<Shape> {
         match sel.body().filter(|b| !b.is_empty()) {
             Some(b) => self.ctx.find_body(b).map(|i| self.ctx.bodies[i].shape().clone()),
@@ -36,51 +58,74 @@ impl Look<'_> {
     }
 
     fn edge(&mut self, sel: &Selector) -> Option<Shape> {
-        let part = self.part(sel)?;
-        let v = serde_json::to_value(sel).ok()?;
-        Resolver::new(Some(&mut self.notes), Some(self.id)).edges(&part, &v).ok()?.into_iter().next()
+        let found = self.part(sel).and_then(|part| {
+            let v = serde_json::to_value(sel).ok()?;
+            Resolver::new(Some(&mut self.notes), Some(self.id)).edges(&part, &v).ok()?.into_iter().next()
+        });
+        found.or_else(|| self.miss("edge", sel))
     }
 
     fn face(&mut self, sel: &Selector) -> Option<Shape> {
-        let part = self.part(sel)?;
-        let v = serde_json::to_value(sel).ok()?;
-        Resolver::new(Some(&mut self.notes), Some(self.id)).faces(&part, &v).ok()?.into_iter().next()
+        let found = self.part(sel).and_then(|part| {
+            let v = serde_json::to_value(sel).ok()?;
+            Resolver::new(Some(&mut self.notes), Some(self.id)).faces(&part, &v).ok()?.into_iter().next()
+        });
+        found.or_else(|| self.miss("face", sel))
     }
 
     fn line(&mut self, sel: &Selector) -> Option<(DVec3, DVec3)> {
         let ent = EdgeEnt::new(self.edge(sel)?).ok()?;
-        if ent.curve != CurveType::Line {
-            return None;
+        match unit(ent.dir()) {
+            Some(d) if ent.curve == CurveType::Line => Some((ent.mid, d)),
+            _ => self.miss("edge", sel),
         }
-        Some((ent.mid, unit(ent.dir())?))
+    }
+
+    /// A datum named by id has to be above this feature, or it is refused
+    /// like any other reference to a feature below.
+    fn above(&self, name: &str, what: &str) -> FResult<()> {
+        let at = |id: &str| self.ctx.timeline.iter().position(|s| s.id == id);
+        match (at(name), at(self.id)) {
+            (Some(k), Some(me)) if k < me => Ok(()),
+            (_, None) => Ok(()),
+            _ => Err(missing_reference(format!("{{\"{what}\": \"{name}\"}} names no datum above this one."))),
+        }
     }
 
     /// A point on the plane and its unit normal.
-    fn plane(&mut self, r: &PlaneOf) -> Option<(DVec3, DVec3)> {
-        match r {
+    fn plane(&mut self, r: &PlaneOf) -> FResult<Option<(DVec3, DVec3)>> {
+        Ok(match r {
             PlaneOf::Named { plane } => {
-                let f = plane_of(PlaneRef::Name(plane), &self.ctx.datums).ok()?;
-                Some((DVec3::from(f.origin), DVec3::from(f.z)))
+                if named(plane).is_none() {
+                    self.above(plane, "plane")?;
+                }
+                plane_of(PlaneRef::Name(plane), &self.ctx.datums)
+                    .ok()
+                    .map(|f| (DVec3::from(f.origin), DVec3::from(f.z)))
             }
             PlaneOf::Face { face } => {
-                let probe = sa::face_probe(&self.face(face)?)?;
-                if probe.surface != SurfaceType::Plane {
-                    return None;
-                }
-                Some((DVec3::from(probe.centre?), unit(DVec3::from(probe.normal?))?))
+                let flat = self.face(face).and_then(|f| sa::face_probe(&f)).and_then(|probe| {
+                    if probe.surface != SurfaceType::Plane {
+                        return None;
+                    }
+                    Some((DVec3::from(probe.centre?), unit(DVec3::from(probe.normal?))?))
+                });
+                flat.or_else(|| self.miss("face", face))
             }
-        }
+        })
     }
 
     fn point(&mut self, p: &PointAt) -> FResult<Option<DVec3>> {
         Ok(match p {
-            PointAt::Datum { datum } => self
-                .ctx
+            PointAt::Datum { datum } => {
+                self.above(datum, "datum")?;
+                self.ctx
                 .datum_marks
                 .get(datum)
                 .and_then(|m| m.get("position"))
                 .and_then(arr3)
-                .or_else(|| self.ctx.points.get(datum).map(|p| DVec3::from(*p))),
+                .or_else(|| self.ctx.points.get(datum).map(|p| DVec3::from(*p)))
+            }
             PointAt::Face { face } => self
                 .face(face)
                 .and_then(|f| sa::face_probe(&f))
@@ -107,11 +152,27 @@ impl Look<'_> {
 
 }
 
-/// The diagnostics a lost reference leaves, with one of its own when the
-/// resolver said nothing, so the timeline always shows why it froze.
-fn lost(ctx: &mut Ctx, id: &str, mut notes: Vec<Value>, what: &str) {
-    if notes.is_empty() {
-        ctx.advise(id, "referenceLost", format!("{what}: a reference no longer resolves, kept where it was"));
+type Lost = (Vec<Value>, Option<(&'static str, [f64; 3])>);
+
+/// The diagnostics a lost reference leaves. A selector that gave nothing is
+/// named the way the re-pick flow looks for it; otherwise one of its own when
+/// the resolver said nothing, so the timeline always shows why it froze.
+fn lost(ctx: &mut Ctx, id: &str, (mut notes, missed): Lost, what: &str) {
+    match missed {
+        Some((kind, at)) => ctx.diagnostics.push(serde_json::json!({
+            "feature_id": id,
+            "kind": kind,
+            "resolved": 0,
+            "confidence": 0.0,
+            "lossy": true,
+            "reason": format!("{what}: the {kind} it was made from no longer resolves, kept where it was. Re-pick the {kind}."),
+            "at": at,
+            "code": "referenceNotFound",
+        })),
+        None if notes.is_empty() => {
+            ctx.advise(id, "referenceLost", format!("{what}: a reference no longer resolves, kept where it was"))
+        }
+        None => {}
     }
     ctx.diagnostics.append(&mut notes);
 }
@@ -153,9 +214,9 @@ pub fn plane_through(ctx: &mut Ctx, f: &DatumPlane, through: &PlaneThrough) -> F
     let cached = plane_of(PlaneRef::from(&f.plane), &ctx.datums)?;
     let t = ctx.val_or(f.t.as_ref(), 0.5)?;
     let angle = ctx.val_or(f.angle.as_ref(), 0.0)?;
-    let mut look = Look { ctx: &*ctx, id: &f.id, notes: Vec::new() };
+    let mut look = Look::new(&*ctx, &f.id);
     let found = match through {
-        PlaneThrough::Mid { a, b } => match (look.plane(a), look.plane(b)) {
+        PlaneThrough::Mid { a, b } => match (look.plane(a)?, look.plane(b)?) {
             (Some(a), Some(b)) => mid(a, b).and_then(|(p, n)| settle(None, p, n, &cached)),
             _ => None,
         },
@@ -210,7 +271,7 @@ pub fn plane_through(ctx: &mut Ctx, f: &DatumPlane, through: &PlaneThrough) -> F
             }
             _ => None,
         },
-        PlaneThrough::Angle { edge, from } => match (look.line(edge), look.plane(from)) {
+        PlaneThrough::Angle { edge, from } => match (look.line(edge), look.plane(from)?) {
             (Some((o, d)), Some((_, nr))) => {
                 unit(nr - d * d.dot(nr)).and_then(|np| settle(Some(o), o, rotate(np, d, angle), &cached))
             }
@@ -218,8 +279,7 @@ pub fn plane_through(ctx: &mut Ctx, f: &DatumPlane, through: &PlaneThrough) -> F
         },
     };
     if found.is_none() {
-        let notes = look.notes;
-        lost(ctx, &f.id, notes, "Plane");
+        lost(ctx, &f.id, look.done(), "Plane");
     }
     Ok(found)
 }
@@ -243,14 +303,13 @@ fn nearest_fraction(e: &opencascade::primitives::Edge, p: DVec3) -> f64 {
 /// viewport read ahead of the cached `point`.
 pub fn datum_point(ctx: &mut Ctx, f: &DatumPoint) -> FResult {
     let Some(at) = &f.at else { return Ok(()) };
-    let mut look = Look { ctx: &*ctx, id: &f.id, notes: Vec::new() };
+    let mut look = Look::new(&*ctx, &f.id);
     match look.point(at)? {
         Some(p) => {
             ctx.datum_marks.insert(f.id.clone(), serde_json::json!({"kind": "point", "position": p.to_array()}));
         }
         None => {
-            let notes = look.notes;
-            lost(ctx, &f.id, notes, "Point");
+            lost(ctx, &f.id, look.done(), "Point");
         }
     }
     Ok(())
@@ -258,14 +317,14 @@ pub fn datum_point(ctx: &mut Ctx, f: &DatumPoint) -> FResult {
 
 /// A datum axis's `through` as a line, `None` (with a diagnostic) to keep the cache.
 pub fn axis_through(ctx: &mut Ctx, f: &DatumAxis, through: &AxisThrough) -> FResult<Option<(DVec3, DVec3)>> {
-    let mut look = Look { ctx: &*ctx, id: &f.id, notes: Vec::new() };
+    let mut look = Look::new(&*ctx, &f.id);
     let found = match through {
         AxisThrough::Points { a, b } => match (look.point(a)?, look.point(b)?) {
             (Some(a), Some(b)) => unit(b - a).map(|d| (a, d)),
             _ => None,
         },
         AxisThrough::Cylinder { face } => look.face(face).and_then(|s| cylinder_axis(&s)).map(|(o, d, _)| (o, d)),
-        AxisThrough::Planes { a, b } => match (look.plane(a), look.plane(b)) {
+        AxisThrough::Planes { a, b } => match (look.plane(a)?, look.plane(b)?) {
             (Some((oa, na)), Some((ob, nb))) => {
                 let u = na.cross(nb);
                 (u.length() >= TOL).then(|| {
@@ -280,8 +339,7 @@ pub fn axis_through(ctx: &mut Ctx, f: &DatumAxis, through: &AxisThrough) -> FRes
     match found {
         Some((o, d)) => Ok(Some((o, if d.dot(cached) < 0.0 { -d } else { d }))),
         None => {
-            let notes = look.notes;
-            lost(ctx, &f.id, notes, "Axis");
+            lost(ctx, &f.id, look.done(), "Axis");
             Ok(None)
         }
     }
