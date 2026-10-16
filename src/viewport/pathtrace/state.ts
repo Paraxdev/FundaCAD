@@ -10,6 +10,8 @@ export interface TraceInputs {
   mode: ViewMode;
   visible: boolean;
   stillMs: number;
+  /** A gizmo drag is under way; the tracer is refitted once on release. */
+  dragging?: boolean;
   sectioned: boolean;
   xray: boolean;
   wireframe: boolean;
@@ -29,7 +31,7 @@ export function traceState(i: TraceInputs): TraceState {
   if (i.xray) return "paused:xray";
   if (i.wireframe) return "paused:wireframe";
   if (i.sketchOpen) return "paused:sketch";
-  if (i.stillMs < STILL_MS) return "moving";
+  if (i.stillMs < STILL_MS || i.dragging) return "moving";
   if (i.samples >= i.cap) return "done";
   return "trace";
 }

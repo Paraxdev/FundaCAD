@@ -14,6 +14,9 @@ class FakeTracer implements TracerBackend {
   async init() {}
   setSize() { this.calls.push("size"); }
   setScene() { this.calls.push("scene"); }
+  updateGeometry() { this.calls.push("geometry"); }
+  updateTransforms() { this.calls.push("transforms"); }
+  updateMaterials() { this.calls.push("materials"); }
   updateCamera() { this.calls.push("camera"); }
   reset() { this.calls.push("reset"); }
   renderSample() { this.calls.push("sample"); }
@@ -130,7 +133,7 @@ describe("path trace host", () => {
     expect(host.samples).toBe(2);
   });
 
-  it("does not re-mirror on a hover, only when the scene changes", async () => {
+  it("does not touch the scene on a hover, and refits it when a body moves", async () => {
     const root = scene();
     const { host, t } = await started();
     host.tick(frame({}, 1000, { root }));
@@ -140,7 +143,8 @@ describe("path trace host", () => {
     expect(scenes()).toBe(before);
     root.children[0]!.position.x = 3;
     host.tick(frame({}, 1000, { root, sceneMaybeChanged: true }));
-    expect(scenes()).toBe(before + 1);
+    expect(scenes()).toBe(before);
+    expect(t.calls.filter((c) => c === "transforms")).toHaveLength(1);
   });
 
   it("drops to Realtime on a GPU fault and turns off after the second", async () => {

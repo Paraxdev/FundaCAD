@@ -4,12 +4,20 @@
 
 import * as THREE from "three";
 import { SAMPLE_CAP, type TraceScene, type TracerBackend } from "./backend";
+import { repackInPlace, type SwappableBvhData } from "./bvhSwap";
 import { traceCameraFor } from "./camera";
 
 type WebGpuModule = typeof import("three/webgpu");
 type TracerModule = typeof import("three-gpu-pathtracer/webgpu");
 
 const MAX_BOUNCES = 6;
+
+interface TracerInternals {
+  _bvhData?: SwappableBvhData & { textureAtlas: { setTextures(r: unknown, t: unknown): void }; textures: unknown };
+  _renderer: unknown;
+  scene: THREE.Scene;
+  generateMissingAttributes: boolean;
+}
 
 /** A soft studio sky, Z up, as half floats: Float32 data with a nearest filter
  *  makes the tracer gather zero samples without any error. */
@@ -82,6 +90,9 @@ export class WebGpuTracer implements TracerBackend {
     hooks.onError = (e) => this.fault(`GPU ${e.type ?? "error"}: ${e.message ?? ""}`);
     this.renderer = r;
     const t = new tracerMod.WebGPUPathTracer(r);
+    // Mirrors carry what the tracer reads; a generated tangent would cost 16 B
+    // per vertex on every body for nothing.
+    (t as unknown as TracerInternals).generateMissingAttributes = false;
     t.maxSamples = SAMPLE_CAP;
     t.maxBounces = MAX_BOUNCES;
     t.renderDelay = 0;
@@ -113,10 +124,35 @@ export class WebGpuTracer implements TracerBackend {
       scene.add(d, d.target);
     }
     scene.updateMatrixWorld(true);
-    this.disposeScene();
+    this.disposeLights();
     this.scene = scene;
     this.camera = traceCameraFor(camera, this.camera);
     this.tracer.setScene(scene, this.camera);
+  }
+
+  updateGeometry(meshes: THREE.Mesh[]) {
+    if (!this.tracer || !this.camera) return;
+    const scene = this.scene;
+    const want = new Set(meshes);
+    for (const o of [...scene.children]) if ((o as THREE.Mesh).isMesh && !want.has(o as THREE.Mesh)) scene.remove(o);
+    for (const m of meshes) if (m.parent !== scene) scene.add(m);
+    scene.updateMatrixWorld(true);
+    const t = this.tracer as unknown as TracerInternals;
+    const d = t._bvhData;
+    if (!d || !repackInPlace(d)) {
+      this.tracer.setScene(scene, this.camera);
+      return;
+    }
+    d.textureAtlas.setTextures(t._renderer, d.textures);
+    this.tracer.reset();
+  }
+
+  updateTransforms() {
+    this.tracer?.updateTransforms();
+  }
+
+  updateMaterials() {
+    this.tracer?.updateMaterials();
   }
 
   updateCamera(camera: THREE.Camera) {
@@ -142,19 +178,17 @@ export class WebGpuTracer implements TracerBackend {
     return c.min;
   }
 
-  private disposeScene() {
-    for (const o of this.scene.children) {
-      const m = o as THREE.Mesh;
-      if (m.isMesh) {
-        m.geometry.dispose();
-        (Array.isArray(m.material) ? m.material : [m.material]).forEach((x) => x.dispose());
-      }
+  /** The meshes are the host's cached mirrors and outlive this tracer. */
+  private disposeLights() {
+    for (const o of [...this.scene.children]) {
+      if ((o as THREE.DirectionalLight).isDirectionalLight) (o as THREE.DirectionalLight).dispose();
+      this.scene.remove(o);
     }
   }
 
   dispose() {
     this.disposed = true;
-    this.disposeScene();
+    this.disposeLights();
     this.tracer?.dispose();
     this.renderer?.dispose();
     this.sky?.dispose();

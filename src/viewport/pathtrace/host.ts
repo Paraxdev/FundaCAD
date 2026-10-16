@@ -5,7 +5,12 @@
 import type * as THREE from "three";
 import { SAMPLE_CAP, type TraceScene, type TracerBackend } from "./backend";
 import { armGuard, clearGuard } from "./guard";
-import { collectBodies, countTriangles, mirrorBodies, sceneSignature, TRIANGLE_BUDGET } from "./mirror";
+import { BlasCache, type BlasBuilder } from "./blasCache";
+import { createBlasBuilder } from "./blasPool";
+import {
+  colorSignature, collectAllBodies, collectBodies, countTriangles, materialSignature, sceneSignature,
+  transformSignature, TRIANGLE_BUDGET,
+} from "./mirror";
 import { TraceGeneration, traceState, type TraceInputs, type TraceState } from "./state";
 
 /** No sample this long after the tracer started reads as a hung GPU. */
@@ -51,7 +56,12 @@ export class PathTraceHost {
   private starting = false;
   private faults = 0;
   private gen = new TraceGeneration();
-  private signature = "";
+  private cache: BlasCache;
+  private hasScene = false;
+  private geometryKey = "";
+  private transforms = "";
+  private materials = "";
+  private colors = "";
   private sceneDirty = true;
   private cameraDirty = true;
   private polling = false;
@@ -67,7 +77,15 @@ export class PathTraceHost {
     private webglCanvas: HTMLCanvasElement,
     private create: CreateTracer = async () => (await import("./webgpuTracer")).createWebGpuTracer(),
     private guard: CrashGuard = { arm: armGuard, clear: clearGuard },
-  ) {}
+    builder: BlasBuilder = createBlasBuilder(),
+  ) {
+    this.cache = new BlasCache(builder);
+  }
+
+  /** Trees built so far, for the timing log. */
+  get blasBuilds(): number {
+    return this.cache.builds;
+  }
 
   get backendName(): string {
     return this.backend?.name ?? "";
@@ -153,7 +171,7 @@ export class PathTraceHost {
     const sig = sceneSignature(bodies);
     if (sig === this.refusedSig) return true;
     this.refusedSig = sig;
-    this.signature = "";
+    this.hasScene = false;
     this.note = `Path tracing is limited to 2 million triangles for now, this model has ${(tris / 1e6).toFixed(1)} million`;
     this.samples = 0;
     this.traceSince = 0;
@@ -178,7 +196,7 @@ export class PathTraceHost {
         this.webglCanvas.style.position = "relative";
         this.backend = b;
         this.sceneDirty = this.cameraDirty = true;
-        this.signature = "";
+        this.hasScene = false;
         this.size = { w: 0, h: 0, ratio: 0 };
       } catch (e) {
         this.fault(`Path tracing could not start: ${e instanceof Error ? e.message : String(e)}`);
@@ -202,18 +220,41 @@ export class PathTraceHost {
     this.cameraDirty = true;
   }
 
-  /** False while the scene is refused, so nothing is traced. */
+  /** False while the scene is refused or a tree is still building, so the
+   *  Realtime frame stays up. Each kind of change takes the cheapest tracer
+   *  call that covers it. */
   private syncScene(b: TracerBackend, f: TraceFrame): boolean {
     const bodies = collectBodies(f.root);
     if (this.refuseIfOver(bodies)) return false;
+    const sync = this.cache.sync(bodies, collectAllBodies(f.root));
+    if (!sync.meshes) return false;
     this.sceneDirty = false;
-    const sig = sceneSignature(bodies);
-    if (sig === this.signature) return true;
-    this.signature = sig;
+    const transforms = transformSignature(bodies);
+    const materials = materialSignature(bodies);
+    const colors = colorSignature(bodies);
+    const geometry = !this.hasScene || sync.key !== this.geometryKey;
+    const moved = transforms !== this.transforms;
+    const restyled = materials !== this.materials;
+    const painted = colors !== this.colors;
+    if (!geometry && !moved && !restyled && !painted) return true;
+    if (geometry || moved) this.cache.syncTransforms();
+    if (geometry || restyled) this.cache.syncMaterials();
+    if (geometry || painted) this.cache.syncColors();
+    if (!this.hasScene) {
+      b.setScene({ ...f.look(), meshes: sync.meshes }, f.camera);
+      this.cameraDirty = false;
+      this.hasScene = true;
+    } else if (geometry || painted) b.updateGeometry(sync.meshes);
+    else {
+      if (moved) b.updateTransforms();
+      if (restyled) b.updateMaterials();
+    }
+    this.geometryKey = sync.key;
+    this.transforms = transforms;
+    this.materials = materials;
+    this.colors = colors;
     this.note = "";
     this.refusedSig = "";
-    b.setScene({ ...f.look(), meshes: mirrorBodies(bodies) }, f.camera);
-    this.cameraDirty = false;
     this.restart();
     return true;
   }
@@ -252,6 +293,7 @@ export class PathTraceHost {
     this.disabled = this.faults >= 2;
     const b = this.backend;
     this.backend = null;
+    this.hasScene = false;
     this.samples = 0;
     this.traceSince = 0;
     this.show(false);
@@ -266,7 +308,7 @@ export class PathTraceHost {
     const b = this.backend;
     this.backend = null;
     this.samples = 0;
-    this.signature = "";
+    this.hasScene = false;
     this.show(false);
     b?.dispose();
   }

@@ -36,6 +36,8 @@ export interface BodyMesh {
   // per-vertex base colors (this body's own buffer) the highlighter restores to
   // (component/draft analysis overwrite this; default = BASE_COLOR everywhere).
   baseColors: Float32Array;
+  /** Bumped on every rewrite of baseColors, so the traced copy knows to follow. */
+  baseVersion?: number;
   // B-rep faceId -> LOCAL triangle indices (into this body's own index buffer),
   // precomputed once so highlight.ts/viewport.ts can touch just one face's/body's
   // own triangles without scanning the whole body on each hover/select/measure.
