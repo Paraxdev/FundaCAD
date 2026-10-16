@@ -405,7 +405,7 @@ export function extToFormat(path: string): ExportFormat {
 // through GeometryBackend.exportWith.
 
 // FreeCAD writes .FCStd, and GTK file dialogs on Linux match case.
-export const IMPORT_EXTS = ["stl", "3mf", "step", "stp", "stpz", "gz", "xbf", "iges", "igs", "brep", "fcstd", "FCStd", "3dm", "obj", "ply", "off", "amf", "glb", "gltf", "wrl", "wrz", "x3d", "x3dz"];
+export const IMPORT_EXTS = ["stl", "3mf", "step", "stp", "stpz", "gz", "xbf", "iges", "igs", "brep", "fcstd", "FCStd", "3dm", "ifc", "obj", "ply", "off", "amf", "glb", "gltf", "wrl", "wrz", "x3d", "x3dz"];
 
 /** Import an external mesh / B-rep file (STL / 3MF / STEP / IGES / XBF / FreeCAD / OBJ / PLY / OFF / AMF / glTF / VRML / X3D) as a new body.
  *  The engine reads the file by path and returns an embeddable BREP payload, so
@@ -433,6 +433,7 @@ export async function importModel(store: DocumentStore, geometry: GeometryBacken
       { name: "OCCT XBF", extensions: ["xbf"] },
       { name: "FreeCAD", extensions: ["fcstd", "FCStd"] },
       { name: "Rhino 3DM", extensions: ["3dm"] },
+      { name: "IFC (buildings)", extensions: ["ifc"] },
       { name: "OBJ", extensions: ["obj"] },
       { name: "PLY", extensions: ["ply"] },
       { name: "OFF", extensions: ["off"] },
@@ -705,6 +706,7 @@ export function extToImportFormat(path: string): ImportFormat {
   if (ext === "iges" || ext === "igs") return "iges";
   if (ext === "fcstd") return "fcstd";
   if (ext === "3dm") return "3dm";
+  if (ext === "ifc") return "ifc";
   if (ext === "gltf") return "gltf";
   if (ext === "ply") return "ply";
   if (ext === "off") return "off";

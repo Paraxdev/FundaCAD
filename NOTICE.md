@@ -52,6 +52,14 @@ distributing FundaCAD under its own terms.
   https://github.com/facebook/zstd; **zip**, **serde-value**, **ordered-float**, MIT;
   **roxmltree**, **typed-path**, **sha1**, **sha2**, **digest**, **hybrid-array**, **const-oid**,
   **block-buffer**, **crypto-common**, **jobserver** and **pkg-config**, MIT OR Apache-2.0
+- **ifc-lite-core**, **ifc-lite-geometry** and **ifc-lite-processing** (the IFC reader),
+  MPL-2.0, source at https://github.com/LTplus-AG/ifc-lite; **nalgebra**, **simba** and
+  **approx**, Apache-2.0; **earcutr**, ISC; **geometry-predicates**, **i_float**, **i_key_sort**,
+  **i_shape**, **i_tree** and **nom**, MIT; **i_overlay**, **glam**, **bnum**, **fast-float2**,
+  **jpeg-decoder**, **png**, **num-bigint**, **num-integer**, **num-rational**, **lexical-core**
+  (and its `-parse-float`, `-parse-integer`, `-util`, `-write-float`, `-write-integer` crates),
+  **minimal-lexical**, **matrixmultiply** and **rawpointer**, MIT OR Apache-2.0; **wide** and
+  **safe_arch**, Zlib OR Apache-2.0 OR MIT
 
 ## Written offer (LGPL source availability)
 

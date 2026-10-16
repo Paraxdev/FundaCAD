@@ -9,6 +9,7 @@ pub mod blobstore;
 pub mod canonical;
 pub mod fcstd;
 pub mod gltf;
+pub mod ifc;
 pub mod mesh;
 pub mod off;
 pub mod packed;
@@ -356,6 +357,7 @@ pub fn import_geometry_in(path: &str, fmt: &str, store: &BlobStore, unit: Option
         "iges" | "igs" => read_iges(p)?,
         "fcstd" => fcstd::read_fcstd(p)?,
         "3dm" => outward(rhino::read_3dm(p)?),
+        "ifc" => outward(mesh::finish_objects(ifc::read_ifc(&std::fs::read(p).map_err(|e| e.to_string())?)?)?),
         "brep" => outward(Imported {
             shape: Shape::read_brep_text(p).map_err(|e| e.to_string())?,
             fields: Map::new(),
