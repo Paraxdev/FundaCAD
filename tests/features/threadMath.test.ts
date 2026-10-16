@@ -10,7 +10,7 @@ import {
   THREAD_DEPTH_RATIO,
   THREAD_HALF_WIDTH_RATIO,
   coarsePitchFor,
-  threadAngleDeg,
+  threadAngleDeg, grooveProfile,
   threadProfile,
   threadTurns,
 } from "../../src/features/threadMath";
@@ -115,5 +115,25 @@ describe("threadAngleDeg", () => {
     expect(threadAngleDeg(0, 1)).toBe(0);
     expect(threadAngleDeg(10, 0)).toBe(0);
     expect(threadTurns(0.5, 1)).toBeLessThan(MIN_THREAD_TURNS);
+  });
+});
+
+describe("grooveProfile", () => {
+  it("is a 60 degree groove 0.6134P deep that stays narrower than the pitch", () => {
+    const p = 1;
+    const g = grooveProfile(3, p, true)!;
+    expect(g).toHaveLength(4);
+    const depth = Math.max(...g.map(([into]) => into));
+    expect(depth).toBeCloseTo(0.6134 * p, 4);
+    const [[i0, a0], [i1, a1]] = [g[0]!, g[1]!];
+    expect(Math.atan2(a1 - a0, i1 - i0) * 180 / Math.PI).toBeCloseTo(30, 1);
+    const width = Math.max(...g.map(([, a]) => a)) - Math.min(...g.map(([, a]) => a));
+    expect(width).toBeLessThan(p);
+    expect(Math.min(...g.map(([into]) => into))).toBeLessThan(0);
+  });
+
+  it("refuses a pitch whose groove would reach a shank's axis, not a bore's", () => {
+    expect(grooveProfile(1, 2, true)).toBeNull();
+    expect(grooveProfile(1, 2, false)).not.toBeNull();
   });
 });
