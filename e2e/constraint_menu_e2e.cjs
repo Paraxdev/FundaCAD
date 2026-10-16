@@ -9,6 +9,8 @@
 //   4. A rectangle side is a Parallel operand.
 //   5. H with a line selected makes it horizontal, the tangent tool on two
 //      lines says why it refuses.
+//   6. Shift+P, Shift+L, Shift+C and I apply to the selection, the select tool
+//      stays armed; a box selected rectangle is not read as a side clicked earlier.
 //
 // Usage (from the repo root, with vite on 5173 + engine on 8765 (`fundacad-engine --ws`)):
 //   SC_TOKEN=<engine token> SC_CHROME=<chrome.exe> node e2e/constraint_menu_e2e.cjs [outDir]
@@ -73,6 +75,16 @@ const check = (name, ok, detail) => {
       { type: "point", id: "W3", x: 30, y: 88 },
       { type: "rectangle", id: "Q", x: 15, y: -50, width: 30, height: 20 },
       { type: "line", id: "B", x1: 0, y1: -80, x2: 30, y2: -74 },
+      { type: "line", id: "K1", x1: -85, y1: 40, x2: -68, y2: 46 },
+      { type: "line", id: "K2", x1: -85, y1: 55, x2: -68, y2: 65 },
+      { type: "line", id: "K3", x1: 110, y1: -30, x2: 128, y2: -26 },
+      { type: "line", id: "K4", x1: 110, y1: -50, x2: 128, y2: -40 },
+      { type: "circle", id: "C1", x: 115, y: 30, radius: 5 },
+      { type: "circle", id: "C2", x: 115, y: 55, radius: 6 },
+      { type: "line", id: "L4", x1: -85, y1: -60, x2: -68, y2: -70 },
+      { type: "point", id: "P4", x: -75, y: -80 },
+      { type: "circle", id: "C3", x: 115, y: 85, radius: 6 },
+      { type: "point", id: "P5", x: 125, y: 100 },
     ] });
     await window.store.rebuildNow();
   });
@@ -217,6 +229,47 @@ const check = (name, ok, detail) => {
   const said = await page.evaluate(() => document.body.innerText.includes("Two lines cannot be tangent"));
   check("tangent on two lines adds nothing and says why", (await cons()).length === before.length && said, `toast ${said}`);
   await page.screenshot({ path: path.join(OUT, "cm-4-tangent-refusal.png") });
+
+  // 6. modifier keys apply to the selection
+  const at = (id, t) => ents().then((m) => { const l = m[id]; return [l.x1 + (l.x2 - l.x1) * t, l.y1 + (l.y2 - l.y1) * t]; });
+  const rim = (id) => ents().then((m) => [m[id].x + m[id].radius, m[id].y]);
+  const key = async (pts, combo) => {
+    await select(...pts);
+    const b = await cons();
+    const picked = await page.evaluate(() => [...window.sketch.selected]);
+    await page.keyboard.press(combo);
+    await page.waitForTimeout(400);
+    const st = await page.evaluate(() => ({ tool: window.sketch.tool, sel: window.sketch.selected.size, input: document.activeElement?.tagName === "INPUT" }));
+    return { picked, added: (await cons()).slice(b.length), ...st };
+  };
+  await page.evaluate(() => window.sketch.setTool("select"));
+  let k = await key([await at("K1", 0.8), await at("K2", 0.8)], "Shift+P");
+  check("Shift+P on two lines records parallel and keeps the select tool", types(k.added) === '["parallel"]' && k.tool === "select" && k.sel === 2, JSON.stringify(k));
+  k = await key([await at("K3", 0.8), await at("K4", 0.8)], "Shift+L");
+  check("Shift+L on two lines records collinear", types(k.added) === '["collinear"]' && k.tool === "select", JSON.stringify(k));
+  k = await key([await rim("C1"), await rim("C2")], "Shift+C");
+  check("Shift+C on two circles records concentric", types(k.added) === '["concentric"]' && k.tool === "select", JSON.stringify(k));
+  k = await key([[-75, -80], await at("L4", 0.8)], "i");
+  check("I on a point and a line records On curve", types(k.added) === '["pointOnCurve"]' && k.added[0].curve === "L4" && !k.input, JSON.stringify(k));
+  k = await key([[125, 100], await rim("C3")], "i");
+  check("I on a point and a circle puts the point on the rim", types(k.added) === '["pointOnCurve"]' && k.added[0].curve === "C3", JSON.stringify(k));
+  e = await ents();
+  check("the point sits on the circle C3", Math.abs(Math.hypot(e.P5.x - e.C3.x, e.P5.y - e.C3.y) - e.C3.radius) < 1e-6, JSON.stringify(e.P5));
+
+  await select([e.Q.x, e.Q.y + e.Q.height / 2]);
+  await clear();
+  const s0 = await scr(e.Q.x - e.Q.width / 2 - 6, -88), s1 = await scr(e.Q.x + e.Q.width / 2 + 6, e.Q.y + e.Q.height / 2 + 5);
+  await page.mouse.move(s0.x, s0.y);
+  await page.mouse.down();
+  await page.mouse.move((s0.x + s1.x) / 2, (s0.y + s1.y) / 2, { steps: 4 });
+  await page.mouse.move(s1.x, s1.y, { steps: 4 });
+  await page.mouse.up();
+  await page.waitForTimeout(300);
+  const boxed = await page.evaluate(() => [...window.sketch.selected].sort());
+  labels = await menu(await at("B", 0.9));
+  check("a box selected rectangle offers no side constraint from an old click", boxed.includes("Q") && boxed.includes("B") && !labels.includes("Parallel"), `${JSON.stringify(boxed)} ${JSON.stringify(labels)}`);
+  await page.keyboard.press("Escape");
+  await page.screenshot({ path: path.join(OUT, "cm-5-keys.png") });
 
   await browser.close();
   console.log(failures ? `${failures} FAILED` : "ALL PASS");
