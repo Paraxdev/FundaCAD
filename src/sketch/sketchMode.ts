@@ -752,6 +752,7 @@ export class SketchMode {
     // dimension tool with geometry already selected dimensions that geometry
     // (Fusion: pick the line, then press D).
     const preselected = t === "dimension" ? [...this.selected] : [];
+    if (t !== this.tool && this.tangentArc) this.setTangentArc(false);
     this.tool = t;
     this.base = null;
     this.inferTag.hide();
@@ -3876,7 +3877,6 @@ export class SketchMode {
     return this.lastDof;
   }
 
-  /** preview while drawing an arc: chord after 1st click, arc after 2nd */
   /** The direction a tangent arc leaves its start along, when the mode is on and
    *  the arc started on the end of a line or arc. */
   private tangentArcFrom() {
@@ -3886,9 +3886,10 @@ export class SketchMode {
   /** Arc tool: switch the tangent arc mode (A again while the arc tool is armed). */
   setTangentArc(on: boolean) {
     this.tangentArc = on;
-    toast(on ? "Tangent arc: start on the end of a line or arc, then click where it ends" : "Three point arc");
+    setPrompt(on ? "Tangent arc, start on the end of a line or arc, then click where it ends. A turns it off" : null);
   }
 
+  /** preview while drawing an arc: chord after 1st click, arc after 2nd */
   private arcPreview(cursor: THREE.Vector2) {
     const t = !this.arcEnd ? this.tangentArcFrom() : null;
     const m = t && this.arcStart ? tangentArcMid(this.arcStart, t.dir, cursor) : null;
