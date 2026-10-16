@@ -27,7 +27,7 @@ beforeEach(() => {
   });
   b = definePluginSettings("Test.Beta", {
     version: 1,
-    props: [{ key: "speed", type: "number", label: "Rotate speed", default: 1, min: 0, max: 5 }],
+    props: [{ key: "speed", type: "number", label: "Rotate speed", default: 1, min: 0, max: 5, step: 0.25 }],
   });
   const Custom = defineComponent({ render: () => h("div", { "data-custom": "" }, "custom part") });
   contribute("Test.Alpha", { settings: [{ key: "s", settings: a, component: Custom }] });
@@ -71,6 +71,21 @@ describe("settings under a plugin's row", () => {
 
     await input.setValue("500");
     expect(panel.get('[data-setting="gap"] [role=alert]').text()).toContain("at most 100");
+  });
+
+  it("steps a number by its step with the arrow keys, ten steps with Shift, and stops at its limits", async () => {
+    const w = mount(PluginsSection);
+    const input = (await expand(w, "Test.Beta")).get('[data-setting="speed"] input');
+    await input.trigger("keydown", { key: "ArrowUp" });
+    expect(b.get("speed")).toBe(1.25);
+    await input.trigger("keydown", { key: "ArrowDown" });
+    await input.trigger("keydown", { key: "ArrowDown" });
+    expect(b.get("speed")).toBe(0.75);
+    await input.trigger("keydown", { key: "ArrowUp", shiftKey: true });
+    expect(b.get("speed")).toBe(3.25);
+    await input.trigger("keydown", { key: "ArrowUp", shiftKey: true });
+    expect(b.get("speed")).toBe(5);
+    expect((input.element as HTMLInputElement).value).toBe("5");
   });
 
   it("shows a row once its condition holds, and resets one property or the whole plugin", async () => {

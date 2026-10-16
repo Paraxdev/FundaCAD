@@ -741,7 +741,8 @@ contribute("Me.Thing", { settings: [{ key: "main", settings, component: MyExtraP
 
 The types are `boolean`, `number` (`min`, `max`, `step`, `integer`, and a
 `unit`: `length` is stored in mm and shown in the display unit, `angle` in
-degrees, anything else is a suffix), `enum` (options with labels), `string`,
+degrees, anything else is a suffix; the arrow keys move it by `step`, ten
+steps with Shift), `enum` (options with labels), `string`,
 `colour` (`#rrggbb`), `key` (a combination like `Ctrl+K`, captured by pressing
 it), `file` (a path, with a Choose button in the desktop app) and `data`, a
 value the plugin's own component edits that the app keeps and resets but never
