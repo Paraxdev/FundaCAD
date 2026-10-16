@@ -505,3 +505,16 @@ fn a_file_that_is_not_fbx_says_so() {
     let e = import_as(&write("not.fbx", b"solid nothing\nendsolid\n"), "fbx").unwrap_err();
     assert!(e.contains("FBX"), "{e}");
 }
+
+#[test]
+fn fbx_axes_keep_up_up_in_either_handedness() {
+    // Legs of 100, 200 and 300 mm along file X, Y and Z: each bbox side names its file axis.
+    for (name, want) in [("tetra_yup74", [0.0, -300.0, 0.0, 100.0, 0.0, 200.0]), ("tetra_lh74", [-100.0, -300.0, 0.0, 0.0, 0.0, 200.0])] {
+        let reply = import_as(&fbx_fixture(name), "fbx").unwrap();
+        assert_eq!(reply["solid"], json!(true), "{name}: {reply:?}");
+        let b = build(reply, "fbx");
+        assert_near(kernel::bbox(&b.bodies[0].shape).unwrap(), want, 1e-3, name);
+        let vol = kernel::volume(&b.bodies[0].shape);
+        assert!((vol - 1.0e6).abs() < 1.0, "{name}: {vol}");
+    }
+}
