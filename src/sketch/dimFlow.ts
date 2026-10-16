@@ -22,7 +22,7 @@ import type { SketchPlane } from "./plane";
 import type { SketchOverlay } from "./overlay";
 import { curveObjects, dimensionLineObjects, PREVIEW_COLOR } from "./overlay";
 import type { DimInput } from "./dimInput";
-import { linearDim } from "./entityDims";
+import { constraintDims, linearDim } from "./entityDims";
 import {
   clampPlace, isDimError, isRoundTarget, pickDimTarget, rebindTarget, resolveDim,
   targetIdentity, targetKey, unsupportedMessage,
@@ -93,6 +93,10 @@ export class DimFlow {
   // and persists for the whole in-progress dim (reset with the picks).
   private dimTangentArmed = false;
   private dimRoundPref: "radius" | "diameter" | undefined;
+  private dimReflex = false;
+  // the cursor's offset from the plan's label anchor on the last hover, it picks the
+  // mode (aligned, horizontal, vertical, the angle's wedge) until the label is placed
+  private dimCursor: PlaceOffset | undefined;
 
   constructor(private host: DimHost) {}
 
@@ -119,6 +123,19 @@ export class DimFlow {
   toggleTangent(): boolean {
     this.dimTangentArmed = !this.dimTangentArmed;
     return this.dimTangentArmed;
+  }
+  /** measure the outside of the angle's wedge; returns the new state for the prompt */
+  toggleReflex(): boolean {
+    this.dimReflex = !this.dimReflex;
+    this.refreshDimPlan();
+    return this.dimReflex;
+  }
+  get reflex(): boolean {
+    return this.dimReflex;
+  }
+  /** the offset that picks the plan's mode: the frozen label, else the last hover */
+  private modeOffset(): PlaceOffset | undefined {
+    return this.dimPlace ?? this.dimCursor;
   }
   /** the radius-vs-diameter override for a lone round */
   setRoundPref(pref: "radius" | "diameter") {
@@ -192,11 +209,16 @@ export class DimFlow {
     this.dimPlanKey = "";
     this.dimTangentArmed = false;
     this.dimRoundPref = undefined;
+    this.dimReflex = false;
+    this.dimCursor = undefined;
   }
 
   /** the right-click overrides the pair matrix reads */
   private dimOptions(): DimOptions {
-    return this.dimRoundPref ? { roundPref: this.dimRoundPref } : {};
+    return {
+      ...(this.dimRoundPref ? { roundPref: this.dimRoundPref } : {}),
+      ...(this.dimReflex ? { reflex: true } : {}),
+    };
   }
 
   /** WHICH dimension the open box belongs to: the plan shape plus the picks it
@@ -318,6 +340,7 @@ export class DimFlow {
       setPrompt(r.hint);
     }
     this.dimPlace = null; // a new pick invalidates any earlier placement
+    this.dimCursor = undefined;
     this.syncDimBox(ev);
   }
 
@@ -367,7 +390,7 @@ export class DimFlow {
       this.host.dim().show(plan.fields.map((f) => ({ ...f, free: true })), () => this.commitDim(), () => this.cancelDim());
       if (discarded) toast("This is a different dimension now, retype the value");
     }
-    this.host.dim().updateFromCursor({ [plan.field]: plan.measure() });
+    this.host.dim().updateFromCursor({ [plan.field]: plan.measure(this.modeOffset()) });
     this.positionDimBox(ev);
     // Until the label is placed the box must not intercept the click that
     // places it, that click landed on confirm and committed the measured value.
@@ -386,7 +409,7 @@ export class DimFlow {
     if (!plan) { this.cancelDim(); return; }
     const kind: FieldKind = plan.kind === "angle" ? "angle" : "length";
     const raw = this.host.dim().getRaw(plan.field).trim();
-    let value = plan.measure();
+    let value = plan.measure(this.modeOffset());
     let typed: { value: number; expr: string | null; name?: string } | null = null;
     if (raw !== "") {
       const r = this.host.evalDimInput(raw, kind, null);
@@ -398,7 +421,7 @@ export class DimFlow {
       value = r.value;
       typed = r;
     }
-    const c = this.dimPlace ? plan.make(value, this.dimPlace) : plan.make(value);
+    const c = this.dimPlace ? plan.make(value, this.dimPlace) : plan.make(value, undefined, this.dimCursor);
     const forceDriven = plan.forceDriven === true;
     const firstPicked = this.dimPicks[0]?.e.id ?? null;
     this.host.dim().hide();
@@ -528,9 +551,11 @@ export class DimFlow {
     }
     const plan = this.dimPlan;
     if (plan) {
+      const own = plan.labelAnchor();
+      this.dimCursor = own ? { ox: p.x - own.x, oy: p.y - own.y } : undefined;
       const segs = this.dimPreviewSegs(plan, p);
       if (segs.length) preview.push(...dimensionLineObjects([], this.host.plane(), segs, PREVIEW_COLOR));
-      this.host.dim().updateFromCursor({ [plan.field]: plan.measure() });
+      this.host.dim().updateFromCursor({ [plan.field]: plan.measure(this.modeOffset()) });
       this.positionDimBox(e);
     }
     this.host.overlay().setPreview(preview);
@@ -559,14 +584,24 @@ export class DimFlow {
   /** the annotation segments (extension lines + dimension line + arrowheads)
    *  for the resolved plan, offset by the frozen placement or the live cursor */
   private dimPreviewSegs(plan: DimPlan, cursor: THREE.Vector2): [THREE.Vector2, THREE.Vector2][] {
+    // the dims whose look depends on the mode render exactly as they will once placed
+    const own = plan.labelAnchor();
+    if (own) {
+      const off = this.dimPlace ?? { ox: cursor.x - own.x, oy: cursor.y - own.y };
+      const c = plan.make(plan.measure(off), off);
+      if (c.type === "hDistance" || c.type === "vDistance" || c.type === "angle" || c.type === "radius" || c.type === "diameter") {
+        const segs = constraintDims(this.host.entities(), [c]).flatMap((d) => d.lines);
+        if (segs.length) return segs;
+      }
+    }
     const an = plan.anchors();
-    if (!an) return []; // angle dims render as a bare value (see entityDims)
+    if (!an) return [];
     const anchor = this.dimBoxAnchor(plan);
     // A plan with no labelAnchor (line length, circle diameter) can't PERSIST a
     // placement, those render through entityDims, which has no constraint
     // access (see types.ts). Previewing at the cursor would promise a position
     // the commit throws away, so preview them exactly where they will land.
-    const holdsPlace = plan.labelAnchor() !== null;
+    const holdsPlace = plan.labelAnchor() !== null && plan.kind !== "length";
     const off = !holdsPlace
       ? null
       : this.dimPlace

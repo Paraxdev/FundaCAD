@@ -30,7 +30,8 @@ const EPS = 1e-9;
  *  Only single-entity dimensions are handled. Anything relating two entities
  *  (point-to-point, radial gap, angle between lines) needs a solve to decide
  *  WHICH end moves, and guessing would put geometry somewhere the user never
- *  asked for. Those stay unapplied rather than applied wrongly. */
+ *  asked for. Those stay unapplied rather than applied wrongly, see
+ *  waitsForSolver. */
 export function applyDrivingDimsDirect(
   entities: ResolvedEntity[],
   constraints: SketchConstraint[],
@@ -61,6 +62,21 @@ export function applyDrivingDimsDirect(
       if (field === "width") e.width = c.value;
       else e.height = c.value;
       changed = true;
+    } else if ((c.type === "hDistance" || c.type === "vDistance") && !c.driven) {
+      if (c.e1 !== c.e2 || c.p1 === c.p2 || !(c.value > 0)) continue;
+      const e = entities.find((x) => x.id === c.e1);
+      if (e?.type !== "line" || c.p1 > 1 || c.p2 > 1) continue;
+      const k = c.type === "hDistance" ? "x" : "y";
+      const at = (p: number) => (p === 0 ? (k === "x" ? e.x1 : e.y1) : (k === "x" ? e.x2 : e.y2));
+      const set = (p: number, val: number) => {
+        if (p === 0) { if (k === "x") e.x1 = val; else e.y1 = val; }
+        else if (k === "x") e.x2 = val; else e.y2 = val;
+      };
+      if (Math.abs(at(c.p2) - at(c.p1) - c.value) <= EPS) continue;
+      // the end a solve would hold stays, the other moves along the axis only
+      if (lineHeldEnd(e, entities, constraints) === c.p1) set(c.p2, at(c.p1) + c.value);
+      else set(c.p1, at(c.p2) - c.value);
+      changed = true;
     } else if (c.type === "distance") {
       const e = entities.find((x) => x.id === c.line);
       if (e?.type !== "line" || !(c.value > 0)) continue;
@@ -81,6 +97,16 @@ export function applyDrivingDimsDirect(
     }
   }
   return changed;
+}
+
+/** Driving horizontal or vertical distances the no-solver path leaves alone (all
+ *  but those along one line),
+ *  so the user is told they wait for the solver instead of seeing nothing happen. */
+export function waitsForSolver(entities: ResolvedEntity[], constraints: SketchConstraint[]): number {
+  const lines = new Set(entities.filter((e) => e.type === "line").map((e) => e.id));
+  return constraints.filter((c) =>
+    (c.type === "hDistance" || c.type === "vDistance") && !c.driven &&
+    (c.e1 !== c.e2 || !lines.has(c.e1))).length;
 }
 
 /** The rectangle corner a no-solver resize keeps in place: one that is pinned

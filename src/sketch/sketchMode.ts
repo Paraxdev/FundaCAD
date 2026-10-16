@@ -33,7 +33,7 @@ import { circumcenter } from "./arc";
 import { compileAndSolve, coincKey, constraintIndexOf, solveKeepingAxes } from "./sketchSolve";
 import { SolverUnavailable } from "./solver";
 import { resolveRealEntities, toSketchEntity } from "./resolve";
-import { applyDrivingDimsDirect, dimAnchor, drivenBadges, drivingDimFor, findDrivingDim, type DrivingDim } from "./directDims";
+import { applyDrivingDimsDirect, waitsForSolver, dimAnchor, drivenBadges, drivingDimFor, findDrivingDim, type DrivingDim } from "./directDims";
 import { expandPattern, reflectedRect, translated } from "./pattern";
 import { candidatesFromEntities, dragSnap, originCandidate, settleOriginPin, showsSnapMarker, snap, type OriginPinRequest, type SnapGuide, type SnapKind, type SnapCandidate } from "./snap";
 import type { ResolvedEntity } from "./snap";
@@ -249,6 +249,7 @@ export class SketchMode {
   private solverDead = false;
   private solverDeadToast = false;
   private directDimToast = false; // said once: dims are being written straight to geometry
+  private axisDimToast = false;
   private solveDirty = false; // a constraint/dimension solve is pending
   /** The pending solve follows a typed dimension, see solveKeepingAxes. */
   private dimSolve: { anchor: { x: number; y: number } | undefined } | null = null;
@@ -1132,6 +1133,10 @@ export class SketchMode {
    *  the geometry; they otherwise did nothing. The constraint is kept for a real
    *  solver, and two-entity dims are left alone since only a solve says which moves. */
   private applyDrivingDimsDirectly() {
+    if (waitsForSolver(this.entities, this.constraints) > 0 && !this.axisDimToast) {
+      this.axisDimToast = true;
+      toast("The solver is not running, so horizontal and vertical distances between two entities wait for it", { timeout: 12000 });
+    }
     if (!applyDrivingDimsDirect(this.entities, this.constraints)) return;
     this.entityVersion++; // guards any in-flight solve against this write
     if (!this.directDimToast) {
@@ -1191,7 +1196,7 @@ export class SketchMode {
    *  isPlacedDim, which is exactly the set that carries `place`). */
   private commitConstraintPlace(cIndex: number, ox: number, oy: number, done: boolean): THREE.Vector2 | null {
     const c = this.constraints[cIndex];
-    if (!c || !isPlacedDim(c)) return null;
+    if (!c || !(isPlacedDim(c) || c.type === "diameter")) return null;
     const p = clampPlace(ox, oy, this.planeMmPerPx());
     const { place: _dropped, ...rest } = c;
     this.constraints[cIndex] = (p ? { ...c, place: p } : rest) as SketchConstraint;
@@ -1257,7 +1262,7 @@ export class SketchMode {
     const sameTarget = (k: SketchConstraint): boolean => {
       if (c.type === "distance" && k.type === "distance") return k.line === c.line;
       if (c.type === "diameter" && k.type === "diameter") return k.circle === c.circle;
-      if (c.type === "p2pDistance" && k.type === "p2pDistance") {
+      if ((c.type === "p2pDistance" || c.type === "hDistance" || c.type === "vDistance") && k.type === c.type) {
         return (
           (k.e1 === c.e1 && k.p1 === c.p1 && k.e2 === c.e2 && k.p2 === c.p2) ||
           (k.e1 === c.e2 && k.p1 === c.p2 && k.e2 === c.e1 && k.p2 === c.p1)
@@ -3231,6 +3236,13 @@ export class SketchMode {
             : "Tangent pick cleared");
         },
       },
+      {
+        label: "Reflex angle", checked: this.dimFlow.reflex, disabled: plan?.kind !== "angle",
+        onClick: () => {
+          const on = this.dimFlow.toggleReflex();
+          setPrompt(on ? "Reflex angle: measures the outside of the wedge" : "Angle: measures the wedge the cursor is in");
+        },
+      },
       { separator: true, label: "" },
       {
         label: "Radius", checked: lone && !isDia, disabled: !lone,
@@ -3324,7 +3336,7 @@ export class SketchMode {
         case "midpoint": return endIds.has(c.e) && at(c.e, c.p) && hasLineOperand(c.line);
         case "symmetric": return endIds.has(c.e1) && endIds.has(c.e2) && at(c.e1, c.p1) && at(c.e2, c.p2) && hasLineOperand(c.line);
         case "radius": return roundIds.has(c.e);
-        case "p2pDistance": return refIds.has(c.e1) && refIds.has(c.e2) && at(c.e1, c.p1) && at(c.e2, c.p2);
+        case "p2pDistance": case "hDistance": case "vDistance": return refIds.has(c.e1) && refIds.has(c.e2) && at(c.e1, c.p1) && at(c.e2, c.p2);
         case "p2lDistance": return refIds.has(c.e) && at(c.e, c.p) && hasLineOperand(c.line);
         // rim (edge-to-edge) dims, a round operand is a circle OR an arc
         case "radialGap": return roundIds.has(c.inner) && roundIds.has(c.outer);
