@@ -34,7 +34,10 @@ const check = (name, ok, detail) => {
   });
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
   const shaderErrors = [];
-  page.on("console", (m) => { if (/Shader Error|Program Info Log|WebGL: INVALID/i.test(m.text())) shaderErrors.push(m.text().slice(0, 300)); });
+  // A Program Info Log holding only D3D compiler warnings (three's own PMREM
+  // program logs warning X4122 on ANGLE) links and runs, so it is not an error.
+  const warningsOnly = (t) => /Program Info Log/i.test(t) && !/error/i.test(t.replace(/warning X\d+:[^\n]*/gi, ""));
+  page.on("console", (m) => { const t = m.text(); if (/Shader Error|Program Info Log|WebGL: INVALID/i.test(t) && !warningsOnly(t)) shaderErrors.push(t.slice(0, 300)); });
   page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
   await page.addInitScript(([port, t]) => {
     const N = window.WebSocket;
