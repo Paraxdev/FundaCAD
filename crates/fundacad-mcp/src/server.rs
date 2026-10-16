@@ -2737,7 +2737,7 @@ impl FundaCad {
             let fmt = args
                 .get("format")
                 .and_then(Value::as_str)
-                .map(str::to_ascii_lowercase)
+                .map(upload::format_told_as)
                 .unwrap_or_else(|| upload::import_format(&path.to_string_lossy()).to_string());
             if !IMPORT_FORMATS.contains(&fmt.as_str()) {
                 return failure(format!(

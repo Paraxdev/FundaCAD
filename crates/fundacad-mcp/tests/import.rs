@@ -140,6 +140,24 @@ fn an_ordinary_name_is_left_exactly_as_it_is() {
     assert_eq!(upload::safe_filename("..", "step"), "imported.step");
 }
 
+#[tokio::test(flavor = "multi_thread")]
+async fn a_format_told_in_any_spelling_reaches_the_engine_by_its_own_name() {
+    let _serial = serial();
+    for (told, want) in [("STP", "step"), ("Stp", "step"), ("STEP", "step"), ("IGS", "iges"), ("STL", "stl")] {
+        let (srv, engine) = server_with(part_reply());
+        let path = a_file(".dat");
+        let out = run(&srv, json!({"path": path.to_string_lossy(), "format": told})).await;
+        let _ = std::fs::remove_file(&path);
+        assert!(!is_error(&out), "{told}: {}", text_of(&out));
+        assert_eq!(engine.calls()[0].payload["format"], json!(want), "{told}");
+
+        let (srv, engine) = server_with(part_reply());
+        let out = run(&srv, json!({"content": b64(STL), "name": "PART.STP", "format": told})).await;
+        assert!(!is_error(&out), "{told}: {}", text_of(&out));
+        assert_eq!(engine.calls()[0].payload["format"], json!(want), "{told} inline");
+    }
+}
+
 // --- a path ------------------------------------------------------------------
 
 #[tokio::test(flavor = "multi_thread")]

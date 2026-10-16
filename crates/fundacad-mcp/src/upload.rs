@@ -146,12 +146,23 @@ fn too_large(size: usize) -> String {
 /// contents. Knowing that the name was silent is what makes reading the answer
 /// off the file inside it correct rather than a second guess.
 pub fn format_of(name: &str) -> Option<&'static str> {
-    let ext = extension(name);
-    let ext = FORMAT_ALIASES
+    named_format(&extension(name))
+}
+
+/// The format a spelling names, in any case: `STP` and `igs` as much as `step`.
+fn named_format(spelling: &str) -> Option<&'static str> {
+    let spelling = spelling.to_ascii_lowercase();
+    let own = FORMAT_ALIASES
         .iter()
-        .find(|(a, _)| *a == ext)
-        .map_or(ext.as_str(), |(_, f)| *f);
-    IMPORT_FORMATS.iter().copied().find(|f| *f == ext)
+        .find(|(a, _)| *a == spelling)
+        .map_or(spelling.as_str(), |(_, f)| *f);
+    IMPORT_FORMATS.iter().copied().find(|f| *f == own)
+}
+
+/// A format the caller named: its own name when it is one, else lower case as
+/// given, which the caller then refuses by that name.
+pub fn format_told_as(told: &str) -> String {
+    named_format(told).map_or_else(|| told.to_ascii_lowercase(), str::to_string)
 }
 
 /// The format an extension implies. STEP is the fallback rather than an error,
@@ -296,7 +307,7 @@ impl Upload {
             .filter(|f| !f.is_empty());
         let told_format = told.is_some() || format_of(&inner).is_some();
         let fmt = told
-            .map(str::to_ascii_lowercase)
+            .map(format_told_as)
             .unwrap_or_else(|| import_format(&inner).to_string());
         if !IMPORT_FORMATS.contains(&fmt.as_str()) {
             return fail(format!(

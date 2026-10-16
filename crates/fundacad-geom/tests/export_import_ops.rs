@@ -322,3 +322,32 @@ fn a_revolved_tip_ending_on_the_axis_round_trips_as_a_closed_sphere() {
         assert_eq!(open, 0, "{tip_x}: the STEP read back is not watertight");
     }
 }
+
+#[test]
+fn a_stp_export_keeps_its_name_and_upper_case_names_import() {
+    blob_dir();
+    let c = Client::new();
+    let dir = scratch("stp");
+    let path = p(&dir, "Plate.STP");
+    for (id, format) in [(1, "stp"), (2, "STP"), (3, "step")] {
+        let _ = std::fs::remove_file(&path);
+        let r = c.call(json!({"id": id, "op": "export", "document": two_bodies(), "format": format, "path": path}));
+        assert_eq!(r["ok"], true, "{format}: {r}");
+        assert!(PathBuf::from(&path).is_file(), "{format}: the typed name is kept");
+    }
+    for (id, format) in [(4, "STP"), (5, "Step"), (6, "stp")] {
+        let r = c.call(json!({"id": id, "op": "import", "format": format, "path": path}));
+        assert_eq!(r["ok"], true, "{format}: {r}");
+        assert_eq!(r["result"]["name"], "Plate", "{format}");
+        assert_eq!(r["result"]["faces"], 7, "{format}");
+    }
+
+    let gz = p(&dir, "Plate.STEP.GZ");
+    let mut z = flate2::write::GzEncoder::new(std::fs::File::create(&gz).unwrap(), flate2::Compression::fast());
+    std::io::Write::write_all(&mut z, &std::fs::read(&path).unwrap()).unwrap();
+    z.finish().unwrap();
+    let r = c.call(json!({"id": 7, "op": "import", "format": "STEP", "path": gz}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert_eq!(r["result"]["name"], "Plate");
+    assert_eq!(r["result"]["faces"], 7);
+}
