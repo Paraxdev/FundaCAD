@@ -1,16 +1,14 @@
 <script setup lang="ts">
-// The plugin's page in Preferences: the button preset, the radial menu and the
-// keys. A key goes to any command the palette offers, by the same id.
+// Below the plugin's declared settings: what the buttons do now, the radial
+// menu's items and the keys. A key goes to any command the palette offers, by
+// the same id.
 
 import { computed, onUnmounted, ref } from "vue";
 import {
   SHORTCUTS, activeShortcuts, allCommands, bindingRows, checkShortcut, describeShortcutProblem, formatShortcut,
   type Shortcut, type ShortcutOverride,
 } from "fundacad";
-import {
-  PRESETS, RADIAL_ACTION, RADIAL_CONTEXTS, RADIAL_DRAGS, RADIAL_KEY, RING_SLOTS, keymapFor, tableFor,
-  type RadialContext, type RadialDrag,
-} from "./navigation";
+import { RADIAL_ACTION, RADIAL_CONTEXTS, RING_SLOTS, keymapFor, tableFor, type RadialContext } from "./navigation";
 import { navState, updateConfig } from "./state";
 
 const cfg = computed(() => navState.cfg);
@@ -102,47 +100,24 @@ const moved = (action: string) => cfg.value.keys.some((k) => k.action === action
 <template>
   <div class="prefs-grid" data-navigation-prefs>
     <div class="pref-card wide">
-      <div class="pref-head"><span class="pref-title">Mouse buttons</span></div>
-      <label v-for="p in PRESETS" :key="p.id" class="pref-head">
-        <span class="pref-title">{{ p.label }}</span>
-        <input type="radio" name="nav-preset" :value="p.id" :checked="cfg.preset === p.id" @change="updateConfig({ preset: p.id })" />
-      </label>
-      <p class="pref-hint">
-        The left button alone always selects. <template v-for="(r, i) in rows" :key="i"><b>{{ r.key }}</b>: {{ r.label.toLowerCase() }}. </template>
-      </p>
-      <p v-if="cfg.preset === 'alt-left'" class="pref-hint">
-        On Linux the window manager may take Alt+drag to move the window before the app sees it; the middle button presets avoid that.
+      <p class="pref-hint" data-nav-bindings>
+        <template v-for="(r, i) in rows" :key="i"><b>{{ r.key }}</b>: {{ r.label.toLowerCase() }}. </template>
       </p>
     </div>
 
-    <div class="pref-card wide">
-      <label class="pref-head">
-        <span class="pref-title">Radial menu</span>
-        <input type="checkbox" data-nav-radial :checked="cfg.radial" @change="updateConfig({ radial: ($event.target as HTMLInputElement).checked })" />
-      </label>
-      <p class="pref-hint">
-        A ring of commands at the cursor, chosen by what you are doing. Hold the trigger, move towards a command and let go,
-        or tap the key and click. Its key is {{ RADIAL_KEY.toUpperCase() }} unless you move it below.
-      </p>
-      <template v-if="cfg.radial">
-        <div class="pref-head">
-          <label class="pref-title" for="nav-radial-drag">Mouse trigger</label>
-          <select id="nav-radial-drag" :value="cfg.radialDrag" @change="updateConfig({ radialDrag: ($event.target as HTMLSelectElement).value as RadialDrag })">
-            <option v-for="d in RADIAL_DRAGS" :key="d.id" :value="d.id">{{ d.label }}</option>
+    <div v-if="cfg.radial" class="pref-card wide">
+      <div class="pref-head"><span class="pref-title">Radial menu items</span></div>
+      <p v-if="navState.problem" class="pref-hint" role="status">{{ navState.problem }}</p>
+      <details v-for="c in RADIAL_CONTEXTS" :key="c.id">
+        <summary>{{ c.label }}</summary>
+        <div v-for="slot in RING_SLOTS + 2" :key="slot" class="pref-head">
+          <label class="pref-title" :for="`nav-${c.id}-${slot}`">{{ slot <= RING_SLOTS ? `Slot ${slot}` : `More ${slot - RING_SLOTS}` }}</label>
+          <select :id="`nav-${c.id}-${slot}`" :value="cfg.items[c.id][slot - 1] ?? ''" @change="setItem(c.id, slot - 1, ($event.target as HTMLSelectElement).value)">
+            <option value="">Nothing</option>
+            <option v-for="cmd in commands" :key="cmd.id" :value="cmd.id">{{ cmd.label }}</option>
           </select>
         </div>
-        <p v-if="navState.problem" class="pref-hint" role="status">{{ navState.problem }}</p>
-        <details v-for="c in RADIAL_CONTEXTS" :key="c.id">
-          <summary>{{ c.label }}</summary>
-          <div v-for="slot in RING_SLOTS + 2" :key="slot" class="pref-head">
-            <label class="pref-title" :for="`nav-${c.id}-${slot}`">{{ slot <= RING_SLOTS ? `Slot ${slot}` : `More ${slot - RING_SLOTS}` }}</label>
-            <select :id="`nav-${c.id}-${slot}`" :value="cfg.items[c.id][slot - 1] ?? ''" @change="setItem(c.id, slot - 1, ($event.target as HTMLSelectElement).value)">
-              <option value="">Nothing</option>
-              <option v-for="cmd in commands" :key="cmd.id" :value="cmd.id">{{ cmd.label }}</option>
-            </select>
-          </div>
-        </details>
-      </template>
+      </details>
     </div>
 
     <div class="pref-card wide">

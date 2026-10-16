@@ -14,6 +14,6 @@ export async function activate(e: Engine): Promise<() => void> {
   return contribute(PLUGIN_ID, {
     menus: [{ menu: "File", items: [{ separator: true, label: "" }, { label: "Import from Onshape link\u2026", onClick: run }] }],
     overlays: [LinkHost],
-    settings: [{ key: "onshape", title: "Onshape", component: KeysSection }],
+    settings: [{ key: "onshape", component: KeysSection }],
   });
 }

@@ -19,8 +19,9 @@ Flies the view and runs commands from a game controller or a Steam Deck.
 | Left stick click | Cycle projection |
 | View / Menu | Reset camera / Save |
 
-Every button except the triggers can be rebound in Preferences, Game
-Controller, to any command the palette has, to a key, or to the cursor.
+The speeds, the deadzone and the inverts are declared settings, under this
+plugin's row in Preferences > Plugins. Every button except the triggers can be
+rebound there too, to any command the palette has, to a key, or to the cursor.
 
 ## Steam Deck
 

@@ -16,7 +16,9 @@
 // The triggers are analog and drive zoom, so they are not bindable. Every other
 // button is, to a command id from the palette, to a key, or to the cursor.
 
-import { readSetting } from "fundacad";
+import { definePluginSettings, readSetting, type SettingsSchema } from "fundacad";
+
+export const PLUGIN_ID = "FundaCAD.Gamepad";
 
 /** What a button does, as one string so a <select> can hold it:
  *  ""            nothing
@@ -123,8 +125,6 @@ export function parseConfig(raw: string | null): GamepadConfig {
   return cfg;
 }
 
-const CONFIG: GamepadConfig = parseConfig(safeRead());
-
 function safeRead(): string | null {
   try {
     return readSetting(KEY);
@@ -133,13 +133,41 @@ function safeRead(): string | null {
   }
 }
 
-function persist() {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(CONFIG));
-  } catch {
-    /* no storage, the change still holds for this session */
-  }
-}
+const speed = (key: string, label: string, description: string) =>
+  ({ key, type: "number", label, description, default: DEFAULTS[key as "panSens"], min: 0, max: 20, step: 0.1, group: "Sticks" }) as const;
+
+export const SETTINGS: SettingsSchema = {
+  version: 1,
+  props: [
+    speed("panSens", "Pan speed", "How far the left stick moves the view."),
+    speed("orbitSens", "Rotate speed", "How fast the right stick turns the view."),
+    speed("zoomSens", "Zoom speed", "How fast the triggers zoom."),
+    {
+      key: "cursorSpeed", type: "number", label: "Cursor speed", group: "Sticks", unit: "px/s",
+      description: "How fast the left stick moves the cursor while the cursor is on.",
+      default: DEFAULTS.cursorSpeed, min: 50, max: 5000, step: 50,
+    },
+    {
+      key: "deadzone", type: "number", label: "Stick deadzone", group: "Sticks",
+      description: "How far a stick has to move before anything happens, as a share of its travel.",
+      default: DEFAULTS.deadzone, min: 0, max: 0.9, step: 0.01,
+    },
+    { key: "invertOrbitX", type: "boolean", label: "Invert rotate left and right", group: "Sticks", default: false },
+    { key: "invertOrbitY", type: "boolean", label: "Invert rotate up and down", group: "Sticks", default: false },
+    { key: "buttons", type: "data", default: DEFAULTS.buttons, parse: (v) => parseConfig(JSON.stringify({ buttons: v })).buttons },
+  ],
+  legacy: () => {
+    const raw = safeRead();
+    return raw ? { ...parseConfig(raw) } : null;
+  },
+};
+
+export const settings = definePluginSettings(PLUGIN_ID, SETTINGS);
+
+const configOf = (): GamepadConfig => parseConfig(JSON.stringify(settings.all()));
+
+const CONFIG: GamepadConfig = configOf();
+settings.onChange(() => Object.assign(CONFIG, configOf()));
 
 export function getGamepadConfig(): GamepadConfig {
   return CONFIG;
@@ -149,14 +177,12 @@ export function getGamepadConfig(): GamepadConfig {
  *  so setting one binding never clears the others. */
 export function setGamepadConfig(patch: Partial<GamepadConfig>) {
   const { buttons, ...rest } = patch;
-  Object.assign(CONFIG, rest);
-  if (buttons) Object.assign(CONFIG.buttons, buttons);
-  persist();
+  for (const [k, v] of Object.entries(rest)) settings.set(k, v);
+  if (buttons) settings.set("buttons", { ...CONFIG.buttons, ...buttons });
 }
 
 export function resetGamepadConfig() {
-  Object.assign(CONFIG, structuredClone(DEFAULTS));
-  persist();
+  settings.reset();
 }
 
 /** A stick with a radial deadzone, rescaled so motion starts at zero just past

@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { MemoryStorage } from "./memoryStorage";
 import { validateBindings } from "../../src/viewport/navigator/bindings";
 import { checkShortcut } from "../../src/input/shortcuts";
 import { shippedPlugins } from "../../src/plugins/shipped";
@@ -80,5 +81,42 @@ describe("the Navigation plugin", () => {
     expect(items.at(-1)!.children!.map((c) => c.label)).toEqual(["CMD7", "CMD8", "CMD9"]);
     items[0]!.onClick!();
     expect(run).toHaveBeenCalledWith("fillet");
+  });
+});
+
+describe("its settings", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  });
+
+  const start = async (store: MemoryStorage) => {
+    vi.stubGlobal("localStorage", store);
+    vi.resetModules();
+    return import("../../plugins/FundaCAD.Navigation/state");
+  };
+
+  it("adopts the old key once, then keeps them in the app's store", async () => {
+    const store = new MemoryStorage();
+    store.setItem("fundacad.navigation.plugin", JSON.stringify({ preset: "alt-left", radial: true, radialDrag: "middle", keys: [{ action: "fit", key: "q" }] }));
+    const first = await start(store);
+    expect(first.navState.cfg).toMatchObject({ preset: "alt-left", radial: true, radialDrag: "middle" });
+    expect(first.navState.cfg.keys).toEqual([{ action: "fit", key: "q" }]);
+    expect(JSON.parse(store.getItem("fundacad.pluginSettings.FundaCAD.Navigation")!).values.preset).toBe("alt-left");
+
+    store.setItem("fundacad.navigation.plugin", JSON.stringify({ preset: "middle-shift" }));
+    const again = await start(store);
+    expect(again.navState.cfg.preset).toBe("alt-left");
+  });
+
+  it("applies a change made through the store, as the Preferences row makes it", async () => {
+    const m = await start(new MemoryStorage());
+    const applied = vi.fn();
+    m.onConfigChange(applied);
+    expect(m.settings.set("preset", "middle-ctrl")).toBeNull();
+    expect(m.navState.cfg.preset).toBe("middle-ctrl");
+    expect(applied).toHaveBeenCalledTimes(1);
+    m.settings.reset();
+    expect(m.navState.cfg.preset).toBe("right");
   });
 });

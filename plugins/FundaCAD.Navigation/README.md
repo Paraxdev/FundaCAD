@@ -24,7 +24,7 @@ modifier.
 
 ## Radial menu
 
-Off by default. Turn it on in Preferences, Mouse and keys. Hold the trigger,
+Off by default. Turn it on under this plugin's row in Preferences > Plugins. Hold the trigger,
 move towards a command and let go; or tap the key (W unless you move it) and
 click. What it offers depends on what you are doing: nothing selected,
 something selected, or in a sketch, and each of the three lists is yours to

@@ -7,7 +7,7 @@
 
 import { choose, contribute, toast } from "fundacad";
 import type { Engine } from "fundacad";
-import { bedFitMessage, bedSizeOf, loadBedFitSetting, saveBedFitSetting, BED_PRESETS } from "./bedFit";
+import { bedFitMessage, bedSettings, bedSizeOf, loadBedFitSetting, saveBedFitSetting, BED_PRESETS } from "./bedFit";
 import { openCustomBedDialog } from "./customBedDialog";
 import CustomBedHost from "./CustomBedHost.vue";
 import PrintabilityPanel from "./PrintabilityPanel.vue";
@@ -123,6 +123,7 @@ export async function activate(e: Engine): Promise<() => void> {
     }],
     icons: { ...ICONS, printBedFit: '<rect x="4" y="4" width="16" height="16" rx="1.5"/><path d="M4 15L9 10L13 14L20 7"/>' },
     overlays: [CustomBedHost, PrintabilityPanel],
+    settings: [{ key: "bed", settings: bedSettings }],
     features: PRINT_TOOLS.map((t) => ({
       type: t.type,
       meta: { icon: t.icon, label: t.label },

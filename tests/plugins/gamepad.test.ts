@@ -1,7 +1,8 @@
 // The controller's arithmetic: sticks to camera motion, buttons to rising
 // edges, stored settings repaired rather than trusted. main.ts is the polling
 // and the DOM around this; everything worth getting right is in here.
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { MemoryStorage } from "./memoryStorage";
 import {
   BINDABLE,
   DEFAULTS,
@@ -116,5 +117,39 @@ describe("parseConfig", () => {
     for (const i of BINDABLE) expect(DEFAULTS.buttons[i]).toBeTruthy();
     expect(BINDABLE).not.toContain(6);
     expect(BINDABLE).not.toContain(7);
+  });
+});
+
+describe("its settings", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  });
+
+  const start = async (store: MemoryStorage) => {
+    vi.stubGlobal("localStorage", store);
+    vi.resetModules();
+    return import("../../plugins/FundaCAD.Gamepad/gamepad");
+  };
+
+  it("adopts the old key once and reads every later change from the app's store", async () => {
+    const store = new MemoryStorage();
+    store.setItem("fundacad.gamepad.config", JSON.stringify({ deadzone: 0.3, invertOrbitY: true, buttons: { 0: "fit" } }));
+    const m = await start(store);
+    expect(m.getGamepadConfig()).toMatchObject({ deadzone: 0.3, invertOrbitY: true });
+    expect(m.getGamepadConfig().buttons[0]).toBe("fit");
+    expect(m.getGamepadConfig().buttons[1]).toBe("key:Escape");
+
+    m.settings.set("deadzone", 0.2);
+    expect(m.getGamepadConfig().deadzone).toBe(0.2);
+    m.setGamepadConfig({ buttons: { 2: "redo" } });
+    expect(m.getGamepadConfig().buttons[0]).toBe("fit");
+    expect(m.getGamepadConfig().buttons[2]).toBe("redo");
+
+    store.setItem("fundacad.gamepad.config", JSON.stringify({ deadzone: 0.5 }));
+    const again = await start(store);
+    expect(again.getGamepadConfig().deadzone).toBe(0.2);
+    again.resetGamepadConfig();
+    expect(again.getGamepadConfig().deadzone).toBe(0.15);
   });
 });
