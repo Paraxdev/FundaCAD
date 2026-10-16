@@ -11,7 +11,9 @@
 // Settings screen (./SpaceMouseModal.vue) edits this live with a raw-axis
 // readout + a test cube; the config persists to localStorage.
 
-import { listen, readSetting } from "fundacad";
+import { definePluginSettings, listen, readSetting, type SettingValues, type SettingsSchema } from "fundacad";
+
+export const PLUGIN_ID = "FundaCAD.SpaceMouse";
 import type { Viewport } from "fundacad";
 
 export interface Motion { tx: number; ty: number; tz: number; rx: number; ry: number; rz: number }
@@ -131,7 +133,7 @@ const KEY = "fundacad.spacemouse.config";
 const LEGACY_KEYS = ["neocad.spacemouse.config", "sindricad.spacemouse.config"];
 const LEGACY_MODE_KEY = "sindricad.spacemouse.mode";
 
-function loadConfig(): SpaceMouseConfig {
+function readOldConfig(): SpaceMouseConfig | null {
   const cfg: SpaceMouseConfig = structuredClone(DEFAULTS);
   try {
     const raw = readSetting(KEY, ...LEGACY_KEYS);
@@ -164,44 +166,114 @@ function loadConfig(): SpaceMouseConfig {
       }
     } else {
       const legacy = localStorage.getItem(LEGACY_MODE_KEY);
+      if (legacy === null) return null;
       if (legacy === "camera") cfg.mode = "camera";
     }
   } catch {
-    /* ignore */
+    return null;
   }
   return cfg;
 }
 
-const CONFIG: SpaceMouseConfig = loadConfig();
+const PERCENT_MAX = 500;
+const percentOf = (v: number, dflt: number) => Math.min(PERCENT_MAX, Math.max(0, Math.round((v / dflt) * 100)));
+const sens = (key: string, label: string) =>
+  ({ key, type: "number", label, group: "Sensitivity", unit: "%", default: 100, min: 0, max: PERCENT_MAX, step: 5 }) as const;
 
-function persist() {
-  try {
-    localStorage.setItem(KEY, JSON.stringify(CONFIG));
-  } catch {
-    /* ignore */
+function parseBind(v: unknown): Record<ActionName, AxisBinding> {
+  const out = structuredClone(DEFAULTS.bind);
+  if (!v || typeof v !== "object") return out;
+  for (const a of Object.keys(DEFAULTS.bind) as ActionName[]) {
+    const b = (v as Record<string, Partial<AxisBinding> | undefined>)[a];
+    if (b && AXIS_NAMES.includes(b.src as AxisName)) out[a] = { src: b.src as AxisName, invert: !!b.invert };
   }
+  return out;
 }
+
+/** The stored settings in the units the form shows: sensitivities as a share
+ *  of the default, because the internal ones are per axis unit per ms. */
+function valuesOf(cfg: SpaceMouseConfig): SettingValues {
+  return {
+    mode: cfg.mode,
+    panPercent: percentOf(cfg.panSens, DEFAULTS.panSens),
+    zoomPercent: percentOf(cfg.zoomSens, DEFAULTS.zoomSens),
+    orbitPercent: percentOf(cfg.orbitSens, DEFAULTS.orbitSens),
+    deadzone: Math.min(200, Math.max(0, Math.round(cfg.deadzone))),
+    crossAxisPercent: Math.round(clampCrossAxis(cfg.crossAxis) * 100),
+    bind: cfg.bind,
+  };
+}
+
+export const SETTINGS: SettingsSchema = {
+  version: 1,
+  props: [
+    {
+      key: "mode",
+      type: "enum",
+      label: "Mode",
+      description: "Object mode moves the model the way the puck moves; camera mode moves the camera instead.",
+      default: DEFAULTS.mode,
+      options: [
+        { id: "object", label: "Object mode" },
+        { id: "camera", label: "Camera mode" },
+      ],
+    },
+    sens("panPercent", "Pan"),
+    sens("zoomPercent", "Zoom"),
+    sens("orbitPercent", "Rotate"),
+    {
+      key: "deadzone", type: "number", label: "Deadzone", group: "Sensitivity", integer: true,
+      description: "How far the puck has to move before anything happens, in device counts.",
+      default: DEFAULTS.deadzone, min: 0, max: 200, step: 1,
+    },
+    {
+      key: "crossAxisPercent", type: "number", label: "Cross-axis filter", group: "Sensitivity", unit: "%", integer: true,
+      description: "Ignores a weak axis while another axis is much stronger, so a hard tilt does not also zoom. 0 turns it off.",
+      default: Math.round(DEFAULTS.crossAxis * 100), min: 0, max: Math.round(CROSS_AXIS_MAX * 100), step: 1,
+    },
+    { key: "bind", type: "data", default: DEFAULTS.bind, parse: parseBind },
+  ],
+  legacy: () => {
+    const old = readOldConfig();
+    return old ? valuesOf(old) : null;
+  },
+};
+
+export const settings = definePluginSettings(PLUGIN_ID, SETTINGS);
+
+function configOf(v: SettingValues, staleMs = DEFAULTS.staleMs): SpaceMouseConfig {
+  const num = (k: string) => v[k] as number;
+  return {
+    ...structuredClone(DEFAULTS),
+    mode: v.mode === "camera" ? "camera" : "object",
+    panSens: (DEFAULTS.panSens * num("panPercent")) / 100,
+    zoomSens: (DEFAULTS.zoomSens * num("zoomPercent")) / 100,
+    orbitSens: (DEFAULTS.orbitSens * num("orbitPercent")) / 100,
+    deadzone: num("deadzone"),
+    crossAxis: num("crossAxisPercent") / 100,
+    staleMs,
+    bind: parseBind(v.bind),
+  };
+}
+
+const CONFIG: SpaceMouseConfig = configOf(settings.all());
+settings.onChange(() => Object.assign(CONFIG, configOf(settings.all(), CONFIG.staleMs)));
 
 export function getSpaceMouseConfig(): SpaceMouseConfig {
   return CONFIG;
 }
 
-/** Merge a patch into the live config and persist (used by the settings UI and
- *  the devtools console: window.spaceMouseConfig({ orbitSens: 4e-6 })). */
+/** Merge a patch into the live config and store it, in the config's own units
+ *  (the devtools hook window.spaceMouseConfig({ orbitSens: 4e-6 }) uses this). */
 export function setSpaceMouseConfig(patch: Partial<SpaceMouseConfig>) {
-  // Pull `bind` out FIRST: a blanket Object.assign(CONFIG, patch) would replace
-  // CONFIG.bind wholesale with the (usually single-action) partial, wiping every
-  // other binding. Merge the rest, then merge bind per-action into the existing one.
-  const { bind, ...rest } = patch;
-  Object.assign(CONFIG, rest);
-  if ("crossAxis" in rest) CONFIG.crossAxis = clampCrossAxis(CONFIG.crossAxis);
-  if (bind) Object.assign(CONFIG.bind, bind);
-  persist();
+  const { bind, staleMs, ...rest } = patch;
+  if (typeof staleMs === "number") CONFIG.staleMs = staleMs;
+  const next = valuesOf({ ...CONFIG, ...rest, bind: { ...CONFIG.bind, ...bind } });
+  for (const [k, v] of Object.entries(next)) settings.set(k, v);
 }
 
 export function resetSpaceMouseConfig() {
-  Object.assign(CONFIG, structuredClone(DEFAULTS));
-  persist();
+  settings.reset();
 }
 
 export function getSpaceMouseMode(): "object" | "camera" {
@@ -217,8 +289,7 @@ export function getSpaceMouseMode(): "object" | "camera" {
 // the camera.
 
 export function setSpaceMouseMode(mode: "object" | "camera") {
-  CONFIG.mode = mode;
-  persist();
+  settings.set("mode", mode);
 }
 
 // --- live raw-motion stream (for the settings readout + test cube) ---
