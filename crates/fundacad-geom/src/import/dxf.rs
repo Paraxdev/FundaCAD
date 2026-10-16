@@ -280,15 +280,24 @@ fn unit_scale(insunits: Option<i64>) -> Result<(f64, &'static str, bool), String
         0 | 4 => (1.0, "mm", insunits.unwrap_or(0) == 0),
         1 => (25.4, "in", false),
         2 => (304.8, "ft", false),
+        3 => (1_609_344.0, "mi", false),
         5 => (10.0, "cm", false),
         6 => (1000.0, "m", false),
+        7 => (1e6, "km", false),
         8 => (2.54e-5, "microinch", false),
         9 => (0.0254, "mil", false),
         10 => (914.4, "yd", false),
+        11 => (1e-7, "angstrom", false),
+        12 => (1e-6, "nm", false),
         13 => (1e-3, "um", false),
         14 => (100.0, "dm", false),
-        21 => (1200.0 / 3937.0 * 1000.0, "us-ft", false),
-        3 => return Err("this DXF is drawn in miles, too large for a part. Rescale it to millimetres in the source app".into()),
+        15 => (1e4, "dam", false),
+        16 => (1e5, "hm", false),
+        21 => (1_200_000.0 / 3937.0, "us-ft", false),
+        22 => (100_000.0 / 3937.0, "us-in", false),
+        23 => (3_600_000.0 / 3937.0, "us-yd", false),
+        24 => (6_336_000_000.0 / 3937.0, "us-mi", false),
+        17..=20 => return Err("this DXF is drawn in astronomical units, too large for a part. Rescale it to millimetres in the source app".into()),
         other => return Err(format!("this DXF uses unit code {other} ($INSUNITS), which is not a length FundaCAD reads. Save it in millimetres or inches")),
     })
 }
@@ -523,6 +532,7 @@ struct Walker<'a> {
     blocks: &'a HashMap<String, Block>,
     out: Out,
     stack: Vec<String>,
+    layer_names: HashMap<String, String>,
 }
 
 impl Walker<'_> {
@@ -538,6 +548,7 @@ impl Walker<'_> {
             if let Some(owner) = inherit.filter(|_| layer == "0") {
                 layer = owner.to_string();
             }
+            let layer = self.layer_names.entry(layer.to_uppercase()).or_insert(layer).clone();
             self.entity(e, m, &layer);
         }
     }
@@ -1051,7 +1062,7 @@ pub fn read_dxf(data: &[u8]) -> Result<DxfRead, String> {
     let pairs = if data.starts_with(BINARY_SENTINEL) { binary_pairs(data)? } else { ascii_pairs(data)? };
     let d = drawing(pairs)?;
     let (mm, unit, unnamed) = unit_scale(d.insunits)?;
-    let mut walker = Walker { blocks: &d.blocks, out: Out::default(), stack: Vec::new() };
+    let mut walker = Walker { blocks: &d.blocks, out: Out::default(), stack: Vec::new(), layer_names: HashMap::new() };
     walker.walk(&d.entities, &scale([mm; 3]), None);
     let o = walker.out;
     if o.count > MAX_SKETCH_ENTITIES {
@@ -1146,6 +1157,27 @@ mod tests {
             assert!(err.contains("more than"), "{err}");
             assert!(t.elapsed().as_secs_f64() < 5.0, "took {:?}", t.elapsed());
         }
+    }
+
+    #[test]
+    fn every_length_unit_code_reads() {
+        for (code, mm) in [(3, 1_609_344.0), (7, 1e6), (11, 1e-7), (12, 1e-6), (15, 1e4), (16, 1e5), (22, 25.400_050_800_101_6), (23, 914.401_828_803_657_6), (24, 1_609_347.218_694_437_4)] {
+            let got = unit_scale(Some(code)).unwrap_or_else(|e| panic!("code {code}: {e}")).0;
+            assert!((got - mm).abs() < mm * 1e-12, "code {code}: {got}");
+        }
+        let r = read_dxf(&dxf(22, "", UNIT_LINE)).unwrap();
+        assert_eq!(r.sketches[0].1[0]["x2"], 25.400_050_800_101_6);
+    }
+
+    #[test]
+    fn layers_that_differ_only_in_case_are_one_sketch() {
+        let walls = UNIT_LINE.replace("8\n0\n", "8\nWalls\n");
+        let shouted = UNIT_LINE.replace("8\n0\n", "8\nWALLS\n").replace("21\n0", "21\n5");
+        let ents = format!("{walls}{shouted}");
+        let r = read_dxf(&dxf(4, "", &ents)).unwrap();
+        let names: Vec<&str> = r.sketches.iter().map(|(n, _)| n.as_str()).collect();
+        assert_eq!(names, ["Walls"]);
+        assert_eq!(r.sketches[0].1.len(), 2);
     }
 
     #[test]
