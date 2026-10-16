@@ -526,6 +526,7 @@ export function mountUi(e: Engine): void {
     setLastAction: (a) => { e.lastAction = a; },
     startCutByPlane: (id) => e.starters.startCutByPlane(id),
     offsetPlaneFromFace: (...args) => e.starters.offsetPlaneFromFace(...args),
+    axisFromRoundFace: (...args) => e.starters.axisFromRoundFace(...args),
   });
 
   e.ui.panels = createPanels({

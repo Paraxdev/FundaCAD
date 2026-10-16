@@ -643,3 +643,50 @@ export function midPlane(a: PlaneDef, b: PlaneDef): PlaneDef | null {
   const t = dot(nb, sub(b.origin, a.origin)) / dot(nb, inA);
   return planeFromPointNormal(add(a.origin, scale(inA, t)), n);
 }
+
+export function cross3(a: Vec3, b: Vec3): Vec3 {
+  return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+}
+
+export function dist3(a: Vec3, b: Vec3): number {
+  return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+}
+
+/** The point at fraction `t` of a polyline's length and the unit tangent there. */
+export function alongPolyline(points: readonly Vec3[], t: number): { p: Vec3; tangent: Vec3 } | null {
+  let total = 0;
+  for (let i = 1; i < points.length; i++) total += dist3(points[i - 1]!, points[i]!);
+  if (!(total > 1e-12)) return null;
+  let left = Math.min(1, Math.max(0, t)) * total;
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1]!;
+    const b = points[i]!;
+    const d = dist3(a, b);
+    if (d < 1e-12) continue;
+    if (left <= d || i === points.length - 1) {
+      const f = Math.min(1, left / d);
+      const tangent: Vec3 = [(b[0] - a[0]) / d, (b[1] - a[1]) / d, (b[2] - a[2]) / d];
+      return { p: [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f], tangent };
+    }
+    left -= d;
+  }
+  return null;
+}
+
+/** The line two planes meet in: its point nearest the first plane's origin. */
+export function planesMeet(a: PlaneDef, b: PlaneDef): { origin: Vec3; dir: Vec3 } | null {
+  const dir = unit(cross3(a.normal, b.normal));
+  if (!dir) return null;
+  const na = a.normal;
+  const nb = b.normal;
+  const da = na[0] * a.origin[0] + na[1] * a.origin[1] + na[2] * a.origin[2];
+  const db = nb[0] * b.origin[0] + nb[1] * b.origin[1] + nb[2] * b.origin[2];
+  // Point on both planes: p = (da (nb x d) + db (d x na)) / |na x nb|^2 with d = na x nb.
+  const d = cross3(na, nb);
+  const dd = d[0] * d[0] + d[1] * d[1] + d[2] * d[2];
+  const u = cross3(nb, d);
+  const v = cross3(d, na);
+  const p: Vec3 = [0, 1, 2].map((i) => (da * u[i]! + db * v[i]!) / dd) as Vec3;
+  const k = (a.origin[0] - p[0]) * dir[0] + (a.origin[1] - p[1]) * dir[1] + (a.origin[2] - p[2]) * dir[2];
+  return { origin: [p[0] + dir[0] * k, p[1] + dir[1] * k, p[2] + dir[2] * k], dir };
+}

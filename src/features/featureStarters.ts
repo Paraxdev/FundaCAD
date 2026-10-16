@@ -9,7 +9,7 @@ import type { Viewport } from "../viewport/viewport";
 import type { SketchOverlay, WorldRegion } from "../sketch/overlay";
 import type { SketchMode, SketchTool } from "../sketch/sketchMode";
 import { SketchPlane } from "../sketch/plane";
-import { axisFromEdge, midPlane, planeThroughPoints } from "./planeMath";
+import { alongPolyline, axisFromEdge, cross3, dist3, midPlane, planeFromPointNormal, planesMeet, planeThroughPoints, unit } from "./planeMath";
 import { BOOLEAN_LABEL, type BooleanOp } from "./booleanOps";
 import type { ExtrudeTool } from "./extrudeTool";
 import type { EdgeFeatureTool } from "./edgeFeatureTool";
@@ -27,7 +27,8 @@ import { pickPlaneTarget, planeSpecOf, type FacePlanePick } from "./facePlanePic
 import { choose } from "../ui/choice";
 import { pointInRegion } from "../sketch/region";
 import { setPrompt } from "../ui/prompt";
-import type { Axis3, AxisSpec, Feature, JointMode, MechanismJoint, PlaneDef, PlaneOf, PlaneSpec, Selector, Vec3 } from "../types";
+import type { Axis3, AxisSpec, Feature, JointMode, MechanismJoint, PlaneDef, PlaneOf, PlaneSpec, PointAt, Selector, Vec3 } from "../types";
+import { edgeMatchSelectorFrom } from "../viewport/edgeMatch";
 import type { Hit } from "../viewport/picking";
 import { isDrivable, nextJointId, NO_DRIVE } from "../document/mechanism";
 import { findSelectorAt, repickedExtent, repickedSelector, replaceSelectorAt } from "./repickReference";
@@ -392,9 +393,10 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   // the part lies in, through three holes, three corners of a casting, a rib
   // and two bosses. Points come from the same snap the gizmo's origin uses
   // (viewport.pointAt), so a corner and the middle of an edge are aimable
-  // rather than approximate.
+  // rather than approximate. Edge ends and middles are kept as references so
+  // the plane follows them; a bare surface spot leaves the plane baked.
   function createPlaneThroughPoints() {
-    pickPointsInteractive(3, "Select three points for the plane", (pts) => {
+    pickPointsInteractive(3, "Select three points for the plane", (pts, refs) => {
       const [a, b, c] = pts;
       const def = a && b && c ? planeThroughPoints(a, b, c) : null;
       if (!def) {
@@ -402,7 +404,11 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
         return;
       }
       const id = store.nextId();
-      store.addFeature({ id, type: "datumPlane", plane: def, name: "Plane" } as Feature);
+      const points = allRefs(refs);
+      store.addFeature({
+        id, type: "datumPlane", plane: def, name: "Plane",
+        ...(points ? { through: { kind: "points", points } } : {}),
+      } as Feature);
       selectFeature(id, false);
     });
   }
@@ -410,24 +416,25 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   // Datum Point: one click on the model, snapped to what it actually has (the
   // same snap the gizmo origin and plane-through-points use), saved as a named
   // reference point. It builds no geometry, it exists to be measured to, snapped
-  // to, and named. Like a midplane, the coordinate is BAKED and does not yet
-  // follow the geometry it was picked on.
+  // to, and named. On an edge end or middle it follows that edge; on a bare
+  // surface spot the coordinate is baked.
   function createDatumPoint() {
-    pickPointsInteractive(1, "Select a point for the datum point", (pts) => {
+    pickPointsInteractive(1, "Select a point for the datum point", (pts, refs) => {
       const [p] = pts;
       if (!p) return;
+      const at = refs[0];
       const id = store.nextId();
-      store.addFeature({ id, type: "datumPoint", point: p, name: "Point" } as Feature);
+      store.addFeature({ id, type: "datumPoint", point: p, name: "Point", ...(at ? { at } : {}) } as Feature);
       selectFeature(id, false);
     });
   }
 
   // Datum Axis: two clicks name the line through them, `origin` the first point
   // and `dir` the second minus the first. It is the line a revolve, a circular
-  // pattern or a mirror can be aimed at by name. Same baked-coordinate limit as
-  // the datum point above.
+  // pattern or a mirror can be aimed at by name. Follows its points like the
+  // datum point above.
   function createDatumAxis() {
-    pickPointsInteractive(2, "Select two points for the datum axis", (pts) => {
+    pickPointsInteractive(2, "Select two points for the datum axis", (pts, refs) => {
       const [a, b] = pts;
       if (!a || !b) return;
       const dir: Vec3 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
@@ -436,7 +443,11 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
         return;
       }
       const id = store.nextId();
-      store.addFeature({ id, type: "datumAxis", origin: a, dir, name: "Axis" } as Feature);
+      const both = allRefs(refs);
+      store.addFeature({
+        id, type: "datumAxis", origin: a, dir, name: "Axis",
+        ...(both && both[0] && both[1] ? { through: { kind: "points", a: both[0], b: both[1] } } : {}),
+      } as Feature);
       selectFeature(id, false);
     });
   }
@@ -460,6 +471,150 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     });
   }
 
+  function allRefs(refs: (PointAt | null)[]): PointAt[] | null {
+    return refs.every((r): r is PointAt => r !== null) ? refs : null;
+  }
+
+  /** One preselected edge (the edge right-click selects it first) is taken
+   *  as the pick, else the edge is picked. */
+  function withEdge(promptText: string, onPick: (sel: Selector, points: readonly Vec3[]) => void) {
+    const pre = viewport.selectedEdgeLines();
+    const only = pre.length === 1 ? pre[0] : undefined;
+    const pts = only?.points.map((q) => [q[0], q[1], q[2]] as Vec3);
+    const sel = only && pts ? edgeMatchSelectorFrom({ points: pts, body: only.body }) : undefined;
+    if (sel && pts && !toolBusy()) onPick(sel, pts);
+    else pickEdgeInteractive(promptText, onPick);
+  }
+
+  function matchEdge(points: readonly Vec3[], sel: Selector): Selector {
+    const body = (sel as { body?: string }).body;
+    return edgeMatchSelectorFrom({ points: points as Vec3[], body }) ?? sel;
+  }
+
+  // Plane normal to an edge: at the middle of the edge, its `t` editable in the
+  // values panel afterwards (0 one end, 1 the other). The engine re-resolves the
+  // edge every rebuild, so a longer edge keeps the plane at the same fraction.
+  function createPlaneNormalToEdge() {
+    withEdge("Select an edge or path for the plane normal to it", (sel, points) => {
+      const at = alongPolyline(points, 0.5);
+      const def = at && planeFromPointNormal(at.p, at.tangent);
+      if (!def) return;
+      const id = store.nextId();
+      store.addFeature({
+        id, type: "datumPlane", plane: def, name: "Normal plane",
+        t: 0.5, through: { kind: "normalToEdge", edge: matchEdge(points, sel) },
+      } as Feature);
+      selectFeature(id, false);
+    });
+  }
+
+  // Plane through two edges: two parallel edges, or two that cross in one plane.
+  function createPlaneThroughEdges() {
+    pickEdgeInteractive("Select the first edge for the plane", (sa, pa) => {
+      requestAnimationFrame(() => {
+        pickEdgeInteractive("Select the second edge", (sb, pb) => {
+          const a0 = pa[0];
+          const a1 = pa[pa.length - 1];
+          const b0 = pb[0];
+          const b1 = pb[pb.length - 1];
+          const def = a0 && a1 && b0 && b1
+            ? planeThroughPoints(a0, a1, dist3(a0, b0) > dist3(a0, b1) ? b0 : b1)
+            : null;
+          if (!def) {
+            setStatus("Plane through edges: those two edges lie in a line", "");
+            return;
+          }
+          const id = store.nextId();
+          store.addFeature({
+            id, type: "datumPlane", plane: def, name: "Plane",
+            through: { kind: "twoEdges", a: matchEdge(pa, sa), b: matchEdge(pb, sb) },
+          } as Feature);
+          selectFeature(id, false);
+        });
+      });
+    });
+  }
+
+  // Plane at an angle: a straight edge as the hinge, then the face or plane the
+  // angle is measured from. Starts at 45 degrees, edited in the values panel;
+  // the engine places it, this first placement is only the cache.
+  function createPlaneAtAngle() {
+    withEdge("Select a straight edge to turn the plane about", (sel, points) => {
+      const line = axisFromEdge(points as Vec3[]);
+      if (!line) {
+        setStatus("A plane at an angle turns about a straight edge", "");
+        return;
+      }
+      requestAnimationFrame(() => {
+        pickPlaneInteractive("Select the face or plane the angle is measured from", (spec, face, datumId) => {
+          const from = planeOfPick(spec, face, datumId);
+          if (!from) {
+            setStatus("Plane at angle: measure from a flat face or a plane", "");
+            return;
+          }
+          const angle = 45;
+          const u = unit(line.dir);
+          const n0 = asDef(spec).normal;
+          if (!u) return;
+          const r = (angle * Math.PI) / 180;
+          const k = cross3(u, n0);
+          const d = u[0] * n0[0] + u[1] * n0[1] + u[2] * n0[2];
+          const n: Vec3 = [0, 1, 2].map((i) => n0[i]! * Math.cos(r) + k[i]! * Math.sin(r) + u[i]! * d * (1 - Math.cos(r))) as Vec3;
+          const def = planeFromPointNormal(line.origin, n);
+          if (!def) return;
+          const id = store.nextId();
+          store.addFeature({
+            id, type: "datumPlane", plane: def, name: "Angled plane",
+            angle, through: { kind: "angle", edge: matchEdge(points, sel), from },
+          } as Feature);
+          selectFeature(id, false);
+        });
+      });
+    });
+  }
+
+  // Axis of a round face: the hole or shaft axis, followed when it moves.
+  function createAxisFromCylinder() {
+    pickPlaneInteractive("Select a round face for its axis", (_spec, face) => axisFromRoundFace(face));
+  }
+
+  function axisFromRoundFace(face: FacePlanePick | null) {
+    const cyl = face && face.kind === "tangent" ? viewport.faceCylinder(face.faceId) : null;
+    if (!face || !cyl) {
+      setStatus("Axis from cylinder: pick a round face", "");
+      return;
+    }
+    const id = store.nextId();
+    store.addFeature({
+      id, type: "datumAxis", origin: cyl.point, dir: cyl.axis, name: "Axis",
+      through: { kind: "cylinder", face: face.selector },
+    } as Feature);
+    selectFeature(id, false);
+  }
+
+  // Axis where two planes meet.
+  function createAxisFromPlanes() {
+    pickPlaneInteractive("Select the first plane or flat face", (a, fa, da) => {
+      requestAnimationFrame(() => {
+        pickPlaneInteractive("Select the second plane or flat face", (b, fb, db) => {
+          const ra = planeOfPick(a, fa, da);
+          const rb = planeOfPick(b, fb, db);
+          const line = planesMeet(asDef(a), asDef(b));
+          if (!ra || !rb || !line) {
+            setStatus("Axis from planes: pick two flat faces or planes that cross", "");
+            return;
+          }
+          const id = store.nextId();
+          store.addFeature({
+            id, type: "datumAxis", origin: line.origin, dir: line.dir, name: "Axis",
+            through: { kind: "planes", a: ra, b: rb },
+          } as Feature);
+          selectFeature(id, false);
+        });
+      });
+    });
+  }
+
   /** Collect `n` points on the model, snapping to what it actually has.
    *
    *  Every point taken so far is drawn, and so is the one under the cursor, so
@@ -470,12 +625,13 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   function pickPointsInteractive(
     n: number,
     promptText: string,
-    onDone: (pts: Vec3[]) => void,
+    onDone: (pts: Vec3[], refs: (PointAt | null)[]) => void,
   ) {
     if (toolBusy()) return;
     setPlanePick(true);
     viewport.suspendPicking = true;
     const taken: Vec3[] = [];
+    const refs: (PointAt | null)[] = [];
     const say = () => setPrompt(`${promptText} · ${taken.length} of ${n} · Esc`);
     say();
     const draw = (live: Vec3 | null) => viewport.setPickMarkers(taken, live);
@@ -491,24 +647,28 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       if (!hit) return; // over nothing: stay in the pick rather than take a guess
       e.preventDefault();
       e.stopImmediatePropagation();
-      take([hit.p.x, hit.p.y, hit.p.z]);
+      const p: Vec3 = [hit.p.x, hit.p.y, hit.p.z];
+      const edge = hit.edge && edgeMatchSelectorFrom(hit.edge);
+      take(p, edge && hit.edge ? { edge, end: hit.edge.end, point: p } : null);
     };
-    const take = (p: Vec3) => {
+    const take = (p: Vec3, ref: PointAt | null) => {
       taken.push(p);
+      refs.push(ref);
       draw(null);
       if (taken.length < n) { say(); return; }
       const pts = taken.slice();
+      const got = refs.slice();
       cleanup();
-      requestAnimationFrame(() => onDone(pts));
+      requestAnimationFrame(() => onDone(pts, got));
     };
     const onEsc = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
-      if (taken.length) { taken.pop(); draw(null); say(); return; }
+      if (taken.length) { taken.pop(); refs.pop(); draw(null); say(); return; }
       cleanup();
     };
     const releaseTree = awaitTreePick((pick) => {
       if (pick.kind !== "datumPoint") return treePickRefusal(pick, "a point");
-      take(pick.point);
+      take(pick.point, { datum: pick.id });
       return true;
     }, () => cleanup());
     const cleanup = () => {
@@ -1693,6 +1853,12 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     createDatumPoint,
     createDatumAxis,
     createDatumAxisOnEdge,
+    createPlaneNormalToEdge,
+    createPlaneThroughEdges,
+    createPlaneAtAngle,
+    createAxisFromCylinder,
+    axisFromRoundFace,
+    createAxisFromPlanes,
     offsetPlaneFromFace,
     startSplit,
     startCutByPlane,

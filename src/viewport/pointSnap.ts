@@ -19,6 +19,8 @@ export type ModelPointKind = "vertex" | "midpoint" | "center" | "surface";
 export interface PointCandidate {
   p: [number, number, number];
   kind: ModelPointKind;
+  /** The edge an end or middle sits on, so a datum can keep it as a reference. */
+  edge?: { points: [number, number, number][]; body?: string | undefined; end: "start" | "end" | "mid" };
 }
 
 /** Higher is preferred where two candidates are both in reach. */

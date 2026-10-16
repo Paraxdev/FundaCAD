@@ -170,3 +170,41 @@ export function edgeSelectorFrom(edge: { points: Vec3[]; body?: string | undefin
   const sel = { kind: "edge" as const, by: "nearest" as const, point: mid };
   return edge.body ? { ...sel, body: edge.body } : sel;
 }
+
+/** A fingerprint selector for a picked edge, for references that must survive
+ *  the edge moving or changing length (a `nearest` point stays where it was,
+ *  so a longer box hands it a different edge). Same body rule as above. */
+export function edgeMatchSelectorFrom(edge: { points: Vec3[]; body?: string | undefined }):
+  | { kind: "edge"; by: "match"; fp: { mid: Vec3; dir: Vec3; length: number; curve?: "line" }; body?: string }
+  | undefined {
+  const pts = edge.points;
+  const mid = polylineMid(pts);
+  const a = pts[0];
+  const b = pts[pts.length - 1];
+  if (!mid || !a || !b || pts.length < 2) return undefined;
+  let length = 0;
+  let half: [Vec3, Vec3] = [a, b];
+  for (let i = 1; i < pts.length; i++) length += dist(pts[i - 1]!, pts[i]!);
+  let run = 0;
+  for (let i = 1; i < pts.length; i++) {
+    const d = dist(pts[i - 1]!, pts[i]!);
+    if (run + d >= length / 2) { half = [pts[i - 1]!, pts[i]!]; break; }
+    run += d;
+  }
+  const chord = dist(a, b);
+  const straight = chord > 1e-9 && Math.abs(length - chord) < 1e-6 * Math.max(1, length);
+  const [p, q] = straight ? [a, b] : half;
+  let dir: Vec3 = [q[0] - p[0], q[1] - p[1], q[2] - p[2]];
+  const n = Math.hypot(dir[0], dir[1], dir[2]);
+  if (n < 1e-12) return undefined;
+  dir = [dir[0] / n, dir[1] / n, dir[2] / n];
+  const lead = dir.find((c) => Math.abs(c) > 1e-9) ?? 1;
+  if (lead < 0) dir = [0 - dir[0], 0 - dir[1], 0 - dir[2]];
+  const fp = { mid, dir, length, ...(straight ? { curve: "line" as const } : {}) };
+  const sel = { kind: "edge" as const, by: "match" as const, fp };
+  return edge.body ? { ...sel, body: edge.body } : sel;
+}
+
+function dist(a: Vec3, b: Vec3): number {
+  return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+}
