@@ -186,3 +186,23 @@ fn an_arc_meets_a_neighbour_a_hair_away() {
     assert_eq!(solids(&b), 1);
     near(volume(&b), 2.0 * (250_000.0 + PI * 62_500.0 / 2.0), 1e-3, "rect and half disc");
 }
+
+#[test]
+fn a_use_fan_out_is_refused_quickly() {
+    let mut defs = String::from(r#"<g id="u0"/>"#);
+    for k in 1..15 {
+        defs.push_str(&format!(r#"<g id="u{k}">"#));
+        for _ in 0..6 {
+            defs.push_str(&format!(r##"<use href="#u{}"/>"##, k - 1));
+        }
+        defs.push_str("</g>");
+    }
+    let svg = format!(r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><defs>{defs}</defs><use href="#u14"/></svg>"##);
+    let p = blob_dir().join("fan_out.svg");
+    std::fs::write(&p, svg).unwrap();
+    let store = BlobStore::open(blob_dir()).unwrap();
+    let t = std::time::Instant::now();
+    let err = import::import_geometry(&p.to_string_lossy(), "svg", &store).expect_err("a fan out of 6^14 elements");
+    assert!(err.contains("elements"), "{err}");
+    assert!(t.elapsed().as_secs_f64() < 10.0, "{:?}", t.elapsed());
+}
