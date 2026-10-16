@@ -58,7 +58,8 @@ done
 # edge off its faces written by crates/fundacad-geom/tests/step/gen_heal_edge_off.py,
 # the compressed STEP copies and XBF documents written by
 # crates/fundacad-geom/tests/step/gen_compressed.py, the Rhino files written by
-# crates/fundacad-geom/tests/rhino/gen_3dm.py, the IFC fixtures written by hand,
+# crates/fundacad-geom/tests/rhino/gen_3dm.py, the IFC fixtures written by hand
+# or taken from ifc-lite's public test models,
 # and third_party sample
 # models that ship with vendored code. The stress samples in examples/stress
 # are allowed too: small parts modelled from parameters so the Stress panel has

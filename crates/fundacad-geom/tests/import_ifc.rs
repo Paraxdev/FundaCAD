@@ -101,3 +101,65 @@ fn a_zipped_ifc_is_refused_by_name() {
     let e = imported(&p.to_string_lossy()).unwrap_err();
     assert!(e.contains("IFCZIP") || e.contains("zip"), "{e}");
 }
+
+fn notes(reply: &Map<String, Value>) -> Vec<String> {
+    reply.get("notes").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_str).map(String::from).collect()).unwrap_or_default()
+}
+
+fn scratch(name: &str, text: &str) -> String {
+    let dir = blob_dir().join("variants");
+    std::fs::create_dir_all(&dir).unwrap();
+    let p = dir.join(name);
+    std::fs::write(&p, text).unwrap();
+    p.to_string_lossy().into_owned()
+}
+
+#[test]
+fn openings_spaces_envelopes_virtual_elements_and_annotations_are_left_out() {
+    let reply = imported(&fixture("ifc_not_material.ifc").to_string_lossy()).unwrap_or_else(|e| panic!("{e}"));
+    assert_eq!(reply.get("name").and_then(Value::as_str), Some("Wall B"), "one element keeps its IFC name");
+    assert!(notes(&reply).is_empty(), "{:?}", notes(&reply));
+    let r = build(reply);
+    let names: Vec<&str> = r.bodies.iter().map(|b| b.name.as_str()).collect();
+    assert_eq!(names, ["Wall B"]);
+    let wall = &r.bodies[0].shape;
+    assert_eq!(kernel::count(wall, Kind::Solid), 1);
+    let want = 3000.0 * 200.0 * 2500.0 - 800.0 * 200.0 * 1000.0;
+    let got = kernel::volume_precise(wall);
+    assert!((got - want).abs() <= want * 1e-3, "the window hole is cut, volume {got}, want {want}");
+}
+
+#[test]
+fn a_revit_wall_with_openings_comes_in_closed() {
+    let reply = imported(&fixture("ifc_revit_wall_openings.ifc").to_string_lossy()).unwrap_or_else(|e| panic!("{e}"));
+    assert!(!notes(&reply).iter().any(|n| n.contains("open shell")), "{:?}", notes(&reply));
+    let r = build(reply);
+    assert_eq!(r.bodies.len(), 8);
+    for b in &r.bodies {
+        assert!(kernel::count(&b.shape, Kind::Solid) >= 1, "{} is not solid", b.name);
+        assert!(kernel::volume_precise(&b.shape) > 0.0, "{} is inside out", b.name);
+        assert!(b.shape.is_valid().unwrap(), "{} is not valid, its touching pieces were sewn into one shell", b.name);
+    }
+    let wall = r.bodies.iter().find(|b| b.name.starts_with("Basic Wall")).expect("the wall");
+    // ifc-lite's own mesh of this wall encloses 31.4214 m3
+    let got = kernel::volume_precise(&wall.shape);
+    assert!((got - 31.4214e9).abs() <= 31.4214e9 * 1e-3, "wall volume {got}");
+}
+
+#[test]
+fn an_element_that_does_not_close_and_a_cut_off_file_say_so() {
+    let text = std::fs::read_to_string(fixture("ifc_not_material.ifc")).unwrap().replace(
+        "IFCANNOTATION('0bbbbbbbbbbbbbbbbbbbbC',$,'Level mark',$,$,#106,#105)",
+        "IFCBUILDINGELEMENTPROXY('0bbbbbbbbbbbbbbbbbbbbC',$,'Canopy',$,$,#33,#305,$,.NOTDEFINED.)",
+    );
+    let reply = imported(&scratch("open.ifc", &text)).unwrap_or_else(|e| panic!("{e}"));
+    let said = notes(&reply);
+    assert!(said.iter().any(|n| n.starts_with("Canopy:") && n.contains("open shell")), "{said:?}");
+    assert!(!said.iter().any(|n| n.starts_with("Wall B:")), "{said:?}");
+    assert_eq!(reply.get("solid"), Some(&json!(true)));
+
+    let tiny = std::fs::read_to_string(fixture("ifc_tiny.ifc")).unwrap();
+    let cut = &tiny[..tiny.find("#110=").unwrap()];
+    let reply = imported(&scratch("cut.ifc", cut)).unwrap_or_else(|e| panic!("{e}"));
+    assert!(notes(&reply).iter().any(|n| n.contains("cut off")), "{:?}", notes(&reply));
+}
