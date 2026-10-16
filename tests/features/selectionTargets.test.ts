@@ -92,10 +92,10 @@ describe("targetsFor", () => {
     expect(fields({ id: "l", type: "loft", profiles: [] })).toEqual([]);
     expect(fields({ id: "l", type: "loft", profiles: [], operation: "join" })).toEqual(["targets"]);
     // A press/pull in its automatic mode moves the face of its own body.
-    expect(fields({ id: "p", type: "press-pull", distance: 2, operation: "cut" })).toEqual(["face"]);
-    expect(fields({ id: "p", type: "press-pull", distance: 2, operation: "cut", mode: "auto" })).toEqual(["face"]);
-    expect(fields({ id: "p", type: "press-pull", distance: 2, operation: "cut", mode: "new" })).toEqual(["face"]);
-    expect(fields({ id: "p", type: "press-pull", distance: 2, operation: "cut", mode: "cut" })).toEqual(["face", "targets"]);
+    expect(fields({ id: "p", type: "press-pull", distance: 2, operation: "cut" })).toEqual(["face", "upTo"]);
+    expect(fields({ id: "p", type: "press-pull", distance: 2, operation: "cut", mode: "auto" })).toEqual(["face", "upTo"]);
+    expect(fields({ id: "p", type: "press-pull", distance: 2, operation: "cut", mode: "new" })).toEqual(["face", "upTo"]);
+    expect(fields({ id: "p", type: "press-pull", distance: 2, operation: "cut", mode: "cut" })).toEqual(["face", "upTo", "targets"]);
   });
 });
 
@@ -294,5 +294,23 @@ describe("profile targets", () => {
     // A row reporting "3 areas" while dropping which sketch each came from is a
     // row that cannot be written back.
     expect(targetsOf("loft").filter((t) => t.kind === "area")).toHaveLength(0);
+  });
+});
+
+describe("extrude start and end rows", () => {
+  const fields = (f: object) => targetsFor(f as Feature).map((t) => t.field);
+  it("shows a face row only for the start or end that reads it", () => {
+    expect(fields({ id: "e", type: "extrude", sketch: "s", distance: 5, operation: "new", startType: "face" }))
+      .toEqual(["regions", "startFace"]);
+    expect(fields({ id: "e", type: "extrude", sketch: "s", distance: 5, operation: "cut", endType: "upToFace" }))
+      .toEqual(["regions", "upToFace", "targets"]);
+    expect(fields({ id: "e", type: "extrude", sketch: "s", distance: 5, operation: "new", endType2: "upToFace" }))
+      .toEqual(["regions"]);
+    expect(fields({ id: "e", type: "extrude", sketch: "s", distance: 5, operation: "new", twoSided: true, endType2: "upToFace" }))
+      .toEqual(["regions", "upToFace2"]);
+  });
+  it("marks the face rows as tracked picks", () => {
+    const rows = targetsFor({ id: "e", type: "extrude", sketch: "s", distance: 5, operation: "new", endType: "upToFace" } as Feature);
+    expect(rows.find((t) => t.field === "upToFace")?.tracked).toBe(true);
   });
 });

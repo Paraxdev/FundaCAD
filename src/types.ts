@@ -309,6 +309,10 @@ export interface MechanismJoint {
   b?: MateConnector;
 }
 
+export type ExtrudeStart = "sketch" | "offset" | "face" | "plane" | "point";
+export type ExtrudeEnd = "distance" | "upToFace" | "upToPlane" | "upToPoint" | "throughAll";
+/** A datum point's id, or the vertex of `body` nearest `point`. */
+export type PointRef = string | { point: [number, number, number]; body?: string };
 export type PressPullMode = "auto" | "join" | "cut" | "new" | "intersect";
 export type PressPullDirection = "normal" | "axis";
 
@@ -338,6 +342,27 @@ export type CoreFeature =
       symmetric?: boolean;
       // Degrees; positive narrows the far face.
       taper?: Num;
+      // Where the profile starts; absent is the sketch plane. `startOffset` adds along its normal.
+      startType?: ExtrudeStart;
+      startOffset?: Num;
+      startFace?: Selector;
+      startPlane?: string;
+      startPoint?: PointRef;
+      // Where side one stops; absent is `distance`. `endOffset` runs past an up to target, negative stops short.
+      endType?: ExtrudeEnd;
+      upToFace?: Selector;
+      upToPlane?: string;
+      upToPoint?: PointRef;
+      endOffset?: Num;
+      // A second side the other way, exclusive with `symmetric`.
+      twoSided?: boolean;
+      distance2?: Num;
+      taper2?: Num;
+      endType2?: ExtrudeEnd;
+      upToFace2?: Selector;
+      upToPlane2?: string;
+      upToPoint2?: PointRef;
+      endOffset2?: Num;
     }
   // `profile`: -1 chamfer, 0 circular, +1 sharp corner.
   // `sizeType` "chord" reads `radius` as the width across the round. `tangentEdges`
@@ -351,7 +376,7 @@ export type CoreFeature =
   // moves the face along the axis its walls run along (a hole's end), absent is "normal".
   // `followTangent` absent is true: when a resized round face would lose the faces running
   // smoothly into it, their closed run moves with it. False refuses instead.
-  | { id: string; type: "press-pull"; face: Selector | Selector[]; distance: Num; operation: "join" | "cut"; body?: string; upTo?: Selector; taper?: Num; mode?: PressPullMode; direction?: PressPullDirection; targets?: string[]; followTangent?: boolean }
+  | { id: string; type: "press-pull"; face: Selector | Selector[]; distance: Num; operation: "join" | "cut"; body?: string; upTo?: Selector; upToPlane?: string; upToPoint?: PointRef; upToOffset?: Num; taper?: Num; mode?: PressPullMode; direction?: PressPullDirection; targets?: string[]; followTangent?: boolean }
   | { id: string; type: "deleteFace"; face: Selector | Selector[]; body?: string }
   // `plane` is written { name } once `bodies` is set (document/mirrorPlane.ts).
   | { id: string; type: "mirror"; plane: Plane3 | { name: Plane3 }; bodies?: string[] }

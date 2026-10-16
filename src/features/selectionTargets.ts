@@ -36,6 +36,7 @@
 
 import type { Feature, FeatureType, Selector } from "../types";
 import { contributedFeature } from "../plugins/contrib";
+import { fieldApplies } from "../document/optionFields";
 
 /** What a target holds, one entry at a time. "area" is a closed region of a
  *  sketch, the word the extrude prompts already use for the thing you click. */
@@ -68,6 +69,9 @@ export interface TargetField {
    *  in the builder, `field` is preferred there, and keeping the pair in step through an
    *  edit is not worth the fifth reader it would need. */
   alsoReads?: string;
+  /** A face pick writes a tracked selector carrying its body, so the row keeps
+   *  naming that face when an edit above moves it, on whichever body it is. */
+  tracked?: boolean;
 }
 
 /** The inventory, for the features the APPLICATION owns. A feature type absent
@@ -95,7 +99,11 @@ export const FEATURE_TARGETS: Partial<Record<FeatureType, readonly TargetField[]
   // never been.
   fillet: [{ field: "edges", label: "Edges", kind: "edge", shape: "selector", arity: "many" }],
   chamfer: [{ field: "edges", label: "Edges", kind: "edge", shape: "selector", arity: "many" }],
-  "press-pull": [{ field: "face", label: "Face", kind: "face", shape: "selector", arity: "one" }, ACTS_ON],
+  "press-pull": [
+    { field: "face", label: "Face", kind: "face", shape: "selector", arity: "one" },
+    { field: "upTo", label: "Up to face", kind: "face", shape: "selector", arity: "one", whenEmpty: "the distance", tracked: true },
+    ACTS_ON,
+  ],
   deleteFace: [{ field: "face", label: "Face", kind: "face", shape: "selector", arity: "one" }],
   // Shell's empty set is not "no faces", it is a sealed hollow, a legitimate
   // and quite different part.
@@ -140,7 +148,11 @@ export const FEATURE_TARGETS: Partial<Record<FeatureType, readonly TargetField[]
   extrude: [{
     field: "regions", label: "Profile", kind: "area", shape: "regionPoint",
     arity: "many", whenEmpty: "the whole sketch", alsoReads: "region",
-  }, ACTS_ON],
+  },
+  { field: "startFace", label: "Start face", kind: "face", shape: "selector", arity: "one", tracked: true },
+  { field: "upToFace", label: "Up to face", kind: "face", shape: "selector", arity: "one", tracked: true },
+  { field: "upToFace2", label: "Up to face 2", kind: "face", shape: "selector", arity: "one", tracked: true },
+  ACTS_ON],
   revolve: [{
     field: "regions", label: "Profile", kind: "area", shape: "regionPoint",
     arity: "many", whenEmpty: "the whole sketch",
@@ -180,7 +192,9 @@ export function targetsFor(f: Feature): readonly TargetField[] {
   const { features: repeats, operation, mode } = f as { features?: string[]; operation?: string; mode?: string };
   const how = f.type === "press-pull" ? mode ?? "auto" : operation ?? "new";
   const combines = how !== "auto" && how !== "new";
-  return all.filter((t) => (t.field !== "bodies" || !repeats?.length) && (t !== ACTS_ON || combines));
+  const values = f as unknown as Record<string, unknown>;
+  return all.filter((t) =>
+    (t.field !== "bodies" || !repeats?.length) && (t !== ACTS_ON || combines) && fieldApplies(f.type, t.field, values));
 }
 
 export function readTarget(feature: Feature, t: TargetField): TargetEntry[] {

@@ -60,6 +60,7 @@ import {
   choiceFieldsFor,
   choiceValue,
   fieldApplies,
+  datumChoices,
   fieldLabel,
   fileFieldsFor,
   fileValue,
@@ -297,7 +298,7 @@ const choiceRows = useDocValue(() => {
         ? { ...c, ...patternAxisChoice(f, store.document.features) }
         : f.type === "mechanism" && c.field === "drive"
           ? { ...c, ...mechanismDriveChoice(values) }
-          : { ...c, current: choiceValue(f, c) },
+          : { ...c, options: datumChoices(c.field, store.document.features) ?? c.options, current: choiceValue(f, c) },
     );
 });
 
