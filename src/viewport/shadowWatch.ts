@@ -29,7 +29,7 @@ export class ShadowWatch {
     scene.updateMatrixWorld();
     scene.traverseVisible((o) => {
       if ((o as THREE.Light).isLight) {
-        const shadow = (o as THREE.Light).shadow;
+        const shadow = (o as THREE.Light & { shadow?: THREE.LightShadow }).shadow;
         if (!o.castShadow || !shadow) return;
         v.push(o.id, ...o.matrixWorld.elements, shadow.mapSize.x, shadow.bias, shadow.radius, ...shadow.camera.projectionMatrix.elements);
         const target = (o as THREE.DirectionalLight).target;

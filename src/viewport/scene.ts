@@ -266,6 +266,10 @@ function detectLowPower(rendererName: string): boolean {
 /** The floor under a motion frame's pixel ratio, potato mode's included. */
 const MIN_MOTION_PIXEL_RATIO = 0.35;
 
+// three r186 dropped PCFSoftShadowMap and rewrites it to PCFShadowMap on the first
+// shadowed frame, the softness comes from each light's shadow.radius.
+export const SHADOW_MAP_TYPE: THREE.ShadowMapType = THREE.PCFShadowMap;
+
 export function createScene(canvas: HTMLCanvasElement): SceneBundle {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, stencil: true });
   const name = unmaskedRendererName(renderer);
@@ -278,7 +282,7 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
   // draw, the surest way to a dropped context. 2 elsewhere keeps edges crisp
   // without going to native 3x. Applied once here for the frames before the
   // first pref-apply lands.
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.type = SHADOW_MAP_TYPE;
   let fullQuality = false;
   let motionScale = 1;
   const potatoOn = () => renderPrefs().potatoMode && !fullQuality;

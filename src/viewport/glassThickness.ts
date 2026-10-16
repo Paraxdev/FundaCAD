@@ -125,7 +125,7 @@ const FRAGMENT = /* glsl */`
 	material.attenuationColor = attenuationColor;
 	vec3 pos = vWorldPosition;
 	vec3 v = normalize( cameraPosition - pos );
-	vec3 n = inverseTransformDirection( normal, viewMatrix );
+	vec3 n = transformNormalByInverseViewMatrix( normal, viewMatrix );
 	float fcThick = material.thickness;
 	bool fcHit = false;
 	vec3 fcBackN = - n;
@@ -141,7 +141,7 @@ const FRAGMENT = /* glsl */`
 		}
 	}
 	vec4 transmitted = fcVolumeRefraction(
-		n, v, material.roughness, material.diffuseColor, material.specularColor, material.specularF90,
+		n, v, material.roughness, material.diffuseContribution, material.specularColorBlended, material.specularF90,
 		pos, modelMatrix, viewMatrix, projectionMatrix, material.dispersion, material.ior, fcThick, fcHit, fcBackN,
 		material.attenuationColor, material.attenuationDistance );
 	material.transmissionAlpha = mix( material.transmissionAlpha, transmitted.a, material.transmission );

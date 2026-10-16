@@ -3,7 +3,7 @@
 // follow the renderer's pixel ratio.
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { PostChain } from "../../src/viewport/scene";
+import { PostChain, SHADOW_MAP_TYPE } from "../../src/viewport/scene";
 import { composerClearColor, neutralToneMap } from "../../src/viewport/composerColor";
 import { BACKGROUND_COLOR, DEFAULT_RENDER, setRenderPref } from "../../src/ui/renderPrefs";
 
@@ -163,6 +163,12 @@ describe("three internals the composer clear relies on", () => {
   // setClearColor, converted for the target bound then, and only a GPU shows it.
   // Bumping three means running e2e/bloom_e2e.cjs on a GPU Chrome, then this number.
   it("is still the three release e2e/bloom_e2e.cjs was run against", () => {
-    expect(THREE.REVISION).toBe("180");
+    expect(THREE.REVISION).toBe("186");
+  });
+});
+
+describe("shadow map type", () => {
+  it("is one this three keeps instead of rewriting on the first shadowed frame", () => {
+    expect([THREE.BasicShadowMap, THREE.PCFShadowMap, THREE.VSMShadowMap]).toContain(SHADOW_MAP_TYPE);
   });
 });

@@ -194,7 +194,7 @@ export class Viewport {
   // Z the ground grid sits at: the model's lowest point (so the grid is always a
   // floor under the model), or 0 (world XY) when the document is empty.
   private targetGridZ = 0;
-  private clock = new THREE.Clock();
+  private timer = new THREE.Timer();
   private resolution = new THREE.Vector2();
   /** A wide line over one edge, for when a hover tint on a 1.6px line is not enough. */
   private emphasis: EdgeEmphasis | null = null;
@@ -3912,7 +3912,7 @@ export class Viewport {
     try {
       const now = performance.now();
       this.watchStutter(now);
-      const dt = this.clock.getDelta();
+      const dt = this.timer.update().getDelta();
       // Always advanced so damping and transitions progress; returns whether it moved.
       const moved = this.rig.update(dt);
       const resized = this.applyMotionScale(moved, now);
