@@ -380,3 +380,44 @@ fn a_section_gives_the_outline_and_the_numbers_a_beam_check_needs() {
     let r = mcp.call("section", json!({"axis": "X", "at": 500}));
     assert!(r.text.ends_with("The plane misses every body."), "{}", r.text);
 }
+
+#[test]
+fn a_list_of_bodies_exports_only_those_merged_or_one_file_each() {
+    let tmp = tempfile::tempdir().expect("a temp dir");
+    let mut mcp = session();
+    let r = mcp.call(
+        "edit",
+        json!({"ops": [
+            {"op": "add", "feature": {"type": "box", "length": 10, "width": 10, "height": 10, "name": "Left"}},
+            {"op": "add", "feature": {"type": "box", "length": 10, "width": 10, "height": 10, "name": "Middle"}},
+            {"op": "add", "feature": {"type": "move", "dx": 30, "bodies": ["body2"]}},
+            {"op": "add", "feature": {"type": "box", "length": 10, "width": 10, "height": 10, "name": "Right"}},
+            {"op": "add", "feature": {"type": "move", "dx": 60, "bodies": ["body3"]}}
+        ], "build": true}),
+    );
+    assert!(!r.is_error, "{}", r.text);
+
+    let path = tmp.path().join("pick.stl");
+    let r = mcp.call("export", json!({"path": path.to_string_lossy(), "format": "stl", "bodies": ["body1", "Right"]}));
+    assert!(!r.is_error, "{}", r.text);
+    let raw = std::fs::read(&path).unwrap();
+    assert_eq!(u32::from_le_bytes(raw[80..84].try_into().unwrap()), 24, "two boxes of 12 triangles");
+    let (lo, hi) = stl_box(&path);
+    assert!((lo[0] + 5.0).abs() < 1e-3 && (hi[0] - 65.0).abs() < 1e-3, "{lo:?} {hi:?}");
+
+    let parts = tmp.path().join("parts.stl");
+    let r = mcp.call(
+        "export",
+        json!({"path": parts.to_string_lossy(), "format": "stl", "separate": true, "bodies": ["Middle", "body3"]}),
+    );
+    assert!(!r.is_error, "{}", r.text);
+    let mut names: Vec<String> = std::fs::read_dir(tmp.path().join("parts"))
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    assert_eq!(names, ["Middle.stl", "Right.stl"]);
+
+    let r = mcp.call("export", json!({"path": path.to_string_lossy(), "format": "stl", "bodies": ["body1", "nope"]}));
+    assert!(r.is_error && r.text.contains("nope"), "{}", r.text);
+}

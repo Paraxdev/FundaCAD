@@ -1210,7 +1210,7 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
 
     #[tool(
         name = "export",
-        description = "Write the model to STEP, STL or 3MF. `separate` writes one file per body, named after the body; `body` writes one body; `layFlat` turns the parts for printing. Refused if a feature failed to build, naming which, unless allowPartial:true is passed, in which case it writes the file anyway and still names the failures.",
+        description = "Write the model to STEP, STL or 3MF. `separate` writes one file per body, named after the body; `body` writes one body, `bodies` a list of them, merged or with `separate`; `layFlat` turns the parts for printing. Refused if a feature failed to build, naming which, unless allowPartial:true is passed, in which case it writes the file anyway and still names the failures.",
         input_schema = crate::tools::export()
     )]
     pub async fn t_export(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
@@ -1245,27 +1245,41 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
                  file of its own.",
             ));
         }
+        let mut listed: Vec<String> = Vec::new();
+        if let Some(v) = args.get("bodies").filter(|v| !v.is_null()) {
+            let Some(arr) = v.as_array() else {
+                return Ok(failure(format!("`bodies` is a list of body ids or names, got {v}")));
+            };
+            for b in arr {
+                match b.as_str().filter(|s| !s.is_empty()) {
+                    Some(s) => listed.push(s.to_string()),
+                    None => return Ok(failure(format!("`bodies` is a list of body ids or names, got {b}"))),
+                }
+            }
+        }
         let lay_flat = args.get("layFlat").filter(|v| truthy(Some(v))).cloned();
         let (link, mut doc) = {
             let mut st = self.state.lock().await;
             model::recompute_parameters(&mut st.doc);
             (st.link.clone(), st.doc.clone())
         };
-        let mut body_id = None;
+        let mut ids: Vec<String> = Vec::new();
         let mut laid = String::new();
-        if wanted.is_some() || lay_flat.is_some() {
+        if wanted.is_some() || !listed.is_empty() || lay_flat.is_some() {
             let built = match engine_bodies(&link, &doc, None).await {
                 Ok(b) => b,
                 Err(e) => return Ok(failure(e)),
             };
-            if let Some(w) = &wanted {
+            for w in listed.iter().chain(wanted.iter()) {
                 match find_body(&built, w) {
-                    Some(id) => body_id = Some(id),
+                    Some(id) if !ids.contains(&id) => ids.push(id),
+                    Some(_) => {}
                     None => return Ok(failure(no_such_body(w, &built))),
                 }
             }
             if let Some(how) = &lay_flat {
-                match crate::layflat::lay_flat(&link, &mut doc, &built, how, body_id.as_deref(), separate).await {
+                let only = (!ids.is_empty()).then_some(ids.as_slice());
+                match crate::layflat::lay_flat(&link, &mut doc, &built, how, only, separate).await {
                     Ok(note) => laid = note,
                     Err(e) => return Ok(failure(e)),
                 }
@@ -1306,8 +1320,12 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
             if separate {
                 obj.insert("separate".into(), json!(true));
             }
-            if let Some(id) = &body_id {
-                obj.insert("body".into(), json!(id));
+            if listed.is_empty() {
+                if let Some(id) = ids.first() {
+                    obj.insert("body".into(), json!(id));
+                }
+            } else {
+                obj.insert("bodies".into(), json!(ids));
             }
         }
         let discard = || {
