@@ -816,12 +816,15 @@ fn faces_from_edges(edges: &[Shape]) -> Vec<Shape> {
 /// The arrangement cells inside an odd number of the outlines.
 fn evenodd_cells(cells: &[Shape], outlines: &[Shape], edges: &[Shape]) -> Vec<Shape> {
     let boxes: Vec<Option<[f64; 6]>> = outlines.iter().map(kernel::bbox).collect();
-    let boundary = kernel::compound(edges);
-    let margin = 1e-6 * kernel::bbox_diagonal(&boundary).max(1.0);
-    let clear = |x: f64, y: f64| kernel::distance_to_point(&boundary, [x, y, 0.0]).is_some_and(|d| d > margin);
+    let margin = 1e-6 * kernel::bbox_diagonal(&kernel::compound(edges)).max(1.0);
     let mut kept = Vec::new();
     for cell in cells.iter().flat_map(|c| kernel::subshapes(c, Kind::Face)) {
-        let Some([x, y]) = inside_point_by(&cell, |x, y| kernel::face_contains(&cell, [x, y, 0.0], 1e-7), clear) else {
+        // No edge enters a cell, so the nearest one to a point inside it is on its own boundary.
+        let rim = kernel::compound(&kernel::subshapes(&cell, Kind::Edge));
+        let clear = |x: f64, y: f64| kernel::distance_to_point(&rim, [x, y, 0.0]).is_some_and(|d| d > margin);
+        let good = |x: f64, y: f64| kernel::face_contains(&cell, [x, y, 0.0], 1e-7);
+        let found = [(3, 32), (7, 100), (15, 400)].into_iter().find_map(|(lines, steps)| inside_point_grid(&cell, good, &clear, lines, steps));
+        let Some([x, y]) = found else {
             continue;
         };
         let depth = outlines
@@ -1377,26 +1380,28 @@ fn inside_point(face: &Shape, avoid: &[Shape]) -> Option<[f64; 2]> {
     inside_point_by(face, good, |_, _| true)
 }
 
-/// `good` is tested on every scan sample, `strict` only on the candidates.
 fn inside_point_by(face: &Shape, good: impl Fn(f64, f64) -> bool, strict: impl Fn(f64, f64) -> bool) -> Option<[f64; 2]> {
+    inside_point_grid(face, good, strict, 15, 400)
+}
+
+/// `good` is tested on every scan sample, `strict` only on the candidates.
+fn inside_point_grid(face: &Shape, good: impl Fn(f64, f64) -> bool, strict: impl Fn(f64, f64) -> bool, lines: usize, steps: usize) -> Option<[f64; 2]> {
     let c = kernel::face_area_centre(face)?;
     if good(c[1], c[2]) && strict(c[1], c[2]) {
         return Some([c[1], c[2]]);
     }
     let b = kernel::bbox(face)?;
     let (w, h) = (b[3] - b[0], b[4] - b[1]);
-    const STEPS: usize = 400;
-    const LINES: usize = 15;
     let mut runs: Vec<(f64, [f64; 2])> = Vec::new();
-    for k in 0..LINES {
+    for k in 0..lines {
         #[allow(clippy::cast_precision_loss)]
-        let y = b[1] + h * (k as f64 + 0.5) / LINES as f64;
+        let y = b[1] + h * (k as f64 + 0.5) / lines as f64;
         // The first and last qualifying sample of each run.
         let mut run: Option<(f64, f64)> = None;
-        for i in 0..=STEPS + 1 {
+        for i in 0..=steps + 1 {
             #[allow(clippy::cast_precision_loss)]
-            let x = b[0] + w * i as f64 / STEPS as f64;
-            if i <= STEPS && good(x, y) {
+            let x = b[0] + w * i as f64 / steps as f64;
+            if i <= steps && good(x, y) {
                 run = Some(run.map_or((x, x), |(x0, _)| (x0, x)));
             } else if let Some((x0, x1)) = run.take() {
                 runs.push((x1 - x0, [(x0 + x1) / 2.0, y]));
