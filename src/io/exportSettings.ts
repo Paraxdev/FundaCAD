@@ -124,12 +124,12 @@ export function saveExportSettings(s: ExportSettings) {
 const LAST_DIR_KEY = "fundacad.exportDir";
 
 /** A default export file name that no earlier export took: the base, then the
- *  local date and time to the second, `bracket_2026-10-16_11-42-07.stl`. */
+ *  local date and time to the second, `bracket_20261016114207.stl`. */
 export function exportFileName(base: string, ext: string, now: Date = new Date()): string {
   // Windows refuses these in a file name, and a trailing dot or space.
   const safe = base.replace(/[<>:"/\\|?*\u0000-\u001f]/g, "_").replace(/[. ]+$/, "").trim() || "part";
   const p = (n: number) => String(n).padStart(2, "0");
-  const stamp = `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}_${p(now.getHours())}-${p(now.getMinutes())}-${p(now.getSeconds())}`;
+  const stamp = `${now.getFullYear()}${p(now.getMonth() + 1)}${p(now.getDate())}${p(now.getHours())}${p(now.getMinutes())}${p(now.getSeconds())}`;
   return `${safe}_${stamp}.${ext}`;
 }
 
