@@ -55,7 +55,7 @@ describe("finishOf", () => {
   it("carries the glass fields and leaves absent colours absent", () => {
     const f = finishOf({ id: "a", name: "A", color: "#fff", ior: 1.33, attenuationColor: "#2a8f6a" });
     expect(f.ior).toBe(1.33);
-    expect(f.thickness).toBe(3);
+    expect(f.thickness).toBe("auto");
     expect(f.attenuationColor).toBe("#2a8f6a");
     expect("specularColor" in f).toBe(false);
   });
@@ -137,9 +137,27 @@ describe("normalizeMaterial", () => {
   it("omits every glass field at its default, so an old glass reads back as it was", () => {
     const old = { id: "m-glass", name: "Glass", color: "#cfe4ee", metalness: 0, roughness: 0.05, opacity: 0.25 };
     expect(normalizeMaterial({
-      ...old, ior: 1.5, thickness: 3, dispersion: 0, attenuationDistance: 0, iridescence: 0,
+      ...old, ior: 1.5, dispersion: 0, attenuationDistance: 0, iridescence: 0,
     })).toEqual(old);
     expect(normalizeMaterial(old)).toEqual(old);
+  });
+
+  it("keeps a stored thickness as an override and reads absent or junk as auto", () => {
+    const base = { id: "g", name: "G", color: "#ffffff", opacity: 0.2 };
+    for (const thickness of [3, 12, 0]) {
+      expect(normalizeMaterial({ ...base, thickness })!.thickness, String(thickness)).toBe(thickness);
+      expect(finishOf(normalizeMaterial({ ...base, thickness })!).thickness).toBe(thickness);
+    }
+    expect(normalizeMaterial({ ...base, thickness: -4 })!.thickness).toBe(0);
+    for (const thickness of ["auto", "x", undefined, null, Number.NaN]) {
+      const m = normalizeMaterial({ ...base, thickness })!;
+      expect("thickness" in m, String(thickness)).toBe(false);
+      expect(finishOf(m).thickness).toBe("auto");
+    }
+    expect(isDefaultFinish(finishOf({ id: "a", name: "A", color: "#fff", thickness: 3 }))).toBe(false);
+    for (const preset of STARTER_LIBRARY.filter((m) => (m.opacity ?? 1) < 1)) {
+      expect(finishOf(preset).thickness, preset.id).toBe("auto");
+    }
   });
 
   it("carries a valid procedural surface and drops a broken one", () => {

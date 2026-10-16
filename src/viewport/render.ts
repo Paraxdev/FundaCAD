@@ -9,6 +9,7 @@ import { disposeObject } from "./dispose";
 import { scheduleRaycastIndex } from "./raycastIndex";
 import { BodyEdges, EDGE_IDLE_COLOR, EDGE_IDLE_WIDTH, type EdgeRef } from "./edgeLines";
 import { type BodyFinish, FINISH } from "../document/materials";
+import { meanThickness, setGlassAuto } from "./glassThickness";
 import { removeSelectionGlows } from "./selectionGlow";
 import { weldByFace } from "./weld";
 
@@ -586,8 +587,13 @@ export function isRenderLowPower(): boolean {
  *  Toggling transmission across zero flips the USE_TRANSMISSION shader define, so
  *  it recompiles the material, done only on the crossing, and applyBodyFinish
  *  runs on material CHANGES, not per frame, so the recompile is not a per-frame
- *  cost. Dispersion flips its own define, three bumps the version for it. */
-export function applyGlassLook(mat: THREE.MeshStandardMaterial, f: BodyFinish, ghost: boolean): boolean {
+ *  cost. Dispersion flips its own define, three bumps the version for it.
+ *
+ *  Auto thickness needs the mesh: its mean thickness is the uniform, and the
+ *  per pixel pass in glassThickness measures the rest. */
+export function applyGlassLook(
+  mat: THREE.MeshStandardMaterial, f: BodyFinish, ghost: boolean, mesh?: THREE.Mesh,
+): boolean {
   const phys = mat as THREE.MeshPhysicalMaterial;
   if (!(phys as { isMeshPhysicalMaterial?: boolean }).isMeshPhysicalMaterial) return false;
   const glassy = !ghost && !renderLowPower && f.opacity < 1 && f.metalness < 0.5;
@@ -598,7 +604,9 @@ export function applyGlassLook(mat: THREE.MeshStandardMaterial, f: BodyFinish, g
     // frosted 0.6 visibly glassy, since flat alpha at that opacity already read
     // as glass and transmission must not look LESS clear than the fade it replaces.
     phys.transmission = Math.min(1, 1 - f.opacity + 0.25);
-    phys.thickness = f.thickness;
+    const auto = f.thickness === "auto";
+    phys.thickness = auto ? meanThickness(mesh?.geometry) : (f.thickness as number);
+    setGlassAuto(phys, auto && mesh ? mesh : null);
     phys.attenuationColor.set(f.attenuationColor ?? 0xffffff);
     // The document keeps 0 for "never", three wants Infinity, which JSON cannot hold.
     phys.attenuationDistance = f.attenuationDistance > 0 ? f.attenuationDistance : Infinity;
@@ -609,6 +617,7 @@ export function applyGlassLook(mat: THREE.MeshStandardMaterial, f: BodyFinish, g
   } else {
     phys.transmission = 0;
     phys.thickness = 0;
+    setGlassAuto(phys, null);
     phys.attenuationColor.set(0xffffff);
     phys.attenuationDistance = Infinity;
     phys.dispersion = 0;

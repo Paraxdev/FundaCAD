@@ -4,6 +4,7 @@
 // material cannot undo each other depending on which ran last.
 
 import * as THREE from "three";
+import { isGlassAuto, registerGlass } from "./glassThickness";
 import { applyClearcoat, applyGlassLook, applyThinFilm, isRenderLowPower, type BodyMesh, type ModelView } from "./render";
 import type { SceneBundle } from "./scene";
 import { type BodyFinish, FINISH, isShiny } from "../document/materials";
@@ -181,7 +182,7 @@ export class BodyFinishLayer {
       applyThinFilm(mat, bf, ghost);
       if (!ghost && f?.surfaceGraph) applySurfaceGraph(mat, f.surfaceGraph);
       else applySurface(mat, ghost ? undefined : f?.surface);
-      if (!applyGlassLook(mat, bf, ghost)) {
+      if (!applyGlassLook(mat, bf, ghost, b.mesh)) {
         const opacity = ghost ? Math.min(f ? f.opacity : 1, ghostOpacity) : f ? f.opacity : 1;
         mat.transparent = opacity < 1;
         mat.opacity = opacity;
@@ -205,7 +206,7 @@ export class BodyFinishLayer {
           applyThinFilm(fm, ff, ghost);
           if (!ghost && ff.surfaceGraph) applySurfaceGraph(fm, ff.surfaceGraph);
           else applySurface(fm, ghost ? undefined : ff.surface);
-          if (!applyGlassLook(fm, ff, ghost)) {
+          if (!applyGlassLook(fm, ff, ghost, b.mesh)) {
             const fo = ghost ? Math.min(ff.opacity, ghostOpacity) : ff.opacity;
             fm.transparent = fo < 1;
             fm.opacity = fo;
@@ -216,6 +217,7 @@ export class BodyFinishLayer {
         }
       }
       applyWireframe(mat, o.wireframe);
+      registerGlass(b.mesh, extra ? extra.mats.map(isGlassAuto) : [isGlassAuto(mat)]);
       if (glow > 0 || faceGlow) glowing.push({ b, glow, fids: byBody.get(b.id), bound: 0 });
     }
     this.startEmitters(model, glowing);
