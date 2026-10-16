@@ -176,7 +176,9 @@ function readOldConfig(): SpaceMouseConfig | null {
 }
 
 const PERCENT_MAX = 500;
-const percentOf = (v: number, dflt: number) => Math.min(PERCENT_MAX, Math.max(0, Math.round((v / dflt) * 100)));
+// Rounded to 1e-9 only to drop float noise; an old slider value is rarely a whole percent.
+const percentOf = (v: number, dflt: number) =>
+  Math.min(PERCENT_MAX, Math.max(0, Math.round((v / dflt) * 100 * 1e9) / 1e9));
 const sens = (key: string, label: string) =>
   ({ key, type: "number", label, group: "Sensitivity", unit: "%", default: 100, min: 0, max: PERCENT_MAX, step: 5 }) as const;
 
@@ -263,13 +265,25 @@ export function getSpaceMouseConfig(): SpaceMouseConfig {
   return CONFIG;
 }
 
+const SETTING_OF: Partial<Record<keyof SpaceMouseConfig, string>> = {
+  mode: "mode",
+  panSens: "panPercent",
+  zoomSens: "zoomPercent",
+  orbitSens: "orbitPercent",
+  deadzone: "deadzone",
+  crossAxis: "crossAxisPercent",
+  bind: "bind",
+};
+
 /** Merge a patch into the live config and store it, in the config's own units
  *  (the devtools hook window.spaceMouseConfig({ orbitSens: 4e-6 }) uses this). */
 export function setSpaceMouseConfig(patch: Partial<SpaceMouseConfig>) {
   const { bind, staleMs, ...rest } = patch;
   if (typeof staleMs === "number") CONFIG.staleMs = staleMs;
   const next = valuesOf({ ...CONFIG, ...rest, bind: { ...CONFIG.bind, ...bind } });
-  for (const [k, v] of Object.entries(next)) settings.set(k, v);
+  // Only what the patch names: the rest would come back through valuesOf's rounding.
+  const named = new Set(Object.keys(patch).map((f) => SETTING_OF[f as keyof SpaceMouseConfig]));
+  for (const [k, v] of Object.entries(next)) if (named.has(k)) settings.set(k, v);
 }
 
 export function resetSpaceMouseConfig() {
