@@ -518,3 +518,49 @@ fn fbx_axes_keep_up_up_in_either_handedness() {
         assert!((vol - 1.0e6).abs() < 1.0, "{name}: {vol}");
     }
 }
+
+fn threeds_fixture(name: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("../../tests/fixtures/threeds_{name}.3ds"))
+}
+
+#[test]
+fn threeds_objects_become_named_coloured_bodies() {
+    let reply = import_as(&threeds_fixture("two"), "3ds").unwrap();
+    assert_eq!(reply["solid"], json!(true), "{reply:?}");
+    let parts = reply["parts"].as_array().unwrap();
+    assert_eq!(parts[0]["color"], json!("#ff0000"));
+    assert_eq!(parts[1]["color"], json!("#0000ff"));
+    let b = build(reply, "3ds");
+    let names: Vec<&str> = b.bodies.iter().map(|b| b.name.as_str()).collect();
+    assert_eq!(names, ["Red", "Blue"]);
+    for body in &b.bodies {
+        assert!((kernel::volume(&body.shape) - 1000.0).abs() < 1e-2, "{}", body.name);
+    }
+    assert_near(kernel::bbox(&b.bodies[0].shape).unwrap(), [0.0, 0.0, 0.0, 10.0, 10.0, 10.0], 1e-3, "Red");
+    assert_near(kernel::bbox(&b.bodies[1].shape).unwrap(), [30.0, 0.0, 0.0, 40.0, 10.0, 10.0], 1e-3, "Blue keeps its stored points, its mirror matrix moves nothing");
+}
+
+#[test]
+fn threeds_master_scale_multiplies_the_points() {
+    let b = build(import_as(&threeds_fixture("scaled"), "3ds").unwrap(), "3ds");
+    assert_near(kernel::bbox(&b.bodies[0].shape).unwrap(), [0.0, 0.0, 0.0, 25.0, 25.0, 25.0], 1e-3, "scaled");
+}
+
+#[test]
+fn a_broken_3ds_errors_instead_of_reading_past_its_chunks() {
+    let good = std::fs::read(threeds_fixture("two")).unwrap();
+    for cut in [0, 3, 6, 20, good.len() / 2, good.len() - 1] {
+        let e = import_as(&write("cut.3ds", &good[..cut]), "3ds").unwrap_err();
+        assert!(e.contains("3DS"), "cut at {cut}: {e}");
+    }
+    // The point array claims 65535 points inside a chunk that holds eight.
+    let at = good.windows(2).position(|w| w == [0x10, 0x41]).unwrap();
+    let mut lie = good.clone();
+    lie[at + 6..at + 8].copy_from_slice(&u16::MAX.to_le_bytes());
+    let e = import_as(&write("lie.3ds", &lie), "3ds").unwrap_err();
+    assert!(e.contains("points"), "{e}");
+    let e = import_as(&write("not.3ds", b"solid nothing
+endsolid
+"), "3ds").unwrap_err();
+    assert!(e.contains("3DS"), "{e}");
+}

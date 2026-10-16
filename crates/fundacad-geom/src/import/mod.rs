@@ -17,6 +17,7 @@ pub mod off;
 pub mod packed;
 pub mod ply;
 pub mod rhino;
+pub mod threeds;
 pub mod x3d;
 
 use std::collections::HashMap;
@@ -421,6 +422,7 @@ pub fn import_geometry_in(path: &str, fmt: &str, store: &BlobStore, unit: Option
             }
             outward(imported)
         }
+        "3ds" => outward(mesh::finish_objects(threeds::read_3ds(&std::fs::read(p).map_err(|e| e.to_string())?)?)?),
         "dxf" => return import_dxf(p, store),
         other => return Err(format!("unsupported import format: {other}")),
     };
