@@ -1,7 +1,8 @@
 // Which mouse button, with which modifiers, orbits, pans, zooms or opens the
 // menu. One table is active: the default below, or the one a plugin holding the
 // input.remap grant contributed (plugins/contrib.ts). Selection is not in it,
-// the left button alone always selects, so a left binding needs a modifier.
+// the left button alone always selects and Shift or Ctrl with it adds to the
+// selection, so a left binding needs Alt.
 
 export type PointerButton = "left" | "middle" | "right";
 export type PointerDrag = "orbit" | "pan" | "zoom" | "gesture";
@@ -81,8 +82,8 @@ export function validateBindings(table: readonly PointerBinding[]): string[] {
       return;
     }
     if (!b.drag && !b.click) out.push(`${bindingKeys(b)} is bound to nothing`);
-    if (b.button === "left" && !MODS.some((m) => b[m] === true)) {
-      out.push(`${bindingKeys(b)} is selection and cannot be rebound, hold Shift, Ctrl or Alt with it`);
+    if (b.button === "left" && b.alt !== true) {
+      out.push(`${bindingKeys(b)} is selection and cannot be rebound, hold Alt with it`);
     }
     for (let i = 0; i < j; i++) {
       const a = table[i]!;

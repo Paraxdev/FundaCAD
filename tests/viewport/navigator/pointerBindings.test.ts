@@ -227,6 +227,12 @@ describe("validateBindings", () => {
     expect(validateBindings([{ button: "left", drag: "orbit" }]).join()).toContain("is selection");
     expect(validateBindings([{ button: "left", alt: false, drag: "orbit" }, { button: "right", drag: "orbit" }]).join()).toContain("is selection");
   });
+  it("refuses Shift+left and Ctrl+left, which add to the selection", () => {
+    const orbit: PointerBinding = { button: "right", drag: "orbit" };
+    expect(validateBindings([{ button: "left", shift: true, drag: "pan" }, orbit]).join()).toContain("Shift+left is selection");
+    expect(validateBindings([{ button: "left", ctrl: true, drag: "zoom" }, orbit]).join()).toContain("Ctrl+left is selection");
+    expect(validateBindings([{ button: "left", alt: true, shift: true, drag: "pan" }, orbit])).toEqual([]);
+  });
   it("accepts the default and a modifier+left table", () => {
     expect(validateBindings(DEFAULT_BINDINGS)).toEqual([]);
     expect(validateBindings(ALT_LEFT)).toEqual([]);

@@ -277,7 +277,8 @@ three rules: the default lives in core, one plugin's table is active at a time
 (a second plugin contributing one is refused, not silently preferred), and
 removing the plugin restores the default. `contribute` refuses both without the
 `input.remap` grant. Selection is not rebindable, the left button alone always
-selects, and the keys handled before the table (undo, save, Escape, Tab, `?`)
+selects and Shift or Ctrl with it adds to the selection, so a left binding
+must hold Alt, and the keys handled before the table (undo, save, Escape, Tab, `?`)
 cannot be taken. The `?nav=legacy` camera ignores the table. There
 is no way to read another plugin's contributions except `service()`, which hands
 back an opaque value the app never looks inside, the same arrangement as grant
