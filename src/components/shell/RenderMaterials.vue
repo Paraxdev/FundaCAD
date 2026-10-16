@@ -23,6 +23,7 @@ import { toast } from "../../ui/toast";
 import { exportMaterialLibrary, importMaterialLibrary } from "../../io/files";
 import { finishLabel, finishOf, type MaterialDef, type SurfaceSpec } from "../../document/materials";
 import { materialPreview, onPreviewsChanged } from "../../viewport/materialPreview";
+import { FALLBACK_THICKNESS } from "../../viewport/glassThickness";
 import { isRenderLowPower } from "../../viewport/render";
 import { beginMaterialDrag, endMaterialDrag, MATERIAL_MIME } from "../../ui/materialDrag";
 import { onRenderPrefsChange, renderPrefs } from "../../ui/renderPrefs";
@@ -245,6 +246,10 @@ function set(
   }
   if (field === "specularColor") {
     store.updateMaterial(m.id, { specularColor: raw || undefined } as MaterialPatch);
+    return;
+  }
+  if (field === "thickness" && raw === "") {
+    store.updateMaterial(m.id, { thickness: undefined } as unknown as MaterialPatch);
     return;
   }
   const n = Number.parseFloat(raw);
@@ -626,16 +631,22 @@ async function doImport() {
             @input="set('ior', ($event.target as HTMLInputElement).value)"
           />
         </label>
-        <label class="prefs-row">
-          <span class="prefs-label">Thickness {{ finishOf(selected).thickness }} mm</span>
+        <div class="prefs-row" title="Auto measures how deep light travels through each body, a number overrides it">
+          <span class="prefs-label">Thickness {{ selected.thickness === undefined ? "auto" : `${selected.thickness} mm` }}</span>
           <input
             class="sm-slider"
             data-field="thickness"
             type="range" min="0.5" max="50" step="0.5"
-            :value="finishOf(selected).thickness"
+            :value="selected.thickness ?? FALLBACK_THICKNESS"
             @input="set('thickness', ($event.target as HTMLInputElement).value)"
           />
-        </label>
+          <button
+            v-if="selected.thickness !== undefined"
+            class="rd-chip"
+            data-field="thickness-auto"
+            @click="set('thickness', '')"
+          >Auto</button>
+        </div>
         <label class="prefs-row">
           <span class="prefs-label">Dispersion</span>
           <input
@@ -646,7 +657,7 @@ async function doImport() {
             @input="set('dispersion', ($event.target as HTMLInputElement).value)"
           />
         </label>
-        <div v-if="finishOf(selected).dispersion > 0 && finishOf(selected).thickness < 10" class="sm-hint">
+        <div v-if="finishOf(selected).dispersion > 0 && (selected.thickness ?? Infinity) < 10" class="sm-hint">
           Dispersion fans the colours out over the distance light travels, raise Thickness to see it.
         </div>
         <div class="prefs-row">

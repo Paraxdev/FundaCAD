@@ -9,6 +9,7 @@ import { gridStep } from "../sketch/planeGrid";
 import { isRenderLowPower, setRenderLowPower } from "./render";
 import { composerClearColor, DISPLAY_COLOR_GLSL, displayColorUniforms, followComposer, setComposing, thresholdAboveGround } from "./composerColor";
 import { BACKGROUND_COLOR, bloomSettings, renderPrefs } from "../ui/renderPrefs";
+import { GlassBackPass, glassBodyCount } from "./glassThickness";
 import { POTATO_PIXEL_RATIO, PotatoDraw } from "./potato";
 import { isSoftwareRendererName, setSoftwareRenderer } from "../ui/glassBlur";
 import { buildRoom, disposeRoom } from "./environments";
@@ -456,6 +457,7 @@ export class PostChain {
     OutputPass: typeof import("three/examples/jsm/postprocessing/OutputPass.js").OutputPass;
   } | null = null;
   private potato: PotatoDraw | null = null;
+  private glassPass: GlassBackPass | null = null;
   private motionDraw: PotatoDraw | null = null;
   private size = new THREE.Vector2(1, 1);
   private composerRatio = 0;
@@ -537,6 +539,20 @@ export class PostChain {
       (this.motionDraw ??= new PotatoDraw(true)).render(this.renderer, this.scene, camera);
       return;
     }
+    let glass = false;
+    if (glassBodyCount() > 0) glass = (this.glassPass ??= new GlassBackPass()).begin(this.renderer, camera);
+    else if (this.glassPass) {
+      this.glassPass.dispose();
+      this.glassPass = null;
+    }
+    try {
+      this.renderFull(camera);
+    } finally {
+      if (glass) this.glassPass!.end();
+    }
+  }
+
+  private renderFull(camera: THREE.Camera) {
     const want = this.wanted();
     if (!want.bloom && !want.blur) {
       this.renderer.render(this.scene, camera);

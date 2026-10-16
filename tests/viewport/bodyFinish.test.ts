@@ -79,7 +79,7 @@ describe("BodyFinishLayer peek", () => {
 });
 
 // One case per field: a field missing from a key makes its edit a silent no op.
-const OPTICS: Partial<BodyFinish>[] = [
+const OPTICS: (Partial<Omit<BodyFinish, "thickness">> & { thickness?: number })[] = [
   { ior: 2.42 }, { thickness: 20 }, { dispersion: 5 }, { attenuationColor: "#2a8f6a" },
   { attenuationDistance: 15 }, { iridescence: 0.6 }, { specularColor: "#ffd0a0" },
 ];
@@ -112,7 +112,7 @@ describe("glass and thin film reach the screen", () => {
     expect(m.transparent).toBe(false);
   });
 
-  it("keeps an old glass at the look it always had", () => {
+  it("falls back to the old 3 mm when it is not given the body", () => {
     const m = new THREE.MeshPhysicalMaterial();
     applyGlassLook(m, glass, false);
     expect([m.ior, m.thickness, m.dispersion, m.attenuationDistance]).toEqual([1.5, 3, 0, Infinity]);

@@ -104,7 +104,8 @@ const check = (name, ok, detail) => {
     const b = window.viewport.bodyMeshes.find((x) => x.id === "body1");
     const m = Array.isArray(b.mesh.material) ? b.mesh.material[0] : b.mesh.material;
     return {
-      ior: m.ior, thickness: m.thickness, dispersion: m.dispersion, transmission: m.transmission,
+      ior: m.ior, thickness: +m.thickness.toFixed(3), dispersion: m.dispersion, transmission: m.transmission,
+      auto: String(m.customProgramCacheKey?.() ?? "").includes("glass-auto"),
       transparent: m.transparent, attenuation: m.attenuationColor?.getHexString(), distance: m.attenuationDistance,
     };
   });
@@ -157,8 +158,9 @@ const check = (name, ok, detail) => {
   }, [field, v]);
 
   const old = await glassMat();
-  check("an old glass keeps IOR 1.5 and 3 mm", old.ior === 1.5 && old.thickness === 3 && old.dispersion === 0
-    && old.transmission > 0, JSON.stringify(old));
+  // The 40 x 24 x 40 block: 2 * volume / area is 10.909 mm, the per pixel pass measures the rest.
+  check("a glass with no thickness measures it from the body", old.ior === 1.5 && old.thickness === 10.909
+    && old.auto && old.dispersion === 0 && old.transmission > 0, JSON.stringify(old));
   await shot("glass_default");
 
   // --- IOR through the preset chips -------------------------------------------
@@ -179,6 +181,12 @@ const check = (name, ok, detail) => {
   const d5 = await shot("t20_dispersion_5");
   const m5 = await glassMat();
   check("sliders set thickness 20 and dispersion 5", m5.thickness === 20 && m5.dispersion === 5, JSON.stringify(m5));
+  await page.click('[data-field="thickness-auto"]');
+  await page.waitForTimeout(300);
+  const reset = await glassMat();
+  check("Auto puts the measured thickness back", reset.thickness === 10.909 && reset.auto
+    && !(await page.$('[data-field="thickness-auto"]')), JSON.stringify(reset));
+  await slide("thickness", 20);
   const dDisp = await diff(d0, d5);
   check("dispersion 0 to 5 visibly splits the colours", dDisp.meanAbs > 2 && dDisp.changed > 1000, JSON.stringify(dDisp));
 

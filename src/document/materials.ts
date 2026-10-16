@@ -92,8 +92,8 @@ export interface MaterialDef {
   /** Index of refraction of a see-through finish, 1 (air) to 2.5. Water 1.33,
    *  glass 1.5, diamond 2.42. */
   ior?: number;
-  /** mm of material light travels through on a see-through finish. Refraction,
-   *  tint and dispersion all grow with it, a few mm reads as a window pane. */
+  /** mm of material light travels through on a see-through finish, an override.
+   *  Absent is auto: the viewport measures it from the body per pixel. */
   thickness?: number;
   /** "#rrggbb" colour light turns into as it travels through, the green of a
    *  thick bottle. Absent is clear. */
@@ -123,7 +123,7 @@ export interface MaterialDef {
  *  its finish" the same picture instead of two nearly identical ones. */
 export const FINISH = {
   metalness: 0.1, roughness: 0.55, opacity: 1, emissive: 0, clearcoat: 0,
-  ior: 1.5, thickness: 3, attenuationDistance: 0, dispersion: 0, iridescence: 0,
+  ior: 1.5, thickness: "auto", attenuationDistance: 0, dispersion: 0, iridescence: 0,
 } as const;
 
 /** The four numbers the renderer wants, never undefined, so the render path has
@@ -136,7 +136,7 @@ export interface BodyFinish {
   emissive: number;
   clearcoat: number;
   ior: number;
-  thickness: number;
+  thickness: number | "auto";
   attenuationDistance: number;
   dispersion: number;
   iridescence: number;
@@ -244,16 +244,16 @@ export const STARTER_LIBRARY: readonly MaterialDef[] = Object.freeze([
   { id: "m-wood", name: "Wood", color: "#9a6b3f", metalness: 0.0, roughness: 0.8 },
   { id: "m-glass", name: "Glass", color: "#cfe4ee", metalness: 0.0, roughness: 0.05, opacity: 0.25 },
   // Glass family: frosted is rough glass, tinted takes its colour from depth
-  // rather than from its surface, and diamond is thick enough for its
-  // dispersion to fan the colours out.
+  // rather than from its surface, and diamond fans the colours out. Thickness is
+  // left auto on all of them, the body says how deep light travels.
   { id: "m-glass-frosted", name: "Glass, frosted", color: "#e6eef2", metalness: 0.0, roughness: 0.5, opacity: 0.3 },
   {
     id: "m-glass-tinted", name: "Glass, tinted", color: "#d8efe6", metalness: 0.0, roughness: 0.05, opacity: 0.2,
-    thickness: 12, attenuationColor: "#2a8f6a", attenuationDistance: 20,
+    attenuationColor: "#2a8f6a", attenuationDistance: 20,
   },
   {
     id: "m-diamond", name: "Diamond", color: "#f4f8fb", metalness: 0.0, roughness: 0, opacity: 0.1,
-    ior: 2.42, thickness: 12, dispersion: 5,
+    ior: 2.42, dispersion: 5,
   },
   { id: "m-acrylic", name: "Acrylic, clear", color: "#dfeaf0", metalness: 0.0, roughness: 0.15, opacity: 0.45 },
   // The one entry that is not a material you could hold: a lit indicator. It is
@@ -321,7 +321,8 @@ export function normalizeMaterial(raw: unknown, index = 0): MaterialDef | null {
   const dispersion = clampRange(r["dispersion"], 0, 10);
   const iridescence = clamp01(r["iridescence"]);
   if (ior !== undefined && ior !== FINISH.ior) out.ior = ior;
-  if (thickness !== undefined && thickness !== FINISH.thickness) out.thickness = thickness;
+  // Kept whatever its value, a stored number is an override and absent is auto.
+  if (thickness !== undefined) out.thickness = thickness;
   const attenuationColor = asHex(r["attenuationColor"]);
   if (attenuationColor) out.attenuationColor = attenuationColor;
   if (attenuationDistance !== undefined && attenuationDistance !== FINISH.attenuationDistance) {
