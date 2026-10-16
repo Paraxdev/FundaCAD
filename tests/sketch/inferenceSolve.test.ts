@@ -119,3 +119,51 @@ describe("recorded relations hold after an edit", () => {
     expect(Math.abs(perp(c.x, c.y, byId(r.entities, "L2")) - c.r)).toBeLessThan(1e-6);
   });
 });
+
+describe("menu relations the solver holds", () => {
+  const pt = (id: string, x: number, y: number): ResolvedEntity => ({ type: "point", id, x, y });
+  const at = (ents: ResolvedEntity[], id: string) => { const e = byId(ents, id); if (e.type !== "point") throw new Error("point"); return e; };
+
+  it("two points aligned horizontally, then vertically, share a y, then an x", async () => {
+    const ents = [pt("P", 0, 0), pt("Q", 30, 5)];
+    const free = await compileAndSolve(ents, []);
+    const h = await compileAndSolve(ents, [{ type: "horizontalPoints", e1: "P", p1: 0, e2: "Q", p2: 0 }]);
+    expect(h.ok).toBe(true);
+    expect(h.dof).toBe(free.dof - 1);
+    expect(Math.abs(at(h.entities, "P").y - at(h.entities, "Q").y)).toBeLessThan(1e-9);
+    const v = await compileAndSolve(ents, [{ type: "verticalPoints", e1: "P", p1: 0, e2: "Q", p2: 0 }]);
+    expect(Math.abs(at(v.entities, "P").x - at(v.entities, "Q").x)).toBeLessThan(1e-9);
+    expect(v.overDefined).toEqual([]);
+  });
+
+  it("a point held on a rectangle side, and a circle tangent to another side", async () => {
+    const ents: ResolvedEntity[] = [
+      { type: "rectangle", id: "Q", x: 0, y: 0, width: 20, height: 10 },
+      pt("P", 4, -8),
+      { type: "circle", id: "C", x: 30, y: 0, radius: 3 },
+    ];
+    const r = await compileAndSolve(ents, [
+      { type: "pointOnCurve", e: "P", p: 0, curve: "Q~0" },
+      { type: "tangent2", a: "Q~1", b: "C" },
+    ]);
+    expect(r.ok).toBe(true);
+    expect(r.conflicts).toEqual([]);
+    const q = byId(r.entities, "Q"), c = byId(r.entities, "C");
+    if (q.type !== "rectangle" || c.type !== "circle") throw new Error("shape");
+    expect(Math.abs(at(r.entities, "P").y - (q.y - q.height / 2))).toBeLessThan(1e-6);
+    expect(Math.abs(Math.abs(c.x - (q.x + q.width / 2)) - c.radius)).toBeLessThan(1e-6);
+  });
+
+  it("a rectangle corner, a circle centre and a point each snap with their point index", () => {
+    const ents: ResolvedEntity[] = [
+      { type: "rectangle", id: "Q", x: 0, y: 0, width: 20, height: 10 },
+      { type: "circle", id: "C", x: 40, y: 0, radius: 3 },
+      pt("P", 60, 0),
+    ];
+    const cand = candidatesFromEntities(ents);
+    const refAt = (x: number, y: number) => snap(new THREE.Vector2(x, y), cand, toScreen, 0).ref;
+    expect(refAt(10.1, 5.1)).toEqual({ entity: "Q", at: 2 });
+    expect(refAt(40.1, 0.1)).toEqual({ entity: "C", at: 0 });
+    expect(refAt(60.1, 0)).toEqual({ entity: "P", at: 0 });
+  });
+});

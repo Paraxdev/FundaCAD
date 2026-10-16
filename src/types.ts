@@ -213,6 +213,8 @@ export type SketchConstraint =
   | { type: "pointOnCurve"; e: string; p: number; curve: string }
   // symmetric: two endpoints mirror across a line (the symmetry axis)
   | { type: "symmetric"; e1: string; p1: number; e2: string; p2: number; line: string }
+  // horizontalPoints/verticalPoints: two points share a y (or an x), same `p` semantics as p2pDistance
+  | { type: "horizontalPoints" | "verticalPoints"; e1: string; p1: number; e2: string; p2: number }
   // angle: driving included angle (DEGREES) between two lines (solver works in radians)
   // Without `rays`, `value` is the signed angle from l1's direction to l2's (older dims).
   // With `rays`, l1's and l2's directions times rays[0] and rays[1] bound the shown wedge,

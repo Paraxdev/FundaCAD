@@ -51,7 +51,7 @@ import { tooEdgeOn } from "./planeGraze";
 import { toast } from "../ui/toast";
 import { contextMenu, dismissContextMenu, type CtxItem } from "../ui/menu";
 import { dropSeparatedJoins } from "./joins";
-import { ConstraintTools, CONSTRAINT_TOOLS, type ConstraintHost, type ConstraintOption } from "./constraintTools";
+import { ConstraintTools, CONSTRAINT_TOOLS, nearestRectSide, type ConstraintHost, type ConstraintOption, type ConstraintPick } from "./constraintTools";
 import { PatternFlow, PATTERN_TOOLS, ENTITY_PATTERNS, type PatternHost } from "./patternFlow";
 import { DimFlow, type DimHost } from "./dimFlow";
 import { ProjectPanel } from "./projectPanel";
@@ -213,6 +213,8 @@ export class SketchMode {
   private clickPts: THREE.Vector2[] = []; // accumulated clicks for multi-point primitives (polygon/slot/circle variants)
   private polygonSides = 6; // n for the polygon tool
   private selected = new Set<string>(); // selected entity ids (select tool)
+  /** where each entity was last clicked to select it, so a rectangle can stand for that side */
+  private pickedAt = new Map<string, THREE.Vector2>();
   /** a press on empty space that becomes a selection box once it travels */
   private boxDown: { x: number; y: number; additive: boolean; shift: boolean; base: Set<string>; region: WorldRegion | null } | null = null;
   private areaBox = new AreaBox();
@@ -528,6 +530,7 @@ export class SketchMode {
     this.modelPlaneEdges = inPlane.flatMap(({ edge, poly }) =>
       edge.body && isExactPlaneEdge(edge, meshBodies) ? [{ edge: { body: edge.body, points: edge.points }, poly }] : []);
     this.history.reset(); // fresh history per session (armed once entities load)
+    this.pickedAt = new Map();
     if (!this.fonts.length) void fetchFonts().then((f) => { this.fonts = f; });
 
     // load existing entities if editing
@@ -1516,6 +1519,7 @@ export class SketchMode {
     const idx = pickEntity(this.entities, raw, this.pickTol());
     const ent = idx >= 0 ? this.entities[idx] : undefined;
     if (!ent) return false;
+    this.pickedAt.set(ent.id, raw.clone());
     if (e.shiftKey) {
       if (!this.selected.delete(ent.id)) this.selected.add(ent.id);
     } else {
@@ -3341,10 +3345,28 @@ export class SketchMode {
    *  never drift apart (SK-3). */
   constraintOptions(at?: THREE.Vector2 | null): ConstraintOption[] {
     const ids = [...this.selected];
-    if (!ids.length || ids.length > 2) return [];
+    if (!ids.length) return [];
     const gp = at ? this.constraintTools.resolvePoint(at) : null;
-    const picks = ids.map((id) => (gp && gp.id === id ? { id, p: gp.idx } : { id }));
+    const hit = at ? this.entities[pickEntity(this.entities, at, this.pickTol())] : undefined;
+    const picks = ids.map((id): ConstraintPick => {
+      if (gp && gp.id === id) return { id, p: gp.idx };
+      const e = this.entities.find((x) => x.id === id);
+      // a rectangle stands for the side it was clicked on
+      const where = e?.type === "rectangle" ? (hit?.id === id ? at : this.pickedAt.get(id)) : null;
+      return e?.type === "rectangle" && where ? { id: `${id}~${nearestRectSide(e, where)}` } : { id };
+    });
     return this.constraintTools.applicable(picks);
+  }
+
+  /** Apply the constraint `tool` stands for to the selection, if it fits it.
+   *  False leaves the caller to arm the tool for picking instead. */
+  applySelectedConstraint(tool: SketchTool): boolean {
+    if (this.tool !== "select") return false;
+    const opt = this.constraintOptions().find((o) => o.tool === tool);
+    if (!opt) return false;
+    opt.apply();
+    this.onState?.();
+    return true;
   }
 
   /** Drop constraints on entities that are gone or the wrong type. The switch is
@@ -3379,7 +3401,8 @@ export class SketchMode {
         case "tangent": return hasLineOperand(c.line) && circleIds.has(c.circle);
         case "tangent2": return (curveIds.has(c.a) || hasLineOperand(c.a)) && (curveIds.has(c.b) || hasLineOperand(c.b));
         case "equalRadius": return roundIds.has(c.a) && roundIds.has(c.b);
-        case "coincident": return refIds.has(c.e1) && refIds.has(c.e2) && at(c.e1, c.p1) && at(c.e2, c.p2);
+        case "coincident": case "horizontalPoints": case "verticalPoints":
+          return refIds.has(c.e1) && refIds.has(c.e2) && at(c.e1, c.p1) && at(c.e2, c.p2);
         case "concentric": return roundIds.has(c.c1) && roundIds.has(c.c2);
         case "midpoint": return refIds.has(c.e) && at(c.e, c.p) && hasLineOperand(c.line);
         case "pointOnCurve": return refIds.has(c.e) && at(c.e, c.p) && (hasLineOperand(c.curve) || roundIds.has(c.curve));
@@ -3803,6 +3826,7 @@ export class SketchMode {
           return;
         }
         if (ent) {
+          this.pickedAt.set(ent.id, md.last.clone());
           if (md.shift) {
             if (!this.selected.delete(ent.id)) this.selected.add(ent.id);
           } else {
