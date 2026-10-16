@@ -113,6 +113,7 @@ fn the_extension_decides_the_format() {
         (".3dm", "3dm"),
         (".ifc", "ifc"),
         (".dxf", "dxf"),
+        (".FBX", "fbx"),
         (".DXF", "dxf"),
         (".stpz", "step"),
     ] {
