@@ -3,7 +3,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { DocumentStore } from "../../src/document/store";
 import type { GeometryBackend } from "../../src/geometry/client";
 
-import { IMPORT_EXTS, describeImportCapability, extToFormat, extToImportFormat, importedBodyCount, looksLikeContainer } from "../../src/io/files";
+import { FORMATS } from "../../src/io/exportSettings";
+import { routeDroppedName } from "../../src/io/dropRouting";
+import { IMPORT_EXTS, dialogExts, describeImportCapability, extToFormat, extToImportFormat, importedBodyCount, looksLikeContainer } from "../../src/io/files";
 
 // Both mappers are TOTAL, an unrecognised extension silently becomes "step"
 // rather than erroring. That is deliberate (the save dialog can hand back a bare
@@ -317,5 +319,38 @@ describe("importedBodyCount", () => {
     // count of 0 here would silently disable the warning for single-body files
     // and, worse, misreport the document.
     expect(importedBodyCount({})).toBe(1);
+  });
+});
+
+describe("extensions in any case", () => {
+  it("every import extension maps the same in upper, lower and mixed case", () => {
+    for (const ext of IMPORT_EXTS) {
+      const want = extToImportFormat(`/tmp/a.${ext}`);
+      expect(extToImportFormat(`/tmp/A.${ext.toUpperCase()}`)).toBe(want);
+      expect(extToImportFormat(`/tmp/A.${ext[0]!.toUpperCase()}${ext.slice(1)}`)).toBe(want);
+      expect(routeDroppedName(`/tmp/A.${ext.toUpperCase()}`)).toBe("import");
+    }
+    expect(extToImportFormat("C:\in\PART.STP")).toBe("step");
+    expect(extToImportFormat("C:\in\Part.Stp.GZ")).toBe("step");
+    expect(extToImportFormat("part.STEP.GZ")).toBe("step");
+    expect(extToImportFormat("PART.FCSTD")).toBe("fcstd");
+  });
+
+  it("lists import extensions once, in lower case", () => {
+    expect(IMPORT_EXTS.filter((e) => e !== e.toLowerCase())).toEqual([]);
+  });
+
+  it("offers dialogs every extension in lower and upper case, and FreeCAD's own spelling", () => {
+    const exts = dialogExts(IMPORT_EXTS);
+    for (const e of ["stp", "STP", "step", "STEP", "STL", "3DM", "IFC", "FCSTD", "FCStd", "fcstd"]) expect(exts).toContain(e);
+    expect(new Set(exts).size).toBe(exts.length);
+  });
+
+  it("the STEP export dialog offers .step and .stp in both cases and keeps .step as the default name", () => {
+    const step = FORMATS.find((f) => f.value === "step")!;
+    expect(step.ext).toBe("step");
+    expect(dialogExts(step.exts)).toEqual(["step", "STEP", "stp", "STP"]);
+    expect(step.label).toContain("*.stp");
+    expect(extToFormat("C:\out\Bracket.STP")).toBe("step");
   });
 });
