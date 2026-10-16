@@ -8,6 +8,7 @@ import { SAMPLE_CAP, type TraceLook, type TraceScene, type TracerBackend } from 
 import { repackInPlace, type SwappableBvhData } from "./bvhSwap";
 import { traceCameraFor, type TraceLens } from "./camera";
 import { backgroundTexture } from "./environment";
+import { AtrousFilter, filterMix } from "./atrous";
 import { FinalDenoise } from "./denoise";
 import { OidnPass, type OidnLike } from "./oidnPass";
 import smallWeights from "./weights/rt_hdr_calb_cnrm_small.tza?url";
@@ -15,6 +16,7 @@ import largeWeights from "./weights/rt_hdr_calb_cnrm_large.tza?url";
 
 type WebGpuModule = typeof import("three/webgpu");
 type TracerModule = typeof import("three-gpu-pathtracer/webgpu");
+type TslModule = typeof import("three/tsl");
 
 const MAX_BOUNCES = 6;
 
@@ -42,6 +44,12 @@ export class WebGpuTracer implements TracerBackend {
   private faultCbs: ((why: string) => void)[] = [];
   private disposed = false;
   private tracerMod: TracerModule | null = null;
+  private tsl: TslModule | null = null;
+  private atrous: AtrousFilter | null = null;
+  private guides: THREE.RenderTarget | null = null;
+  private guidesStale = true;
+  private glassMask: THREE.Material | null = null;
+  private gpu: WebGpuModule | null = null;
   /** The screen holds a denoised image that the samples underneath no longer match. */
   private showsDenoise = false;
   private initUNetFromURL: unknown = null;
@@ -64,8 +72,12 @@ export class WebGpuTracer implements TracerBackend {
   }
 
   async init() {
-    const [gpu, tracerMod, oidnWeb] = await Promise.all([import("three/webgpu"), import("three-gpu-pathtracer/webgpu"), import("oidn-web")]);
+    const [gpu, tracerMod, oidnWeb, tsl] = await Promise.all([
+      import("three/webgpu"), import("three-gpu-pathtracer/webgpu"), import("oidn-web"), import("three/tsl"),
+    ]);
     this.tracerMod = tracerMod;
+    this.tsl = tsl;
+    this.gpu = gpu;
     this.initUNetFromURL = oidnWeb.initUNetFromURL;
     // Above the 128 MiB floor when the adapter offers more, so a model of a few
     // million triangles fits its attribute buffer.
@@ -102,6 +114,11 @@ export class WebGpuTracer implements TracerBackend {
     t.minSamples = 0;
     t.fadeDuration = 0;
     this.tracer = t;
+    this.atrous = new AtrousFilter(r as unknown as ConstructorParameters<typeof AtrousFilter>[0], (tex, w, h) => {
+      const e = new gpu.ExternalTexture(tex as never) as unknown as THREE.Texture;
+      e.image = { width: w, height: h } as never;
+      return e;
+    });
     this.setDenoise(this.level);
   }
 
@@ -145,6 +162,65 @@ export class WebGpuTracer implements TracerBackend {
       this.showsDenoise = false;
     }
     return step.more;
+  }
+
+  /** Albedo, and the view normal with view depth in alpha, for the a-trous
+   *  stops. Drawn once per restart, the scene is still while it traces. Glass
+   *  is drawn over it as no surface, so it stays as traced. */
+  private renderGuides(w: number, h: number): THREE.RenderTarget | null {
+    const tsl = this.tsl;
+    if (!tsl || !this.camera) return null;
+    if (!this.guides) {
+      this.guides = new THREE.RenderTarget(w, h, {
+        count: 2, type: THREE.HalfFloatType, minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter,
+      });
+      // The MRT keys are matched against these names.
+      this.guides.textures[0]!.name = "output";
+      this.guides.textures[1]!.name = "normal";
+    }
+    const g = this.guides;
+    g.setSize(w, h);
+    const r = this.renderer as unknown as {
+      toneMapping: THREE.ToneMapping; autoClear: boolean;
+      getRenderTarget(): unknown; setRenderTarget(t: unknown): void; getMRT(): unknown; setMRT(m: unknown): void;
+      render(s: THREE.Scene, c: THREE.Camera): void;
+    };
+    const meshes: THREE.Mesh[] = [];
+    this.scene.traverse((o) => { if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh); });
+    const glassy = (m: THREE.Mesh) => ([] as THREE.Material[]).concat(m.material).some((x) =>
+      x.transparent || x.opacity < 1 || ((x as THREE.MeshPhysicalMaterial).transmission ?? 0) > 0);
+    const glass = new Set(meshes.filter(glassy));
+    const was = { target: r.getRenderTarget(), mrt: r.getMRT(), tone: r.toneMapping, auto: r.autoClear, background: this.scene.background };
+    const surfaces = tsl.mrt({
+      output: tsl.diffuseColor,
+      normal: tsl.vec4(tsl.normalView.mul(0.5).add(0.5), tsl.positionView.z.negate()),
+    });
+    surfaces.setClearColor("output", 0x000000, 0);
+    surfaces.setClearColor("normal", 0x000000, 0);
+    r.toneMapping = THREE.NoToneMapping;
+    this.scene.background = null;
+    r.setRenderTarget(g);
+    r.autoClear = true;
+    r.setMRT(surfaces);
+    const shown = meshes.map((m) => m.visible);
+    for (const m of glass) m.visible = false;
+    r.render(this.scene, this.camera);
+    if (glass.size) {
+      meshes.forEach((m, i) => (m.visible = shown[i]! && glass.has(m)));
+      this.glassMask ??= new this.gpu!.MeshBasicNodeMaterial();
+      this.scene.overrideMaterial = this.glassMask;
+      r.autoClear = false;
+      r.setMRT(tsl.mrt({ output: tsl.vec4(0), normal: tsl.vec4(0) }));
+      r.render(this.scene, this.camera);
+      this.scene.overrideMaterial = null;
+    }
+    meshes.forEach((m, i) => (m.visible = shown[i]!));
+    r.setMRT(was.mrt);
+    r.setRenderTarget(was.target);
+    r.toneMapping = was.tone;
+    r.autoClear = was.auto;
+    this.scene.background = was.background;
+    return g;
   }
 
   /** Redraws the canvas through the tracer's own blit, so tone mapping and
@@ -241,12 +317,25 @@ export class WebGpuTracer implements TracerBackend {
 
   reset() {
     this.final.reset();
+    this.guidesStale = true;
     this.tracer?.reset();
   }
 
-  renderSample(_samples: number) {
-    this.tracer?.renderSample();
+  renderSample(samples: number) {
+    if (!this.tracer) return;
+    this.tracer.renderSample();
     this.showsDenoise = false;
+    const mix = this.level === "off" || samples < 1 ? 0 : filterMix(samples, SAMPLE_CAP);
+    if (mix <= 0 || !this.atrous) return;
+    const raw = this.internals._pathTracer.outputTarget;
+    const { width, height } = raw.image as { width: number; height: number };
+    if (this.guidesStale || this.guides?.width !== width || this.guides?.height !== height) {
+      if (!this.renderGuides(width, height)) return;
+      this.guidesStale = false;
+    }
+    const g = this.guides!;
+    const filtered = this.atrous.run(raw, g.textures[0]!, g.textures[1]!, samples);
+    if (filtered) this.blit(raw, filtered, mix);
   }
 
   async samples(): Promise<number> {
@@ -268,6 +357,12 @@ export class WebGpuTracer implements TracerBackend {
     this.disposeLights();
     this.oidn?.dispose();
     this.oidn = null;
+    this.atrous?.dispose();
+    this.atrous = null;
+    this.guides?.dispose();
+    this.guides = null;
+    this.glassMask?.dispose();
+    this.glassMask = null;
     this.tracer?.dispose();
     this.renderer?.dispose();
     this.tracer = null;
