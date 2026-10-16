@@ -1077,8 +1077,9 @@ Object.assign(STILLS, {
     await ctx.still("ai-live-document", { x: 230, y: 90, width: 980, height: 330 });
   },
   async "prefs-gamepad"(ctx) {
-    await openPrefs(ctx);
-    await ctx.page.click(".prefs-nav-btn:has-text(\"Game Controller\")");
+    await openPrefs(ctx, "plugins");
+    await ctx.page.click('[data-plugin-row="FundaCAD.Gamepad"] [data-plugin-settings-toggle]');
+    await ctx.page.locator('[data-plugin-row="FundaCAD.Gamepad"]').scrollIntoViewIfNeeded();
     await sleep(600);
     await ctx.still("prefs-gamepad", await ctx.box(".prefs-panel", 6));
   },

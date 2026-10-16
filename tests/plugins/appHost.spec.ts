@@ -212,7 +212,7 @@ describe("what this host cannot do yet, it refuses by name", () => {
       // this a test of the ORDER of the op table: feature_remove comes before
       // feature_move, and would delete the feature the move then looked for.
       const s = store();
-      const b = broker(appHost({ store: s, featureTypes: () => ["box"] }));
+      const b = broker(appHost({ store: s, plugin: "A.Test", featureTypes: () => ["box"] }));
       await b.call("feature_add", { feature: { type: "box", id: "f1" } });
       await b.call("param_set", { name: "p", expr: 1 });
       const r = await b.call(op, {
@@ -276,5 +276,18 @@ describe("edits go through the store, not around it", () => {
 describe("HostRefused", () => {
   it("is an Error, so the broker turns it into a refusal rather than a crash", () => {
     expect(new HostRefused("x")).toBeInstanceOf(Error);
+  });
+});
+
+describe("settings_get", () => {
+  it("answers with the calling plugin's own settings and takes no id from it", async () => {
+    const { definePluginSettings } = await import("../../src/plugins/settings");
+    definePluginSettings("A.One", { version: 1, props: [{ key: "n", type: "number", label: "N", default: 3 }] }).set("n", 5);
+    definePluginSettings("A.Two", { version: 1, props: [{ key: "n", type: "number", label: "N", default: 7 }] });
+
+    const b = broker(appHost({ store: store(), plugin: "A.One" }));
+    expect(await b.callOrThrow("settings_get", { plugin: "A.Two" })).toEqual({ n: 5 });
+    await expect(broker(appHost({ store: store() })).callOrThrow("settings_get")).rejects.toThrow(/plugin id/);
+    expect(await broker(testHost({ settings: { n: 1 } })).callOrThrow("settings_get")).toEqual({ n: 1 });
   });
 });

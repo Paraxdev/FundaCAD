@@ -96,6 +96,8 @@ export interface TestHostOptions {
   featureTypes?: string[];
   /** What `app_info` reports. */
   appInfo?: { version: string; platform: string; arch: string };
+  /** What `settings_get` reports: the plugin's settings as a person set them. */
+  settings?: Record<string, unknown>;
 }
 
 export interface TestHost extends BrokerHost {
@@ -219,6 +221,9 @@ export function testHost(opts: TestHostOptions = {}): TestHost {
           return (
             opts.appInfo ?? { version: "0.0.0-test", platform: "test", arch: "test" }
           );
+
+        case "settings_get":
+          return structuredClone(opts.settings ?? {});
 
         case "file_pick": {
           // `null` means the person dismissed the dialog. Distinguished from

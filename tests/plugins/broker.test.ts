@@ -65,10 +65,11 @@ describe("the op table", () => {
     // argued for op by op rather than allowed to grow quietly. These four reach
     // past the window, which an MCP server does not need: it is a process on
     // the machine and can open a file by naming it, where a compute plugin
-    // cannot name anything at all.
+    // cannot name anything at all. settings_get is the fifth: an MCP client
+    // has no settings of its own in the app.
     const tools = new Set(serverTools());
     const extra = OPS.filter((op) => !tools.has(op));
-    expect([...extra].sort()).toEqual([...NATIVE_OPS].sort());
+    expect([...extra].sort()).toEqual([...NATIVE_OPS, "settings_get"].sort());
     // And they are on the same table, checked by the same broker, rather than
     // in a channel of their own. A second channel would be a second permission
     // system to keep in step with this one.

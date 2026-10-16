@@ -39,6 +39,9 @@
 // a file it never renders. Anything that drags Vue in goes there; everything
 // else goes here.
 
+import { useDialogStore } from "../stores/dialogs";
+import { pluginFocus } from "./settingsFocus";
+
 // --- the contribution table: the only way onto the app's surfaces -----------
 export {
   contribute,
@@ -143,6 +146,14 @@ export type { Command } from "../ui/commands";
 // --- remembering something ---------------------------------------------------
 /** One `fundacad.*` localStorage key, read forward through its older names. */
 export { readSetting } from "../ui/storedSetting";
+/** A plugin's own settings, drawn under its row in Preferences > Plugins. */
+export { definePluginSettings } from "./settings";
+/** Opens Preferences on the plugin's row with its settings expanded. */
+export function openPluginSettings(pluginId: string) {
+  pluginFocus.value = pluginId;
+  useDialogStore().preferences = true;
+}
+export type { PluginSettings, SettingProp, SettingValues, SettingsSchema } from "./settings";
 
 // --- showing a number --------------------------------------------------------
 /** The app's display-precision rule, so a plugin's readout rounds a length the
