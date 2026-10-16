@@ -8,13 +8,22 @@
 
 import * as THREE from "three";
 
+type ShadowMapState = Pick<THREE.WebGLShadowMap, "enabled" | "type" | "autoUpdate">;
+
 export class ShadowWatch {
   private last: number[] = [];
   private now: number[] = [];
 
-  changed(scene: THREE.Object3D): boolean {
+  gate(rendering: boolean, scene: THREE.Object3D, map: ShadowMapState): void {
+    map.autoUpdate = rendering && this.changed(scene, map);
+  }
+
+  changed(scene: THREE.Object3D, map?: ShadowMapState): boolean {
     const v = this.now;
     v.length = 0;
+    // Performance mode flips enabled; three skips the whole pass while it is
+    // off, so the maps are stale the moment it comes back on.
+    if (map) v.push(map.enabled ? 1 : 0, map.type);
     scene.updateMatrixWorld();
     scene.traverseVisible((o) => {
       if ((o as THREE.Light).isLight) {

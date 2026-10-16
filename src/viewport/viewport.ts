@@ -3911,7 +3911,7 @@ export class Viewport {
         this.scene.post.focusDistance = this.rig.active.position.distanceTo(t);
         const shadows = this.scene.renderer.shadowMap;
         // Shadows depend on the casters and the lights, never on the camera.
-        shadows.autoUpdate = this.needsRender && this.shadowWatch.changed(this.scene.scene);
+        this.shadowWatch.gate(this.needsRender, this.scene.scene, shadows);
         try {
           this.scene.post.render(this.rig.active, this.motionActive && this.motionScale < 1);
         } finally {
