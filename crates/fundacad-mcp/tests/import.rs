@@ -110,6 +110,7 @@ fn the_extension_decides_the_format() {
         (".wrl", "vrml"),
         (".x3d", "x3d"),
         (".xbf", "xbf"),
+        (".3dm", "3dm"),
         (".stpz", "step"),
     ] {
         assert_eq!(upload::import_format(&format!("part{ext}")), want, "{ext}");

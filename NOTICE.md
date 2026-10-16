@@ -46,6 +46,12 @@ distributing FundaCAD under its own terms.
   **paste**, **num_cpus** and **enum-as-inner**, MIT OR Apache-2.0; **libm**, **raw-cpuid**,
   **interpol** and **sysctl**, MIT; **defer**, MIT OR Apache-2.0; **bytemuck**, Zlib OR
   Apache-2.0 OR MIT; **byteorder**, **walkdir** and **same-file**, Unlicense OR MIT
+- **cadmpeg-codec-rhino** (the Rhino .3dm reader) with **cadmpeg-ir**, **cadmpeg-core** and
+  **cadmpeg-container**, Apache-2.0, https://github.com/cadmpeg/cadmpeg; **zstd**, **zstd-safe**
+  and **zstd-sys**, MIT OR Apache-2.0, bundling the zstd library, BSD-3-Clause,
+  https://github.com/facebook/zstd; **zip**, **serde-value**, **ordered-float**, MIT;
+  **roxmltree**, **typed-path**, **sha1**, **sha2**, **digest**, **hybrid-array**, **const-oid**,
+  **block-buffer**, **crypto-common**, **jobserver** and **pkg-config**, MIT OR Apache-2.0
 
 ## Written offer (LGPL source availability)
 

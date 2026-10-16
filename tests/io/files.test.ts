@@ -49,6 +49,8 @@ describe("extToImportFormat", () => {
     expect(extToImportFormat("/tmp/a.wrl")).toBe("vrml");
     expect(extToImportFormat("/tmp/a.x3d")).toBe("x3d");
     expect(extToImportFormat("/tmp/a.xbf")).toBe("xbf");
+    expect(extToImportFormat("/tmp/a.3dm")).toBe("3dm");
+    expect(extToImportFormat("/tmp/Logo.3DM")).toBe("3dm");
   });
 
   it("reads a gzip copy as the format inside it", () => {
