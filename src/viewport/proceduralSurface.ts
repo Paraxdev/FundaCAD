@@ -38,10 +38,12 @@ export function graphKey(g: SurfaceGraph | undefined): string {
 
 // --- shared GLSL: the generator functions, parameterised so the picker (via
 // uniforms) and the graph (via baked literals) both call the same code. -------
-const SURF_FUNCS = /* glsl */`
+const SURF_VARYINGS = /* glsl */`
 varying vec3 vSurfWPos;
 varying vec3 vSurfWNorm;
+`;
 
+const SURF_FUNCS = /* glsl */`
 float sHash(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
 float sNoise(vec3 x){
   vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
@@ -177,7 +179,7 @@ float sPickHeight(vec3 wp, vec3 wn){ return sGen(wp, wn, uSurfKind, uSurfScale, 
     Object.assign(shader.uniforms, uniforms);
     shader.vertexShader = injectVarying(shader.vertexShader);
     shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", "#include <common>\n" + SURF_FUNCS + UNIFORMS)
+      .replace("#include <common>", "#include <common>\n" + SURF_VARYINGS + SURF_FUNCS + UNIFORMS)
       .replace(
         "#include <color_fragment>",
         "#include <color_fragment>\n  float sH = sPickHeight(vSurfWPos, vSurfWNorm);\n  diffuseColor.rgb = mix(diffuseColor.rgb, uSurfColor, uSurfColorAmt * sH);",
@@ -215,7 +217,7 @@ export function applySurfaceGraph(mat: THREE.Material, graph: SurfaceGraph | und
   m.onBeforeCompile = (shader) => {
     shader.vertexShader = injectVarying(shader.vertexShader);
     shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", "#include <common>\n" + SURF_FUNCS + STRUCT_GLSL + compiled)
+      .replace("#include <common>", "#include <common>\n" + SURF_VARYINGS + SURF_FUNCS + STRUCT_GLSL + compiled)
       .replace(
         "#include <color_fragment>",
         "#include <color_fragment>\n  SurfOut sO = sGraph(vSurfWPos, vSurfWNorm);\n  diffuseColor.rgb = mix(diffuseColor.rgb, sO.tint, sO.tintAmt);",
@@ -231,6 +233,46 @@ export function applySurfaceGraph(mat: THREE.Material, graph: SurfaceGraph | und
   };
   setProgramKey(m, key);
   m.needsUpdate = true;
+}
+
+export interface SurfaceBakeShader {
+  key: string;
+  /** Defines `SurfOut surfBake(vec3 wp, vec3 wn)`. */
+  glsl: string;
+  uniforms: Record<string, THREE.IUniform>;
+}
+
+/** The surface a material carries, as a function of world point and normal
+ *  for a bake pass, built from the same pieces the Realtime shader uses. */
+export function surfaceBakeShader(mat: THREE.Material): SurfaceBakeShader | null {
+  const m = mat as Physical;
+  const key = m.userData.surfKey;
+  if (!key) return null;
+  if (key.startsWith("g:")) {
+    const graph = JSON.parse(key.slice(2)) as SurfaceGraph;
+    return {
+      key,
+      glsl: SURF_FUNCS + STRUCT_GLSL + compileGraph(graph) + "SurfOut surfBake(vec3 wp, vec3 wn){ return sGraph(wp, wn); }\n",
+      uniforms: {},
+    };
+  }
+  const u = m.userData.surfUniforms;
+  if (!u) return null;
+  return {
+    key,
+    glsl: SURF_FUNCS + STRUCT_GLSL + /* glsl */`
+uniform int uSurfKind; uniform float uSurfScale; uniform float uSurfAmount; uniform float uSurfAngle;
+uniform vec3 uSurfColor; uniform float uSurfColorAmt;
+SurfOut surfBake(vec3 wp, vec3 wn){
+  float h = sGen(wp, wn, uSurfKind, uSurfScale, uSurfAngle);
+  SurfOut o;
+  o.rough = h; o.roughAmt = uSurfAmount; o.bump = 0.0; o.bumpAmt = 0.0;
+  o.tint = uSurfColor; o.tintAmt = uSurfColorAmt * h;
+  return o;
+}
+`,
+    uniforms: u,
+  };
 }
 
 const STRUCT_GLSL = /* glsl */`

@@ -37,19 +37,52 @@ export function mirrorBody(src: THREE.Mesh, withIndex = true): THREE.Mesh {
   return m;
 }
 
-export function copyMirrorColors(mirror: THREE.Mesh, src: THREE.Mesh) {
-  const base = (src.userData.owner as Owned).baseColors;
+/** A body's procedural surfaces averaged per vertex: `slot` is -1 where no
+ *  surface reaches, `tint` and `amount` blend over the base colour like the
+ *  Realtime shader does, `rough` is each baked slot's mean roughness offset. */
+export interface SurfaceBake {
+  slot: Int16Array;
+  tint: Float32Array;
+  amount: Float32Array;
+  rough: Map<number, number>;
+}
+
+export type SurfaceBaker = (src: THREE.Mesh) => SurfaceBake | null;
+
+export function copyMirrorColors(mirror: THREE.Mesh, src: THREE.Mesh, bake: SurfaceBake | null = null) {
+  const owned = (src.userData.owner as Owned).baseColors;
   const count = src.geometry.getAttribute("position").count;
+  const base = owned && owned.length === count * 3 ? owned : null;
   const g = mirror.geometry;
-  if (!base || base.length !== count * 3) {
+  if (bake && bake.slot.length !== count) bake = null;
+  mirror.userData.bake = bake ? bake.rough : undefined;
+  if (!base && !bake) {
     if (g.getAttribute("color")) g.deleteAttribute("color");
     return;
   }
   const c = g.getAttribute("color") as THREE.BufferAttribute | undefined;
-  if (c && c.array.length === base.length) {
-    (c.array as Float32Array).set(base);
-    c.needsUpdate = true;
-  } else g.setAttribute("color", new THREE.BufferAttribute(base.slice(), 3));
+  const out = c && c.array.length === count * 3 ? c.array as Float32Array : new Float32Array(count * 3);
+  if (base) out.set(base);
+  else out.fill(1);
+  if (bake) composeBake(out, bake, Array.isArray(src.material) ? src.material : [src.material]);
+  if (c && c.array === out) c.needsUpdate = true;
+  else g.setAttribute("color", new THREE.BufferAttribute(out, 3));
+}
+
+/** A baked slot's material colour moves into its vertices, so the slot's
+ *  traced material is white and mix(colour * base, tint, amount) is exact. */
+function composeBake(out: Float32Array, bake: SurfaceBake, mats: THREE.Material[]) {
+  for (let v = 0; v < bake.slot.length; v++) {
+    const k = bake.slot[v]!;
+    if (k < 0) continue;
+    const col = (mats[k] as Partial<THREE.MeshStandardMaterial>)?.color;
+    const rgb = col ? [col.r, col.g, col.b] : [1, 1, 1];
+    const a = bake.amount[v]!;
+    for (let i = 0; i < 3; i++) {
+      const own = out[v * 3 + i]! * rgb[i]!;
+      out[v * 3 + i] = own + (bake.tint[v * 3 + i]! - own) * a;
+    }
+  }
 }
 
 /** In place where the slot count is unchanged, so the tracer's material map
@@ -58,14 +91,23 @@ export function refreshMirrorMaterials(mirror: THREE.Mesh, src: THREE.Mesh) {
   const colors = !!mirror.geometry.getAttribute("color");
   const from = Array.isArray(src.material) ? src.material : [src.material];
   const had = Array.isArray(mirror.material) ? mirror.material : [mirror.material];
+  const baked = mirror.userData.bake as Map<number, number> | undefined;
+  const fit = (m: THREE.MeshPhysicalMaterial, i: number) => {
+    const off = baked?.get(i);
+    if (off === undefined) return m;
+    m.color.setRGB(1, 1, 1);
+    m.roughness = Math.min(1, Math.max(0.04, m.roughness + off));
+    return m;
+  };
   if (had.length !== from.length || !had.every((m) => m instanceof THREE.MeshPhysicalMaterial)) {
     had.forEach((m) => m.dispose());
-    const made = from.map((m) => traceMaterialFrom(m, colors));
+    const made = from.map((m, i) => fit(traceMaterialFrom(m, colors), i));
     mirror.material = Array.isArray(src.material) ? made : made[0]!;
     return;
   }
-  had.forEach((m, i) => traceMaterialFrom(from[i]!, colors, m as THREE.MeshPhysicalMaterial));
+  had.forEach((m, i) => fit(traceMaterialFrom(from[i]!, colors, m as THREE.MeshPhysicalMaterial), i));
 }
+
 export function countTriangles(bodies: THREE.Mesh[]): number {
   let n = 0;
   for (const m of bodies) {
@@ -116,9 +158,20 @@ export function materialSignature(bodies: THREE.Mesh[]): string {
   return bodies.map((b) => (Array.isArray(b.material) ? b.material : [b.material]).map(traceMaterialKey).join("+")).join("|");
 }
 
-/** highlight.setBase bumps baseVersion whenever it rewrites the base colours. */
+/** highlight.setBase bumps baseVersion whenever it rewrites the base colours;
+ *  a procedural surface or the colour under it changes the baked colours. */
+export function bodyColorKey(b: THREE.Mesh): string {
+  const mats = Array.isArray(b.material) ? b.material : [b.material];
+  let k = String((b.userData.owner as Owned).baseVersion ?? 0);
+  mats.forEach((m, i) => {
+    const surf = m.userData.surfKey as string | undefined;
+    if (surf) k += `;${i}:${(m as Partial<THREE.MeshStandardMaterial>).color?.getHexString()}:${surf}`;
+  });
+  return k;
+}
+
 export function colorSignature(bodies: THREE.Mesh[]): string {
-  return bodies.map((b) => (b.userData.owner as Owned).baseVersion ?? 0).join(",");
+  return bodies.map(bodyColorKey).join(",");
 }
 
 function sampleSum(a: ArrayLike<number> | undefined): number {

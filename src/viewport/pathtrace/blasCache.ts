@@ -5,7 +5,7 @@
 
 import * as THREE from "three";
 import { MeshBVH, SAH } from "three-mesh-bvh";
-import { copyMirrorColors, mirrorBody, refreshMirrorMaterials } from "./mirror";
+import { bodyColorKey, copyMirrorColors, mirrorBody, refreshMirrorMaterials, type SurfaceBaker } from "./mirror";
 
 export interface BlasJob {
   position: Float32Array;
@@ -41,8 +41,6 @@ export const mainThreadBuilder: BlasBuilder = { build: buildBlas, dispose() {} }
 interface Owner {
   id?: string;
   etag?: string;
-  baseColors?: Float32Array;
-  baseVersion?: number;
 }
 
 export function blasKey(m: THREE.Mesh): string {
@@ -75,7 +73,7 @@ interface Entry {
   src: THREE.Mesh;
   mirror: THREE.Mesh;
   ready: boolean;
-  baseVersion: number;
+  colorKey: string;
 }
 
 export interface CacheSync {
@@ -130,19 +128,23 @@ export class BlasCache {
     for (const e of this.entries.values()) refreshMirrorMaterials(e.mirror, e.src);
   }
 
-  /** Only bodies whose base colours were rewritten since their copy was made. */
-  syncColors() {
+  /** Only bodies whose base colours or surfaces changed since their copy was
+   *  made; a new body with a surface is baked here, mirrorBody has no renderer. */
+  syncColors(bake?: SurfaceBaker) {
     for (const e of this.entries.values()) {
-      const v = (e.src.userData.owner as Owner).baseVersion ?? 0;
-      if (v === e.baseVersion) continue;
-      e.baseVersion = v;
-      copyMirrorColors(e.mirror, e.src);
+      const k = bodyColorKey(e.src);
+      if (k === e.colorKey) continue;
+      e.colorKey = k;
+      const mats = Array.isArray(e.src.material) ? e.src.material : [e.src.material];
+      const surfaced = mats.some((m) => m.userData.surfKey);
+      copyMirrorColors(e.mirror, e.src, bake && surfaced ? bake(e.src) : null);
+      refreshMirrorMaterials(e.mirror, e.src);
     }
   }
 
   private add(key: string, src: THREE.Mesh): Entry {
     const mirror = mirrorBody(src, false);
-    const e: Entry = { src, mirror, ready: false, baseVersion: (src.userData.owner as Owner).baseVersion ?? 0 };
+    const e: Entry = { src, mirror, ready: false, colorKey: "" };
     this.entries.set(key, e);
     const g = src.geometry;
     const job: BlasJob = {
