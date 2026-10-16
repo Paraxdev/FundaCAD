@@ -59,3 +59,48 @@ describe("ShadowWatch", () => {
     expect(w.changed(s)).toBe(true);
   });
 });
+
+describe("ShadowWatch.gate", () => {
+  const map = () => ({ enabled: true, type: THREE.PCFSoftShadowMap as THREE.ShadowMapType, autoUpdate: true });
+
+  it("redraws only on a frame that renders and has a change", () => {
+    const { s, body } = scene();
+    const w = new ShadowWatch();
+    const m = map();
+    w.gate(true, s, m);
+    expect(m.autoUpdate).toBe(true);
+    w.gate(true, s, m);
+    expect(m.autoUpdate).toBe(false);
+    body.position.x = 3;
+    w.gate(false, s, m);
+    expect(m.autoUpdate).toBe(false);
+    w.gate(true, s, m);
+    expect(m.autoUpdate).toBe(true);
+  });
+
+  it("redraws when performance mode turns shadows back on, even if a caster moved while they were off", () => {
+    const { s, body } = scene();
+    const w = new ShadowWatch();
+    const m = map();
+    w.gate(true, s, m);
+    w.gate(true, s, m);
+    m.enabled = false;
+    body.position.x = 4;
+    w.gate(true, s, m);
+    w.gate(true, s, m);
+    m.enabled = true;
+    w.gate(true, s, m);
+    expect(m.autoUpdate).toBe(true);
+  });
+
+  it("redraws when the shadow map type changes", () => {
+    const { s } = scene();
+    const w = new ShadowWatch();
+    const m = map();
+    w.gate(true, s, m);
+    w.gate(true, s, m);
+    m.type = THREE.VSMShadowMap;
+    w.gate(true, s, m);
+    expect(m.autoUpdate).toBe(true);
+  });
+});
