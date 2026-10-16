@@ -11,6 +11,9 @@ import { TraceGeneration, traceState, type TraceInputs, type TraceState } from "
 /** No sample this long after the tracer started reads as a hung GPU. */
 export const FIRST_SAMPLE_TIMEOUT_MS = 10_000;
 
+/** Out of Path traced this long frees the WebGPU device and the mirrored scene. */
+export const IDLE_DISPOSE_MS = 60_000;
+
 export interface CrashGuard {
   arm(): Promise<void>;
   clear(): void;
@@ -56,6 +59,7 @@ export class PathTraceHost {
   private sawSample = false;
   private size = { w: 0, h: 0, ratio: 0 };
   private refusedSig = "";
+  private offSince = 0;
   /** The pending arm write, so a clear always lands after it. */
   private guardWrite: Promise<void> | null = null;
 
@@ -77,7 +81,10 @@ export class PathTraceHost {
       this.state = s;
       this.onStateChange?.(s);
     }
-    if (s === "off") this.refusedSig = "";
+    if (s === "off") {
+      this.refusedSig = "";
+      this.idle(f.now);
+    } else this.offSince = 0;
     if (s !== "trace" && s !== "done") {
       this.traceSince = 0;
       if (!this.sawSample) this.disarm();
@@ -115,6 +122,15 @@ export class PathTraceHost {
     this.samples = 0;
     this.gen.bump();
     this.backend?.reset();
+  }
+
+  private idle(now: number) {
+    if (!this.backend) return;
+    if (!this.offSince) this.offSince = now;
+    else if (now - this.offSince > IDLE_DISPOSE_MS) {
+      this.offSince = 0;
+      this.dispose();
+    }
   }
 
   private arm(): Promise<void> {
@@ -247,7 +263,11 @@ export class PathTraceHost {
   }
 
   dispose() {
-    this.backend?.dispose();
+    const b = this.backend;
     this.backend = null;
+    this.samples = 0;
+    this.signature = "";
+    this.show(false);
+    b?.dispose();
   }
 }

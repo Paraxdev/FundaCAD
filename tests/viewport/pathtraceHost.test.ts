@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import type { TracerBackend } from "../../src/viewport/pathtrace/backend";
-import { FIRST_SAMPLE_TIMEOUT_MS, PathTraceHost, type TraceFrame } from "../../src/viewport/pathtrace/host";
+import { FIRST_SAMPLE_TIMEOUT_MS, IDLE_DISPOSE_MS, PathTraceHost, type TraceFrame } from "../../src/viewport/pathtrace/host";
 import { TRIANGLE_BUDGET } from "../../src/viewport/pathtrace/mirror";
 
 class FakeTracer implements TracerBackend {
@@ -243,5 +243,23 @@ describe("path trace host", () => {
     t.answer(1);
     await flush();
     expect(guard.set).toBe(false);
+  });
+
+  it("frees the tracer a while after leaving Path traced and starts again on the next pick", async () => {
+    const created: FakeTracer[] = [];
+    const host = new PathTraceHost(glCanvas, async () => { const t = new FakeTracer(); created.push(t); return t; }, new FakeGuard());
+    host.tick(frame({}, 1000));
+    await flush();
+    await flush();
+    host.tick(frame({ mode: "realtime" }, 2000));
+    host.tick(frame({ mode: "realtime" }, 2000 + IDLE_DISPOSE_MS - 1));
+    expect(created[0]!.calls).not.toContain("dispose");
+    host.tick(frame({ mode: "realtime" }, 2000 + IDLE_DISPOSE_MS + 1));
+    expect(created[0]!.calls).toContain("dispose");
+    expect(host.backendName).toBe("");
+    host.tick(frame({}, 70_000));
+    await flush();
+    await flush();
+    expect(created).toHaveLength(2);
   });
 });
