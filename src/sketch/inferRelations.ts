@@ -88,7 +88,7 @@ export function pointRelation(id: string, p: number, ref: SnapRef | null | undef
   if (!ref || ref.entity === id) return null;
   const target = entities.find((e) => e.id === ref.entity);
   if (!target) return null;
-  if (typeof ref.at === "number") return { type: "coincident", e1: id, p1: p, e2: target.id, p2: ref.at };
+  if (typeof ref.at === "number") return { type: "coincident", e1: id, p1: p, e2: target.id, p2: ref.at, snap: true };
   if (ref.at === "mid" && target.type === "line") return { type: "midpoint", e: id, p, line: target.id };
   if (ref.at === "curve" && (target.type === "line" || target.type === "circle" || target.type === "arc")) {
     return { type: "pointOnCurve", e: id, p, curve: target.id };

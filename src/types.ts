@@ -203,8 +203,9 @@ export type SketchConstraint =
   // tangent: a line and a circle/arc touch (line tangent to the circle)
   | { type: "tangent"; line: string; circle: string }
   // coincident: two entity endpoints share a position. `e1`/`e2` are entity ids;
-  // `p1`/`p2` are the endpoint index (0 = start, 1 = end) on each.
-  | { type: "coincident"; e1: string; p1: number; e2: string; p2: number }
+  // `p1`/`p2` are the endpoint index (0 = start, 1 = end) on each. `snap` marks
+  // one recorded from a drawing snap, which a modify step may pull apart.
+  | { type: "coincident"; e1: string; p1: number; e2: string; p2: number; snap?: boolean }
   // concentric: two circles/arcs share a center
   | { type: "concentric"; c1: string; c2: string }
   // midpoint: a point (endpoint of `e`/`p`) sits at the midpoint of a line
