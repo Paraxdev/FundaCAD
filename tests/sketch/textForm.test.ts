@@ -5,7 +5,7 @@
 // engine as NaN.
 
 import { describe, it, expect } from "vitest";
-import { initialTextForm, styleOf, textPanelPos, toTextValues } from "../../src/sketch/textForm";
+import { initialTextForm, styleOf, textFormErrors, textPanelPos, toTextValues } from "../../src/sketch/textForm";
 
 describe("styleOf", () => {
   it("maps the two checkboxes onto the four style names", () => {
@@ -81,5 +81,20 @@ describe("textPanelPos", () => {
 
   it("keeps an 8px inset at the top and left", () => {
     expect(textPanelPos({ x: -50, y: -50 }, win)).toEqual({ left: 8, top: 8 });
+  });
+});
+
+describe("number boxes read the shared measure grammar", () => {
+  it("evaluates arithmetic, fractions and a decimal comma", () => {
+    const f = { ...initialTextForm({}), height: "5*2", angle: "90/2", boxWidth: "2,5" };
+    const v = toTextValues(f);
+    expect(v.height).toBe(10);
+    expect(v.angle).toBe(45);
+    expect(v.boxWidth).toBe(2.5);
+  });
+
+  it("reports unparseable text per field and nothing for blank", () => {
+    const f = { ...initialTextForm({}), height: "5*", angle: "", boxWidth: "7" };
+    expect(Object.keys(textFormErrors(f))).toEqual(["height"]);
   });
 });

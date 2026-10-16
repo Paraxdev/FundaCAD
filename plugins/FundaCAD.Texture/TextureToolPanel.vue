@@ -21,11 +21,11 @@
 
 import { computed, reactive, watch, type CSSProperties } from "vue";
 import {
-  TEXTURE_KIND_GROUPS, basename, initialTextureForm, sharpnessLabel, textureRows, toTextureValues,
+  TEXTURE_KIND_GROUPS, basename, initialTextureForm, sharpnessLabel, textureFormErrors, textureRows, toTextureValues,
   type TextureMode,
 } from "./textureForm";
 import { Icon } from "fundacad/ui";
-import { openDialog } from "fundacad";
+import { fieldNumber, openDialog } from "fundacad";
 import * as panel from "./panel";
 
 // Seeded from the request, and RESEEDED whenever the tool opens a new one.
@@ -34,6 +34,7 @@ import * as panel from "./panel";
 // same job is done explicitly here, without it, re-opening the tool would show
 // the values from the last time it ran.
 const form = reactive(initialTextureForm(panel.request.value?.initial ?? {}));
+const errors = computed(() => Object.entries(textureFormErrors(form)));
 watch(
   () => panel.request.value?.id,
   () => {
@@ -48,11 +49,11 @@ const rows = computed(() => textureRows(form));
 const palette = computed(() => panel.request.value?.palette ?? []);
 const editing = computed(() => panel.request.value?.editing ?? false);
 const sharpLabel = computed(() => sharpnessLabel(form.profile));
-const grimePct = computed(() => `${Math.round((parseFloat(form.grime) || 0) * 100)}%`);
-const smoothPct = computed(() => `${Math.round((parseFloat(form.smooth) || 0) * 100)}%`);
-const seamBlendPct = computed(() => `${Math.round((parseFloat(form.seamBlend) || 0) * 100)}%`);
-const seamBandPct = computed(() => `${Math.round((parseFloat(form.seamBand) || 0) * 100)}%`);
-const amplitudePct = computed(() => `${Math.round((parseFloat(form.amplitude) || 0) * 100)}%`);
+const grimePct = computed(() => `${Math.round((fieldNumber(form.grime) || 0) * 100)}%`);
+const smoothPct = computed(() => `${Math.round((fieldNumber(form.smooth) || 0) * 100)}%`);
+const seamBlendPct = computed(() => `${Math.round((fieldNumber(form.seamBlend) || 0) * 100)}%`);
+const seamBandPct = computed(() => `${Math.round((fieldNumber(form.seamBand) || 0) * 100)}%`);
+const amplitudePct = computed(() => `${Math.round((fieldNumber(form.amplitude) || 0) * 100)}%`);
 
 function emitChange() {
   panel.request.value?.onChange(toTextureValues(form));
@@ -153,6 +154,7 @@ const pathLabel: CSSProperties = {
 };
 const summaryStyle: CSSProperties = { cursor: "pointer", marginBottom: "4px" };
 const offsetRow: CSSProperties = { display: "flex", gap: "6px", alignItems: "center" };
+const problem: CSSProperties = { color: "var(--error, #f0564a)", fontSize: "11px", marginBottom: "4px" };
 const note: CSSProperties = { color: "var(--text-mute, #8b93a3)", fontStyle: "italic", margin: "8px 0" };
 const btnRow: CSSProperties = { ...row, marginBottom: "0", justifyContent: "flex-end" };
 const btn: CSSProperties = { border: "none", borderRadius: "var(--r-sm, 4px)", padding: "4px 10px", cursor: "pointer", font: "inherit" };
@@ -204,17 +206,17 @@ const noBtn: CSSProperties = { ...btn, background: "var(--raised, #555)", color:
 
       <div :style="row">
         <label :style="lbl">Depth</label>
-        <input v-model="form.depth" type="number" step="0.01" :style="num" @input="emitChange" @change="emitChange" />
+        <input v-model="form.depth" type="text" inputmode="decimal" :style="num" @input="emitChange" @change="emitChange" />
         <label :style="lbl">Scale</label>
-        <input v-model="form.scale" type="number" step="0.01" :style="num" @input="emitChange" @change="emitChange" />
+        <input v-model="form.scale" type="text" inputmode="decimal" :style="num" @input="emitChange" @change="emitChange" />
       </div>
 
       <div v-show="rows.angle" :style="row">
         <label :style="lbl">Angle°</label>
-        <input v-model="form.angle" type="number" step="1" :style="num" @input="emitChange" @change="emitChange" />
+        <input v-model="form.angle" type="text" inputmode="decimal" :style="num" @input="emitChange" @change="emitChange" />
         <label v-show="rows.sharpness" :style="lbl" :title="sharpLabel.title">{{ sharpLabel.text }}</label>
         <input
-          v-show="rows.sharpness" v-model="form.sharpness" type="number" step="0.05" min="0" max="1"
+          v-show="rows.sharpness" v-model="form.sharpness" type="text" inputmode="decimal"
           :style="num" @input="emitChange" @change="emitChange"
         />
       </div>
@@ -309,7 +311,7 @@ const noBtn: CSSProperties = { ...btn, background: "var(--raised, #555)", color:
 
       <div v-show="rows.seed" :style="row">
         <label :style="lbl">Seed</label>
-        <input v-model="form.seed" type="number" step="1" :style="num" @input="emitChange" @change="emitChange" />
+        <input v-model="form.seed" type="text" inputmode="decimal" :style="num" @input="emitChange" @change="emitChange" />
         <button :style="smallBtn" @click="randomize"><Icon name="dice" :size="13" /> Randomize</button>
       </div>
 
@@ -340,9 +342,9 @@ const noBtn: CSSProperties = { ...btn, background: "var(--raised, #555)", color:
           title="Edge blend: mm the pattern fades over at a face boundary. 0 = a clean machined cut-off."
         >
           <label :style="lbl">Offset</label>
-          <input v-model="form.offset" type="number" step="0.01" :style="num" @input="emitChange" @change="emitChange" />
+          <input v-model="form.offset" type="text" inputmode="decimal" :style="num" @input="emitChange" @change="emitChange" />
           <label :style="lbl">Edge blend</label>
-          <input v-model="form.edgeBlend" type="number" step="0.05" min="0" :style="num" @input="emitChange" @change="emitChange" />
+          <input v-model="form.edgeBlend" type="text" inputmode="decimal" :style="num" @input="emitChange" @change="emitChange" />
         </div>
         <!-- Slope mask: keep the texture only where the face normal's angle from
              +Z (up) is in this band, so a near-horizontal top or bottom can be
@@ -352,9 +354,9 @@ const noBtn: CSSProperties = { ...btn, background: "var(--raised, #555)", color:
           title="Keep the texture only where the surface's angle from up (0 = a flat top, 90 = a vertical wall, 180 = a flat underside) is in this band. 0 to 180 masks nothing."
         >
           <label :style="lbl">Slope°</label>
-          <input v-model="form.slopeMin" type="number" step="5" min="0" max="180" :style="num" @input="emitChange" @change="emitChange" />
+          <input v-model="form.slopeMin" type="text" inputmode="decimal" :style="num" @input="emitChange" @change="emitChange" />
           <label :style="lbl">to</label>
-          <input v-model="form.slopeMax" type="number" step="5" min="0" max="180" :style="num" @input="emitChange" @change="emitChange" />
+          <input v-model="form.slopeMax" type="text" inputmode="decimal" :style="num" @input="emitChange" @change="emitChange" />
         </div>
         <!-- Mesh: the target edge length of the sampling mesh (0 = automatic,
              from the scale) and a hard per-face triangle budget (0 = off). A
@@ -365,13 +367,15 @@ const noBtn: CSSProperties = { ...btn, background: "var(--raised, #555)", color:
           title="Mesh detail: target edge length in mm for the sampling mesh (0 = automatic). Max triangles: a hard per-face budget (0 = off). Lower detail or a tighter budget keeps a heavy texture light."
         >
           <label :style="lbl">Mesh mm</label>
-          <input v-model="form.targetEdge" type="number" step="0.05" min="0" :style="num" @input="emitChange" @change="emitChange" />
+          <input v-model="form.targetEdge" type="text" inputmode="decimal" :style="num" @input="emitChange" @change="emitChange" />
           <label :style="lbl">Max tris</label>
-          <input v-model="form.triBudget" type="number" step="1000" min="0" :style="num" @input="emitChange" @change="emitChange" />
+          <input v-model="form.triBudget" type="text" inputmode="decimal" :style="num" @input="emitChange" @change="emitChange" />
         </div>
       </details>
 
       <div :style="note">Preview is real geometry at display resolution, exports keep full detail.</div>
+
+      <div v-for="[k, msg] in errors" :key="k" :style="problem" data-testid="texture-field-error">{{ k }}: {{ msg }}</div>
 
       <div :style="btnRow">
         <button :style="okBtn" @pointerdown.prevent.stop="panel.commit(toTextureValues(form))">

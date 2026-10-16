@@ -65,4 +65,27 @@ describe("CustomBedDialog", () => {
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     expect(resolve).toHaveBeenCalledWith([200, 200, 200]);
   });
+
+  it("evaluates arithmetic and units typed into a field", () => {
+    const resolve = open();
+    const w = $('[data-testid="bed-custom-width"]')!;
+    w.value = "2*100+20";
+    w.dispatchEvent(new Event("input"));
+    const d = $('[data-testid="bed-custom-depth"]')!;
+    d.value = "10 in";
+    d.dispatchEvent(new Event("input"));
+    $('[data-testid="bed-custom-confirm"]')!.dispatchEvent(new Event("click", { bubbles: true }));
+    expect(resolve).toHaveBeenCalledWith([220, 254, 200]);
+  });
+
+  it("names the field whose text is not a value", async () => {
+    const resolve = open();
+    const h = $('[data-testid="bed-custom-height"]')!;
+    h.value = "3*";
+    h.dispatchEvent(new Event("input"));
+    $('[data-testid="bed-custom-confirm"]')!.dispatchEvent(new Event("click", { bubbles: true }));
+    await nextTick();
+    expect(resolve).not.toHaveBeenCalled();
+    expect(document.querySelector('[data-testid="bed-custom-error"]')?.textContent).toContain("Height");
+  });
 });

@@ -11,6 +11,7 @@ import {
   type BodyScope, type Faceting, type Refinement,
 } from "../../io/exportSettings";
 import ModalFrame from "./ModalFrame.vue";
+import NumberBox from "../shell/NumberBox.vue";
 import Select from "../ui/Select.vue";
 
 const dialog = useExportDialogStore();
@@ -54,9 +55,8 @@ function onRefinement(r: Refinement) {
   else settings.value.faceting = { ...REFINEMENTS[r] };
 }
 
-function setFacet(key: keyof Faceting, ev: Event) {
-  const v = Number.parseFloat((ev.target as HTMLInputElement).value);
-  if (!Number.isFinite(v)) return;
+function setFacet(key: keyof Faceting, v: number | null) {
+  if (v == null || !Number.isFinite(v)) return;
   settings.value.faceting = { ...settings.value.faceting, [key]: v };
   settings.value.refinement = refinementOf(settings.value.faceting);
 }
@@ -130,14 +130,11 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
           <label class="prefs-row">
             <span class="prefs-label">Surface deviation</span>
             <span class="export-num">
-              <input
+              <NumberBox
                 class="sm-input"
-                type="number"
-                min="0.0001"
-                step="0.005"
                 data-testid="export-surface-deviation"
-                :value="settings.faceting.surfaceDeviation"
-                @change="setFacet('surfaceDeviation', $event)"
+                :model-value="settings.faceting.surfaceDeviation"
+                @update:model-value="setFacet('surfaceDeviation', $event)"
               />
               <span class="export-unit">mm</span>
             </span>
@@ -146,15 +143,11 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
           <label class="prefs-row">
             <span class="prefs-label">Normal deviation</span>
             <span class="export-num">
-              <input
+              <NumberBox
                 class="sm-input"
-                type="number"
-                min="0.5"
-                max="90"
-                step="1"
                 data-testid="export-normal-deviation"
-                :value="settings.faceting.normalDeviation"
-                @change="setFacet('normalDeviation', $event)"
+                :model-value="settings.faceting.normalDeviation"
+                @update:model-value="setFacet('normalDeviation', $event)"
               />
               <span class="export-unit">°</span>
             </span>
@@ -163,14 +156,11 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
           <label class="prefs-row">
             <span class="prefs-label">Maximum cell size</span>
             <span class="export-num">
-              <input
+              <NumberBox
                 class="sm-input"
-                type="number"
-                min="0"
-                step="1"
                 data-testid="export-max-edge"
-                :value="settings.faceting.maxEdgeLength"
-                @change="setFacet('maxEdgeLength', $event)"
+                :model-value="settings.faceting.maxEdgeLength"
+                @update:model-value="setFacet('maxEdgeLength', $event)"
               />
               <span class="export-unit">mm</span>
             </span>

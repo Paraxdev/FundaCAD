@@ -95,7 +95,7 @@ describe("TextureToolPanel", () => {
   it("reseeds the form when the tool re-opens it", async () => {
     open({ initial: { depth: 0.4 } });
     await nextTick();
-    const depth = () => document.querySelector<HTMLInputElement>("input[type=number]")!;
+    const depth = () => document.querySelector<HTMLInputElement>("input[inputmode=decimal]")!;
     expect(depth().value).toBe("0.4");
 
     depth().value = "9";
@@ -117,7 +117,7 @@ describe("TextureToolPanel", () => {
     await nextTick();
     expect(document.body.textContent).toContain("2 faces");
 
-    const depth = document.querySelector<HTMLInputElement>("input[type=number]")!;
+    const depth = document.querySelector<HTMLInputElement>("input[inputmode=decimal]")!;
     depth.value = "9";
     depth.dispatchEvent(new Event("input"));
     await nextTick();
@@ -177,7 +177,7 @@ describe("TextureToolPanel", () => {
   it("fires the live preview on an edit", async () => {
     const { handlers } = open();
     await nextTick();
-    const depth = document.querySelector<HTMLInputElement>("input[type=number]")!;
+    const depth = document.querySelector<HTMLInputElement>("input[inputmode=decimal]")!;
     depth.value = "1.5";
     depth.dispatchEvent(new Event("input"));
     await nextTick();

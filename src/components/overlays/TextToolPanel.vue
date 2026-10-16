@@ -10,9 +10,9 @@
 // promoted to SCSS: this panel has never had a stylesheet entry, and inventing
 // one in the same commit as the port would make the port unreviewable.
 
-import { onMounted, onUnmounted, reactive, useTemplateRef, type CSSProperties } from "vue";
+import { computed, onMounted, onUnmounted, reactive, useTemplateRef, type CSSProperties } from "vue";
 import Icon from "../shell/Icon.vue";
-import { initialTextForm, textPanelPos, toTextValues } from "../../sketch/textForm";
+import { initialTextForm, textFormErrors, textPanelPos, toTextValues } from "../../sketch/textForm";
 import { useToolPanelStore, type TextReq } from "../../stores/toolPanels";
 
 const props = defineProps<{ req: TextReq }>();
@@ -25,6 +25,7 @@ const panels = useToolPanelStore();
 const form = reactive(initialTextForm(props.req.initial));
 const pos = textPanelPos(props.req.screen, window);
 
+const errors = computed(() => textFormErrors(form));
 const ta = useTemplateRef<HTMLTextAreaElement>("ta");
 
 function emitChange() {
@@ -69,6 +70,8 @@ const textArea: CSSProperties = { ...field, width: "100%", resize: "vertical" };
 const fontSelect: CSSProperties = { ...field, flex: "1", minWidth: "0", maxWidth: "100%" };
 const num: CSSProperties = { ...field, width: "56px" };
 const wide: CSSProperties = { ...field, flex: "1", minWidth: "0" };
+const bad: CSSProperties = { borderColor: "var(--error, #f0564a)" };
+const problem: CSSProperties = { color: "var(--error, #f0564a)", fontSize: "11px", marginBottom: "6px" };
 const btnRow: CSSProperties = { ...row, marginBottom: "0", justifyContent: "flex-end" };
 const btn: CSSProperties = { color: "#fff", border: "none", borderRadius: "4px", padding: "4px 10px", cursor: "pointer", font: "inherit" };
 const okBtn: CSSProperties = { ...btn, background: "#2b6" };
@@ -100,9 +103,9 @@ const noBtn: CSSProperties = { ...btn, background: "#555" };
 
       <div :style="row">
         <label :style="lbl">Size</label>
-        <input v-model="form.height" type="number" min="0.1" :style="num" @input="emitChange" @change="emitChange" />
+        <input v-model="form.height" type="text" inputmode="decimal" :title="errors.height" :style="[num, errors.height ? bad : {}]" @input="emitChange" @change="emitChange" />
         <label :style="lbl">Angle°</label>
-        <input v-model="form.angle" type="number" :style="num" @input="emitChange" @change="emitChange" />
+        <input v-model="form.angle" type="text" inputmode="decimal" :title="errors.angle" :style="[num, errors.angle ? bad : {}]" @input="emitChange" @change="emitChange" />
       </div>
 
       <div :style="row">
@@ -120,10 +123,12 @@ const noBtn: CSSProperties = { ...btn, background: "#555" };
       <div :style="row">
         <label :style="lbl">Box width (mm)</label>
         <input
-          v-model="form.boxWidth" type="number" min="0" step="0.5" placeholder="0 = no box"
-          :style="wide" @input="emitChange" @change="emitChange"
+          v-model="form.boxWidth" type="text" inputmode="decimal" placeholder="0 = no box"
+          :title="errors.boxWidth" :style="[wide, errors.boxWidth ? bad : {}]" @input="emitChange" @change="emitChange"
         />
       </div>
+
+      <div v-for="(msg, k) in errors" :key="k" :style="problem" data-testid="text-field-error">{{ msg }}</div>
 
       <!-- pointerdown, not click: the buttons have to act before the field next
            to them can blur, or a commit loses the last keystroke. -->
