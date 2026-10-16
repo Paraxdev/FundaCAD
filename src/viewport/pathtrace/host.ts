@@ -11,6 +11,11 @@ import { TraceGeneration, traceState, type TraceInputs, type TraceState } from "
 /** No sample this long after the tracer started reads as a hung GPU. */
 export const FIRST_SAMPLE_TIMEOUT_MS = 10_000;
 
+export interface CrashGuard {
+  arm(): Promise<void>;
+  clear(): void;
+}
+
 export interface TraceFrame {
   now: number;
   inputs: Omit<TraceInputs, "samples" | "cap">;
@@ -48,10 +53,13 @@ export class PathTraceHost {
   private traceSince = 0;
   private sawSample = false;
   private size = { w: 0, h: 0, ratio: 0 };
+  /** The pending arm write, so a clear always lands after it. */
+  private guardWrite: Promise<void> | null = null;
 
   constructor(
     private webglCanvas: HTMLCanvasElement,
     private create: CreateTracer = async () => (await import("./webgpuTracer")).createWebGpuTracer(),
+    private guard: CrashGuard = { arm: armGuard, clear: clearGuard },
   ) {}
 
   get backendName(): string {
@@ -66,16 +74,20 @@ export class PathTraceHost {
       this.state = s;
       this.onStateChange?.(s);
     }
-    if (s === "off") return this.show(false);
+    if (s !== "trace" && s !== "done") {
+      this.traceSince = 0;
+      if (!this.sawSample) this.disarm();
+      return this.show(false);
+    }
     const b = this.backend;
     if (!b) {
       this.start();
       return this.show(false);
     }
-    this.watchdog(f.now, s);
-    if (s !== "trace" && s !== "done") return this.show(false);
+    if (s === "trace" && !this.sawSample) this.arm();
     this.syncCanvas(b);
     if (this.sceneDirty) this.syncScene(b, f);
+    this.watchdog(f.now, s);
     if (this.cameraDirty) {
       b.updateCamera(f.camera);
       this.restart();
@@ -101,12 +113,26 @@ export class PathTraceHost {
     this.backend?.reset();
   }
 
+  private arm(): Promise<void> {
+    this.guardWrite ??= this.guard.arm();
+    return this.guardWrite;
+  }
+
+  private disarm() {
+    const w = this.guardWrite;
+    if (!w) return;
+    this.guardWrite = null;
+    const clear = () => this.guard.clear();
+    void w.then(clear, clear);
+  }
+
   private start() {
     if (this.starting) return;
     this.starting = true;
+    this.sawSample = false;
     void (async () => {
       try {
-        await armGuard();
+        await this.arm();
         const b = await this.create();
         b.onFault((why) => this.fault(why));
         this.webglCanvas.parentElement?.insertBefore(b.canvas, this.webglCanvas);
@@ -115,7 +141,6 @@ export class PathTraceHost {
         st.pointerEvents = "none";
         this.webglCanvas.style.position = "relative";
         this.backend = b;
-        this.sawSample = false;
         this.sceneDirty = this.cameraDirty = true;
         this.signature = "";
         this.size = { w: 0, h: 0, ratio: 0 };
@@ -168,7 +193,7 @@ export class PathTraceHost {
         this.samples = n;
         if (n > 0 && !this.sawSample) {
           this.sawSample = true;
-          clearGuard();
+          this.disarm();
         }
       },
       () => {
@@ -197,7 +222,7 @@ export class PathTraceHost {
     try {
       b?.dispose();
     } catch { /* already gone with the device */ }
-    clearGuard();
+    this.disarm();
     this.onFault?.(why, this.disabled);
   }
 

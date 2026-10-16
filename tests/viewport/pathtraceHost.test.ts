@@ -22,6 +22,12 @@ class FakeTracer implements TracerBackend {
   answer(n: number) { for (const r of this.pending.splice(0)) r(n); }
 }
 
+class FakeGuard {
+  set = false;
+  async arm() { this.set = true; }
+  clear() { this.set = false; }
+}
+
 const flush = () => new Promise((r) => setTimeout(r, 0));
 const glCanvas = { clientWidth: 800, clientHeight: 600, offsetLeft: 0, offsetTop: 0, style: {}, parentElement: null } as unknown as HTMLCanvasElement;
 
@@ -49,7 +55,7 @@ function frame(over: Partial<TraceFrame["inputs"]> = {}, now = 1000, extra: Part
 async function started(): Promise<{ host: PathTraceHost; t: FakeTracer; created: () => number }> {
   const t = new FakeTracer();
   let n = 0;
-  const host = new PathTraceHost(glCanvas, async () => { n++; return t; });
+  const host = new PathTraceHost(glCanvas, async () => { n++; return t; }, new FakeGuard());
   host.tick(frame());
   await flush();
   await flush();
@@ -163,5 +169,30 @@ describe("path trace host", () => {
     await flush();
     await flush();
     expect(faults[0]).toMatch(/no adapter/);
+  });
+
+  it("arms the crash guard only while a first sample is wanted", async () => {
+    const guard = new FakeGuard();
+    const t = new FakeTracer();
+    let n = 0;
+    const host = new PathTraceHost(glCanvas, async () => { n++; return t; }, guard);
+    host.tick(frame({ sketchOpen: true }));
+    host.tick(frame({ visible: false }));
+    await flush();
+    expect(guard.set).toBe(false);
+    expect(n).toBe(0);
+    host.tick(frame());
+    await flush();
+    await flush();
+    expect(guard.set).toBe(true);
+    host.tick(frame({ xray: true }));
+    await flush();
+    expect(guard.set).toBe(false);
+    host.tick(frame());
+    await flush();
+    expect(guard.set).toBe(true);
+    t.answer(1);
+    await flush();
+    expect(guard.set).toBe(false);
   });
 });
