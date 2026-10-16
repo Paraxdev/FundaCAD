@@ -200,8 +200,9 @@ function onDown(e: PointerEvent, i: number, l: DimItem) {
   l.suppressEdit = s.dimHooks?.overlapPick(e) ?? false;
   // overlapPick rebuilds every label when geometry claims the pick, so the
   // element under the cursor may already have been patched away, never start a
-  // drag on top of that.
-  if (l.suppressEdit) return;
+  // drag on top of that. The click that follows lands on the rebuilt item, which
+  // never saw suppressEdit, so the layer wide flag has to stop that edit.
+  if (l.suppressEdit) { suppressClick = true; return; }
   select(i);
   beginDrag(l, e.currentTarget as HTMLElement, e);
 }
