@@ -17,9 +17,9 @@
 // Every pane stays in the DOM (v-show), so a control keeps its id whichever
 // category is open.
 
-import { computed, onMounted, onUnmounted, ref, shallowRef } from "vue";
-import { contributedSettings, onContribChange } from "../../plugins/contrib";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useDialogStore } from "../../stores/dialogs";
+import { pluginFocus } from "../../plugins/settingsFocus";
 import { useModalGate } from "../../composables/useModalGate";
 import ModalFrame from "./ModalFrame.vue";
 import Select from "../ui/Select.vue";
@@ -96,8 +96,6 @@ const nav = ref(getNavPrefs());
 const detectedWheel = ref(getDetectedWheel());
 const classicCamera = ref(navigatorChoice() === "legacy");
 
-const sections = shallowRef(contributedSettings());
-
 const stops: (() => void)[] = [];
 onMounted(() => {
   stops.push(
@@ -109,23 +107,21 @@ onMounted(() => {
     onMotionChange(() => { motion.value = motionOn(); }),
     onNavPrefsChange(() => { nav.value = getNavPrefs(); }),
     onDetectedWheelChange(() => { detectedWheel.value = getDetectedWheel(); }),
-    onContribChange(() => { sections.value = contributedSettings(); }),
   );
 });
 onUnmounted(() => { for (const stop of stops) stop(); });
 
-// Plugin sections come after the core categories, in the order the plugins
-// registered them, and the plugin list itself is last.
+// A plugin's settings are under its own row in Plugins, not a category here.
 const categories = computed(() => [
   { id: "appearance", label: "Appearance" },
   { id: "viewport", label: "Viewport" },
   { id: "navigation", label: "Navigation" },
   { id: "access", label: "Accessibility" },
   { id: "mcp", label: "AI assistants" },
-  ...sections.value.map((x) => ({ id: `plugin:${x.key}`, label: x.section.title })),
   { id: "plugins", label: "Plugins" },
 ]);
-const category = ref("appearance");
+const category = ref(pluginFocus.value ? "plugins" : "appearance");
+watch(pluginFocus, (id) => { if (id) category.value = "plugins"; });
 
 const UNITS = [
   { id: "mm", label: "mm" },
@@ -573,18 +569,6 @@ function onClassicCamera(ev: Event) {
 
         <section v-show="category === 'mcp'" class="prefs-pane prefs-pane-flow">
           <McpSection />
-        </section>
-
-        <!-- What the running plugins ask about. A plugin that is not installed
-             leaves no category behind. -->
-        <section
-          v-for="x in sections"
-          v-show="category === `plugin:${x.key}`"
-          :key="x.key"
-          class="prefs-pane prefs-pane-flow"
-        >
-          <h3 class="prefs-pane-title">{{ x.section.title }}</h3>
-          <component :is="x.section.component" />
         </section>
 
         <section v-show="category === 'plugins'" class="prefs-pane prefs-pane-flow">

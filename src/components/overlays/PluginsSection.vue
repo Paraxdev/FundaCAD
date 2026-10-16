@@ -31,8 +31,12 @@
 // stale while the alarming half stays current, and a modest plugin looks
 // different from a greedy one at a glance.
 
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, shallowRef, watch } from "vue";
 import { describeGrants, sandboxNote } from "../../plugins/manifest";
+import { contributedSettings, onContribChange } from "../../plugins/contrib";
+import { removePluginSettings, settingMatches } from "../../plugins/settings";
+import { pluginFocus } from "../../plugins/settingsFocus";
+import PluginSettingsForm from "./PluginSettingsForm.vue";
 import {
   inspectFile,
   inspectUrl,
@@ -92,15 +96,72 @@ function toggle(id: string, ev: Event) {
 
 const record = (id: string) => installed.value.find((r) => r.id === id);
 
+// --- settings ----------------------------------------------------------------
+
+const sections = shallowRef(contributedSettings());
+let offContrib: (() => void) | null = null;
+onMounted(() => { offContrib = onContribChange(() => { sections.value = contributedSettings(); }); });
+onUnmounted(() => offContrib?.());
+
+const sectionsOf = (id: string) => sections.value.filter((x) => x.plugin === id).map((x) => x.section);
+
+/** the ids whose settings are expanded */
+const expanded = ref<Set<string>>(new Set());
+const query = ref("");
+/** ids whose Remove also forgets their settings */
+const forget = ref<Record<string, boolean>>({});
+
+function toggleSettings(id: string) {
+  const next = new Set(expanded.value);
+  if (next.has(id)) next.delete(id);
+  else next.add(id);
+  expanded.value = next;
+}
+
+/** Whether a plugin has a setting matching the search; true for all while it is empty. */
+function matches(id: string): boolean {
+  const q = query.value.trim();
+  if (!q) return true;
+  return sectionsOf(id).some((s) => s.settings?.schema.props.some((p) => settingMatches(p, q)));
+}
+
+const settingsOpen = (id: string) => expanded.value.has(id) || (!!query.value.trim() && matches(id));
+
+function resetAll(id: string) {
+  for (const s of sectionsOf(id)) s.settings?.reset();
+}
+
+const hasDeclared = (id: string) => sectionsOf(id).some((s) => s.settings);
+
+async function focusPlugin(id: string | null) {
+  if (!id) return;
+  query.value = "";
+  expanded.value = new Set([...expanded.value, id]);
+  pluginFocus.value = null;
+  await nextTick();
+  document.querySelector(`[data-plugin-row="${CSS.escape(id)}"]`)?.scrollIntoView({ block: "start" });
+}
+watch(pluginFocus, focusPlugin);
+onMounted(() => void focusPlugin(pluginFocus.value));
+
 /** Rows for what is installed, each with a manifest to describe it by and the
  *  update on offer for it, if any. */
 const rows = computed(() =>
-  installed.value.map((rec) => ({
-    rec,
-    manifest: installedManifest(rec),
-    update: updateFor(rec, suggested.value),
-  })),
+  installed.value
+    .map((rec) => ({
+      rec,
+      manifest: installedManifest(rec),
+      update: updateFor(rec, suggested.value),
+    }))
+    .filter((r) => matches(r.rec.id)),
 );
+
+/** Plugins a development build runs from this repository without installing
+ *  them, so their settings have a row to sit under. */
+const fromSource = computed(() => {
+  const ids = [...new Set(sections.value.map((x) => x.plugin))].filter((id) => !record(id) && matches(id));
+  return ids.map((id) => ({ id, manifest: suggested.value.find((p) => p.manifest.id === id)?.manifest ?? null }));
+});
 
 /** An update whose promise grew installs only from its own consent screen. */
 function update(u: NonNullable<ReturnType<typeof updateFor>>) {
@@ -205,6 +266,7 @@ async function drop(id: string, name: string) {
   busy.value = id;
   try {
     await removePlugin(id);
+    if (forget.value[id]) removePluginSettings(id);
     await refresh();
     toast(`${name} is removed.`);
   } catch (err) {
@@ -222,9 +284,27 @@ async function drop(id: string, name: string) {
     it.
   </div>
 
-  <div v-if="rows.length === 0" class="sm-hint">Nothing installed yet.</div>
+  <input
+    v-if="sections.length"
+    v-model="query"
+    class="plug-url plug-search"
+    type="search"
+    spellcheck="false"
+    placeholder="Search plugin settings"
+    aria-label="Search plugin settings"
+    data-plugin-settings-search
+  />
 
-  <div v-for="{ rec, manifest, update: u } in rows" :key="rec.id" class="plug-row" :data-plugin="rec.id">
+  <div v-if="rows.length === 0 && fromSource.length === 0" class="sm-hint">
+    {{ query.trim() ? "No plugin setting matches that." : "Nothing installed yet." }}
+  </div>
+  <div
+    v-for="{ rec, manifest, update: u } in rows"
+    :key="rec.id"
+    class="plug-row"
+    :data-plugin="rec.id"
+    :data-plugin-row="rec.id"
+  >
     <div class="plug-head">
       <div>
         <div class="plug-name">{{ manifest ? manifest.name : rec.id }}</div>
@@ -255,6 +335,33 @@ async function drop(id: string, name: string) {
       >
         {{ showing === rec.id ? "Hide what it uses" : "What it uses" }}
       </button>
+      <template v-if="sectionsOf(rec.id).length">
+        <button
+          class="plug-link"
+          :aria-expanded="settingsOpen(rec.id)"
+          data-plugin-settings-toggle
+          @click="toggleSettings(rec.id)"
+        >
+          {{ settingsOpen(rec.id) ? "Hide settings" : "Settings" }}
+        </button>
+        <label class="plug-forget">
+          <input v-model="forget[rec.id]" type="checkbox" /> Remove forgets its settings
+        </label>
+      </template>
+    </div>
+
+    <div v-if="settingsOpen(rec.id)" class="plug-settings" :data-plugin-settings="rec.id">
+      <PluginSettingsForm
+        v-for="s in sectionsOf(rec.id)"
+        :key="s.key"
+        :settings="s.settings"
+        :component="s.component"
+        :title="s.title"
+        :query="query"
+      />
+      <div v-if="hasDeclared(rec.id) && !query.trim()" class="plug-actions">
+        <button class="btn" data-plugin-settings-reset @click="resetAll(rec.id)">Reset to defaults</button>
+      </div>
     </div>
 
     <div v-if="u" class="plug-update" data-plugin-update>
@@ -310,6 +417,44 @@ async function drop(id: string, name: string) {
         </ul>
       </div>
       <div class="sm-hint">{{ sandboxNote(manifest.kind) }}</div>
+    </div>
+  </div>
+
+  <div
+    v-for="{ id, manifest } in fromSource"
+    :key="id"
+    class="plug-row"
+    :data-plugin-row="id"
+  >
+    <div class="plug-head">
+      <div>
+        <div class="plug-name">{{ manifest ? manifest.name : id }}</div>
+        <div class="plug-summary">{{ manifest ? manifest.summary : "" }}</div>
+      </div>
+    </div>
+    <div class="plug-state">
+      Running from source, not installed.
+      <button
+        class="plug-link"
+        :aria-expanded="settingsOpen(id)"
+        data-plugin-settings-toggle
+        @click="toggleSettings(id)"
+      >
+        {{ settingsOpen(id) ? "Hide settings" : "Settings" }}
+      </button>
+    </div>
+    <div v-if="settingsOpen(id)" class="plug-settings" :data-plugin-settings="id">
+      <PluginSettingsForm
+        v-for="s in sectionsOf(id)"
+        :key="s.key"
+        :settings="s.settings"
+        :component="s.component"
+        :title="s.title"
+        :query="query"
+      />
+      <div v-if="hasDeclared(id) && !query.trim()" class="plug-actions">
+        <button class="btn" data-plugin-settings-reset @click="resetAll(id)">Reset to defaults</button>
+      </div>
     </div>
   </div>
 

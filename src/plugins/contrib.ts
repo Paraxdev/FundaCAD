@@ -41,6 +41,7 @@ import type { ChoiceField, FileField, ToggleField } from "../document/optionFiel
 import type { FeatureMeta } from "../ui/featureMeta";
 import type { FieldKind } from "../document/numFields";
 import type { TargetField } from "../features/selectionTargets";
+import type { PluginSettings } from "./settings";
 import { setPointerBindings, type PointerBinding, type PointerGesture } from "../viewport/navigator/bindings";
 import { setShortcutOverrides, type ShortcutOverride } from "../input/shortcuts";
 
@@ -113,17 +114,17 @@ export interface BrowserSection {
   filter?: string;
 }
 
-/** A block of settings a plugin adds to Preferences.
+/** Settings a plugin adds, drawn under its row in Preferences > Plugins.
  *
- *  A component, for the same reason a browser section is one: what a plugin
- *  needs to ask is its own business, and no row vocabulary the app could invent
- *  would fit the next one. The app supplies the heading and the place. */
+ *  Declared settings (./settings.ts) are drawn by the app from their schema;
+ *  a component is for what a schema cannot express and is drawn below them. */
 export interface SettingsSection {
   /** Stable within the contributing plugin; used as the render key. */
   key: string;
-  /** The heading, in the dialog's own style. */
-  title: string;
-  component: Component;
+  /** A heading over this block, when a plugin has more than one. */
+  title?: string;
+  settings?: PluginSettings;
+  component?: Component;
 }
 
 /** A modeling tool a plugin adds, as the app has to know it.
@@ -365,6 +366,12 @@ export function contribute(plugin: string, c: Contribution): Unregister {
     const other = entries.find((e) => e.c[point] && e.plugin !== plugin);
     if (other) throw new Error(`${plugin} contributes ${point}, which ${other.plugin} already does`);
   }
+  for (const section of c.settings ?? []) {
+    // No grant for a plugin's own settings, so the one rule is that they are its own.
+    if (section.settings && section.settings.pluginId !== plugin) {
+      throw new Error(`${plugin} contributes the settings of ${section.settings.pluginId}`);
+    }
+  }
   const entry: Entry = { plugin, c };
   entries = [...entries, entry];
   changed();
@@ -415,11 +422,11 @@ export function contributedOverlays(): { key: string; component: Component }[] {
   return out;
 }
 
-export function contributedSettings(): { key: string; section: SettingsSection }[] {
-  const out: { key: string; section: SettingsSection }[] = [];
+export function contributedSettings(): { key: string; plugin: string; section: SettingsSection }[] {
+  const out: { key: string; plugin: string; section: SettingsSection }[] = [];
   for (const e of entries) {
     for (const section of e.c.settings ?? []) {
-      out.push({ key: `${e.plugin}:${section.key}`, section });
+      out.push({ key: `${e.plugin}:${section.key}`, plugin: e.plugin, section });
     }
   }
   return out;

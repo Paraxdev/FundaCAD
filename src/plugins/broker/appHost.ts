@@ -32,6 +32,7 @@
 // The store is injected rather than imported. The alternative is a module-level
 // singleton, which is the same coupling with a worse test story.
 
+import { storedSettings } from "../settings";
 import type { CadDocument, Feature } from "../../types";
 import type { DocumentStore } from "../../document/store";
 import { ensureBodyIds } from "../../document/bodyIds";
@@ -149,6 +150,10 @@ export function appHost(opts: AppHostOptions): BrokerHost {
       switch (op) {
         case "app_info":
           return await bridge(op).native.info();
+
+        case "settings_get":
+          if (!opts.plugin) throw new HostRefused(`${op}: this host was built without a plugin id, so it has no settings to read`);
+          return storedSettings(opts.plugin);
 
         case "file_pick": {
           const { native, plugin } = bridge(op);

@@ -67,6 +67,7 @@ export const OPS = [
   "file_read",
   "file_write",
   "app_info",
+  "settings_get",
 ] as const;
 
 export type Op = (typeof OPS)[number];
@@ -224,7 +225,12 @@ export const OP_TABLE: Record<Op, OpSpec> = {
     needs: [],
     why: "the version, the platform and the architecture. A plugin that cannot tell what it is running on has to assume or break, and none of the three says anything about the person",
     writes: false,
+  },  settings_get: {
+    needs: [],
+    why: "the plugin's own settings as the person set them under its row in Preferences. The host answers for the calling plugin only and takes no id from the plugin, so it cannot read another's",
+    writes: false,
   },
+
 };
 
 const OP_SET: ReadonlySet<string> = new Set<string>(OPS);

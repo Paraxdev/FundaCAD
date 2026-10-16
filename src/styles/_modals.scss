@@ -385,6 +385,22 @@
   color: var(--accent, #ff7a3c);
   cursor: pointer;
 }
+.plug-link + .plug-link {
+  margin-left: var(--s-2);
+}
+.plug-forget {
+  margin-left: var(--s-3);
+  white-space: nowrap;
+}
+.plug-search {
+  width: 100%;
+  margin: var(--s-2) 0;
+}
+/* A plugin's settings, set in under its row like an add-on's panel. */
+.plug-settings {
+  padding: 0 0 var(--s-2) var(--s-3);
+  border-left: 2px solid var(--line, #2a2f3a);
+}
 .plug-consent {
   display: flex;
   flex-direction: column;

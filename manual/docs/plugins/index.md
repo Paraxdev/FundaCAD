@@ -16,6 +16,8 @@ A plugin adds something not everyone needs, such as screws, textures or a link t
 | [Game controller](gamepad.md) | Navigate with a gamepad |
 | [3D mouse](spacemouse.md) | Navigate with a 3D mouse |
 
-Turn one on or off in Edit, Preferences, Plugins. Off does not delete anything, and your work comes back when you switch it on. Remove deletes the plugin from your computer.
+Turn one on or off in Edit, Preferences, Plugins. Off does not delete anything, and your work comes back when you switch it on. Remove deletes the plugin from your computer, and keeps its settings unless you tick Remove forgets its settings.
+
+A plugin's own settings are under its row: click Settings to open them. The search box finds a setting in any plugin, the arrow beside a changed setting puts it back, and Reset to defaults puts back all of that plugin's.
 
 To install one, press Install under Made by FundaCAD, or use Add a plugin with a web address or a file.
