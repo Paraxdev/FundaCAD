@@ -67,11 +67,11 @@ describe("the fastener library, switched on and off", () => {
     resetContributions();
   });
 
-  it("adds a Fasteners button to INSERT that opens the library panel", () => {
+  it("adds Fasteners and Standard Thread buttons to INSERT, Fasteners opens the library panel", () => {
     expect(contributors()).toEqual(["FundaCAD.Screws"]);
     const group = contributedRibbon().find((g) => g.group === "INSERT");
-    expect(group?.items.map((i) => i.action)).toEqual(["fasteners"]);
-    expect(contributedOverlays()).toHaveLength(1);
+    expect(group?.items.map((i) => i.action)).toEqual(["fasteners", "standardThread"]);
+    expect(contributedOverlays()).toHaveLength(2);
     expect(open.value).toBe(false);
     contributedAction("fasteners")!();
     expect(open.value).toBe(true);

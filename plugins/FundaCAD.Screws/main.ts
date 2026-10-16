@@ -8,6 +8,8 @@
 import { contribute } from "fundacad";
 import type { Engine } from "fundacad";
 import LibraryPanel from "./LibraryPanel.vue";
+import ThreadPanel from "./ThreadPanel.vue";
+import { StandardThreadTool, threadTool } from "./threadTool";
 import { insertFastener, placementAt, specOfBody } from "./insert";
 import { DRAG_MIME, PLUGIN_ID, dragging, open, resetState, selection, tab } from "./state";
 
@@ -41,15 +43,41 @@ export async function activate(e: Engine): Promise<() => void> {
   canvas.addEventListener("dragover", onDragOver);
   canvas.addEventListener("drop", onDrop);
 
+  const thread = new StandardThreadTool(e);
+  threadTool.value = thread;
+  const threadDone = (id: string | null) => {
+    e.noteCommitted(id);
+    if (id) e.selectFeature(id);
+  };
+
   const off = contribute(PLUGIN_ID, {
     actions: {
       fasteners: () => {
         open.value = !open.value;
       },
+      standardThread: () => {
+        if (e.toolBusy()) return;
+        if (!e.hasBody()) {
+          e.setStatus("Standard Thread: create or import a body first", "");
+          return;
+        }
+        thread.start(threadDone);
+      },
     },
-    ribbon: [{ group: "INSERT", items: [{ action: "fasteners", label: "Fasteners", iconName: "fasteners" }] }],
+    tools: [{
+      id: "standardThread", label: "Standard Thread", iconName: "thread",
+      consumes: ["face"], source: "selection", busy: () => thread.active,
+    }],
+    features: [{ type: "thread", edit: (id, done) => thread.edit(id, done) }],
+    ribbon: [{
+      group: "INSERT",
+      items: [
+        { action: "fasteners", label: "Fasteners", iconName: "fasteners" },
+        { action: "standardThread", label: "Standard Thread", iconName: "thread" },
+      ],
+    }],
     icons: { fasteners: FASTENER_ICON },
-    overlays: [LibraryPanel],
+    overlays: [LibraryPanel, ThreadPanel],
     bodyMenu: (bodyId) => {
       const spec = specOfBody(e, bodyId);
       if (!spec) return [];
@@ -68,6 +96,8 @@ export async function activate(e: Engine): Promise<() => void> {
     canvas.removeEventListener("dragover", onDragOver);
     canvas.removeEventListener("drop", onDrop);
     resetState();
+    if (thread.active) thread.cancel();
+    threadTool.value = null;
     off();
   };
 }

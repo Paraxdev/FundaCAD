@@ -88,3 +88,44 @@ describe("the thread feature", () => {
     expect(f.spec).toMatchObject({ system: "tr", size: "Tr8", designation: "Tr8x2" });
   });
 });
+
+import { choicesFor, draftForFace, draftForFeature, featureOf, nearestIn, offByText } from "../../plugins/FundaCAD.Screws/threadTool";
+
+describe("standard thread panel draft", () => {
+  const face = { kind: "face", by: "nearest", point: [2.5, 0, 0], body: "body1" } as never;
+
+  it("names every size of a system once, so the size list can key on it", () => {
+    for (const s of ["iso", "unc", "unf", "tr", "acme"] as const) {
+      const names = choicesFor(s).map((c) => c.designation);
+      expect(names.length).toBeGreaterThan(0);
+      expect(new Set(names).size).toBe(names.length);
+    }
+  });
+
+  it("opens a 5.1 bore on M6 tap drill and says how far off it is", () => {
+    const d = draftForFace(face, 5.1, false)!;
+    expect(d.designation).toBe("M6");
+    expect(d.faceIs).toBe("tap");
+    expect(offByText(d)).toBe("M6, 0.10 mm over tap drill");
+  });
+
+  it("switching system lands on that system's nearest size", () => {
+    const d = draftForFace(face, 6.35, true)!;
+    expect(nearestIn(d, "unf")!.choice.designation).toBe("1/4-28 UNF");
+  });
+
+  it("writes hand, starts and the print clearance, and reopens on them", () => {
+    const d = { ...draftForFace(face, 8, true)!, system: "tr" as const, designation: "Tr8x2", hand: "left" as const, starts: 4, printFit: true, clearance: 0.3 };
+    const f = featureOf(d, "f9") as unknown as Record<string, unknown>;
+    expect(f).toMatchObject({ type: "thread", pitch: 2, starts: 4, hand: "left", clearance: 0.3, operation: "cut" });
+    const back = draftForFeature(f, null)!;
+    expect(back).toMatchObject({ editing: "f9", system: "tr", designation: "Tr8x2", hand: "left", starts: 4, printFit: true, clearance: 0.3 });
+  });
+
+  it("leaves the clearance off without Print fit, and a nominal bore joins", () => {
+    const d = { ...draftForFace(face, 6, false)!, faceIs: "nominal" as const };
+    const f = featureOf(d, "f1") as unknown as Record<string, unknown>;
+    expect(f.clearance).toBeUndefined();
+    expect(f.operation).toBe("join");
+  });
+});
