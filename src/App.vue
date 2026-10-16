@@ -6,6 +6,7 @@ import ToastStack from "./components/overlays/ToastStack.vue";
 import ModalHost from "./components/overlays/ModalHost.vue";
 import ShortcutHud from "./components/overlays/ShortcutHud.vue";
 import ContextMenuHost from "./components/overlays/ContextMenuHost.vue";
+import RadialMenuHost from "./components/overlays/RadialMenuHost.vue";
 import TargetEditPanel from "./components/overlays/TargetEditPanel.vue";
 import ConsolePanel from "./components/overlays/ConsolePanel.vue";
 import AreaFilterChip from "./components/overlays/AreaFilterChip.vue";
@@ -125,6 +126,7 @@ watch(() => ui.sketchActive, () => shell.closeDrawer());
   <ModalHost />
   <ShortcutHud />
   <ContextMenuHost />
+  <RadialMenuHost />
   <ConsolePanel />
   <AreaFilterChip />
   <DropHint />
