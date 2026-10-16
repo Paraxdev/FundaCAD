@@ -61,7 +61,8 @@ describe("constraintDims (radius + angle driving dims)", () => {
     expect(dims.length).toBe(1);
     expect(dims[0]!.cIndex).toBe(0);
     expect(dims[0]!.valueMm).toBe(5);
-    expect(dims[0]!.lines.length).toBe(1); // one radial line center→rim
+    expect(dims[0]!.lines[0]![0].length()).toBeCloseTo(0); // the radial line starts at the centre
+    expect(dims[0]!.lines[0]![1].length()).toBeCloseTo(5);
     expect(dims[0]!.kind).toBeUndefined(); // radius is a length
   });
 
@@ -157,10 +158,10 @@ describe("constraintDims with rect-edge operands + placement", () => {
     expect(down.labelPos.y).toBeCloseTo(-5 - 8);
   });
 
-  it("`place` picks the radial direction of a radius dim", () => {
+  it("`place` puts a radius label where it was dragged, outside the rim too", () => {
     const circ: ResolvedEntity = { type: "circle", id: "c", radius: 10, x: 0, y: 0 };
     const d = constraintDims([circ], [{ type: "radius", e: "c", value: 10, place: { ox: -50, oy: 0 } }])[0]!;
-    expect(d.labelPos.x).toBeCloseTo(-6); // −1 radial × r × 0.6
+    expect(d.labelPos.x).toBeCloseTo(-50);
     expect(d.labelPos.y).toBeCloseTo(0);
   });
 
@@ -462,10 +463,10 @@ describe("constraint dim placement", () => {
     expect(moved.place!.x).toBeCloseTo(7);
   });
 
-  it("an arc's diameter dim reports no place (that constraint has no slot for one)", () => {
+  it("an arc's diameter dim reports its place, so its label can be dragged", () => {
     const a: ResolvedEntity = { type: "arc", id: "a", x1: 8, y1: 0, x2: -8, y2: 0, mx: 0, my: 8 };
     const [d] = constraintDims([a], [{ type: "diameter", circle: "a", value: 16 }]);
-    expect(d!.place).toBeUndefined();
+    expect(d!.place).toBeDefined();
   });
 });
 

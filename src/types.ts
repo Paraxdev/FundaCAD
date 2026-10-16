@@ -167,6 +167,8 @@ export function isBadgeEntity<T extends { type: string }>(e: T): e is T & { dimP
   }
 }
 
+export type AngleRay = 1 | -1;
+
 export type SketchConstraint =
   | { type: "horizontal"; line: string }
   | { type: "vertical"; line: string }
@@ -175,9 +177,12 @@ export type SketchConstraint =
   | { type: "equal"; l1: string; l2: string }
   // `driven` dims only measure (isDriven). `id` is what a parameter binding references.
   | { type: "distance"; id?: string; line: string; value: number }
-  | { type: "diameter"; id?: string; circle: string; value: number }
+  | { type: "diameter"; id?: string; circle: string; value: number; place?: PlaceOffset }
   // `p*`: 0/1 start/end, 0..3 rectangle corner, 2 arc centre; a circle is its centre.
   | { type: "p2pDistance"; id?: string; e1: string; p1: number; e2: string; p2: number; value: number; driven?: boolean; place?: PlaceOffset }
+  // hDistance/vDistance: e2's x (or y) minus e1's x (or y) equals `value`, SIGNED. The dimension
+  // tool orders the operands so `value` is positive, which freezes the side like radialGap.
+  | { type: "hDistance" | "vDistance"; id?: string; e1: string; p1: number; e2: string; p2: number; value: number; driven?: boolean; place?: PlaceOffset }
   // p2lDistance: driving perpendicular distance from a picked point to a line
   // operand (same `p` semantics as p2pDistance; `line` may be a rect edge)
   | { type: "p2lDistance"; id?: string; e: string; p: number; line: string; value: number; driven?: boolean; place?: PlaceOffset }
@@ -207,7 +212,10 @@ export type SketchConstraint =
   // symmetric: two endpoints mirror across a line (the symmetry axis)
   | { type: "symmetric"; e1: string; p1: number; e2: string; p2: number; line: string }
   // angle: driving included angle (DEGREES) between two lines (solver works in radians)
-  | { type: "angle"; id?: string; l1: string; l2: string; value: number; driven?: boolean; place?: PlaceOffset }
+  // Without `rays`, `value` is the signed angle from l1's direction to l2's (older dims).
+  // With `rays`, l1's and l2's directions times rays[0] and rays[1] bound the shown wedge,
+  // and `value` is the counterclockwise angle from the first ray to the second, 0..360.
+  | { type: "angle"; id?: string; l1: string; l2: string; value: number; rays?: [AngleRay, AngleRay]; driven?: boolean; place?: PlaceOffset }
   // radius: driving radius (mm) of a circle OR arc entity `e`
   | { type: "radius"; id?: string; e: string; value: number; driven?: boolean; place?: PlaceOffset }
   // fix/lock: pin an entity point in place. `p` uses the dimPoint semantics
@@ -239,7 +247,7 @@ export function isPlacedDim(
   c: SketchConstraint,
 ): c is Extract<SketchConstraint, { driven?: boolean }> {
   switch (c.type) {
-    case "p2pDistance": case "p2lDistance": case "radius": case "angle":
+    case "p2pDistance": case "hDistance": case "vDistance": case "p2lDistance": case "radius": case "angle":
     case "radialGap": case "c2cDistance": case "c2lDistance": case "p2cDistance":
     case "offset":
       return true;

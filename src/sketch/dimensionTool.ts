@@ -24,6 +24,7 @@ import {
 import { pickEntity, PROJECTED_FIXED_MSG } from "./modify";
 import { rectCorners } from "./region";
 import { distToSeg, signedAngleDeg } from "./geom2d";
+import { wedgeAt } from "./angleWedge";
 
 type V = THREE.Vector2;
 const v = (x: number, y: number) => new THREE.Vector2(x, y);
@@ -49,6 +50,8 @@ export interface DimOptions {
   /** force a lone circle/arc to radius or diameter (default: circle ⇒ diameter,
    *  arc ⇒ radius, exactly like Fusion) */
   roundPref?: "radius" | "diameter";
+  /** an angle measures the outside of the wedge the cursor is in */
+  reflex?: boolean;
 }
 
 export type DimErrorCode =
@@ -80,13 +83,16 @@ export interface DimPlan {
   /** identity of the field set, SketchMode re-show()s the box only when this
    *  changes (show() destroys whatever the user already typed) */
   fieldKey: string;
-  /** live measured value, mm (degrees for an angle) */
-  measure(): number;
+  /** live measured value, mm (degrees for an angle). `cursor` is the cursor's offset
+   *  from labelAnchor, it picks the mode of a dim that has several (aligned,
+   *  horizontal or vertical; the angle's wedge). */
+  measure(cursor?: PlaceOffset): number;
   /** the two ends of the dimension line, for the placement preview */
   anchors(): { a: V; b: V } | null;
   /** the point `place` is measured FROM (null = this dim can't hold a placement) */
   labelAnchor(): V | null;
-  make(value: number, place?: PlaceOffset): SketchConstraint;
+  /** `place` (the frozen label) picks the mode when given, else `cursor` does */
+  make(value: number, place?: PlaceOffset, cursor?: PlaceOffset): SketchConstraint;
   /** The two line operands this plan's value only MEANS something between when
    *  they are held parallel (the parallel-lines distance: one p2lDistance pins
    *  a single endpoint, so without this the solver satisfies the number by
@@ -355,9 +361,10 @@ function buildPlan(spec: {
   icon?: string;
   fieldKind: "length" | "angle";
   value: number;
+  measureAt?: (cursor?: PlaceOffset) => number;
   anchors: { a: V; b: V } | null;
   labelAnchor: V | null;
-  make: (value: number, place?: PlaceOffset) => SketchConstraint;
+  make: (value: number, place?: PlaceOffset, cursor?: PlaceOffset) => SketchConstraint;
   forceDriven?: boolean;
   parallelPair?: { l1: string; l2: string };
   implyConcentric?: { c1: string; c2: string };
@@ -371,7 +378,7 @@ function buildPlan(spec: {
     field: spec.field,
     fields,
     fieldKey: `${spec.field}:${spec.fieldKind}`,
-    measure: () => spec.value,
+    measure: spec.measureAt ?? (() => spec.value),
     anchors: () => (anchors ? { a: anchors.a.clone(), b: anchors.b.clone() } : null),
     labelAnchor: () => labelAnchor?.clone() ?? null,
     make: spec.make,
@@ -385,18 +392,54 @@ function buildPlan(spec: {
 /** the shared distance plan: point-to-point, centre-to-centre, and the
  *  edge-length special case all land here */
 function p2pPlan(a: PointOp, b: PointOp, forceDriven: boolean, hint: string): DimPlan {
+  const anchor = mid(a.pos, b.pos);
+  const modeOf = (off?: PlaceOffset) => off ? axisModeAt(a.pos, b.pos, v(anchor.x + off.ox, anchor.y + off.oy)) : "aligned";
   return buildPlan({
     kind: "distance", field: "distance", label: "D", fieldKind: "length",
     value: a.pos.distanceTo(b.pos),
+    measureAt: (off) => axisMeasure(a.pos, b.pos, modeOf(off)),
     anchors: { a: a.pos, b: b.pos },
-    labelAnchor: mid(a.pos, b.pos),
+    labelAnchor: anchor,
     forceDriven,
     hint,
-    make: (value, place) => ({
-      type: "p2pDistance", e1: a.eid, p1: a.p, e2: b.eid, p2: b.p, value,
-      ...(place ? { place } : {}),
-    }),
+    make: (value, place, cursor) => {
+      const mode = modeOf(place ?? cursor);
+      if (mode !== "aligned") return axisDim(mode, a, b, value, place);
+      return {
+        type: "p2pDistance", e1: a.eid, p1: a.p, e2: b.eid, p2: b.p, value,
+        ...(place ? { place } : {}),
+      };
+    },
   });
+}
+
+export type AxisMode = "aligned" | "h" | "v";
+
+/** Like mainstream CAD: a cursor beside the pair (outside its x range, inside its y
+ *  range) measures vertically, one above or below measures horizontally, anywhere else
+ *  along the pair. A mode that would read 0, or the same as aligned, stays aligned. */
+export function axisModeAt(a: V, b: V, cursor: V): AxisMode {
+  const outX = cursor.x < Math.min(a.x, b.x) || cursor.x > Math.max(a.x, b.x);
+  const outY = cursor.y < Math.min(a.y, b.y) || cursor.y > Math.max(a.y, b.y);
+  const mode: AxisMode = outX && !outY ? "v" : outY && !outX ? "h" : "aligned";
+  if (mode === "aligned") return mode;
+  const m = axisMeasure(a, b, mode);
+  return m < MEASURE_EPS || a.distanceTo(b) - m < MEASURE_EPS ? "aligned" : mode;
+}
+
+export function axisMeasure(a: V, b: V, mode: AxisMode): number {
+  return mode === "h" ? Math.abs(b.x - a.x) : mode === "v" ? Math.abs(b.y - a.y) : a.distanceTo(b);
+}
+
+/** e2 is the operand further along the axis, so the stored signed value is positive */
+function axisDim(mode: "h" | "v", a: PointOp, b: PointOp, value: number, place?: PlaceOffset): SketchConstraint {
+  const k = mode === "h" ? "x" : "y";
+  const [lo, hi] = a.pos[k] <= b.pos[k] ? [a, b] : [b, a];
+  return {
+    type: mode === "h" ? "hDistance" : "vDistance",
+    e1: lo.eid, p1: lo.p, e2: hi.eid, p2: hi.p, value,
+    ...(place ? { place } : {}),
+  };
 }
 
 /** point (or a line's start point) to a line operand: the perpendicular distance */
@@ -569,7 +612,7 @@ export function resolveDim(picks: DimTarget[], opts: DimOptions = {}): DimResolu
   if (!t1) return { error: "need-second", message: "", keepPicks: true };
   if (!t2) return resolveSingle(t1, opts);
   if (targetKey(t1) === targetKey(t2)) return { error: "same-entity", message: "" };
-  return resolvePair(t1, t2);
+  return resolvePair(t1, t2, opts.reflex === true);
 }
 
 function resolveSingle(t: DimTarget, opts: DimOptions): DimResolution {
@@ -602,13 +645,22 @@ function resolveSingle(t: DimTarget, opts: DimOptions): DimResolution {
     if (len < MEASURE_EPS) return degenerate("line");
     const a = v(ls.x1, ls.y1), b = v(ls.x2, ls.y2);
     const eid = e.id;
+    const anchor = mid(a, b);
+    const modeOf = (off?: PlaceOffset) => off ? axisModeAt(a, b, v(anchor.x + off.ox, anchor.y + off.oy)) : "aligned";
+    const pa: PointOp = { kind: "point", eid, p: 0, pos: a, round: false, fixed: false };
+    const pb: PointOp = { kind: "point", eid, p: 1, pos: b, round: false, fixed: false };
     return buildPlan({
       kind: "length", field: "length", label: "L", fieldKind: "length",
       value: len,
+      measureAt: (off) => axisMeasure(a, b, modeOf(off)),
       anchors: { a, b },
-      labelAnchor: null, // `distance` renders through entityDims, no place slot
+      // the aligned `distance` renders through the line's badge and drops `place`
+      labelAnchor: anchor,
       hint: "Line: type a length, or pick a second entity · click to place",
-      make: (value) => ({ type: "distance", line: eid, value }),
+      make: (value, place, cursor) => {
+        const mode = modeOf(place ?? cursor);
+        return mode === "aligned" ? { type: "distance", line: eid, value } : axisDim(mode, pa, pb, value, place);
+      },
     });
   }
   if (e.type === "circle") {
@@ -634,9 +686,9 @@ function resolveSingle(t: DimTarget, opts: DimOptions): DimResolution {
         kind: "diameter", field: "diameter", label: "Diameter", icon: "diameter", fieldKind: "length",
         value: rd.r * 2,
         anchors: { a: v(rd.x - rd.r, rd.y), b: v(rd.x + rd.r, rd.y) },
-        labelAnchor: null, // `diameter` has no place slot (see types.ts)
+        labelAnchor: c,
         hint: "Arc: type a diameter, or pick a second entity · click to place",
-        make: (value) => ({ type: "diameter", circle: eid, value }),
+        make: (value, place) => ({ type: "diameter", circle: eid, value, ...(place ? { place } : {}) }),
       });
     }
     return roundValuePlan(eid, rd.r, c, "Arc");
@@ -657,7 +709,7 @@ function roundValuePlan(eid: string, r: number, c: V, what: string): DimPlan {
   });
 }
 
-function resolvePair(t1: DimTarget, t2: DimTarget): DimResolution {
+function resolvePair(t1: DimTarget, t2: DimTarget, reflex = false): DimResolution {
   const o1 = reduce(t1);
   if ("error" in o1) return o1;
   const o2 = reduce(t2);
@@ -711,10 +763,10 @@ function resolvePair(t1: DimTarget, t2: DimTarget): DimResolution {
     }
     return p2lPlan(pt, ln, forceDriven, `Distance to line: type a value · click to place${drivenHint}`);
   }
-  return lineLine(a, b, forceDriven, drivenHint);
+  return lineLine(a, b, forceDriven, drivenHint, reflex);
 }
 
-function lineLine(l1: LineOp, l2: LineOp, forceDriven: boolean, drivenHint: string): DimResolution {
+function lineLine(l1: LineOp, l2: LineOp, forceDriven: boolean, drivenHint: string, reflex = false): DimResolution {
   if (l1.opId === l2.opId) return { error: "same-entity", message: "" };
   const d1 = dirOf(l1.seg), d2 = dirOf(l2.seg);
   if (!d1 || !d2) return degenerate("line");
@@ -724,14 +776,24 @@ function lineLine(l1: LineOp, l2: LineOp, forceDriven: boolean, drivenHint: stri
     const m1 = v((s1.x1 + s1.x2) / 2, (s1.y1 + s1.y2) / 2);
     const m2 = v((s2.x1 + s2.x2) / 2, (s2.y1 + s2.y2) / 2);
     const id1 = l1.opId, id2 = l2.opId;
+    const anchor = mid(m1, m2);
+    const wedgeOf = (off?: PlaceOffset) => off ? wedgeAt(s1, s2, v(anchor.x + off.ox, anchor.y + off.oy), reflex) : null;
     return buildPlan({
       kind: "angle", field: "angle", label: "Angle", icon: "angle", fieldKind: "angle",
       value: signedAngleDeg(s1, s2),
-      anchors: null, // an angle dim renders as a bare value (see entityDims)
-      labelAnchor: mid(m1, m2),
+      measureAt: (off) => wedgeOf(off)?.value ?? signedAngleDeg(s1, s2),
+      anchors: null,
+      labelAnchor: anchor,
       forceDriven,
-      hint: `Angle: type the included angle · click to place${drivenHint}`,
-      make: (value, place) => ({ type: "angle", l1: id1, l2: id2, value, ...(place ? { place } : {}) }),
+      hint: `Angle: type the included angle · click to place, right-click for the reflex angle${drivenHint}`,
+      make: (value, place, cursor) => {
+        const w = wedgeOf(place ?? cursor);
+        if (!w) return { type: "angle", l1: id1, l2: id2, value, ...(place ? { place } : {}) };
+        return {
+          type: "angle", l1: w.swap ? id2 : id1, l2: w.swap ? id1 : id2, value, rays: w.rays,
+          ...(place ? { place } : {}),
+        };
+      },
     });
   }
   // Parallel: an angle dim here would read "0°" and drive nothing. Measure the

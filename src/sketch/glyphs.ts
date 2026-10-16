@@ -59,6 +59,8 @@ export function constraintFace(c: SketchConstraint): {
     case "radius": return { icon: "radius", name: "Radius", operands: [c.e] };
     case "angle": return { icon: "angle", name: "Angle", operands: [c.l1, c.l2] };
     case "p2pDistance": return { icon: "distance", name: "Distance", operands: [c.e1, c.e2] };
+    case "hDistance": return { icon: "distance", name: "Horizontal distance", operands: [c.e1, c.e2] };
+    case "vDistance": return { icon: "distance", name: "Vertical distance", operands: [c.e1, c.e2] };
     case "p2lDistance": return { icon: "distance", name: "Distance to line", operands: [c.e, c.line] };
     case "radialGap": return { icon: "distance", name: "Radial gap", operands: [c.inner, c.outer] };
     case "c2cDistance": return { icon: "distance", name: "Rim to rim", operands: [c.c1, c.c2] };

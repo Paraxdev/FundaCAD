@@ -484,7 +484,8 @@ describe("label placement", () => {
   it("distance / diameter have no place slot (they render through entityDims)", () => {
     const lengthPlan = plan(resolveDim([T.entity(line("l", 0, 0, 10, 0))]));
     const diaPlan = plan(resolveDim([T.entity(circle("c", 0, 0, 5))]));
-    expect(lengthPlan.labelAnchor()).toBeNull();
+    // a line length anchors a label for its horizontal and vertical modes only
+    expect(lengthPlan.labelAnchor()).not.toBeNull();
     expect(diaPlan.labelAnchor()).toBeNull();
     expect(lengthPlan.make(10, place)).toEqual({ type: "distance", line: "l", value: 10 });
     expect(diaPlan.make(10, place)).toEqual({ type: "diameter", circle: "c", value: 10 });

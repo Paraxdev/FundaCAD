@@ -10,7 +10,9 @@ import type { DimField, DimPlace, PlaceOffset, SketchConstraint } from "../types
 import { isDriven, dimPlaceOf, projEndSamples } from "../types";
 import { circumcenter, arcCenterRadius } from "./arc";
 import { rectCorners } from "./region";
-import { paramOnSeg, signedAngleDeg } from "./geom2d";
+import { paramOnSeg } from "./geom2d";
+import { crossingOf, measuredAngleDeg, wedgeRays } from "./angleWedge";
+import type { AngleRay } from "../types";
 import { poleRef } from "./bspline";
 
 export type { DimField };
@@ -131,6 +133,104 @@ export function linearDim(
   };
 }
 const linear = linearDim;
+
+/** A horizontal (axis x) or vertical (axis y) dimension of a..b. The dimension line
+ *  runs along the axis and `offOverride` sets how far it sits from the pair's middle
+ *  across it; the label is at midpoint(a,b) + place, as with linearDim. */
+export function axisLinearDim(
+  a: V, b: V, axis: "x" | "y", value: number, offOverride?: number,
+): { labelPos: V; lines: [V, V][]; place: V } {
+  const across = axis === "x" ? "y" : "x";
+  const m = a.clone().add(b).multiplyScalar(0.5);
+  const at = offOverride !== undefined
+    ? m[across] + offOverride
+    : Math.max(a[across], b[across]) + dimOffset(defaultOffset(value));
+  const da = a.clone(), db = b.clone();
+  da[across] = at;
+  db[across] = at;
+  const dir = db.clone().sub(da);
+  if (dir.lengthSq() > 1e-18) dir.normalize();
+  const aSize = arrowSize(da.distanceTo(db));
+  const place = v(0, 0);
+  place[across] = at - m[across];
+  return {
+    labelPos: da.clone().add(db).multiplyScalar(0.5),
+    lines: [
+      [a.clone(), da.clone()],
+      [b.clone(), db.clone()],
+      [da.clone(), db.clone()],
+      ...arrow(da, dir.clone().negate(), aSize),
+      ...arrow(db, dir, aSize),
+    ],
+    place,
+  };
+}
+
+const ARC_SEGS = 48;
+type LineSeg = { x1: number; y1: number; x2: number; y2: number };
+
+function arcPolyline(c: V, r: number, from: number, sweep: number): [V, V][] {
+  const n = Math.max(2, Math.ceil((ARC_SEGS * Math.abs(sweep)) / (2 * Math.PI)));
+  const out: [V, V][] = [];
+  let prev = v(c.x + r * Math.cos(from), c.y + r * Math.sin(from));
+  for (let k = 1; k <= n; k++) {
+    const t = from + (sweep * k) / n;
+    const q = v(c.x + r * Math.cos(t), c.y + r * Math.sin(t));
+    out.push([prev, q]);
+    prev = q;
+  }
+  return out;
+}
+
+const ccwRad = (from: number, to: number) => ((to - from) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI);
+
+/** The rim gap from an arc's nearer end round to direction `ang`, empty when `ang` is
+ *  already on the arc, so a radius or diameter placed off the arc still meets it. */
+function arcExtension(e: ResolvedEntity, c: V, r: number, ang: number): [V, V][] {
+  if (e.type !== "arc") return [];
+  const at = (x: number, y: number) => Math.atan2(y - c.y, x - c.x);
+  const a1 = at(e.x1, e.y1), a2 = at(e.x2, e.y2), am = at(e.mx, e.my);
+  const s = ccwRad(a1, a2);
+  const [start, span] = ccwRad(a1, am) < s ? [a1, s] : [a2, 2 * Math.PI - s];
+  if (ccwRad(start, ang) <= span + 1e-9) return [];
+  const pastEnd = ccwRad(start + span, ang), beforeStart = ccwRad(ang, start);
+  return pastEnd <= beforeStart
+    ? arcPolyline(c, r, start + span, pastEnd)
+    : arcPolyline(c, r, ang, beforeStart);
+}
+
+/** An angle dim's arc between its two rays at the label's distance from the crossing,
+ *  with extension lines where the arc ends beyond either segment. */
+function angleArc(s1: LineSeg, s2: LineSeg, rays: [AngleRay, AngleRay] | undefined, labelPos: V): [V, V][] {
+  const x = crossingOf(s1, s2);
+  if (!x) return [];
+  const { from, sweepDeg } = wedgeRays(s1, s2, rays);
+  const r = Math.max(labelPos.distanceTo(x), px(OFFSET_PX, 4));
+  const a0 = Math.atan2(from.y, from.x), sweep = (sweepDeg * Math.PI) / 180;
+  const lines = arcPolyline(x, r, a0, sweep);
+  const aSize = arrowSize(r * sweep);
+  const e0 = v(x.x + r * Math.cos(a0), x.y + r * Math.sin(a0));
+  const e1 = v(x.x + r * Math.cos(a0 + sweep), x.y + r * Math.sin(a0 + sweep));
+  lines.push(...arrow(e0, v(Math.sin(a0), -Math.cos(a0)), aSize));
+  lines.push(...arrow(e1, v(-Math.sin(a0 + sweep), Math.cos(a0 + sweep)), aSize));
+  for (const ang of [a0, a0 + sweep]) {
+    const u = v(Math.cos(ang), Math.sin(ang));
+    const end = v(x.x + u.x * r, x.y + u.y * r);
+    // the segment this ray runs along: the one whose direction is parallel to u
+    const s = Math.abs(cross(u, s1)) <= Math.abs(cross(u, s2)) ? s1 : s2;
+    const t1 = (s.x1 - x.x) * u.x + (s.y1 - x.y) * u.y;
+    const t2 = (s.x2 - x.x) * u.x + (s.y2 - x.y) * u.y;
+    const t = Math.min(Math.max(r, Math.min(t1, t2)), Math.max(t1, t2));
+    if (Math.abs(t - r) > 1e-9) lines.push([v(x.x + u.x * t, x.y + u.y * t), end]);
+  }
+  return lines;
+}
+
+function cross(u: V, s: LineSeg): number {
+  const dx = s.x2 - s.x1, dy = s.y2 - s.y1;
+  const l = Math.hypot(dx, dy) || 1;
+  return (u.x * dy - u.y * dx) / l;
+}
 
 /** A badge dim's stored placement, as a vector, `null` when the user hasn't
  *  placed this one and there's no staggered default to fall back on. THE one
@@ -559,30 +659,43 @@ export function constraintDims(ents: ResolvedEntity[], constraints: SketchConstr
       const cr = asRound(e);
       if (!cr || (e.type !== "circle" && e.type !== "arc")) return;
       const cx = cr.x, cy = cr.y, r = cr.r;
-      // placement picks the radial DIRECTION (its magnitude is ignored, the
-      // label stays on the rim radius, which is what the dim means)
+      // the label sits at centre + place, inside or outside the rim; the radial line
+      // runs out to whichever is further, the label or the rim
       const pv = place ? v(place.ox, place.oy) : null;
-      const d = pv && pv.lengthSq() > 1e-12 ? pv.normalize() : v(Math.SQRT1_2, Math.SQRT1_2); // 45° radial
+      const placed = pv !== null && pv.lengthSq() > 1e-12;
+      const d = placed ? pv.clone().normalize() : v(Math.SQRT1_2, Math.SQRT1_2); // 45° radial
+      const off = placed ? pv : d.clone().multiplyScalar(r * 0.6);
+      const reach = Math.max(r, off.length());
+      const rim = v(cx + d.x * r, cy + d.y * r);
       out.push({
         cIndex: i, valueMm: driven ? r : c.value, driven,
-        labelPos: v(cx + d.x * r * 0.6, cy + d.y * r * 0.6),
-        lines: [[v(cx, cy), v(cx + d.x * r, cy + d.y * r)]],
-        place: d.clone().multiplyScalar(r * 0.6),
+        labelPos: v(cx + off.x, cy + off.y),
+        lines: [
+          [v(cx, cy), v(cx + d.x * reach, cy + d.y * reach)],
+          ...arrow(rim, d, arrowSize(r)),
+          ...arcExtension(e, v(cx, cy), r, Math.atan2(d.y, d.x)),
+        ],
+        place: off.clone(),
       });
       return;
     }
     // diameter on an ARC (the dimension tool's Radius/Diameter override): a
     // circle's diameter renders through its own entityDims badge, an arc has
-    // none, so only arcs are drawn here, and only ever once. The `diameter`
-    // constraint carries no `place` slot (see types.ts), so this one label is
-    // not draggable: it always renders in the shared default layout.
+    // none, so only arcs are drawn here, and only ever once.
     if (c.type === "diameter") {
       const e = byId.get(c.circle);
       if (!e || e.type !== "arc") return;
       const cr = asRound(e);
       if (!cr) return;
-      const d = diameterDim(cr.x, cr.y, cr.r, null);
-      out.push({ cIndex: i, valueMm: cr.r * 2, driven: false, labelPos: d.labelPos, lines: d.lines });
+      const ctr = v(cr.x, cr.y);
+      const d = diameterDim(cr.x, cr.y, cr.r, place ? v(place.ox, place.oy) : null);
+      const u = d.place.clone().normalize();
+      const lines = [
+        ...d.lines,
+        ...arcExtension(e, ctr, cr.r, Math.atan2(u.y, u.x)),
+        ...arcExtension(e, ctr, cr.r, Math.atan2(-u.y, -u.x)),
+      ];
+      out.push({ cIndex: i, valueMm: cr.r * 2, driven: false, labelPos: d.labelPos, lines, place: d.place });
       return;
     }
     // angle (line-to-line): a label between the two lines, value in degrees
@@ -594,7 +707,23 @@ export function constraintDims(ents: ResolvedEntity[], constraints: SketchConstr
       const labelPos = m1.clone().add(m2).multiplyScalar(0.5);
       const off = place ? v(place.ox, place.oy) : v(0, 0); // free 2D: a straight offset
       labelPos.add(off);
-      out.push({ cIndex: i, valueMm: driven ? signedAngleDeg(s1, s2) : c.value, labelPos, lines: [], kind: "angle", driven, place: off });
+      out.push({
+        cIndex: i, valueMm: driven ? measuredAngleDeg(s1, s2, c.rays) : c.value, labelPos,
+        lines: angleArc(s1, s2, c.rays, labelPos), kind: "angle", driven, place: off,
+      });
+      return;
+    }
+    if (c.type === "hDistance" || c.type === "vDistance") {
+      const e1 = byId.get(c.e1), e2 = byId.get(c.e2);
+      const a = e1 ? refPoint(e1, c.p1) : null;
+      const b = e2 ? refPoint(e2, c.p2) : null;
+      if (!a || !b) return;
+      const axis = c.type === "hDistance" ? "x" : "y";
+      const meas = b[axis] - a[axis];
+      if (Math.abs(meas) < 1e-6) return;
+      const off = place ? (axis === "x" ? place.oy : place.ox) : undefined;
+      const lin = axisLinearDim(a, b, axis, Math.abs(meas), off);
+      out.push({ cIndex: i, labelPos: lin.labelPos, valueMm: driven ? meas : c.value, lines: lin.lines, driven, place: lin.place });
       return;
     }
     // each branch yields the measured pair (a, b); the shared tail draws it.

@@ -23,6 +23,7 @@ import { asRound, lineOperand, refPoint, rimNesting, type Round } from "./entity
 import type { SketchConstraint } from "../types";
 import { isDriven, projEndSamples } from "../types";
 import { poleOfRef } from "./bspline";
+import { solverAngleDeg } from "./angleWedge";
 
 export interface SolvePass {
   entities: ResolvedEntity[];
@@ -329,6 +330,10 @@ export async function compileAndSolve(
       const a = dimPoint(c.e1, c.p1), b = dimPoint(c.e2, c.p2);
       if (a && b && a !== b) cons.push({ id, type: "distance", a, b, value: c.value });
     }
+    else if (c.type === "hDistance" || c.type === "vDistance") {
+      const a = dimPoint(c.e1, c.p1), b = dimPoint(c.e2, c.p2);
+      if (a && b && a !== b) cons.push({ id, type: "axisDistance", a, b, axis: c.type === "hDistance" ? "x" : "y", value: c.value });
+    }
     else if (c.type === "p2lDistance") {
       const p = dimPoint(c.e, c.p);
       if (p && isLine(c.line)) cons.push({ id, type: "p2lDistance", p, line: c.line, value: c.value });
@@ -380,7 +385,7 @@ export async function compileAndSolve(
       if (a && b && isLine(c.line)) cons.push({ id, type: "symmetric", a, b, line: c.line });
     }
     else if (c.type === "angle") {
-      if (isLine(c.l1) && isLine(c.l2)) cons.push({ id, type: "angleLL", l1: c.l1, l2: c.l2, value: (c.value * Math.PI) / 180 });
+      if (isLine(c.l1) && isLine(c.l2)) cons.push({ id, type: "angleLL", l1: c.l1, l2: c.l2, value: (solverAngleDeg(c.value, c.rays) * Math.PI) / 180 });
     }
     else if (c.type === "radius") {
       if (centers.has(c.e)) cons.push({ id, type: "circleRadius", circle: c.e, value: c.value });
@@ -545,6 +550,7 @@ export async function compileAndSolve(
         case "perpendicular": { if (!fxLine(c.l1) || !fxLine(c.l2)) return null; const d1 = lineDir(c.l1), d2 = lineDir(c.l2); return Math.abs(d1.x * d2.x + d1.y * d2.y); }
         case "equal": return fxLine(c.l1) && fxLine(c.l2) ? Math.abs(lineLen(c.l1) - lineLen(c.l2)) : null;
         case "distance": return fx(c.a) && fx(c.b) ? Math.abs(dist(c.a, c.b) - c.value) : null;
+        case "axisDistance": return fx(c.a) && fx(c.b) ? Math.abs(P(c.b)[c.axis] - P(c.a)[c.axis] - c.value) : null;
         case "p2lDistance": return fx(c.p) && fxLine(c.line) ? Math.abs(perpDist(c.p, c.line) - c.value) : null;
         case "diameter": return fxRound(c.circle) ? Math.abs(2 * radiusOf.get(c.circle)! - c.value) : null;
         case "circleRadius": return fxRound(c.circle) ? Math.abs(radiusOf.get(c.circle)! - c.value) : null;

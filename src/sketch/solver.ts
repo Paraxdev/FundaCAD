@@ -31,6 +31,8 @@ export type SConstraint =
   | { id: string; type: "perpendicular"; l1: string; l2: string }
   | { id: string; type: "equal"; l1: string; l2: string }
   | { id: string; type: "distance"; a: PointId; b: PointId; value: number }
+  // b.x - a.x (axis x) or b.y - a.y (axis y) = value, signed
+  | { id: string; type: "axisDistance"; a: PointId; b: PointId; axis: "x" | "y"; value: number }
   | { id: string; type: "p2lDistance"; p: PointId; line: string; value: number }
   | { id: string; type: "diameter"; circle: string; value: number }
   | { id: string; type: "tangentLC"; line: string; circle: string }
@@ -231,6 +233,13 @@ function toGcsConstraint(c: SConstraint): any {
       return { id: c.id, type: "equal_length", l1_id: c.l1, l2_id: c.l2 };
     case "distance":
       return { id: c.id, type: "p2p_distance", p1_id: c.a, p2_id: c.b, distance: c.value };
+    case "axisDistance":
+      return {
+        id: c.id, type: "difference",
+        param1: { o_id: c.a, prop: c.axis },
+        param2: { o_id: c.b, prop: c.axis },
+        difference: c.value,
+      };
     case "p2lDistance":
       return { id: c.id, type: "p2l_distance", p_id: c.p, l_id: c.line, distance: c.value };
     case "diameter":
