@@ -237,6 +237,21 @@ describe("ConstraintTools.applicable: point on curve, alignment, chains, rectang
     }
   });
 
+  it("two clicked line ends offer Coincident first, which the I key takes", () => {
+    const M: ResolvedEntity = { type: "line", id: "M", x1: 5, y1: 20, x2: 15, y2: 30 };
+    const { ct } = host([L, M]);
+    for (const sel of [[{ id: "M", p: 1 }, { id: "L", p: 0 }], [{ id: "L", p: 0 }, { id: "M", p: 1 }]]) {
+      expect(ct.applicable(sel).find((o) => o.tool === "coincident")?.label).toBe("Coincident");
+    }
+  });
+
+  it("a clicked circle centre and a point offer Coincident first, a whole circle On curve", () => {
+    const { ct } = host([C, P]);
+    const first = (sel: { id: string; p?: number }[]) => ct.applicable(sel).find((o) => o.tool === "coincident")?.label;
+    expect(first([{ id: "P" }, { id: "C", p: 0 }])).toBe("Coincident");
+    expect(first([{ id: "P" }, { id: "C" }])).toBe("On curve");
+  });
+
   it("a clicked line end and a line offer On curve and Midpoint for that end", () => {
     const M: ResolvedEntity = { type: "line", id: "M", x1: 5, y1: 20, x2: 15, y2: 30 };
     const { h, ct } = host([L, M]);

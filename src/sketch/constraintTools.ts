@@ -324,10 +324,14 @@ export class ConstraintTools {
       add("Tangent", "tangent", chain((a, b) => ({ type: "tangent2", a: a.id, b: b.id })));
     }
 
-    if (ops.length === 2) {
-      // a point with a curve, either way round, ahead of Coincident so I on a
-      // point and a circle puts the point on the rim, not on the centre
+    // a point with a curve, either way round. A curve picked whole is preferred
+    // over Coincident so I on a point and a circle puts the point on the rim, not
+    // on the centre; a curve picked by a clicked end or centre is a point, so
+    // Coincident comes first for it
+    const curveOptions = (clicked: boolean) => {
+      if (ops.length !== 2) return;
       for (const [pt, cv] of [[first, rest[0]!], [rest[0]!, first]] as const) {
+        if (cv.explicit !== clicked) continue;
         if (pt.point === null || !cv.kind || baseId(cv.id) === pt.id) continue;
         const p = pt.point;
         const centre = isRnd(pt) && p === centreIndex(pt.ent);
@@ -337,7 +341,8 @@ export class ConstraintTools {
         add(centre ? (cv.kind === "line" ? "Centre on line" : "Centre on curve") : "On curve", "coincident", [{ type: "pointOnCurve", e: pt.id, p, curve: cv.id }]);
         if (cv.kind === "line") add(centre ? "Centre at midpoint" : "Midpoint", "midpoint", [{ type: "midpoint", e: pt.id, p, line: cv.id }]);
       }
-    }
+    };
+    curveOptions(false);
 
     if (all(hasPt)) {
       // concentric already says "same centre"; a redundant Coincident on round
@@ -345,6 +350,7 @@ export class ConstraintTools {
       if (!all(isRnd)) {
         add("Coincident", "coincident", chain((a, b) => ({ type: "coincident", e1: a.id, p1: a.point!, e2: b.id, p2: b.point! })));
       }
+      curveOptions(true);
       add("Align horizontally", "horizontal", chain((a, b) => ({ type: "horizontalPoints", e1: a.id, p1: a.point!, e2: b.id, p2: b.point! })));
       add("Align vertically", "vertical", chain((a, b) => ({ type: "verticalPoints", e1: a.id, p1: a.point!, e2: b.id, p2: b.point! })));
     }

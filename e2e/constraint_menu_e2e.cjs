@@ -10,7 +10,7 @@
 //   5. H with a line selected makes it horizontal, the tangent tool on two
 //      lines says why it refuses.
 //   6. Shift+P, Shift+L, Shift+C and I apply to the selection, the select tool
-//      stays armed; a box selected rectangle is not read as a side clicked earlier.
+//      stays armed, I on two points is Coincident; a box selected rectangle is not read as a side clicked earlier.
 //
 // Usage (from the repo root, with vite on 5173 + engine on 8765 (`fundacad-engine --ws`)):
 //   SC_TOKEN=<engine token> SC_CHROME=<chrome.exe> node e2e/constraint_menu_e2e.cjs [outDir]
@@ -85,6 +85,8 @@ const check = (name, ok, detail) => {
       { type: "point", id: "P4", x: -75, y: -80 },
       { type: "circle", id: "C3", x: 115, y: 85, radius: 6 },
       { type: "point", id: "P5", x: 125, y: 100 },
+      { type: "point", id: "P6", x: 100, y: -70 },
+      { type: "point", id: "P7", x: 115, y: -80 },
     ] });
     await window.store.rebuildNow();
   });
@@ -255,6 +257,11 @@ const check = (name, ok, detail) => {
   check("I on a point and a circle puts the point on the rim", types(k.added) === '["pointOnCurve"]' && k.added[0].curve === "C3", JSON.stringify(k));
   e = await ents();
   check("the point sits on the circle C3", Math.abs(Math.hypot(e.P5.x - e.C3.x, e.P5.y - e.C3.y) - e.C3.radius) < 1e-6, JSON.stringify(e.P5));
+
+  k = await key([[100, -70], [115, -80]], "i");
+  check("I on two points records Coincident", types(k.added) === '["coincident"]' && !k.input, JSON.stringify(k));
+  e = await ents();
+  check("the two points meet", Math.hypot(e.P6.x - e.P7.x, e.P6.y - e.P7.y) < 1e-6, JSON.stringify([e.P6, e.P7]));
 
   await select([e.Q.x, e.Q.y + e.Q.height / 2]);
   await clear();
