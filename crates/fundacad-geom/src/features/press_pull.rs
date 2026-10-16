@@ -573,8 +573,9 @@ pub fn press_pull(ctx: &mut Ctx, f: &PressPull) -> FResult {
             None => dist,
         };
         let d = if target.is_some() && reach_offset != 0.0 {
-            let pushed = d + d.signum() * reach_offset;
-            if d.abs() < 1e-9 || pushed * d.signum() < 0.0 {
+            let toward = if d.abs() >= 1e-9 { d.signum() } else if dist < 0.0 { -1.0 } else { 1.0 };
+            let pushed = d + toward * reach_offset;
+            if pushed * toward < 1e-9 {
                 return Err(Fail::msg("Press/Pull: the 'up to' offset reaches back past the face"));
             }
             pushed
@@ -620,9 +621,11 @@ pub fn press_pull(ctx: &mut Ctx, f: &PressPull) -> FResult {
         ctx.set_shape(act, act_shape.clone());
     }
     if target.is_some() && !moved {
-        return Err(Fail::msg(
-            "Press/Pull: the face already lies on the 'up to' target, pick a target away from it",
-        ));
+        ctx.advise(
+            &f.id,
+            "upToReached",
+            "the face already lies on its 'up to' target, so the push moves nothing".into(),
+        );
     }
     Ok(())
 }
