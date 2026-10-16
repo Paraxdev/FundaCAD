@@ -87,7 +87,7 @@ const check = (name, ok, detail) => {
   await pick("export-binary", "ASCII");
   await page.screenshot({ path: path.join(OUT, "01_stl_advanced.png") });
 
-  await pick("export-format", "STEP (*.step)");
+  await pick("export-format", "STEP (*.step, *.stp)");
   check("STEP hides the mesh settings", !(await has("export-unit")) && !(await has("export-refinement")));
   await pick("export-format", "STL (*.stl)");
 

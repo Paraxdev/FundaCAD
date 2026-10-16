@@ -130,9 +130,9 @@ export async function openDocument(
       // MCAD-style: Open takes our document AND mesh/CAD files (imported as a
       // body), routed by extension below, so users can just "open" an STL.
       filters: [
-        { name: "All supported", extensions: [DOC_EXT, BINARY_DOC_EXT, ...LEGACY_DOC_EXTS, "json", ...IMPORT_EXTS] },
-        { name: "FundaCAD Document", extensions: [DOC_EXT, BINARY_DOC_EXT, ...LEGACY_DOC_EXTS, "json"] },
-        { name: "Mesh / CAD", extensions: IMPORT_EXTS },
+        { name: "All supported", extensions: dialogExts([DOC_EXT, BINARY_DOC_EXT, ...LEGACY_DOC_EXTS, "json", ...IMPORT_EXTS]) },
+        { name: "FundaCAD Document", extensions: dialogExts([DOC_EXT, BINARY_DOC_EXT, ...LEGACY_DOC_EXTS, "json"]) },
+        { name: "Mesh / CAD", extensions: dialogExts(IMPORT_EXTS) },
       ],
     });
     if (typeof path !== "string") return;
@@ -387,7 +387,7 @@ export async function exportModel(store: DocumentStore, geometry: GeometryBacken
   const dir = lastExportDir();
   const { save } = await import("@tauri-apps/plugin-dialog");
   const path = await save({
-    filters: [{ name: kind.label, extensions: kind.value === "step" ? ["step", "stp"] : [kind.ext] }],
+    filters: [{ name: kind.label, extensions: dialogExts(kind.exts) }],
     // "separate" derives one file per body as "<base>-<body>.<ext>", so name the base.
     defaultPath: dir ? `${dir}/${name}` : name,
   });
@@ -450,8 +450,24 @@ export function extToFormat(path: string): ExportFormat {
 // owns is written by that plugin's exporter in the geometry engine, reached
 // through GeometryBackend.exportWith.
 
-// FreeCAD writes .FCStd, and GTK file dialogs on Linux match case.
-export const IMPORT_EXTS = ["stl", "3mf", "step", "stp", "stpz", "gz", "xbf", "iges", "igs", "brep", "fcstd", "FCStd", "3dm", "ifc", "obj", "ply", "off", "amf", "glb", "gltf", "wrl", "wrz", "x3d", "x3dz"];
+/** Lower case only, every lookup lower-cases the name first (dropRouting, the
+ *  two mappers above). */
+export const IMPORT_EXTS = ["stl", "3mf", "step", "stp", "stpz", "gz", "xbf", "iges", "igs", "brep", "fcstd", "3dm", "ifc", "obj", "ply", "off", "amf", "glb", "gltf", "wrl", "wrz", "x3d", "x3dz"];
+
+// FreeCAD writes .FCStd.
+const MIXED_CASE_EXTS = ["FCStd"];
+
+/** GTK file dialogs on Linux match case, so a list handed to one offers each
+ *  extension in lower and upper case. */
+export function dialogExts(exts: readonly string[]): string[] {
+  const out = new Set<string>();
+  for (const e of exts) {
+    out.add(e.toLowerCase());
+    out.add(e.toUpperCase());
+  }
+  for (const m of MIXED_CASE_EXTS) if (out.has(m.toLowerCase())) out.add(m);
+  return [...out];
+}
 
 /** Import an external mesh / B-rep file (STL / 3MF / STEP / IGES / XBF / FreeCAD / OBJ / PLY / OFF / AMF / glTF / VRML / X3D) as a new body.
  *  The engine reads the file by path and returns an embeddable BREP payload, so
@@ -467,23 +483,23 @@ export async function importModel(store: DocumentStore, geometry: GeometryBacken
   const path = await open({
     multiple: false,
     filters: [
-      { name: "All supported", extensions: IMPORT_EXTS },
-      { name: "STL", extensions: ["stl"] },
-      { name: "3MF", extensions: ["3mf"] },
-      { name: "STEP", extensions: ["step", "stp", "stpz", "gz"] },
-      { name: "IGES", extensions: ["iges", "igs"] },
-      { name: "BREP", extensions: ["brep"] },
-      { name: "OCCT XBF", extensions: ["xbf"] },
-      { name: "FreeCAD", extensions: ["fcstd", "FCStd"] },
-      { name: "Rhino 3DM", extensions: ["3dm"] },
-      { name: "IFC (buildings)", extensions: ["ifc"] },
-      { name: "OBJ", extensions: ["obj"] },
-      { name: "PLY", extensions: ["ply"] },
-      { name: "OFF", extensions: ["off"] },
-      { name: "AMF", extensions: ["amf"] },
-      { name: "glTF", extensions: ["glb", "gltf"] },
-      { name: "VRML", extensions: ["wrl", "wrz"] },
-      { name: "X3D", extensions: ["x3d", "x3dz"] },
+      { name: "All supported", extensions: dialogExts(IMPORT_EXTS) },
+      { name: "STL", extensions: dialogExts(["stl"]) },
+      { name: "3MF", extensions: dialogExts(["3mf"]) },
+      { name: "STEP", extensions: dialogExts(["step", "stp", "stpz", "gz"]) },
+      { name: "IGES", extensions: dialogExts(["iges", "igs"]) },
+      { name: "BREP", extensions: dialogExts(["brep"]) },
+      { name: "OCCT XBF", extensions: dialogExts(["xbf"]) },
+      { name: "FreeCAD", extensions: dialogExts(["fcstd"]) },
+      { name: "Rhino 3DM", extensions: dialogExts(["3dm"]) },
+      { name: "IFC (buildings)", extensions: dialogExts(["ifc"]) },
+      { name: "OBJ", extensions: dialogExts(["obj"]) },
+      { name: "PLY", extensions: dialogExts(["ply"]) },
+      { name: "OFF", extensions: dialogExts(["off"]) },
+      { name: "AMF", extensions: dialogExts(["amf"]) },
+      { name: "glTF", extensions: dialogExts(["glb", "gltf"]) },
+      { name: "VRML", extensions: dialogExts(["wrl", "wrz"]) },
+      { name: "X3D", extensions: dialogExts(["x3d", "x3dz"]) },
     ],
   });
   if (typeof path !== "string") return;

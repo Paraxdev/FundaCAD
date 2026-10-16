@@ -24,11 +24,13 @@ export interface ExportSettings {
   showAdvanced: boolean;
 }
 
-export const FORMATS: { value: ExportFormat; label: string; ext: string }[] = [
-  { value: "stl", label: "STL (*.stl)", ext: "stl" },
-  { value: "3mf", label: "3MF (*.3mf)", ext: "3mf" },
-  { value: "step", label: "STEP (*.step)", ext: "step" },
-  { value: "glb", label: "GLB glTF (*.glb)", ext: "glb" },
+/** `exts` are what the save dialog offers, the first is the default name's. A
+ *  typed name is kept as typed, the engine writes the path it is given. */
+export const FORMATS: { value: ExportFormat; label: string; ext: string; exts: string[] }[] = [
+  { value: "stl", label: "STL (*.stl)", ext: "stl", exts: ["stl"] },
+  { value: "3mf", label: "3MF (*.3mf)", ext: "3mf", exts: ["3mf"] },
+  { value: "step", label: "STEP (*.step, *.stp)", ext: "step", exts: ["step", "stp"] },
+  { value: "glb", label: "GLB glTF (*.glb)", ext: "glb", exts: ["glb"] },
 ];
 
 export const UNITS: { value: ExportUnit; label: string }[] = [
