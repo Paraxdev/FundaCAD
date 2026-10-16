@@ -28,6 +28,8 @@ thiserror = "1"
 zip = { version = "4", default-features = false, features = ["deflate-flate2"] }
 flate2 = "1"
 quick-xml = "0.37"
+# Pinned exactly: its generated bindings are tied to the bundled ufbx.c it compiles.
+ufbx = "=0.11.5"
 # Rhino .3dm reader, pure Rust. Pinned: a young crate, a new release is checked against tests/import_rhino.rs first.
 cadmpeg-codec-rhino = "=0.6.1"
 cadmpeg-ir = "=0.6.1"

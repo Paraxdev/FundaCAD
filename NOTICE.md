@@ -46,6 +46,8 @@ distributing FundaCAD under its own terms.
   **paste**, **num_cpus** and **enum-as-inner**, MIT OR Apache-2.0; **libm**, **raw-cpuid**,
   **interpol** and **sysctl**, MIT; **defer**, MIT OR Apache-2.0; **bytemuck**, Zlib OR
   Apache-2.0 OR MIT; **byteorder**, **walkdir** and **same-file**, Unlicense OR MIT
+- **ufbx** (the FBX reader, Rust crate with the bundled ufbx.c), MIT OR Unlicense,
+  https://github.com/ufbx/ufbx-rust
 - **cadmpeg-codec-rhino** (the Rhino .3dm reader) with **cadmpeg-ir**, **cadmpeg-core** and
   **cadmpeg-container**, Apache-2.0, https://github.com/cadmpeg/cadmpeg; **zstd**, **zstd-safe**
   and **zstd-sys**, MIT OR Apache-2.0, bundling the zstd library, BSD-3-Clause,
