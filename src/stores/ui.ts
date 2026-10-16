@@ -41,6 +41,8 @@ export const useUiStore = defineStore("ui", () => {
   const xray = ref(false);
   const wireframe = ref(false);
   const viewMode = ref<ViewMode>("realtime");
+  /** What the path tracer is doing, for the paused hint on the view switch. */
+  const traceState = ref("off");
 
   // --- the viewport stutters under the full render (viewport/stutterWatch.ts) ---
   const lowPerformance = ref(false);
@@ -54,7 +56,7 @@ export const useUiStore = defineStore("ui", () => {
     canUndo, canRedo,
     sketchActive,
     gridStepMm,
-    projLabel, selMode, xray, wireframe, viewMode,
+    projLabel, selMode, xray, wireframe, viewMode, traceState,
     lowPerformance, lowPerformanceDismissed,
     shortcutHudOpen,
   };

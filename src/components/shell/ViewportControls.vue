@@ -138,9 +138,19 @@ const offTier = onRenderPrefsChange(() => {
   matcap.value = { style: renderPrefs().matcapStyle, tint: renderPrefs().matcapTint };
 });
 onUnmounted(offTier);
+const offTierChange = engine.viewport.onRenderTierChange(() => { tier.value = engine.viewport.renderTier; });
+onUnmounted(offTierChange);
+const PAUSED_HINT: Record<string, string> = {
+  "paused:section": "paused: section view",
+  "paused:xray": "paused: x-ray",
+  "paused:wireframe": "paused: wireframe",
+  "paused:sketch": "paused: sketch open",
+};
 const viewModes = computed(() => VIEW_MODES.map((v) => {
   const block = v.id === "pathtraced" ? pathTracedBlock(tier.value) : null;
-  return { ...v, disabled: block !== null, title: block ? block.tooltip : `${v.label} (Z)` };
+  const hint = v.id === "pathtraced" ? PAUSED_HINT[ui.traceState] : undefined;
+  const title = block ? block.tooltip : hint ? `${v.label} (Z), ${hint}` : `${v.label} (Z)`;
+  return { ...v, disabled: block !== null, title };
 }));
 const viewModeChoices = computed(() => viewModes.value.map((v) => ({
   value: v.id, label: v.label, disabled: v.disabled, title: v.disabled ? v.title : undefined,

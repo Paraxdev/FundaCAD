@@ -256,6 +256,13 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   e.viewport.onWireframeChange = (on) => { useUiStore().wireframe = on; };
   e.viewport.onViewModeChange = (m) => { useUiStore().viewMode = m; };
   useUiStore().viewMode = e.viewport.viewMode;
+  e.viewport.onTraceStateChange = (st) => { useUiStore().traceState = st; };
+  e.viewport.onTraceFault = (why, off) => {
+    toast(off ? `${why}. Path tracing is off until FundaCAD restarts.` : `${why}. The view is back on Realtime.`, {
+      kind: "error", source: "pathtrace",
+    });
+  };
+  e.viewport.onTraceNotice = (message) => toast(message, { kind: "warning", source: "pathtrace" });
   e.viewport.onStutterChange = (on) => { useUiStore().lowPerformance = on; };
 
   e.geometry = new Geometry();

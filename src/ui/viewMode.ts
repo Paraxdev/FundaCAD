@@ -19,26 +19,49 @@ export const VIEW_MODES: readonly { id: ViewMode; label: string; icon: string }[
 ];
 
 /** The effective render tier: performance or potato mode, or a machine the
- *  viewport detected as weak (`auto`). */
+ *  viewport detected as weak (`auto`), and whether the web view offers a real
+ *  WebGPU adapter (undefined while the probe is still out). */
 export interface RenderTier {
   lowPower: boolean;
   auto: boolean;
+  webgpu?: boolean | undefined;
+  /** The tracer hit a second GPU fault this session. */
+  traceFault?: boolean;
 }
 
 export const PATH_TRACING_OFF =
   "To avoid crashes or unintentional freezes path tracing has been turned off. To re-enable, turn off performance mode.";
 export const PATH_TRACING_AUTO =
   "This computer was detected as low powered, so turning off performance mode may not lift it.";
-export const PATH_TRACING_LATER = "Path tracing arrives in a later update";
+export const PATH_TRACING_NO_GPU = "Path tracing needs WebGPU, which this system's web view does not have yet";
+export const PATH_TRACING_PROBING = "Checking whether this system can path trace";
+export const PATH_TRACING_FAULT = "Path tracing stopped after a GPU error and stays off until FundaCAD restarts";
 
-/** Why Path traced cannot be chosen, or null when it can. There is no tracer
- *  yet, so it is always blocked; the performance reason is checked first so
- *  its wording is already the one a weak machine will keep. */
-export function pathTracedBlock(tier: RenderTier): { reason: "perf" | "later"; tooltip: string } | null {
+export type PathTracedBlockReason = "perf" | "nogpu" | "probing" | "fault";
+
+/** Why Path traced cannot be chosen, or null when it can. The performance
+ *  reason is checked first so a weak machine reads the user's wording. */
+export function pathTracedBlock(tier: RenderTier): { reason: PathTracedBlockReason; tooltip: string } | null {
   if (tier.lowPower || tier.auto) {
     return { reason: "perf", tooltip: tier.auto ? `${PATH_TRACING_OFF} ${PATH_TRACING_AUTO}` : PATH_TRACING_OFF };
   }
-  return { reason: "later", tooltip: PATH_TRACING_LATER };
+  if (tier.webgpu === undefined) return { reason: "probing", tooltip: PATH_TRACING_PROBING };
+  if (!tier.webgpu) return { reason: "nogpu", tooltip: PATH_TRACING_NO_GPU };
+  if (tier.traceFault) return { reason: "fault", tooltip: PATH_TRACING_FAULT };
+  return null;
+}
+
+/** The mode to open with. `guardSet` reads the flag left by a tracer start
+ *  that never reached its first sample, which means the app died there. */
+export function bootViewMode(saved: ViewMode, guardSet: () => boolean): { mode: ViewMode; notice: boolean } {
+  if (saved !== "pathtraced") return { mode: saved, notice: false };
+  let died = false;
+  try {
+    died = guardSet();
+  } catch {
+    died = false;
+  }
+  return died ? { mode: "realtime", notice: true } : { mode: saved, notice: false };
 }
 
 function prefKey(w: Workspace): "viewModeModel" | "viewModeRender" {
@@ -50,7 +73,8 @@ export function savedViewMode(w: Workspace = workspace()): ViewMode {
 }
 
 /** The mode the viewport draws: the saved one, or Realtime while the saved one
- *  is Path traced and that is blocked (performance mode turned on since). */
+ *  is Path traced and that is blocked (performance mode turned on since, or the
+ *  probe is still out). The saved choice is kept either way. */
 export function effectiveViewMode(tier: RenderTier, w: Workspace = workspace()): ViewMode {
   const m = savedViewMode(w);
   return m === "pathtraced" && pathTracedBlock(tier) ? "realtime" : m;
