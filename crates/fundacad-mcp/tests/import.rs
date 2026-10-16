@@ -114,6 +114,7 @@ fn the_extension_decides_the_format() {
         (".ifc", "ifc"),
         (".dxf", "dxf"),
         (".FBX", "fbx"),
+        (".3DS", "3ds"),
         (".DXF", "dxf"),
         (".stpz", "step"),
     ] {
