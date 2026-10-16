@@ -5,9 +5,9 @@
 // together structurally rather than by a coincident constraint. That is easy to
 // doubt from the outside, a saved sketch of a closed triangle has no
 // `constraints` key at all, which reads as "nothing is holding this together",
-// and the answer decides whether auto-constrain owes the user a coincident on
-// every corner it draws. It does not: adding one would be redundant with the
-// merge, and redundant is what the over-defined diagnosis is for.
+// and the answer decides what a recorded coincident on a snapped corner costs.
+// Nothing: the merge already holds it, so the recorded one (which gives the
+// join a glyph) is absorbed rather than reported as over-defined.
 //
 // Counted in DEGREES OF FREEDOM, which is the only measure that can tell the
 // two apart. Run against the real planegcs wasm, like sketchSolve.test.ts.
@@ -54,14 +54,15 @@ describe("a drawn chain is joined by position, not by a constraint", () => {
     expect(r.dof).toBe(8); // 4 points now: the split corner counts twice
   });
 
-  it("a coincident constraint on a corner that already merged is redundant", async () => {
-    // What auto-constrain would be adding on every corner it drew. planegcs is
-    // asked to hold together two ends that are already the same variable, so it
-    // reports the constraint as over-defining rather than as useful work.
+  it("a recorded coincident on a corner that already merged is absorbed, not over-defined", async () => {
+    // What a snapped join records on every corner it draws. The two ends are
+    // already one solver variable, so the constraint removes no freedom and
+    // must not paint its glyph as over-defined.
     const r = await compileAndSolve(CLOSED, [
       { type: "coincident", e1: "e1", p1: 1, e2: "e2", p2: 0 },
     ]);
-    expect(r.dof).toBe(6); // it removes no freedom, because there was none to remove
-    expect(r.overDefined.length).toBeGreaterThan(0);
+    expect(r.dof).toBe(6);
+    expect(r.overDefined).toEqual([]);
+    expect(r.conflicts).toEqual([]);
   });
 });

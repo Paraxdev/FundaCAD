@@ -36,7 +36,7 @@ import { resolveRealEntities, toSketchEntity } from "./resolve";
 import { applyDrivingDimsDirect, waitsForSolver, dimAnchor, drivenBadges, drivingDimFor, findDrivingDim, type DrivingDim } from "./directDims";
 import { expandPattern, reflectedRect, translated } from "./pattern";
 import { candidatesFromEntities, curvesFromEntities, dragSnap, originCandidate, settleOriginPin, showsSnapMarker, snap, type OriginPinRequest, type SnapGuide, type SnapKind, type SnapCandidate, type SnapCurve, type SnapRef } from "./snap";
-import { bindNew, inferArcRelations, inferLineRelations, NEW_ENTITY, tangentArcMid, tangentFrom, type InferResult } from "./inferRelations";
+import { bindNew, inferArcRelations, inferLineRelations, NEW_ENTITY, tagged, tangentArcMid, tangentFrom, type InferResult } from "./inferRelations";
 import type { ResolvedEntity } from "./snap";
 import { hitPx } from "../input/pointerKind";
 import { detectRegions, entityPolyline, profileBounds, rectCorners, rectFromThreePoints } from "./region";
@@ -50,6 +50,7 @@ import { setPrompt } from "../ui/prompt";
 import { tooEdgeOn } from "./planeGraze";
 import { toast } from "../ui/toast";
 import { contextMenu, dismissContextMenu, type CtxItem } from "../ui/menu";
+import { dropSeparatedJoins } from "./joins";
 import { ConstraintTools, CONSTRAINT_TOOLS, type ConstraintHost, type ConstraintOption } from "./constraintTools";
 import { PatternFlow, PATTERN_TOOLS, ENTITY_PATTERNS, type PatternHost } from "./patternFlow";
 import { DimFlow, type DimHost } from "./dimFlow";
@@ -467,7 +468,10 @@ export class SketchMode {
     this.projectFlow = new ProjectFlow(projectHost);
     const modifyHost: ModifyHost = {
       entities: () => this.entities,
-      setEntities: (list) => { this.entities = list; },
+      setEntities: (list) => {
+        this.constraints = dropSeparatedJoins(this.entities, list, this.constraints);
+        this.entities = list;
+      },
       selected: () => this.selected,
       setSelected: (ids) => { this.selected = ids; },
       dim: () => this.dim,
@@ -2937,7 +2941,7 @@ export class SketchMode {
       this.inferTag.hide();
       return;
     }
-    this.inferTag.show(inf.glyphs, inf.relations.map((r) => r.type), this.viewport.projectToScreen(this.plane.to3D(inf.end.x, inf.end.y)));
+    this.inferTag.show(inf.glyphs, inf.relations.filter(tagged).map((r) => r.type), this.viewport.projectToScreen(this.plane.to3D(inf.end.x, inf.end.y)));
     if (inf.hints.length) this.overlay.setGuides(inf.hints, this.plane, this.planeMmPerPx());
   }
 
@@ -3353,12 +3357,6 @@ export class SketchMode {
     // entities that own a center (circle/arc), for concentric/radius/equalRadius
     const roundIds = ids((e) => { const k = curveKind(e); return k === "circle" || k === "arc"; });
     const curveIds = ids((e) => curveKind(e) !== undefined);
-    // entities that own an addressable endpoint (line/arc/spline/point; projected line/arc/poly)
-    const endIds = ids(
-      (e) =>
-        e.type === "line" || e.type === "arc" || e.type === "spline" || e.type === "bspline" || e.type === "point" ||
-        (e.type === "projected" && e.curve.kind !== "circle"),
-    );
     // a pole index beyond a control-point spline's poles names nothing
     const polesOf = new Map(this.entities.flatMap((e) => (e.type === "bspline" ? [[e.id, e.poles.length] as const] : [])));
     const at = (id: string, p: number) => { const n = polesOf.get(id); return n === undefined || poleOfRef(p, n) >= 0; };
@@ -3379,13 +3377,13 @@ export class SketchMode {
           return hasLineOperand(c.l1) && hasLineOperand(c.l2);
         case "diameter": return roundIds.has(c.circle);
         case "tangent": return hasLineOperand(c.line) && circleIds.has(c.circle);
-        case "tangent2": return curveIds.has(c.a) && curveIds.has(c.b);
+        case "tangent2": return (curveIds.has(c.a) || hasLineOperand(c.a)) && (curveIds.has(c.b) || hasLineOperand(c.b));
         case "equalRadius": return roundIds.has(c.a) && roundIds.has(c.b);
-        case "coincident": return endIds.has(c.e1) && endIds.has(c.e2) && at(c.e1, c.p1) && at(c.e2, c.p2);
+        case "coincident": return refIds.has(c.e1) && refIds.has(c.e2) && at(c.e1, c.p1) && at(c.e2, c.p2);
         case "concentric": return roundIds.has(c.c1) && roundIds.has(c.c2);
-        case "midpoint": return endIds.has(c.e) && at(c.e, c.p) && hasLineOperand(c.line);
-        case "pointOnCurve": return endIds.has(c.e) && at(c.e, c.p) && (lineIds.has(c.curve) || roundIds.has(c.curve));
-        case "symmetric": return endIds.has(c.e1) && endIds.has(c.e2) && at(c.e1, c.p1) && at(c.e2, c.p2) && hasLineOperand(c.line);
+        case "midpoint": return refIds.has(c.e) && at(c.e, c.p) && hasLineOperand(c.line);
+        case "pointOnCurve": return refIds.has(c.e) && at(c.e, c.p) && (hasLineOperand(c.curve) || roundIds.has(c.curve));
+        case "symmetric": return refIds.has(c.e1) && refIds.has(c.e2) && at(c.e1, c.p1) && at(c.e2, c.p2) && hasLineOperand(c.line);
         case "radius": return roundIds.has(c.e);
         case "p2pDistance": case "hDistance": case "vDistance": return refIds.has(c.e1) && refIds.has(c.e2) && at(c.e1, c.p1) && at(c.e2, c.p2);
         case "p2lDistance": return refIds.has(c.e) && at(c.e, c.p) && hasLineOperand(c.line);

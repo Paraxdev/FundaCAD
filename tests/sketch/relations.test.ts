@@ -103,6 +103,13 @@ describe("impliedJoins", () => {
     expect(impliedJoins(apart)).toHaveLength(2);
   });
 
+  it("leaves out a corner a recorded coincident already lists", () => {
+    const [a, b] = [TRIANGLE[0]!.id, TRIANGLE[1]!.id];
+    const joins = impliedJoins(TRIANGLE, [{ type: "coincident", e1: b, p1: 0, e2: a, p2: 1 }]);
+    expect(joins).toHaveLength(2);
+    expect(joins.some((j) => j.entities.includes(a) && j.entities.includes(b))).toBe(false);
+  });
+
   it("ignores construction geometry and lone endpoints", () => {
     expect(impliedJoins([line("a", 0, 0, 10, 0)])).toEqual([]);
     const c = [line("a", 0, 0, 10, 0), { ...line("b", 10, 0, 10, 9), construction: true }];

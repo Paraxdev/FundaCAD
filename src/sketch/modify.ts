@@ -234,6 +234,12 @@ export function trimEntity(
   return ents.flatMap((o, i) => (i === index ? pieces : [o]));
 }
 
+/** The line cut back to `to` at its corner end, each end keeping its index so
+ *  a join or dimension on the far end still names it. */
+function shortenTo(l: Extract<ResolvedEntity, { type: "line" }>, keepStart: boolean, to: THREE.Vector2): ResolvedEntity {
+  return keepStart ? { ...l, x2: to.x, y2: to.y } : { ...l, x1: to.x, y1: to.y };
+}
+
 /**
  * Fillet the corner where two line entities meet: shorten both to the tangent
  * points and insert a tangent arc of the given radius. Returns null if it can't.
@@ -270,8 +276,8 @@ export function filletCorner(
   const through = center.clone().add(corner.clone().sub(center).normalize().multiplyScalar(radius));
 
   // A and B survive (just shortened) → keep their ids + constraints; the arc is new
-  const newA: ResolvedEntity = { ...A, x1: aFar.x, y1: aFar.y, x2: T1.x, y2: T1.y };
-  const newB: ResolvedEntity = { ...B, x1: bFar.x, y1: bFar.y, x2: T2.x, y2: T2.y };
+  const newA = shortenTo(A, aFar === a1, T1);
+  const newB = shortenTo(B, bFar === b1, T2);
   const arc: ResolvedEntity = { type: "arc", id: newEntityId(), x1: T1.x, y1: T1.y, x2: T2.x, y2: T2.y, mx: through.x, my: through.y };
 
   const out = ents.map((o, i) => (i === iA ? newA : i === iB ? newB : o));
@@ -839,8 +845,8 @@ export function chamferCorner(
   const T1 = corner.clone().add(d1.clone().multiplyScalar(dist));
   const T2 = corner.clone().add(d2.clone().multiplyScalar(dist));
 
-  const newA: ResolvedEntity = { ...A, x1: aFar.x, y1: aFar.y, x2: T1.x, y2: T1.y };
-  const newB: ResolvedEntity = { ...B, x1: bFar.x, y1: bFar.y, x2: T2.x, y2: T2.y };
+  const newA = shortenTo(A, aFar === a1, T1);
+  const newB = shortenTo(B, bFar === b1, T2);
   const bevel: ResolvedEntity = { type: "line", id: newEntityId(), x1: T1.x, y1: T1.y, x2: T2.x, y2: T2.y };
 
   const out = ents.map((o, i) => (i === iA ? newA : i === iB ? newB : o));
