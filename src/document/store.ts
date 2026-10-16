@@ -299,6 +299,8 @@ export class DocumentStore {
   };
 
   private busy: BusyState = IDLE_BUSY;
+  /** Every runBusy op still running, newest last; the chip shows the newest. */
+  private busyOps: { state: BusyState; abort: AbortController | null }[] = [];
 
   /** The last build of the document without a preview, and what it was built
    *  from. Leaving a tool, or undoing a commit the kernel refused, lands back on
@@ -350,14 +352,12 @@ export class DocumentStore {
     // coarse phase progress for a long non-rebuild op (import) -> the busy chip
     geometry.onOpProgress?.((pct, label) => {
       if (!this.busy.active) return;
-      this.busy = { ...this.busy, pct, ...(label ? { label } : {}) };
-      this.emitBusy();
+      this.setBusy({ ...this.busy, pct, ...(label ? { label } : {}) });
     });
     // Only the busy op's own request: any other id is not what this document waits on.
     geometry.onQueue?.((id, behind) => {
       if (!this.busy.active || this.busy.id !== id) return;
-      this.busy = { ...this.busy, waiting: behind };
-      this.emitBusy();
+      this.setBusy({ ...this.busy, waiting: behind });
     });
   }
 
@@ -410,21 +410,30 @@ export class DocumentStore {
     fn: (onStarted: (id: string) => void) => Promise<T>,
     opts: { rebuild?: boolean; abort?: AbortController } = {},
   ): Promise<T> {
-    this.busy = { ...IDLE_BUSY, active: true, label, rebuild: opts.rebuild === true };
-    this.busyAbort = opts.abort ?? null;
-    this.emitBusy();
+    const op = { state: { ...IDLE_BUSY, active: true, label, rebuild: opts.rebuild === true }, abort: opts.abort ?? null };
+    this.busyOps.push(op);
+    this.setBusy(op.state);
     try {
       return await fn((id) => {
-        this.busy = { ...this.busy, id, waiting: null };
-        this.emitBusy();
+        op.state = { ...op.state, id, waiting: null };
+        if (this.busyOps.at(-1) === op) this.setBusy(op.state);
       });
     } finally {
-      if (this.busyAbort === (opts.abort ?? null)) this.busyAbort = null;
-      this.busy = IDLE_BUSY;
+      this.busyOps.splice(this.busyOps.indexOf(op), 1);
+      this.busy = this.busyOps.at(-1)?.state ?? IDLE_BUSY;
       this.emitBusy();
     }
   }
-  private busyAbort: AbortController | null = null;
+  private get busyAbort(): AbortController | null {
+    return this.busyOps.at(-1)?.abort ?? null;
+  }
+
+  private setBusy(next: BusyState) {
+    this.busy = next;
+    const top = this.busyOps.at(-1);
+    if (top) top.state = next;
+    this.emitBusy();
+  }
 
   /** Stop the busy op, if any. Resolves to whether anything was stopped, false
    *  covers both "nothing running" and "the engine had already finished". */
