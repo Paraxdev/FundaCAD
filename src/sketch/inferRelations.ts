@@ -6,6 +6,7 @@ import * as THREE from "three";
 import type { SketchConstraint } from "../types";
 import { asRound } from "./entityDims";
 import { inferLineDirection, onLattice } from "./inferLine";
+import { rectCorners } from "./region";
 import type { ResolvedEntity, SnapKind, SnapRef } from "./snap";
 
 export interface InferLineInput {
@@ -122,6 +123,19 @@ function distToSegment(q: THREE.Vector2, a: THREE.Vector2, b: THREE.Vector2): nu
   return q.distanceTo(a.clone().addScaledVector(ab, t));
 }
 
+/** Every straight edge a new line may be made parallel or perpendicular to, a
+ *  rectangle's four as `<id>~<k>`, the operand the solver reads. */
+function* referenceLines(entities: readonly ResolvedEntity[], skip: string): Generator<{ lineId: string; a: THREE.Vector2; b: THREE.Vector2 }> {
+  for (const e of entities) {
+    if (e.id === skip) continue;
+    if (e.type === "line") yield { lineId: e.id, a: new THREE.Vector2(e.x1, e.y1), b: new THREE.Vector2(e.x2, e.y2) };
+    else if (e.type === "rectangle") {
+      const c = rectCorners(e.x, e.y, e.width, e.height, e.angle);
+      for (let k = 0; k < 4; k++) yield { lineId: `${e.id}~${k}`, a: c[k]!, b: c[(k + 1) % 4]! };
+    }
+  }
+}
+
 /** Tangent continuation of the curve the line starts on, else parallel or
  *  perpendicular to a line within `nearMm` of the start or the cursor. */
 function guessDirection(
@@ -131,9 +145,7 @@ function guessDirection(
   const tan = tangentFrom(id, startRef, entities);
   if (tan && angleBetween(draw, tan.dir) <= tol) return tan;
   let bestErr = tol, pick: { a: THREE.Vector2; b: THREE.Vector2; lineId: string; dir: THREE.Vector2; kind: "parallel" | "perpendicular" } | null = null;
-  for (const e of entities) {
-    if (e.type !== "line" || e.id === id) continue;
-    const a = new THREE.Vector2(e.x1, e.y1), b = new THREE.Vector2(e.x2, e.y2);
+  for (const { lineId, a, b } of referenceLines(entities, id)) {
     if (Math.min(distToSegment(start, a, b), distToSegment(cursor, a, b)) > nearMm) continue;
     const d = b.clone().sub(a);
     if (d.lengthSq() < 1e-18) continue;
@@ -141,7 +153,7 @@ function guessDirection(
     const n = new THREE.Vector2(-d.y, d.x);
     for (const [kind, dir] of [["parallel", d], ["perpendicular", n]] as const) {
       const err = Math.min(angleBetween(draw, dir), 180 - angleBetween(draw, dir));
-      if (err <= bestErr) { bestErr = err; pick = { a, b, lineId: e.id, dir, kind }; }
+      if (err <= bestErr) { bestErr = err; pick = { a, b, lineId, dir, kind }; }
     }
   }
   if (!pick) return null;
