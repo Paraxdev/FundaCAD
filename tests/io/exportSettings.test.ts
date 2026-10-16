@@ -37,13 +37,13 @@ describe("export file name", () => {
   const at = new Date(2026, 9, 16, 9, 5, 7);
 
   it("adds the date and time to the second, so each export suggests a new file", () => {
-    expect(exportFileName("bracket", "stl", at)).toBe("bracket_2026-10-16_09-05-07.stl");
+    expect(exportFileName("bracket", "stl", at)).toBe("bracket_20261016090507.stl");
     expect(exportFileName("bracket", "stl", new Date(2026, 9, 16, 9, 5, 8))).not.toBe(exportFileName("bracket", "stl", at));
   });
 
   it("makes a body or document name safe for Windows and never empty", () => {
-    expect(exportFileName('a<b>:c"d/e\\f|g?h*', "step", at)).toBe("a_b__c_d_e_f_g_h__2026-10-16_09-05-07.step");
-    expect(exportFileName("lid. ", "3mf", at)).toBe("lid_2026-10-16_09-05-07.3mf");
-    expect(exportFileName("", "glb", at)).toBe("part_2026-10-16_09-05-07.glb");
+    expect(exportFileName('a<b>:c"d/e\\f|g?h*', "step", at)).toBe("a_b__c_d_e_f_g_h__20261016090507.step");
+    expect(exportFileName("lid. ", "3mf", at)).toBe("lid_20261016090507.3mf");
+    expect(exportFileName("", "glb", at)).toBe("part_20261016090507.glb");
   });
 });
