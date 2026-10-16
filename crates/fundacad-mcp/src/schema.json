@@ -518,7 +518,7 @@
     "imagePath": "optional path of the image; required with kind \"image\"",
     "angle": "optional Num, degrees, default 0",
     "offset": "optional Num, default 0",
-    "sharpness": "optional Num, default 0.5",
+    "sharpness": "optional Num, default 0.5, counted in the direction the cached `plane` normal points where it sits on the edge",
     "seed": "optional whole Num, default 0",
     "octaves": "optional whole Num, 1 to 6, default 3",
     "invert": "optional bool",

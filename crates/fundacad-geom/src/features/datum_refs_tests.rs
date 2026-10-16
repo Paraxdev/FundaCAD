@@ -292,3 +292,26 @@ fn a_datum_point_on_an_edge_end_keeps_that_end_when_the_edge_moves_past_half_its
         assert!(near(mark(&r, "pt", "position"), [20.0, 10.0, 10.0 + dz]), "dz {dz}: {}", r.datum_marks["pt"]);
     }
 }
+
+/// The plane as the app makes it, at the middle of a cylinder's top circle
+/// with the path's tangent there as its cached normal, then its `t` edited.
+/// The circle runs clockwise seen from above; a cached normal against that
+/// means the path was drawn the other way, so `t` counts from the other end.
+#[test]
+fn a_plane_normal_to_a_circle_sits_at_an_edited_fraction() {
+    let circle = json!({"kind": "edge", "by": "match", "body": "body1",
+        "fp": {"mid": [-10, 0, 15], "dir": [0, 1, 0], "length": 20.0 * std::f64::consts::PI}});
+    let d = |t: f64, along: f64| json!({"parameters": {}, "features": [
+        {"id": "c", "type": "cylinder", "radius": 10, "height": 30},
+        {"id": "n", "type": "datumPlane", "plane": {"origin": [-10, 0, 15], "normal": [0, along, 0], "xdir": [1, 0, 0]},
+         "t": t, "through": {"kind": "normalToEdge", "edge": circle}},
+    ]});
+    for along in [1.0, -1.0] {
+        for t in [0.1, 0.3, 0.5, 0.7] {
+            let a = if along > 0.0 { t } else { 1.0 - t } * std::f64::consts::TAU;
+            let want = [10.0 * a.cos(), -10.0 * a.sin(), 15.0];
+            let r = build(d(t, along));
+            assert!(near(r.datum_planes["n"].origin, want), "t {t} along {along}: {:?} want {want:?}", r.datum_planes["n"]);
+        }
+    }
+}

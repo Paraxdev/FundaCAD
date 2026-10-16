@@ -237,12 +237,13 @@ pub fn plane_through(ctx: &mut Ctx, f: &DatumPlane, through: &PlaneThrough) -> F
             };
             match look.edge(edge).and_then(|e| e.as_edge()) {
                 Some(e) => {
+                    // The cached normal is the path's tangent where the plane
+                    // was made, in the direction it was drawn, so the edge's
+                    // tangent there says which end t counts from.
+                    let made_at = nearest_fraction(&e, DVec3::from(cached.origin) + moved_by(&e, edge));
                     let frac = match at {
                         Some(p) => nearest_fraction(&e, p),
-                        // An edit can rebuild the edge with its curve reversed;
-                        // the cached normal is the tangent it had, so it says
-                        // which end t counts from.
-                        None if e.tangent_at(t).dot(DVec3::from(cached.z)) < 0.0 => 1.0 - t,
+                        None if e.tangent_at(made_at).dot(DVec3::from(cached.z)) < 0.0 => 1.0 - t,
                         None => t,
                     };
                     if vertex.is_some() && at.is_none() {
