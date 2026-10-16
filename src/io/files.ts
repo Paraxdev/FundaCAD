@@ -453,7 +453,7 @@ export function extToFormat(path: string): ExportFormat {
 
 /** Lower case only, every lookup lower-cases the name first (dropRouting, the
  *  two mappers above). */
-export const IMPORT_EXTS = ["stl", "3mf", "step", "stp", "stpz", "gz", "xbf", "iges", "igs", "brep", "fcstd", "3dm", "ifc", "dxf", "obj", "ply", "off", "amf", "glb", "gltf", "wrl", "wrz", "x3d", "x3dz", "fbx"];
+export const IMPORT_EXTS = ["stl", "3mf", "step", "stp", "stpz", "gz", "xbf", "iges", "igs", "brep", "fcstd", "3dm", "ifc", "dxf", "obj", "ply", "off", "amf", "glb", "gltf", "wrl", "wrz", "x3d", "x3dz", "fbx", "3ds"];
 
 // FreeCAD writes .FCStd.
 const MIXED_CASE_EXTS = ["FCStd"];
@@ -503,6 +503,7 @@ export async function importModel(store: DocumentStore, geometry: GeometryBacken
       { name: "VRML", extensions: dialogExts(["wrl", "wrz"]) },
       { name: "X3D", extensions: dialogExts(["x3d", "x3dz"]) },
       { name: "FBX (Maya, 3ds Max)", extensions: dialogExts(["fbx"]) },
+      { name: "3DS (old 3ds Max)", extensions: dialogExts(["3ds"]) },
     ],
   });
   if (typeof path !== "string") return;
@@ -817,6 +818,7 @@ export function extToImportFormat(path: string): ImportFormat {
   if (ext === "wrl" || ext === "wrz") return "vrml";
   if (ext === "x3d" || ext === "x3dz") return "x3d";
   if (ext === "fbx") return "fbx";
+  if (ext === "3ds") return "3ds";
   return "step";  // TOTAL, like extToFormat above, see the note there
 }
 

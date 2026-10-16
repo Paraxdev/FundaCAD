@@ -23,7 +23,7 @@ beforeEach(() => {
 describe("the import unit picker", () => {
   it("asks for the four formats that leave the unit open", () => {
     for (const f of ["glb", "gltf", "vrml", "x3d"] as const) expect(asksForUnit(f)).toBe(true);
-    for (const f of ["step", "stl", "obj", "amf", "3mf", "fbx"] as const) expect(asksForUnit(f)).toBe(false);
+    for (const f of ["step", "stl", "obj", "amf", "3mf", "fbx", "3ds"] as const) expect(asksForUnit(f)).toBe(false);
   });
 
   it("starts at metres and offers the last choice first", () => {
