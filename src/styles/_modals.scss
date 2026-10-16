@@ -542,7 +542,15 @@
 .choice-btn.choice-primary {
   background: var(--accent, #ff7a3c);
   border-color: var(--accent, #ff7a3c);
-  color: #fff;
+  color: var(--on-accent, #160a04);
+  font-weight: 600;
+}
+.choice-btn.choice-primary:hover:not(:disabled) {
+  background: var(--accent-hot, #ff9a5c);
+  border-color: var(--accent-hot, #ff9a5c);
+}
+.choice-btn.choice-primary small {
+  color: color-mix(in srgb, var(--on-accent, #160a04) 70%, transparent);
 }
 .choice-btn.choice-primary:disabled {
   opacity: 0.4;
