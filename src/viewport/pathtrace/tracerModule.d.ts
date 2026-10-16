@@ -13,6 +13,7 @@ declare module "three-gpu-pathtracer/webgpu" {
     setCamera(camera: Camera): void;
     updateCamera(): void;
     updateMaterials(): void;
+    updateTransforms(): void;
     updateEnvironment(): void;
     updateLights(): void;
     reset(): void;

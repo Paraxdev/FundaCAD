@@ -251,6 +251,8 @@ export class Viewport {
    *  and then the faces of a body already chosen. */
   private selectPolicy: SelectPolicy = "auto";
   suspendPicking = false;
+  /** Held while a gizmo handle is dragged, so Path traced refits once on release. */
+  gizmoDragging = false;
   /** True while nothing but the viewport's own hover reacts to pointer moves
    *  (no tool, no sketch), so a move that lights nothing new draws nothing. */
   quietPointer: (() => boolean) | null = null;
@@ -4037,6 +4039,7 @@ export class Viewport {
           mode: this.viewModeNow,
           visible: document.visibilityState === "visible",
           stillMs: now - this.lastMovedAt,
+          dragging: this.gizmoDragging,
           sectioned: this.sectioned,
           xray: this.xray,
           wireframe: this.wireframe,

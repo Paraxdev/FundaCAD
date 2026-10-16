@@ -471,6 +471,7 @@ export class MoveTool {
     e.stopImmediatePropagation();
     this.viewport.hoverThrough(null);
     this.grab = hit;
+    this.viewport.gizmoDragging = true;
     this.last = hit;
     this.viewport.domElement.style.cursor = "grabbing";
   }
@@ -479,6 +480,7 @@ export class MoveTool {
     if (e.button !== 0) return;
     if (this.grab) {
       this.grab = null;
+      this.viewport.gizmoDragging = false;
       this.dropDial();
       this.stepLabel = "";
       setPrompt(idlePrompt(this.cubes.length > 0));
@@ -975,6 +977,7 @@ export class MoveTool {
     this.viewport.suspendPicking = this.suspendedBefore;
     this.active = false;
     this.grab = null;
+    this.viewport.gizmoDragging = false;
     this.hover = null;
     this.t.set(0, 0, 0);
     this.rot.identity();

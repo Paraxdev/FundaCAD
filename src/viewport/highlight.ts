@@ -469,6 +469,7 @@ export class Highlighter {
       // renderer does a full upload here instead of replaying a stale sub-range.
       colorAttr.clearUpdateRanges();
       colorAttr.needsUpdate = true;
+      body.baseVersion = (body.baseVersion ?? 0) + 1;
     }
     // Whole-body selections are a fresnel overlay now, independent of the base
     // colours this rewrites, so there is nothing to re-apply on top.

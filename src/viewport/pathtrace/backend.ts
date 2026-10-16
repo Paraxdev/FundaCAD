@@ -27,7 +27,15 @@ export interface TracerBackend {
   readonly name: string;
   init(): Promise<void>;
   setSize(cssWidth: number, cssHeight: number, pixelRatio: number): void;
+  /** The first scene; every later change goes through the update calls. The
+   *  meshes carry their tree on geometry.boundsTree and stay owned by the caller. */
   setScene(scene: TraceScene, camera: THREE.Camera): void;
+  /** A new set of meshes, or new vertex colours on the same ones: repacks the
+   *  buffers from the cached trees, no tree is built. */
+  updateGeometry(meshes: THREE.Mesh[]): void;
+  /** Re-reads the meshes' matrices and refits the top level tree. */
+  updateTransforms(): void;
+  updateMaterials(): void;
   /** Re-reads the camera, which also restarts accumulation. */
   updateCamera(camera: THREE.Camera): void;
   reset(): void;

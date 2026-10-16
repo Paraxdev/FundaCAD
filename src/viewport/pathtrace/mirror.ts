@@ -9,14 +9,18 @@ import * as THREE from "three";
  *  P1 refuses past this and says so. */
 export const TRIANGLE_BUDGET = 2_000_000;
 
-interface Owned { baseColors?: Float32Array }
+interface Owned { baseColors?: Float32Array; baseVersion?: number }
 
 export function isTracedBody(o: THREE.Object3D): o is THREE.Mesh {
   return (o as THREE.Mesh).isMesh === true && !!o.userData.owner && o.visible;
 }
 
 function physicalFrom(src: THREE.Material, vertexColors: boolean): THREE.MeshPhysicalMaterial {
-  const m = new THREE.MeshPhysicalMaterial({ vertexColors });
+  return copyPhysical(new THREE.MeshPhysicalMaterial(), src, vertexColors);
+}
+
+function copyPhysical(m: THREE.MeshPhysicalMaterial, src: THREE.Material, vertexColors: boolean): THREE.MeshPhysicalMaterial {
+  m.vertexColors = vertexColors;
   const s = src as Partial<THREE.MeshPhysicalMaterial>;
   if (s.color) m.color.copy(s.color);
   if (s.emissive) m.emissive.copy(s.emissive);
@@ -34,22 +38,19 @@ function physicalFrom(src: THREE.Material, vertexColors: boolean): THREE.MeshPhy
   return m;
 }
 
-export function mirrorBody(src: THREE.Mesh): THREE.Mesh {
+/** `withIndex` false leaves the index off until the body's tree lands, which
+ *  brings the index reordered to match it. */
+export function mirrorBody(src: THREE.Mesh, withIndex = true): THREE.Mesh {
   const g = src.geometry;
   const out = new THREE.BufferGeometry();
   out.setAttribute("position", g.getAttribute("position"));
   const normal = g.getAttribute("normal");
   if (normal) out.setAttribute("normal", normal);
-  if (g.index) out.setIndex(new THREE.BufferAttribute((g.index.array as Uint32Array).slice(), 1));
+  if (withIndex && g.index) out.setIndex(new THREE.BufferAttribute((g.index.array as Uint32Array).slice(), 1));
   for (const gr of g.groups) out.addGroup(gr.start, gr.count, gr.materialIndex);
-  const base = (src.userData.owner as Owned).baseColors;
-  const count = g.getAttribute("position").count;
-  const colors = !!base && base.length === count * 3;
-  if (colors) out.setAttribute("color", new THREE.BufferAttribute(base.slice(), 3));
-  const mat = Array.isArray(src.material)
-    ? src.material.map((m) => physicalFrom(m, colors))
-    : physicalFrom(src.material, colors);
-  const m = new THREE.Mesh(out, mat);
+  const m = new THREE.Mesh(out, []);
+  copyMirrorColors(m, src);
+  refreshMirrorMaterials(m, src);
   src.updateWorldMatrix(true, false);
   m.matrixAutoUpdate = false;
   m.matrix.copy(src.matrixWorld);
@@ -57,6 +58,35 @@ export function mirrorBody(src: THREE.Mesh): THREE.Mesh {
   return m;
 }
 
+export function copyMirrorColors(mirror: THREE.Mesh, src: THREE.Mesh) {
+  const base = (src.userData.owner as Owned).baseColors;
+  const count = src.geometry.getAttribute("position").count;
+  const g = mirror.geometry;
+  if (!base || base.length !== count * 3) {
+    if (g.getAttribute("color")) g.deleteAttribute("color");
+    return;
+  }
+  const c = g.getAttribute("color") as THREE.BufferAttribute | undefined;
+  if (c && c.array.length === base.length) {
+    (c.array as Float32Array).set(base);
+    c.needsUpdate = true;
+  } else g.setAttribute("color", new THREE.BufferAttribute(base.slice(), 3));
+}
+
+/** In place where the slot count is unchanged, so the tracer's material map
+ *  keeps pointing at the same objects. */
+export function refreshMirrorMaterials(mirror: THREE.Mesh, src: THREE.Mesh) {
+  const colors = !!mirror.geometry.getAttribute("color");
+  const from = Array.isArray(src.material) ? src.material : [src.material];
+  const had = Array.isArray(mirror.material) ? mirror.material : [mirror.material];
+  if (had.length !== from.length || !had.every((m) => m instanceof THREE.MeshPhysicalMaterial)) {
+    had.forEach((m) => m.dispose());
+    const made = from.map((m) => physicalFrom(m, colors));
+    mirror.material = Array.isArray(src.material) ? made : made[0]!;
+    return;
+  }
+  had.forEach((m, i) => copyPhysical(m as THREE.MeshPhysicalMaterial, from[i]!, colors));
+}
 export function countTriangles(bodies: THREE.Mesh[]): number {
   let n = 0;
   for (const m of bodies) {
@@ -74,8 +104,29 @@ export function collectBodies(root: THREE.Object3D): THREE.Mesh[] {
   return out;
 }
 
-export function mirrorBodies(bodies: THREE.Mesh[]): THREE.Mesh[] {
-  return bodies.map(mirrorBody);
+/** Hidden bodies too, whose trees are kept for when they are shown again. */
+export function collectAllBodies(root: THREE.Object3D): THREE.Mesh[] {
+  const out: THREE.Mesh[] = [];
+  root.traverse((o) => {
+    if ((o as THREE.Mesh).isMesh && o.userData.owner) out.push(o as THREE.Mesh);
+  });
+  return out;
+}
+
+export function transformSignature(bodies: THREE.Mesh[]): string {
+  return bodies.map((b) => {
+    b.updateWorldMatrix(true, false);
+    return b.matrixWorld.elements.join(",");
+  }).join("|");
+}
+
+export function materialSignature(bodies: THREE.Mesh[]): string {
+  return bodies.map((b) => (Array.isArray(b.material) ? b.material : [b.material]).map(materialKey).join("+")).join("|");
+}
+
+/** highlight.setBase bumps baseVersion whenever it rewrites the base colours. */
+export function colorSignature(bodies: THREE.Mesh[]): string {
+  return bodies.map((b) => (b.userData.owner as Owned).baseVersion ?? 0).join(",");
 }
 
 function sampleSum(a: ArrayLike<number> | undefined): number {
