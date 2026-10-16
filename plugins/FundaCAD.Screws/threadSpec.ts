@@ -169,7 +169,7 @@ const rnd = (pt: number[]) => pt.map((v) => Math.round(v * 1e5) / 1e5);
 export interface ThreadOptions {
   id: string;
   face: Record<string, unknown>;
-  axis?: [number, number, number];
+  axis?: [number, number, number] | undefined;
   choice: ThreadChoice;
   faceIs: FaceIs;
   external: boolean;
@@ -177,8 +177,8 @@ export interface ThreadOptions {
   hand?: Hand;
   /** Radial print clearance, mm; 0 or absent for none. */
   clearance?: number;
-  length?: number;
-  offset?: number;
+  length?: number | undefined;
+  offset?: number | undefined;
 }
 
 /** The PRINT fit's default radial clearance, mm. */
