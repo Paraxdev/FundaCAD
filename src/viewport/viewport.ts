@@ -72,6 +72,8 @@ import { traceEnvironment, type TraceHemi } from "./pathtrace/environment";
 import { composerClearColor } from "./composerColor";
 import { clearGuard, guardSet } from "./pathtrace/guard";
 import { PathTraceHost } from "./pathtrace/host";
+import type { SurfaceBaker } from "./pathtrace/mirror";
+import { createSurfaceBaker, webglSurfaceShade } from "./pathtrace/surfaceBake";
 import { describeProbe, probeWebGpu, type GpuProbe } from "./pathtrace/probe";
 import type { TraceState } from "./pathtrace/state";
 import { onWorkspaceChange } from "../ui/workspace";
@@ -932,6 +934,7 @@ export class Viewport {
   }
 
   private trace!: PathTraceHost;
+  private traceBaker: SurfaceBaker | null = null;
   private gpu: GpuProbe | null = null;
   private tierListeners = new Set<() => void>();
   /** A GPU fault dropped the view to Realtime; `off` once Path traced is off for the session. */
@@ -4074,6 +4077,7 @@ export class Viewport {
         root: this.scene.scene,
         look: () => this.traceLook(),
         lens: () => this.traceLens(),
+        bake: (this.traceBaker ??= createSurfaceBaker(webglSurfaceShade(this.scene.renderer))),
       });
       // Render-on-demand: skip the (relatively expensive) grid rebuild + GPU
       // draw entirely when nothing changed, camera didn't move, no mutation

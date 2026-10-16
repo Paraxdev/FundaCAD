@@ -1,7 +1,7 @@
 // What the tracer reads off a body's material. The tracer takes three's
 // physical fields as they are, so a finish reaches it by copying them; the
 // raster-only parts (the auto thickness pass, the procedural shader) are left
-// behind here and baked elsewhere.
+// behind here, the procedural shader is baked by surfaceBake.ts.
 
 import * as THREE from "three";
 

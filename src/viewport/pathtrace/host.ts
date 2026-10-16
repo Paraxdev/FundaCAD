@@ -10,7 +10,7 @@ import { BlasCache, type BlasBuilder } from "./blasCache";
 import { createBlasBuilder } from "./blasPool";
 import {
   colorSignature, collectAllBodies, collectBodies, countTriangles, countVertices, materialSignature, sceneSignature,
-  storageBytes, transformSignature, TRIANGLE_BUDGET,
+  storageBytes, transformSignature, TRIANGLE_BUDGET, type SurfaceBaker,
 } from "./mirror";
 import { TraceGeneration, traceState, type TraceInputs, type TraceState } from "./state";
 
@@ -37,6 +37,8 @@ export interface TraceFrame {
   root: THREE.Object3D;
   look: () => TraceLook;
   lens: () => TraceLens | null;
+  /** Evaluates procedural surfaces for the mirror's vertex colours. */
+  bake?: SurfaceBaker;
 }
 
 export function lookSignature(l: TraceLook): string {
@@ -267,7 +269,7 @@ export class PathTraceHost {
     if (!geometry && !moved && !restyled && !painted && !relit) return true;
     if (geometry || moved) this.cache.syncTransforms();
     if (geometry || restyled) this.cache.syncMaterials();
-    if (geometry || painted) this.cache.syncColors();
+    if (geometry || painted) this.cache.syncColors(f.bake);
     if (!this.hasScene) {
       const lens = f.lens();
       b.setScene({ ...look, meshes: sync.meshes, lens }, f.camera);
