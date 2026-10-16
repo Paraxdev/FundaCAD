@@ -41,7 +41,8 @@ describe("a document dropped as bytes in the desktop app", () => {
     vi.doUnmock("@tauri-apps/plugin-dialog");
     vi.doUnmock("../../src/app/documentActions");
     vi.resetModules();
-    delete (globalThis as unknown as Record<string, unknown>).window;
+    // The window stub stays: the store's param commit chain outlives the test,
+    // and deleting it under that chain threw on slower CI runners.
   });
 
   function setup() {
