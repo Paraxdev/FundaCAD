@@ -124,6 +124,7 @@ import {
 import { collectInBox, projectForArea, type AreaProjection } from "./areaProjection";
 import { isEditableTarget } from "../ui/focus";
 import { hitScale } from "../input/pointerKind";
+import { ShadowWatch } from "./shadowWatch";
 
 /** One box drag. The box previews by selecting every frame, so each frame starts
  *  from the selection as it was when the drag began. */
@@ -257,6 +258,7 @@ export class Viewport {
   // linger frames remain for effects that settle a frame late.
   private needsRender = true;
   private lingerFrames = 3;
+  private shadowWatch = new ShadowWatch();
 
   constructor(private canvas: HTMLCanvasElement) {
     this.scene = createScene(canvas);
@@ -3851,8 +3853,6 @@ export class Viewport {
       // draw entirely when nothing changed, camera didn't move, no mutation
       // flagged requestRender(), and we've drained the post-mutation linger.
       if (resized !== "wait" && (moved || this.needsRender || this.lingerFrames > 0)) {
-        // Shadows depend on the lights and the model, never on the camera.
-        const cameraOnly = moved && !this.needsRender && this.lingerFrames === 0;
         // keep the ground grid spacing/extent matched to the current zoom + pan
         const t = this.rig.getTarget(this.scratchTarget);
         this.scene.grid.update(t.x, t.y, this.pixelWorldSize(t), this.viewDiagonalPx(), this.targetGridZ);
@@ -3868,7 +3868,8 @@ export class Viewport {
         // a wheel is turned, and it costs one subtraction.
         this.scene.post.focusDistance = this.rig.active.position.distanceTo(t);
         const shadows = this.scene.renderer.shadowMap;
-        shadows.autoUpdate = !cameraOnly;
+        // Shadows depend on the casters and the lights, never on the camera.
+        shadows.autoUpdate = this.needsRender && this.shadowWatch.changed(this.scene.scene);
         try {
           this.scene.post.render(this.rig.active, this.motionActive && this.motionScale < 1);
         } finally {
