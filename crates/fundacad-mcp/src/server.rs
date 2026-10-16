@@ -831,10 +831,10 @@ impl FundaCad {
 
     #[tool(
         name = "doc_import",
-        description = "Read an external geometry file (STEP, IGES, FreeCAD .FCStd, Rhino .3dm, IFC buildings, STL, 3MF, OBJ, PLY, OFF, AMF, BREP, GLB, glTF, VRML, X3D) into the timeline as a body, so it can be measured with `inspect` and modelled against. Use it when asked to fit something to a part that exists as a file.\n\
+        description = "Read an external geometry file (STEP, IGES, FreeCAD .FCStd, Rhino .3dm, IFC buildings, STL, 3MF, OBJ, PLY, OFF, AMF, BREP, GLB, glTF, VRML, X3D, DXF) into the timeline as a body, so it can be measured with `inspect` and modelled against. Use it when asked to fit something to a part that exists as a file.\n\
 `path` is a file the machine FundaCAD runs on can open, and is how anything of real size gets in. `content` is the file itself, for when you have no path to give: gzip it (`compression`, and a STEP shrinks about tenfold), and split it with `part` and `parts` if one message will not hold it.\n\
 But content is written by YOU, so the limit that binds is your own output and not this server's: roughly one message per piece, and a file needing more than a handful of pieces is one to ask for a path to instead. If you cannot reach the file from where you are, ask the person you are working with for its path on the machine FundaCAD runs on, or ask them to open it in FundaCAD themselves (File, Import Mesh), which puts it in the document for `inspect` to measure. Do not substitute a simplified stand-in for the real part: fitting to an approximation is the failure this tool exists to prevent.\n\
-The format comes from the extension unless given. A .gltf whose buffers sit in separate files needs `path`, its neighbours cannot come as `content`. A large STEP can take minutes: it is one read, so do it once and keep the document.",
+The format comes from the extension unless given. A .gltf whose buffers sit in separate files needs `path`, its neighbours cannot come as `content`. A large STEP can take minutes: it is one read, so do it once and keep the document. A DXF drawing arrives as one sketch per layer on the XY plane, ready to extrude, and only its 3D faces as a body; a binary DXF goes as base64, an ASCII one may go as text.",
         input_schema = crate::tools::doc_import()
     )]
     pub async fn t_doc_import(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
@@ -2821,8 +2821,44 @@ impl FundaCad {
             return failure(format!("Import failed: {message}"));
         }
         let res = reply.get("result").cloned().unwrap_or_else(|| json!({}));
-        if res.get("geom").and_then(Value::as_str).unwrap_or("").is_empty() {
-            return failure(format!("The engine read {source} but returned no geometry."));
+        let sketches: Vec<Value> = res.get("sketches").and_then(Value::as_array).cloned().unwrap_or_default();
+        let has_geom = !res.get("geom").and_then(Value::as_str).unwrap_or("").is_empty();
+        if !has_geom && sketches.is_empty() {
+            return failure(format!("The engine read {source} but returned neither sketches nor geometry."));
+        }
+        let notes: String = res
+            .get("notes")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(Value::as_str)
+            .map(|n| format!("\nNote: {n}."))
+            .collect();
+        let mut at = args.get("at").and_then(Value::as_i64);
+        let mut added = Vec::new();
+        if !sketches.is_empty() {
+            let mut st = self.state.lock().await;
+            for s in &sketches {
+                let layer = s.get("name").and_then(Value::as_str).unwrap_or("Sketch");
+                let entities = s.get("entities").cloned().unwrap_or_else(|| json!([]));
+                let count = entities.as_array().map_or(0, Vec::len);
+                let f = json!({"type": "sketch", "plane": "XY", "name": layer, "entities": entities});
+                match model::add_feature(&mut st.doc, &f, at) {
+                    Ok(fid) => added.push(format!("sketch {fid} '{layer}', {count} entities")),
+                    Err(e) => return doc_error(e),
+                }
+                at = at.map(|a| a + 1);
+            }
+            st.invalidate();
+            if !has_geom {
+                let what = if added.len() == 1 { "1 sketch".to_string() } else { format!("{} sketches", added.len()) };
+                let head = format!(
+                    "Imported {source} as {what} on the XY plane: {}.{notes}\nExtrude a sketch to make a body. Without \
+                     `regions` an extrude fills every closed outline, holes included.",
+                    added.join("; ")
+                );
+                return text(st.state_line(&head));
+            }
         }
 
         let mut feature = Map::new();
@@ -2851,7 +2887,7 @@ impl FundaCad {
         let fid = match model::add_feature(
             &mut st.doc,
             &Value::Object(feature),
-            args.get("at").and_then(Value::as_i64),
+            at,
         ) {
             Ok(fid) => fid,
             Err(e) => return doc_error(e),
@@ -2866,16 +2902,9 @@ impl FundaCad {
             Some(p) if !p.is_empty() => format!(", {} parts", p.len()),
             _ => String::new(),
         };
-        let notes: String = res
-            .get("notes")
-            .and_then(Value::as_array)
-            .into_iter()
-            .flatten()
-            .filter_map(Value::as_str)
-            .map(|n| format!("\nNote: {n}."))
-            .collect();
+        let sketch_line = if added.is_empty() { String::new() } else { format!("\nAlso added {}.", added.join("; ")) };
         let head = format!(
-            "Imported {source} as {fid}: '{name}', {kind}, {} faces{parts}.{notes}\nRun `build`, then \
+            "Imported {source} as {fid}: '{name}', {kind}, {} faces{parts}.{sketch_line}{notes}\nRun `build`, then \
              `inspect` for its sizes and the selectors that address its faces and edges.",
             res.get("faces")
                 .map_or("?".to_string(), |f| py_num(Some(f)))

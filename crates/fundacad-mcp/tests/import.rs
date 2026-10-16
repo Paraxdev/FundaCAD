@@ -112,6 +112,8 @@ fn the_extension_decides_the_format() {
         (".xbf", "xbf"),
         (".3dm", "3dm"),
         (".ifc", "ifc"),
+        (".dxf", "dxf"),
+        (".DXF", "dxf"),
         (".stpz", "step"),
     ] {
         assert_eq!(upload::import_format(&format!("part{ext}")), want, "{ext}");
@@ -299,6 +301,46 @@ async fn a_read_that_returns_no_geometry_is_a_failure() {
     let _ = std::fs::remove_file(&path);
     assert!(is_error(&out));
     assert!(features(&srv).await.is_empty());
+}
+
+fn line(id: &str) -> Value {
+    json!({"id": id, "type": "line", "x1": 0, "y1": 0, "x2": 10, "y2": 0})
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_dxf_adds_one_sketch_per_layer_and_no_body() {
+    let _serial = serial();
+    let (srv, engine) = server_with(json!({"ok": true, "result": {"name": "plate", "unit": "mm",
+        "notes": ["skipped what is not geometry: 1 TEXT"],
+        "sketches": [{"name": "Plate", "entities": [line("e1"), line("e2")]}, {"name": "Cam", "entities": [line("e1")]}]}}));
+    let path = a_file(".dxf");
+    let out = run(&srv, json!({"path": path.to_string_lossy()})).await;
+    let _ = std::fs::remove_file(&path);
+    assert!(!is_error(&out), "{}", text_of(&out));
+    assert_eq!(engine.calls()[0].payload["format"], json!("dxf"));
+    let fs = features(&srv).await;
+    let kinds: Vec<(&str, &str, &str)> =
+        fs.iter().map(|f| (f["type"].as_str().unwrap(), f["plane"].as_str().unwrap(), f["name"].as_str().unwrap())).collect();
+    assert_eq!(kinds, [("sketch", "XY", "Plate"), ("sketch", "XY", "Cam")]);
+    assert_eq!(fs[0]["entities"].as_array().unwrap().len(), 2);
+    let said = text_of(&out);
+    assert!(said.contains("2 sketches") && said.contains("'Plate', 2 entities") && said.contains("1 TEXT"), "{said}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_dxf_with_3d_faces_adds_its_body_after_the_sketches() {
+    let _serial = serial();
+    let (srv, _engine) = server_with(json!({"ok": true, "result": {"name": "mix", "geom": "h1", "solid": true, "faces": 6,
+        "sketches": [{"name": "Outline", "entities": [line("e1")]}]}}));
+    let path = a_file(".dxf");
+    let out = run(&srv, json!({"path": path.to_string_lossy()})).await;
+    let _ = std::fs::remove_file(&path);
+    assert!(!is_error(&out), "{}", text_of(&out));
+    let fs = features(&srv).await;
+    let kinds: Vec<&str> = fs.iter().map(|f| f["type"].as_str().unwrap()).collect();
+    assert_eq!(kinds, ["sketch", "import"]);
+    assert_eq!(fs[1]["format"], json!("dxf"));
+    assert_eq!(fs[1]["geom"], json!("h1"));
 }
 
 // --- inline content ----------------------------------------------------------
