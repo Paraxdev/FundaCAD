@@ -15,11 +15,12 @@ import Select from "../ui/Select.vue";
 
 const dialog = useExportDialogStore();
 const bodies = dialog.request?.bodies ?? [];
+const picked = dialog.request?.selected?.length ?? 0;
 
 useModalGate();
 
 const settings = ref(loadExportSettings());
-const scope = ref<BodyScope>("all");
+const scope = ref<BodyScope>(dialog.request?.scope ?? "all");
 
 const mesh = computed(() => isMeshFormat(settings.value.format));
 const unitShown = computed(() => takesUnit(settings.value.format));
@@ -33,6 +34,12 @@ const REFINEMENT_OPTIONS: { value: Refinement; label: string }[] = [
 const scopeOptions = computed(() => [
   { value: "all", label: "All in one file" },
   { value: "separate", label: "Each body as its own file" },
+  ...(picked > 1
+    ? [
+        { value: "selected", label: `Selected (${picked} bodies)` },
+        { value: "selected-separate", label: `Selected (${picked} bodies), each as its own file` },
+      ]
+    : []),
   ...bodies.map((b) => ({ value: b.id, label: b.name })),
 ]);
 // The picker speaks strings; STL's binary flag is a bool, so it rides through

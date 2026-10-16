@@ -10,7 +10,7 @@ import type { CtxItem } from "./menu";
 import { contributedBodyMenu } from "../plugins/contrib";
 import { ancestryOf, childrenByParent, type ElementDef } from "../document/elements";
 import type { MaterialDef } from "../document/materials";
-import type { ImportColorSource } from "../types";
+import type { CadDocument, ImportColorSource } from "../types";
 
 /** The rows a plugin adds to a body's right-click menu.
  *
@@ -178,6 +178,16 @@ function fromAsm(g: AsmGroup): TreeGroup {
     bodies: g.bodies,
     total: g.total,
   };
+}
+
+/** featureId → the assembly manifest an import feature carries. */
+export function importTrees(doc: CadDocument): Map<string, { name: string; parent: number | null }[]> {
+  const trees = new Map<string, { name: string; parent: number | null }[]>();
+  for (const f of doc.features) {
+    const nodes = (f as { nodes?: { name: string; parent: number | null }[] }).nodes;
+    if (f.type === "import" && nodes) trees.set(f.id, nodes);
+  }
+  return trees;
 }
 
 /** The Browser's whole body tree: the user's elements first, then whatever

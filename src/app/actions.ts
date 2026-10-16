@@ -164,7 +164,7 @@ export function createActions(e: Engine): (action: string) => void {
         void e.openDoc();
         break;
       case "export":
-        void exportModel(e.store, e.geometry);
+        void exportModel(e.store, e.geometry, e.viewport.selectionBodyIds());
         break;
       case "welcome":
         e.ui.welcome.open();

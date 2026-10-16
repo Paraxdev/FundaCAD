@@ -1475,6 +1475,11 @@ export class Viewport {
     return this.highlighter?.getSelectedBodies() ?? [];
   }
 
+  /** The selected bodies plus the bodies owning a selected face or edge. */
+  selectionBodyIds(): string[] {
+    return [...new Set([...this.getSelectedBodies(), ...this.drilledBodies()])];
+  }
+
   /** O(selection). Per-frame callers must use this, not selectedFacesForPressPull,
    *  which walks every triangle of every selected face. */
   getSelectedFaceIds(): number[] {

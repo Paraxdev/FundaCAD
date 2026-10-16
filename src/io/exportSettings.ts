@@ -1,10 +1,49 @@
 // What the Export dialog asks for, its presets, and the choices it remembers.
 
 import type { ExportFormat } from "../types";
+import type { TreeGroup } from "../ui/browserTree";
 
 export type ExportUnit = "mm" | "cm" | "m" | "in" | "ft";
 export type Refinement = "low" | "medium" | "high" | "custom";
-export type BodyScope = "all" | "separate" | string;
+/** "selected" and "selected-separate" export ExportStart.selected; any other
+ *  string is one body id, which is always `bodyN` so never clashes. */
+export type BodyScope = "all" | "separate" | "selected" | "selected-separate" | string;
+
+export interface ExportStart {
+  scope: BodyScope;
+  /** The selected bodies still built, in build order. */
+  selected: string[];
+  /** What the default file name starts with: the body, the folder or the document. */
+  base: string;
+}
+
+/** Where Export starts from what is selected: nothing is the whole document, one
+ *  body is that body, more are "selected", named after the folder they make up
+ *  when they are exactly one folder's bodies. */
+export function exportScopeFromSelection(
+  selected: readonly string[],
+  bodies: readonly { id: string; name: string }[],
+  groups: readonly TreeGroup[],
+  docName: string,
+): ExportStart {
+  const want = new Set(selected);
+  const picked = bodies.filter((b) => want.has(b.id));
+  if (picked.length === 0) return { scope: "all", selected: [], base: docName };
+  if (picked.length === 1) return { scope: picked[0]!.id, selected: [picked[0]!.id], base: picked[0]!.name };
+  const ids = picked.map((b) => b.id);
+  return { scope: "selected", selected: ids, base: folderOf(ids, groups) ?? docName };
+}
+
+function folderOf(ids: readonly string[], groups: readonly TreeGroup[]): string | null {
+  let found: string | null = null;
+  const walk = (g: TreeGroup): string[] => {
+    const under = [...g.bodies.map((b) => b.id), ...g.children.flatMap(walk)];
+    if (under.length === ids.length && ids.every((id) => under.includes(id))) found ??= g.label;
+    return under;
+  };
+  groups.forEach(walk);
+  return found;
+}
 
 export interface Faceting {
   /** Largest gap between the body and a facet, mm. */

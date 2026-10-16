@@ -7,8 +7,15 @@ export interface ExportChoice {
   scope: BodyScope;
 }
 
-interface ExportRequest {
+interface ExportOpen {
   bodies: { id: string; name: string }[];
+  /** Where the body picker starts. */
+  scope?: BodyScope;
+  /** The bodies "selected" exports, more than one to offer it. */
+  selected?: readonly string[];
+}
+
+interface ExportRequest extends ExportOpen {
   resolve: (choice: ExportChoice | null) => void;
 }
 
@@ -16,10 +23,10 @@ interface ExportRequest {
 export const useExportDialogStore = defineStore("exportDialog", () => {
   const request = shallowRef<ExportRequest | null>(null);
 
-  function open(bodies: { id: string; name: string }[]): Promise<ExportChoice | null> {
+  function open(what: ExportOpen): Promise<ExportChoice | null> {
     request.value?.resolve(null);
     return new Promise((resolve) => {
-      request.value = markRaw({ bodies, resolve });
+      request.value = markRaw({ ...what, resolve });
     });
   }
 
