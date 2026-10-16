@@ -831,10 +831,10 @@ impl FundaCad {
 
     #[tool(
         name = "doc_import",
-        description = "Read an external geometry file (STEP, IGES, FreeCAD .FCStd, Rhino .3dm, IFC buildings, STL, 3MF, OBJ, PLY, OFF, AMF, BREP, GLB, glTF, VRML, X3D, FBX, 3DS, DXF) into the timeline as a body, so it can be measured with `inspect` and modelled against. Use it when asked to fit something to a part that exists as a file.\n\
+        description = "Read an external geometry file (STEP, IGES, FreeCAD .FCStd, Rhino .3dm, IFC buildings, STL, 3MF, OBJ, PLY, OFF, AMF, BREP, GLB, glTF, VRML, X3D, FBX, 3DS, DXF, SVG) into the timeline as a body, so it can be measured with `inspect` and modelled against. Use it when asked to fit something to a part that exists as a file.\n\
 `path` is a file the machine FundaCAD runs on can open, and is how anything of real size gets in. `content` is the file itself, for when you have no path to give: gzip it (`compression`, and a STEP shrinks about tenfold), and split it with `part` and `parts` if one message will not hold it.\n\
 But content is written by YOU, so the limit that binds is your own output and not this server's: roughly one message per piece, and a file needing more than a handful of pieces is one to ask for a path to instead. If you cannot reach the file from where you are, ask the person you are working with for its path on the machine FundaCAD runs on, or ask them to open it in FundaCAD themselves (File, Import Mesh), which puts it in the document for `inspect` to measure. Do not substitute a simplified stand-in for the real part: fitting to an approximation is the failure this tool exists to prevent.\n\
-The format comes from the extension unless given. A .gltf whose buffers sit in separate files needs `path`, its neighbours cannot come as `content`. A large STEP can take minutes: it is one read, so do it once and keep the document. A DXF drawing arrives as one sketch per layer on the XY plane, ready to extrude, and only its 3D faces as a body; a binary DXF goes as base64, an ASCII one may go as text.",
+The format comes from the extension unless given. A .gltf whose buffers sit in separate files needs `path`, its neighbours cannot come as `content`. A large STEP can take minutes: it is one read, so do it once and keep the document. A DXF drawing arrives as one sketch per layer on the XY plane, ready to extrude, and only its 3D faces as a body; a binary DXF goes as base64, an ASCII one may go as text. An SVG drawing arrives the same way, one sketch per top level group or Inkscape layer, Y up, healed into closed outlines that extrude with their holes; strokes come in as open curves.",
         input_schema = crate::tools::doc_import()
     )]
     pub async fn t_doc_import(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
@@ -2860,7 +2860,10 @@ impl FundaCad {
                 let layer = s.get("name").and_then(Value::as_str).unwrap_or("Sketch");
                 let entities = s.get("entities").cloned().unwrap_or_else(|| json!([]));
                 let count = entities.as_array().map_or(0, Vec::len);
-                let f = json!({"type": "sketch", "plane": "XY", "name": layer, "entities": entities});
+                let mut f = json!({"type": "sketch", "plane": "XY", "name": layer, "entities": entities});
+                if let Some(rule) = s.get("fillRule") {
+                    f["fillRule"] = rule.clone();
+                }
                 match model::add_feature(&mut st.doc, &f, at) {
                     Ok(fid) => added.push(format!("sketch {fid} '{layer}', {count} entities")),
                     Err(e) => return doc_error(e),
@@ -2870,9 +2873,14 @@ impl FundaCad {
             st.invalidate();
             if !has_geom {
                 let what = if added.len() == 1 { "1 sketch".to_string() } else { format!("{} sketches", added.len()) };
+                let filled = if sketches.iter().any(|s| s.get("fillRule").is_some()) {
+                    "Its outlines are healed into closed profiles with fillRule evenodd, so the holes stay open when the \
+                     extrude has no `regions`."
+                } else {
+                    "Without `regions` an extrude fills every closed outline, holes included."
+                };
                 let head = format!(
-                    "Imported {source} as {what} on the XY plane: {}.{notes}\nExtrude a sketch to make a body. Without \
-                     `regions` an extrude fills every closed outline, holes included.",
+                    "Imported {source} as {what} on the XY plane: {}.{notes}\nExtrude a sketch to make a body. {filled}",
                     added.join("; ")
                 );
                 return text(st.state_line(&head));
