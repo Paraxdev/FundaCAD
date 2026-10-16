@@ -125,6 +125,10 @@ export type TangentEdges = "show" | "faint" | "hide";
 /** How the viewport shades the model (ui/viewMode.ts). */
 export type ViewMode = "matcap" | "realtime" | "pathtraced";
 
+/** The sphere Matcap shades with (viewport/matcap.ts draws each one). */
+export const MATCAP_STYLES = ["studio", "clay", "metal", "wax"] as const;
+export type MatcapStyle = (typeof MATCAP_STYLES)[number];
+
 export interface RenderPrefs {
   environment: Environment;
   background: Background;
@@ -175,6 +179,9 @@ export interface RenderPrefs {
   /** The view mode last chosen in each workspace. */
   viewModeModel: ViewMode;
   viewModeRender: ViewMode;
+  /** Matcap's sphere, and whether it keeps body colours (false is plain). */
+  matcapStyle: MatcapStyle;
+  matcapTint: boolean;
 }
 
 /** What the f-stop numbers mean to the blur pass, and the range the control
@@ -214,6 +221,8 @@ export const DEFAULT_RENDER: RenderPrefs = {
   keyElevation: DEFAULT_KEY.elevation,
   viewModeModel: "realtime",
   viewModeRender: "realtime",
+  matcapStyle: "studio",
+  matcapTint: true,
 };
 
 export const MIN_BRIGHTNESS = 0.4;
@@ -243,6 +252,10 @@ export function asBackground(v: unknown): Background | null {
 
 export function asViewMode(v: unknown): ViewMode | null {
   return v === "matcap" || v === "realtime" || v === "pathtraced" ? v : null;
+}
+
+export function asMatcapStyle(v: unknown): MatcapStyle | null {
+  return MATCAP_STYLES.includes(v as MatcapStyle) ? (v as MatcapStyle) : null;
 }
 
 export function asTangentEdges(v: unknown): TangentEdges | null {
@@ -318,6 +331,8 @@ export function asRenderPrefs(v: unknown): RenderPrefs {
     keyElevation: asElevation(o["keyElevation"]) ?? DEFAULT_RENDER.keyElevation,
     viewModeModel: asViewMode(o["viewModeModel"]) ?? DEFAULT_RENDER.viewModeModel,
     viewModeRender: asViewMode(o["viewModeRender"]) ?? DEFAULT_RENDER.viewModeRender,
+    matcapStyle: asMatcapStyle(o["matcapStyle"]) ?? DEFAULT_RENDER.matcapStyle,
+    matcapTint: typeof o["matcapTint"] === "boolean" ? o["matcapTint"] : DEFAULT_RENDER.matcapTint,
   };
 }
 
@@ -355,7 +370,9 @@ export function setRenderPref<K extends keyof RenderPrefs>(key: K, value: Render
                       : key === "keyAzimuth" ? asAzimuth(value)
                         : key === "keyElevation" ? asElevation(value)
                           : key === "viewModeModel" || key === "viewModeRender" ? asViewMode(value)
-                            : asBrightness(value);
+                            : key === "matcapStyle" ? asMatcapStyle(value)
+                              : key === "matcapTint" ? (typeof value === "boolean" ? value : null)
+                                : asBrightness(value);
   if (ok === null || current[key] === ok) return;
   // A fresh object rather than a mutation, so a subscriber may hold the result
   // of renderPrefs() and compare identity to decide it must redraw.

@@ -565,6 +565,23 @@
   font-weight: 600;
   color: var(--text);
 }
+.matcap-swatches {
+  display: flex;
+  gap: 8px;
+  margin: 8px var(--s-1);
+}
+.matcap-swatch {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  background-color: var(--float-line);
+  background-size: cover;
+  cursor: pointer;
+  &:hover { border-color: var(--float-line); }
+  &.active { border-color: var(--accent); }
+}
 .pop-rule {
   height: 1px;
   margin: 10px 0;

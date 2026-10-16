@@ -551,7 +551,10 @@ export class PostChain {
       this.potato = null;
     }
     if (this.viewMode === "matcap" && !forceRealtime) {
-      (this.matcap ??= new MatcapDraw()).render(this.renderer, this.scene, camera, renderPrefs().brightness);
+      (this.matcap ??= new MatcapDraw()).render(this.renderer, this.scene, camera, renderPrefs().brightness, {
+        style: renderPrefs().matcapStyle,
+        tint: renderPrefs().matcapTint,
+      });
       return;
     }
     if (motion && this.lowPower()) {
