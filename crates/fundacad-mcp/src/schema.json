@@ -1062,7 +1062,7 @@
     "plane": "XY",
     "offset": 25
    },
-   "notes": "Placement is reference frame, then shiftX/shiftY/offset along the reference's own axes, then tiltX, tiltY and spin in that order about the resulting point. Every number is relative to the reference, so the plane follows its parent datum or face and every value can be a parameter name. A plane 20 mm above XY leaning 30 degrees: {\"plane\":\"XY\", \"offset\":20, \"tiltX\":30}. Planes that follow the model: midplane {\"through\":{\"kind\":\"mid\",\"a\":{\"face\":<sel>},\"b\":{\"plane\":\"YZ\"}}}, normal to an edge {\"t\":0.25,\"through\":{\"kind\":\"normalToEdge\",\"edge\":<sel>}}, through two edges {\"through\":{\"kind\":\"twoEdges\",\"a\":<sel>,\"b\":<sel>}}, at an angle {\"angle\":30,\"through\":{\"kind\":\"angle\",\"edge\":<sel>,\"from\":{\"face\":<sel>}}}. Traps: every selector needs its `body`, take it from `inspect`; an edge picked `by: nearest` is lost once the part grows, prefer `by: match` fingerprints for edges and `tracked` for flat faces; `t` is a fraction of the edge's parameter range, close to but not exactly arc length on a spline; skew edges and an edge normal to `from` are refused; a reference that stops resolving keeps `plane` and adds a diagnostic, so set `plane` to where it is now; the pose fields (offset, tilts, spin) still apply on top."
+   "notes": "Placement is reference frame, then shiftX/shiftY/offset along the reference's own axes, then tiltX, tiltY and spin in that order about the resulting point. Every number is relative to the reference, so the plane follows its parent datum or face and every value can be a parameter name. A plane 20 mm above XY leaning 30 degrees: {\"plane\":\"XY\", \"offset\":20, \"tiltX\":30}. Planes that follow the model: midplane {\"through\":{\"kind\":\"mid\",\"a\":{\"face\":<sel>},\"b\":{\"plane\":\"YZ\"}}}, normal to an edge {\"t\":0.25,\"through\":{\"kind\":\"normalToEdge\",\"edge\":<sel>}}, through two edges {\"through\":{\"kind\":\"twoEdges\",\"a\":<sel>,\"b\":<sel>}}, at an angle {\"angle\":30,\"through\":{\"kind\":\"angle\",\"edge\":<sel>,\"from\":{\"face\":<sel>}}}. Traps: every selector needs its `body`, take it from `inspect`; an edge picked `by: nearest` is lost once the part grows, prefer `by: match` fingerprints for edges and `tracked` for flat faces; `t` is a fraction of the edge's parameter range, close to but not exactly arc length on a spline; a datum named in `through` must be above this feature or it is refused; skew edges, an edge normal to `from` and a reference that stops resolving keep `plane` and add a diagnostic, so set `plane` to where it is now; the pose fields (offset, tilts, spin) still apply on top."
   },
   "datumPoint": {
    "summary": "A reference point in space, a marker with no geometry that other features and the user can snap to.",
@@ -1105,7 +1105,7 @@
      1
     ]
    },
-   "notes": "Axis of a hole: {\"origin\":[0,0,0],\"dir\":[0,0,1],\"through\":{\"kind\":\"cylinder\",\"face\":<sel>}}. Traps: two parallel planes have no line and are refused; the direction keeps the sign of the cached `dir`."
+   "notes": "Axis of a hole: {\"origin\":[0,0,0],\"dir\":[0,0,1],\"through\":{\"kind\":\"cylinder\",\"face\":<sel>}}. Traps: two parallel planes have no line, so the axis keeps origin/dir and adds a diagnostic; a datum named in `through` must be above this feature; the direction keeps the sign of the cached `dir`."
   },
   "patternLinear": {
    "summary": "Repeat bodies along an axis.",
