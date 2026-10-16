@@ -98,7 +98,7 @@ import { ProgressiveModel } from "./progressive";
 import { nearestEdgeByMid, nearestEdgeByCurve, midMatchTol, edgeSelectorFrom, polylineMid } from "./edgeMatch";
 import { mergeScope, pickScope, type ScopeDecision, type ScopeView } from "./pickScope";
 import { clickTakes, DwellIntent, type SelectPolicy } from "./clickIntent";
-import { getHoverDwellMs } from "../ui/interactionPrefs";
+import { getHoverDwellMs, getNavPrefs } from "../ui/interactionPrefs";
 import { edgesOnFace, faceEdgeTol, faceSurface, type Tri } from "./faceEdges";
 import { remapSelection, remapStreamedSelection, shouldAnnounce } from "./selectionMemo";
 import { arcSweep, cylinderFromFace, FULL_SWEEP, isPlanarFace, onRoundFace, radialAt, roundStand, solidInsideCylinder, sphereCentreFromFace, unit, type Cylinder } from "../features/planeMath";
@@ -307,6 +307,11 @@ export class Viewport {
         return hit ? hit.distance : null;
       },
       groundZ: () => (this.scene.grid.group.visible ? this.targetGridZ : null),
+    });
+    this.rig.setPivotSource(() => {
+      const pivot = getNavPrefs().orbitPivot;
+      if (pivot === "origin") return new THREE.Vector3();
+      return pivot === "selection" ? this.selectionCentre() : null;
     });
     this.installPointer();
     this.scene.post.onReady = () => this.requestRender();
@@ -2671,6 +2676,21 @@ export class Viewport {
       this.combsObj = null;
     }
     this.requestRender();
+  }
+
+  /** One arrow-key step of the view. */
+  stepView(dir: "left" | "right" | "up" | "down", fine: boolean) {
+    this.rig.stepView(dir, fine);
+    this.requestRender();
+  }
+
+  /** Centre of the selected bodies, or null while nothing is selected. */
+  private selectionCentre(): THREE.Vector3 | null {
+    if (!this.model) return null;
+    const ids = new Set(this.selectionBodyIds());
+    const box = new THREE.Box3();
+    for (const b of this.model.bodies) if (ids.has(b.id)) box.union(new THREE.Box3().setFromObject(b.mesh));
+    return box.isEmpty() ? null : box.getCenter(new THREE.Vector3());
   }
 
   fitView() {

@@ -33,6 +33,9 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
   nav.setFrame(r0?.width || 800 * aspect, r0?.height || 800);
   nav.resetView(null, 0, false);
 
+  let pivotSource: (() => THREE.Vector3 | null) | null = null;
+  nav.opts.preferredPivot = () => pivotSource?.() ?? null;
+
   const applyPrefs = () => {
     const p = getNavPrefs();
     nav.opts.inertia = p.inertia;
@@ -192,6 +195,12 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
     },
     orbitBy(az, pol) {
       nav.orbitBy(az, pol);
+    },
+    stepView(dir, fine) {
+      nav.stepView(dir, fine);
+    },
+    setPivotSource(source) {
+      pivotSource = source;
     },
     tumble(az, pol) {
       nav.tumble(az, pol);

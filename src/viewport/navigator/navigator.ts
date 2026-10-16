@@ -9,6 +9,7 @@ import type { NavScene, ProjectionMode } from "../cameras";
 import {
   centreDepth, orbitPivot, zoomAnchor, type AnchorContext,
 } from "./anchor";
+import { stepAngles, type StepDir } from "../viewStep";
 import { OrbitChannel, PanChannel, ZoomChannel } from "./channels";
 import { makeFlight, stepFlight, type Flight } from "./flight";
 import {
@@ -42,12 +43,17 @@ export const CONTAIN_FACTOR = 1.5;
 /** Seconds of drag velocity an inertial orbit carries on after release. */
 const INERTIA_S = 0.3;
 
+export { VIEW_STEP, VIEW_STEP_FINE, stepAngles } from "../viewStep";
+
 export type NavigatorEvent = "inputstart" | "inputend" | "change" | "rest";
 
 export interface NavigatorOptions {
   /** Smooth time of the eased gestures, seconds. 0 is raw. */
   smoothTime: number;
   inertia: boolean;
+  /** The pivot the user asked for in preferences (the origin, the selection's
+   *  centre), or null to pick one from the model under the cursor. */
+  preferredPivot: (() => THREE.Vector3 | null) | null;
 }
 
 type Gesture = { kind: "orbit"; x: number; y: number; vx: number; vy: number; started: boolean } | { kind: "pan" } | null;
@@ -55,7 +61,7 @@ type Gesture = { kind: "orbit"; x: number; y: number; vx: number; vy: number; st
 export class Navigator {
   readonly pose: Pose = makePose();
   frame: Frame = { width: 800, height: 600 };
-  opts: NavigatorOptions = { smoothTime: 0.125, inertia: false };
+  opts: NavigatorOptions = { smoothTime: 0.125, inertia: false, preferredPivot: null };
 
   private mode: ProjectionMode = "auto";
   private userLimits: Partial<Limits> = {};
@@ -202,7 +208,7 @@ export class Navigator {
     return project(this.pose, this.frame, point);
   }
   pivotAt(x: number, y: number): THREE.Vector3 {
-    return this.orbitPoint?.clone() ?? orbitPivot(this.pose, this.ctx(), x, y);
+    return this.orbitPoint?.clone() ?? this.opts.preferredPivot?.() ?? orbitPivot(this.pose, this.ctx(), x, y);
   }
 
   // --- gestures -------------------------------------------------------------------
@@ -692,11 +698,16 @@ export class Navigator {
   /** Immediate turntable orbit about the orbit point, else the target. */
   orbitBy(az: number, pol: number) {
     if (!this.takeInput()) return;
-    const pivot = this.orbitPoint ?? this.pose.target.clone();
+    const pivot = this.orbitPoint ?? this.opts.preferredPivot?.() ?? this.pose.target.clone();
     const t = this.pose.level ? { yaw: this.pose.yaw, elev: this.pose.elev, roll: 0 } : decompose(this.pose.q);
     const [lo, hi] = elevRange(this.limits);
     turntableAbout(this.pose, pivot, t.yaw + az, Math.min(hi, Math.max(lo, t.elev + pol)), t.roll);
     this.moved();
+  }
+
+  stepView(dir: StepDir, fine = false) {
+    const [az, pol] = stepAngles(dir, fine);
+    this.orbitBy(az, pol);
   }
 
   /** Free rotation about the screen axes, over the poles (3D mouse). One of the

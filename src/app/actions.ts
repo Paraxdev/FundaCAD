@@ -12,6 +12,7 @@ import { useUiStore } from "../stores/ui";
 import { useSketchPaletteStore } from "../stores/sketchPalette";
 import type { Engine } from "./engine";
 import type { SketchTool } from "../sketch/sketchMode";
+import { isChoiceOpen } from "../ui/choice";
 import type { StandardView } from "../viewport/cameras";
 import type { FaceOffsetMode } from "../features/faceOffsetTool";
 
@@ -90,6 +91,14 @@ export function createActions(e: Engine): (action: string) => void {
     }
     if (action === "finish") return void e.sketch.finish(true);
     if (action === "palette") return void (palette.visible = true);
+    // The arrow keys turn the view and nothing else: they leave a sketch open,
+    // and a tool that reads the arrows itself (the pattern count) keeps them.
+    const step = /^view-step-(left|right|up|down)(-fine)?$/.exec(action);
+    if (step) {
+      if (isChoiceOpen() || (!e.sketch.active && e.toolBusy())) return;
+      e.viewport.stepView(step[1] as "left" | "right" | "up" | "down", !!step[2]);
+      return;
+    }
     // Undo/redo must be handled BEFORE the finish-the-sketch line below. They are
     // not 3D modeling commands: letting Ctrl+Z fall through would commit the sketch
     // and THEN undo it as a whole, which is the exact bug in-sketch undo exists to

@@ -70,7 +70,13 @@ export function setNavigatorChoice(choice: NavigatorChoice) {
 export type WheelDevicePref = "auto" | "touchpad" | "mouse";
 export type TouchpadScroll = "orbit" | "pan";
 
+export type OrbitPivotPref = "auto" | "origin" | "selection";
+
 export interface NavPrefs {
+  /** What a drag orbits about: the model under the cursor, the world origin, or
+   *  the centre of the selection (the model under the cursor while nothing is
+   *  selected). */
+  orbitPivot: OrbitPivotPref;
   /** An orbit keeps turning a moment after release, about the same pivot. */
   inertia: boolean;
   /** Where wheel events come from: told apart per scroll, or always one. */
@@ -83,10 +89,13 @@ export interface NavPrefs {
 }
 
 const NAV_PREFS_KEY = "fundacad.navigation";
-const NAV_DEFAULTS: NavPrefs = { inertia: false, wheelDevice: "auto", touchpadScroll: "orbit", smoothTime: 0.125 };
+const NAV_DEFAULTS: NavPrefs = { orbitPivot: "auto", inertia: false, wheelDevice: "auto", touchpadScroll: "orbit", smoothTime: 0.125 };
 
 export function asWheelDevice(v: unknown): WheelDevicePref | null {
   return v === "auto" || v === "touchpad" || v === "mouse" ? v : null;
+}
+export function asOrbitPivot(v: unknown): OrbitPivotPref | null {
+  return v === "auto" || v === "origin" || v === "selection" ? v : null;
 }
 export function asTouchpadScroll(v: unknown): TouchpadScroll | null {
   return v === "orbit" || v === "pan" ? v : null;
@@ -100,6 +109,7 @@ function readNavPrefs(): NavPrefs {
     // "Scroll pans" made every wheel pan, which is a touchpad that pans.
     const legacyPans = v.scrollPans === true && v.wheelDevice === undefined && v.touchpadScroll === undefined;
     return {
+      orbitPivot: asOrbitPivot(v.orbitPivot) ?? NAV_DEFAULTS.orbitPivot,
       inertia: typeof v.inertia === "boolean" ? v.inertia : NAV_DEFAULTS.inertia,
       wheelDevice: asWheelDevice(v.wheelDevice) ?? (legacyPans ? "touchpad" : NAV_DEFAULTS.wheelDevice),
       touchpadScroll: asTouchpadScroll(v.touchpadScroll) ?? (legacyPans ? "pan" : NAV_DEFAULTS.touchpadScroll),

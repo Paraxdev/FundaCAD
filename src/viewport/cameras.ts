@@ -107,6 +107,11 @@ export interface CameraRig {
   /** Turntable orbit about the target by az (about world Z) and pol (tilt)
    *  radians. Positive pol tips the camera up over the top. */
   orbitBy(az: number, pol: number): void;
+  /** One arrow-key step of the view: 15 degrees, or a finer 5. */
+  stepView(dir: "left" | "right" | "up" | "down", fine: boolean): void;
+  /** Where an orbit turns about when preferences name a place, or null to take
+   *  the model under the cursor. The classic camera ignores it. */
+  setPivotSource(source: (() => THREE.Vector3 | null) | null): void;
   /** Free rotation about the screen axes (3D mouse tumble), over the poles. */
   tumble(az: number, pol: number): void;
   /** Bank the view about the view axis by `angle` radians. */
