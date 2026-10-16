@@ -404,6 +404,8 @@ tagged_enum! {
         Distance(Distance) = "distance",
         Diameter(Diameter) = "diameter",
         P2pDistance(P2pDistance) = "p2pDistance",
+        HDistance(P2pDistance) = "hDistance",
+        VDistance(P2pDistance) = "vDistance",
         P2lDistance(P2lDistance) = "p2lDistance",
         RadialGap(RadialGap) = "radialGap",
         C2cDistance(C2cDistance) = "c2cDistance",

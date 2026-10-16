@@ -524,3 +524,35 @@ fn no_ordinary_document_carries_a_field_a_build_ignores() {
     }
     assert!(found.is_empty(), "{found:#?}");
 }
+
+#[test]
+fn horizontal_and_vertical_distances_land_typed_and_keep_their_fields() {
+    let constraints = serde_json::json!([
+        { "type": "hDistance", "id": "c20", "e1": "e3", "p1": 0, "e2": "e3", "p2": 1, "value": 8, "driven": true, "place": { "ox": 0, "oy": 3 } },
+        { "type": "vDistance", "id": "c21", "e1": "e3", "p1": 0, "e2": "e2", "p2": 0, "value": -4 },
+        { "type": "angle", "id": "c8", "l1": "e3", "l2": "e1~1", "value": 270, "rays": [1, -1], "place": { "ox": 1, "oy": 2 } },
+        { "type": "radius", "id": "c1", "e": "e2", "value": 4, "place": { "ox": 2, "oy": 2 } },
+        { "type": "diameter", "id": "c9", "circle": "e2", "value": 6, "place": { "ox": 3, "oy": 1 } }
+    ]);
+    let doc_json = serde_json::json!({
+        "features": [{ "type": "sketch", "id": "s1", "plane": "XY", "entities": [], "constraints": constraints }]
+    });
+    let doc: CadDocument = serde_json::from_value(doc_json.clone()).expect("load");
+    let Feature::Sketch(s) = &doc.features[0] else {
+        panic!("sketch")
+    };
+    let loaded = s.constraints.as_ref().expect("constraints");
+    for (c, want) in loaded.iter().zip(["hDistance", "vDistance", "angle", "radius", "diameter"]) {
+        assert_eq!(c.type_name(), Some(want));
+        assert!(!c.is_unknown(), "{want} fell into Unknown");
+    }
+    let SketchConstraint::HDistance(h) = &loaded[0] else {
+        panic!("hDistance is typed")
+    };
+    assert_eq!(h.value.get(), 8.0);
+    let SketchConstraint::VDistance(v) = &loaded[1] else {
+        panic!("vDistance is typed")
+    };
+    assert_eq!(v.value.get(), -4.0);
+    assert_eq!(serde_json::to_value(&doc).expect("save"), doc_json);
+}
