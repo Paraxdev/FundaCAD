@@ -11,7 +11,7 @@ const deg = (d: number) => (d * Math.PI) / 180;
 const polar = (o: THREE.Vector2, len: number, d: number) => V(o.x + len * Math.cos(deg(d)), o.y + len * Math.sin(deg(d)));
 
 const base = (over: Partial<InferLineInput>): InferLineInput => ({
-  id: NEW_ENTITY, start: V(0, 0), end: V(10, 10), endKind: "free", entities: [], step: 0, tolDeg: 3, smart: true, ...over,
+  id: NEW_ENTITY, start: V(0, 0), end: V(10, 10), endKind: "free", entities: [], step: 0, tolDeg: 3, nearMm: 100, smart: true, ...over,
 });
 const types = (r: { relations: { type: string }[] }) => r.relations.map((c) => c.type);
 
@@ -93,6 +93,31 @@ describe("line inference", () => {
   it("a typed angle takes no direction guess", () => {
     const r = inferLineRelations(base({ start: V(0, 0), end: V(50, 1), typedAngle: true }));
     expect(r.relations).toEqual([]);
+  });
+
+  it("a lattice snapped end stays on the lattice, a guess is only recorded when exact", () => {
+    const B = line("B", 0, 100, 200, 106);
+    const par = inferLineRelations(base({ start: V(0, 0), end: V(200, 5), raw: V(199.9, 5.7), step: 5, nearMm: 150, entities: [B] }));
+    expect(par.end.toArray()).toEqual([200, 5]);
+    expect(par.relations).toEqual([]);
+    expect(par.hints).toEqual([]);
+    const C = line("C", 0, 0, 100, 10);
+    const ref = { entity: "C", at: 1 as const };
+    const off = inferLineRelations(base({ start: V(100, 10), startRef: ref, end: V(190, 20), raw: V(190.3, 19.2), step: 10, entities: [C] }));
+    expect(off.end.toArray()).toEqual([190, 20]);
+    expect(off.relations).toEqual([]);
+    const exact = inferLineRelations(base({ start: V(100, 10), startRef: ref, end: V(200, 20), raw: V(200.4, 20.9), step: 10, entities: [C] }));
+    expect(exact.end.toArray()).toEqual([200, 20]);
+    expect(exact.relations).toEqual([{ type: "collinear", l1: "C", l2: NEW_ENTITY }]);
+  });
+
+  it("parallel and perpendicular only look at lines near the new one", () => {
+    const far = line("F", 7000, 7000, 7000 + 100 * Math.cos(deg(30.2)), 7000 + 100 * Math.sin(deg(30.2)));
+    const r = inferLineRelations(base({ start: V(0, 0), end: polar(V(0, 0), 50, 31), entities: [far] }));
+    expect(r.relations).toEqual([]);
+    expect(r.hints).toEqual([]);
+    const near = inferLineRelations(base({ start: V(0, 0), end: polar(V(0, 0), 50, 31), entities: [line("N", 0, 40, 100 * Math.cos(deg(30.2)), 40 + 100 * Math.sin(deg(30.2)))] }));
+    expect(types(near)).toEqual(["parallel"]);
   });
 
   it("bindNew names the committed entity", () => {
