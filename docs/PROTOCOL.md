@@ -766,7 +766,9 @@ is turned and tolerances are reset. The redrawn solid is kept only when the kern
 accepts it, its skin is closed and its exact volume agrees with a mesh of it, and the
 note says how many edges were redrawn and how far off they were. Otherwise the solid
 stays as the file has it and the note says how many edges are off, how far, and why
-they were not redrawn, because a section or a mesh can gap there.
+they were not redrawn, because a section or a mesh can gap there. Redrawing one solid
+stops after 10 s and a whole read after 30 s, the rest stays as the file has it, and a
+cancel stops it like any other step of the read.
 `notes` says each of these in a sentence led by the body's
 name, what did not close first. The app stores them on the feature, and every
 rebuild repeats them as `importNote` diagnostics. A product that already holds a solid is not sewn, and

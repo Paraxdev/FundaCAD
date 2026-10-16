@@ -280,6 +280,12 @@ pub fn widest_tolerance(shape: &Shape) -> f64 {
     ffi::step_widest_tolerance(&shape.inner)
 }
 
+/// How many seconds one solid of a STEP or IGES read may spend being healed,
+/// for every read after this; a solid past it is kept as the file has it.
+pub fn set_heal_budget(seconds: f64) {
+    ffi::step_set_heal_budget(seconds);
+}
+
 /// Binary BREP, BinTools format V3 with triangles.
 pub fn to_bin_v3(shape: &Shape) -> Result<Vec<u8>, Error> {
     shape.to_brep_bytes(

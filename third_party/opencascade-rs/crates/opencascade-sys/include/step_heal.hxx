@@ -31,6 +31,7 @@
 #include <Geom_BSplineCurve.hxx>
 #include <Geom_Curve.hxx>
 #include <Geom_Surface.hxx>
+#include <Message_ProgressScope.hxx>
 #include <NCollection_DataMap.hxx>
 #include <Poly_Triangulation.hxx>
 #include <ShapeAnalysis_Surface.hxx>
@@ -55,15 +56,67 @@
 #include <TopoDS_Wire.hxx>
 #include <gp_Vec2d.hxx>
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cstdio>
 #include <cmath>
 #include <map>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
 
 // An edge farther than this from a face it bounds is redrawn.
 const double STEP_HEAL_LIMIT = 1e-3;
+
+// What a heal polls: a cancel stops it, each poll beats the job's heartbeat
+// through `progress`, and a solid past `until` is kept as the file has it.
+struct StepHealClock {
+  Message_ProgressScope *progress = nullptr;
+  std::chrono::steady_clock::time_point until = std::chrono::steady_clock::time_point::max();
+  bool cancelled = false;
+};
+
+struct StepHealStop : std::runtime_error {
+  StepHealStop() : std::runtime_error("healing an imported solid stopped") {}
+};
+
+inline StepHealClock *&step_heal_clock() {
+  static thread_local StepHealClock *clock = nullptr;
+  return clock;
+}
+
+inline void step_heal_poll() {
+  StepHealClock *c = step_heal_clock();
+  if (c == nullptr) {
+    return;
+  }
+  if (c->progress != nullptr && c->progress->UserBreak()) {
+    c->cancelled = true;
+    throw StepHealStop{};
+  }
+  if (std::chrono::steady_clock::now() > c->until) {
+    throw StepHealStop{};
+  }
+}
+
+// Seconds one solid may spend being healed. A read spends at most three
+// times that on all of its solids, the rest are kept as the file has them.
+inline std::atomic<double> &step_heal_budget_slot() {
+  static std::atomic<double> seconds(10.0);
+  return seconds;
+}
+
+// Seconds this thread's read has spent healing so far.
+inline double &step_heal_spent() {
+  static thread_local double seconds = 0.0;
+  return seconds;
+}
+
+inline double step_heal_budget() {
+  const double solid = step_heal_budget_slot().load();
+  return std::max(0.0, std::min(solid, 3.0 * solid - step_heal_spent()));
+}
 
 // How far an edge's curve is from where its pcurve on `face` puts it.
 inline double step_heal_gap(const TopoDS_Edge &edge, const TopoDS_Face &face) {
@@ -87,6 +140,7 @@ inline int step_heal_edges_away(const TopoDS_Shape &shape, double limit, double 
   TopExp::MapShapesAndAncestors(shape, TopAbs_EDGE, TopAbs_FACE, faces_of);
   int away = 0;
   for (int i = 1; i <= faces_of.Extent(); ++i) {
+    step_heal_poll();
     const TopoDS_Edge &edge = TopoDS::Edge(faces_of.FindKey(i));
     if (BRep_Tool::Degenerated(edge)) {
       continue;
@@ -127,6 +181,7 @@ struct StepHeal {
   // Why edges were not redrawn, with how many.
   std::map<std::string, int> refused;
   bool healed = false;
+  bool cancelled = false;
   // Why the redrawn solid was not kept, empty when it was or nothing was redrawn.
   std::string why_not;
   TopoDS_Solid solid;
@@ -250,6 +305,9 @@ inline gp_Pnt solve_corner(const gp_Pnt &p, const Surfaces &sas, const std::vect
   }
   gp_Pnt q = p;
   for (int it = 0; it < 5000; ++it) {
+    if (it % 64 == 0) {
+      step_heal_poll();
+    }
     gp_Pnt q0 = q;
     for (const auto &sa : sas) {
       q = on_surface(sa, q);
@@ -298,6 +356,7 @@ inline const char *march(const gp_Pnt &A, const gp_Pnt &B, const Surfaces &sas, 
   gp_Vec prev;
   bool have_prev = false, reached = false;
   for (int step = 0; step < 30 * N; ++step) {
+    step_heal_poll();
     gp_Vec n0, n1;
     if (!normal(sas[0], q, n0) || !normal(sas[1], q, n1)) {
       return step_heal_detail::TANGENT;
@@ -538,6 +597,7 @@ inline std::vector<Off> off_edges(const TopoDS_Shape &body) {
   TopExp::MapShapesAndAncestors(body, TopAbs_EDGE, TopAbs_FACE, faces_of);
   std::vector<Off> out;
   for (int i = 1; i <= faces_of.Extent(); ++i) {
+    step_heal_poll();
     Off o;
     o.edge = TopoDS::Edge(faces_of.FindKey(i));
     if (BRep_Tool::Degenerated(o.edge)) {
@@ -580,6 +640,7 @@ inline int fix_corners(const TopoDS_Shape &body, const std::vector<Off> &offs, c
         continue;
       }
       seen.Add(v);
+      step_heal_poll();
       gp_Pnt p = BRep_Tool::Pnt(v);
       Surfaces sas;
       TopTools_IndexedMapOfShape faces;
@@ -770,6 +831,7 @@ inline void heal(const TopoDS_Solid &source, StepHeal &out) {
   BRep_Builder builder;
   std::vector<std::pair<double, double>> drawn;
   for (const Off &o : offs) {
+    step_heal_poll();
     if (o.faces.size() != 2) {
       ++out.refused[NOT_TWO];
       continue;
@@ -835,6 +897,7 @@ inline void heal(const TopoDS_Solid &source, StepHeal &out) {
     }
   }
 
+  step_heal_poll();
   if (body.ShapeType() != TopAbs_SOLID || !BRepCheck_Analyzer(body).IsValid()) {
     out.why_not = "the kernel's validity check rejects the redrawn body";
     return;
@@ -854,6 +917,7 @@ inline void heal(const TopoDS_Solid &source, StepHeal &out) {
   // hand, a large part is meshed coarser so this stays quick.
   const double deflection = std::max(0.01, 1e-4 * diagonal);
   double area = 0.0;
+  step_heal_poll();
   const double exact = exact_volume(body), meshed = mesh_volume(body, deflection, area);
   double bound = area * deflection;
   for (const auto &d : drawn) {
@@ -871,8 +935,10 @@ inline void heal(const TopoDS_Solid &source, StepHeal &out) {
 
 // `solid` healed when an edge of it lies more than STEP_HEAL_LIMIT from a face
 // it bounds. `healed` is set only when the result is sound, with the same
-// faces in the same order.
-inline StepHeal step_heal(const TopoDS_Solid &solid) {
+// faces in the same order. A cancel through `progress` sets `cancelled`, and
+// past `budget` seconds the solid is kept as the file has it.
+inline StepHeal step_heal(const TopoDS_Solid &solid, Message_ProgressScope *progress = nullptr,
+                          double budget = 1e9) {
   StepHeal out;
   bool loose = false;
   for (TopExp_Explorer ex(solid, TopAbs_EDGE); ex.More() && !loose; ex.Next()) {
@@ -884,16 +950,38 @@ inline StepHeal step_heal(const TopoDS_Solid &solid) {
   if (!loose) {
     return out;
   }
-  out.away = step_heal_edges_away(solid, STEP_HEAL_LIMIT, out.widest);
+  StepHealClock clock;
+  clock.progress = progress;
+  struct Use {
+    StepHealClock *before;
+    explicit Use(StepHealClock *c) : before(step_heal_clock()) { step_heal_clock() = c; }
+    ~Use() { step_heal_clock() = before; }
+  } use(&clock);
+  try {
+    out.away = step_heal_edges_away(solid, STEP_HEAL_LIMIT, out.widest);
+  } catch (const StepHealStop &) {
+    out.cancelled = true;
+    return out;
+  }
   if (out.away == 0) {
     return out;
   }
+  // Counting is cheap and the note needs the count, so the budget starts here.
+  const auto start = std::chrono::steady_clock::now();
+  clock.until = start + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+                            std::chrono::duration<double>(std::min(std::max(budget, 0.0), 1e6)));
   try {
     step_heal_detail::heal(solid, out);
   } catch (const Standard_Failure &) {
     out.healed = false;
     out.why_not = "the kernel failed while redrawing them";
+  } catch (const StepHealStop &) {
+    out.healed = false;
+    out.solid = TopoDS_Solid();
+    out.cancelled = clock.cancelled;
+    out.why_not = "redrawing them took too long";
   }
+  step_heal_spent() += std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
   return out;
 }
 

@@ -484,7 +484,10 @@ inline StepLooseRepair step_loose_repair(const TopoDS_Shape &product,
       for (TopExp_Explorer fx(solid, TopAbs_FACE); fx.More(); fx.Next()) {
         piece.face_colors.push_back(color_now(fx.Current()));
       }
-      StepHeal heal = step_heal(solid);
+      StepHeal heal = step_heal(solid, &progress, step_heal_budget());
+      if (heal.cancelled) {
+        return StepLooseRepair();
+      }
       if (heal.healed) {
         solid = heal.solid;
       } else {

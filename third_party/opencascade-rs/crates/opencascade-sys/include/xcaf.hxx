@@ -475,6 +475,7 @@ inline std::unique_ptr<StepAssembly> xcaf_assembly_walk(const Handle(TDocStd_Doc
   walk.reads_faces = styled.Length() > 0;
   Message_ProgressScope sewing(whole.Next(1), "sewing", 1, true);
   walk.sewing = &sewing;
+  step_heal_spent() = 0.0;
 
   TDF_LabelSequence roots;
   walk.shapes->GetFreeShapes(roots);
@@ -711,6 +712,7 @@ inline int32_t step_edges_away(const TopoDS_Shape &shape, double limit, rust::Sl
   return n;
 }
 inline double step_widest_tolerance(const TopoDS_Shape &shape) { return step_heal_widest_tolerance(shape); }
+inline void step_set_heal_budget(double seconds) { step_heal_budget_slot().store(seconds); }
 inline int32_t step_assembly_note_count(const StepAssembly &a) { return static_cast<int32_t>(a.notes.size()); }
 inline int32_t step_assembly_note_node(const StepAssembly &a, int32_t i) { return a.notes.at(i).node; }
 inline int32_t step_assembly_note_leaf(const StepAssembly &a, int32_t i) { return a.notes.at(i).leaf; }
