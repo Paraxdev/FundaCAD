@@ -278,3 +278,17 @@ fn a_lost_reference_names_the_selector_so_it_can_be_picked_again() {
     assert_eq!(repick("pt")["kind"], "face", "{:?}", r.diagnostics);
     assert_eq!(repick("pt")["at"], json!([20.0, 0.0, 0.0]));
 }
+
+#[test]
+fn a_datum_point_on_an_edge_end_keeps_that_end_when_the_edge_moves_past_half_its_length() {
+    let d = |dz: f64| json!({"parameters": {"dz": dz}, "features": [
+        {"id": "b", "type": "box", "length": 40, "width": 20, "height": 20},
+        {"id": "mv", "type": "move", "dz": "dz"},
+        {"id": "pt", "type": "datumPoint", "point": [20, 10, 10],
+         "at": {"edge": vertical_edge(10.0), "end": "end", "point": [20, 10, 10]}},
+    ]});
+    for dz in [5.0, 15.0, 30.0] {
+        let r = build(d(dz));
+        assert!(near(mark(&r, "pt", "position"), [20.0, 10.0, 10.0 + dz]), "dz {dz}: {}", r.datum_marks["pt"]);
+    }
+}
