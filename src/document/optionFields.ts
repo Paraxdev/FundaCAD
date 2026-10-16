@@ -154,6 +154,38 @@ export function datumChoices(field: string, features: readonly Feature[]): Choic
   return null;
 }
 
+const DATUM_FIELD = /^(startPlane|startPoint|upToPlane2?|upToPoint2?)$/;
+
+/** The value a point row shows for a picked vertex, which is not one of its choices. */
+export const PICKED_POINT = "picked";
+
+/** A start or up to plane or point row: its choices from the datums above the
+ *  feature, and the value it holds even when that is a picked vertex, a datum
+ *  that is gone, or nothing chosen yet. */
+export function datumChoiceRow(
+  feature: Feature,
+  field: string,
+  features: readonly Feature[],
+): { options: ChoiceOption[]; current: string } | null {
+  if (!DATUM_FIELD.test(field)) return null;
+  const at = features.findIndex((x) => x.id === feature.id);
+  const options = datumChoices(field, at < 0 ? features : features.slice(0, at)) ?? [];
+  const v = (feature as unknown as Record<string, unknown>)[field];
+  if (v && typeof v === "object") {
+    return { options: [...options, { value: PICKED_POINT, label: "Picked point" }], current: PICKED_POINT };
+  }
+  if (typeof v === "string" && v) {
+    if (options.some((o) => o.value === v)) return { options, current: v };
+    return { options: [...options, { value: v, label: `${v} (missing)` }], current: v };
+  }
+  return { options: [{ value: "", label: "Choose one" }, ...options], current: "" };
+}
+
+/** Whether picking `value` on a datum row would only rewrite what it already holds. */
+export function datumChoiceIsNoOp(field: string, value: string | boolean): boolean {
+  return DATUM_FIELD.test(field) && (value === "" || value === PICKED_POINT);
+}
+
 /** Which start and end rows an extrude reads, given its start and end types. */
 function extrudeFieldApplies(field: string, v: Record<string, unknown>): boolean {
   const start = (v.startType as string) || "sketch";
