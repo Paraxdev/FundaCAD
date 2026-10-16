@@ -3,6 +3,7 @@
 // viewport noticing.
 
 import type * as THREE from "three";
+import type { TraceLens } from "./camera";
 
 export interface TraceLight {
   color: THREE.Color;
@@ -12,13 +13,21 @@ export interface TraceLight {
   target: THREE.Vector3;
 }
 
-export interface TraceScene {
-  meshes: THREE.Mesh[];
+export interface TraceLook {
   lights: TraceLight[];
+  /** Linear, before tone mapping: the tracer tone maps its background, the
+   *  Realtime clear is not, so this is the clear run back through the tone mapper. */
   background: THREE.Color;
+  /** An equirect, sampled as it is (no rotation), like the Realtime cube. */
+  environment: THREE.Texture;
   brightness: number;
   toneMapping: THREE.ToneMapping;
   exposure: number;
+}
+
+export interface TraceScene extends TraceLook {
+  meshes: THREE.Mesh[];
+  lens: TraceLens | null;
 }
 
 export interface TracerBackend {
@@ -36,10 +45,13 @@ export interface TracerBackend {
   /** Re-reads the meshes' matrices and refits the top level tree. */
   updateTransforms(): void;
   updateMaterials(): void;
+  /** New lights, background, environment or exposure; restarts accumulation. */
+  updateLook(look: TraceLook): void;
   /** The largest storage buffer the device took, for the size refusal. */
   readonly maxStorageBytes: number;
-  /** Re-reads the camera, which also restarts accumulation. */
-  updateCamera(camera: THREE.Camera): void;
+  /** Re-reads the camera, which also restarts accumulation. A lens is depth of
+   *  field, null a pinhole. */
+  updateCamera(camera: THREE.Camera, lens: TraceLens | null): void;
   reset(): void;
   renderSample(): void;
   /** Samples gathered per pixel since the last reset. */

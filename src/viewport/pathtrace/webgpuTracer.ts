@@ -3,9 +3,10 @@
 // first time Path traced is picked.
 
 import * as THREE from "three";
-import { SAMPLE_CAP, type TraceScene, type TracerBackend } from "./backend";
+import { SAMPLE_CAP, type TraceLook, type TraceScene, type TracerBackend } from "./backend";
 import { repackInPlace, type SwappableBvhData } from "./bvhSwap";
-import { traceCameraFor } from "./camera";
+import { traceCameraFor, type TraceLens } from "./camera";
+import { backgroundTexture } from "./environment";
 
 type WebGpuModule = typeof import("three/webgpu");
 type TracerModule = typeof import("three-gpu-pathtracer/webgpu");
@@ -22,35 +23,6 @@ interface TracerInternals {
   generateMissingAttributes: boolean;
 }
 
-/** A soft studio sky, Z up, as half floats: Float32 data with a nearest filter
- *  makes the tracer gather zero samples without any error. */
-function skyTexture(): THREE.DataTexture {
-  const w = 64;
-  const h = 32;
-  const data = new Uint16Array(w * h * 4);
-  const top = new THREE.Color(0.9, 0.93, 1);
-  const horizon = new THREE.Color(0.75, 0.75, 0.78);
-  const ground = new THREE.Color(0.22, 0.22, 0.24);
-  const c = new THREE.Color();
-  for (let y = 0; y < h; y++) {
-    const v = 1 - (y + 0.5) / h;
-    if (v > 0.5) c.lerpColors(horizon, top, Math.min(1, (v - 0.5) * 2.5));
-    else c.lerpColors(ground, horizon, Math.pow(v * 2, 4));
-    for (let x = 0; x < w; x++) {
-      const i = (y * w + x) * 4;
-      data[i] = THREE.DataUtils.toHalfFloat(c.r);
-      data[i + 1] = THREE.DataUtils.toHalfFloat(c.g);
-      data[i + 2] = THREE.DataUtils.toHalfFloat(c.b);
-      data[i + 3] = THREE.DataUtils.toHalfFloat(1);
-    }
-  }
-  const t = new THREE.DataTexture(data, w, h, THREE.RGBAFormat, THREE.HalfFloatType);
-  t.mapping = THREE.EquirectangularReflectionMapping;
-  t.magFilter = t.minFilter = THREE.LinearFilter;
-  t.needsUpdate = true;
-  return t;
-}
-
 export class WebGpuTracer implements TracerBackend {
   readonly name = "three-gpu-pathtracer 0.0.27 (WebGPU)";
   readonly canvas: HTMLCanvasElement;
@@ -58,7 +30,6 @@ export class WebGpuTracer implements TracerBackend {
   private tracer: InstanceType<TracerModule["WebGPUPathTracer"]> | null = null;
   private scene = new THREE.Scene();
   private camera: THREE.Camera | null = null;
-  private sky: THREE.DataTexture | null = null;
   private faultCbs: ((why: string) => void)[] = [];
   private disposed = false;
   maxStorageBytes = DEFAULT_STORAGE_BINDING;
@@ -122,26 +93,39 @@ export class WebGpuTracer implements TracerBackend {
 
   setScene(ts: TraceScene, camera: THREE.Camera) {
     if (!this.renderer || !this.tracer) return;
-    this.renderer.toneMapping = ts.toneMapping;
-    this.renderer.toneMappingExposure = ts.exposure;
+    this.disposeLights();
     const scene = new THREE.Scene();
-    scene.background = ts.background.clone();
-    scene.environment = (this.sky ??= skyTexture());
-    scene.environmentIntensity = ts.brightness;
-    // The sky is drawn Y up, the model is Z up.
-    scene.environmentRotation.set(Math.PI / 2, 0, 0);
     for (const m of ts.meshes) scene.add(m);
-    for (const l of ts.lights) {
+    this.scene = scene;
+    this.applyLook(ts);
+    this.camera = traceCameraFor(camera, this.camera, ts.lens);
+    this.tracer.setScene(scene, this.camera);
+  }
+
+  private applyLook(look: TraceLook) {
+    const r = this.renderer!;
+    r.toneMapping = look.toneMapping;
+    r.toneMappingExposure = look.exposure;
+    const scene = this.scene;
+    this.disposeLights();
+    scene.background = backgroundTexture(look.background);
+    scene.environment = look.environment;
+    scene.environmentIntensity = look.brightness;
+    for (const l of look.lights) {
       const d = new THREE.DirectionalLight(l.color, l.intensity);
       d.position.copy(l.position);
       d.target.position.copy(l.target);
       scene.add(d, d.target);
     }
     scene.updateMatrixWorld(true);
-    this.disposeLights();
-    this.scene = scene;
-    this.camera = traceCameraFor(camera, this.camera);
-    this.tracer.setScene(scene, this.camera);
+  }
+
+  updateLook(look: TraceLook) {
+    if (!this.tracer || !this.camera) return;
+    this.applyLook(look);
+    this.tracer.updateEnvironment();
+    this.tracer.updateLights();
+    this.tracer.reset();
   }
 
   updateGeometry(meshes: THREE.Mesh[]) {
@@ -169,10 +153,10 @@ export class WebGpuTracer implements TracerBackend {
     this.tracer?.updateMaterials();
   }
 
-  updateCamera(camera: THREE.Camera) {
+  updateCamera(camera: THREE.Camera, lens: TraceLens | null) {
     if (!this.tracer) return;
     const prev = this.camera;
-    this.camera = traceCameraFor(camera, prev);
+    this.camera = traceCameraFor(camera, prev, lens);
     if (this.camera !== prev) this.tracer.setCamera(this.camera);
     else this.tracer.updateCamera();
     this.tracer.reset();
@@ -196,7 +180,7 @@ export class WebGpuTracer implements TracerBackend {
   private disposeLights() {
     for (const o of [...this.scene.children]) {
       if ((o as THREE.DirectionalLight).isDirectionalLight) (o as THREE.DirectionalLight).dispose();
-      this.scene.remove(o);
+      if (!(o as THREE.Mesh).isMesh) this.scene.remove(o);
     }
   }
 
@@ -205,7 +189,6 @@ export class WebGpuTracer implements TracerBackend {
     this.disposeLights();
     this.tracer?.dispose();
     this.renderer?.dispose();
-    this.sky?.dispose();
     this.tracer = null;
     this.renderer = null;
     this.canvas.remove();

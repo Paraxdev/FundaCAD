@@ -3,7 +3,8 @@
 // scene and the camera, and traces only while traceState says so.
 
 import type * as THREE from "three";
-import { SAMPLE_CAP, type TraceScene, type TracerBackend } from "./backend";
+import { SAMPLE_CAP, type TraceLook, type TracerBackend } from "./backend";
+import type { TraceLens } from "./camera";
 import { armGuard, clearGuard } from "./guard";
 import { BlasCache, type BlasBuilder } from "./blasCache";
 import { createBlasBuilder } from "./blasPool";
@@ -34,7 +35,20 @@ export interface TraceFrame {
    *  when what the tracer sees differs. */
   sceneMaybeChanged: boolean;
   root: THREE.Object3D;
-  look: () => Omit<TraceScene, "meshes">;
+  look: () => TraceLook;
+  lens: () => TraceLens | null;
+}
+
+export function lookSignature(l: TraceLook): string {
+  const lights = l.lights.map((x) => [x.color.getHex(), x.intensity, ...x.position.toArray(), ...x.target.toArray()].join(","));
+  return [
+    lights.join(";"), l.background.toArray().join(","), l.environment.uuid, l.environment.version,
+    l.brightness, l.toneMapping, l.exposure,
+  ].join("|");
+}
+
+function lensSignature(l: TraceLens | null): string {
+  return l ? `${l.focusDistance}:${l.apertureRadius}` : "";
 }
 
 export type CreateTracer = () => Promise<TracerBackend>;
@@ -62,6 +76,8 @@ export class PathTraceHost {
   private transforms = "";
   private materials = "";
   private colors = "";
+  private look = "";
+  private lens = "";
   private sceneDirty = true;
   private cameraDirty = true;
   private polling = false;
@@ -118,8 +134,12 @@ export class PathTraceHost {
     this.syncCanvas(b);
     if (this.sceneDirty && !this.syncScene(b, f)) return this.show(false);
     this.watchdog(f.now, s);
+    const lens = f.lens();
+    const lensKey = lensSignature(lens);
+    if (lensKey !== this.lens) this.cameraDirty = true;
     if (this.cameraDirty) {
-      b.updateCamera(f.camera);
+      b.updateCamera(f.camera, lens);
+      this.lens = lensKey;
       this.restart();
       this.cameraDirty = false;
     }
@@ -241,19 +261,28 @@ export class PathTraceHost {
     const moved = transforms !== this.transforms;
     const restyled = materials !== this.materials;
     const painted = colors !== this.colors;
-    if (!geometry && !moved && !restyled && !painted) return true;
+    const look = f.look();
+    const lookKey = lookSignature(look);
+    const relit = lookKey !== this.look;
+    if (!geometry && !moved && !restyled && !painted && !relit) return true;
     if (geometry || moved) this.cache.syncTransforms();
     if (geometry || restyled) this.cache.syncMaterials();
     if (geometry || painted) this.cache.syncColors();
     if (!this.hasScene) {
-      b.setScene({ ...f.look(), meshes: sync.meshes }, f.camera);
+      const lens = f.lens();
+      b.setScene({ ...look, meshes: sync.meshes, lens }, f.camera);
+      this.lens = lensSignature(lens);
       this.cameraDirty = false;
       this.hasScene = true;
-    } else if (geometry || painted) b.updateGeometry(sync.meshes);
-    else {
-      if (moved) b.updateTransforms();
-      if (restyled) b.updateMaterials();
+    } else {
+      if (geometry || painted) b.updateGeometry(sync.meshes);
+      else {
+        if (moved) b.updateTransforms();
+        if (restyled) b.updateMaterials();
+      }
+      if (relit) b.updateLook(look);
     }
+    this.look = lookKey;
     this.geometryKey = sync.key;
     this.transforms = transforms;
     this.materials = materials;

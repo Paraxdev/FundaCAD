@@ -22,3 +22,15 @@ declare module "three-gpu-pathtracer/webgpu" {
     dispose(): void;
   }
 }
+
+declare module "three-gpu-pathtracer/src/objects/PhysicalCamera.js" {
+  import { PerspectiveCamera } from "three";
+  export class PhysicalCamera extends PerspectiveCamera {
+    fStop: number;
+    bokehSize: number;
+    apertureBlades: number;
+    apertureRotation: number;
+    focusDistance: number;
+    anamorphicRatio: number;
+  }
+}

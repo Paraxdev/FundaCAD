@@ -5,6 +5,8 @@ import type { BlasBuilder, BlasJob, BlasTree } from "../../src/viewport/pathtrac
 import { buildBlas } from "../../src/viewport/pathtrace/blasCache";
 import { PathTraceHost, type TraceFrame } from "../../src/viewport/pathtrace/host";
 
+const ENV = new THREE.Texture();
+
 class FakeTracer implements TracerBackend {
   readonly name = "fake";
   readonly canvas = { style: {} as Record<string, string> } as unknown as HTMLCanvasElement;
@@ -17,6 +19,7 @@ class FakeTracer implements TracerBackend {
   updateGeometry(meshes: THREE.Mesh[]) { this.meshes = meshes; this.calls.push("geometry"); }
   updateTransforms() { this.calls.push("transforms"); }
   updateMaterials() { this.calls.push("materials"); }
+  updateLook() { this.calls.push("look"); }
   updateCamera() { this.calls.push("camera"); }
   reset() { this.calls.push("reset"); }
   renderSample() {}
@@ -63,7 +66,8 @@ function frame(root: THREE.Object3D, over: Partial<TraceFrame["inputs"]> = {}, c
     cameraChanged: false,
     sceneMaybeChanged: changed,
     root,
-    look: () => ({ lights: [], background: new THREE.Color(), brightness: 1, toneMapping: THREE.NeutralToneMapping, exposure: 1 }),
+    look: () => ({ lights: [], background: new THREE.Color(), environment: ENV, brightness: 1, toneMapping: THREE.NeutralToneMapping, exposure: 1 }),
+    lens: () => null,
   };
 }
 
