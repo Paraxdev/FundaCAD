@@ -12,6 +12,9 @@ type TracerModule = typeof import("three-gpu-pathtracer/webgpu");
 
 const MAX_BOUNCES = 6;
 
+/** The WebGPU floor every adapter grants without asking. */
+const DEFAULT_STORAGE_BINDING = 128 * 1024 * 1024;
+
 interface TracerInternals {
   _bvhData?: SwappableBvhData & { textureAtlas: { setTextures(r: unknown, t: unknown): void }; textures: unknown };
   _renderer: unknown;
@@ -58,6 +61,7 @@ export class WebGpuTracer implements TracerBackend {
   private sky: THREE.DataTexture | null = null;
   private faultCbs: ((why: string) => void)[] = [];
   private disposed = false;
+  maxStorageBytes = DEFAULT_STORAGE_BINDING;
 
   constructor() {
     this.canvas = document.createElement("canvas");
@@ -74,7 +78,15 @@ export class WebGpuTracer implements TracerBackend {
 
   async init() {
     const [gpu, tracerMod] = await Promise.all([import("three/webgpu"), import("three-gpu-pathtracer/webgpu")]);
-    const r = new gpu.WebGPURenderer({ canvas: this.canvas, antialias: false });
+    // Above the 128 MiB floor when the adapter offers more, so a model of a few
+    // million triangles fits its attribute buffer.
+    const nav = globalThis.navigator as unknown as { gpu?: { requestAdapter(): Promise<{ limits: Record<string, number> } | null> } };
+    const adapter = await nav.gpu?.requestAdapter();
+    const offered = adapter?.limits;
+    const requiredLimits = offered
+      ? { maxStorageBufferBindingSize: offered.maxStorageBufferBindingSize, maxBufferSize: offered.maxBufferSize }
+      : undefined;
+    const r = new gpu.WebGPURenderer({ canvas: this.canvas, antialias: false, requiredLimits } as ConstructorParameters<typeof gpu.WebGPURenderer>[0]);
     r.setPixelRatio(1);
     await r.init();
     const backend = r.backend as unknown as { isWebGPUBackend?: boolean };
@@ -89,6 +101,8 @@ export class WebGpuTracer implements TracerBackend {
     hooks.onDeviceLost = (info) => this.fault(`GPU device lost: ${info.message ?? info.reason ?? "unknown"}`);
     hooks.onError = (e) => this.fault(`GPU ${e.type ?? "error"}: ${e.message ?? ""}`);
     this.renderer = r;
+    const device = (r.backend as unknown as { device?: { limits: { maxStorageBufferBindingSize: number; maxBufferSize: number } } }).device;
+    if (device) this.maxStorageBytes = Math.min(device.limits.maxStorageBufferBindingSize, device.limits.maxBufferSize);
     const t = new tracerMod.WebGPUPathTracer(r);
     // Mirrors carry what the tracer reads; a generated tangent would cost 16 B
     // per vertex on every body for nothing.

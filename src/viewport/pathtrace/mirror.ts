@@ -5,9 +5,10 @@
 
 import * as THREE from "three";
 
-/** setScene is synchronous on the main thread (58 ms for 25k triangles), so
- *  P1 refuses past this and says so. */
-export const TRIANGLE_BUDGET = 2_000_000;
+/** Trees build in workers, but every edit still repacks the tracer's buffers
+ *  on the main thread, about 0.22 us per triangle (0.45 s at 2 M, 0.7 s at 3 M,
+ *  1 s at 4 M on a desktop CPU), so past this the mode refuses with a note. */
+export const TRIANGLE_BUDGET = 3_000_000;
 
 interface Owned { baseColors?: Float32Array; baseVersion?: number }
 
@@ -94,6 +95,19 @@ export function countTriangles(bodies: THREE.Mesh[]): number {
     n += (g.index ? g.index.count : g.getAttribute("position").count) / 3;
   }
   return n;
+}
+
+export function countVertices(bodies: THREE.Mesh[]): number {
+  let n = 0;
+  for (const m of bodies) n += m.geometry.getAttribute("position").count;
+  return n;
+}
+
+/** The largest GPU storage buffer the tracer packs for this much geometry,
+ *  measured on three-gpu-pathtracer 0.0.27: 64 B per vertex of interleaved
+ *  attributes, about 18 B per triangle of tree nodes. */
+export function storageBytes(triangles: number, vertices: number): number {
+  return Math.max(vertices * 64, triangles * 18);
 }
 
 export function collectBodies(root: THREE.Object3D): THREE.Mesh[] {

@@ -8,8 +8,8 @@ import { armGuard, clearGuard } from "./guard";
 import { BlasCache, type BlasBuilder } from "./blasCache";
 import { createBlasBuilder } from "./blasPool";
 import {
-  colorSignature, collectAllBodies, collectBodies, countTriangles, materialSignature, sceneSignature,
-  transformSignature, TRIANGLE_BUDGET,
+  colorSignature, collectAllBodies, collectBodies, countTriangles, countVertices, materialSignature, sceneSignature,
+  storageBytes, transformSignature, TRIANGLE_BUDGET,
 } from "./mirror";
 import { TraceGeneration, traceState, type TraceInputs, type TraceState } from "./state";
 
@@ -167,12 +167,17 @@ export class PathTraceHost {
   /** Over the budget the tracer is never fed; said once per model, as a note. */
   private refuseIfOver(bodies: THREE.Mesh[]): boolean {
     const tris = countTriangles(bodies);
-    if (tris <= TRIANGLE_BUDGET) return false;
+    const limit = this.backend?.maxStorageBytes ?? Infinity;
+    const overDevice = storageBytes(tris, countVertices(bodies)) > limit;
+    if (tris <= TRIANGLE_BUDGET && !overDevice) return false;
     const sig = sceneSignature(bodies);
     if (sig === this.refusedSig) return true;
     this.refusedSig = sig;
     this.hasScene = false;
-    this.note = `Path tracing is limited to 2 million triangles for now, this model has ${(tris / 1e6).toFixed(1)} million`;
+    const has = (tris / 1e6).toFixed(1);
+    this.note = overDevice
+      ? `Path tracing needs more GPU memory than this device allows for a model of ${has} million triangles`
+      : `Path tracing is limited to ${TRIANGLE_BUDGET / 1e6} million triangles for now, this model has ${has} million`;
     this.samples = 0;
     this.traceSince = 0;
     this.disarm();

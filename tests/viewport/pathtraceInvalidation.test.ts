@@ -8,6 +8,7 @@ import { PathTraceHost, type TraceFrame } from "../../src/viewport/pathtrace/hos
 class FakeTracer implements TracerBackend {
   readonly name = "fake";
   readonly canvas = { style: {} as Record<string, string> } as unknown as HTMLCanvasElement;
+  maxStorageBytes = Infinity;
   calls: string[] = [];
   meshes: THREE.Mesh[] = [];
   async init() {}
@@ -216,5 +217,22 @@ describe("path tracer invalidation", () => {
     await flush();
     host.tick(frame(root));
     expect(builder.jobs).toHaveLength(2);
+  });
+
+  it("refuses with a note when the buffers would pass what the device granted", async () => {
+    const root = new THREE.Scene();
+    root.add(body("body1", "e1", 0));
+    const t = new FakeTracer();
+    t.maxStorageBytes = 1000;
+    const notes: string[] = [];
+    const host = new PathTraceHost(glCanvas, async () => t, { arm: async () => {}, clear: () => {} }, new HeldBuilder());
+    host.onRefuse = (why) => notes.push(why);
+    host.tick(frame(root));
+    await flush();
+    await flush();
+    host.tick(frame(root));
+    host.tick(frame(root));
+    expect(notes).toEqual(["Path tracing needs more GPU memory than this device allows for a model of 0.0 million triangles"]);
+    expect(t.work()).toEqual([]);
   });
 });

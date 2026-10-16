@@ -7,6 +7,7 @@ import { TRIANGLE_BUDGET } from "../../src/viewport/pathtrace/mirror";
 class FakeTracer implements TracerBackend {
   readonly name = "fake";
   readonly canvas = { style: {} as Record<string, string> } as unknown as HTMLCanvasElement;
+  readonly maxStorageBytes = Infinity;
   calls: string[] = [];
   count = 0;
   pending: ((n: number) => void)[] = [];
@@ -200,7 +201,7 @@ describe("path trace host", () => {
       await flush();
       await flush();
     }
-    expect(notes).toEqual(["Path tracing is limited to 2 million triangles for now, this model has 2.1 million"]);
+    expect(notes).toEqual(["Path tracing is limited to 3 million triangles for now, this model has 3.1 million"]);
     expect(faults).toEqual([]);
     expect(host.disabled).toBe(false);
     expect(n).toBe(0);
