@@ -76,7 +76,7 @@ export function edgeProbePoint(points: readonly Vec3[]): [number, number, number
   return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
 }
 
-const MESH_FORMATS = new Set(["stl", "3mf", "obj", "glb", "gltf", "ply", "off", "amf", "vrml", "x3d", "fbx"]);
+const MESH_FORMATS = new Set(["stl", "3mf", "obj", "glb", "gltf", "ply", "off", "amf", "vrml", "x3d", "fbx", "3ds"]);
 
 /** Bodies carrying faces read in from a mesh file. */
 export function meshBodyIds(

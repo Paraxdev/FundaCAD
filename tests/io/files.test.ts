@@ -57,6 +57,7 @@ describe("extToImportFormat", () => {
     expect(extToImportFormat("/tmp/HOUSE.IFC")).toBe("ifc");
     expect(extToImportFormat("/tmp/plate.dxf")).toBe("dxf");
     expect(extToImportFormat("/tmp/rig.FBX")).toBe("fbx");
+    expect(extToImportFormat("/tmp/old.3DS")).toBe("3ds");
     expect(extToImportFormat("/tmp/PLATE.DXF")).toBe("dxf");
   });
 
