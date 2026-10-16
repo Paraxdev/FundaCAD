@@ -115,10 +115,43 @@ struct End<'a> {
     offset: Option<&'a Num>,
 }
 
+impl End<'_> {
+    fn kind(&self) -> &str {
+        self.kind.filter(|k| !k.is_empty()).unwrap_or("distance")
+    }
+}
+
+/// How far the farthest corner of the target bodies lies from `o` along `dir`.
+fn reach(ctx: &Ctx, f: &Extrude, o: DVec3, dir: DVec3) -> f64 {
+    let wanted: Option<HashSet<&str>> =
+        f.targets.as_ref().map(|t| t.iter().map(String::as_str).collect());
+    ctx.bodies
+        .iter()
+        .filter(|b| wanted.as_ref().map_or(true, |w| w.contains(b.id.as_str())))
+        .filter_map(|b| kernel::bbox(b.shape()))
+        .flat_map(|b| {
+            (0..8usize).map(move |i| {
+                dvec3(b[(i & 1) * 3], b[1 + ((i >> 1) & 1) * 3], b[2 + ((i >> 2) & 1) * 3])
+            })
+        })
+        .map(|c| (c - o).dot(dir))
+        .fold(f64::NEG_INFINITY, f64::max)
+}
+
 /// A distance along the faces, or the travel from `o` along `n` to a target.
-fn end(ctx: &mut Ctx, f: &Extrude, e: End<'_>, distance: f64, o: DVec3, n: DVec3) -> FResult<Amount> {
+/// `way` is the side's direction along `n` when `distance` gives none.
+fn end(
+    ctx: &mut Ctx,
+    f: &Extrude,
+    e: End<'_>,
+    distance: f64,
+    way: f64,
+    o: DVec3,
+    n: DVec3,
+) -> FResult<Amount> {
     let axis = n.to_array();
-    let kind = e.kind.filter(|k| !k.is_empty()).unwrap_or("distance");
+    let way = if distance != 0.0 { distance.signum() } else { way };
+    let kind = e.kind();
     let raw = match kind {
         "distance" => {
             if distance == 0.0 {
@@ -127,27 +160,13 @@ fn end(ctx: &mut Ctx, f: &Extrude, e: End<'_>, distance: f64, o: DVec3, n: DVec3
             return Ok(Amount::AlongFace(distance));
         }
         "throughAll" => {
-            let dir = if distance < 0.0 { -n } else { n };
-            let wanted: Option<HashSet<&str>> =
-                f.targets.as_ref().map(|t| t.iter().map(String::as_str).collect());
-            let reach = ctx
-                .bodies
-                .iter()
-                .filter(|b| wanted.as_ref().map_or(true, |w| w.contains(b.id.as_str())))
-                .filter_map(|b| kernel::bbox(b.shape()))
-                .flat_map(|b| {
-                    (0..8usize).map(move |i| {
-                        dvec3(b[(i & 1) * 3], b[1 + ((i >> 1) & 1) * 3], b[2 + ((i >> 2) & 1) * 3])
-                    })
-                })
-                .map(|c| (c - o).dot(dir))
-                .fold(f64::NEG_INFINITY, f64::max);
-            if reach <= 0.0 {
+            let r = reach(ctx, f, o, n * way);
+            if r <= 0.0 {
                 return Err(Fail::msg(
                     "Extrude: through all finds no body ahead of the start to go through",
                 ));
             }
-            return Ok(Amount::AlongAxis(dir.dot(n) * (reach + 1.0), axis));
+            return Ok(Amount::AlongAxis(way * (r + 1.0), axis));
         }
         "upToFace" | "upToPlane" => {
             let (p, m) = if kind == "upToFace" {
@@ -178,14 +197,15 @@ fn end(ctx: &mut Ctx, f: &Extrude, e: End<'_>, distance: f64, o: DVec3, n: DVec3
         }
         other => return Err(Fail::msg(format!("Extrude: unknown end type {other}"))),
     };
-    if raw.abs() < 1e-9 {
+    let off = ctx.val_or(e.offset, 0.0)?;
+    if raw.abs() < 1e-9 && off <= 0.0 {
         return Err(Fail::msg(
             "Extrude: the up to target lies on the start, there is nothing to extrude",
         ));
     }
-    let off = ctx.val_or(e.offset, 0.0)?;
-    let a = raw + raw.signum() * off;
-    if a * raw.signum() < 1e-9 {
+    let toward = if raw.abs() < 1e-9 { way } else { raw.signum() };
+    let a = raw + toward * off;
+    if a * toward < 1e-9 {
         return Err(Fail::msg("Extrude: the end offset reaches back past the start"));
     }
     Ok(Amount::AlongAxis(a, axis))
@@ -256,10 +276,23 @@ fn extents(
         point: f.up_to_point.as_ref(),
         offset: f.end_offset.as_ref(),
     };
-    let first = Side {
-        amount: end(ctx, f, first_end, distance, o, n)?,
-        taper: checked_taper(ctx, f.taper.as_ref())?,
-    };
+    let taper = checked_taper(ctx, f.taper.as_ref())?;
+    if both && first_end.kind() == "throughAll" {
+        let way = if distance < 0.0 { -1.0 } else { 1.0 };
+        let sides: Vec<Side> = [way, -way]
+            .into_iter()
+            .map(|w| (w, reach(ctx, f, o, n * w)))
+            .filter(|(_, r)| *r > 0.0)
+            .map(|(w, r)| Side { amount: Amount::AlongAxis(w * (r + 1.0), n.to_array()), taper })
+            .collect();
+        if sides.is_empty() {
+            return Err(Fail::msg(
+                "Extrude: through all finds no body on either side of the start to go through",
+            ));
+        }
+        return Ok((target, sides));
+    }
+    let first = Side { amount: end(ctx, f, first_end, distance, 1.0, o, n)?, taper };
     let mut sides = vec![first];
     if both {
         let amount = match first.amount {
@@ -276,7 +309,7 @@ fn extents(
             point: f.up_to_point2.as_ref(),
             offset: f.end_offset2.as_ref(),
         };
-        let amount = end(ctx, f, second_end, -distance2, o, n)?;
+        let amount = end(ctx, f, second_end, -distance2, -1.0, o, n)?;
         sides.push(Side { amount, taper: checked_taper(ctx, f.taper2.as_ref())? });
     }
     Ok((target, sides))
