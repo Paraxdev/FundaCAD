@@ -33,7 +33,7 @@ function check(ok, what, detail) {
 (async () => {
   const browser = await chromium.launch({
     channel: process.env.CHROME_CHANNEL || "chrome",
-    headless: false,
+    headless: process.env.SC_HEADLESS === "1",
     args: ["--no-sandbox", "--enable-gpu", "--ignore-gpu-blocklist"],
   });
   try {
@@ -45,6 +45,17 @@ function check(ok, what, detail) {
         constructor(u, p) { super(String(u).replace(":8765", `:${ws}`), p); }
       };
     }, ENGINE_PORT);
+    await page.addInitScript(() => {
+      window.__gpuSubmits = 0;
+      window.__rafs = 0;
+      const q = globalThis.GPUQueue?.prototype;
+      if (q) {
+        const submit = q.submit;
+        q.submit = function (...a) { window.__gpuSubmits++; return submit.apply(this, a); };
+      }
+      const raf = window.requestAnimationFrame.bind(window);
+      window.requestAnimationFrame = (cb) => raf((t) => { window.__rafs++; cb(t); });
+    });
     const open = async () => {
       await page.goto(`${APP}?token=${TOKEN}`);
       await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });
@@ -164,6 +175,19 @@ function check(ok, what, detail) {
     const again = await waitDenoised();
     check(again.denoised === true, "the denoise runs again after a restart", again);
     check(JSON.stringify(await materialIds()) === JSON.stringify(before), "body materials are the same objects in Path traced");
+
+    const counters = () => page.evaluate(() => ({ submits: window.__gpuSubmits, rafs: window.__rafs }));
+    await page.waitForTimeout(500);
+    const c0 = await counters();
+    await page.waitForTimeout(2000);
+    const c1 = await counters();
+    // The viewport's own loop keeps its rAF, drawing only on demand; the tracer must add no GPU work.
+    check(c1.submits - c0.submits === 0, "no GPU work at the cap", { submits: c1.submits - c0.submits, rafs: c1.rafs - c0.rafs });
+    const cost = await page.evaluate(() => {
+      const t = window.viewport.trace.backend?.tracer;
+      return { budget: t?.frameBudget, renderScale: t?.renderScale, cap: t?.maxSamples };
+    });
+    check(cost.renderScale === 0.75 && cost.cap === 256, "traces at three quarters of the canvas up to 256 samples", cost);
     await page.evaluate(async () => (await import("/src/ui/renderPrefs.ts")).setRenderPref("performanceMode", true));
     await page.waitForTimeout(300);
     s = await state();

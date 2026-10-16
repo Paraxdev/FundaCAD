@@ -23,7 +23,19 @@ class FakeTracer implements TracerBackend {
   updateLook() { this.calls.push("look"); }
   updateCamera() { this.calls.push("camera"); }
   reset() { this.calls.push("reset"); }
-  renderSample() { this.calls.push("sample"); }
+  frameMs = 5;
+  /** Set to hold renderSample's GPU time until `land()`. */
+  holdFrames = false;
+  private held: ((ms: number) => void)[] = [];
+  renderSample() {
+    this.calls.push("sample");
+    if (!this.holdFrames) return Promise.resolve(this.frameMs);
+    return new Promise<number>((r) => this.held.push(r));
+  }
+  land() { for (const r of this.held.splice(0)) r(this.frameMs); }
+  setFrameBudget(n: number) { this.calls.push(`budget:${n}`); }
+  setRenderScale(n: number) { this.calls.push(`scale:${n}`); }
+  setCap(n: number) { this.calls.push(`cap:${n}`); }
   more = true;
   denoised = false;
   present() { this.calls.push("present"); return this.more; }
@@ -349,5 +361,65 @@ describe("path trace host", () => {
     t.calls.length = 0;
     host.tick(frame({}, 1200, { lens: () => ({ focusDistance: 200, apertureRadius: 1 }) }));
     expect(t.calls).not.toContain("camera");
+  });
+
+  it("waits for the last frame to leave the GPU before handing it another", async () => {
+    const { host, t } = await started();
+    t.holdFrames = true;
+    host.tick(frame());
+    host.tick(frame());
+    host.tick(frame());
+    expect(t.calls.filter((c) => c === "sample")).toHaveLength(1);
+    t.land();
+    await flush();
+    host.tick(frame());
+    expect(t.calls.filter((c) => c === "sample")).toHaveLength(2);
+  });
+
+  it("times no frame before the first sample, those carry the shader compiles", async () => {
+    const { host, t } = await started();
+    t.frameMs = 2500;
+    for (let i = 0; i < 8; i++) {
+      host.tick(frame({}, 1000 + i * 16));
+      await flush();
+    }
+    expect(t.calls.filter((c) => c.startsWith("budget:"))).toEqual(["budget:262144"]);
+  });
+
+  it("hands a slow GPU a smaller frame budget", async () => {
+    const { host, t } = await started();
+    host.tick(frame());
+    t.answer(1);
+    await flush();
+    t.frameMs = 30;
+    for (let i = 0; i < 8; i++) {
+      host.tick(frame({}, 1000 + i * 16));
+      await flush();
+    }
+    const budgets = t.calls.filter((c) => c.startsWith("budget:")).map((c) => Number(c.slice(7)));
+    expect(budgets[0]).toBe(262_144);
+    expect(budgets.at(-1)).toBeLessThan(120_000);
+  });
+
+  it("traces below the canvas size", async () => {
+    const { host, t } = await started();
+    host.tick(frame());
+    expect(t.calls).toContain("scale:0.75");
+  });
+
+  it("stops at 64 samples on battery and goes back to 256 on the charger", async () => {
+    const { host, t } = await started();
+    host.setPower({ discharging: true });
+    host.tick(frame());
+    expect(t.calls).toContain("cap:64");
+    expect(t.calls).toContain("scale:0.5");
+    t.answer(64);
+    await flush();
+    host.tick(frame());
+    expect(host.state).toBe("done");
+    host.setPower({ discharging: false });
+    host.tick(frame());
+    expect(t.calls.at(-1) === "cap:256" || t.calls.includes("cap:256")).toBe(true);
+    expect(host.state).toBe("trace");
   });
 });

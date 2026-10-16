@@ -55,8 +55,15 @@ export interface TracerBackend {
   updateCamera(camera: THREE.Camera, lens: TraceLens | null): void;
   reset(): void;
   /** Gathers one more frame of samples; `samples` is the count so far, which
-   *  sets how hard the image is filtered on its way to the screen. */
-  renderSample(samples: number): void;
+   *  sets how hard the image is filtered on its way to the screen. Resolves
+   *  with the frame's GPU time in ms once the GPU has finished it. */
+  renderSample(samples: number): Promise<number>;
+  /** Path slots traced per frame. */
+  setFrameBudget(slots: number): void;
+  /** The trace's size against the canvas drawing buffer, 1 at full size. */
+  setRenderScale(scale: number): void;
+  /** Samples per pixel where tracing stops. */
+  setCap(samples: number): void;
   /** At the cap: runs the final denoise and crossfades to it. False once
    *  nothing is left to draw, so the GPU can idle. */
   present(now: number): boolean;

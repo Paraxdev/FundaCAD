@@ -20,6 +20,12 @@ type TslModule = typeof import("three/tsl");
 
 const MAX_BOUNCES = 6;
 
+interface GpuQueueDevice {
+  limits: { maxStorageBufferBindingSize: number; maxBufferSize: number };
+  queue: { onSubmittedWorkDone(): Promise<void> };
+}
+
+
 /** The WebGPU floor every adapter grants without asking. */
 const DEFAULT_STORAGE_BINDING = 128 * 1024 * 1024;
 
@@ -57,6 +63,8 @@ export class WebGpuTracer implements TracerBackend {
   private oidn: OidnPass | null = null;
   private final = new FinalDenoise(null);
   maxStorageBytes = DEFAULT_STORAGE_BINDING;
+  private cap = SAMPLE_CAP;
+  private device: GpuQueueDevice | null = null;
 
   constructor() {
     this.canvas = document.createElement("canvas");
@@ -102,13 +110,16 @@ export class WebGpuTracer implements TracerBackend {
     hooks.onDeviceLost = (info) => this.fault(`GPU device lost: ${info.message ?? info.reason ?? "unknown"}`);
     hooks.onError = (e) => this.fault(`GPU ${e.type ?? "error"}: ${e.message ?? ""}`);
     this.renderer = r;
-    const device = (r.backend as unknown as { device?: { limits: { maxStorageBufferBindingSize: number; maxBufferSize: number } } }).device;
-    if (device) this.maxStorageBytes = Math.min(device.limits.maxStorageBufferBindingSize, device.limits.maxBufferSize);
+    const device = (r.backend as unknown as { device?: GpuQueueDevice }).device;
+    if (device) {
+      this.device = device;
+      this.maxStorageBytes = Math.min(device.limits.maxStorageBufferBindingSize, device.limits.maxBufferSize);
+    }
     const t = new tracerMod.WebGPUPathTracer(r);
     // Mirrors carry what the tracer reads; a generated tangent would cost 16 B
     // per vertex on every body for nothing.
     (t as unknown as TracerInternals).generateMissingAttributes = false;
-    t.maxSamples = SAMPLE_CAP;
+    t.maxSamples = this.cap;
     t.maxBounces = MAX_BOUNCES;
     t.renderDelay = 0;
     t.minSamples = 0;
@@ -321,11 +332,37 @@ export class WebGpuTracer implements TracerBackend {
     this.tracer?.reset();
   }
 
-  renderSample(samples: number) {
+  setFrameBudget(slots: number) {
+    if (this.tracer) this.tracer.frameBudget = slots;
+  }
+
+  setRenderScale(scale: number) {
+    if (this.tracer) this.tracer.renderScale = scale;
+  }
+
+  setCap(samples: number) {
+    this.cap = samples;
+    if (this.tracer) this.tracer.maxSamples = samples;
+  }
+
+  /** Resolves once the GPU has finished everything submitted so far, with the
+   *  ms since `since`. */
+  private gpuTime(since: number): Promise<number> {
+    const done = this.device?.queue.onSubmittedWorkDone() ?? Promise.resolve();
+    return done.then(() => performance.now() - since);
+  }
+
+  renderSample(samples: number): Promise<number> {
+    const t0 = performance.now();
+    this.trace(samples);
+    return this.gpuTime(t0);
+  }
+
+  private trace(samples: number) {
     if (!this.tracer) return;
     this.tracer.renderSample();
     this.showsDenoise = false;
-    const mix = this.level === "off" || samples < 1 ? 0 : filterMix(samples, SAMPLE_CAP);
+    const mix = this.level === "off" || samples < 1 ? 0 : filterMix(samples, this.cap);
     if (mix <= 0 || !this.atrous) return;
     const raw = this.internals._pathTracer.outputTarget;
     const { width, height } = raw.image as { width: number; height: number };
