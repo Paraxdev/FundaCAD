@@ -193,3 +193,15 @@ describe("a typed size fixes the end", () => {
     expect(r.relations).toEqual([join(NEW_ENTITY, 0, "L", 0)]);
   });
 });
+
+describe("rectangle edges as references", () => {
+  const R: ResolvedEntity = { type: "rectangle", id: "R", width: 40, height: 20, x: 0, y: 0, angle: 30 };
+
+  it("a line near a rotated rectangle is parallel to one of its edges, either pair", () => {
+    const par = inferLineRelations(base({ start: V(0, 50), end: polar(V(0, 50), 30, 32), entities: [R] }));
+    expect(par.relations).toEqual([{ type: "parallel", l1: expect.stringMatching(/^R~[02]$/), l2: NEW_ENTITY }]);
+    const per = inferLineRelations(base({ start: V(0, 50), end: polar(V(0, 50), 30, 118.5), entities: [R] }));
+    expect(per.relations).toEqual([{ type: "parallel", l1: expect.stringMatching(/^R~[13]$/), l2: NEW_ENTITY }]);
+    expect(par.hints).toHaveLength(1);
+  });
+});
