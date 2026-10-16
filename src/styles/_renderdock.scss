@@ -375,3 +375,27 @@
   font: inherit;
   font-size: 10px;
 }
+
+.rd-heavy-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.rd-heavy {
+  display: inline-flex;
+  color: var(--warn);
+  cursor: help;
+}
+.rd-emitting {
+  height: 3px;
+  margin: -2px 0 6px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--warn) 18%, transparent);
+}
+.rd-emitting-bar {
+  display: block;
+  height: 100%;
+  background: var(--warn);
+  transition: width 120ms linear;
+}

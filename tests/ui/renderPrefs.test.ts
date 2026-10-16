@@ -139,7 +139,7 @@ describe("bloom", () => {
     expect(bloomSettings(0).strength).toBe(0);
   });
 
-  it("lets the Glow slider reach past the default bloom threshold", () => {
+  it("lets the Emission slider reach past the default bloom threshold", () => {
     // CONTROL on the numbers being set independently: if the slider could not
     // push a material past the threshold, its top end would do visibly nothing
     // and an emissive material would never bloom at all, which is the only thing

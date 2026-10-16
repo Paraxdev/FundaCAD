@@ -66,7 +66,7 @@
 *[Stress]: An analysis of how one body bends and where it is strained.
 *[stress]: An analysis of how one body bends and where it is strained.
 *[Bloom]: A soft halo around bright areas that does not light other objects.
-*[Glow]: A material setting that makes a body give off light.
+*[Emission]: A material setting that makes a body give off light.
 *[Node editor]: The graph where you build a surface finish from connected patterns.
 *[node editor]: The graph where you build a surface finish from connected patterns.
 *[MCP]: The connection that lets an AI assistant build and check parts.

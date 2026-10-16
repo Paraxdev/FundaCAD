@@ -376,7 +376,7 @@ function onClassicCamera(ev: Event) {
                 :value="render.bloom" @input="onBloom" />
               <p class="pref-hint">
                 Light spilling off the brightest parts of the image. The lower half reaches
-                a material with Glow turned up and a hard specular highlight and nothing
+                a material with Emission turned up and a hard specular highlight and nothing
                 else, so an ordinary part looks the same; turn it up to catch everyday
                 highlights too.
               </p>

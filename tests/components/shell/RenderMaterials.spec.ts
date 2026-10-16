@@ -11,6 +11,7 @@ import { ENGINE } from "../../../src/app/engineKey";
 import { useBrowserStore } from "../../../src/stores/browser";
 import type { MaterialDef } from "../../../src/document/materials";
 import type { Engine } from "../../../src/app/engine";
+import { setEmissionProgress } from "../../../src/ui/emissionProgress";
 
 vi.mock("../../../src/viewport/materialPreview", () => ({
   materialPreview: () => null,
@@ -173,5 +174,49 @@ describe("RenderMaterials glass controls", () => {
     expect(fake.store.updateMaterial).toHaveBeenLastCalledWith("m-glass", {
       attenuationColor: "#2a8f6a", attenuationDistance: 20,
     });
+  });
+});
+
+describe("RenderMaterials Emission control", () => {
+  it("is named Emission and warns that it is a heavy effect", async () => {
+    await tile("m-glass").trigger("click");
+    await poll();
+    const label = w.get('[data-field="emissive"]').element.closest("label")!;
+    expect(label.textContent).toContain("Emission");
+    expect(label.textContent).not.toContain("Glow");
+    const warn = w.get('[data-heavy="emissive"]');
+    expect(warn.find('[data-icon="warning"]').exists()).toBe(true);
+    expect(warn.attributes("title")).toMatch(/heavy/i);
+  });
+
+  it("lands a drag as one edit per frame, with the last value", async () => {
+    await tile("m-glass").trigger("click");
+    await poll();
+    fake.store.updateMaterial.mockClear();
+    const slider = w.get('[data-field="emissive"]');
+    for (const v of ["0.1", "0.2", "0.35"]) {
+      (slider.element as HTMLInputElement).value = v;
+      await slider.trigger("input");
+    }
+    expect(fake.store.updateMaterial).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(20);
+    expect(fake.store.updateMaterial).toHaveBeenCalledTimes(1);
+    expect(fake.store.updateMaterial).toHaveBeenLastCalledWith("m-glass", { emissive: 0.35 });
+    (slider.element as HTMLInputElement).value = "0.5";
+    await slider.trigger("input");
+    await slider.trigger("change");
+    expect(fake.store.updateMaterial).toHaveBeenLastCalledWith("m-glass", { emissive: 0.5 });
+  });
+
+  it("shows how far the lights have filled in while the viewport is still at it", async () => {
+    await tile("m-glass").trigger("click");
+    await poll();
+    expect(w.find(".rd-emitting").exists()).toBe(false);
+    setEmissionProgress(0.4);
+    await nextTick();
+    expect(w.get(".rd-emitting").attributes("aria-valuenow")).toBe("40");
+    setEmissionProgress(null);
+    await nextTick();
+    expect(w.find(".rd-emitting").exists()).toBe(false);
   });
 });
