@@ -128,6 +128,10 @@ export function openMenuAt(x: number, y: number, items: CtxItem[], opts: MenuAtO
   }
 }
 
+export function radialMenuOpen(): boolean {
+  return radial !== null;
+}
+
 /** Close a radial menu opened by openMenuAt, if one is up. */
 export function dismissRadialMenu(): void {
   radial?.close();
