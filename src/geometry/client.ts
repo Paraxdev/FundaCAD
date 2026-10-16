@@ -413,8 +413,9 @@ export interface GeometryBackend {
   /** A soft cancel stops a job at its next checkpoint and never restarts the
    *  engine to do it. Without it a superseded rebuild is left to finish. */
   readonly softCancel?: boolean;
-  /** Coarse phase progress for a long op (import). Optional. */
-  onOpProgress?(fn: (pct: number, label: string) => void): () => void;
+  /** Stage progress for a long op (import): `pct` is null while the stage has
+   *  no fraction. Optional. */
+  onOpProgress?(fn: OpProgressListener): () => void;
   /** A request of ours that waits behind another client's job on the same
    *  engine: `behind` says whose and what, null once ours has started. Optional,
    *  a backend with one client never queues behind anyone. */
@@ -623,6 +624,10 @@ export function tooLargeToSend(len: number): string | null {
   );
 }
 
+/** One `importing` frame: the request it is for, its stage fraction 0 to 100 or
+ *  null while the stage has none, and the stage name. */
+export type OpProgressListener = (id: string, pct: number | null, stage: string) => void;
+
 /** Another client's job one of ours is waiting behind, as the engine names it. */
 export interface EngineWait {
   op: string;
@@ -650,7 +655,7 @@ export class Geometry implements GeometryBackend {
   private lastHeavyId: string | null = null;
   private outbox: string[] = [];
   private statusListeners = new Set<StatusListener>();
-  private opProgressListeners = new Set<(pct: number, label: string) => void>();
+  private opProgressListeners = new Set<OpProgressListener>();
   private progressListeners = new Set<(feature: number, meshed: number, meshTotal: number) => void>();
   private queueListeners = new Set<(id: string, behind: EngineWait | null) => void>();
   // Protocol-v2 per-body mesh cache: the engine answers unchanged bodies with
@@ -708,9 +713,7 @@ export class Geometry implements GeometryBackend {
     return () => this.statusListeners.delete(fn);
   }
 
-  /** Coarse progress for a long non-rebuild op (today: import). Phase-level
-   *  only, OCCT exposes no usable sub-operation progress in this OCP build. */
-  onOpProgress(fn: (pct: number, label: string) => void): () => void {
+  onOpProgress(fn: OpProgressListener): () => void {
     this.opProgressListeners.add(fn);
     return () => this.opProgressListeners.delete(fn);
   }
@@ -782,9 +785,9 @@ export class Geometry implements GeometryBackend {
         const mt = typeof msg.meshTotal === "number" ? msg.meshTotal : -1;
         for (const fn of this.progressListeners) fn(f, m, mt);
       } else if (msg.status === "importing") {
-        const pct = typeof msg.pct === "number" ? msg.pct : 0;
+        const pct = typeof msg.pct === "number" && msg.pct >= 0 ? Math.min(msg.pct, 100) : null;
         const label = typeof msg.label === "string" ? msg.label : "";
-        for (const fn of this.opProgressListeners) fn(pct, label);
+        for (const fn of this.opProgressListeners) fn(msg.id, pct, label);
       }
       return;
     }

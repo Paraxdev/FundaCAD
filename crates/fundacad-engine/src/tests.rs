@@ -61,6 +61,25 @@ impl Jobs for Fake {
         fields.insert("bodies".into(), Value::Null);
         JobResult::Mesh(MeshResult { fields, bodies })
     }
+
+    /// `import` reports the stage its request names, then waits on the gate.
+    fn run(&mut self, op: &str, req: &Map<String, Value>, ctx: &JobContext) -> JobResult {
+        if op != "import" {
+            return error_result(&format!("unknown op: {op}"));
+        }
+        let at = |k: &str| req.get(k).and_then(Value::as_i64).unwrap_or(-1);
+        ctx.progress.stage(at("stage"), at("done"), at("total"));
+        if let Some(g) = &self.gate {
+            while g.recv_timeout(Duration::from_millis(10)).is_err() {
+                if ctx.cancel.is_cancelled() {
+                    break;
+                }
+            }
+        }
+        let mut m = Map::new();
+        m.insert("geom".into(), json!("g"));
+        JobResult::Json(m)
+    }
 }
 
 fn engine(gate: Option<Receiver<()>>) -> (Engine, Receiver<Message>, Arc<AtomicI64>) {
@@ -206,6 +225,41 @@ fn a_long_job_reports_progress_before_its_reply() {
             break;
         }
     }
+}
+
+fn first_import_frame(stage: i64, done: i64, total: i64) -> Value {
+    let (gate_tx, gate_rx) = channel();
+    let (e, rx, _) = engine(Some(gate_rx));
+    send(
+        &e,
+        json!({"id": "imp", "op": "import", "stage": stage, "done": done, "total": total}),
+    );
+    let frame = text(next(&rx));
+    gate_tx.send(()).unwrap();
+    let reply = text(next(&rx));
+    assert_eq!(reply["id"], "imp");
+    assert_eq!(reply["ok"], true);
+    frame
+}
+
+#[test]
+fn an_import_reports_its_stage_and_fraction_before_its_reply() {
+    use fundacad_protocol::import_stage;
+    let frame = first_import_frame(import_stage::TRANSFER, 3, 10);
+    assert_eq!(
+        frame,
+        json!({"id": "imp", "status": "importing", "phase": import_stage::TRANSFER,
+               "label": import_stage::label(import_stage::TRANSFER), "pct": 30})
+    );
+}
+
+#[test]
+fn an_import_stage_with_no_fraction_says_minus_one() {
+    use fundacad_protocol::import_stage;
+    let frame = first_import_frame(import_stage::WALK, -1, -1);
+    assert_eq!(frame["status"], "importing");
+    assert_eq!(frame["phase"], import_stage::WALK);
+    assert_eq!(frame["pct"], -1);
 }
 
 #[test]

@@ -105,10 +105,10 @@ export interface BusyState {
   active: boolean;
   label: string;
   id: string | null;
-  /** 0-100 phase progress, or null when the backend reports none. Coarse by
-   *  necessity: OCCT gives no sub-operation progress, so this advances a few
-   *  times and creeps on elapsed time in between. */
+  /** 0-100 through the current stage, or null when it has no fraction. */
   pct: number | null;
+  /** What the op is doing now, "Transferring shapes", null before it says. */
+  stage: string | null;
   /** The op is this document's own rebuild rather than an import or export. */
   rebuild: boolean;
   /** Another client's job on the same engine that this op is queued behind,
@@ -118,7 +118,7 @@ export interface BusyState {
 
 type DocListener = (doc: CadDocument) => void;
 type BuildListener = (state: RebuildState) => void;
-const IDLE_BUSY: BusyState = { active: false, label: "", id: null, pct: null, rebuild: false, waiting: null };
+const IDLE_BUSY: BusyState = { active: false, label: "", id: null, pct: null, stage: null, rebuild: false, waiting: null };
 
 type BusyListener = (state: BusyState) => void;
 type MetaListener = () => void;
@@ -349,10 +349,9 @@ export class DocumentStore {
       const chunk: BuildChunk = { ...c, epoch: this.buildEpoch };
       for (const fn of this.chunkListeners) fn(chunk);
     });
-    // coarse phase progress for a long non-rebuild op (import) -> the busy chip
-    geometry.onOpProgress?.((pct, label) => {
-      if (!this.busy.active) return;
-      this.setBusy({ ...this.busy, pct, ...(label ? { label } : {}) });
+    geometry.onOpProgress?.((id, pct, stage) => {
+      if (!this.busy.active || (this.busy.id !== null && this.busy.id !== id)) return;
+      this.setBusy({ ...this.busy, pct, stage: stage || null });
     });
     // Only the busy op's own request: any other id is not what this document waits on.
     geometry.onQueue?.((id, behind) => {

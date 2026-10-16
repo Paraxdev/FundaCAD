@@ -360,6 +360,8 @@ impl Jobs for GeomJobs {
                 let watch = EngineWatch(ctx);
                 let _beat = crate::heartbeat::install(watch.heartbeat());
                 let _cancel = crate::cancel::install(watch.cancel_token());
+                let progress = ctx.progress.clone();
+                let _stage = crate::import::stage::install(Some(std::sync::Arc::new(move |s, d, t| progress.stage(s, d, t))));
                 crate::import::import_result(req)
             }
             "listFonts" => crate::text::list_fonts_result(),

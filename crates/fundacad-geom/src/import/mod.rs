@@ -19,6 +19,7 @@ pub mod off;
 pub mod packed;
 pub mod ply;
 pub mod rhino;
+pub mod stage;
 pub mod threeds;
 pub mod x3d;
 
@@ -114,6 +115,7 @@ fn turned_text(n: usize) -> String {
 /// `reader_turned`. A document that already holds a shape keeps it as stored,
 /// a face selector saved against it carries the normal it had.
 fn outward(imported: Imported) -> Imported {
+    stage::report(stage::BUILD, -1, -1);
     let (shape, n) = crate::bench::phase("turn_outward", || kernel::turned_outward_where_clean(&imported.shape));
     if n == 0 {
         return imported;
@@ -167,7 +169,9 @@ pub fn assembly_payload(asm: &StepAssembly) -> Imported {
     let mut leaves: Vec<Option<Shape>> = Vec::with_capacity(asm.leaves.len());
     let mut parts = Vec::with_capacity(asm.leaves.len());
     let mut turned: Vec<StepNote> = Vec::new();
+    let total = asm.leaves.len() as i64;
     for (i, leaf) in asm.leaves.iter().enumerate() {
+        stage::report(stage::BUILD, i as i64, total);
         turned.extend(reader_turned(&leaf.shape, leaf.node, Some(i)));
         let mut colors = leaf.face_colors.clone();
         let mut placed = None;
@@ -229,7 +233,7 @@ pub fn assembly_payload(asm: &StepAssembly) -> Imported {
 /// The STEP half of `import_geometry`.
 pub fn read_step(path: &Path) -> Result<Imported, String> {
     let progress = crate::cancel::progress_beating();
-    let asm = crate::bench::phase("step_read", || xcaf::read_step_assembly_with(path, &progress.start()))
+    let asm = crate::bench::phase("step_read", || stage::sampling_xcaf_read(&progress, || xcaf::read_step_assembly_with(path, &progress.start())))
         .map_err(|e| occt_message(&e))?;
     Ok(from_assembly(asm))
 }
@@ -237,7 +241,7 @@ pub fn read_step(path: &Path) -> Result<Imported, String> {
 /// IGES, read like STEP with each free root a product.
 pub fn read_iges(path: &Path) -> Result<Imported, String> {
     let progress = crate::cancel::progress_beating();
-    let asm = crate::bench::phase("iges_read", || xcaf::read_iges_assembly_with(path, &progress.start()))
+    let asm = crate::bench::phase("iges_read", || stage::sampling_xcaf_read(&progress, || xcaf::read_iges_assembly_with(path, &progress.start())))
         .map_err(|e| occt_message(&e))?;
     Ok(from_assembly(asm))
 }
@@ -252,7 +256,9 @@ pub fn read_xbf(path: &Path) -> Result<Imported, String> {
     }
     drop(opened);
     let progress = crate::cancel::progress_beating();
-    let asm = crate::bench::phase("xbf_read", || xcaf::read_xbf_assembly_with(path, &progress.start())).map_err(|e| {
+    let asm = crate::bench::phase("xbf_read", || {
+        stage::sampling_xcaf_read(&progress, || xcaf::read_xbf_assembly_with(path, &progress.start()))
+    }).map_err(|e| {
         // OCCT can fail on a damaged file with something that is neither a
         // Standard_Failure nor a std::exception, which the bridge can only call unknown.
         match occt_message(&e) {
@@ -264,6 +270,7 @@ pub fn read_xbf(path: &Path) -> Result<Imported, String> {
 }
 
 fn from_assembly(asm: StepAssembly) -> Imported {
+    stage::report(stage::BUILD, -1, -1);
     if asm.is_assembly {
         return crate::bench::phase("assembly_payload", || assembly_payload(&asm));
     }
@@ -343,6 +350,7 @@ pub fn import_geometry_in(path: &str, fmt: &str, store: &BlobStore, unit: Option
         ));
     }
     fundacad_engine::sysmem::refuse_if_memory_is_short(size, None)?;
+    stage::report(stage::READ, -1, -1);
     if !matches!(fmt.as_str(), "step" | "stp" | "stpz" | "vrml" | "x3d") && is_gzip(p) {
         return Err(format!(
             "this {} file is gzip compressed, only STEP, VRML and X3D import compressed. Unpack it and import the file inside.",
@@ -501,6 +509,7 @@ fn import_svg(p: &Path) -> Result<Map<String, Value>, String> {
 }
 
 fn store_imported(imported: Imported, p: &Path, store: &BlobStore) -> Result<Map<String, Value>, String> {
+    stage::report(stage::STORE, -1, -1);
     let bytes = crate::bench::phase("to_bin", || xcaf::to_bin_v3(&imported.shape)).map_err(|e| {
         format!(
             "could not store the imported geometry ({e}). Check free disk space and permissions on the FundaCAD data directory."

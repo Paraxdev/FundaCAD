@@ -18,7 +18,7 @@ pub use doc_state::DocState;
 pub use supervise::{Budget, Clocks};
 
 use fundacad_protocol::{
-    envelope, send_reply, CancelToken, JobResult, Limits, Message, ReplyOptions,
+    envelope, import_stage, send_reply, CancelToken, JobResult, Limits, Message, ReplyOptions,
 };
 use serde_json::{json, Map, Value};
 use std::collections::HashMap;
@@ -61,6 +61,9 @@ pub struct Progress {
     feature: AtomicI64,
     meshed: AtomicI64,
     mesh_total: AtomicI64,
+    stage: AtomicI64,
+    stage_done: AtomicI64,
+    stage_total: AtomicI64,
     beats: AtomicU64,
 }
 
@@ -78,6 +81,15 @@ impl Progress {
         self.tick();
     }
 
+    /// An import's [`fundacad_protocol::import_stage`], `done` of `total`, or
+    /// a total of -1 when the stage has no fraction. Not proof of life: a
+    /// sampler thread reports it while the kernel call it watches may be wedged.
+    pub fn stage(&self, stage: i64, done: i64, total: i64) {
+        self.stage_done.store(done, Ordering::Relaxed);
+        self.stage_total.store(total, Ordering::Relaxed);
+        self.stage.store(stage, Ordering::Relaxed);
+    }
+
     /// Proof of life for the stall watchdog, from a phase with no feature or
     /// body counter to report (an export write, a pair sweep).
     pub fn tick(&self) {
@@ -92,6 +104,7 @@ impl Progress {
         self.feature.store(-1, Ordering::Relaxed);
         self.meshed.store(-1, Ordering::Relaxed);
         self.mesh_total.store(-1, Ordering::Relaxed);
+        self.stage(-1, -1, -1);
     }
 }
 
@@ -535,7 +548,11 @@ fn run_one<J: Jobs>(
     let watchdog = spawn_watchdog(
         WatchedJob {
             id: id.clone(),
-            frames: op == "rebuild" || op == "computeAll",
+            frames: match op.as_str() {
+                "rebuild" | "computeAll" => Frames::Building,
+                "import" => Frames::Importing,
+                _ => Frames::None,
+            },
             progress,
             ticking: ticking.clone(),
             claimed: claimed.clone(),
@@ -609,10 +626,17 @@ fn truthy(v: Option<&Value>) -> bool {
     fundacad_protocol::pyjson::truthy(v)
 }
 
+/// Which progress frames a job streams while it runs.
+#[derive(Clone, Copy, PartialEq)]
+enum Frames {
+    None,
+    Building,
+    Importing,
+}
+
 struct WatchedJob {
     id: Value,
-    /// Whether to stream `building` frames, which only a rebuild does.
-    frames: bool,
+    frames: Frames,
     progress: Arc<Progress>,
     ticking: Arc<AtomicBool>,
     /// Set by whoever answers the request first, the job or its watchdog.
@@ -661,19 +685,29 @@ fn spawn_watchdog(
                 on_breach();
                 return;
             }
-            if !job.frames || waited < PROGRESS_EVERY {
+            if job.frames == Frames::None || waited < PROGRESS_EVERY {
                 continue;
             }
             waited = Duration::ZERO;
             if !job.ticking.load(Ordering::SeqCst) {
                 break;
             }
-            let frame = envelope::building(
-                &job.id,
-                job.progress.feature.load(Ordering::Relaxed),
-                job.progress.meshed.load(Ordering::Relaxed),
-                job.progress.mesh_total.load(Ordering::Relaxed),
-            );
+            let p = &job.progress;
+            let frame = if job.frames == Frames::Building {
+                envelope::building(
+                    &job.id,
+                    p.feature.load(Ordering::Relaxed),
+                    p.meshed.load(Ordering::Relaxed),
+                    p.mesh_total.load(Ordering::Relaxed),
+                )
+            } else {
+                let stage = p.stage.load(Ordering::Relaxed);
+                if stage < 0 {
+                    continue;
+                }
+                let pct = import_stage::pct(p.stage_done.load(Ordering::Relaxed), p.stage_total.load(Ordering::Relaxed));
+                envelope::importing(&job.id, stage, import_stage::label(stage), pct)
+            };
             let _ = job.out.send(&mut std::iter::once(Message::Text(frame)));
         }
     })

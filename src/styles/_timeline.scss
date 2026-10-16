@@ -91,11 +91,63 @@
 /* what the running operation is doing, next to Cancel */
 .timeline-busy {
   flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
   padding: var(--s-1) var(--s-3);
   color: var(--fg-dim);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+.timeline-busy .busy-text,
+.timeline-busy .busy-stage {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.timeline-busy .busy-stage {
+  font-size: 10.5px;
+  color: var(--text-dim);
+}
+.timeline-busy .busy-bar {
+  position: relative;
+  display: block;
+  height: 3px;
+  background: var(--line);
+  border-radius: var(--r-pill);
+  overflow: hidden;
+}
+.timeline-busy .busy-bar i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: inherit;
+  transition: width 0.4s var(--ease);
+}
+.timeline-busy .busy-bar.indeterminate i {
+  position: absolute;
+  width: 30%;
+  animation: busy-bar-sweep 1.4s var(--ease) infinite;
+}
+@keyframes busy-bar-sweep {
+  from { left: -30%; }
+  to { left: 100%; }
+}
+/* Without motion the sweep would run once and leave the bar empty. */
+@mixin busy-bar-still {
+  animation: none;
+  left: 0;
+  width: 100%;
+  opacity: 0.45;
+}
+@media (prefers-reduced-motion: reduce) {
+  .timeline-busy .busy-bar.indeterminate i {
+    @include busy-bar-still;
+  }
+}
+:root[data-motion="off"] .timeline-busy .busy-bar.indeterminate i {
+  @include busy-bar-still;
 }
 .timeline-busy.hidden {
   display: none;

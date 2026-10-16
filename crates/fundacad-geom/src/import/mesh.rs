@@ -444,6 +444,7 @@ pub fn unit_color(c: [f64; 3]) -> [u8; 3] {
 /// stay two bodies. One object answers its shape and colour, several answer a
 /// compound with `nodes` and `parts` as the assembly readers do.
 pub fn finish_objects(objs: Vec<MeshObject>) -> Result<super::Imported, String> {
+    super::stage::report(super::stage::BUILD, -1, -1);
     let objs: Vec<MeshObject> = objs.into_iter().filter(|o| o.idx.len() >= 3).collect();
     if objs.is_empty() {
         return Err("no geometry found in the mesh file".into());
