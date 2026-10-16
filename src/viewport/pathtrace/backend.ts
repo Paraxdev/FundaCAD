@@ -36,6 +36,8 @@ export interface TracerBackend {
   /** Re-reads the meshes' matrices and refits the top level tree. */
   updateTransforms(): void;
   updateMaterials(): void;
+  /** The largest storage buffer the device took, for the size refusal. */
+  readonly maxStorageBytes: number;
   /** Re-reads the camera, which also restarts accumulation. */
   updateCamera(camera: THREE.Camera): void;
   reset(): void;
