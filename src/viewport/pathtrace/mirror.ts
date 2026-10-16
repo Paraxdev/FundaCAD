@@ -57,9 +57,13 @@ export function mirrorBody(src: THREE.Mesh): THREE.Mesh {
   return m;
 }
 
-function triangles(m: THREE.Mesh): number {
-  const g = m.geometry;
-  return (g.index ? g.index.count : g.getAttribute("position").count) / 3;
+export function countTriangles(bodies: THREE.Mesh[]): number {
+  let n = 0;
+  for (const m of bodies) {
+    const g = m.geometry;
+    n += (g.index ? g.index.count : g.getAttribute("position").count) / 3;
+  }
+  return n;
 }
 
 export function collectBodies(root: THREE.Object3D): THREE.Mesh[] {
@@ -70,10 +74,8 @@ export function collectBodies(root: THREE.Object3D): THREE.Mesh[] {
   return out;
 }
 
-export function mirrorBodies(bodies: THREE.Mesh[]): { meshes: THREE.Mesh[]; triangles: number; refused: boolean } {
-  const tris = bodies.reduce((n, b) => n + triangles(b), 0);
-  if (tris > TRIANGLE_BUDGET) return { meshes: [], triangles: tris, refused: true };
-  return { meshes: bodies.map(mirrorBody), triangles: tris, refused: false };
+export function mirrorBodies(bodies: THREE.Mesh[]): THREE.Mesh[] {
+  return bodies.map(mirrorBody);
 }
 
 function sampleSum(a: ArrayLike<number> | undefined): number {

@@ -319,6 +319,10 @@ export class Viewport {
     };
     this.trace.onStateChange = (st) => this.onTraceStateChange?.(st);
     this.trace.onFault = (why, off) => this.dropTrace(why, off);
+    this.trace.onRefuse = (why) => {
+      if (this.viewModeNow === "pathtraced") chooseViewMode("realtime", this.renderTier);
+      this.onTraceNotice?.(why);
+    };
     void this.bootPathTrace();
     this.syncViewMode();
     onWorkspaceChange(() => this.syncViewMode());

@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import type { TracerBackend } from "../../src/viewport/pathtrace/backend";
 import { FIRST_SAMPLE_TIMEOUT_MS, PathTraceHost, type TraceFrame } from "../../src/viewport/pathtrace/host";
+import { TRIANGLE_BUDGET } from "../../src/viewport/pathtrace/mirror";
 
 class FakeTracer implements TracerBackend {
   readonly name = "fake";
@@ -35,6 +36,17 @@ function scene(): THREE.Scene {
   const s = new THREE.Scene();
   const m = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial());
   m.userData.owner = { baseColors: new Float32Array(m.geometry.getAttribute("position").count * 3) };
+  s.add(m);
+  return s;
+}
+
+function bigScene(): THREE.Scene {
+  const s = new THREE.Scene();
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(9), 3));
+  g.setIndex(new THREE.BufferAttribute(new Uint32Array((TRIANGLE_BUDGET + 100_000) * 3), 1));
+  const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial());
+  m.userData.owner = {};
   s.add(m);
   return s;
 }
@@ -169,6 +181,43 @@ describe("path trace host", () => {
     await flush();
     await flush();
     expect(faults[0]).toMatch(/no adapter/);
+  });
+
+  it("refuses a model over the triangle budget with a note, never as a GPU fault", async () => {
+    const faults: string[] = [];
+    const notes: string[] = [];
+    let n = 0;
+    const host = new PathTraceHost(glCanvas, async () => { n++; return new FakeTracer(); }, new FakeGuard());
+    host.onFault = (why) => faults.push(why);
+    host.onRefuse = (why) => notes.push(why);
+    const root = bigScene();
+    for (const now of [1000, 2000, 1000 + FIRST_SAMPLE_TIMEOUT_MS + 1, 1000 + 3 * FIRST_SAMPLE_TIMEOUT_MS]) {
+      host.tick(frame({}, now, { root }));
+      await flush();
+      await flush();
+    }
+    expect(notes).toEqual(["Path tracing is limited to 2 million triangles for now, this model has 2.1 million"]);
+    expect(faults).toEqual([]);
+    expect(host.disabled).toBe(false);
+    expect(n).toBe(0);
+  });
+
+  it("refuses a model that grows past the budget while tracing, without a fault", async () => {
+    const faults: string[] = [];
+    const notes: string[] = [];
+    const t = new FakeTracer();
+    const host = new PathTraceHost(glCanvas, async () => t, new FakeGuard());
+    host.onFault = (why) => faults.push(why);
+    host.onRefuse = (why) => notes.push(why);
+    host.tick(frame());
+    await flush();
+    await flush();
+    const root = bigScene();
+    host.tick(frame({}, 1000, { root, sceneMaybeChanged: true }));
+    host.tick(frame({}, 1000 + FIRST_SAMPLE_TIMEOUT_MS + 1, { root, sceneMaybeChanged: true }));
+    expect(notes).toHaveLength(1);
+    expect(faults).toEqual([]);
+    expect(host.shown).toBe(false);
   });
 
   it("arms the crash guard only while a first sample is wanted", async () => {
