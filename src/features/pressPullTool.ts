@@ -40,6 +40,7 @@ import {
   type SizeQuantity,
 } from "./sizeQuantity";
 import { CanvasGesture } from "./canvasGesture";
+import { trackedFace } from "./holeFace";
 import { commitDecision } from "./edgeDragMath";
 import {
   anchorOnAxis,
@@ -54,6 +55,18 @@ import {
 } from "./pressPullAxis";
 import { featureKey, PreviewOutcomes } from "./previewOutcomes";
 import { axialSpan, ResizeGuides } from "./resizeGuides";
+
+/** A picked flat face as a tracked selector, so the push follows the target when
+ *  an edit upstream moves it. A curved face keeps its picked point. */
+function upToFace(
+  hit: { selector: Selector; bodyId: string | null },
+  plane: { normal: THREE.Vector3 } | null,
+): Selector {
+  if (!plane || hit.selector.kind !== "face" || hit.selector.by !== "nearest") return hit.selector;
+  const round3 = (x: number) => Math.round(x * 1e3) / 1e3;
+  const point = hit.selector.point.map(round3) as Vec3;
+  return trackedFace(point, [plane.normal.x, plane.normal.y, plane.normal.z], hit.bodyId);
+}
 
 /** Steepest taper the tool offers, degrees, just under the engine's 89 fold limit. */
 const MAX_PP_TAPER = 88;
@@ -302,7 +315,7 @@ export class PressPullTool {
       e.stopImmediatePropagation();
       const hit = this.viewport.pickFaceForPressPull(e.clientX, e.clientY);
       if (hit && !this.faceIds.includes(hit.faceId)) {
-        this.upTo = hit.selector;
+        this.upTo = upToFace(hit, this.viewport.planarFace(hit.faceId));
         this.commitUpTo();
       } else {
         setPrompt("Click the face to stop at · Esc");
@@ -413,7 +426,7 @@ export class PressPullTool {
     // commit a distance the user never asked for.
     const hit = this.resizing ? null : this.viewport.pickFaceForPressPull(e.clientX, e.clientY);
     if (hit && !this.faceIds.includes(hit.faceId)) {
-      this.upTo = hit.selector;
+      this.upTo = upToFace(hit, this.viewport.planarFace(hit.faceId));
       this.commitUpTo();
       return;
     }
