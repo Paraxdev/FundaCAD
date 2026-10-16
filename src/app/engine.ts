@@ -254,6 +254,8 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   // says which mode you are in.
   e.viewport.onXrayChange = (on) => { useUiStore().xray = on; };
   e.viewport.onWireframeChange = (on) => { useUiStore().wireframe = on; };
+  e.viewport.onViewModeChange = (m) => { useUiStore().viewMode = m; };
+  useUiStore().viewMode = e.viewport.viewMode;
   e.viewport.onStutterChange = (on) => { useUiStore().lowPerformance = on; };
 
   e.geometry = new Geometry();

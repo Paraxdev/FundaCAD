@@ -1,5 +1,6 @@
 import { saveDocument, saveDocumentAs, exportModel, importModel } from "../io/files";
 import { setWorkspace } from "../ui/workspace";
+import { chooseViewMode, nextViewMode, pathTracedBlock, type ViewMode } from "../ui/viewMode";
 import { contributedAction } from "../plugins/contrib";
 import { openParamsDialog } from "../ui/paramsDialog";
 import { toggleShortcutHUD } from "../input/shortcuts";
@@ -20,6 +21,7 @@ const KEEPS_PICK = new Set([
   "fit", "reset-camera", "iso", "top", "front", "right", "persp",
   "selmode", "selmode-auto", "selmode-faces", "selmode-bodies",
   "toggle-xray", "toggle-wireframe", "zebra", "curvature", "draft-analysis", "shortcut-help",
+  "viewmode-matcap", "viewmode-realtime", "viewmode-pathtraced", "viewmode-cycle", "viewmode-cycle-back",
 ]);
 
 /** Commands that act on a body selection. Picking a body raises the Move gizmo
@@ -362,6 +364,20 @@ export function createActions(e: Engine): (action: string) => void {
       }
       case "toggle-wireframe": {
         e.viewport.setWireframe(!e.viewport.isWireframe);
+        break;
+      }
+      case "viewmode-matcap":
+      case "viewmode-realtime":
+      case "viewmode-pathtraced": {
+        const tier = e.viewport.renderTier;
+        const mode = action.slice("viewmode-".length) as ViewMode;
+        if (!chooseViewMode(mode, tier)) e.setStatus(pathTracedBlock(tier)?.tooltip ?? "", "");
+        break;
+      }
+      case "viewmode-cycle":
+      case "viewmode-cycle-back": {
+        const tier = e.viewport.renderTier;
+        chooseViewMode(nextViewMode(e.viewport.viewMode, action === "viewmode-cycle" ? 1 : -1, tier), tier);
         break;
       }
       case "hide-selected": {

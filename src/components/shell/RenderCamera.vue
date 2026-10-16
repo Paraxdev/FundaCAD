@@ -51,7 +51,7 @@ async function takePicture() {
     // Rendered BEFORE the dialog, and read as a string, because the pixels are
     // only valid in the same task as the render that produced them. Awaiting a
     // file dialog first would hand the writer a blank canvas.
-    const url = engine.viewport.renderStill(scale.value, { edges: edges.value });
+    const url = engine.viewport.renderStill(scale.value, { edges: edges.value, realtime: true });
     const base = engine.store.fileName === "Untitled" ? "render" : engine.store.fileName;
     const path = await saveRenderedImage(url, `${base}.png`);
     if (path) toast(`Saved ${path}`);

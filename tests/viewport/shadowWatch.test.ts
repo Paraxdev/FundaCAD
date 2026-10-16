@@ -17,6 +17,23 @@ function scene() {
 }
 
 describe("ShadowWatch", () => {
+  it("redraws on the first drawn frame after Matcap moved a caster", () => {
+    const { s, body } = scene();
+    const w = new ShadowWatch();
+    const map = { enabled: true, type: THREE.PCFShadowMap, autoUpdate: true } as Parameters<ShadowWatch["gate"]>[2];
+    w.gate(true, s, map);
+    expect(map.autoUpdate).toBe(true);
+    w.gate(true, s, map);
+    expect(map.autoUpdate).toBe(false);
+
+    body.position.x = 4;
+    w.gate(true, s, map, false);
+    expect(map.autoUpdate).toBe(false);
+    w.gate(true, s, map, false);
+    w.gate(true, s, map);
+    expect(map.autoUpdate).toBe(true);
+  });
+
   it("sees the first frame and then nothing until a caster or a shadow light changes", () => {
     const { s, body, overlay, light } = scene();
     const w = new ShadowWatch();

@@ -8,8 +8,12 @@ withDefaults(
     active?: boolean;
     size?: number;
     badge?: string | number | null;
+    /** Greyed with the title kept live. Not the native attribute: a disabled
+     *  button shows no tooltip in some webviews. The click still arrives, so
+     *  the handler has to refuse it. */
+    disabled?: boolean;
   }>(),
-  { active: false, size: 20, badge: null },
+  { active: false, size: 20, badge: null, disabled: false },
 );
 </script>
 
@@ -17,7 +21,8 @@ withDefaults(
   <button
     type="button"
     class="icon-btn"
-    :class="{ active }"
+    :class="{ active, disabled }"
+    :aria-disabled="disabled || undefined"
     :title="title"
     :aria-label="title"
     :aria-pressed="active"

@@ -14,8 +14,10 @@ export class ShadowWatch {
   private last: number[] = [];
   private now: number[] = [];
 
-  gate(rendering: boolean, scene: THREE.Object3D, map: ShadowMapState): void {
-    map.autoUpdate = rendering && this.changed(scene, map);
+  /** `drawn` false is a frame that draws no shadow maps (Matcap). It is not
+   *  looked at, so what changed meanwhile still counts on the next drawn frame. */
+  gate(rendering: boolean, scene: THREE.Object3D, map: ShadowMapState, drawn = true): void {
+    map.autoUpdate = drawn && rendering && this.changed(scene, map);
   }
 
   changed(scene: THREE.Object3D, map?: ShadowMapState): boolean {

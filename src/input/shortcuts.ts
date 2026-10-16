@@ -71,6 +71,8 @@ export const SHORTCUTS: Shortcut[] = [
   { key: "home", shift: true, action: "reset-camera", context: "global", label: "Reset camera" },
   { key: "f6", action: "fit", context: "global", label: "Fit view" },
   { key: "?", action: "shortcut-help", context: "global", label: "Shortcut help" },
+  { key: "z", action: "viewmode-cycle", context: "global", label: "Next view mode" },
+  { key: "z", shift: true, action: "viewmode-cycle-back", context: "global", label: "Previous view mode" },
 ];
 
 /** How a shortcut is written for a human ("Shift+H", "Ctrl+U", "Home").

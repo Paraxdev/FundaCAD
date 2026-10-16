@@ -46,6 +46,7 @@ export const NON_REPEATABLE = new Set([
   "undo", "redo", "compute-all", "shortcut-help", "finish", "palette",
   "fit", "reset-camera", "iso", "top", "front", "right", "persp",
   "selmode", "selmode-auto", "selmode-faces", "selmode-bodies", "toggle-xray", "toggle-wireframe",
+  "viewmode-matcap", "viewmode-realtime", "viewmode-pathtraced", "viewmode-cycle", "viewmode-cycle-back",
   "hide-selected", "show-all-bodies",
 ]);
 

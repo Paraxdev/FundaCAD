@@ -39,6 +39,10 @@ const GLOBAL: Command[] = [
   { id: "right", label: "Right View", group: "View", context: "global" },
   { id: "persp", label: "Cycle Projection (Persp / Ortho / Auto)", group: "View", context: "global" },
   { id: "selmode", label: "Toggle Faces / Bodies selection", group: "View", context: "global" },
+  { id: "viewmode-matcap", label: "Matcap View Mode", group: "View", context: "global" },
+  { id: "viewmode-realtime", label: "Realtime View Mode", group: "View", context: "global" },
+  { id: "viewmode-pathtraced", label: "Path Traced View Mode", group: "View", context: "global" },
+  { id: "viewmode-cycle", label: "Next View Mode", group: "View", context: "global", key: "Z" },
   { id: "show-all-bodies", label: "Show All Bodies", group: "View", context: "global", key: "Shift+H" },
   { id: "shortcut-help", label: "Keyboard Shortcuts…", group: "Help", context: "global", key: "?" },
   // pinned ribbon groups (FINISH/PALETTE) live outside the SKETCH const, so the

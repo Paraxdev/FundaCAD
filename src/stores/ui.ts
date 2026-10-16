@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
 import type { SelectPolicy } from "../viewport/clickIntent";
+import type { ViewMode } from "../ui/renderPrefs";
 
 /** Chrome state that used to live as imperative writes to element ids in
  *  index.html, `statusEl.textContent`, `docnameEl.classList.toggle("dirty")`,
@@ -39,6 +40,7 @@ export const useUiStore = defineStore("ui", () => {
    *  accident and cannot find again, so the view bar carries a lit button. */
   const xray = ref(false);
   const wireframe = ref(false);
+  const viewMode = ref<ViewMode>("realtime");
 
   // --- the viewport stutters under the full render (viewport/stutterWatch.ts) ---
   const lowPerformance = ref(false);
@@ -52,7 +54,7 @@ export const useUiStore = defineStore("ui", () => {
     canUndo, canRedo,
     sketchActive,
     gridStepMm,
-    projLabel, selMode, xray, wireframe,
+    projLabel, selMode, xray, wireframe, viewMode,
     lowPerformance, lowPerformanceDismissed,
     shortcutHudOpen,
   };

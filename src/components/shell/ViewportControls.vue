@@ -13,7 +13,8 @@ import { useDialogStore } from "../../stores/dialogs";
 import { useSketchPaletteStore } from "../../stores/sketchPalette";
 import { fmtLength, getUnit, onUnitChange, setUnit, asUnit, type Unit } from "../../ui/units";
 import { saveRenderedImage } from "../../io/files";
-import { setRenderPref } from "../../ui/renderPrefs";
+import { onRenderPrefsChange, setRenderPref } from "../../ui/renderPrefs";
+import { VIEW_MODES, pathTracedBlock, type ViewMode } from "../../ui/viewMode";
 import { isRenderLowPower } from "../../viewport/render";
 import { toast } from "../../ui/toast";
 import { featureFailures } from "../../ui/featureNotes";
@@ -128,6 +129,22 @@ function runAndRefresh(action: string) {
   pulse.value++;
 }
 
+// The tier is read again on every prefs change, after the viewport has applied it.
+const tier = ref(engine.viewport.renderTier);
+const offTier = onRenderPrefsChange(() => { tier.value = engine.viewport.renderTier; });
+onUnmounted(offTier);
+const viewModes = computed(() => VIEW_MODES.map((v) => {
+  const block = v.id === "pathtraced" ? pathTracedBlock(tier.value) : null;
+  return { ...v, disabled: block !== null, title: block ? block.tooltip : `${v.label} (Z)` };
+}));
+const viewModeChoices = computed(() => viewModes.value.map((v) => ({
+  value: v.id, label: v.label, disabled: v.disabled, title: v.disabled ? v.title : undefined,
+})));
+function pickViewMode(m: ViewMode) {
+  if (viewModes.value.find((v) => v.id === m)?.disabled) return;
+  engine.handleAction(`viewmode-${m}`);
+}
+
 const errorCount = useBuildValue((b) => featureFailures({ ...b, featureErrors: b.result?.featureErrors }).size);
 
 function enablePerformanceMode() {
@@ -195,6 +212,18 @@ async function screenshot() {
       >{{ gridLabel }}</button>
       <IconButton icon="views" title="Views" :active="isOpen('views')" @click="open('views', $event)" />
       <IconButton icon="view-reset" title="Reset camera (Shift Home)" @click="engine.handleAction('reset-camera')" />
+    </div>
+    <div class="float-group view-modes" role="group" aria-label="View mode">
+      <IconButton
+        v-for="v in viewModes"
+        :key="v.id"
+        :icon="v.icon"
+        :title="v.title"
+        :active="ui.viewMode === v.id"
+        :disabled="v.disabled"
+        :data-view-mode="v.id"
+        @click="pickViewMode(v.id)"
+      />
     </div>
     <div class="float-group">
       <IconButton icon="shaded" title="Display" :active="isOpen('display') || ui.xray || ui.wireframe" @click="open('display', $event)" />
@@ -293,6 +322,8 @@ async function screenshot() {
 
     <Popover v-if="isOpen('display')" :anchor="anchorOf('display')" side="left" kind="vc-pop" @close="shell.closePopover()">
       <div class="pop-section">Shading</div>
+      <ChoiceList :options="viewModeChoices" :model-value="ui.viewMode" @update:model-value="pickViewMode" />
+      <div class="pop-rule"></div>
       <Toggle :model-value="ui.xray" label="X-Ray" @update:model-value="engine.handleAction('toggle-xray')" />
       <Toggle :model-value="ui.wireframe" label="Wireframe" @update:model-value="engine.handleAction('toggle-wireframe')" />
       <div class="pop-rule"></div>
