@@ -1321,7 +1321,10 @@ export class Geometry implements GeometryBackend {
     if (msg.ok) {
       const r = msg.result;
       return {
-        ok: true, geom: r.geom, name: r.name, solid: r.solid, faces: r.faces,
+        ok: true, name: r.name,
+        ...(r.geom !== undefined ? { geom: r.geom } : {}),
+        ...(r.solid !== undefined ? { solid: r.solid } : {}),
+        ...(r.faces !== undefined ? { faces: r.faces } : {}),
         ...(r.color !== undefined ? { color: r.color } : {}),
         ...(r.nodes !== undefined ? { nodes: r.nodes } : {}),
         ...(r.parts !== undefined ? { parts: r.parts } : {}),
