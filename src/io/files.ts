@@ -462,7 +462,7 @@ export function extToFormat(path: string): ExportFormat {
 
 /** Lower case only, every lookup lower-cases the name first (dropRouting, the
  *  two mappers above). */
-export const IMPORT_EXTS = ["stl", "3mf", "step", "stp", "stpz", "gz", "xbf", "iges", "igs", "brep", "fcstd", "3dm", "ifc", "dxf", "obj", "ply", "off", "amf", "glb", "gltf", "wrl", "wrz", "x3d", "x3dz", "fbx", "3ds"];
+export const IMPORT_EXTS = ["stl", "3mf", "step", "stp", "stpz", "gz", "xbf", "iges", "igs", "brep", "fcstd", "3dm", "ifc", "dxf", "obj", "ply", "off", "amf", "glb", "gltf", "wrl", "wrz", "x3d", "x3dz", "fbx", "3ds", "svg"];
 
 // FreeCAD writes .FCStd.
 const MIXED_CASE_EXTS = ["FCStd"];
@@ -504,6 +504,7 @@ export async function importModel(store: DocumentStore, geometry: GeometryBacken
       { name: "Rhino 3DM", extensions: dialogExts(["3dm"]) },
       { name: "IFC (buildings)", extensions: dialogExts(["ifc"]) },
       { name: "DXF (AutoCAD)", extensions: dialogExts(["dxf"]) },
+      { name: "SVG (drawing)", extensions: dialogExts(["svg"]) },
       { name: "OBJ", extensions: dialogExts(["obj"]) },
       { name: "PLY", extensions: dialogExts(["ply"]) },
       { name: "OFF", extensions: dialogExts(["off"]) },
@@ -820,6 +821,7 @@ export function extToImportFormat(path: string): ImportFormat {
   if (ext === "3dm") return "3dm";
   if (ext === "ifc") return "ifc";
   if (ext === "dxf") return "dxf";
+  if (ext === "svg") return "svg";
   if (ext === "gltf") return "gltf";
   if (ext === "ply") return "ply";
   if (ext === "off") return "off";

@@ -40,6 +40,11 @@ describe("routeDroppedName", () => {
     expect(routeDroppedName("plate.DXF")).toBe("import");
   });
 
+  it("imports an SVG logo", () => {
+    expect(IMPORT_EXTS).toContain("svg");
+    expect(routeDroppedName("logo.SVG")).toBe("import");
+  });
+
   it("imports every format the import picker accepts, in any case", () => {
     for (const ext of IMPORT_EXTS) {
       expect(routeDroppedName(`part.${ext}`)).toBe("import");

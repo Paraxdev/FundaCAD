@@ -29,6 +29,12 @@ describe("importFeatures", () => {
     ]);
   });
 
+  it("carries an SVG sketch's fill rule onto the feature so its holes stay open", () => {
+    const res: Ok = { ok: true, name: "logo", sketches: [{ name: "logo", entities: [line], fillRule: "evenodd" }] };
+    const out = importFeatures(res, { format: "svg", source: "logo.svg", taken });
+    expect(out).toEqual([{ id: "f3", type: "sketch", plane: "XY", name: "logo", entities: [line], fillRule: "evenodd" }]);
+  });
+
   it("adds the import feature after the sketches when the file also had 3D faces", () => {
     const res: Ok = { ok: true, name: "mix", geom: "abc", solid: true, faces: 6, notes: ["n"], sketches: [{ name: "A", entities: [line] }] };
     const out = importFeatures(res, { format: "dxf", source: "mix.dxf", taken });

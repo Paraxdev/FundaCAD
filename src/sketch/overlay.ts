@@ -17,6 +17,7 @@ import { SketchPlane } from "./plane";
 import { resolveEntities } from "./resolve";
 import {
   detectRegions,
+  evenOddFilled,
   entityPolyline,
   glyphRegion,
   pointInRegion,
@@ -40,6 +41,7 @@ export interface WorldRegion {
   interior3D: THREE.Vector3; // a point inside the material, selection anchor
   fill?: THREE.Mesh; // the fill mesh, for hover/selection recoloring
   groupId?: string; // regions selected/hovered as a unit (all glyphs of one text)
+  hole?: boolean; // an even-odd sketch leaves it empty, a whole-sketch extrude skips it
   entityId?: string; // the source text entity, for double-click-to-edit
 }
 
@@ -232,13 +234,16 @@ export class SketchOverlay {
         this.committed.add(obj);
       }
       const footprint = this.footprintFor(plane, profileBounds(ents));
-      for (const region of detectRegions(f.id, ents, footprint.length ? footprint : undefined)) {
+      const detected = detectRegions(f.id, ents, footprint.length ? footprint : undefined);
+      const filled = f.fillRule === "evenodd" ? evenOddFilled(detected) : null;
+      for (const [i, region] of detected.entries()) {
         const wr: WorldRegion = {
           sketchId: f.id,
           region,
           plane,
           centroid3D: plane.to3D(region.centroid.x, region.centroid.y),
           interior3D: plane.to3D(region.interior.x, region.interior.y),
+          ...(filled && !filled[i] ? { hole: true } : {}),
         };
         wr.fill = fillMesh(region, plane, this.fillMaterial(wr));
         this.fills.add(wr.fill);
@@ -387,7 +392,7 @@ export class SketchOverlay {
    *  nothing. Same shape selectRegionsByPoints consumes. */
   regionPointsForSketch(sketchId: string): [number, number, number][] {
     return this.regions
-      .filter((wr) => wr.sketchId === sketchId)
+      .filter((wr) => wr.sketchId === sketchId && !wr.hole)
       .map((wr) => [wr.interior3D.x, wr.interior3D.y, wr.interior3D.z]);
   }
   /** Hover-highlight one region's fill (or clear with null). */

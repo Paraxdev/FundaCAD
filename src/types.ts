@@ -319,7 +319,7 @@ export type HoleFit = "close" | "normal" | "loose";
 export type CoreFeature =
   // `planeId` (a datum) or `face` (a body face, touched at `at`) make the sketch follow;
   // `plane` stays as the resolved cache. An id in `plane` itself would render as XY.
-  | { id: string; type: "sketch"; plane: PlaneSpec; planeId?: string; face?: Selector; at?: Vec3; entities: SketchEntity[]; constraints?: SketchConstraint[]; patterns?: SketchPattern[]; name?: string }
+  | { id: string; type: "sketch"; plane: PlaneSpec; planeId?: string; face?: Selector; at?: Vec3; entities: SketchEntity[]; constraints?: SketchConstraint[]; patterns?: SketchPattern[]; name?: string; fillRule?: "evenodd" }
   | {
       id: string;
       type: "extrude";
@@ -391,7 +391,7 @@ export type CoreFeature =
   | {
       id: string;
       type: "import";
-      format: "stl" | "3mf" | "step" | "obj" | "brep" | "glb" | "gltf" | "iges" | "fcstd" | "ply" | "off" | "amf" | "vrml" | "x3d" | "xbf" | "3dm" | "ifc" | "dxf" | "fbx" | "3ds";
+      format: "stl" | "3mf" | "step" | "obj" | "brep" | "glb" | "gltf" | "iges" | "fcstd" | "ply" | "off" | "amf" | "vrml" | "x3d" | "xbf" | "3dm" | "ifc" | "dxf" | "fbx" | "3ds" | "svg";
       name: string;
       // Content hash in the container's blob store; inline base64 was 541.8 MiB on one assembly.
       geom?: string;
@@ -826,12 +826,12 @@ export interface MeshExportOptions {
 // Import: the format the user picks, and the engine's reply for an `import` op,
 // the content hash of the stored geometry plus a little metadata for the new
 // `import` feature.
-export type ImportFormat = "stl" | "3mf" | "step" | "obj" | "brep" | "glb" | "gltf" | "iges" | "fcstd" | "ply" | "off" | "amf" | "vrml" | "x3d" | "xbf" | "3dm" | "ifc" | "dxf" | "fbx" | "3ds";
+export type ImportFormat = "stl" | "3mf" | "step" | "obj" | "brep" | "glb" | "gltf" | "iges" | "fcstd" | "ply" | "off" | "amf" | "vrml" | "x3d" | "xbf" | "3dm" | "ifc" | "dxf" | "fbx" | "3ds" | "svg";
 export type ImportReply =
   // A DXF answers its lines and curves as `sketches`, one per layer, and has
   // `geom` only when it also held 3D faces.
   | { ok: true; geom?: string; name: string; solid?: boolean; faces?: number; color?: string;
-      sketches?: { name: string; entities: SketchEntity[] }[];
+      sketches?: { name: string; entities: SketchEntity[]; fillRule?: "evenodd" }[];
       // present only for a STEP that carried a real assembly tree; see the
       // `import` feature above for what they mean
       nodes?: { name: string; parent: number | null; color?: string }[];

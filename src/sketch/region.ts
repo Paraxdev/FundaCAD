@@ -473,6 +473,12 @@ function centroidOf(loop: THREE.Vector2[]): THREE.Vector2 {
 }
 
 /** point-in-polygon (ray cast) in 2D */
+/** Which regions an even-odd sketch fills: those whose anchor lies inside an
+ *  odd number of the regions' outer loops, its own included. */
+export function evenOddFilled(regions: readonly Region[]): boolean[] {
+  return regions.map((r) => regions.filter((o) => pointInLoop(r.interior, o.loop)).length % 2 === 1);
+}
+
 export function pointInLoop(p: THREE.Vector2, loop: THREE.Vector2[]): boolean {
   let inside = false;
   for (let i = 0, j = loop.length - 1; i < loop.length; j = i++) {

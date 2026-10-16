@@ -1318,7 +1318,7 @@ export class Geometry implements GeometryBackend {
       nodes?: { name: string; parent: number | null; color?: string }[];
       parts?: { node: number; faces: number }[];
       notes?: string[]; unit?: string;
-      sketches?: { name: string; entities: SketchEntity[] }[];
+      sketches?: { name: string; entities: SketchEntity[]; fillRule?: "evenodd" }[];
     }>("import", req, onStarted);
     if (msg.ok) {
       const r = msg.result;

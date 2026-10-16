@@ -17,7 +17,7 @@ export function freeIds(taken: Iterable<string>, count: number): string[] {
 }
 
 /** The features an import reply adds: a plain sketch on XY for every layer of
- *  a drawing (DXF), then the `import` feature when the file had 3D geometry. */
+ *  a drawing (DXF, SVG), then the `import` feature when the file had 3D geometry. */
 export function importFeatures(
   res: ImportOk,
   opts: { format: ImportFormat; source: string; taken: Iterable<string> },
@@ -32,6 +32,7 @@ export function importFeatures(
     plane: "XY",
     name: s.name,
     entities: s.entities,
+    ...(s.fillRule !== undefined ? { fillRule: s.fillRule } : {}),
   }));
   if (hasGeom) {
     out.push({

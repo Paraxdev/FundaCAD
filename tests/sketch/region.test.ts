@@ -2,7 +2,7 @@
 // detectRegions, pointInLoop/pointInRegion.
 import { describe, it, expect } from "vitest";
 import * as THREE from "three";
-import { detectRegions, entityPolyline, glyphRegion, pointInRegion, rectCorners, rectFromThreePoints, regionArea } from "../../src/sketch/region";
+import { detectRegions, entityPolyline, evenOddFilled, glyphRegion, pointInRegion, rectCorners, rectFromThreePoints, regionArea } from "../../src/sketch/region";
 import type { ResolvedEntity } from "../../src/sketch/snap";
 
 const line = (id: string, x1: number, y1: number, x2: number, y2: number): ResolvedEntity =>
@@ -497,5 +497,14 @@ describe("detectRegions, the areas are the engine's cells whatever the cut lines
     const cuts = [seg(0, 0, 0, 100), seg(0, 0, 100, 0), seg(20, 20, 20, 100), seg(20, 20, 100, 20)];
     const rs = detectRegions("s", [rect("r", 10, 10, 60, 60)], cuts);
     expect(areas(rs).map((a) => Math.round(a))).toEqual([400, 1200, 2000]);
+  });
+});
+
+describe("evenOddFilled", () => {
+  it("leaves the counter of an O empty and fills the island inside it", () => {
+    const regions = detectRegions("s", [circle("a", 0, 0, 10), circle("b", 0, 0, 5), circle("c", 0, 0, 2)]);
+    const filled = evenOddFilled(regions);
+    const byArea = regions.map((r, i) => [Math.round(regionArea(r)), filled[i]]).sort((x, y) => Number(y[0]) - Number(x[0]));
+    expect(byArea.map((x) => x[1])).toEqual([true, false, true]);
   });
 });
