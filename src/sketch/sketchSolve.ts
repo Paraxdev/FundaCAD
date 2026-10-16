@@ -380,6 +380,12 @@ export async function compileAndSolve(
         cons.push({ id: `${id}b`, type: "pointOnPerpBisector", p, line: c.line });
       }
     }
+    else if (c.type === "pointOnCurve") {
+      const p = endpointPoint(c.e, c.p), k = kindOf(c.curve);
+      if (p && k === "line") cons.push({ id, type: "pointOnLine", p, line: c.curve });
+      else if (p && k === "circle") cons.push({ id, type: "pointOnCircle", p, circle: c.curve });
+      else if (p && k === "arc") cons.push({ id, type: "pointOnArc", p, arc: c.curve });
+    }
     else if (c.type === "symmetric") {
       const a = endpointPoint(c.e1, c.p1), b = endpointPoint(c.e2, c.p2);
       if (a && b && isLine(c.line)) cons.push({ id, type: "symmetric", a, b, line: c.line });
@@ -565,6 +571,8 @@ export async function compileAndSolve(
         case "equalRadiusCA": return fxRound(c.circle) && fxRound(c.arc) ? Math.abs(radiusOf.get(c.circle)! - radiusOf.get(c.arc)!) : null;
         case "equalRadiusAA": return fxRound(c.a1) && fxRound(c.a2) ? Math.abs(radiusOf.get(c.a1)! - radiusOf.get(c.a2)!) : null;
         case "pointOnLine": return fx(c.p) && fxLine(c.line) ? perpDist(c.p, c.line) : null;
+        case "pointOnCircle": return fx(c.p) && fxRound(c.circle) ? Math.abs(dist(c.p, centerOf.get(c.circle)!) - radiusOf.get(c.circle)!) : null;
+        case "pointOnArc": return fx(c.p) && fxRound(c.arc) ? Math.abs(dist(c.p, centerOf.get(c.arc)!) - radiusOf.get(c.arc)!) : null;
         case "pointOnPerpBisector": { if (!fx(c.p) || !fxLine(c.line)) return null; const l = lineEnds.get(c.line)!; return Math.abs(dist(c.p, l.p1) - dist(c.p, l.p2)); }
         case "symmetric": { if (!fx(c.a) || !fx(c.b) || !fxLine(c.line)) return null; const l = lineEnds.get(c.line)!; const A = P(l.p1), d = lineDir(c.line), a = P(c.a), b = P(c.b); const t = (a.x - A.x) * d.x + (a.y - A.y) * d.y; const mx = 2 * (A.x + t * d.x) - a.x, my = 2 * (A.y + t * d.y) - a.y; return Math.hypot(mx - b.x, my - b.y); }
         // rim dims: the same measures entityDims defines, over the pinned params

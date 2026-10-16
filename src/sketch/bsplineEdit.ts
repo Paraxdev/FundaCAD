@@ -35,7 +35,7 @@ export function remapPoleRefs(
     if (c.type === "coincident" || c.type === "p2pDistance" || c.type === "hDistance" || c.type === "vDistance" || c.type === "symmetric") {
       const p1 = ref(c.e1, c.p1), p2 = ref(c.e2, c.p2);
       if (p1 !== null && p2 !== null) out.push({ ...c, p1, p2 });
-    } else if (c.type === "midpoint" || c.type === "p2lDistance" || c.type === "p2cDistance" || c.type === "fix") {
+    } else if (c.type === "midpoint" || c.type === "pointOnCurve" || c.type === "p2lDistance" || c.type === "p2cDistance" || c.type === "fix") {
       const p = ref(c.e, c.p);
       if (p !== null) out.push({ ...c, p });
     } else {
@@ -58,7 +58,7 @@ export function constrainedPoles(constraints: SketchConstraint[], id: string, n:
     if (c.type === "coincident" || c.type === "p2pDistance" || c.type === "hDistance" || c.type === "vDistance" || c.type === "symmetric") {
       take(c.e1, c.p1);
       take(c.e2, c.p2);
-    } else if (c.type === "midpoint" || c.type === "p2lDistance" || c.type === "p2cDistance" || c.type === "fix") {
+    } else if (c.type === "midpoint" || c.type === "pointOnCurve" || c.type === "p2lDistance" || c.type === "p2cDistance" || c.type === "fix") {
       take(c.e, c.p);
     }
   }

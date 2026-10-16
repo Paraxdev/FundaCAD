@@ -49,6 +49,7 @@ export function constraintFace(c: SketchConstraint): {
     case "coincident": return { icon: "coincident", name: "Coincident", operands: [c.e1, c.e2] };
     case "concentric": return { icon: "concentric", name: "Concentric", operands: [c.c1, c.c2] };
     case "midpoint": return { icon: "midpoint", name: "Midpoint", operands: [c.e, c.line] };
+    case "pointOnCurve": return { icon: "coincident", name: "On curve", operands: [c.e, c.curve] };
     case "symmetric": return { icon: "symmetric", name: "Symmetric", operands: [c.e1, c.e2, c.line] };
     case "fix": return { icon: "fix", name: "Fixed", operands: [c.e] };
     // The dimensional constraints have no glyph, they ARE their badge on the
@@ -121,6 +122,7 @@ export function constraintGlyphs(ents: ResolvedEntity[], constraints: SketchCons
       case "coincident": push(i, constraintFace(c).icon, refPos(c.e1, c.p1)); break;
       case "concentric": push(i, constraintFace(c).icon, center(c.c1)); break;
       case "midpoint": push(i, constraintFace(c).icon, center(c.line)); break;
+      case "pointOnCurve": push(i, constraintFace(c).icon, refPos(c.e, c.p)); break;
       case "symmetric": push(i, constraintFace(c).icon, center(c.line)); break;
       case "fix": push(i, constraintFace(c).icon, refPos(c.e, c.p)); break;
       // distance/diameter/p2pDistance/p2lDistance/radius/angle render as dimensions
