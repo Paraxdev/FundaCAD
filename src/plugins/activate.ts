@@ -29,7 +29,9 @@
 // that could only be stopped by restarting would be an uninstall that lies for
 // as long as the session lasts.
 
-import { installedIds, onInstalledChange, pluginCode, refreshInstalled } from "./index";
+import { installedGrants, installedIds, onInstalledChange, pluginCode, refreshInstalled } from "./index";
+import { setGrantLookup } from "./contrib";
+import { shippedPlugins } from "./shipped";
 import { onPluginChange, pluginEnabled } from "./registry";
 import { evaluatePlugin, hostModules, type PluginModule } from "./loader";
 import type { Engine } from "../app/engine";
@@ -93,6 +95,7 @@ async function moduleFor(
  *  Returns a teardown that stops everything and stops listening, which is what
  *  a test needs to leave no timers, listeners or device handles behind. */
 export function activatePlugins(e: Engine): () => void {
+  setGrantLookup((id) => installedGrants(id) ?? shippedPlugins().find((p) => p.dir === id)?.manifest.grants);
   const running = new Map<string, () => void>();
   // Empty in a shipped build, and the plugin directories of this repository in
   // a development one.

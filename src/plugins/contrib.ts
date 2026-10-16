@@ -41,6 +41,8 @@ import type { ChoiceField, FileField, ToggleField } from "../document/optionFiel
 import type { FeatureMeta } from "../ui/featureMeta";
 import type { FieldKind } from "../document/numFields";
 import type { TargetField } from "../features/selectionTargets";
+import { setPointerBindings, type PointerBinding, type PointerGesture } from "../viewport/navigator/bindings";
+import { setShortcutOverrides, type ShortcutOverride } from "../input/shortcuts";
 
 /** Undo a `contribute`. Idempotent: calling it twice is not an error. */
 export type Unregister = () => void;
@@ -293,6 +295,16 @@ export interface Contribution {
    *  back to whoever asks for that name, and has no opinion about what is in it.
    *  Two plugins agreeing on a name is a contract between them. */
   provides?: Record<string, unknown>;
+  /** The mouse binding table (viewport/navigator/bindings.ts), replacing the
+   *  default while contributed. Needs the input.remap grant, and one plugin at
+   *  a time: a second is refused rather than silently preferred. Selection
+   *  stays on the left button whatever the table says. */
+  pointerBindings?: readonly PointerBinding[];
+  /** Called when a binding's "gesture" drag starts. */
+  onPointerGesture?: (g: PointerGesture) => void;
+  /** Keys moved to other actions (input/shortcuts.ts). Same grant, same one
+   *  plugin rule. */
+  keymap?: readonly ShortcutOverride[];
 }
 
 interface Entry {
@@ -303,7 +315,39 @@ interface Entry {
 let entries: Entry[] = [];
 const listeners = new Set<() => void>();
 
+let grantsOf: (plugin: string) => readonly string[] | undefined = () => undefined;
+
+/** How contribute() learns a plugin's grants (plugins/activate.ts sets it).
+ *  Ids name themselves, so this keeps an honest plugin inside what its install
+ *  screen said; it is a guardrail, not a security boundary. */
+export function setGrantLookup(fn: (plugin: string) => readonly string[] | undefined) {
+  grantsOf = fn;
+}
+
+let appliedBindings: Entry | null = null;
+let appliedKeymap: Entry | null = null;
+
+function applyRemap() {
+  const b = entries.find((e) => e.c.pointerBindings) ?? null;
+  if (b !== appliedBindings) {
+    appliedBindings = b;
+    try {
+      setPointerBindings(b?.c.pointerBindings ?? null, b?.c.onPointerGesture);
+    } catch (err) {
+      console.error(`[plugins] ${b!.plugin}:`, err);
+      setPointerBindings(null);
+    }
+  }
+  const k = entries.find((e) => e.c.keymap) ?? null;
+  if (k !== appliedKeymap) {
+    appliedKeymap = k;
+    const problems = setShortcutOverrides(k?.c.keymap ?? []);
+    if (problems.length) console.warn(`[plugins] ${k!.plugin} keymap:`, problems);
+  }
+}
+
 function changed() {
+  applyRemap();
   for (const fn of listeners) fn();
 }
 
@@ -313,6 +357,14 @@ function changed() {
  *  capability adds" is a single object in a single file, and so that turning it
  *  off cannot half-succeed. */
 export function contribute(plugin: string, c: Contribution): Unregister {
+  for (const point of ["pointerBindings", "keymap"] as const) {
+    if (!c[point]) continue;
+    if (!grantsOf(plugin)?.includes("input.remap")) {
+      throw new Error(`${plugin} contributes ${point} without the input.remap grant`);
+    }
+    const other = entries.find((e) => e.c[point] && e.plugin !== plugin);
+    if (other) throw new Error(`${plugin} contributes ${point}, which ${other.plugin} already does`);
+  }
   const entry: Entry = { plugin, c };
   entries = [...entries, entry];
   changed();

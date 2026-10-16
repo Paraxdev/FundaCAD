@@ -34,6 +34,8 @@ export const ORBIT_PER_HEIGHT = 2 * Math.PI;
 /** An orbit press that stays within this many pixels is a right click (the
  *  viewport's menu threshold), so it turns nothing. */
 export const CLICK_SLOP_PX = 5;
+/** Wheel pixels per pixel of a zoom drag: a 300 px drag is about a 4x zoom. */
+export const ZOOM_PER_DRAG_PX = 3;
 /** Drag distance over which a banked view (3D mouse roll) comes back level. */
 export const RELEVEL_PX = 80;
 /** 'auto' projection is orthographic within this of a world axis. */
@@ -56,7 +58,7 @@ export interface NavigatorOptions {
   preferredPivot: (() => THREE.Vector3 | null) | null;
 }
 
-type Gesture = { kind: "orbit"; x: number; y: number; vx: number; vy: number; started: boolean } | { kind: "pan" } | null;
+type Gesture = { kind: "orbit"; x: number; y: number; vx: number; vy: number; started: boolean } | { kind: "pan" } | { kind: "zoom"; x: number; y: number; ly: number } | null;
 
 export class Navigator {
   readonly pose: Pose = makePose();
@@ -248,11 +250,26 @@ export class Navigator {
     this.emit("inputstart");
   }
 
+  /** A drag that zooms about the press point, down zooming as the wheel
+   *  turned towards you does. */
+  beginZoom(x: number, y: number) {
+    if (!this.takeInput()) return;
+    this.endGesture(true);
+    this.gesture = { kind: "zoom", x, y, ly: y };
+    this.emit("inputstart");
+  }
+
   /** The pointer moved during a gesture; `dt` (seconds since the last move)
    *  only feeds the inertia estimate. */
   dragTo(x: number, y: number, dt = 1 / 60) {
     const g = this.gesture;
     if (!g) return;
+    if (g.kind === "zoom") {
+      const dy = y - g.ly;
+      g.ly = y;
+      if (dy !== 0) this.wheel(g.x, g.y, dy * ZOOM_PER_DRAG_PX);
+      return;
+    }
     if (g.kind === "pan") {
       if (this.pan) {
         this.pan.cx = x;
@@ -304,7 +321,7 @@ export class Navigator {
     if (!silent) this.emit("inputend");
   }
 
-  dragging(): "orbit" | "pan" | null {
+  dragging(): "orbit" | "pan" | "zoom" | null {
     return this.gesture?.kind ?? null;
   }
 

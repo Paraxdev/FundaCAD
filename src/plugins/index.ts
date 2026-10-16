@@ -115,6 +115,7 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
 export async function installedPlugins(): Promise<InstalledPlugin[]> {
   if (!isTauri()) return [];
   const list = await retire(await call<InstalledPlugin[]>("plugin_list"));
+  installedGrantMap = new Map(list.map((r) => [r.id, r.consented?.grants ?? []]));
   noteInstalled(list.map((r) => r.id));
   return list;
 }
@@ -167,6 +168,12 @@ async function retire(list: InstalledPlugin[]): Promise<InstalledPlugin[]> {
 // plugin that might not be.
 
 let installedIdSet: ReadonlySet<string> = new Set();
+let installedGrantMap = new Map<string, readonly string[]>();
+
+/** The grants an installed plugin was consented with, as of the last refresh. */
+export function installedGrants(id: string): readonly string[] | undefined {
+  return installedGrantMap.get(id);
+}
 const installedListeners = new Set<() => void>();
 
 /** The ids on disk as of the last refresh. */

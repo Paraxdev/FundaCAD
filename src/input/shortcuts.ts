@@ -5,6 +5,7 @@
 // ribbon promised sketch Offset on "O" with no binding behind it).
 
 import { useUiStore } from "../stores/ui";
+import { DEFAULT_BINDINGS, bindingRows, pointerBindings } from "../viewport/navigator/bindings";
 
 export interface Shortcut {
   key: string; // normalized lowercase key ("b", "home", "f6", "?")
@@ -109,7 +110,7 @@ export function formatShortcut(s: Shortcut): string {
 
 /** first key hint for an action ("Shift+H", "Ctrl+U", "Home"), for menus/palette. */
 export function keyHint(action: string): string | undefined {
-  const s = SHORTCUTS.find((x) => x.action === action);
+  const s = activeShortcuts().find((x) => x.action === action);
   return s ? formatShortcut(s) : undefined;
 }
 
@@ -122,7 +123,7 @@ export function resolveShortcut(
   ctrl = false,
 ): string | null {
   const k = key.toLowerCase();
-  for (const s of SHORTCUTS) {
+  for (const s of activeShortcuts()) {
     // Every flag is compared, including the absent ones. A bare "b" must not
     // resolve to Ctrl+B's action and Ctrl+B must not resolve to bare B's: the
     // two are different commands, and the pair that would collide here is
@@ -133,6 +134,121 @@ export function resolveShortcut(
   return null;
 }
 
+// --- overrides: a plugin holding input.remap may move a key ----------------------
+
+/** A key for an action. An action the table has keeps its context and label; a
+ *  contributed action needs a context (global if left out) and a label. An
+ *  empty key unbinds it. */
+export interface ShortcutOverride {
+  action: string;
+  key: string;
+  shift?: boolean;
+  ctrl?: boolean;
+  /** Only to be refused: keymap.ts reads no Alt, and tools read Alt+key. */
+  alt?: boolean;
+  context?: Shortcut["context"];
+  label?: string;
+}
+
+export type ShortcutProblem = { conflict: Shortcut } | { reserved: string } | { refused: string };
+
+/** Combos handled before the table is asked (keymap.ts, app/keyboard.ts,
+ *  app/engine.ts), written as formatShortcut writes them. */
+const RESERVED: Record<string, string> = {
+  "Ctrl+Z": "Undo", "Ctrl+Shift+Z": "Redo", "Ctrl+Y": "Redo",
+  "Ctrl+S": "Save", "Ctrl+Shift+S": "Save As", "Ctrl+N": "New", "Ctrl+O": "Open",
+  "Ctrl+E": "Export", "Ctrl+F": "Find", "Ctrl+K": "Command palette", "Ctrl+,": "Preferences",
+  Escape: "Cancel", Tab: "Box select filter", Delete: "Delete", Backspace: "Delete",
+  "?": "This sheet",
+};
+
+let overrides: ShortcutOverride[] = [];
+let active: Shortcut[] | null = null;
+
+const sameCombo = (a: Pick<Shortcut, "key" | "shift" | "ctrl">, b: Pick<Shortcut, "key" | "shift" | "ctrl">) =>
+  a.key === b.key && !!a.shift === !!b.shift && !!a.ctrl === !!b.ctrl;
+const combo = (o: { key: string; shift?: boolean; ctrl?: boolean }): Pick<Shortcut, "key" | "shift" | "ctrl"> => ({
+  key: o.key.toLowerCase(),
+  ...(o.shift ? { shift: true } : {}),
+  ...(o.ctrl ? { ctrl: true } : {}),
+});
+const overlap = (a: Shortcut["context"], b: Shortcut["context"]) => a === b || a === "global" || b === "global";
+
+/** The table with the overrides applied, overridden rows first so a key the
+ *  user chose is preferred over the table's own use of it. */
+export function activeShortcuts(): Shortcut[] {
+  if (active) return active;
+  const moved = new Map(overrides.map((o) => [o.action, o]));
+  const mine: Shortcut[] = [];
+  for (const o of overrides) {
+    if (!o.key) continue;
+    const rows = SHORTCUTS.filter((s) => s.action === o.action);
+    const base = rows.length ? rows : [{ action: o.action, context: o.context ?? "global", label: o.label ?? o.action, key: "" } as Shortcut];
+    for (const r of base) {
+      const { shift: _s, ctrl: _c, ...rest } = r;
+      mine.push({ ...rest, ...combo(o), context: o.context ?? r.context });
+    }
+  }
+  active = [...mine, ...SHORTCUTS.filter((s) => !moved.has(s.action))];
+  return active;
+}
+
+export function shortcutOverridden(action: string): boolean {
+  return overrides.some((o) => o.action === action);
+}
+
+/** Why a key cannot go to an action, or null when it can. */
+export function checkShortcut(o: ShortcutOverride, table: Shortcut[] = activeShortcuts()): ShortcutProblem | null {
+  if (o.alt) return { refused: "Alt is read by the tools, pick a key without it" };
+  if (!o.key) return null;
+  const row = combo(o);
+  const name = formatShortcut({ ...row, action: o.action, context: "global", label: "" });
+  if (RESERVED[name]) return { reserved: RESERVED[name]! };
+  const ctx = o.context ?? SHORTCUTS.find((s) => s.action === o.action)?.context ?? "global";
+  const hit = table.find((s) => s.action !== o.action && sameCombo(s, row) && overlap(s.context, ctx));
+  return hit ? { conflict: hit } : null;
+}
+
+/** Sentences for what is wrong with a set of overrides, by action. */
+export function describeShortcutProblem(p: ShortcutProblem): string {
+  if ("conflict" in p) return `${formatShortcut(p.conflict)} is already ${p.conflict.label}`;
+  if ("reserved" in p) return `taken by ${p.reserved}`;
+  return p.refused;
+}
+
+/** Replace every override. Reserved and refused ones are left out; the rest
+ *  apply, and the conflicts among them are returned and shown on the sheet. */
+export function setShortcutOverrides(list: readonly ShortcutOverride[]): { action: string; problem: ShortcutProblem }[] {
+  const out: { action: string; problem: ShortcutProblem }[] = [];
+  const kept: ShortcutOverride[] = [];
+  for (const o of list) {
+    const p = checkShortcut(o, SHORTCUTS);
+    if (p && !("conflict" in p)) out.push({ action: o.action, problem: p });
+    else kept.push(o);
+  }
+  overrides = kept;
+  active = null;
+  for (const o of kept) {
+    const table = activeShortcuts().filter((s) => !(s.action === o.action && sameCombo(s, combo(o))));
+    const p = checkShortcut(o, table);
+    if (p) out.push({ action: o.action, problem: p });
+  }
+  return out;
+}
+
+/** Every pair of rows that answer the same key in the same context. */
+export function shortcutConflicts(): [Shortcut, Shortcut][] {
+  const t = activeShortcuts();
+  const out: [Shortcut, Shortcut][] = [];
+  for (let i = 0; i < t.length; i++) {
+    for (let j = i + 1; j < t.length; j++) {
+      const a = t[i]!, b = t[j]!;
+      if (a.action !== b.action && sameCombo(a, b) && overlap(a.context, b.context)) out.push([a, b]);
+    }
+  }
+  return out;
+}
+
 // --- the `?` cheat-sheet HUD: auto-generated, dismissed by any key/click ---
 
 /** One rendered section of the HUD. Derived from SHORTCUTS so the cheat sheet
@@ -140,23 +256,27 @@ export function resolveShortcut(
  *  file being the single source of truth. */
 export interface HudGroup {
   name: string;
-  rows: { key: string; label: string }[];
+  rows: { key: string; label: string; changed?: boolean }[];
 }
 
 /** Pure: the HUD's content. Exported so it is unit-testable without a DOM. */
 export function shortcutHudGroups(): HudGroup[] {
   const fmt = formatShortcut;
   const byContext = (ctx: Shortcut["context"]) =>
-    SHORTCUTS.filter((s) => s.context === ctx).map((s) => ({ key: fmt(s), label: s.label }));
+    activeShortcuts()
+      .filter((s) => s.context === ctx)
+      .map((s) => (shortcutOverridden(s.action) ? { key: fmt(s), label: s.label, changed: true } : { key: fmt(s), label: s.label }));
+  const clashes = shortcutConflicts().map(([a, b]) => ({ key: fmt(a), label: `${a.label} and ${b.label} share this key, ${a.label} applies` }));
+  const custom = pointerBindings() !== DEFAULT_BINDINGS;
   return [
+    ...(clashes.length ? [{ name: "Conflicts", rows: clashes }] : []),
     { name: "Model", rows: byContext("model") },
     { name: "Sketch", rows: byContext("sketch") },
     { name: "Global", rows: byContext("global") },
     {
       name: "Mouse",
       rows: [
-        { key: "Right drag", label: "Orbit" },
-        { key: "Middle drag", label: "Pan" },
+        ...bindingRows(pointerBindings()).map((r) => (custom ? { ...r, changed: true } : r)),
         { key: "Wheel", label: "Zoom" },
         { key: "Left drag", label: "Box select (see Always, below)" },
         { key: "Left click", label: "Select a body, then a face on it (pause over it to light the face up first)" },

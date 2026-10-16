@@ -214,6 +214,11 @@
   font-size: 12px;
   color: var(--text-dim);
 }
+.shortcut-hud-changed {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--accent);
+}
 .shortcut-hud-row kbd {
   min-width: 54px;
   padding: var(--s-0) var(--s-2);

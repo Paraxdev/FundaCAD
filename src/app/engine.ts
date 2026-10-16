@@ -11,6 +11,7 @@
 // as comments HERE, next to the lines they constrain. They are not stylistic:
 // several of them encode bugs that took multiple rounds to find.
 
+import { setLeftButtonOwner } from "../viewport/navigator/bindings";
 import { Viewport } from "../viewport/viewport";
 import { asFeature } from "../types";
 import { Geometry, type GeometryBackend } from "../geometry/client";
@@ -404,6 +405,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
 
   // --- predicates the UI wiring below depends on ---
   Object.assign(e, createToolBusy(e));
+  setLeftButtonOwner(() => e.toolBusy());
   Object.assign(e, createSketchVisibility(e));
   // The overlay declared this hook and nothing ever assigned it, so its default
   // ("everything is visible") stood: a sketch hidden from the browser tree kept
