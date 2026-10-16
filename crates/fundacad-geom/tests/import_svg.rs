@@ -145,3 +145,44 @@ fn an_icon_reads_groups_transforms_units_and_layers() {
     assert_eq!(solids(&b), 7, "seven separate marks");
     near(volume(&b), 2.0 * (43.0 * PI + 346.0) / 4.0, 1e-3, "marks keep their areas through skew and matrix");
 }
+
+fn imported_text(name: &str, svg: &str) -> Map<String, Value> {
+    let p = blob_dir().join(format!("{name}.svg"));
+    std::fs::write(&p, svg).unwrap();
+    let store = BlobStore::open(blob_dir()).unwrap();
+    import::import_geometry(&p.to_string_lossy(), "svg", &store).unwrap_or_else(|e| panic!("{name}: {e}"))
+}
+
+/// A circle as four quarter A commands whose last one stops `gap` short of the start.
+fn arc_circle(cx: f64, cy: f64, r: f64, gap: f64) -> String {
+    format!(
+        "M {x0} {cy} A {r} {r} 0 0 1 {cx} {y1} A {r} {r} 0 0 1 {x2} {cy} A {r} {r} 0 0 1 {cx} {y3} A {r} {r} 0 0 1 {x0} {yg} Z",
+        x0 = cx + r, y1 = cy + r, x2 = cx - r, y3 = cy - r, yg = cy - gap
+    )
+}
+
+#[test]
+fn a_ring_of_arcs_keeps_its_hole_across_tiny_gaps() {
+    for (size, gap) in [(1000.0, 0.0), (1000.0, 1e-7), (1000.0, 1e-4), (1000.0, 5e-3), (100.0, 5e-4)] {
+        let (c, r_out, r_in) = (size / 2.0, size * 0.4, size * 0.2);
+        let svg = format!(
+            r#"<svg xmlns="http://www.w3.org/2000/svg" width="{size}mm" height="{size}mm" viewBox="0 0 {size} {size}"><path fill-rule="evenodd" d="{} {}"/></svg>"#,
+            arc_circle(c, c, r_out, gap),
+            arc_circle(c, c, r_in, gap)
+        );
+        let r = imported_text("ring_gap", &svg);
+        let b = extruded(&sketches(&r)[0]);
+        assert_eq!(solids(&b), 1, "size {size} gap {gap}");
+        near(volume(&b), 2.0 * PI * (r_out * r_out - r_in * r_in), 1e-3, &format!("ring, size {size} gap {gap}"));
+    }
+}
+
+#[test]
+fn an_arc_meets_a_neighbour_a_hair_away() {
+    let svg = r#"<svg xmlns="http://www.w3.org/2000/svg" width="1000mm" height="1000mm" viewBox="0 0 1000 1000">
+<path d="M 0 0 H 500 V 500 H 0 Z"/><path d="M 500 0.003 A 250 250 0 0 1 500 500.003 Z"/></svg>"#;
+    let r = imported_text("rect_half_disc", svg);
+    let b = extruded(&sketches(&r)[0]);
+    assert_eq!(solids(&b), 1);
+    near(volume(&b), 2.0 * (250_000.0 + PI * 62_500.0 / 2.0), 1e-3, "rect and half disc");
+}
