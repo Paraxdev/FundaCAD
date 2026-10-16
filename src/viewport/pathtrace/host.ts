@@ -5,7 +5,7 @@
 import type * as THREE from "three";
 import { SAMPLE_CAP, type TraceScene, type TracerBackend } from "./backend";
 import { armGuard, clearGuard } from "./guard";
-import { collectBodies, mirrorBodies, sceneSignature } from "./mirror";
+import { collectBodies, countTriangles, mirrorBodies, sceneSignature, TRIANGLE_BUDGET } from "./mirror";
 import { TraceGeneration, traceState, type TraceInputs, type TraceState } from "./state";
 
 /** No sample this long after the tracer started reads as a hung GPU. */
@@ -41,6 +41,8 @@ export class PathTraceHost {
   onShownChange: ((shown: boolean) => void) | null = null;
   onStateChange: ((s: TraceState) => void) | null = null;
   onFault: ((why: string, disabled: boolean) => void) | null = null;
+  /** The model is too big to trace; not a fault, Path traced stays available. */
+  onRefuse: ((why: string) => void) | null = null;
 
   private backend: TracerBackend | null = null;
   private starting = false;
@@ -53,6 +55,7 @@ export class PathTraceHost {
   private traceSince = 0;
   private sawSample = false;
   private size = { w: 0, h: 0, ratio: 0 };
+  private refusedSig = "";
   /** The pending arm write, so a clear always lands after it. */
   private guardWrite: Promise<void> | null = null;
 
@@ -74,6 +77,7 @@ export class PathTraceHost {
       this.state = s;
       this.onStateChange?.(s);
     }
+    if (s === "off") this.refusedSig = "";
     if (s !== "trace" && s !== "done") {
       this.traceSince = 0;
       if (!this.sawSample) this.disarm();
@@ -81,19 +85,19 @@ export class PathTraceHost {
     }
     const b = this.backend;
     if (!b) {
+      if (!this.starting && this.refuseIfOver(collectBodies(f.root))) return this.show(false);
       this.start();
       return this.show(false);
     }
     if (s === "trace" && !this.sawSample) this.arm();
     this.syncCanvas(b);
-    if (this.sceneDirty) this.syncScene(b, f);
+    if (this.sceneDirty && !this.syncScene(b, f)) return this.show(false);
     this.watchdog(f.now, s);
     if (this.cameraDirty) {
       b.updateCamera(f.camera);
       this.restart();
       this.cameraDirty = false;
     }
-    if (this.note) return this.show(false);
     if (s === "trace") {
       b.renderSample();
       this.poll(b);
@@ -124,6 +128,22 @@ export class PathTraceHost {
     this.guardWrite = null;
     const clear = () => this.guard.clear();
     void w.then(clear, clear);
+  }
+
+  /** Over the budget the tracer is never fed; said once per model, as a note. */
+  private refuseIfOver(bodies: THREE.Mesh[]): boolean {
+    const tris = countTriangles(bodies);
+    if (tris <= TRIANGLE_BUDGET) return false;
+    const sig = sceneSignature(bodies);
+    if (sig === this.refusedSig) return true;
+    this.refusedSig = sig;
+    this.signature = "";
+    this.note = `Path tracing is limited to 2 million triangles for now, this model has ${(tris / 1e6).toFixed(1)} million`;
+    this.samples = 0;
+    this.traceSince = 0;
+    this.disarm();
+    this.onRefuse?.(this.note);
+    return true;
   }
 
   private start() {
@@ -166,20 +186,20 @@ export class PathTraceHost {
     this.cameraDirty = true;
   }
 
-  private syncScene(b: TracerBackend, f: TraceFrame) {
-    this.sceneDirty = false;
+  /** False while the scene is refused, so nothing is traced. */
+  private syncScene(b: TracerBackend, f: TraceFrame): boolean {
     const bodies = collectBodies(f.root);
+    if (this.refuseIfOver(bodies)) return false;
+    this.sceneDirty = false;
     const sig = sceneSignature(bodies);
-    if (sig === this.signature) return;
+    if (sig === this.signature) return true;
     this.signature = sig;
-    const m = mirrorBodies(bodies);
-    this.note = m.refused
-      ? `Path tracing is limited to 2 million triangles for now, this model has ${(m.triangles / 1e6).toFixed(1)} million`
-      : "";
-    if (m.refused) return;
-    b.setScene({ ...f.look(), meshes: m.meshes }, f.camera);
+    this.note = "";
+    this.refusedSig = "";
+    b.setScene({ ...f.look(), meshes: mirrorBodies(bodies) }, f.camera);
     this.cameraDirty = false;
     this.restart();
+    return true;
   }
 
   private poll(b: TracerBackend) {
