@@ -7,6 +7,7 @@ const host = vi.hoisted(() => ({
   channel: null as null | { onmessage: (b: ArrayBuffer) => void },
   state: null as null | ((e: { payload: boolean }) => void),
   sent: [] as Uint8Array[],
+  refuse: null as null | string,
 }));
 
 vi.mock("@tauri-apps/api/core", () => ({
@@ -18,6 +19,7 @@ vi.mock("@tauri-apps/api/core", () => ({
   },
   invoke: async (cmd: string, arg: unknown) => {
     if (cmd === "engine_attach") return true;
+    if (cmd === "engine_send" && host.refuse) throw host.refuse;
     if (cmd === "engine_send") host.sent.push(arg as Uint8Array);
     return undefined;
   },
@@ -53,6 +55,7 @@ afterEach(() => {
   host.channel = null;
   host.state = null;
   host.sent = [];
+  host.refuse = null;
   delete (globalThis as unknown as Record<string, unknown>).__TAURI_INTERNALS__;
 });
 
@@ -86,6 +89,18 @@ describe("IpcTransport", () => {
     t.send('{"op":"ping","id":"é"}');
     await Promise.resolve();
     expect(new TextDecoder().decode(host.sent[0])).toBe('{"op":"ping","id":"é"}');
+  });
+
+  it("answers a request the host refused with an error, so its call settles", async () => {
+    const t = new IpcTransport();
+    const { s, log } = sink();
+    await t.start(s);
+    host.refuse = "the geometry engine is not running";
+    t.send('{"op":"import","id":"r1"}');
+    await new Promise((r) => setTimeout(r, 0));
+    const reply = JSON.parse(log[1] as string);
+    expect(reply).toMatchObject({ id: "r1", ok: false });
+    expect(reply.error.message).toContain("the geometry engine is not running");
   });
 });
 

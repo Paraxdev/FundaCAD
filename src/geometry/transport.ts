@@ -108,6 +108,15 @@ export class IpcTransport implements GeometryTransport {
   send(raw: string): void {
     void this.invoke!("engine_send", this.encoder.encode(raw)).catch((err) => {
       console.error("[geometry] engine_send failed:", err);
+      let id: unknown;
+      try {
+        id = (JSON.parse(raw) as { id?: unknown }).id;
+      } catch {
+        return;
+      }
+      if (typeof id !== "string") return;
+      const message = `the geometry engine did not take the request: ${String(err)}`;
+      this.sink?.message(JSON.stringify({ id, ok: false, error: { message } }));
     });
   }
 
