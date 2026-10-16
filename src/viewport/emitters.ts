@@ -247,3 +247,23 @@ function convexHull(input: [number, number][]): [number, number][] {
 export function emitterLuminance(glow: number, e: Pick<AreaEmitter, "area" | "width" | "height">): number {
   return glow * EMITTER_LUMINANCE * Math.min(1, e.area / (e.width * e.height));
 }
+
+/** What an emitter is ranked by: its luminance over the rectangle it lights from. */
+export function emitterPower(glow: number, e: Pick<AreaEmitter, "area" | "width" | "height">): number {
+  return emitterLuminance(glow, e) * e.width * e.height;
+}
+
+/** No patch of a body inside `box` can rank above this, so a body whose bound is
+ *  below the dimmest light already kept need not be fitted at all.
+ *
+ *  Power is at most glow x luminance x the fitted rectangle. That rectangle is the
+ *  smallest one around the patch projected on its plane, so it is at most twice
+ *  the projected hull (true of any convex set), and the hull lies inside the
+ *  box's projection, which is at most half the box's surface. The 1e-3 floor on
+ *  each side of the rectangle is the last term. */
+export function emitterPowerBound(glow: number, box: { min: { x: number; y: number; z: number }; max: { x: number; y: number; z: number } }): number {
+  const a = box.max.x - box.min.x, b = box.max.y - box.min.y, c = box.max.z - box.min.z;
+  const surface = 2 * (a * b + b * c + c * a);
+  const d = Math.hypot(a, b, c);
+  return glow * EMITTER_LUMINANCE * (surface + 2e-3 * d + 1e-6) * (1 + 1e-9);
+}
