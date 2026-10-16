@@ -124,7 +124,6 @@ function check(ok, what, detail) {
 
     const before = await materialIds();
     const rt1 = await snap();
-    const programsBefore = await page.evaluate(() => window.viewport.scene.renderer.info.programs.length);
 
     await page.click('[data-view-mode="pathtraced"]');
     s = await state();
@@ -146,6 +145,8 @@ function check(ok, what, detail) {
     await page.evaluate(async () => (await import("/src/ui/renderPrefs.ts")).setRenderPref("performanceMode", false));
     await page.waitForTimeout(300);
     await page.click('[data-view-mode="realtime"]');
+    await page.waitForTimeout(300);
+    const programsBefore = await page.evaluate(() => window.viewport.scene.renderer.info.programs.length);
 
     await page.click('[data-view-mode="matcap"]');
     s = await state();
@@ -184,7 +185,11 @@ function check(ok, what, detail) {
     check(s.mode === "realtime", "Z from Matcap goes to Realtime", s.mode);
     await page.keyboard.press("z");
     s = await state();
-    check(s.mode === "matcap", "Z skips the greyed Path traced", s.mode);
+    check(s.mode === "pathtraced", "Z goes on to Path traced", s.mode);
+    await page.keyboard.press("z");
+    s = await state();
+    check(s.mode === "matcap", "Z wraps round to Matcap", s.mode);
+    await page.keyboard.press("Shift+Z");
     await page.keyboard.press("Shift+Z");
     s = await state();
     check(s.mode === "realtime", "Shift+Z goes back", s.mode);
@@ -194,7 +199,7 @@ function check(ok, what, detail) {
     const programsAfter = await page.evaluate(() => window.viewport.scene.renderer.info.programs.length);
     check(programsAfter - programsBefore <= 1, "one matcap program, nothing recompiled", { programsBefore, programsAfter });
 
-    await page.keyboard.press("z");
+    await page.click('[data-view-mode="matcap"]');
     await page.evaluate(() => window.__fundacad.handleAction("toggle-xray"));
     await shotView("matcap-xray.png");
     await page.evaluate(() => window.__fundacad.handleAction("toggle-xray"));
