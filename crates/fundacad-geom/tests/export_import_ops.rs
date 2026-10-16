@@ -351,3 +351,61 @@ fn a_stp_export_keeps_its_name_and_upper_case_names_import() {
     assert_eq!(r["result"]["name"], "Plate");
     assert_eq!(r["result"]["faces"], 7);
 }
+
+fn three_boxes() -> Value {
+    json!({"features": [
+        {"id": "a", "type": "box", "length": 10, "width": 10, "height": 10},
+        {"id": "b", "type": "box", "length": 10, "width": 10, "height": 10},
+        {"id": "mb", "type": "move", "dx": 30, "bodies": ["body2"]},
+        {"id": "c", "type": "box", "length": 10, "width": 10, "height": 10},
+        {"id": "mc", "type": "move", "dx": 60, "bodies": ["body3"]},
+    ]})
+}
+
+fn stl_xs(path: &str) -> (usize, Vec<f32>) {
+    let raw = std::fs::read(path).unwrap();
+    let n = u32::from_le_bytes(raw[80..84].try_into().unwrap()) as usize;
+    let mut xs = Vec::new();
+    for t in 0..n {
+        let rec = &raw[84 + 50 * t..84 + 50 * (t + 1)];
+        for v in 0..3 {
+            let o = 12 + 12 * v;
+            xs.push(f32::from_le_bytes(rec[o..o + 4].try_into().unwrap()));
+        }
+    }
+    (n, xs)
+}
+
+#[test]
+fn a_bodies_list_exports_only_those_bodies_merged_or_separate() {
+    let c = Client::new();
+    let dir = scratch("bodies_list");
+    let merged = p(&dir, "pick.stl");
+    let r = c.call(json!({"id": 1, "op": "export", "document": three_boxes(), "format": "stl", "path": merged,
+        "bodies": ["body1", "body3"]}));
+    assert_eq!(r["ok"], true, "{r}");
+    let (n, xs) = stl_xs(&merged);
+    assert_eq!(n, 24);
+    assert!(xs.iter().all(|x| !(20.0..40.0).contains(x)), "body2 sits at x 25..35");
+    assert!(xs.iter().any(|x| *x < 0.0) && xs.iter().any(|x| *x > 60.0));
+
+    let base = p(&dir, "parts.stl");
+    let r = c.call(json!({"id": 2, "op": "export", "document": three_boxes(), "format": "stl", "path": base,
+        "bodies": ["body3", "body1"], "separate": true}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert_eq!(r["result"]["paths"].as_array().unwrap().len(), 2);
+
+    let step = p(&dir, "pick.step");
+    let r = c.call(json!({"id": 3, "op": "export", "document": three_boxes(), "format": "step", "path": step,
+        "bodies": ["body2"]}));
+    assert_eq!(r["ok"], true, "{r}");
+
+    let r = c.call(json!({"id": 4, "op": "export", "document": three_boxes(), "format": "stl", "path": merged,
+        "bodies": ["body1", "nope"]}));
+    assert_eq!(r["error"]["message"], "body 'nope' not found to export");
+
+    let all = p(&dir, "all.stl");
+    let r = c.call(json!({"id": 5, "op": "export", "document": three_boxes(), "format": "stl", "path": all, "bodies": []}));
+    assert_eq!(r["ok"], true, "{r}");
+    assert_eq!(stl_xs(&all).0, 36, "an empty list is no filter");
+}

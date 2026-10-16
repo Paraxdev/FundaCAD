@@ -84,15 +84,15 @@ fn add_move(doc: &mut Doc, id: &str, turn: (f64, f64), shift: [f64; 3]) -> Resul
 
 /// The face each part goes down on, as `export {layFlat}` picks it: the one
 /// asked for in {body: face index}, else its largest flat face, None for a
-/// part with no flat face. `only` is the one body being exported, if it is
-/// one. `printability {layFlat}` asks the same, so it checks what export
+/// part with no flat face. `only` is the bodies being exported, if not all.
+/// `printability {layFlat}` asks the same, so it checks what export
 /// would write.
 pub(crate) async fn bed_faces(
     link: &EngineLink,
     doc: &Doc,
     built: &[Value],
     how: &Value,
-    only: Option<&str>,
+    only: Option<&[String]>,
 ) -> Result<Vec<(String, Option<(i64, [f64; 3])>)>, String> {
     let mut asked: Vec<(String, i64)> = Vec::new();
     match how {
@@ -111,7 +111,7 @@ pub(crate) async fn bed_faces(
         other => return Err(format!("layFlat is true or {{body: face index}}, got {other}")),
     }
     let ids: Vec<String> = match only {
-        Some(id) => vec![id.to_string()],
+        Some(ids) => ids.to_vec(),
         None => built.iter().map(id_of).filter(|i| !i.is_empty()).collect(),
     };
     let detailed = engine_bodies(link, doc, Some(&ids)).await?;
@@ -125,7 +125,7 @@ pub(crate) async fn bed_faces(
 }
 
 /// Turn and place the bodies in `doc` for printing. `how` is `true` or
-/// {body: face index}; `only` is the one body being exported, if it is one;
+/// {body: face index}; `only` is the bodies being exported, if not all;
 /// `apart` is a separate export, where each part goes at the origin rather
 /// than beside the last. Returns a line saying what went down on what.
 pub async fn lay_flat(
@@ -133,7 +133,7 @@ pub async fn lay_flat(
     doc: &mut Doc,
     built: &[Value],
     how: &Value,
-    only: Option<&str>,
+    only: Option<&[String]>,
     apart: bool,
 ) -> Result<String, String> {
     let mut turns: Vec<(String, (f64, f64))> = Vec::new();

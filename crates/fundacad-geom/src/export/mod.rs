@@ -495,8 +495,20 @@ pub fn export_built(
             "message": "surface displacement from a plugin is not represented in STEP exports"
         }));
     }
-    let body = req.get("body").and_then(Value::as_str).filter(|s| !s.is_empty());
+    let mut body = req.get("body").and_then(Value::as_str).filter(|s| !s.is_empty());
     let separate = fundacad_protocol::pyjson::truthy(req.get("separate"));
+    let mut wanted: Vec<&str> =
+        req.get("bodies").and_then(Value::as_array).into_iter().flatten().filter_map(Value::as_str).collect();
+    if !wanted.is_empty() {
+        wanted.extend(body.take());
+        if let Some(miss) = wanted.iter().find(|id| !bodies.iter().any(|b| b.id == **id)) {
+            let mut m = Map::new();
+            m.insert("error".into(), json!({ "message": format!("body '{miss}' not found to export") }));
+            return m;
+        }
+        let picked: Vec<ExportBody<'_>> = bodies.into_iter().filter(|b| wanted.contains(&b.id)).collect();
+        return export_bodies(&mut exporter, &picked, path, None, separate);
+    }
     export_bodies(&mut exporter, &bodies, path, body, separate)
 }
 

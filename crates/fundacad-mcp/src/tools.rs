@@ -406,6 +406,8 @@ pub fn export() -> JsonObject {
                          "description": "one file per body, named after the body, in a folder \
                                          named after `path` (parts.stl writes parts/<name>.stl)"},
             "body": {"type": "string", "description": "export only this body, by id or name"},
+            "bodies": {"type": "array", "items": {"type": "string"},
+                       "description": "export only these bodies, by id or name, in one file, or one file each with `separate`"},
             "layFlat": {"description": "turn each part for printing: true puts each body's \
                                         largest flat face on the bed, or {body: face index} \
                                         picks the face per body (indices from `inspect`). \
