@@ -11,6 +11,8 @@ import { composerClearColor, DISPLAY_COLOR_GLSL, displayColorUniforms, followCom
 import { BACKGROUND_COLOR, bloomSettings, renderPrefs } from "../ui/renderPrefs";
 import { GlassBackPass, glassBodyCount } from "./glassThickness";
 import { POTATO_PIXEL_RATIO, PotatoDraw } from "./potato";
+import { MatcapDraw } from "./matcap";
+import type { ViewMode } from "../ui/renderPrefs";
 import { isSoftwareRendererName, setSoftwareRenderer } from "../ui/glassBlur";
 import { buildRoom, disposeRoom } from "./environments";
 import type { Environment } from "../ui/renderPrefs";
@@ -459,6 +461,9 @@ export class PostChain {
   private potato: PotatoDraw | null = null;
   private glassPass: GlassBackPass | null = null;
   private motionDraw: PotatoDraw | null = null;
+  private matcap: MatcapDraw | null = null;
+  /** Written by the viewport. Potato mode is preferred over it. */
+  viewMode: ViewMode = "realtime";
   private size = new THREE.Vector2(1, 1);
   private composerRatio = 0;
   private clearWas = new THREE.Color();
@@ -480,6 +485,12 @@ export class PostChain {
     private potatoOn: () => boolean = () => renderPrefs().potatoMode,
     private lowPower: () => boolean = isRenderLowPower,
   ) {}
+
+  /** Whether this frame draws shadow maps at all. While it does not, the
+   *  viewport stops recording caster changes, so the maps are redrawn on return. */
+  get drawsShadows(): boolean {
+    return this.potatoOn() || this.viewMode !== "matcap";
+  }
 
   /** Asked for a frame once the passes have loaded, so bloom does not wait on the next input. */
   onReady: () => void = () => {};
@@ -523,7 +534,11 @@ export class PostChain {
   /** `motion` is a camera frame on a machine that cannot keep up. On a low power
    *  tier (performance mode included) it draws 1px edge lines and no passes until
    *  the view settles, otherwise the full look stays on while the camera moves. */
-  render(camera: THREE.Camera, motion = false) {
+  render(camera: THREE.Camera, motion = false, forceRealtime = false) {
+    if (this.matcap && (this.viewMode !== "matcap" || this.potatoOn())) {
+      this.matcap.dispose();
+      this.matcap = null;
+    }
     if (this.potatoOn()) {
       (this.potato ??= new PotatoDraw()).render(this.renderer, this.scene, camera, renderPrefs().brightness);
       // Only the modules, so a still taken in potato mode can build its passes at once.
@@ -534,6 +549,10 @@ export class PostChain {
     if (this.potato) {
       this.potato.dispose();
       this.potato = null;
+    }
+    if (this.viewMode === "matcap" && !forceRealtime) {
+      (this.matcap ??= new MatcapDraw()).render(this.renderer, this.scene, camera, renderPrefs().brightness);
+      return;
     }
     if (motion && this.lowPower()) {
       (this.motionDraw ??= new PotatoDraw(true)).render(this.renderer, this.scene, camera);

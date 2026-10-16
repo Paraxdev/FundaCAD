@@ -26,7 +26,7 @@ const PRUNE_AFTER_FRAMES = 30;
 
 /** Plain Material fields copied onto a twin every frame. None of them changes the
  *  shader program, so copying them never recompiles. */
-const MIRRORED = [
+export const MIRRORED = [
   "side", "transparent", "opacity", "alphaTest", "blending", "premultipliedAlpha",
   "depthTest", "depthWrite", "depthFunc", "colorWrite",
   "polygonOffset", "polygonOffsetFactor", "polygonOffsetUnits",
@@ -35,14 +35,14 @@ const MIRRORED = [
   "clippingPlanes", "clipIntersection", "visible",
 ] as const;
 
-function mirror(dst: THREE.Material, src: THREE.Material) {
+export function mirror(dst: THREE.Material, src: THREE.Material) {
   const d = dst as unknown as Record<string, unknown>;
   const s = src as unknown as Record<string, unknown>;
   for (const k of MIRRORED) if (d[k] !== s[k]) d[k] = s[k];
 }
 
 /** Anything three draws through the PBR path: Standard, and Physical which extends it. */
-function isPbr(m: THREE.Material): m is THREE.MeshStandardMaterial {
+export function isPbr(m: THREE.Material): m is THREE.MeshStandardMaterial {
   return (m as THREE.MeshStandardMaterial).isMeshStandardMaterial === true;
 }
 
@@ -55,7 +55,7 @@ function isFatLine(o: THREE.Object3D): o is FatLine {
   return (o as { isLineSegments2?: boolean }).isLineSegments2 === true;
 }
 
-function isCostlyLight(o: THREE.Object3D): boolean {
+export function isCostlyLight(o: THREE.Object3D): boolean {
   const l = o as { isRectAreaLight?: boolean; isPointLight?: boolean; isSpotLight?: boolean };
   return l.isRectAreaLight === true || l.isPointLight === true || l.isSpotLight === true;
 }

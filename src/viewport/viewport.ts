@@ -64,6 +64,8 @@ import type { DocumentStore } from "../document/store";
 import type { BodyFinish } from "../document/materials";
 import { BodyFinishLayer, sameFinishMap, sameStringMap } from "./bodyFinish";
 import { onRenderPrefsChange, renderPrefs } from "../ui/renderPrefs";
+import { effectiveViewMode, type RenderTier, type ViewMode } from "../ui/viewMode";
+import { onWorkspaceChange } from "../ui/workspace";
 import { invalidateThemeColors } from "./themeColors";
 import { onThemeChange } from "../ui/theme";
 import type { ViewCubeSide } from "../types";
@@ -304,6 +306,8 @@ export class Viewport {
     this.scene.post.onReady = () => this.requestRender();
     // Re-applied on theme changes too: the default ground is a theme token.
     this.scene.applyRenderPrefs();
+    this.syncViewMode();
+    onWorkspaceChange(() => this.syncViewMode());
     onRenderPrefsChange(() => {
       const wasLow = isRenderLowPower();
       const wasPotato = this.potato;
@@ -320,6 +324,7 @@ export class Viewport {
         this.motion.reset();
       }
       if (renderPrefs().tangentEdges !== this.tangentEdges) this.applyTangentEdges();
+      this.syncViewMode();
       this.requestRender();
     });
     onThemeChange(() => {
@@ -882,6 +887,27 @@ export class Viewport {
   /** Fires when see-through is switched, so the chrome can say it is on. */
   onXrayChange: ((on: boolean) => void) | null = null;
   onWireframeChange: ((on: boolean) => void) | null = null;
+  onViewModeChange: ((m: ViewMode) => void) | null = null;
+  private viewModeNow: ViewMode = "realtime";
+
+  get viewMode(): ViewMode {
+    return this.viewModeNow;
+  }
+
+  get renderTier(): RenderTier {
+    return { lowPower: isRenderLowPower(), auto: this.scene.lowPower };
+  }
+
+  /** Draw the mode saved for the current workspace. Only the draw changes:
+   *  no material is written and nothing is rebuilt. */
+  private syncViewMode() {
+    const m = effectiveViewMode(this.renderTier);
+    if (m === this.viewModeNow) return;
+    this.viewModeNow = m;
+    this.scene.post.viewMode = m;
+    this.onViewModeChange?.(m);
+    this.requestRender();
+  }
   /** The mesh on screen is the last one that BUILT, not what the values say. */
   private stale = false;
 
@@ -3728,7 +3754,7 @@ export class Viewport {
    *  Resizes the drawing buffer (updateStyle false) so the post chain is reused.
    *  Must stay synchronous: without preserveDrawingBuffer an await reads a blank
    *  image. `scale` is capped because an oversized buffer fails silently. */
-  renderStill(scale = 2, opts: { edges?: boolean } = {}): string {
+  renderStill(scale = 2, opts: { edges?: boolean; realtime?: boolean } = {}): string {
     const rect = this.canvas.getBoundingClientRect();
     const w = Math.max(1, Math.round(rect.width));
     const h = Math.max(1, Math.round(rect.height));
@@ -3761,7 +3787,7 @@ export class Viewport {
       this.scene.renderer.setSize(w * k, h * k, false);
       this.scene.post.setSize(w * k, h * k);
       this.scene.post.focusDistance = this.rig.active.position.distanceTo(this.cameraTarget());
-      this.scene.post.render(this.rig.active);
+      this.scene.post.render(this.rig.active, false, opts.realtime);
       url = this.canvas.toDataURL("image/png");
     } finally {
       // Whatever happened, the viewport goes back to being the viewport. A throw
@@ -3911,7 +3937,7 @@ export class Viewport {
         this.scene.post.focusDistance = this.rig.active.position.distanceTo(t);
         const shadows = this.scene.renderer.shadowMap;
         // Shadows depend on the casters and the lights, never on the camera.
-        this.shadowWatch.gate(this.needsRender, this.scene.scene, shadows);
+        this.shadowWatch.gate(this.needsRender, this.scene.scene, shadows, this.scene.post.drawsShadows);
         try {
           this.scene.post.render(this.rig.active, this.motionActive && this.motionScale < 1);
         } finally {

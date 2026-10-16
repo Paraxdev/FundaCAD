@@ -122,6 +122,9 @@ export const MAX_EMISSIVE_INTENSITY = 4;
  *  continuous surface. */
 export type TangentEdges = "show" | "faint" | "hide";
 
+/** How the viewport shades the model (ui/viewMode.ts). */
+export type ViewMode = "matcap" | "realtime" | "pathtraced";
+
 export interface RenderPrefs {
   environment: Environment;
   background: Background;
@@ -169,6 +172,9 @@ export interface RenderPrefs {
    *  above the ground (viewport/keyLight.ts). Aimed on the canvas in Render. */
   keyAzimuth: number;
   keyElevation: number;
+  /** The view mode last chosen in each workspace. */
+  viewModeModel: ViewMode;
+  viewModeRender: ViewMode;
 }
 
 /** What the f-stop numbers mean to the blur pass, and the range the control
@@ -206,6 +212,8 @@ export const DEFAULT_RENDER: RenderPrefs = {
   tangentEdges: "faint",
   keyAzimuth: DEFAULT_KEY.azimuth,
   keyElevation: DEFAULT_KEY.elevation,
+  viewModeModel: "realtime",
+  viewModeRender: "realtime",
 };
 
 export const MIN_BRIGHTNESS = 0.4;
@@ -231,6 +239,10 @@ export function asEnvironment(v: unknown): Environment | null {
 
 export function asBackground(v: unknown): Background | null {
   return BACKGROUNDS.includes(v as Background) ? (v as Background) : null;
+}
+
+export function asViewMode(v: unknown): ViewMode | null {
+  return v === "matcap" || v === "realtime" || v === "pathtraced" ? v : null;
 }
 
 export function asTangentEdges(v: unknown): TangentEdges | null {
@@ -304,6 +316,8 @@ export function asRenderPrefs(v: unknown): RenderPrefs {
     tangentEdges: asTangentEdges(o["tangentEdges"]) ?? DEFAULT_RENDER.tangentEdges,
     keyAzimuth: asAzimuth(o["keyAzimuth"]) ?? DEFAULT_RENDER.keyAzimuth,
     keyElevation: asElevation(o["keyElevation"]) ?? DEFAULT_RENDER.keyElevation,
+    viewModeModel: asViewMode(o["viewModeModel"]) ?? DEFAULT_RENDER.viewModeModel,
+    viewModeRender: asViewMode(o["viewModeRender"]) ?? DEFAULT_RENDER.viewModeRender,
   };
 }
 
@@ -340,7 +354,8 @@ export function setRenderPref<K extends keyof RenderPrefs>(key: K, value: Render
                     : key === "tangentEdges" ? asTangentEdges(value)
                       : key === "keyAzimuth" ? asAzimuth(value)
                         : key === "keyElevation" ? asElevation(value)
-                          : asBrightness(value);
+                          : key === "viewModeModel" || key === "viewModeRender" ? asViewMode(value)
+                            : asBrightness(value);
   if (ok === null || current[key] === ok) return;
   // A fresh object rather than a mutation, so a subscriber may hold the result
   // of renderPrefs() and compare identity to decide it must redraw.

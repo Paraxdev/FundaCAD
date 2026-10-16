@@ -685,6 +685,12 @@
   border-radius: var(--r-pill);
   background: var(--accent);
 }
+.opt-row.disabled,
+.opt-row.disabled:hover {
+  background: none;
+  opacity: 0.45;
+  cursor: default;
+}
 .opt-row.opt-row-icon {
   flex-direction: row;
   align-items: center;
@@ -924,6 +930,13 @@
 .icon-btn.active {
   background: var(--accent-tint);
   color: var(--accent-hot);
+}
+.icon-btn.disabled,
+.icon-btn.disabled:hover {
+  background: none;
+  color: var(--text-dim);
+  opacity: 0.38;
+  cursor: default;
 }
 
 .perf-warn-group {
