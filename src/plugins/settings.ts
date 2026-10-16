@@ -2,9 +2,10 @@
 //
 // The plugin says WHAT it wants to ask (a typed list of properties); the app
 // owns where it is shown (under the plugin's row in Preferences > Plugins) and
-// where it is kept (one localStorage key per plugin id, so two plugins can
-// never read or overwrite each other's values). Vue free, so the headless
-// suites import it.
+// where it is kept (one localStorage key per plugin id). The id is trusted:
+// a builtin plugin runs in the app's process and could reach localStorage
+// anyway, so the wall between plugins is the sandbox, whose settings_get takes
+// no id. Vue free, so the headless suites import it.
 //
 // SYNCHRONOUS ON PURPOSE. Plugins read their options at module scope, before
 // anything asynchronous has run, and the value they start with decides what
@@ -218,13 +219,24 @@ function storage(): Storage | null {
   }
 }
 
-function readStored(pluginId: string): { version: number; values: SettingValues } | null {
+interface Stored {
+  version: number;
+  values: SettingValues;
+  /** Remove forgot them: the plugin starts on its defaults and does not read its old keys again. */
+  forgotten?: true;
+}
+
+function readStored(pluginId: string): Stored | null {
   try {
     const raw = storage()?.getItem(storageKey(pluginId));
     if (!raw) return null;
-    const v = JSON.parse(raw) as { version?: unknown; values?: unknown };
+    const v = JSON.parse(raw) as { version?: unknown; values?: unknown; forgotten?: unknown };
     if (!v || typeof v !== "object" || !v.values || typeof v.values !== "object") return null;
-    return { version: typeof v.version === "number" ? v.version : 1, values: v.values as SettingValues };
+    return {
+      version: typeof v.version === "number" ? v.version : 1,
+      values: v.values as SettingValues,
+      ...(v.forgotten === true ? { forgotten: true as const } : {}),
+    };
   } catch {
     return null;
   }
@@ -253,14 +265,18 @@ export function storedSettings(pluginId: string): SettingValues {
   return registry.get(pluginId)?.all() ?? clone(readStored(pluginId)?.values ?? {});
 }
 
-/** Forget everything stored for a plugin, for Remove with its data. */
+/** Forget everything stored for a plugin, for Remove with its data.
+ *
+ *  It leaves a marker rather than no key: with no key the next start would
+ *  read the plugin's `legacy` keys again and bring the forgotten values back. */
 export function removePluginSettings(pluginId: string) {
-  // Reset first: it writes the defaults, and the removal has to come after.
+  // Reset first: it writes the defaults, and the marker has to come after.
   registry.get(pluginId)?.reset();
+  const forgotten: Stored = { version: 0, values: {}, forgotten: true };
   try {
-    storage()?.removeItem(storageKey(pluginId));
+    storage()?.setItem(storageKey(pluginId), JSON.stringify(forgotten));
   } catch {
-    /* blocked storage holds nothing to remove */
+    /* blocked storage holds nothing to forget */
   }
 }
 
@@ -290,7 +306,9 @@ export function definePluginSettings(pluginId: string, schema: SettingsSchema): 
   };
 
   const stored = readStored(pluginId);
-  if (stored) {
+  if (stored?.forgotten) {
+    fill({});
+  } else if (stored) {
     let from = stored.values;
     if (stored.version < schema.version && schema.migrate) {
       try {

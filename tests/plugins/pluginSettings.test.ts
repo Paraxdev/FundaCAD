@@ -113,11 +113,11 @@ describe("storage", () => {
     expect(s.get("list")).toEqual([1, 2]);
   });
 
-  it("removing the plugin's data leaves the defaults and no key", () => {
+  it("removing the plugin's data leaves the defaults and no stored value", () => {
     const s = definePluginSettings("A.X", schema());
     s.set("speed", 5);
     removePluginSettings("A.X");
-    expect(store.getItem(storageKey("A.X"))).toBeNull();
+    expect(JSON.parse(store.getItem(storageKey("A.X"))!).values).toEqual({});
     expect(s.get("speed")).toBe(2);
   });
 });
@@ -141,6 +141,25 @@ describe("versions and old keys", () => {
     store.setItem("old.key", JSON.stringify({ speed: 1 }));
     expect(definePluginSettings("A.X", schema({ legacy })).get("speed")).toBe(9);
     expect(legacy).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not import the old key again after Remove forgot the settings", () => {
+    store.setItem("old.key", JSON.stringify({ speed: 7 }));
+    const legacy = () => JSON.parse(store.getItem("old.key")!);
+    expect(definePluginSettings("A.X", schema({ legacy })).get("speed")).toBe(7);
+    removePluginSettings("A.X");
+    const again = definePluginSettings("A.X", schema({ legacy }));
+    expect(again.get("speed")).toBe(2);
+    expect(storedSettings("A.X")).toEqual(again.all());
+    again.set("speed", 4);
+    expect(definePluginSettings("A.X", schema({ legacy })).get("speed")).toBe(4);
+  });
+
+  it("forgets a plugin that is not running without importing its old key later", () => {
+    store.setItem("old.key", JSON.stringify({ speed: 7 }));
+    removePluginSettings("A.Y");
+    const legacy = () => JSON.parse(store.getItem("old.key")!);
+    expect(definePluginSettings("A.Y", schema({ legacy })).get("speed")).toBe(2);
   });
 
   it("writes nothing when there was nothing to import", () => {
