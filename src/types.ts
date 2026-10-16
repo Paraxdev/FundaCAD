@@ -391,7 +391,7 @@ export type CoreFeature =
   | {
       id: string;
       type: "import";
-      format: "stl" | "3mf" | "step" | "obj" | "brep" | "glb" | "gltf" | "iges" | "fcstd" | "ply" | "off" | "amf" | "vrml" | "x3d" | "xbf" | "3dm" | "ifc";
+      format: "stl" | "3mf" | "step" | "obj" | "brep" | "glb" | "gltf" | "iges" | "fcstd" | "ply" | "off" | "amf" | "vrml" | "x3d" | "xbf" | "3dm" | "ifc" | "dxf";
       name: string;
       // Content hash in the container's blob store; inline base64 was 541.8 MiB on one assembly.
       geom?: string;
@@ -826,9 +826,12 @@ export interface MeshExportOptions {
 // Import: the format the user picks, and the engine's reply for an `import` op,
 // the content hash of the stored geometry plus a little metadata for the new
 // `import` feature.
-export type ImportFormat = "stl" | "3mf" | "step" | "obj" | "brep" | "glb" | "gltf" | "iges" | "fcstd" | "ply" | "off" | "amf" | "vrml" | "x3d" | "xbf" | "3dm" | "ifc";
+export type ImportFormat = "stl" | "3mf" | "step" | "obj" | "brep" | "glb" | "gltf" | "iges" | "fcstd" | "ply" | "off" | "amf" | "vrml" | "x3d" | "xbf" | "3dm" | "ifc" | "dxf";
 export type ImportReply =
-  | { ok: true; geom: string; name: string; solid: boolean; faces: number; color?: string;
+  // A DXF answers its lines and curves as `sketches`, one per layer, and has
+  // `geom` only when it also held 3D faces.
+  | { ok: true; geom?: string; name: string; solid?: boolean; faces?: number; color?: string;
+      sketches?: { name: string; entities: SketchEntity[] }[];
       // present only for a STEP that carried a real assembly tree; see the
       // `import` feature above for what they mean
       nodes?: { name: string; parent: number | null; color?: string }[];
