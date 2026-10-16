@@ -755,23 +755,26 @@ function environmentMapNow(renderer: THREE.WebGLRenderer, id: Environment): THRE
   const held = envCache.get(id);
   if (held) return held;
   const pmrem = new THREE.PMREMGenerator(renderer);
-  let tex: THREE.Texture;
+  const room = environmentRoom(id as Exclude<Environment, "none">);
+  const tex = pmrem.fromScene(room.scene, 0.04).texture;
+  room.dispose();
+  pmrem.dispose();
+  envCache.set(id, tex);
+  return tex;
+}
+
+/** The scene for an environment, for one render; the caller disposes it. */
+export function environmentRoom(id: Exclude<Environment, "none">): { scene: THREE.Scene; dispose(): void } {
   if (id === "studio") {
     // three's own, kept as it is: it is a Y-up room, which is a quarter turn
     // from this app's world, and it has looked right since the day materials
     // landed. Turning it upright would be changing what every existing
     // document reflects to fix something nobody can see.
     const room = new RoomEnvironment();
-    tex = pmrem.fromScene(room, 0.04).texture;
-    room.dispose();
-  } else {
-    const room = buildRoom(id as Exclude<Environment, "studio" | "none">);
-    tex = pmrem.fromScene(room, 0.04).texture;
-    disposeRoom(room);
+    return { scene: room, dispose: () => room.dispose() };
   }
-  pmrem.dispose();
-  envCache.set(id, tex);
-  return tex;
+  const room = buildRoom(id);
+  return { scene: room, dispose: () => disposeRoom(room) };
 }
 
 async function environmentMap(renderer: THREE.WebGLRenderer, id: Environment): Promise<THREE.Texture> {

@@ -4,6 +4,8 @@ import type { TracerBackend } from "../../src/viewport/pathtrace/backend";
 import { FIRST_SAMPLE_TIMEOUT_MS, IDLE_DISPOSE_MS, PathTraceHost, type TraceFrame } from "../../src/viewport/pathtrace/host";
 import { TRIANGLE_BUDGET } from "../../src/viewport/pathtrace/mirror";
 
+const ENV = new THREE.Texture();
+
 class FakeTracer implements TracerBackend {
   readonly name = "fake";
   readonly canvas = { style: {} as Record<string, string> } as unknown as HTMLCanvasElement;
@@ -18,6 +20,7 @@ class FakeTracer implements TracerBackend {
   updateGeometry() { this.calls.push("geometry"); }
   updateTransforms() { this.calls.push("transforms"); }
   updateMaterials() { this.calls.push("materials"); }
+  updateLook() { this.calls.push("look"); }
   updateCamera() { this.calls.push("camera"); }
   reset() { this.calls.push("reset"); }
   renderSample() { this.calls.push("sample"); }
@@ -63,7 +66,8 @@ function frame(over: Partial<TraceFrame["inputs"]> = {}, now = 1000, extra: Part
     cameraChanged: false,
     sceneMaybeChanged: false,
     root: extra.root ?? scene(),
-    look: () => ({ lights: [], background: new THREE.Color(), brightness: 1, toneMapping: THREE.NeutralToneMapping, exposure: 1 }),
+    look: () => ({ lights: [], background: new THREE.Color(), environment: ENV, brightness: 1, toneMapping: THREE.NeutralToneMapping, exposure: 1 }),
+    lens: () => null,
     ...extra,
   };
 }
@@ -266,5 +270,30 @@ describe("path trace host", () => {
     await flush();
     await flush();
     expect(created).toHaveLength(2);
+  });
+
+  it("hands a changed look to the tracer after the first scene, once, with a restart", async () => {
+    const { host, t } = await started();
+    host.tick(frame());
+    expect(t.calls).toContain("scene");
+    t.calls.length = 0;
+    const brighter = () => ({ ...frame().look(), brightness: 1.6, background: new THREE.Color(0.8, 0.8, 0.8) });
+    host.tick(frame({}, 1100, { sceneMaybeChanged: true, look: brighter }));
+    expect(t.calls.filter((c) => c === "look")).toHaveLength(1);
+    expect(t.calls.indexOf("reset")).toBeGreaterThan(t.calls.indexOf("look"));
+    t.calls.length = 0;
+    host.tick(frame({}, 1200, { sceneMaybeChanged: true, look: brighter }));
+    expect(t.calls).not.toContain("look");
+  });
+
+  it("re-reads the camera when the lens changes without a camera move", async () => {
+    const { host, t } = await started();
+    host.tick(frame());
+    t.calls.length = 0;
+    host.tick(frame({}, 1100, { lens: () => ({ focusDistance: 200, apertureRadius: 1 }) }));
+    expect(t.calls).toContain("camera");
+    t.calls.length = 0;
+    host.tick(frame({}, 1200, { lens: () => ({ focusDistance: 200, apertureRadius: 1 }) }));
+    expect(t.calls).not.toContain("camera");
   });
 });

@@ -3,7 +3,7 @@
 // of the app uses: setModel(), fit(), pick callbacks, projection/view toggles.
 
 import * as THREE from "three";
-import { createScene, type SceneBundle } from "./scene";
+import { createScene, environmentRoom, type SceneBundle } from "./scene";
 import {
   createCameraRig,
   type CameraRig,
@@ -66,7 +66,10 @@ import type { BodyFinish } from "../document/materials";
 import { BodyFinishLayer, sameFinishMap, sameStringMap } from "./bodyFinish";
 import { onRenderPrefsChange, renderPrefs, setRenderPref } from "../ui/renderPrefs";
 import { bootViewMode, chooseViewMode, effectiveViewMode, type RenderTier, type ViewMode } from "../ui/viewMode";
-import type { TraceLight } from "./pathtrace/backend";
+import type { TraceLight, TraceLook } from "./pathtrace/backend";
+import { lensFor, type TraceLens } from "./pathtrace/camera";
+import { traceEnvironment, type TraceHemi } from "./pathtrace/environment";
+import { composerClearColor } from "./composerColor";
 import { clearGuard, guardSet } from "./pathtrace/guard";
 import { PathTraceHost } from "./pathtrace/host";
 import { describeProbe, probeWebGpu, type GpuProbe } from "./pathtrace/probe";
@@ -977,10 +980,22 @@ export class Viewport {
     this.tierChanged();
   }
 
-  private traceLook() {
+  private traceLook(): TraceLook {
     const r = this.scene.renderer;
     const lights: TraceLight[] = [];
+    let hemi = null as TraceHemi | null;
+    const p = renderPrefs();
     this.scene.scene.traverseVisible((o) => {
+      const h = o as THREE.HemisphereLight;
+      if (h.isHemisphereLight && h.intensity > 0) {
+        hemi = {
+          sky: h.color.clone(),
+          ground: h.groundColor.clone(),
+          intensity: p.brightness > 0 ? h.intensity / p.brightness : 0,
+          up: h.getWorldPosition(new THREE.Vector3()).normalize(),
+        };
+        return;
+      }
       const l = o as THREE.DirectionalLight;
       if (!l.isDirectionalLight || l.intensity <= 0) return;
       lights.push({
@@ -990,13 +1005,21 @@ export class Viewport {
         target: l.target.getWorldPosition(new THREE.Vector3()),
       });
     });
+    const env = p.environment;
+    const environment = traceEnvironment(r, env, env === "none" ? null : () => environmentRoom(env), hemi);
     return {
       lights,
-      background: r.getClearColor(new THREE.Color()),
-      brightness: renderPrefs().brightness,
+      background: composerClearColor(r.getClearColor(new THREE.Color()), r.toneMapping, r.toneMappingExposure),
+      environment,
+      brightness: p.brightness,
       toneMapping: r.toneMapping,
       exposure: r.toneMappingExposure,
     };
+  }
+
+  private traceLens(): TraceLens | null {
+    const p = renderPrefs();
+    return lensFor(this.rig.active, this.scene.post.focusDistance, p.aperture, p.focusBlur);
   }
 
   /** Draw the mode saved for the current workspace. Only the draw changes:
@@ -4050,6 +4073,7 @@ export class Viewport {
         sceneMaybeChanged: this.needsRender,
         root: this.scene.scene,
         look: () => this.traceLook(),
+        lens: () => this.traceLens(),
       });
       // Render-on-demand: skip the (relatively expensive) grid rebuild + GPU
       // draw entirely when nothing changed, camera didn't move, no mutation
