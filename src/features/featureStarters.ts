@@ -27,7 +27,7 @@ import { pickPlaneTarget, planeSpecOf, type FacePlanePick } from "./facePlanePic
 import { choose } from "../ui/choice";
 import { pointInRegion } from "../sketch/region";
 import { setPrompt } from "../ui/prompt";
-import type { Axis3, AxisSpec, Feature, JointMode, MechanismJoint, PlaneDef, PlaneSpec, Selector, Vec3 } from "../types";
+import type { Axis3, AxisSpec, Feature, JointMode, MechanismJoint, PlaneDef, PlaneOf, PlaneSpec, Selector, Vec3 } from "../types";
 import type { Hit } from "../viewport/picking";
 import { isDrivable, nextJointId, NO_DRIVE } from "../document/mechanism";
 import { findSelectorAt, repickedExtent, repickedSelector, replaceSelectorAt } from "./repickReference";
@@ -355,27 +355,37 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   // back to either wall afterwards. See planeMath.midPlane for what "between"
   // means when the two are not parallel.
   //
-  // KNOWN LIMIT, the same one a datum built off a construction quad has: the
-  // result is a RESOLVED plane, so it does not follow either face if something
-  // upstream moves them. A datum keeps one face reference and this has two, so
-  // following would need a shape the document does not have.
+  // Both picks are kept as references when they have one (a flat face, a datum,
+  // a world plane), so the midplane follows either wall; a tangent plane on a
+  // round face has none and leaves the plane baked.
   function createMidplane() {
-    pickPlaneInteractive("Select the first plane or face for the midplane", (a) => {
+    pickPlaneInteractive("Select the first plane or face for the midplane", (a, fa, da) => {
       // Next frame, like the pick's own commit: the first pick's click must not
       // arrive at the second pick's listeners.
       requestAnimationFrame(() => {
-        pickPlaneInteractive("Select the second plane or face", (b) => {
+        pickPlaneInteractive("Select the second plane or face", (b, fb, db) => {
           const def = midPlane(asDef(a), asDef(b));
           if (!def) {
             setStatus("Midplane: those two faces name no plane between them", "");
             return;
           }
+          const ra = planeOfPick(a, fa, da);
+          const rb = planeOfPick(b, fb, db);
           const id = store.nextId();
-          store.addFeature({ id, type: "datumPlane", plane: def, name: "Midplane" } as Feature);
+          store.addFeature({
+            id, type: "datumPlane", plane: def, name: "Midplane",
+            ...(ra && rb ? { through: { kind: "mid", a: ra, b: rb } } : {}),
+          } as Feature);
           selectFeature(id, false);
         });
       });
     });
+  }
+
+  function planeOfPick(spec: PlaneSpec, face: FacePlanePick | null, datumId: string | null): PlaneOf | null {
+    if (face) return face.kind === "planar" ? { face: face.selector } : null;
+    if (datumId) return { plane: datumId };
+    return typeof spec === "string" ? { plane: spec } : null;
   }
 
   // Plane through three points: the only way to reach a plane that no face of
