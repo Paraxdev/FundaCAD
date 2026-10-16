@@ -28,6 +28,9 @@ thiserror = "1"
 zip = { version = "4", default-features = false, features = ["deflate-flate2"] }
 flate2 = "1"
 quick-xml = "0.37"
+# Rhino .3dm reader, pure Rust. Pinned: a young crate, a new release is checked against tests/import_rhino.rs first.
+cadmpeg-codec-rhino = "=0.6.1"
+cadmpeg-ir = "=0.6.1"
 # Deterministic data parallelism: every parallel pass collects by index and is
 # assembled in the serial order, so a reply is byte identical either way.
 rayon = "1"

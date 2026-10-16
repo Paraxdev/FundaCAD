@@ -448,12 +448,50 @@ pub fn finish_objects(objs: Vec<MeshObject>) -> Result<super::Imported, String> 
     if objs.is_empty() {
         return Err("no geometry found in the mesh file".into());
     }
+    let mut shapes = object_shapes(&objs)?;
+    let hex = |c: [u8; 3]| serde_json::json!(super::hex(c));
+    let mut fields = serde_json::Map::new();
+    if shapes.len() == 1 {
+        if let Some(c) = objs[0].color {
+            fields.insert("color".into(), hex(c));
+        }
+        let shape = shapes.pop().unwrap_or_else(Shape::empty);
+        return Ok(super::Imported { shape, fields });
+    }
+    let nodes: Vec<serde_json::Value> = objs
+        .iter()
+        .enumerate()
+        .map(|(i, o)| {
+            let name = o.name.as_deref().map(super::clean).filter(|n| !n.is_empty());
+            serde_json::json!({"name": name.unwrap_or_else(|| format!("Object {}", i + 1)), "parent": null})
+        })
+        .collect();
+    let parts: Vec<serde_json::Value> = objs
+        .iter()
+        .zip(&shapes)
+        .enumerate()
+        .map(|(i, (o, s))| {
+            let mut part = serde_json::json!({"node": i, "faces": kernel::count(s, Kind::Face)});
+            if let Some(c) = o.color {
+                part["color"] = hex(c);
+            }
+            part
+        })
+        .collect();
+    fields.insert("nodes".into(), serde_json::Value::Array(nodes));
+    fields.insert("parts".into(), serde_json::Value::Array(parts));
+    Ok(super::Imported { shape: kernel::compound(shapes.iter()), fields })
+}
+
+/// Each object sewn, unified and cleaned on its own, behind the density
+/// gates, in the order given.
+pub fn object_shapes(objs: &[MeshObject]) -> Result<Vec<Shape>, String> {
     let ntri: u64 = objs.iter().map(|o| (o.idx.len() / 3) as u64).sum();
     if ntri > MAX_IMPORT_TRIANGLES {
         return Err(too_dense_error(ntri));
     }
     let mut soups = Vec::with_capacity(objs.len());
-    for o in &objs {
+    for o in objs {
         let pos32: Vec<f32> = o.pos.iter().map(|&v| v as f32).collect();
         if o.idx.iter().any(|&i| i as usize * 3 + 2 >= pos32.len()) {
             return Err("a triangle references a vertex that does not exist".into());
@@ -486,38 +524,7 @@ pub fn finish_objects(objs: Vec<MeshObject>) -> Result<super::Imported, String> 
             thousands(MAX_IMPORT_TOTAL_FACES)
         ));
     }
-    let hex = |c: [u8; 3]| serde_json::json!(super::hex(c));
-    let mut fields = serde_json::Map::new();
-    if shapes.len() == 1 {
-        if let Some(c) = objs[0].color {
-            fields.insert("color".into(), hex(c));
-        }
-        let shape = shapes.pop().unwrap_or_else(Shape::empty);
-        return Ok(super::Imported { shape, fields });
-    }
-    let nodes: Vec<serde_json::Value> = objs
-        .iter()
-        .enumerate()
-        .map(|(i, o)| {
-            let name = o.name.as_deref().map(super::clean).filter(|n| !n.is_empty());
-            serde_json::json!({"name": name.unwrap_or_else(|| format!("Object {}", i + 1)), "parent": null})
-        })
-        .collect();
-    let parts: Vec<serde_json::Value> = objs
-        .iter()
-        .zip(&faces)
-        .enumerate()
-        .map(|(i, (o, &n))| {
-            let mut part = serde_json::json!({"node": i, "faces": n});
-            if let Some(c) = o.color {
-                part["color"] = hex(c);
-            }
-            part
-        })
-        .collect();
-    fields.insert("nodes".into(), serde_json::Value::Array(nodes));
-    fields.insert("parts".into(), serde_json::Value::Array(parts));
-    Ok(super::Imported { shape: kernel::compound(shapes.iter()), fields })
+    Ok(shapes)
 }
 
 pub fn read_stl(path: &Path) -> Result<Shape, String> {

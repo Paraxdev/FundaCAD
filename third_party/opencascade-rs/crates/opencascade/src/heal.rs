@@ -89,4 +89,19 @@ impl Face {
         let inner = ffi::shape_fix::ShapeFix_Face_perform(&self.inner, precision, &mut modified)?;
         Ok(Fixed { shape: Shape { inner }, modified })
     }
+
+    /// The face's surface over its whole parameter range, bounded by
+    /// `BRepBuilderAPI_MakeFace`, which also makes the seams and the
+    /// degenerate edges of a closed surface.
+    pub fn untrimmed(&self, edge_tolerance: f64) -> Result<Face, Error> {
+        let surface = ffi::b_rep::BRep_Tool_Surface(&self.inner);
+        if surface.IsNull() {
+            return Err(Error::InvalidInput("the face has no surface"));
+        }
+        let make = ffi::b_rep_builder_api::BRepBuilderAPI_MakeFace_surface(&surface, edge_tolerance);
+        if !make.IsDone() {
+            return Err(Error::OperationFailed("BRepBuilderAPI_MakeFace"));
+        }
+        Ok(Face::from_face(make.Face()))
+    }
 }

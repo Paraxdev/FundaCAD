@@ -13,6 +13,7 @@ pub mod mesh;
 pub mod off;
 pub mod packed;
 pub mod ply;
+pub mod rhino;
 pub mod x3d;
 
 use std::collections::HashMap;
@@ -354,6 +355,7 @@ pub fn import_geometry_in(path: &str, fmt: &str, store: &BlobStore, unit: Option
         "xbf" => read_xbf(p)?,
         "iges" | "igs" => read_iges(p)?,
         "fcstd" => fcstd::read_fcstd(p)?,
+        "3dm" => outward(rhino::read_3dm(p)?),
         "brep" => outward(Imported {
             shape: Shape::read_brep_text(p).map_err(|e| e.to_string())?,
             fields: Map::new(),
