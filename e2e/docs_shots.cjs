@@ -1347,7 +1347,7 @@ Object.assign(STILLS, {
     await sleep(600);
     await page.getByText("3D Mouse Settings").click();
     await sleep(1500);
-    await ctx.still("spacemouse-settings", { x: 357, y: 50, width: 726, height: 800 });
+    await ctx.still("spacemouse-settings", await ctx.box(".prefs-panel", 6));
   },
   async "expression-value"(ctx) {
     const { page } = ctx;

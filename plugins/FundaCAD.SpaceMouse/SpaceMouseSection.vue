@@ -1,27 +1,25 @@
 <script setup lang="ts">
-// 3D-Mouse settings modal: calibrate the SpaceMouse without guessing the
-// hardware. Shows a LIVE raw-axis readout (push/twist the puck → see which axis
-// moves), lets you bind each camera action to any axis + invert + set
-// sensitivity, and a TEST CUBE driven by the puck (with the current mapping) so
-// you can confirm the feel. All edits apply live and persist.
+// Below the 3D mouse's declared settings (mode, sensitivities): calibrate it
+// without guessing the hardware. A LIVE raw-axis readout (push/twist the puck,
+// see which axis moves), each camera action bound to any axis with an invert,
+// and a TEST CUBE driven by the puck with the current mapping so you can
+// confirm the feel. Mounted only while the plugin's row is expanded.
 //
 // Two halves, deliberately kept apart:
 //
-//   * the FORM (mode, sensitivities, mappings) is ordinary reactive state,
-//     mirrored out of the persisted config and written straight back;
+//   * the FORM (mappings) is ordinary reactive state, mirrored out of the
+//     stored config and written straight back;
 //   * the READOUT (six axis bars + the WebGL test cube) is imperative. It runs
 //     at device report rate and at 60 fps respectively, writes styles directly
 //     through plain element handles, and never touches a ref. Pushing that
 //     through reactivity would be a per-frame render for no benefit.
 //
 // The renderer, its scene resources and the rAF are all torn down in
-// onUnmounted. The class this replaces cancelled the rAF and disposed the
-// renderer but left the box/edges/sphere geometries and their materials on the
-// GPU, and "Reset to defaults" rebuilt the whole dialog, so it leaked a full
-// set every time it was pressed.
+// onUnmounted, geometries and materials included, so collapsing the row frees
+// the GPU side too.
 
 import * as THREE from "three";
-import { onMounted, onUnmounted, ref, shallowRef, useTemplateRef, type ComponentPublicInstance } from "vue";
+import { onMounted, onUnmounted, shallowRef, useTemplateRef, type ComponentPublicInstance } from "vue";
 import {
   AXIS_LABELS,
   AXIS_NAMES,
@@ -30,94 +28,22 @@ import {
   getLatestMotion,
   getSpaceMouseConfig,
   onSpaceMouseMotion,
-  resetSpaceMouseConfig,
   setSpaceMouseConfig,
+  settings,
   type ActionName,
   type AxisBinding,
   type AxisName,
   type Motion,
-  type SpaceMouseConfig,
 } from "./spacemouse";
-import { closeSettings } from "./state";
-import { ModalFrame } from "fundacad/ui";
-
-const close = () => closeSettings();
-
-// NOTE: deliberately no useModalGate() here. The imperative version never
-// counted itself in the modal-depth gate either, so global shortcuts have
-// always stayed live behind this dialog. Adding the gate would be a behaviour
-// change, and this commit is a move.
 
 const ACTIONS = Object.keys(ACTION_LABELS) as ActionName[];
 
-// --- form state, mirrored out of the persisted config ---
-type SensKey = "panSens" | "zoomSens" | "orbitSens" | "deadzone" | "crossAxis";
-interface SliderDef {
-  key: SensKey;
-  label: string;
-  min: number;
-  max: number;
-  step: number;
-  /** How the number reads beside the slider, when it is not the raw value. */
-  format?: (v: number) => string;
-  /** One line under the row, for a control whose name does not explain it. */
-  hint?: string;
-}
-
-const SLIDERS: SliderDef[] = [
-  { key: "panSens", label: "Pan", min: 0, max: 0.000003, step: 0.000003 / 100 },
-  { key: "zoomSens", label: "Zoom", min: 0, max: 0.0000035, step: 0.0000035 / 100 },
-  { key: "orbitSens", label: "Rotate", min: 0, max: 0.00001, step: 0.00001 / 100 },
-  { key: "deadzone", label: "Deadzone", min: 0, max: 200, step: 1 },
-  // Cross-axis filter, shown as a percentage of the strongest axis. 0 turns it
-  // off. Capped at 60: past that a deliberate combined gesture stops working
-  // long before the filter buys anything more.
-  {
-    key: "crossAxis",
-    label: "Cross-axis filter",
-    min: 0,
-    max: 60,
-    step: 1,
-    format: (v) => `${Math.round(v)}%`,
-    hint: "Ignores a weak axis while another axis is much stronger, so a hard tilt doesn't also zoom.",
-  },
-];
-
-/** The slider's own units, which for the cross-axis filter is a percentage of
- *  the stored fraction. Kept here so the row and the config never drift. */
-const toSlider = (k: SensKey, v: number) => (k === "crossAxis" ? Math.round(v * 100) : v);
-const fromSlider = (k: SensKey, v: number) => (k === "crossAxis" ? v / 100 : v);
-
-const mode = ref<SpaceMouseConfig["mode"]>("object");
-const sens = ref<Record<SensKey, number>>(
-  { panSens: 0, zoomSens: 0, orbitSens: 0, deadzone: 0, crossAxis: 0 },
-);
 // shallowRef and replace-wholesale: the bindings are handed straight back to
 // setSpaceMouseConfig, which merges them into the module-level CONFIG object.
 // A deep ref would put reactive proxies in there.
 const binds = shallowRef<Record<ActionName, AxisBinding>>(structuredClone(getSpaceMouseConfig().bind));
 
-function syncFromConfig() {
-  const c = getSpaceMouseConfig();
-  mode.value = c.mode;
-  sens.value = {
-    panSens: c.panSens, zoomSens: c.zoomSens, orbitSens: c.orbitSens,
-    deadzone: c.deadzone, crossAxis: toSlider("crossAxis", c.crossAxis),
-  };
-  binds.value = structuredClone(c.bind);
-}
-syncFromConfig();
-
-function setMode(m: SpaceMouseConfig["mode"]) {
-  mode.value = m;
-  setSpaceMouseConfig({ mode: m });
-}
-
-function setSens(key: SensKey, raw: string) {
-  const v = parseFloat(raw);
-  sens.value = { ...sens.value, [key]: v };
-  setSpaceMouseConfig({ [key]: fromSlider(key, v) } as Partial<SpaceMouseConfig>);
-}
+const offSettings = settings.onChange(() => { binds.value = structuredClone(getSpaceMouseConfig().bind); });
 
 function applyBind(action: ActionName, patch: Partial<AxisBinding>) {
   const next: AxisBinding = { ...binds.value[action], ...patch };
@@ -125,19 +51,6 @@ function applyBind(action: ActionName, patch: Partial<AxisBinding>) {
   // A one-action patch. setSpaceMouseConfig merges `bind` per action rather
   // than replacing it, which is why this partial is safe (and why the cast is).
   setSpaceMouseConfig({ bind: { [action]: next } as unknown as Record<ActionName, AxisBinding> });
-}
-
-/** Reset re-reads the config in place. The class closed and reopened itself,
- *  which tore down and rebuilt the WebGL context for a settings change. */
-function resetDefaults() {
-  resetSpaceMouseConfig();
-  syncFromConfig();
-}
-
-function fmt(v: number): string {
-  if (v === 0) return "0";
-  if (Math.abs(v) >= 1) return String(Math.round(v));
-  return v.toPrecision(2);
 }
 
 // --- live axis bars (imperative: written at device report rate) ---
@@ -330,6 +243,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  offSettings();
   if (raf) cancelAnimationFrame(raf);
   raf = 0;
   unsub?.();
@@ -339,78 +253,40 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <ModalFrame @close="close()">
-    <template #title>3D Mouse Settings</template>
-
-    <div class="modal-body sm-grid">
-      <!-- left column: live axes + test cube -->
-      <div class="sm-col">
-        <div class="sm-section">Live axes, move the puck</div>
-        <div class="sm-hint">Push/tilt/twist and watch which bar reacts, then map it below.</div>
-        <div v-for="a in AXIS_NAMES" :key="a" class="sm-axis-row">
-          <span class="sm-axis-label">{{ AXIS_LABELS[a] }}</span>
-          <div class="sm-axis-track">
-            <div class="sm-axis-bar" :ref="(el) => setBar(a, el)"></div>
-          </div>
+  <div class="sm-grid" data-spacemouse-section>
+    <div class="sm-col">
+      <div class="sm-section">Live axes, move the puck</div>
+      <div class="sm-hint">Push/tilt/twist and watch which bar reacts, then map it beside.</div>
+      <div v-for="a in AXIS_NAMES" :key="a" class="sm-axis-row">
+        <span class="sm-axis-label">{{ AXIS_LABELS[a] }}</span>
+        <div class="sm-axis-track">
+          <div class="sm-axis-bar" :ref="(el) => setBar(a, el)"></div>
         </div>
-        <div class="sm-section">Test, rotate the cube</div>
-        <canvas ref="testCanvas" class="sm-test" width="240" height="170"></canvas>
       </div>
+      <div class="sm-section">Test, rotate the cube</div>
+      <canvas ref="testCanvas" class="sm-test" width="240" height="170"></canvas>
+    </div>
 
-      <!-- right column: mode, sensitivities, mappings -->
-      <div class="sm-col">
-        <div class="sm-section">Mode</div>
-        <div class="sm-row">
-          <label class="sm-radio">
-            <input type="radio" name="sm-mode" :checked="mode === 'object'" @change="setMode('object')" />
-            Object mode
-          </label>
-          <label class="sm-radio">
-            <input type="radio" name="sm-mode" :checked="mode === 'camera'" @change="setMode('camera')" />
-            Camera mode
-          </label>
-        </div>
-
-        <div class="sm-section">Sensitivity</div>
-        <div v-for="s in SLIDERS" :key="s.key" class="sm-row">
-          <span class="sm-slabel">{{ s.label }}</span>
+    <div class="sm-col">
+      <div class="sm-section">Axis mapping</div>
+      <div v-for="action in ACTIONS" :key="action" class="sm-map-row">
+        <span class="sm-map-label">{{ ACTION_LABELS[action] }}</span>
+        <select
+          class="sm-select"
+          :value="binds[action].src"
+          @change="applyBind(action, { src: ($event.target as HTMLSelectElement).value as AxisName })"
+        >
+          <option v-for="ax in AXIS_NAMES" :key="ax" :value="ax">{{ AXIS_LABELS[ax] }}</option>
+        </select>
+        <label class="sm-inv">
           <input
-            type="range"
-            :min="s.min"
-            :max="s.max"
-            :step="s.step"
-            :value="sens[s.key]"
-            @input="setSens(s.key, ($event.target as HTMLInputElement).value)"
+            type="checkbox"
+            :checked="binds[action].invert"
+            @change="applyBind(action, { invert: ($event.target as HTMLInputElement).checked })"
           />
-          <span class="sm-sval">{{ (s.format ?? fmt)(sens[s.key]) }}</span>
-          <div v-if="s.hint" class="sm-hint sm-srow-hint">{{ s.hint }}</div>
-        </div>
-
-        <div class="sm-section">Axis mapping</div>
-        <div v-for="action in ACTIONS" :key="action" class="sm-map-row">
-          <span class="sm-map-label">{{ ACTION_LABELS[action] }}</span>
-          <select
-            class="sm-select"
-            :value="binds[action].src"
-            @change="applyBind(action, { src: ($event.target as HTMLSelectElement).value as AxisName })"
-          >
-            <option v-for="ax in AXIS_NAMES" :key="ax" :value="ax">{{ AXIS_LABELS[ax] }}</option>
-          </select>
-          <label class="sm-inv">
-            <input
-              type="checkbox"
-              :checked="binds[action].invert"
-              @change="applyBind(action, { invert: ($event.target as HTMLInputElement).checked })"
-            />
-            flip
-          </label>
-        </div>
+          flip
+        </label>
       </div>
     </div>
-
-    <div class="modal-foot">
-      <button class="btn" @click="resetDefaults()">Reset to defaults</button>
-      <button class="btn btn-primary" @click="close()">Done</button>
-    </div>
-  </ModalFrame>
+  </div>
 </template>

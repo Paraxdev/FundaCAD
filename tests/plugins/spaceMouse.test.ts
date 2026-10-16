@@ -10,6 +10,7 @@
 // source of truth shared by the viewport motion loop and the settings preview
 // (they used to carry a deadzone each, so they could disagree).
 import { describe, it, expect, vi, afterEach } from "vitest";
+import { MemoryStorage } from "./memoryStorage";
 import {
   filterMotion,
   getSpaceMouseConfig,
@@ -114,5 +115,49 @@ describe("crossAxis is clamped to [0, 0.9]", () => {
     setSpaceMouseConfig({ crossAxis: 5 });
     expect(getSpaceMouseConfig().crossAxis).toBe(0.9);
     setSpaceMouseConfig({ crossAxis: 0.25 }); // restore for any later test
+  });
+});
+
+describe("its settings", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  });
+
+  const start = async (store: MemoryStorage) => {
+    vi.stubGlobal("localStorage", store);
+    vi.resetModules();
+    return import("../../plugins/FundaCAD.SpaceMouse/spacemouse");
+  };
+
+  it("adopts the oldest key once, with the v1 sensitivity rescale, as a share of the default", async () => {
+    const store = new MemoryStorage();
+    // v1 pan default was 0.00006, so twice that is twice the default
+    store.setItem("sindricad.spacemouse.config", JSON.stringify({ mode: "camera", panSens: 0.00012, deadzone: 40, bind: { zoom: { src: "tz", invert: true } } }));
+    const m = await start(store);
+    expect(m.settings.get("panPercent")).toBe(200);
+    expect(m.settings.get("mode")).toBe("camera");
+    expect(m.getSpaceMouseConfig().panSens).toBeCloseTo(0.0000012, 12);
+    expect(m.getSpaceMouseConfig().deadzone).toBe(40);
+    expect(m.getSpaceMouseConfig().bind.zoom).toEqual({ src: "tz", invert: true });
+
+    store.setItem("fundacad.spacemouse.config", JSON.stringify({ mode: "object", sensVersion: 2 }));
+    const again = await start(store);
+    expect(again.getSpaceMouseMode()).toBe("camera");
+  });
+
+  it("reads the old mode-only key when that is all there is", async () => {
+    const store = new MemoryStorage();
+    store.setItem("sindricad.spacemouse.mode", "camera");
+    expect((await start(store)).getSpaceMouseMode()).toBe("camera");
+  });
+
+  it("writes nothing on a machine that never stored anything", async () => {
+    const store = new MemoryStorage();
+    const m = await start(store);
+    expect(m.getSpaceMouseConfig().panSens).toBe(0.0000006);
+    expect(store.length).toBe(0);
+    m.setSpaceMouseMode("camera");
+    expect(JSON.parse(store.getItem("fundacad.pluginSettings.FundaCAD.SpaceMouse")!).values.mode).toBe("camera");
   });
 });

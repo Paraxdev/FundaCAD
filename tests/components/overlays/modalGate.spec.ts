@@ -13,9 +13,9 @@
 // assert the count is back to zero after each dialog closes by its OWN exit
 // path: Escape, backdrop, Cancel, or the frame's close button.
 //
-// The three dialogs here are the three that gate. FilamentMappingDialog and
-// SpaceMouseModal both deliberately do NOT (each says so at its own top), so
-// using one as a vehicle would assert the opposite of what it promises.
+// The three dialogs here are the three that gate. FilamentMappingDialog
+// deliberately does NOT (it says so at its top), so using it as a vehicle
+// would assert the opposite of what it promises.
 //
 // The dialogs Teleport to body, so assertions query `document` rather than the
 // wrapper: the wrapper only holds the teleport anchor comments.

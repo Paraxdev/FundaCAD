@@ -266,6 +266,7 @@ with everything it adds, and gets back the removal:
 | `pointerBindings` | which button and modifiers orbit, pan, zoom, open the menu or start a gesture (needs `input.remap`) |
 | `onPointerGesture` | called when a binding's gesture drag starts, with the press point and pointer id |
 | `keymap` | keys moved to other actions, contributed ones included (needs `input.remap`) |
+| `settings` | the plugin's own settings, declared or drawn by its own component, shown under its row in Preferences ▸ Plugins (see [Settings](#settings)) |
 
 Four things this deliberately is not. There is no generic "run this on event X".
 There is no way to replace a core behaviour: `app/actions.ts` reaches its own
@@ -528,7 +529,7 @@ plugins/
                            search.ts, library.ts, state.ts, insert.ts, LibraryPanel.vue,
                            FastenerPreview.vue, CustomForm.vue, catalogue/, geometry-rs/
   FundaCAD.SpaceMouse/     manifest.json, README.md, main.ts, spacemouse.ts,
-                           state.ts, SettingsHost.vue, SpaceMouseModal.vue
+                           SpaceMouseSection.vue
 ```
 
 A capability's Vue components live there too, and that is the point rather than
@@ -706,6 +707,93 @@ judge, and a note underneath an argument is a note read after the decision.
 A row whose record will not parse is not described at all. `installedManifest`
 returns null and the screen says so plainly, because a row that cannot be
 described accurately must not be described reassuringly.
+
+A plugin's settings are under its own row, behind a **Settings** disclosure,
+the way an add-on's preferences sit under it. Nothing a plugin adds gets a
+category of its own in the Preferences sidebar. Above the rows a search box
+finds a setting in any plugin by its label, description or group, and opens
+the rows that match. A changed setting has a reset arrow beside it, and
+**Reset to defaults** puts back all of that plugin's. **Remove** keeps the
+plugin's settings, so a reinstall finds them, unless **Remove forgets its
+settings** is ticked first. In a development build every plugin that runs from
+this repository without being installed has a row too, "Running from source",
+so its settings have somewhere to be.
+
+## Settings
+
+A plugin declares what it wants to ask; the app draws it, keeps it and hands
+it back. `definePluginSettings(pluginId, schema)` (from `fundacad`) returns a
+handle, and the plugin contributes it:
+
+```ts
+export const settings = definePluginSettings("Me.Thing", {
+  version: 1,
+  props: [
+    { key: "speed", type: "number", label: "Speed", default: 1, min: 0, max: 5, step: 0.1 },
+    { key: "gap", type: "number", label: "Gap", unit: "length", default: 0.2, min: 0 },
+    { key: "mode", type: "enum", label: "Mode", default: "a", options: [{ id: "a", label: "A" }, { id: "b", label: "B" }] },
+    { key: "list", type: "data", default: [] },
+  ],
+  legacy: () => null,
+});
+contribute("Me.Thing", { settings: [{ key: "main", settings, component: MyExtraPart }] });
+```
+
+The types are `boolean`, `number` (`min`, `max`, `step`, `integer`, and a
+`unit`: `length` is stored in mm and shown in the display unit, `angle` in
+degrees, anything else is a suffix), `enum` (options with labels), `string`,
+`colour` (`#rrggbb`), `key` (a combination like `Ctrl+K`, captured by pressing
+it), `file` (a path, with a Choose button in the desktop app) and `data`, a
+value the plugin's own component edits that the app keeps and resets but never
+draws. Every property has a `label`, an optional `description`, `group` and
+`visibleWhen(values)`. A schema that does not hold together (a repeated key, a
+default outside its range or not among its options, an unknown type) is
+refused when it is declared, not when somebody opens Preferences.
+
+Numbers are typed, not dragged, and read through the same grammar as every
+other field, so `1 in` in a length is 25.4 mm and `abc` says why it is not a
+value without storing anything. The component, if there is one, is drawn below
+the declared rows, for what a schema cannot say: Navigation's key rebinding,
+the 3D mouse's live axes and test cube (loaded async, so the row builds WebGL
+only while it is open), Onshape's keys in the credential store.
+
+**Storage is the app's.** One localStorage key per plugin,
+`fundacad.pluginSettings.<id>`, holding `{ version, values }`. Two plugins
+cannot read or overwrite each other's values, and contributing a handle made
+for another id is refused. It is synchronous on purpose: plugins read their
+options at module scope, before anything async has run. Secrets do not belong
+here; a plugin with keys keeps them in the credential store
+(`plugin_secret_*`) and draws them with its own component.
+
+**Versions.** Raise `version` when a stored value has to be rewritten to be
+read, and give `migrate(old, fromVersion)`. It runs once and the result is
+written back. A value that no longer fits its property (a removed option, a
+number out of range) falls back to that property's default and leaves the
+others alone.
+
+**Old keys.** `legacy()` returns whatever the plugin kept before this existed.
+It is called once, only while nothing is stored under the new key, and its
+result is written there. It lives in the plugin, never in the app, because
+`scripts/check-no-plugin-code.mjs` fails the build if a plugin's storage key
+reaches the shipped app.
+
+**Reading and listening.** The handle has `get(key)`, `all()` (copies),
+`set(key, value)` (null when stored, else the reason), `reset(key?)`,
+`isDefault(key)` and `onChange(fn)`, called with the keys that changed once
+per set or reset that changed any. No grant is needed for a plugin's own
+settings. A sandboxed plugin, which cannot import the handle, asks the broker
+for `settings_get`, answered for the calling plugin only. `openPluginSettings(id)`
+opens Preferences on the plugin's row with its settings expanded; the 3D
+mouse's View menu entry uses it.
+
+What moved onto it: Navigation (preset, radial menu and its trigger; items and
+keys as `data` edited by its panel), Game controller (speeds, deadzone,
+inverts; buttons as `data`), 3D mouse (mode, sensitivities as a share of the
+default, deadzone, cross-axis filter; axis mapping as `data`; its settings
+window is gone) and the Print toolbox's bed for Bed Fit Check. The active
+printer and the fastener library stay where they are, because they are state
+and content rather than preferences; Texture, Organic, MultiColor and
+ExtraParameters keep their options in the document and their tool panels.
 
 ## The broker: one door
 
@@ -1064,6 +1152,8 @@ and the `process` sentence on the install screen says so.
 | `src/plugins/shipped.ts` | the one glob of `plugins/*/manifest.json`, parsed |
 | `src/plugins/contrib.ts` | what a plugin may add to the app, and the only way in; names no plugin |
 | `src/plugins/registry.ts` | which installed plugins are switched off; names no plugin either |
+| `src/plugins/settings.ts` | settings a plugin declares: the schema check, one stored key per plugin, versions and old keys |
+| `src/components/overlays/PluginSettingsForm.vue` | draws a plugin's declared settings under its row |
 | `src/plugins/host.ts` | `fundacad`: the whole of what a plugin may import |
 | `src/plugins/hostUi.ts` | `fundacad/ui`: the four components, kept apart so `fundacad` needs no DOM |
 | `src/plugins/loader.ts` | evaluates a downloaded plugin's module against the app's own modules |

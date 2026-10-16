@@ -10,16 +10,14 @@ document.
 
 ## What is here
 
-- `spacemouse.ts`, the axis filter, the bindings and the stored settings.
-- `SpaceMouseModal.vue`, the settings window, with the live axis bars and the
-  test cube.
-- `SettingsHost.vue`, mounts that window only while it is open, because a
-  contributed overlay is mounted for the whole life of the capability and this
-  one builds a WebGL scene.
-- `state.ts`, whether the window is open. A ref here rather than a field on the
-  app's dialog store, which had no business holding one piece of state per
-  capability that might want a window.
-- `main.ts`, the device, and the View menu.
+- `spacemouse.ts`, the axis filter, the bindings, and the declared settings
+  (mode, sensitivities as a share of the default, deadzone, cross-axis filter),
+  which the app draws under this plugin's row in Preferences > Plugins.
+- `SpaceMouseSection.vue`, drawn below those settings: the live axis bars, the
+  test cube and the axis mapping. Loaded async and mounted only while the row
+  is expanded, because it builds a WebGL scene.
+- `main.ts`, the device, and the View menu, whose "3D Mouse Settings" opens
+  the row.
 
 The app contained none of this before only in the sense that it did not import
 it. It still wrote out every row of the View menu behind a capability check,

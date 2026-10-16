@@ -11,19 +11,20 @@
 // answer "which mode is ticked" synchronously. What is left of all that is the
 // `contribute` call below.
 //
-// The input filter, the settings window and its three.js scene, and the HID
+// The input filter, the settings panel and its three.js scene, and the HID
 // plumbing are in this directory and reached only from here, so a machine with
 // no such device, which is most of them, never downloads or parses any of it.
 
 import {
+  PLUGIN_ID,
   getSpaceMouseMode,
   initSpaceMouse,
   setSpaceMouseConfig,
   setSpaceMouseMode,
+  settings,
 } from "./spacemouse";
-import { openSettings } from "./state";
-import SettingsHost from "./SettingsHost.vue";
-import { contribute, invoke, listen, stickyFact, toast } from "fundacad";
+import { defineAsyncComponent } from "vue";
+import { contribute, invoke, listen, openPluginSettings, stickyFact, toast } from "fundacad";
 import type { Engine, Viewport } from "fundacad";
 
 type Inventory = { picked: string | null; seen: string[]; note?: string | null };
@@ -67,11 +68,13 @@ export async function activate(e: Engine): Promise<() => void> {
               onClick: () => setSpaceMouseMode("camera"),
             },
             { separator: true, label: "" },
-            { label: "3D Mouse Settings\u2026", onClick: () => openSettings() },
+            { label: "3D Mouse Settings\u2026", onClick: () => openPluginSettings(PLUGIN_ID) },
           ],
         },
       ],
-      overlays: [SettingsHost],
+      // Async, so three.js and the test cube stay out of the chunk that starts
+      // the plugin; the row only builds them when it is expanded.
+      settings: [{ key: "spacemouse", settings, component: defineAsyncComponent(() => import("./SpaceMouseSection.vue")) }],
     }),
   );
 
