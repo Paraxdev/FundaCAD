@@ -49,3 +49,24 @@ describe("constraintGlyphs", () => {
     expect(constraintGlyphs([], [{ type: "horizontal", line: "gone" }])).toEqual([]);
   });
 });
+
+describe("constraintGlyphs for point alignment, joins and rectangle sides", () => {
+  const ents: ResolvedEntity[] = [
+    { type: "point", id: "P", x: 0, y: 0 },
+    { type: "point", id: "Q", x: 10, y: 0 },
+    { type: "line", id: "A", x1: 10, y1: 0, x2: 10, y2: 20 },
+    { type: "rectangle", id: "R", x: 50, y: 0, width: 20, height: 10 },
+  ];
+  it("an alignment sits between its points, a join on its point, a side relation on the side", () => {
+    const g = constraintGlyphs(ents, [
+      { type: "horizontalPoints", e1: "P", p1: 0, e2: "Q", p2: 0 },
+      { type: "coincident", e1: "A", p1: 0, e2: "Q", p2: 0 },
+      { type: "parallel", l1: "R~2", l2: "A" },
+    ]);
+    expect(g.map((x) => [x.icon, x.pos.x, x.pos.y])).toEqual([
+      ["horizontal", 5, 0],
+      ["coincident", 10, 0],
+      ["parallel", 50, 5],
+    ]);
+  });
+});

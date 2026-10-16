@@ -375,6 +375,11 @@ export async function compileAndSolve(
       const a = centerPoint(c.c1), b = centerPoint(c.c2);
       if (a && b && a !== b) cons.push({ id, type: "coincident", a, b });
     }
+    else if (c.type === "horizontalPoints" || c.type === "verticalPoints") {
+      const a = endpointPoint(c.e1, c.p1), b = endpointPoint(c.e2, c.p2);
+      const axis = c.type === "horizontalPoints" ? "y" : "x";
+      if (a && b && a !== b) cons.push({ id, type: "axisDistance", a, b, axis, value: 0 });
+    }
     else if (c.type === "midpoint") {
       const p = endpointPoint(c.e, c.p);
       if (p && isLine(c.line)) {

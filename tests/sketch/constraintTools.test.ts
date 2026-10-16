@@ -138,3 +138,56 @@ describe("constraintTools click flows (Tier 1 additions)", () => {
     expect(h.warnings[0]).toMatch(/Break Link/);
   });
 });
+
+describe("constraint click flows: rectangle sides, point on curve, refusals", () => {
+  const rect: ResolvedEntity = { type: "rectangle", id: "Q", x: 0, y: 30, width: 20, height: 10 };
+  const line: ResolvedEntity = { type: "line", id: "S", x1: 0, y1: 0, x2: 30, y2: 3 };
+
+  it("parallel takes a line, then a rectangle side", () => {
+    const h = new MockHost();
+    h._ents = [line, rect];
+    h._tool = "parallel";
+    const ct = new ConstraintTools(h);
+    ct.click(v(15, 1.5));
+    ct.click(v(0, 25)); // bottom side, y = 25
+    expect(h._cons).toEqual([{ type: "parallel", l1: "S", l2: "Q~0" }]);
+    expect(h._fillet).toBeNull();
+  });
+
+  it("tangent on two lines says why instead of doing nothing", () => {
+    const h = new MockHost();
+    h._ents = [line, { type: "line", id: "T", x1: 0, y1: 10, x2: 30, y2: 10 }];
+    h._tool = "tangent";
+    const ct = new ConstraintTools(h);
+    ct.click(v(15, 1.5));
+    ct.click(v(15, 10));
+    expect(h._cons).toEqual([]);
+    expect(h.warnings).toHaveLength(1);
+    expect(h.warnings[0]).toMatch(/cannot be tangent/);
+  });
+
+  it("coincident from a point onto a curve body records point on curve", () => {
+    const h = new MockHost();
+    h._ents = [line, { type: "point", id: "P", x: 40, y: 40 }, { type: "circle", id: "C", x: 60, y: 0, radius: 5 }];
+    h._tool = "coincident";
+    const ct = new ConstraintTools(h);
+    ct.click(v(40, 40));
+    ct.click(v(15, 1.5));
+    ct.click(v(40, 40));
+    ct.click(v(65, 0));
+    expect(h._cons).toEqual([
+      { type: "pointOnCurve", e: "P", p: 0, curve: "S" },
+      { type: "pointOnCurve", e: "P", p: 0, curve: "C" },
+    ]);
+  });
+
+  it("midpoint takes a point, then a rectangle side", () => {
+    const h = new MockHost();
+    h._ents = [rect, { type: "point", id: "P", x: 40, y: 40 }];
+    h._tool = "midpoint";
+    const ct = new ConstraintTools(h);
+    ct.click(v(40, 40));
+    ct.click(v(0, 35)); // top side, y = 35
+    expect(h._cons).toEqual([{ type: "midpoint", e: "P", p: 0, line: "Q~2" }]);
+  });
+});

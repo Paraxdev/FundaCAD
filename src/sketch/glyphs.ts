@@ -6,7 +6,7 @@
 import * as THREE from "three";
 import type { ResolvedEntity } from "./snap";
 import type { SketchConstraint, SketchPattern } from "../types";
-import { refPoint } from "./entityDims";
+import { lineOperand, refPoint } from "./entityDims";
 import { bsplinePoint, bsplineRange, bsplineValid } from "./bspline";
 
 const V = (x: number, y: number) => new THREE.Vector2(x, y);
@@ -51,6 +51,8 @@ export function constraintFace(c: SketchConstraint): {
     case "midpoint": return { icon: "midpoint", name: "Midpoint", operands: [c.e, c.line] };
     case "pointOnCurve": return { icon: "coincident", name: "On curve", operands: [c.e, c.curve] };
     case "symmetric": return { icon: "symmetric", name: "Symmetric", operands: [c.e1, c.e2, c.line] };
+    case "horizontalPoints": return { icon: "horizontal", name: "Aligned horizontally", operands: [c.e1, c.e2] };
+    case "verticalPoints": return { icon: "vertical", name: "Aligned vertically", operands: [c.e1, c.e2] };
     case "fix": return { icon: "fix", name: "Fixed", operands: [c.e] };
     // The dimensional constraints have no glyph, they ARE their badge on the
     // canvas, but a list that showed only the geometric half would be lying
@@ -100,7 +102,12 @@ function entCenter(e: ResolvedEntity): THREE.Vector2 {
 export function constraintGlyphs(ents: ResolvedEntity[], constraints: SketchConstraint[]): ConstraintGlyph[] {
   const byId = new Map(ents.map((e) => [e.id, e]));
   const out: ConstraintGlyph[] = [];
-  const center = (id: string): THREE.Vector2 | null => { const e = byId.get(id); return e ? entCenter(e) : null; };
+  const center = (id: string): THREE.Vector2 | null => {
+    const e = byId.get(id);
+    if (e) return entCenter(e);
+    const l = lineOperand(byId, id);
+    return l ? V((l.x1 + l.x2) / 2, (l.y1 + l.y2) / 2) : null;
+  };
   const refPos = (id: string, p: number): THREE.Vector2 | null => {
     const e = byId.get(id);
     return e ? refPoint(e, p) : null;
@@ -124,6 +131,7 @@ export function constraintGlyphs(ents: ResolvedEntity[], constraints: SketchCons
       case "midpoint": push(i, constraintFace(c).icon, center(c.line)); break;
       case "pointOnCurve": push(i, constraintFace(c).icon, refPos(c.e, c.p)); break;
       case "symmetric": push(i, constraintFace(c).icon, center(c.line)); break;
+      case "horizontalPoints": case "verticalPoints": push(i, constraintFace(c).icon, mid2(refPos(c.e1, c.p1), refPos(c.e2, c.p2))); break;
       case "fix": push(i, constraintFace(c).icon, refPos(c.e, c.p)); break;
       // distance/diameter/p2pDistance/p2lDistance/radius/angle render as dimensions
       default: break;
