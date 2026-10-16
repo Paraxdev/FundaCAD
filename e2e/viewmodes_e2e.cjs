@@ -55,6 +55,11 @@ function check(ok, what, detail) {
       }
       const raf = window.requestAnimationFrame.bind(window);
       window.requestAnimationFrame = (cb) => raf((t) => { window.__rafs++; cb(t); });
+      const click = HTMLAnchorElement.prototype.click;
+      HTMLAnchorElement.prototype.click = function () {
+        if (this.download) window.__saved = { name: this.download, href: this.href };
+        return click.call(this);
+      };
     });
     const open = async () => {
       await page.goto(`${APP}?token=${TOKEN}`);
@@ -188,6 +193,56 @@ function check(ok, what, detail) {
       return { budget: t?.frameBudget, renderScale: t?.renderScale, cap: t?.maxSamples };
     });
     check(cost.renderScale === 0.75 && cost.cap === 256, "traces at three quarters of the canvas up to 256 samples", cost);
+
+    await page.evaluate(async () => (await import("/src/ui/workspace.ts")).setWorkspace("render"));
+    await page.click('[data-view-mode="pathtraced"]');
+    await page.waitForFunction(() => !!window.viewport.tracedPictureSize(1), null, { timeout: 60000, polling: 200 });
+    await page.click('.rd-tab[data-tab="camera"]');
+    await page.click('.rd-chip[data-scale="1"]');
+    await page.click('.rd-chip[data-samples="64"]');
+    const offer = await page.evaluate(() => ({ traced: document.querySelector("#rd-traced")?.checked, size: window.viewport.tracedPictureSize(1) }));
+    check(offer.traced === true, "the Camera tab offers a traced picture in Path traced", offer);
+    const p0 = Date.now();
+    await page.click("#rd-take-picture");
+    await page.waitForFunction(() => window.viewport.traceStatus.picturing, null, { timeout: 10000, polling: 16 });
+    const during = await page.evaluate(() => ({ shown: window.viewport.traceStatus.shown, button: document.querySelector("#rd-take-picture")?.textContent }));
+    await page.waitForFunction(() => !!window.__saved, null, { timeout: 120000, polling: 100 });
+    const pictureMs = Date.now() - p0;
+    const pic = await page.evaluate(async () => {
+      const load = (src) => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+      const pixels = (img) => {
+        const c = document.createElement("canvas");
+        c.width = img.width; c.height = img.height;
+        const g = c.getContext("2d");
+        g.drawImage(img, 0, 0);
+        return g.getImageData(0, 0, c.width, c.height).data;
+      };
+      const traced = await load(window.__saved.href);
+      const raster = await load(window.viewport.renderStill(1, { realtime: true }));
+      const a = pixels(traced), b = pixels(raster);
+      let sum = 0, sq = 0, diff = 0;
+      const n = a.length / 4;
+      for (let i = 0; i < a.length; i += 4) {
+        const l = (a[i] + a[i + 1] + a[i + 2]) / 3;
+        sum += l; sq += l * l;
+        if (a.length === b.length) diff += Math.abs(l - (b[i] + b[i + 1] + b[i + 2]) / 3);
+      }
+      const mean = sum / n;
+      return {
+        name: window.__saved.name, w: traced.width, h: traced.height, rw: raster.width, rh: raster.height,
+        mean: +mean.toFixed(1), sd: +Math.sqrt(sq / n - mean * mean).toFixed(1), diffFromRaster: +(diff / n).toFixed(2),
+      };
+    });
+    const base64 = await page.evaluate(() => window.__saved.href.slice(window.__saved.href.indexOf(",") + 1));
+    fs.writeFileSync(path.join(OUT, "picture-traced.png"), Buffer.from(base64, "base64"));
+    const after = await page.waitForFunction(() => (window.viewport.traceStatus.samples > 0 && !window.viewport.traceStatus.picturing ? window.viewport.traceStatus : null), null, { timeout: 30000, polling: 100 })
+      .then((h) => h.jsonValue(), (e) => ({ error: String(e) }));
+    check(during.shown === false && /Cancel/.test(during.button || ""), "the viewport shows Realtime while the picture traces", during);
+    check(pic.w === offer.size.width && pic.h === offer.size.height && pic.sd > 5 && pic.diffFromRaster > 1,
+      "a traced picture is saved at the view's size and is not the raster still", { ...pic, ms: pictureMs });
+    check(after.samples > 0 && after.shown, "the viewport traces again after the picture", after);
+    await page.click('[data-view-mode="realtime"]');
+    await page.evaluate(async () => (await import("/src/ui/workspace.ts")).setWorkspace("model"));
     await page.evaluate(async () => (await import("/src/ui/renderPrefs.ts")).setRenderPref("performanceMode", true));
     await page.waitForTimeout(300);
     s = await state();

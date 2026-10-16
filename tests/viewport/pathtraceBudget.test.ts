@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  BUDGET_STEPS, BUDGET_START, costProfile, FrameBudget, MAX_SLOTS, renderScaleFor, STEP_UP_MS, TARGET_MS,
+  BUDGET_STEPS, BUDGET_START, costProfile, FrameBudget, MAX_SLOTS, renderScaleFor, STEP_UP_MS, TARGET_MS, tracedPictureScale,
 } from "../../src/viewport/pathtrace/budget";
 
 /** A GPU whose frame time grows with the work handed to it. */
@@ -103,5 +103,13 @@ describe("path trace cost profile", () => {
     // The canvas is already drawn at CSS size, which is half the device pixels at 2x.
     expect(renderScaleFor({ cssHeight: 900, dpr: 2, discharging: false })).toBe(1);
     expect(renderScaleFor({ cssHeight: 900, dpr: 1.25, discharging: false })).toBeCloseTo(0.9375);
+  });
+
+  it("keeps a traced picture inside the pixel and texture limits", () => {
+    expect(tracedPictureScale(1400, 864, 1, 8192)).toBe(1);
+    expect(tracedPictureScale(1400, 864, 2, 8192)).toBe(2);
+    const k = tracedPictureScale(1400, 864, 4, 8192);
+    expect(1400 * k * 864 * k).toBeLessThanOrEqual(8_294_400);
+    expect(tracedPictureScale(3000, 500, 4, 8192) * 3000).toBeLessThanOrEqual(8192);
   });
 });

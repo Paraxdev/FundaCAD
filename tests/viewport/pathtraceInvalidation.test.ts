@@ -23,9 +23,11 @@ class FakeTracer implements TracerBackend {
   updateCamera() { this.calls.push("camera"); }
   reset() { this.calls.push("reset"); }
   renderSample() { return Promise.resolve(1); }
+  readonly maxTextureSize = 8192;
   setFrameBudget() {}
   setRenderScale() {}
   setCap() {}
+  picture() { return Promise.resolve(""); }
   readonly denoised = false;
   present() { return false; }
   setDenoise() {}
