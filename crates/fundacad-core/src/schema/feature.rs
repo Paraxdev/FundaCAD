@@ -502,6 +502,35 @@ feature_struct!(Thicken {
 });
 feature_struct!(Draft { faces: OneOrMany<Selector>, angle: Num, axis: Axis3 });
 
+open_enum! {
+    pub enum Hand { Right = "right", Left = "left" }
+}
+
+feature_struct!(
+    /// A helical groove (`cut`, the default) or ridge (`join`) swept along a
+    /// round face that is found again at every build. Each `profile` point is
+    /// `[into, along]` in mm: into the material from the face, and along the axis
+    /// from the profile's centre line. `pitch` is the axial distance between
+    /// neighbouring grooves, the lead is `pitch * starts`. `axis` only says which
+    /// way the face runs, `offset` and `length` are measured from its first end
+    /// that way. `clearance` moves the whole thread that far into the material.
+    /// `spec` belongs to the tool that wrote the feature and is never read here.
+    Thread {
+        face: Selector,
+        profile: Vec<[Real; 2]>,
+        pitch: Num,
+        #[serde(default, skip_serializing_if = "Option::is_none")] starts: Option<Num>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] hand: Option<Hand>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] axis: Option<Vec3>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] offset: Option<Num>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] length: Option<Num>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] clearance: Option<Num>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] operation: Option<Operation>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] body: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] spec: Option<Value>,
+    }
+);
+
 feature_struct!(
     /// A dimension left out comes from `size` (features/holeStandards.ts).
     Hole {
@@ -665,6 +694,7 @@ tagged_enum! {
         Thicken(Thicken) = "thicken",
         Draft(Draft) = "draft",
         Hole(Hole) = "hole",
+        Thread(Thread) = "thread",
         PatternRect(PatternRect) = "patternRect",
         PatternLinear(PatternLinear) = "patternLinear",
         PatternCircular(PatternCircular) = "patternCircular",
@@ -709,6 +739,7 @@ macro_rules! each_known {
             Feature::Thicken($f) => $e,
             Feature::Draft($f) => $e,
             Feature::Hole($f) => $e,
+            Feature::Thread($f) => $e,
             Feature::PatternRect($f) => $e,
             Feature::PatternLinear($f) => $e,
             Feature::PatternCircular($f) => $e,

@@ -502,6 +502,14 @@ export type CoreFeature =
       cbDiameter?: Num; cbDepth?: Num; csDiameter?: Num; csAngle?: Num; leadIn?: Num;
       drillPoint?: boolean; flip?: boolean; tapped?: boolean;
     }
+  // A helical groove (cut) or ridge (join) along a round face, found again at
+  // every build. `profile` points are [into the material, along the axis] mm.
+  // `spec` is the Thread tool's own record of the standard size it picked.
+  | {
+      id: string; type: "thread"; face: Selector; profile: [number, number][]; pitch: Num;
+      starts?: Num; hand?: "right" | "left"; axis?: Vec3; offset?: Num; length?: Num;
+      clearance?: Num; operation?: "cut" | "join"; body?: string; spec?: Record<string, unknown>; name?: string;
+    }
   // Patterns union their copies. `bodies` absent means the active body.
   // `features` repeats those features' cuts and joins instead of a body
   // (mutually exclusive with `bodies`): each copy of the feature's tool is
@@ -578,7 +586,7 @@ const CORE_FEATURE_TYPES = {
   loft: true, mechanism: true, mirror: true, move: true, offsetFace: true, patternCircular: true,
   patternLinear: true, patternRect: true, "press-pull": true, removeBody: true, revolve: true, scale: true,
   shell: true, simplifyMesh: true, sketch: true, sphere: true, split: true, sweep: true,
-  thicken: true, torus: true,
+  thicken: true, thread: true, torus: true,
 } as const satisfies Record<FeatureType, true>;
 
 export function isCoreFeatureType(type: string): type is FeatureType {

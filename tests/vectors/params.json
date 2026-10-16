@@ -282,6 +282,7 @@
     "offsetFace": [["distance", "length"]],
     "thicken": [["thickness", "length"]],
     "draft": [["angle", "angle"]],
+    "thread": [["pitch", "length"], ["starts", "count"], ["offset", "length"], ["length", "length"], ["clearance", "length"]],
     "hole": [["diameter", "length"], ["depth", "length"], ["cbDiameter", "length"], ["cbDepth", "length"], ["csDiameter", "length"], ["csAngle", "angle"], ["leadIn", "length"]],
     "patternRect": [["countX", "count"], ["countY", "count"], ["spacingX", "length"], ["spacingY", "length"]],
     "patternLinear": [["count", "count"], ["spacing", "length"]],
@@ -295,5 +296,5 @@
     "duplicate": [["dx", "length"], ["dy", "length"], ["dz", "length"], ["rx", "angle"], ["ry", "angle"], ["rz", "angle"]]
   },
   "commonNumFields": [["activeWhen", "count"]],
-  "intFields": { "sides": 3, "count": 1, "countX": 1, "countY": 1, "rings": 1, "seed": "-Infinity" }
+  "intFields": { "sides": 3, "count": 1, "countX": 1, "countY": 1, "rings": 1, "starts": 1, "seed": "-Infinity" }
 }

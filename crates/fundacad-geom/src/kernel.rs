@@ -907,3 +907,8 @@ pub fn screw_sweep(
         lefthand,
     ))
 }
+
+/// True when `p` lies strictly inside the solid `s`.
+pub fn point_inside(s: &Shape, p: [f64; 3], tol: f64) -> bool {
+    opencascade_sys::plugin_ops::po_classify(s.raw(), p[0], p[1], p[2], tol) == 0
+}

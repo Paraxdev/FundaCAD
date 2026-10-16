@@ -444,6 +444,58 @@
    },
    "notes": "Sizes are M2 to M10; a heat-set insert preset exists for M2 to M5 and is always blind. A through hole reaches past the far side of the body."
   },
+  "thread": {
+    "summary": "A helical thread groove (cut) or ridge (join) along a round face, a shaft or a bore. The face is found again at every build, so the thread follows the hole or shaft when its diameter changes.",
+    "fields": {
+      "face": "Selector naming ONE round face, {\"kind\":\"face\", \"by\":\"nearest\", \"point\":[x,y,z], \"body\":\"body1\"} with the point on the face",
+      "profile": "list of [into, along] points in mm, a closed outline: `into` is the distance into the material from the face (negative is out of it), `along` the axial distance from the profile's centre line. Run it a little out of the material so the flanks cross the face. Must be narrower along the axis than `pitch`",
+      "pitch": "Num, axial distance between neighbouring grooves in mm; the lead is pitch times starts",
+      "starts": "Num, 1 (default) to 8 interleaved threads",
+      "hand": "\"right\" (default) or \"left\"",
+      "axis": "optional [x,y,z], which way along the face `offset` and `length` run",
+      "offset": "Num, where the thread starts from the face's first end, default 0",
+      "length": "Num, threaded length, default to the face's far end",
+      "clearance": "Num, radial mm the whole thread moves into the material, a print fit; default 0",
+      "operation": "\"cut\" (default) or \"join\"",
+      "body": "optional body id",
+      "spec": "optional object the tool that wrote the feature keeps (system, size, fit); never read by the build"
+    },
+    "example": {
+      "id": "th1",
+      "type": "thread",
+      "face": {
+        "kind": "face",
+        "by": "nearest",
+        "point": [
+          3,
+          0,
+          0
+        ],
+        "body": "body1"
+      },
+      "profile": [
+        [
+          -0.05,
+          -0.466
+        ],
+        [
+          0.613,
+          -0.083
+        ],
+        [
+          0.613,
+          0.083
+        ],
+        [
+          -0.05,
+          0.466
+        ]
+      ],
+      "pitch": 1,
+      "hand": "right"
+    },
+    "note": "An end of the face with no material beyond it lets the thread run out past it; an end against a shoulder or a blind bottom stops it at the face. A 60 degree external groove is 17H/24 deep (H = 0.866 pitch) with a pitch/8 crest, an internal one cut from the tap drill is 5H/8 deep; trapezoidal Tr is pitch/2 + ac deep with 15 degree flanks."
+  },
   "thicken": {
    "summary": "Give a surface (or a set of faces) a thickness.",
    "fields": {
