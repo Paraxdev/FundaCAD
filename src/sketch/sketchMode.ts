@@ -833,6 +833,7 @@ export class SketchMode {
         : shapes.some((pts) => touches(e.type === "text" ? [...pts, pts[0]!, pts[1]!] : pts));
       if (hit) next.add(e.id);
     }
+    for (const id of next) if (!base.has(id)) this.pickedAt.delete(id);
     const same = next.size === this.selected.size && [...next].every((id) => this.selected.has(id));
     if (same) return;
     this.selected = next;
@@ -861,6 +862,7 @@ export class SketchMode {
    * dimension labels. Called when the entity list changes, and on drag end. */
   private refreshActive() {
     this.entityVersion++; // bump guards in-flight constraint solves against staleness
+    for (const id of this.pickedAt.keys()) if (!this.selected.has(id)) this.pickedAt.delete(id);
     // current zoom → mm-per-pixel, so dimension badges keep screen clearance
     // from the geometry they label (they're click targets in the select tool)
     setDimPixelScale(this.planeMmPerPx());
