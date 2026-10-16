@@ -102,7 +102,7 @@ Hover over an underlined word anywhere in the manual to see its meaning from thi
 
 **Bloom.** A soft halo around bright areas that does not light other objects.
 
-**Glow.** A material setting that makes a body give off light.
+**Emission.** A material setting that makes a body give off light. It is a heavy effect on a large model.
 
 **Material.** The finish of a body in the Render workspace.
 

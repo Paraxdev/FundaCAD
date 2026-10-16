@@ -26,6 +26,7 @@ import { materialPreview, onPreviewsChanged } from "../../viewport/materialPrevi
 import { isRenderLowPower } from "../../viewport/render";
 import { beginMaterialDrag, endMaterialDrag, MATERIAL_MIME } from "../../ui/materialDrag";
 import { onRenderPrefsChange, renderPrefs } from "../../ui/renderPrefs";
+import { emissionProgress, onEmissionProgress } from "../../ui/emissionProgress";
 import SurfaceNodeEditor from "./SurfaceNodeEditor.vue";
 import { contextMenu, type CtxItem } from "../../ui/menu";
 import { choose } from "../../ui/choice";
@@ -40,13 +41,16 @@ const browser = useBrowserStore();
  *  import plus a cubemap) and every swatch is worth asking for again. */
 const previewTick = ref(0);
 const bloomOn = ref(renderPrefs().bloom > 0);
+const emitting = ref(emissionProgress());
 let offPreview: (() => void) | null = null;
 let offPrefs: (() => void) | null = null;
+let offEmission: (() => void) | null = null;
 onMounted(() => {
   offPreview = onPreviewsChanged(() => { previewTick.value++; });
   offPrefs = onRenderPrefsChange(() => { bloomOn.value = renderPrefs().bloom > 0; });
+  offEmission = onEmissionProgress((p) => { emitting.value = p; });
 });
-onUnmounted(() => { offPreview?.(); offPrefs?.(); });
+onUnmounted(() => { flushNumbers(); offPreview?.(); offPrefs?.(); offEmission?.(); });
 
 function preview(m: MaterialDef): string | null {
   previewTick.value; // dependency: re-ask once the reflections land
@@ -245,6 +249,29 @@ function set(
   }
   const n = Number.parseFloat(raw);
   if (Number.isFinite(n)) store.updateMaterial(m.id, { [field]: n });
+}
+
+// A slider fires input faster than frames, and an emission edit restyles every
+// body wearing the material, so a drag lands as at most one edit per frame.
+function slide(field: "emissive", raw: string) {
+  const m = selected.value;
+  const n = Number.parseFloat(raw);
+  if (m && Number.isFinite(n)) setNumber(m.id, field, n);
+}
+let pendingNumbers: { id: string; patch: Record<string, number> } | null = null;
+let numbersFrame = 0;
+function setNumber(id: string, field: string, n: number) {
+  if (pendingNumbers && pendingNumbers.id !== id) flushNumbers();
+  pendingNumbers ??= { id, patch: {} };
+  pendingNumbers.patch[field] = n;
+  numbersFrame ||= requestAnimationFrame(flushNumbers);
+}
+function flushNumbers() {
+  if (numbersFrame) cancelAnimationFrame(numbersFrame);
+  numbersFrame = 0;
+  const p = pendingNumbers;
+  pendingNumbers = null;
+  if (p) store.updateMaterial(p.id, p.patch);
 }
 
 // Transmission is how the panel names the see-through amount; the document keeps it as opacity.
@@ -518,19 +545,31 @@ async function doImport() {
         />
       </label>
       <label class="prefs-row">
-        <span class="prefs-label">Glow</span>
+        <span class="prefs-label rd-heavy-label">
+          Emission
+          <span
+            class="rd-heavy"
+            data-heavy="emissive"
+            title="Heavy effect: every glowing body adds lights and shadows, which can slow the view on a large model."
+          ><Icon name="warning" :size="13" /></span>
+        </span>
         <input
           class="sm-slider"
           type="range" min="0" max="1" step="0.01"
+          data-field="emissive"
           :value="finishOf(selected).emissive"
-          @input="set('emissive', ($event.target as HTMLInputElement).value)"
+          @input="slide('emissive', ($event.target as HTMLInputElement).value)"
+          @change="flushNumbers()"
         />
       </label>
+      <div v-if="emitting !== null" class="rd-emitting" role="progressbar" aria-label="Applying emission" :aria-valuenow="Math.round(emitting * 100)">
+        <span class="rd-emitting-bar" :style="{ width: `${Math.round(emitting * 100)}%` }" />
+      </div>
       <!-- Only where it applies. Bloom is what makes a glow read as light rather
            than as a flat bright patch, and a slider that quietly depends on a
            setting on another tab is a slider that looks broken. -->
       <div v-if="finishOf(selected).emissive > 0 && !bloomOn" class="sm-hint">
-        Glow is on for this material. Turn Bloom on under Environment to see it
+        Emission is on for this material. Turn Bloom on under Environment to see it
         spill light.
       </div>
       <label class="prefs-row">

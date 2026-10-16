@@ -108,7 +108,7 @@ export function bloomSettings(amount: number): { strength: number; radius: numbe
   return { strength: a * 0.85, radius: 0.3 + a * 0.3, threshold: 2.0 - a * 1.2 };
 }
 
-/** What the material's 0..1 Glow slider means in the renderer.
+/** What the material's 0..1 Emission slider means in the renderer.
  *
  *  Not 1:1. `emissiveIntensity` is a multiplier on a linear colour, so a slider
  *  that stopped at 1 could never push a mid-tone colour past the bloom threshold
