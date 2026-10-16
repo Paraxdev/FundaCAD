@@ -149,11 +149,12 @@ describe("migrateDocument", () => {
     // content hash carried in the container); v6 added `rectangle.angle`; v7
     // added `datumPlane.face`; v8 re-read `extrude.regions` as the area under
     // the point rather than the whole profile; v9 rewrote `combine` features as
-    // `boolean`. A v3 document still passes through migrateDocument untouched by
+    // `boolean`; v10 added datum references. A v3 document still passes
+    // through migrateDocument untouched by
     // any of them: `brep` is still READ, an absent angle already means 0, an
     // absent face reference already means the datum keeps the plane it was
     // given, v8 rewrites no data at all, and this document has no combine in it.
-    expect(FORMAT_VERSION).toBe(9);
+    expect(FORMAT_VERSION).toBe(10);
     const doc = v1({
       version: 3,
       features: [{ id: "f1", type: "sketch", plane: "XY", entities: [
