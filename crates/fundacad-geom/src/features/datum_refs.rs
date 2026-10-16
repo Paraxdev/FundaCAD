@@ -141,7 +141,7 @@ impl<'c> Look<'c> {
                 let hint = point.as_ref().map(|p| DVec3::new(p[0].get(), p[1].get(), p[2].get()));
                 self.edge(edge).and_then(|e| e.as_edge()).map(|e| {
                     let (a, b) = (e.position_at(frac), e.position_at(1.0 - frac));
-                    match hint {
+                    match hint.map(|h| h + moved_by(&e, edge)) {
                         Some(h) if b.distance(h) < a.distance(h) => b,
                         _ => a,
                     }
@@ -282,6 +282,16 @@ pub fn plane_through(ctx: &mut Ctx, f: &DatumPlane, through: &PlaneThrough) -> F
         lost(ctx, &f.id, look.done(), "Plane");
     }
     Ok(found)
+}
+
+/// How far the edge's middle has moved since its fingerprint was taken, so a
+/// point recorded then can be compared with the edge where it is now.
+fn moved_by(e: &opencascade::primitives::Edge, sel: &Selector) -> DVec3 {
+    fp_vec(sel, "mid").map_or(DVec3::ZERO, |mid| e.position_at(0.5) - mid)
+}
+
+fn fp_vec(sel: &Selector, key: &str) -> Option<DVec3> {
+    serde_json::to_value(sel).ok()?.get("fp")?.get(key).and_then(arr3)
 }
 
 fn nearest_fraction(e: &opencascade::primitives::Edge, p: DVec3) -> f64 {
