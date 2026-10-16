@@ -60,7 +60,8 @@ import {
   choiceFieldsFor,
   choiceValue,
   fieldApplies,
-  datumChoices,
+  datumChoiceIsNoOp,
+  datumChoiceRow,
   fieldLabel,
   fileFieldsFor,
   fileValue,
@@ -298,7 +299,7 @@ const choiceRows = useDocValue(() => {
         ? { ...c, ...patternAxisChoice(f, store.document.features) }
         : f.type === "mechanism" && c.field === "drive"
           ? { ...c, ...mechanismDriveChoice(values) }
-          : { ...c, options: datumChoices(c.field, store.document.features) ?? c.options, current: choiceValue(f, c) },
+          : { ...c, ...(datumChoiceRow(f, c.field, store.document.features) ?? { current: choiceValue(f, c) }) },
     );
 });
 
@@ -321,6 +322,7 @@ const toggleRows = useDocValue(() => {
 });
 
 function setOption(field: string, value: string | boolean) {
+  if (datumChoiceIsNoOp(field, value)) return;
   let patch: Record<string, unknown> = { [field]: value };
   const f = store.document.features.find((x) => x.id === props.featureId);
   if (f?.type === "patternCircular" && field === "axis") {

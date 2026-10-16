@@ -1,5 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { choiceFieldsFor, datumChoices, fieldApplies, fieldLabel, toggleFieldsFor } from "../../src/document/optionFields";
+import {
+  choiceFieldsFor,
+  datumChoiceIsNoOp,
+  datumChoiceRow,
+  datumChoices,
+  fieldApplies,
+  fieldLabel,
+  PICKED_POINT,
+  toggleFieldsFor,
+} from "../../src/document/optionFields";
 import type { Feature } from "../../src/types";
 
 describe("fillet and chamfer option rows", () => {
@@ -46,5 +55,34 @@ describe("extrude start and end values", () => {
     expect(datumChoices("upToPlane", feats)?.map((o) => o.value)).toEqual(["XY", "XZ", "YZ", "dp1"]);
     expect(datumChoices("startPoint", feats)?.map((o) => o.label)).toEqual(["pt1"]);
     expect(datumChoices("distance", feats)).toBeNull();
+  });
+
+  it("shows the datum plane or point an extrude holds, never a stand in", () => {
+    const ex = (v: Record<string, unknown>) => ({ id: "ex", type: "extrude", sketch: "sk", distance: 2, ...v });
+    const docOf = (e: Record<string, unknown>) => [
+      { id: "dp1", type: "datumPlane", plane: "XY" },
+      { id: "pt1", type: "datumPoint", point: [0, 0, 1] },
+      e,
+      { id: "dp2", type: "datumPlane", plane: "XZ" },
+    ] as unknown as Feature[];
+    const row = (v: Record<string, unknown>, field: string) => {
+      const e = ex(v);
+      return datumChoiceRow(e as unknown as Feature, field, docOf(e));
+    };
+    expect(row({ startType: "plane", startPlane: "dp1" }, "startPlane")?.current).toBe("dp1");
+    expect(row({ endType: "upToPoint", upToPoint: "pt1" }, "upToPoint")?.current).toBe("pt1");
+    expect(row({ endType: "upToPlane" }, "upToPlane")?.current).toBe("");
+    expect(row({ startType: "point" }, "startPoint")?.current).toBe("");
+    expect(row({ startType: "plane", startPlane: "dp1" }, "startPlane")?.options.map((o) => o.value))
+      .toEqual(["XY", "XZ", "YZ", "dp1"]);
+    const picked = row({ endType: "upToPoint", upToPoint: { point: [1, 2, 3], body: "body1" } }, "upToPoint");
+    expect(picked?.current).toBe(PICKED_POINT);
+    expect(picked?.options.some((o) => o.value === PICKED_POINT)).toBe(true);
+    const gone = row({ endType: "upToPlane", upToPlane: "dp9" }, "upToPlane");
+    expect(gone?.current).toBe("dp9");
+    expect(row({}, "distance")).toBeNull();
+    expect(datumChoiceIsNoOp("upToPoint", PICKED_POINT)).toBe(true);
+    expect(datumChoiceIsNoOp("startPlane", "")).toBe(true);
+    expect(datumChoiceIsNoOp("startPlane", "dp1")).toBe(false);
   });
 });
