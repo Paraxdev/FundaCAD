@@ -61,7 +61,8 @@ done
 # crates/fundacad-geom/tests/rhino/gen_3dm.py, the DXF drawings written by
 # crates/fundacad-geom/tests/dxf/gen_dxf.py, the FBX scenes written by
 # crates/fundacad-geom/tests/fbx/gen_fbx.py and gen_fbx_blender.py, the 3DS scenes written by
-# crates/fundacad-geom/tests/threeds/gen_3ds.py, the IFC fixtures written by hand
+# crates/fundacad-geom/tests/threeds/gen_3ds.py, the SVG drawings written by
+# crates/fundacad-geom/tests/svg/gen_svg.py (and the app's own icons and brand art), the IFC fixtures written by hand
 # or taken from ifc-lite's public test models,
 # and third_party sample
 # models that ship with vendored code. The stress samples in examples/stress
@@ -69,8 +70,8 @@ done
 # something to open. Add to this list only for files that are genuinely
 # synthetic or already public.
 echo "checking for tracked CAD models…"
-models=$(git ls-files -- '*.funda' '*.fundab' '*.neocad' '*.sindri' '*.3mf' '*.stl' '*.step' '*.stp' '*.igs' '*.iges' '*.FCStd' '*.fcstd' '*.stpz' '*.gz' '*.xbf' '*.3dm' '*.ifc' '*.dxf' '*.fbx' '*.3ds' 2>/dev/null \
-  | grep -vE '^(tests/fixtures/textured_box\.funda$|tests/fixtures/asm_[a-z_]+\.step$|tests/fixtures/loose_faces_[a-z_]+\.step$|tests/fixtures/inside_out_[a-z_]+\.step$|tests/fixtures/heal_edge_off\.step$|tests/fixtures/(two_parts_mode[01]|face_soup)\.igs$|tests/fixtures/(plate|bracket)\.FCStd$|tests/fixtures/asm_colors(\.stpz|_zip\.stpz|\.step\.gz)$|tests/fixtures/(two_parts(_m)?|shared_inch)\.xbf$|tests/fixtures/rhino_[a-z_]+\.3dm$|tests/fixtures/ifc_[a-z_]+\.ifc$|tests/fixtures/dxf_[a-z_0-9]+\.dxf$|tests/fixtures/fbx_[a-z_0-9]+\.fbx$|tests/fixtures/threeds_[a-z_0-9]+\.3ds$|examples/stress/[a-z0-9-]+\.funda$|third_party/)' || true)
+models=$(git ls-files -- '*.funda' '*.fundab' '*.neocad' '*.sindri' '*.3mf' '*.stl' '*.step' '*.stp' '*.igs' '*.iges' '*.FCStd' '*.fcstd' '*.stpz' '*.gz' '*.xbf' '*.3dm' '*.ifc' '*.dxf' '*.fbx' '*.3ds' '*.svg' 2>/dev/null \
+  | grep -vE '^(tests/fixtures/textured_box\.funda$|tests/fixtures/asm_[a-z_]+\.step$|tests/fixtures/loose_faces_[a-z_]+\.step$|tests/fixtures/inside_out_[a-z_]+\.step$|tests/fixtures/heal_edge_off\.step$|tests/fixtures/(two_parts_mode[01]|face_soup)\.igs$|tests/fixtures/(plate|bracket)\.FCStd$|tests/fixtures/asm_colors(\.stpz|_zip\.stpz|\.step\.gz)$|tests/fixtures/(two_parts(_m)?|shared_inch)\.xbf$|tests/fixtures/rhino_[a-z_]+\.3dm$|tests/fixtures/ifc_[a-z_]+\.ifc$|tests/fixtures/dxf_[a-z_0-9]+\.dxf$|tests/fixtures/fbx_[a-z_0-9]+\.fbx$|tests/fixtures/threeds_[a-z_0-9]+\.3ds$|tests/fixtures/svg_[a-z_0-9]+\.svg$|src/assets/|assets/brand/|examples/stress/[a-z0-9-]+\.funda$|third_party/)' || true)
 if [ -n "$models" ]; then
   note "tracked CAD model — is this a real part in a public repo?:"
   printf '%s\n' "$models" | sed 's/^/    /'
