@@ -35,6 +35,43 @@
       "1/2": { "d": 0.5, "unc": 13, "unf": 20 }
     }
   },
+  "trapezoidal": {
+    "standard": "ISO 2903 / ISO 2904",
+    "units": "mm",
+    "ac": [[1.5, 0.15], [5, 0.25], [12, 0.5], [44, 1]],
+    "sizes": {
+      "Tr8": { "d": 8, "pitch": 1.5, "other": [2] },
+      "Tr10": { "d": 10, "pitch": 2, "other": [1.5] },
+      "Tr12": { "d": 12, "pitch": 3, "other": [2] },
+      "Tr14": { "d": 14, "pitch": 3, "other": [2] },
+      "Tr16": { "d": 16, "pitch": 4, "other": [2] },
+      "Tr18": { "d": 18, "pitch": 4, "other": [2] },
+      "Tr20": { "d": 20, "pitch": 4, "other": [2] },
+      "Tr22": { "d": 22, "pitch": 5, "other": [3] },
+      "Tr24": { "d": 24, "pitch": 5, "other": [3] },
+      "Tr26": { "d": 26, "pitch": 5, "other": [3] },
+      "Tr28": { "d": 28, "pitch": 5, "other": [3] },
+      "Tr30": { "d": 30, "pitch": 6, "other": [3] },
+      "Tr32": { "d": 32, "pitch": 6, "other": [3] },
+      "Tr36": { "d": 36, "pitch": 6, "other": [3] },
+      "Tr40": { "d": 40, "pitch": 7, "other": [3] }
+    }
+  },
+  "acme": {
+    "standard": "ASME B1.5 general purpose",
+    "units": "in",
+    "sizes": {
+      "1/4": { "d": 0.25, "tpi": 16 },
+      "5/16": { "d": 0.3125, "tpi": 14 },
+      "3/8": { "d": 0.375, "tpi": 12 },
+      "7/16": { "d": 0.4375, "tpi": 12 },
+      "1/2": { "d": 0.5, "tpi": 10 },
+      "5/8": { "d": 0.625, "tpi": 8 },
+      "3/4": { "d": 0.75, "tpi": 6 },
+      "7/8": { "d": 0.875, "tpi": 6 },
+      "1": { "d": 1, "tpi": 5 }
+    }
+  },
   "tapping": {
     "standard": "ISO 1478",
     "units": "mm",
