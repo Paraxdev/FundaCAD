@@ -13,6 +13,7 @@ use super::dxf::MAX_SKETCH_ENTITIES;
 use super::heal2d::{self, Filled, Seg, Sub, P};
 
 const MAX_USE_DEPTH: usize = 16;
+const MAX_ELEMENTS: usize = 200_000;
 const SVG_NS: &str = "http://www.w3.org/2000/svg";
 const INKSCAPE_NS: &str = "http://www.inkscape.org/namespaces/inkscape";
 
@@ -180,6 +181,7 @@ struct Ctx<'a> {
     paint_urls: usize,
     colours: HashSet<String>,
     curves: usize,
+    elements: usize,
 }
 
 struct Group {
@@ -229,6 +231,10 @@ impl<'a> Ctx<'a> {
         }
         if self.prop(n, "display").as_deref() == Some("none") {
             return Ok(());
+        }
+        self.elements += 1;
+        if self.elements > MAX_ELEMENTS {
+            return Err(format!("this SVG expands to more than {MAX_ELEMENTS} elements through <use>"));
         }
         let tag = n.tag_name().name();
         match tag {
@@ -635,6 +641,7 @@ pub fn read_svg(data: &[u8]) -> Result<SvgRead, String> {
         paint_urls: 0,
         colours: HashSet::new(),
         curves: 0,
+        elements: 0,
     };
     let m = root_matrix(root);
     let base = Style { fill: Paint::Color("black".into()), evenodd: false, stroke: false, visible: true };
