@@ -26,7 +26,7 @@ export function createDatumPlanes(
   /** Where a datum's REFERENCE is right now, before its own pose.
    *
    *  A parent datum is resolved here, recursively, so moving the parent moves
-   *  the child's quad on the same frame. A face is only known to the engine: the
+   *  the child's quad on the same frame. A face or `through` is only known to the engine: the
    *  last rebuild's placement has the pose backed out, which keeps the pose a
    *  LOCAL edit, a drag moves the quad without waiting for a rebuild. A plain
    *  reference is the feature's own `plane`. */
@@ -34,7 +34,7 @@ export function createDatumPlanes(
     seen.add(f.id);
     const parent = parentOf(f);
     if (parent && !seen.has(parent.id)) return datumPlaneDefIn(parent, seen);
-    const placed = f.face ? e.store.buildState.result?.datumPlanes?.[f.id] : undefined;
+    const placed = f.face || f.through ? e.store.buildState.result?.datumPlanes?.[f.id] : undefined;
     return placed ? sourceOfPlaced(placed, poseFor(f)) : f.plane;
   };
 

@@ -419,11 +419,15 @@ export type CoreFeature =
       name?: string;
       face?: Selector;
       at?: Vec3;
+      // Model references the engine rebuilds the plane from, `plane` the cache.
+      through?: PlaneThrough;
+      t?: Num;
+      angle?: Num;
     }
-  // A baked point, not re-resolved on rebuild; drawn client-side.
-  | { id: string; type: "datumPoint"; point: Vec3; name?: string }
-  // An infinite line (`dir` need not be unit). `axisEdge` makes it follow an edge.
-  | { id: string; type: "datumAxis"; origin: Vec3; dir: Vec3; name?: string; axisEdge?: Selector }
+  // `at` makes the point follow the model, `point` being the cache.
+  | { id: string; type: "datumPoint"; point: Vec3; name?: string; at?: PointAt }
+  // An infinite line (`dir` need not be unit). `axisEdge` or `through` makes it follow the model.
+  | { id: string; type: "datumAxis"; origin: Vec3; dir: Vec3; name?: string; axisEdge?: Selector; through?: AxisThrough }
   // An imported body, embedded so the file rebuilds without the original. `solid` is
   // false for a non-watertight mesh.
   | {
@@ -544,6 +548,22 @@ export interface PluginFeature {
 }
 
 /** `f.type === "sketch"` cannot narrow away PluginFeature's string type; use isFeature. */
+export type PlaneOf = { face: Selector } | { plane: string };
+export type PointAt =
+  | { edge: Selector; end?: "start" | "end" | "mid"; t?: Num; point?: Vec3 }
+  | { face: Selector }
+  | { datum: string };
+export type PlaneThrough =
+  | { kind: "mid"; a: PlaneOf; b: PlaneOf }
+  | { kind: "points"; points: PointAt[] }
+  | { kind: "normalToEdge"; edge: Selector; vertex?: PointAt }
+  | { kind: "twoEdges"; a: Selector; b: Selector }
+  | { kind: "angle"; edge: Selector; from: PlaneOf };
+export type AxisThrough =
+  | { kind: "points"; a: PointAt; b: PointAt }
+  | { kind: "cylinder"; face: Selector }
+  | { kind: "planes"; a: PlaneOf; b: PlaneOf };
+
 export type Feature = CoreFeature | PluginFeature;
 
 /** The `type` of a feature the APPLICATION defines. A plugin's is just a string. */
