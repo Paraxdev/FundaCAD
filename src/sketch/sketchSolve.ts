@@ -365,13 +365,15 @@ export async function compileAndSolve(
       if (p && isRound(c.circle)) cons.push({ id, type: "rimPoint", p, round: c.circle, value: c.value });
     }
     else if (c.type === "tangent") { if (isLine(c.line) && isCircle(c.circle)) cons.push({ id, type: "tangentLC", line: c.line, circle: c.circle }); }
+    // A join already fused into one solver point by the position merge would be
+    // p2p_coincident(P, P), which planegcs reports as redundant (over-defined).
     else if (c.type === "coincident") {
       const a = endpointPoint(c.e1, c.p1), b = endpointPoint(c.e2, c.p2);
-      if (a && b) cons.push({ id, type: "coincident", a, b });
+      if (a && b && a !== b) cons.push({ id, type: "coincident", a, b });
     }
     else if (c.type === "concentric") {
       const a = centerPoint(c.c1), b = centerPoint(c.c2);
-      if (a && b) cons.push({ id, type: "coincident", a, b });
+      if (a && b && a !== b) cons.push({ id, type: "coincident", a, b });
     }
     else if (c.type === "midpoint") {
       const p = endpointPoint(c.e, c.p);

@@ -15,10 +15,9 @@
 // chain drawn end to end is genuinely joined with nothing recorded anywhere,
 // the corner holds, and there is no constraint, no glyph, and nothing in the
 // saved file to say so. Those are listed below as IMPLIED: real, load-bearing,
-// and not deletable, because there is no record to delete. Writing coincident
-// constraints for them instead would be redundant with the merge, which is
-// what the over-defined diagnosis is for (tests/sketch/coincidence.test.ts
-// measures all three cases in degrees of freedom).
+// and not deletable, because there is no record to delete. A join drawn with
+// Snap on records a coincident as well, which the merge absorbs (see
+// tests/sketch/coincidence.test.ts), and is listed once, as that record.
 //
 // Pure: entities and constraints in, rows out. No DOM, no store, no viewport.
 
@@ -91,7 +90,7 @@ export function entityLabel(ents: ResolvedEntity[], id: string): string | null {
  *  The same key the solver merges on, deliberately: a list that used its own
  *  idea of "attached" would show joins the solver does not hold and miss ones
  *  it does. Only groups of two or more count, a lone endpoint is not a join. */
-export function impliedJoins(ents: ResolvedEntity[]): RelationRow[] {
+export function impliedJoins(ents: ResolvedEntity[], recorded: readonly SketchConstraint[] = []): RelationRow[] {
   const at = new Map<string, string[]>();
   const add = (x: number, y: number, id: string) => {
     const k = coincKey(x, y);
@@ -117,7 +116,7 @@ export function impliedJoins(ents: ResolvedEntity[]): RelationRow[] {
   }
   const out: RelationRow[] = [];
   for (const ids of at.values()) {
-    if (ids.length < 2) continue;
+    if (ids.length < 2 || joinedByRecords(ids, recorded)) continue;
     out.push({
       index: null,
       icon: "coincident",
@@ -129,6 +128,19 @@ export function impliedJoins(ents: ResolvedEntity[]): RelationRow[] {
     });
   }
   return out;
+}
+
+/** Whether recorded coincidents between these ids already tie all of them together. */
+function joinedByRecords(ids: string[], recorded: readonly SketchConstraint[]): boolean {
+  const reached = new Set([ids[0]]);
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const c of recorded) {
+      if (c.type !== "coincident" || !ids.includes(c.e1) || !ids.includes(c.e2)) continue;
+      if (reached.has(c.e1) !== reached.has(c.e2)) { reached.add(c.e1); reached.add(c.e2); grew = true; }
+    }
+  }
+  return ids.every((id) => reached.has(id));
 }
 
 /** Every recorded constraint on the sketch, in the order they were added. */
@@ -164,7 +176,7 @@ export function relationRows(
   conflicts: Set<number>,
   over: Set<number>,
 ): RelationRow[] {
-  return [...constraintRows(ents, constraints, conflicts, over), ...impliedJoins(ents)];
+  return [...constraintRows(ents, constraints, conflicts, over), ...impliedJoins(ents, constraints)];
 }
 
 /** How the degrees-of-freedom count reads to a person.

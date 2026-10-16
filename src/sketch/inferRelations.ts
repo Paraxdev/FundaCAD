@@ -41,6 +41,10 @@ export interface InferResult {
 
 const ANCHORED: ReadonlySet<SnapKind> = new Set(["endpoint", "midpoint", "center", "control", "curve"]);
 
+/** Whether the cursor tag names a relation: the join at the start of a line is
+ *  already drawn, so the tag only names what the end takes. */
+export const tagged = (c: SketchConstraint) => !(c.type === "coincident" && c.p1 === 0);
+
 function glyphOf(c: SketchConstraint): string {
   switch (c.type) {
     case "pointOnCurve": return "coincident";
@@ -79,11 +83,12 @@ function along(start: THREE.Vector2, dir: THREE.Vector2, q: THREE.Vector2): THRE
   return new THREE.Vector2(start.x + dir.x * t, start.y + dir.y * t);
 }
 
-/** A point relation for an endpoint that snapped to a midpoint or onto a curve. */
+/** A point relation for an endpoint that snapped to a point, a midpoint or onto a curve. */
 export function pointRelation(id: string, p: number, ref: SnapRef | null | undefined, entities: readonly ResolvedEntity[]): SketchConstraint | null {
   if (!ref || ref.entity === id) return null;
   const target = entities.find((e) => e.id === ref.entity);
   if (!target) return null;
+  if (typeof ref.at === "number") return { type: "coincident", e1: id, p1: p, e2: target.id, p2: ref.at };
   if (ref.at === "mid" && target.type === "line") return { type: "midpoint", e: id, p, line: target.id };
   if (ref.at === "curve" && (target.type === "line" || target.type === "circle" || target.type === "arc")) {
     return { type: "pointOnCurve", e: id, p, curve: target.id };
@@ -94,7 +99,7 @@ export function pointRelation(id: string, p: number, ref: SnapRef | null | undef
 /** The tangent continuation of a curve ending at `ref`, as a relation and the
  *  direction a new curve leaving that point has to take. */
 export function tangentFrom(id: string, ref: SnapRef | null | undefined, entities: readonly ResolvedEntity[]): { dir: THREE.Vector2; relation: SketchConstraint } | null {
-  if (!ref || typeof ref.at !== "number" || ref.entity === id) return null;
+  if (!ref || typeof ref.at !== "number" || ref.at > 1 || ref.entity === id) return null;
   const prev = entities.find((e) => e.id === ref.entity);
   if (!prev || (prev.type !== "line" && prev.type !== "arc")) return null;
   const leave = leaveDirection(prev, ref.at);
@@ -183,7 +188,7 @@ export function inferLineRelations(inp: InferLineInput): InferResult {
     }
   }
 
-  return { end, relations, glyphs: relations.map(glyphOf), hints };
+  return { end, relations, glyphs: relations.filter(tagged).map(glyphOf), hints };
 }
 
 /** The arc from `a` leaving along unit `dir` that ends at `b`, as a 3-point arc's
@@ -219,7 +224,8 @@ export function inferArcRelations(
   const a = new THREE.Vector2(arc.x1, arc.y1), b = new THREE.Vector2(arc.x2, arc.y2);
   for (const [at, ref] of [[0, refA], [1, refB]] as const) {
     const pr = pointRelation(id, at, ref, entities);
-    if (pr) { out.push(pr); continue; }
+    if (pr) out.push(pr);
+    if (pr && pr.type !== "coincident") continue;
     const tan = tangentFrom(id, ref, entities);
     const mine = leaveDirection({ type: "arc", id, ...arc, mx: mid.x, my: mid.y }, at);
     if (!tan || !mine || angleBetween(mine, tan.dir) > tolDeg) continue;

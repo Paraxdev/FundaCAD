@@ -394,7 +394,7 @@ export function candidatesFromEntities(
       // drift apart, and a snap that lands on a phantom axis-aligned corner is
       // the sort of thing you only notice after the part is wrong.
       const c = rectCorners(e.x, e.y, e.width, e.height, e.angle);
-      for (const p of c) add(p.x, p.y, "endpoint", 100);
+      c.forEach((p, k) => add(p.x, p.y, "endpoint", 100, { entity: e.id, at: k }));
       add(e.x, e.y, "center", 90);
       for (let k = 0; k < 4; k++) {
         const a = c[k]!;
@@ -402,7 +402,7 @@ export function candidatesFromEntities(
         add((a.x + b.x) / 2, (a.y + b.y) / 2, "midpoint", 80);
       }
     } else if (e.type === "circle") {
-      add(e.x, e.y, "center", 90);
+      add(e.x, e.y, "center", 90, { entity: e.id, at: 0 });
     } else if (e.type === "arc") {
       add(e.x1, e.y1, "endpoint", 100, { entity: e.id, at: 0 });
       add(e.x2, e.y2, "endpoint", 100, { entity: e.id, at: 1 });
@@ -416,7 +416,7 @@ export function candidatesFromEntities(
         add(p.x, p.y, end ? "endpoint" : "control", end ? 100 : 60);
       });
     } else if (e.type === "point") {
-      add(e.x, e.y, "endpoint", 110); // a placed point is a strong snap target
+      add(e.x, e.y, "endpoint", 110, { entity: e.id, at: 0 }); // a placed point is a strong snap target
     } else if (e.type === "projected") {
       // projected reference curves snap like their native counterparts, that's
       // half the point of projecting. Centers come from asRound (the one
