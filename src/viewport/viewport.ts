@@ -124,6 +124,7 @@ import {
 import { collectInBox, projectForArea, type AreaProjection } from "./areaProjection";
 import { isEditableTarget } from "../ui/focus";
 import { hitScale } from "../input/pointerKind";
+import { setEmissionProgress } from "../ui/emissionProgress";
 import { ShadowWatch } from "./shadowWatch";
 
 /** One box drag. The box previews by selecting every frame, so each frame starts
@@ -955,7 +956,48 @@ export class Viewport {
     addToScene: (o) => this.addToScene(o),
     requestRender: () => this.requestRender(),
     savedMats: () => this.savedMats,
+    later: (fn) => requestAnimationFrame(() => fn()),
+    prepareLights: (show, hide) => this.prepareLights(show, hide),
+    onEmitterProgress: (p) => setEmissionProgress(p),
   });
+
+  private lightTarget: THREE.WebGLRenderTarget | null = null;
+
+  /** Link the model's programs for the emitter lights as they will be, in the
+   *  driver's background threads where KHR_parallel_shader_compile allows, so
+   *  turning a glow on does not stall a frame for a second. Both targets the
+   *  scene is drawn to are covered, the canvas and the post chain's buffer,
+   *  because each gives a program of its own. Programs are polled directly:
+   *  compileAsync checks each material's current program, which the next frame
+   *  switches back to the ready one in use. */
+  private prepareLights(show: THREE.Object3D, hide: THREE.Object3D | null): Promise<void> {
+    const r = this.scene.renderer;
+    const props = (r as unknown as { properties: { get(m: THREE.Material): { currentProgram?: { isReady(): boolean } } } }).properties;
+    const programs: { isReady(): boolean }[] = [];
+    const before = r.getRenderTarget();
+    const hideWas = hide?.visible ?? false;
+    show.visible = true;
+    if (hide) hide.visible = false;
+    try {
+      for (const target of [null, (this.lightTarget ??= new THREE.WebGLRenderTarget(1, 1))]) {
+        r.setRenderTarget(target);
+        for (const m of r.compile(this.scene.scene, this.rig.active)) {
+          const p = props.get(m).currentProgram;
+          if (p) programs.push(p);
+        }
+      }
+    } catch (e) {
+      console.warn("[viewport] emitter light programs could not be linked ahead:", e);
+    } finally {
+      r.setRenderTarget(before);
+      show.visible = false;
+      if (hide) hide.visible = hideWas;
+    }
+    return new Promise((resolve) => {
+      const poll = () => (programs.every((p) => p.isReady()) ? resolve() : setTimeout(poll, 16));
+      poll();
+    });
+  }
 
   private peek: ReadonlySet<string> = new Set();
   private peekAt: (() => Iterable<string>) | null = null;
