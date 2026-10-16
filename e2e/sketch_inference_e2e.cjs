@@ -6,6 +6,8 @@
 //      one ending on a circle; Ctrl+Z takes the last relation with its line.
 //   3. A sketch fillet records two tangencies; a tangent arc records one.
 //   4. With Snap off a midpoint end records nothing.
+//   5. Escape and a tool switch take the glyph away, Ctrl places without a
+//      guess, and only the line and arc tools snap onto a curve.
 //
 // Usage (from the repo root, with vite on 5173 + engine on 8765 (`fundacad-engine --ws`)):
 //   SC_TOKEN=<engine token> SC_CHROME=<chrome.exe> node e2e/sketch_inference_e2e.cjs [outDir]
@@ -164,6 +166,40 @@ const check = (name, ok, detail) => {
   added = await newCons(before);
   check("with Snap off a midpoint end records nothing", !added.some((c) => c.type === "midpoint"), JSON.stringify(added));
   await page.evaluate(() => window.sketch.setGridSnap(true));
+
+  // 5. glyph lifetime, Ctrl, curve snap per tool
+  await tool("line");
+  await click(0, 120);
+  await hover(40, 120.6);
+  const shown = await tag();
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(150);
+  check("Escape takes the glyph away", shown === "horizontal" && (await tag()) === "", `${shown} then ${await tag()}`);
+  await click(0, 120);
+  await hover(40, 120.6);
+  await tool("select");
+  await page.waitForTimeout(150);
+  check("a tool switch takes the glyph away", (await tag()) === "", await tag());
+  await tool("line");
+  before = await cons();
+  await click(0, 100);
+  const freeEnd = polar([0, 100], 25, 31.5);
+  await hover(...freeEnd);
+  const plainTag = await tag();
+  await page.keyboard.down("Control");
+  await hover(...freeEnd, 1);
+  await hover(...freeEnd);
+  const ctrlTag = await tag();
+  await click(...freeEnd);
+  await page.keyboard.up("Control");
+  await page.keyboard.press("Escape");
+  added = await newCons(before);
+  check("with Ctrl held a line 1.5 degrees off parallel guesses nothing", plainTag === "parallel" && ctrlTag === "" && !added.some((c) => c.type === "parallel"), `${plainTag} ${ctrlTag} ${JSON.stringify(added)}`);
+  await tool("circle");
+  await hover(70, -50, -3);
+  const circleKind = await page.evaluate(() => window.sketch.lastHit?.kind);
+  check("the circle tool does not snap onto a curve", circleKind !== "curve", circleKind);
+  await tool("select");
 
   console.log(failures ? `${failures} FAILED` : "ALL PASS");
   await browser.close();
