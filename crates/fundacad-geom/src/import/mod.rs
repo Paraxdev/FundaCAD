@@ -7,6 +7,7 @@
 pub mod amf;
 pub mod blobstore;
 pub mod canonical;
+pub mod dxf;
 pub mod fcstd;
 pub mod gltf;
 pub mod ifc;
@@ -411,8 +412,48 @@ pub fn import_geometry_in(path: &str, fmt: &str, store: &BlobStore, unit: Option
             }
             outward(imported)
         }
+        "dxf" => return import_dxf(p, store),
         other => return Err(format!("unsupported import format: {other}")),
     };
+    let mut out = store_imported(imported, p, store)?;
+    if let (Some(u), "glb" | "gltf" | "vrml" | "x3d") = (unit, fmt.as_str()) {
+        out.insert("unit".into(), json!(u));
+    }
+    Ok(out)
+}
+
+/// A DXF answers its lines and curves as `sketches`, one per layer, for the
+/// caller to add as sketch features, and its 3D faces as stored geometry.
+fn import_dxf(p: &Path, store: &BlobStore) -> Result<Map<String, Value>, String> {
+    let read = dxf::read_dxf(&std::fs::read(p).map_err(|e| e.to_string())?)?;
+    if read.sketches.is_empty() && read.objects.is_empty() {
+        let mut msg = "this DXF has no lines, curves or 3D faces in model space".to_string();
+        if let Some(n) = read.notes.iter().find(|n| n.contains("ACIS")) {
+            msg.push_str(&format!(", and {n}"));
+        }
+        return Err(msg);
+    }
+    let mut out = if read.objects.is_empty() {
+        let mut m = Map::new();
+        m.insert("name".into(), json!(body_name(p)));
+        m
+    } else {
+        store_imported(outward(mesh::finish_objects(read.objects)?), p, store)?
+    };
+    let mut notes: Vec<Value> = out.remove("notes").and_then(|v| v.as_array().cloned()).unwrap_or_default();
+    notes.extend(read.notes.into_iter().map(Value::from));
+    if !notes.is_empty() {
+        out.insert("notes".into(), Value::Array(notes));
+    }
+    if !read.sketches.is_empty() {
+        let sketches: Vec<Value> = read.sketches.into_iter().map(|(name, entities)| json!({"name": name, "entities": entities})).collect();
+        out.insert("sketches".into(), Value::Array(sketches));
+    }
+    out.insert("unit".into(), json!(read.unit));
+    Ok(out)
+}
+
+fn store_imported(imported: Imported, p: &Path, store: &BlobStore) -> Result<Map<String, Value>, String> {
     let bytes = crate::bench::phase("to_bin", || xcaf::to_bin_v3(&imported.shape)).map_err(|e| {
         format!(
             "could not store the imported geometry ({e}). Check free disk space and permissions on the FundaCAD data directory."
@@ -431,9 +472,6 @@ pub fn import_geometry_in(path: &str, fmt: &str, store: &BlobStore, unit: Option
     out.insert("name".into(), json!(name));
     for (k, v) in imported.fields {
         out.insert(k, v);
-    }
-    if let (Some(u), "glb" | "gltf" | "vrml" | "x3d") = (unit, fmt.as_str()) {
-        out.insert("unit".into(), json!(u));
     }
     Ok(out)
 }
