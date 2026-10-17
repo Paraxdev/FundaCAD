@@ -4,7 +4,7 @@
 // move, a material or a look change sends JSON only.
 
 import * as THREE from "three";
-import { blasKey } from "./blasCache";
+import { blasKey, type TracedBody } from "./blasCache";
 import type { TraceLens } from "./camera";
 import type { TraceLook } from "./backend";
 
@@ -47,9 +47,10 @@ interface Owner {
 function bodyOf(m: THREE.Mesh) {
   m.updateWorldMatrix(true, false);
   const mats = Array.isArray(m.material) ? m.material : [m.material];
+  const traced = m.userData.traced as TracedBody | undefined;
   return {
-    id: (m.userData.owner as Owner | undefined)?.id ?? m.uuid,
-    key: blasKey(m),
+    id: traced?.id ?? (m.userData.owner as Owner | undefined)?.id ?? m.uuid,
+    key: traced?.key ?? blasKey(m),
     matrix: Array.from(m.matrixWorld.elements),
     visible: m.visible,
     materials: mats.map(pageMaterial),
