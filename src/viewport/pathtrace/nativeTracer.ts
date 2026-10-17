@@ -7,7 +7,10 @@
 // tracing calls only restart the sample count.
 
 import { invoke } from "@tauri-apps/api/core";
-import type { PictureOptions, TracerBackend } from "./backend";
+import type * as THREE from "three";
+import type { PictureOptions, TraceLook, TraceScene, TracerBackend } from "./backend";
+import type { TraceLens } from "./camera";
+import { NativeScene, type Call } from "./nativeScene";
 
 export interface NativeFrame {
   seq: number;
@@ -46,6 +49,8 @@ export interface NativeTracerOptions {
   connect?: (width: number, height: number, prefer?: string) => Promise<Connected>;
   blit?: (canvas: HTMLCanvasElement) => Blit;
   canvas?: HTMLCanvasElement;
+  /** The pt_* commands; Tauri's invoke unless a test stands in. */
+  call?: Call;
 }
 
 const HEADER_BYTES = 16;
@@ -337,9 +342,13 @@ export class NativeTracer implements TracerBackend {
   private times: number[] = [];
   private source = "";
   private disposed = false;
+  readonly scene: NativeScene;
 
   constructor(private o: NativeTracerOptions = {}) {
     this.canvas = o.canvas ?? document.createElement("canvas");
+    this.scene = new NativeScene(o.call ?? ((cmd, args) => invoke(cmd, args as never)), (e) =>
+      this.fault(`The native tracer refused the scene: ${e instanceof Error ? e.message : String(e)}`),
+    );
   }
 
   get name(): string {
@@ -391,29 +400,41 @@ export class NativeTracer implements TracerBackend {
     }, RESIZE_SETTLE_MS);
   }
 
-  setScene() {
+  setScene(scene: TraceScene, camera: THREE.Camera) {
+    void this.scene.look(scene);
+    void this.scene.camera(camera, scene.lens);
+    void this.scene.setMeshes(scene.meshes);
     this.reset();
   }
-  updateGeometry() {
+  updateGeometry(meshes: THREE.Mesh[]) {
+    void this.scene.setMeshes(meshes);
     this.reset();
   }
   updateTransforms() {
+    void this.scene.refresh();
     this.reset();
   }
   updateMaterials() {
+    void this.scene.refresh();
     this.reset();
   }
-  updateLook() {
+  updateLook(look: TraceLook) {
+    void this.scene.look(look);
     this.reset();
   }
-  updateCamera() {
+  updateCamera(camera: THREE.Camera, lens: TraceLens | null) {
+    void this.scene.camera(camera, lens);
     this.reset();
   }
   reset() {
     this.count = 0;
   }
-  setFrameBudget() {}
-  setCap() {}
+  setFrameBudget(slots: number) {
+    void this.scene.budget(slots);
+  }
+  setCap(samples: number) {
+    void this.scene.cap(samples);
+  }
   setDenoise() {}
 
   private request(): Promise<NativeFrame> {
@@ -470,8 +491,14 @@ export class NativeTracer implements TracerBackend {
     return false;
   }
 
-  samples(): Promise<number> {
-    return Promise.resolve(this.count);
+  async samples(): Promise<number> {
+    try {
+      const s = (await (this.o.call ?? invoke)("pt_status")) as { samples: number; fault: string | null };
+      if (s.fault) this.fault(`The native tracer stopped: ${s.fault}`);
+      return s.samples;
+    } catch {
+      return this.count;
+    }
   }
 
   onFault(cb: (why: string) => void) {

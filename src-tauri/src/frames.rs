@@ -10,6 +10,7 @@ use fundacad_frames::{frame_size, Current, FrameSource, Transport, WebSocketTran
 use serde::Serialize;
 
 mod pattern;
+pub mod tracer;
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -54,7 +55,15 @@ static OPEN: Current<Open> = Current::new();
 static SOURCE: OnceLock<(Arc<dyn FrameSource>, String)> = OnceLock::new();
 
 fn source() -> (Arc<dyn FrameSource>, String) {
-    SOURCE.get_or_init(pattern::create).clone()
+    SOURCE
+        .get_or_init(|| match tracer::tracer() {
+            Some(t) => {
+                let name = t.name();
+                (t as Arc<dyn FrameSource>, name)
+            }
+            None => pattern::create(),
+        })
+        .clone()
 }
 
 fn token() -> Result<String, String> {
