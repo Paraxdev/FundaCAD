@@ -308,6 +308,7 @@ pub fn run() {
         frames::tracer::pt_cap,
         frames::tracer::pt_budget,
         frames::tracer::pt_denoise,
+        frames::tracer::pt_bloom,
         frames::tracer::pt_status,
         frames::tracer::pt_probe
     ]);

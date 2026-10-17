@@ -12,6 +12,7 @@ import type { Denoise } from "../../ui/renderPrefs";
 import type { PictureOptions, TraceLook, TraceScene, TracerBackend } from "./backend";
 import type { TraceLens } from "./camera";
 import { NativeScene, type Call } from "./nativeScene";
+import { bloomKey, bloomSide, type TraceBloomSettings } from "./tracePost";
 
 export interface NativeFrame {
   seq: number;
@@ -356,6 +357,10 @@ export class NativeTracer implements TracerBackend {
   private times: number[] = [];
   private source = "";
   private disposed = false;
+  private bloom: TraceBloomSettings | null = null;
+  /** The bloom the native side holds, null until this page told it. */
+  private bloomShared: string | null = null;
+  private bloomSent: Promise<unknown> = Promise.resolve();
   readonly scene: NativeScene;
 
   constructor(private o: NativeTracerOptions = {}) {
@@ -383,6 +388,8 @@ export class NativeTracer implements TracerBackend {
     this.link = c.link;
     this.generation = c.generation;
     this.source = c.source;
+    // The native tracer outlives a page, so a bloom of the last one is cleared.
+    this.syncBloom();
   }
 
   setSize(cssWidth: number, cssHeight: number, pixelRatio: number) {
@@ -402,6 +409,7 @@ export class NativeTracer implements TracerBackend {
     if (this.resizeTimer) clearTimeout(this.resizeTimer);
     this.resizeTimer = setTimeout(() => {
       this.resizeTimer = null;
+      this.syncBloom();
       const w = Math.max(1, Math.floor(this.width * this.scale));
       const h = Math.max(1, Math.floor(this.height * this.scale));
       this.link?.resize(w, h).then(
@@ -456,6 +464,41 @@ export class NativeTracer implements TracerBackend {
   setDenoise(level: Denoise) {
     void this.scene.denoise(level);
     this.reset();
+  }
+
+  /** The native side blooms before its tone mapping, the page's frames are
+   *  already tone mapped. At the cap the held frame is pulled again. */
+  setBloom(bloom: TraceBloomSettings | null) {
+    this.bloom = bloom;
+    if (this.syncBloom() && this.settle === "done") this.redraw();
+  }
+
+  private syncBloom(): boolean {
+    if (!this.link || this.disposed) return false;
+    const side = bloomSide(this.width, this.height);
+    const key = this.bloom ? `${bloomKey(this.bloom)}:${side}` : "";
+    if (key === this.bloomShared) return false;
+    this.bloomShared = key;
+    this.bloomSent = this.scene.bloom(this.bloom && { ...this.bloom, side });
+    this.kicked = false;
+    return true;
+  }
+
+  /** The first frame pulled can be the prefetch from before the change. */
+  private redraw() {
+    const g = this.epoch;
+    const live = () => this.epoch === g && !this.disposed && !!this.link;
+    const p: Promise<void> = (this.polling ?? Promise.resolve())
+      .then(async () => {
+        await this.bloomSent;
+        if (live()) await this.renderSample(0);
+        if (live()) await this.renderSample(0);
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (this.polling === p) this.polling = null;
+      });
+    this.polling = p;
   }
 
   private request(): Promise<NativeFrame> {
@@ -524,6 +567,7 @@ export class NativeTracer implements TracerBackend {
 
   private async pollDenoise() {
     const g = this.epoch;
+    await this.bloomSent;
     let s: Status;
     try {
       s = (await this.call("pt_status")) as Status;

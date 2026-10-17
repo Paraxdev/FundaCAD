@@ -78,4 +78,81 @@ mod t {
             assert_eq!(px.len(), 32 * 24 * 4);
         }
     }
+    fn emitter(sky: f32, env: f32) -> Option<Tracer> {
+        let mut s = Tracer::new(TracerOptions { software: true, ..Default::default() }).ok()?;
+        let bodies: Vec<BodyDesc> = serde_json::from_str(
+            r#"[{"id":"body1","key":"lamp","matrix":[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],
+                 "materials":[{"color":[0,0,0],"emissive":[1,1,1],"emissiveIntensity":4}]}]"#,
+        )
+        .unwrap();
+        s.set_bodies(bodies);
+        let (key, mesh) = decode_mesh(&quad_frame("lamp")).unwrap();
+        s.add_mesh(&key, mesh);
+        s.set_camera(serde_json::from_str(r#"{"eye":[0,0,200],"target":[0,0,0],"up":[0,1,0],"fov":50}"#).unwrap());
+        let look = format!(r#"{{"skyTop":[{sky},{sky},{sky}],"skyBottom":[{sky},{sky},{sky}],"envIntensity":{env}}}"#);
+        s.set_look(serde_json::from_str(&look).unwrap());
+        s.set_denoise(Quality::Off);
+        s.set_cap(2);
+        Some(s)
+    }
+
+    const W: u32 = 320;
+    const H: u32 = 240;
+
+    fn at(px: &[u8], x: u32, y: u32) -> u8 {
+        px[((y * W + x) * 4) as usize]
+    }
+
+    fn to_cap(s: &mut Tracer) -> Vec<u8> {
+        let mut px = Vec::new();
+        for _ in 0..64 {
+            px = s.frame(W, H, Duration::from_millis(50));
+            if s.done() {
+                break;
+            }
+        }
+        assert!(s.done());
+        px
+    }
+
+    #[test]
+    fn bloom_at_the_cap_glows_around_an_emitter_and_keeps_the_samples_and_the_sky() {
+        let Some(mut s) = emitter(0.2, 1.0) else {
+            eprintln!("skipped: no adapter");
+            return;
+        };
+        let a = to_cap(&mut s);
+        let samples = s.samples();
+        s.set_bloom(Some(Bloom { strength: 0.7, radius: 0.6, threshold: 0.8, side: 0 }));
+        let b = s.frame(W, H, Duration::from_millis(50));
+        assert_eq!(s.samples(), samples, "a bloom change restarted the samples");
+        let (near, corner) = ((W / 2 + 10, H / 2), (2, 2));
+        eprintln!(
+            "near {} -> {}, corner {} -> {}",
+            at(&a, near.0, near.1),
+            at(&b, near.0, near.1),
+            at(&a, corner.0, corner.1),
+            at(&b, corner.0, corner.1)
+        );
+        assert!(at(&b, near.0, near.1) > at(&a, near.0, near.1) + 8, "no glow next to the emitter");
+        assert!(at(&b, corner.0, corner.1).abs_diff(at(&a, corner.0, corner.1)) <= 1, "the sky bloomed");
+        assert_eq!(s.frame(W, H, Duration::from_millis(50)), b, "the held bloomed frame changed");
+        s.set_bloom(None);
+        assert_eq!(s.frame(W, H, Duration::from_millis(50)), a, "bloom off is not the plain frame");
+    }
+
+    #[test]
+    fn a_sky_brighter_than_the_threshold_never_blooms() {
+        // The native sky is the background times the brightness, the page only
+        // raised the threshold above the background itself.
+        let Some(mut s) = emitter(0.9, 1.2) else {
+            eprintln!("skipped: no adapter");
+            return;
+        };
+        let a = to_cap(&mut s);
+        s.set_bloom(Some(Bloom { strength: 0.7, radius: 0.6, threshold: 0.95, side: 0 }));
+        let b = s.frame(W, H, Duration::from_millis(50));
+        eprintln!("corner {} -> {}", at(&a, 2, 2), at(&b, 2, 2));
+        assert!(at(&b, 2, 2).abs_diff(at(&a, 2, 2)) <= 1, "the sky bloomed");
+    }
 }

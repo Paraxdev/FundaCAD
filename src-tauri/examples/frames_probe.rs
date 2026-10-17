@@ -31,6 +31,7 @@ fn main() {
             fundacad_lib::frames::tracer::pt_cap,
             fundacad_lib::frames::tracer::pt_budget,
             fundacad_lib::frames::tracer::pt_denoise,
+            fundacad_lib::frames::tracer::pt_bloom,
             fundacad_lib::frames::tracer::pt_status,
             fundacad_lib::frames::tracer::pt_probe,
             probe_report

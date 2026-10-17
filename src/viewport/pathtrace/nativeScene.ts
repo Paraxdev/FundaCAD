@@ -8,6 +8,7 @@ import * as THREE from "three";
 import { blasKey, type TracedBody } from "./blasCache";
 import type { TraceLens } from "./camera";
 import type { TraceLook } from "./backend";
+import type { TraceBloomSettings } from "./tracePost";
 
 export type Call = (cmd: string, args?: unknown) => Promise<unknown>;
 
@@ -212,6 +213,11 @@ export class NativeScene {
 
   denoise(level: Denoise) {
     return this.queue(() => this.call("pt_denoise", { level }));
+  }
+
+  /** `side` is the long side of the bloom's input, as TraceBloom sizes it. */
+  bloom(b: (TraceBloomSettings & { side: number }) | null) {
+    return this.queue(() => this.call("pt_bloom", { bloom: b }));
   }
 
   budget(paths: number) {
