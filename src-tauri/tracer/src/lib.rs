@@ -5,7 +5,9 @@ pub mod bvh;
 mod gpu;
 pub mod material;
 pub mod scene;
+pub mod wire;
 
 pub use gpu::{Camera, Look, Path, Tracer, TracerOptions};
 pub use material::{pack_material, tri_slots, GpuMaterial, Group, PageMaterial};
 pub use scene::{Accel, BodyDesc, Commit, Instance, Mesh, Scene};
+pub use wire::{decode_colors, decode_mesh};

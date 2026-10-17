@@ -299,7 +299,15 @@ pub fn run() {
         frames::frames_open,
         frames::frames_next,
         frames::frames_resize,
-        frames::frames_close
+        frames::frames_close,
+        frames::tracer::pt_scene,
+        frames::tracer::pt_mesh,
+        frames::tracer::pt_colors,
+        frames::tracer::pt_camera,
+        frames::tracer::pt_look,
+        frames::tracer::pt_cap,
+        frames::tracer::pt_budget,
+        frames::tracer::pt_status
     ]);
 
     let app = builder
