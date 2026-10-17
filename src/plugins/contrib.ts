@@ -501,8 +501,8 @@ export function anyToolBusy(): boolean {
   return contributedTools().some((t) => t.busy?.() === true);
 }
 
-export function cancelContributedTools() {
-  for (const t of contributedTools()) if (t.busy?.() === true) t.cancel?.();
+export function cancelContributedTools(run: (cancel: () => void) => void = (c) => c()) {
+  for (const t of contributedTools()) if (t.busy?.() === true) run(() => t.cancel?.());
 }
 
 /** What a plugin says about one feature type, or null.
