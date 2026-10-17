@@ -107,6 +107,7 @@ export async function activate(e: Engine): Promise<() => void> {
       consumes: t.pick === "bodies" ? ["body"] : ["face"],
       source: "selection",
       busy: () => (t.pick === "bodies" ? bodyTool.active : faceTool.active),
+      cancel: () => (t.pick === "bodies" ? bodyTool.cancel() : faceTool.cancel()),
     })),
     actions: {
       ...Object.fromEntries(PRINT_TOOLS.map((t) => [t.id, () => start(t)])),

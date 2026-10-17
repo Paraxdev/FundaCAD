@@ -7,6 +7,8 @@
 // mode=building presses New while a full rebuild of the shown document is in flight,
 // mode=render puts materials on the bodies and opens the Render workspace first
 // (a third argument, realtime or pathtraced, picks its view mode).
+// mode=tool (N is ignored) arms Extrude on a 60 x 60 profile, presses New or Open,
+// once with the depth arrow held through it, and checks nothing is left drawn or armed.
 
 const { chromium } = require("playwright-core");
 
@@ -28,6 +30,7 @@ if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
     args: ["--no-sandbox", "--enable-gpu", "--ignore-gpu-blocklist"],
   });
   try {
+    if (MODE === "tool") return await toolRun(browser);
     const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
     page.on("pageerror", (e) => console.error("PAGE ERROR:", e.message));
     await page.addInitScript((ws) => {
@@ -183,3 +186,128 @@ if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
     await browser.close();
   }
 })().catch((e) => { console.error(e); process.exit(1); });
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function openApp(browser) {
+  const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+  page.on("pageerror", (e) => console.error("PAGE ERROR:", e.message));
+  await page.addInitScript((ws) => {
+    const W = window.WebSocket;
+    window.WebSocket = class extends W { constructor(u, p) { super(String(u).replace(":8765", `:${ws}`), p); } };
+  }, ENGINE_PORT);
+  await page.goto(`${APP}?token=${TOKEN}`);
+  await page.waitForFunction(() => !!window.store && !!window.viewport && !!window.__fundacad, null, { timeout: 60000 });
+  await sleep(1500);
+  const modal = await page.$(".modal-close");
+  if (modal) await modal.click();
+  await sleep(500);
+  return page;
+}
+
+/** Pixels in the middle of the view, clear of the side panels, that differ by more than 40 levels. */
+async function changedPixels(browser, a, b) {
+  const page = await browser.newPage();
+  try {
+    return await page.evaluate(async ([a, b]) => {
+      const load = (src) => new Promise((r) => { const i = new Image(); i.onload = () => r(i); i.src = src; });
+      const read = (img) => {
+        const c = document.createElement("canvas");
+        c.width = img.width; c.height = img.height;
+        const g = c.getContext("2d");
+        g.drawImage(img, 0, 0);
+        return g.getImageData(300, 140, 730, 600).data;
+      };
+      const [pa, pb] = [read(await load(a)), read(await load(b))];
+      let n = 0;
+      for (let i = 0; i < pa.length; i += 4) {
+        const d = (Math.abs(pa[i] - pb[i]) + Math.abs(pa[i + 1] - pb[i + 1]) + Math.abs(pa[i + 2] - pb[i + 2])) / 3;
+        if (d > 40) n++;
+      }
+      return n;
+    }, [a, b].map((x) => `data:image/png;base64,${x.toString("base64")}`));
+  } finally {
+    await page.close();
+  }
+}
+
+async function toolRun(browser) {
+  const fails = [];
+  for (const how of ["new", "drag", "open"]) {
+    const page = await openApp(browser);
+    try {
+      const empty = await page.screenshot();
+      await page.evaluate(() => {
+        window.store.addFeature({ id: "s1", type: "sketch", plane: "XY", entities: [{ type: "rectangle", id: "r1", x: -30, y: -30, width: 60, height: 60 }] });
+      });
+      await page.waitForFunction(() => window.__fundacad.overlay.regions.length > 0, null, { timeout: 30000 });
+      await page.evaluate(() => window.viewport.fitView?.());
+      await sleep(800);
+      const toScreen = (p) => page.evaluate((p) => {
+        const v = window.__fundacad;
+        const w = p === "region" ? v.overlay.regions[0]?.interior3D.clone() : (() => {
+          const g = v.extrude.depthHandle?.group;
+          if (!g) return null;
+          const q = new g.position.constructor();
+          g.getWorldPosition(q);
+          return q;
+        })();
+        if (!w) return null;
+        const s = w.project(window.viewport.camera);
+        const r = window.viewport.domElement.getBoundingClientRect();
+        return [r.left + ((s.x + 1) / 2) * r.width, r.top + ((1 - s.y) / 2) * r.height];
+      }, p);
+      const c = await toScreen("region");
+      if (!c) throw new Error("no profile on screen");
+      await page.mouse.move(c[0], c[1]);
+      await page.mouse.click(c[0] + 8, c[1] + 8);
+      await sleep(800);
+      await page.keyboard.press("e");
+      await page.waitForFunction(() => window.__fundacad.extrude.active, null, { timeout: 10000 });
+      await sleep(1000);
+      if (how === "drag") {
+        const h = await toScreen("handle");
+        if (!h) throw new Error("no depth arrow on screen");
+        await page.mouse.move(h[0], h[1]);
+        await page.mouse.down();
+        await page.mouse.move(h[0], h[1] - 60, { steps: 6 });
+        await sleep(800);
+      }
+      const armed = await page.evaluate(() => ({ extrude: window.__fundacad.extrude.active, preview: window.store.hasPreview }));
+      if (how === "open") {
+        await page.evaluate(() => window.store.load(JSON.stringify({ parameters: {}, features: [] })));
+      } else {
+        await page.evaluate(() => window.__fundacad.handleAction("new"));
+        // A DOM click, so the held arrow sees no pointer event until the release below.
+        await page.waitForFunction(() => [...document.querySelectorAll("button")].some((b) => b.textContent.trim().startsWith("Discard")), null, { timeout: 5000 });
+        await page.evaluate(() => [...document.querySelectorAll("button")].find((b) => b.textContent.trim().startsWith("Discard")).click());
+      }
+      await sleep(400);
+      if (how === "drag") await page.mouse.up();
+      await sleep(2500);
+      const after = await page.evaluate(() => ({
+        toolBusy: window.__fundacad.toolBusy(),
+        extrude: window.__fundacad.extrude.active,
+        preview: window.store.hasPreview,
+        features: window.store.document.features.length,
+        bodies: window.viewport.bodyMeshes.length,
+        dirty: window.store.isDirty,
+      }));
+      const changed = await changedPixels(browser, empty, await page.screenshot());
+      console.log(JSON.stringify({ how, armed, after, changed }));
+      const why = [];
+      if (!armed.extrude) why.push("Extrude never armed");
+      if (after.toolBusy || after.extrude) why.push("a tool is still armed");
+      if (after.preview) why.push("the store still holds a preview");
+      if (after.features || after.bodies) why.push(`${after.features} features, ${after.bodies} bodies in the new document`);
+      if (changed) why.push(`${changed} px still drawn where the profile was`);
+      if (why.length) fails.push(`${how}: ${why.join(", ")}`);
+    } finally {
+      await page.close();
+    }
+  }
+  if (fails.length) {
+    console.error(`FAIL tool: ${fails.join("; ")}`);
+    process.exitCode = 1;
+  } else console.error("PASS tool: New, Open and a held drag leave nothing drawn or armed");
+}

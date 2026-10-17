@@ -36,6 +36,7 @@ export async function activate(e: Engine): Promise<() => void> {
       consumes: [],
       source: "selection",
       busy: () => tool.active,
+      cancel: () => tool.cancel(),
     }],
     actions: { nodeBody: start },
     ribbon: [{ group: "CREATE", items: [{ action: "nodeBody", label: "Node Body", iconName: "node-body" }] }],

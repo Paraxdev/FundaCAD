@@ -167,6 +167,9 @@ export interface ToolContribution {
   /** Is the tool holding the window right now? Read at event time only, so a
    *  plain function is enough and nothing has to be reactive. */
   busy?: () => boolean;
+  /** Stand the tool down, called when New or Open replaces the document it
+   *  was working on. */
+  cancel?: () => void;
 }
 
 /** How a feature TYPE in the document is drawn and edited.
@@ -496,6 +499,10 @@ export function contributedToolOwner(toolId: string): string | null {
  *  stuck reporting busy would freeze every command in the app. */
 export function anyToolBusy(): boolean {
   return contributedTools().some((t) => t.busy?.() === true);
+}
+
+export function cancelContributedTools() {
+  for (const t of contributedTools()) if (t.busy?.() === true) t.cancel?.();
 }
 
 /** What a plugin says about one feature type, or null.

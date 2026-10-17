@@ -541,6 +541,13 @@ export class DocumentStore {
     this.emitBuild();
     this.committedShown = null;
     this.provisional = null;
+    // A tool's live feature would be built into the next document.
+    this.preview = null;
+    this.previewHold = false;
+    if (this.editPreview) {
+      this.editPreview = null;
+      this.emitEditPreview();
+    }
     this.restoreArmed = false;
     // No-op when nothing is running. Cancel kills the pool worker, which is the
     // only way to interrupt an OCCT call already under way.
