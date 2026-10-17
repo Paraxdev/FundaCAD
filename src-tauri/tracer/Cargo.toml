@@ -14,6 +14,13 @@ wgpu = "=30.0.1"
 futures-executor = "0.3"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# The CPU denoise at the cap. Links Open Image Denoise 2.5.1 from OIDN_DIR (or
+# pkg-config); the crate's `bundled` feature reads hash files its published
+# package lacks.
+oidn = { version = "=2.5.1", optional = true }
+
+[features]
+oidn = ["dep:oidn"]
 
 [dev-dependencies]
 png = "0.17"

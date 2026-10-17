@@ -3,6 +3,7 @@
 // slots and traceMaterialFrom materials. A mesh crosses once per blasKey, so a
 // move, a material or a look change sends JSON only.
 
+import type { Denoise } from "../../ui/renderPrefs";
 import * as THREE from "three";
 import { blasKey, type TracedBody } from "./blasCache";
 import type { TraceLens } from "./camera";
@@ -207,6 +208,10 @@ export class NativeScene {
 
   cap(samples: number) {
     return this.queue(() => this.call("pt_cap", { cap: Math.max(1, Math.floor(samples)) }));
+  }
+
+  denoise(level: Denoise) {
+    return this.queue(() => this.call("pt_denoise", { level }));
   }
 
   budget(paths: number) {

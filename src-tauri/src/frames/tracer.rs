@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
 use fundacad_frames::{FrameSource, Reopen};
-use fundacad_tracer::{decode_colors, decode_mesh, BodyDesc, Camera, Look, Path, Tracer, TracerOptions};
+use fundacad_tracer::{decode_colors, decode_mesh, denoise, BodyDesc, Camera, Look, Path, Quality, Tracer, TracerOptions};
 use serde::Serialize;
 use tauri::ipc::{InvokeBody, Request};
 
@@ -160,6 +160,12 @@ pub fn pt_cap(cap: u32) -> Result<(), String> {
     with(|t| t.set_cap(cap))
 }
 
+/// The weights the cap is denoised with: off, standard or high.
+#[tauri::command]
+pub fn pt_denoise(level: Quality) -> Result<(), String> {
+    with(|t| t.set_denoise(level))
+}
+
 #[tauri::command]
 pub fn pt_budget(paths: u32) -> Result<(), String> {
     with(|t| t.set_frame_budget(paths))
@@ -174,12 +180,18 @@ pub struct Status {
     path: &'static str,
     adapter: String,
     fault: Option<String>,
+    /// The frames at the cap carry the denoised image.
+    denoised: bool,
+    /// A denoise of the current cap is still running.
+    denoising: bool,
+    denoise_error: Option<String>,
 }
 
 #[tauri::command]
 pub fn pt_status() -> Result<Status, String> {
     let t = open()?;
-    let s = t.lock();
+    let mut s = t.lock();
+    s.tracer.poll_denoise();
     Ok(Status {
         samples: s.tracer.samples(),
         generation: s.tracer.generation(),
@@ -187,6 +199,9 @@ pub fn pt_status() -> Result<Status, String> {
         path: path_id(s.tracer.path()),
         adapter: s.tracer.adapter().to_string(),
         fault: s.fault.clone(),
+        denoised: s.tracer.denoised(),
+        denoising: s.tracer.denoising(),
+        denoise_error: s.tracer.denoise_error().map(str::to_string),
     })
 }
 
@@ -219,7 +234,7 @@ pub async fn pt_probe() -> Probe {
         let probe = match tracer() {
             Ok(t) => {
                 let s = t.lock();
-                Probe { available: true, path: Some(path_id(s.tracer.path())), adapter: Some(s.tracer.adapter().to_string()), denoise: false, reason: None }
+                Probe { available: true, path: Some(path_id(s.tracer.path())), adapter: Some(s.tracer.adapter().to_string()), denoise: denoise::available().is_ok(), reason: None }
             }
             Err(e) => Probe { available: false, path: None, adapter: None, denoise: false, reason: Some(e) },
         };

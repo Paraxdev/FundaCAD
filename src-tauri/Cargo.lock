@@ -2074,6 +2074,7 @@ name = "fundacad-tracer"
 version = "0.1.0"
 dependencies = [
  "futures-executor",
+ "oidn",
  "png 0.17.16",
  "serde",
  "serde_json",
@@ -4341,6 +4342,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1b3fb218c80b037a612cc4ec325a426a1705d0b2e25b207f7e3db22556ded5f"
 dependencies = [
  "cmake",
+]
+
+[[package]]
+name = "oidn"
+version = "2.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c750490adf2813dad251dace8cff2f57b6d67cd2d29e3127ba9e9bd13b46e32"
+dependencies = [
+ "bitflags 2.13.1",
+ "num_enum",
+ "pkg-config",
 ]
 
 [[package]]

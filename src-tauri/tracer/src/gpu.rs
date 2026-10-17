@@ -1,7 +1,9 @@
 use std::collections::HashMap;
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use crate::bvh::{self, Bvh};
+use crate::denoise::{self, Quality};
 use crate::material::{pack_material, tri_slots, GpuMaterial, FLAG_VERTEX_COLORS};
 use crate::scene::{Accel, BodyDesc, Commit, Instance, Mesh, Scene};
 
@@ -255,14 +257,25 @@ pub struct Tracer {
     camera: Camera,
     look: Look,
     held: Option<Held>,
+    quality: Quality,
+    job: Option<Job>,
+    denoise_error: Option<String>,
 }
 
 /// The last frame handed out, shown again while nothing can change it.
 struct Held {
-    generation: u64,
-    samples: u32,
-    size: (u32, u32),
+    key: FrameKey,
     pixels: Vec<u8>,
+    denoised: bool,
+}
+
+/// Generation, samples and size: what a frame was traced for.
+type FrameKey = (u64, u32, (u32, u32));
+
+/// A denoise running on its own thread; a result for an older key is dropped.
+struct Job {
+    key: FrameKey,
+    rx: mpsc::Receiver<Result<Vec<u8>, String>>,
 }
 
 impl Tracer {
@@ -413,6 +426,9 @@ impl Tracer {
             camera: Camera { eye: [4.0, -6.0, 3.0], target: [0.0; 3], up: [0.0, 0.0, 1.0], fov: 50.0 },
             look: Look::default(),
             held: None,
+            quality: Quality::default(),
+            job: None,
+            denoise_error: None,
         };
         t.resize(64, 64);
         Ok(t)
@@ -446,7 +462,7 @@ impl Tracer {
         }
         (self.w, self.h) = (w, h);
         let px = w as u64 * h as u64;
-        self.accum = storage(&self.device, px * 16, wgpu::BufferUsages::empty());
+        self.accum = storage(&self.device, px * 16, wgpu::BufferUsages::COPY_SRC);
         self.aov = storage(&self.device, px * 32, wgpu::BufferUsages::COPY_SRC);
         self.out = storage(&self.device, px * 4, wgpu::BufferUsages::COPY_SRC);
         if self.path == Path::RayQuery || self.rows == 0 {
@@ -715,21 +731,112 @@ impl Tracer {
 
     /// One frame for the transport: applies pending scene changes, traces for
     /// `budget` and resolves. At the cap it hands out the held frame without
-    /// touching the GPU; below it a software band that ends mid sample still
-    /// traces on, so the sample count is no sign of a finished picture.
+    /// touching the GPU, and the denoised one once it lands; below it a
+    /// software band that ends mid sample still traces on, so the sample count
+    /// is no sign of a finished picture.
     pub fn frame(&mut self, w: u32, h: u32, budget: Duration) -> Vec<u8> {
         self.resize(w, h);
         self.apply();
-        let (generation, samples, size) = (self.generation(), self.sample, (self.w, self.h));
-        if let Some(held) = &self.held {
-            if self.done() && (held.generation, held.samples, held.size) == (generation, samples, size) {
-                return held.pixels.clone();
-            }
+        if self.done() && self.held.as_ref().is_some_and(|h| h.key == self.key()) {
+            self.collect_denoise();
+            return self.held.as_ref().map(|h| h.pixels.clone()).unwrap_or_default();
         }
         self.trace_for(budget);
         let pixels = self.resolve();
-        self.held = Some(Held { generation, samples: self.sample, size, pixels: pixels.clone() });
+        self.held = Some(Held { key: self.key(), pixels: pixels.clone(), denoised: false });
+        if self.done() {
+            self.start_denoise();
+        }
         pixels
+    }
+
+    fn key(&self) -> FrameKey {
+        (self.generation(), self.sample, (self.w, self.h))
+    }
+
+    /// The weights the cap is denoised with; a change drops a held result and
+    /// denoises again, keeping the samples.
+    pub fn set_denoise(&mut self, q: Quality) {
+        if q == self.quality {
+            return;
+        }
+        self.quality = q;
+        self.job = None;
+        if self.held.as_ref().is_some_and(|h| h.denoised) {
+            self.held = None;
+        }
+    }
+
+    /// The frame handed out is the denoised one for the current scene.
+    pub fn denoised(&self) -> bool {
+        self.done() && self.held.as_ref().is_some_and(|h| h.denoised && h.key == self.key())
+    }
+
+    /// Why the last denoise gave no frame.
+    pub fn denoise_error(&self) -> Option<&str> {
+        self.denoise_error.as_deref()
+    }
+
+    fn start_denoise(&mut self) {
+        if self.quality == Quality::Off || denoise::available().is_err() {
+            return;
+        }
+        let aov = self.read_aovs();
+        let input = denoise::Input {
+            width: self.w as usize,
+            height: self.h as usize,
+            color: self.read_hdr().into_iter().flatten().collect(),
+            albedo: aov.iter().step_by(2).flat_map(|a| [a[0], a[1], a[2]]).collect(),
+            normal: aov.iter().skip(1).step_by(2).flat_map(|n| [n[0], n[1], n[2]]).collect(),
+        };
+        let (tx, rx) = mpsc::channel();
+        let quality = self.quality;
+        let spawned = std::thread::Builder::new().name("denoise".into()).spawn(move || {
+            let r = denoise::run(&input, quality)
+                .map(|c| denoise::tone_map(&c.chunks_exact(3).map(|p| [p[0], p[1], p[2]]).collect::<Vec<_>>()));
+            let _ = tx.send(r);
+        });
+        match spawned {
+            Ok(_) => self.job = Some(Job { key: self.key(), rx }),
+            Err(e) => self.denoise_error = Some(e.to_string()),
+        }
+    }
+
+    /// Takes a finished denoise into the held frame without tracing, for a
+    /// page that stopped asking for frames at the cap.
+    pub fn poll_denoise(&mut self) {
+        if self.done() && self.held.as_ref().is_some_and(|h| h.key == self.key()) {
+            self.collect_denoise();
+        }
+    }
+
+    pub fn denoising(&self) -> bool {
+        self.job.as_ref().is_some_and(|j| j.key == self.key())
+    }
+
+    fn collect_denoise(&mut self) {
+        let Some(job) = &self.job else { return };
+        if job.key != self.key() {
+            self.job = None;
+            return;
+        }
+        let got = match job.rx.try_recv() {
+            Err(mpsc::TryRecvError::Empty) => return,
+            Err(mpsc::TryRecvError::Disconnected) => Err("the denoise thread ended".to_string()),
+            Ok(r) => r,
+        };
+        self.job = None;
+        match got {
+            Ok(px) if px.len() == (self.w * self.h * 4) as usize => {
+                if let Some(h) = &mut self.held {
+                    h.pixels = px;
+                    h.denoised = true;
+                }
+                self.denoise_error = None;
+            }
+            Ok(px) => self.denoise_error = Some(format!("a {} byte denoise for a {}x{} frame", px.len(), self.w, self.h)),
+            Err(e) => self.denoise_error = Some(e),
+        }
     }
 
     /// Rows per software dispatch.
@@ -793,6 +900,20 @@ impl Tracer {
         }
         self.queue.submit([enc.finish()]);
         self.read(&self.out, self.w as u64 * self.h as u64 * 4)
+    }
+
+    /// The accumulation as exposed linear rgb, rows top first: what resolve.wgsl
+    /// tone maps.
+    pub fn read_hdr(&self) -> Vec<[f32; 3]> {
+        let raw = self.read(&self.accum, self.w as u64 * self.h as u64 * 16);
+        let e = self.look.exposure;
+        raw.chunks_exact(16)
+            .map(|c| {
+                let f = |k: usize| f32::from_le_bytes(c[k * 4..k * 4 + 4].try_into().unwrap());
+                let n = f(3).max(1.0);
+                [f(0) / n * e, f(1) / n * e, f(2) / n * e]
+            })
+            .collect()
     }
 
     /// Two vec4 per pixel from the first sample after a reset: albedo and view
