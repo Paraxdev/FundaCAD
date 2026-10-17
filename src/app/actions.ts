@@ -1,6 +1,6 @@
 import { saveDocument, saveDocumentAs, exportModel, importModel } from "../io/files";
 import { setWorkspace } from "../ui/workspace";
-import { chooseViewMode, nextViewMode, requestPathTraced, type ViewMode } from "../ui/viewMode";
+import { chooseViewMode, nextViewMode, requestPathTraced, toggleCleanView, type ViewMode } from "../ui/viewMode";
 import { contributedAction } from "../plugins/contrib";
 import { openParamsDialog } from "../ui/paramsDialog";
 import { toggleShortcutHUD } from "../input/shortcuts";
@@ -23,6 +23,7 @@ const KEEPS_PICK = new Set([
   "selmode", "selmode-auto", "selmode-faces", "selmode-bodies",
   "toggle-xray", "toggle-wireframe", "zebra", "curvature", "draft-analysis", "shortcut-help",
   "viewmode-matcap", "viewmode-realtime", "viewmode-pathtraced", "viewmode-cycle", "viewmode-cycle-back",
+  "clean-view",
 ]);
 
 /** Commands that act on a body selection. Picking a body raises the Move gizmo
@@ -390,6 +391,10 @@ export function createActions(e: Engine): (action: string) => void {
       }
       case "toggle-wireframe": {
         e.viewport.setWireframe(!e.viewport.isWireframe);
+        break;
+      }
+      case "clean-view": {
+        toggleCleanView();
         break;
       }
       case "viewmode-matcap":
