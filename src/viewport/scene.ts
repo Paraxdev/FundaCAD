@@ -8,7 +8,7 @@ import { stickyFact } from "../diagnostics/breadcrumbs";
 import { gridStep } from "../sketch/planeGrid";
 import { isRenderLowPower, setRenderLowPower } from "./render";
 import { composerClearColor, DISPLAY_COLOR_GLSL, displayColorUniforms, followComposer, setComposing, thresholdAboveGround } from "./composerColor";
-import { BACKGROUND_COLOR, bloomSettings, renderPrefs } from "../ui/renderPrefs";
+import { BACKGROUND_COLOR, bloomSettings, bloomWanted, renderPrefs } from "../ui/renderPrefs";
 import { GlassBackPass, glassBodyCount } from "./glassThickness";
 import { POTATO_PIXEL_RATIO, PotatoDraw } from "./potato";
 import { MatcapDraw } from "./matcap";
@@ -443,13 +443,6 @@ function frameKeyShadow(key: THREE.DirectionalLight, modelGroup: THREE.Group): v
  *  again. Until the import lands, the direct path draws, so the viewport is
  *  never waiting on it for a frame, the model simply gains its bloom a beat
  *  after the setting is switched on. */
-/** A threshold above 1 only lets through what is brighter than a fully lit white
- *  surface, so with nothing glowing or shiny on screen the whole pass would draw
- *  the image unchanged. */
-export function bloomWanted(amount: number, bloomable: boolean): boolean {
-  if (!(amount > 0)) return false;
-  return bloomable || bloomSettings(amount).threshold < 1;
-}
 
 export class PostChain {
   private composer: import("three/examples/jsm/postprocessing/EffectComposer.js").EffectComposer | null = null;

@@ -4110,6 +4110,8 @@ export class Viewport {
         lens: () => this.traceLens(),
         bake: (this.traceBaker ??= createSurfaceBaker(webglSurfaceShade(this.scene.renderer))),
         denoise: renderPrefs().denoise,
+        bloom: renderPrefs().bloom,
+        bloomable: this.scene.post.bloomable,
       });
       // Render-on-demand: skip the (relatively expensive) grid rebuild + GPU
       // draw entirely when nothing changed, camera didn't move, no mutation

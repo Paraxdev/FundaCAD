@@ -110,6 +110,14 @@ export function bloomSettings(amount: number): { strength: number; radius: numbe
   return { strength: 0.7 * a * a, radius: 0.3 + a * 0.3, threshold: 2.0 - a * 1.2 };
 }
 
+/** A threshold above 1 only lets through what is brighter than a fully lit white
+ *  surface, so with nothing glowing or shiny on screen the whole pass would draw
+ *  the image unchanged. */
+export function bloomWanted(amount: number, bloomable: boolean): boolean {
+  if (!(amount > 0)) return false;
+  return bloomable || bloomSettings(amount).threshold < 1;
+}
+
 /** What the material's 0..1 Emission slider means in the renderer.
  *
  *  Not 1:1. `emissiveIntensity` is a multiplier on a linear colour, so a slider

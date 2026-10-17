@@ -48,6 +48,7 @@ class FakeTracer implements TracerBackend {
   denoised = false;
   present() { this.calls.push("present"); return this.more; }
   setDenoise(level: string) { this.calls.push(`denoise:${level}`); }
+  setBloom(b: { strength: number } | null) { this.calls.push(`bloom:${b ? b.strength.toFixed(3) : "off"}`); }
   samples() { return new Promise<number>((r) => this.pending.push(r)); }
   dispose() { this.calls.push("dispose"); }
   onFault(cb: (why: string) => void) { this.faultCb = cb; }
@@ -170,6 +171,32 @@ describe("path trace host", () => {
     host.tick(frame({}, 1000, { denoise: "high" }));
     expect(t.calls).toEqual(["denoise:high", "present"]);
     expect(host.samples).toBe(256);
+  });
+
+  it("a bloom change draws the finished image again without restarting the samples", async () => {
+    const { host, t } = await started();
+    host.tick(frame());
+    t.answer(256);
+    await flush();
+    t.more = false;
+    host.tick(frame());
+    t.calls.length = 0;
+    host.tick(frame({}, 1000, { bloom: 0.6, bloomable: true }));
+    host.tick(frame({}, 1010, { bloom: 0.6, bloomable: true }));
+    expect(t.calls).toEqual(["bloom:0.252"]);
+    expect(host.samples).toBe(256);
+    expect(host.state).toBe("done");
+    t.calls.length = 0;
+    host.tick(frame({}, 1020, { bloom: 0, bloomable: true }));
+    expect(t.calls).toEqual(["bloom:off"]);
+  });
+
+  it("asks for no bloom while nothing on screen can reach the threshold", async () => {
+    const { host, t } = await started();
+    host.tick(frame({}, 1000, { bloom: 0.5, bloomable: false }));
+    expect(t.calls.filter((c) => c.startsWith("bloom"))).toEqual([]);
+    host.tick(frame({}, 1010, { bloom: 0.5, bloomable: true }));
+    expect(t.calls.filter((c) => c.startsWith("bloom"))).toEqual(["bloom:0.175"]);
   });
 
   it("presents again at the next cap after a camera move", async () => {
