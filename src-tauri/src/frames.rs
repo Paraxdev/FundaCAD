@@ -4,9 +4,9 @@
 //! a runtime without shared buffers (before 114), and every other platform,
 //! uses the loopback WebSocket of fundacad-frames.
 
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, OnceLock};
 
-use fundacad_frames::{FrameSource, Transport, WebSocketTransport};
+use fundacad_frames::{frame_size, Current, FrameSource, Transport, WebSocketTransport};
 use serde::Serialize;
 
 mod pattern;
@@ -14,6 +14,8 @@ mod pattern;
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Opened {
+    /// What frames_close names, so a late close leaves a newer transport open.
+    id: u64,
     kind: &'static str,
     generation: u32,
     port: Option<u16>,
@@ -48,7 +50,7 @@ impl Open {
     }
 }
 
-static OPEN: Mutex<Option<Open>> = Mutex::new(None);
+static OPEN: Current<Open> = Current::new();
 static SOURCE: OnceLock<(Arc<dyn FrameSource>, String)> = OnceLock::new();
 
 fn source() -> (Arc<dyn FrameSource>, String) {
@@ -69,6 +71,7 @@ fn open_ws(src: Arc<dyn FrameSource>, width: u32, height: u32) -> Result<(Open, 
     let notes: fundacad_frames::Notes = Arc::new(|s| eprintln!("[frames] {s}"));
     let t = WebSocketTransport::start(src, authorize, Some(notes), width, height).map_err(|e| e.to_string())?;
     let opened = Opened {
+        id: 0,
         kind: "websocket",
         generation: t.generation(),
         port: Some(t.port()),
@@ -87,17 +90,17 @@ pub async fn frames_open(
     height: u32,
     prefer: Option<String>,
 ) -> Result<Opened, String> {
-    let (width, height) = (width.max(1), height.max(1));
+    let (width, height) = frame_size(width, height)?;
     tauri::async_runtime::spawn_blocking(move || {
-        close();
+        close_open(OPEN.take());
         let (src, name) = source();
         #[cfg(windows)]
         if prefer.as_deref() != Some("websocket") {
             match shared::SharedBufferTransport::open(window, src.clone(), width, height) {
                 Ok(t) => {
                     let generation = t.generation();
-                    *OPEN.lock().unwrap() = Some(Open::Shared(t));
-                    return Ok(Opened { kind: "sharedbuffer", generation, port: None, token: None, source: name });
+                    let id = install(Open::Shared(t));
+                    return Ok(Opened { id, kind: "sharedbuffer", generation, port: None, token: None, source: name });
                 }
                 Err(e) => eprintln!("[frames] no shared buffers, WebSocket instead: {e}"),
             }
@@ -106,11 +109,17 @@ pub async fn frames_open(
         let _ = (window, prefer);
         let (open, mut opened) = open_ws(src, width, height)?;
         opened.source = name;
-        *OPEN.lock().unwrap() = Some(open);
+        opened.id = install(open);
         Ok(opened)
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+fn install(open: Open) -> u64 {
+    let (id, displaced) = OPEN.replace(open);
+    close_open(displaced);
+    id
 }
 
 /// The one invoke per frame on the shared buffer path. Releases the slots the
@@ -120,9 +129,12 @@ pub async fn frames_open(
 pub async fn frames_next(release: Vec<(usize, u32)>) -> Result<Next, String> {
     #[cfg(windows)]
     {
-        let t = match OPEN.lock().unwrap().as_ref() {
-            Some(Open::Shared(t)) => t.clone(),
-            _ => return Err("no shared buffers are open".into()),
+        let t = match OPEN.with(|o| match o {
+            Some(Open::Shared(t)) => Some(t.clone()),
+            _ => None,
+        }) {
+            Some(t) => t,
+            None => return Err("no shared buffers are open".into()),
         };
         tauri::async_runtime::spawn_blocking(move || t.next(release))
             .await
@@ -138,33 +150,33 @@ pub async fn frames_next(release: Vec<(usize, u32)>) -> Result<Next, String> {
 /// Returns the generation frames of the new size carry.
 #[tauri::command]
 pub async fn frames_resize(width: u32, height: u32) -> Result<u32, String> {
-    let (width, height) = (width.max(1), height.max(1));
+    let (width, height) = frame_size(width, height)?;
     tauri::async_runtime::spawn_blocking(move || {
         #[cfg(windows)]
-        let shared = match OPEN.lock().unwrap().as_ref() {
+        let shared = OPEN.with(|o| match o {
             Some(Open::Shared(t)) => Some(t.clone()),
             _ => None,
-        };
+        });
         #[cfg(windows)]
         if let Some(t) = shared {
             return t.resize_now(width, height);
         }
-        match OPEN.lock().unwrap().as_ref() {
+        OPEN.with(|o| match o {
             Some(open) => Ok(open.transport().resize(width, height)),
             None => Err("no frame transport is open".into()),
-        }
+        })
     })
     .await
     .map_err(|e| e.to_string())?
 }
 
+/// Closes the transport `id` names, unless a newer one replaced it already.
 #[tauri::command]
-pub async fn frames_close() {
-    let _ = tauri::async_runtime::spawn_blocking(close).await;
+pub async fn frames_close(id: u64) {
+    let _ = tauri::async_runtime::spawn_blocking(move || close_open(OPEN.take_if(id))).await;
 }
 
-fn close() {
-    let open = OPEN.lock().unwrap().take();
+fn close_open(open: Option<Open>) {
     #[cfg(windows)]
     if let Some(Open::Shared(t)) = &open {
         t.close();
@@ -176,10 +188,10 @@ fn close() {
 mod shared {
     use std::cell::RefCell;
     use std::sync::atomic::{AtomicU32, Ordering};
-    use std::sync::{mpsc, Arc, Mutex};
+    use std::sync::{mpsc, Arc};
     use std::time::Duration;
 
-    use fundacad_frames::{frame_bytes, FrameRing, FrameSource, Transport, SLOTS};
+    use fundacad_frames::{frame_bytes, Buffers, FrameSource, Transport, SLOTS};
     use webview2_com::Microsoft::Web::WebView2::Win32::{
         ICoreWebView2Environment12, ICoreWebView2SharedBuffer, ICoreWebView2_17, ICoreWebView2_2,
         COREWEBVIEW2_SHARED_BUFFER_ACCESS_READ_ONLY,
@@ -208,8 +220,7 @@ mod shared {
 
     pub struct SharedBufferTransport {
         window: tauri::WebviewWindow,
-        ring: FrameRing,
-        slots: Mutex<Slots>,
+        buffers: Buffers<Slots>,
         seq: AtomicU32,
         source: Arc<dyn FrameSource>,
     }
@@ -223,8 +234,7 @@ mod shared {
         ) -> Result<Arc<SharedBufferTransport>, String> {
             let t = Arc::new(SharedBufferTransport {
                 window,
-                ring: FrameRing::new(),
-                slots: Mutex::new(Slots { ptrs: [0; SLOTS], width, height }),
+                buffers: Buffers::new(Slots { ptrs: [0; SLOTS], width, height }),
                 seq: AtomicU32::new(0),
                 source,
             });
@@ -233,39 +243,36 @@ mod shared {
         }
 
         pub fn generation(&self) -> u32 {
-            self.ring.generation()
+            self.buffers.ring.generation()
         }
 
         pub fn resize_now(&self, width: u32, height: u32) -> Result<u32, String> {
-            let generation = self.ring.retire();
-            let ptrs = self.post(generation, width, height)?;
-            *self.slots.lock().unwrap() = Slots { ptrs, width, height };
-            self.ring.install(generation);
-            Ok(generation)
+            self.buffers.swap(|generation| {
+                let ptrs = self.post(generation, width, height)?;
+                Ok(Slots { ptrs, width, height })
+            })
         }
 
         pub fn next(&self, release: Vec<(usize, u32)>) -> Result<Next, String> {
             for (index, generation) in release {
-                self.ring.release(index, generation);
+                self.buffers.ring.release(index, generation);
             }
-            let slot = self.ring.begin(SLOT_WAIT).ok_or("the page holds every frame buffer")?;
-            // Stable while the slot is Writing: retire waits for it before the
-            // buffers are replaced.
-            let s = *self.slots.lock().unwrap();
+            let slot = self.buffers.ring.begin(SLOT_WAIT).ok_or("the page holds every frame buffer")?;
+            let s = self.buffers.mem();
             let seq = self.seq.fetch_add(1, Ordering::SeqCst).wrapping_add(1);
             let bytes = frame_bytes(s.width, s.height);
             // SAFETY: the section is `bytes` long, alive until retire, and the
             // page does not hold this slot, so nothing reads it while it is written.
             let out = unsafe { std::slice::from_raw_parts_mut(s.ptrs[slot.index] as *mut u8, bytes) };
             self.source.render(out, s.width, s.height, seq);
-            self.ring.publish(slot);
+            self.buffers.ring.publish(slot);
             Ok(Next { index: slot.index, generation: slot.generation, seq, width: s.width, height: s.height })
         }
 
         pub fn close(&self) {
-            self.ring.close();
-            let _ = self.ring.retire();
-            let _ = self.window.with_webview(|_| close_posted());
+            self.buffers.close(|| {
+                let _ = self.window.with_webview(|_| close_posted());
+            });
         }
 
         /// Closes the old buffers and posts three new ones tagged with
@@ -291,7 +298,7 @@ mod shared {
         fn resize(&self, width: u32, height: u32) -> u32 {
             self.resize_now(width, height).unwrap_or_else(|e| {
                 eprintln!("[frames] resize: {e}");
-                self.ring.generation()
+                self.buffers.ring.generation()
             })
         }
     }

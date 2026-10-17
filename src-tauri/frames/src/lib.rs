@@ -6,9 +6,11 @@
 //! WebKitGTK.
 
 mod ring;
+mod swap;
 mod ws;
 
 pub use ring::{FrameRing, Slot, SLOTS};
+pub use swap::{Buffers, Current};
 pub use ws::{Authorize, Notes, WebSocketTransport, MAX_CONNECTIONS};
 
 /// RGBA8.
@@ -33,6 +35,18 @@ pub trait Transport: Send + Sync {
     fn resize(&self, width: u32, height: u32) -> u32;
 }
 
+/// Each side of a frame. Larger asks are refused rather than allocated, three
+/// 8192 square buffers are already 768 MB.
+pub const MAX_SIDE: u32 = 8192;
+
+/// A size the page asked for, at least one pixel a side.
+pub fn frame_size(width: u32, height: u32) -> Result<(u32, u32), String> {
+    if width > MAX_SIDE || height > MAX_SIDE {
+        return Err(format!("a {width} x {height} frame is over the {MAX_SIDE} pixel side limit"));
+    }
+    Ok((width.max(1), height.max(1)))
+}
+
 pub fn frame_bytes(width: u32, height: u32) -> usize {
     width as usize * height as usize * BYTES_PER_PIXEL
 }
@@ -49,4 +63,17 @@ pub fn read_header(b: &[u8]) -> Option<[u32; 4]> {
     }
     let w = |i: usize| u32::from_le_bytes(b[i * 4..i * 4 + 4].try_into().unwrap());
     Some([w(0), w(1), w(2), w(3)])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_frame_size_over_the_limit_is_refused() {
+        assert_eq!(frame_size(0, 0), Ok((1, 1)));
+        assert_eq!(frame_size(MAX_SIDE, 1080), Ok((MAX_SIDE, 1080)));
+        assert!(frame_size(MAX_SIDE + 1, 1).is_err());
+        assert!(frame_size(1, u32::MAX).is_err());
+    }
 }

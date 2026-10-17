@@ -53,8 +53,11 @@ const BUFFER_WAIT_MS = 2000;
 /** One resize per settled drag, each one reallocates the native buffers. */
 const RESIZE_SETTLE_MS = 150;
 const LOG_EVERY = 240;
+/** The app refuses larger frames (MAX_SIDE in src-tauri/frames), the canvas scales up. */
+const MAX_SIDE = 8192;
 
 interface Opened {
+  id: number;
   kind: "sharedbuffer" | "websocket";
   generation: number;
   port: number | null;
@@ -94,6 +97,8 @@ export class SharedBufferLink implements FrameLink {
   private newest = 0;
   private waiters = new Set<() => void>();
   private done: [number, number][] = [];
+  /** The app's name for the transport, set once frames_open answers. */
+  id = 0;
 
   constructor(private wv: WebView2) {
     wv.addEventListener("sharedbufferreceived", this.onBuffer);
@@ -159,11 +164,16 @@ export class SharedBufferLink implements FrameLink {
     return invoke<number>("frames_resize", { width, height });
   }
 
-  close() {
+  /** Stops listening and lets go of the buffers, the app side stays open. */
+  detach() {
     this.wv.removeEventListener("sharedbufferreceived", this.onBuffer);
     for (const v of this.buffers.values()) this.wv.releaseBuffer(v.buf);
     this.buffers.clear();
-    void invoke("frames_close").catch(() => {});
+  }
+
+  close() {
+    this.detach();
+    void invoke("frames_close", { id: this.id }).catch(() => {});
   }
 }
 
@@ -173,7 +183,10 @@ export class WebSocketLink implements FrameLink {
   readonly kind = "websocket";
   private waiting: { ok: (f: NativeFrame) => void; fail: (e: Error) => void }[] = [];
 
-  private constructor(private ws: WebSocket) {
+  private constructor(
+    private ws: WebSocket,
+    private id: number,
+  ) {
     ws.onmessage = (e) => {
       const w = this.waiting.shift();
       if (!w || !(e.data instanceof ArrayBuffer)) return;
@@ -192,11 +205,11 @@ export class WebSocketLink implements FrameLink {
     };
   }
 
-  static open(port: number, token: string): Promise<WebSocketLink> {
+  static open(port: number, token: string, id: number): Promise<WebSocketLink> {
     return new Promise((ok, fail) => {
       const ws = new WebSocket(`ws://127.0.0.1:${port}/?token=${encodeURIComponent(token)}`);
       ws.binaryType = "arraybuffer";
-      ws.onopen = () => ok(new WebSocketLink(ws));
+      ws.onopen = () => ok(new WebSocketLink(ws, id));
       ws.onerror = () => fail(new Error("the frame socket refused the page"));
     });
   }
@@ -220,7 +233,7 @@ export class WebSocketLink implements FrameLink {
 
   close() {
     this.ws.close();
-    void invoke("frames_close").catch(() => {});
+    void invoke("frames_close", { id: this.id }).catch(() => {});
   }
 }
 
@@ -232,13 +245,21 @@ export async function connectNative(width: number, height: number, prefer?: stri
   try {
     o = await invoke<Opened>("frames_open", { width, height, prefer: prefer ?? null });
   } catch (e) {
-    shared?.close();
+    shared?.detach();
     throw e;
   }
-  if (o.kind === "sharedbuffer" && shared) return { link: shared, generation: o.generation, source: o.source };
-  shared?.close();
+  if (o.kind === "sharedbuffer" && shared) {
+    shared.id = o.id;
+    return { link: shared, generation: o.generation, source: o.source };
+  }
+  shared?.detach();
   if (o.port == null || o.token == null) throw new Error("the app opened no frame transport");
-  return { link: await WebSocketLink.open(o.port, o.token), generation: o.generation, source: o.source };
+  try {
+    return { link: await WebSocketLink.open(o.port, o.token, o.id), generation: o.generation, source: o.source };
+  } catch (e) {
+    void invoke("frames_close", { id: o.id }).catch(() => {});
+    throw e;
+  }
 }
 
 const VERT = `#version 300 es
@@ -344,8 +365,8 @@ export class NativeTracer implements TracerBackend {
   setSize(cssWidth: number, cssHeight: number, pixelRatio: number) {
     this.canvas.style.width = `${cssWidth}px`;
     this.canvas.style.height = `${cssHeight}px`;
-    this.width = Math.max(1, Math.floor(cssWidth * pixelRatio));
-    this.height = Math.max(1, Math.floor(cssHeight * pixelRatio));
+    this.width = Math.min(MAX_SIDE, Math.max(1, Math.floor(cssWidth * pixelRatio)));
+    this.height = Math.min(MAX_SIDE, Math.max(1, Math.floor(cssHeight * pixelRatio)));
     this.queueResize();
   }
 
