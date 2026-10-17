@@ -122,6 +122,10 @@ impl FrameRing {
         }
     }
 
+    pub fn is_closed(&self) -> bool {
+        self.state.lock().unwrap().closed
+    }
+
     /// Wakes every waiting writer for good.
     pub fn close(&self) {
         let mut s = self.state.lock().unwrap();
@@ -263,6 +267,23 @@ mod tests {
         let distinct: std::collections::BTreeSet<_> = slots.iter().map(|s| s.index).collect();
         assert_eq!(distinct.len(), SLOTS);
         assert!(ring.begin(Duration::from_millis(20)).is_none(), "an old release freed nothing");
+    }
+
+    #[test]
+    fn an_old_release_never_frees_a_held_slot_of_the_new_generation() {
+        let ring = installed();
+        let old = ring.begin(WAIT).unwrap();
+        ring.publish(old);
+        let g = ring.retire();
+        ring.install(g);
+        for _ in 0..SLOTS {
+            let s = ring.begin(WAIT).unwrap();
+            ring.publish(s);
+        }
+        ring.release(old.index, old.generation);
+        assert!(ring.begin(Duration::from_millis(20)).is_none(), "an old release freed a slot the page reads");
+        ring.release(old.index, g);
+        assert_eq!(ring.begin(WAIT), Some(Slot { index: old.index, generation: g }));
     }
 
     #[test]
