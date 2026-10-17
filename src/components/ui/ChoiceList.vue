@@ -1,6 +1,6 @@
 <script setup lang="ts" generic="T extends string">
 defineProps<{
-  options: readonly { value: T; label: string; hint?: string; disabled?: boolean; title?: string | undefined }[];
+  options: readonly { value: T; label: string; hint?: string; disabled?: boolean; /** Greyed but still answers a click. */ clickable?: boolean; title?: string | undefined }[];
   modelValue: T | null;
 }>();
 const emit = defineEmits<{ "update:modelValue": [T] }>();
@@ -18,7 +18,7 @@ const emit = defineEmits<{ "update:modelValue": [T] }>();
       :aria-checked="o.value === modelValue"
       :aria-disabled="o.disabled || undefined"
       :title="o.title"
-      @click="o.disabled || emit('update:modelValue', o.value)"
+      @click="(o.disabled && !o.clickable) || emit('update:modelValue', o.value)"
     >
       <span class="opt-label">{{ o.label }}</span>
       <span v-if="o.hint" class="opt-hint">{{ o.hint }}</span>

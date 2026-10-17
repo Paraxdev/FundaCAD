@@ -39,16 +39,48 @@ export const PATH_TRACING_FAULT = "Path tracing stopped after a GPU error and st
 
 export type PathTracedBlockReason = "perf" | "nogpu" | "probing" | "fault";
 
+const OVERRIDE_WINDOW_MS = 6000;
+export const PATH_TRACING_AGAIN = "Click again to path trace anyway until FundaCAD restarts.";
+
+// In memory on purpose: a restart greys Path traced again.
+let perfOverride = false;
+let warnedAt = -Infinity;
+
+export function resetPathTracedOverride(): void {
+  perfOverride = false;
+  warnedAt = -Infinity;
+}
+
 /** Why Path traced cannot be chosen, or null when it can. The performance
  *  reason is checked first so a weak machine reads the user's wording. */
 export function pathTracedBlock(tier: RenderTier): { reason: PathTracedBlockReason; tooltip: string } | null {
-  if (tier.lowPower || tier.auto) {
+  if ((tier.lowPower || tier.auto) && !perfOverride) {
     return { reason: "perf", tooltip: tier.auto ? `${PATH_TRACING_OFF} ${PATH_TRACING_AUTO}` : PATH_TRACING_OFF };
   }
   if (tier.webgpu === undefined) return { reason: "probing", tooltip: PATH_TRACING_PROBING };
   if (!tier.webgpu) return { reason: "nogpu", tooltip: PATH_TRACING_NO_GPU };
   if (tier.traceFault) return { reason: "fault", tooltip: PATH_TRACING_FAULT };
   return null;
+}
+
+/** A click on a blocked Path traced. The performance block warns on the first
+ *  click and lifts for this session on a second one while that warning shows;
+ *  every other block stays. */
+export function requestPathTraced(
+  tier: RenderTier,
+  now: number = Date.now(),
+): { result: "free" | "warn" | "enabled" | "blocked"; message: string } {
+  const block = pathTracedBlock(tier);
+  if (!block) return { result: "free", message: "" };
+  if (block.reason !== "perf") return { result: "blocked", message: block.tooltip };
+  const hard = pathTracedBlock({ ...tier, lowPower: false, auto: false });
+  if (hard) return { result: "blocked", message: block.tooltip };
+  if (now - warnedAt <= OVERRIDE_WINDOW_MS) {
+    perfOverride = true;
+    return { result: "enabled", message: "" };
+  }
+  warnedAt = now;
+  return { result: "warn", message: `${block.tooltip} ${PATH_TRACING_AGAIN}` };
 }
 
 /** The mode to open with. `guardSet` reads the flag left by a tracer start

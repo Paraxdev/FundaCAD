@@ -3,7 +3,7 @@ import { DEFAULT_RENDER, renderPrefs, setRenderPref } from "../../src/ui/renderP
 import { setWorkspace } from "../../src/ui/workspace";
 import {
   PATH_TRACING_AUTO, PATH_TRACING_NO_GPU, PATH_TRACING_OFF, asViewMode, bootViewMode, chooseViewMode,
-  effectiveViewMode, nextViewMode, pathTracedBlock, savedViewMode,
+  effectiveViewMode, nextViewMode, pathTracedBlock, requestPathTraced, resetPathTracedOverride, savedViewMode,
 } from "../../src/ui/viewMode";
 
 const fast = { lowPower: false, auto: false, webgpu: true };
@@ -13,6 +13,7 @@ const noGpu = { lowPower: false, auto: false, webgpu: false };
 const probing = { lowPower: false, auto: false };
 
 afterEach(() => {
+  resetPathTracedOverride();
   setWorkspace("model");
   setRenderPref("viewModeModel", DEFAULT_RENDER.viewModeModel);
   setRenderPref("viewModeRender", DEFAULT_RENDER.viewModeRender);
@@ -135,5 +136,49 @@ describe("crash guard", () => {
     expect(bootViewMode("pathtraced", () => false)).toEqual({ mode: "pathtraced", notice: false });
     expect(bootViewMode("matcap", () => true)).toEqual({ mode: "matcap", notice: false });
     expect(bootViewMode("pathtraced", () => { throw new Error("no storage"); })).toEqual({ mode: "pathtraced", notice: false });
+  });
+});
+
+describe("the session override of the performance block", () => {
+  it("warns on the first click and enables on a second click while the warning shows", () => {
+    expect(requestPathTraced(perf, 1000)).toEqual({ result: "warn", message: expect.stringContaining(PATH_TRACING_OFF) });
+    expect(pathTracedBlock(perf)?.reason).toBe("perf");
+    expect(requestPathTraced(perf, 2000).result).toBe("enabled");
+    expect(pathTracedBlock(perf)).toBeNull();
+    expect(pathTracedBlock(weak)).toBeNull();
+    expect(chooseViewMode("pathtraced", perf)).toBe(true);
+    expect(effectiveViewMode(perf)).toBe("pathtraced");
+  });
+
+  it("needs the second click while the warning is still showing", () => {
+    requestPathTraced(perf, 1000);
+    expect(requestPathTraced(perf, 1000 + 60000).result).toBe("warn");
+    expect(pathTracedBlock(perf)?.reason).toBe("perf");
+  });
+
+  it("leaves a missing WebGPU and a GPU fault as hard disables", () => {
+    const noGpuPerf = { lowPower: true, auto: false, webgpu: false };
+    expect(requestPathTraced(noGpuPerf, 1000).result).toBe("blocked");
+    expect(requestPathTraced(noGpuPerf, 1500).result).toBe("blocked");
+    expect(pathTracedBlock(noGpuPerf)?.reason).toBe("perf");
+    expect(chooseViewMode("pathtraced", noGpuPerf)).toBe(false);
+    const faultPerf = { ...perf, traceFault: true };
+    requestPathTraced(faultPerf, 1000);
+    expect(requestPathTraced(faultPerf, 1500).result).toBe("blocked");
+    expect(chooseViewMode("pathtraced", faultPerf)).toBe(false);
+  });
+
+  it("is in memory only", async () => {
+    const before = JSON.stringify(renderPrefs());
+    requestPathTraced(perf, 1000);
+    requestPathTraced(perf, 1500);
+    expect(JSON.stringify(renderPrefs())).toBe(before);
+    const store = (globalThis as { localStorage?: Storage }).localStorage;
+    for (let i = 0; store && i < store.length; i++) {
+      expect(store.getItem(store.key(i)!) ?? "").not.toMatch(/override/i);
+    }
+    vi.resetModules();
+    const fresh = await import("../../src/ui/viewMode");
+    expect(fresh.pathTracedBlock(perf)?.reason).toBe("perf");
   });
 });
