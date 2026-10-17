@@ -366,7 +366,9 @@ impl Tracer {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let empty = |d: &wgpu::Device| storage(d, 16, wgpu::BufferUsages::empty());
+        // Room for one element of the largest bound struct (Inst, 128 bytes):
+        // frames run before the first scene lands.
+        let empty = |d: &wgpu::Device| storage(d, 256, wgpu::BufferUsages::empty());
         let shading = Shading {
             pos: empty(&device),
             nrm: empty(&device),
@@ -589,6 +591,14 @@ impl Tracer {
             rows.extend([off[0], off[1], base, off[2], off[3], n, colors, 0].map(f32::from_bits));
         }
         self.n_inst = insts.len() as u32;
+        // A runtime array binding needs room for one element even when the
+        // loop traces before the first mesh lands; n_inst keeps it unread.
+        if rows.is_empty() {
+            rows.resize(32, 0.0);
+        }
+        if mats.is_empty() {
+            mats.push(pack_material(&Default::default()));
+        }
         let u = wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST;
         self.insts = buffer(&self.device, &self.queue, bytes(&rows), u);
         self.mats = buffer(&self.device, &self.queue, bytes(&mats), u);

@@ -55,4 +55,27 @@ mod t {
         s.frame(64, 48, Duration::from_millis(12));
         assert!(s.samples() > 4);
     }
+
+    /// The page opens frames before its scene lands, and a body's mesh comes
+    /// after the body list, so the loop traces with no instance at all first.
+    #[test]
+    fn frames_before_the_scene_and_before_its_meshes_trace_the_sky() {
+        for software in [true, false] {
+            let Ok(mut s) = Tracer::new(TracerOptions { software, ..Default::default() }) else {
+                eprintln!("skipped: no adapter");
+                return;
+            };
+            if !software && s.path() != Path::RayQuery {
+                continue;
+            }
+            s.frame(32, 24, Duration::from_millis(12));
+            let bodies: Vec<BodyDesc> = serde_json::from_str(
+                r#"[{"id":"body1","key":"body1:e1:7:0:0","matrix":[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]}]"#,
+            )
+            .unwrap();
+            s.set_bodies(bodies);
+            let px = s.frame(32, 24, Duration::from_millis(12));
+            assert_eq!(px.len(), 32 * 24 * 4);
+        }
+    }
 }
