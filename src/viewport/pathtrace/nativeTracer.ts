@@ -492,13 +492,19 @@ export class NativeTracer implements TracerBackend {
   }
 
   async samples(): Promise<number> {
+    let s: { samples: number; fault: string | null };
     try {
-      const s = (await (this.o.call ?? invoke)("pt_status")) as { samples: number; fault: string | null };
-      if (s.fault) this.fault(`The native tracer stopped: ${s.fault}`);
-      return s.samples;
-    } catch {
-      return this.count;
+      s = (await this.call("pt_status")) as typeof s;
+    } catch (e) {
+      this.fault(`The native tracer stopped: ${e instanceof Error ? e.message : String(e)}`);
+      throw e;
     }
+    if (s.fault) this.fault(`The native tracer stopped: ${s.fault}`);
+    return s.samples;
+  }
+
+  private call(cmd: string, args?: Record<string, unknown>): Promise<unknown> {
+    return this.o.call ? this.o.call(cmd, args) : invoke(cmd, args as never);
   }
 
   onFault(cb: (why: string) => void) {

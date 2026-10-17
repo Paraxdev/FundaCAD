@@ -25,7 +25,7 @@ class FakeLink implements FrameLink {
   }
 }
 
-function setup(link: FakeLink, generation = 1) {
+function setup(link: FakeLink, generation = 1, call?: (cmd: string, args?: unknown) => Promise<unknown>) {
   const uploads: number[] = [];
   const blit = (log: string[]): Blit => ({
     maxTextureSize: 4096,
@@ -40,6 +40,7 @@ function setup(link: FakeLink, generation = 1) {
     canvas,
     blit: () => blit(link.log),
     connect: async () => ({ link, generation, source: "test" }),
+    call: call ?? (async (cmd) => (cmd === "pt_status" ? { samples: 1, fault: null } : undefined)),
   });
   return { t, uploads };
 }
@@ -101,5 +102,18 @@ describe("the native tracer backend", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("faults when the app has no tracer to report on instead of counting its own frames", async () => {
+    const link = new FakeLink();
+    const { t } = setup(link, 1, async (cmd) => {
+      if (cmd === "pt_status") throw new Error("no native tracer on this machine");
+    });
+    const faults: string[] = [];
+    t.onFault((why) => faults.push(why));
+    await t.init();
+    await t.renderSample(0);
+    await expect(t.samples()).rejects.toThrow("no native tracer");
+    expect(faults).toEqual(["The native tracer stopped: no native tracer on this machine"]);
   });
 });

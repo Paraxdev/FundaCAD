@@ -60,6 +60,7 @@ import {
   asBloom,
   asEnvironment,
   asTangentEdges,
+  asTracerPref,
   MAX_BRIGHTNESS,
   MIN_BRIGHTNESS,
   onRenderPrefsChange,
@@ -133,6 +134,11 @@ const BACKGROUNDS = [
   { id: "dark", label: "Dark" },
   { id: "grey", label: "Grey" },
   { id: "light", label: "Light" },
+];
+const TRACERS = [
+  { id: "auto", label: "Auto" },
+  { id: "native", label: "Native" },
+  { id: "webgpu", label: "WebGPU" },
 ];
 const TANGENT = [
   { id: "show", label: "Show" },
@@ -212,6 +218,7 @@ function pickBackground(id: string) { const v = asBackground(id); if (v) setRend
 function onBrightness(ev: Event) { setRenderPref("brightness", Number.parseFloat(value(ev))); }
 function onDwell(ev: Event) { setHoverDwellMs(Number.parseFloat(value(ev))); }
 function onBloom(ev: Event) { const v = asBloom(value(ev)); if (v !== null) setRenderPref("bloom", v); }
+function pickTracer(id: string) { const v = asTracerPref(id); if (v) setRenderPref("tracer", v); }
 function pickTangent(id: string) { const v = asTangentEdges(id); if (v) setRenderPref("tangentEdges", v); }
 function onPerformanceMode(ev: Event) { setRenderPref("performanceMode", (ev.target as HTMLInputElement).checked); }
 function onPotatoMode(ev: Event) { setRenderPref("potatoMode", (ev.target as HTMLInputElement).checked); }
@@ -382,6 +389,27 @@ function onClassicCamera(ev: Event) {
                 a material with Emission turned up and a hard specular highlight and nothing
                 else, so an ordinary part looks the same; turn it up to catch everyday
                 highlights too.
+              </p>
+            </div>
+            <div class="pref-card">
+              <div class="pref-head">
+                <span class="pref-title">Path tracer</span>
+                <div id="prefs-tracer" class="pref-seg" role="radiogroup" aria-label="Path tracer">
+                  <button
+                    v-for="t in TRACERS"
+                    :key="t.id"
+                    type="button"
+                    role="radio"
+                    :aria-checked="render.tracer === t.id"
+                    :class="{ on: render.tracer === t.id }"
+                    @click="pickTracer(t.id)"
+                  >{{ t.label }}</button>
+                </div>
+              </div>
+              <p class="pref-hint">
+                Where Path traced runs. Native traces in the app itself, WebGPU in the
+                viewport's web view; Auto picks the faster one this computer has. If the
+                one picked is missing, the other is used.
               </p>
             </div>
             <div class="pref-card">

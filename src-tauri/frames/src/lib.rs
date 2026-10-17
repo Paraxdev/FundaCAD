@@ -10,7 +10,7 @@ mod swap;
 mod ws;
 
 pub use ring::{FrameRing, Slot, SLOTS};
-pub use swap::{Buffers, Current};
+pub use swap::{Buffers, Current, Reopen};
 pub use ws::{Authorize, Notes, WebSocketTransport, MAX_CONNECTIONS};
 
 /// RGBA8.

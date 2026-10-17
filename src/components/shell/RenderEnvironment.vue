@@ -15,7 +15,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 import {
   ENVIRONMENTS_LIST, MAX_BRIGHTNESS, MAX_EXPOSURE, MIN_BRIGHTNESS, MIN_EXPOSURE, hdrHashOf,
   onRenderPrefsChange, performanceModeOn, renderPrefs, setRenderPref,
-  type Background, type Denoise, type Environment,
+  type Background, type Denoise, type Environment, type TracerPref,
 } from "../../ui/renderPrefs";
 import {
   activeSavedId, applySavedEnvironment, chooseBuiltInEnvironment, deleteSavedEnvironment, envLibrary, hdrName,
@@ -116,6 +116,11 @@ const DENOISES: { id: Denoise; label: string }[] = [
   { id: "off", label: "Off" },
   { id: "standard", label: "Standard" },
   { id: "high", label: "High quality" },
+];
+const TRACERS: { id: TracerPref; label: string }[] = [
+  { id: "auto", label: "Auto" },
+  { id: "native", label: "Native" },
+  { id: "webgpu", label: "WebGPU" },
 ];
 const aimKey = () => {
   const tool = engine.tools.lightAim;
@@ -364,6 +369,24 @@ const onBloom = (e: Event) =>
       <div class="sm-hint">
         Path traced cleans the grain out of the finished picture. High quality
         takes a few seconds longer.
+      </div>
+    </section>
+
+    <section class="rd-section">
+      <h3 class="rd-head">Tracer</h3>
+      <div class="rd-chips" role="group" aria-label="Path tracer">
+        <button
+          v-for="t in TRACERS"
+          :key="t.id"
+          class="rd-chip"
+          :class="{ active: prefs.tracer === t.id }"
+          :data-tracer="t.id"
+          @click="setRenderPref('tracer', t.id)"
+        >{{ t.label }}</button>
+      </div>
+      <div class="sm-hint">
+        Where Path traced runs: in the app itself or in the web view. Auto picks
+        the faster one this computer has.
       </div>
     </section>
 

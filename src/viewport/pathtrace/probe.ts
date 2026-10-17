@@ -1,5 +1,8 @@
 // Whether this web view can path trace: a real WebGPU adapter, not a software
-// fallback. Asked once per session and kept.
+// fallback, and whether the app has a native tracer. Asked once per session
+// and kept.
+
+import type { NativeProbe } from "./choose";
 
 export interface GpuProbe {
   webgpu: boolean;
@@ -60,4 +63,31 @@ export function describeProbe(p: GpuProbe | null): string {
   if (!p.webgpu) return `WebGPU: none (${p.isFallbackAdapter ? "software fallback adapter" : p.error ?? "no adapter"})`;
   const mib = Math.round(p.maxStorageBufferBindingSize / 1048576);
   return `WebGPU: ${p.vendor || "unknown"} ${p.architecture}, storage binding ${mib} MiB, probe ${Math.round(p.ms)} ms`;
+}
+
+/** Tracer::new takes 350 to 610 ms; a probe far past that is a stuck driver. */
+const NATIVE_PROBE_TIMEOUT_MS = 8000;
+
+/** Whether the app has a native tracer. Outside the app there is none. */
+export function probeNative(
+  call?: (cmd: string) => Promise<unknown>,
+  timeoutMs = NATIVE_PROBE_TIMEOUT_MS,
+): Promise<NativeProbe> {
+  if (!call && !("__TAURI_INTERNALS__" in globalThis)) return Promise.resolve({ available: false, reason: "not in the app" });
+  const ask = call ?? (async (cmd: string) => (await import("@tauri-apps/api/core")).invoke(cmd));
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<NativeProbe>((resolve) => {
+    timer = setTimeout(() => resolve({ available: false, reason: "the probe did not answer" }), timeoutMs);
+  });
+  const asked = ask("pt_probe").then(
+    (p) => p as NativeProbe,
+    (e: unknown) => ({ available: false, reason: String(e) }),
+  );
+  return Promise.race([asked, late]).finally(() => clearTimeout(timer));
+}
+
+export function describeNative(p: NativeProbe | null): string {
+  if (!p) return "native tracer: checking";
+  if (!p.available) return `native tracer: none (${p.reason ?? "no adapter"})`;
+  return `native tracer: ${p.path === "rayquery" ? "ray query" : "software"}, ${p.adapter ?? "unknown"}${p.denoise ? ", denoise" : ""}`;
 }
