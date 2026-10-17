@@ -1,6 +1,6 @@
 import { saveDocument, saveDocumentAs, exportModel, importModel } from "../io/files";
 import { setWorkspace } from "../ui/workspace";
-import { chooseViewMode, nextViewMode, pathTracedBlock, type ViewMode } from "../ui/viewMode";
+import { chooseViewMode, nextViewMode, requestPathTraced, type ViewMode } from "../ui/viewMode";
 import { contributedAction } from "../plugins/contrib";
 import { openParamsDialog } from "../ui/paramsDialog";
 import { toggleShortcutHUD } from "../input/shortcuts";
@@ -397,7 +397,15 @@ export function createActions(e: Engine): (action: string) => void {
       case "viewmode-pathtraced": {
         const tier = e.viewport.renderTier;
         const mode = action.slice("viewmode-".length) as ViewMode;
-        if (!chooseViewMode(mode, tier)) e.setStatus(pathTracedBlock(tier)?.tooltip ?? "", "");
+        if (mode === "pathtraced") {
+          const ask = requestPathTraced(tier);
+          if (ask.result === "warn" || ask.result === "blocked") {
+            e.setStatus(ask.message, "");
+            break;
+          }
+          if (ask.result === "enabled") e.viewport.tierChanged();
+        }
+        chooseViewMode(mode, e.viewport.renderTier);
         break;
       }
       case "viewmode-cycle":

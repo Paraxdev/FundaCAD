@@ -65,7 +65,7 @@ import type { DocumentStore } from "../document/store";
 import type { BodyFinish } from "../document/materials";
 import { BodyFinishLayer, sameFinishMap, sameStringMap } from "./bodyFinish";
 import { hdrHashOf, onRenderPrefsChange, renderPrefs, setRenderPref } from "../ui/renderPrefs";
-import { bootViewMode, chooseViewMode, effectiveViewMode, type RenderTier, type ViewMode } from "../ui/viewMode";
+import { bootViewMode, chooseViewMode, effectiveViewMode, resetPathTracedOverride, type RenderTier, type ViewMode } from "../ui/viewMode";
 import type { TraceLight, TraceLook } from "./pathtrace/backend";
 import { lensFor, type TraceLens } from "./pathtrace/camera";
 import { traceEnvironment, type TraceHemi } from "./pathtrace/environment";
@@ -354,6 +354,7 @@ export class Viewport {
       // Only when the tier actually flipped: the finishes decide glass vs alpha
       // and how many emitter lights to draw off it, and re-running them on every
       // brightness nudge would walk every body's materials for nothing.
+      if (isRenderLowPower() && !wasLow) resetPathTracedOverride();
       if (isRenderLowPower() !== wasLow) this.applyBodyFinish();
       if (isRenderLowPower() !== wasLow || this.potato !== wasPotato) {
         this.stutter.reset();
@@ -977,7 +978,7 @@ export class Viewport {
     return this.trace.picture(o).finally(() => this.requestRender());
   }
 
-  private tierChanged() {
+  tierChanged() {
     this.syncViewMode();
     for (const fn of this.tierListeners) fn();
     this.requestRender();

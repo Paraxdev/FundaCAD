@@ -247,6 +247,17 @@ function check(ok, what, detail) {
     await page.waitForTimeout(300);
     s = await state();
     check(s.mode === "realtime" && s.ptDisabled === "true" && s.ptTitle?.startsWith(PERF_TIP), "performance mode drops Path traced to Realtime", s);
+    await page.click('[data-view-mode="pathtraced"]');
+    await page.waitForTimeout(300);
+    s = await state();
+    check(s.mode === "realtime" && s.ptDisabled === "true", "the first click on the greyed Path traced only warns", s);
+    await page.click('[data-view-mode="pathtraced"]');
+    await page.waitForTimeout(500);
+    s = await state();
+    check(s.mode === "pathtraced" && s.ptDisabled !== "true", "a second click enables Path traced for the session", s);
+    const kept = await page.evaluate(() => JSON.stringify(localStorage).includes("override"));
+    check(!kept, "the session override is not saved", kept);
+    await page.click('[data-view-mode="realtime"]');
     await page.evaluate(async () => (await import("/src/ui/renderPrefs.ts")).setRenderPref("performanceMode", false));
     await page.waitForTimeout(300);
     await page.click('[data-view-mode="realtime"]');

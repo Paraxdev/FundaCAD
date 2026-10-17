@@ -150,13 +150,14 @@ const viewModes = computed(() => VIEW_MODES.map((v) => {
   const block = v.id === "pathtraced" ? pathTracedBlock(tier.value) : null;
   const hint = v.id === "pathtraced" ? PAUSED_HINT[ui.traceState] : undefined;
   const title = block ? block.tooltip : hint ? `${v.label} (Z), ${hint}` : `${v.label} (Z)`;
-  return { ...v, disabled: block !== null, title };
+  return { ...v, disabled: block !== null, softBlock: block?.reason === "perf", title };
 }));
 const viewModeChoices = computed(() => viewModes.value.map((v) => ({
-  value: v.id, label: v.label, disabled: v.disabled, title: v.disabled ? v.title : undefined,
+  value: v.id, label: v.label, disabled: v.disabled, clickable: v.softBlock, title: v.disabled ? v.title : undefined,
 })));
 function pickViewMode(m: ViewMode) {
-  if (viewModes.value.find((v) => v.id === m)?.disabled) return;
+  const mode = viewModes.value.find((v) => v.id === m);
+  if (mode?.disabled && !mode.softBlock) return;
   engine.handleAction(`viewmode-${m}`);
 }
 
