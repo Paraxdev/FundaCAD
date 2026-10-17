@@ -60,7 +60,7 @@ and takes about twenty minutes. The technical notes are in `docs/`.
 
 Most of the code and tests here are written by AI. I decide what gets built, steer it, and use the app actively.
 
-Im trying to apply real software engineering strategies and learnings to make sure the codebase and the features are a useless mess, and actively listening to any feedback that I get.
+Im trying to apply real software engineering strategies and learnings to make sure the codebase and the features aren't a useless mess, and actively listening to any feedback that I get.
 
 
 You may use AI for creating features and creating pull requests,
