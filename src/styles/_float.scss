@@ -606,6 +606,12 @@
   background: none;
   border-color: var(--float-line);
 }
+.pop-key {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  opacity: 0.7;
+}
 
 .float-toggle {
   display: grid;

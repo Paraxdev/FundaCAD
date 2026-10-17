@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_RENDER, asRenderPrefs, renderPrefs, setRenderPref } from "../../src/ui/renderPrefs";
 import { setWorkspace } from "../../src/ui/workspace";
-import { savedOverlays, setOverlay, setOverlaysOn } from "../../src/ui/viewMode";
+import { cleanViewOn, savedOverlays, setOverlay, setOverlaysOn, toggleCleanView } from "../../src/ui/viewMode";
 import { OVERLAY_KINDS, allOverlaysOn } from "../../src/viewport/overlayKinds";
 
 afterEach(() => {
@@ -44,6 +44,18 @@ describe("overlay prefs", () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+
+  it("Clean view hides them all and brings back the exact set, kinds already off staying off", () => {
+    setOverlay("grid", false, "model");
+    setOverlay("origin", false, "model");
+    const before = structuredClone(savedOverlays("model"));
+    expect(toggleCleanView("model")).toBe(true);
+    expect(cleanViewOn("model")).toBe(true);
+    expect(savedOverlays("model").on).toBe(false);
+    expect(savedOverlays("render").on).toBe(true);
+    expect(toggleCleanView("model")).toBe(false);
+    expect(savedOverlays("model")).toEqual(before);
   });
 
   it("the master switch leaves the kinds as they were", () => {

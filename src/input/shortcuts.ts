@@ -95,6 +95,7 @@ export const SHORTCUTS: Shortcut[] = [
   { key: "?", action: "shortcut-help", context: "global", label: "Shortcut help" },
   { key: "z", action: "viewmode-cycle", context: "global", label: "Next view mode" },
   { key: "z", shift: true, action: "viewmode-cycle-back", context: "global", label: "Previous view mode" },
+  { key: "v", shift: true, action: "clean-view", context: "global", label: "Clean view (hide every overlay, again to bring them back)" },
 ];
 
 /** How a shortcut is written for a human ("Shift+H", "Ctrl+U", "Home").

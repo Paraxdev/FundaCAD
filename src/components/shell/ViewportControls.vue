@@ -17,6 +17,7 @@ import { MATCAP_STYLES, onRenderPrefsChange, renderPrefs, setRenderPref, type Ma
 import { matcapSwatchUrl } from "../../ui/matcapSwatch";
 import { VIEW_MODES, pathTracedBlock, savedOverlays, setOverlay, setOverlaysOn, type ViewMode } from "../../ui/viewMode";
 import { onWorkspaceChange } from "../../ui/workspace";
+import { keyHint } from "../../input/shortcuts";
 import { OVERLAY_KINDS, OVERLAY_LABELS } from "../../viewport/overlayKinds";
 import { isRenderLowPower } from "../../viewport/render";
 import { toast } from "../../ui/toast";
@@ -143,6 +144,7 @@ const offTier = onRenderPrefsChange(() => {
 });
 onUnmounted(offTier);
 onUnmounted(onWorkspaceChange(() => { overlays.value = savedOverlays(); }));
+const cleanKey = keyHint("clean-view");
 const offTierChange = engine.viewport.onRenderTierChange(() => { tier.value = engine.viewport.renderTier; });
 onUnmounted(offTierChange);
 const PAUSED_HINT: Record<string, string> = {
@@ -375,6 +377,9 @@ async function screenshot() {
         @update:model-value="setOverlay(k, $event)"
       />
       <p class="pop-note">A running tool still shows its gizmo, and a hidden outline still selects its edge.</p>
+      <button type="button" class="pop-wide ghost" data-action="clean-view" @click="engine.handleAction('clean-view')">
+        {{ overlays.on ? "Clean view" : "Bring overlays back" }}<span v-if="cleanKey" class="pop-key">{{ cleanKey }}</span>
+      </button>
       <div class="pop-rule"></div>
       <Toggle :model-value="ui.xray" label="X-Ray" @update:model-value="engine.handleAction('toggle-xray')" />
       <Toggle :model-value="ui.wireframe" label="Wireframe" @update:model-value="engine.handleAction('toggle-wireframe')" />

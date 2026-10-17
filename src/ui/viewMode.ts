@@ -154,3 +154,14 @@ export function setOverlaysOn(on: boolean, w: Workspace = workspace()): void {
   const s = savedOverlays(w);
   setRenderPref(overlayKey(w), { on, kinds: { ...s.kinds } });
 }
+
+/** Clean view is the master switch off: every overlay goes, and turning it
+ *  back on brings the set that was showing, kinds already off staying off. */
+export function cleanViewOn(w: Workspace = workspace()): boolean {
+  return !savedOverlays(w).on;
+}
+
+export function toggleCleanView(w: Workspace = workspace()): boolean {
+  setOverlaysOn(cleanViewOn(w), w);
+  return cleanViewOn(w);
+}
