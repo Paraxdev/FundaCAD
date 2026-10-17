@@ -34,10 +34,10 @@ export function onHdrRegistered(fn: (hash: string) => void): () => void {
 /** The panorama on the inside of a sphere, so the Realtime PMREM and the Path
  *  traced cube both take it exactly like a built in room. Three's equirect is
  *  Y up and this world is Z up, so the sphere is tipped a quarter turn, then
- *  turned `rotationDeg` about Z. Exposure is the material's gain. */
+ *  turned `rotationDeg` about Z. Exposure is baked into the texture. */
 export function hdrRoom(h: HeldHdr, rotationDeg: number, exposure: number): { scene: THREE.Scene; dispose(): void } {
   const { width, height } = h.light;
-  const half = toHalfRgba(h.light);
+  const half = toHalfRgba(h.light, 2 ** exposure);
   // Rows flipped here rather than with flipY, which a data texture does not honour everywhere.
   const rows = new Uint16Array(half.length);
   const stride = width * 4;
@@ -50,7 +50,6 @@ export function hdrRoom(h: HeldHdr, rotationDeg: number, exposure: number): { sc
   const geo = new THREE.SphereGeometry(50, 96, 48);
   geo.scale(-1, 1, 1);
   const mat = new THREE.MeshBasicMaterial({ map: tex, toneMapped: false, depthWrite: false });
-  mat.color.setScalar(2 ** exposure);
   const mesh = new THREE.Mesh(geo, mat);
   mesh.rotation.x = Math.PI / 2;
   const turn = new THREE.Group();
