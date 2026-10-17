@@ -4,10 +4,10 @@
 //! builds the TLAS once.
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
-use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
-use fundacad_frames::FrameSource;
+use fundacad_frames::{FrameSource, Reopen};
 use fundacad_tracer::{decode_colors, decode_mesh, BodyDesc, Camera, Look, Path, Tracer, TracerOptions};
 use serde::Serialize;
 use tauri::ipc::{InvokeBody, Request};
@@ -22,27 +22,41 @@ struct State {
 
 pub struct TracerSource(Mutex<State>);
 
-static TRACER: OnceLock<Option<Arc<TracerSource>>> = OnceLock::new();
+static TRACER: Reopen<TracerSource> = Reopen::new();
 
 /// FUNDACAD_TRACER=software keeps the BVH path on a ray query adapter, off
-/// leaves the test pattern, both for measuring.
-pub fn tracer() -> Option<Arc<TracerSource>> {
-    TRACER
-        .get_or_init(|| {
-            let mode = std::env::var("FUNDACAD_TRACER").unwrap_or_default();
-            if mode == "off" {
-                return None;
-            }
-            let opts = TracerOptions { software: mode == "software", ..Default::default() };
-            match Tracer::new(opts) {
-                Ok(tracer) => Some(Arc::new(TracerSource(Mutex::new(State { tracer, fault: None })))),
-                Err(e) => {
-                    eprintln!("[frames] no native tracer, the test pattern instead: {e}");
-                    None
-                }
-            }
-        })
-        .clone()
+/// leaves the test pattern, both for measuring. A fresh tracer starts with no
+/// fault, so a released one comes back clean.
+pub fn tracer() -> Result<Arc<TracerSource>, String> {
+    TRACER.get(|| {
+        let mode = std::env::var("FUNDACAD_TRACER").unwrap_or_default();
+        if mode == "off" {
+            return Err("the native tracer is off (FUNDACAD_TRACER=off)".into());
+        }
+        let opts = TracerOptions { software: mode == "software", ..Default::default() };
+        Tracer::new(opts)
+            .map(|tracer| TracerSource(Mutex::new(State { tracer, fault: None })))
+            .map_err(|e| {
+                eprintln!("[frames] no native tracer: {e}");
+                e.to_string()
+            })
+    })
+}
+
+/// Only frames_open and pt_probe make a tracer, so a late scene call after a
+/// release cannot bring the device back with nothing drawing it.
+fn open() -> Result<Arc<TracerSource>, String> {
+    TRACER.current().ok_or_else(|| "the native tracer is not open".into())
+}
+
+/// The device, pipelines and scene buffers go once the closed transport drops
+/// its handle too; the next use makes a fresh tracer.
+pub fn release() -> Option<Arc<TracerSource>> {
+    TRACER.release()
+}
+
+pub fn pattern_allowed() -> bool {
+    std::env::var("FUNDACAD_TRACER").is_ok_and(|m| m == "off")
 }
 
 impl TracerSource {
@@ -90,7 +104,7 @@ impl FrameSource for TracerSource {
 }
 
 fn with<T>(f: impl FnOnce(&mut Tracer) -> T) -> Result<T, String> {
-    let t = tracer().ok_or("no native tracer on this machine")?;
+    let t = open()?;
     let mut s = t.lock();
     if let Some(f) = &s.fault {
         return Err(format!("the native tracer stopped: {f}"));
@@ -164,18 +178,56 @@ pub struct Status {
 
 #[tauri::command]
 pub fn pt_status() -> Result<Status, String> {
-    let t = tracer().ok_or("no native tracer on this machine")?;
+    let t = open()?;
     let s = t.lock();
     Ok(Status {
         samples: s.tracer.samples(),
         generation: s.tracer.generation(),
         band: s.tracer.band(),
-        path: match s.tracer.path() {
-            Path::RayQuery => "rayquery",
-            Path::Software => "software",
-        },
+        path: path_id(s.tracer.path()),
         adapter: s.tracer.adapter().to_string(),
         fault: s.fault.clone(),
     })
 }
 
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Probe {
+    available: bool,
+    path: Option<&'static str>,
+    adapter: Option<String>,
+    /// Whether the native denoise can run at the cap.
+    denoise: bool,
+    reason: Option<String>,
+}
+
+fn path_id(p: Path) -> &'static str {
+    match p {
+        Path::RayQuery => "rayquery",
+        Path::Software => "software",
+    }
+}
+
+/// Whether this machine has a native tracer and which path it runs, without
+/// opening frames. A tracer made only to answer is released again.
+#[tauri::command]
+pub async fn pt_probe() -> Probe {
+    tauri::async_runtime::spawn_blocking(|| {
+        let _life = super::lifecycle();
+        let was_open = TRACER.current().is_some();
+        let probe = match tracer() {
+            Ok(t) => {
+                let s = t.lock();
+                Probe { available: true, path: Some(path_id(s.tracer.path())), adapter: Some(s.tracer.adapter().to_string()), denoise: false, reason: None }
+            }
+            Err(e) => Probe { available: false, path: None, adapter: None, denoise: false, reason: Some(e) },
+        };
+        if !was_open {
+            TRACER.release();
+        }
+        probe
+    })
+    .await
+    .unwrap_or_else(|e| Probe { available: false, path: None, adapter: None, denoise: false, reason: Some(e.to_string()) })
+}

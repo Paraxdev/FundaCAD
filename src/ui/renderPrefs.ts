@@ -156,6 +156,10 @@ export type MatcapStyle = (typeof MATCAP_STYLES)[number];
 export const DENOISE_LEVELS = ["off", "standard", "high"] as const;
 export type Denoise = (typeof DENOISE_LEVELS)[number];
 
+/** Which tracer Path traced runs on (viewport/pathtrace/choose.ts). */
+export const TRACER_PREFS = ["auto", "native", "webgpu"] as const;
+export type TracerPref = (typeof TRACER_PREFS)[number];
+
 export interface RenderPrefs {
   environment: EnvironmentChoice;
   /** An imported panorama's turn about the up axis, degrees, and its exposure
@@ -216,6 +220,7 @@ export interface RenderPrefs {
   matcapStyle: MatcapStyle;
   matcapTint: boolean;
   denoise: Denoise;
+  tracer: TracerPref;
 }
 
 /** What the f-stop numbers mean to the blur pass, and the range the control
@@ -261,6 +266,7 @@ export const DEFAULT_RENDER: RenderPrefs = {
   matcapStyle: "studio",
   matcapTint: true,
   denoise: "standard",
+  tracer: "auto",
 };
 
 export const MIN_BRIGHTNESS = 0.4;
@@ -306,6 +312,10 @@ export function asMatcapStyle(v: unknown): MatcapStyle | null {
 
 export function asDenoise(v: unknown): Denoise | null {
   return DENOISE_LEVELS.includes(v as Denoise) ? (v as Denoise) : null;
+}
+
+export function asTracerPref(v: unknown): TracerPref | null {
+  return TRACER_PREFS.includes(v as TracerPref) ? (v as TracerPref) : null;
 }
 
 export function asTangentEdges(v: unknown): TangentEdges | null {
@@ -387,6 +397,7 @@ export function asRenderPrefs(v: unknown): RenderPrefs {
     matcapStyle: asMatcapStyle(o["matcapStyle"]) ?? DEFAULT_RENDER.matcapStyle,
     matcapTint: typeof o["matcapTint"] === "boolean" ? o["matcapTint"] : DEFAULT_RENDER.matcapTint,
     denoise: asDenoise(o["denoise"]) ?? DEFAULT_RENDER.denoise,
+    tracer: asTracerPref(o["tracer"]) ?? DEFAULT_RENDER.tracer,
   };
 }
 
@@ -429,7 +440,8 @@ export function setRenderPref<K extends keyof RenderPrefs>(key: K, value: Render
                             : key === "matcapStyle" ? asMatcapStyle(value)
                               : key === "matcapTint" ? (typeof value === "boolean" ? value : null)
                                 : key === "denoise" ? asDenoise(value)
-                                  : asBrightness(value);
+                                  : key === "tracer" ? asTracerPref(value)
+                                    : asBrightness(value);
   if (ok === null || current[key] === ok) return;
   // A fresh object rather than a mutation, so a subscriber may hold the result
   // of renderPrefs() and compare identity to decide it must redraw.

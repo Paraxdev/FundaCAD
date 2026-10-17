@@ -19,12 +19,14 @@ export const VIEW_MODES: readonly { id: ViewMode; label: string; icon: string }[
 ];
 
 /** The effective render tier: performance or potato mode, or a machine the
- *  viewport detected as weak (`auto`), and whether the web view offers a real
- *  WebGPU adapter (undefined while the probe is still out). */
+ *  viewport detected as weak (`auto`), whether the web view offers a real
+ *  WebGPU adapter and whether the app has a native tracer (each undefined
+ *  while its probe is still out). */
 export interface RenderTier {
   lowPower: boolean;
   auto: boolean;
   webgpu?: boolean | undefined;
+  native?: { available: boolean; path?: "rayquery" | "software" | undefined } | undefined;
   /** The tracer hit a second GPU fault this session. */
   traceFault?: boolean;
 }
@@ -33,7 +35,7 @@ export const PATH_TRACING_OFF =
   "To avoid crashes or unintentional freezes path tracing has been turned off. To re-enable, turn off performance mode.";
 export const PATH_TRACING_AUTO =
   "This computer was detected as low powered, so turning off performance mode may not lift it.";
-export const PATH_TRACING_NO_GPU = "Path tracing needs WebGPU, which this system's web view does not have yet";
+export const PATH_TRACING_NO_GPU = "Path tracing needs a GPU tracer, which this system does not have";
 export const PATH_TRACING_PROBING = "Checking whether this system can path trace";
 export const PATH_TRACING_FAULT = "Path tracing stopped after a GPU error and stays off until FundaCAD restarts";
 
@@ -57,8 +59,10 @@ export function pathTracedBlock(tier: RenderTier): { reason: PathTracedBlockReas
   if ((tier.lowPower || tier.auto) && !perfOverride) {
     return { reason: "perf", tooltip: tier.auto ? `${PATH_TRACING_OFF} ${PATH_TRACING_AUTO}` : PATH_TRACING_OFF };
   }
-  if (tier.webgpu === undefined) return { reason: "probing", tooltip: PATH_TRACING_PROBING };
-  if (!tier.webgpu) return { reason: "nogpu", tooltip: PATH_TRACING_NO_GPU };
+  if (!tier.webgpu) {
+    if (tier.webgpu === undefined || tier.native === undefined) return { reason: "probing", tooltip: PATH_TRACING_PROBING };
+    if (!tier.native.available) return { reason: "nogpu", tooltip: PATH_TRACING_NO_GPU };
+  }
   if (tier.traceFault) return { reason: "fault", tooltip: PATH_TRACING_FAULT };
   return null;
 }

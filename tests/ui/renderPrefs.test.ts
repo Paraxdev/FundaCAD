@@ -76,6 +76,7 @@ describe("asRenderPrefs", () => {
       matcapStyle: DEFAULT_RENDER.matcapStyle,
       matcapTint: DEFAULT_RENDER.matcapTint,
       denoise: DEFAULT_RENDER.denoise,
+      tracer: DEFAULT_RENDER.tracer,
     });
   });
 
@@ -235,5 +236,18 @@ describe("path traced denoise", () => {
     setRenderPref("denoise", "max" as never);
     expect(renderPrefs().denoise).toBe("off");
     setRenderPref("denoise", DEFAULT_RENDER.denoise);
+  });
+});
+
+describe("path traced backend", () => {
+  it("defaults to Auto and keeps only Auto, Native or WebGPU", () => {
+    expect(DEFAULT_RENDER.tracer).toBe("auto");
+    expect(asRenderPrefs({ tracer: "native" }).tracer).toBe("native");
+    expect(asRenderPrefs({ tracer: "cuda" }).tracer).toBe("auto");
+    setRenderPref("tracer", "webgpu");
+    expect(renderPrefs().tracer).toBe("webgpu");
+    setRenderPref("tracer", "metal" as never);
+    expect(renderPrefs().tracer).toBe("webgpu");
+    setRenderPref("tracer", DEFAULT_RENDER.tracer);
   });
 });

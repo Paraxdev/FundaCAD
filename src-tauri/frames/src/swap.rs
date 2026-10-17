@@ -1,4 +1,4 @@
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use crate::ring::FrameRing;
 
@@ -89,6 +89,71 @@ impl<T> Current<T> {
     }
 }
 
+/// A resource made on first use and dropped on release, so an idle viewer
+/// frees the device and its buffers. A failure to make it is kept: the
+/// machine does not grow a GPU between two clicks.
+pub struct Reopen<T> {
+    inner: Mutex<Made<T>>,
+}
+
+enum Made<T> {
+    Empty,
+    Ready(Arc<T>),
+    Failed(String),
+}
+
+impl<T> Default for Reopen<T> {
+    fn default() -> Self {
+        Reopen::new()
+    }
+}
+
+impl<T> Reopen<T> {
+    pub const fn new() -> Self {
+        Reopen { inner: Mutex::new(Made::Empty) }
+    }
+
+    pub fn get(&self, make: impl FnOnce() -> Result<T, String>) -> Result<Arc<T>, String> {
+        let mut g = self.inner.lock().unwrap_or_else(|p| p.into_inner());
+        match &*g {
+            Made::Ready(t) => return Ok(t.clone()),
+            Made::Failed(e) => return Err(e.clone()),
+            Made::Empty => {}
+        }
+        match make() {
+            Ok(t) => {
+                let t = Arc::new(t);
+                *g = Made::Ready(t.clone());
+                Ok(t)
+            }
+            Err(e) => {
+                *g = Made::Failed(e.clone());
+                Err(e)
+            }
+        }
+    }
+
+    pub fn current(&self) -> Option<Arc<T>> {
+        match &*self.inner.lock().unwrap_or_else(|p| p.into_inner()) {
+            Made::Ready(t) => Some(t.clone()),
+            _ => None,
+        }
+    }
+
+    /// The caller's handle and any transport still holding one keep it alive
+    /// until they drop theirs.
+    pub fn release(&self) -> Option<Arc<T>> {
+        let mut g = self.inner.lock().unwrap_or_else(|p| p.into_inner());
+        match std::mem::replace(&mut *g, Made::Empty) {
+            Made::Ready(t) => Some(t),
+            other => {
+                *g = other;
+                None
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -150,5 +215,29 @@ mod tests {
         assert_eq!(c.with(|t| t.copied()), Some("b"));
         assert_eq!(c.take_if(b), Some("b"));
         assert_eq!(c.take(), None);
+    }
+
+    #[test]
+    fn a_released_resource_is_made_again_on_next_use() {
+        let made = AtomicU32::new(0);
+        let r: Reopen<u32> = Reopen::new();
+        let make = || Ok(made.fetch_add(1, Ordering::SeqCst));
+        let first = r.get(make).unwrap();
+        assert_eq!(*r.get(|| panic!("made twice")).unwrap(), *first);
+        let weak = Arc::downgrade(&first);
+        drop(first);
+        assert!(r.release().is_some());
+        assert!(weak.upgrade().is_none(), "release kept the resource alive");
+        assert!(r.current().is_none());
+        assert_eq!(*r.get(make).unwrap(), 1);
+        assert_eq!(made.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn a_failure_to_make_is_kept_across_release() {
+        let r: Reopen<u32> = Reopen::new();
+        assert_eq!(r.get(|| Err("no adapter".into())).unwrap_err(), "no adapter");
+        assert!(r.release().is_none());
+        assert_eq!(r.get(|| panic!("tried again")).unwrap_err(), "no adapter");
     }
 }

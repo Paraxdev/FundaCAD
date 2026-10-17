@@ -4,7 +4,7 @@
 //! a runtime without shared buffers (before 114), and every other platform,
 //! uses the loopback WebSocket of fundacad-frames.
 
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use fundacad_frames::{frame_size, Current, FrameSource, Transport, WebSocketTransport};
 use serde::Serialize;
@@ -52,18 +52,17 @@ impl Open {
 }
 
 static OPEN: Current<Open> = Current::new();
-static SOURCE: OnceLock<(Arc<dyn FrameSource>, String)> = OnceLock::new();
-
-fn source() -> (Arc<dyn FrameSource>, String) {
-    SOURCE
-        .get_or_init(|| match tracer::tracer() {
-            Some(t) => {
-                let name = t.name();
-                (t as Arc<dyn FrameSource>, name)
-            }
-            None => pattern::create(),
-        })
-        .clone()
+/// The test pattern only when FUNDACAD_TRACER=off asks for it, so a machine
+/// without a tracer is told so instead of tracing the pattern.
+fn source() -> Result<(Arc<dyn FrameSource>, String), String> {
+    match tracer::tracer() {
+        Ok(t) => {
+            let name = t.name();
+            Ok((t as Arc<dyn FrameSource>, name))
+        }
+        Err(_) if tracer::pattern_allowed() => Ok(pattern::create()),
+        Err(e) => Err(e),
+    }
 }
 
 fn token() -> Result<String, String> {
@@ -101,8 +100,9 @@ pub async fn frames_open(
 ) -> Result<Opened, String> {
     let (width, height) = frame_size(width, height)?;
     tauri::async_runtime::spawn_blocking(move || {
+        let _life = lifecycle();
         close_open(OPEN.take());
-        let (src, name) = source();
+        let (src, name) = source()?;
         #[cfg(windows)]
         if prefer.as_deref() != Some("websocket") {
             match shared::SharedBufferTransport::open(window, src.clone(), width, height) {
@@ -179,10 +179,27 @@ pub async fn frames_resize(width: u32, height: u32) -> Result<u32, String> {
     .map_err(|e| e.to_string())?
 }
 
-/// Closes the transport `id` names, unless a newer one replaced it already.
+/// Closes the transport `id` names, unless a newer one replaced it already,
+/// and releases the tracer with it: the page closes its frames when Path
+/// traced has been off a while or the backend restarts after a fault.
 #[tauri::command]
 pub async fn frames_close(id: u64) {
-    let _ = tauri::async_runtime::spawn_blocking(move || close_open(OPEN.take_if(id))).await;
+    let _ = tauri::async_runtime::spawn_blocking(move || {
+        let _life = lifecycle();
+        if let Some(open) = OPEN.take_if(id) {
+            close_open(Some(open));
+            drop(tracer::release());
+        }
+    })
+    .await;
+}
+
+static LIFECYCLE: Mutex<()> = Mutex::new(());
+
+/// Held while a transport opens or closes, so a release never lands between
+/// a new transport taking the tracer and the pt_* commands reaching it.
+pub(crate) fn lifecycle() -> MutexGuard<'static, ()> {
+    LIFECYCLE.lock().unwrap_or_else(|p| p.into_inner())
 }
 
 fn close_open(open: Option<Open>) {

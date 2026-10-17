@@ -307,7 +307,8 @@ pub fn run() {
         frames::tracer::pt_look,
         frames::tracer::pt_cap,
         frames::tracer::pt_budget,
-        frames::tracer::pt_status
+        frames::tracer::pt_status,
+        frames::tracer::pt_probe
     ]);
 
     let app = builder

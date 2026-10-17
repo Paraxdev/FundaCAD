@@ -70,11 +70,13 @@ import { lensFor, type TraceLens } from "./pathtrace/camera";
 import { traceEnvironment, type TraceHemi } from "./pathtrace/environment";
 import { composerClearColor } from "./composerColor";
 import { clearGuard, guardSet } from "./pathtrace/guard";
-import { PathTraceHost, type CreateTracer, type PictureRequest } from "./pathtrace/host";
+import { PathTraceHost, type PictureRequest } from "./pathtrace/host";
 import { watchPower, type PowerState } from "./pathtrace/power";
 import type { SurfaceBaker } from "./pathtrace/mirror";
 import { createSurfaceBaker, webglSurfaceShade } from "./pathtrace/surfaceBake";
-import { describeProbe, probeWebGpu, type GpuProbe } from "./pathtrace/probe";
+import { describeNative, describeProbe, probeNative, probeWebGpu, type GpuProbe } from "./pathtrace/probe";
+import { chooseTracer, createTracerOf, type NativeProbe, type TracerKind } from "./pathtrace/choose";
+import type { TracerBackend } from "./pathtrace/backend";
 import type { TraceState } from "./pathtrace/state";
 import { onWorkspaceChange } from "../ui/workspace";
 import { invalidateThemeColors } from "./themeColors";
@@ -157,14 +159,14 @@ export interface AreaDrag {
  *  Vector3 per frame for a constant is litter in the hot path. Never written. */
 const WORLD_ORIGIN = new THREE.Vector3(0, 0, 0);
 
-/** ?tracer=native draws the native side's frames instead of tracing in
- *  WebGPU, ?tracer=native-ws forces the WebSocket path. A dev switch until the
- *  native tracer is preferred over WebGPU somewhere. */
-function nativeTracerSwitch(): CreateTracer | undefined {
+/** ?tracer=native or ?tracer=webgpu overrides the preference for measuring,
+ *  ?tracer=native-ws also forces the WebSocket path. */
+function devTracerSwitch(): { kind: TracerKind; prefer?: string } | null {
   const pick = new URLSearchParams(globalThis.location?.search ?? "").get("tracer");
-  if (pick !== "native" && pick !== "native-ws") return undefined;
-  const prefer = pick === "native-ws" ? "websocket" : undefined;
-  return async () => (await import("./pathtrace/nativeTracer")).createNativeTracer({ prefer });
+  if (pick === "webgpu") return { kind: "webgpu" };
+  if (pick === "native") return { kind: "native" };
+  if (pick === "native-ws") return { kind: "native", prefer: "websocket" };
+  return null;
 }
 
 /** Pixel radii of the extra rays `probe` casts for a finger. */
@@ -337,13 +339,16 @@ export class Viewport {
     this.scene.post.onReady = () => this.requestRender();
     // Re-applied on theme changes too: the default ground is a theme token.
     this.scene.applyRenderPrefs();
-    this.trace = new PathTraceHost(canvas, nativeTracerSwitch());
+    this.trace = new PathTraceHost(canvas, () => this.createTracer());
     this.trace.onShownChange = (on) => {
       this.scene.post.traceShown = on;
       this.requestRender();
     };
     this.trace.onStateChange = (st) => this.onTraceStateChange?.(st);
-    this.trace.onFault = (why, off) => this.dropTrace(why, off);
+    this.trace.onFault = (why, off) => {
+      if (this.tracerKind) this.tracerFaults.add(this.tracerKind);
+      this.dropTrace(why, off);
+    };
     this.trace.onRefuse = (why) => {
       if (this.viewModeNow === "pathtraced") chooseViewMode("realtime", this.renderTier);
       this.onTraceNotice?.(why);
@@ -357,6 +362,10 @@ export class Viewport {
     this.syncViewMode();
     onWorkspaceChange(() => this.syncViewMode());
     onRenderPrefsChange(() => {
+      if (renderPrefs().tracer !== this.tracerPref) {
+        this.tracerPref = renderPrefs().tracer;
+        this.trace.dispose();
+      }
       const wasLow = isRenderLowPower();
       const wasPotato = this.potato;
       this.potato = renderPrefs().potatoMode;
@@ -948,6 +957,7 @@ export class Viewport {
       lowPower: isRenderLowPower(),
       auto: this.scene.lowPower,
       webgpu: this.gpu ? this.gpu.webgpu : undefined,
+      native: this.native ?? undefined,
       traceFault: this.trace?.disabled ?? false,
     };
   }
@@ -956,6 +966,10 @@ export class Viewport {
   private power: PowerState = { discharging: false, minimised: false };
   private traceBaker: SurfaceBaker | null = null;
   private gpu: GpuProbe | null = null;
+  private native: NativeProbe | null = null;
+  private tracerKind: TracerKind | null = null;
+  private tracerFaults = new Set<TracerKind>();
+  private tracerPref = renderPrefs().tracer;
   private tierListeners = new Set<() => void>();
   /** A GPU fault dropped the view to Realtime; `off` once Path traced is off for the session. */
   onTraceFault: ((why: string, off: boolean) => void) | null = null;
@@ -972,7 +986,7 @@ export class Viewport {
   get traceStatus(): { state: TraceState; samples: number; shown: boolean; denoised: boolean; backend: string; gpu: string; note: string; picturing: boolean } {
     const t = this.trace;
     return {
-      state: t.state, samples: t.samples, shown: t.shown, denoised: t.denoised, backend: t.backendName, gpu: describeProbe(this.gpu),
+      state: t.state, samples: t.samples, shown: t.shown, denoised: t.denoised, backend: t.backendName, gpu: `${describeProbe(this.gpu)}; ${describeNative(this.native)}`,
       note: t.note, picturing: t.picturing,
     };
   }
@@ -996,6 +1010,11 @@ export class Viewport {
   }
 
   private async bootPathTrace() {
+    const native = probeNative().then((p) => {
+      this.native = p;
+      crumb(describeNative(p));
+      this.tierChanged();
+    });
     const [probe, died] = await Promise.all([probeWebGpu(), guardSet().catch(() => false)]);
     let notice = false;
     for (const key of ["viewModeModel", "viewModeRender"] as const) {
@@ -1010,6 +1029,20 @@ export class Viewport {
     this.gpu = probe;
     crumb(describeProbe(probe));
     this.tierChanged();
+    await native;
+  }
+
+  /** Read at every start, so a preference change or a fault picks again. */
+  private async createTracer(): Promise<TracerBackend> {
+    const dev = devTracerSwitch();
+    const kind = dev?.kind ?? chooseTracer(renderPrefs().tracer, {
+      webgpu: this.gpu?.webgpu ?? false,
+      native: this.native ?? { available: false },
+      faulted: this.tracerFaults,
+    });
+    if (!kind) throw new Error("both tracers faulted this session");
+    this.tracerKind = kind;
+    return createTracerOf(kind, dev?.prefer);
   }
 
   private dropTrace(why: string, off: boolean) {

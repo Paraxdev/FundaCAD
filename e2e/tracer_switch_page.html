@@ -1,0 +1,78 @@
+<!doctype html><meta charset="utf-8"><title>tracer switch probe</title>
+<body style="margin:0;background:#222"><div id="host" style="position:relative;width:640px;height:400px"></div></body>
+<script type="module">
+// Page side of src-tauri/examples/frames_probe.rs with PROBE_PAGE set: the
+// product's PathTraceHost on the backend each preference picks, then the
+// switching rules that must hold on every backend.
+import { invoke } from "@tauri-apps/api/core";
+import * as THREE from "three";
+import { PathTraceHost } from "/src/viewport/pathtrace/host.ts";
+import { chooseTracer, createTracerOf } from "/src/viewport/pathtrace/choose.ts";
+import { probeNative, probeWebGpu } from "/src/viewport/pathtrace/probe.ts";
+import { halfEquirect } from "/src/viewport/pathtrace/environment.ts";
+
+const holder = document.getElementById("host");
+const gl = document.createElement("canvas");
+gl.style.width = "640px";
+gl.style.height = "400px";
+holder.append(gl);
+
+const scene = new THREE.Scene();
+const box = new THREE.Mesh(new THREE.BoxGeometry(20, 20, 20), new THREE.MeshStandardMaterial({ color: 0xc08040 }));
+box.userData.owner = "body1";
+scene.add(box);
+scene.updateMatrixWorld(true);
+const camera = new THREE.PerspectiveCamera(45, 640 / 400, 1, 1000);
+camera.position.set(60, 45, 60);
+camera.lookAt(0, 0, 0);
+camera.updateMatrixWorld();
+const env = halfEquirect(new Uint16Array(64 * 32 * 4).fill(THREE.DataUtils.toHalfFloat(0.6)), 64, 32);
+const look = () => ({
+  lights: [{ color: new THREE.Color(1, 1, 1), intensity: 3, position: new THREE.Vector3(50, 80, 30), target: new THREE.Vector3() }],
+  background: new THREE.Color(0.2, 0.2, 0.22), environment: env, brightness: 1,
+  toneMapping: THREE.NeutralToneMapping, exposure: 1,
+});
+const inputs = (o = {}) => ({ mode: "pathtraced", visible: true, stillMs: 10_000, dragging: false, sectioned: false, xray: false, wireframe: false, sketchOpen: false, ...o });
+const frame = (o) => ({
+  now: performance.now(), inputs: inputs(o), camera, cameraChanged: false, sceneMaybeChanged: false, root: scene,
+  look, lens: () => null, denoise: "off",
+});
+const nextFrame = () => new Promise((r) => requestAnimationFrame(r));
+
+async function run(pref, env) {
+  const kind = chooseTracer(pref, env);
+  const host = new PathTraceHost(gl, () => createTracerOf(kind), { arm: async () => {}, clear() {} });
+  const faults = [];
+  host.onFault = (why) => faults.push(why);
+  const t0 = performance.now();
+  while (performance.now() - t0 < 20_000 && host.samples < 16 && !faults.length) {
+    host.tick(frame());
+    await nextFrame();
+  }
+  const r = { pref, kind, backend: host.backendName, samples: host.samples, ms: Math.round(performance.now() - t0), faults };
+  const paused = {};
+  for (const [k, v] of [["sectioned", "paused:section"], ["xray", "paused:xray"], ["wireframe", "paused:wireframe"], ["sketchOpen", "paused:sketch"]]) {
+    host.tick(frame({ [k]: true }));
+    paused[k] = host.state === v && !host.shown;
+  }
+  r.paused = paused;
+  host.tick(frame({ mode: "realtime" }));
+  r.off = host.state;
+  host.dispose();
+  await new Promise((res) => setTimeout(res, 300));
+  r.statusAfterDispose = await invoke("pt_status").then(() => "still open", (e) => String(e));
+  return r;
+}
+
+const out = [];
+try {
+  const [webgpuProbe, native] = await Promise.all([probeWebGpu(), probeNative()]);
+  const env = { webgpu: webgpuProbe.webgpu, native };
+  out.push({ webgpu: webgpuProbe.webgpu, native });
+  for (const pref of ["native", "webgpu", "auto", "native"]) out.push(await run(pref, env));
+  out.push({ linuxAuto: chooseTracer("auto", { webgpu: false, native }) });
+} catch (e) {
+  out.push({ error: String(e && e.stack || e) });
+}
+await invoke("probe_report", { json: JSON.stringify(out) });
+</script>

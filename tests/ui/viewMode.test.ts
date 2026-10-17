@@ -78,13 +78,27 @@ describe("Path traced", () => {
     expect(nextViewMode("matcap", -1, fast)).toBe("pathtraced");
   });
 
-  it("is greyed where the web view has no WebGPU", () => {
-    expect(pathTracedBlock(noGpu)).toEqual({
-      reason: "nogpu", tooltip: "Path tracing needs WebGPU, which this system's web view does not have yet",
+  it("is greyed only where neither WebGPU nor a native tracer exists", () => {
+    const none = { ...noGpu, native: { available: false } };
+    expect(pathTracedBlock(none)).toEqual({
+      reason: "nogpu", tooltip: "Path tracing needs a GPU tracer, which this system does not have",
     });
-    expect(PATH_TRACING_NO_GPU).toBe("Path tracing needs WebGPU, which this system's web view does not have yet");
-    expect(chooseViewMode("pathtraced", noGpu)).toBe(false);
-    expect(nextViewMode("realtime", 1, noGpu)).toBe("matcap");
+    expect(PATH_TRACING_NO_GPU).toBe("Path tracing needs a GPU tracer, which this system does not have");
+    expect(chooseViewMode("pathtraced", none)).toBe(false);
+    expect(nextViewMode("realtime", 1, none)).toBe("matcap");
+  });
+
+  it("runs on the native tracer where the web view has no WebGPU", () => {
+    const linux = { ...noGpu, native: { available: true, path: "software" as const } };
+    expect(pathTracedBlock(linux)).toBeNull();
+    expect(chooseViewMode("pathtraced", linux)).toBe(true);
+    expect(pathTracedBlock({ ...linux, lowPower: true })!.tooltip).toBe(PATH_TRACING_OFF);
+    expect(pathTracedBlock({ ...linux, auto: true })!.tooltip).toBe(`${PATH_TRACING_OFF} ${PATH_TRACING_AUTO}`);
+  });
+
+  it("waits for the native probe while WebGPU is missing, not while WebGPU is there", () => {
+    expect(pathTracedBlock(noGpu)?.reason).toBe("probing");
+    expect(pathTracedBlock({ ...fast, native: undefined })).toBeNull();
   });
 
   it("waits for the probe without forgetting a saved choice", () => {
