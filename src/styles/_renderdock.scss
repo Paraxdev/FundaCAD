@@ -399,3 +399,43 @@
   background: var(--warn);
   transition: width 120ms linear;
 }
+
+.rd-saved {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.rd-saved-actions {
+  display: flex;
+  gap: 2px;
+}
+.rd-mini {
+  flex: 1;
+  padding: 1px var(--s-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-mute);
+  font-size: 11px;
+  cursor: pointer;
+}
+.rd-mini:hover {
+  color: var(--text);
+  border-color: var(--line-strong);
+}
+.rd-name {
+  width: 100%;
+  margin-top: var(--s-1);
+  padding: 2px var(--s-1);
+  border: 1px solid var(--accent);
+  border-radius: var(--r-sm);
+  background: var(--panel-2);
+  color: var(--text);
+}
+.rd-ball-hdr {
+  background: linear-gradient(180deg, #8fb4e8 0%, #f4e7c8 48%, #6b5a45 52%, #2d261e 100%);
+}
+.rd-notice {
+  color: var(--text);
+}

@@ -11,12 +11,18 @@
 // gesture here is trying six of them in ten seconds. A grid of swatches is the
 // right control for that and a dropdown in a modal is not.
 
-import { onMounted, onUnmounted, ref } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 import {
-  ENVIRONMENTS_LIST, MAX_BRIGHTNESS, MIN_BRIGHTNESS,
+  ENVIRONMENTS_LIST, MAX_BRIGHTNESS, MAX_EXPOSURE, MIN_BRIGHTNESS, MIN_EXPOSURE, hdrHashOf,
   onRenderPrefsChange, performanceModeOn, renderPrefs, setRenderPref,
   type Background, type Denoise, type Environment,
 } from "../../ui/renderPrefs";
+import {
+  applySavedEnvironment, deleteSavedEnvironment, envLibrary, hdrName, importEnvironmentFile,
+  onEnvLibraryChange, renameSavedEnvironment, saveEnvironmentAs, syncDocumentEnvironment,
+} from "../../ui/environmentImport";
+import type { EnvEntry } from "../../ui/environmentLibrary";
+import { onHdrRegistered } from "../../viewport/hdrRegistry";
 import { DEFAULT_KEY } from "../../viewport/keyLight";
 import { formatTurn } from "../../viewport/rotateDial";
 import { useEngine } from "../../app/engineKey";
@@ -24,9 +30,85 @@ import { useEngine } from "../../app/engineKey";
 const engine = useEngine();
 const prefs = ref({ ...renderPrefs() });
 const aiming = ref(false);
-let off: (() => void) | null = null;
-onMounted(() => { off = onRenderPrefsChange(() => { prefs.value = { ...renderPrefs() }; }); });
-onUnmounted(() => off?.());
+const saved = ref<EnvEntry[]>([]);
+const activeSaved = ref<string | null>(null);
+const notice = ref<string | null>(null);
+const naming = ref<{ id: string | null; text: string } | null>(null);
+const nameInput = ref<HTMLInputElement | null>(null);
+const fileInput = ref<HTMLInputElement | null>(null);
+const hdrLabel = ref<string | null>(null);
+const hdrHash = computed(() => hdrHashOf(prefs.value.environment));
+const offs: (() => void)[] = [];
+const loadSaved = () => {
+  void envLibrary().list().then((l) => { saved.value = l; }).catch(() => { saved.value = []; });
+};
+const syncLabel = () => { hdrLabel.value = hdrHash.value ? hdrName(hdrHash.value) : null; };
+onMounted(() => {
+  offs.push(onRenderPrefsChange(() => { prefs.value = { ...renderPrefs() }; syncLabel(); }));
+  offs.push(onEnvLibraryChange(loadSaved));
+  offs.push(onHdrRegistered(syncLabel));
+  loadSaved();
+  syncLabel();
+});
+onUnmounted(() => { for (const off of offs) off(); });
+
+const activeName = () => saved.value.find((e) => e.id === activeSaved.value)?.name ?? null;
+/** A change made here is the user choosing this document's light. */
+const commit = () => { void syncDocumentEnvironment(engine.store, activeName()); };
+const fail = (err: unknown) => { notice.value = err instanceof Error ? err.message : String(err); };
+
+const importFile = async (file: File) => {
+  notice.value = `Reading ${file.name}...`;
+  const refused = await importEnvironmentFile(engine.store, file);
+  activeSaved.value = null;
+  notice.value = refused;
+};
+const onFilePicked = (e: Event) => {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+  if (file) void importFile(file);
+};
+const pickSaved = (entry: EnvEntry) => {
+  notice.value = null;
+  activeSaved.value = entry.id;
+  void applySavedEnvironment(engine.store, entry).catch(fail);
+};
+const startNaming = (id: string | null, text: string) => {
+  naming.value = { id, text };
+  void nextTick(() => { nameInput.value?.focus(); nameInput.value?.select(); });
+};
+const finishNaming = async () => {
+  const n = naming.value;
+  if (!n) return;
+  naming.value = null;
+  try {
+    if (n.id) await renameSavedEnvironment(n.id, n.text);
+    else activeSaved.value = (await saveEnvironmentAs(engine.store, n.text)).id;
+    notice.value = null;
+  } catch (err) {
+    fail(err);
+  }
+};
+const saveName = () => (hdrLabel.value ?? "My environment").replace(/\.(hdr|exr)$/i, "");
+const removeSaved = (entry: EnvEntry) => {
+  if (activeSaved.value === entry.id) activeSaved.value = null;
+  void deleteSavedEnvironment(entry.id).catch(fail);
+};
+const thumbStyle = (thumb: string) =>
+  thumb.startsWith("data:") ? { backgroundImage: `url("${thumb}")`, backgroundSize: "cover" } : { background: thumb };
+const onRotation = (e: Event) => {
+  setRenderPref("envRotation", Number.parseFloat((e.target as HTMLInputElement).value));
+  commit();
+};
+const onExposure = (e: Event) => {
+  setRenderPref("envExposure", Number.parseFloat((e.target as HTMLInputElement).value));
+  commit();
+};
+const toggleBehind = () => {
+  setRenderPref("envBackground", !prefs.value.envBackground);
+  commit();
+};
 
 const BACKGROUNDS: { id: Background; label: string }[] = [
   { id: "theme", label: "Theme" },
@@ -35,7 +117,11 @@ const BACKGROUNDS: { id: Background; label: string }[] = [
   { id: "light", label: "Light" },
 ];
 
-const pickEnv = (id: Environment) => setRenderPref("environment", id);
+const pickEnv = (id: Environment) => {
+  activeSaved.value = null;
+  setRenderPref("environment", id);
+  commit();
+};
 const DENOISES: { id: Denoise; label: string }[] = [
   { id: "off", label: "Off" },
   { id: "standard", label: "Standard" },
@@ -85,6 +171,109 @@ const onBloom = (e: Event) =>
         Every one of these is built in the renderer out of a few lit panels, so
         none of them is a file to download. A metal is almost entirely
         reflection, which is why the choice changes so much.
+      </p>
+    </section>
+
+    <section class="rd-section" data-env-custom>
+      <h3 class="rd-head">Your environments</h3>
+      <div v-if="saved.length || hdrHash" class="rd-grid" role="listbox" aria-label="Saved environments">
+        <button
+          v-if="hdrHash && !activeSaved"
+          class="rd-tile is-selected"
+          role="option"
+          aria-selected="true"
+          data-environment="hdr"
+          :title="hdrLabel ?? 'Imported HDR'"
+        >
+          <span class="rd-ball rd-ball-hdr"></span>
+          <span class="rd-tile-name">{{ hdrLabel ?? "Imported HDR" }}</span>
+          <span class="rd-sub">Imported, not saved yet</span>
+        </button>
+        <div v-for="s in saved" :key="s.id" class="rd-saved">
+          <button
+            class="rd-tile"
+            :class="{ 'is-selected': activeSaved === s.id }"
+            role="option"
+            :aria-selected="activeSaved === s.id"
+            :data-saved-environment="s.name"
+            :title="s.name"
+            @click="pickSaved(s)"
+          >
+            <span class="rd-ball" :style="thumbStyle(s.thumb)"></span>
+            <span class="rd-tile-name">{{ s.name }}</span>
+          </button>
+          <input
+            v-if="naming && naming.id === s.id"
+            ref="nameInput"
+            v-model="naming.text"
+            class="rd-name"
+            aria-label="Environment name"
+            maxlength="60"
+            @keydown.enter.prevent="finishNaming"
+            @keydown.escape.prevent="naming = null"
+            @blur="finishNaming"
+          />
+          <div v-else class="rd-saved-actions">
+            <button class="rd-mini" :data-rename="s.name" @click="startNaming(s.id, s.name)">Rename</button>
+            <button class="rd-mini" :data-delete="s.name" @click="removeSaved(s)">Delete</button>
+          </div>
+        </div>
+      </div>
+      <div class="rd-chips" role="group" aria-label="Your environments">
+        <button class="rd-chip" data-env-import @click="fileInput?.click()">Import HDR...</button>
+        <button class="rd-chip" data-env-save @click="startNaming(null, saveName())">Save as...</button>
+        <input ref="fileInput" type="file" accept=".hdr,.exr" hidden data-env-file @change="onFilePicked" />
+      </div>
+      <input
+        v-if="naming && naming.id === null"
+        ref="nameInput"
+        v-model="naming.text"
+        class="rd-name"
+        aria-label="Name for this environment"
+        maxlength="60"
+        data-env-name
+        @keydown.enter.prevent="finishNaming"
+        @keydown.escape.prevent="naming = null"
+        @blur="finishNaming"
+      />
+      <div v-if="notice" class="sm-hint rd-notice" role="status" data-env-notice>{{ notice }}</div>
+      <template v-if="hdrHash">
+        <label class="prefs-row">
+          <span class="prefs-label">Rotation</span>
+          <input
+            id="rd-env-rotation"
+            class="sm-slider"
+            type="range"
+            min="-180" max="180" step="5"
+            :value="prefs.envRotation"
+            @change="onRotation"
+          />
+        </label>
+        <label class="prefs-row">
+          <span class="prefs-label">Exposure</span>
+          <input
+            id="rd-env-exposure"
+            class="sm-slider"
+            type="range"
+            :min="MIN_EXPOSURE" :max="MAX_EXPOSURE" step="0.25"
+            :value="prefs.envExposure"
+            @change="onExposure"
+          />
+        </label>
+        <div class="rd-chips" role="group" aria-label="Panorama behind the model">
+          <button
+            class="rd-chip"
+            :class="{ active: prefs.envBackground }"
+            data-env-behind
+            :aria-pressed="prefs.envBackground"
+            @click="toggleBehind"
+          >{{ prefs.envBackground ? "Shown behind the model" : "Ground colour behind" }}</button>
+        </div>
+      </template>
+      <p class="sm-hint">
+        Import an .hdr or .exr panorama, or drop one on the window. Save as keeps
+        the whole look under a name. A document lit by one of these carries it,
+        so it opens with the same light elsewhere.
       </p>
     </section>
 

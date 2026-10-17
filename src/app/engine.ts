@@ -85,6 +85,7 @@ import { LiveSessionHost } from "../live/liveSession";
 import { liveEditsAllowed, liveSharingEnabled, onLiveEditingChange } from "../ui/liveEditing";
 
 import type { Feature, PlaneDef, PlaneSpec, Vec3 } from "../types";
+import { installEnvironmentSync } from "../ui/environmentImport";
 import type { DatumPose } from "../document/datumPose";
 
 export interface EngineTools {
@@ -439,6 +440,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
     e.viewport.clearSelection();
     e.viewport.setSelectedBodies([]);
   });
+  installEnvironmentSync(e.store);
 
   return e;
 }

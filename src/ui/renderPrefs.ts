@@ -35,6 +35,19 @@ import { DEFAULT_KEY } from "../viewport/keyLight";
  *  looking for a misplaced hole they are noise over the thing you are reading. */
 export type Environment = "studio" | "softbox" | "warm" | "dusk" | "bright" | "none";
 
+/** An imported panorama, by the SHA-256 of its stored pixels
+ *  (ui/environmentLibrary.ts keeps them, viewport/hdrRegistry.ts holds them in memory). */
+export type HdrEnvironment = `hdr:${string}`;
+export type EnvironmentChoice = Environment | HdrEnvironment;
+
+export function isHdrEnvironment(v: unknown): v is HdrEnvironment {
+  return typeof v === "string" && /^hdr:[0-9a-f]{16,64}$/.test(v);
+}
+
+export function hdrHashOf(env: EnvironmentChoice): string | null {
+  return isHdrEnvironment(env) ? env.slice(4) : null;
+}
+
 /** The list, in the order it is offered, with what each is FOR. The note is
  *  shown under the name: a row of six unlabelled greys is a row nobody can
  *  choose from without trying all six.
@@ -144,7 +157,13 @@ export const DENOISE_LEVELS = ["off", "standard", "high"] as const;
 export type Denoise = (typeof DENOISE_LEVELS)[number];
 
 export interface RenderPrefs {
-  environment: Environment;
+  environment: EnvironmentChoice;
+  /** An imported panorama's turn about the up axis, degrees, and its exposure
+   *  in stops. Built in rooms ignore both. */
+  envRotation: number;
+  envExposure: number;
+  /** Draw the imported panorama behind the model instead of the ground colour. */
+  envBackground: boolean;
   background: Background;
   /** Overall light level, 0.4 to 2. Multiplies the lighting rig AND the
    *  environment together, so the two cannot drift apart into a model that is
@@ -212,6 +231,9 @@ export const DEFAULT_RENDER: RenderPrefs = {
   // renders black is not a defensible default, and the whole material library
   // is unreadable without it.
   environment: "studio",
+  envRotation: 0,
+  envExposure: 0,
+  envBackground: false,
   background: "theme",
   brightness: 1,
   // On, gently. It costs a pass whether or not anything is bright enough to
@@ -258,8 +280,16 @@ export const BACKGROUND_COLOR: Record<Exclude<Background, "theme">, number> = {
 
 const KEY = "fundacad.render";
 
-export function asEnvironment(v: unknown): Environment | null {
+export function asEnvironment(v: unknown): EnvironmentChoice | null {
+  if (isHdrEnvironment(v)) return v;
   return ENVIRONMENTS.includes(v as Environment) ? (v as Environment) : null;
+}
+
+export const MIN_EXPOSURE = -4;
+export const MAX_EXPOSURE = 4;
+
+export function asExposure(v: unknown): number | null {
+  return asClamped(v, MIN_EXPOSURE, MAX_EXPOSURE);
 }
 
 export function asBackground(v: unknown): Background | null {
@@ -337,6 +367,9 @@ export function asRenderPrefs(v: unknown): RenderPrefs {
   const o = v as Record<string, unknown>;
   return {
     environment: asEnvironment(o["environment"]) ?? DEFAULT_RENDER.environment,
+    envRotation: asAzimuth(o["envRotation"]) ?? DEFAULT_RENDER.envRotation,
+    envExposure: asExposure(o["envExposure"]) ?? DEFAULT_RENDER.envExposure,
+    envBackground: typeof o["envBackground"] === "boolean" ? o["envBackground"] : DEFAULT_RENDER.envBackground,
     background: asBackground(o["background"]) ?? DEFAULT_RENDER.background,
     brightness: asBrightness(o["brightness"]) ?? DEFAULT_RENDER.brightness,
     bloom: asBloom(o["bloom"]) ?? DEFAULT_RENDER.bloom,
@@ -385,7 +418,9 @@ export function setRenderPref<K extends keyof RenderPrefs>(key: K, value: Render
           : key === "fov" ? asFov(value)
             : key === "aperture" ? asAperture(value)
               : key === "focusBlur" ? asFocusBlur(value)
-                : key === "performanceMode" || key === "potatoMode" ? (typeof value === "boolean" ? value : null)
+                : key === "performanceMode" || key === "potatoMode" || key === "envBackground" ? (typeof value === "boolean" ? value : null)
+                : key === "envRotation" ? asAzimuth(value)
+                : key === "envExposure" ? asExposure(value)
                   : key === "shadows" ? (typeof value === "boolean" ? value : null)
                     : key === "tangentEdges" ? asTangentEdges(value)
                       : key === "keyAzimuth" ? asAzimuth(value)
@@ -404,6 +439,38 @@ export function setRenderPref<K extends keyof RenderPrefs>(key: K, value: Render
   } catch {
     /* private mode / no storage: the choice just doesn't survive the session */
   }
+  for (const fn of listeners) fn();
+}
+
+/** The settings a saved environment carries, the Environment tab's look. */
+export const ENV_SETTING_KEYS = [
+  "environment", "envRotation", "envExposure", "envBackground", "background",
+  "brightness", "keyAzimuth", "keyElevation", "bloom", "shadows",
+] as const satisfies readonly (keyof RenderPrefs)[];
+export type EnvSettings = Pick<RenderPrefs, (typeof ENV_SETTING_KEYS)[number]>;
+
+export function envSettingsOf(p: Readonly<RenderPrefs> = current): EnvSettings {
+  const out = {} as Record<string, unknown>;
+  for (const k of ENV_SETTING_KEYS) out[k] = p[k];
+  return out as EnvSettings;
+}
+
+/** Untrusted settings narrowed field by field, anything missing taken from `base`. */
+export function asEnvSettings(v: unknown, base: Readonly<RenderPrefs> = DEFAULT_RENDER): EnvSettings {
+  const o = v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+  const merged: Record<string, unknown> = { ...base };
+  for (const k of ENV_SETTING_KEYS) if (k in o) merged[k] = o[k];
+  return envSettingsOf(asRenderPrefs(merged));
+}
+
+/** Apply a whole saved look; listeners hear once per changed field. */
+export function applyEnvSettings(s: EnvSettings): void {
+  for (const k of ENV_SETTING_KEYS) setRenderPref(k, s[k] as never);
+}
+
+/** Tell the surfaces to redraw with unchanged settings, for when what a
+ *  setting names has just become available (an imported panorama loaded). */
+export function refreshRenderPrefs(): void {
   for (const fn of listeners) fn();
 }
 

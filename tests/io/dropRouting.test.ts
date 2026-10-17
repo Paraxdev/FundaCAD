@@ -21,6 +21,13 @@ vi.mock("../../src/io/files", async (importOriginal) => {
   };
 });
 
+vi.mock("../../src/ui/environmentImport", () => ({
+  importEnvironmentFile: vi.fn(async (_s: unknown, file: File) => {
+    calls.push(`environment ${file.name}`);
+    return file.name.startsWith("huge") ? `${file.name} is too big.` : null;
+  }),
+}));
+
 import { IMPORT_EXTS } from "../../src/io/files";
 import { DOC_EXTS } from "../../src/io/documentExt";
 import { planDrop, routeDroppedName } from "../../src/io/dropRouting";
@@ -70,7 +77,13 @@ describe("routeDroppedName", () => {
 describe("planDrop", () => {
   it("opens the first document, skips the others, imports in drop order", () => {
     const plan = planDrop(["b.stl", "a.funda", "c.step", "d.fundab", "e.txt", "f.3mf"], (n) => n);
-    expect(plan).toEqual({ open: "a.funda", imports: ["b.stl", "c.step", "f.3mf"], skipped: ["d.fundab"], rejected: ["e.txt"] });
+    expect(plan).toEqual({ open: "a.funda", imports: ["b.stl", "c.step", "f.3mf"], environments: [], skipped: ["d.fundab"], rejected: ["e.txt"] });
+  });
+
+  it("sends a panorama to the environment instead of refusing it", () => {
+    expect(routeDroppedName("room.hdr")).toBe("environment");
+    expect(routeDroppedName("Sky.EXR")).toBe("environment");
+    expect(planDrop(["room.hdr", "b.stl"], (n) => n).environments).toEqual(["room.hdr"]);
   });
 });
 
@@ -92,6 +105,18 @@ describe("takeDroppedFiles", () => {
     const stl = new File(["solid x\nendsolid x\n"], "b.stl");
     await takeDroppedFiles(engine, [{ name: "a.funda", file }, { name: "b.stl", path: null, file: stl }]);
     expect(calls).toEqual(["ask", "open bytes a.funda", "import bytes b.stl"]);
+  });
+
+  it("lights with a dropped panorama and says nothing could not be read", async () => {
+    const hdr = new File(["#?RADIANCE"], "room.hdr");
+    await takeDroppedFiles(engine, [{ name: "room.hdr", path: "D:/in/room.hdr", file: hdr }]);
+    expect(calls).toEqual(["environment room.hdr"]);
+  });
+
+  it("passes on the environment's refusal", async () => {
+    const hdr = new File(["#?RADIANCE"], "huge.hdr");
+    await takeDroppedFiles(engine, [{ name: "huge.hdr", file: hdr }]);
+    expect(calls).toEqual(["environment huge.hdr", "error huge.hdr is too big."]);
   });
 
   it("names every refused file and does nothing else when all are refused", async () => {
