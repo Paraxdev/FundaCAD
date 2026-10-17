@@ -31,6 +31,7 @@ class FakeTracer implements TracerBackend {
   readonly denoised = false;
   present() { return false; }
   setDenoise() {}
+  setBloom() {}
   samples() { return new Promise<number>(() => {}); }
   dispose() { this.calls.push("dispose"); }
   onFault() {}

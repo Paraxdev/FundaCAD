@@ -12,6 +12,7 @@ import { backgroundTexture } from "./environment";
 import { AtrousFilter, filterMix } from "./atrous";
 import { FinalDenoise } from "./denoise";
 import { OidnPass, type OidnLike } from "./oidnPass";
+import { TraceBloom, type FadeQuad, type TraceBloomDeps, type TraceBloomSettings } from "./tracePost";
 import smallWeights from "./weights/rt_hdr_calb_cnrm_small.tza?url";
 import largeWeights from "./weights/rt_hdr_calb_cnrm_large.tza?url";
 
@@ -31,10 +32,8 @@ const nextFrame = () => new Promise<void>((r) => requestAnimationFrame(() => r()
 /** The WebGPU floor every adapter grants without asking. */
 const DEFAULT_STORAGE_BINDING = 128 * 1024 * 1024;
 
-interface BlitMaterial { opacity: number; transition: number; fromTexture: THREE.Texture | null; texture: THREE.Texture | null }
-
 interface TracerInternals {
-  _blitQuad: { material: BlitMaterial; render(r: unknown): void };
+  _blitQuad: FadeQuad;
   _pathTracer: { outputTarget: THREE.Texture };
   _bvhData?: SwappableBvhData & { textureAtlas: { setTextures(r: unknown, t: unknown): void }; textures: unknown };
   _renderer: unknown;
@@ -68,6 +67,9 @@ export class WebGpuTracer implements TracerBackend {
   maxTextureSize = 8192;
   private cap = SAMPLE_CAP;
   private device: GpuQueueDevice | null = null;
+  private picturing = false;
+  private post: TraceBloom | null = null;
+  private bloomWanted: TraceBloomSettings | null = null;
 
   constructor() {
     this.canvas = document.createElement("canvas");
@@ -83,8 +85,9 @@ export class WebGpuTracer implements TracerBackend {
   }
 
   async init() {
-    const [gpu, tracerMod, oidnWeb, tsl] = await Promise.all([
+    const [gpu, tracerMod, oidnWeb, tsl, bloomMod] = await Promise.all([
       import("three/webgpu"), import("three-gpu-pathtracer/webgpu"), import("oidn-web"), import("three/tsl"),
+      import("three/examples/jsm/tsl/display/BloomNode.js"),
     ]);
     this.tracerMod = tracerMod;
     this.tsl = tsl;
@@ -129,6 +132,14 @@ export class WebGpuTracer implements TracerBackend {
     t.minSamples = 0;
     t.fadeDuration = 0;
     this.tracer = t;
+    this.post = new TraceBloom({
+      renderer: r as unknown as TraceBloomDeps["renderer"],
+      blitQuad: (t as unknown as TracerInternals)._blitQuad,
+      bloom: bloomMod.bloom as unknown as TraceBloomDeps["bloom"],
+      tsl: tsl as unknown as TraceBloomDeps["tsl"],
+      size: new THREE.Vector2(),
+    });
+    if (this.bloomWanted) this.post.set(this.bloomWanted);
     this.atrous = new AtrousFilter(r as unknown as ConstructorParameters<typeof AtrousFilter>[0], (tex, w, h) => {
       const e = new gpu.ExternalTexture(tex as never) as unknown as THREE.Texture;
       e.image = { width: w, height: h } as never;
@@ -241,22 +252,20 @@ export class WebGpuTracer implements TracerBackend {
   /** Redraws the canvas through the tracer's own blit, so tone mapping and
    *  exposure match its frames; `mix` crossfades from `from` to `to`. */
   private blit(from: THREE.Texture, to: THREE.Texture, mix: number) {
-    const r = this.renderer as unknown as { autoClear: boolean; setRenderTarget(t: null): void };
-    const q = this.internals._blitQuad;
-    const autoClear = r.autoClear;
-    r.setRenderTarget(null);
-    r.autoClear = true;
-    q.material.opacity = 1;
-    q.material.transition = mix;
-    q.material.fromTexture = from;
-    q.material.texture = to;
-    q.render(r);
-    r.autoClear = autoClear;
+    this.post?.draw(from, to, mix);
+  }
+
+  setBloom(b: TraceBloomSettings | null) {
+    this.bloomWanted = b;
+    if (!this.post) return;
+    this.post.set(b);
+    if (!this.picturing) this.post.redraw();
   }
 
   setSize(cssWidth: number, cssHeight: number, pixelRatio: number) {
     this.renderer?.setPixelRatio(pixelRatio);
     this.renderer?.setSize(cssWidth, cssHeight, true);
+    this.post?.setViewSize(cssWidth * pixelRatio, cssHeight * pixelRatio);
   }
 
   setScene(ts: TraceScene, camera: THREE.Camera) {
@@ -366,17 +375,24 @@ export class WebGpuTracer implements TracerBackend {
     if (!this.tracer) return;
     this.tracer.renderSample();
     this.showsDenoise = false;
-    const mix = this.level === "off" || samples < 1 ? 0 : filterMix(samples, this.cap);
-    if (mix <= 0 || !this.atrous) return;
     const raw = this.internals._pathTracer.outputTarget;
+    const mix = this.level === "off" || samples < 1 ? 0 : filterMix(samples, this.cap);
+    if (mix <= 0 || !this.atrous) return this.drewItself(raw);
     const { width, height } = raw.image as { width: number; height: number };
     if (this.guidesStale || this.guides?.width !== width || this.guides?.height !== height) {
-      if (!this.renderGuides(width, height)) return;
+      if (!this.renderGuides(width, height)) return this.drewItself(raw);
       this.guidesStale = false;
     }
     const g = this.guides!;
     const filtered = this.atrous.run(raw, g.textures[0]!, g.textures[1]!, samples);
     if (filtered) this.blit(raw, filtered, mix);
+    else this.drewItself(raw);
+  }
+
+  /** The tracer's own blit is on the canvas, without bloom. */
+  private drewItself(raw: THREE.Texture) {
+    if (this.post?.on) this.blit(raw, raw, 0);
+    else this.post?.drewItself(raw);
   }
 
   async picture(o: PictureOptions): Promise<string> {
@@ -387,6 +403,7 @@ export class WebGpuTracer implements TracerBackend {
     const cancelled = () => new DOMException("The picture was cancelled", "AbortError");
     r.setPixelRatio(1);
     r.setSize(o.width, o.height, false);
+    this.picturing = true;
     t.renderScale = 1;
     t.maxSamples = o.samples;
     if (this.level !== "high") this.setDenoise("high");
@@ -419,6 +436,7 @@ export class WebGpuTracer implements TracerBackend {
       this.blit(raw, clean ?? raw, clean ? 1 : 0);
       return this.canvas.toDataURL("image/png");
     } finally {
+      this.picturing = false;
       if (!this.disposed) {
         t.renderScale = was.scale;
         t.maxSamples = this.cap;
@@ -452,6 +470,8 @@ export class WebGpuTracer implements TracerBackend {
     this.oidn = null;
     this.atrous?.dispose();
     this.atrous = null;
+    this.post?.dispose();
+    this.post = null;
     this.guides?.dispose();
     this.guides = null;
     this.glassMask?.dispose();

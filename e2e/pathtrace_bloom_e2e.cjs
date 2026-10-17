@@ -1,0 +1,193 @@
+// Bloom on the Path traced image, in a real browser on a real WebGPU device.
+//
+// An emitting cylinder over a plate, traced to the cap with the denoise off:
+// moving the Bloom slider must glow around the emitter without restarting the
+// samples, back to 0 must give the exact image it started from, the far
+// corner (the background, out of the halo) must stay as it was, and the traced
+// Picture must glow the same way. Realtime is measured on the same view as the
+// control the traced glow is held against.
+//
+// Usage (from the repo root, vite + engine `fundacad-engine --ws` running):
+//   SC_TOKEN=<engine token> [SC_CHROME=<chrome exe>] [SC_URL=http://localhost:5173/] \
+//     [SC_ENGINE_PORT=8765] node e2e/pathtrace_bloom_e2e.cjs [outDir]
+// On a cold vite the first Path traced load optimizes the tracer's modules and
+// reloads the page mid run: run it once more on a warm server.
+const { chromium } = require("playwright-core");
+const fs = require("fs");
+const path = require("path");
+
+const TOKEN = process.env.SC_TOKEN || "";
+const EXE = process.env.SC_CHROME || "";
+const URL = process.env.SC_URL || "http://localhost:5173/";
+const PORT = process.env.SC_ENGINE_PORT || "8765";
+const OUT = path.resolve(process.argv[2] || "pathtrace_bloom_shots");
+if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
+let failures = 0;
+const check = (name, ok, detail) => {
+  console.log(`  ${ok ? "PASS" : "FAIL"}  ${name}${detail ? `, ${detail}` : ""}`);
+  if (!ok) failures++;
+};
+
+(async () => {
+  fs.mkdirSync(OUT, { recursive: true });
+  const browser = await chromium.launch({
+    ...(EXE ? { executablePath: EXE } : { channel: "chrome" }),
+    args: ["--no-sandbox", "--enable-gpu", "--ignore-gpu-blocklist", "--enable-unsafe-webgpu"],
+  });
+  try {
+    const page = await browser.newPage({ viewport: { width: 1200, height: 800 } });
+    page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
+    await page.addInitScript(([port, t]) => {
+      const N = window.WebSocket;
+      window.WebSocket = class extends N {
+        constructor(u, p) {
+          let s = String(u).replace(":8765", ":" + port);
+          s = s.replace(/([?&])token=[^&]*/, `$1token=${t}`);
+          super(s.includes("token=") ? s : s + (s.includes("?") ? "&" : "?") + "token=" + t, p);
+        }
+      };
+    }, [PORT, TOKEN]);
+    await page.goto(URL);
+    await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });
+    await page.waitForTimeout(1500);
+    const modal = await page.$(".modal-close");
+    if (modal) { await modal.click(); await page.waitForTimeout(300); }
+    const setPref = (k, v) => page.evaluate(async ([k, v]) => (await import("/src/ui/renderPrefs.ts")).setRenderPref(k, v), [k, v]);
+    await setPref("bloom", 0);
+    await setPref("denoise", "off");
+    await page.evaluate(async () => {
+      const s = window.store;
+      s.addFeature({ id: s.nextId(), type: "box", length: 80, width: 80, height: 6 });
+      s.addFeature({ id: s.nextId(), type: "cylinder", radius: 6, height: 40 });
+      s.addFeature({ id: s.nextId(), type: "move", bodies: ["body2"], dx: 0, dy: 0, dz: 23, rx: 0, ry: 0, rz: 0 });
+      await s.rebuildNow();
+      for (let i = 0; i < 300; i++) {
+        const b = s.buildState;
+        if (!b.building && b.result?.bodies?.length >= 2) return;
+        await new Promise((r) => setTimeout(r, 100));
+      }
+    });
+    await page.evaluate(() => window.__fundacad.handleAction("iso"));
+    await page.waitForTimeout(400);
+    await page.evaluate(() => window.__fundacad.handleAction("fit"));
+    await page.waitForTimeout(800);
+    await page.evaluate(() => window.store.setBodiesMaterial(["body2"], "m-emitter"));
+    await page.waitForTimeout(800);
+    await page.mouse.move(5, 5);
+
+    const box = await page.evaluate(() => {
+      const r = window.viewport.canvas.getBoundingClientRect();
+      return { x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height) };
+    });
+    const shot = async (name) => {
+      const buf = await page.screenshot({ clip: box });
+      fs.writeFileSync(path.join(OUT, name), buf);
+      return "data:image/png;base64," + buf.toString("base64");
+    };
+    // Max delta and mean gain over a region, the region in image pixels.
+    const compare = (a, b, region) => page.evaluate(async ([a, b, region]) => {
+      const px = async (s) => {
+        const bm = await createImageBitmap(await (await fetch(s)).blob());
+        const c = new OffscreenCanvas(bm.width, bm.height);
+        const g = c.getContext("2d");
+        g.drawImage(bm, 0, 0);
+        return { d: g.getImageData(0, 0, bm.width, bm.height).data, w: bm.width, h: bm.height };
+      };
+      const A = await px(a), B = await px(b);
+      const r = region || { x: 0, y: 0, w: A.w, h: A.h };
+      let max = 0, sum = 0, n = 0;
+      for (let y = Math.max(0, r.y); y < Math.min(A.h, r.y + r.h); y++) {
+        for (let x = Math.max(0, r.x); x < Math.min(A.w, r.x + r.w); x++) {
+          const i = (y * A.w + x) * 4;
+          const d = Math.max(Math.abs(A.d[i] - B.d[i]), Math.abs(A.d[i + 1] - B.d[i + 1]), Math.abs(A.d[i + 2] - B.d[i + 2]));
+          if (d > max) max = d;
+          sum += (B.d[i] + B.d[i + 1] + B.d[i + 2]) - (A.d[i] + A.d[i + 1] + A.d[i + 2]);
+          n++;
+        }
+      }
+      return { max, meanGain: +(sum / Math.max(1, n) / 3).toFixed(3), pixels: n };
+    }, [a, b, region]);
+    // The emitter's centre: the saturated green of #42e07a once tone mapped.
+    const emitterAt = (a) => page.evaluate(async (a) => {
+      const bm = await createImageBitmap(await (await fetch(a)).blob());
+      const c = new OffscreenCanvas(bm.width, bm.height);
+      const g = c.getContext("2d");
+      g.drawImage(bm, 0, 0);
+      const d = g.getImageData(0, 0, bm.width, bm.height).data;
+      let sx = 0, sy = 0, n = 0;
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i + 1] > 230 && d[i] < 200 && d[i + 2] < 220) { const p = i / 4; sx += p % bm.width; sy += Math.floor(p / bm.width); n++; }
+      }
+      return n ? { x: Math.round(sx / n), y: Math.round(sy / n), n } : null;
+    }, a);
+    const settle = (ms = 1200) => page.evaluate(async (ms) => { window.viewport.requestRender(); await new Promise((r) => setTimeout(r, ms)); }, ms);
+    const waitDone = () => page.waitForFunction(() => {
+      const s = window.viewport.traceStatus;
+      return s.state === "done" && s.samples >= 256 ? s : null;
+    }, null, { timeout: 240000, polling: 250 }).then((h) => h.jsonValue());
+
+    // Background only, clear of the panels and 400 px from the emitter.
+    const corner = { x: 950, y: 560, w: 60, h: 60 };
+
+    await settle();
+    const rt0 = await shot("rt-bloom0.png");
+    await setPref("bloom", 0.6);
+    await settle(2000);
+    const rt6 = await shot("rt-bloom06.png");
+    const em = await emitterAt(rt0);
+    check("the emitter is on screen", !!em, JSON.stringify(em));
+    const halo = em ? { x: em.x - 120, y: em.y - 160, w: 240, h: 320 } : corner;
+    const rtHalo = await compare(rt0, rt6, halo);
+    const rtCorner = await compare(rt0, rt6, corner);
+    console.log("  realtime control: halo", JSON.stringify(rtHalo), "corner", JSON.stringify(rtCorner));
+
+    await setPref("bloom", 0);
+    await settle();
+    await page.click('[data-view-mode="pathtraced"]');
+    const done = await waitDone();
+    check("the tracer runs on WebGPU", /WebGPU/.test(done.backend), done.backend);
+    await settle();
+    const pt0 = await shot("pt-bloom0.png");
+    const s0 = done.samples;
+
+    await setPref("bloom", 0.6);
+    await settle(1500);
+    const pt6 = await shot("pt-bloom06.png");
+    const st = await page.evaluate(() => window.viewport.traceStatus);
+    const ptHalo = await compare(pt0, pt6, halo);
+    const ptCorner = await compare(pt0, pt6, corner);
+    check("bloom 0.6 glows around the emitter in Path traced", ptHalo.meanGain > 1, JSON.stringify(ptHalo));
+    check("the glow is of Realtime's order", ptHalo.meanGain > rtHalo.meanGain * 0.25 && ptHalo.meanGain < rtHalo.meanGain * 4,
+      `traced ${ptHalo.meanGain}, realtime ${rtHalo.meanGain}`);
+    check("the slider redraws without restarting the samples", st.samples === s0 && st.state === "done", `${s0} -> ${st.samples}`);
+    check("the background out of the halo is unchanged", ptCorner.max <= Math.max(1, rtCorner.max), JSON.stringify(ptCorner));
+
+    await setPref("bloom", 0);
+    await settle(1500);
+    const pt0again = await shot("pt-bloom0-again.png");
+    const back = await compare(pt0, pt0again);
+    check("bloom back to 0 is the exact image it started from", back.max === 0, JSON.stringify(back));
+
+    const picture = async (amount, name) => {
+      await setPref("bloom", amount);
+      await settle(300);
+      const url = await page.evaluate(() => window.viewport.renderTracedPicture({ scale: 1, samples: 64 }));
+      fs.writeFileSync(path.join(OUT, name), Buffer.from(url.split(",")[1], "base64"));
+      await waitDone();
+      return url;
+    };
+    const pic0 = await picture(0, "picture-bloom0.png");
+    const pic6 = await picture(0.6, "picture-bloom06.png");
+    const picHalo = await compare(pic0, pic6, halo);
+    const picCorner = await compare(pic0, pic6, corner);
+    check("the traced Picture glows at 0.6", picHalo.meanGain > 1, JSON.stringify(picHalo));
+    check("the Picture's background out of the halo is unchanged", picCorner.max <= Math.max(2, rtCorner.max), JSON.stringify(picCorner));
+
+    const tracedAfter = await page.evaluate(() => window.viewport.traceStatus.backend);
+    check("no tracer fault dropped the view to Realtime", /WebGPU/.test(tracedAfter || ""), tracedAfter);
+  } finally {
+    await browser.close();
+  }
+  console.log(failures ? `${failures} FAILED` : "all passed");
+  process.exit(failures ? 1 : 0);
+})().catch((e) => { console.error(e); process.exit(1); });

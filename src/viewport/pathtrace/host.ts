@@ -15,6 +15,7 @@ import {
   storageBytes, transformSignature, TRIANGLE_BUDGET, type SurfaceBaker,
 } from "./mirror";
 import { TraceGeneration, traceState, type TraceInputs, type TraceState } from "./state";
+import { bloomKey, traceBloom } from "./tracePost";
 
 /** No sample this long after the tracer started reads as a hung GPU. */
 export const FIRST_SAMPLE_TIMEOUT_MS = 10_000;
@@ -42,6 +43,10 @@ export interface TraceFrame {
   /** Evaluates procedural surfaces for the mirror's vertex colours. */
   bake?: SurfaceBaker;
   denoise?: Denoise;
+  /** The Bloom slider, 0..1. */
+  bloom?: number;
+  /** Something on screen can reach the bloom threshold, as for Realtime. */
+  bloomable?: boolean;
 }
 
 export function lookSignature(l: TraceLook): string {
@@ -109,6 +114,8 @@ export class PathTraceHost {
   /** At the cap the final denoise and its crossfade are drawn, then nothing. */
   private settled = false;
   private denoiseLevel: Denoise | "" = "";
+  private bloom = "";
+  private background: THREE.Color | null = null;
   /** The pending arm write, so a clear always lands after it. */
   private guardWrite: Promise<void> | null = null;
   private power: Power = { discharging: false };
@@ -189,6 +196,7 @@ export class PathTraceHost {
       this.denoiseLevel = level;
       this.settled = false;
     }
+    this.syncBloom(b, f);
     if (this.measured !== null) {
       if (this.budget.frame(this.measured, f.now)) b.setFrameBudget(this.budget.budget);
       this.measured = null;
@@ -198,6 +206,15 @@ export class PathTraceHost {
       this.poll(b);
     } else if (!this.settled && this.samples >= this.cap) this.settled = !b.present(f.now);
     this.show(this.samples > 0);
+  }
+
+  private syncBloom(b: TracerBackend, f: TraceFrame) {
+    if (!this.background) return;
+    const bloom = traceBloom(f.bloom ?? 0, this.background, f.bloomable ?? true);
+    const key = bloomKey(bloom);
+    if (key === this.bloom) return;
+    this.bloom = key;
+    b.setBloom(bloom);
   }
 
   private traceFrame(b: TracerBackend) {
@@ -333,6 +350,7 @@ export class PathTraceHost {
         this.budget = new FrameBudget(Infinity);
         this.budgetSent = false;
         this.denoiseLevel = "";
+        this.bloom = "";
         this.sceneDirty = this.cameraDirty = true;
         this.hasScene = false;
         this.size = { w: 0, h: 0, ratio: 0 };
@@ -408,6 +426,7 @@ export class PathTraceHost {
       if (relit) b.updateLook(look);
     }
     this.look = lookKey;
+    this.background = look.background.clone();
     this.geometryKey = sync.key;
     this.transforms = transforms;
     this.materials = materials;

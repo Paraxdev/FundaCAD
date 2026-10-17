@@ -5,6 +5,7 @@
 import type * as THREE from "three";
 import type { Denoise } from "../../ui/renderPrefs";
 import type { TraceLens } from "./camera";
+import type { TraceBloomSettings } from "./tracePost";
 
 export interface TraceLight {
   color: THREE.Color;
@@ -76,6 +77,10 @@ export interface TracerBackend {
   readonly denoised: boolean;
   /** Swaps the denoise weights; the samples gathered are kept. */
   setDenoise(level: Denoise): void;
+  /** Bloom on the linear frame before tone mapping, null for none. Draws the
+   *  last frame again with it and never restarts the samples; a picture blooms
+   *  the same. */
+  setBloom(bloom: TraceBloomSettings | null): void;
   /** Samples gathered per pixel since the last reset. */
   samples(): Promise<number>;
   dispose(): void;
