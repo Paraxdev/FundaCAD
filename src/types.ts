@@ -468,8 +468,8 @@ export type CoreFeature =
       // was generated from. Read by that plugin to say what the body is; the build ignores it.
       generatedBy?: { plugin: string; spec: Record<string, unknown> };
     }
-  // keep=both splits into bodies. `bodies` cuts several; `planeId` names a datum plane.
   | { id: string; type: "separate"; body?: string; bodies?: string[] }
+  // keep=both splits into bodies. `bodies` cuts several; `planeId` names a datum plane.
   | { id: string; type: "split"; plane?: PlaneSpec; planeId?: string; keep: "top" | "bottom" | "both"; body?: string; bodies?: string[]; groupSides?: boolean }
   // Divide the face `sketch` sits on by imprinting its curves; no material changes.
   | { id: string; type: "imprint"; sketch: string; body?: string }

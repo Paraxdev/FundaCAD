@@ -758,7 +758,44 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       if (!picked) return;
       ids = [picked];
     }
-    store.addFeature({ id: store.nextId(), type: "separate", bodies: ids } as Feature);
+    const before = new Map(bodies.map((b) => [b.id, b.name]));
+    const sources = ids.map((id) => ({ id, name: before.get(id) ?? "" }));
+    const id = store.nextId();
+    store.addFeature({ id, type: "separate", bodies: ids } as Feature);
+    carryLookToSeparated(id, before, sources);
+  }
+
+  // The engine names the pieces "Name 2", "Name 3", and the look of a body (palette
+  // slot, material, folder, visibility, a rename) lives in the app, so each new piece
+  // is matched to its source by that name and takes the look once the build lands.
+  function carryLookToSeparated(
+    featureId: string,
+    before: Map<string, string>,
+    sources: { id: string; name: string }[],
+  ) {
+    let off: (() => void) | null = null;
+    const timer = setTimeout(() => off?.(), 60_000);
+    const done = () => { clearTimeout(timer); off?.(); };
+    const bySize = [...sources].sort((a, b) => b.name.length - a.name.length);
+    const numberAfter = (name: string, src: { name: string }) =>
+      name.startsWith(`${src.name} `) && /^\d+$/.test(name.slice(src.name.length + 1))
+        ? name.slice(src.name.length + 1)
+        : null;
+    off = store.onBuild((s) => {
+      if (s.building) return;
+      if (s.errorFeatureId === featureId) { done(); return; }
+      const made = (s.result?.bodies ?? []).filter((b) => !before.has(b.id));
+      if (!made.length) return;
+      done();
+      for (const piece of made) {
+        const from = bySize.find((src) => numberAfter(piece.name, src) !== null)
+          ?? (sources.length === 1 ? sources[0] : undefined);
+        if (!from) continue;
+        const shown = store.bodyName(from.id);
+        const n = numberAfter(piece.name, from);
+        store.inheritBodyLook(from.id, piece.id, shown && n ? `${shown} ${n}` : undefined);
+      }
+    });
   }
 
   // Cut ALL visible bodies by a construction plane (right-click a plane → Cut, or

@@ -1493,6 +1493,22 @@ export class DocumentStore {
   setBodyName(id: string, name: string) {
     this.writeOverlayBatch(this.bodyNames, [id], name.trim() || null);
   }
+  /** Give a body the app-side look of another: palette slot, material, folder,
+   *  visibility, and `name` when the source carries a display-name override.
+   *  Not an undo step of its own, the feature that made `to` owns the undo. */
+  inheritBodyLook(from: string, to: string, name?: string) {
+    const slot = this.bodyColors.get(from);
+    if (slot !== undefined) this.bodyColors.set(to, slot);
+    const material = this.bodyMaterial.get(from);
+    if (material !== undefined) this.bodyMaterial.set(to, material);
+    const element = this.bodyElement.get(from);
+    if (element !== undefined) this.bodyElement.set(to, element);
+    const visible = this.bodyVis.get(from);
+    if (visible !== undefined) this.bodyVis.set(to, visible);
+    if (name && this.bodyNames.get(from) !== undefined) this.bodyNames.set(to, name);
+    this.markDirty();
+    this.emitBuild();
+  }
   // --- the Stress panel's study ----------------------------------------------
   // Saved with the file and off the undo stack, like the elements below: the
   // panel writes it on every edit to a field, and a Ctrl+Z that stepped back
