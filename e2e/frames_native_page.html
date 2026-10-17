@@ -1,0 +1,60 @@
+<!doctype html><meta charset="utf-8"><title>native frames probe</title>
+<body style="margin:0;background:#222"></body>
+<script type="module">
+// Page side of src-tauri/examples/frames_probe.rs: the product's NativeTracer
+// over each transport the app offers here, then a resize.
+import { invoke } from "@tauri-apps/api/core";
+import { NativeTracer, connectNative, glBlit } from "/src/viewport/pathtrace/nativeTracer.ts";
+
+const N = 120;
+async function run(prefer, w, h) {
+  const canvas = document.createElement("canvas");
+  canvas.style.width = "640px";
+  document.body.append(canvas);
+  let bad = 0, checked = 0;
+  const blit = (c) => {
+    const b = glBlit(c);
+    const gl = c.getContext("webgl2");
+    const px = new Uint8Array(4);
+    return { ...b, upload(f) {
+      b.upload(f);
+      // Bottom left on screen is the frame's last row, first pixel.
+      gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, px);
+      const at = (f.height - 1) * f.width * 4;
+      if (Math.abs(px[0] - f.pixels[at]) > 1 || Math.abs(px[1] - f.pixels[at + 1]) > 1) bad++;
+      checked++;
+    } };
+  };
+  const t = new NativeTracer({ canvas, prefer, blit, connect: (_w, _h, p) => connectNative(w, h, p) });
+  await t.init();
+  for (let i = 0; i < 10; i++) await t.renderSample(0);
+  const times = [];
+  const t0 = performance.now();
+  for (let i = 0; i < N; i++) times.push(await t.renderSample(0));
+  const total = performance.now() - t0;
+  times.sort((a, b) => a - b);
+  const r = { kind: t.name, w, h, frames: N, ms: +total.toFixed(1), fps: +(N * 1000 / total).toFixed(1),
+    p50: +times[N >> 1].toFixed(2), p95: +times[Math.floor(N * 0.95)].toFixed(2), samples: await t.samples(), checked, bad };
+  // A resize: new buffers, the old ones Closed natively and released here.
+  const link = t["link"];
+  const g = await link.resize(1280, 720);
+  t["generation"] = Math.max(t["generation"], g);
+  let resized = 0;
+  for (let i = 0; i < 30; i++) {
+    await t.renderSample(0);
+    if (canvas.width === 1280 && canvas.height === 720) resized++;
+  }
+  r.after_resize_1280x720 = resized;
+  t.dispose();
+  canvas.remove();
+  return r;
+}
+const out = [];
+try {
+  out.push(await run(undefined, 1920, 1080));
+  out.push(await run("websocket", 1920, 1080));
+} catch (e) {
+  out.push({ error: String(e && e.message || e) });
+}
+await invoke("probe_report", { json: JSON.stringify(out) });
+</script>

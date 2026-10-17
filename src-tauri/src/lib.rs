@@ -11,6 +11,7 @@ pub mod plugins;
 pub mod session_file;
 mod spacemouse;
 mod drop_paths;
+pub mod frames;
 // WebKitGTK only exists on Linux; macOS and Windows use WKWebView and WebView2.
 #[cfg(target_os = "linux")]
 mod webkit;
@@ -294,7 +295,11 @@ pub fn run() {
         plugins::launch::plugin_launch,
         spacemouse::spacemouse_inventory,
         spacemouse::spacemouse_start,
-        spacemouse::spacemouse_stop
+        spacemouse::spacemouse_stop,
+        frames::frames_open,
+        frames::frames_next,
+        frames::frames_resize,
+        frames::frames_close
     ]);
 
     let app = builder

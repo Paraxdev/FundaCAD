@@ -70,7 +70,7 @@ import { lensFor, type TraceLens } from "./pathtrace/camera";
 import { traceEnvironment, type TraceHemi } from "./pathtrace/environment";
 import { composerClearColor } from "./composerColor";
 import { clearGuard, guardSet } from "./pathtrace/guard";
-import { PathTraceHost, type PictureRequest } from "./pathtrace/host";
+import { PathTraceHost, type CreateTracer, type PictureRequest } from "./pathtrace/host";
 import { watchPower, type PowerState } from "./pathtrace/power";
 import type { SurfaceBaker } from "./pathtrace/mirror";
 import { createSurfaceBaker, webglSurfaceShade } from "./pathtrace/surfaceBake";
@@ -156,6 +156,17 @@ export interface AreaDrag {
 /** (0,0,0), kept once. Read every frame to size the origin arrows, and a fresh
  *  Vector3 per frame for a constant is litter in the hot path. Never written. */
 const WORLD_ORIGIN = new THREE.Vector3(0, 0, 0);
+
+/** ?tracer=native draws the native side's frames instead of tracing in
+ *  WebGPU, ?tracer=native-ws forces the WebSocket path. A dev switch until the
+ *  native tracer is preferred over WebGPU somewhere. */
+function nativeTracerSwitch(): CreateTracer | undefined {
+  const pick = new URLSearchParams(globalThis.location?.search ?? "").get("tracer");
+  if (pick !== "native" && pick !== "native-ws") return undefined;
+  const prefer = pick === "native-ws" ? "websocket" : undefined;
+  return async () => (await import("./pathtrace/nativeTracer")).createNativeTracer({ prefer });
+}
+
 /** Pixel radii of the extra rays `probe` casts for a finger. */
 const PROBE_RINGS_PX = [8, 16];
 /** How long the camera has to stay still for a gesture to count as over. */
@@ -326,7 +337,7 @@ export class Viewport {
     this.scene.post.onReady = () => this.requestRender();
     // Re-applied on theme changes too: the default ground is a theme token.
     this.scene.applyRenderPrefs();
-    this.trace = new PathTraceHost(canvas);
+    this.trace = new PathTraceHost(canvas, nativeTracerSwitch());
     this.trace.onShownChange = (on) => {
       this.scene.post.traceShown = on;
       this.requestRender();

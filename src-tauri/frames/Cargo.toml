@@ -1,0 +1,13 @@
+[package]
+name = "fundacad-frames"
+version = "0.1.0"
+description = "Moves rendered frames from the native side into the app's webview"
+edition = "2021"
+rust-version = "1.89"
+license = "AGPL-3.0-only"
+publish = false
+
+# No Tauri and no GPU here, so the slot tests and the e2e example build in
+# seconds. tungstenite is the version the engine's WebSocket already links.
+[dependencies]
+tungstenite = "0.29"

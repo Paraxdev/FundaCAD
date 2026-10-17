@@ -141,19 +141,20 @@ describe("Content-Security-Policy", () => {
   });
 });
 
-// The engine is a worker process the app supervises, and every frame reaches
-// the webview over Tauri IPC (src/geometry/transport.ts, IpcTransport). So the
-// policy grants no loopback origin: a grant a build cannot use is the one route
-// by which anything listening on a local port could talk to a privileged
-// webview. The Python beta needed ws://127.0.0.1:8765; it is built on the
-// legacy branch now.
+// The engine is a worker process the app supervises, and every engine frame
+// reaches the webview over Tauri IPC (src/geometry/transport.ts, IpcTransport).
+// The one loopback grant is the native tracer's frame socket
+// (src-tauri/frames), WebSocket only: its port is picked at launch, so no port
+// can be named, and the socket itself takes only the launch token from the
+// webview's Origin. Nothing http is reachable, and no other scheme.
 describe("the engine's reach", () => {
-  it("grants no loopback origin at all", () => {
+  it("grants only the native frame socket on loopback", () => {
     for (const key of ["csp", "devCsp"] as const) {
       expect(directive(conf.app.security[key], "connect-src")).toEqual([
         "'self'",
         "ipc:",
         "http://ipc.localhost",
+        "ws://127.0.0.1:*",
       ]);
     }
   });

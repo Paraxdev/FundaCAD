@@ -1,0 +1,30 @@
+<!doctype html><meta charset="utf-8"><title>frames over WebSocket</title><script>
+(async () => {
+  const q = new URLSearchParams(location.search), port = q.get("port"), token = q.get("token");
+  const W = 1920, H = 1080, HEADER = 16, N = 30;
+  const open = (query) => new Promise((ok) => {
+    const s = new WebSocket(`ws://127.0.0.1:${port}/${query}`);
+    s.binaryType = "arraybuffer";
+    s.onopen = () => ok(s);
+    s.onerror = () => ok(null);
+  });
+  const refused = (await open("")) === null;
+  const s = await open(`?token=${encodeURIComponent(token)}`);
+  if (!s) return;
+  const wait = [];
+  s.onmessage = (e) => wait.shift()(e.data);
+  const next = () => new Promise((ok) => { wait.push(ok); s.send("next"); });
+  const first = new DataView(await next());
+  let seq = first.getUint32(0, true);
+  const t0 = performance.now();
+  let ok = 0;
+  for (let i = 0; i < N; i++) {
+    const b = await next();
+    const v = new DataView(b), n = b.byteLength - HEADER;
+    const s0 = v.getUint32(0, true);
+    const stamped = [HEADER, HEADER + n / 2, b.byteLength - 4].every((at) => v.getUint32(at, true) === s0);
+    if (s0 === ++seq && v.getUint32(8, true) === W && v.getUint32(12, true) === H && n === W * H * 4 && stamped) ok++;
+  }
+  s.send("note RESULT " + JSON.stringify({ refused, ok, ms: performance.now() - t0 }));
+})();
+</script>

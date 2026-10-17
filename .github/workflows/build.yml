@@ -686,6 +686,15 @@ jobs:
           SC_CHROME: /usr/bin/google-chrome
         run: node e2e/history_side_e2e.cjs
 
+      # Builds only the small frames crate and tungstenite, no Tauri, no kernel.
+      - name: Native frames over WebSocket end-to-end
+        env:
+          SC_CHROME: /usr/bin/google-chrome
+          CARGO_TARGET_DIR: ${{ runner.temp }}/frames-target
+        run: |
+          cargo build --release --example frames_serve --manifest-path src-tauri/frames/Cargo.toml
+          node e2e/frames_ws_e2e.cjs
+
       - name: Engine log on failure
         if: failure()
         run: tail -50 /tmp/ci_engine.log /tmp/ci_vite.log || true
@@ -807,7 +816,7 @@ jobs:
         working-directory: src-tauri
         run: |
           mkdir -p ../dist
-          cargo test --tests
+          cargo test --tests --workspace
 
       - name: Upload the engine for the e2e job
         uses: actions/upload-artifact@v4

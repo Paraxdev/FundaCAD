@@ -49,6 +49,14 @@ fundacad-protocol = { path = "../crates/fundacad-protocol" }
 fundacad-engine = { path = "../crates/fundacad-engine", features = ["ws"] }
 fundacad-geom = { path = "../crates/fundacad-geom", features = ["plugins"] }
 fundacad-mcp = { path = "../crates/fundacad-mcp" }
+# Native frames into the webview (frames/, frames.rs).
+fundacad-frames = { path = "frames" }
+# Renders the frames the transport carries: a test pattern until the native
+# tracer lands. Vulkan first, DX12 on Windows next. Pinned with its lock edge:
+# gpu-allocator must resolve to windows 0.62, Tauri's 0.61 fails to compile
+# wgpu-hal's dx12 backend (cargo update -p gpu-allocator moves the edge).
+wgpu = "=30.0.1"
+futures-executor = "0.3"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 # The document files (.fundab, the ZIP container, the JSON .funda) live in the
@@ -81,6 +89,7 @@ windows-core = "0.61"
 
 [dev-dependencies]
 fundacad-core = { path = "../crates/fundacad-core" }
+tungstenite = "0.29"
 
 # The shipped engine's own crates compile as one unit, which is what the root
 # workspace's release profile does for the standalone engine. Kept per package
