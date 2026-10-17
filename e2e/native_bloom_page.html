@@ -1,0 +1,137 @@
+<!doctype html><meta charset="utf-8"><title>native bloom probe</title>
+<body style="margin:0;background:#222"><div id="host" style="position:relative;width:640px;height:400px"></div></body>
+<script type="module">
+// Page side of src-tauri/examples/frames_probe.rs with
+// PROBE_PAGE=e2e/native_bloom_page.html: Path traced on the native tracer to
+// the cap, then bloom on and off through the host, reading the frames the
+// transport hands the page. The invariants of e2e/pathtrace_bloom_e2e.cjs.
+import * as THREE from "three";
+import { PathTraceHost } from "/src/viewport/pathtrace/host.ts";
+import { createNativeTracer, glBlit } from "/src/viewport/pathtrace/nativeTracer.ts";
+import { halfEquirect } from "/src/viewport/pathtrace/environment.ts";
+import { invoke } from "@tauri-apps/api/core";
+
+const holder = document.getElementById("host");
+const gl = document.createElement("canvas");
+gl.style.width = "640px";
+gl.style.height = "400px";
+holder.append(gl);
+
+const scene = new THREE.Scene();
+const plate = new THREE.Mesh(new THREE.BoxGeometry(80, 80, 2), new THREE.MeshStandardMaterial({ color: 0x404040 }));
+plate.position.set(0, 0, -6);
+const lamp = new THREE.Mesh(
+  new THREE.BoxGeometry(4, 4, 4),
+  new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffffff, emissiveIntensity: 6 }),
+);
+plate.userData.owner = "body1";
+lamp.userData.owner = "body2";
+scene.add(plate, lamp);
+scene.updateMatrixWorld(true);
+const camera = new THREE.PerspectiveCamera(45, 640 / 400, 1, 1000);
+camera.position.set(0, -10, 140);
+camera.lookAt(0, 0, 0);
+camera.updateMatrixWorld();
+const env = halfEquirect(new Uint16Array(64 * 32 * 4).fill(THREE.DataUtils.toHalfFloat(0.3)), 64, 32);
+const look = () => ({
+  lights: [], background: new THREE.Color(0.2, 0.2, 0.22), environment: env, brightness: 1,
+  toneMapping: THREE.NeutralToneMapping, exposure: 1,
+});
+const frame = (bloom) => ({
+  now: performance.now(),
+  inputs: { mode: "pathtraced", visible: true, stillMs: 10_000, dragging: false, sectioned: false, xray: false, wireframe: false, sketchOpen: false },
+  camera, cameraChanged: false, sceneMaybeChanged: false, root: scene, look, lens: () => null, denoise: "off",
+  bloom, bloomable: true,
+});
+const nextFrame = () => new Promise((r) => requestAnimationFrame(r));
+
+let last = null;
+let uploads = 0;
+const recording = (canvas) => {
+  const real = glBlit(canvas);
+  return {
+    maxTextureSize: real.maxTextureSize,
+    upload(f) {
+      last = { w: f.width, h: f.height, px: new Uint8Array(f.pixels.buffer, f.pixels.byteOffset, f.width * f.height * 4).slice() };
+      uploads++;
+      real.upload(f);
+    },
+    dispose: () => real.dispose(),
+  };
+};
+
+async function settle(bloom, ms) {
+  let seen = uploads;
+  let quiet = performance.now();
+  const t0 = performance.now();
+  while (performance.now() - t0 < ms) {
+    host.tick(frame(bloom));
+    await nextFrame();
+    if (uploads !== seen) { seen = uploads; quiet = performance.now(); }
+    if (host.samples >= 256 && performance.now() - quiet > 800) break;
+  }
+  return last;
+}
+
+function compare(a, b, box) {
+  let max = 0;
+  for (let y = box.y; y < box.y + box.h; y++)
+    for (let x = box.x; x < box.x + box.w; x++)
+      for (let c = 0; c < 3; c++) {
+        const i = (y * a.w + x) * 4 + c;
+        max = Math.max(max, Math.abs(a.px[i] - b.px[i]));
+      }
+  return max;
+}
+
+function brightest(a) {
+  let best = { v: -1, x: 0, y: 0 };
+  for (let y = 0; y < a.h; y++)
+    for (let x = 0; x < a.w; x++) {
+      const v = a.px[(y * a.w + x) * 4];
+      if (v > best.v) best = { v, x, y };
+    }
+  return best;
+}
+
+const faults = [];
+const host = new PathTraceHost(gl, () => createNativeTracer({ blit: recording }), { arm: async () => {}, clear() {} });
+host.onFault = (why) => faults.push(why);
+const out = {};
+try {
+  const t0 = performance.now();
+  const a = await settle(0, 60_000);
+  out.samples = host.samples;
+  out.backend = host.backendName;
+  out.capMs = Math.round(performance.now() - t0);
+  const n0 = uploads;
+  const b = await settle(0.6, 8_000);
+  out.bloomFrames = uploads - n0;
+  const c = await settle(0, 8_000);
+  const em = brightest(a);
+  const corner = { x: 4, y: 4, w: 40, h: 40 };
+  const halo = { x: Math.min(a.w - 12, em.x + 8), y: Math.max(0, em.y - 4), w: 8, h: 8 };
+  out.size = [a.w, a.h];
+  out.emitter = em;
+  out.cornerA = a.px[(corner.y * a.w + corner.x) * 4];
+  out.haloA = a.px[(halo.y * a.w + halo.x) * 4];
+  out.haloB = b.px[(halo.y * b.w + halo.x) * 4];
+  out.cornerDiff = compare(a, b, corner);
+  out.haloDiff = compare(a, b, halo);
+  out.restoreDiff = compare(a, c, { x: 0, y: 0, w: a.w, h: a.h });
+  const s = await invoke("pt_status");
+  out.samplesAfter = s.samples;
+  out.checks = {
+    "the bloom pulled frames at the cap": out.bloomFrames > 0,
+    "a glow next to the emitter": out.haloB > out.haloA + 4,
+    "the background out of the halo is unchanged": out.cornerDiff <= 1,
+    "bloom 0 restores the start image": out.restoreDiff <= 1,
+    "the samples were kept": s.samples >= 256,
+  };
+} catch (e) {
+  out.error = String((e && e.stack) || e);
+}
+out.faults = faults;
+host.dispose();
+await invoke("probe_report", { json: JSON.stringify(out) });
+</script>
