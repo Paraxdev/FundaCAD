@@ -48,6 +48,10 @@ distributing FundaCAD under its own terms.
   **objc2** and its Apple framework crates, **windows** and its sibling crates, all
   MIT OR Apache-2.0 (some also Zlib); **spirv**, Apache-2.0; **libloading**, ISC;
   **slotmap** and **foldhash**, Zlib
+- **oidn** (Rust crate, the native tracer's denoise), MIT, https://github.com/Twinklebear/oidn-rs
+- **Open Image Denoise** 2.5.1 (the native tracer's denoise, loaded at run time by a build
+  with the `oidn` feature), Apache-2.0, https://github.com/RenderKit/oidn, with
+  **oneTBB**, Apache-2.0, https://github.com/uxlfoundation/oneTBB
 - **faer** (the stress analysis's sparse linear algebra), MIT,
   https://codeberg.org/sarah-quinones/faer, with its numeric crates
   **faer-traits**, **gemm**, **gemm-common**, **gemm-f32**, **gemm-f64**, **gemm-c32**,
