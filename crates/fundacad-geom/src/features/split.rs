@@ -275,7 +275,16 @@ fn solid_face_colors(
 /// look, the rest are numbered after it and take its colours.
 pub fn separate(ctx: &mut Ctx, f: &Separate) -> FResult {
     let targets: Vec<usize> = match f.bodies.as_ref().filter(|b| !b.is_empty()) {
-        Some(ids) => ids.iter().filter_map(|b| ctx.find_body(b)).collect(),
+        Some(ids) => ids
+            .iter()
+            .filter_map(|b| {
+                let found = ctx.find_body(b);
+                if found.is_none() {
+                    ctx.skip_feature(&f.id, "separate", &format!("no body {b} to separate"));
+                }
+                found
+            })
+            .collect(),
         None => match f.body.as_deref().filter(|b| !b.is_empty()) {
             Some(id) => ctx.find_body(id).into_iter().collect(),
             None => ctx.bodies.len().checked_sub(1).into_iter().collect(),
@@ -293,8 +302,20 @@ pub fn separate(ctx: &mut Ctx, f: &Separate) -> FResult {
         } else {
             body.name.clone()
         };
-        let mut solids = kernel::subshapes(&kernel::drop_debris(body.shape()), Kind::Solid);
-        if solids.len() < 2 {
+        let mut solids = kernel::subshapes(body.shape(), Kind::Solid);
+        let volumes: Vec<f64> = solids.iter().map(|s| kernel::volume_precise(s).abs()).collect();
+        let mut order: Vec<usize> = (0..solids.len()).collect();
+        order.sort_by(|&a, &b| volumes[b].total_cmp(&volumes[a]));
+        // Debris stays out, counted off the shape the way the build drops it. The
+        // colour runs are read from the raw solids so they keep their place.
+        if !body.intact {
+            let debris = solids.len() - kernel::subshapes(&kernel::drop_debris(body.shape()), Kind::Solid).len();
+            let tiny = |i: &usize| volumes[*i] < 1e-6 * volumes[order[0]];
+            let mut gone: Vec<usize> = order.iter().rev().copied().filter(tiny).take(debris).collect();
+            gone.sort_unstable();
+            order.retain(|i| gone.binary_search(i).is_err());
+        }
+        if order.len() < 2 {
             let note = format!("{name} is one solid, there is nothing to separate");
             if single {
                 return Err(Fail::msg(note));
@@ -303,12 +324,6 @@ pub fn separate(ctx: &mut Ctx, f: &Separate) -> FResult {
             continue;
         }
         let (face_colors, part_color) = (body.face_colors.clone(), body.part_color.clone());
-        let order: Vec<usize> = {
-            let volumes: Vec<f64> = solids.iter().map(|s| kernel::volume_precise(s).abs()).collect();
-            let mut o: Vec<usize> = (0..solids.len()).collect();
-            o.sort_by(|&a, &b| volumes[b].total_cmp(&volumes[a]));
-            o
-        };
         let colors: Vec<_> = (0..solids.len())
             .map(|i| solid_face_colors(&face_colors, &solids, i))
             .collect();
@@ -330,4 +345,27 @@ pub fn separate(ctx: &mut Ctx, f: &Separate) -> FResult {
         return Err(Fail::msg("Separate found no body made of several solids"));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn each_solid_takes_the_face_colours_of_its_own_faces() {
+        let box_at = |x: f64, l: f64| {
+            let b = kernel::make_box(l, l, l).expect("a box");
+            kernel::translated(&b, [x, 0.0, 0.0]).expect("moved")
+        };
+        let solids = vec![box_at(0.0, 10.0), box_at(50.0, 1e-4), box_at(100.0, 10.0)];
+        let paint = |c: &str, n: usize| vec![Some(c.to_owned()); n];
+        let all: Vec<Option<String>> = [paint("#ff0000", 6), paint("#00ff00", 6), paint("#0000ff", 6)].concat();
+        let body = serde_json::to_value(fundacad_core::face_colors::encode(&all)).expect("encodes");
+        let body = Some(body);
+        for (at, want) in [(0, "#ff0000"), (1, "#00ff00"), (2, "#0000ff")] {
+            let runs = solid_face_colors(&body, &solids, at).expect("coloured");
+            let got = fundacad_core::face_colors::decode_value(Some(&runs), 6);
+            assert!(got.iter().all(|c| c.as_deref() == Some(want)), "solid {at}: {got:?}");
+        }
+    }
 }

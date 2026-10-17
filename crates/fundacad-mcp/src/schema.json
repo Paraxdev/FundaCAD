@@ -1067,7 +1067,7 @@
   "separate": {
    "summary": "Turn each disjoint solid of a body into a body of its own.",
    "fields": {
-    "body": "optional single body id; `bodies` wins when both are set",
+    "body": "optional single body id; `bodies` is preferred over it when both are set",
     "bodies": "optional list of body ids; absent = the active body"
    },
    "example": {
