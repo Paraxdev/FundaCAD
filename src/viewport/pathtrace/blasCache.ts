@@ -76,6 +76,13 @@ interface Entry {
   colorKey: string;
 }
 
+/** On each mirror: the body it mirrors and the key its tree is cached under,
+ *  which the native tracer caches the mesh under too. */
+export interface TracedBody {
+  id: string;
+  key: string;
+}
+
 export interface CacheSync {
   /** The visible bodies' mirrors in order, null while a tree is still building. */
   meshes: THREE.Mesh[] | null;
@@ -144,6 +151,7 @@ export class BlasCache {
 
   private add(key: string, src: THREE.Mesh): Entry {
     const mirror = mirrorBody(src, false);
+    mirror.userData.traced = { id: (src.userData.owner as Owner | undefined)?.id ?? src.uuid, key } satisfies TracedBody;
     const e: Entry = { src, mirror, ready: false, colorKey: "" };
     this.entries.set(key, e);
     const g = src.geometry;

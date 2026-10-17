@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
+import { BlasCache, mainThreadBuilder } from "../../src/viewport/pathtrace/blasCache";
 import { meshFrame, NativeScene, nativeCamera, pageMaterial } from "../../src/viewport/pathtrace/nativeScene";
 
 function body(id: string, etag: string, color?: boolean) {
@@ -32,6 +33,23 @@ function rust() {
 }
 
 describe("native tracer scene feed", () => {
+  it("takes the host's mirrors, which carry their body's id and key", async () => {
+    const r = rust();
+    const a = body("body1", "e1");
+    const cache = new BlasCache(mainThreadBuilder);
+    let sync = cache.sync([a], [a]);
+    for (let i = 0; i < 5 && !sync.meshes; i++) {
+      await Promise.resolve();
+      sync = cache.sync([a], [a]);
+    }
+    expect(sync.meshes).not.toBeNull();
+    await r.scene.setMeshes(sync.meshes!);
+    expect(r.errors).toEqual([]);
+    const sent = r.calls[0]!.args as { bodies: { id: string; key: string }[] };
+    expect(sent.bodies.map((b) => b.id)).toEqual(["body1"]);
+    expect(sent.bodies[0]!.key).toBe(sync.key);
+  });
+
   it("sends each body's geometry once per key and only JSON for moves and materials", async () => {
     const r = rust();
     const a = body("body1", "e1");
