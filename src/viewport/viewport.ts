@@ -140,7 +140,7 @@ import { isEditableTarget } from "../ui/focus";
 import { hitScale } from "../input/pointerKind";
 import { setEmissionProgress } from "../ui/emissionProgress";
 import { ShadowWatch } from "./shadowWatch";
-import { hideForPicture, markInPicture, markNotInPicture } from "./pictureScene";
+import { hideForPicture, markInPicture, markNotInPicture, widenLines } from "./pictureScene";
 
 /** One box drag. The box previews by selecting every frame, so each frame starts
  *  from the selection as it was when the drag began. */
@@ -3952,11 +3952,12 @@ export class Viewport {
 
     // No selection, hover, grid, tool handle or any other overlay goes in the file.
     const showOverlays = hideForPicture(this.scene.scene, this.scene.modelGroup);
+    const narrowLines = widenLines(lines.map((e) => e.material), k);
     let url = "";
     try {
       this.scene.renderer.setPixelRatio(1);
       this.scene.renderer.setSize(w * k, h * k, false);
-      this.scene.post.setSize(w * k, h * k);
+      this.scene.post.setSize(w * k, h * k, k);
       this.scene.post.focusDistance = this.rig.active.position.distanceTo(this.cameraTarget());
       const draw = () => {
         this.scene.post.render(this.rig.active, false, opts.realtime);
@@ -3965,6 +3966,7 @@ export class Viewport {
       url = this.highlighter ? this.highlighter.withoutSelectionPaint(draw) : draw();
     } finally {
       showOverlays();
+      narrowLines();
       // Whatever happened, the viewport goes back to being the viewport. A throw
       // between the resize and the restore would otherwise leave the canvas
       // drawing at twice its size with no furniture on it and no way back.

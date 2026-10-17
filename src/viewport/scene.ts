@@ -469,6 +469,7 @@ export class PostChain {
    *  show, so this frame draws only what sits on top of it. */
   traceShown = false;
   private size = new THREE.Vector2(1, 1);
+  private glowSize = new THREE.Vector2(1, 1);
   private composerRatio = 0;
   private clearWas = new THREE.Color();
   private clearNow = new THREE.Color();
@@ -524,11 +525,14 @@ export class PostChain {
     return this.bokeh?.enabled ?? false;
   }
 
-  setSize(w: number, h: number) {
+  /** `scale` is how many times the view's size this frame is, for a picture. */
+  setSize(w: number, h: number, scale = 1) {
     this.size.set(Math.max(1, w), Math.max(1, h));
+    this.glowSize.set(Math.max(1, Math.round(this.size.x / scale)), Math.max(1, Math.round(this.size.y / scale)));
     this.composer?.setSize(this.size.x, this.size.y);
-    // At CSS size on purpose: the glow's width is in texels and was tuned there.
-    this.bloom?.setSize(this.size.x, this.size.y);
+    // At the view's CSS size on purpose, a picture included: the glow's width is
+    // in texels and was tuned there.
+    this.bloom?.setSize(this.glowSize.x, this.glowSize.y);
   }
 
   /** Whether anything in the settings needs a pass at all. The direct path is
@@ -650,7 +654,7 @@ export class PostChain {
     if (pr !== this.composerRatio) {
       this.composerRatio = pr;
       composer.setPixelRatio(pr);
-      this.bloom?.setSize(this.size.x, this.size.y);
+      this.bloom?.setSize(this.glowSize.x, this.glowSize.y);
     }
     // The RenderPass does not clear, this does. The OutputPass tone maps the
     // clear, so it is the inverse of the tone mapper. Then the plain colour again
@@ -723,7 +727,7 @@ export class PostChain {
     // Without it the whole viewport comes back washed out and over-bright.
     composer.addPass(new OutputPass());
     // addPass sized the glow in device pixels, setSize keeps it at CSS size.
-    bloom.setSize(this.size.x, this.size.y);
+    bloom.setSize(this.glowSize.x, this.glowSize.y);
     this.bloom = bloom;
     this.bokeh = bokeh;
     this.composer = composer;

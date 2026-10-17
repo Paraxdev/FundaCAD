@@ -43,3 +43,10 @@ export function hideForPicture(scene: THREE.Scene, model: THREE.Object3D): () =>
   };
 }
 
+/** Fat lines are as wide as asked in the pixels they are drawn into, so a
+ *  picture `k` times the view's size needs them `k` times wider to look the same. */
+export function widenLines(materials: readonly { linewidth: number }[], k: number): () => void {
+  const was = materials.map((m) => m.linewidth);
+  for (const m of materials) m.linewidth *= k;
+  return () => materials.forEach((m, i) => { m.linewidth = was[i]!; });
+}
