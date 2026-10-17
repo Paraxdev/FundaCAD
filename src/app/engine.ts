@@ -81,6 +81,7 @@ import { installPointerKind } from "../input/pointerKind";
 import { installLongPress } from "../ui/longPress";
 import { useUiStore } from "../stores/ui";
 import { createDocBridge, type DocBridge } from "./docBridge";
+import { wireDocumentSwap } from "./documentSwap";
 import { LiveSessionHost } from "../live/liveSession";
 import { liveEditsAllowed, liveSharingEnabled, onLiveEditingChange } from "../ui/liveEditing";
 
@@ -433,13 +434,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   Object.assign(e, createSelection(e));
   Object.assign(e, createDocumentActions(e));
   e.store.onRewind(endPickSession);
-  e.store.onOpen(() => {
-    if (e.sketch.active) e.sketch.cancel();
-    // Left selected, a face is found again by position in the next document's model.
-    e.dropBodyGizmo();
-    e.viewport.clearSelection();
-    e.viewport.setSelectedBodies([]);
-  });
+  wireDocumentSwap(e.store, e);
   installEnvironmentSync(e.store);
 
   return e;

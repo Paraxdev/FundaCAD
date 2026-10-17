@@ -520,6 +520,10 @@ export class DocumentStore {
   /** On New or Open, drop the old model and cancel its build: a failed rebuild keeps
    *  the last result, and a build in flight would hold up the new document's. */
   private discardModelForReplacement() {
+    // A reply or chunk for the old document can still arrive before the cancel lands.
+    this.staleThrough = this.sendGen;
+    this.buildEpoch++;
+    if (this.build.streamed !== null) this.emitBuildAbort();
     this.build = {
       ...this.build,
       building: false,

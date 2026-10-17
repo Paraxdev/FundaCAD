@@ -18,7 +18,6 @@ import {
   bodyMaterials,
   bodyOfFace,
   disposeBody,
-  disposeModel,
   faceIdOfHit,
   edgeObjects,
   groupEdgesByBody,
@@ -139,6 +138,7 @@ import { collectInBox, projectForArea, type AreaProjection } from "./areaProject
 import { isEditableTarget } from "../ui/focus";
 import { hitScale } from "../input/pointerKind";
 import { setEmissionProgress } from "../ui/emissionProgress";
+import { DisposeQueue, detachModel } from "./disposeQueue";
 import { ShadowWatch } from "./shadowWatch";
 import { hideForPicture, markInPicture, markNotInPicture, widenLines } from "./pictureScene";
 
@@ -2709,6 +2709,10 @@ export class Viewport {
     if (bodies) this.onBodySelectionChange?.("restore");
   }
 
+  private disposeQueue = new DisposeQueue();
+
+  /** Takes the model off screen and out of picking at once, for New and Open as
+   *  well as an empty reply. Its GPU objects are released over the next frames. */
   clearModel() {
     this.setStressOverlay(null);
     this.clearFaceMarks();
@@ -2718,11 +2722,11 @@ export class Viewport {
     // `streaming` would suppress picking for good.
     this.abortProgressiveModel();
     if (this.model) {
-      for (const b of this.model.bodies) this.scene.modelGroup.remove(b.mesh);
-      for (const d of edgeObjects(this.model)) this.scene.modelGroup.remove(d.object);
-      disposeModel(this.model);
+      detachModel(this.scene.modelGroup, this.model, this.disposeQueue);
       this.model = null;
+      this.lastResult = null;
       this.dropHighlighter();
+      this.picker.invalidate();
     }
     this.targetGridZ = 0; // no model → grid back on the world XY plane
     this.rig.setContentBox(new THREE.Box3());

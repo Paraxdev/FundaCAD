@@ -11,7 +11,7 @@
 import { describe, it, expect } from "vitest";
 import { DocumentStore } from "../../src/document/store";
 import type { CadDocument, RebuildResult } from "../../src/types";
-import type { GeometryBackend } from "../../src/geometry/client";
+import type { GeometryBackend, RebuildChunk } from "../../src/geometry/client";
 
 const RESULT: RebuildResult = {
   mesh: { positions: [0, 0, 0], indices: [0], faceIds: [0] },
@@ -114,4 +114,71 @@ describe("replacing the document", () => {
     expect(store.bodyMaterialId("b1")).toBeUndefined();
     expect(store.materialLibrary.some((m) => m.id === id)).toBe(false);
   });
+
+  // The old document's rebuild can finish before its cancel lands. Its reply
+  // must not be published, or the discarded model is drawn again over the new one.
+  for (const how of ["New", "Open"] as const) {
+    it(`never publishes a late reply for the discarded document after ${how}`, async () => {
+      const late = lateReplyBackend();
+      const store = new DocumentStore(late.be, DOC);
+      await store.rebuildNow();
+      void store.rebuildNow();
+      await Promise.resolve();
+      const seen: (RebuildResult | null)[] = [];
+      store.onBuild((s) => seen.push(s.result));
+      seen.length = 0;
+      if (how === "New") store.newDocument();
+      else store.load(JSON.stringify({ parameters: {}, features: [] }));
+      late.release({ ok: true, result: { ...RESULT } });
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+      expect(seen.some((r) => r?.bodies?.[0]?.id === "b1")).toBe(false);
+      expect(store.buildState.result).toBeNull();
+    });
+  }
+
+  it("drops a half streamed model and its late chunks on File → New", async () => {
+    const late = lateReplyBackend();
+    const store = new DocumentStore(late.be, DOC);
+    await store.rebuildNow();
+    void store.rebuildNow();
+    await Promise.resolve();
+    const chunks: number[] = [];
+    let aborts = 0;
+    store.onBuildChunk((c) => chunks.push(c.done));
+    store.onBuildAbort(() => aborts++);
+    late.chunk(1);
+    expect(chunks).toEqual([1]);
+    store.newDocument();
+    expect(aborts).toBe(1);
+    late.chunk(2);
+    expect(chunks).toEqual([1]);
+  });
 });
+
+/** First rebuild lands RESULT, the second is held until `release`, later ones hang. */
+function lateReplyBackend() {
+  let calls = 0;
+  let release!: (v: unknown) => void;
+  const chunkFns: ((c: RebuildChunk) => void)[] = [];
+  const be = {
+    async rebuild() {
+      calls++;
+      if (calls === 1) return { ok: true as const, result: RESULT };
+      if (calls === 2) return new Promise((r) => { release = r; });
+      return new Promise(() => {});
+    },
+    async init() {},
+    onStatus() { return () => {}; },
+    onProgress() { return () => {}; },
+    onRebuildChunk(fn: (c: RebuildChunk) => void) { chunkFns.push(fn); return () => {}; },
+    async cancel() { return true; },
+  } as unknown as GeometryBackend;
+  const chunk = (done: number) => {
+    const c = {
+      phase: "bodies", result: RESULT, manifest: [], bodies: [], edgesByBody: new Map(),
+      triRange: { triStart: 0, triEnd: 0 }, bbox: RESULT.bbox, done, total: 3,
+    } as RebuildChunk;
+    chunkFns.forEach((fn) => fn(c));
+  };
+  return { be, chunk, release: (v: unknown) => release(v) };
+}
