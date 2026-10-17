@@ -12,7 +12,7 @@ pub mod meshes;
 pub mod store;
 
 use std::collections::{BTreeSet, HashMap, HashSet};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{mpsc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use fundacad_core::CadDocument;
@@ -140,7 +140,7 @@ impl RebuildCache {
     /// `reset_cache` and the mesh cache: this process forgets, the disk does not.
     pub fn reset(&mut self) {
         self.ring_keys.clear();
-        self.ring.clear();
+        reap(std::mem::take(&mut self.ring));
         self.payloads.clear();
         self.brep_sigs.clear();
     }
@@ -258,9 +258,13 @@ impl RebuildCache {
         }
         let r = built?;
 
+        let mut old = std::mem::take(&mut self.ring);
         let mut ring: Vec<Option<Snapshot>> = if source == Source::Ram {
-            std::mem::take(&mut self.ring).into_iter().take(start).collect()
+            let tail = old.split_off(start.min(old.len()));
+            reap(tail);
+            old
         } else {
+            reap(old);
             (0..start).map(|_| None).collect()
         };
         ring.resize_with(start, || None);
@@ -275,9 +279,12 @@ impl RebuildCache {
                 *slot = Some(snap);
             }
         }
-        for slot in ring.iter_mut().take(n.saturating_sub(self.window)) {
-            *slot = None;
-        }
+        let beyond: Vec<Snapshot> = ring
+            .iter_mut()
+            .take(n.saturating_sub(self.window))
+            .filter_map(Option::take)
+            .collect();
+        reap(beyond);
 
         let mut written = 0;
         if let Some(mut p) = tap.persist.take() {
@@ -387,6 +394,29 @@ fn projection_cap(raw: &Value) -> Option<usize> {
         })
 }
 
+/// Frees `old` on a background thread. The snapshots of a big build hold every
+/// body after every feature, and freeing them took 0.6 s at 1,000 bodies, all of
+/// it in front of the reply of the next document's rebuild. OCCT handle counts
+/// are atomic, so a shape still shared with the kept ring is safe to release here.
+fn reap<T: Send + 'static>(old: T) {
+    type Garbage = Box<dyn Send>;
+    static REAPER: OnceLock<Option<Mutex<mpsc::Sender<Garbage>>>> = OnceLock::new();
+    let tx = REAPER.get_or_init(|| {
+        let (tx, rx) = mpsc::channel::<Garbage>();
+        std::thread::Builder::new()
+            .name("cache-reaper".into())
+            .spawn(move || rx.into_iter().for_each(drop))
+            .ok()
+            .map(|_| Mutex::new(tx))
+    });
+    let garbage: Garbage = Box::new(old);
+    if let Some(tx) = tx {
+        if let Err(back) = tx.lock().unwrap_or_else(|p| p.into_inner()).send(garbage) {
+            drop(back.0);
+        }
+    }
+}
+
 /// The engine process's cache, created on first use.
 pub fn global() -> &'static Mutex<RebuildCache> {
     static CACHE: OnceLock<Mutex<RebuildCache>> = OnceLock::new();
@@ -404,4 +434,30 @@ pub fn stats_json(s: &CacheStats) -> Value {
         "meshDiskHits": s.mesh_disk_hits,
         "meshed": s.meshed,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::reap;
+    use std::sync::mpsc;
+    use std::thread::{self, ThreadId};
+    use std::time::Duration;
+
+    struct Noisy(mpsc::Sender<ThreadId>);
+    impl Drop for Noisy {
+        fn drop(&mut self) {
+            let _ = self.0.send(thread::current().id());
+        }
+    }
+
+    #[test]
+    fn an_old_ring_is_freed_off_the_request_thread() {
+        let (tx, rx) = mpsc::channel();
+        reap(vec![Some(Noisy(tx.clone())), None, Some(Noisy(tx))]);
+        let me = thread::current().id();
+        for _ in 0..2 {
+            let on = rx.recv_timeout(Duration::from_secs(10)).expect("the reaper dropped it");
+            assert_ne!(on, me);
+        }
+    }
 }
