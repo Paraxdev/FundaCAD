@@ -212,12 +212,18 @@ pub const BAND_TARGET: Duration = Duration::from_millis(10);
 
 /// The next band after one of `rows` took `took`: scaled towards `target`,
 /// at most doubling per step so one fast band over the sky cannot jump to a
-/// full frame over the model, in multiples of the workgroup's 8 rows.
-pub fn adapt_rows(rows: u32, height: u32, took: Duration, target: Duration) -> u32 {
+/// full frame over the model, in multiples of the workgroup's 8 rows. Never
+/// under MIN_BAND_PATHS: on a GPU shared with another app a band's time is
+/// mostly waiting for its turn, and smaller bands only add submits.
+pub fn adapt_rows(rows: u32, width: u32, height: u32, took: Duration, target: Duration) -> u32 {
     let ratio = (target.as_secs_f64() / took.as_secs_f64().max(1e-6)).clamp(0.25, 2.0);
     let want = (rows as f64 * ratio).round() as u32;
-    want.clamp(8, height.next_multiple_of(8).max(8)).next_multiple_of(8)
+    let top = height.next_multiple_of(8).max(8);
+    let floor = (MIN_BAND_PATHS / width.max(1)).clamp(8, top);
+    want.clamp(floor, top).next_multiple_of(8)
 }
+
+pub const MIN_BAND_PATHS: u32 = 65_536;
 
 pub struct Tracer {
     device: wgpu::Device,
@@ -691,7 +697,7 @@ impl Tracer {
             }
             self.wait();
             if self.path == Path::Software {
-                self.rows = adapt_rows(self.rows, self.h, t.elapsed(), BAND_TARGET);
+                self.rows = adapt_rows(self.rows, self.w, self.h, t.elapsed(), BAND_TARGET);
             }
         }
         self.sample - before
@@ -816,11 +822,13 @@ mod tests {
     #[test]
     fn a_software_band_follows_the_dispatch_time() {
         let ms = Duration::from_millis;
-        assert_eq!(adapt_rows(272, 1080, ms(30), ms(10)), 96);
-        assert_eq!(adapt_rows(96, 1080, ms(10), ms(10)), 96);
-        assert_eq!(adapt_rows(96, 1080, ms(1), ms(10)), 192);
-        assert_eq!(adapt_rows(1080, 1080, ms(1), ms(10)), 1080);
-        assert_eq!(adapt_rows(8, 1080, ms(400), ms(10)), 8);
-        assert_eq!(adapt_rows(100, 1080, Duration::ZERO, ms(10)), 200);
+        assert_eq!(adapt_rows(272, 1920, 1080, ms(30), ms(10)), 96);
+        assert_eq!(adapt_rows(96, 1920, 1080, ms(10), ms(10)), 96);
+        assert_eq!(adapt_rows(96, 1920, 1080, ms(1), ms(10)), 192);
+        assert_eq!(adapt_rows(1080, 1920, 1080, ms(1), ms(10)), 1080);
+        assert_eq!(adapt_rows(100, 1920, 1080, Duration::ZERO, ms(10)), 200);
+        // 65536 paths at 1920 wide is 34 rows, 40 on the workgroup grid.
+        assert_eq!(adapt_rows(48, 1920, 1080, ms(400), ms(10)), 40);
+        assert_eq!(adapt_rows(8, 64, 48, ms(400), ms(10)), 48);
     }
 }
