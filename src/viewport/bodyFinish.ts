@@ -12,6 +12,7 @@ import { applySurface, applySurfaceGraph, cloneWithoutSurface, graphKey, surface
 import { MAX_EMISSIVE_INTENSITY } from "../ui/renderPrefs";
 import { type AreaEmitter, areaEmitters, emitterLuminance, emitterPower, emitterPowerBound, emitterShadowNear, emitterStandoff } from "./emitters";
 import { installAreaLights } from "./areaLightShadows";
+import { markInPicture } from "./pictureScene";
 
 /** Every rectangle light is evaluated for every lit pixel, so this is the budget. */
 const MAX_AREA_LIGHTS = 12;
@@ -588,6 +589,7 @@ function keepTop(top: number[], v: number, cap: number) {
 function buildRig(area: number, shadow: number): EmitterRig {
   const group = new THREE.Group();
   group.name = "emitters";
+  markInPicture(group);
   const areas = Array.from({ length: area }, () => group.add(new THREE.RectAreaLight(0xffffff, 0, 1e-3, 1e-3)).children.at(-1) as THREE.RectAreaLight);
   // Shadowed area light i and shadow i are one emitter, so these come after.
   const shadows = Array.from({ length: shadow }, () => {

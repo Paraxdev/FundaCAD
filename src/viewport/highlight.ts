@@ -373,6 +373,26 @@ export class Highlighter {
     this.syncHoverOverlay();
   }
 
+  /** Run `fn` with every selected, hovered and failing face and edge in its
+   *  plain colour, then paint those tints back. A saved picture shows none of them. */
+  withoutSelectionPaint<T>(fn: () => T): T {
+    const faces = new Set([...this.selectedFaces, ...this.hoveredFaces]);
+    const edges = new Set([...this.selectedEdges, ...this.errorEdges]);
+    if (this.hoveredEdge) edges.add(this.hoveredEdge);
+    for (const f of faces) this.restoreFace(f);
+    for (const e of edges) paintIdle(e, this.edgeBase);
+    try {
+      return fn();
+    } finally {
+      for (const f of faces) this.paintFace(f, this.selectedFaces.has(f) ? SELECT : HOVER);
+      for (const e of edges) {
+        if (this.errorEdges.has(e)) paint(e, ERROR);
+        else if (this.selectedEdges.has(e)) paint(e, SELECT);
+        else paint(e, HOVER);
+      }
+    }
+  }
+
   private paintFace(faceId: number, color: THREE.Color) {
     const body = bodyOfFace(this.view, faceId);
     const tris = body?.faceTriangles.get(faceId);

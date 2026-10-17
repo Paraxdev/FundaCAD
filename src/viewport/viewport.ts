@@ -140,6 +140,7 @@ import { isEditableTarget } from "../ui/focus";
 import { hitScale } from "../input/pointerKind";
 import { setEmissionProgress } from "../ui/emissionProgress";
 import { ShadowWatch } from "./shadowWatch";
+import { hideForPicture, markInPicture, markNotInPicture } from "./pictureScene";
 
 /** One box drag. The box previews by selecting every frame, so each frame starts
  *  from the selection as it was when the drag began. */
@@ -1688,7 +1689,7 @@ export class Viewport {
     if (this.combs && this.model) {
       const seg = buildCurvatureCombs(this.model, this.model.box);
       if (seg) {
-        this.combsObj = seg;
+        this.combsObj = markNotInPicture(seg);
         this.scene.modelGroup.add(seg);
       }
     }
@@ -2995,7 +2996,7 @@ export class Viewport {
     }
     if (o && o.positions.length && o.indices.length && o.values.length * 3 === o.positions.length) {
       this.stressMesh = buildStressMesh(o.positions, o.indices, stressColors(o.values, o.range.min, o.range.max));
-      this.scene.scene.add(this.stressMesh);
+      this.scene.scene.add(markInPicture(this.stressMesh));
       if (o.displacement && o.displacement.length === o.positions.length) {
         this.stressShape = { base: Float32Array.from(o.positions), displacement: Float32Array.from(o.displacement) };
         this.setStressDeformation(o.scale ?? 0);
@@ -3924,7 +3925,7 @@ export class Viewport {
     return url;
   }
 
-  /** The current view at `scale` times the size without grid, origin arrows or planes.
+  /** The current view at `scale` times the size, the model only.
    *  Resizes the drawing buffer (updateStyle false) so the post chain is reused.
    *  Must stay synchronous: without preserveDrawingBuffer an await reads a blank
    *  image. `scale` is capped because an oversized buffer fails silently. */
@@ -3935,15 +3936,9 @@ export class Viewport {
     const cap = this.scene.renderer.capabilities.maxTextureSize || 4096;
     const k = Math.max(1, Math.min(scale, cap / Math.max(w, h)));
 
-    const grid = this.scene.grid.group.visible;
-    const triad = this.scene.triad.group.visible;
-    const planes = Object.values(this.scene.planes).map((m) => m.visible);
     const lines = this.model ? edgeObjects(this.model) : [];
     const wereLit = lines.map((e) => e.object.visible);
     const dpr = this.scene.renderer.getPixelRatio();
-    this.scene.grid.group.visible = false;
-    this.scene.triad.group.visible = false;
-    for (const m of Object.values(this.scene.planes)) m.visible = false;
     // Hidden rather than removed: a body whose edges were already off (a hidden
     // body's are) must come back off, which is what the saved flags are for.
     if (!opts.edges) for (const e of lines) e.object.visible = false;
@@ -3955,15 +3950,21 @@ export class Viewport {
     const stillLow = isRenderLowPower();
     if (stillLow !== wasLow) this.applyBodyFinish();
 
+    // No selection, hover, grid, tool handle or any other overlay goes in the file.
+    const showOverlays = hideForPicture(this.scene.scene, this.scene.modelGroup);
     let url = "";
     try {
       this.scene.renderer.setPixelRatio(1);
       this.scene.renderer.setSize(w * k, h * k, false);
       this.scene.post.setSize(w * k, h * k);
       this.scene.post.focusDistance = this.rig.active.position.distanceTo(this.cameraTarget());
-      this.scene.post.render(this.rig.active, false, opts.realtime);
-      url = this.canvas.toDataURL("image/png");
+      const draw = () => {
+        this.scene.post.render(this.rig.active, false, opts.realtime);
+        return this.canvas.toDataURL("image/png");
+      };
+      url = this.highlighter ? this.highlighter.withoutSelectionPaint(draw) : draw();
     } finally {
+      showOverlays();
       // Whatever happened, the viewport goes back to being the viewport. A throw
       // between the resize and the restore would otherwise leave the canvas
       // drawing at twice its size with no furniture on it and no way back.
@@ -3972,9 +3973,6 @@ export class Viewport {
         if (isRenderLowPower() !== stillLow) this.applyBodyFinish();
       }
       this.scene.renderer.setPixelRatio(dpr);
-      this.scene.grid.group.visible = grid;
-      this.scene.triad.group.visible = triad;
-      Object.values(this.scene.planes).forEach((m, i) => { m.visible = planes[i] ?? false; });
       lines.forEach((e, i) => { e.object.visible = wereLit[i] ?? true; });
       this.resize();
       this.requestRender();

@@ -9,6 +9,7 @@
 
 import * as THREE from "three";
 import type { BodyMesh } from "./render";
+import { markInPicture } from "./pictureScene";
 
 /** Past this many bodies the caps are left off: each body costs three draws. */
 export const CAP_BODY_LIMIT = 400;
@@ -91,6 +92,7 @@ export class SectionCaps {
 
   constructor() {
     this.group.name = "section-caps";
+    markInPicture(this.group);
   }
 
   /** Rebuild the caps for these bodies, cut by `plane` (the kept side's). */
