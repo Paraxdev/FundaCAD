@@ -310,7 +310,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   onLiveEditingChange(syncLive);
 
   e.overlay = new SketchOverlay();
-  e.viewport.addToScene(e.overlay.group);
+  e.viewport.addToScene(e.overlay.group, "sketches");
   e.sketch = new SketchMode(e.viewport, e.overlay);
   // Every sketch's areas split along the lines the engine cuts a consuming
   // feature's profile with, so a highlighted area is the area that builds. The
@@ -411,6 +411,12 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
 
   // --- predicates the UI wiring below depends on ---
   Object.assign(e, createToolBusy(e));
+  const work = { tool: false, sketch: false };
+  e.viewport.activeWork = () => {
+    work.sketch = e.sketch.active;
+    work.tool = !work.sketch && e.toolBusy();
+    return work;
+  };
   setLeftButtonOwner(() => e.altLeftOwned());
   Object.assign(e, createSketchVisibility(e));
   // The overlay declared this hook and nothing ever assigned it, so its default

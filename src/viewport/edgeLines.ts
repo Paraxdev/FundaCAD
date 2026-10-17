@@ -20,6 +20,7 @@ import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import { overlayMaterial } from "./overlayMaterial";
+import { markOverlay } from "./overlayKinds";
 import type { RebuildResult } from "../types";
 import type { TangentEdges } from "../ui/renderPrefs";
 
@@ -106,6 +107,7 @@ export class BodyEdges {
     this.object = new LineSegments2(new LineSegmentsGeometry(), this.material);
     this.object.name = "edges";
     this.object.userData.edges = this;
+    markOverlay(this.object, "edges");
     this.flush();
   }
 

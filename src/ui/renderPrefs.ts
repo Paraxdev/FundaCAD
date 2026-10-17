@@ -20,6 +20,7 @@
 
 import { readSetting } from "./storedSetting";
 import { DEFAULT_KEY } from "../viewport/keyLight";
+import { DEFAULT_OVERLAYS, asOverlays, type OverlayState } from "../viewport/overlayKinds";
 
 /** What the model reflects, and therefore most of what a metal LOOKS like.
  *
@@ -216,6 +217,9 @@ export interface RenderPrefs {
   /** The view mode last chosen in each workspace. */
   viewModeModel: ViewMode;
   viewModeRender: ViewMode;
+  /** The overlays drawn in each workspace (viewport/overlayKinds.ts). */
+  overlaysModel: OverlayState;
+  overlaysRender: OverlayState;
   /** Matcap's sphere, and whether it keeps body colours (false is plain). */
   matcapStyle: MatcapStyle;
   matcapTint: boolean;
@@ -263,6 +267,8 @@ export const DEFAULT_RENDER: RenderPrefs = {
   keyElevation: DEFAULT_KEY.elevation,
   viewModeModel: "realtime",
   viewModeRender: "realtime",
+  overlaysModel: DEFAULT_OVERLAYS,
+  overlaysRender: DEFAULT_OVERLAYS,
   matcapStyle: "studio",
   matcapTint: true,
   denoise: "standard",
@@ -394,6 +400,8 @@ export function asRenderPrefs(v: unknown): RenderPrefs {
     keyElevation: asElevation(o["keyElevation"]) ?? DEFAULT_RENDER.keyElevation,
     viewModeModel: asViewMode(o["viewModeModel"]) ?? DEFAULT_RENDER.viewModeModel,
     viewModeRender: asViewMode(o["viewModeRender"]) ?? DEFAULT_RENDER.viewModeRender,
+    overlaysModel: asOverlays(o["overlaysModel"]),
+    overlaysRender: asOverlays(o["overlaysRender"]),
     matcapStyle: asMatcapStyle(o["matcapStyle"]) ?? DEFAULT_RENDER.matcapStyle,
     matcapTint: typeof o["matcapTint"] === "boolean" ? o["matcapTint"] : DEFAULT_RENDER.matcapTint,
     denoise: asDenoise(o["denoise"]) ?? DEFAULT_RENDER.denoise,
@@ -437,6 +445,7 @@ export function setRenderPref<K extends keyof RenderPrefs>(key: K, value: Render
                       : key === "keyAzimuth" ? asAzimuth(value)
                         : key === "keyElevation" ? asElevation(value)
                           : key === "viewModeModel" || key === "viewModeRender" ? asViewMode(value)
+                          : key === "overlaysModel" || key === "overlaysRender" ? asOverlays(value)
                             : key === "matcapStyle" ? asMatcapStyle(value)
                               : key === "matcapTint" ? (typeof value === "boolean" ? value : null)
                                 : key === "denoise" ? asDenoise(value)

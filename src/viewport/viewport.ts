@@ -64,7 +64,8 @@ import type { DocumentStore } from "../document/store";
 import type { BodyFinish } from "../document/materials";
 import { BodyFinishLayer, sameFinishMap, sameStringMap } from "./bodyFinish";
 import { hdrHashOf, onRenderPrefsChange, renderPrefs, setRenderPref } from "../ui/renderPrefs";
-import { bootViewMode, chooseViewMode, effectiveViewMode, resetPathTracedOverride, type RenderTier, type ViewMode } from "../ui/viewMode";
+import { bootViewMode, chooseViewMode, effectiveViewMode, resetPathTracedOverride, savedOverlays, type RenderTier, type ViewMode } from "../ui/viewMode";
+import { drawMask, markOverlay, overlayBit, overlayShown, pickLayers, pickMask, pictureMask, setPickLayers, syncOverlayLayers, type ActiveWork, type OverlayKind } from "./overlayKinds";
 import type { TraceLight, TraceLook } from "./pathtrace/backend";
 import { lensFor, type TraceLens } from "./pathtrace/camera";
 import { traceEnvironment, type TraceHemi } from "./pathtrace/environment";
@@ -96,6 +97,7 @@ const EDGE_PICKABLE = new THREE.Color(0xd98a4a); // muted ember "selectable" edg
 
 /** How much of the model is left standing while a sketch is open on it, and how
  *  much of its edges. Both were far lower; see setModelDimmed. */
+const NO_WORK: ActiveWork = { tool: false, sketch: false };
 const SKETCH_DIM_OPACITY = 0.55;
 const SKETCH_DIM_EDGE_OPACITY = 0.5;
 
@@ -294,7 +296,7 @@ export class Viewport {
   constructor(private canvas: HTMLCanvasElement) {
     this.scene = createScene(canvas);
     this.progressive = new ProgressiveModel(this.scene.modelGroup, disposeBody);
-    this.scene.scene.add(this.datumGroup);
+    this.scene.scene.add(markOverlay(this.datumGroup, "origin"));
     const rect = canvas.getBoundingClientRect();
     this.rig = createCameraRig(canvas, rect.width / rect.height);
 
@@ -360,7 +362,10 @@ export class Viewport {
     });
     void this.bootPathTrace();
     this.syncViewMode();
-    onWorkspaceChange(() => this.syncViewMode());
+    onWorkspaceChange(() => {
+      this.syncViewMode();
+      this.overlays = savedOverlays();
+    });
     onRenderPrefsChange(() => {
       if (renderPrefs().tracer !== this.tracerPref) {
         this.tracerPref = renderPrefs().tracer;
@@ -383,6 +388,7 @@ export class Viewport {
       }
       if (renderPrefs().tangentEdges !== this.tangentEdges) this.applyTangentEdges();
       this.syncViewMode();
+      this.overlays = savedOverlays();
       this.requestRender();
     });
     onThemeChange(() => {
@@ -2515,6 +2521,7 @@ export class Viewport {
     this.model = view;
     this.highlighter?.dispose();
     this.highlighter = new Highlighter(view);
+    this.highlighter.setPaintShown(overlayShown(this.overlays, "highlight"));
     this.dropKey = "";
     this.picker.invalidate();
     // Retried every installment: the selected face's body is usually still in flight.
@@ -2634,6 +2641,7 @@ export class Viewport {
     this.picker.invalidate(); // edge geometry just changed, drop cached targets
     this.highlighter?.dispose();
     this.highlighter = new Highlighter(this.model);
+    this.highlighter.setPaintShown(overlayShown(this.overlays, "highlight"));
     this.dropKey = "";
     // Before applyAnalysis: setBase() reads the selected set.
     if (memo) this.restoreSelection(memo);
@@ -3409,7 +3417,7 @@ export class Viewport {
     }
     if (!this.emphasis) {
       this.emphasis = new EdgeEmphasis(this.resolution, EDGE_HOVER_COLOR);
-      this.addToScene(this.emphasis.object);
+      this.addToScene(this.emphasis.object, "highlight");
     }
     this.emphasis.showAll(lines.map((l) => l.points));
     this.requestRender();
@@ -3583,7 +3591,7 @@ export class Viewport {
       -((clientY - rect.top) / rect.height) * 2 + 1,
     );
     this.sharedRaycaster.setFromCamera(this.ndc, this.rig.active);
-    return this.sharedRaycaster;
+    return pickLayers(this.sharedRaycaster);
   }
 
   cycleProjection(): ProjectionMode {
@@ -3731,7 +3739,11 @@ export class Viewport {
   get domElement(): HTMLCanvasElement {
     return this.canvas;
   }
-  addToScene(obj: THREE.Object3D) {
+  /** Adds `obj` on top of the model. Untagged, it counts as a tool's handle,
+   *  unless a picture keeps it (lights, section caps). */
+  addToScene(obj: THREE.Object3D, kind?: OverlayKind) {
+    if (kind) markOverlay(obj, kind);
+    else if (!obj.userData.overlay && !obj.userData.inPicture) markOverlay(obj, "handles");
     this.scene.scene.add(obj);
     this.requestRender();
   }
@@ -3986,11 +3998,9 @@ export class Viewport {
     const k = Math.max(1, Math.min(scale, cap / Math.max(w, h)));
 
     const lines = this.model ? edgeObjects(this.model) : [];
-    const wereLit = lines.map((e) => e.object.visible);
     const dpr = this.scene.renderer.getPixelRatio();
-    // Hidden rather than removed: a body whose edges were already off (a hidden
-    // body's are) must come back off, which is what the saved flags are for.
-    if (!opts.edges) for (const e of lines) e.object.visible = false;
+    const camera = this.rig.active;
+    const viewLayers = camera.layers.mask;
 
     // A still is full quality even in potato mode: the tier, passes and environment
     // come back for this one render, and glass and emitters with the tier.
@@ -4000,6 +4010,7 @@ export class Viewport {
     if (stillLow !== wasLow) this.applyBodyFinish();
 
     // No selection, hover, grid, tool handle or any other overlay goes in the file.
+    camera.layers.mask = pictureMask(opts);
     const showOverlays = hideForPicture(this.scene.scene, this.scene.modelGroup);
     const narrowLines = widenLines(lines.map((e) => e.material), k);
     let url = "";
@@ -4015,6 +4026,7 @@ export class Viewport {
       url = this.highlighter ? this.highlighter.withoutSelectionPaint(draw) : draw();
     } finally {
       showOverlays();
+      camera.layers.mask = viewLayers;
       narrowLines();
       // Whatever happened, the viewport goes back to being the viewport. A throw
       // between the resize and the restore would otherwise leave the canvas
@@ -4024,7 +4036,6 @@ export class Viewport {
         if (isRenderLowPower() !== stillLow) this.applyBodyFinish();
       }
       this.scene.renderer.setPixelRatio(dpr);
-      lines.forEach((e, i) => { e.object.visible = wereLit[i] ?? true; });
       this.resize();
       this.requestRender();
     }
@@ -4127,6 +4138,35 @@ export class Viewport {
     return "changed";
   }
 
+  /** Wired by the app: what is running that needs its overlay drawn anyway. */
+  activeWork: () => ActiveWork = () => NO_WORK;
+  private overlays = savedOverlays();
+  private overlayMask = -1;
+  private overlayWatchers = new Set<() => void>();
+
+  /** Heard after the overlays drawn change, a tool starting included. */
+  watchOverlays(fn: () => void): () => void {
+    this.overlayWatchers.add(fn);
+    return () => this.overlayWatchers.delete(fn);
+  }
+
+  overlayDrawn(kind: OverlayKind): boolean {
+    return (this.overlayMask & overlayBit(kind)) !== 0;
+  }
+
+  private syncOverlayMask() {
+    const mask = drawMask(this.overlays, this.activeWork());
+    const camera = this.rig.active;
+    if (mask === this.overlayMask && camera.layers.mask === mask) return;
+    const changed = mask !== this.overlayMask;
+    this.overlayMask = mask;
+    camera.layers.mask = mask;
+    setPickLayers(pickMask(mask));
+    this.highlighter?.setPaintShown(overlayShown(this.overlays, "highlight"));
+    this.requestRender();
+    if (changed) for (const fn of this.overlayWatchers) fn();
+  }
+
   private scratchTarget = new THREE.Vector3();
   private loop = () => {
     // Never let a single bad frame kill the loop: if any step throws, log and
@@ -4140,6 +4180,8 @@ export class Viewport {
       const moved = this.rig.update(dt);
       const resized = this.applyMotionScale(moved, now);
       if (resized === "changed" || (resized === "wait" && moved)) this.requestRender();
+      this.syncOverlayMask();
+      if (this.needsRender) syncOverlayLayers(this.scene.scene);
       this.trace.tick({
         now,
         inputs: {
@@ -4169,14 +4211,16 @@ export class Viewport {
       if (resized !== "wait" && (moved || this.needsRender || this.lingerFrames > 0)) {
         // keep the ground grid spacing/extent matched to the current zoom + pan
         const t = this.rig.getTarget(this.scratchTarget);
-        this.scene.grid.update(t.x, t.y, this.pixelWorldSize(t), this.viewDiagonalPx(), this.targetGridZ);
-        // Only while the ground grid is the one being drawn: inside a sketch it
-        // is hidden and SketchMode reports the plane lattice instead.
-        if (this.scene.grid.group.visible) this.reportGridStep(this.scene.grid.step);
+        if (this.overlayDrawn("grid")) {
+          this.scene.grid.update(t.x, t.y, this.pixelWorldSize(t), this.viewDiagonalPx(), this.targetGridZ);
+          // Only while the ground grid is the one being drawn: inside a sketch it
+          // is hidden and SketchMode reports the plane lattice instead.
+          if (this.scene.grid.group.visible) this.reportGridStep(this.scene.grid.step);
+        }
         // ...and the origin arrows to a constant size on screen. Measured AT THE
         // ORIGIN rather than at the camera target, because that is where they
         // are drawn and a perspective pixel is a different size at each depth.
-        this.scene.triad.update(this.pixelWorldSize(WORLD_ORIGIN), this.modelDiagonal());
+        if (this.overlayDrawn("origin")) this.scene.triad.update(this.pixelWorldSize(WORLD_ORIGIN), this.modelDiagonal());
         // What stays sharp when the lens is open: whatever the view is centred
         // on. Written every frame because the orbit distance changes every frame
         // a wheel is turned, and it costs one subtraction.
