@@ -644,12 +644,6 @@ function disposeBody(body: BodyMesh) {
 
 export { disposeBody, buildEdgeLines };
 
-export function disposeModel(view: ModelView | null) {
-  if (!view) return;
-  for (const b of view.bodies) disposeBody(b);
-  view.orphanEdges?.dispose();
-}
-
 export function setEdgeResolution(view: ModelView | null, res: THREE.Vector2) {
   if (!view) return;
   for (const b of view.bodies) b.edges.setResolution(res);
