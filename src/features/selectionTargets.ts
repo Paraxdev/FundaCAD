@@ -140,6 +140,10 @@ export const FEATURE_TARGETS: Partial<Record<FeatureType, readonly TargetField[]
     field: "bodies", label: "Bodies", kind: "body", shape: "bodyId", arity: "many",
     whenEmpty: "the active body", alsoReads: "body",
   }],
+  separate: [{
+    field: "bodies", label: "Bodies", kind: "body", shape: "bodyId", arity: "many",
+    whenEmpty: "the active body", alsoReads: "body",
+  }],
   // The half of an extrude that was never shown. It is the FIRST thing about the
   // feature, which areas of the sketch became solid, and until now the panel
   // opened on "Distance" as though the profile were settled at creation and

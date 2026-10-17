@@ -77,6 +77,7 @@ fn handle(ctx: &mut Ctx, f: &Feature) -> FResult {
         Feature::SimplifyMesh(s) => cleanup::simplify_mesh(ctx, s),
         Feature::CleanUp(c) => cleanup::clean_up(ctx, c),
         Feature::Split(s) => split::split(ctx, s),
+        Feature::Separate(s) => split::separate(ctx, s),
         Feature::Imprint(i) => split::imprint(ctx, i),
         Feature::Import(i) => import::handle(ctx, i),
         other => Err(not_ported(other.type_name().unwrap_or("feature"))),

@@ -743,6 +743,24 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     });
   }
 
+  // Separate: each disjoint solid of the selected bodies becomes a body of its own.
+  async function startSeparate() {
+    if (toolBusy()) return;
+    const bodies = store.buildState.result?.bodies ?? [];
+    if (!bodies.length) {
+      setStatus("Separate: create or import a body first", "");
+      return;
+    }
+    let ids = viewport.getSelectedBodies().filter((id) => bodies.some((b) => b.id === id));
+    if (!ids.length && bodies.length === 1 && bodies[0]) ids = [bodies[0].id];
+    if (!ids.length) {
+      const picked = await chooseBody("Which body to separate?", bodies);
+      if (!picked) return;
+      ids = [picked];
+    }
+    store.addFeature({ id: store.nextId(), type: "separate", bodies: ids } as Feature);
+  }
+
   // Cut ALL visible bodies by a construction plane (right-click a plane → Cut, or
   // select a plane + Split Body). Reuses the split feature with `planeId` + the list
   // of currently-visible body ids.
@@ -1866,6 +1884,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     createAxisFromPlanes,
     offsetPlaneFromFace,
     startSplit,
+    startSeparate,
     startCutByPlane,
     startBoolean,
     startSimplifyMesh,

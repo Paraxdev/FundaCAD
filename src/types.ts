@@ -469,6 +469,7 @@ export type CoreFeature =
       generatedBy?: { plugin: string; spec: Record<string, unknown> };
     }
   // keep=both splits into bodies. `bodies` cuts several; `planeId` names a datum plane.
+  | { id: string; type: "separate"; body?: string; bodies?: string[] }
   | { id: string; type: "split"; plane?: PlaneSpec; planeId?: string; keep: "top" | "bottom" | "both"; body?: string; bodies?: string[]; groupSides?: boolean }
   // Divide the face `sketch` sits on by imprinting its curves; no material changes.
   | { id: string; type: "imprint"; sketch: string; body?: string }
@@ -584,7 +585,7 @@ const CORE_FEATURE_TYPES = {
   datumAxis: true, datumPlane: true, datumPoint: true, deleteFace: true, draft: true,
   duplicate: true, extrude: true, fillet: true, hole: true, import: true, imprint: true, joint: true,
   loft: true, mechanism: true, mirror: true, move: true, offsetFace: true, patternCircular: true,
-  patternLinear: true, patternRect: true, "press-pull": true, removeBody: true, revolve: true, scale: true,
+  patternLinear: true, patternRect: true, "press-pull": true, removeBody: true, revolve: true, scale: true, separate: true,
   shell: true, simplifyMesh: true, sketch: true, sphere: true, split: true, sweep: true,
   thicken: true, thread: true, torus: true,
 } as const satisfies Record<FeatureType, true>;

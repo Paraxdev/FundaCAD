@@ -100,6 +100,7 @@ export const MODEL: Group[] = [
         }),
       },
       { action: "split", label: "Split Body", iconName: "split", key: "K" },
+      { action: "separate", label: "Separate", iconName: "split" },
       {
         label: "Shell",
         children: [

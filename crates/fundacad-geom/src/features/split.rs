@@ -4,7 +4,7 @@
 
 use std::collections::HashMap;
 
-use fundacad_core::schema::{Imprint, Split};
+use fundacad_core::schema::{Imprint, Separate, Split};
 use glam::DVec3;
 use opencascade::boolean_op::{BooleanKind, BooleanOp, BooleanOptions};
 use opencascade::primitives::{Shape, ShapeType};
@@ -254,6 +254,80 @@ pub fn imprint(ctx: &mut Ctx, f: &Imprint) -> FResult {
             "imprint",
             "these curves don't divide the face, extend them across it to its edges",
         );
+    }
+    Ok(())
+}
+
+/// Face colours of one solid out of its body's, the faces of the solids taken in order.
+fn solid_face_colors(
+    body: &Option<serde_json::Value>,
+    solids: &[Shape],
+    at: usize,
+) -> Option<serde_json::Value> {
+    let counts: Vec<usize> = solids.iter().map(|s| kernel::count(s, Kind::Face)).collect();
+    let all = fundacad_core::face_colors::decode_value(Some(body.as_ref()?), counts.iter().sum());
+    let from: usize = counts[..at].iter().sum();
+    let mine = &all[from..from + counts[at]];
+    serde_json::to_value(fundacad_core::face_colors::encode(mine)?).ok()
+}
+
+/// One body per disjoint solid. The largest keeps the body's id, name and
+/// look, the rest are numbered after it and take its colours.
+pub fn separate(ctx: &mut Ctx, f: &Separate) -> FResult {
+    let targets: Vec<usize> = match f.bodies.as_ref().filter(|b| !b.is_empty()) {
+        Some(ids) => ids.iter().filter_map(|b| ctx.find_body(b)).collect(),
+        None => match f.body.as_deref().filter(|b| !b.is_empty()) {
+            Some(id) => ctx.find_body(id).into_iter().collect(),
+            None => ctx.bodies.len().checked_sub(1).into_iter().collect(),
+        },
+    };
+    if targets.is_empty() {
+        return Err(Fail::msg("Separate needs an existing body"));
+    }
+    let single = targets.len() == 1;
+    let mut parted = false;
+    for target in targets {
+        let body = &ctx.bodies[target];
+        let name = if body.name.is_empty() {
+            format!("Body{}", fundacad_core::body_ids::number(&body.id))
+        } else {
+            body.name.clone()
+        };
+        let mut solids = kernel::subshapes(&kernel::drop_debris(body.shape()), Kind::Solid);
+        if solids.len() < 2 {
+            let note = format!("{name} is one solid, there is nothing to separate");
+            if single {
+                return Err(Fail::msg(note));
+            }
+            ctx.skip_feature(&f.id, "separate", &note);
+            continue;
+        }
+        let (face_colors, part_color) = (body.face_colors.clone(), body.part_color.clone());
+        let order: Vec<usize> = {
+            let volumes: Vec<f64> = solids.iter().map(|s| kernel::volume_precise(s).abs()).collect();
+            let mut o: Vec<usize> = (0..solids.len()).collect();
+            o.sort_by(|&a, &b| volumes[b].total_cmp(&volumes[a]));
+            o
+        };
+        let colors: Vec<_> = (0..solids.len())
+            .map(|i| solid_face_colors(&face_colors, &solids, i))
+            .collect();
+        let mut taken: Vec<Option<Shape>> = solids.drain(..).map(Some).collect();
+        for (n, &i) in order.iter().enumerate() {
+            let Some(solid) = taken[i].take() else { continue };
+            if n == 0 {
+                ctx.set_shape(target, solid);
+                ctx.bodies[target].face_colors = colors[i].clone();
+                continue;
+            }
+            let at = ctx.new_body(solid, Some(format!("{name} {}", n + 1)), None);
+            ctx.bodies[at].face_colors = colors[i].clone();
+            ctx.bodies[at].part_color = part_color.clone();
+        }
+        parted = true;
+    }
+    if !parted {
+        return Err(Fail::msg("Separate found no body made of several solids"));
     }
     Ok(())
 }

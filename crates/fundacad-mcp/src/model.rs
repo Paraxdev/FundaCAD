@@ -129,6 +129,7 @@ const PREFIXES: &[(&str, &str)] = &[
     ("patternCircular", "pc"),
     ("patternLinear", "pln"),
     ("split", "spl"),
+    ("separate", "sep"),
     ("hole", "ho"),
     ("mechanism", "mech"),
 ];
