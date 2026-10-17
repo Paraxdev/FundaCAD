@@ -36,6 +36,43 @@ export function radianceSize(bytes: Uint8Array): { width: number; height: number
   return m ? { width: Number(m[4]), height: Number(m[2]) } : null;
 }
 
+/** The size an OpenEXR header's dataWindow declares, or null when it is not one. */
+export function exrSize(bytes: Uint8Array): { width: number; height: number } | null {
+  if (bytes.length < 8 || bytes[0] !== 0x76 || bytes[1] !== 0x2f || bytes[2] !== 0x31 || bytes[3] !== 0x01) return null;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const cstr = (at: number) => {
+    let end = at;
+    while (end < bytes.length && bytes[end] !== 0) end++;
+    return end < bytes.length ? { text: new TextDecoder("latin1").decode(bytes.subarray(at, end)), next: end + 1 } : null;
+  };
+  let p = 8;
+  while (p < bytes.length && bytes[p] !== 0) {
+    const name = cstr(p);
+    const type = name && cstr(name.next);
+    if (!name || !type || type.next + 4 > bytes.length) return null;
+    const size = view.getInt32(type.next, true);
+    const body = type.next + 4;
+    if (size < 0 || body + size > bytes.length) return null;
+    if (name.text === "dataWindow" && type.text === "box2i" && size === 16) {
+      const [x0, y0, x1, y1] = [0, 4, 8, 12].map((o) => view.getInt32(body + o, true)) as [number, number, number, number];
+      return { width: x1 - x0 + 1, height: y1 - y0 + 1 };
+    }
+    p = body + size;
+  }
+  return null;
+}
+
+/** Rows reversed in place; three's EXRLoader hands them back bottom first. */
+function flipRows(data: Float32Array, width: number, height: number) {
+  const stride = width * 4;
+  const tmp = new Float32Array(stride);
+  for (let top = 0, bottom = height - 1; top < bottom; top++, bottom--) {
+    tmp.set(data.subarray(top * stride, top * stride + stride));
+    data.copyWithin(top * stride, bottom * stride, bottom * stride + stride);
+    data.set(tmp, bottom * stride);
+  }
+}
+
 function refuseSize(name: string, width: number, height: number) {
   if (width > MAX_HDR_WIDTH || height > MAX_HDR_WIDTH) {
     throw new HdrRefusal(`${name} is ${width} x ${height}, an environment can be ${MAX_HDR_WIDTH} pixels wide at most.`);
@@ -52,12 +89,14 @@ export async function decodeHdr(bytes: Uint8Array, name: string): Promise<HdrIma
   const buf = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
   type Parsed = { width: number; height: number; data: ArrayLike<number> };
   let parsed: Parsed | null = null;
+  const isExr = /\.exr$/i.test(name);
   try {
-    if (/\.exr$/i.test(name)) {
+    if (isExr) {
+      const size = exrSize(bytes);
+      if (!size) throw new HdrRefusal(`${name} is not an OpenEXR image.`);
+      refuseSize(name, size.width, size.height);
       const { EXRLoader } = await import("three/examples/jsm/loaders/EXRLoader.js");
-      const exr = new EXRLoader().setDataType(THREE.FloatType).parse(buf);
-      refuseSize(name, exr.width ?? 0, exr.height ?? 0);
-      parsed = exr as unknown as Parsed;
+      parsed = new EXRLoader().setDataType(THREE.FloatType).parse(buf) as unknown as Parsed;
     } else {
       const size = radianceSize(bytes);
       if (!size) throw new HdrRefusal(`${name} is not a Radiance HDR image.`);
@@ -73,6 +112,7 @@ export async function decodeHdr(bytes: Uint8Array, name: string): Promise<HdrIma
     throw new HdrRefusal(`${name} could not be read as an HDR image.`);
   }
   const data = parsed.data instanceof Float32Array ? parsed.data : Float32Array.from(parsed.data);
+  if (isExr) flipRows(data, parsed.width, parsed.height);
   return { width: parsed.width, height: parsed.height, data };
 }
 
@@ -120,9 +160,14 @@ export function encodeRgbe(img: HdrImage): Uint8Array {
   return out;
 }
 
-export function toHalfRgba(img: HdrImage): Uint16Array {
+/** Half floats with `gain` applied before the clamp to the largest finite half,
+ *  so exposure on a bright sun cannot put Infinity into the PMREM blur. */
+export function toHalfRgba(img: HdrImage, gain = 1): Uint16Array {
   const out = new Uint16Array(img.data.length);
-  for (let i = 0; i < out.length; i++) out[i] = THREE.DataUtils.toHalfFloat(img.data[i]!);
+  for (let i = 0; i < out.length; i++) {
+    const v = (i & 3) === 3 ? img.data[i]! : img.data[i]! * gain;
+    out[i] = THREE.DataUtils.toHalfFloat(Math.min(65504, v));
+  }
   return out;
 }
 
