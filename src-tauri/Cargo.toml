@@ -98,6 +98,12 @@ tungstenite = "0.29"
 # rather than profile wide: `lto` and a workspace `codegen-units = 1` would
 # apply to the whole Tauri app and its webview crates, and the release job pays
 # that on every build.
+[features]
+# Open Image Denoise on the CPU for the native tracer's cap. Building it needs
+# OIDN_DIR at the 2.5.1 release; running without the library leaves the denoise
+# off (Windows delay loads it, see build.rs).
+oidn = ["fundacad-tracer/oidn"]
+
 [profile.release.package.fundacad-geom]
 codegen-units = 1
 [profile.release.package.fundacad-core]

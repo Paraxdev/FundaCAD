@@ -116,4 +116,57 @@ describe("the native tracer backend", () => {
     await expect(t.samples()).rejects.toThrow("no native tracer");
     expect(faults).toEqual(["The native tracer stopped: no native tracer on this machine"]);
   });
+
+  describe("at the sample cap", () => {
+    const flush = () => new Promise((r) => setTimeout(r, 0));
+    const statuses = (list: object[], calls: string[]) => async (cmd: string, args?: unknown) => {
+      calls.push(args ? `${cmd} ${JSON.stringify(args)}` : cmd);
+      if (cmd !== "pt_status") return undefined;
+      return { samples: 64, fault: null, denoised: false, denoising: false, denoiseError: null, ...((list.length > 1 ? list.shift() : list[0]) ?? {}) };
+    };
+    async function settle(t: NativeTracer) {
+      let rounds = 0;
+      while (t.present() && rounds++ < 20) await flush();
+      return rounds;
+    }
+
+    it("waits for the native denoise, then pulls its frame past the raw prefetch", async () => {
+      const link = new FakeLink();
+      const calls: string[] = [];
+      const { t, uploads } = setup(link, 1, statuses([{ denoising: true }, { denoising: true }, { denoised: true }], calls));
+      await t.init();
+      await t.renderSample(0);
+      expect(t.denoised).toBe(false);
+      expect(await settle(t)).toBeLessThan(20);
+      expect(uploads).toEqual([1, 2, 3]);
+      expect(t.denoised).toBe(true);
+      expect(t.present()).toBe(false);
+      t.reset();
+      expect(t.denoised).toBe(false);
+    });
+
+    it("asks for a frame after a new level, so the native side starts that denoise", async () => {
+      const link = new FakeLink();
+      const calls: string[] = [];
+      const { t, uploads } = setup(link, 1, statuses([{}, { denoising: true }, { denoised: true }], calls));
+      await t.init();
+      t.setDenoise("high");
+      await settle(t);
+      expect(calls).toContain('pt_denoise {"level":"high"}');
+      expect(uploads).toEqual([1, 2, 3, 4]);
+      expect(t.denoised).toBe(true);
+    });
+
+    it("settles on the raw frame where the app has no denoise", async () => {
+      const link = new FakeLink();
+      const { t } = setup(link, 1, statuses([{ denoiseError: "OpenImageDenoise.dll did not load" }], []));
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      await t.init();
+      await t.renderSample(0);
+      expect(await settle(t)).toBeLessThan(5);
+      expect(t.denoised).toBe(false);
+      expect(warn).toHaveBeenCalledWith("[native tracer] denoise: OpenImageDenoise.dll did not load");
+      warn.mockRestore();
+    });
+  });
 });

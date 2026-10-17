@@ -8,6 +8,7 @@
 
 import { invoke } from "@tauri-apps/api/core";
 import type * as THREE from "three";
+import type { Denoise } from "../../ui/renderPrefs";
 import type { PictureOptions, TraceLook, TraceScene, TracerBackend } from "./backend";
 import type { TraceLens } from "./camera";
 import { NativeScene, type Call } from "./nativeScene";
@@ -325,10 +326,23 @@ export function glBlit(canvas: HTMLCanvasElement): Blit {
   };
 }
 
+interface Status {
+  samples: number;
+  fault: string | null;
+  denoised: boolean;
+  denoising: boolean;
+  denoiseError: string | null;
+}
+
 export class NativeTracer implements TracerBackend {
   readonly canvas: HTMLCanvasElement;
   readonly maxStorageBytes = Infinity;
-  readonly denoised = false;
+  private shownDenoised = false;
+  /** The cap's denoise is still to come, or done (nothing more to draw). */
+  private settle: "wait" | "done" = "wait";
+  private polling: Promise<void> | null = null;
+  private epoch = 0;
+  private kicked = false;
   private link: FrameLink | null = null;
   private blit: Blit | null = null;
   private generation = 0;
@@ -428,6 +442,10 @@ export class NativeTracer implements TracerBackend {
   }
   reset() {
     this.count = 0;
+    this.shownDenoised = false;
+    this.settle = "wait";
+    this.kicked = false;
+    this.epoch++;
   }
   setFrameBudget(slots: number) {
     void this.scene.budget(slots);
@@ -435,7 +453,10 @@ export class NativeTracer implements TracerBackend {
   setCap(samples: number) {
     void this.scene.cap(samples);
   }
-  setDenoise() {}
+  setDenoise(level: Denoise) {
+    void this.scene.denoise(level);
+    this.reset();
+  }
 
   private request(): Promise<NativeFrame> {
     const p = this.link!.next();
@@ -487,12 +508,48 @@ export class NativeTracer implements TracerBackend {
     return Promise.reject(new Error("The native tracer cannot save a picture yet"));
   }
 
+  get denoised(): boolean {
+    return this.shownDenoised;
+  }
+
+  /** At the cap the native side denoises on its own thread; this asks after
+   *  it and pulls the denoised frame once it is held. The frame prefetched
+   *  before it landed is still the raw one, so two are pulled. A new denoise
+   *  level at the cap starts no denoise until a frame is asked for. */
   present(): boolean {
-    return false;
+    if (this.settle === "done" || this.disposed) return false;
+    this.polling ??= this.pollDenoise().finally(() => (this.polling = null));
+    return true;
+  }
+
+  private async pollDenoise() {
+    const g = this.epoch;
+    let s: Status;
+    try {
+      s = (await this.call("pt_status")) as Status;
+    } catch {
+      this.settle = "done";
+      return;
+    }
+    if (this.epoch !== g || this.disposed) return;
+    if (s.denoised) {
+      await this.renderSample(0);
+      await this.renderSample(0);
+      if (this.epoch !== g || this.disposed) return;
+      this.shownDenoised = true;
+      this.settle = "done";
+    } else if (!s.denoising && !this.kicked) {
+      this.kicked = true;
+      await this.renderSample(0);
+      await this.renderSample(0);
+    } else if (!s.denoising) {
+      if (s.denoiseError) console.warn(`[native tracer] denoise: ${s.denoiseError}`);
+      this.settle = "done";
+    }
   }
 
   async samples(): Promise<number> {
-    let s: { samples: number; fault: string | null };
+    let s: Status;
     try {
       s = (await this.call("pt_status")) as typeof s;
     } catch (e) {

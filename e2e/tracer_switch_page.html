@@ -33,9 +33,9 @@ const look = () => ({
   toneMapping: THREE.NeutralToneMapping, exposure: 1,
 });
 const inputs = (o = {}) => ({ mode: "pathtraced", visible: true, stillMs: 10_000, dragging: false, sectioned: false, xray: false, wireframe: false, sketchOpen: false, ...o });
-const frame = (o) => ({
+const frame = (o, denoise = "off") => ({
   now: performance.now(), inputs: inputs(o), camera, cameraChanged: false, sceneMaybeChanged: false, root: scene,
-  look, lens: () => null, denoise: "off",
+  look, lens: () => null, denoise,
 });
 const nextFrame = () => new Promise((r) => requestAnimationFrame(r));
 
@@ -50,6 +50,18 @@ async function run(pref, env) {
     await nextFrame();
   }
   const r = { pref, kind, backend: host.backendName, samples: host.samples, ms: Math.round(performance.now() - t0), faults };
+  if (kind === "native") {
+    // On to the cap with the denoise on: the native side denoises there on its
+    // own thread and the host shows that frame.
+    const t1 = performance.now();
+    while (performance.now() - t1 < 30_000 && !host.denoised && !faults.length) {
+      host.tick(frame({}, "standard"));
+      await nextFrame();
+    }
+    r.cap = { samples: host.samples, denoised: host.denoised, ms: Math.round(performance.now() - t1) };
+    const s = await invoke("pt_status");
+    r.cap.status = { denoised: s.denoised, denoising: s.denoising, denoiseError: s.denoiseError };
+  }
   const paused = {};
   for (const [k, v] of [["sectioned", "paused:section"], ["xray", "paused:xray"], ["wireframe", "paused:wireframe"], ["sketchOpen", "paused:sketch"]]) {
     host.tick(frame({ [k]: true }));
