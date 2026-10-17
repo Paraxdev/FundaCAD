@@ -1,7 +1,7 @@
 // File → New after a big import left the old model drawn and pickable until the
 // engine answered the empty document's rebuild, most of a second at 1,000 bodies.
 // The view has to let go in the same call as the replacement, in this order.
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { DocumentStore } from "../../src/document/store";
 import { wireDocumentSwap } from "../../src/app/documentSwap";
 import type { CadDocument, RebuildResult } from "../../src/types";
@@ -150,4 +150,13 @@ describe("New and Open stand every tool down", () => {
     expect(store.editPreviewId).toBe("f1");
   });
 
+  it("still clears the document when one tool's cancel throws", () => {
+    const calls: string[] = [];
+    const t = tools(calls);
+    t.extrude.cancel = () => { throw new Error("boom"); };
+    const err = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(() => cancelActiveTools(t)).not.toThrow();
+    expect(calls).toContain("pressPull.cancel");
+    err.mockRestore();
+  });
 });

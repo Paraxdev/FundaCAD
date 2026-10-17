@@ -15,12 +15,21 @@ function modalTools(t: EngineTools) {
  *  standing section view is a mode the next document keeps, so only its pick
  *  ends. A plane or point pick ends through the store's rewind. */
 export function cancelActiveTools(t: EngineTools) {
-  for (const tool of modalTools(t)) if (tool.active) tool.cancel();
+  for (const tool of modalTools(t)) if (tool.active) standDown(() => tool.cancel());
   // Also when idle: it drops a reopen still pending from the last commit.
-  t.move.cancel();
-  if (t.measure.active) t.measure.stop();
-  if (t.section.picking) t.section.stop();
-  cancelContributedTools();
+  standDown(() => t.move.cancel());
+  if (t.measure.active) standDown(() => t.measure.stop());
+  if (t.section.picking) standDown(() => t.section.stop());
+  cancelContributedTools(standDown);
+}
+
+/** One tool that throws must not leave New or Open half done. */
+function standDown(cancel: () => void) {
+  try {
+    cancel();
+  } catch (err) {
+    console.error("A tool failed to stand down for the next document:", err);
+  }
 }
 
 /** Guard predicates checked at the top of every start* tool and interactive helper:
