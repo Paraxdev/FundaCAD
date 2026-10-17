@@ -101,14 +101,24 @@ fn main() {
     t.step();
     t.wait();
     let first_ms = tf.elapsed().as_secs_f64() * 1e3;
+    // BENCH_LOOP=frame times what the app's transport asks for per frame:
+    // tracing for 12 ms, the resolve and the readback.
+    let frames = env("BENCH_LOOP", "dispatch") == "frame";
     let mut dispatch = vec![];
     let start = Instant::now();
     loop {
         let td = Instant::now();
-        if !t.step() {
-            break;
+        if frames {
+            if t.done() {
+                break;
+            }
+            t.frame(w, h, std::time::Duration::from_millis(12));
+        } else {
+            if !t.step() {
+                break;
+            }
+            t.wait();
         }
-        t.wait();
         dispatch.push(td.elapsed().as_secs_f64() * 1e3);
     }
     let secs = start.elapsed().as_secs_f64();
@@ -122,8 +132,8 @@ fn main() {
         std::fs::write(out, &img).unwrap();
     }
     println!(
-        "{{\"path\":\"{:?}\",\"adapter\":\"{}\",\"scene\":\"{}\",\"tris\":{},\"w\":{},\"h\":{},\"spp\":{},\"init_ms\":{:.0},\"accel_ms\":{:.1},\"first_dispatch_ms\":{:.1},\"dispatch_p50_ms\":{:.2},\"dispatch_p95_ms\":{:.2},\"msamples_per_s\":{:.1},\"spp_per_s\":{:.1},\"time_to_spp_s\":{:.2},\"resolve_ms\":{:.1}}}",
-        t.path(), t.adapter(), name, tris, w, h, t.samples(), init_ms, accel_ms, first_ms, p(0.5), p(0.95),
+        "{{\"loop\":\"{}\",\"band\":{},\"path\":\"{:?}\",\"adapter\":\"{}\",\"scene\":\"{}\",\"tris\":{},\"w\":{},\"h\":{},\"spp\":{},\"init_ms\":{:.0},\"accel_ms\":{:.1},\"first_dispatch_ms\":{:.1},\"dispatch_p50_ms\":{:.2},\"dispatch_p95_ms\":{:.2},\"msamples_per_s\":{:.1},\"spp_per_s\":{:.1},\"time_to_spp_s\":{:.2},\"resolve_ms\":{:.1}}}",
+        if frames { "frame" } else { "dispatch" }, t.band(), t.path(), t.adapter(), name, tris, w, h, t.samples(), init_ms, accel_ms, first_ms, p(0.5), p(0.95),
         samples / secs / 1e6, samples / secs / (w as f64 * h as f64), secs + first_ms / 1e3, resolve_ms
     );
 }
