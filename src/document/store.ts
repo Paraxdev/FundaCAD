@@ -1500,11 +1500,12 @@ export class DocumentStore {
     return this.environment;
   }
 
-  /** Save a custom environment with the document (null drops it), off the undo stack. */
-  setDocumentEnvironment(env: DocEnvironment | null) {
+  /** Save a custom environment with the document (null drops it), off the undo
+   *  stack. `quiet` carries it without making the document unsaved. */
+  setDocumentEnvironment(env: DocEnvironment | null, opts: { quiet?: boolean } = {}) {
     if (sameDocEnvironment(env, this.environment)) return;
     this.environment = env ? { ...env, settings: { ...env.settings } } : null;
-    this.markDirty();
+    if (!opts.quiet) this.markDirty();
   }
 
   // --- elements: the user's own folders over the bodies ---------------------

@@ -10,8 +10,8 @@ import {
 import { heldHdr, registerHdr } from "../viewport/hdrRegistry";
 import { createEnvLibrary, indexedDbKv, type EnvEntry, type EnvLibrary, type StoredHdr } from "./environmentLibrary";
 import {
-  applyEnvSettings, asEnvSettings, ENVIRONMENTS_LIST, envSettingsOf, hdrHashOf, refreshRenderPrefs,
-  renderPrefs, setRenderPref, type EnvSettings,
+  applyEnvSettings, asEnvSettings, ENVIRONMENTS_LIST, envSettingsOf, hdrHashOf, onRenderPrefsChange,
+  refreshRenderPrefs, renderPrefs, setRenderPref, type EnvSettings,
 } from "./renderPrefs";
 
 let lib: EnvLibrary | null = null;
@@ -30,6 +30,23 @@ export function onEnvLibraryChange(fn: () => void): () => void {
 }
 function libraryChanged() {
   for (const fn of libraryListeners) fn();
+}
+
+/** The saved environment the look came from; the document names it while it lasts. */
+let activeSaved: { id: string | null; name: string } | null = null;
+export function activeSavedId(): string | null {
+  return activeSaved?.id ?? null;
+}
+function setActiveSaved(next: { id: string | null; name: string } | null) {
+  if (activeSaved?.id === next?.id && activeSaved?.name === next?.name) return;
+  activeSaved = next;
+  libraryChanged();
+}
+
+export function chooseBuiltInEnvironment(store: DocumentStore | null, id: EnvSettings["environment"]) {
+  setActiveSaved(null);
+  setRenderPref("environment", id);
+  if (store) void syncDocumentEnvironment(store);
 }
 
 const names = new Map<string, string>();
@@ -55,8 +72,9 @@ export async function importEnvironmentBytes(
 ): Promise<string | null> {
   try {
     const rec = await storeHdr(await decodeHdr(bytes, name), name, library);
+    setActiveSaved(null);
     setRenderPref("environment", `hdr:${rec.hash}`);
-    if (store) await syncDocumentEnvironment(store, null, library);
+    if (store) await syncDocumentEnvironment(store, library);
     return null;
   } catch (err) {
     if (err instanceof HdrRefusal) return err.message;
@@ -112,9 +130,22 @@ export async function documentEnvironmentFor(
   return env;
 }
 
-export async function syncDocumentEnvironment(store: DocumentStore, savedName: string | null = null, library = envLibrary()) {
-  store.setDocumentEnvironment(await documentEnvironmentFor(envSettingsOf(renderPrefs()), savedName, library));
+let syncing: Promise<void> = Promise.resolve();
+
+/** Serialised, and the look is read when its turn comes, so an embed still
+ *  being prepared can never land after a newer one. */
+export function syncDocumentEnvironment(
+  store: DocumentStore, library = envLibrary(), opts: { quiet?: boolean } = {},
+): Promise<void> {
+  const run = syncing.then(async () => {
+    const env = await documentEnvironmentFor(envSettingsOf(renderPrefs()), activeSaved?.name ?? null, library);
+    store.setDocumentEnvironment(env, opts);
+  });
+  syncing = run.catch(() => {});
+  return run;
 }
+
+let applying = false;
 
 /** Light the viewport the way an opened document was saved. */
 export async function applyDocumentEnvironment(env: Readonly<DocEnvironment> | null, library = envLibrary()): Promise<void> {
@@ -133,7 +164,15 @@ export async function applyDocumentEnvironment(env: Readonly<DocEnvironment> | n
     await ensureHdrLoaded(hash, library);
   }
   if (hash && !heldHdr(hash)) return;
-  applyEnvSettings(settings);
+  const name = env.name ?? null;
+  const entry = name ? (await library.list().catch(() => [])).find((e) => e.name === name) : undefined;
+  setActiveSaved(name ? { id: entry?.id ?? null, name } : null);
+  applying = true;
+  try {
+    applyEnvSettings(settings);
+  } finally {
+    applying = false;
+  }
 }
 
 function canvasThumb(img: HdrImage): string {
@@ -163,8 +202,9 @@ export function thumbFor(settings: EnvSettings): string {
 export async function saveEnvironmentAs(store: DocumentStore | null, name: string, library = envLibrary()): Promise<EnvEntry> {
   const settings = envSettingsOf(renderPrefs());
   const entry = await library.save(name, settings, thumbFor(settings));
+  setActiveSaved({ id: entry.id, name: entry.name });
   libraryChanged();
-  if (store) await syncDocumentEnvironment(store, entry.name, library);
+  if (store) await syncDocumentEnvironment(store, library);
   return entry;
 }
 
@@ -173,33 +213,50 @@ export async function applySavedEnvironment(store: DocumentStore | null, entry: 
   if (hash && !(await ensureHdrLoaded(hash, library))) {
     throw new Error(`The panorama ${entry.name} lights with is no longer in the library.`);
   }
+  setActiveSaved({ id: entry.id, name: entry.name });
   applyEnvSettings(asEnvSettings(entry.settings, renderPrefs()));
-  if (store) await syncDocumentEnvironment(store, entry.name, library);
+  if (store) await syncDocumentEnvironment(store, library);
 }
 
 export async function renameSavedEnvironment(id: string, name: string, library = envLibrary()) {
-  await library.rename(id, name);
+  const renamed = await library.rename(id, name);
+  if (renamed && activeSaved?.id === id) setActiveSaved({ id, name: renamed.name });
   libraryChanged();
 }
 
 export async function deleteSavedEnvironment(id: string, library = envLibrary()) {
   await library.remove(id, hdrHashOf(renderPrefs().environment));
+  if (activeSaved?.id === id) setActiveSaved(null);
   libraryChanged();
 }
 
-/** Load the panorama the stored settings name, and follow opened documents. */
+/** Load the panorama the stored settings name, keep the document's copy of
+ *  the look current, and follow opened documents. */
 export function installEnvironmentSync(store: DocumentStore): () => void {
   const hash = hdrHashOf(renderPrefs().environment);
   if (hash) {
-    void ensureHdrLoaded(hash).then((ok) => {
-      // Its panorama is gone from this machine's library, so light with the default room.
-      if (!ok) setRenderPref("environment", "studio");
-    });
+    // A panorama gone from this machine's library, or unreadable, lights with the default room.
+    void ensureHdrLoaded(hash)
+      .catch(() => false)
+      .then((ok) => { if (!ok) setRenderPref("environment", "studio"); });
   }
-  return store.onOpen(() => {
+  let look = JSON.stringify(envSettingsOf(renderPrefs()));
+  const offPrefs = onRenderPrefsChange(() => {
+    const next = JSON.stringify(envSettingsOf(renderPrefs()));
+    if (next === look) return;
+    look = next;
+    if (!applying) void syncDocumentEnvironment(store).catch(() => {});
+  });
+  const offOpen = store.onOpen(() => {
     // onOpen fires before load() has restored the document's own state.
     queueMicrotask(() => {
-      void applyDocumentEnvironment(store.documentEnvironment).catch(() => {});
+      const env = store.documentEnvironment;
+      const done = env
+        ? applyDocumentEnvironment(env)
+        // Carried quietly: opening a document is not an edit, but its next save keeps this light.
+        : syncDocumentEnvironment(store, envLibrary(), { quiet: true });
+      void done.catch(() => {});
     });
   });
+  return () => { offPrefs(); offOpen(); };
 }

@@ -18,8 +18,8 @@ import {
   type Background, type Denoise, type Environment,
 } from "../../ui/renderPrefs";
 import {
-  applySavedEnvironment, deleteSavedEnvironment, envLibrary, hdrName, importEnvironmentFile,
-  onEnvLibraryChange, renameSavedEnvironment, saveEnvironmentAs, syncDocumentEnvironment,
+  activeSavedId, applySavedEnvironment, chooseBuiltInEnvironment, deleteSavedEnvironment, envLibrary, hdrName,
+  importEnvironmentFile, onEnvLibraryChange, renameSavedEnvironment, saveEnvironmentAs,
 } from "../../ui/environmentImport";
 import type { EnvEntry } from "../../ui/environmentLibrary";
 import { onHdrRegistered } from "../../viewport/hdrRegistry";
@@ -31,7 +31,7 @@ const engine = useEngine();
 const prefs = ref({ ...renderPrefs() });
 const aiming = ref(false);
 const saved = ref<EnvEntry[]>([]);
-const activeSaved = ref<string | null>(null);
+const activeSaved = ref<string | null>(activeSavedId());
 const notice = ref<string | null>(null);
 const naming = ref<{ id: string | null; text: string } | null>(null);
 const nameInput = ref<HTMLInputElement | null>(null);
@@ -40,6 +40,7 @@ const hdrLabel = ref<string | null>(null);
 const hdrHash = computed(() => hdrHashOf(prefs.value.environment));
 const offs: (() => void)[] = [];
 const loadSaved = () => {
+  activeSaved.value = activeSavedId();
   void envLibrary().list().then((l) => { saved.value = l; }).catch(() => { saved.value = []; });
 };
 const syncLabel = () => { hdrLabel.value = hdrHash.value ? hdrName(hdrHash.value) : null; };
@@ -52,15 +53,11 @@ onMounted(() => {
 });
 onUnmounted(() => { for (const off of offs) off(); });
 
-const activeName = () => saved.value.find((e) => e.id === activeSaved.value)?.name ?? null;
-/** A change made here is the user choosing this document's light. */
-const commit = () => { void syncDocumentEnvironment(engine.store, activeName()); };
 const fail = (err: unknown) => { notice.value = err instanceof Error ? err.message : String(err); };
 
 const importFile = async (file: File) => {
   notice.value = `Reading ${file.name}...`;
   const refused = await importEnvironmentFile(engine.store, file);
-  activeSaved.value = null;
   notice.value = refused;
 };
 const onFilePicked = (e: Event) => {
@@ -71,7 +68,6 @@ const onFilePicked = (e: Event) => {
 };
 const pickSaved = (entry: EnvEntry) => {
   notice.value = null;
-  activeSaved.value = entry.id;
   void applySavedEnvironment(engine.store, entry).catch(fail);
 };
 const startNaming = (id: string | null, text: string) => {
@@ -84,7 +80,7 @@ const finishNaming = async () => {
   naming.value = null;
   try {
     if (n.id) await renameSavedEnvironment(n.id, n.text);
-    else activeSaved.value = (await saveEnvironmentAs(engine.store, n.text)).id;
+    else await saveEnvironmentAs(engine.store, n.text);
     notice.value = null;
   } catch (err) {
     fail(err);
@@ -92,22 +88,18 @@ const finishNaming = async () => {
 };
 const saveName = () => (hdrLabel.value ?? "My environment").replace(/\.(hdr|exr)$/i, "");
 const removeSaved = (entry: EnvEntry) => {
-  if (activeSaved.value === entry.id) activeSaved.value = null;
   void deleteSavedEnvironment(entry.id).catch(fail);
 };
 const thumbStyle = (thumb: string) =>
   thumb.startsWith("data:") ? { backgroundImage: `url("${thumb}")`, backgroundSize: "cover" } : { background: thumb };
 const onRotation = (e: Event) => {
   setRenderPref("envRotation", Number.parseFloat((e.target as HTMLInputElement).value));
-  commit();
 };
 const onExposure = (e: Event) => {
   setRenderPref("envExposure", Number.parseFloat((e.target as HTMLInputElement).value));
-  commit();
 };
 const toggleBehind = () => {
   setRenderPref("envBackground", !prefs.value.envBackground);
-  commit();
 };
 
 const BACKGROUNDS: { id: Background; label: string }[] = [
@@ -118,9 +110,7 @@ const BACKGROUNDS: { id: Background; label: string }[] = [
 ];
 
 const pickEnv = (id: Environment) => {
-  activeSaved.value = null;
-  setRenderPref("environment", id);
-  commit();
+  chooseBuiltInEnvironment(engine.store, id);
 };
 const DENOISES: { id: Denoise; label: string }[] = [
   { id: "off", label: "Off" },
