@@ -143,6 +143,11 @@ describe("PostChain composer frames", () => {
     r.build();
     // UnrealBloomPass halves what setSize gets: 300 at CSS size, 600 at the ratio of 2.
     expect(r.bloom.renderTargetBright.width).toBe(300);
+    // A picture four times the view's size keeps the view's glow width.
+    c.post.setSize(2400, 1600, 4);
+    expect(r.bloom.renderTargetBright.width).toBe(300);
+    c.post.setSize(600, 400);
+    expect(r.bloom.renderTargetBright.width).toBe(300);
   });
 
   it("follows the renderer's pixel ratio", () => {

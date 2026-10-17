@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { hideForPicture, markInPicture } from "../../src/viewport/pictureScene";
+import { hideForPicture, markInPicture, widenLines } from "../../src/viewport/pictureScene";
 import { makeFaceHoverOverlay, makeSelectionGlow } from "../../src/viewport/selectionGlow";
 import { Highlighter } from "../../src/viewport/highlight";
 import type { EdgeRef, ModelView } from "../../src/viewport/render";
@@ -36,6 +36,14 @@ describe("a picture draws the model only", () => {
     restore();
     for (const o of [t.glow, t.hover, t.gizmo, t.grid]) expect(o.visible).toBe(true);
     expect(t.sketch.visible).toBe(false);
+  });
+
+  it("draws lines as many times wider as the picture is larger, and puts them back", () => {
+    const mats = [{ linewidth: 1.5 }, { linewidth: 2 }];
+    const restore = widenLines(mats, 4);
+    expect(mats.map((m) => m.linewidth)).toEqual([6, 8]);
+    restore();
+    expect(mats.map((m) => m.linewidth)).toEqual([1.5, 2]);
   });
 });
 
