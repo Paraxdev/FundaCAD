@@ -541,17 +541,21 @@ export class DocumentStore {
     this.emitBuild();
     this.committedShown = null;
     this.provisional = null;
-    // A tool's live feature would be built into the next document.
+    this.restoreArmed = false;
+    // No-op when nothing is running. Cancel kills the pool worker, which is the
+    // only way to interrupt an OCCT call already under way.
+    void this.cancelBusy();
+  }
+
+  /** A tool's live feature would be built into the next document. Not for a
+   *  replace load, where an armed tool stays and keeps previewing. */
+  private dropToolPreview() {
     this.preview = null;
     this.previewHold = false;
     if (this.editPreview) {
       this.editPreview = null;
       this.emitEditPreview();
     }
-    this.restoreArmed = false;
-    // No-op when nothing is running. Cancel kills the pool worker, which is the
-    // only way to interrupt an OCCT call already under way.
-    void this.cancelBusy();
   }
 
   newDocument() {
@@ -573,6 +577,7 @@ export class DocumentStore {
     this.path = null;
     this.pathlessName = null;
     this.isDirty = false;
+    this.dropToolPreview();
     this.discardModelForReplacement();
     this.emitDoc();
     this.emitMeta();
@@ -2054,6 +2059,7 @@ export class DocumentStore {
     }
     canonicalMirrorPlanes(this.doc);
     this.markDirty(); // openDocument clears this via markSaved() once the path is known
+    if (!opts.replace) this.dropToolPreview();
     this.discardModelForReplacement();
     this.emitDoc();
     this.scheduleRebuild(true);

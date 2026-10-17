@@ -132,4 +132,22 @@ describe("New and Open stand every tool down", () => {
       expect(sent.at(-1)).toBe("");
     });
   }
+
+  it("keeps a tool's live preview through a replace load, where the tool stays armed", async () => {
+    const engine = {
+      async rebuild() { return { ok: true as const, result: RESULT }; },
+      async init() {},
+      onStatus() { return () => {}; },
+      onProgress() { return () => {}; },
+      async cancel() { return true; },
+    } as unknown as GeometryBackend;
+    const store = new DocumentStore(engine, DOC);
+    await store.rebuildNow();
+    store.setPreview({ id: "pv", type: "box", width: 60, depth: 60, height: 5 } as never);
+    store.beginEditPreview("f1", null);
+    store.load(JSON.stringify(DOC), { replace: true });
+    expect(store.hasPreview).toBe(true);
+    expect(store.editPreviewId).toBe("f1");
+  });
+
 });
