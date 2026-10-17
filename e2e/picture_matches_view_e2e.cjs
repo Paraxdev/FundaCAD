@@ -1,6 +1,7 @@
 // A saved Realtime picture looks like the viewport: glass, an emitter and painted
 // boxes, every body and a face selected, a face hovered, and the picture must
-// show none of that selection, nor the grid or a gizmo, at any size.
+// show none of that selection, nor the grid or a gizmo, at any size. Then glass
+// on every body under shadows and bloom.
 //
 // Usage (from the repo root, vite + engine `fundacad-engine --ws` running):
 //   SC_TOKEN=<engine token> SC_CHROME=<chrome exe> [SC_URL=http://localhost:5173/] \
@@ -165,6 +166,50 @@ const check = (name, ok, detail) => {
       const share = linesK / lines1;
       check(`edge lines in a ${k}x picture are as heavy as in the view`, share > 0.6 && share < 1.4, `${linesK.toFixed(2)} against ${lines1.toFixed(2)} at 1x`);
     }
+
+    // Glass everywhere under shadows and bloom: a frame that redraws the shadow
+    // maps (every picture does) must look like the frames that keep them.
+    await page.evaluate(async () => {
+      const s = window.store, f = window.__fundacad;
+      s.setBodiesMaterial(["body1", "body2", "body3", "body4"], "m-glass-tinted");
+      f.setRenderPref("environment", "bright");
+      f.setRenderPref("shadows", true);
+      f.setRenderPref("bloom", 0.2);
+      await s.rebuildNow();
+    });
+    for (let i = 0, prev = await page.evaluate(() => window.viewport.screenshotPNG()); i < 30; i++) {
+      await page.waitForTimeout(1000);
+      const now = await page.evaluate(() => window.viewport.screenshotPNG());
+      const d = await diff(prev, now);
+      prev = now;
+      if (d < 0.05) break;
+    }
+    const frame = (redraw) => page.evaluate((redraw) => {
+      const v = window.viewport, sc = v.scene, r = sc.renderer;
+      const was = [sc.grid.group.visible, sc.triad.group.visible, r.shadowMap.autoUpdate];
+      sc.grid.group.visible = false;
+      sc.triad.group.visible = false;
+      r.shadowMap.autoUpdate = redraw;
+      try {
+        sc.post.render(v.rig.active, false, false);
+        return r.domElement.toDataURL("image/png");
+      } finally {
+        [sc.grid.group.visible, sc.triad.group.visible, r.shadowMap.autoUpdate] = was;
+        v.requestRender();
+      }
+    }, redraw);
+    const kept = await frame(false);
+    save("glass_view", kept);
+    const redrawn = await frame(true);
+    save("glass_view_shadows_redrawn", redrawn);
+    const dRedraw = await diff(kept, redrawn);
+    check("glass looks the same on a frame that redraws the shadow maps", dRedraw < 1, dRedraw.toFixed(2));
+    const glassStill = await still("glass_1", 1, true);
+    const dGlass = await diff(kept, glassStill);
+    check("a picture of glass under shadows and bloom matches the view", dGlass < 2, dGlass.toFixed(2));
+    const glass2 = await still("glass_2", 2, true);
+    const dGlass2 = await diff(kept, glass2);
+    check("and so does a 2x one", dGlass2 < 3, dGlass2.toFixed(2));
   } finally {
     await browser.close();
   }

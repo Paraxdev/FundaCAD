@@ -163,6 +163,43 @@ describe("PostChain composer frames", () => {
   });
 });
 
+describe("PostChain composer frame that redraws the shadow maps", () => {
+  it("leaves the clear the glass transmission buffer reads at the background, not the shadow pass's white", () => {
+    setRenderPref("bloom", 0.4);
+    const bg = new THREE.Color(0x0b0912);
+    // WebGLState's cached clear value, which three's shadow pass sets to white and leaves there.
+    const cache = new THREE.Color();
+    const seenByGlass: number[] = [];
+    let target: unknown = null;
+    const renderer = {
+      toneMapping: THREE.NeutralToneMapping,
+      toneMappingExposure: 1,
+      getPixelRatio: () => 1,
+      getDrawingBufferSize: (v: THREE.Vector2) => v.set(64, 32),
+      getRenderTarget: () => target,
+      setRenderTarget: (t: unknown) => { target = t; },
+      getClearColor: (c: THREE.Color) => c.copy(bg),
+      getClearAlpha: () => 1,
+      setClearColor: (c: THREE.Color) => { cache.copy(c); },
+      clear: () => {},
+      shadowMap: { enabled: true, autoUpdate: true, needsUpdate: false, render: () => { cache.setRGB(1, 1, 1); } },
+    } as unknown as THREE.WebGLRenderer;
+    const post = new PostChain(renderer, new THREE.Scene(), () => false, () => false);
+    const f = fakeComposer();
+    f.composer.render = () => {
+      renderer.shadowMap.render([], new THREE.Scene(), new THREE.PerspectiveCamera());
+      seenByGlass.push(cache.getHex());
+      return seenByGlass.length;
+    };
+    (post as unknown as { composer: unknown }).composer = f.composer;
+    const own = renderer.shadowMap.render;
+    post.render(new THREE.PerspectiveCamera());
+    expect(seenByGlass).toEqual([bg.getHex()]);
+    expect(renderer.shadowMap.render).toBe(own);
+    setRenderPref("bloom", DEFAULT_RENDER.bloom);
+  });
+});
+
 describe("three internals the composer clear relies on", () => {
   // The transmission pass clears from the value WebGLState cached at the last
   // setClearColor, converted for the target bound then, and only a GPU shows it.
