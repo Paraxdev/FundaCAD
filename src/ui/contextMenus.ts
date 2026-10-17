@@ -251,6 +251,7 @@ export function createContextMenus(deps: ContextMenusDeps) {
         shortcut: keyHint(c.action),
         onClick: unlessBusy(() => handleAction(c.action)),
       })),
+      { label: "Separate", onClick: unlessBusy(() => handleAction("separate")) },
       { label: "Properties", onClick: unlessBusy(() => handleAction("properties")) },
       { separator: true, label: "" },
       { label: "Hide body", onClick: () => hideBody(bodyId) },

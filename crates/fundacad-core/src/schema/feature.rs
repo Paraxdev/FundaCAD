@@ -440,6 +440,14 @@ feature_struct!(Split {
     #[serde(default, skip_serializing_if = "Option::is_none")] group_sides: Option<bool>,
 });
 
+feature_struct!(
+    /// Each disjoint solid of a body becomes a body of its own, the largest keeps the id.
+    Separate {
+        #[serde(default, skip_serializing_if = "Option::is_none")] body: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] bodies: Option<Vec<String>>,
+    }
+);
+
 feature_struct!(Imprint {
     sketch: String,
     #[serde(default, skip_serializing_if = "Option::is_none")] body: Option<String>,
@@ -682,6 +690,7 @@ tagged_enum! {
         DatumAxis(DatumAxis) = "datumAxis",
         Import(Import) = "import",
         Split(Split) = "split",
+        Separate(Separate) = "separate",
         Imprint(Imprint) = "imprint",
         Boolean(BooleanFeature) = "boolean",
         Box(BoxFeature) = "box",
@@ -727,6 +736,7 @@ macro_rules! each_known {
             Feature::DatumAxis($f) => $e,
             Feature::Import($f) => $e,
             Feature::Split($f) => $e,
+            Feature::Separate($f) => $e,
             Feature::Imprint($f) => $e,
             Feature::Boolean($f) => $e,
             Feature::Box($f) => $e,

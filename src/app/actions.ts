@@ -147,6 +147,9 @@ export function createActions(e: Engine): (action: string) => void {
       case "split":
         void e.starters.startSplit();
         break;
+      case "separate":
+        void e.starters.startSeparate();
+        break;
       case "datum-plane":
         e.starters.createDatumPlane();
         break;

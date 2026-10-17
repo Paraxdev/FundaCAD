@@ -1064,6 +1064,19 @@
     "keep": "both"
    }
   },
+  "separate": {
+   "summary": "Turn each disjoint solid of a body into a body of its own.",
+   "fields": {
+    "body": "optional single body id; `bodies` wins when both are set",
+    "bodies": "optional list of body ids; absent = the active body"
+   },
+   "example": {
+    "id": "sep1",
+    "type": "separate",
+    "body": "body1"
+   },
+   "notes": "The largest solid keeps the body's id, name and colours, the others become new bodies named 'Name 2', 'Name 3' and so on, largest first. A body of one solid is refused. A cut, an intersect or a split that parts a body leaves its pieces in one body until this runs."
+  },
   "imprint": {
    "summary": "Divide a face into separate faces along a sketch drawn on it, adding and removing no material.",
    "fields": {
