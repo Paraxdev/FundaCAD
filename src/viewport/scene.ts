@@ -21,6 +21,7 @@ import { hdrRoom, heldHdr } from "./hdrRegistry";
 import { themeColor } from "./themeColors";
 import { keyDirection } from "./keyLight";
 import { AXIS_COLOR, OriginTriad } from "./originTriad";
+import { markOverlay } from "./overlayKinds";
 
 export interface SceneBundle {
   renderer: THREE.WebGLRenderer;
@@ -343,8 +344,10 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
 
   // --- Z-up adaptive ground grid in the XY plane (rescales with zoom) ---
   const grid = new AdaptiveGrid(scene);
+  markOverlay(grid.group, "grid");
 
   const triad = new OriginTriad(scene);
+  markOverlay(triad.group, "origin");
 
   // --- sketch planes (semi-transparent, toggled per active sketch) ---
   // Coloured by their NORMAL axis, which is the convention the triad above is
@@ -358,6 +361,7 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
     YZ: makePlane(AXIS_COLOR.x, "YZ"),
   };
   for (const p of Object.values(planes)) {
+    markOverlay(p, "origin");
     p.visible = false;
     scene.add(p);
   }

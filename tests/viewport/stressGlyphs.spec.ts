@@ -34,6 +34,8 @@ function rig() {
     requestRender: () => {},
     pickStressOverlay: pick,
     stressOverlayPoint: () => [1, 2, 0] as [number, number, number],
+    overlayDrawn: () => true,
+    watchOverlays: () => () => {},
   } as unknown as StressGlyphHost;
   const handlers = {
     forceDrag: vi.fn(),

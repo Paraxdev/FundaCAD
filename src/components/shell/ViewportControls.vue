@@ -15,7 +15,9 @@ import { fmtLength, getUnit, onUnitChange, setUnit, asUnit, type Unit } from "..
 import { saveRenderedImage } from "../../io/files";
 import { MATCAP_STYLES, onRenderPrefsChange, renderPrefs, setRenderPref, type MatcapStyle } from "../../ui/renderPrefs";
 import { matcapSwatchUrl } from "../../ui/matcapSwatch";
-import { VIEW_MODES, pathTracedBlock, type ViewMode } from "../../ui/viewMode";
+import { VIEW_MODES, pathTracedBlock, savedOverlays, setOverlay, setOverlaysOn, type ViewMode } from "../../ui/viewMode";
+import { onWorkspaceChange } from "../../ui/workspace";
+import { OVERLAY_KINDS, OVERLAY_LABELS } from "../../viewport/overlayKinds";
 import { isRenderLowPower } from "../../viewport/render";
 import { toast } from "../../ui/toast";
 import { featureFailures } from "../../ui/featureNotes";
@@ -133,11 +135,14 @@ function runAndRefresh(action: string) {
 // The tier is read again on every prefs change, after the viewport has applied it.
 const tier = ref(engine.viewport.renderTier);
 const matcap = ref({ style: renderPrefs().matcapStyle, tint: renderPrefs().matcapTint });
+const overlays = ref(savedOverlays());
 const offTier = onRenderPrefsChange(() => {
   tier.value = engine.viewport.renderTier;
   matcap.value = { style: renderPrefs().matcapStyle, tint: renderPrefs().matcapTint };
+  overlays.value = savedOverlays();
 });
 onUnmounted(offTier);
+onUnmounted(onWorkspaceChange(() => { overlays.value = savedOverlays(); }));
 const offTierChange = engine.viewport.onRenderTierChange(() => { tier.value = engine.viewport.renderTier; });
 onUnmounted(offTierChange);
 const PAUSED_HINT: Record<string, string> = {
@@ -357,6 +362,19 @@ async function screenshot() {
         </div>
         <Toggle :model-value="matcap.tint" label="Tint with body colors" @update:model-value="setRenderPref('matcapTint', $event)" />
       </template>
+      <div class="pop-rule"></div>
+      <div class="pop-section">Overlays</div>
+      <Toggle :model-value="overlays.on" label="Show overlays" data-overlay="all" @update:model-value="setOverlaysOn($event)" />
+      <Toggle
+        v-for="k in OVERLAY_KINDS"
+        :key="k"
+        :model-value="overlays.kinds[k]"
+        :label="OVERLAY_LABELS[k]"
+        :disabled="!overlays.on"
+        :data-overlay="k"
+        @update:model-value="setOverlay(k, $event)"
+      />
+      <p class="pop-note">A running tool still shows its gizmo, and a hidden outline still selects its edge.</p>
       <div class="pop-rule"></div>
       <Toggle :model-value="ui.xray" label="X-Ray" @update:model-value="engine.handleAction('toggle-xray')" />
       <Toggle :model-value="ui.wireframe" label="Wireframe" @update:model-value="engine.handleAction('toggle-wireframe')" />

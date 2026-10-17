@@ -31,7 +31,7 @@ export type StressGlyphHost = Pick<
   Viewport,
   | "addToScene" | "removeFromScene" | "rayFrom" | "pixelWorldSize" | "projectToScreen"
   | "camera" | "domElement" | "requestRender" | "pickStressOverlay" | "stressOverlayPoint"
-  | "pickFaceForPressPull"
+  | "pickFaceForPressPull" | "overlayDrawn" | "watchOverlays"
 >;
 
 /** A spot of a support or a load: the body's surface inside the orb. */
@@ -197,7 +197,10 @@ export class StressGlyphs {
   constructor(
     private host: StressGlyphHost,
     private handlers: StressGlyphHandlers,
-  ) {}
+  ) {
+    this.unwatch = host.watchOverlays(() => this.loop());
+  }
+  private unwatch: () => void;
 
   /** Draw this model, replacing the last one. An empty model detaches. */
   setModel(m: StressGlyphModel) {
@@ -235,7 +238,7 @@ export class StressGlyphs {
       const mesh = new THREE.Mesh(shared.ball, this.material(0xffffff));
       mesh.renderOrder = 1000;
       mesh.raycast = () => {};
-      this.host.addToScene(mesh);
+      this.host.addToScene(mesh, "stress");
       const label = this.makeLabel("stress-probe-pin");
       label.textContent = p.label;
       this.probes.push({ mesh, tri: p.tri, weights: p.weights, label });
@@ -247,6 +250,7 @@ export class StressGlyphs {
 
   /** Take everything off the view and give the canvas back. */
   dispose() {
+    this.unwatch();
     this.model = { forces: [], pressures: [], gravity: null, pins: [] };
     this.probe = false;
     this.drag = null;
@@ -356,7 +360,7 @@ export class StressGlyphs {
     for (const o of parts) {
       // Only the hidden grab ball is asked for hits, and directly.
       if (o !== grab) o.raycast = () => {};
-      this.host.addToScene(o);
+      this.host.addToScene(o, "stress");
     }
     const orb: Orb = { spot, at: new THREE.Vector3(...at), radius, dome, ghost, ring, handle, grab };
     this.layOrb(orb);
@@ -418,7 +422,7 @@ export class StressGlyphs {
     }
     const a: Arrow = { group, shaft, head, shaftEdge, headEdge, grab, at: new THREE.Vector3(...at), dir: new THREE.Vector3(...dir).normalize(), px, tipAtRoot };
     this.shape(a);
-    this.host.addToScene(group);
+    this.host.addToScene(group, "stress");
     this.arrows.push(a);
     return a;
   }
@@ -484,7 +488,7 @@ export class StressGlyphs {
       const line = new THREE.Line(geo, new THREE.LineBasicMaterial({ color: PINNED_MARK_COLOR, depthTest: false, transparent: true, opacity: 0.95 }));
       line.renderOrder = 998;
       line.raycast = () => {};
-      this.host.addToScene(line);
+      this.host.addToScene(line, "stress");
       this.lines.push(line);
     }
     this.syncAttach();
@@ -503,7 +507,7 @@ export class StressGlyphs {
   /** Keep the frame loop running while the pointer is ours and something is
    *  drawn. Idempotent, so every change can ask for it. */
   private loop() {
-    if (this.raf || !this.attached || !(this.arrows.length || this.probes.length || this.orbs.length || this.preview)) return;
+    if (this.raf || !this.attached || !this.host.overlayDrawn("stress") || !(this.arrows.length || this.probes.length || this.orbs.length || this.preview)) return;
     if (typeof requestAnimationFrame === "function") this.raf = requestAnimationFrame(this.tick);
   }
 

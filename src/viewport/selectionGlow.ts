@@ -18,7 +18,7 @@
 import * as THREE from "three";
 import { themeColor } from "./themeColors";
 import { DISPLAY_COLOR_GLSL, displayColorUniforms, followComposer } from "./composerColor";
-import { markNotInPicture } from "./pictureScene";
+import { markOverlay } from "./overlayKinds";
 
 // cameraPosition / modelMatrix / normal / position are all built into a
 // THREE.ShaderMaterial (prepended for us), so they are used here undeclared.
@@ -144,7 +144,7 @@ export function makeFaceHoverOverlay(positions: Float32Array, color: THREE.Color
   mesh.castShadow = false;
   mesh.receiveShadow = false;
   mesh.renderOrder = 4; // above the glow's 3
-  markNotInPicture(mesh);
+  markOverlay(mesh, "highlight");
   return mesh;
 }
 
@@ -185,7 +185,7 @@ export function makeSelectionGlow(geometry: THREE.BufferGeometry, kind: GlowKind
   mesh.castShadow = false;
   mesh.receiveShadow = false;
   mesh.renderOrder = 3; // over the shaded body, under gizmos and other overlays
-  markNotInPicture(mesh);
+  markOverlay(mesh, "highlight");
   // Per draw, because the material is shared by every glowing body.
   mesh.onBeforeRender = (_r, _s, camera, geo, mat) => {
     if (!geo.boundingBox) geo.computeBoundingBox();

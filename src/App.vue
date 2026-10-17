@@ -34,7 +34,8 @@ import TextToolPanel from "./components/overlays/TextToolPanel.vue";
 import FilletMembers from "./components/overlays/FilletMembers.vue";
 import ProjectFilterBar from "./components/overlays/ProjectFilterBar.vue";
 import MeasureReadout from "./components/overlays/MeasureReadout.vue";
-import { onMounted, onUnmounted, shallowRef, useTemplateRef, watch } from "vue";
+import { onMounted, onUnmounted, ref, shallowRef, useTemplateRef, watch } from "vue";
+import { useEngine } from "./app/engineKey";
 import { isNarrowStage } from "./ui/layoutBreakpoints";
 import { useDialogStore } from "./stores/dialogs";
 import { useExportDialogStore } from "./stores/exportDialog";
@@ -46,6 +47,12 @@ const exportDialog = useExportDialogStore();
 const toolPanels = useToolPanelStore();
 const shell = useShellStore();
 const ui = useUiStore();
+const engine = useEngine();
+// Unmounted while the overlay is off, so their reprojection loops stop with it.
+const sketchLabelsShown = ref(engine.viewport.overlayDrawn("sketchLabels"));
+onUnmounted(engine.viewport.watchOverlays(() => {
+  sketchLabelsShown.value = engine.viewport.overlayDrawn("sketchLabels");
+}));
 
 // The overlays the running plugins add, mounted at the end of the stack.
 //
@@ -142,13 +149,13 @@ watch(() => ui.sketchActive, () => shell.closeDrawer());
   <MeasureReadout />
 
   <!-- In-canvas overlays, driven entirely by imperative tool code through the
-       facades in sketch/ and features/. The two annotation LAYERS are always
-       mounted (they render nothing until a sketch is open) because each owns a
-       rAF reprojection loop it starts and stops itself; the three tool PANELS
+       facades in sketch/ and features/. The two annotation LAYERS are mounted
+       while their overlay is shown (they render nothing until a sketch is open)
+       and each owns a rAF reprojection loop it starts and stops itself; the tool PANELS
        are v-if'd and keyed, so reopening a tool remounts one with fresh form
        state instead of needing a reset path. -->
-  <SketchDimLayer />
-  <SketchGlyphLayer />
+  <SketchDimLayer v-if="sketchLabelsShown" />
+  <SketchGlyphLayer v-if="sketchLabelsShown" />
   <TextToolPanel v-if="toolPanels.text" :key="toolPanels.text.id" :req="toolPanels.text" />
   <ProjectFilterBar v-if="toolPanels.projectAnchor" />
 

@@ -73,6 +73,8 @@ describe("asRenderPrefs", () => {
       keyElevation: DEFAULT_RENDER.keyElevation,
       viewModeModel: DEFAULT_RENDER.viewModeModel,
       viewModeRender: DEFAULT_RENDER.viewModeRender,
+      overlaysModel: DEFAULT_RENDER.overlaysModel,
+      overlaysRender: DEFAULT_RENDER.overlaysRender,
       matcapStyle: DEFAULT_RENDER.matcapStyle,
       matcapTint: DEFAULT_RENDER.matcapTint,
       denoise: DEFAULT_RENDER.denoise,

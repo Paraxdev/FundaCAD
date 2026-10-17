@@ -111,8 +111,8 @@ export class Highlighter {
     for (const e of this.errorEdges) {
       if (next.has(e)) continue;
       // no longer failing, restore whatever tier it belongs to now
-      if (this.selectedEdges.has(e)) paint(e, SELECT);
-      else if (e === this.hoveredEdge) paint(e, HOVER);
+      if (this.selectedEdges.has(e)) this.tint(e, SELECT);
+      else if (e === this.hoveredEdge) this.tint(e, HOVER);
       else paintIdle(e, this.edgeBase);
     }
     this.errorEdges = next;
@@ -130,7 +130,7 @@ export class Highlighter {
     }
     this.hoveredEdge = line;
     if (line && !this.selectedEdges.has(line) && !this.errorEdges.has(line)) {
-      paint(line, HOVER);
+      this.tint(line, HOVER);
     }
   }
 
@@ -247,7 +247,7 @@ export class Highlighter {
       if (!this.errorEdges.has(line)) paintIdle(line, this.edgeBase);
     } else {
       this.selectedEdges.add(line);
-      if (!this.errorEdges.has(line)) paint(line, SELECT);
+      if (!this.errorEdges.has(line)) this.tint(line, SELECT);
     }
   }
 
@@ -373,6 +373,43 @@ export class Highlighter {
     this.syncHoverOverlay();
   }
 
+  private paintShown = true;
+
+  private tint(e: EdgeRef, color: THREE.Color) {
+    if (this.paintShown) paint(e, color);
+    else paintIdle(e, this.edgeBase);
+  }
+
+  /** Show or leave out the selection and hover tints. Off, the sets keep
+   *  following clicks, so the tree and the properties still do; a failing
+   *  edge stays red either way. */
+  setPaintShown(on: boolean) {
+    if (on === this.paintShown) return;
+    if (on) {
+      this.paintShown = true;
+      this.repaintSelection();
+    } else {
+      this.stripSelection();
+      this.paintShown = false;
+    }
+  }
+
+  private stripSelection() {
+    for (const f of new Set([...this.selectedFaces, ...this.hoveredFaces])) this.restoreFace(f);
+    const edges = new Set(this.selectedEdges);
+    if (this.hoveredEdge) edges.add(this.hoveredEdge);
+    for (const e of edges) if (!this.errorEdges.has(e)) paintIdle(e, this.edgeBase);
+  }
+
+  private repaintSelection() {
+    for (const f of new Set([...this.selectedFaces, ...this.hoveredFaces])) {
+      this.paintFace(f, this.selectedFaces.has(f) ? SELECT : HOVER);
+    }
+    for (const e of this.selectedEdges) if (!this.errorEdges.has(e)) this.tint(e, SELECT);
+    const h = this.hoveredEdge;
+    if (h && !this.selectedEdges.has(h) && !this.errorEdges.has(h)) this.tint(h, HOVER);
+  }
+
   /** Run `fn` with every selected, hovered and failing face and edge in its
    *  plain colour, then paint those tints back. A saved picture shows none of them. */
   withoutSelectionPaint<T>(fn: () => T): T {
@@ -387,13 +424,14 @@ export class Highlighter {
       for (const f of faces) this.paintFace(f, this.selectedFaces.has(f) ? SELECT : HOVER);
       for (const e of edges) {
         if (this.errorEdges.has(e)) paint(e, ERROR);
-        else if (this.selectedEdges.has(e)) paint(e, SELECT);
-        else paint(e, HOVER);
+        else if (this.selectedEdges.has(e)) this.tint(e, SELECT);
+        else this.tint(e, HOVER);
       }
     }
   }
 
   private paintFace(faceId: number, color: THREE.Color) {
+    if (!this.paintShown) return;
     const body = bodyOfFace(this.view, faceId);
     const tris = body?.faceTriangles.get(faceId);
     if (!body || !tris) return;

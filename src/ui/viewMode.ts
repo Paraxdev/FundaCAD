@@ -8,6 +8,7 @@
 
 import { asViewMode, renderPrefs, setRenderPref, type ViewMode } from "./renderPrefs";
 import { workspace, type Workspace } from "./workspace";
+import type { OverlayKind, OverlayState } from "../viewport/overlayKinds";
 
 export type { ViewMode };
 export { asViewMode };
@@ -134,4 +135,22 @@ export function nextViewMode(cur: ViewMode, dir: 1 | -1, tier: RenderTier): View
     if (id !== "pathtraced" || !pathTracedBlock(tier)) return id;
   }
   return cur;
+}
+
+function overlayKey(w: Workspace): "overlaysModel" | "overlaysRender" {
+  return w === "render" ? "overlaysRender" : "overlaysModel";
+}
+
+export function savedOverlays(w: Workspace = workspace()): Readonly<OverlayState> {
+  return renderPrefs()[overlayKey(w)];
+}
+
+export function setOverlay(kind: OverlayKind, on: boolean, w: Workspace = workspace()): void {
+  const s = savedOverlays(w);
+  setRenderPref(overlayKey(w), { on: s.on, kinds: { ...s.kinds, [kind]: on } });
+}
+
+export function setOverlaysOn(on: boolean, w: Workspace = workspace()): void {
+  const s = savedOverlays(w);
+  setRenderPref(overlayKey(w), { on, kinds: { ...s.kinds } });
 }

@@ -10,6 +10,7 @@ import type { BodyEdges, EdgeRef } from "./edgeLines";
 import { edgeSelectorFrom } from "./edgeMatch";
 import { flushRaycastIndex } from "./raycastIndex";
 import { hitScale } from "../input/pointerKind";
+import { overlayLayer } from "./overlayKinds";
 import {
   BAND_CAP_EXTENT_PX,
   ScreenExtent,
@@ -69,12 +70,19 @@ export interface EdgeCandidate extends EdgeHit {
   point: THREE.Vector3;
 }
 
+function edgeLayer<T extends THREE.Raycaster>(r: T): T {
+  r.layers.enable(overlayLayer("edges"));
+  return r;
+}
+
 export class Picker {
   // firstHitOnly is read by three-mesh-bvh: every mesh query here wants only the
   // nearest face, and collecting every hit along the ray through a whole
   // assembly only to sort and drop them was most of a pick's cost. Line picks
   // ignore the flag.
-  private raycaster = Object.assign(new THREE.Raycaster(), { firstHitOnly: true });
+  // The edges' layer is always tested, so an outline hidden from the view
+  // still selects its edge.
+  private raycaster = edgeLayer(Object.assign(new THREE.Raycaster(), { firstHitOnly: true }));
   private ndc = new THREE.Vector2();
   private scratch = new THREE.Vector3();
   // Raycast targets: ONE merged object per body now, so this list is ~3k long

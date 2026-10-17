@@ -243,7 +243,7 @@ export class SectionTool {
     this.gesture.attach();
     this.handle = createDragHandle();
     this.gizmo = this.handle.group;
-    this.viewport.addToScene(this.gizmo);
+    this.viewport.addToScene(this.gizmo, "section");
     this.showChrome();
     this.gesture.frame();
   }

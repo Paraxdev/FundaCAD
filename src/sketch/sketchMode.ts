@@ -3929,7 +3929,7 @@ export class SketchMode {
     const grid = new SketchPlaneGrid();
     grid.setVisible(this.gridVisible);
     this.grid = grid;
-    this.viewport.addToScene(grid.object);
+    this.viewport.addToScene(grid.object, "grid");
     this.updateGrid(); // build it now rather than showing an empty frame
   }
   private removeGrid() {

@@ -35,6 +35,8 @@ function rig() {
     pickFaceForPressPull: (x: number, y: number) => x - 50 <= -40 ? null : {
       anchor: new THREE.Vector3(x - 50, 50 - y, 0), normal: new THREE.Vector3(0, 0, 1), bodyId: "body1",
     },
+    overlayDrawn: () => true,
+    watchOverlays: () => () => {},
   } as unknown as StressGlyphHost;
   const handlers = {
     forceDrag: vi.fn(),
