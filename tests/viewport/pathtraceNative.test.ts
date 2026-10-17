@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import type { TracerBackend } from "../../src/viewport/pathtrace/backend";
 import { NativeTracer, type Blit, type FrameLink, type NativeFrame } from "../../src/viewport/pathtrace/nativeTracer";
 
 class FakeLink implements FrameLink {
@@ -167,6 +168,80 @@ describe("the native tracer backend", () => {
       expect(t.denoised).toBe(false);
       expect(warn).toHaveBeenCalledWith("[native tracer] denoise: OpenImageDenoise.dll did not load");
       warn.mockRestore();
+    });
+  });
+  describe("bloom", () => {
+    const flush = () => new Promise((r) => setTimeout(r, 0));
+    const glow = { strength: 0.252, radius: 0.48, threshold: 1.28 };
+    const logged = (link: FakeLink, status: object = {}) => async (cmd: string, args?: unknown) => {
+      link.log.push(args ? `${cmd} ${JSON.stringify(args)}` : cmd);
+      if (cmd !== "pt_status") return undefined;
+      return { samples: 64, fault: null, denoised: false, denoising: false, denoiseError: null, ...status };
+    };
+    const blooms = (link: FakeLink) => link.log.filter((l) => l.startsWith("pt_bloom"));
+
+    it("is a whole TracerBackend", () => {
+      const b: TracerBackend = setup(new FakeLink()).t;
+      expect(typeof b.setBloom).toBe("function");
+    });
+
+    it("clears the shared native bloom on open and sends one set before it then", async () => {
+      const link = new FakeLink();
+      const { t } = setup(link, 1, logged(link));
+      t.setBloom(glow);
+      await flush();
+      expect(blooms(link)).toEqual([]);
+      await t.init();
+      await flush();
+      expect(blooms(link)).toEqual([`pt_bloom {"bloom":${JSON.stringify({ ...glow, side: 1 })}}`]);
+      const other = new FakeLink();
+      const b = setup(other, 1, logged(other)).t;
+      await b.init();
+      await flush();
+      expect(blooms(other)).toEqual(['pt_bloom {"bloom":null}']);
+    });
+
+    it("sends a change once, with the bloom side of the canvas, and null for none", async () => {
+      const link = new FakeLink();
+      const { t } = setup(link, 1, logged(link));
+      await t.init();
+      t.setSize(800, 600, 2);
+      t.setBloom(glow);
+      t.setBloom({ ...glow });
+      t.setBloom(null);
+      await flush();
+      expect(blooms(link)).toEqual([
+        'pt_bloom {"bloom":null}',
+        `pt_bloom {"bloom":${JSON.stringify({ ...glow, side: 800 })}}`,
+        'pt_bloom {"bloom":null}',
+      ]);
+    });
+
+    it("pulls the held frame again at the cap, after the change landed, and keeps the denoised state", async () => {
+      const link = new FakeLink();
+      const { t, uploads } = setup(link, 1, logged(link, { denoised: true }));
+      await t.init();
+      await t.renderSample(0);
+      while (t.present()) await flush();
+      expect(t.denoised).toBe(true);
+      const before = uploads.length;
+      t.setBloom(glow);
+      for (let i = 0; i < 5; i++) await flush();
+      expect(uploads.length).toBe(before + 2);
+      const sent = link.log.findIndex((l) => l.startsWith("pt_bloom {\"bloom\":{"));
+      expect(link.log.indexOf(`upload ${uploads[before + 1]}`)).toBeGreaterThan(sent);
+      expect(t.denoised).toBe(true);
+      expect(t.present()).toBe(false);
+    });
+
+    it("pulls nothing extra while tracing: the next frame carries the bloom", async () => {
+      const link = new FakeLink();
+      const { t, uploads } = setup(link, 1, logged(link));
+      await t.init();
+      await t.renderSample(0);
+      t.setBloom(glow);
+      for (let i = 0; i < 5; i++) await flush();
+      expect(uploads).toEqual([1]);
     });
   });
 });

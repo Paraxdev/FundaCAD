@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
 use fundacad_frames::{FrameSource, Reopen};
-use fundacad_tracer::{decode_colors, decode_mesh, denoise, BodyDesc, Camera, Look, Path, Quality, Tracer, TracerOptions};
+use fundacad_tracer::{decode_colors, decode_mesh, denoise, Bloom, BodyDesc, Camera, Look, Path, Quality, Tracer, TracerOptions};
 use serde::Serialize;
 use tauri::ipc::{InvokeBody, Request};
 
@@ -164,6 +164,12 @@ pub fn pt_cap(cap: u32) -> Result<(), String> {
 #[tauri::command]
 pub fn pt_denoise(level: Quality) -> Result<(), String> {
     with(|t| t.set_denoise(level))
+}
+
+/// Bloom before tone mapping, null for none; keeps the samples.
+#[tauri::command]
+pub fn pt_bloom(bloom: Option<Bloom>) -> Result<(), String> {
+    with(|t| t.set_bloom(bloom))
 }
 
 #[tauri::command]

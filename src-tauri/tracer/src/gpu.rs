@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
+use crate::bloom::{self, Bloom, Chain};
 use crate::bvh::{self, Bvh};
 use crate::denoise::{self, Quality};
 use crate::material::{pack_material, tri_slots, GpuMaterial, FLAG_VERTEX_COLORS};
@@ -148,7 +149,7 @@ fn make_tlas(device: &wgpu::Device, queue: &wgpu::Queue, instances: &[Instance<'
     tlas
 }
 
-fn bytes<T: Copy>(v: &[T]) -> &[u8] {
+pub(crate) fn bytes<T: Copy>(v: &[T]) -> &[u8] {
     // Only ever f32, u32 and arrays of them, which have no padding.
     unsafe { std::slice::from_raw_parts(v.as_ptr() as *const u8, std::mem::size_of_val(v)) }
 }
@@ -164,7 +165,7 @@ fn buffer(device: &wgpu::Device, queue: &wgpu::Queue, data: &[u8], usage: wgpu::
     b
 }
 
-fn storage(device: &wgpu::Device, size: u64, extra: wgpu::BufferUsages) -> wgpu::Buffer {
+pub(crate) fn storage(device: &wgpu::Device, size: u64, extra: wgpu::BufferUsages) -> wgpu::Buffer {
     device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
         size: size.max(16),
@@ -248,6 +249,13 @@ pub struct Tracer {
     n_inst: u32,
     bind: Option<wgpu::BindGroup>,
     resolve_bind: Option<wgpu::BindGroup>,
+    glow_pipe: wgpu::ComputePipeline,
+    glow_bgl: wgpu::BindGroupLayout,
+    glow_uniform: wgpu::Buffer,
+    chain: Option<Chain>,
+    bloom: Option<Bloom>,
+    /// The denoised colour over the exposure, as accum's layout, for a bloom.
+    hdr: wgpu::Buffer,
     w: u32,
     h: u32,
     sample: u32,
@@ -267,6 +275,15 @@ struct Held {
     key: FrameKey,
     pixels: Vec<u8>,
     denoised: bool,
+    /// What `pixels` were resolved with.
+    bloom: Option<Bloom>,
+    denoise: Option<Denoised>,
+}
+
+/// The denoise result tone mapped as it is, and in linear for a bloom.
+struct Denoised {
+    plain: Vec<u8>,
+    hdr: Vec<[f32; 4]>,
 }
 
 /// Generation, samples and size: what a frame was traced for.
@@ -275,7 +292,7 @@ type FrameKey = (u64, u32, (u32, u32));
 /// A denoise running on its own thread; a result for an older key is dropped.
 struct Job {
     key: FrameKey,
-    rx: mpsc::Receiver<Result<Vec<u8>, String>>,
+    rx: mpsc::Receiver<Result<Denoised, String>>,
 }
 
 impl Tracer {
@@ -366,6 +383,19 @@ impl Tracer {
             entries: &[uni, ro(1), rw(2)],
         });
         let resolve_pipe = pipeline(&device, &resolve_bgl, include_str!("resolve.wgsl"), "tracer-resolve");
+        let glow_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: None,
+            entries: &[uni, ro(1), rw(2), ro(3), wgpu::BindGroupLayoutEntry { binding: 4, ..uni }],
+        });
+        let glow_src = format!("{}
+{}", include_str!("resolve.wgsl"), include_str!("resolve_bloom.wgsl"));
+        let glow_pipe = pipeline_at(&device, &glow_bgl, &glow_src, "tracer-resolve-bloom", "main_bloom");
+        let glow_uniform = device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: 16,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
 
         let uniform = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
@@ -402,6 +432,7 @@ impl Tracer {
             accum: empty(&device),
             aov: empty(&device),
             out: empty(&device),
+            hdr: empty(&device),
             device,
             queue,
             path,
@@ -417,6 +448,11 @@ impl Tracer {
             n_inst: 0,
             bind: None,
             resolve_bind: None,
+            glow_pipe,
+            glow_bgl,
+            glow_uniform,
+            chain: None,
+            bloom: None,
             w: 0,
             h: 0,
             sample: 0,
@@ -465,6 +501,7 @@ impl Tracer {
         self.accum = storage(&self.device, px * 16, wgpu::BufferUsages::COPY_SRC);
         self.aov = storage(&self.device, px * 32, wgpu::BufferUsages::COPY_SRC);
         self.out = storage(&self.device, px * 4, wgpu::BufferUsages::COPY_SRC);
+        self.hdr = storage(&self.device, px * 16, wgpu::BufferUsages::empty());
         if self.path == Path::RayQuery || self.rows == 0 {
             self.rows = h;
         }
@@ -739,11 +776,12 @@ impl Tracer {
         self.apply();
         if self.done() && self.held.as_ref().is_some_and(|h| h.key == self.key()) {
             self.collect_denoise();
+            self.rebloom_held();
             return self.held.as_ref().map(|h| h.pixels.clone()).unwrap_or_default();
         }
         self.trace_for(budget);
         let pixels = self.resolve();
-        self.held = Some(Held { key: self.key(), pixels: pixels.clone(), denoised: false });
+        self.held = Some(Held { key: self.key(), pixels: pixels.clone(), denoised: false, bloom: self.bloom, denoise: None });
         if self.done() {
             self.start_denoise();
         }
@@ -752,6 +790,31 @@ impl Tracer {
 
     fn key(&self) -> FrameKey {
         (self.generation(), self.sample, (self.w, self.h))
+    }
+
+    /// Bloom on the linear frame before tone mapping. Never restarts the
+    /// samples: the held frame is resolved again on the next frame.
+    pub fn set_bloom(&mut self, b: Option<Bloom>) {
+        self.bloom = b;
+    }
+
+    /// Brings the held frame to the current bloom, from the accumulation or
+    /// the denoised colour, only when the bloom changed since it was resolved.
+    fn rebloom_held(&mut self) {
+        let Some(h) = self.held.take() else { return };
+        let mut h = h;
+        if h.bloom != self.bloom {
+            h.pixels = match (&h.denoise, self.bloom) {
+                (Some(d), None) => d.plain.clone(),
+                (Some(d), Some(_)) => {
+                    self.queue.write_buffer(&self.hdr, 0, bytes(&d.hdr));
+                    self.resolve_from(true)
+                }
+                (None, _) => self.resolve(),
+            };
+            h.bloom = self.bloom;
+        }
+        self.held = Some(h);
     }
 
     /// The weights the cap is denoised with; a change drops a held result and
@@ -791,9 +854,12 @@ impl Tracer {
         };
         let (tx, rx) = mpsc::channel();
         let quality = self.quality;
+        let e = if self.look.exposure > 0.0 { self.look.exposure } else { 1.0 };
         let spawned = std::thread::Builder::new().name("denoise".into()).spawn(move || {
-            let r = denoise::run(&input, quality)
-                .map(|c| denoise::tone_map(&c.chunks_exact(3).map(|p| [p[0], p[1], p[2]]).collect::<Vec<_>>()));
+            let r = denoise::run(&input, quality).map(|c| {
+                let rgb: Vec<[f32; 3]> = c.chunks_exact(3).map(|p| [p[0], p[1], p[2]]).collect();
+                Denoised { plain: denoise::tone_map(&rgb), hdr: rgb.iter().map(|p| [p[0] / e, p[1] / e, p[2] / e, 1.0]).collect() }
+            });
             let _ = tx.send(r);
         });
         match spawned {
@@ -807,6 +873,7 @@ impl Tracer {
     pub fn poll_denoise(&mut self) {
         if self.done() && self.held.as_ref().is_some_and(|h| h.key == self.key()) {
             self.collect_denoise();
+            self.rebloom_held();
         }
     }
 
@@ -827,14 +894,18 @@ impl Tracer {
         };
         self.job = None;
         match got {
-            Ok(px) if px.len() == (self.w * self.h * 4) as usize => {
+            Ok(d) if d.plain.len() == (self.w * self.h * 4) as usize => {
                 if let Some(h) = &mut self.held {
-                    h.pixels = px;
+                    h.pixels = d.plain.clone();
+                    h.bloom = None;
+                    h.denoise = Some(d);
                     h.denoised = true;
                 }
                 self.denoise_error = None;
             }
-            Ok(px) => self.denoise_error = Some(format!("a {} byte denoise for a {}x{} frame", px.len(), self.w, self.h)),
+            Ok(d) => {
+                self.denoise_error = Some(format!("a {} byte denoise for a {}x{} frame", d.plain.len(), self.w, self.h))
+            }
             Err(e) => self.denoise_error = Some(e),
         }
     }
@@ -873,6 +944,50 @@ impl Tracer {
 
     /// The accumulated image tone mapped to sRGB RGBA8, rows top first.
     pub fn resolve(&mut self) -> Vec<u8> {
+        self.resolve_from(false)
+    }
+
+    /// The threshold kept above the sky as the trace draws it, the background
+    /// times the brightness: the page raised it above the background alone,
+    /// so a brightness above 1 could bloom the whole sky.
+    fn bloom_threshold(&self, b: &Bloom) -> f32 {
+        let l = &self.look;
+        let sky = bloom::luma(l.sky_top).max(bloom::luma(l.sky_bottom)) * l.env_intensity;
+        b.threshold.max(sky + 0.05)
+    }
+
+    fn resolve_from(&mut self, denoised: bool) -> Vec<u8> {
+        let Some(b) = self.bloom else { return self.resolve_plain() };
+        let r = [self.w, self.h, self.look.exposure.to_bits(), 0];
+        self.queue.write_buffer(&self.resolve_uniform, 0, bytes(&r));
+        let threshold = self.bloom_threshold(&b);
+        let src = if denoised { &self.hdr } else { &self.accum };
+        let chain = self.chain.get_or_insert_with(|| Chain::new(&self.device));
+        let mut enc = self.device.create_command_encoder(&Default::default());
+        let (glow, size) = chain.encode(&self.device, &self.queue, &mut enc, src, (self.w, self.h), &b, threshold);
+        self.queue.write_buffer(&self.glow_uniform, 0, bytes(&[size.0, size.1, 0, 0]));
+        let bind = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &self.glow_bgl,
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: self.resolve_uniform.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 1, resource: src.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 2, resource: self.out.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 3, resource: glow.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 4, resource: self.glow_uniform.as_entire_binding() },
+            ],
+        });
+        {
+            let mut pass = enc.begin_compute_pass(&Default::default());
+            pass.set_pipeline(&self.glow_pipe);
+            pass.set_bind_group(0, &bind, &[]);
+            pass.dispatch_workgroups(self.w.div_ceil(8), self.h.div_ceil(8), 1);
+        }
+        self.queue.submit([enc.finish()]);
+        self.read(&self.out, self.w as u64 * self.h as u64 * 4)
+    }
+
+    fn resolve_plain(&mut self) -> Vec<u8> {
         let r = [self.w, self.h, self.look.exposure.to_bits(), 0];
         self.queue.write_buffer(&self.resolve_uniform, 0, bytes(&r));
         let bind = match &self.resolve_bind {
@@ -927,6 +1042,16 @@ impl Tracer {
 }
 
 fn pipeline(device: &wgpu::Device, bgl: &wgpu::BindGroupLayout, src: &str, label: &str) -> wgpu::ComputePipeline {
+    pipeline_at(device, bgl, src, label, "main")
+}
+
+pub(crate) fn pipeline_at(
+    device: &wgpu::Device,
+    bgl: &wgpu::BindGroupLayout,
+    src: &str,
+    label: &str,
+    entry: &str,
+) -> wgpu::ComputePipeline {
     let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some(label),
         source: wgpu::ShaderSource::Wgsl(src.into()),
@@ -940,7 +1065,7 @@ fn pipeline(device: &wgpu::Device, bgl: &wgpu::BindGroupLayout, src: &str, label
         label: Some(label),
         layout: Some(&layout),
         module: &module,
-        entry_point: Some("main"),
+        entry_point: Some(entry),
         compilation_options: Default::default(),
         cache: None,
     })
@@ -949,6 +1074,50 @@ fn pipeline(device: &wgpu::Device, bgl: &wgpu::BindGroupLayout, src: &str, label
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_denoised_frame_blooms_as_the_accumulation_it_came_from() {
+        let Ok(mut t) = Tracer::new(TracerOptions { software: true, ..Default::default() }) else {
+            eprintln!("skipped: no adapter");
+            return;
+        };
+        let lamp: Vec<BodyDesc> = serde_json::from_str(
+            r#"[{"id":"body1","key":"lamp","matrix":[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],
+                 "materials":[{"color":[0,0,0],"emissive":[1,0.6,0.2],"emissiveIntensity":5}]}]"#,
+        )
+        .unwrap();
+        t.set_bodies(lamp);
+        t.add_mesh(
+            "lamp",
+            Mesh {
+                positions: vec![[-1.0, -1.0, 0.0], [1.0, -1.0, 0.0], [1.0, 1.0, 0.0], [-1.0, 1.0, 0.0]],
+                normals: vec![[0.0, 0.0, 1.0]; 4],
+                indices: vec![0, 1, 2, 0, 2, 3],
+                ..Default::default()
+            },
+        );
+        t.set_camera(Camera { eye: [0.0, 0.0, 12.0], target: [0.0; 3], up: [0.0, 1.0, 0.0], fov: 50.0 });
+        t.set_look(Look { exposure: 1.7, sky_top: [0.1; 3], sky_bottom: [0.05; 3], ..Look::default() });
+        t.set_denoise(Quality::Off);
+        t.set_cap(1);
+        let plain = t.frame(48, 32, Duration::from_millis(50));
+        assert!(t.done());
+        // A denoise that changed nothing: its colour is the exposed accumulation.
+        let e = t.look.exposure;
+        let hdr = t.read_hdr().iter().map(|c| [c[0] / e, c[1] / e, c[2] / e, 1.0]).collect();
+        let h = t.held.as_mut().unwrap();
+        h.denoise = Some(Denoised { plain: plain.clone(), hdr });
+        h.denoised = true;
+        let b = Bloom { strength: 0.8, radius: 0.5, threshold: 0.8, side: 0 };
+        t.set_bloom(Some(b));
+        let from_hdr = t.frame(48, 32, Duration::ZERO);
+        let from_accum = t.resolve();
+        assert_ne!(from_hdr, plain);
+        let worst = from_hdr.iter().zip(&from_accum).map(|(a, b)| a.abs_diff(*b)).max().unwrap();
+        assert!(worst <= 1, "the denoised bloom is {worst} codes off the accumulation's");
+        t.set_bloom(None);
+        assert_eq!(t.frame(48, 32, Duration::ZERO), plain);
+    }
 
     #[test]
     fn a_software_band_follows_the_dispatch_time() {
