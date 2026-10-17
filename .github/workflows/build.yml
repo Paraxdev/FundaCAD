@@ -695,6 +695,13 @@ jobs:
           cargo build --release --example frames_serve --manifest-path src-tauri/frames/Cargo.toml
           node e2e/frames_ws_e2e.cjs
 
+      # The material mapping and scene tests always run; the image tests skip
+      # themselves when the runner has no adapter that fits.
+      - name: Native tracer tests
+        env:
+          CARGO_TARGET_DIR: ${{ runner.temp }}/frames-target
+        run: cargo test --manifest-path src-tauri/tracer/Cargo.toml -- --test-threads=4
+
       - name: Engine log on failure
         if: failure()
         run: tail -50 /tmp/ci_engine.log /tmp/ci_vite.log || true

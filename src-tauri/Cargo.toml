@@ -51,6 +51,8 @@ fundacad-geom = { path = "../crates/fundacad-geom", features = ["plugins"] }
 fundacad-mcp = { path = "../crates/fundacad-mcp" }
 # Native frames into the webview (frames/, frames.rs).
 fundacad-frames = { path = "frames" }
+# Trace mode on the native side (tracer/, frames.rs).
+fundacad-tracer = { path = "tracer" }
 # Renders the frames the transport carries: a test pattern until the native
 # tracer lands. Vulkan first, DX12 on Windows next. Pinned with its lock edge:
 # gpu-allocator must resolve to windows 0.62, Tauri's 0.61 fails to compile
