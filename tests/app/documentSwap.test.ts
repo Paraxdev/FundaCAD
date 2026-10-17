@@ -6,6 +6,8 @@ import { DocumentStore } from "../../src/document/store";
 import { wireDocumentSwap } from "../../src/app/documentSwap";
 import type { CadDocument, RebuildResult } from "../../src/types";
 import type { GeometryBackend } from "../../src/geometry/client";
+import { cancelActiveTools } from "../../src/app/toolBusy";
+import type { EngineTools } from "../../src/app/engine";
 
 const RESULT: RebuildResult = {
   mesh: { positions: [0, 0, 0], indices: [0], faceIds: [0] },
@@ -34,8 +36,11 @@ function harness() {
   const calls: string[] = [];
   const sketch = { active: true, cancel: () => calls.push("sketch.cancel") };
   wireDocumentSwap(store, {
+    cancelTools: () => calls.push("cancelTools"),
     sketch,
     dropBodyGizmo: () => calls.push("dropBodyGizmo"),
+    overlay: { clearRegionSelection: () => calls.push("clearRegionSelection") },
+    forgetLastCommit: () => calls.push("forgetLastCommit"),
     viewport: {
       clearSelection: () => calls.push("clearSelection"),
       setSelectedBodies: () => calls.push("setSelectedBodies"),
@@ -54,8 +59,9 @@ describe("New and Open clear the view at once", () => {
       calls.length = 0;
       if (how === "New") store.newDocument();
       else store.load(JSON.stringify({ parameters: {}, features: [] }));
-      expect(calls.slice(0, 5)).toEqual([
-        "sketch.cancel", "dropBodyGizmo", "clearSelection", "setSelectedBodies", "clearModel",
+      expect(calls.slice(0, 8)).toEqual([
+        "cancelTools", "sketch.cancel", "dropBodyGizmo", "clearSelection", "setSelectedBodies",
+        "clearRegionSelection", "forgetLastCommit", "clearModel",
       ]);
       expect(calls).not.toContain("build:old");
     });
@@ -68,4 +74,62 @@ describe("New and Open clear the view at once", () => {
     store.load(JSON.stringify(DOC), { replace: true });
     expect(calls).not.toContain("clearModel");
   });
+});
+
+// An Extrude armed on a profile kept its slab, arrows and panel over the empty
+// document, and a depth drag released after New committed into it.
+describe("New and Open stand every tool down", () => {
+  function tools(calls: string[]) {
+    const tool = (name: string, active: boolean) => ({ active, cancel: () => calls.push(`${name}.cancel`) });
+    const t: Record<string, unknown> = {};
+    for (const n of [
+      "extrude", "edgeFeature", "targetEdit", "pressPull", "faceOffset", "draft", "thread", "hole", "loft",
+      "pattern", "planeOffset", "datumPose", "lightAim", "revolvePitch", "joint", "mechanism",
+    ]) t[n] = tool(n, n === "extrude" || n === "pressPull");
+    t.move = tool("move", false);
+    t.measure = { active: true, stop: () => calls.push("measure.stop") };
+    t.section = { active: true, picking: false, stop: () => calls.push("section.stop") };
+    return t as unknown as EngineTools;
+  }
+
+  it("cancels the armed tools and leaves idle ones and a standing section alone", () => {
+    const calls: string[] = [];
+    cancelActiveTools(tools(calls));
+    expect(calls.sort()).toEqual(["extrude.cancel", "measure.stop", "move.cancel", "pressPull.cancel"]);
+  });
+
+  it("ends a section still aiming", () => {
+    const calls: string[] = [];
+    const t = tools(calls);
+    Object.assign(t.section, { active: false, picking: true });
+    cancelActiveTools(t);
+    expect(calls).toContain("section.stop");
+  });
+
+  for (const how of ["New", "Open"] as const) {
+    it(`drops a tool's live preview so ${how} does not build it into the next document`, async () => {
+      const sent: string[] = [];
+      const engine = {
+        async rebuild(doc: CadDocument) {
+          sent.push(doc.features.map((f) => f.id).join(","));
+          return { ok: true as const, result: RESULT };
+        },
+        async init() {},
+        onStatus() { return () => {}; },
+        onProgress() { return () => {}; },
+        async cancel() { return true; },
+      } as unknown as GeometryBackend;
+      const store = new DocumentStore(engine, DOC);
+      await store.rebuildNow();
+      store.setPreview({ id: "pv", type: "box", width: 60, depth: 60, height: 5 } as never);
+      store.beginEditPreview("f1", null);
+      if (how === "New") store.newDocument();
+      else store.load(JSON.stringify({ parameters: {}, features: [] }));
+      expect(store.hasPreview).toBe(false);
+      expect(store.editPreviewId).toBeNull();
+      sent.length = 0;
+      await store.rebuildNow();
+      expect(sent.at(-1)).toBe("");
+    });
+  }
 });

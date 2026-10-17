@@ -1,6 +1,27 @@
 import { isChoiceOpen } from "../ui/choice";
-import { anyToolBusy } from "../plugins/contrib";
-import type { Engine } from "./engine";
+import { anyToolBusy, cancelContributedTools } from "../plugins/contrib";
+import type { Engine, EngineTools } from "./engine";
+
+/** The tools that hold the screen while `active` and stand down with cancel().
+ *  Move is apart because a body selection raises it by itself. */
+function modalTools(t: EngineTools) {
+  return [
+    t.extrude, t.edgeFeature, t.pressPull, t.faceOffset, t.draft, t.thread, t.hole, t.loft,
+    t.planeOffset, t.datumPose, t.lightAim, t.pattern, t.targetEdit, t.revolvePitch, t.joint, t.mechanism,
+  ];
+}
+
+/** Stand down every tool busy() counts, for a document that is going away. A
+ *  standing section view is a mode the next document keeps, so only its pick
+ *  ends. A plane or point pick ends through the store's rewind. */
+export function cancelActiveTools(t: EngineTools) {
+  for (const tool of modalTools(t)) if (tool.active) tool.cancel();
+  // Also when idle: it drops a reopen still pending from the last commit.
+  t.move.cancel();
+  if (t.measure.active) t.measure.stop();
+  if (t.section.picking) t.section.stop();
+  cancelContributedTools();
+}
 
 /** Guard predicates checked at the top of every start* tool and interactive helper:
  *  they can't fire mid-sketch / mid-drag.
@@ -25,11 +46,8 @@ export function createToolBusy(
   const busy = (moveCounts: boolean) => {
     const t = e.tools;
     return (
-      e.sketch.active || t.extrude.active || t.edgeFeature.active || t.pressPull.active ||
-      t.faceOffset.active || t.draft.active || t.thread.active || t.hole.active || t.loft.active || t.planeOffset.active || t.datumPose.active || t.lightAim.active ||
-      (moveCounts && t.move.active) || t.pattern.active ||
-      t.measure.active || t.section.picking || t.targetEdit.active ||
-      t.revolvePitch.active || t.joint.active || t.mechanism.active ||
+      e.sketch.active || modalTools(t).some((x) => x.active) ||
+      (moveCounts && t.move.active) || t.measure.active || t.section.picking ||
       e.planePick || isChoiceOpen() ||
       // A plugin's tool holds the window exactly as one of the above does.
       // Without this the app believes it is idle while a contributed tool

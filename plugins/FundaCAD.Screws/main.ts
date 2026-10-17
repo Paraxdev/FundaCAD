@@ -67,6 +67,7 @@ export async function activate(e: Engine): Promise<() => void> {
     tools: [{
       id: "standardThread", label: "Standard Thread", iconName: "thread",
       consumes: ["face"], source: "selection", busy: () => thread.active,
+      cancel: () => thread.cancel(),
     }],
     features: [{ type: "thread", edit: (id, done) => thread.edit(id, done) }],
     ribbon: [{

@@ -63,7 +63,7 @@ import { createSelection } from "./selection";
 import { DraftTool } from "../features/draftTool";
 import { ThreadTool } from "../features/threadTool";
 import { HoleTool } from "../features/holeTool";
-import { createToolBusy } from "./toolBusy";
+import { cancelActiveTools, createToolBusy } from "./toolBusy";
 import { createDocumentActions } from "./documentActions";
 import { endPickSession } from "../ui/treePick";
 import { createDatumPlanes } from "./datumPlanes";
@@ -434,7 +434,14 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   Object.assign(e, createSelection(e));
   Object.assign(e, createDocumentActions(e));
   e.store.onRewind(endPickSession);
-  wireDocumentSwap(e.store, e);
+  wireDocumentSwap(e.store, {
+    cancelTools: () => cancelActiveTools(e.tools),
+    sketch: e.sketch,
+    dropBodyGizmo: () => e.dropBodyGizmo(),
+    overlay: e.overlay,
+    forgetLastCommit: () => { e.tools.extrude.lastCommit = null; },
+    viewport: e.viewport,
+  });
   installEnvironmentSync(e.store);
 
   return e;

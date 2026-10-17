@@ -110,6 +110,7 @@ export async function activate(e: Engine): Promise<() => void> {
       // lifetime including the rollback before the panel exists, which is the
       // window a narrower answer would leave open.
       busy: () => tool.active,
+      cancel: () => tool.cancel(),
     }],
 
     actions: { texture: start },
