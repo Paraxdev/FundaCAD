@@ -666,9 +666,21 @@ export class PostChain {
     r.clear();
     r.setClearColor(this.clearWas, alpha);
     setComposing(true, this.clearWas);
+    // Note: three's shadow pass sets that cached clear to white and leaves it, and
+    // the RenderPass never clears after it, so on a frame that redraws the shadow
+    // maps (every still, a moved light) glass showed a white buffer through it.
+    const shadows = r.shadowMap as THREE.WebGLShadowMap | undefined;
+    const drawShadows = shadows?.render;
+    if (shadows && drawShadows) {
+      shadows.render = (lights, scene, camera) => {
+        drawShadows.call(shadows, lights, scene, camera);
+        r.setClearColor(this.clearWas, alpha);
+      };
+    }
     try {
       composer.render();
     } finally {
+      if (shadows && drawShadows) shadows.render = drawShadows;
       setComposing(false);
       r.setRenderTarget(null);
       r.setClearColor(this.clearWas, alpha);
