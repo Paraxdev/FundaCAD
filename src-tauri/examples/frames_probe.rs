@@ -7,6 +7,8 @@
 //!
 //! PROBE_PAGE=e2e/tracer_switch_page.html runs Path traced through the host
 //! on each tracer backend instead.
+//! PROBE_PAGE=e2e/native_bloom_page.html checks the native tracer's bloom at
+//! the cap: a glow by the emitter, the background and the samples unchanged.
 //!
 //! Prints one line, PROBE {json}, and exits.
 
