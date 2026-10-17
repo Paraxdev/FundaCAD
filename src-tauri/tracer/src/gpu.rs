@@ -27,7 +27,8 @@ impl Default for TracerOptions {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Camera {
     pub eye: [f32; 3],
     pub target: [f32; 3],
@@ -36,7 +37,8 @@ pub struct Camera {
     pub fov: f32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, serde::Deserialize)]
+#[serde(rename_all = "camelCase", default)]
 pub struct Look {
     pub sky_top: [f32; 3],
     pub sky_bottom: [f32; 3],
@@ -204,6 +206,19 @@ struct Shading {
     offsets: HashMap<String, [u32; 4]>,
 }
 
+/// What one software dispatch aims for, short enough that the compositor and
+/// the WebGPU viewport keep their frames, long enough to amortise a submit.
+pub const BAND_TARGET: Duration = Duration::from_millis(10);
+
+/// The next band after one of `rows` took `took`: scaled towards `target`,
+/// at most doubling per step so one fast band over the sky cannot jump to a
+/// full frame over the model, in multiples of the workgroup's 8 rows.
+pub fn adapt_rows(rows: u32, height: u32, took: Duration, target: Duration) -> u32 {
+    let ratio = (target.as_secs_f64() / took.as_secs_f64().max(1e-6)).clamp(0.25, 2.0);
+    let want = (rows as f64 * ratio).round() as u32;
+    want.clamp(8, height.next_multiple_of(8).max(8)).next_multiple_of(8)
+}
+
 pub struct Tracer {
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -233,6 +248,15 @@ pub struct Tracer {
     cap: u32,
     camera: Camera,
     look: Look,
+    held: Option<Held>,
+}
+
+/// The last frame handed out, shown again while nothing can change it.
+struct Held {
+    generation: u64,
+    samples: u32,
+    size: (u32, u32),
+    pixels: Vec<u8>,
 }
 
 impl Tracer {
@@ -380,6 +404,7 @@ impl Tracer {
             cap: 256,
             camera: Camera { eye: [4.0, -6.0, 3.0], target: [0.0; 3], up: [0.0, 0.0, 1.0], fov: 50.0 },
             look: Look::default(),
+            held: None,
         };
         t.resize(64, 64);
         Ok(t)
@@ -396,6 +421,11 @@ impl Tracer {
     }
     pub fn generation(&self) -> u64 {
         self.scene.generation()
+    }
+    /// The sample cap is reached; the picture will not change until the scene,
+    /// camera, look or cap does.
+    pub fn done(&self) -> bool {
+        self.sample >= self.cap
     }
     pub fn size(&self) -> (u32, u32) {
         (self.w, self.h)
@@ -654,10 +684,41 @@ impl Tracer {
     pub fn trace_for(&mut self, budget: Duration) -> u32 {
         let start = Instant::now();
         let before = self.sample;
-        while start.elapsed() < budget && self.step() {
+        loop {
+            let t = Instant::now();
+            if start.elapsed() >= budget || !self.step() {
+                break;
+            }
             self.wait();
+            if self.path == Path::Software {
+                self.rows = adapt_rows(self.rows, self.h, t.elapsed(), BAND_TARGET);
+            }
         }
         self.sample - before
+    }
+
+    /// One frame for the transport: applies pending scene changes, traces for
+    /// `budget` and resolves. At the cap it hands out the held frame without
+    /// touching the GPU; below it a software band that ends mid sample still
+    /// traces on, so the sample count is no sign of a finished picture.
+    pub fn frame(&mut self, w: u32, h: u32, budget: Duration) -> Vec<u8> {
+        self.resize(w, h);
+        self.apply();
+        let (generation, samples, size) = (self.generation(), self.sample, (self.w, self.h));
+        if let Some(held) = &self.held {
+            if self.done() && (held.generation, held.samples, held.size) == (generation, samples, size) {
+                return held.pixels.clone();
+            }
+        }
+        self.trace_for(budget);
+        let pixels = self.resolve();
+        self.held = Some(Held { generation, samples: self.sample, size, pixels: pixels.clone() });
+        pixels
+    }
+
+    /// Rows per software dispatch.
+    pub fn band(&self) -> u32 {
+        self.rows
     }
 
     pub fn render_samples(&mut self, n: u32) {
@@ -746,4 +807,20 @@ fn pipeline(device: &wgpu::Device, bgl: &wgpu::BindGroupLayout, src: &str, label
         compilation_options: Default::default(),
         cache: None,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_software_band_follows_the_dispatch_time() {
+        let ms = Duration::from_millis;
+        assert_eq!(adapt_rows(272, 1080, ms(30), ms(10)), 96);
+        assert_eq!(adapt_rows(96, 1080, ms(10), ms(10)), 96);
+        assert_eq!(adapt_rows(96, 1080, ms(1), ms(10)), 192);
+        assert_eq!(adapt_rows(1080, 1080, ms(1), ms(10)), 1080);
+        assert_eq!(adapt_rows(8, 1080, ms(400), ms(10)), 8);
+        assert_eq!(adapt_rows(100, 1080, Duration::ZERO, ms(10)), 200);
+    }
 }
