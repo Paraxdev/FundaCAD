@@ -16,7 +16,8 @@ import { OverlayDraw } from "./pathtrace/overlayDraw";
 import type { ViewMode } from "../ui/renderPrefs";
 import { isSoftwareRendererName, setSoftwareRenderer } from "../ui/glassBlur";
 import { buildRoom, disposeRoom } from "./environments";
-import type { Environment } from "../ui/renderPrefs";
+import { hdrHashOf, type Environment, type RenderPrefs } from "../ui/renderPrefs";
+import { hdrRoom, heldHdr } from "./hdrRegistry";
 import { themeColor } from "./themeColors";
 import { keyDirection } from "./keyLight";
 import { AXIS_COLOR, OriginTriad } from "./originTriad";
@@ -384,8 +385,9 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
       fullQuality = true;
       applyPowerTier();
       const p = renderPrefs();
-      if (p.environment !== "none") {
-        scene.environment = environmentMapNow(renderer, p.environment);
+      const tex = environmentMapNow(renderer, p);
+      if (tex) {
+        scene.environment = tex;
         scene.environmentIntensity = p.brightness;
       }
       frameShadows();
@@ -740,23 +742,54 @@ export class PostChain {
  *  Generated rather than loaded. An HDR file would be a network fetch (or an
  *  asset in the bundle) for something the renderer can produce from a handful of
  *  boxes, and the app deliberately fetches nothing at start-up. */
-const envCache = new Map<Environment, THREE.Texture>();
+const envCache = new Map<string, THREE.Texture>();
+/** Imported panoramas are keyed by rotation and exposure too, so only the last
+ *  few are kept; the built in rooms stay for the session as they always have. */
+const KEEP_CUSTOM = 2;
 
-/** The room for `id`, built now if it is not cached yet. A still taken in potato
+/** What `p` lights with as a cache key, or null for none, which includes an
+ *  imported panorama whose pixels have not loaded yet. */
+export function environmentKey(p: Readonly<RenderPrefs>): string | null {
+  if (p.environment === "none") return null;
+  const hash = hdrHashOf(p.environment);
+  if (!hash) return p.environment;
+  if (!heldHdr(hash)) return null;
+  return `${p.environment}|${p.envRotation.toFixed(1)}|${p.envExposure.toFixed(2)}`;
+}
+
+/** The room for `p`, built now if it is not cached yet. A still taken in potato
  *  mode needs it synchronously, the live viewport goes through environmentMap. */
-function environmentMapNow(renderer: THREE.WebGLRenderer, id: Environment): THREE.Texture {
-  const held = envCache.get(id);
+function environmentMapNow(renderer: THREE.WebGLRenderer, p: Readonly<RenderPrefs>): THREE.Texture | null {
+  const key = environmentKey(p);
+  if (!key) return null;
+  const held = envCache.get(key);
   if (held) return held;
+  const room = environmentRoomFor(p);
+  if (!room) return null;
   const pmrem = new THREE.PMREMGenerator(renderer);
-  const room = environmentRoom(id as Exclude<Environment, "none">);
   const tex = pmrem.fromScene(room.scene, 0.04).texture;
   room.dispose();
   pmrem.dispose();
-  envCache.set(id, tex);
+  envCache.set(key, tex);
+  const custom = [...envCache.keys()].filter((k) => k.startsWith("hdr:"));
+  for (const k of custom.slice(0, Math.max(0, custom.length - KEEP_CUSTOM))) {
+    envCache.get(k)?.dispose();
+    envCache.delete(k);
+  }
   return tex;
 }
 
-/** The scene for an environment, for one render; the caller disposes it. */
+/** The scene for what `p` lights with, for one render; the caller disposes it. */
+export function environmentRoomFor(p: Readonly<RenderPrefs>): { scene: THREE.Scene; dispose(): void } | null {
+  if (p.environment === "none") return null;
+  const hash = hdrHashOf(p.environment);
+  if (hash) {
+    const h = heldHdr(hash);
+    return h ? hdrRoom(h, p.envRotation, p.envExposure) : null;
+  }
+  return environmentRoom(p.environment as Exclude<Environment, "none">);
+}
+
 export function environmentRoom(id: Exclude<Environment, "none">): { scene: THREE.Scene; dispose(): void } {
   if (id === "studio") {
     // three's own, kept as it is: it is a Y-up room, which is a quarter turn
@@ -770,10 +803,10 @@ export function environmentRoom(id: Exclude<Environment, "none">): { scene: THRE
   return { scene: room, dispose: () => disposeRoom(room) };
 }
 
-async function environmentMap(renderer: THREE.WebGLRenderer, id: Environment): Promise<THREE.Texture> {
+async function environmentMap(renderer: THREE.WebGLRenderer, p: Readonly<RenderPrefs>): Promise<THREE.Texture | null> {
   // A task later, so a frame is drawn flat-lit first instead of waiting on the PMREM pass.
   await new Promise((resolve) => setTimeout(resolve, 0));
-  return environmentMapNow(renderer, id);
+  return environmentMapNow(renderer, p);
 }
 
 /** Put the user's viewport settings on a scene.
@@ -807,17 +840,26 @@ function applyRenderPrefs(
     p.background === "theme" ? themeColor("--viewport-bg", 0x1a1d21) : BACKGROUND_COLOR[p.background],
     1,
   );
-  if (p.environment === "none" || p.potatoMode) {
+  const want = environmentKey(p);
+  if (!want || p.potatoMode) {
     scene.environment = null;
+    scene.background = null;
     return;
   }
   scene.environmentIntensity = p.brightness;
-  const want = p.environment;
-  void environmentMap(renderer, want).then((tex) => {
+  scene.backgroundIntensity = p.brightness;
+  const behind = p.envBackground && hdrHashOf(p.environment) !== null;
+  if (!behind) scene.background = null;
+  void environmentMap(renderer, p).then((tex) => {
     // Re-checked, not assumed: the setting may have been changed again while the
     // cubemap was being generated, and writing it then would put back the
     // environment the user has just moved on from.
-    if (renderPrefs().environment === want && !renderPrefs().potatoMode) scene.environment = tex;
+    const now = renderPrefs();
+    if (environmentKey(now) !== want || now.potatoMode) return;
+    scene.environment = tex;
+    // The lit room itself, so the panorama behind the part is turned and exposed
+    // exactly as the light it casts.
+    scene.background = behind && now.envBackground ? tex : null;
   });
 }
 

@@ -3,7 +3,7 @@
 // of the app uses: setModel(), fit(), pick callbacks, projection/view toggles.
 
 import * as THREE from "three";
-import { createScene, environmentRoom, type SceneBundle } from "./scene";
+import { createScene, environmentKey, environmentRoomFor, type SceneBundle } from "./scene";
 import {
   createCameraRig,
   type CameraRig,
@@ -64,7 +64,7 @@ import { awaitTreePick, treePickRefusal } from "../ui/treePick";
 import type { DocumentStore } from "../document/store";
 import type { BodyFinish } from "../document/materials";
 import { BodyFinishLayer, sameFinishMap, sameStringMap } from "./bodyFinish";
-import { onRenderPrefsChange, renderPrefs, setRenderPref } from "../ui/renderPrefs";
+import { hdrHashOf, onRenderPrefsChange, renderPrefs, setRenderPref } from "../ui/renderPrefs";
 import { bootViewMode, chooseViewMode, effectiveViewMode, type RenderTier, type ViewMode } from "../ui/viewMode";
 import type { TraceLight, TraceLook } from "./pathtrace/backend";
 import { lensFor, type TraceLens } from "./pathtrace/camera";
@@ -1030,12 +1030,13 @@ export class Viewport {
         target: l.target.getWorldPosition(new THREE.Vector3()),
       });
     });
-    const env = p.environment;
-    const environment = traceEnvironment(r, env, env === "none" ? null : () => environmentRoom(env), hemi);
+    const envKey = environmentKey(p);
+    const environment = traceEnvironment(r, envKey ?? "none", envKey ? () => environmentRoomFor(p)! : null, hemi);
     return {
       lights,
       background: composerClearColor(r.getClearColor(new THREE.Color()), r.toneMapping, r.toneMappingExposure),
       environment,
+      environmentBehind: !!envKey && p.envBackground && hdrHashOf(p.environment) !== null,
       brightness: p.brightness,
       toneMapping: r.toneMapping,
       exposure: r.toneMappingExposure,

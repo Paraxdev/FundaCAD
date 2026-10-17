@@ -285,7 +285,8 @@ export class WebGpuTracer implements TracerBackend {
     r.toneMappingExposure = look.exposure;
     const scene = this.scene;
     this.disposeLights();
-    scene.background = backgroundTexture(look.background);
+    scene.background = look.environmentBehind ? look.environment : backgroundTexture(look.background);
+    scene.backgroundIntensity = look.environmentBehind ? look.brightness : 1;
     scene.environment = look.environment;
     scene.environmentIntensity = look.brightness;
     for (const l of look.lights) {

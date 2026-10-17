@@ -56,6 +56,9 @@ describe("asRenderPrefs", () => {
       performanceMode: true,
     })).toEqual({
       environment: DEFAULT_RENDER.environment,
+      envRotation: DEFAULT_RENDER.envRotation,
+      envExposure: DEFAULT_RENDER.envExposure,
+      envBackground: DEFAULT_RENDER.envBackground,
       background: "grey",
       brightness: 1.4,
       bloom: 0.7,

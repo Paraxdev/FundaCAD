@@ -762,6 +762,8 @@ export interface CadDocument {
    *  the study back. Selectors only: the panel finds the faces again on the
    *  build it opens on. The rebuild ignores it (document/stressStudy.ts). */
   stress?: StressStudy;
+  /** document/docEnvironment.ts, only for a custom environment. */
+  environment?: import("./document/docEnvironment").DocEnvironment;
 }
 
 /** The six world axes a direction can be picked from in the Stress panel. */

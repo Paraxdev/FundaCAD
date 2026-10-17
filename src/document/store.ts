@@ -33,6 +33,7 @@ import { documentShapeProblem, UnreadableDocumentError } from "./documentShape";
 import { forgetStaleJoins, joinSignatures } from "./bodyIds";
 import { canonicalMirrorPlanes } from "./mirrorPlane";
 import { normalizeStressStudy } from "./stressStudy";
+import { normalizeDocEnvironment, sameDocEnvironment, type DocEnvironment } from "./docEnvironment";
 import { readsBodyVisibility } from "./readsVisibility";
 import * as params from "../params/engine";
 import { extrasEmpty, trialConfiguration } from "../params/extras";
@@ -263,6 +264,8 @@ export class DocumentStore {
   /** The Stress panel's study (document/stressStudy.ts). Null until the panel
    *  is first used on this document. */
   private stress: StressStudy | null = null;
+  /** Off `doc` like the study, so an embedded panorama is never cloned onto the undo stack. */
+  private environment: DocEnvironment | null = null;
   // static descriptor list driving toJSON/load below, in the exact on-disk key
   // order (palette piggybacks on bodyColors' condition, so isn't listed here).
   private readonly overlays: { overlay: Overlay<any>; mapValue?: (v: unknown) => any }[] = [
@@ -555,6 +558,7 @@ export class DocumentStore {
     this.materials = STARTER_LIBRARY.map((m) => ({ ...m }));
     this.repo = null;
     this.stress = null;
+    this.environment = null;
     this.path = null;
     this.pathlessName = null;
     this.isDirty = false;
@@ -1492,6 +1496,17 @@ export class DocumentStore {
     this.markDirty();
   }
 
+  get documentEnvironment(): Readonly<DocEnvironment> | null {
+    return this.environment;
+  }
+
+  /** Save a custom environment with the document (null drops it), off the undo stack. */
+  setDocumentEnvironment(env: DocEnvironment | null) {
+    if (sameDocEnvironment(env, this.environment)) return;
+    this.environment = env ? { ...env, settings: { ...env.settings } } : null;
+    this.markDirty();
+  }
+
   // --- elements: the user's own folders over the bodies ---------------------
   // Display only and off the undo stack. Visibility, name, material and colour
   // moved onto it (writeOverlayBatch), a folder move has not: it could use the
@@ -1902,6 +1917,7 @@ export class DocumentStore {
     // right (the "design in loaded colors" premise) even with zero assignments.
     if (this.bodyColors.size || !this.paletteIsDefault()) out.palette = this.palette;
     if (this.stress) out.stress = structuredClone(this.stress);
+    if (this.environment) out.environment = { ...this.environment, settings: { ...this.environment.settings } };
     if (withVersions && this.repo) out.versions = this.repo;
     return out;
   }
@@ -1996,6 +2012,7 @@ export class DocumentStore {
     // Elements without an id and materials without a colour are dropped here, not at every reader.
     this.repo = normalizeRepo(parsed.versions);
     this.stress = normalizeStressStudy(parsed.stress);
+    this.environment = normalizeDocEnvironment(parsed.environment);
     this.materials = parsed.materials?.length
       ? parsed.materials
           .map((m, i) => normalizeMaterial(m, i))

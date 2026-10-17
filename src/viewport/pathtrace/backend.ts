@@ -22,6 +22,8 @@ export interface TraceLook {
   background: THREE.Color;
   /** An equirect, sampled as it is (no rotation), like the Realtime cube. */
   environment: THREE.Texture;
+  /** Draw `environment` behind the model instead of `background`. */
+  environmentBehind?: boolean;
   brightness: number;
   toneMapping: THREE.ToneMapping;
   exposure: number;

@@ -33,6 +33,12 @@ export async function takeDroppedFiles(e: DropEngine, items: readonly DroppedFil
     if (item.path) await importPath(e.store, e.geometry, item.path);
     else if (item.file) await importFileBytes(e.store, e.geometry, item.file);
   }
+  const env = plan.environments[plan.environments.length - 1];
+  if (env?.file) {
+    const { importEnvironmentFile } = await import("../ui/environmentImport");
+    const refused = await importEnvironmentFile(e.store, env.file);
+    if (refused) await reportError(refused);
+  }
   if (leftovers) await reportError(leftovers);
 }
 
