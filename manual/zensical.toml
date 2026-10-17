@@ -39,7 +39,7 @@ nav = [
     { "Print checks" = ["inspect/overhang.md", "inspect/printability.md", "inspect/bed-fit.md"] },
     { "Stress" = ["inspect/stress.md", "inspect/stress-results.md"] },
   ] },
-  { "Render" = ["render/materials.md", "render/editing.md", "render/graph.md", "render/environment.md"] },
+  { "Render" = ["render/materials.md", "render/editing.md", "render/graph.md", "render/environment.md", "render/view-modes.md"] },
   { "Files" = ["files/save.md", "files/versions.md", "files/link.md", "files/import.md", "files/export.md"] },
   { "Plugins" = [
     "plugins/index.md",

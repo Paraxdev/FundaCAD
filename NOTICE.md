@@ -41,6 +41,13 @@ distributing FundaCAD under its own terms.
 - **wasmtime** (the plugin host), Apache-2.0 WITH LLVM-exception,
   https://github.com/bytecodealliance/wasmtime
 - **serde / serde_json / glam / tungstenite**, MIT OR Apache-2.0
+- **wgpu** (the native path tracer, src-tauri/tracer), MIT OR Apache-2.0,
+  https://github.com/gfx-rs/wgpu, with **wgpu-core**, **wgpu-hal**, **wgpu-types**,
+  **naga**, **ash**, **gpu-allocator**, **range-alloc**, **glow**, **renderdoc-sys**,
+  **codespan-reporting**, **half**, **bytemuck**, **ordered-float**, **parking_lot**,
+  **objc2** and its Apple framework crates, **windows** and its sibling crates, all
+  MIT OR Apache-2.0 (some also Zlib); **spirv**, Apache-2.0; **libloading**, ISC;
+  **slotmap** and **foldhash**, Zlib
 - **faer** (the stress analysis's sparse linear algebra), MIT,
   https://codeberg.org/sarah-quinones/faer, with its numeric crates
   **faer-traits**, **gemm**, **gemm-common**, **gemm-f32**, **gemm-f64**, **gemm-c32**,
