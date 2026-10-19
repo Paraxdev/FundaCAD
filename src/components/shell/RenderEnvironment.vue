@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import DenoiserRow from "./DenoiserRow.vue";
 // What the model is lit by and drawn against.
 //
 // Together on one tab because they are one decision. Choosing a dark room and
@@ -370,6 +371,7 @@ const onBloom = (e: Event) =>
         Path traced cleans the grain out of the finished picture. High quality
         takes a few seconds longer.
       </div>
+      <DenoiserRow hint-class="sm-hint" button-class="rd-chip" />
     </section>
 
     <section class="rd-section">

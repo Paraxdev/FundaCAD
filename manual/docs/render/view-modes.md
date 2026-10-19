@@ -8,9 +8,11 @@ Matcap is flat studio clay and the lightest on the computer. Realtime shows the 
 
 Path traced runs either in FundaCAD itself, on the native tracer, or in the viewport's web view, on WebGPU. Preferences, Viewport, Path tracer picks one: Auto, Native or WebGPU. The Render workspace has the same choice under Tracer.
 
-Auto uses the native tracer on Linux and on older macOS, where the web view has no WebGPU. On Windows it uses WebGPU unless the native tracer is the faster of the two on that graphics card. If the tracer you picked is missing, FundaCAD uses the other one.
+Auto uses the native tracer on Linux and on older macOS, where the web view has no WebGPU, and anywhere the graphics card traces with ray queries, which makes the native tracer many times faster. Otherwise it uses WebGPU. If the tracer you picked is missing, FundaCAD uses the other one.
 
-Once the picture reaches its sample count it is denoised, the grain smoothed away. On WebGPU the web view does it; on the native tracer FundaCAD does it on the processor, which takes about half a second at full screen. A copy of FundaCAD without the denoise libraries shows the native picture as it was traced.
+Once the picture reaches its sample count it is denoised, the grain smoothed away. On WebGPU the web view does it. On the native tracer FundaCAD does it on the processor with an edge aware filter, which keeps edges and shading and only takes out grain it can measure.
+
+For a cleaner picture, press High quality denoise (about 52 MB) under Denoise in the Render workspace or in Preferences, Viewport. FundaCAD downloads Intel Open Image Denoise once from its official release, checks every file against the copy it expects, and uses it straight away, no restart. Without a connection, or if the download fails, the filter stays and the row says why. The line under Denoise always names the denoiser in use. On macOS the download is not offered yet.
 
 ## When Path traced is greyed out
 
