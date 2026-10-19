@@ -53,6 +53,7 @@ export const FEATURE_NUM_FIELDS: Partial<Record<Feature["type"], [string, string
     ["pitch", "Pitch", "length"], ["starts", "Starts", "count"], ["offset", "Offset", "length"],
     ["length", "Length", "length"], ["clearance", "Print clearance", "length"],
   ],
+  textOnFace: [["height", "Height", "length"], ["depth", "Depth", "length"], ["angle", "Angle", "angle"]],
   hole: [
     ["diameter", "Diameter", "length"], ["depth", "Depth", "length"],
     ["cbDiameter", "Counterbore diameter", "length"], ["cbDepth", "Counterbore depth", "length"],

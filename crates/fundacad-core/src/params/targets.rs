@@ -85,6 +85,7 @@ pub const FEATURE_NUM_FIELDS: &[(&str, &[(&str, FieldKind)])] = &[
             ("leadIn", Length),
         ],
     ),
+    ("textOnFace", &[("height", Length), ("depth", Length), ("angle", Angle)]),
     (
         "thread",
         &[
