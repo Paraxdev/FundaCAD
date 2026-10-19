@@ -13,5 +13,7 @@ mod inner {
         pub fn sk_cylinder_axis(face: &TopoDS_Shape, out: &mut [f64]) -> Result<bool>;
         pub fn sk_edge_at(edge: &TopoDS_Shape, fraction: f64, out: &mut [f64]) -> Result<()>;
         pub fn sk_glyph_face(data: &[f64]) -> Result<UniquePtr<TopoDS_Shape>>;
+        pub fn sk_surface_at(face: &TopoDS_Shape, query: &[f64], out: &mut [f64]) -> Result<bool>;
+        pub fn sk_glyph_on_face(face: &TopoDS_Shape, data: &[f64], depth: f64) -> Result<UniquePtr<TopoDS_Shape>>;
     }
 }

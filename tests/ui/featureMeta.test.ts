@@ -34,6 +34,7 @@ const DRAWN_BY_APP: Record<FeatureType, "app"> = {
   hole: "app",
   thread: "app",
   separate: "app",
+  textOnFace: "app",
   deleteFace: "app",
   mirror: "app",
   revolve: "app",

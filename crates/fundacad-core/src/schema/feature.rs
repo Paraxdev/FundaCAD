@@ -565,6 +565,26 @@ feature_struct!(
 );
 
 feature_struct!(
+    /// Text laid on a face, wrapped along a round one so the letters keep their
+    /// size. `at` places the anchor as fractions of the face's (u, v) range and
+    /// is preferred over `point`; operation join embosses, cut engraves.
+    TextOnFace {
+        face: Selector,
+        text: String,
+        height: Num,
+        depth: Num,
+        #[serde(default, skip_serializing_if = "Option::is_none")] operation: Option<Operation>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] body: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] font: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] style: Option<super::sketch::TextStyle>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] align: Option<super::sketch::TextAlign>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] angle: Option<Num>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] point: Option<Vec3>,
+        #[serde(default, skip_serializing_if = "Option::is_none")] at: Option<[Num; 2]>,
+    }
+);
+
+feature_struct!(
     /// `features` repeats those features' cuts and joins instead of a body.
     PatternRect {
         count_x: Num,
@@ -704,6 +724,7 @@ tagged_enum! {
         Draft(Draft) = "draft",
         Hole(Hole) = "hole",
         Thread(Thread) = "thread",
+        TextOnFace(TextOnFace) = "textOnFace",
         PatternRect(PatternRect) = "patternRect",
         PatternLinear(PatternLinear) = "patternLinear",
         PatternCircular(PatternCircular) = "patternCircular",
@@ -750,6 +771,7 @@ macro_rules! each_known {
             Feature::Draft($f) => $e,
             Feature::Hole($f) => $e,
             Feature::Thread($f) => $e,
+            Feature::TextOnFace($f) => $e,
             Feature::PatternRect($f) => $e,
             Feature::PatternLinear($f) => $e,
             Feature::PatternCircular($f) => $e,

@@ -511,6 +511,14 @@ export type CoreFeature =
       starts?: Num; hand?: "right" | "left"; axis?: Vec3; offset?: Num; length?: Num;
       clearance?: Num; operation?: "cut" | "join"; body?: string; spec?: Record<string, unknown>; name?: string;
     }
+  // Text laid on a face and wrapped onto a round one at its true size, found
+  // again at every build. join embosses, cut engraves; `at` is the anchor as
+  // fractions of the face's (u, v) range and is preferred over `point`.
+  | {
+      id: string; type: "textOnFace"; face: Selector; text: string; height: Num; depth: Num;
+      operation?: "join" | "cut"; body?: string; font?: string; style?: "regular" | "bold" | "italic" | "bolditalic"; align?: "left" | "center" | "right";
+      angle?: Num; point?: Vec3; at?: [Num, Num]; name?: string;
+    }
   // Patterns union their copies. `bodies` absent means the active body.
   // `features` repeats those features' cuts and joins instead of a body
   // (mutually exclusive with `bodies`): each copy of the feature's tool is
@@ -587,7 +595,7 @@ const CORE_FEATURE_TYPES = {
   loft: true, mechanism: true, mirror: true, move: true, offsetFace: true, patternCircular: true,
   patternLinear: true, patternRect: true, "press-pull": true, removeBody: true, revolve: true, scale: true, separate: true,
   shell: true, simplifyMesh: true, sketch: true, sphere: true, split: true, sweep: true,
-  thicken: true, thread: true, torus: true,
+  textOnFace: true, thicken: true, thread: true, torus: true,
 } as const satisfies Record<FeatureType, true>;
 
 export function isCoreFeatureType(type: string): type is FeatureType {

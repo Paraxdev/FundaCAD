@@ -496,6 +496,47 @@
     },
     "note": "An end of the face with no material beyond it lets the thread run out past it; an end against a shoulder or a blind bottom stops it at the face. A 60 degree external groove is 17H/24 deep (H = 0.866 pitch) with a pitch/8 crest, an internal one cut from the tap drill is 5H/8 deep; trapezoidal Tr is pitch/2 + ac deep with 15 degree flanks."
   },
+  "textOnFace": {
+   "summary": "Text laid directly on a face of a body, embossed (join) or engraved (cut). On a cylinder or a cone the letters wrap around the surface at their true size instead of being projected onto it. The face is found again at every build, so the text follows it through upstream edits.",
+   "fields": {
+    "face": "Selector naming ONE face, flat, cylindrical or conical: {\"kind\":\"face\", \"by\":\"nearest\", \"point\":[x,y,z], \"body\":\"body1\"} with the point on the face",
+    "text": "the text, one line",
+    "height": "Num, letter size in mm (the font's em height)",
+    "depth": "Num, mm the letters stand out of (join) or sink into (cut) the face",
+    "operation": "\"join\" (default, emboss) or \"cut\" (engrave)",
+    "point": "optional [x,y,z] on the face where the text is anchored; the text is centred on it vertically",
+    "at": "optional [fu, fv], the anchor as fractions 0 to 1 of the face's (u, v) range; preferred over `point` when both are set; neither = the middle of the face",
+    "align": "\"center\" (default), \"left\" or \"right\" of the anchor",
+    "angle": "Num, degrees the text turns about the anchor, counter-clockwise seen from outside; on a cylinder 0 runs the text around it, 90 along its axis",
+    "font": "optional font family, as the sketch text tool lists them; absent = the default font",
+    "style": "\"regular\" (default), \"bold\", \"italic\" or \"bolditalic\"",
+    "body": "optional body id, otherwise the face selector's body"
+   },
+   "example": {
+    "id": "txt1",
+    "type": "textOnFace",
+    "face": {
+     "kind": "face",
+     "by": "nearest",
+     "point": [
+      20,
+      0,
+      0
+     ],
+     "body": "body1"
+    },
+    "point": [
+     20,
+     0,
+     0
+    ],
+    "text": "FUNDA",
+    "height": 8,
+    "depth": 1,
+    "operation": "join"
+   },
+   "notes": "Text reads left to right seen from outside the body, upright along +Z (along +Y on a face that looks up or down). A sphere or a free-form face is refused. Text longer than the way round a cylinder is refused, so is an engraving deeper than the radius. Text that runs past the face's edges still builds, with a warning."
+  },
   "thicken": {
    "summary": "Give a surface (or a set of faces) a thickness.",
    "fields": {
