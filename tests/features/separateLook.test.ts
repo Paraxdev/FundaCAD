@@ -27,7 +27,7 @@ function rig() {
     addFeature: vi.fn(),
     onBuild: (fn: (s: unknown) => void) => { listener = fn; return () => { listener = null; }; },
     bodyName: (id: string) => real.bodyName(id),
-    inheritBodyLook: (a: string, b: string, n?: string) => real.inheritBodyLook(a, b, n),
+    inheritBodyLook: (from: string, pieces: Parameters<DocumentStore["inheritBodyLook"]>[1]) => real.inheritBodyLook(from, pieces),
   };
   const deps = {
     store,
@@ -55,6 +55,51 @@ describe("Separate keeps the look", () => {
       expect(r.real.bodyName(id)).toBe(name);
       expect(r.real.isBodyVisible(id)).toBe(false);
     }
+  });
+
+  it("is one undo step: undoing it takes the look off the pieces again", async () => {
+    const r = rig();
+    await r.starters.startSeparate();
+    r.fire({ building: true, errorFeatureId: null, result: { bodies: r.bodies } });
+    r.fire({
+      building: false,
+      errorFeatureId: null,
+      result: { bodies: [...r.bodies, { id: "body2", name: "Body1 2" }] },
+    });
+    expect(r.real.bodyColorSlot("body2")).toBe(3);
+    r.real.undo();
+    expect(r.real.bodyColorSlot("body2")).toBeUndefined();
+    expect(r.real.bodyMaterialId("body2")).toBeUndefined();
+    expect(r.real.bodyName("body2")).toBeUndefined();
+    expect(r.real.bodyColorSlot("body1")).toBe(3);
+    r.real.redo();
+    expect(r.real.bodyColorSlot("body2")).toBe(3);
+  });
+
+  it("moves per face materials to the piece their faces went to", async () => {
+    const r = rig();
+    r.real.setFacesMaterial([{ body: "body1", face: 2 }, { body: "body1", face: 7 }], "m-steel");
+    await r.starters.startSeparate();
+    r.fire({
+      building: false,
+      errorFeatureId: null,
+      result: {
+        bodies: [...r.bodies, { id: "body2", name: "Body1 2" }],
+        diagnostics: [{
+          feature_id: "f9", kind: "separateFaces", source: "body1",
+          pieces: [{ body: "body1", from: 6, count: 6 }, { body: "body2", from: 0, count: 6 }],
+        }],
+      },
+    });
+    expect(r.real.faceMaterialId("body2", 2)).toBe("m-steel");
+    expect(r.real.faceMaterialId("body1", 1)).toBe("m-steel");
+    expect(r.real.faceMaterialId("body1", 2)).toBeUndefined();
+    expect(r.real.faceMaterialId("body1", 7)).toBeUndefined();
+    r.real.undo();
+    expect(r.real.faceMaterialId("body2", 2)).toBeUndefined();
+    expect(r.real.faceMaterialId("body1", 2)).toBe("m-steel");
+    expect(r.real.faceMaterialId("body1", 7)).toBe("m-steel");
+    expect(r.real.faceMaterialId("body1", 1)).toBeUndefined();
   });
 
   it("stops waiting when the feature fails", async () => {

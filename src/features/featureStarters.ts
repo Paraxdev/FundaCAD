@@ -767,7 +767,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
 
   // The engine names the pieces "Name 2", "Name 3", and the look of a body (palette
   // slot, material, folder, visibility, a rename) lives in the app, so each new piece
-  // is matched to its source by that name and takes the look once the build lands.
+  // is matched to its source by the engine's face note (its name as a fallback) and takes
+  // the look, and the per face materials of its faces, once the build lands.
   function carryLookToSeparated(
     featureId: string,
     before: Map<string, string>,
@@ -787,13 +788,24 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       const made = (s.result?.bodies ?? []).filter((b) => !before.has(b.id));
       if (!made.length) return;
       done();
-      for (const piece of made) {
-        const from = bySize.find((src) => numberAfter(piece.name, src) !== null)
-          ?? (sources.length === 1 ? sources[0] : undefined);
-        if (!from) continue;
-        const shown = store.bodyName(from.id);
-        const n = numberAfter(piece.name, from);
-        store.inheritBodyLook(from.id, piece.id, shown && n ? `${shown} ${n}` : undefined);
+      const notes = (s.result?.diagnostics ?? []).filter((d) => d.feature_id === featureId && d.kind === "separateFaces");
+      const spans = (src: { id: string }) =>
+        new Map((notes.find((d) => d.source === src.id)?.pieces ?? []).map((p) => [p.body, p]));
+      const owner = (piece: { id: string; name: string }) =>
+        sources.find((src) => spans(src).has(piece.id))
+        ?? bySize.find((src) => numberAfter(piece.name, src) !== null)
+        ?? (sources.length === 1 ? sources[0] : undefined);
+      for (const src of sources) {
+        const run = spans(src);
+        const pieces = [
+          ...(run.has(src.id) ? [{ id: src.id, faces: run.get(src.id) }] : []),
+          ...made.filter((piece) => owner(piece) === src).map((piece) => {
+            const shown = store.bodyName(src.id);
+            const n = numberAfter(piece.name, src);
+            return { id: piece.id, name: shown && n ? `${shown} ${n}` : undefined, faces: run.get(piece.id) };
+          }),
+        ];
+        if (pieces.length) store.inheritBodyLook(src.id, pieces);
       }
     });
   }

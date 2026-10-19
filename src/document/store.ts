@@ -1493,21 +1493,62 @@ export class DocumentStore {
   setBodyName(id: string, name: string) {
     this.writeOverlayBatch(this.bodyNames, [id], name.trim() || null);
   }
-  /** Give a body the app-side look of another: palette slot, material, folder,
-   *  visibility, and `name` when the source carries a display-name override.
-   *  Not an undo step of its own, the feature that made `to` owns the undo. */
-  inheritBodyLook(from: string, to: string, name?: string) {
-    const slot = this.bodyColors.get(from);
-    if (slot !== undefined) this.bodyColors.set(to, slot);
-    const material = this.bodyMaterial.get(from);
-    if (material !== undefined) this.bodyMaterial.set(to, material);
-    const element = this.bodyElement.get(from);
-    if (element !== undefined) this.bodyElement.set(to, element);
-    const visible = this.bodyVis.get(from);
-    if (visible !== undefined) this.bodyVis.set(to, visible);
-    if (name && this.bodyNames.get(from) !== undefined) this.bodyNames.set(to, name);
+  /** Give the pieces of a separated body the app-side look of it: palette slot,
+   *  material, folder, visibility, `name` when the source carries a display-name
+   *  override, and the per face materials of the faces each piece took (`faces`
+   *  is the run of the source's face list, a piece that kept the source's id
+   *  only has its faces moved). One undo step, so a body that later reuses a
+   *  piece's id does not find its look left behind. */
+  inheritBodyLook(
+    from: string,
+    pieces: { id: string; name?: string | undefined; faces?: { from: number; count: number } | undefined }[],
+  ) {
+    const was = new Map<Overlay<any>, Map<string, unknown>>();
+    const write = (overlay: Overlay<any>, key: string, value: unknown) => {
+      let seen = was.get(overlay);
+      if (!seen) was.set(overlay, (seen = new Map()));
+      if (!seen.has(key)) seen.set(key, overlay.get(key));
+      if (value === undefined) overlay.delete(key); else overlay.set(key, value);
+    };
+    const faces = new Map<number, string>();
+    for (const [key, material] of this.faceMaterial.entries()) {
+      const parsed = parseFaceKey(key);
+      if (parsed?.body === from) faces.set(parsed.face, material);
+    }
+    if (faces.size && pieces.some((p) => p.faces)) {
+      for (const face of faces.keys()) write(this.faceMaterial, faceKey(from, face), undefined);
+    }
+    for (const piece of pieces) {
+      if (piece.id !== from) {
+        write(this.bodyColors, piece.id, this.bodyColors.get(from));
+        write(this.bodyMaterial, piece.id, this.bodyMaterial.get(from));
+        write(this.bodyElement, piece.id, this.bodyElement.get(from));
+        write(this.bodyVis, piece.id, this.bodyVis.get(from));
+        const named = piece.name && this.bodyNames.get(from) !== undefined;
+        if (named) write(this.bodyNames, piece.id, piece.name);
+      }
+      const { faces: run } = piece;
+      if (!run) continue;
+      for (let i = 0; i < run.count; i++) {
+        const material = faces.get(run.from + i);
+        if (material !== undefined) write(this.faceMaterial, faceKey(piece.id, i), material);
+      }
+    }
+    const changed = [...was].flatMap(([overlay, keys]) =>
+      [...keys].filter(([key, prior]) => overlay.get(key) !== prior).map(([key, prior]) => ({ overlay, key, prior, value: overlay.get(key) })),
+    );
+    if (!changed.length) return;
+    const apply = (pick: (c: (typeof changed)[number]) => unknown) => {
+      for (const c of changed) {
+        const value = pick(c);
+        if (value === undefined) c.overlay.delete(c.key); else c.overlay.set(c.key, value);
+      }
+      this.markDirty();
+      this.emitBuild();
+    };
     this.markDirty();
     this.emitBuild();
+    this.pushOverlayUndo({ undo: () => apply((c) => c.prior), redo: () => apply((c) => c.value) });
   }
   // --- the Stress panel's study ----------------------------------------------
   // Saved with the file and off the undo stack, like the elements below: the

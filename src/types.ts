@@ -815,7 +815,7 @@ export interface ResolveDiag {
   feature_id?: string;
   // edgeOpFailed: `failed` names the edges to paint red. sealedVoid: a cut closed a
   // cavity inside the body (legal, so not an error; the other fields are neutral).
-  kind: "edge" | "face" | "boolean" | "edgeOpFailed" | "sealedVoid";
+  kind: "edge" | "face" | "boolean" | "edgeOpFailed" | "sealedVoid" | "separateFaces";
   resolved: number; // how many entities matched (0 for a skipped boolean)
   confidence: number; // 0..1, margin to the runner-up candidate (1 = lone clear pick)
   lossy: boolean; // a marginal / drift-path match was taken (or a feature was skipped)
@@ -824,6 +824,10 @@ export interface ResolveDiag {
   // For "ambiguous nearest pick": the selector's own point, naming which one to re-pick.
   at?: [number, number, number];
   candidates?: string[];
+  // separateFaces: the body a Separate took apart and, per piece, the run of that body's
+  // face list (as the build showed it) that the piece's own faces are.
+  source?: string;
+  pieces?: { body: string; from: number; count: number }[];
 }
 
 // Mesh wire arrays arrive either as plain JSON number arrays (text replies,
