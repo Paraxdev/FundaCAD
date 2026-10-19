@@ -257,7 +257,8 @@ export function createActions(e: Engine): (action: string) => void {
         e.starters.startScale();
         break;
       case "move":
-        e.starters.startMove();
+        if (e.tools.move.active && e.tools.move.ambient) e.tools.move.claim();
+        else e.starters.startMove();
         break;
       case "measure":
         if (!e.hasBody()) {

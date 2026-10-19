@@ -415,7 +415,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   e.viewport.activeWork = () => {
     work.sketch = e.sketch.active;
     work.planes = e.viewport.constructionOnTop;
-    work.tool = !work.sketch && e.toolBusy();
+    work.tool = !work.sketch && (e.toolOwnsScreen() || (e.tools.move.active && !e.tools.move.ambient));
     return work;
   };
   setLeftButtonOwner(() => e.altLeftOwned());

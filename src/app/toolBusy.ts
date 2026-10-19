@@ -71,6 +71,7 @@ export function createToolBusy(
       e.viewport.clickThrough(x, y, additive);
     };
     e.starters.startMove();
+    e.tools.move.markAmbient();
   };
   let stopRestore: (() => void) | null = null;
   return {

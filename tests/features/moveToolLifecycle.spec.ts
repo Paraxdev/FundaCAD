@@ -44,9 +44,22 @@ function fakeViewport() {
       test(vp.rayFrom(x, y)) || null,
     screenToPlane: () => null,
     pointAt: () => null,
+    handlesOn: true,
+    overlayOn: (kind: string) => kind !== "handles" || vp.handlesOn,
+    watchOverlays: (fn: () => void) => {
+      watchers.add(fn);
+      return () => watchers.delete(fn);
+    },
   };
-  return { vp: vp as unknown as Viewport, scene, canvas };
+  const watchers = new Set<() => void>();
+  const setHandles = (on: boolean) => {
+    vp.handlesOn = on;
+    for (const fn of [...watchers]) fn();
+  };
+  return { vp: vp as unknown as Viewport, scene, canvas, setHandles, watchers };
 }
+
+const valueRowHidden = () => (document.querySelector(".dim-input") as HTMLElement | null)?.style.visibility === "hidden";
 
 function fakeStore() {
   const listeners = new Set<(s: { building: boolean }) => void>();
@@ -313,5 +326,85 @@ describe("a typed move", () => {
     expect(a.commits).toBe(0);
     expect(tool.active).toBe(true);
     expect(problem()).toMatch(/Click an arrow/);
+  });
+});
+
+describe("move gizmo raised by a body selection", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    frames = [];
+    vi.stubGlobal("requestAnimationFrame", (fn: () => void) => { frames.push(fn); return frames.length; });
+    vi.stubGlobal("cancelAnimationFrame", () => {});
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    document.body.innerHTML = "";
+  });
+
+  it("hides its value row while the handles overlay is off, and shows it again", () => {
+    const { vp, setHandles } = fakeViewport();
+    const tool = new MoveTool(vp, fakeStore().store);
+    setHandles(false);
+    tool.startTarget(probe([0, 0, 0]).target, () => {});
+    expect(valueRowHidden()).toBe(false);
+    tool.markAmbient();
+    expect(tool.ambient).toBe(true);
+    expect(valueRowHidden()).toBe(true);
+    setHandles(true);
+    expect(valueRowHidden()).toBe(false);
+  });
+
+  it("a Move started explicitly is not ambient, so Clean view keeps its row", () => {
+    const { vp, setHandles } = fakeViewport();
+    const tool = new MoveTool(vp, fakeStore().store);
+    setHandles(false);
+    tool.startTarget(probe([0, 0, 0]).target, () => {});
+    tool.markAmbient();
+    tool.startTarget(probe([5, 0, 0]).target, () => {});
+    expect(tool.ambient).toBe(false);
+    expect(valueRowHidden()).toBe(false);
+  });
+
+  it("claiming the raised gizmo shows its row again without a new session", () => {
+    const { vp, setHandles } = fakeViewport();
+    const tool = new MoveTool(vp, fakeStore().store);
+    const a = probe([0, 0, 0]);
+    setHandles(false);
+    tool.startTarget(a.target, () => {});
+    tool.markAmbient();
+    tool.claim();
+    expect(tool.ambient).toBe(false);
+    expect(valueRowHidden()).toBe(false);
+    expect(a.began).toBe(1);
+  });
+
+  it("stays ambient over the re-open after a drag", () => {
+    const { vp, scene, canvas } = fakeViewport();
+    const { store, build } = fakeStore();
+    const tool = new MoveTool(vp, store);
+    tool.startTarget(probe([0, 0, 0], { rebuild: true }).target, () => {});
+    tool.markAmbient();
+    dragZ(canvas, scene);
+    build();
+    expect(tool.active).toBe(true);
+    expect(tool.ambient).toBe(true);
+  });
+
+  it("stops listening and clears the hidden row once it closes", () => {
+    const { vp, setHandles, watchers } = fakeViewport();
+    const tool = new MoveTool(vp, fakeStore().store);
+    setHandles(false);
+    tool.startTarget(probe([0, 0, 0]).target, () => {});
+    tool.markAmbient();
+    tool.cancel();
+    expect(watchers.size).toBe(0);
+    expect(valueRowHidden()).toBe(false);
+  });
+
+  it("marking does nothing with no session up", () => {
+    const { vp } = fakeViewport();
+    const tool = new MoveTool(vp, fakeStore().store);
+    tool.markAmbient();
+    expect(tool.ambient).toBe(false);
   });
 });

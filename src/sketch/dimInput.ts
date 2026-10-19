@@ -278,6 +278,11 @@ export class DimInput {
     this.applyHitTesting();
   }
 
+  /** Outlives show() and hide(), for a box whose owner is drawn hidden. */
+  setHidden(hidden: boolean) {
+    this.root.style.visibility = hidden ? "hidden" : "";
+  }
+
   show(
     defs: DimFieldDef[],
     onCommit: (values: Record<string, number>) => void,

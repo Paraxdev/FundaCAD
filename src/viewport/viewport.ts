@@ -4154,6 +4154,11 @@ export class Viewport {
     return (this.overlayMask & overlayBit(kind)) !== 0;
   }
 
+  /** The user's switch for a kind, without what a running tool adds. */
+  overlayOn(kind: OverlayKind): boolean {
+    return overlayShown(this.overlays, kind);
+  }
+
   private syncOverlayMask() {
     const mask = drawMask(this.overlays, this.activeWork());
     const camera = this.rig.active;
