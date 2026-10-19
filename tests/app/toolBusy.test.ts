@@ -37,7 +37,7 @@ function fakeEngine(over: {
     tools: {
       extrude: { active: over.extrude ?? false },
       move: { active: over.move ?? false, cancel: () => { cancelled++; } },
-      edgeFeature: off, pressPull: off, faceOffset: off, draft: off, thread: off, hole: off,
+      edgeFeature: off, pressPull: off, faceOffset: off, draft: off, thread: off, textOnFace: off, hole: off,
       loft: off, planeOffset: off, datumPose: { active: over.datumPose ?? false }, lightAim: off, pattern: off, measure: off, targetEdit: off,
       revolvePitch: off, joint: off, mechanism: off, section: { picking: false },
     },

@@ -6,7 +6,7 @@ import type { Engine, EngineTools } from "./engine";
  *  Move is apart because a body selection raises it by itself. */
 function modalTools(t: EngineTools) {
   return [
-    t.extrude, t.edgeFeature, t.pressPull, t.faceOffset, t.draft, t.thread, t.hole, t.loft,
+    t.extrude, t.edgeFeature, t.pressPull, t.faceOffset, t.draft, t.thread, t.textOnFace, t.hole, t.loft,
     t.planeOffset, t.datumPose, t.lightAim, t.pattern, t.targetEdit, t.revolvePitch, t.joint, t.mechanism,
   ];
 }

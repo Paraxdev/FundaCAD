@@ -57,7 +57,7 @@ export function createActions(e: Engine): (action: string) => void {
   // a round face) are the same shape of command as the two above: pick a face,
   // size the result on the model, commit. They differ only in which tool runs,
   // so they share the body/busy guard rather than repeating it.
-  function startFaceTool(which: "draft" | "thread" | "hole") {
+  function startFaceTool(which: "draft" | "thread" | "hole" | "textOnFace") {
     if (e.toolBusy()) return;
     if (!e.hasBody()) {
       e.setStatus("Create or import a body first", "");
@@ -243,6 +243,9 @@ export function createActions(e: Engine): (action: string) => void {
         break;
       case "thread":
         startFaceTool("thread");
+        break;
+      case "text-on-face":
+        startFaceTool("textOnFace");
         break;
       case "pattern-linear":
         e.starters.startPattern("linear");

@@ -81,6 +81,7 @@ export type ToolId =
   | "offset-face"
   | "thicken"
   | "thread"
+  | "text-on-face"
   | "hole";
 
 export interface ToolCapability {
@@ -165,6 +166,7 @@ export const TOOL_CAPABILITIES: Record<ToolId, ToolCapability> = {
   // tool's refusal would be describing the tool, not the selection. The tool
   // says so itself when the face it is handed is flat.
   thread: { label: "Thread", consumes: ["face"], source: "pick" },
+  "text-on-face": { label: "Text on Face", consumes: ["face"], source: "pick" },
 };
 
 /** Every tool id THE APP ITSELF has, in inventory order. */

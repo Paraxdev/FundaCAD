@@ -104,6 +104,7 @@ const TOOL_ICON: Record<ToolId, string> = {
   "offset-face": "offsetFace",
   thicken: "thicken",
   thread: "thread",
+  "text-on-face": "text",
   hole: "hole",
 };
 

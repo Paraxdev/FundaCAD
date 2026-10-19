@@ -121,6 +121,18 @@ export type FaceAxisReply = (
   | { reason: string }
 ) & { resize?: FaceResize };
 
+/** The `faceAnchor` op: a picked point in the terms a `textOnFace` stores. */
+export type FaceAnchorReply =
+  | {
+      body: string;
+      surface: "plane" | "cylinder" | "cone" | "sphere" | "other";
+      /** fractions of the face's (u, v) range */
+      at: [number, number];
+      normal: Vec3;
+      fp?: Record<string, unknown>;
+    }
+  | { reason: string };
+
 /** How a cylinder, cone, sphere or torus face resizes (docs/PROTOCOL.md, faceAxis). */
 export interface FaceResize {
   kind: "cylinder" | "cone" | "sphere" | "torus";
@@ -356,6 +368,9 @@ export interface GeometryBackend {
    *  or why it has none. Null when the engine could not be asked. Optional, a
    *  test backend may not answer it. */
   faceAxis?(doc: CadDocument, face: Selector, body: string | null): Promise<FaceAxisReply | null>;
+  /** Where `point` sits on `face`, as a fingerprint and (u, v) fractions.
+   *  Optional, a test backend may not answer it. */
+  faceAnchor?(doc: CadDocument, face: Selector, body: string | null, point: Vec3): Promise<FaceAnchorReply | null>;
   /** Linear static stress in one body (`body` is its id or name). `onStarted`
    *  hands back the request id for a Cancel through `cancel(id)`. Optional, a
    *  test backend may have no solver. */
@@ -1412,6 +1427,11 @@ export class Geometry implements GeometryBackend {
 
   async faceAxis(doc: CadDocument, face: Selector, body: string | null): Promise<FaceAxisReply | null> {
     const msg = await this.call<FaceAxisReply>("faceAxis", { document: doc, face, ...(body ? { body } : {}) });
+    return msg.ok ? msg.result : null;
+  }
+
+  async faceAnchor(doc: CadDocument, face: Selector, body: string | null, point: Vec3): Promise<FaceAnchorReply | null> {
+    const msg = await this.call<FaceAnchorReply>("faceAnchor", { document: doc, face, point, ...(body ? { body } : {}) });
     return msg.ok ? msg.result : null;
   }
 
