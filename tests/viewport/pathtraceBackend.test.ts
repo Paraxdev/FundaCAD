@@ -11,10 +11,11 @@ describe("tracer backend choice", () => {
     expect(chooseTracer("auto", { webgpu: false, native: rayquery })).toBe("native");
   });
 
-  it("is native on Auto beside WebGPU only on the ray query path with its denoise", () => {
-    expect(chooseTracer("auto", { webgpu: true, native: rayquery })).toBe("native");
+  it("is native on Auto beside WebGPU wherever ray queries work, with or without Open Image Denoise", () => {
+    expect(chooseTracer("auto", { webgpu: true, native: { ...rayquery, denoiser: "oidn" } })).toBe("native");
+    expect(chooseTracer("auto", { webgpu: true, native: { ...rayquery, denoiser: "filter" } })).toBe("native");
+    expect(chooseTracer("auto", { webgpu: true, native: { ...rayquery, denoise: false } })).toBe("native");
     expect(chooseTracer("auto", { webgpu: true, native: software })).toBe("webgpu");
-    expect(chooseTracer("auto", { webgpu: true, native: { ...rayquery, denoise: false } })).toBe("webgpu");
     expect(chooseTracer("auto", { webgpu: true, native: none })).toBe("webgpu");
   });
 

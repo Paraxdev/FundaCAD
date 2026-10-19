@@ -1,8 +1,9 @@
 // Which tracer Path traced starts on. Auto prefers the native tracer where the
-// web view has no WebGPU (Linux, macOS 14/15), and beside WebGPU only on the
-// ray query path with its own denoise: the N2b bench measured that path 14x to
-// 40x WebGPU's samples per second, while the software path is about WebGPU's
-// speed, so there WebGPU and its browser denoise are preferred.
+// web view has no WebGPU (Linux, macOS 14/15), and beside WebGPU wherever it
+// runs on ray queries: the N2b bench measured that path 14x to 40x WebGPU's
+// samples per second, and its cap is always cleaned, by Open Image Denoise
+// when downloaded, else by the edge aware filter. The software path is about
+// WebGPU's speed, so there WebGPU and its browser denoise are preferred.
 
 import type { TracerPref } from "../../ui/renderPrefs";
 import type { TracerBackend } from "./backend";
@@ -15,6 +16,8 @@ export interface NativeProbe {
   path?: "rayquery" | "software" | undefined;
   adapter?: string | undefined;
   denoise?: boolean | undefined;
+  /** What cleans the cap; absent from an app older than the runtime load. */
+  denoiser?: "oidn" | "filter" | undefined;
   reason?: string | undefined;
 }
 
@@ -29,7 +32,7 @@ export interface TracerEnv {
 export function chooseTracer(pref: TracerPref, env: TracerEnv): TracerKind | null {
   const usable = (k: TracerKind) => (k === "webgpu" ? env.webgpu : env.native.available);
   const nativeFirst = pref === "native"
-    || (pref === "auto" && (!env.webgpu || (env.native.path === "rayquery" && env.native.denoise === true)));
+    || (pref === "auto" && (!env.webgpu || env.native.path === "rayquery"));
   const order: TracerKind[] = nativeFirst ? ["native", "webgpu"] : ["webgpu", "native"];
   const left = order.filter(usable);
   if (left.every((k) => env.faulted?.has(k)) && left.length > 1) return null;
