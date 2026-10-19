@@ -196,6 +196,36 @@ fn a_file_past_the_scan_limit_is_refused_naming_it() {
 }
 
 #[test]
+fn a_join_or_cut_never_takes_a_scan() {
+    let (path, ntri) = dense_stl();
+    let reply = import_file(path, "stl").unwrap();
+    let post = |extra: Value| {
+        let mut f = json!({"id": "post", "type": "box", "length": 4, "width": 4, "height": 60, "operation": "join"});
+        f.as_object_mut().unwrap().extend(extra.as_object().unwrap().clone());
+        f
+    };
+
+    let r = build(vec![scan_feature(&reply), post(json!({}))]);
+    assert!(r.errors.is_empty(), "{:?}", r.errors);
+    assert_eq!(r.bodies.len(), 2, "the post is its own body, the scan is not fused");
+    let bodies = payloads(&r);
+    let scan = bodies.iter().find(|b| b.fields.get("scan") == Some(&json!(true))).expect("the scan");
+    assert_eq!(scan.indices.len() / 3, *ntri);
+
+    let r = build(vec![scan_feature(&reply), post(json!({"targets": ["body1"]}))]);
+    let err = r.errors.iter().find(|e| e.wire()["feature_id"] == "post").expect("a named scan target fails");
+    assert!(err.wire().to_string().contains("reference scan"), "{:?}", err.wire());
+
+    let r = build(vec![
+        scan_feature(&reply),
+        json!({"id": "b", "type": "box", "length": 4, "width": 4, "height": 60}),
+        json!({"id": "cut", "type": "boolean", "operation": "subtract", "target": "body1", "tools": ["body2"]}),
+    ]);
+    let err = r.errors.iter().find(|e| e.wire()["feature_id"] == "cut").expect("a scan target fails");
+    assert!(err.wire().to_string().contains("reference scan"), "{:?}", err.wire());
+}
+
+#[test]
 fn an_import_without_the_flag_keeps_its_old_serialisation() {
     let f: fundacad_core::schema::Import =
         serde_json::from_value(json!({"id": "f1", "type": "import", "name": "part"})).unwrap();
