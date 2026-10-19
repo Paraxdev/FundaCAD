@@ -130,6 +130,7 @@ const PREFIXES: &[(&str, &str)] = &[
     ("patternLinear", "pln"),
     ("split", "spl"),
     ("separate", "sep"),
+    ("textOnFace", "txt"),
     ("hole", "ho"),
     ("mechanism", "mech"),
 ];
