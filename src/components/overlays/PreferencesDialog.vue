@@ -24,6 +24,7 @@ import { useModalGate } from "../../composables/useModalGate";
 import ModalFrame from "./ModalFrame.vue";
 import Select from "../ui/Select.vue";
 import McpSection from "./McpSection.vue";
+import DenoiserRow from "../shell/DenoiserRow.vue";
 import PluginsSection from "./PluginsSection.vue";
 import {
   addCustomTheme,
@@ -411,6 +412,7 @@ function onClassicCamera(ev: Event) {
                 viewport's web view; Auto picks the faster one this computer has. If the
                 one picked is missing, the other is used.
               </p>
+              <DenoiserRow hint-class="pref-hint" button-class="btn" />
             </div>
             <div class="pref-card">
               <label class="pref-head">
