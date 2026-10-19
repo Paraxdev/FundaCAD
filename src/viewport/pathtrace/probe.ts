@@ -89,5 +89,5 @@ export function probeNative(
 export function describeNative(p: NativeProbe | null): string {
   if (!p) return "native tracer: checking";
   if (!p.available) return `native tracer: none (${p.reason ?? "no adapter"})`;
-  return `native tracer: ${p.path === "rayquery" ? "ray query" : "software"}, ${p.adapter ?? "unknown"}${p.denoise ? ", denoise" : ""}`;
+  return `native tracer: ${p.path === "rayquery" ? "ray query" : "software"}, ${p.adapter ?? "unknown"}${p.denoiser === "oidn" ? ", Open Image Denoise" : p.denoise ? ", edge aware filter" : ""}`;
 }
