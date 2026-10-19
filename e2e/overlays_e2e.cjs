@@ -162,12 +162,19 @@ const KINDS = ["edges", "highlight", "grid", "origin", "sketches", "sketchLabels
     clean.pick = await edgePick();
     clean.select = await clickSelect();
 
-    // A running tool keeps its gizmo in Clean view.
-    await page.evaluate(async () => {
+    // The gizmo a body selection raises by itself hides in Clean view; Move
+    // asked for over it, like any running tool, keeps its gizmo.
+    const ambient = await page.evaluate(async () => {
       const vp = window.viewport, cam = vp.rig.active;
       const rect = vp.domElement.getBoundingClientRect();
       const m = new cam.position.constructor(0, 0, 0).project(cam);
       vp.selectBodyAt(rect.left + (m.x + 1) / 2 * rect.width, rect.top + (1 - m.y) / 2 * rect.height, false);
+      await new Promise((r) => setTimeout(r, 500));
+      // Every tool keeps its own value box; the Move one is the box on display.
+      const row = [...document.querySelectorAll(".dim-input")].find((el) => el.style.display === "flex");
+      return { handlesDrawn: vp.overlayDrawn("handles"), rowHidden: !!row && row.style.visibility === "hidden" };
+    });
+    await page.evaluate(async () => {
       window.__fundacad.handleAction("move");
       await new Promise((r) => setTimeout(r, 500));
     });
@@ -218,6 +225,7 @@ const KINDS = ["edges", "highlight", "grid", "origin", "sketches", "sketchLabels
     check("clean view draws only the model", clean.frame.mask === 1 && clean.frame.calls < base.frame.calls && clean.frame.gridUpdates === 0 && clean.frame.triadUpdates === 0,
       clean.frame);
     check("clean view still picks and selects", !!clean.pick.picked && clean.select.bodies.length + clean.select.faces.length > 0, { pick: clean.pick, select: clean.select });
+    check("clean view hides the gizmo a body selection raises", ambient.handlesDrawn === false && ambient.rowHidden, ambient);
     check("clean view shows a running tool's gizmo", tool.handlesDrawn === true && tool.frame.calls > clean.frame.calls, { clean: clean.frame.calls, tool: tool.frame.calls });
     check("clean view plane pick draws and picks the planes", planes.drawn && !!planes.plane && !afterPick, { ...planes, afterPick });
     check("clean view off brings the set back", back.frame.calls === base.frame.calls && back.frame.mask === base.frame.mask, { base: base.frame, back: back.frame });

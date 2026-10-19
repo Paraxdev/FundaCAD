@@ -118,6 +118,8 @@ describe("glass refracts only bodies", () => {
         probe: () => null,
         screenToPlane: () => null,
         pointAt: () => null,
+        overlayOn: () => true,
+        watchOverlays: () => () => {},
       } as unknown as Viewport;
       const store = { onBuild: () => () => {} } as unknown as DocumentStore;
       const c = new THREE.Vector3();

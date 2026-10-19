@@ -190,6 +190,10 @@ export class MoveTool {
   /** Where a plain click that stood the tool down landed, so the caller can let
    *  that same click do its ordinary work, usually picking the next body. */
   onClickThrough: ((x: number, y: number, additive: boolean) => void) | null = null;
+  /** Raised by a body selection rather than started, so it draws only when
+   *  the user's handles overlay is on. Kept over the re-open after a drag. */
+  ambient = false;
+  private unwatchOverlays: (() => void) | null = null;
 
   private readonly gesture: CanvasGesture;
 
@@ -216,7 +220,25 @@ export class MoveTool {
     this.dropPendingReopen();
     if (this.active) this.cancel();
     this.copy = false;
+    this.ambient = false;
     this.open(target, onDone);
+  }
+
+  markAmbient() {
+    if (!this.active) return;
+    this.ambient = true;
+    this.syncHidden();
+  }
+
+  /** Move asked for over the gizmo a selection raised: the same session,
+   *  now shown whatever the overlay switches say. */
+  claim() {
+    this.ambient = false;
+    this.syncHidden();
+  }
+
+  private syncHidden() {
+    this.dim.setHidden(this.active && this.ambient && !this.viewport.overlayOn("handles"));
   }
 
   private open(target: MoveTarget, onDone: (id: string | null) => void) {
@@ -259,6 +281,8 @@ export class MoveTool {
           }
         : undefined,
     );
+    this.unwatchOverlays = this.viewport.watchOverlays(() => this.syncHidden());
+    this.syncHidden();
     const s = this.viewport.projectToScreen(this.anchor);
     this.dim.position(s.x + FIELDS_OFFSET_PX, s.y);
     this.dim.updateFromCursor({ move: 0, turn: 0, size: 1 });
@@ -945,7 +969,10 @@ export class MoveTool {
     this.target = null;
     this.gesture.detach();
     el.style.cursor = "default";
+    this.unwatchOverlays?.();
+    this.unwatchOverlays = null;
     this.dim.hide();
+    this.dim.setHidden(false);
     if (this.gizmo) {
       this.viewport.removeFromScene(this.gizmo);
       for (const a of this.arrows) {
