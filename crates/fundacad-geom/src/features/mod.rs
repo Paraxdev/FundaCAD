@@ -18,7 +18,7 @@ mod loft_sweep;
 pub mod pattern;
 mod primitives;
 mod revolve;
-mod text_on_face;
+pub mod text_on_face;
 mod thread;
 pub mod sketch;
 mod press_pull;

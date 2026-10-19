@@ -351,3 +351,55 @@ pub fn handle(ctx: &mut Ctx, f: &TextOnFace) -> FResult {
 fn data_points<'a>(c: &'a text::Contour, map: &'a Map) -> impl Iterator<Item = DVec2> + 'a {
     std::iter::once(c.start).chain(c.segs.iter().map(seg_end)).map(|p| (map.f)(DVec2::from(p)))
 }
+
+/// The `faceAnchor` op: where `point` sits on `face` of `body`, in the terms a
+/// `textOnFace` stores, `{surface, fp, at, point, normal}`. The app cannot
+/// work out OCCT's (u, v) origin or the exact fingerprint itself.
+pub fn face_anchor_result(req: &serde_json::Map<String, Value>, watch: &dyn crate::builder::Watch) -> fundacad_protocol::JobResult {
+    let (_, built) = match crate::inspect::rebuild_request(req, watch) {
+        Ok(r) => r,
+        Err(e) => return e,
+    };
+    let Some(sel) = req.get("face") else {
+        return fundacad_engine::error_result("'face'");
+    };
+    let point = match req.get("point").and_then(Value::as_array).map(|a| a.iter().filter_map(Value::as_f64).collect::<Vec<_>>()) {
+        Some(p) if p.len() == 3 => [p[0], p[1], p[2]],
+        _ => return fundacad_engine::error_result("'point'"),
+    };
+    let wanted = req.get("body").and_then(Value::as_str).or_else(|| sel.get("body").and_then(Value::as_str));
+    let found = built.bodies.iter().filter(|b| wanted.map_or(true, |id| b.id == id)).find_map(|b| {
+        let face = Resolver::new(None, None).faces(&b.shape, sel).ok()?.into_iter().next()?;
+        Some((b, face))
+    });
+    let reply = match found {
+        None => serde_json::json!({"reason": "the face was not found"}),
+        Some((body, face)) => match Surface::at(&face, [point[0], point[1], point[2], 0.0, 0.0, 0.0]) {
+            None => serde_json::json!({"reason": "the point is not on the face"}),
+            Some(s) => {
+                #[allow(clippy::float_cmp)]
+                let surface = match s.kind {
+                    k if k == PLANE => "plane",
+                    k if k == CYLINDER => "cylinder",
+                    k if k == CONE => "cone",
+                    k if k == 4.0 => "sphere",
+                    _ => "other",
+                };
+                let [umin, umax, vmin, vmax] = s.bounds;
+                let frac = |x: f64, lo: f64, hi: f64| if hi - lo > 1e-12 { ((x - lo) / (hi - lo)).clamp(0.0, 1.0) } else { 0.5 };
+                let n = s.outward();
+                let mut r = serde_json::json!({
+                    "body": body.id,
+                    "surface": surface,
+                    "at": [frac(s.uv.x, umin, umax), frac(s.uv.y, vmin, vmax)],
+                    "normal": [n.x, n.y, n.z],
+                });
+                if let Ok(fp) = crate::select::face_fingerprint(&face) {
+                    r["fp"] = fp;
+                }
+                r
+            }
+        },
+    };
+    fundacad_protocol::JobResult::Json(reply.as_object().cloned().unwrap_or_default())
+}
