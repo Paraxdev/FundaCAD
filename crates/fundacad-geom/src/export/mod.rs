@@ -179,6 +179,7 @@ impl<E: std::fmt::Display> From<E> for Failure {
 }
 
 /// A body as the export sees it.
+#[derive(Clone)]
 pub struct ExportBody<'a> {
     pub id: &'a str,
     pub name: &'a str,
@@ -187,6 +188,7 @@ pub struct ExportBody<'a> {
     pub node_ref: Option<&'a str>,
     /// The plugin mesh pass specs on the body, displaced into its mesh.
     pub mesh_passes: &'a [Value],
+    pub scan: bool,
 }
 
 pub struct Exporter<'a> {
@@ -331,6 +333,31 @@ pub fn export_bodies(
     body: Option<&str>,
     separate: bool,
 ) -> Map<String, Value> {
+    let kept: Vec<ExportBody<'_>>;
+    let mut bodies = bodies;
+    if exporter.format == "step" && bodies.iter().any(|b| b.scan) {
+        let scan_msg = |b: &ExportBody<'_>, tail: &str| {
+            format!("{} ({}) is a reference scan, STEP holds no mesh{tail}", b.name, b.id)
+        };
+        if let Some(b) = body.and_then(|id| bodies.iter().find(|b| b.id == id && b.scan)) {
+            let mut m = Map::new();
+            let msg = scan_msg(b, ". Export it as STL, 3MF or GLB, or make it solid first.");
+            m.insert("error".into(), json!({ "message": msg }));
+            return m;
+        }
+        for b in bodies.iter().filter(|b| b.scan) {
+            let msg = scan_msg(b, ", so it is left out. Export it as STL, 3MF or GLB.");
+            exporter.warnings.push(json!({ "message": msg }));
+        }
+        kept = bodies.iter().filter(|b| !b.scan).cloned().collect();
+        if kept.is_empty() {
+            let mut m = Map::new();
+            let msg = "only reference scans to export, STEP holds no mesh. Export as STL, 3MF or GLB, or make one solid first.";
+            m.insert("error".into(), json!({ "message": msg }));
+            return m;
+        }
+        bodies = &kept;
+    }
     match export_inner(exporter, bodies, path, body, separate) {
         Ok(mut m) => {
             if !exporter.warnings.is_empty() {
@@ -487,6 +514,7 @@ pub fn export_built(
             shape: &b.shape,
             node_ref: b.node_ref.as_deref(),
             mesh_passes: &b.mesh_passes,
+            scan: b.scan,
         })
         .collect();
     if exporter.format == "step" && built.iter().any(|b| !b.mesh_passes.is_empty()) {

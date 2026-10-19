@@ -255,6 +255,36 @@ fn a_face_feature_on_a_scan_is_refused_naming_it() {
 }
 
 #[test]
+fn step_leaves_a_scan_out_and_stl_keeps_its_triangles() {
+    use fundacad_geom::export::export_built;
+    let (path, ntri) = dense_stl();
+    let reply = import_file(path, "stl").unwrap();
+    let doc = json!({"version": 1, "parameters": {}});
+    let r = build(vec![scan_feature(&reply), json!({"id": "b", "type": "box", "length": 4, "width": 4, "height": 4})]);
+    assert!(r.errors.is_empty(), "{:?}", r.errors);
+    let out = |name: &str| scratch().join(name).to_string_lossy().into_owned();
+    let export = |format: &str, file: &str, body: Option<&str>| {
+        let mut req = Map::new();
+        if let Some(b) = body {
+            req.insert("body".into(), json!(b));
+        }
+        export_built(&req, &doc, format, &out(file), &r.bodies, &r.errors)
+    };
+
+    let m = export("step", "both.step", None);
+    assert!(m.get("error").is_none(), "{m:?}");
+    assert!(m["warnings"].to_string().contains("is a reference scan"), "{m:?}");
+
+    let m = export("step", "scan.step", Some("body1"));
+    assert!(m["error"].to_string().contains("is a reference scan"), "{m:?}");
+
+    let m = export("stl", "scan.stl", Some("body1"));
+    assert!(m.get("error").is_none(), "{m:?}");
+    let len = std::fs::metadata(out("scan.stl")).unwrap().len() as usize;
+    assert!(len >= 50 * ntri, "{len} bytes for {ntri} triangles");
+}
+
+#[test]
 fn an_import_without_the_flag_keeps_its_old_serialisation() {
     let f: fundacad_core::schema::Import =
         serde_json::from_value(json!({"id": "f1", "type": "import", "name": "part"})).unwrap();
