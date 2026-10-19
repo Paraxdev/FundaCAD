@@ -32,7 +32,7 @@ fn simplify(shape: &Shape, tol_deg: f64) -> Shape {
 }
 
 pub fn simplify_mesh(ctx: &mut Ctx, f: &SimplifyMesh) -> FResult {
-    let act = ctx.require_active("Simplify Mesh")?;
+    let act = ctx.editable(ctx.require_active("Simplify Mesh")?, "Simplify Mesh")?;
     let tol = ctx.val(&f.tolerance)?;
     let out = simplify(ctx.bodies[act].shape(), tol);
     ctx.set_shape(act, out);
@@ -158,8 +158,8 @@ fn refacet_clean(shape: &Shape, tol: f64) -> FResult<Shape> {
 pub fn clean_up(ctx: &mut Ctx, f: &CleanUp) -> FResult {
     let named = f.body.as_deref().filter(|b| !b.is_empty());
     let targets: Vec<Option<usize>> = match named {
-        Some(id) => vec![ctx.find_body(id)],
-        None => (0..ctx.bodies.len()).map(Some).collect(),
+        Some(id) => vec![ctx.find_body(id).map(|i| ctx.editable(i, "Clean Up")).transpose()?],
+        None => (0..ctx.bodies.len()).filter(|&i| !ctx.bodies[i].scan).map(Some).collect(),
     };
     for target in targets {
         match target {
