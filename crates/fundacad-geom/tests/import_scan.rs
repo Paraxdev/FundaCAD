@@ -226,6 +226,35 @@ fn a_join_or_cut_never_takes_a_scan() {
 }
 
 #[test]
+fn a_face_feature_on_a_scan_is_refused_naming_it() {
+    let (path, ntri) = dense_stl();
+    let reply = import_file(path, "stl").unwrap();
+    let face = json!({"kind": "face", "by": "normal", "dir": [0, 0, 1], "body": "body1"});
+    let cases = [
+        json!({"type": "press-pull", "distance": 1, "body": "body1", "face": face}),
+        json!({"type": "offsetFace", "distance": 1, "body": "body1", "faces": face}),
+        json!({"type": "deleteFace", "body": "body1", "face": face}),
+        json!({"type": "thicken", "thickness": 1, "body": "body1"}),
+        json!({"type": "shell", "thickness": 1, "faces": face}),
+        json!({"type": "draft", "angle": 2, "faces": face, "axis": "Z"}),
+        json!({"type": "fillet", "radius": 1, "edges": {"kind": "edge", "by": "all", "body": "body1"}}),
+        json!({"type": "split", "plane": "XY", "keep": "both", "body": "body1"}),
+        json!({"type": "separate", "body": "body1"}),
+    ];
+    for mut f in cases {
+        let kind = f["type"].as_str().unwrap().to_owned();
+        f["id"] = json!("op");
+        let r = build(vec![scan_feature(&reply), f]);
+        let err = r.errors.iter().find(|e| e.wire()["feature_id"] == "op");
+        let text = err.map(|e| e.wire().to_string()).unwrap_or_default();
+        assert!(text.contains("is a reference scan"), "{kind}: {text}");
+        assert_eq!(r.bodies.len(), 1, "{kind}");
+        assert!(r.bodies[0].scan, "{kind}");
+        assert_eq!(payloads(&r)[0].indices.len() / 3, *ntri, "{kind}");
+    }
+}
+
+#[test]
 fn an_import_without_the_flag_keeps_its_old_serialisation() {
     let f: fundacad_core::schema::Import =
         serde_json::from_value(json!({"id": "f1", "type": "import", "name": "part"})).unwrap();

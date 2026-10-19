@@ -350,7 +350,7 @@ pub fn handle(ctx: &mut Ctx, f: &Hole) -> FResult {
         }
         (body, origin, normal)
     } else if let Some(plane) = sk_plane {
-        let body = pick_body(ctx, f, None, Some(points[0]))?;
+        let body = ctx.editable(pick_body(ctx, f, None, Some(points[0]))?, "Hole")?;
         (body, plane.origin, plane.z)
     } else {
         return Err(bad("Hole: pick a flat face to drill into"));
@@ -393,7 +393,7 @@ fn face_anchor(ctx: &mut Ctx, f: &Hole, sel: &Value) -> FResult<(usize, [f64; 3]
     } else {
         None
     };
-    let body = pick_body(ctx, f, m.get("body").and_then(Value::as_str), anchor)?;
+    let body = ctx.editable(pick_body(ctx, f, m.get("body").and_then(Value::as_str), anchor)?, "Hole")?;
     let shape = ctx.bodies[body].shape().clone();
     let faces = Resolver::new(Some(&mut ctx.diagnostics), Some(&f.id))
         .faces(&shape, sel)

@@ -219,6 +219,7 @@ pub fn thicken(ctx: &mut Ctx, f: &Thicken) -> FResult {
     let Some(act) = act else {
         return Err(Fail::msg("Thicken: the target body no longer exists"));
     };
+    ctx.editable(act, "Thicken")?;
     let part = ctx.bodies[act].shape().clone();
     let faces = match f.faces.as_ref().filter(|s| !s.as_slice().is_empty()) {
         Some(sel) => resolve_field(ctx, &f.id, &part, sel)?,

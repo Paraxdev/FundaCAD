@@ -937,6 +937,7 @@ pub fn group_by_body<'s>(
                 .ok_or_else(|| Fail::msg(format!("{label}: the target body no longer exists")))?,
             None => ctx.require_active(label)?,
         };
+        ctx.editable(body, label)?;
         let id = &ctx.bodies[body].id;
         match groups.iter_mut().find(|(b, _)| &ctx.bodies[*b].id == id) {
             Some((_, list)) => list.push(s),
