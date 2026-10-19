@@ -467,6 +467,9 @@ export type CoreFeature =
       // Geometry a plugin generated and stored here (GeometryBackend.generateShape), and what it
       // was generated from. Read by that plugin to say what the body is; the build ignores it.
       generatedBy?: { plugin: string; spec: Record<string, unknown> };
+      // A dense mesh kept as one read-only reference scan: drawn as one mesh,
+      // never in a boolean, snapped to and measured but not edited.
+      scan?: boolean;
     }
   | { id: string; type: "separate"; body?: string; bodies?: string[] }
   // keep=both splits into bodies. `bodies` cuts several; `planeId` names a datum plane.
@@ -917,7 +920,9 @@ export type ImportReply =
       // `import` feature above for what they mean
       nodes?: { name: string; parent: number | null; color?: string }[];
       parts?: { node: number; faces: number; faceColors?: FaceColorRuns; color?: string }[];
-      notes?: string[]; unit?: string }
+      notes?: string[]; unit?: string;
+      // a mesh past the editable limit, kept as a read-only reference scan
+      scan?: boolean; triangles?: number }
   // `cancelled` = the user stopped it. Distinct from a failure so the UI can
   // dismiss quietly instead of showing an error the user already knows about.
   | { ok: false; cancelled?: boolean; message: string };

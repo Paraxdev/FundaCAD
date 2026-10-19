@@ -19,6 +19,7 @@ pub fn mesh_body(b: &BuiltBody) -> MeshBody<'_> {
         node_ref: b.node_ref.clone().map(Value::String),
         face_colors: b.face_colors.clone(),
         part_color: b.part_color.clone().map(Value::String),
+        scan: b.scan,
         ..Default::default()
     }
 }

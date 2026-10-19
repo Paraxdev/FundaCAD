@@ -36,6 +36,8 @@ pub struct ManifestEntry {
     pub node_ref: Option<String>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub intact: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub scan: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub face_colors: Option<Value>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -482,6 +484,7 @@ mod tests {
             blob_key: blob.into(),
             node_ref: None,
             intact: false,
+            scan: false,
             face_colors: None,
             part_color: None,
             mesh_passes: Vec::new(),

@@ -8,6 +8,7 @@ mod inner {
         type TopoDS_Shape = crate::topo_ds::TopoDS_Shape;
 
         pub fn mesh_import_sew(pos: &[f64], idx: &[u32]) -> Result<UniquePtr<TopoDS_Shape>>;
+        pub fn mesh_import_triangulation_face(pos: &[f64], idx: &[u32]) -> Result<UniquePtr<TopoDS_Shape>>;
         pub fn mesh_import_unify(shape: &TopoDS_Shape) -> Result<UniquePtr<TopoDS_Shape>>;
         pub fn mesh_import_explode(shape: &TopoDS_Shape) -> Result<UniquePtr<CxxVector<TopoDS_Shape>>>;
         pub fn mesh_import_shapes_len(v: &CxxVector<TopoDS_Shape>) -> usize;

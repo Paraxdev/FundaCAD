@@ -169,6 +169,8 @@ pub struct Body {
     pub part_color: Option<String>,
     /// An explicitly collapsed import, exempt from debris dropping.
     pub intact: bool,
+    /// A read-only reference scan, never a boolean operand.
+    pub scan: bool,
 }
 
 impl Body {
@@ -224,6 +226,7 @@ impl Body {
             face_colors: meta.face_colors,
             part_color: meta.part_color,
             intact: meta.intact,
+            scan: meta.scan,
         }
     }
 }
@@ -235,6 +238,7 @@ pub struct ImportedMeta {
     pub face_colors: Option<Value>,
     pub part_color: Option<String>,
     pub intact: bool,
+    pub scan: bool,
 }
 
 /// A located sketch: the whole profile, its region cells, the hole positions
@@ -404,6 +408,7 @@ impl Ctx {
             face_colors: meta.face_colors,
             part_color: meta.part_color.filter(|c| !c.is_empty()),
             intact: meta.intact,
+            scan: meta.scan,
         });
         self.bodies.len() - 1
     }
@@ -654,6 +659,7 @@ pub struct BuiltBody {
     pub node_ref: Option<String>,
     pub face_colors: Option<Value>,
     pub part_color: Option<String>,
+    pub scan: bool,
     /// `Body::identity` of the body this was made from.
     pub identity: (u64, u64),
 }
@@ -1354,6 +1360,7 @@ pub fn rebuild_from(
             node_ref: b.node_ref,
             face_colors: b.face_colors,
             part_color: b.part_color,
+            scan: b.scan,
         })
         .collect();
     Ok(Rebuild {

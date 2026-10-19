@@ -5,7 +5,8 @@
 
 use std::collections::HashMap;
 
-use super::mesh::{dominant_color, MeshObject, MAX_IMPORT_TRIANGLES};
+use super::mesh::{dominant_color, MeshObject};
+use super::scan::{too_dense_for_a_scan, MAX_SCAN_TRIANGLES};
 
 const MAIN: u16 = 0x4D4D;
 const EDITOR: u16 = 0x3D3D;
@@ -102,8 +103,8 @@ fn read_mesh(name: &str, body: &[u8], scale: f64, colors: &HashMap<String, [u8; 
             }
             FACES => {
                 let n = u16_at(c.body, 0)? as usize;
-                if n as u64 > MAX_IMPORT_TRIANGLES {
-                    return Err(super::mesh::too_dense_error(n as u64));
+                if n as u64 > MAX_SCAN_TRIANGLES {
+                    return Err(too_dense_for_a_scan(n as u64));
                 }
                 if c.body.len() < 2 + n * 8 {
                     return Err(bad(&format!("object '{name}' lists {n} faces but the chunk is shorter")));

@@ -249,9 +249,9 @@ fn a_broken_ply_or_off_says_what_it_is() {
     let e = import_as(&write("huge.ply", huge), "ply").unwrap_err();
     assert!(e.contains("PLY"), "{e}");
     let dense = b"ply\nformat ascii 1.0\nelement vertex 3\nproperty float x\nproperty float y\nproperty float z\n\
-                  element face 900000\nproperty list uchar int vertex_indices\nend_header\n";
+                  element face 10000001\nproperty list uchar int vertex_indices\nend_header\n";
     let e = import_as(&write("dense.ply", dense), "ply").unwrap_err();
-    assert!(e.contains("too dense"), "{e}");
+    assert!(e.contains("reference scan"), "{e}");
     let e = import_as(&write("bad.off", b"OFF\n8 1 0\n0 0 0\n"), "off").unwrap_err();
     assert!(e.contains("OFF"), "{e}");
 }

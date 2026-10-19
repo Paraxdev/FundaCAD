@@ -48,6 +48,7 @@ pub struct MeshBody<'a> {
     pub mesh_passes: Vec<Value>,
     /// The content key of the checkpoint blob this shape was stored under.
     pub mesh_key: Option<String>,
+    pub scan: bool,
 }
 
 /// A store of built payloads, consulted before a body is meshed. What it
@@ -66,7 +67,7 @@ impl PayloadCache for NoPayloadCache {
     fn put(&mut self, _: &MeshBody<'_>, _: f64, _: ViewportProfile, _: &FullBody, _: std::time::Duration) {}
 }
 
-pub const ENVELOPE_KEYS: [&str; 6] = ["id", "name", "etag", "nodeRef", "faceColors", "partColor"];
+pub const ENVELOPE_KEYS: [&str; 7] = ["id", "name", "etag", "nodeRef", "faceColors", "partColor", "scan"];
 
 /// The payload without its envelope, the part a cache may share between bodies.
 pub fn strip_envelope(full: &FullBody) -> FullBody {
@@ -349,6 +350,9 @@ fn envelope(body: &MeshBody<'_>, etag: &str) -> Map<String, Value> {
     if let Some(v) = body.part_color.as_ref().filter(|v| truthy(v)) {
         m.insert("partColor".into(), v.clone());
     }
+    if body.scan {
+        m.insert("scan".into(), true.into());
+    }
     m
 }
 
@@ -438,7 +442,7 @@ pub fn etag_with(body: &FullBody, passes: Option<&str>) -> String {
         );
     }
     let mut rest = body.fields.clone();
-    for k in ["id", "name", "etag", "nodeRef", "faceColors", "partColor"] {
+    for k in ENVELOPE_KEYS {
         rest.shift_remove(k);
     }
     h.update(Value::Object(rest).to_string().as_bytes());

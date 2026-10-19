@@ -19,6 +19,7 @@ pub mod off;
 pub mod packed;
 pub mod ply;
 pub mod rhino;
+pub mod scan;
 pub mod stage;
 pub mod threeds;
 pub mod x3d;
@@ -115,6 +116,9 @@ fn turned_text(n: usize) -> String {
 /// `reader_turned`. A document that already holds a shape keeps it as stored,
 /// a face selector saved against it carries the normal it had.
 fn outward(imported: Imported) -> Imported {
+    if imported.fields.get("scan").is_some_and(|v| v == true) {
+        return imported;
+    }
     stage::report(stage::BUILD, -1, -1);
     let (shape, n) = crate::bench::phase("turn_outward", || kernel::turned_outward_where_clean(&imported.shape));
     if n == 0 {
@@ -376,31 +380,41 @@ pub fn import_geometry_in(path: &str, fmt: &str, store: &BlobStore, unit: Option
             fields: Map::new(),
         }),
         "stl" | "3mf" | "obj" => {
-            if let Some(ntri) = mesh::peek_triangle_count(p, &fmt).filter(|&n| n > mesh::MAX_IMPORT_TRIANGLES) {
-                return Err(mesh::too_dense_error(ntri));
+            let peek = mesh::peek_triangle_count(p, &fmt).filter(|&n| n > mesh::MAX_IMPORT_TRIANGLES);
+            if let Some(ntri) = peek {
+                scan::admit(ntri)?;
             }
-            let shape = match fmt.as_str() {
-                "stl" => mesh::read_stl(p)?,
-                "3mf" => mesh::read_3mf(p)?,
-                _ => mesh::read_obj(p)?,
-            };
-            outward(Imported { shape, fields: Map::new() })
+            if fmt == "obj" {
+                outward(mesh::read_obj(p)?)
+            } else if peek.is_some() {
+                let (pos, idx) = mesh::read_triangles(p, &fmt)?;
+                let ntri = (idx.len() / 3) as u64;
+                match scan::route(ntri) {
+                    scan::Route::Scan => {
+                        scan::admit(ntri)?;
+                        scan::scan_imported(&pos, &idx)?
+                    }
+                    scan::Route::Refused(why) => return Err(why),
+                    scan::Route::Editable => outward(Imported { shape: mesh::sew_triangles(&pos, &idx)?, fields: Map::new() }),
+                }
+            } else {
+                let shape = if fmt == "stl" { mesh::read_stl(p)? } else { mesh::read_3mf(p)? };
+                outward(Imported { shape, fields: Map::new() })
+            }
         }
         "glb" => {
-            let shape = mesh::read_glb(p, mm_per_unit)?;
-            let mut fields = Map::new();
+            let mut imported = mesh::read_glb(p, mm_per_unit)?;
             if let Some(c) = std::fs::read(p).ok().and_then(|d| mesh::glb_dominant_color(&d)) {
-                fields.insert("color".into(), json!(c));
+                imported.fields.insert("color".into(), json!(c));
             }
-            outward(Imported { shape, fields })
+            outward(imported)
         }
         "gltf" => {
-            let (shape, color) = mesh::read_gltf(p, mm_per_unit)?;
-            let mut fields = Map::new();
+            let (mut imported, color) = mesh::read_gltf(p, mm_per_unit)?;
             if let Some(c) = color {
-                fields.insert("color".into(), json!(c));
+                imported.fields.insert("color".into(), json!(c));
             }
-            outward(Imported { shape, fields })
+            outward(imported)
         }
         "ply" | "off" => {
             let data = std::fs::read(p).map_err(|e| e.to_string())?;

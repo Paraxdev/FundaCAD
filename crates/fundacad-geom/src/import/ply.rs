@@ -1,7 +1,8 @@
 //! Stanford PLY, ascii and both binary byte orders, every element read so an
 //! unknown one is stepped over. Millimetres, as STL.
 
-use super::mesh::{dominant_color, MeshObject, MAX_IMPORT_TRIANGLES};
+use super::mesh::{dominant_color, MeshObject};
+use super::scan::{too_dense_for_a_scan, MAX_SCAN_TRIANGLES};
 
 fn bad(why: &str) -> String {
     format!("couldn't read this PLY file, {why}")
@@ -173,8 +174,8 @@ fn color_of(props: &[Property], row: &[f64]) -> Option<[u8; 3]> {
 pub fn read_ply(data: &[u8]) -> Result<MeshObject, String> {
     let (format, elements, body) = header(data)?;
     let faces = elements.iter().find(|e| e.name == "face").map_or(0, |e| e.count);
-    if faces as u64 > MAX_IMPORT_TRIANGLES {
-        return Err(super::mesh::too_dense_error(faces as u64));
+    if faces as u64 > MAX_SCAN_TRIANGLES {
+        return Err(too_dense_for_a_scan(faces as u64));
     }
     let left = data.len() - body;
     for e in &elements {
