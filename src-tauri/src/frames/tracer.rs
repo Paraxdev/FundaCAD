@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
 use fundacad_frames::{FrameSource, Reopen};
-use fundacad_tracer::{decode_colors, decode_mesh, denoise, Bloom, BodyDesc, Camera, Look, Path, Quality, Tracer, TracerOptions};
+use fundacad_tracer::{decode_colors, decode_mesh, denoise, Bloom, BodyDesc, Camera, Denoiser, Look, Path, Quality, Tracer, TracerOptions};
 use serde::Serialize;
 use tauri::ipc::{InvokeBody, Request};
 
@@ -190,6 +190,8 @@ pub struct Status {
     denoised: bool,
     /// A denoise of the current cap is still running.
     denoising: bool,
+    /// What cleaned the frames at the cap.
+    denoiser: Option<Denoiser>,
     denoise_error: Option<String>,
 }
 
@@ -207,6 +209,7 @@ pub fn pt_status() -> Result<Status, String> {
         fault: s.fault.clone(),
         denoised: s.tracer.denoised(),
         denoising: s.tracer.denoising(),
+        denoiser: s.tracer.denoised_by(),
         denoise_error: s.tracer.denoise_error().map(str::to_string),
     })
 }
@@ -220,6 +223,8 @@ pub struct Probe {
     adapter: Option<String>,
     /// Whether the native denoise can run at the cap.
     denoise: bool,
+    /// Which one: Open Image Denoise when installed, else the filter.
+    denoiser: Option<Denoiser>,
     reason: Option<String>,
 }
 
@@ -240,9 +245,9 @@ pub async fn pt_probe() -> Probe {
         let probe = match tracer() {
             Ok(t) => {
                 let s = t.lock();
-                Probe { available: true, path: Some(path_id(s.tracer.path())), adapter: Some(s.tracer.adapter().to_string()), denoise: denoise::available().is_ok(), reason: None }
+                Probe { available: true, path: Some(path_id(s.tracer.path())), adapter: Some(s.tracer.adapter().to_string()), denoise: true, denoiser: Some(denoise::active()), reason: None }
             }
-            Err(e) => Probe { available: false, path: None, adapter: None, denoise: false, reason: Some(e) },
+            Err(e) => Probe { available: false, path: None, adapter: None, denoise: false, denoiser: None, reason: Some(e) },
         };
         if !was_open {
             TRACER.release();
@@ -250,5 +255,5 @@ pub async fn pt_probe() -> Probe {
         probe
     })
     .await
-    .unwrap_or_else(|e| Probe { available: false, path: None, adapter: None, denoise: false, reason: Some(e.to_string()) })
+    .unwrap_or_else(|e| Probe { available: false, path: None, adapter: None, denoise: false, denoiser: None, reason: Some(e.to_string()) })
 }

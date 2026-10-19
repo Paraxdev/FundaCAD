@@ -4,7 +4,7 @@
 
 use std::time::{Duration, Instant};
 
-use fundacad_tracer::{denoise, BodyDesc, Camera, Look, Mesh, PageMaterial, Quality, Tracer, TracerOptions};
+use fundacad_tracer::{denoise, BodyDesc, Denoiser, Camera, Look, Mesh, PageMaterial, Quality, Tracer, TracerOptions};
 
 const W: u32 = 96;
 const H: u32 = 64;
@@ -108,10 +108,6 @@ fn without_a_denoise_the_cap_never_reports_a_denoised_frame() {
 
 #[test]
 fn at_the_cap_the_denoised_frame_is_held_and_is_closer_to_the_reference() {
-    if let Err(why) = denoise::available() {
-        println!("skipped, no denoiser: {why}");
-        return;
-    }
     let Some(mut reference) = traced(2048) else { return };
     reference.render_samples(2048);
     let clean = reference.resolve();
@@ -133,10 +129,14 @@ fn at_the_cap_the_denoised_frame_is_held_and_is_closer_to_the_reference() {
         std::thread::sleep(Duration::from_millis(5));
     }
     assert!(t.denoised(), "no denoised frame after 30 s: {:?}", t.denoise_error());
+    assert_eq!(t.denoised_by(), Some(denoise::active()));
     let raw = raw.unwrap();
     let (before, after) = (rmse(&raw, &clean), rmse(&held, &clean));
     println!("8 spp against 2048 spp: rmse raw {before:.2}, denoised {after:.2} of 255");
-    assert!(after < before * 0.7, "the denoise did not clean the frame: {before:.2} to {after:.2}");
+    // The filter holds its stop to the measured noise, so on this nearly
+    // noise free scene it only gains a little; it must never lose.
+    let bound = if denoise::active() == Denoiser::Oidn { before * 0.7 } else { before };
+    assert!(after < bound, "the denoise did not clean the frame: {before:.2} to {after:.2}");
     assert_eq!(t.frame(W, H, Duration::from_millis(50)), held, "the denoised frame is held at the cap");
 
     t.set_denoise(Quality::High);
@@ -145,3 +145,9 @@ fn at_the_cap_the_denoised_frame_is_held_and_is_closer_to_the_reference() {
     t.frame(W, H, Duration::from_millis(50));
     assert!(!t.denoised(), "a moved camera is not denoised");
 }
+
+#[test]
+fn with_no_open_image_denoise_the_filter_cleans_the_cap() {
+    assert_eq!(denoise::active(), Denoiser::Filter, "nothing in this test binary loads the library");
+}
+

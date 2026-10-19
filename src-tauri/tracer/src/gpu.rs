@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 use crate::bloom::{self, Bloom, Chain};
 use crate::bvh::{self, Bvh};
-use crate::denoise::{self, Quality};
+use crate::denoise::{self, Denoiser, Quality};
 use crate::material::{pack_material, tri_slots, GpuMaterial, FLAG_VERTEX_COLORS};
 use crate::scene::{Accel, BodyDesc, Commit, Instance, Mesh, Scene};
 
@@ -284,6 +284,9 @@ struct Held {
 struct Denoised {
     plain: Vec<u8>,
     hdr: Vec<[f32; 4]>,
+    by: Denoiser,
+    /// Why Open Image Denoise gave way to the filter.
+    note: Option<String>,
 }
 
 /// Generation, samples and size: what a frame was traced for.
@@ -835,13 +838,18 @@ impl Tracer {
         self.done() && self.held.as_ref().is_some_and(|h| h.denoised && h.key == self.key())
     }
 
-    /// Why the last denoise gave no frame.
+    /// What cleaned the held frame at the cap.
+    pub fn denoised_by(&self) -> Option<Denoiser> {
+        self.held.as_ref().filter(|h| h.denoised && h.key == self.key()).and_then(|h| h.denoise.as_ref()).map(|d| d.by)
+    }
+
+    /// Why the last denoise gave no frame, or fell back to the filter.
     pub fn denoise_error(&self) -> Option<&str> {
         self.denoise_error.as_deref()
     }
 
     fn start_denoise(&mut self) {
-        if self.quality == Quality::Off || denoise::available().is_err() {
+        if self.quality == Quality::Off {
             return;
         }
         let aov = self.read_aovs();
@@ -851,16 +859,17 @@ impl Tracer {
             color: self.read_hdr().into_iter().flatten().collect(),
             albedo: aov.iter().step_by(2).flat_map(|a| [a[0], a[1], a[2]]).collect(),
             normal: aov.iter().skip(1).step_by(2).flat_map(|n| [n[0], n[1], n[2]]).collect(),
+            depth: aov.chunks_exact(2).map(|p| if p[1][3] > 0.0 { p[0][3] } else { 0.0 }).collect(),
+            samples: self.sample,
         };
         let (tx, rx) = mpsc::channel();
         let quality = self.quality;
         let e = if self.look.exposure > 0.0 { self.look.exposure } else { 1.0 };
         let spawned = std::thread::Builder::new().name("denoise".into()).spawn(move || {
-            let r = denoise::run(&input, quality).map(|c| {
-                let rgb: Vec<[f32; 3]> = c.chunks_exact(3).map(|p| [p[0], p[1], p[2]]).collect();
-                Denoised { plain: denoise::tone_map(&rgb), hdr: rgb.iter().map(|p| [p[0] / e, p[1] / e, p[2] / e, 1.0]).collect() }
-            });
-            let _ = tx.send(r);
+            let (c, by, note) = denoise::run(&input, quality);
+            let rgb: Vec<[f32; 3]> = c.chunks_exact(3).map(|p| [p[0], p[1], p[2]]).collect();
+            let d = Denoised { plain: denoise::tone_map(&rgb), hdr: rgb.iter().map(|p| [p[0] / e, p[1] / e, p[2] / e, 1.0]).collect(), by, note };
+            let _ = tx.send(Ok(d));
         });
         match spawned {
             Ok(_) => self.job = Some(Job { key: self.key(), rx }),
@@ -895,13 +904,13 @@ impl Tracer {
         self.job = None;
         match got {
             Ok(d) if d.plain.len() == (self.w * self.h * 4) as usize => {
+                self.denoise_error = d.note.clone();
                 if let Some(h) = &mut self.held {
                     h.pixels = d.plain.clone();
                     h.bloom = None;
                     h.denoise = Some(d);
                     h.denoised = true;
                 }
-                self.denoise_error = None;
             }
             Ok(d) => {
                 self.denoise_error = Some(format!("a {} byte denoise for a {}x{} frame", d.plain.len(), self.w, self.h))
@@ -1106,7 +1115,7 @@ mod tests {
         let e = t.look.exposure;
         let hdr = t.read_hdr().iter().map(|c| [c[0] / e, c[1] / e, c[2] / e, 1.0]).collect();
         let h = t.held.as_mut().unwrap();
-        h.denoise = Some(Denoised { plain: plain.clone(), hdr });
+        h.denoise = Some(Denoised { plain: plain.clone(), hdr, by: Denoiser::Filter, note: None });
         h.denoised = true;
         let b = Bloom { strength: 0.8, radius: 0.5, threshold: 0.8, side: 0 };
         t.set_bloom(Some(b));
