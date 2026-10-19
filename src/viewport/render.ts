@@ -67,6 +67,7 @@ export interface ModelView {
 export const BASE_COLOR = new THREE.Color(0x9aa7b4);
 /** A reference scan is matte and sand coloured, so it never reads as a solid. */
 export const SCAN_COLOR = new THREE.Color(0xc9b48f);
+export const SCAN_MATTE = { metalness: 0, roughness: 1 } as const;
 
 
 /** Split a RebuildResult's flat edge list by owning body id (see `orphans` above
@@ -364,10 +365,7 @@ export function buildBodyMesh(
     side: THREE.DoubleSide,
   }));
 
-  if (meta.scan) {
-    mat.metalness = 0;
-    mat.roughness = 1;
-  }
+  if (meta.scan) Object.assign(mat, SCAN_MATTE);
   const mesh = new THREE.Mesh(geo, mat);
   mesh.name = "model";
   // Cast and receive shadows so an emissive body/face lights AND shadows its

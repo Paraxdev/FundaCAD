@@ -154,3 +154,20 @@ describe("glass and thin film reach the screen", () => {
     expect(m.specularColor.getHexString()).toBe("ffffff");
   });
 });
+
+describe("BodyFinishLayer reference scan", () => {
+  it("keeps a scan matte when it has no finish of its own", () => {
+    const scan = Object.assign(body("s"), { scan: true as const });
+    const solid = body("b");
+    const f = layer([scan, solid]);
+    f.apply(base);
+    expect(mat(scan).metalness).toBe(0);
+    expect(mat(scan).roughness).toBe(1);
+    expect(mat(solid).metalness).toBe(FINISH.metalness);
+    expect(mat(solid).roughness).toBe(FINISH.roughness);
+
+    f.bodyFinish = { s: { ...FINISH, roughness: 0.3 } };
+    f.apply(base);
+    expect(mat(scan).roughness).toBe(0.3);
+  });
+});

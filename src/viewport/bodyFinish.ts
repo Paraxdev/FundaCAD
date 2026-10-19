@@ -5,7 +5,7 @@
 
 import * as THREE from "three";
 import { isGlassAuto, registerGlass } from "./glassThickness";
-import { applyClearcoat, applyGlassLook, applyThinFilm, isRenderLowPower, type BodyMesh, type ModelView } from "./render";
+import { applyClearcoat, applyGlassLook, applyThinFilm, isRenderLowPower, SCAN_MATTE, type BodyMesh, type ModelView } from "./render";
 import type { SceneBundle } from "./scene";
 import { type BodyFinish, FINISH, isShiny } from "../document/materials";
 import { applySurface, applySurfaceGraph, cloneWithoutSurface, graphKey, surfaceKey } from "./proceduralSurface";
@@ -169,8 +169,9 @@ export class BodyFinishLayer {
       const ghost = anyGhost || peeked;
       const ghostOpacity = anyGhost ? baseOpacity : PEEK_OPACITY;
       const f = this.bodyFinish[b.id];
-      mat.metalness = f ? f.metalness : FINISH.metalness;
-      mat.roughness = f ? f.roughness : FINISH.roughness;
+      const unset = b.scan ? SCAN_MATTE : FINISH;
+      mat.metalness = f ? f.metalness : unset.metalness;
+      mat.roughness = f ? f.roughness : unset.roughness;
       if (!ghost && f && isShiny(f)) shiny = true;
       // Colour is baked per vertex, so the emissive tint comes off the paint map.
       // White for an unpainted body: emissive black would make the glow do nothing.
