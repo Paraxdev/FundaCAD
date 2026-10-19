@@ -23,8 +23,8 @@ pub fn read_fbx(data: &[u8]) -> Result<(Vec<MeshObject>, Vec<String>), String> {
 
     // An instanced mesh is baked once per node that places it.
     let total: u64 = scene.nodes.iter().filter_map(|n| n.mesh.as_ref()).map(|m| m.num_triangles as u64).sum();
-    if total > mesh::MAX_IMPORT_TRIANGLES {
-        return Err(mesh::too_dense_error(total));
+    if total > super::scan::MAX_SCAN_TRIANGLES {
+        return Err(super::scan::too_dense_for_a_scan(total));
     }
 
     let mut objs = Vec::new();

@@ -21,6 +21,12 @@ pub fn sew_triangles(positions: &[f64], indices: &[u32]) -> Result<Shape, Error>
     own(ffi::mesh_import_sew(positions, indices)?)
 }
 
+/// One face holding only these triangles, no surface: a read-only reference
+/// scan that never takes part in a boolean.
+pub fn triangulation_face(positions: &[f64], indices: &[u32]) -> Result<Shape, Error> {
+    own(ffi::mesh_import_triangulation_face(positions, indices)?)
+}
+
 /// `ShapeUpgrade_UnifySameDomain` merging faces and edges, the input back when
 /// it leaves no face.
 pub fn unify(shape: &Shape) -> Result<Shape, Error> {

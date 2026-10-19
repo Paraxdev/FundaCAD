@@ -50,6 +50,7 @@ export function importFeatures(
       ...(res.parts !== undefined ? { parts: res.parts } : {}),
       ...(res.notes !== undefined ? { notes: res.notes } : {}),
       ...(res.unit !== undefined ? { unit: res.unit } : {}),
+      ...(res.scan ? { scan: true } : {}),
     });
   }
   return out;

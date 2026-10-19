@@ -21,6 +21,8 @@
 #include <ShapeFix_Shape.hxx>
 #include <ShapeFix_Solid.hxx>
 #include <ShapeUpgrade_UnifySameDomain.hxx>
+#include <Poly_Triangle.hxx>
+#include <Poly_Triangulation.hxx>
 #include <TopAbs.hxx>
 #include <TopExp.hxx>
 #include <TopExp_Explorer.hxx>
@@ -386,4 +388,35 @@ inline std::unique_ptr<TopoDS_Shape> planar_rebuild_finish(const PlanarRebuild &
     b.Add(c, s);
   }
   return mesh_import_own(c);
+}
+
+// A reference scan: one face that holds only a triangulation, no surface.
+// BRepMesh leaves a surfaceless face alone and BRepTools::Clean skips it, so
+// the triangles survive every remesh and the BinTools v3 blob round trip.
+inline std::unique_ptr<TopoDS_Shape> mesh_import_triangulation_face(rust::Slice<const double> pos,
+                                                                    rust::Slice<const uint32_t> idx) {
+  const size_t nvert = pos.size() / 3;
+  const size_t ntri = idx.size() / 3;
+  if (nvert < 3 || ntri < 1) {
+    throw std::invalid_argument("a scan needs at least one triangle");
+  }
+  Handle(Poly_Triangulation) tri =
+      new Poly_Triangulation(static_cast<Standard_Integer>(nvert), static_cast<Standard_Integer>(ntri), false);
+  for (size_t v = 0; v < nvert; ++v) {
+    tri->SetNode(static_cast<Standard_Integer>(v + 1), gp_Pnt(pos[3 * v], pos[3 * v + 1], pos[3 * v + 2]));
+  }
+  for (size_t t = 0; t < ntri; ++t) {
+    const uint32_t a = idx[3 * t], b = idx[3 * t + 1], c = idx[3 * t + 2];
+    if (a >= nvert || b >= nvert || c >= nvert) {
+      throw std::invalid_argument("a triangle references a vertex that does not exist");
+    }
+    tri->SetTriangle(static_cast<Standard_Integer>(t + 1),
+                     Poly_Triangle(static_cast<Standard_Integer>(a + 1), static_cast<Standard_Integer>(b + 1),
+                                   static_cast<Standard_Integer>(c + 1)));
+  }
+  tri->ComputeNormals();
+  TopoDS_Face face;
+  BRep_Builder builder;
+  builder.MakeFace(face, tri);
+  return mesh_import_own(face);
 }

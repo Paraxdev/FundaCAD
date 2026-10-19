@@ -449,6 +449,15 @@ pub fn finish_objects(objs: Vec<MeshObject>) -> Result<super::Imported, String> 
     if objs.is_empty() {
         return Err("no geometry found in the mesh file".into());
     }
+    let ntri: u64 = objs.iter().map(|o| (o.idx.len() / 3) as u64).sum();
+    match super::scan::route(ntri) {
+        super::scan::Route::Editable => {}
+        super::scan::Route::Scan => {
+            super::scan::admit(ntri)?;
+            return super::scan::scan_objects(objs);
+        }
+        super::scan::Route::Refused(why) => return Err(why),
+    }
     let mut shapes = object_shapes(&objs)?;
     let hex = |c: [u8; 3]| serde_json::json!(super::hex(c));
     let mut fields = serde_json::Map::new();
@@ -543,30 +552,57 @@ pub fn read_3mf(path: &Path) -> Result<Shape, String> {
     finish_mesh(shapes)
 }
 
-pub fn read_obj(path: &Path) -> Result<Shape, String> {
-    let text = String::from_utf8_lossy(&std::fs::read(path).map_err(|e| e.to_string())?).into_owned();
-    let (pos, idx) = obj_triangles(&text)?;
-    let ntri = (idx.len() / 3) as u64;
-    if ntri > MAX_IMPORT_TRIANGLES {
-        return Err(too_dense_error(ntri));
+/// An editable OBJ, or a scan past the editable limit.
+pub fn read_obj(path: &Path) -> Result<super::Imported, String> {
+    let (pos, idx) = read_triangles(path, "obj")?;
+    sew_or_scan(&pos, &idx)
+}
+
+/// The file's triangles as one soup, every 3MF object together.
+pub fn read_triangles(path: &Path, fmt: &str) -> Result<Triangles, String> {
+    match fmt {
+        "stl" => stl_triangles(&std::fs::read(path).map_err(|e| e.to_string())?),
+        "3mf" => {
+            let (mut pos, mut idx) = (Vec::new(), Vec::new());
+            for (p, i) in threemf_meshes(path)? {
+                let base = (pos.len() / 3) as u32;
+                idx.extend(i.iter().map(|&v| base + v));
+                pos.extend(p);
+            }
+            Ok((pos, idx))
+        }
+        _ => obj_triangles(&String::from_utf8_lossy(&std::fs::read(path).map_err(|e| e.to_string())?)),
     }
-    sew_triangles(&pos, &idx)
+}
+
+fn sew_or_scan(pos: &[f64], idx: &[u32]) -> Result<super::Imported, String> {
+    let ntri = (idx.len() / 3) as u64;
+    match super::scan::route(ntri) {
+        super::scan::Route::Editable => {
+            Ok(super::Imported { shape: sew_triangles(pos, idx)?, fields: serde_json::Map::new() })
+        }
+        super::scan::Route::Scan => {
+            super::scan::admit(ntri)?;
+            super::scan::scan_imported(pos, idx)
+        }
+        super::scan::Route::Refused(why) => Err(why),
+    }
 }
 
 /// `_read_glb` then the shared sew path.
-pub fn read_glb(path: &Path, mm_per_unit: Option<f64>) -> Result<Shape, String> {
+pub fn read_glb(path: &Path, mm_per_unit: Option<f64>) -> Result<super::Imported, String> {
     let data = std::fs::read(path).map_err(|e| e.to_string())?;
     let (json, bin) = super::gltf::split_glb(&data)?;
     sew_gltf(&json, &[std::borrow::Cow::Borrowed(bin)], mm_per_unit)
 }
 
 /// A text .gltf through the GLB path, and its dominant colour.
-pub fn read_gltf(path: &Path, mm_per_unit: Option<f64>) -> Result<(Shape, Option<String>), String> {
+pub fn read_gltf(path: &Path, mm_per_unit: Option<f64>) -> Result<(super::Imported, Option<String>), String> {
     let (json, buffers) = super::gltf::load_gltf(path)?;
     Ok((sew_gltf(&json, &buffers, mm_per_unit)?, gltf_dominant_color(&json)))
 }
 
-fn sew_gltf(json: &serde_json::Value, buffers: &[std::borrow::Cow<'_, [u8]>], mm_per_unit: Option<f64>) -> Result<Shape, String> {
+fn sew_gltf(json: &serde_json::Value, buffers: &[std::borrow::Cow<'_, [u8]>], mm_per_unit: Option<f64>) -> Result<super::Imported, String> {
     let (pos, idx) = match mm_per_unit {
         Some(mm) => super::gltf::read_gltf(json, buffers, mm)?,
         None => {
@@ -574,16 +610,7 @@ fn sew_gltf(json: &serde_json::Value, buffers: &[std::borrow::Cow<'_, [u8]>], mm
             if super::gltf::max_extent(&metres.0) > GLB_MM_AS_UNITS_ABOVE { super::gltf::read_gltf(json, buffers, 1.0)? } else { metres }
         }
     };
-    let ntri = idx.len() / 3;
-    if ntri as u64 > MAX_IMPORT_TRIANGLES {
-        return Err(format!(
-            "This glTF has ~{} triangles, too dense to import as an editable model (limit ~{}). \
-             Reduce it first, or import a STEP / clean CAD mesh.",
-            thousands(ntri),
-            thousands(MAX_IMPORT_TRIANGLES as usize)
-        ));
-    }
-    sew_triangles(&pos, &idx)
+    sew_or_scan(&pos, &idx)
 }
 
 /// Least squares `M y = r` for a small symmetric positive semidefinite `M`,

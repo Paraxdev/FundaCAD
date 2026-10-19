@@ -225,6 +225,7 @@ fn bind_assembly(
                 .and_then(|c| serde_json::to_value(c).ok()),
             part_color: part.color.clone(),
             intact: false,
+            scan: false,
         };
         ctx.new_body_with(child, Some(label), None, meta);
     }
@@ -244,6 +245,11 @@ pub fn handle(ctx: &mut Ctx, f: &Import) -> FResult {
     }
     let base = base_name(f).to_owned();
     let nodes = non_empty(&f.nodes);
+    if f.scan == Some(true) {
+        let meta = ImportedMeta { intact: true, scan: true, ..Default::default() };
+        ctx.new_body_with(shape, Some(base), None, meta);
+        return Ok(());
+    }
     if f.explode == Some(false) {
         let root = nodes.and_then(|n| root_index(n).map(|r| (r, &n[r])));
         let (name, node_ref) = match root {

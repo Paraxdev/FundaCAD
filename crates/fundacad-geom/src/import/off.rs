@@ -1,7 +1,8 @@
 //! Object File Format (OFF, COFF, NOFF, STOFF and the like, ascii only).
 //! Millimetres, as STL.
 
-use super::mesh::{dominant_color, unit_color, MeshObject, MAX_IMPORT_TRIANGLES};
+use super::mesh::{dominant_color, unit_color, MeshObject};
+use super::scan::{too_dense_for_a_scan, MAX_SCAN_TRIANGLES};
 
 fn bad(why: &str) -> String {
     format!("couldn't read this OFF file, {why}")
@@ -25,8 +26,8 @@ pub fn read_off(text: &str) -> Result<MeshObject, String> {
     let num = |s: Option<&&str>| s.and_then(|s| s.parse::<usize>().ok()).ok_or_else(|| bad("its counts are not numbers"));
     let nv = num(counts.first())?;
     let nf = num(counts.get(1))?;
-    if nf as u64 > MAX_IMPORT_TRIANGLES {
-        return Err(super::mesh::too_dense_error(nf as u64));
+    if nf as u64 > MAX_SCAN_TRIANGLES {
+        return Err(too_dense_for_a_scan(nf as u64));
     }
     if nv > text.len() / 6 {
         return Err(bad(&format!("it claims {nv} vertices, more than the file holds")));

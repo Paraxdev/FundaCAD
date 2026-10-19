@@ -116,6 +116,7 @@ impl Persist<'_> {
                 blob_key: key,
                 node_ref: b.node_ref.clone(),
                 intact: b.intact,
+                scan: b.scan,
                 face_colors: b.face_colors.clone(),
                 part_color: b.part_color.clone(),
                 mesh_passes: b.mesh_passes.clone(),
@@ -213,6 +214,7 @@ pub fn restore(store: &GeomStore, keys: &[String]) -> Option<(usize, Snapshot, M
                 face_colors: entry.face_colors.clone(),
                 part_color: entry.part_color.clone(),
                 intact: entry.intact,
+                scan: entry.scan,
             },
         );
         body.mesh_passes = entry.mesh_passes.clone();
