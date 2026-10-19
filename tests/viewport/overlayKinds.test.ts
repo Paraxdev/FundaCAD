@@ -67,9 +67,18 @@ describe("overlay registry", () => {
 
   it("draws a running tool's handles and the open sketch whatever the switches say", () => {
     const clean = { on: false, kinds: allOverlaysOn() };
-    expect(drawMask(clean, { tool: true, sketch: false }) & overlayBit("handles")).not.toBe(0);
-    expect(drawMask(clean, { tool: false, sketch: true }) & overlayBit("sketches")).not.toBe(0);
-    expect(drawMask(clean, { tool: true, sketch: false }) & overlayBit("grid")).toBe(0);
+    expect(drawMask(clean, { tool: true, sketch: false, planes: false }) & overlayBit("handles")).not.toBe(0);
+    expect(drawMask(clean, { tool: false, sketch: true, planes: false }) & overlayBit("sketches")).not.toBe(0);
+    expect(drawMask(clean, { tool: true, sketch: false, planes: false }) & overlayBit("grid")).toBe(0);
+  });
+
+  it("draws and picks the construction planes while a plane pick shows them, whatever the switches say", () => {
+    const clean = { on: false, kinds: allOverlaysOn() };
+    const picking = drawMask(clean, { tool: true, sketch: false, planes: true });
+    expect(picking & overlayBit("origin")).not.toBe(0);
+    expect(pickMask(picking) & overlayBit("origin")).not.toBe(0);
+    expect(drawMask(withOff("origin"), { tool: true, sketch: false, planes: true }) & overlayBit("origin")).not.toBe(0);
+    expect(drawMask(clean, { tool: true, sketch: false, planes: false }) & overlayBit("origin")).toBe(0);
   });
 
   it("keeps hidden outlines and highlight pickable, and a hidden gizmo not", () => {

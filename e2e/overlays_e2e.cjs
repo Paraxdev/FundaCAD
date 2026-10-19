@@ -177,6 +177,20 @@ const KINDS = ["edges", "highlight", "grid", "origin", "sketches", "sketchLabels
     await page.keyboard.press("Escape");
     await page.waitForTimeout(300);
 
+    // A plane pick draws and picks the construction planes in Clean view.
+    await page.evaluate(() => window.__fundacad.handleAction("sketch"));
+    await page.waitForTimeout(500);
+    const planes = await page.evaluate(() => {
+      const vp = window.viewport, cam = vp.rig.active;
+      const rect = vp.domElement.getBoundingClientRect();
+      const p = new cam.position.constructor(-30, 30, 0).project(cam);
+      const x = rect.left + (p.x + 1) / 2 * rect.width, y = rect.top + (1 - p.y) / 2 * rect.height;
+      return { drawn: vp.overlayDrawn("origin"), plane: vp.pickPlane(x, y), mask: cam.layers.mask };
+    });
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
+    const afterPick = await page.evaluate(() => window.viewport.overlayDrawn("origin"));
+
     await page.keyboard.press("Shift+V");
     await page.waitForTimeout(400);
     const back = await record("04_clean_view_off");
@@ -205,6 +219,7 @@ const KINDS = ["edges", "highlight", "grid", "origin", "sketches", "sketchLabels
       clean.frame);
     check("clean view still picks and selects", !!clean.pick.picked && clean.select.bodies.length + clean.select.faces.length > 0, { pick: clean.pick, select: clean.select });
     check("clean view shows a running tool's gizmo", tool.handlesDrawn === true && tool.frame.calls > clean.frame.calls, { clean: clean.frame.calls, tool: tool.frame.calls });
+    check("clean view plane pick draws and picks the planes", planes.drawn && !!planes.plane && !afterPick, { ...planes, afterPick });
     check("clean view off brings the set back", back.frame.calls === base.frame.calls && back.frame.mask === base.frame.mask, { base: base.frame, back: back.frame });
     check("a picture leaves the mask as the view had it", pic.before === pic.after && pic.bytes > 1000, pic);
     check("no page errors", res.errors.length === 0, res.errors.slice(0, 3));

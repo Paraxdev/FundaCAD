@@ -411,9 +411,10 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
 
   // --- predicates the UI wiring below depends on ---
   Object.assign(e, createToolBusy(e));
-  const work = { tool: false, sketch: false };
+  const work = { tool: false, sketch: false, planes: false };
   e.viewport.activeWork = () => {
     work.sketch = e.sketch.active;
+    work.planes = e.viewport.constructionOnTop;
     work.tool = !work.sketch && e.toolBusy();
     return work;
   };
