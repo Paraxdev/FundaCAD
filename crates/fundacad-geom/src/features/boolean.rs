@@ -191,6 +191,15 @@ fn cut_missed(extrude: bool, unseen: usize, recorded: bool) -> &'static str {
 /// Named `targets` are acted on hidden or not. Without them the feature acts
 /// on every body it reaches that is not in `hidden`, which is the live eye
 /// states when the caller records no set of its own.
+/// The refusal for a reference scan named as an operand of `what`.
+pub fn scan_refusal(ctx: &Ctx, index: usize, what: &str) -> Fail {
+    let b = &ctx.bodies[index];
+    Fail::msg(format!(
+        "{} ({}) is a reference scan, {what} cannot use it. Make it solid first.",
+        b.name, b.id
+    ))
+}
+
 pub fn combine(
     ctx: &mut Ctx,
     feature_id: &str,
@@ -230,7 +239,11 @@ pub fn combine(
             )));
         }
         candidates.retain(|&i| targets.contains(&ctx.bodies[i].id));
+        if let Some(&i) = candidates.iter().find(|&&i| ctx.bodies[i].scan) {
+            return Err(scan_refusal(ctx, i, "a join, cut or intersect"));
+        }
     }
+    candidates.retain(|&i| !ctx.bodies[i].scan);
     let (skipped, candidates): (Vec<usize>, Vec<usize>) =
         candidates.into_iter().partition(|&i| hidden.contains(&ctx.bodies[i].id));
     let hits: Vec<usize> = crate::bench::phase("combine_bbox", || {
@@ -498,19 +511,22 @@ pub fn do_boolean(ctx: &mut Ctx, f: &BooleanFeature) -> FResult {
     };
     let target = match f.target.as_deref().filter(|t| !t.is_empty()) {
         Some(t) => ctx.find_body(t),
-        None => (!ctx.bodies.is_empty()).then_some(0),
+        None => ctx.bodies.iter().position(|b| !b.scan),
     };
     let Some(target) = target else {
         ctx.skip_feature(&f.id, "boolean", "target body already consumed or missing");
         return Ok(());
     };
+    if ctx.bodies[target].scan {
+        return Err(scan_refusal(ctx, target, "a boolean"));
+    }
     let target_id = ctx.bodies[target].id.clone();
     let tool_ids: Vec<String> = match f.tools.as_ref().filter(|t| !t.is_empty()) {
         Some(t) => t.clone(),
         None => ctx
             .bodies
             .iter()
-            .filter(|b| b.id != target_id)
+            .filter(|b| b.id != target_id && !b.scan)
             .map(|b| b.id.clone())
             .collect(),
     };
@@ -531,6 +547,9 @@ pub fn do_boolean(ctx: &mut Ctx, f: &BooleanFeature) -> FResult {
         })
         .filter(|&i| ctx.bodies[i].id != target_id)
         .collect();
+    if let Some(&t) = tools.iter().find(|&&t| ctx.bodies[t].scan) {
+        return Err(scan_refusal(ctx, t, "a boolean"));
+    }
     if tools.is_empty() {
         ctx.skip_feature(&f.id, "boolean", "tool bodies already consumed or missing");
         return Ok(());
