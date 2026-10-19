@@ -83,7 +83,7 @@ describe("New and Open stand every tool down", () => {
     const tool = (name: string, active: boolean) => ({ active, cancel: () => calls.push(`${name}.cancel`) });
     const t: Record<string, unknown> = {};
     for (const n of [
-      "extrude", "edgeFeature", "targetEdit", "pressPull", "faceOffset", "draft", "thread", "hole", "loft",
+      "extrude", "edgeFeature", "targetEdit", "pressPull", "faceOffset", "draft", "thread", "textOnFace", "hole", "loft",
       "pattern", "planeOffset", "datumPose", "lightAim", "revolvePitch", "joint", "mechanism",
     ]) t[n] = tool(n, n === "extrude" || n === "pressPull");
     t.move = tool("move", false);
