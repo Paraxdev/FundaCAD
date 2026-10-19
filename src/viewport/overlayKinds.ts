@@ -34,11 +34,14 @@ export interface OverlayState {
 }
 
 /** What the view needs whatever the switches say: a running tool's handle, the
- *  sketch being drawn. */
+ *  sketch being drawn, the construction planes a plane pick is asking for. */
 export interface ActiveWork {
   tool: boolean;
   sketch: boolean;
+  planes: boolean;
 }
+
+const NO_WORK: Readonly<ActiveWork> = Object.freeze({ tool: false, sketch: false, planes: false });
 
 const KIND = "overlay";
 
@@ -110,11 +113,12 @@ export function syncOverlayLayers(scene: THREE.Object3D): void {
 }
 
 /** The layers the view draws. */
-export function drawMask(s: Readonly<OverlayState>, active: ActiveWork = { tool: false, sketch: false }): number {
+export function drawMask(s: Readonly<OverlayState>, active: Readonly<ActiveWork> = NO_WORK): number {
   let m = MODEL_BIT;
   if (s.on) for (const k of OVERLAY_KINDS) if (s.kinds[k]) m |= overlayBit(k);
   if (active.tool) m |= overlayBit("handles");
   if (active.sketch) m |= overlayBit("sketches");
+  if (active.planes) m |= overlayBit("origin");
   return m;
 }
 

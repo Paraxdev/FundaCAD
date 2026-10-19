@@ -97,7 +97,7 @@ const EDGE_PICKABLE = new THREE.Color(0xd98a4a); // muted ember "selectable" edg
 
 /** How much of the model is left standing while a sketch is open on it, and how
  *  much of its edges. Both were far lower; see setModelDimmed. */
-const NO_WORK: ActiveWork = { tool: false, sketch: false };
+const NO_WORK: ActiveWork = { tool: false, sketch: false, planes: false };
 const SKETCH_DIM_OPACITY = 0.55;
 const SKETCH_DIM_EDGE_OPACITY = 0.5;
 
