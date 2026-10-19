@@ -684,6 +684,9 @@ export class PostChain {
     try {
       composer.render();
     } finally {
+      // Note: BokehPass clears its depth override without a finally, so a throw mid
+      // pass left every later frame, and the overlay over a trace, drawn as packed depth.
+      this.scene.overrideMaterial = null;
       if (shadows && drawShadows) shadows.render = drawShadows;
       setComposing(false);
       r.setRenderTarget(null);

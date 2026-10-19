@@ -28,12 +28,15 @@ export class OverlayDraw {
     const autoUpdate = shadows.autoUpdate;
     renderer.getClearColor(this.clear);
     const alpha = renderer.getClearAlpha();
+    const override = scene.overrideMaterial;
     try {
       scene.traverseVisible((o) => this.visit(o));
       shadows.autoUpdate = false;
+      scene.overrideMaterial = null;
       renderer.setClearColor(this.clear, 0);
       renderer.render(scene, camera);
     } finally {
+      scene.overrideMaterial = override;
       renderer.setClearColor(this.clear, alpha);
       shadows.autoUpdate = autoUpdate;
       for (const { mesh, was } of this.swapped) mesh.material = was;

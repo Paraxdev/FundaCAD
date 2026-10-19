@@ -52,3 +52,23 @@ describe("a body filling the view does not wash the screen", () => {
     expect(mat.uniforms.uFade!.value).toBeCloseTo(0.25);
   });
 });
+
+describe("a glow drawn by a pass that overrides every material", () => {
+  it("leaves the override alone instead of reading glow uniforms off it", () => {
+    const geometry = new THREE.BoxGeometry(1, 1, 1);
+    const glow = makeSelectionGlow(geometry, "hover");
+    glow.updateMatrixWorld();
+    const camera = new THREE.PerspectiveCamera(45, 1.5, 0.1, 100);
+    camera.position.set(0, -5, 3);
+    camera.lookAt(0, 0, 0);
+    camera.updateMatrixWorld();
+    const depth = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
+    const call = (mat: THREE.Material) =>
+      glow.onBeforeRender({} as THREE.WebGLRenderer, new THREE.Scene(), camera, geometry, mat, null as unknown as THREE.Group);
+    expect(() => call(depth)).not.toThrow();
+    const own = glow.material as THREE.ShaderMaterial;
+    own.uniforms.uFade!.value = -1;
+    call(own);
+    expect(own.uniforms.uFade!.value).toBeGreaterThan(0);
+  });
+});
