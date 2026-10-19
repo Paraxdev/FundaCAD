@@ -65,3 +65,21 @@ fn a_body_of_one_solid_is_refused_with_a_note() {
     assert_eq!(r.errors.len(), 1);
     assert!(r.errors[0].message.contains("one solid"), "{}", r.errors[0].message);
 }
+
+#[test]
+fn a_piece_never_takes_a_name_another_body_already_has() {
+    let name = parted(vec![]).bodies[0].name.clone();
+    let taken = format!("{name} 2");
+    let r = parted(vec![
+        json!({"id": "bx", "type": "box", "length": 5, "width": 5, "height": 5, "name": taken}),
+        json!({"id": "sep", "type": "separate", "body": "body1"}),
+    ]);
+    assert!(r.errors.is_empty(), "{:?}", r.errors);
+    let names: Vec<&str> = r.bodies.iter().map(|b| b.name.as_str()).collect();
+    assert_eq!(names.len(), 3, "{names:?}");
+    let mut sorted = names.clone();
+    sorted.sort_unstable();
+    sorted.dedup();
+    assert_eq!(sorted.len(), 3, "duplicate names: {names:?}");
+    assert!(names.contains(&format!("{name} 3").as_str()), "{names:?}");
+}

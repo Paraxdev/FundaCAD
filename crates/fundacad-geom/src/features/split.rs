@@ -9,6 +9,7 @@ use glam::DVec3;
 use opencascade::boolean_op::{BooleanKind, BooleanOp, BooleanOptions};
 use opencascade::primitives::{Shape, ShapeType};
 use opencascade::progress::ProgressRange;
+use serde_json::{json, Value};
 
 use super::sketch::require;
 use crate::builder::plane::{plane_of, PlaneRef};
@@ -271,6 +272,14 @@ fn solid_face_colors(
     serde_json::to_value(fundacad_core::face_colors::encode(mine)?).ok()
 }
 
+/// `Name N` from `first` on, the first that no body in the document carries.
+fn free_name(ctx: &Ctx, name: &str, first: usize) -> String {
+    (first..)
+        .map(|n| format!("{name} {n}"))
+        .find(|candidate| ctx.bodies.iter().all(|b| &b.name != candidate))
+        .expect("an unbounded range")
+}
+
 /// One body per disjoint solid. The largest keeps the body's id, name and
 /// look, the rest are numbered after it and take its colours.
 pub fn separate(ctx: &mut Ctx, f: &Separate) -> FResult {
@@ -308,10 +317,11 @@ pub fn separate(ctx: &mut Ctx, f: &Separate) -> FResult {
         order.sort_by(|&a, &b| volumes[b].total_cmp(&volumes[a]));
         // Debris stays out, counted off the shape the way the build drops it. The
         // colour runs are read from the raw solids so they keep their place.
+        let mut gone: Vec<usize> = Vec::new();
         if !body.intact {
             let debris = solids.len() - kernel::subshapes(&kernel::drop_debris(body.shape()), Kind::Solid).len();
             let tiny = |i: &usize| volumes[*i] < 1e-6 * volumes[order[0]];
-            let mut gone: Vec<usize> = order.iter().rev().copied().filter(tiny).take(debris).collect();
+            gone = order.iter().rev().copied().filter(tiny).take(debris).collect();
             gone.sort_unstable();
             order.retain(|i| gone.binary_search(i).is_err());
         }
@@ -327,18 +337,40 @@ pub fn separate(ctx: &mut Ctx, f: &Separate) -> FResult {
         let colors: Vec<_> = (0..solids.len())
             .map(|i| solid_face_colors(&face_colors, &solids, i))
             .collect();
+        // Where each piece's faces sat in the body's face list as the build shows it.
+        let mut spans = vec![(0, 0); solids.len()];
+        let mut shown = 0;
+        for (i, s) in solids.iter().enumerate() {
+            if gone.binary_search(&i).is_ok() {
+                continue;
+            }
+            spans[i] = (shown, kernel::count(s, Kind::Face));
+            shown += spans[i].1;
+        }
+        let mut pieces: Vec<Value> = Vec::new();
         let mut taken: Vec<Option<Shape>> = solids.drain(..).map(Some).collect();
         for (n, &i) in order.iter().enumerate() {
             let Some(solid) = taken[i].take() else { continue };
-            if n == 0 {
+            let at = if n == 0 {
                 ctx.set_shape(target, solid);
-                ctx.bodies[target].face_colors = colors[i].clone();
-                continue;
-            }
-            let at = ctx.new_body(solid, Some(format!("{name} {}", n + 1)), None);
+                target
+            } else {
+                let at = ctx.new_body(solid, Some(free_name(ctx, &name, n + 1)), None);
+                ctx.bodies[at].part_color = part_color.clone();
+                at
+            };
             ctx.bodies[at].face_colors = colors[i].clone();
-            ctx.bodies[at].part_color = part_color.clone();
+            pieces.push(json!({"body": ctx.bodies[at].id, "from": spans[i].0, "count": spans[i].1}));
         }
+        ctx.diagnostics.push(json!({
+            "feature_id": f.id,
+            "kind": "separateFaces",
+            "resolved": 1,
+            "confidence": 1.0,
+            "lossy": false,
+            "source": ctx.bodies[target].id,
+            "pieces": pieces,
+        }));
         parted = true;
     }
     if !parted {
