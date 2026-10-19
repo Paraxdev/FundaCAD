@@ -373,6 +373,7 @@ impl Jobs for GeomJobs {
             "stress" => crate::stress::stress_result(req, &EngineWatch(ctx)),
             "printability" => crate::printcheck::op::printability_result(req, &EngineWatch(ctx)),
             "faceAxis" => crate::features::axis_push::face_axis_result(req, &EngineWatch(ctx)),
+            "faceAnchor" => crate::features::text_on_face::face_anchor_result(req, &EngineWatch(ctx)),
             "profileCuts" => crate::features::sketch::profile_cuts_result(req),
             "sketchOutline" => crate::features::sketch::sketch_outline_result(req, &EngineWatch(ctx)),
             "patternAxis" => crate::features::pattern::pattern_axis_result(req, &EngineWatch(ctx)),

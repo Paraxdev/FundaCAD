@@ -367,6 +367,26 @@ is tested for overlap or for clearance: an empty `pairs` beside `unchecked` is n
 clear result. A body whose box reaches no other is never listed, it overlaps nothing
 whatever it is.
 
+### `faceAnchor`
+
+Where a picked point sits on one face, in the terms a `textOnFace` stores: the
+face's fingerprint for a `by: "match"` selector and the point as fractions of the
+face's (u, v) range. Rebuilds through the same warm cache as `inspect`.
+
+```jsonc
+{ "op": "faceAnchor", "id": "...", "document": { /* CadDocument */ },
+  "face": { /* a face Selector */ }, "point": [x,y,z], "body": "body1" }   // body optional
+```
+
+Reply, or `{ "reason": "..." }` when the face is not found or the point does not project:
+```jsonc
+{ "body": "body1",
+  "surface": "cylinder",       // "plane" | "cylinder" | "cone" | "sphere" | "other"
+  "at": [0.25, 0.5],           // fractions of the face's u and v range
+  "normal": [0, 1, 0],         // out of the material at the point
+  "fp": { /* select::face_fingerprint */ } }
+```
+
 ### `faceAxis`
 
 The axis a press/pull with `direction: "axis"` would move one face along, so the

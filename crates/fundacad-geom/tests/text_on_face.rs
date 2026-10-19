@@ -243,3 +243,43 @@ fn the_mcp_schema_example_builds_on_a_cylinder() {
     let dv = volume(&build(json!({}), vec![cylinder(), example])) - volume(&round(cylinder(), [20.0, 0.0, 0.0], None));
     near(dv, a * (1.0 + 1.0 / 40.0), 0.005, "the schema example embosses its text on r20");
 }
+
+#[test]
+fn the_face_anchor_op_gives_what_a_round_face_text_stores() {
+    use fundacad_geom::features::text_on_face::face_anchor_result;
+    let anchor = |r: f64, point: [f64; 3]| {
+        let raw = json!({"parameters": {"r": r}, "features": [{"id": "cyl", "type": "cylinder", "radius": "r", "height": 40}]});
+        let req = json!({"document": raw, "point": point, "face": {"kind": "face", "by": "nearest", "point": point}});
+        let fundacad_protocol::JobResult::Json(got) = face_anchor_result(req.as_object().unwrap(), &NoWatch) else {
+            panic!("a json reply");
+        };
+        got
+    };
+    let side = anchor(20.0, [0.0, 20.0, 0.0]);
+    assert_eq!(side["surface"], "cylinder", "{side:?}");
+    assert_eq!(side["body"], "body1", "{side:?}");
+    let at = [side["at"][0].as_f64().unwrap(), side["at"][1].as_f64().unwrap()];
+    assert!((at[0] - 0.25).abs() < 1e-6 && (at[1] - 0.5).abs() < 1e-6, "a quarter turn, half way up: {at:?}");
+    let n = &side["normal"];
+    assert!((n[1].as_f64().unwrap() - 1.0).abs() < 1e-6, "outward at +Y: {n:?}");
+    assert_eq!(side["fp"]["surface"], "cylinder", "{side:?}");
+
+    let top = anchor(20.0, [5.0, 5.0, 20.0]);
+    assert_eq!(top["surface"], "plane", "{top:?}");
+    assert!((top["normal"][2].as_f64().unwrap() - 1.0).abs() < 1e-6, "{top:?}");
+
+    let Some(a) = glyph_area() else { return };
+    let cyl = |r: f64, text: bool| {
+        let mut f = vec![json!({"id": "cyl", "type": "cylinder", "radius": "r", "height": 40})];
+        if text {
+            f.push(json!({"id": "t1", "type": "textOnFace", "text": TEXT, "height": 8, "depth": 1, "operation": "join",
+                "face": {"kind": "face", "by": "match", "fp": side["fp"], "body": "body1"},
+                "point": [0.0, 20.0, 0.0], "at": side["at"]}));
+        }
+        build(json!({"r": r}), f)
+    };
+    let wide = cyl(25.0, true);
+    near(volume(&wide) - volume(&cyl(25.0, false)), a * (1.0 + 1.0 / 50.0), 0.005, "embossed volume after r 20 to 25");
+    let bb = kernel::bbox(&wide.bodies[0].shape).unwrap();
+    assert!(bb[4] > 25.9 && bb[4] <= 26.0 + 1e-3, "the letters stay at the picked quarter turn, y max {:.4}", bb[4]);
+}
