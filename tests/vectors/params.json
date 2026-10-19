@@ -282,6 +282,7 @@
     "offsetFace": [["distance", "length"]],
     "thicken": [["thickness", "length"]],
     "draft": [["angle", "angle"]],
+    "textOnFace": [["height", "length"], ["depth", "length"], ["angle", "angle"]],
     "thread": [["pitch", "length"], ["starts", "count"], ["offset", "length"], ["length", "length"], ["clearance", "length"]],
     "hole": [["diameter", "length"], ["depth", "length"], ["cbDiameter", "length"], ["cbDepth", "length"], ["csDiameter", "length"], ["csAngle", "angle"], ["leadIn", "length"]],
     "patternRect": [["countX", "count"], ["countY", "count"], ["spacingX", "length"], ["spacingY", "length"]],

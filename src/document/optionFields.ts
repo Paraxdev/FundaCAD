@@ -240,6 +240,10 @@ export const FEATURE_CHOICE_FIELDS: Partial<Record<FeatureType, ChoiceField[]>> 
     { field: "hand", label: "Hand", options: [{ value: "right", label: "Right" }, { value: "left", label: "Left" }], fallback: "right" },
     { field: "operation", label: "Operation", options: BOOLEAN_OPS.filter((o) => o.value === "cut" || o.value === "join"), fallback: "cut" },
   ],
+  textOnFace: [
+    { field: "operation", label: "Operation", options: [{ value: "join", label: "Emboss" }, { value: "cut", label: "Engrave" }], fallback: "join" },
+    { field: "align", label: "Align", options: [{ value: "left", label: "Left" }, { value: "center", label: "Centre" }, { value: "right", label: "Right" }], fallback: "center" },
+  ],
   loft: [{ field: "operation", label: "Operation", options: BOOLEAN_OPS, fallback: "new" }],
   sweep: [{
     field: "operation",
