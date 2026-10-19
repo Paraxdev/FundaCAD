@@ -214,9 +214,12 @@ inline bool sa_face_probe(const TopoDS_Shape &shape, rust::Slice<double> out) {
   if (shape.IsNull() || shape.ShapeType() != TopAbs_FACE) return false;
   const TopoDS_Face &face = TopoDS::Face(shape);
   out[10] = 6;
-  try {
+  // A reference scan's face has no surface; BRepGProp_Face::Normal would
+  // dereference it (a caught exception on Windows, a segfault on Linux).
+  const bool has_surf = !BRep_Tool::Surface(face).IsNull();
+  if (has_surf) try {
     Handle(Geom_Surface) surf = BRep_Tool::Surface(face);
-    bool planar = !surf.IsNull() && GeomLib_IsPlanarSurface(surf, 1e-6).IsPlanar();
+    bool planar = GeomLib_IsPlanarSurface(surf, 1e-6).IsPlanar();
     gp_Pnt c;
     if (planar) {
       GProp_GProps props;
@@ -231,7 +234,7 @@ inline bool sa_face_probe(const TopoDS_Shape &shape, rust::Slice<double> out) {
     out[0] = 1; out[1] = c.X(); out[2] = c.Y(); out[3] = c.Z();
   } catch (...) {
   }
-  try {
+  if (has_surf) try {
     double u0, u1, v0, v1;
     BRepTools::UVBounds(face, u0, u1, v0, v1);
     gp_Pnt p;

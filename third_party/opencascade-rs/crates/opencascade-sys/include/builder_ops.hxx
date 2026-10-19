@@ -363,11 +363,15 @@ inline bool bo_face_fp(const TopoDS_Shape &shape, rust::Slice<double> out) {
     if (shape.IsNull() || shape.ShapeType() != TopAbs_FACE || out.size() < 4) return false;
     TopLoc_Location loc = shape.Location();
     TopoDS_Face face = TopoDS::Face(shape.Located(TopLoc_Location()));
+    Handle(Geom_Surface) surf = BRep_Tool::Surface(face);
+    // A reference scan's face is a bare triangulation. BRepGProp_Face::Normal
+    // dereferences the missing surface: Windows turns that into a caught
+    // exception, Linux segfaults.
+    if (surf.IsNull()) return false;
     GProp_GProps props;
     BRepGProp::SurfaceProperties(face, props);
     gp_Pnt c;
-    Handle(Geom_Surface) surf = BRep_Tool::Surface(face);
-    if (!surf.IsNull() && GeomLib_IsPlanarSurface(surf, 1e-6).IsPlanar()) {
+    if (GeomLib_IsPlanarSurface(surf, 1e-6).IsPlanar()) {
       c = props.CentreOfMass();
     } else {
       double u0, u1, v0, v1;
@@ -1463,6 +1467,7 @@ inline BoShape bo_face_from_wire(const TopoDS_Shape &wire) {
 inline bool bo_face_normal_mid(const TopoDS_Shape &f, rust::Slice<double> out) {
   try {
     TopoDS_Face face = TopoDS::Face(f);
+    if (BRep_Tool::Surface(face).IsNull()) return false;
     double u0, u1, v0, v1;
     BRepTools::UVBounds(face, u0, u1, v0, v1);
     gp_Pnt p;
@@ -1710,6 +1715,7 @@ inline bool bo_face_is_planar(const TopoDS_Shape &f) {
 inline bool bo_face_plane_normal(const TopoDS_Shape &f, rust::Slice<double> out) {
   try {
     TopoDS_Face face = TopoDS::Face(f);
+    if (BRep_Tool::Surface(face).IsNull()) return false;
     GeomAPI_ProjectPointOnSurf proj(gp_Pnt(0, 0, 0), BRep_Tool::Surface(face));
     double u, v;
     proj.LowerDistanceParameters(u, v);
