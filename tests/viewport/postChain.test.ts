@@ -214,3 +214,33 @@ describe("shadow map type", () => {
     expect([THREE.BasicShadowMap, THREE.PCFShadowMap, THREE.VSMShadowMap]).toContain(SHADOW_MAP_TYPE);
   });
 });
+
+describe("PostChain composer frame that throws inside a pass", () => {
+  it("does not leave the pass's material override on the scene for later frames", () => {
+    setRenderPref("bloom", 0.4);
+    const scene = new THREE.Scene();
+    const renderer = {
+      toneMapping: THREE.NeutralToneMapping,
+      toneMappingExposure: 1,
+      getPixelRatio: () => 1,
+      getDrawingBufferSize: (v: THREE.Vector2) => v.set(64, 32),
+      getRenderTarget: () => null,
+      setRenderTarget: () => {},
+      getClearColor: (c: THREE.Color) => c.set(0x0b0912),
+      getClearAlpha: () => 1,
+      setClearColor: () => {},
+      clear: () => {},
+    } as unknown as THREE.WebGLRenderer;
+    const post = new PostChain(renderer, scene, () => false, () => false);
+    const f = fakeComposer();
+    // BokehPass sets its depth override, renders, then clears it, with no try/finally.
+    f.composer.render = () => {
+      scene.overrideMaterial = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking });
+      throw new TypeError("a mesh callback threw mid pass");
+    };
+    (post as unknown as { composer: unknown }).composer = f.composer;
+    expect(() => post.render(new THREE.PerspectiveCamera())).toThrow(TypeError);
+    expect(scene.overrideMaterial).toBeNull();
+    setRenderPref("bloom", DEFAULT_RENDER.bloom);
+  });
+});

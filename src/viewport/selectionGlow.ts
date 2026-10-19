@@ -187,7 +187,10 @@ export function makeSelectionGlow(geometry: THREE.BufferGeometry, kind: GlowKind
   mesh.renderOrder = 3; // over the shaded body, under gizmos and other overlays
   markOverlay(mesh, "highlight");
   // Per draw, because the material is shared by every glowing body.
+  // Note: three hands this the scene's override material while one is set (a depth
+  // pass), which has no glow uniforms, so that draw is skipped.
   mesh.onBeforeRender = (_r, _s, camera, geo, mat) => {
+    if (mat !== mesh.material) return;
     if (!geo.boundingBox) geo.computeBoundingBox();
     const m = mat as THREE.ShaderMaterial;
     m.uniforms.uFade!.value = glowFade(screenCoverage(geo.boundingBox!, mesh.matrixWorld, camera));
