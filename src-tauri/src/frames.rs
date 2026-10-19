@@ -9,6 +9,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use fundacad_frames::{frame_size, Current, FrameSource, Transport, WebSocketTransport};
 use serde::Serialize;
 
+pub mod denoiser;
 mod pattern;
 pub mod tracer;
 

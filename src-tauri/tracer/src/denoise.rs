@@ -1,7 +1,8 @@
-//! The denoise at the sample cap: Open Image Denoise on the CPU (feature
-//! `oidn`), on a worker thread, tone mapped with resolve.wgsl's curve.
+//! The denoise at the sample cap, on a worker thread, tone mapped with
+//! resolve.wgsl's curve: Open Image Denoise when it is installed, the edge
+//! aware a-trous filter otherwise.
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -58,81 +59,36 @@ pub struct Input {
     pub color: Vec<f32>,
     pub albedo: Vec<f32>,
     pub normal: Vec<f32>,
+    /// View depth, 0 where no surface was hit.
+    pub depth: Vec<f32>,
+    /// The samples behind `color`, which set the filter's luminance stop.
+    pub samples: u32,
 }
 
-/// Why the denoise cannot run here, or Ok once the library loaded.
-pub fn available() -> Result<(), String> {
-    imp::available()
+/// What cleans the picture at the cap.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Denoiser {
+    Oidn,
+    Filter,
 }
 
-pub(crate) fn run(input: &Input, quality: Quality) -> Result<Vec<f32>, String> {
-    imp::run(input, quality)
-}
-
-#[cfg(not(feature = "oidn"))]
-mod imp {
-    use super::*;
-
-    pub fn available() -> Result<(), String> {
-        Err("this build has no denoiser (feature oidn)".into())
-    }
-
-    pub fn run(_: &Input, _: Quality) -> Result<Vec<f32>, String> {
-        available().map(|_| Vec::new())
+pub fn active() -> Denoiser {
+    if crate::oidn::api().is_some() {
+        Denoiser::Oidn
+    } else {
+        Denoiser::Filter
     }
 }
 
-#[cfg(feature = "oidn")]
-mod imp {
-    use super::*;
-    use std::sync::OnceLock;
-
-    /// The app delay loads OpenImageDenoise.dll (src-tauri/build.rs), so a
-    /// missing library must be found here, before the first call faults.
-    #[cfg(windows)]
-    fn load() -> Result<(), String> {
-        #[link(name = "kernel32")]
-        extern "system" {
-            fn LoadLibraryW(name: *const u16) -> *mut std::ffi::c_void;
+/// Open Image Denoise when loaded, the filter when it is not or it failed.
+pub(crate) fn run(input: &Input, quality: Quality) -> (Vec<f32>, Denoiser, Option<String>) {
+    let mut note = None;
+    if let Some(api) = crate::oidn::api() {
+        match api.denoise(input, quality) {
+            Ok(c) => return (c, Denoiser::Oidn, None),
+            Err(e) => note = Some(e),
         }
-        let name: Vec<u16> = "OpenImageDenoise.dll\0".encode_utf16().collect();
-        if unsafe { LoadLibraryW(name.as_ptr()) }.is_null() {
-            return Err(format!("OpenImageDenoise.dll did not load ({})", std::io::Error::last_os_error()));
-        }
-        Ok(())
     }
-
-    #[cfg(not(windows))]
-    fn load() -> Result<(), String> {
-        Ok(())
-    }
-
-    pub fn available() -> Result<(), String> {
-        static LOADED: OnceLock<Result<(), String>> = OnceLock::new();
-        LOADED
-            .get_or_init(|| {
-                load()?;
-                oidn::Device::cpu().map(drop).map_err(|e| format!("no CPU denoise device: {e:?}"))
-            })
-            .clone()
-    }
-
-    pub fn run(input: &Input, quality: Quality) -> Result<Vec<f32>, String> {
-        available()?;
-        let device = oidn::Device::cpu().map_err(|e| format!("{e:?}"))?;
-        let mut out = vec![0.0; input.color.len()];
-        let mut f = oidn::RayTracing::try_new(&device).map_err(|e| format!("{e:?}"))?;
-        f.srgb(false)
-            .hdr(true)
-            .clean_aux(true)
-            .image_dimensions(input.width, input.height)
-            .filter_quality(match quality {
-                Quality::High => oidn::Quality::High,
-                _ => oidn::Quality::Balanced,
-            })
-            .albedo_normal(&input.albedo, &input.normal);
-        f.filter(&input.color, &mut out).map_err(|e| format!("{e:?}"))?;
-        device.get_error().map_err(|e| format!("{e:?}"))?;
-        Ok(out)
-    }
+    (crate::atrous::filter(input, input.samples), Denoiser::Filter, note)
 }

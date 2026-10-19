@@ -310,7 +310,9 @@ pub fn run() {
         frames::tracer::pt_denoise,
         frames::tracer::pt_bloom,
         frames::tracer::pt_status,
-        frames::tracer::pt_probe
+        frames::tracer::pt_probe,
+        frames::denoiser::pt_denoiser,
+        frames::denoiser::pt_denoiser_download
     ]);
 
     let app = builder
@@ -321,6 +323,7 @@ pub fn run() {
         .manage(plugins::files::Handles::default())
         .setup(|app| {
             app.manage(engine::Engine::start(app.handle()));
+            frames::denoiser::load_installed(app.handle());
             // The 3D-mouse reader is NOT started here any more. It is a
             // capability the user can turn off (Preferences, Plugins), and one
             // that is off must not hold the HID device open. The frontend
