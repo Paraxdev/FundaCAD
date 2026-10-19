@@ -137,8 +137,12 @@ pub fn mirror(ctx: &mut Ctx, m: &Mirror) -> FResult {
             missing.join(", ")
         )));
     }
-    for i in targets(ctx, m.bodies.as_ref(), "Mirror")?.into_iter().flatten() {
+    let all: Vec<usize> = targets(ctx, m.bodies.as_ref(), "Mirror")?.into_iter().flatten().collect();
+    // Every target is checked before the first is mirrored, so a refusal leaves none changed.
+    for &i in &all {
         ctx.editable(i, "Mirror")?;
+    }
+    for i in all {
         let shape = ctx.bodies[i].shape();
         let mirrored = kernel::mirrored(shape, plane.origin, plane.z)?;
         let wrapped = kernel::compound([&mirrored]);

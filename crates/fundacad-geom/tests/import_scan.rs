@@ -281,6 +281,25 @@ fn a_pattern_mirror_or_mesh_cleanup_of_a_scan_is_refused_naming_it() {
 }
 
 #[test]
+fn a_mirror_naming_a_scan_beside_a_solid_leaves_the_solid_unmirrored() {
+    let (path, _) = dense_stl();
+    let reply = import_file(path, "stl").unwrap();
+    let r = build(vec![
+        scan_feature(&reply),
+        json!({"id": "b", "type": "box", "length": 10, "width": 10, "height": 10}),
+        json!({"id": "mv", "type": "move", "dx": 100, "dy": 0, "dz": 0, "rx": 0, "ry": 0, "rz": 0, "bodies": ["body2"]}),
+        json!({"id": "op", "type": "mirror", "plane": {"name": "YZ"}, "bodies": ["body2", "body1"]}),
+    ]);
+    let err = r.errors.iter().find(|e| e.wire()["feature_id"] == "op").expect("the scan target refuses");
+    assert!(err.wire().to_string().contains("is a reference scan"), "{:?}", err.wire());
+    let bodies = payloads(&r);
+    let solid = bodies.iter().find(|b| b.fields.get("scan") != Some(&json!(true))).expect("the box");
+    let xs = solid.positions.chunks(3).map(|p| p[0]);
+    let (lo, hi) = xs.fold((f32::MAX, f32::MIN), |(lo, hi), x| (lo.min(x), hi.max(x)));
+    assert!(hi - lo < 10.5, "the box was mirrored before the refusal: x {lo}..{hi}");
+}
+
+#[test]
 fn an_unnamed_cleanup_passes_over_a_scan() {
     let (path, ntri) = dense_stl();
     let reply = import_file(path, "stl").unwrap();
