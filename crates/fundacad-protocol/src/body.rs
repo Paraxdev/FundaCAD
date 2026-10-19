@@ -179,7 +179,7 @@ impl WireBody {
         e.insert("id".into(), get("id"));
         e.insert("name".into(), get("name"));
         e.insert("etag".into(), get("etag"));
-        for key in ["nodeRef", "faceColors", "partColor"] {
+        for key in ["nodeRef", "faceColors", "partColor", "scan"] {
             if let Some(v) = f.get(key).filter(|v| !v.is_null()) {
                 e.insert(key.into(), v.clone());
             }

@@ -42,6 +42,8 @@ export interface BodyMesh {
   // precomputed once so highlight.ts/viewport.ts can touch just one face's/body's
   // own triangles without scanning the whole body on each hover/select/measure.
   faceTriangles: Map<number, number[]>;
+  /** A read-only reference scan: picked as a whole body, never face by face. */
+  scan?: true;
 }
 
 export interface ModelView {
@@ -63,6 +65,8 @@ export interface ModelView {
 // Base albedo is baked into vertex colors (material.color stays white) so
 // highlight.ts can recolor a single face's vertices without touching lighting.
 export const BASE_COLOR = new THREE.Color(0x9aa7b4);
+/** A reference scan is matte and sand coloured, so it never reads as a solid. */
+export const SCAN_COLOR = new THREE.Color(0xc9b48f);
 
 
 /** Split a RebuildResult's flat edge list by owning body id (see `orphans` above
@@ -192,7 +196,7 @@ export function partitionMesh(
  *  several bodies from the same reply. Output is identical either way. */
 export function buildBodyMesh(
   result: RebuildResult,
-  meta: { id: string; name: string; faceStart: number; faceCount: number },
+  meta: { id: string; name: string; faceStart: number; faceCount: number; scan?: true | undefined },
   bodyEdges: RebuildResult["edges"],
   resolution: THREE.Vector2,
   etag: string | undefined,
@@ -322,10 +326,11 @@ export function buildBodyMesh(
   // vertices without disturbing lighting (material.color is white).
   const vcount = posOut.length / 3;
   const colors = new Float32Array(vcount * 3);
+  const base = meta.scan ? SCAN_COLOR : BASE_COLOR;
   for (let i = 0; i < vcount; i++) {
-    colors[i * 3] = BASE_COLOR.r;
-    colors[i * 3 + 1] = BASE_COLOR.g;
-    colors[i * 3 + 2] = BASE_COLOR.b;
+    colors[i * 3] = base.r;
+    colors[i * 3 + 1] = base.g;
+    colors[i * 3 + 2] = base.b;
   }
   geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
 
@@ -359,6 +364,10 @@ export function buildBodyMesh(
     side: THREE.DoubleSide,
   }));
 
+  if (meta.scan) {
+    mat.metalness = 0;
+    mat.roughness = 1;
+  }
   const mesh = new THREE.Mesh(geo, mat);
   mesh.name = "model";
   // Cast and receive shadows so an emissive body/face lights AND shadows its
@@ -374,8 +383,10 @@ export function buildBodyMesh(
 
   // one pass over this body's own (already-sliced) triangle list, grouping
   // LOCAL triangle indices by their B-rep faceId.
+  // A scan's one face is every triangle, a list nothing reads since a scan is
+  // never painted face by face, and at a few million triangles it is not small.
   const faceTriangles = new Map<number, number[]>();
-  for (let t = 0; t < localFaceIds.length; t++) {
+  for (let t = 0; t < (meta.scan ? 0 : localFaceIds.length); t++) {
     const fid = localFaceIds[t];
     if (fid === undefined) continue;
     let tris = faceTriangles.get(fid);
@@ -394,6 +405,7 @@ export function buildBodyMesh(
     edges,
     baseColors: colors.slice(),
     faceTriangles,
+    ...(meta.scan ? { scan: true as const } : {}),
   };
   // reverse lookup: a raycast hit's `.object` (the exact mesh hit) back to the
   // BodyMesh that owns it, picking.ts/viewport.ts use this via faceIdOfHit().
