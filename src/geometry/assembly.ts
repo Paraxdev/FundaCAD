@@ -29,6 +29,8 @@ export interface WireBodyFull {
   /** The colour the imported file styled on this body's solid. Envelope, same
    *  reason as faceColors. */
   partColor?: string;
+  /** A read-only reference scan: one surfaceless face, never in a boolean. */
+  scan?: true;
   positions: F32Wire;
   indices: U32Wire;
   faceIds: U32Wire;
@@ -65,6 +67,7 @@ export interface WireBodyStub {
   nodeRef?: string;
   faceColors?: FaceColorRuns;
   partColor?: string;
+  scan?: true;
   unchanged: true;
 }
 export type WireBody = WireBodyFull | WireBodyStub;
@@ -123,6 +126,7 @@ export interface WireManifestEntry {
   nodeRef?: string;
   faceColors?: FaceColorRuns;
   partColor?: string;
+  scan?: true;
   unchanged?: true;
   faceCount?: number;
   nVerts3?: number;
@@ -161,6 +165,7 @@ export function manifestFromBodies(bodies: WireBody[]): WireManifestEntry[] {
     if (b.nodeRef !== undefined) e.nodeRef = b.nodeRef;
     if (b.faceColors !== undefined) e.faceColors = b.faceColors;
     if (b.partColor !== undefined) e.partColor = b.partColor;
+    if (b.scan) e.scan = true;
     if (b.unchanged) {
       e.unchanged = true;
       return e;
@@ -262,7 +267,7 @@ export class RebuildAssembly {
     // they CAN change while geometry does not, a new diagnostic or
     // featureError must still produce a fresh object.
     const sig = manifest.length === 0 ? null : JSON.stringify([
-      sizes.map((m) => [m.id, m.etag, m.name, m.nodeRef, m.faceCount, m.faceColors, m.partColor]),
+      sizes.map((m) => [m.id, m.etag, m.name, m.nodeRef, m.faceCount, m.faceColors, m.partColor, m.scan]),
       head.bbox,
       head.diagnostics, head.featureError, head.featureErrors, head.projectionUpdates,
       // Datum planes belong to no body, so nothing about them reaches the etags
@@ -324,6 +329,7 @@ export class RebuildAssembly {
       ...(m.nodeRef !== undefined ? { nodeRef: m.nodeRef } : {}),
       ...(m.faceColors !== undefined ? { faceColors: m.faceColors } : {}),
       ...(m.partColor !== undefined ? { partColor: m.partColor } : {}),
+      ...(m.scan ? { scan: true as const } : {}),
     }));
     const out: RebuildResult = {
       mesh,

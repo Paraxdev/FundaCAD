@@ -285,6 +285,17 @@ fn step_leaves_a_scan_out_and_stl_keeps_its_triangles() {
 }
 
 #[test]
+fn the_chunked_manifest_carries_the_scan_flag() {
+    let (path, _) = dense_stl();
+    let reply = import_file(path, "stl").unwrap();
+    let r = build(vec![scan_feature(&reply)]);
+    let JobResult::Mesh(m) = reply::mesh_result(&r.bodies, 0.1, &Map::new(), &NoWatch) else {
+        panic!("a mesh reply")
+    };
+    assert_eq!(m.bodies[0].manifest_entry().get("scan"), Some(&json!(true)));
+}
+
+#[test]
 fn an_import_without_the_flag_keeps_its_old_serialisation() {
     let f: fundacad_core::schema::Import =
         serde_json::from_value(json!({"id": "f1", "type": "import", "name": "part"})).unwrap();

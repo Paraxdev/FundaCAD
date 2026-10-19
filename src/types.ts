@@ -859,7 +859,7 @@ export interface RebuildResult {
   edges: { id: string; points: [number, number, number][]; body?: string; smooth?: boolean }[];
   bbox: { min: Vec3; max: Vec3 };
   // Each body's faceId range. No `etag` means always rebuild the body's mesh.
-  bodies?: { id: string; name: string; faceStart: number; faceCount: number; faceOwners?: (string | null)[]; faceBands?: number[][]; faceColorSlots?: (number | null)[]; fault?: string; etag?: string; nodeRef?: string; faceColors?: FaceColorRuns; partColor?: string }[];
+  bodies?: { id: string; name: string; faceStart: number; faceCount: number; faceOwners?: (string | null)[]; faceBands?: number[][]; faceColorSlots?: (number | null)[]; fault?: string; etag?: string; nodeRef?: string; faceColors?: FaceColorRuns; partColor?: string; scan?: true }[];
   // selector-resolution diagnostics, when any selector resolved with low confidence.
   diagnostics?: ResolveDiag[];
   // Failed features alongside what did build. featureError is the most downstream one.

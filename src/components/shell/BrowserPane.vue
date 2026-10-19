@@ -616,6 +616,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
     out.push({ kind: "plugin", k: `x:${key}`, component: section.component });
   }
 
+  const scanIds = new Set((store.buildState.result?.bodies ?? []).filter((b) => b.scan).map((b) => b.id));
   const bodyRow = (b: BodyRef, depth: number): RowNode => {
     // The swatch is the slot assignment made visible. Drawn only while
     // something is contributing a colour menu for a body, because that is the
@@ -636,7 +637,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
       id: b.id,
       depth,
       label: store.bodyName(b.id) ?? b.name,
-      icon: "body",
+      icon: scanIds.has(b.id) ? "scan" : "body",
       ...(chip ? { swatch: chip } : {}),
       selected: selectedIds.has(b.id),
       ...eye({ category: "bodies", key: b.id }, store.isBodyVisible(b.id)),
