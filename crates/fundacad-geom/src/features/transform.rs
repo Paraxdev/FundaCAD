@@ -7,7 +7,7 @@ use std::collections::HashSet;
 use fundacad_core::schema::{Mirror, MirrorPlane, Move, RemoveBody, Scale};
 
 use crate::builder::plane::{plane_of, PlaneRef};
-use crate::builder::{Ctx, FResult, Fail};
+use crate::builder::{Ctx, FResult, Fail, ImportedMeta};
 use crate::kernel::{self, BoolKind};
 
 /// The bodies a move-like feature acts on: the listed ids (stale ones as
@@ -69,7 +69,8 @@ pub fn duplicate(ctx: &mut Ctx, m: &Move) -> FResult {
         let copy = kernel::copy(ctx.bodies[i].shape())?;
         let sh = placed(&copy, r, d)?;
         let name = format!("{} copy", ctx.bodies[i].name);
-        ctx.new_body(sh, Some(name), None);
+        let meta = ImportedMeta { scan: ctx.bodies[i].scan, ..Default::default() };
+        ctx.new_body_with(sh, Some(name), None, meta);
     }
     Ok(())
 }
@@ -137,6 +138,7 @@ pub fn mirror(ctx: &mut Ctx, m: &Mirror) -> FResult {
         )));
     }
     for i in targets(ctx, m.bodies.as_ref(), "Mirror")?.into_iter().flatten() {
+        ctx.editable(i, "Mirror")?;
         let shape = ctx.bodies[i].shape();
         let mirrored = kernel::mirrored(shape, plane.origin, plane.z)?;
         let wrapped = kernel::compound([&mirrored]);

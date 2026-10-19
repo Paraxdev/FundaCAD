@@ -374,12 +374,12 @@ pub fn pattern_rect(ctx: &mut Ctx, f: &PatternRect) -> FResult {
 /// `_pattern_targets`: a stale listed id is skipped with a diagnostic.
 fn targets(ctx: &mut Ctx, id: &str, kind: &str, ids: Option<&Vec<String>>) -> FResult<Vec<usize>> {
     let Some(ids) = ids.filter(|v| !v.is_empty()) else {
-        return Ok(vec![ctx.require_active("Pattern")?]);
+        return Ok(vec![ctx.editable(ctx.require_active("Pattern")?, "Pattern")?]);
     };
     let mut out = Vec::new();
     for bid in ids {
         match ctx.find_body(bid) {
-            Some(i) => out.push(i),
+            Some(i) => out.push(ctx.editable(i, "Pattern")?),
             None => ctx.skip_feature(id, kind, "target body already consumed or missing"),
         }
     }

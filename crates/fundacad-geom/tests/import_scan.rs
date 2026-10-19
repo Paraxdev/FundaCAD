@@ -241,17 +241,77 @@ fn a_face_feature_on_a_scan_is_refused_naming_it() {
         json!({"type": "split", "plane": "XY", "keep": "both", "body": "body1"}),
         json!({"type": "separate", "body": "body1"}),
     ];
+    assert_each_refuses(&reply, *ntri, cases);
+}
+
+/// Every case is built on its own after the scan, and every one that does not refuse by name is listed.
+fn assert_each_refuses(reply: &Map<String, Value>, ntri: usize, cases: impl IntoIterator<Item = Value>) {
+    let mut failed = Vec::new();
     for mut f in cases {
         let kind = f["type"].as_str().unwrap().to_owned();
         f["id"] = json!("op");
-        let r = build(vec![scan_feature(&reply), f]);
+        let r = build(vec![scan_feature(reply), f]);
         let err = r.errors.iter().find(|e| e.wire()["feature_id"] == "op");
         let text = err.map(|e| e.wire().to_string()).unwrap_or_default();
-        assert!(text.contains("is a reference scan"), "{kind}: {text}");
-        assert_eq!(r.bodies.len(), 1, "{kind}");
-        assert!(r.bodies[0].scan, "{kind}");
-        assert_eq!(payloads(&r)[0].indices.len() / 3, *ntri, "{kind}");
+        let intact = r.bodies.len() == 1 && r.bodies[0].scan && payloads(&r)[0].indices.len() / 3 == ntri;
+        if !text.contains("is a reference scan") || !intact {
+            failed.push(format!("{kind}: bodies {}, error {text:?}", r.bodies.len()));
+        }
     }
+    assert!(failed.is_empty(), "not refused by name:
+{}", failed.join("
+"));
+}
+
+#[test]
+fn a_pattern_mirror_or_mesh_cleanup_of_a_scan_is_refused_naming_it() {
+    let (path, ntri) = dense_stl();
+    let reply = import_file(path, "stl").unwrap();
+    let cases = [
+        json!({"type": "patternLinear", "count": 2, "spacing": 200, "axis": "X", "bodies": ["body1"]}),
+        json!({"type": "patternLinear", "count": 2, "spacing": 200, "axis": "X"}),
+        json!({"type": "patternRect", "countX": 2, "countY": 2, "spacingX": 200, "spacingY": 200, "bodies": ["body1"]}),
+        json!({"type": "patternCircular", "count": 2, "angle": 360, "axis": "Z", "bodies": ["body1"]}),
+        json!({"type": "mirror", "plane": {"name": "YZ"}, "bodies": ["body1"]}),
+        json!({"type": "mirror", "plane": "YZ"}),
+        json!({"type": "simplifyMesh", "tolerance": 1}),
+        json!({"type": "cleanUp", "body": "body1"}),
+    ];
+    assert_each_refuses(&reply, *ntri, cases);
+}
+
+#[test]
+fn an_unnamed_cleanup_passes_over_a_scan() {
+    let (path, ntri) = dense_stl();
+    let reply = import_file(path, "stl").unwrap();
+    let r = build(vec![scan_feature(&reply), json!({"id": "op", "type": "cleanUp"})]);
+    assert!(r.errors.is_empty(), "{:?}", r.errors.iter().map(|e| e.wire()).collect::<Vec<_>>());
+    assert!(r.bodies[0].scan);
+    assert_eq!(payloads(&r)[0].indices.len() / 3, *ntri);
+}
+
+#[test]
+fn a_copy_of_a_scan_is_a_scan() {
+    let (path, ntri) = dense_stl();
+    let reply = import_file(path, "stl").unwrap();
+    let r = build(vec![
+        scan_feature(&reply),
+        json!({"id": "dup", "type": "duplicate", "dx": 300, "bodies": ["body1"]}),
+    ]);
+    assert!(r.errors.is_empty(), "{:?}", r.errors.iter().map(|e| e.wire()).collect::<Vec<_>>());
+    assert_eq!(r.bodies.len(), 2);
+    assert!(r.bodies.iter().all(|b| b.scan), "the copy keeps the scan flag");
+    let bodies = payloads(&r);
+    assert!(bodies.iter().all(|b| b.fields.get("scan") == Some(&json!(true)) && b.indices.len() / 3 == *ntri));
+
+    let r = build(vec![
+        scan_feature(&reply),
+        json!({"id": "dup", "type": "duplicate", "dx": 300, "bodies": ["body1"]}),
+        json!({"id": "op", "type": "press-pull", "distance": 1, "body": "body2",
+               "face": {"kind": "face", "by": "normal", "dir": [0, 0, 1], "body": "body2"}}),
+    ]);
+    let err = r.errors.iter().find(|e| e.wire()["feature_id"] == "op").expect("press/pull on the copy fails");
+    assert!(err.wire().to_string().contains("is a reference scan"), "{:?}", err.wire());
 }
 
 #[test]
