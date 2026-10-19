@@ -18,7 +18,7 @@ import {
 import type { CadDocument, Feature, ImportColorSource, ParamControl, ParamExtras, ParamTarget, PlaneSpec, ProjectedSource, ProjectionUpdate, RebuildReply, RebuildResult, ResolveDiag, Selector, StressStudy, Vec3, ViewCubeSide, ViewOverride } from "../types";
 import { asFeature } from "../types";
 import { applyProjectionUpdate } from "../types";
-import type { EngineWait, FaceAxisReply, GeometryBackend, PatternAxisReply, ProjectionResult } from "../geometry/client";
+import type { EngineWait, FaceAnchorReply, FaceAxisReply, GeometryBackend, PatternAxisReply, ProjectionResult } from "../geometry/client";
 import { FORMAT_VERSION, migrateDocument } from "./migrate";
 import {
   ancestryOf, descendantsOf, type ElementDef, freshElementName, reparented,
@@ -2147,7 +2147,7 @@ export class DocumentStore {
 
   /** the document actually sent to build: features up to the rollback marker,
    *  minus suppressed ones. The full document is what we save/serialize. */
-  private effectiveDoc(): CadDocument {
+  private effectiveDoc(opts?: { withoutPreview?: boolean }): CadDocument {
     let features = prefixFeatures(this.doc.features, this.rollbackIndex, this.suppressed);
     if (this.editPreview) {
       // roll to the edited feature's position (never past the rollback marker),
@@ -2161,7 +2161,7 @@ export class DocumentStore {
         if (live) features.push(live);
       }
     }
-    if (this.preview) features.push(...this.preview);
+    if (this.preview && !opts?.withoutPreview) features.push(...this.preview);
     features = features.map(withoutDisplayName);
     // Body visibility travels with the rebuild: a join, cut or intersect that
     // names no targets leaves hidden bodies alone.
@@ -2187,6 +2187,13 @@ export class DocumentStore {
    *  document as it is built on screen. Null when the backend cannot answer. */
   async faceAxis(face: Selector, body: string | null): Promise<FaceAxisReply | null> {
     return (await this.geometry.faceAxis?.(this.effectiveDoc(), face, body)) ?? null;
+  }
+
+  /** Where `point` sits on `face`, in the terms a textOnFace stores, asked of
+   *  the document as built without the tool's own preview. Null when the
+   *  backend cannot answer. */
+  async faceAnchor(face: Selector, body: string | null, point: Vec3): Promise<FaceAnchorReply | null> {
+    return (await this.geometry.faceAnchor?.(this.effectiveDoc({ withoutPreview: true }), face, body, point)) ?? null;
   }
 
   /** The lines a feature added now would cut a sketch's areas along on this

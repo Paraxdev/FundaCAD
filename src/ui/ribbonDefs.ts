@@ -107,6 +107,7 @@ export const MODEL: Group[] = [
           { action: "shell", label: "Shell", iconName: "shell" },
           { action: "draft", label: "Draft", iconName: "draft" },
           { action: "thread", label: "Thread", iconName: "thread" },
+          { action: "text-on-face", label: "Text on Face", iconName: "text" },
           { action: "offset-face", label: "Offset Face", iconName: "offsetFace" },
           { action: "thicken", label: "Thicken", iconName: "thicken" },
         ],
