@@ -148,6 +148,9 @@ pub fn split(ctx: &mut Ctx, f: &Split) -> FResult {
     if targets.is_empty() {
         return Err(Fail::msg("Split needs an existing body"));
     }
+    for &t in &targets {
+        ctx.editable(t, "Split")?;
+    }
     let (origin, normal, xdir) = (v(plane.origin), v(plane.z), v(plane.x));
     let single = targets.len() == 1;
     for target in targets {
@@ -227,6 +230,7 @@ pub fn imprint(ctx: &mut Ctx, f: &Imprint) -> FResult {
             "Divide: the face to split is no longer in the model",
         ));
     };
+    ctx.editable(act, "Divide")?;
     let shape = ctx.bodies[act].shape().clone();
     let before = kernel::count(&shape, Kind::Face);
     let options = BooleanOptions {
@@ -301,6 +305,9 @@ pub fn separate(ctx: &mut Ctx, f: &Separate) -> FResult {
     };
     if targets.is_empty() {
         return Err(Fail::msg("Separate needs an existing body"));
+    }
+    for &t in &targets {
+        ctx.editable(t, "Separate")?;
     }
     let single = targets.len() == 1;
     let mut parted = false;

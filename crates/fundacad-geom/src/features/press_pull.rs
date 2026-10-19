@@ -494,6 +494,7 @@ pub fn press_pull(ctx: &mut Ctx, f: &PressPull) -> FResult {
     let Some(mut act) = act else {
         return Err(Fail::msg("Press/Pull: the target body no longer exists"));
     };
+    ctx.editable(act, "Press/Pull")?;
     let sels = selector_list(&f.face);
     let up = f
         .up_to
@@ -688,6 +689,7 @@ pub fn offset_face(ctx: &mut Ctx, f: &OffsetFace) -> FResult {
     let Some(act) = act else {
         return Err(Fail::msg("Offset face: the target body no longer exists"));
     };
+    ctx.editable(act, "Offset face")?;
     let part = ctx.bodies[act].shape().clone();
     let faces = resolve_field(ctx, &f.id, &part, &f.faces)?;
     if faces.is_empty() {

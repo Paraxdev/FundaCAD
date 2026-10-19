@@ -746,6 +746,7 @@ pub fn delete_face(ctx: &mut Ctx, f: &DeleteFace) -> FResult {
     let Some((act, faces)) = retarget(ctx, f, named, &sels)? else {
         return Err(Fail::msg("Delete Face: the target body no longer exists"));
     };
+    ctx.editable(act, "Delete Face")?;
     if faces.is_empty() {
         return Err(Fail::msg("no face found to delete"));
     }

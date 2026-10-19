@@ -430,6 +430,23 @@ impl Ctx {
         self.bodies.iter().position(|b| b.id == id)
     }
 
+    /// The refusal for a reference scan named as an operand of `what`.
+    pub fn scan_refusal(&self, index: usize, what: &str) -> Fail {
+        let b = &self.bodies[index];
+        Fail::msg(format!(
+            "{} ({}) is a reference scan, {what} cannot use it. Make it solid first.",
+            b.name, b.id
+        ))
+    }
+
+    /// `index` back unless it is a reference scan, which has no faces or edges to edit.
+    pub fn editable(&self, index: usize, what: &str) -> FResult<usize> {
+        if self.bodies[index].scan {
+            return Err(self.scan_refusal(index, what));
+        }
+        Ok(index)
+    }
+
     pub fn set_shape(&mut self, index: usize, shape: Shape) {
         let generation = self.bump();
         if let Some(b) = self.bodies.get_mut(index) {

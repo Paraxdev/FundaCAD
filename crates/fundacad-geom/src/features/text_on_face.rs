@@ -219,7 +219,7 @@ fn seg_end(s: &Seg) -> P {
 
 pub fn handle(ctx: &mut Ctx, f: &TextOnFace) -> FResult {
     let sel = serde_json::to_value(&f.face).map_err(|_| Fail::Internal("TypeError".into()))?;
-    let body = pick_body(ctx, f, &sel)?;
+    let body = ctx.editable(pick_body(ctx, f, &sel)?, "Text on face")?;
     let shape = ctx.bodies[body].shape().clone();
     let face = Resolver::new(Some(&mut ctx.diagnostics), Some(&f.id))
         .faces(&shape, &sel)?
