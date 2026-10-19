@@ -166,7 +166,11 @@ export class TextOnFaceTool {
       () => this.readDepth(),
     );
     this.dim.updateFromCursor({ depth: this.depth });
-    this.panel.show(screen, this.fonts, this.values, {
+    // The panel goes on the far side of the canvas from the click, so it covers
+    // neither the letters nor the dot that drags them.
+    const left = screen.x > window.innerWidth / 2;
+    const at = { x: left ? 16 : window.innerWidth - 332, y: screen.y - 120 };
+    this.panel.show(at, this.fonts, this.values, {
       onChange: (v) => { this.values = v; this.valueChanged(); },
       onCommit: (v) => { this.values = v; this.commit(); },
       onCancel: () => this.cancel(),
@@ -205,7 +209,7 @@ export class TextOnFaceTool {
   private tick() {
     if (this.phase !== "type" || !this.anchor) return;
     const s = this.viewport.projectToScreen(new THREE.Vector3(...this.anchor.point));
-    this.dim.position(s.x + 24, s.y + 24);
+    this.dim.position(s.x, s.y + 60);
     this.gesture.frame();
   }
 
