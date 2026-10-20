@@ -10,7 +10,7 @@ import { sketchRail } from "../ui/railDefs";
 export interface ReadHost {
   store: Pick<
     DocumentStore,
-    "document" | "buildState" | "rollbackIndex" | "isSuppressed" | "isBodyVisible" | "previewError" | "canUndo" | "canRedo" | "dirty" | "fileName"
+    "document" | "buildState" | "rollbackIndex" | "isSuppressed" | "isBodyVisible" | "bodyMaterialId" | "bodyColorSlot" | "previewError" | "canUndo" | "canRedo" | "dirty" | "fileName"
   >;
   viewport: Pick<Viewport, "getSelectedBodies" | "getSelectedFaceIds" | "selectedEdgeLines" | "faceIdToBodyId">;
 }
@@ -48,6 +48,9 @@ export interface BodyRow {
   name: string;
   faces: number;
   visible: boolean;
+  material: string | null;
+  /** The colour palette slot the body wears, when it was given one. */
+  slot: number | null;
   fault: string | null;
 }
 
@@ -57,6 +60,8 @@ export function bodies(h: ReadHost): BodyRow[] {
     name: b.name,
     faces: b.faceCount,
     visible: h.store.isBodyVisible(b.id),
+    material: h.store.bodyMaterialId(b.id) ?? null,
+    slot: h.store.bodyColorSlot(b.id) ?? null,
     fault: b.fault ?? null,
   }));
 }

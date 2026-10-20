@@ -59,7 +59,9 @@ def bodies(rows: list[dict], max_rows: int = BODY_ROWS) -> str:
         for r in shown:
             state = "visible" if r.get("visible") else "hidden"
             fault = f"  fault: {r['fault']}" if r.get("fault") else ""
-            lines.append(f"  {r['id']:<{w_id}}  {r['name']:<{w_name}}  {r['faces']} faces  {state}{fault}")
+            worn = f"  material {r['material']}" if r.get("material") else ""
+            worn += f"  colour {r['slot']}" if r.get("slot") is not None else ""
+            lines.append(f"  {r['id']:<{w_id}}  {r['name']:<{w_name}}  {r['faces']} faces  {state}{worn}{fault}")
     return "\n".join(lines)
 
 

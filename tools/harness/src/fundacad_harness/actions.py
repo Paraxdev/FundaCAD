@@ -270,20 +270,29 @@ class Actions:
         """The title bar Redo button, the step says what it changed."""
         return self._undo_redo("#redo-btn")
 
-    def _model_counts(self) -> tuple[int, int]:
-        return self.bridge.call("history")["count"], len(self.bridge.call("bodies"))
+    def _model_look(self) -> tuple[int, list[dict]]:
+        return self.bridge.call("history")["count"], self.bridge.call("bodies")
 
     def _undo_redo(self, ref: str) -> str:
-        before = self._model_counts()
+        before = self._model_look()
         self._click_control(ref)
         if not getattr(self, "_settling", True):
             return f"clicked {ref}"
         self.settle()
-        after = self._model_counts()
-        if after == before:
-            return f"clicked {ref}, still {after[0]} features and {after[1]} bodies"
-        moved = [f"{what} {a} to {b}" for what, a, b in zip(("features", "bodies"), before, after) if a != b]
-        return f"clicked {ref}, {', '.join(moved)}"
+        after = self._model_look()
+        counts = (("features", before[0], after[0]), ("bodies", len(before[1]), len(after[1])))
+        moved = [f"{what} {a} to {b}" for what, a, b in counts if a != b]
+        if moved:
+            return f"clicked {ref}, {', '.join(moved)}"
+        was = {r.get("id"): r for r in before[1]}
+        changed = []
+        for key, words in (("material", "changed material"), ("slot", "changed colour"), ("visible", "shown or hidden")):
+            n = sum(1 for r in after[1] if r.get("id") in was and was[r.get("id")].get(key) != r.get(key))
+            if n:
+                changed.append(f"{n} bod{'y' if n == 1 else 'ies'} {words}")
+        if changed:
+            return f"clicked {ref}, {', '.join(changed)}"
+        return f"clicked {ref}, still {after[0]} features and {len(after[1])} bodies"
 
     @action
     def command(self, name: str):
