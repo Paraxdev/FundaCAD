@@ -11,7 +11,7 @@ import { useHomeStore } from "../../../src/stores/home";
 import { choose } from "../../../src/ui/choice";
 import type { HomeCallbacks } from "../../../src/ui/home";
 import type { OpenOutcome } from "../../../src/io/files";
-import { setLibrary, type DocumentLibrary, type FileStat, type FolderListing } from "../../../src/io/library";
+import { setLibrary, type DocumentLibrary, type DocSummary, type FileStat, type FolderListing } from "../../../src/io/library";
 import { saveFolder, setSaveFolder } from "../../../src/io/saveFolder";
 import ContextMenuHost from "../../../src/components/overlays/ContextMenuHost.vue";
 import HomeScreen from "../../../src/components/home/HomeScreen.vue";
@@ -31,6 +31,9 @@ function callbacks(over: Partial<HomeCallbacks> = {}): HomeCallbacks {
     newFromTemplate: vi.fn(async () => {}),
     openPath: vi.fn(async () => "ok" as const),
     currentPath: () => null,
+    currentVersions: () => null,
+    openVersion: vi.fn(async () => true),
+    openBranch: vi.fn(async () => true),
     ...over,
   };
 }
@@ -42,8 +45,13 @@ function fakeLibrary(
   mtime = 0,
   folders: Record<string, FolderListing> = {},
   picks: string[] = [],
+  summaries: Record<string, DocSummary | null> = {},
 ): DocumentLibrary {
   return {
+    summary: vi.fn(async (path: string) => {
+      if (!(path in summaries)) throw new Error("unreadable");
+      return summaries[path]!;
+    }),
     list: vi.fn(async (dir: string) => {
       const l = folders[dir];
       if (!l) throw new Error("not found");
@@ -397,6 +405,99 @@ describe("HomeScreen", () => {
     it("has no folders in the browser build", () => {
       open([], {}, null);
       expect(rows()).toEqual(["Recent"]);
+    });
+  });
+
+  describe("versions drawer", () => {
+    const row = (id: string, parent: string | null, branch: string, time: number) =>
+      ({ id, parent, branch, message: `msg ${id}`, time });
+    const hist: DocSummary = {
+      format: "funda",
+      versions: [row("v1", null, "main", 1), row("v2", "v1", "main", 2), row("v3", "v1", "wide", 3)],
+      branches: { main: "v2", wide: "v3" },
+      current: "wide",
+    };
+    const P = "D:/p/part.funda";
+    const texts = (sel: string) => $$(sel).map((n) => n.textContent?.trim());
+    const button = (sel: string, label: string) => $$(sel).find((b) => b.textContent?.trim() === label)!;
+
+    async function drawerFor(summaries: Record<string, DocSummary | null>, over: Partial<HomeCallbacks> = {}) {
+      const opened = open([{ path: P, openedAt: 1 }], over, fakeLibrary([], 0, {}, [], summaries));
+      await flushPromises();
+      $(".home-card-versions")!.click();
+      await flushPromises();
+      return opened;
+    }
+
+    it("lists the branches, current first, and the versions of the one shown", async () => {
+      await drawerFor({ [P]: hist });
+      expect(texts(".home-branch-name")).toEqual(["widecurrent", "main"]);
+      expect(texts(".home-version-msg")).toEqual(["msg v3", "msg v1"]);
+      $$(".home-branch-name")[1]!.click();
+      await nextTick();
+      expect(texts(".home-version-msg")).toEqual(["msg v2", "msg v1"]);
+    });
+
+    it("restores a version and closes once the document shows it", async () => {
+      const { cb, home } = await drawerFor({ [P]: hist });
+      button(".home-version-restore", "Restore").click();
+      await flushPromises();
+      expect(cb.openVersion).toHaveBeenCalledWith(P, "v3", false);
+      expect(home.visible).toBe(false);
+    });
+
+    it("passes the copy and branch actions through and stays up when they are refused", async () => {
+      const { cb, home } = await drawerFor({ [P]: hist }, {
+        openVersion: vi.fn(async () => false),
+        openBranch: vi.fn(async () => false),
+      });
+      $$(".home-version-copy")[1]!.click();
+      await flushPromises();
+      expect(cb.openVersion).toHaveBeenCalledWith(P, "v1", true);
+      $$(".home-branch-open")[1]!.click();
+      await flushPromises();
+      expect(cb.openBranch).toHaveBeenCalledWith(P, "main");
+      expect(home.visible).toBe(true);
+      expect($(".home-drawer")).not.toBeNull();
+    });
+
+    it("closes the drawer on Escape before Home", async () => {
+      const { home } = await drawerFor({ [P]: hist });
+      key("Escape");
+      await nextTick();
+      expect($(".home-drawer")).toBeNull();
+      expect(home.visible).toBe(true);
+      key("Escape");
+      expect(home.visible).toBe(false);
+    });
+
+    it("says when there is no history, the file is too old, or it cannot be read", async () => {
+      await drawerFor({ [P]: { ...hist, versions: [], branches: {} } });
+      expect($(".home-drawer-note")!.textContent).toBe("No versions saved in this document.");
+      document.body.innerHTML = "";
+      await drawerFor({ [P]: null });
+      expect($(".home-drawer-note")!.textContent).toBe("Open the document to see its versions.");
+      document.body.innerHTML = "";
+      await drawerFor({});
+      expect($(".home-drawer-note")!.textContent).toBe("The versions could not be read.");
+    });
+
+    it("reads the open document's history live instead of the file", async () => {
+      const lib = fakeLibrary([], 0, {}, [], { [P]: hist });
+      open([{ path: P, openedAt: 1 }], {
+        currentPath: () => P,
+        currentVersions: () => ({
+          objects: {},
+          versions: [{ id: "u1", parent: null, branch: "main", message: "unsaved", time: 9, tree: { features: [], rest: "" } }],
+          branches: { main: "u1" },
+          current: "main",
+        }),
+      }, lib);
+      await flushPromises();
+      $(".home-card-versions")!.click();
+      await flushPromises();
+      expect(lib.summary).not.toHaveBeenCalled();
+      expect(texts(".home-version-msg")).toEqual(["unsaved"]);
     });
   });
 });

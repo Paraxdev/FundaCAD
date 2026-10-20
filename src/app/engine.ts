@@ -67,7 +67,7 @@ import { ThreadTool } from "../features/threadTool";
 import { TextOnFaceTool } from "../features/textOnFaceTool";
 import { HoleTool } from "../features/holeTool";
 import { cancelActiveTools, createToolBusy } from "./toolBusy";
-import { createDocumentActions, newFromTemplate, openPathGuarded } from "./documentActions";
+import { createDocumentActions, newFromTemplate, openAtVersion, openOnBranch, openPathGuarded } from "./documentActions";
 import { endPickSession } from "../ui/treePick";
 import { createDatumPlanes } from "./datumPlanes";
 import { createSketchVisibility } from "./sketchVisibility";
@@ -492,6 +492,9 @@ export function mountUi(e: Engine): void {
     newFromTemplate: (id) => newFromTemplate(e, id),
     openPath: (path) => openPathGuarded(e, path),
     currentPath: () => e.store.filePath,
+    currentVersions: () => e.store.versionRepo,
+    openVersion: (path, id, copy) => openAtVersion(e, path, id, copy),
+    openBranch: (path, name) => openOnBranch(e, path, name),
   });
   // emitOpen fires before the new document is applied, so this must read nothing from the store.
   e.store.onOpen(() => { e.ui.home.close(); setSaveFolder(null); });

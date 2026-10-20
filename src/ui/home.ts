@@ -1,5 +1,6 @@
 import { useHomeStore } from "../stores/home";
 import type { OpenOutcome } from "../io/files";
+import type { VersionRepo } from "../document/versions";
 
 export interface HomeCallbacks {
   newDocument: () => Promise<void>;
@@ -7,6 +8,11 @@ export interface HomeCallbacks {
   newFromTemplate: (id: string) => Promise<void>;
   openPath: (path: string) => Promise<OpenOutcome | "cancelled">;
   currentPath: () => string | null;
+  /** The open document's history, live, unsaved versions included. */
+  currentVersions: () => Readonly<VersionRepo> | null;
+  /** True once the document shows that version (a copy: as a new untitled document). */
+  openVersion: (path: string, id: string, copy: boolean) => Promise<boolean>;
+  openBranch: (path: string, name: string) => Promise<boolean>;
 }
 
 let shown: Home | null = null;

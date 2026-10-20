@@ -6,7 +6,7 @@ import { folderPath, type HomeEntry } from "../../ui/homeList";
 import type { ThumbQueue } from "../../ui/thumbQueue";
 
 const props = defineProps<{ entry: HomeEntry; unreadable?: boolean; thumbs?: ThumbQueue | null }>();
-const emit = defineEmits<{ open: []; menu: [ev: MouseEvent] }>();
+const emit = defineEmits<{ open: []; menu: [ev: MouseEvent]; versions: [] }>();
 
 const when = computed(() => {
   const e = props.entry;
@@ -54,21 +54,32 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <button
-    ref="root"
-    class="home-card"
-    :class="{ missing: entry.missing }"
-    :title="entry.path"
-    @click="emit('open')"
-    @contextmenu.prevent.stop="emit('menu', $event)"
-  >
-    <span class="home-card-pic">
-      <img v-if="pic" :src="pic" alt="" draggable="false" />
-      <Icon v-else name="body" :size="36" />
-    </span>
-    <span v-if="badge" class="home-badge">{{ badge }}</span>
-    <span class="home-card-name">{{ entry.name }}</span>
-    <span class="home-card-folder" :title="folderPath(entry.path)">{{ entry.folder }}</span>
-    <span class="home-card-time">{{ when }}</span>
-  </button>
+  <div class="home-cell">
+    <button
+      ref="root"
+      class="home-card"
+      :class="{ missing: entry.missing }"
+      :title="entry.path"
+      @click="emit('open')"
+      @contextmenu.prevent.stop="emit('menu', $event)"
+    >
+      <span class="home-card-pic">
+        <img v-if="pic" :src="pic" alt="" draggable="false" />
+        <Icon v-else name="body" :size="36" />
+      </span>
+      <span v-if="badge" class="home-badge">{{ badge }}</span>
+      <span class="home-card-name">{{ entry.name }}</span>
+      <span class="home-card-folder" :title="folderPath(entry.path)">{{ entry.folder }}</span>
+      <span class="home-card-time">{{ when }}</span>
+    </button>
+    <button
+      v-if="!entry.missing"
+      class="home-card-versions"
+      title="Versions"
+      :aria-label="`Versions of ${entry.name}`"
+      @click="emit('versions')"
+    >
+      <Icon name="versions" :size="14" />
+    </button>
+  </div>
 </template>

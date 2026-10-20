@@ -17,6 +17,14 @@ pub async fn library_list(dir: String) -> Result<ListResult, String> {
         .map_err(|e| e.to_string())?
 }
 
+/// None for the old ZIP container, which Home asks the user to open instead.
+#[tauri::command]
+pub async fn doc_summary(path: String) -> Result<Option<fundacad_format::summary::Summary>, String> {
+    tauri::async_runtime::spawn_blocking(move || fundacad_format::summary::read_summary(std::path::Path::new(&path)))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 fn thumbs_dir(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
     Ok(app.path().app_data_dir().map_err(|e| e.to_string())?.join("thumbs"))
 }

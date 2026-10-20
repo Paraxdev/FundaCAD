@@ -18,6 +18,7 @@ function fakeLib(cached: string | null = null) {
     stat: vi.fn(async () => []),
     list: vi.fn(async () => ({ files: [], truncated: false })),
     pickFolder: vi.fn(async () => null),
+    summary: vi.fn(async () => null),
     thumbs: vi.fn(async (paths: string[]) => paths.map(() => cached)),
     putThumb: vi.fn(async () => {}),
   } satisfies DocumentLibrary;

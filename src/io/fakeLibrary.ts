@@ -1,10 +1,12 @@
-import type { DocumentLibrary } from "./library";
+import type { DocSummary, DocumentLibrary } from "./library";
 
 export interface FakeFile {
   path: string;
   exists?: boolean;
   mtimeMs?: number;
   thumb?: string;
+  /** Its history, none when left out; null stands for a file too old to summarise. */
+  summary?: DocSummary | null;
 }
 
 export interface FakeLibrary extends DocumentLibrary {
@@ -41,6 +43,12 @@ export function fakeLibrary(files: readonly FakeFile[], picks: readonly string[]
       const found = [...byPath.values()].filter((f) => f.exists !== false && inside(dir, f.path));
       if (!found.length && !picks.includes(dir)) throw new Error(`${dir} was not found`);
       return { files: await this.stat(found.map((f) => f.path)), truncated: false };
+    },
+    async summary(path) {
+      const f = there(path);
+      if (!f) throw new Error(`${path} was not found`);
+      if (f.summary === undefined) return { format: "funda", versions: [], branches: {}, current: "main" };
+      return f.summary;
     },
     async pickFolder() {
       return queue.shift() ?? null;

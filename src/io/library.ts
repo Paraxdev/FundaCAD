@@ -11,12 +11,31 @@ export interface FolderListing {
   truncated: boolean;
 }
 
+export interface VersionRow {
+  id: string;
+  parent: string | null;
+  branch: string;
+  message: string;
+  time: number;
+}
+
+/** A document's history without what each version holds. */
+export interface DocSummary {
+  format: "funda" | "fundab";
+  versions: VersionRow[];
+  /** Branch name to its newest version id. */
+  branches: Record<string, string>;
+  current: string;
+}
+
 /** What Home reads from the disk. The desktop app answers through Rust, dev
  *  builds can swap in a fake for the browser e2e. */
 export interface DocumentLibrary {
   stat(paths: string[]): Promise<FileStat[]>;
   /** The documents in a folder and its subfolders, four levels deep. Rejects for a folder that is gone. */
   list(dir: string): Promise<FolderListing>;
+  /** Null for a file that cannot be read cheaply (the old ZIP format). Rejects for an unreadable one. */
+  summary(path: string): Promise<DocSummary | null>;
   /** A folder the user picks, null when they cancel. */
   pickFolder(): Promise<string | null>;
   /** The cached preview of each path, null where there is none or the file changed since. At most 48 per call. */
@@ -32,6 +51,10 @@ export const tauriLibrary: DocumentLibrary = {
   async list(dir) {
     const { invoke } = await import("@tauri-apps/api/core");
     return invoke<FolderListing>("library_list", { dir });
+  },
+  async summary(path) {
+    const { invoke } = await import("@tauri-apps/api/core");
+    return invoke<DocSummary | null>("doc_summary", { path });
   },
   async pickFolder() {
     const { open } = await import("@tauri-apps/plugin-dialog");

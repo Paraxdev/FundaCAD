@@ -74,6 +74,9 @@ const fakeHomeCallbacks = (): HomeCallbacks => ({
   newDocument: async () => {},
   openDoc: async () => {},
   newFromTemplate: async () => {},
+  currentVersions: () => null,
+  openVersion: async () => false,
+  openBranch: async () => false,
   openPath: async () => "ok",
   currentPath: () => null,
 });
