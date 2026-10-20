@@ -17,11 +17,13 @@
 
 import {
   PLUGIN_ID,
+  blockedText,
   getSpaceMouseMode,
   initSpaceMouse,
   setSpaceMouseConfig,
   setSpaceMouseMode,
   settings,
+  type DeviceBlocked,
 } from "./spacemouse";
 import { defineAsyncComponent } from "vue";
 import { contribute, invoke, listen, openPluginSettings, stickyFact, toast } from "fundacad";
@@ -105,12 +107,9 @@ async function install(viewport: Viewport): Promise<(() => void)[]> {
   if (!("__TAURI_INTERNALS__" in window)) return stops;
 
   stops.push(
-    await listen<{ name: string; detail: string }>("spacemouse:blocked", (ev) => {
+    await listen<DeviceBlocked>("spacemouse:blocked", (ev) => {
       console.warn("SpaceMouse blocked:", ev.payload.detail);
-      toast(
-        `Found "${ev.payload.name}" but can't read it, run spacenavd or install the udev rule, see the 3D mouse page of the manual`,
-        { kind: "error", timeout: 15000 },
-      );
+      toast(blockedText(ev.payload), { kind: "error", timeout: 15000 });
     }),
   );
 
