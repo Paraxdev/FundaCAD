@@ -20,6 +20,20 @@ export interface GeometryTransport {
   readonly softCancel?: boolean;
 }
 
+const DEFAULT_ENGINE_PORT = 8765;
+
+/** The engine socket. DEV builds take `?engine=<port>` so the agent harness can
+ *  reach a private engine; only a loopback port is accepted. */
+export function engineUrl(search: string, dev: boolean): string {
+  let port = DEFAULT_ENGINE_PORT;
+  if (dev) {
+    const raw = new URLSearchParams(search).get("engine") ?? "";
+    const n = /^\d{1,5}$/.test(raw) ? Number(raw) : NaN;
+    if (n >= 1 && n <= 65535) port = n;
+  }
+  return `ws://127.0.0.1:${port}`;
+}
+
 /** `fundacad-engine --ws` (or `fundacad --engine --ws`) on a loopback socket,
  *  for a plain browser in development and the e2e scripts. */
 export class WebSocketTransport implements GeometryTransport {
@@ -30,10 +44,11 @@ export class WebSocketTransport implements GeometryTransport {
   private reconnectTimer: number | null = null;
   private reconnectDelay = 500; // ms; doubles on each failed attempt, capped, reset on open
 
-  constructor(private readonly url = "ws://127.0.0.1:8765") {}
+  constructor(private url?: string) {}
 
   async start(sink: TransportSink): Promise<void> {
     this.sink = sink;
+    this.url ??= engineUrl(location.search, import.meta.env.DEV);
     // DEV builds take the token from the URL (`?token=`), so the app can be
     // driven against a hand-started engine; a production bundle keeps "".
     this.token = import.meta.env.DEV
@@ -52,7 +67,7 @@ export class WebSocketTransport implements GeometryTransport {
 
   private connect() {
     const sink = this.sink!;
-    const ws = new WebSocket(`${this.url}/?token=${encodeURIComponent(this.token)}`);
+    const ws = new WebSocket(`${this.url!}/?token=${encodeURIComponent(this.token)}`);
     ws.binaryType = "arraybuffer"; // binary mesh frames (default "blob" would need async reads)
     this.ws = ws;
     ws.onopen = () => {
