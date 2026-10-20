@@ -22,17 +22,18 @@ function isAnswer(a: unknown): a is SelfCheckAnswer {
 }
 
 export function runSelfCheck(call: Call): Promise<void> {
-  once ??= (async () => {
+  const run = (once ??= (async () => {
     try {
       const a = await call("pt_selfcheck");
       if (!isAnswer(a)) return;
       const nums = `diff ${a.diff.toFixed(2)}, threshold ${a.threshold.toFixed(2)} of 255, ${Math.round(a.ms)} ms`;
       crumb(`tracer self check ${a.passed ? "passed" : "FAILED"} on ${a.path}: ${nums}`);
     } catch (e) {
+      once = null;
       crumb(`tracer self check did not run: ${e instanceof Error ? e.message : String(e)}`);
     }
-  })();
-  return once;
+  })());
+  return run;
 }
 
 export function resetSelfCheckForTest() {

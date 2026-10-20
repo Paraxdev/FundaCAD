@@ -392,7 +392,6 @@ export class NativeTracer implements TracerBackend {
 
   async init() {
     this.blit = (this.o.blit ?? glBlit)(this.canvas);
-    await runSelfCheck((cmd, args) => this.call(cmd, args as Record<string, unknown>));
     const c = await (this.o.connect ?? connectNative)(this.width, this.height, this.o.prefer);
     if (this.disposed) {
       c.link.close();
@@ -403,6 +402,8 @@ export class NativeTracer implements TracerBackend {
     this.source = c.source;
     // The native tracer outlives a page, so a bloom of the last one is cleared.
     this.syncBloom();
+    // After the connect, which is what opens the native tracer the check borrows its path from.
+    await runSelfCheck((cmd, args) => this.call(cmd, args as Record<string, unknown>));
   }
 
   setSize(cssWidth: number, cssHeight: number, pixelRatio: number) {
