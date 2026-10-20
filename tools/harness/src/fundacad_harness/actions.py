@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from . import selectors
-from .errors import BadArgs, HarnessError, NotFound, Occluded
+from .errors import BadArgs, Disabled, HarnessError, NotFound, Occluded
 from .keys import key, modifiers
 
 
@@ -274,11 +274,20 @@ class Actions:
         return self.bridge.call("history")["count"], self.bridge.call("bodies")
 
     def _undo_redo(self, ref: str) -> str:
+        rows = self.bridge.call("history").get("rows") or []
+        big = getattr(self, "_imported", False) or any(r.get("type") == "import" for r in rows)
         before = self._model_look()
-        self._click_control(ref)
+        try:
+            self._click_control(ref)
+        except Disabled:
+            busy = self.bridge.call("status").get("busy") or ""
+            if busy.startswith("Importing"):
+                raise Disabled(f'{ref} is off while "{busy}" runs, it comes back once the import lands,'
+                               " settle() first") from None
+            raise
         if not getattr(self, "_settling", True):
             return f"clicked {ref}"
-        self.settle()
+        self.settle(timeout=max(self.settle_timeout, IMPORT_SETTLE_S) if big else None)
         after = self._model_look()
         counts = (("features", before[0], after[0]), ("bodies", len(before[1]), len(after[1])))
         moved = [f"{what} {a} to {b}" for what, a, b in counts if a != b]
@@ -458,6 +467,7 @@ class Actions:
         """A browser tab imports a model by a file dropped on the canvas, as from the desktop."""
         full = self._repo_path(path)
         self._drop_on_canvas(full)
+        self._imported = True
         if not getattr(self, "_settling", True):
             return f"dropped {Path(full).name}, the import runs on, wait_for or settle() to see it land", {"path": full}
         self.settle(timeout=max(self.settle_timeout, IMPORT_SETTLE_S))

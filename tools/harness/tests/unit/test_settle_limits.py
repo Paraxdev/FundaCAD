@@ -108,3 +108,35 @@ def test_a_click_a_busy_page_did_not_take_says_the_page_was_busy():
     with pytest.raises(Occluded, match="something is over it"):
         s._click_control("#undo-btn")
     s.close()
+
+
+def test_undo_while_an_import_reads_says_it_waits_for_the_import():
+    from fundacad_harness.errors import Disabled
+    s = session()
+
+    def refuse(ref, *a):
+        raise Disabled(f'{ref} "Undo" is disabled')
+    s._click_control = refuse
+    status = s.bridge.call
+    s.bridge.call = lambda m, **a: {"mode": "model", "busy": "Importing ender3.STEP"} if m == "status" else status(m, **a)
+    with pytest.raises(Disabled, match=r'off while "Importing ender3.STEP" runs, it comes back once the import lands, settle\(\) first'):
+        s.undo()
+    s.close()
+
+
+def test_undo_and_redo_of_an_import_wait_as_long_as_the_import():
+    s = session()
+    s._click_control = lambda ref, *a: {"ref": ref, "label": "Undo"}
+    rows = s.bridge.call
+    s.bridge.call = lambda m, **a: {"count": 1, "rows": [{"type": "import"}]} if m == "history" else rows(m, **a)
+    s.undo()
+    assert s.bridge.settles[0] == 300_000
+    s.bridge.call = rows
+    s.bridge.settles.clear()
+    s.undo()
+    assert s.bridge.settles[0] == 60_000
+    s.import_file(REPO / "tools/harness/fixtures/plate.json")
+    s.bridge.settles.clear()
+    s.redo()
+    assert s.bridge.settles[0] == 300_000
+    s.close()
