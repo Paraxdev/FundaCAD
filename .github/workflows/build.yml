@@ -397,6 +397,36 @@ jobs:
           dpkg-deb -x "$deb" "$RUNNER_TEMP/deb-root"
           python3 scripts/bundle-smoke.py --work "$RUNNER_TEMP/smoke-deb" -- "$RUNNER_TEMP/deb-root/usr/bin/fundacad" --mcp
 
+      # The window as well: the AppImage under Xvfb, and a box built through
+      # the server attached to it. An attached edit only returns once the
+      # page has adopted it, so this proves WebKit loaded the page and its
+      # scripts run. Not a gate until it has run green on the runner.
+      - name: Open the AppImage window under Xvfb and build a box in it
+        if: matrix.platform == 'ubuntu-22.04'
+        continue-on-error: true
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo timeout -k 10 300 apt-get install -y -qq xvfb
+          img=$(find src-tauri/target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' | head -1)
+          fuse=()
+          if ! { [ -e /dev/fuse ] && { command -v fusermount3 || command -v fusermount; } >/dev/null; }; then
+            fuse=(--appimage-extract-and-run)
+          fi
+          export XDG_DATA_HOME="$RUNNER_TEMP/gui-data" WEBKIT_DISABLE_COMPOSITING_MODE=1 LIBGL_ALWAYS_SOFTWARE=1
+          session="$XDG_DATA_HOME/dev.fundacad.app/session.json"
+          mkdir -p "$XDG_DATA_HOME"
+          setsid xvfb-run -a "$img" "${fuse[@]}" > "$RUNNER_TEMP/gui.log" 2>&1 &
+          gui=$!
+          trap 'kill -- -"$gui" 2>/dev/null || true' EXIT
+          for _ in $(seq 120); do [ -f "$session" ] && break; sleep 1; done
+          if [ ! -f "$session" ]; then
+            echo "::error::the app wrote no session file in 120 s"; tail -n 50 "$RUNNER_TEMP/gui.log"; exit 1
+          fi
+          FUNDACAD_MCP_MODE=attach FUNDACAD_SESSION_FILE="$session" \
+            python3 scripts/bundle-smoke.py --work "$RUNNER_TEMP/smoke-gui" -- "$RUNNER_TEMP/deb-root/usr/bin/fundacad" --mcp
+
       # The portable exe the release uploads, and the macOS app's binary, which
       # Tauri names after the binary or the product depending on its version.
       - name: Start the shipped executable and build a box
