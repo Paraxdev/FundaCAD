@@ -66,6 +66,10 @@ describe("findControl", () => {
     const e = fail("menu:Edit/Nope");
     expect(e.candidates).toEqual(['menu:Edit/Preferences... "Preferences..."']);
   });
+
+  it("finds a disabled control when asked to", () => {
+    expect(findControl(walk(), "Measure", { disabled: true }).ref).toBe("action:measure");
+  });
 });
 
 describe("stamp", () => {

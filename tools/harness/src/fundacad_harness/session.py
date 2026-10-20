@@ -322,7 +322,7 @@ class Session(Actions):
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         if target:
-            hit = self.call("locate", target=target)
+            hit = self.call("locate", target=target, disabled=True)
             self.page.locator(f'[data-harness-target="{hit["marker"]}"]').screenshot(path=str(path))
         else:
             self.page.screenshot(path=str(path))
