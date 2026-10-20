@@ -65,6 +65,10 @@ impl GpuMaterial {
     pub fn emits(&self) -> bool {
         self.emission[..3].iter().any(|c| *c > 0.0)
     }
+    /// The luminance its triangles enter the light table with, 0 for none.
+    pub fn light_power(&self) -> f32 {
+        (0.2126 * self.emission[0] + 0.7152 * self.emission[1] + 0.0722 * self.emission[2]).max(0.0)
+    }
     /// The shader's albedo: the base colour times the interpolated vertex
     /// colour when the body carries paint or a bake.
     pub fn albedo(&self, vertex: Option<[f32; 3]>) -> [f32; 3] {

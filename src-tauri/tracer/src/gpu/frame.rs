@@ -23,9 +23,9 @@ pub fn adapt_rows(rows: u32, width: u32, height: u32, took: Duration, target: Du
 
 pub const MIN_BAND_PATHS: u32 = 65_536;
 
-/// U in trace.wgsl: 8 words, 7 vec4s, 4 lights of 2 vec4s, the light count
-/// and the background.
-pub(super) const UNIFORM_SIZE: u64 = 32 + 7 * 16 + 8 * 16 + 2 * 16;
+/// U in trace.wgsl: 8 words, 7 vec4s, 4 lights of 2 vec4s, the light count,
+/// the background and the emitter table.
+pub(super) const UNIFORM_SIZE: u64 = 32 + 7 * 16 + 8 * 16 + 3 * 16;
 
 /// What a light is picked by, its share of the lights' luminance.
 fn power(c: [f32; 3]) -> f32 {
@@ -92,6 +92,13 @@ impl Tracer {
         let behind = (env != 0 && l.environment_behind) as u32;
         data.extend([lights.len() as u32, env, p_env.to_bits(), behind].map(f32::from_bits));
         data.extend(v4(bg, l.background.is_some() as u32 as f32));
+        // Emitter power is flux and the discs' and the map's is irradiance,
+        // so with both an even split; a poor one costs noise, not bias.
+        let em = &self.emitters;
+        let others = !lights.is_empty() || p_env > 0.0;
+        let p_em: f32 = if em.count == 0 { 0.0 } else if others { 0.5 } else { 1.0 };
+        let em_base = self.env.tables.len() as u32;
+        data.extend([em_base, em.count, p_em.to_bits(), em.total.to_bits()].map(f32::from_bits));
         debug_assert_eq!(data.len() * 4, UNIFORM_SIZE as usize);
         self.queue.write_buffer(&self.uniform, 0, bytes(&data));
     }

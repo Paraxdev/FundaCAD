@@ -8,6 +8,9 @@ use super::{bytes, storage, Tracer};
 pub(super) struct EnvMap {
     pub texture: wgpu::TextureView,
     pub lights: wgpu::Buffer,
+    /// What `lights` starts with, kept to copy over when the emitter table
+    /// after them outgrows the buffer.
+    pub tables: Vec<[f32; 4]>,
     pub held: Option<Environment>,
     /// The mean radiance's luminance over the sphere, before the brightness.
     pub mean: f32,
@@ -38,14 +41,14 @@ impl EnvMap {
     pub(super) fn new(device: &wgpu::Device, queue: &wgpu::Queue, e: Option<Environment>) -> EnvMap {
         let Some(e) = e else {
             let lights = storage(device, 256, wgpu::BufferUsages::empty());
-            let head: [[f32; 4]; 2] = [[1.0, 1.0, 8.0, 9.0], [0.0, 2.0, 0.0, 0.0]];
-            queue.write_buffer(&lights, 0, bytes(&head));
-            return EnvMap { texture: texture(device, queue, 1, 1, &[0; 4]), lights, held: None, mean: 0.0 };
+            let tables = vec![[1.0, 1.0, 8.0, 9.0], [0.0, 2.0, 0.0, 0.0]];
+            queue.write_buffer(&lights, 0, bytes(&tables));
+            return EnvMap { texture: texture(device, queue, 1, 1, &[0; 4]), lights, tables, held: None, mean: 0.0 };
         };
         let tables = e.tables();
         let lights = storage(device, (tables.len() * 16).max(256) as u64, wgpu::BufferUsages::empty());
         queue.write_buffer(&lights, 0, bytes(&tables));
-        EnvMap { texture: texture(device, queue, e.width, e.height, &e.rgba), lights, mean: tables[1][0], held: Some(e) }
+        EnvMap { texture: texture(device, queue, e.width, e.height, &e.rgba), lights, mean: tables[1][0], tables, held: Some(e) }
     }
 }
 
@@ -57,6 +60,7 @@ impl Tracer {
             return;
         }
         self.env = EnvMap::new(&self.device, &self.queue, e);
+        self.write_emitters();
         self.reset();
     }
 
