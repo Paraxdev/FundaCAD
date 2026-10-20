@@ -19,6 +19,8 @@ describe("extToFormat", () => {
     expect(extToFormat("/tmp/part.stl")).toBe("stl");
     expect(extToFormat("/tmp/part.3mf")).toBe("3mf");
     expect(extToFormat("/tmp/part.glb")).toBe("glb");
+    expect(extToFormat("/tmp/part.dxf")).toBe("dxf");
+    expect(extToFormat("/tmp/part.svg")).toBe("svg");
   });
 
   it("is case-insensitive and survives dots in the path", () => {

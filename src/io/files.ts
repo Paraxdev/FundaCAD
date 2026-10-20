@@ -8,11 +8,11 @@ import { suggestedSavePath } from "./saveFolder";
 import type { CarriedSection, DocumentStore } from "../document/store";
 import { asFeature } from "../types";
 import type { GeometryBackend } from "../geometry/client";
-import type { CadDocument, ExportFormat, Feature, ImportFormat } from "../types";
+import type { CadDocument, ExportFormat, Feature, ImportFormat, PlaneDef } from "../types";
 import { clearRecovery } from "./recovery";
 import {
-  exportFileName, exportScopeFromSelection, FORMATS, isMeshFormat, lastExportDir, meshWire, rememberExportDir,
-  saveExportSettings,
+  clampTolerance, exportFileName, exportScopeFromSelection, FORMATS, isFlatFormat, isMeshFormat, lastExportDir, meshWire,
+  rememberExportDir, saveExportSettings, type FlatSource,
 } from "./exportSettings";
 import { buildBodyTree, importTrees } from "../ui/browserTree";
 import { referencedGeometry } from "../document/versions";
@@ -392,15 +392,52 @@ async function finishOpen(
   return "ok";
 }
 
-/** `selected` is the viewport's selection as body ids, where the picker starts. */
-export async function exportModel(store: DocumentStore, geometry: GeometryBackend, selected: readonly string[] = []) {
+interface ExportViewport {
+  selectionBodyIds(): string[];
+  selectedFaceSketchPlane(): { plane: PlaneDef; faceId: number; anchor: { selector: unknown } } | null;
+}
+
+/** The selected sketch, else the selected flat face, as what a DXF or SVG export draws. */
+export function flatSourceOf(store: DocumentStore, viewport: ExportViewport, featureId: string | null): FlatSource | null {
+  const f = featureId ? store.document.features.find((x) => x.id === featureId) : undefined;
+  if (f?.type === "sketch") return sketchFlatSource(store, f.id);
+  const face = viewport.selectedFaceSketchPlane();
+  if (!face) return null;
+  const body = (face.anchor.selector as { body?: string }).body;
+  return { face: face.anchor.selector, plane: face.plane, label: `${(body && store.bodyName(body)) || "part"} face` };
+}
+
+export function sketchFlatSource(store: DocumentStore, sketchId: string): FlatSource {
+  const i = store.document.features.filter((x) => x.type === "sketch").findIndex((x) => x.id === sketchId);
+  const f = store.document.features.find((x) => x.id === sketchId);
+  return { sketch: sketchId, label: (f && "name" in f && typeof f.name === "string" && f.name) || `Sketch${i + 1}` };
+}
+
+/** File, Export: the selected bodies, or a selected sketch or flat face for DXF and SVG. */
+export async function exportSelection(store: DocumentStore, geometry: GeometryBackend, viewport: ExportViewport) {
+  const { useSelectionStore } = await import("../stores/selection");
+  return exportModel(store, geometry, viewport.selectionBodyIds(), flatSourceOf(store, viewport, useSelectionStore().featureId));
+}
+
+/** `selected` is the viewport's selection as body ids, where the picker starts.
+ *  `flat` is what a DXF or SVG export draws, `format` the format to start on. */
+export async function exportModel(
+  store: DocumentStore,
+  geometry: GeometryBackend,
+  selected: readonly string[] = [],
+  flat: FlatSource | null = null,
+  format?: ExportFormat,
+) {
   const built = store.buildState.result?.bodies ?? [];
   const bodies = built.map((b) => ({ id: b.id, name: store.bodyName(b.id) ?? b.name }));
   const docName = store.fileName === "Untitled" ? "" : store.fileName.replace(/\.[^.]+$/, "");
   const { groups } = buildBodyTree(built, importTrees(store.document), store.bodyElements, store.bodyElementMap());
   const start = exportScopeFromSelection(selected, bodies, groups, docName);
   const { useExportDialogStore } = await import("../stores/exportDialog");
-  const choice = await useExportDialogStore().open({ bodies, scope: start.scope, selected: start.selected });
+  const choice = await useExportDialogStore().open({
+    bodies, scope: start.scope, selected: start.selected,
+    ...(flat ? { flat: { label: flat.label } } : {}), ...(format ? { format } : {}),
+  });
   if (!choice) return;
   const { settings, scope } = choice;
   saveExportSettings(settings);
@@ -412,13 +449,25 @@ export async function exportModel(store: DocumentStore, geometry: GeometryBacken
     await reportError("Export needs the desktop app: a browser tab has no filesystem path to give the engine to write to.");
     return;
   }
-  const opts: { body?: string; bodies?: string[]; separate?: boolean } = {};
-  if (scope === "separate" || scope === "selected-separate") opts.separate = true;
-  if (scope === "selected" || scope === "selected-separate") opts.bodies = start.selected;
-  else if (scope !== "all" && scope !== "separate") opts.body = scope;
+  const opts: {
+    body?: string; bodies?: string[]; separate?: boolean;
+    sketch?: string; face?: unknown; plane?: PlaneDef; tolerance?: number;
+  } = {};
+  const drawn = isFlatFormat(settings.format) ? flat : null;
+  if (drawn) {
+    if ("sketch" in drawn) opts.sketch = drawn.sketch;
+    else Object.assign(opts, { face: drawn.face, plane: drawn.plane });
+    opts.tolerance = clampTolerance(settings.tolerance);
+  } else {
+    if (scope === "separate" || scope === "selected-separate") opts.separate = true;
+    if (scope === "selected" || scope === "selected-separate") opts.bodies = start.selected;
+    else if (scope !== "all" && scope !== "separate") opts.body = scope;
+  }
 
   const kind = FORMATS.find((f) => f.value === settings.format) ?? FORMATS[0]!;
-  const base = opts.body
+  const base = drawn
+    ? drawn.label
+    : opts.body
     ? store.bodyName(opts.body) ?? docName
     : (opts.bodies ? start.base : docName) || (opts.separate || opts.bodies ? "parts" : "part");
   const name = exportFileName(base, kind.ext);
@@ -481,6 +530,8 @@ export function extToFormat(path: string): ExportFormat {
   // STEP rather than erroring. Miss a format here and the user gets a STEP file
   // wearing the extension they asked for, with no error anywhere.
   if (ext === "glb") return "glb";
+  if (ext === "dxf") return "dxf";
+  if (ext === "svg") return "svg";
   return "step";
 }
 

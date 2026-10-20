@@ -1,4 +1,4 @@
-import { saveDocument, saveDocumentAs, exportModel, importModel } from "../io/files";
+import { saveDocument, saveDocumentAs, exportSelection, importModel } from "../io/files";
 import { setWorkspace } from "../ui/workspace";
 import { chooseViewMode, nextViewMode, requestPathTraced, toggleCleanView, type ViewMode } from "../ui/viewMode";
 import { contributedAction } from "../plugins/contrib";
@@ -201,7 +201,7 @@ export function createActions(e: Engine): (action: string) => void {
         void e.openDoc();
         break;
       case "export":
-        void exportModel(e.store, e.geometry, e.viewport.selectionBodyIds());
+        void exportSelection(e.store, e.geometry, e.viewport);
         break;
       case "welcome":
         e.ui.home.open();

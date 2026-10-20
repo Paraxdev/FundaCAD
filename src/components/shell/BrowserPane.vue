@@ -40,7 +40,7 @@ import {
   bodyExtraMenu, buildBodyTree, collectGroupBodyIds, elementMoveMenu, elementPath,
   importColorMenu, importTrees, materialMenu, type BodyRef, type TreeGroup,
 } from "../../ui/browserTree";
-import { adoptImportedColors } from "../../io/files";
+import { adoptImportedColors, exportModel, sketchFlatSource } from "../../io/files";
 import { ancestryOf } from "../../document/elements";
 import {
   BROWSER_FILTERS, asBrowserFilter, getBrowserFilter, isBrowserSection,
@@ -299,6 +299,10 @@ function eye(tag: VisTag, visible: boolean) {
 
 /** The Visibility submenu for `keys`, the same for every list: show or hide the
  *  lot when there are several, show only them, or bring the whole list back. */
+function exportSketch(id: string, format: "dxf" | "svg") {
+  void exportModel(store, engine.geometry, [], sketchFlatSource(store, id), format);
+}
+
 function visibilityMenu(category: VisCategory, keys: readonly string[], plural: string): CtxItem {
   const n = keys.length;
   const children: CtxItem[] = [];
@@ -795,7 +799,11 @@ const nodes = useDocValue((doc): TreeNode[] => {
     ...eye({ category: "sketches", key: f.id }, engine.isSketchVisible(f.id)),
     activate: viaTool(() => ({ kind: "sketch", id: f.id }), (e) => selectSketch(f.id, e)),
     edit: editRow(f.id),
-    extraMenu: [visibilityMenu("sketches", actOnSelection(pickedSketches, f.id), "sketches")],
+    extraMenu: [
+      visibilityMenu("sketches", actOnSelection(pickedSketches, f.id), "sketches"),
+      { label: "Export as DXF…", onClick: () => exportSketch(f.id, "dxf") },
+      { label: "Export as SVG…", onClick: () => exportSketch(f.id, "svg") },
+    ],
     rename: (name: string) => store.updateFeature(f.id, { name } as Partial<Feature>),
     remove: () => store.removeFeature(f.id),
     title: fmtKeys("Click to select (Ctrl+click adds, Shift+click takes a run) · double-click to edit · right-click for Visibility / Edit / Rename / Delete · drag across eyes to show or hide many"),
