@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { thinExtrudeOf } from "../../src/features/thinExtrude";
+import { thinExtrudeOf, thinTogglePatch } from "../../src/features/thinExtrude";
 import { choiceFieldsFor, fieldApplies, toggleFieldsFor } from "../../src/document/optionFields";
 import { featureMeta } from "../../src/ui/featureMeta";
 import type { Feature } from "../../src/types";
@@ -50,5 +50,18 @@ describe("thin extrude option rows", () => {
   it("names the history chip Thin extrude", () => {
     expect(featureMeta({ type: "extrude", thin: true }).label).toBe("Thin extrude");
     expect(featureMeta({ type: "extrude" }).label).toBe("Extrude");
+  });
+});
+
+describe("the Thin row on an existing extrude", () => {
+  const ex = { id: "ex", type: "extrude", sketch: "sk", distance: 10, operation: "new" } as Feature;
+
+  it("gives a wall with no thickness the default one", () => {
+    expect(thinTogglePatch(ex, true)).toEqual({ thin: true, thickness: 2 });
+  });
+
+  it("keeps a thickness already typed, and turning off writes only thin", () => {
+    expect(thinTogglePatch({ ...ex, thickness: 5 } as Feature, true)).toEqual({ thin: true });
+    expect(thinTogglePatch({ ...ex, thickness: 5 } as Feature, false)).toEqual({ thin: false });
   });
 });

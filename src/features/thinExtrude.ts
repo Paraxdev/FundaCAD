@@ -20,3 +20,10 @@ export function thinExtrudeOf(features: readonly Feature[], sketchId: string, id
     thin: true, curves, thickness: THIN_DEFAULTS.thickness, side: "center",
   };
 }
+
+/** The patch the Thin row writes: turning it on also gives a wall that has no
+ *  thickness yet the default one, which the engine needs before it builds. */
+export function thinTogglePatch(feature: Feature, on: boolean): Record<string, unknown> {
+  const thickness = (feature as { thickness?: unknown }).thickness;
+  return on && thickness == null ? { thin: true, thickness: THIN_DEFAULTS.thickness } : { thin: on };
+}
