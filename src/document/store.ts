@@ -1377,7 +1377,10 @@ export class DocumentStore {
 
   // --- undo / redo ---
   undo() {
-    if (this.historyHeld) return;
+    if (!this.historyHeld) this.undoStep();
+  }
+  /** The store taking back its own last step, which an import's hold does not stop. */
+  private undoStep() {
     const prev = this.undoStack.pop();
     if (!prev) return;
     this.emitRewind();
@@ -2584,7 +2587,7 @@ export class DocumentStore {
     if (!err) return false;
     this.onWarning?.(`${p.what} was refused, nothing changed: ${err.message}`);
     this.restoreArmed = true;
-    this.undo();
+    this.undoStep();
     return true;
   }
 

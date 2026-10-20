@@ -170,6 +170,32 @@ describe("a commit the kernel had not answered for", () => {
     expect(store.canRedo).toBe(true);
   });
 
+  it("is undone when the rebuild refuses it while an import reads its file", async () => {
+    const { store, jobs } = await editing();
+    const warnings: string[] = [];
+    store.onWarning = (m) => warnings.push(m);
+    store.endEditPreview(false);
+    store.replaceFeature("f1", fillet(60));
+    store.verifyCommit("f1", "Fillet 60 mm");
+    await flush();
+    let finish!: () => void;
+    const reading = store.runBusy("Importing a.step", () => new Promise<void>((r) => (finish = r)), { holdHistory: true });
+    const refused = result("partial");
+    refused.featureErrors = [{ feature_id: "f1", message: "too large" }];
+    jobs[2]!.settle({ ok: true, result: refused });
+    await flush();
+    const radius = () => (store.document.features.find((f) => f.id === "f1") as { radius: number }).radius;
+    expect(radius()).toBe(2);
+    expect(store.buildState.building).toBe(false);
+    expect(store.buildState.result?.bodies?.[0]?.id).toBe("committed");
+    expect(warnings).toEqual(["Fillet 60 mm was refused, nothing changed: too large"]);
+    expect(jobs).toHaveLength(3);
+    finish();
+    await reading;
+    await flush();
+    expect(radius()).toBe(2);
+  });
+
   it("stays when the rebuild builds it", async () => {
     const { store, jobs } = await editing();
     store.endEditPreview(false);
