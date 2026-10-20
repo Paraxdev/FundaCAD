@@ -3967,6 +3967,12 @@ export class Viewport {
     this.requestRender();
   }
 
+  /** Rolling median GPU ms per pass of the realtime frame (shadow, glassBack,
+   *  main, composer), or just `frame` where the browser has no timer queries. */
+  passTimes(): Record<string, number> {
+    return this.scene.post.timer.medians();
+  }
+
   /** Counters for a bug report (diagnostics/sceneStats). */
   sceneStats(): string[] {
     return sceneStats({
@@ -3975,6 +3981,7 @@ export class Viewport {
       pixelRatio: this.scene.renderer.getPixelRatio(),
       frameMs: this.fps.lastFrameMs(),
       render: this.scene.renderer.info.render,
+      passes: { ms: this.passTimes(), kind: this.scene.post.timer.kind },
       seam: { ms: this.seamMs, skipped: this.seamSkipped },
     });
   }
