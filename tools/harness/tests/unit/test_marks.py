@@ -71,3 +71,20 @@ def test_a_step_says_what_the_app_said_while_it_ran(tmp_path):
     assert "recent: info" in s.status()
     s.close()
 
+
+def test_a_refused_lookup_does_not_keep_the_work_folder():
+    b = LogBridge()
+    s = session(b)
+
+    def missing(method, **args):
+        if method == "locate":
+            from fundacad_harness.errors import NotFound
+            raise NotFound("no visible control")
+        return LogBridge.call(b, method, **args)
+
+    b.call = missing
+    with pytest.raises(HarnessError):
+        s.click("Nope")
+    work = s.work
+    s.close()
+    assert not work.exists()

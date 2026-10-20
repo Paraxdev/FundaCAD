@@ -43,9 +43,6 @@ def action(fn: Callable) -> Callable:
             done = fn(self, *args, **kwargs)
             if settle:
                 self.settle()
-        except HarnessError:
-            self.failed = True
-            raise
         finally:
             if outer:
                 self._in_action = False
@@ -456,6 +453,5 @@ class Actions:
                 self._recorded("wait_for", (text,), {} if timeout == 10 else {"timeout": timeout}, seen)
                 return seen
             if time.monotonic() > end:
-                self.failed = True
                 raise HarnessError(f'"{text}" did not show in {timeout:g} s')
             time.sleep(0.15)
