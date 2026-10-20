@@ -12,6 +12,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { MemoryStorage } from "./memoryStorage";
 import {
+  blockedText,
   filterMotion,
   getSpaceMouseConfig,
   setSpaceMouseConfig,
@@ -177,5 +178,24 @@ describe("its settings", () => {
     expect(store.length).toBe(0);
     m.setSpaceMouseMode("camera");
     expect(JSON.parse(store.getItem("fundacad.pluginSettings.FundaCAD.SpaceMouse")!).values.mode).toBe("camera");
+  });
+});
+
+describe("blockedText, the toast for a device that cannot be read", () => {
+  it("says what the native side found to do", () => {
+    const text = blockedText({
+      name: "SpaceNavigator",
+      detail: "Permission denied",
+      hint: "start spacenavd (sudo systemctl enable --now spacenavd) or install the udev rule",
+    });
+    expect(text).toBe(
+      `Found "SpaceNavigator" but can't read it, start spacenavd (sudo systemctl enable --now spacenavd) or install the udev rule, see the 3D mouse page of the manual`,
+    );
+  });
+
+  it("keeps the general advice when there is no hint", () => {
+    expect(blockedText({ name: "SpaceMouse", detail: "x", hint: null })).toContain(
+      "run spacenavd or install the udev rule",
+    );
   });
 });

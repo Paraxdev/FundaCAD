@@ -17,11 +17,13 @@
 
 import {
   PLUGIN_ID,
+  blockedText,
   getSpaceMouseMode,
   initSpaceMouse,
   setSpaceMouseConfig,
   setSpaceMouseMode,
   settings,
+  type DeviceBlocked,
 } from "./spacemouse";
 import { defineAsyncComponent } from "vue";
 import { contribute, invoke, listen, openPluginSettings, stickyFact, toast } from "fundacad";
@@ -98,19 +100,16 @@ async function install(viewport: Viewport): Promise<(() => void)[]> {
   );
 
   // The device is PRESENT but the OS won't let us open it, on Linux that means the
-  // hidraw udev rule is missing (packaged installs ship it; AppImage can't), or
-  // spacenavd/the 3Dconnexion driver is holding it. Without this the reader failed
+  // hidraw udev rule is missing (packaged installs ship it; AppImage can't) and no
+  // spacenavd socket was there to read through instead. Without this the reader failed
   // into stderr and retried forever, so a plugged-in SpaceMouse just did nothing
   // with no way to find out why. Guarded to Tauri: plain `vite` has no emitter.
   if (!("__TAURI_INTERNALS__" in window)) return stops;
 
   stops.push(
-    await listen<{ name: string; detail: string }>("spacemouse:blocked", (ev) => {
+    await listen<DeviceBlocked>("spacemouse:blocked", (ev) => {
       console.warn("SpaceMouse blocked:", ev.payload.detail);
-      toast(
-        `Found "${ev.payload.name}" but can't read it, see the SpaceMouse section of the README`,
-        { kind: "error", timeout: 15000 },
-      );
+      toast(blockedText(ev.payload), { kind: "error", timeout: 15000 });
     }),
   );
 
