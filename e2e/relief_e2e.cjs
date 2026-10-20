@@ -182,6 +182,8 @@ const PITCH = 0.3;
     }, [name, side]);
 
     const programs = () => page.evaluate(() => window.viewport.scene.renderer.info.programs.length);
+    const programKeys = () => page.evaluate(() => window.viewport.scene.renderer.info.programs.map((q) => q.cacheKey));
+    const added = (before, after) => after.filter((k) => !before.includes(k)).map((k) => k.split(",")[0]);
     const save = async (name) => {
       const b64 = await page.evaluate((n) => window.__shots[n].slice(window.__shots[n].indexOf(",") + 1), name);
       fs.writeFileSync(path.join(OUT, name + ".png"), Buffer.from(b64, "base64"));
@@ -193,7 +195,14 @@ const PITCH = 0.3;
     await page.evaluate(() => window.__r.settle());
     const offNear = await measure("front-off", "front");
     await save("front-off");
+    // Drop the low power motion draw so every run starts cold, as the first run after a vite start does.
+    await page.evaluate(() => { const p = window.viewport.scene.post; p.motionDraw?.dispose(); p.motionDraw = null; });
+    // The first motion frame on a low power tier links the 1px edge line twin (scene.ts PotatoDraw linesOnly), which is
+    // not relief's and links only when frame timing says slow, so it is warmed here with relief off.
+    await page.evaluate(() => { const v = window.viewport; v.scene.post.render(v.rig.active, true); });
+    await page.evaluate(() => window.__r.settle());
     const progOff = await programs();
+    const keysOff = await programKeys();
 
     const relief = { axis: [0, 0, 1], pitch: PITCH, depth: 0.35, cavity: 0.4, tintJitter: 0 };
     await page.evaluate((r) => window.__r.relief(r), relief);
@@ -212,6 +221,10 @@ const PITCH = 0.3;
     await page.evaluate(() => window.__r.settle());
     const progPitch = await programs();
     check("a pitch change links no program", progPitch === progOn, { before: progOn, after: progPitch, off: progOff });
+    const keysOn = await programKeys();
+    const progPitchMotion = await page.evaluate(() => { const v = window.viewport; v.scene.post.render(v.rig.active, true); return v.scene.renderer.info.programs.length; });
+    check("a motion frame with relief on links no program", progPitchMotion === progOn,
+      { on: progOn, motion: progPitchMotion, off: progOff, added: added(keysOn, await programKeys()), addedSinceOff: added(keysOff, keysOn) });
     const cv = await page.evaluate(() => { const r = window.viewport.scene.renderer.domElement.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; });
     await page.mouse.move(cv[0] + 200, cv[1] + 200);
     await page.mouse.down({ button: "middle" });
