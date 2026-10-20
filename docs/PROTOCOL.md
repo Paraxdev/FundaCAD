@@ -148,11 +148,14 @@ Reply `result` is one of:
   `skippedFeatures` lists the features whose type neither the engine nor a plugin on
   disk knows, typically from a file a newer FundaCAD wrote. They are left out of the
   build without being an error: the reply is a successful one, with or without bodies,
-  and the features after them build on what exists. It is present whenever the list is
-  not empty. A feature of a type a plugin declares but cannot run is an error instead,
-  since the user can fix that. An error on a feature that names a skipped one, or a body
-  only a skipped one made, ends with `(<id> was skipped, this version does not know its
-  type)`.
+  and the features after them build on what exists. With no bodies, a reply that lists
+  skips still carries `featureError` and `featureErrors` rather than turning into a
+  failed one. It is present whenever the list is not empty. A feature of a type a plugin
+  declares but cannot run is an error instead, since the user can fix that. An error on
+  a feature that names a skipped one, or a body only a skipped one made, ends with
+  `(<name> is from a newer version of FundaCAD and is not built here)`, `<name>` being
+  the skipped feature's `name` or else its id, and drops advice the user cannot follow
+  ("fix that sketch first", "no longer exists" becomes "was not built").
 
   `diagnostics` is omitted when empty, but when present it is **complete for the whole
   document**, an incrementally-resumed rebuild replays the diagnostics of its cached

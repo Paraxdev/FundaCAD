@@ -72,7 +72,7 @@ fn a_feature_that_names_a_skipped_one_says_why_it_failed() {
     let r = build(&doc);
     let m = messages(&r);
     assert_eq!(m.len(), 1, "{m:?}");
-    assert!(m[0].ends_with(" (w1 was skipped, this version does not know its type)"), "{m:?}");
+    assert!(m[0].ends_with(" (w1 is from a newer version of FundaCAD and is not built here)"), "{m:?}");
 }
 
 #[test]
@@ -85,7 +85,7 @@ fn a_body_only_a_skipped_feature_made_is_named_as_the_cause() {
     let r = build(&doc);
     let m = messages(&r);
     assert_eq!(m.len(), 1, "{m:?}");
-    assert!(m[0].ends_with(" (w1 was skipped, this version does not know its type)"), "{m:?}");
+    assert!(m[0].ends_with(" (w1 is from a newer version of FundaCAD and is not built here)"), "{m:?}");
 }
 
 #[test]
@@ -139,6 +139,31 @@ fn the_future_fixture_builds_all_but_what_it_does_not_know() {
     assert_eq!(skipped(&r), vec![("w1", "futureWidget")]);
     let m = messages(&r);
     assert_eq!(m.len(), 1, "{m:?}");
-    assert!(m[0].ends_with(" (w1 was skipped, this version does not know its type)"), "{m:?}");
+    assert!(m[0].ends_with(" (w1 is from a newer version of FundaCAD and is not built here)"), "{m:?}");
     assert_eq!(r.bodies.len(), 2, "the extrude and the box after the skipped feature build");
+}
+
+#[test]
+fn a_failure_with_no_bodies_still_lists_what_was_skipped() {
+    let doc = json!({"parameters": {}, "bodyIds": {"w1:0": "body1"}, "features": [
+        {"id": "w1", "type": "futureWidget"},
+        {"id": "f1", "type": "fillet", "edges": {"kind": "edge", "by": "all", "body": "body1"}, "radius": 1}
+    ]});
+    let m = reply(&doc);
+    assert!(!m.contains_key("error"), "{m:?}");
+    assert_eq!(m["skippedFeatures"][0]["feature_id"], "w1");
+    assert_eq!(m["featureErrors"][0]["feature_id"], "f1", "{m:?}");
+}
+
+#[test]
+fn the_cause_is_named_by_its_name_without_advice_that_cannot_be_followed() {
+    let doc = json!({"parameters": {}, "features": [
+        {"id": "w1", "type": "futureSketch", "name": "Gusset profile"},
+        {"id": "e1", "type": "extrude", "sketch": "w1", "distance": 5, "operation": "new"}
+    ]});
+    let r = build(&doc);
+    let m = messages(&r);
+    assert_eq!(m.len(), 1, "{m:?}");
+    assert!(!m[0].contains("fix that sketch"), "{m:?}");
+    assert!(m[0].ends_with(" (Gusset profile is from a newer version of FundaCAD and is not built here)"), "{m:?}");
 }
