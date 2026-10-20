@@ -13,10 +13,15 @@ import type { Engine } from "./engine";
 export function installTitlebar(e: Engine): void {
   const ui = useUiStore();
 
-  e.store.onDocChange(() => {
+  // Note: the store emits before it moves the entry between its undo and redo stacks, so
+  // they are read a moment later. A material, colour or visibility change and its undo
+  // emit no doc change, only a build.
+  const syncUndo = () => queueMicrotask(() => {
     ui.canUndo = e.store.canUndo;
     ui.canRedo = e.store.canRedo;
   });
+  e.store.onDocChange(syncUndo);
+  e.store.onBuild(syncUndo);
   e.store.onMeta(() => {
     ui.docName = e.store.fileName;
     ui.dirty = e.store.dirty;
