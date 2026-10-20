@@ -45,8 +45,8 @@ import type { RunOutcome } from "./runner/host";
 const RELEASES = "https://github.com/Paraxdev/fundacad/releases/download/";
 
 /** The release the assets hang off, the one this build was published as:
- *  the rolling beta, or a stable release's own tag, which the release build
- *  passes in VITE_FUNDACAD_RELEASE. Its bundles carry the geometry components
+ *  the rolling beta, the rolling development build, or a stable release's own
+ *  tag, which the release build passes in VITE_FUNDACAD_RELEASE. Its bundles carry the geometry components
  *  the engine's plugin host runs, built from the same commit as the host. */
 export const RELEASE_TAG: string =
   (import.meta.env.VITE_FUNDACAD_RELEASE as string | undefined) || "beta";
