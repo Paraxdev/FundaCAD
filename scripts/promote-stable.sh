@@ -86,11 +86,11 @@ done
 echo "green: $run"
 
 tmp=$(mktemp -d)
-cleanup() { git worktree remove --force "$tmp" 2>/dev/null || rm -rf "$tmp"; }
+cleanup() { git worktree remove --force "$tmp" 2>/dev/null || { rm -rf "$tmp"; git worktree prune; }; }
 trap cleanup EXIT
 git worktree add --quiet --detach "$tmp" "$REMOTE/main"
 git -C "$tmp" merge --no-ff --quiet -m "merge: dev into main for $tag" "$sha" \
-  || die "dev does not merge cleanly into main. Merge main into dev first (a hotfix that was never merged back), then try again."
+  || die "the merge into main failed, see git above. A conflict usually means a hotfix on main was never merged back: merge main into dev first, then try again."
 merge=$(git -C "$tmp" rev-parse HEAD)
 
 git tag -a "$tag" -m "FundaCAD $tag" "$merge"
