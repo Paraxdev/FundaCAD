@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { fmtKeys } from "../../input/platform";
 import { computed, onMounted, onUnmounted, ref, useTemplateRef, watch } from "vue";
 import { claimEscape } from "../../ui/escapeClaim";
 import Icon from "./Icon.vue";
@@ -94,7 +95,7 @@ onUnmounted(() => {
               <Icon v-if="r.checked" name="check" :size="12" />
             </span>
             <span>{{ r.item.label }}</span>
-            <span v-if="r.item.shortcut" class="menu-shortcut">{{ r.item.shortcut }}</span>
+            <span v-if="r.item.shortcut" class="menu-shortcut">{{ fmtKeys(r.item.shortcut) }}</span>
           </button>
         </template>
       </div>

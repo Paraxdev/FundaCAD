@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { fmtKeys } from "../../input/platform";
 // The history: a floating list of every feature in build order, with a draggable
 // rollback marker, transport buttons and an error badge that jumps to failing
 // features. A selected row opens its values in place under it.
@@ -21,6 +22,7 @@ import { useSelectionOffers } from "../../composables/useSelectionOffers";
 import { relatedFeatureIds } from "../../ui/relatedFeatures";
 import { routeTreeClick, treePickWaiting } from "../../ui/treePick";
 import { featurePick } from "../../app/featurePick";
+import { closeOpenEdit } from "../../app/selection";
 import type { Feature } from "../../types";
 
 const engine = useEngine();
@@ -215,7 +217,8 @@ function chipTitle(f: { id: string; type: string; inactive?: boolean }, i: numbe
 //
 // Both are ignored while a tool already owns the screen (an edit in progress, a
 // sketch): a click that swapped the open feature out from under a running editor
-// is exactly the "clicking around bugs out" case. Finish or Escape first.
+// is exactly the "clicking around bugs out" case. A double-click is the one
+// gesture that switches: it closes another feature's open edit, then edits.
 function busyElsewhere(): boolean {
   return engine.toolBusy() || engine.sketch.active;
 }
@@ -230,7 +233,9 @@ function onChipClick(id: string) {
   timeline.select(id);
 }
 function onChipDblclick(id: string) {
-  if (busyElsewhere() || treePickWaiting()) return;
+  if (treePickWaiting()) return;
+  closeOpenEdit(engine, id);
+  if (busyElsewhere()) return;
   timeline.edit(id);
 }
 // --- renaming ------------------------------------------------------------
@@ -447,7 +452,7 @@ function openMenu(e: MouseEvent, id: string, i: number) {
         title="Failing features, click to jump to the next one"
         @click="jumpToNextError()"
       ><Icon name="warning" :size="14" /> {{ errors.size }}</button>
-      <button class="float-card-close" title="Hide the history (Ctrl Alt H)" @click="shellStore.setHistory(false)"><Icon name="close" :size="14" /></button>
+      <button class="float-card-close" :title="fmtKeys('Hide the history (Ctrl Alt H)')" @click="shellStore.setHistory(false)"><Icon name="close" :size="14" /></button>
     </div>
     <!-- Transport moves the SAVED marker (docRollback), and stands down while a
          feature is being edited: the drawn marker is on the edited step then, and

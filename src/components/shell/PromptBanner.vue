@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { fmtKeys } from "../../input/platform";
 import { computed, nextTick, onMounted, onUnmounted, useTemplateRef, watch } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { usePromptStore } from "../../stores/prompt";
@@ -87,8 +88,8 @@ onUnmounted(() => {
        the class by hand. -->
   <div ref="el" class="prompt" :class="{ hidden: !prompt.text, titled: !!title }">
     <span v-if="title" class="prompt-title" data-testid="prompt-title">
-      {{ title.label }}<kbd v-if="title.keys" class="prompt-key">{{ title.keys }}</kbd>
+      {{ title.label }}<kbd v-if="title.keys" class="prompt-key">{{ fmtKeys(title.keys) }}</kbd>
     </span>
-    <span id="prompt" class="prompt-text">{{ prompt.text }}</span>
+    <span id="prompt" class="prompt-text">{{ fmtKeys(prompt.text ?? "") }}</span>
   </div>
 </template>

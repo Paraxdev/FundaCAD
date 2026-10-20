@@ -54,6 +54,7 @@ export class DraftTool {
   private downPos = { x: 0, y: 0 };
   private downOnGizmo = false;
   private refusalShown: string | null = null;
+  private checking = false;
 
   private dim = new DimInput();
   private onDone: ((id: string | null) => void) | null = null;
@@ -209,7 +210,7 @@ export class DraftTool {
     this.previewId = this.store.nextId();
     this.viewport.clearHover();
     this.buildGizmo();
-    this.dim.show([{ name: "angle", label: "Angle", icon: "angle", kind: "angle" }], () => this.commit(), () => this.cancel());
+    this.dim.show([{ name: "angle", label: "Angle", icon: "angle", kind: "angle" }], () => this.commit(true), () => this.cancel());
     const s = this.viewport.projectToScreen(this.anchor);
     this.dim.position(s.x, s.y);
     this.dim.updateFromCursor({ angle: 0 });
@@ -241,6 +242,10 @@ export class DraftTool {
         this.refusalShown = refusal;
         if (refusal) setPrompt(`Draft refused: ${refusal} · drag back or Esc`);
         else this.prompt();
+        this.checking = false;
+      } else if (this.checking && !this.store.buildState.building) {
+        this.checking = false;
+        this.prompt();
       }
       const s = this.viewport.projectToScreen(this.anchor);
       this.dim.position(s.x, s.y);
@@ -279,16 +284,19 @@ export class DraftTool {
     return { id: this.previewId, type: "draft", faces, angle: a, axis: this.pull } as Feature;
   }
 
-  private commit() {
+  /** `typed`: Enter or the tick button. A typed value is judged by the kernel
+   *  before it is committed, so the tool stays open until the answer is in. */
+  private commit(typed = false) {
     if (this.phase !== "drag") return this.cancel();
     const v = this.dim.getValue("angle");
     if (v == null && this.dim.isUserDriven("angle")) {
       setPrompt("That number can't be read · Esc");
       return;
     }
+    let sentNow = false;
     if (v != null && this.dim.isUserDriven("angle")) {
-      const typed = Math.max(-MAX_DRAFT_DEG, Math.min(MAX_DRAFT_DEG, v));
-      if (typed !== this.angle) { this.angle = typed; this.pushPreview(); }
+      const value = Math.max(-MAX_DRAFT_DEG, Math.min(MAX_DRAFT_DEG, v));
+      if (value !== this.angle) { this.angle = value; this.pushPreview(); sentNow = true; }
     }
     if (Math.abs(this.angle) < 1e-3) {
       // keep the tool alive: silently cancelling reads as "nothing happened"
@@ -296,7 +304,15 @@ export class DraftTool {
       return;
     }
     const verdict = previewVerdict(this.store);
-    if (verdict.kind === "refused") return; // tick() already says why and paints the handle
+    if (verdict.kind === "refused") {
+      setPrompt(`Draft refused: ${verdict.reason} · drag back or Esc`);
+      return;
+    }
+    if (typed && (sentNow || verdict.kind === "wait")) {
+      this.checking = true;
+      setPrompt("Checking the draft · Enter again to commit · Esc");
+      return;
+    }
     const feature = this.buildFeature();
     this.store.setPreview(null); // addFeature re-adds it as a committed feature
     this.store.addFeature(feature);
@@ -324,6 +340,7 @@ export class DraftTool {
     this.hovering = false;
     this.angle = 0;
     this.refusalShown = null;
+    this.checking = false;
     setPrompt(null);
   }
 

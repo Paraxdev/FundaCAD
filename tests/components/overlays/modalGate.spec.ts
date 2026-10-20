@@ -144,6 +144,37 @@ describe("modal depth gate", () => {
     expect(depth()).toBe(0);
   });
 
+  it("closes preferences on Escape and gives the count back", async () => {
+    const dialogs = useDialogStore();
+    dialogs.preferences = true;
+    await nextTick();
+    expect(depth()).toBe(1);
+
+    esc();
+    await nextTick();
+    expect(dialogs.preferences).toBe(false);
+    expect(depth()).toBe(0);
+  });
+
+  it("closes preferences before the Home screen under it", async () => {
+    const dialogs = useDialogStore();
+    const home = useHomeStore();
+    home.bind(fakeHomeCallbacks());
+    home.visible = true;
+    await nextTick();
+    dialogs.preferences = true;
+    await nextTick();
+
+    esc();
+    await nextTick();
+    expect(dialogs.preferences).toBe(false);
+    expect(home.visible).toBe(true);
+
+    esc();
+    await nextTick();
+    expect(home.visible).toBe(false);
+  });
+
   it("nests rather than double-counting when dialogs stack", async () => {
     // The bug button is reachable with Home up, so these two genuinely stack.
     // Each has to give its own count back, and one Escape dismisses ONE of them:
