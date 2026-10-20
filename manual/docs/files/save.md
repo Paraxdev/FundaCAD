@@ -16,4 +16,6 @@ A file saved by a newer version of FundaCAD still opens. Features this version d
 
 Bodies made after such a feature may differ, because this version builds without it. Open the file in the newer version to see it as it was made.
 
+Versions saved by the newer version are kept the same way, until you save a version here, which starts a new list in their place. The Versions panel says so.
+
 A .fundab file can also hold parts this version does not read. Saving it as .fundab keeps them, saving it as .funda does not.
