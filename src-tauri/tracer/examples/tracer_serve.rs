@@ -6,7 +6,9 @@
 //!
 //! Usage: tracer_serve <token> [--port N]. Prints `LISTENING <port>`, port 0
 //! (the default) picks a free one. Exits when its stdin closes, so a script
-//! that spawns it with a piped stdin never leaves it running.
+//! that spawns it with a piped stdin never leaves it running. Started with
+//! stdin from /dev/null, under nohup or as a shell background job it exits at
+//! once: spawn it with a piped stdin, as e2e/pathtrace_bloom_e2e.cjs does.
 //!
 //! The command socket: a text message is `{"id","cmd","args"}`, a binary one
 //! (pt_mesh, pt_colors) is `[u32 LE id][u16 LE cmd length][cmd][raw body]`.
@@ -399,7 +401,7 @@ fn connection(stream: TcpStream, dev: &Dev, gate: &Gate) {
 
 fn main() {
     let mut args = std::env::args().skip(1);
-    let usage = "usage: tracer_serve <token> [--port N]";
+    let usage = "usage: tracer_serve <token> [--port N]\nruns until its stdin closes, so spawn it with a piped stdin, not /dev/null";
     let token = args.next().filter(|t| !t.starts_with("--")).unwrap_or_else(|| {
         eprintln!("{usage}");
         std::process::exit(2);
@@ -426,7 +428,7 @@ fn main() {
     println!("LISTENING {}", server.port());
     std::thread::spawn(move || server.serve());
     let _ = io::stdin().lock().read_to_end(&mut Vec::new());
-    eprintln!("[tracer_serve] stdin closed, exiting");
+    eprintln!("[tracer_serve] stdin closed, exiting (it needs a piped stdin to keep running)");
 }
 
 #[cfg(test)]
