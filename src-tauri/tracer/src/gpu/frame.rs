@@ -2,9 +2,9 @@ use std::time::{Duration, Instant};
 
 use crate::bloom::{self, Bloom, Chain};
 
-use super::{bytes, FrameKey, Held, Path, Tracer};
+use super::{bytes, FrameKey, Held, Tracer};
 
-/// What one software dispatch aims for, short enough that the compositor and
+/// What one dispatch aims for, short enough that the compositor and
 /// the WebGPU viewport keep their frames, long enough to amortise a submit.
 pub const BAND_TARGET: Duration = Duration::from_millis(10);
 
@@ -58,8 +58,7 @@ impl Tracer {
         self.queue.write_buffer(&self.uniform, 0, bytes(&data));
     }
 
-    /// One dispatch: the whole frame on the hardware path, a band of rows on
-    /// the software path. False once the sample cap is reached.
+    /// One dispatch over a band of rows. False once the sample cap is reached.
     pub fn step(&mut self) -> bool {
         if self.sample >= self.cap {
             return false;
@@ -94,9 +93,7 @@ impl Tracer {
                 break;
             }
             self.wait();
-            if self.path == Path::Software {
-                self.rows = adapt_rows(self.rows, self.w, self.h, t.elapsed(), BAND_TARGET);
-            }
+            self.rows = adapt_rows(self.rows, self.w, self.h, t.elapsed(), BAND_TARGET);
         }
         self.sample - before
     }
@@ -129,7 +126,7 @@ impl Tracer {
     pub(super) fn key(&self) -> FrameKey {
         (self.generation(), self.sample, (self.w, self.h))
     }
-    /// Rows per software dispatch.
+    /// Rows per dispatch.
     pub fn band(&self) -> u32 {
         self.rows
     }

@@ -179,4 +179,21 @@ mod t {
             assert!(again.is_ok(), "a call after the loss panicked");
         }
     }
+
+    #[test]
+    fn a_ray_query_frame_traces_in_bands_under_the_budget() {
+        let Ok(mut t) = Tracer::new(TracerOptions::default()) else {
+            eprintln!("skipped: no adapter");
+            return;
+        };
+        if t.path() != Path::RayQuery {
+            eprintln!("skipped: no ray queries on {}", t.adapter());
+            return;
+        }
+        t.resize(1024, 512);
+        t.set_frame_budget(65_536);
+        assert_eq!(t.band(), 64);
+        assert!(t.step());
+        assert_eq!(t.samples(), 0, "one dispatch traced the whole sample");
+    }
 }

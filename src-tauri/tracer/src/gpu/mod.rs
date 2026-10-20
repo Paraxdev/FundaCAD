@@ -350,20 +350,18 @@ impl Tracer {
         self.aov = storage(&self.device, px * 32, wgpu::BufferUsages::COPY_SRC);
         self.out = storage(&self.device, px * 4, wgpu::BufferUsages::COPY_SRC);
         self.hdr = storage(&self.device, px * 16, wgpu::BufferUsages::empty());
-        if self.path == Path::RayQuery || self.rows == 0 {
+        if self.rows == 0 {
             self.rows = h;
         }
         self.resolve_bind = None;
         self.reset();
     }
 
-    /// The software path traces about this many paths per dispatch, so one
-    /// dispatch never holds the GPU long enough to stall the UI.
+    /// The first dispatch traces about this many paths, so one dispatch never
+    /// holds the GPU long enough to stall the UI or trip the driver's timeout.
     pub fn set_frame_budget(&mut self, paths: u32) {
-        if self.path == Path::Software {
-            self.rows = (paths / self.w).clamp(8, self.h.next_multiple_of(8)).next_multiple_of(8);
-            self.reset();
-        }
+        self.rows = (paths / self.w).clamp(8, self.h.next_multiple_of(8)).next_multiple_of(8);
+        self.reset();
     }
 
     pub fn set_cap(&mut self, cap: u32) {
