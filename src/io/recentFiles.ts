@@ -6,7 +6,7 @@ import { readSetting } from "../ui/storedSetting";
 
 const KEY = "fundacad.recentFiles";
 const LEGACY_KEYS = ["neocad.recentFiles", "sindri.recentFiles"];
-const MAX = 10;
+const MAX = 50;
 
 export interface RecentFile {
   path: string;
@@ -27,12 +27,16 @@ export function getRecentFiles(): RecentFile[] {
 
 export function noteRecent(path: string): void {
   const rest = getRecentFiles().filter((r) => r.path !== path);
-  const next = [{ path, openedAt: Date.now() }, ...rest].slice(0, MAX);
-  localStorage.setItem(KEY, JSON.stringify(next));
+  write([{ path, openedAt: Date.now() }, ...rest].slice(0, MAX));
 }
 
-/** Drop an entry (e.g. the file no longer exists on disk). */
+/** Only the user removes an entry: a file on an offline drive is not gone. */
 export function forgetRecent(path: string): void {
-  const next = getRecentFiles().filter((r) => r.path !== path);
-  localStorage.setItem(KEY, JSON.stringify(next));
+  write(getRecentFiles().filter((r) => r.path !== path));
+}
+
+function write(list: RecentFile[]): void {
+  try {
+    localStorage.setItem(KEY, JSON.stringify(list));
+  } catch { /* blocked storage keeps the old list */ }
 }

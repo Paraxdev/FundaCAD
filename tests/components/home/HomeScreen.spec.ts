@@ -11,6 +11,8 @@ import { useHomeStore } from "../../../src/stores/home";
 import { choose } from "../../../src/ui/choice";
 import type { HomeCallbacks } from "../../../src/ui/home";
 import type { OpenOutcome } from "../../../src/io/files";
+import { setLibrary, type DocumentLibrary, type FileStat } from "../../../src/io/library";
+import ContextMenuHost from "../../../src/components/overlays/ContextMenuHost.vue";
 import HomeScreen from "../../../src/components/home/HomeScreen.vue";
 import ModalHost from "../../../src/components/overlays/ModalHost.vue";
 
@@ -23,7 +25,6 @@ const key = (k: string, init: KeyboardEventInit = {}) =>
 
 function callbacks(over: Partial<HomeCallbacks> = {}): HomeCallbacks {
   return {
-    desktop: true,
     newDocument: vi.fn(async () => {}),
     openDoc: vi.fn(async () => {}),
     openPath: vi.fn(async () => "ok" as const),
@@ -32,7 +33,22 @@ function callbacks(over: Partial<HomeCallbacks> = {}): HomeCallbacks {
   };
 }
 
-function open(recents: { path: string; openedAt: number }[] = [], over: Partial<HomeCallbacks> = {}) {
+/** Every path exists unless listed in `missing`, edited at `mtime`. */
+function fakeLibrary(missing: string[] = [], mtime = 0): DocumentLibrary {
+  return {
+    stat: vi.fn(async (paths: string[]): Promise<FileStat[]> =>
+      paths.map((path) => missing.includes(path)
+        ? { path, exists: false, mtimeMs: null, size: null }
+        : { path, exists: true, mtimeMs: mtime || null, size: 1 })),
+  };
+}
+
+function open(
+  recents: { path: string; openedAt: number }[] = [],
+  over: Partial<HomeCallbacks> = {},
+  lib: DocumentLibrary | null = fakeLibrary(),
+) {
+  setLibrary(lib);
   // The pre-rename key: a list written by an older build has to keep showing up.
   localStorage.setItem("sindri.recentFiles", JSON.stringify(recents));
   const cb = callbacks(over);
@@ -67,7 +83,7 @@ describe("HomeScreen", () => {
   });
 
   it("says where recent documents are in the browser build", () => {
-    open([{ path: "C:/a.funda", openedAt: 1 }], { desktop: false });
+    open([{ path: "C:/a.funda", openedAt: 1 }], {}, null);
     expect($$(".home-card")).toHaveLength(0);
     expect($(".home-empty")!.textContent).toContain("desktop app");
   });
@@ -160,5 +176,46 @@ describe("HomeScreen", () => {
     box.dispatchEvent(new Event("change", { bubbles: true }));
     await nextTick();
     expect(localStorage.getItem("fundacad.welcomeOnStartup")).toBe("false");
+  });
+
+  it("shows the last edit and marks a missing file", async () => {
+    const now = Date.now();
+    open([{ path: "C:/a.funda", openedAt: 2 }, { path: "C:/gone.funda", openedAt: 1 }], {}, fakeLibrary(["C:/gone.funda"], now - 5 * 60_000));
+    await flushPromises();
+    expect($$(".home-card-time").map((t) => t.textContent)).toEqual(["Edited 5 min ago", expect.stringMatching(/^Opened /)]);
+    expect($$(".home-card.missing")).toHaveLength(1);
+    expect($$(".home-badge").map((b) => b.textContent)).toEqual(["Not found"]);
+  });
+
+  it("asks before taking a missing file off the list", async () => {
+    const { cb } = open([{ path: "C:/gone.funda", openedAt: 1 }], {}, fakeLibrary(["C:/gone.funda"]));
+    mount(ModalHost, { attachTo: document.body });
+    await flushPromises();
+    $(".home-card")!.click();
+    await flushPromises();
+    expect(document.body.textContent).toContain("gone was not found.");
+    [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.includes("Cancel"))!.click();
+    await flushPromises();
+    expect($$(".home-card")).toHaveLength(1);
+    $(".home-card")!.click();
+    await flushPromises();
+    [...document.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent?.includes("Remove from list"))!.click();
+    await flushPromises();
+    expect($$(".home-card")).toHaveLength(0);
+    expect(cb.openPath).not.toHaveBeenCalled();
+    expect(JSON.parse(localStorage.getItem("fundacad.recentFiles")!)).toEqual([]);
+  });
+
+  it("removes a card from its right click menu", async () => {
+    open([{ path: "C:/a.funda", openedAt: 2 }, { path: "C:/b.funda", openedAt: 1 }]);
+    mount(ContextMenuHost, { attachTo: document.body });
+    await flushPromises();
+    $(".home-card")!.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: 5, clientY: 5 }));
+    await nextTick();
+    const rows = [...document.querySelectorAll<HTMLElement>(".ctx-menu button, .ctx-item")];
+    expect(rows.map((r) => r.textContent?.trim())).toEqual(expect.arrayContaining(["Open", "Remove from list", "Copy path"]));
+    rows.find((r) => r.textContent?.trim() === "Remove from list")!.click();
+    await flushPromises();
+    expect($$(".home-card-name").map((n) => n.textContent)).toEqual(["b"]);
   });
 });

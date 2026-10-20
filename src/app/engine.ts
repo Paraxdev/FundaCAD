@@ -485,7 +485,6 @@ export function mountUi(e: Engine): void {
   });
 
   e.ui.home = new Home({
-    desktop: "__TAURI_INTERNALS__" in window,
     newDocument: () => e.newDocument(),
     openDoc: () => e.openDoc(),
     openPath: (path) => openPathGuarded(e, path),

@@ -2,8 +2,6 @@ import { useHomeStore } from "../stores/home";
 import type { OpenOutcome } from "../io/files";
 
 export interface HomeCallbacks {
-  /** False in the plain browser build, which has no paths to list. */
-  desktop: boolean;
   newDocument: () => Promise<void>;
   openDoc: () => Promise<void>;
   openPath: (path: string) => Promise<OpenOutcome | "cancelled">;

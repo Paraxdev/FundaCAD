@@ -6,6 +6,8 @@ import { contextMenu, dismissContextMenu } from "../ui/menu";
 import { useBrowserStore } from "../stores/browser";
 import { renderPrefs, setRenderPref } from "../ui/renderPrefs";
 import type { Engine } from "./engine";
+import { setLibrary } from "../io/library";
+import { fakeLibrary, type FakeFile } from "../io/fakeLibrary";
 
 /** Debug handles for console + headless frontend-logic tests. Gated to DEV so
  *  they're absent from production bundles, a post-XSS attacker shouldn't be
@@ -45,6 +47,8 @@ export function installDevGlobals(e: Engine): void {
     viewport: e.viewport,
     sketch: e.sketch,
     handleAction: (a: string) => e.handleAction(a),
+    // Home reads the library when it opens, so reopen it after this.
+    home: { useFakeLibrary: (files: FakeFile[]) => setLibrary(fakeLibrary(files)) },
     // The app's own module instance: a harness importing /src/ui/renderPrefs.ts
     // after an HMR update gets a second copy whose listeners reach nothing.
     renderPrefs,

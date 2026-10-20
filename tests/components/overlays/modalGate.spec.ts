@@ -71,7 +71,6 @@ function fakeBugDeps(): BugReportDeps {
 }
 
 const fakeHomeCallbacks = (): HomeCallbacks => ({
-  desktop: false,
   newDocument: async () => {},
   openDoc: async () => {},
   openPath: async () => "ok",
