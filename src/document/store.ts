@@ -2092,6 +2092,12 @@ export class DocumentStore {
     return JSON.parse(JSON.stringify(this.toObject(false))) as Snapshot;
   }
 
+  /** Whether the file came with versions this version cannot read, which the
+   *  first version saved here replaces. */
+  hasUnreadVersions(): boolean {
+    return this.unreadSections.versions != null && !this.repo;
+  }
+
   /** Save the document as it is now as a version on the current branch. Null
    *  when nothing changed since that branch's newest version. */
   saveVersion(message: string): Version | null {
