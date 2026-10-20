@@ -57,6 +57,8 @@ export function buildMenubar(e: Engine): MenuDef[] {
     {
       label: "File",
       items: [
+        { label: "Home", onClick: () => e.ui.home.open() },
+        { separator: true, label: "" },
         { label: "New", shortcut: "Ctrl+N", onClick: () => void e.newDocument() },
         { label: "Open…", shortcut: "Ctrl+O", onClick: () => void e.openDoc() },
         { separator: true, label: "" },
@@ -107,7 +109,6 @@ export function buildMenubar(e: Engine): MenuDef[] {
       label: "Help",
       items: [
         { label: "Keyboard Shortcuts", shortcut: "?", onClick: () => toggleShortcutHUD() },
-        { label: "Home", onClick: () => e.ui.home.open() },
         { label: "Issue Tracker", onClick: () => void openExternal(ISSUES_URL) },
         { separator: true, label: "" },
         { label: "Check for Updates…", onClick: () => void checkForUpdates(true) },
