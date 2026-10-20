@@ -1,10 +1,9 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { BlasCache, mainThreadBuilder } from "../../src/viewport/pathtrace/blasCache";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import ENV_DIRECTIONS from "../fixtures/env_directions.json";
 import { envFrame, meshFrame, NativeScene, nativeCamera, nativeLook, pageMaterial } from "../../src/viewport/pathtrace/nativeScene";
-import { equirectDirection, halfEquirect, hdrEnvironment, hemiAt } from "../../src/viewport/pathtrace/environment";
+import { equirectDirection, halfEquirect, hdrEnvironment, hemiAt, type EnvLayout } from "../../src/viewport/pathtrace/environment";
 import { registerHdr } from "../../src/viewport/hdrRegistry";
 import { DEFAULT_RENDER } from "../../src/ui/renderPrefs";
 import { buildLightRig, FILL_INTENSITY, KEY_INTENSITY, SUN_ANGULAR_RADIUS, type RigLight } from "../../src/viewport/lightRig";
@@ -228,11 +227,11 @@ describe("native environment", () => {
   });
 
   it("maps texels to directions as the fixture the tracer reads", () => {
-    const doc = JSON.parse(readFileSync(resolve(__dirname, "../fixtures/env_directions.json"), "utf8"));
+    const doc = ENV_DIRECTIONS as { pairs: { layout: EnvLayout; u: number; v: number; dir: number[] }[] };
     expect(doc.pairs.length).toBeGreaterThanOrEqual(8);
     for (const p of doc.pairs) {
       const d = equirectDirection(p.layout, p.u, p.v);
-      for (let k = 0; k < 3; k++) expect(d[k]).toBeCloseTo(p.dir[k], 6);
+      for (let k = 0; k < 3; k++) expect(d[k]).toBeCloseTo(p.dir[k]!, 6);
     }
   });
 
