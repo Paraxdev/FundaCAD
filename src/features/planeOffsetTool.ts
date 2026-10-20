@@ -12,7 +12,7 @@ import type { SketchPlane } from "../sketch/plane";
 import { DimInput } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
 import { snap } from "../ui/units";
-import { axisDragDistance, createDragHandle, type DragHandle } from "./manipulator";
+import { axisDragDistance, createDragHandle, nameHandle, type DragHandle } from "./manipulator";
 import { CanvasGesture } from "./canvasGesture";
 
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
@@ -170,7 +170,7 @@ export class PlaneOffsetTool {
   }
 
   private buildGizmo() {
-    this.handle = createDragHandle();
+    this.handle = nameHandle(createDragHandle(), "offset");
     const g = this.handle.group;
     this.gizmo = g;
     this.viewport.addToScene(g);

@@ -6,10 +6,12 @@ import { findControl, HarnessError, stamp, covered, toolPath } from "./locate";
 import { screenLines, walkControls, type WalkOptions } from "./screenTree";
 import * as read from "./readouts";
 import { settle, probe, describeQuiet, type SettleHost } from "./settle";
+import * as picks from "./picks";
+import { handleList, handlePoint, type HandleHost } from "./handles";
 
 export const HARNESS_API = 1;
 
-export type HarnessHost = read.ReadHost & SettleHost;
+export type HarnessHost = read.ReadHost & SettleHost & picks.PickHost & HandleHost;
 
 type Args = Record<string, unknown>;
 type Method = (args: Args) => unknown;
@@ -29,14 +31,28 @@ const str = (a: Args, k: string): string => {
   return v;
 };
 
+const num = (a: Args, k: string): number => {
+  const v = a[k];
+  if (typeof v !== "number" || !Number.isFinite(v)) throw new HarnessError(`${k} must be a number`, "BadArgs");
+  return v;
+};
+
+const withBody = (a: Args): string => (typeof a.body === "string" && a.body ? `${a.body}:${str(a, "select")}` : str(a, "select"));
+
 export function startScreen(doc: Document = document): "home" | "welcome" | "none" {
   if (doc.querySelector(".home")) return "home";
   if (doc.querySelector(".modal-overlay")) return "welcome";
   return "none";
 }
 
-export function createMethods(h: HarnessHost, doc: Document = document, walkOpts: WalkOptions = {}): Record<string, Method> {
+export function createMethods(
+  h: HarnessHost,
+  doc: Document = document,
+  walkOpts: WalkOptions = {},
+  canvasCheck?: picks.CanvasTest,
+): Record<string, Method> {
   const walk = () => walkControls(doc, walkOpts);
+  const onCanvas = () => canvasCheck ?? picks.canvasTest(h.viewport.domElement, doc);
   return {
     ready: () => {
       if (!doc.querySelector("#toolrail")) return { ready: false, why: "the tool rail is not mounted yet" };
@@ -77,6 +93,13 @@ export function createMethods(h: HarnessHost, doc: Document = document, walkOpts
       ...(typeof a.trace === "number" ? { trace: a.trace } : {}),
     }),
     quiet: () => describeQuiet(probe(h)),
+    facePoint: (a) => picks.facePoint(h, withBody(a), onCanvas()),
+    edgePoint: (a) => picks.edgePoint(h, withBody(a), a.via === "edge" ? "edge" : "select", onCanvas()),
+    planePoint: (a) => picks.planePoint(h, str(a, "name"), onCanvas()),
+    worldPoint: (a) => picks.worldPoint(h, num(a, "x"), num(a, "y"), num(a, "z"), onCanvas()),
+    sketchPoint: (a) => picks.sketchPoint(h, num(a, "x"), num(a, "y"), onCanvas()),
+    handlePoint: (a) => handlePoint(h, str(a, "name"), onCanvas()),
+    handles: () => handleList(h, onCanvas()),
   };
 }
 
