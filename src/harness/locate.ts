@@ -57,13 +57,13 @@ function nearMisses(walk: Walk, target: string): string[] {
   return out;
 }
 
-function pickOne(matches: Control[], target: string, walk: Walk, index: number | null): Control {
+function pickOne(matches: Control[], target: string, walk: Walk, index: number | null, anyState = false): Control {
   if (index != null) {
     const hit = matches[index - 1];
     if (!hit) throw new HarnessError(`no control "${target}" number ${index}, there are ${matches.length}`, "NotFound", matches.map(describe));
     return hit;
   }
-  const enabled = matches.filter((c) => !c.disabled);
+  const enabled = anyState ? matches : matches.filter((c) => !c.disabled);
   if (enabled.length === 1) return enabled[0]!;
   if (enabled.length > 1) {
     const refs = new Set(enabled.map((c) => c.ref));
@@ -80,20 +80,21 @@ function pickOne(matches: Control[], target: string, walk: Walk, index: number |
 }
 
 /** The control a ref or label names. A trailing `#n` picks the n-th of several. */
-export function findControl(walk: Walk, target: string): Control {
+export function findControl(walk: Walk, target: string, opts: { disabled?: boolean } = {}): Control {
   const m = /^(.+?)#(\d+)$/.exec(target);
   const base = m ? m[1]! : target;
   const index = m ? Number(m[2]) : null;
+  const any = opts.disabled === true;
   if (isRef(base)) {
-    return pickOne(walk.controls.filter((c) => c.ref === base), base, walk, index);
+    return pickOne(walk.controls.filter((c) => c.ref === base), base, walk, index, any);
   }
   const want = matchName(base);
   if (!want) throw new HarnessError("an empty label names nothing", "BadArgs");
   const named = walk.controls.filter((c) => c.role !== "eye");
   const exact = named.filter((c) => matchName(c.label) === want);
-  if (exact.length) return pickOne(exact, base, walk, index);
+  if (exact.length) return pickOne(exact, base, walk, index, any);
   const prefix = named.filter((c) => matchName(c.label).startsWith(want));
-  return pickOne(prefix, base, walk, index);
+  return pickOne(prefix, base, walk, index, any);
 }
 
 let stamped: Element | null = null;
