@@ -730,7 +730,6 @@ const importSource = (f: Feature) =>
 /** An import undone while its rebuild ran put its colours on nothing. Its redo
  *  puts them on then, as part of that same step, or never. */
 export function recolorOnRedo(store: DocumentStore, feature: Feature, res: Parameters<typeof adoptImportedColors>[2]) {
-  const same = (f: Feature) => f.type === feature.type && "source" in f && "source" in feature && f.source === feature.source;
   // Note: an edit can hand a new feature the import's id, so only an undo or redo
   // (a rewind, emitted just before its doc change) may bring the import back.
   let rewound = false;
@@ -746,8 +745,8 @@ export function recolorOnRedo(store: DocumentStore, feature: Feature, res: Param
       offRewind();
       offDoc();
     }
-    if (rewound && back && same(back)) {
-      const source = importSource(back);
+    if (rewound && back) {
+      const source = importSource(feature);
       queueMicrotask(() => {
         adoptImportedColors(store, feature.id, res, { joinImport: true, only: true, source }).catch((e) =>
           console.warn("import colours not put back", e),

@@ -515,6 +515,24 @@ describe("undo covers material, rename and colour too, not just visibility (FI-5
     expect(store.document.features.some((f) => f.id === "nb11")).toBe(false);
   });
 
+  it("makes the steps it took its own step and drops what was left to redo", () => {
+    store.addFeature(box("r1"));
+    store.undo();
+    expect(store.undoAsOne(() => store.setBodiesMaterial(["body1"], "m-brass"))).toBe(false);
+    expect(store.canRedo).toBe(false);
+  });
+
+  it("takes back a group's steps newest first", () => {
+    store.undoAsOne(() => {
+      store.setBodiesMaterial(["body1"], "m-brass");
+      store.setBodiesMaterial(["body1"], "m-steel");
+    });
+    store.undo();
+    expect(store.bodyMaterialId("body1")).toBeUndefined();
+    store.redo();
+    expect(store.bodyMaterialId("body1")).toBe("m-steel");
+  });
+
   it("holds undo and redo while a busy run that holds the history goes on", async () => {
     store.addFeature(box("h1"));
     store.addFeature(box("h2"));
