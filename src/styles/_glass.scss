@@ -21,8 +21,10 @@
 .home-tools,
 .home-new-card,
 .home-card,
+.home-example,
 .home-card-versions,
 .home-badge,
+.home-section,
 .home-foot {
   corner-shape: squircle;
   background: var(--glass-sheen), var(--float-bg);
@@ -51,7 +53,8 @@
 .context-menu,
 .home-tools,
 .home-new-card,
-.home-card {
+.home-card,
+.home-example {
   border-radius: var(--float-tile-radius);
 }
 .rail-pill,
@@ -60,6 +63,7 @@
 .dim-unit-menu,
 .home-card-versions,
 .home-badge,
+.home-section,
 .home-foot {
   border-radius: var(--float-chip-radius);
 }
@@ -83,7 +87,8 @@
 .home-side::after,
 .home-tools::after,
 .home-new-card::after,
-.home-card::after {
+.home-card::after,
+.home-example::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -104,7 +109,8 @@
 
 .rail-tile,
 .home-new-card,
-.home-card {
+.home-card,
+.home-example {
   transition:
     transform var(--t-fast) var(--ease),
     background var(--t-fast) var(--ease),
@@ -114,7 +120,8 @@
 }
 .rail-btn:hover .rail-tile,
 .home-new-card:hover,
-.home-card:hover {
+.home-card:hover,
+.home-example:hover {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.02) 62%), var(--float-bg);
   transform: translateY(-1px);
 }
@@ -123,7 +130,9 @@
 }
 .home-new-card:hover,
 .home-card:hover,
+.home-example:hover,
 .home-card:focus-visible,
+.home-example:focus-visible,
 .home-card-versions:hover {
   border-color: color-mix(in srgb, var(--accent) 55%, transparent);
 }

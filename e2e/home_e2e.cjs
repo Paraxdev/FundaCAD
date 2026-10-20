@@ -8,7 +8,7 @@
 //   5. A .funda dropped over Home opens and Home closes.
 //   6. Over the fake library: edit times, a missing file shows Not found and Remove takes it off.
 //   7. Search filters the cards, the sort changes their order, Ctrl+F finds the field.
-//   8. Each template opens as an untitled document that builds.
+//   8. Each example card opens its template as an untitled document that builds.
 //   9. With 300 documents, the cards in view show their pictures and only those are fetched.
 //  10. A folder added to Home lists its documents, narrow windows pick it from a Select, Remove takes it off.
 //  11. The Versions drawer: the open document's branches and versions, Restore (and Ctrl+Z), branch Open,
@@ -222,7 +222,7 @@ function check(name, ok, detail = "") {
     console.log("8. templates");
     for (const name of ["Plate", "Wall bracket", "Pinned lever"]) {
       if (!(await homeUp())) await menu("File", "Home");
-      await page.click(`.home-new-template:has-text("${name}")`);
+      await page.click(`.home-example:has-text("${name}")`);
       const discard = await page.waitForSelector("button:has-text('Discard')", { timeout: 1500 }).catch(() => null);
       if (discard) await discard.click();
       await settle();
@@ -268,7 +268,7 @@ function check(name, ok, detail = "") {
     check("the first card shows its picture", first.firstPic);
     check("only cards near the view were fetched", first.asked.length > 0 && first.asked.length < 100, `${first.asked.length}`);
     check("the last card was not fetched yet", !first.asked.includes("C:/many/doc299.funda"));
-    await page.evaluate(() => { const g = document.querySelector(".home-grid"); g.scrollTop = g.scrollHeight; });
+    await page.evaluate(() => { const g = document.querySelector(".home-scroll"); g.scrollTop = g.scrollHeight; });
     await page.waitForFunction(() => window.__fundacad.home.thumbRequests().includes("C:/many/doc299.funda"), null, { timeout: 5000 }).catch(() => {});
     const after = await page.evaluate(() => window.__fundacad.home.thumbRequests());
     check("scrolling to the end fetches the last cards", after.includes("C:/many/doc299.funda"), `${after.length}`);

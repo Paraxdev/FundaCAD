@@ -85,16 +85,15 @@
   display: flex;
   gap: var(--s-3);
   min-width: 0;
-  overflow-x: auto;
 }
 .home-new-card {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: var(--s-2);
-  width: 112px;
+  width: 90px;
   flex: none;
-  padding: var(--s-3);
+  padding: var(--s-2) var(--s-3);
   color: var(--text);
   cursor: pointer;
 }
@@ -129,11 +128,13 @@
   color: var(--text);
   font-size: 12px;
 }
-.home-grid {
+.home-scroll {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+}
+.home-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   // Auto rows in a fixed height grid share its height out once there are more
@@ -142,6 +143,15 @@
   align-content: start;
   gap: var(--s-4);
   padding: var(--s-3) var(--s-5) var(--s-5);
+}
+/* A chip of glass, like .home-foot, so it reads over any background. */
+.home-section {
+  width: fit-content;
+  margin: var(--s-2) var(--s-5) 0;
+  padding: var(--s-1) var(--s-3);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
 }
 /* content-visibility clips paint to the cell, so the cell bleeds past its grid
    area by the reach of --float-shadow and the card keeps its whole shadow. The
@@ -161,7 +171,8 @@ $card-bleed-bottom: 44px;
 .home-cell > * {
   pointer-events: auto;
 }
-.home-card {
+.home-card,
+.home-example {
   position: relative;
   display: flex;
   flex-direction: column;
@@ -176,7 +187,8 @@ $card-bleed-bottom: 44px;
   height: 100%;
   overflow: hidden;
 }
-.home-card:focus-visible {
+.home-card:focus-visible,
+.home-example:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
@@ -200,18 +212,22 @@ $card-bleed-bottom: 44px;
 }
 .home-card-name,
 .home-card-folder,
-.home-card-time {
+.home-card-time,
+.home-example-name,
+.home-example-line {
   padding: 0 var(--s-3);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.home-card-name {
+.home-card-name,
+.home-example-name {
   font-size: 13px;
   font-weight: 600;
 }
 .home-card-folder,
-.home-card-time {
+.home-card-time,
+.home-example-line {
   font-size: 11px;
   color: var(--text-dim);
 }
@@ -224,7 +240,6 @@ $card-bleed-bottom: 44px;
   font-weight: 600;
 }
 .home-empty {
-  flex: 1;
   margin: 0;
   padding: var(--s-5);
   font-size: 12px;
@@ -251,13 +266,8 @@ $card-bleed-bottom: 44px;
 #stage.narrow .home-side {
   display: none;
 }
-/* A narrow window wraps the New cards rather than hiding some of them off to the side. */
-#stage.narrow .home-new {
-  flex-wrap: wrap;
-  overflow-x: visible;
-}
 #stage.narrow .home-new-card {
-  width: 96px;
+  width: 80px;
 }
 #stage.narrow .home-tools {
   flex-wrap: wrap;
