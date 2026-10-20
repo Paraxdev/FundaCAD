@@ -94,6 +94,10 @@ describe("status", () => {
     rail.dataset.mode = "sketch";
     rail.dataset.sketchTool = "line";
     expect(read.status(host()).tool).toBe("Line");
+    rail.dataset.sketchTool = "fillet";
+    expect(read.status(host()).tool).toBe("Fillet");
+    rail.dataset.sketchTool = "move";
+    expect(read.status(host()).tool).toBe("Move/Rotate");
     rail.dataset.sketchTool = "select";
     expect(read.status(host()).tool).toBeNull();
     rail.dataset.mode = "model";

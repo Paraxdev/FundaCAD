@@ -1,6 +1,7 @@
 // The harness's short readouts. They are the one place outside the app that
 // reads its state, so a renamed field breaks this file at compile time.
 
+import { SKETCH_MODIFY } from "../app/actionTables";
 import type { DocumentStore } from "../document/store";
 import type { Viewport } from "../viewport/viewport";
 import { featureMeta } from "../ui/featureMeta";
@@ -155,7 +156,8 @@ function busyText(h: ReadHost): string | null {
 function sketchToolLabel(action: string | undefined): string | null {
   if (!action) return null;
   for (const e of sketchRail()) {
-    const t = e.kind === "tool" ? (e.action === action ? e : undefined) : e.items.find((i) => i.action === action);
+    const lit = (a: string) => a === action || SKETCH_MODIFY[a] === action;
+    const t = e.kind === "tool" ? (lit(e.action) ? e : undefined) : e.items.find((i) => lit(i.action));
     if (t) return t.label;
   }
   return null;
