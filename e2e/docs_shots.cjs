@@ -955,6 +955,32 @@ Object.assign(STILLS, {
     await ctx.still("sketch-constraints", { x: 560, y: 70, width: 860, height: 600 });
   },
 
+  // An outline drawn with Ctrl held (no snap) that stops 4 px short of its
+  // start, beside a lone line: amber at the gap, red at the lone ends.
+  async "sketch-loose-ends"(ctx) {
+    const { page } = ctx;
+    await startSketch(ctx);
+    await page.keyboard.press("l");
+    await page.keyboard.down("Control");
+    for (const [x, y] of [[640, 400], [880, 400], [880, 520], [640, 520], [640, 404]]) {
+      await ctx.move(x, y, 6);
+      await page.mouse.click(x, y);
+      await sleep(150);
+    }
+    await page.keyboard.press("Escape");
+    await ctx.move(940, 420, 6);
+    await page.mouse.click(940, 420);
+    await ctx.move(1000, 500, 6);
+    await page.mouse.click(1000, 500);
+    await page.keyboard.up("Control");
+    await page.keyboard.press("Escape");
+    await sleep(300);
+    await page.keyboard.press("Escape");
+    await ctx.park();
+    await sleep(500);
+    await ctx.still("sketch-loose-ends", { x: 560, y: 300, width: 520, height: 300 });
+  },
+
   async "sketch-trim"(ctx) {
     const { page } = ctx;
     await startSketch(ctx);
