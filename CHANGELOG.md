@@ -418,6 +418,10 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Fixed
 
+- **A hole takes the size or depth typed just before Enter.** An Enter pressed
+  within a moment of the last key could make the hole at the size it started
+  with, M3 where M6 was typed.
+
 - **Undo, Redo and the value box fields are named for screen readers.** The
   icon buttons and the inputs on the canvas and in a feature's properties now
   carry their names, not only a tooltip.
