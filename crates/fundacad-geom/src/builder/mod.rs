@@ -663,7 +663,8 @@ fn note_unread(ctx: &mut Ctx, f: &Feature, fid: &str, kind: &str) {
     }
     let names = unread.iter().map(|k| format!("\"{k}\"")).collect::<Vec<_>>().join(", ");
     let (what, it) = if unread.len() == 1 { ("field", "it") } else { ("fields", "them") };
-    ctx.advise(fid, "unreadFields", format!("a {kind} has no {what} {names}, the build ignores {it}"));
+    let article = if kind.starts_with(['a', 'e', 'i', 'o', 'u']) { "an" } else { "a" };
+    ctx.advise(fid, "unreadFields", format!("{article} {kind} has no {what} {names}, the build ignores {it}"));
 }
 
 /// A body as the build leaves it, debris dropped.
