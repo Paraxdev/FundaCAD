@@ -14,9 +14,10 @@ import * as THREE from "three";
 /** Fragment includes a patch edits, in the order they are edited. `common` is the
  *  fragment's own, the vertex side is reached only through `varyings`. */
 export type Point = "common" | "color_fragment" | "roughnessmap_fragment" | "normal_fragment_begin"
-  | "transmission_pars_fragment" | "transmission_fragment" | "aomap_fragment" | "lights_fragment_maps";
+  | "lights_physical_fragment" | "transmission_pars_fragment" | "transmission_fragment" | "aomap_fragment"
+  | "lights_fragment_maps";
 const POINTS: readonly Point[] = [
-  "common", "color_fragment", "roughnessmap_fragment", "normal_fragment_begin",
+  "common", "color_fragment", "roughnessmap_fragment", "normal_fragment_begin", "lights_physical_fragment",
   "transmission_pars_fragment", "transmission_fragment", "aomap_fragment", "lights_fragment_maps",
 ];
 

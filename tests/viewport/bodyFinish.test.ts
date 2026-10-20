@@ -83,6 +83,8 @@ describe("BodyFinishLayer peek", () => {
 const OPTICS: (Partial<Omit<BodyFinish, "thickness">> & { thickness?: number })[] = [
   { ior: 2.42 }, { thickness: 20 }, { dispersion: 5 }, { attenuationColor: "#2a8f6a" },
   { attenuationDistance: 15 }, { iridescence: 0.6 }, { specularColor: "#ffd0a0" },
+  { sheen: 0.4 }, { anisotropy: 0.6 }, { flakes: 0.2 }, { flakeSize: 0.3 }, { scatterDistance: 2 },
+  { castsLight: false },
 ];
 
 describe("glass and thin film reach the screen", () => {

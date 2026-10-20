@@ -5,7 +5,7 @@
 
 import * as THREE from "three";
 import { isGlassAuto, registerGlass } from "./glassThickness";
-import { applyClearcoat, applyGlassLook, applyThinFilm, isRenderLowPower, SCAN_MATTE, type BodyMesh, type ModelView } from "./render";
+import { applyClearcoat, applyFinishFields, applyGlassLook, applyThinFilm, isRenderLowPower, SCAN_MATTE, type BodyMesh, type ModelView } from "./render";
 import type { SceneBundle } from "./scene";
 import { type BodyFinish, FINISH, isShiny } from "../document/materials";
 import { applySurface, applySurfaceGraph, cloneWithoutSurface, graphKey, surfaceKey } from "./proceduralSurface";
@@ -33,6 +33,7 @@ const STALE_OPACITY = 0.16;
  *  reads, solid enough that the body's own faces still do. */
 const PEEK_OPACITY = 0.4;
 const DEFAULT_FINISH: BodyFinish = { ...FINISH };
+const WORLD_UP = new THREE.Vector3(0, 0, 1);
 
 interface EmitterPatch { e: AreaEmitter; glow: number; color: THREE.Color; power: number }
 
@@ -41,6 +42,12 @@ interface GlowingBody { b: BodyMesh; glow: number; fids: number[] | undefined; b
 /** A fixed set of lights in the scene: real emitters first in rank order, the
  *  rest at intensity zero, so a glow change only ever touches uniforms. */
 interface EmitterRig { group: THREE.Group; area: THREE.RectAreaLight[]; shadow: THREE.PointLight[] }
+
+/** Read by the tracer, which leaves such a surface out of its light sampling. */
+function markNoLight(m: THREE.Material, on: boolean): void {
+  if (on) m.userData.noLight = true;
+  else delete m.userData.noLight;
+}
 
 export function sameStringMap(
   a: Record<string, string> | Record<number, string>,
@@ -61,7 +68,8 @@ export function finishKey(f: BodyFinish): string {
   return [
     f.metalness, f.roughness, f.opacity, f.emissive, f.clearcoat,
     f.ior, f.thickness, f.attenuationColor ?? "", f.attenuationDistance, f.dispersion,
-    f.iridescence, f.specularColor ?? "", surfaceKey(f.surface), graphKey(f.surfaceGraph),
+    f.iridescence, f.specularColor ?? "", f.sheen, f.anisotropy, f.flakes, f.flakeSize, f.scatterDistance,
+    f.castsLight, surfaceKey(f.surface), graphKey(f.surfaceGraph),
   ].join("|");
 }
 
@@ -203,9 +211,14 @@ export class BodyFinishLayer {
       // White for an unpainted body: emissive black would make the glow do nothing.
       // A ghost never glows, or x-ray would light the model up instead of fading it.
       const glow = ghost ? 0 : (f?.emissive ?? FINISH.emissive);
-      mat.emissive.set(glow > 0 ? (this.bodyPaint[b.id] ?? 0xffffff) : 0x000000);
+      const paint = this.bodyPaint[b.id] ?? 0xffffff;
+      mat.emissive.set(glow > 0 ? paint : 0x000000);
       mat.emissiveIntensity = glow * MAX_EMISSIVE_INTENSITY;
       const bf = f ?? DEFAULT_FINISH;
+      const light = bf.castsLight ? glow : 0;
+      markNoLight(mat, glow > 0 && !bf.castsLight);
+      const rb = this.reliefFor(b);
+      const axis = rb ? rb.u.uReliefAxis.value : WORLD_UP;
       applyClearcoat(mat, ghost ? 0 : bf.clearcoat);
       applyThinFilm(mat, bf, ghost);
       if (!ghost && f?.surfaceGraph) applySurfaceGraph(mat, f.surfaceGraph);
@@ -216,6 +229,7 @@ export class BodyFinishLayer {
         mat.opacity = opacity;
         mat.depthWrite = opacity >= 1;
       }
+      applyFinishFields(mat, bf, ghost, paint, axis);
 
       const extra = this.faceMatState.get(b.id);
       let faceGlow = false;
@@ -227,7 +241,8 @@ export class BodyFinishLayer {
           fm.roughness = ff.roughness;
           if (!ghost && isShiny(ff)) shiny = true;
           const fglow = ghost ? 0 : ff.emissive;
-          if (fglow > 0) faceGlow = true;
+          if (fglow > 0 && ff.castsLight) faceGlow = true;
+          markNoLight(fm, fglow > 0 && !ff.castsLight);
           fm.emissive.set(fglow > 0 ? (extra.colors[i] ?? 0xffffff) : 0x000000);
           fm.emissiveIntensity = fglow * MAX_EMISSIVE_INTENSITY;
           applyClearcoat(fm, ghost ? 0 : ff.clearcoat);
@@ -240,19 +255,19 @@ export class BodyFinishLayer {
             fm.opacity = fo;
             fm.depthWrite = fo >= 1;
           }
+          applyFinishFields(fm, ff, ghost, extra.colors[i] ?? 0xffffff, axis);
           fm.clippingPlanes = mat.clippingPlanes;
           applyWireframe(fm, o.wireframe);
         }
       }
       applyWireframe(mat, o.wireframe);
-      const rb = this.reliefFor(b);
       const slots = extra ? extra.mats : [mat];
       if (rb && !ghost) {
         if (this.putRelief(slots, rb)) rb.shown = true;
         else cold.push({ b, u: rb.u });
       } else for (const m of slots) removePatch(m, RELIEF_PATCH);
       registerGlass(b.mesh, extra ? extra.mats.map(isGlassAuto) : [isGlassAuto(mat)]);
-      if (glow > 0 || faceGlow) glowing.push({ b, glow, fids: byBody.get(b.id), bound: 0 });
+      if (light > 0 || faceGlow) glowing.push({ b, glow: light, fids: byBody.get(b.id), bound: 0 });
     }
     this.startEmitters(model, glowing);
     this.bloomable = shiny || glowing.length > 0;
@@ -448,7 +463,7 @@ export class BodyFinishLayer {
 
   private glowOf(g: GlowingBody, fid: number): number {
     const ff = this.faceFinish[fid];
-    return ff ? ff.emissive : g.glow;
+    return ff ? (ff.castsLight ? ff.emissive : 0) : g.glow;
   }
 
   private boundOf(g: GlowingBody): number {

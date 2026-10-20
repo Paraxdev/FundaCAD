@@ -191,3 +191,32 @@ describe("progressive emitter fill", () => {
     expect(key(root)).toEqual(key(sync.root));
   });
 });
+
+describe("a glow that lights nothing else", () => {
+  it("makes no emitter lights for a castsLight false body and still blooms", () => {
+    const a = quad("a", 0);
+    const { layer, root } = rig([a]);
+    layer.bodyFinish = { a: { ...glow(0.6), castsLight: false } };
+    layer.apply(base);
+    expect(fits).not.toHaveBeenCalled();
+    expect(lights(root).lit.length).toBe(0);
+    expect(layer.bloomable).toBe(true);
+    const m = a.mesh.material as THREE.MeshStandardMaterial;
+    expect(m.emissiveIntensity).toBeGreaterThan(0);
+    expect(m.userData.noLight).toBe(true);
+    layer.bodyFinish = { a: glow(0.6) };
+    layer.apply(base);
+    expect(lights(root).lit.length).toBe(1);
+    expect(m.userData.noLight).toBeUndefined();
+  });
+
+  it("does not count a castsLight false face as a glowing face", () => {
+    const a = quad("a", 0);
+    const { layer, root } = rig([a]);
+    layer.faceFinish = { 0: { ...glow(0.6), castsLight: false } };
+    layer.apply(base);
+    expect(fits).not.toHaveBeenCalled();
+    expect(lights(root).lit.length).toBe(0);
+    expect(layer.bloomable).toBe(true);
+  });
+});
