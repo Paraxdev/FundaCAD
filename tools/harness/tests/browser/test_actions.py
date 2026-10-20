@@ -77,9 +77,10 @@ def test_drag_handle_changes_the_value_box(plate):
     plate.pick_face("top")
     plate.tool("Press/Pull")
     before = plate.call("fieldValue", target="field:distance")["text"]
-    plate.drag_handle("push", by=40)
+    step = plate.drag_handle("push", by=40)
     after = plate.call("fieldValue", target="field:distance")["text"]
     assert after != before
+    assert f"field:distance {after}" in str(step), "the step says the value it reached"
     plate.press("Escape")
 
 
