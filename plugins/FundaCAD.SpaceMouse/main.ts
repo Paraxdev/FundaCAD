@@ -98,8 +98,8 @@ async function install(viewport: Viewport): Promise<(() => void)[]> {
   );
 
   // The device is PRESENT but the OS won't let us open it, on Linux that means the
-  // hidraw udev rule is missing (packaged installs ship it; AppImage can't), or
-  // spacenavd/the 3Dconnexion driver is holding it. Without this the reader failed
+  // hidraw udev rule is missing (packaged installs ship it; AppImage can't) and no
+  // spacenavd socket was there to read through instead. Without this the reader failed
   // into stderr and retried forever, so a plugged-in SpaceMouse just did nothing
   // with no way to find out why. Guarded to Tauri: plain `vite` has no emitter.
   if (!("__TAURI_INTERNALS__" in window)) return stops;
@@ -108,7 +108,7 @@ async function install(viewport: Viewport): Promise<(() => void)[]> {
     await listen<{ name: string; detail: string }>("spacemouse:blocked", (ev) => {
       console.warn("SpaceMouse blocked:", ev.payload.detail);
       toast(
-        `Found "${ev.payload.name}" but can't read it, see the SpaceMouse section of the README`,
+        `Found "${ev.payload.name}" but can't read it, run spacenavd or install the udev rule, see the 3D mouse page of the manual`,
         { kind: "error", timeout: 15000 },
       );
     }),
