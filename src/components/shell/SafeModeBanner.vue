@@ -34,20 +34,16 @@ async function restart() {
 <style scoped>
 #safe-mode-banner {
   position: fixed;
-  top: 44px;
+  top: calc(36px + var(--float-gap));
   left: 50%;
   transform: translateX(-50%);
   z-index: 900;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--s-3);
   max-width: min(760px, calc(100vw - 32px));
-  padding: 10px 14px;
-  border: 1px solid var(--warn);
-  border-radius: var(--r-md);
-  background: var(--panel);
+  padding: var(--s-3) var(--s-4);
   color: var(--text);
-  box-shadow: 0 6px 24px rgb(0 0 0 / 0.25);
   font-size: 12.5px;
   line-height: 1.45;
 }

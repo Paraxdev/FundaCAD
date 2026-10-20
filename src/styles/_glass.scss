@@ -302,7 +302,8 @@
 #renderdock,
 .ne-overlay,
 .areachip,
-.home-drawer {
+.home-drawer,
+#safe-mode-banner {
   corner-shape: squircle;
   background: var(--glass-sheen), var(--float-bg-solid);
   -webkit-backdrop-filter: var(--float-blur);
@@ -319,7 +320,8 @@
 #renderdock,
 .ne-overlay,
 .areachip,
-.home-drawer {
+.home-drawer,
+#safe-mode-banner {
   box-shadow: var(--glass-inset), var(--float-shadow);
 }
 /* Everything else in the list above floats directly over the viewport, where
@@ -343,7 +345,8 @@
   border-radius: var(--float-radius);
 }
 .menu-popup,
-.toast {
+.toast,
+#safe-mode-banner {
   border-radius: var(--float-tile-radius);
 }
 .areachip {
@@ -370,7 +373,8 @@
 .shortcut-hud-card::after,
 #renderdock::after,
 .ne-overlay::after,
-.home-drawer::after {
+.home-drawer::after,
+#safe-mode-banner::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -403,6 +407,11 @@
 .toast.toast-warning {
   background: var(--glass-sheen), color-mix(in srgb, #d2a83b 20%, var(--float-bg-solid));
   border-color: color-mix(in srgb, #d2a83b 70%, transparent);
+}
+
+#safe-mode-banner {
+  background: var(--glass-sheen), color-mix(in srgb, var(--warn) 9%, var(--float-bg-solid));
+  border-color: color-mix(in srgb, var(--warn) 70%, transparent);
 }
 
 .modal-overlay,
