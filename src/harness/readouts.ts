@@ -5,6 +5,7 @@ import type { DocumentStore } from "../document/store";
 import type { Viewport } from "../viewport/viewport";
 import { featureMeta } from "../ui/featureMeta";
 import { logEntries } from "../ui/logStore";
+import { sketchRail } from "../ui/railDefs";
 
 export interface ReadHost {
   store: Pick<
@@ -137,6 +138,16 @@ export interface Status {
   warnings: string[];
 }
 
+/** A sketch tool shows no running tool button, the rail lights its own button instead. */
+function sketchToolLabel(action: string | undefined): string | null {
+  if (!action) return null;
+  for (const e of sketchRail()) {
+    const t = e.kind === "tool" ? (e.action === action ? e : undefined) : e.items.find((i) => i.action === action);
+    if (t) return t.label;
+  }
+  return null;
+}
+
 export function status(h: ReadHost, doc: Document = document, since = 0): Status {
   const rail = doc.querySelector<HTMLElement>("#toolrail");
   const running = doc.querySelector<HTMLElement>('[data-action="running-tool"]');
@@ -148,7 +159,9 @@ export function status(h: ReadHost, doc: Document = document, since = 0): Status
   const last = log.length && log[log.length - 1]!.id > since ? log[log.length - 1] : undefined;
   return {
     mode: rail?.dataset.mode ?? "unknown",
-    tool: running ? (running.getAttribute("aria-label") ?? running.textContent ?? "").replace(/\s*\([^()]*\)\s*$/, "").trim() : null,
+    tool: running
+      ? (running.getAttribute("aria-label") ?? running.textContent ?? "").replace(/\s*\([^()]*\)\s*$/, "").trim()
+      : sketchToolLabel(rail?.dataset.sketchTool),
     workspace: ws?.dataset.workspace ?? "model",
     doc: docName ? ownText(docName) : h.store.fileName,
     dirty: h.store.dirty,
