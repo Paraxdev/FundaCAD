@@ -122,8 +122,8 @@ Every action is real pointer or keyboard input, waits until the app has settled 
 previews, the camera and the picture all quiet), and returns a `Step`: one line saying what was
 done and what the app shows now, including what it said while the action ran (`said info "Create
 or import a body first"`) and any error, with the JSON behind it in `step.data`. Pass
-`settle=False` to look at the app mid flight. `view` and `open_file` settle anyway, they need a
-quiet app to check what they did.
+`settle=False` to look at the app mid flight. `view` settles anyway, it needs a quiet app to
+check what it did, and `open_file` waits for the file to open but not for its model to build.
 
 ```python
 with Session() as s:
