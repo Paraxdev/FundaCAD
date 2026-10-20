@@ -88,3 +88,21 @@ def test_a_refused_lookup_does_not_keep_the_work_folder():
     work = s.work
     s.close()
     assert not work.exists()
+
+
+def test_a_reload_is_taken_again_a_while_after_the_last_one():
+    clock = [0.0]
+    s = session(LogBridge())
+    s._clock = lambda: clock[0]
+    s._wait_driver = lambda: None
+    s.dismiss_start = lambda: "none"
+    s._navs += 1
+    s._ensure_page()
+    clock[0] = 31
+    s._navs += 1
+    s._ensure_page()
+    clock[0] = 35
+    s._navs += 1
+    with pytest.raises(HarnessError, match="reloaded twice in 30 s"):
+        s._ensure_page()
+    s.close()
