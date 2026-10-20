@@ -429,6 +429,10 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Fixed
 
+- **A .fundab whose first few bytes are damaged opens again.** It was taken
+  for a text file and refused with "stream did not contain valid UTF-8". It now
+  opens from the copy of its header at the end, and says it was repaired.
+
 - **A document with a section this build cannot read still builds.** The
   engine refused the whole job when, say, a newer `materials` row or `versions`
   repo did not fit, which an MCP session could send. It now leaves that section
