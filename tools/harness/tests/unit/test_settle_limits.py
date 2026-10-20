@@ -86,3 +86,25 @@ def test_undo_with_settle_false_only_clicks():
     assert str(s.undo(settle=False)).startswith("clicked #undo-btn, mode model")
     assert s.bridge.settles == []
     s.close()
+
+
+class TimeoutError(Exception):
+    pass
+
+
+def _click_times_out(on_top: bool):
+    s = session()
+    loc = types.SimpleNamespace(click=lambda **k: (_ for _ in ()).throw(TimeoutError()), evaluate=lambda js: on_top)
+    s._locator = lambda target: ({"ref": "#undo-btn", "label": "Undo"}, loc)
+    return s
+
+
+def test_a_click_a_busy_page_did_not_take_says_the_page_was_busy():
+    from fundacad_harness.errors import Occluded
+    s = _click_times_out(True)
+    with pytest.raises(Occluded, match="nothing is over it, the page was busy"):
+        s._click_control("#undo-btn")
+    s = _click_times_out(False)
+    with pytest.raises(Occluded, match="something is over it"):
+        s._click_control("#undo-btn")
+    s.close()

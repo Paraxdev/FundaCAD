@@ -22,6 +22,11 @@ SIDES = {"top", "bottom", "front", "back", "right", "left"}
 # A wide stage has no button that opens a closed Items or History, a person uses the keys.
 PANEL_KEYS = {"items": "Ctrl+Alt+s", "history": "Ctrl+Alt+h"}
 OPEN_WAIT_S = 10
+ON_TOP = """(el) => {
+    const r = el.getBoundingClientRect();
+    const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+    return !!top && (top === el || el.contains(top));
+}"""
 # A big STEP assembly takes minutes to read and build, far past an ordinary step.
 IMPORT_SETTLE_S = 300
 PANELS = ("history", "items", "views", "display", "versions", "snapping", "preferences")
@@ -134,6 +139,9 @@ class Actions:
         except Exception as e:
             if type(e).__name__ != "TimeoutError":
                 raise
+            if loc.evaluate(ON_TOP):
+                raise Occluded(f'{hit["ref"]} "{hit["label"]}" did not take the click in 5 s, nothing is over it,'
+                               " the page was busy, settle() and try again") from None
             raise Occluded(f'{hit["ref"]} "{hit["label"]}" did not take the click, something is over it') from None
         return hit
 
