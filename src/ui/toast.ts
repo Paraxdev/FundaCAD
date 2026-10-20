@@ -23,7 +23,8 @@ import { log } from "./logStore";
 import { useToastStore } from "../stores/toasts";
 import { showErrorNotice } from "./errorNotice";
 
-export function toast(message: string, opts: ToastOptions = {}) {
+/** The toast's id for `dismissToast`, or null for an error, which is the title bar notice. */
+export function toast(message: string, opts: ToastOptions = {}): number | null {
   const kind = opts.kind ?? "info";
   crumb(`[${kind}] ${message}`); // toasts double as bug-report breadcrumbs
   // The toast itself is one clipped line and then it disappears. The log keeps
@@ -35,12 +36,16 @@ export function toast(message: string, opts: ToastOptions = {}) {
   // An error is the title bar notice instead, which opens this entry.
   if (kind === "error") {
     showErrorNotice(message, { logId: entry.id, action: opts.action, holdMs: opts.timeout });
-    return;
+    return null;
   }
-  useToastStore().push(
+  return useToastStore().push(
     message,
     kind,
     opts.action,
     opts.timeout ?? (kind === "warning" ? 6000 : 3500),
   );
+}
+
+export function dismissToast(id: number) {
+  useToastStore().dismiss(id);
 }
