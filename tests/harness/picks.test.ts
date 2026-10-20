@@ -134,6 +134,17 @@ describe("face selectors", () => {
     expect(err(() => resolveFace(h, "body2:index=6")).kind).toBe("NotFound");
   });
 
+  it("says a face in range has nothing drawn instead of calling it out of range", () => {
+    const [top] = boxFaces([0, 0, 0], [1, 1, 1]);
+    const host = {
+      store: { buildState: { result: { bodies: [{ id: "body1", name: "B", faceStart: 0, faceCount: 3 }], edges: [] } } },
+      viewport: { faceTriangles: (fid: number) => (fid === 0 ? top! : []) },
+    } as unknown as PickHost;
+    const e = err(() => resolveFace(host, "index=1"));
+    expect(e.message).toContain("face 1 of body1 has nothing drawn");
+    expect(err(() => resolveFace(host, "index=3")).message).toContain("has faces 0 to 2, not 3");
+  });
+
   it("finds the largest, the smallest and the nearest face", () => {
     expect(resolveFace(h, "body1:largest").index).toBe(0);
     expect(resolveFace(h, "body1:smallest planar").area).toBeCloseTo(100);
