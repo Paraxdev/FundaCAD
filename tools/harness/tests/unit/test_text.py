@@ -39,6 +39,10 @@ def test_history_and_bodies_text():
     b = [{"id": "body1", "name": "Plate", "faces": 6, "visible": True, "fault": None},
          {"id": "body2", "name": "Boss", "faces": 3, "visible": False, "fault": None}]
     assert text.bodies(b).splitlines() == ["bodies 2", "  body1  Plate  6 faces  visible", "  body2  Boss   3 faces  hidden"]
+    many = [{"id": f"body{i}", "name": "Part", "faces": 6, "visible": i % 2 == 0} for i in range(1, 657)]
+    out = text.bodies(many).splitlines()
+    assert out[0] == "bodies 656, 328 hidden, 0 with a fault, the first 40 below, raw=True has them all"
+    assert len(out) == 41 and out[-1].startswith("  body40 ")
 
 
 def test_status_text():
