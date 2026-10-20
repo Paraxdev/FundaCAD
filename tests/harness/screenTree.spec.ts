@@ -34,6 +34,17 @@ describe("walkControls", () => {
     expect(by("menu:Edit/Preferences...").label).toBe("Preferences...");
   });
 
+  it("names a folder with no element id by its tree key, and an eye by its row", () => {
+    const c = walkControls(document, { rect }).controls;
+    const by = (ref: string) => c.find((x) => x.ref === ref)!;
+    expect(by("folder:n:f1/0").label).toBe("Robot");
+    expect(by("folder:n:f1/0").flags).toContain("closed");
+    expect(by("eye:n:f1/0").label).toBe("Robot");
+    expect(by("eye:n:f1/0").flags).toEqual(["hidden"]);
+    expect(by("eye:body1").label).toBe("Plate");
+    expect(by("eye:body1").flags).toEqual(["visible"]);
+  });
+
   it("counts rows scrolled out of their list", () => {
     const w = walkControls(document, { rect });
     expect(w.controls.map((c) => c.ref)).not.toContain("item:body2");
@@ -45,7 +56,7 @@ describe("screenLines", () => {
   it("groups by region with a header and a more line", () => {
     const { lines } = screenLines(walkControls(document, { rect }));
     const items = lines.findIndex((l) => l[0] === 0 && l[1] === "items");
-    expect(lines[items + 1]![1]).toBe("item:body1");
+    expect(lines.slice(items + 1, items + 5).map((l) => l[1])).toContain("item:body1");
     expect(lines.find((l) => l[2] === "more")![3]).toBe("2 more");
     expect(lines.find((l) => l[1] === "toolrail")![3]).toBe("mode=model");
   });

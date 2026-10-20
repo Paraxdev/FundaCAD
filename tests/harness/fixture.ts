@@ -33,7 +33,8 @@ export const APP_HTML = `
 </div>
 <div inert><button>Behind Home</button></div>
 <aside id="browser"><div class="float-card-body" style="overflow-y:auto">
-  <div class="feature-row tree-child" data-id="body1"><span class="tree-label">Plate</span><span class="tree-eye"></span></div>
+  <div class="tree-folder" data-key="n:f1/0" aria-expanded="false"><span class="tree-label">Robot</span><span class="tree-eye" data-visible="false"></span></div>
+  <div class="feature-row tree-child" data-id="body1"><span class="tree-label">Plate</span><span class="tree-eye" data-visible="true"></span></div>
   <div class="feature-row tree-child" data-id="body2" data-y="400"><span class="tree-label">Boss</span></div>
   <div class="feature-row tree-child" data-id="body3" data-y="500"><span class="tree-label">Rib</span></div>
 </div></aside>

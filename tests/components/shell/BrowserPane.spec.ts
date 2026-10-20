@@ -304,6 +304,8 @@ describe("BrowserPane", () => {
     await nextTick();
     expect(rowNamed(w, "Bracket").attributes("data-id")).toBe("body1");
     expect(folderNamed(w, "Rig")!.attributes("data-id")).toBe(rig);
+    expect(folderNamed(w, "Rig")!.attributes("data-key")).toBe(`e:${rig}`);
+    expect(rowNamed(w, "Bracket").find(".tree-eye").attributes("data-visible")).toBe("true");
   });
 
   it("keeps an element that holds nothing, so it can be filled afterwards", async () => {

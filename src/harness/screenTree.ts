@@ -59,6 +59,8 @@ function clip(s: string): string {
 }
 
 export function labelOf(el: HTMLElement): string {
+  const row = el.matches(".tree-eye") ? el.closest<HTMLElement>(".feature-row, .tree-folder") : null;
+  if (row) return labelOf(row);
   const own = el.querySelector(":scope .t-name, :scope .tree-label, :scope .ctx-label, :scope .cmdk-label");
   if (own && el.matches(".timeline-node, .feature-row, .tree-folder, .ctx-item, .cmdk-item")) return clip(visibleText(own));
   const aria = el.getAttribute("aria-label");
@@ -108,9 +110,11 @@ export function refOf(el: HTMLElement): string {
   if (el.id && !GENERATED_ID.test(el.id)) return `#${el.id}`;
   if (el.matches(".timeline-node") && d.id) return `feature:${d.id}`;
   if (el.matches(".feature-row, .tree-folder") && d.id) return `item:${d.id}`;
+  if (el.matches(".tree-folder") && d.key) return `folder:${d.key}`;
   if (el.matches(".tree-eye")) {
-    const row = el.closest<HTMLElement>(".feature-row[data-id], .tree-folder[data-id]");
-    if (row) return `eye:${row.dataset.id}`;
+    const row = el.closest<HTMLElement>(".feature-row, .tree-folder");
+    const key = row?.dataset.id ?? row?.dataset.key;
+    if (key) return `eye:${key}`;
   }
   if (d.action) return `action:${d.action}`;
   if (d.family) return `family:${d.family}`;
@@ -147,6 +151,7 @@ function roleOf(el: HTMLElement): string {
 
 function flagsOf(el: HTMLElement, disabled: boolean): string[] {
   const f: string[] = [];
+  if (el.dataset.visible) return [el.dataset.visible === "false" ? "hidden" : "visible"];
   if (disabled) f.push("disabled");
   if (el.classList.contains("selected") || el.getAttribute("aria-selected") === "true") f.push("selected");
   if (el.classList.contains("active") || el.getAttribute("aria-pressed") === "true") f.push("on");
