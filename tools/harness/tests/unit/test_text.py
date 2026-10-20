@@ -77,3 +77,10 @@ def test_unwrap_maps_error_kinds():
         unwrap({"ok": False, "error": {"kind": "Ambiguous", "message": "two", "candidates": []}})
     with pytest.raises(HarnessError):
         unwrap("nonsense")
+
+
+def test_an_error_lists_its_candidates_once():
+    from fundacad_harness.errors import Ambiguous
+    e = Ambiguous('"Board" matches 2 controls: folder:a "Board", folder:b "Board"', ['folder:a "Board"', 'folder:b "Board"'])
+    assert str(e).count("folder:a") == 1
+    assert "did you mean folder:x" in str(Ambiguous("no control", ["folder:x"]))

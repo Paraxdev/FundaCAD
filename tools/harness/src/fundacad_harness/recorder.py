@@ -10,8 +10,8 @@ from typing import Any
 
 from . import selectors
 
-REF_ARGS = {"click": 0, "type": 0}
-PATH_ARGS = {"open_file", "import_file"}
+REF_ARGS = {"click": 0, "type": 0, "expand": 0}
+PATH_ARGS = {"open_file", "import_file", "save_as"}
 
 
 def literal(v: Any) -> str:
