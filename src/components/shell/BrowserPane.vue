@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { fmtKeys } from "../../input/platform";
 // Left browser, MCAD-style: object-oriented, collapsible folders rather than a
 // flat feature list. Origin (the three base planes, click to start a sketch on
 // one), Bodies (grouped by the imported assembly tree when there is one) and
@@ -656,7 +657,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
       dropHere: () => dropOntoBody(b.id),
       rename: (name: string) => store.setBodyName(b.id, name),
       remove: () => store.removeBody(b.id),
-      title: "Click to select (Ctrl+click adds, Shift+click takes a run) · drag onto another body to group them, or into an element · double-click to rename · right-click for Move / Material / Visibility / Rename / Delete · drag across eyes to show or hide many",
+      title: fmtKeys("Click to select (Ctrl+click adds, Shift+click takes a run) · drag onto another body to group them, or into an element · double-click to rename · right-click for Move / Material / Visibility / Rename / Delete · drag across eyes to show or hide many"),
     };
   };
 
@@ -797,7 +798,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
     extraMenu: [visibilityMenu("sketches", actOnSelection(pickedSketches, f.id), "sketches")],
     rename: (name: string) => store.updateFeature(f.id, { name } as Partial<Feature>),
     remove: () => store.removeFeature(f.id),
-    title: "Click to select (Ctrl+click adds, Shift+click takes a run) · double-click to edit · right-click for Visibility / Edit / Rename / Delete · drag across eyes to show or hide many",
+    title: fmtKeys("Click to select (Ctrl+click adds, Shift+click takes a run) · double-click to edit · right-click for Visibility / Edit / Rename / Delete · drag across eyes to show or hide many"),
   })));
 
   return out;
@@ -859,7 +860,7 @@ onUnmounted(() => root.value?.removeEventListener("wheel", onWheel));
   <aside id="browser" class="float-card">
     <div class="float-card-head">
       <span class="float-card-title">Items</span>
-      <button class="float-card-close" title="Hide the items (Ctrl Alt S)" @click="shell.setItems(false)"><Icon name="close" :size="14" /></button>
+      <button class="float-card-close" :title="fmtKeys('Hide the items (Ctrl Alt S)')" @click="shell.setItems(false)"><Icon name="close" :size="14" /></button>
     </div>
     <div class="browser-title">
       <select

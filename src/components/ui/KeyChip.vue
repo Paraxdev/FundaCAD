@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import { fmtKeys } from "../../input/platform";
 
 const props = defineProps<{ keys: string }>();
-const parts = computed(() => props.keys.split(/[\s+]+/).filter(Boolean));
+const parts = computed(() => fmtKeys(props.keys).split(/[\s+]+/).filter(Boolean));
 </script>
 
 <template>

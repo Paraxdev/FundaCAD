@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { fmtKeys } from "../../input/platform";
 import { markRaw, ref, onMounted, onUnmounted } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useUiStore } from "../../stores/ui";
@@ -58,14 +59,14 @@ onUnmounted(() => { offPlugins?.(); offTheme?.(); });
     <button
       id="undo-btn"
       class="tb-btn"
-      title="Undo (Ctrl+Z)"
+      :title="fmtKeys('Undo (Ctrl+Z)')"
       :disabled="!ui.canUndo"
       @click="engine.doUndo()"
     ><Icon name="undo" :size="15" /></button>
     <button
       id="redo-btn"
       class="tb-btn"
-      title="Redo (Ctrl+Y)"
+      :title="fmtKeys('Redo (Ctrl+Y)')"
       :disabled="!ui.canRedo"
       @click="engine.doRedo()"
     ><Icon name="redo" :size="15" /></button>

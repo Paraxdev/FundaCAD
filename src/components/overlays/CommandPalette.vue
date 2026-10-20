@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { fmtKeys } from "../../input/platform";
 // Cmd/Ctrl-K command palette: fuzzy-search every command and run it. The
 // discoverability safety net (mainstream MCAD's "S" key equivalent), so nothing
 // is lost when the ribbon collapses tools into overflow, and shortcut-less /
@@ -122,7 +123,7 @@ function onKey(e: KeyboardEvent) {
           >
             <span class="cmdk-label">{{ c.label }}</span>
             <span class="cmdk-group">{{ c.group }}</span>
-            <span v-if="c.key" class="cmdk-key">{{ c.key }}</span>
+            <span v-if="c.key" class="cmdk-key">{{ fmtKeys(c.key) }}</span>
           </div>
           <div v-if="!results.length" class="cmdk-empty">No matching command</div>
         </div>

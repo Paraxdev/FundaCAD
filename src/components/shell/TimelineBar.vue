@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { fmtKeys } from "../../input/platform";
 // The history: a floating list of every feature in build order, with a draggable
 // rollback marker, transport buttons and an error badge that jumps to failing
 // features. A selected row opens its values in place under it.
@@ -451,7 +452,7 @@ function openMenu(e: MouseEvent, id: string, i: number) {
         title="Failing features, click to jump to the next one"
         @click="jumpToNextError()"
       ><Icon name="warning" :size="14" /> {{ errors.size }}</button>
-      <button class="float-card-close" title="Hide the history (Ctrl Alt H)" @click="shellStore.setHistory(false)"><Icon name="close" :size="14" /></button>
+      <button class="float-card-close" :title="fmtKeys('Hide the history (Ctrl Alt H)')" @click="shellStore.setHistory(false)"><Icon name="close" :size="14" /></button>
     </div>
     <!-- Transport moves the SAVED marker (docRollback), and stands down while a
          feature is being edited: the drawn marker is on the edited step then, and
