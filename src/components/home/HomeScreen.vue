@@ -16,6 +16,7 @@ import { buildEntries, filterEntries, folderEntries, folderName, folderSort, sor
 import { readSetting } from "../../ui/storedSetting";
 import { thumbQueueFor } from "../../ui/thumbQueue";
 import { getTheme, onThemeChange, themeMode } from "../../ui/theme";
+import { getHomeBackground, homeBackgroundClass, homeBackgroundStyle, loadHomeImage, onHomeBackgroundChange } from "../../ui/homeBackground";
 import Icon from "../shell/Icon.vue";
 import DocCard from "./DocCard.vue";
 import HomeSidebar from "./HomeSidebar.vue";
@@ -222,6 +223,20 @@ watch(showOnStartup, setWelcomeOnStartup);
 const root = ref<HTMLElement | null>(null);
 let focusBefore: Element | null = null;
 
+const background = ref(getHomeBackground());
+const imageUrl = ref<string | null>(null);
+let imageLoad = 0;
+async function syncBackground() {
+  background.value = getHomeBackground();
+  const ticket = ++imageLoad;
+  const blob = background.value === "image" ? await loadHomeImage() : undefined;
+  if (ticket !== imageLoad) return;
+  if (imageUrl.value) URL.revokeObjectURL(imageUrl.value);
+  imageUrl.value = blob ? URL.createObjectURL(blob) : null;
+}
+const offBackground = onHomeBackgroundChange(() => void syncBackground());
+void syncBackground();
+
 onMounted(() => {
   ownDepth = modals.depth;
   window.addEventListener("keydown", onKey, true);
@@ -233,13 +248,23 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener("keydown", onKey, true);
   offTheme();
+  offBackground();
+  imageLoad++;
+  if (imageUrl.value) URL.revokeObjectURL(imageUrl.value);
   const lost = !document.activeElement || document.activeElement === document.body;
   if (lost && focusBefore instanceof HTMLElement && focusBefore.isConnected) focusBefore.focus({ preventScroll: true });
 });
 </script>
 
 <template>
-  <div ref="root" class="home" role="dialog" aria-label="Home">
+  <div
+    ref="root"
+    class="home"
+    :class="homeBackgroundClass(background, imageUrl)"
+    :style="homeBackgroundStyle(background, imageUrl)"
+    role="dialog"
+    aria-label="Home"
+  >
     <aside class="home-side">
       <img :src="logoUrl" alt="FundaCAD" class="home-logo" />
       <HomeSidebar

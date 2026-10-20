@@ -104,6 +104,22 @@ describe("Home wears the app's glass", () => {
     }
   });
 
+  it("keeps the dimmed workspace behind Home for whoever picks it", () => {
+    const scrim = decls(".cmdk-backdrop");
+    const d = decls(".home.bg-workspace::before");
+    expect(d.background).toBe(scrim.background);
+    expect(d["backdrop-filter"]).toBe(scrim["backdrop-filter"]);
+    expect(decls("html.no-glass-blur .home.bg-workspace::before").background).toBe("var(--viewport-bg)");
+  });
+
+  it("covers Home with the user's picture, toned down by the theme's paper", () => {
+    const d = decls(".home.bg-image::before");
+    expect(d.background).toMatch(/var\(--home-image\) center ?\/ ?cover no-repeat/);
+    expect(d.background).toMatch(/^linear-gradient\(color-mix\(in srgb, var\(--bg\) \d+%, transparent\)/);
+    expect(paperBase(d.background)).toBe("var(--bg)");
+    expect(d["backdrop-filter"]).toBeUndefined();
+  });
+
   it("keeps the same paper when the glass cannot blur", () => {
     expect(decls("html.no-glass-blur .home::before").background).toBeUndefined();
   });
