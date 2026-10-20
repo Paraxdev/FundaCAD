@@ -6,11 +6,11 @@
 # the 7.8.1 sources and builds them statically into the binary. So this
 # workflow has no brew, vcpkg or apt OCCT step.
 #
-# `bundle` + `release` publish the rolling `beta` release and its update feed
-# from `dev`, where daily work lands. `main` holds the known good state and
-# runs the same tests and builds, but publishes nothing. A `v1.<minor>.<patch>`
-# tag on a commit of `main` publishes a stable release with its own feed
-# (scripts/promote-stable.sh cuts one). The retired Python
+# `bundle` + `release` publish the rolling `development` pre-release and its
+# own update feed from `dev`, where daily work lands. `main` holds the known
+# good state and runs the same tests and builds, but publishes nothing. A
+# `v1.<minor>.<patch>` tag on a commit of `main` publishes a stable release
+# with its own feed (scripts/promote-stable.sh cuts one). The retired Python
 # engine is frozen on the `legacy` branch, which publishes nothing either.
 #
 # Scope: x86_64 Linux, Apple Silicon macOS, x86_64 Windows. (No Intel-mac / linux-arm64.)
@@ -114,7 +114,7 @@ jobs:
           # would be older than.
           stable='^v1\.([1-9][0-9]*)\.(0|[1-9][0-9]*)$'
           case "$REF" in
-            refs/heads/dev)  config=beta release=beta tag=beta ;;
+            refs/heads/dev)  config=dev release=development tag=development ;;
             refs/heads/main) config=stable ;;
             refs/tags/*)
               [[ "$REF_NAME" =~ $stable ]] \
@@ -238,20 +238,20 @@ jobs:
         shell: bash
         run: |
           node -e "
-            for (const f of ['./src-tauri/tauri.conf.json', './src-tauri/tauri.beta.conf.json', './src-tauri/tauri.stable.conf.json']) {
+            for (const f of ['./src-tauri/tauri.conf.json', './src-tauri/tauri.beta.conf.json', './src-tauri/tauri.dev.conf.json', './src-tauri/tauri.stable.conf.json']) {
               if (require(f).bundle.resources) { console.error(f + ' bundles resources'); process.exit(1); }
             }
           "
 
-      # Beta versioning, 1.0.<run_number>: the Rust engine is the major
-      # upgrade, against the retired Python engine's 0.2. A stable build takes
-      # its version from its tag.
+      # Rolling versioning, 1.0.<run_number>, for the beta and the development
+      # build alike: the Rust engine is the major upgrade, against the retired
+      # Python engine's 0.2. A stable build takes its version from its tag.
       #
       # No `-beta` suffix: tauri's msi target refuses a version whose
       # pre-release identifier is not numeric ("optional pre-release identifier
       # in app version must be numeric-only"), so it fails the Windows leg
       # outright and NSIS silently rewrites it to 0 in VIProductVersion. The
-      # tag, the title and the update feed say beta instead.
+      # tag, the title and the update feed name the channel instead.
       - name: Stamp the version
         shell: bash
         run: |
@@ -427,15 +427,18 @@ jobs:
           if-no-files-found: error
           path: FundaCAD_*.flatpak
 
-  # The rolling "beta" pre-release from dev, or a stable release from a tag.
+  # The rolling "development" pre-release from dev, or a stable release from
+  # a tag.
   #
-  # The beta has its own concurrency group and its own tag, moved in place,
-  # never deleted. A stable release hangs off the tag that was pushed, and is
-  # only marked latest while no higher stable release exists, because stable
-  # installs read releases/latest (tauri.stable.conf.json).
+  # Each rolling release has its own concurrency group and its own tag, moved
+  # in place, never deleted, so a development run never touches the beta's
+  # tag, release or feed. A stable release hangs off the tag that was pushed,
+  # and is only marked latest while no higher stable release exists, because
+  # stable installs read releases/latest (tauri.stable.conf.json).
   #
   # The updater endpoint is baked into the binary at build time
-  # (tauri.conf.json points at beta/latest.json). Installs of the retired Python
+  # (tauri.conf.json points at beta/latest.json, tauri.dev.conf.json at
+  # development/latest.json). Installs of the retired Python
   # engine read the same feed, and 1.0.x is newer than their 0.2.x, so they move
   # to this build too, which is intended. Section 6's own answer, publish no
   # manifest at all, was rejected because a rolling build that cannot roll is
@@ -594,9 +597,11 @@ jobs:
             if gh api "repos/$R/releases/latest" >/dev/null 2>&1; then
               printf '\nThe stable release, the known good one, is [here](https://github.com/%s/releases/latest).\n' "$R" >> notes.md
             fi
-            # The commit the rolling tag is on RIGHT NOW: the build this
-            # replaces. Read BEFORE the tag is moved, further down.
-            prev=$(gh api "repos/$R/git/ref/tags/beta" --jq .object.sha 2>/dev/null || true)
+            branch=dev
+          elif [ "$RELEASE" = development ]; then
+            printf 'FundaCAD development build (%s), bleeding edge, rebuilt from `dev` at [`%s`](https://github.com/%s/commit/%s).\n' \
+              "$VERSION" "${SHA:0:7}" "$R" "$SHA" >> notes.md
+            printf '\nIt has every change as soon as it lands, and it can be broken. The [beta](https://github.com/%s/releases/tag/beta) is the somewhat stable one.\n' "$R" >> notes.md
             branch=dev
           else
             printf 'FundaCAD %s, the stable release, built from `main` at [`%s`](https://github.com/%s/commit/%s).\n' \
@@ -604,6 +609,11 @@ jobs:
             printf '\nThe rolling beta, with the newest changes before they reach a stable release, is [here](https://github.com/%s/releases/tag/beta).\n' "$R" >> notes.md
             prev="$SINCE"
             branch=main
+          fi
+          if [ "$RELEASE" != stable ]; then
+            # The commit the rolling tag is on RIGHT NOW: the build this
+            # replaces. Read BEFORE the tag is moved, further down.
+            prev=$(gh api "repos/$R/git/ref/tags/$TAG" --jq .object.sha 2>/dev/null || true)
           fi
           commits=''
           if [ -n "$prev" ] && [ "$prev" != "$SHA" ]; then
@@ -651,23 +661,28 @@ jobs:
             # The SourceForge mirror's download button, which a hand edit added
             # once and every rebuild of the notes then dropped.
             printf '\n[![Download FundaCAD](https://a.fsdn.com/con/app/sf-download-button)](https://sourceforge.net/projects/fundacad/files/beta/)\n' >> notes.md
-
+          fi
+          if [ "$RELEASE" != stable ]; then
             # Move the rolling tag onto this commit (create it if it is missing),
             # so the release attached to it never stops existing. GitHub refuses
             # this token a tag move across a commit that changes a workflow file,
             # so a refused move keeps the old tag and still publishes this build.
-            gh api -X PATCH "repos/$R/git/refs/tags/beta" -f sha="$SHA" -F force=true \
-              || gh api -X POST "repos/$R/git/refs" -f ref=refs/tags/beta -f sha="$SHA" \
-              || { gh api "repos/$R/git/refs/tags/beta" >/dev/null 2>&1 \
-                     && echo "::warning::the beta tag could not move to $SHA (a workflow file changed), the installers are still this build"; } \
-              || { echo "::error::the beta tag is missing and could not be created"; exit 1; }
+            gh api -X PATCH "repos/$R/git/refs/tags/$TAG" -f sha="$SHA" -F force=true \
+              || gh api -X POST "repos/$R/git/refs" -f ref="refs/tags/$TAG" -f sha="$SHA" \
+              || { gh api "repos/$R/git/refs/tags/$TAG" >/dev/null 2>&1 \
+                     && echo "::warning::the $TAG tag could not move to $SHA (a workflow file changed), the installers are still this build"; } \
+              || { echo "::error::the $TAG tag is missing and could not be created. Push it once by hand with a token that may change workflow files: git push origin $SHA:refs/tags/$TAG"; exit 1; }
 
-            TITLE='FundaCAD 1.0 beta, Rust engine (rolling)'
-            if gh release view beta --repo "$R" >/dev/null 2>&1; then
-              gh release edit beta --repo "$R" --prerelease \
+            if [ "$RELEASE" = beta ]; then
+              TITLE='FundaCAD 1.0 beta, Rust engine (rolling)'
+            else
+              TITLE='FundaCAD 1.0 development build, bleeding edge (rolling)'
+            fi
+            if gh release view "$TAG" --repo "$R" >/dev/null 2>&1; then
+              gh release edit "$TAG" --repo "$R" --prerelease \
                 --title "$TITLE" --notes-file notes.md
             else
-              gh release create beta --repo "$R" --prerelease \
+              gh release create "$TAG" --repo "$R" --prerelease \
                 --title "$TITLE" --notes-file notes.md
             fi
           else
