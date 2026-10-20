@@ -123,19 +123,26 @@ pub fn chain(segs: Vec<Seg>) -> Vec<Path2> {
             _ => open.push(Some(s)),
         }
     }
-    let take_next = |open: &mut Vec<Option<Seg>>, at: [f64; 2]| -> Option<Seg> {
-        for slot in open.iter_mut() {
-            let Some(s) = slot.as_ref() else { continue };
-            if near(s.start(), at) {
-                return slot.take();
-            }
-            if near(s.end(), at) {
-                let r = s.reversed();
-                *slot = None;
-                return Some(r);
-            }
+    let cell = |p: [f64; 2]| ((p[0] / JOIN).floor() as i64, (p[1] / JOIN).floor() as i64);
+    let mut grid: std::collections::HashMap<(i64, i64), Vec<usize>> = std::collections::HashMap::new();
+    for (i, s) in open.iter().enumerate() {
+        let s = s.as_ref().expect("filled above");
+        for p in [s.start(), s.end()] {
+            grid.entry(cell(p)).or_default().push(i);
         }
-        None
+    }
+    // The lowest index segment touching `at`, the same pick as a scan of `open` in order.
+    let take_next = |open: &mut Vec<Option<Seg>>, at: [f64; 2]| -> Option<Seg> {
+        let (cx, cy) = cell(at);
+        let i = (cx - 1..=cx + 1)
+            .flat_map(|x| (cy - 1..=cy + 1).map(move |y| (x, y)))
+            .filter_map(|k| grid.get(&k))
+            .flatten()
+            .copied()
+            .filter(|&i| open[i].as_ref().is_some_and(|s| near(s.start(), at) || near(s.end(), at)))
+            .min()?;
+        let s = open[i].take()?;
+        Some(if near(s.start(), at) { s } else { s.reversed() })
     };
     for i in 0..open.len() {
         let Some(first) = open[i].take() else { continue };

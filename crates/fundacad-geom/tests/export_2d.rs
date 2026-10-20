@@ -321,3 +321,23 @@ fn a_curved_face_is_refused() {
     assert!(m.contains("pick a sketch or a flat face"), "{m}");
 }
 
+#[test]
+fn chaining_many_disjoint_lines_keeps_each_and_joins_a_square() {
+    let mut segs: Vec<Seg> = (0..20_000).map(|i| {
+        let y = 100.0 + i as f64;
+        Seg::Line([0.0, y], [1.0, y])
+    }).collect();
+    let sq = [[0.0, 0.0], [10.0, 0.0], [10.0, 10.0], [0.0, 10.0]];
+    segs.insert(7_000, Seg::Line(sq[1], sq[0]));
+    segs.insert(3, Seg::Line(sq[1], sq[2]));
+    segs.push(Seg::Line(sq[3], sq[2]));
+    segs.insert(12_000, Seg::Line(sq[3], sq[0]));
+    let t = std::time::Instant::now();
+    let paths = flat::chain(segs);
+    eprintln!("chain of 20004 segments: {:?}", t.elapsed());
+    assert_eq!(paths.len(), 20_001);
+    let closed: Vec<_> = paths.iter().filter(|p| p.closed).collect();
+    assert_eq!(closed.len(), 1);
+    assert_eq!(closed[0].segs.len(), 4);
+    assert!(paths.iter().filter(|p| !p.closed).all(|p| p.segs.len() == 1));
+}
