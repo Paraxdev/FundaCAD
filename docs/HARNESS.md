@@ -156,7 +156,7 @@ with Session() as s:
 | `import_file(path)` | drops the file on the canvas, the way a browser tab imports a model |
 | `save_as(path)` | File > Save As, the download lands at `path` |
 | `new_document(discard=True)` | Ctrl+N, answering the unsaved changes question |
-| `settle(trace=None, timeout=None)`, `wait_for(text, timeout=10)` | explicit waits, `wait_for` looks at the prompt, the screen and the messages logged since the last action began |
+| `settle(trace=None, timeout=None)`, `wait_for(text, timeout=10)` | explicit waits, `wait_for` looks at the prompt, and at the messages logged and the labels shown since the last action began |
 
 Labels match the visible text without its key hint, case insensitive, exact before prefix,
 visible and enabled controls only. When a label matches several controls the error lists their
