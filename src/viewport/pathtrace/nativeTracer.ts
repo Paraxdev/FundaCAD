@@ -12,6 +12,7 @@ import type { Denoise } from "../../ui/renderPrefs";
 import type { PictureOptions, TraceLook, TraceScene, TracerBackend } from "./backend";
 import type { TraceLens } from "./camera";
 import { NativeScene, type Call } from "./nativeScene";
+import { runSelfCheck } from "./selfCheck";
 import { bloomKey, bloomSide, type TraceBloomSettings } from "./tracePost";
 
 export interface NativeFrame {
@@ -391,6 +392,7 @@ export class NativeTracer implements TracerBackend {
 
   async init() {
     this.blit = (this.o.blit ?? glBlit)(this.canvas);
+    await runSelfCheck((cmd, args) => this.call(cmd, args as Record<string, unknown>));
     const c = await (this.o.connect ?? connectNative)(this.width, this.height, this.o.prefer);
     if (this.disposed) {
       c.link.close();

@@ -20,7 +20,8 @@ use pipelines::Pipelines;
 pub(crate) use pipelines::pipeline_at;
 use upload::Shading;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Path {
     RayQuery,
     Software,
