@@ -47,4 +47,17 @@ describe("the Linux desktop entries", () => {
     }
     expect(flatpakManifest).toMatch(/install -Dm644 \S+ \/app\/share\/mime\/packages\/dev\.fundacad\.app\.xml/);
   });
+
+  // The bundler files each PNG under hicolor by its pixel size, so a size
+  // missing here is one the desktop scales up from a smaller icon.
+  it("ship the app icon at every size a menu, dock or launcher asks for", () => {
+    for (const icon of ["icons/32x32.png", "icons/64x64.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.png"]) {
+      expect(conf.bundle.icon, icon).toContain(icon);
+    }
+    expect(conf.bundle.icon[0], "the window icon is the first PNG").toBe("icons/32x32.png");
+    for (const size of ["32x32", "64x64", "128x128", "256x256", "512x512"]) {
+      expect(flatpakManifest).toContain(`/app/share/icons/hicolor/${size}/apps/dev.fundacad.app.png`);
+    }
+    expect(flatpakManifest).toContain("/app/share/icons/hicolor/scalable/apps/dev.fundacad.app.svg");
+  });
 });
