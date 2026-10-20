@@ -38,7 +38,7 @@ const CONTROL = [
 ].join(",");
 
 const TEXT_ONLY = "#docname, #prompt, [data-testid=selection-readout]";
-const LABEL_NOISE = ".menu-shortcut, .ctx-key, .cmdk-key, .menu-check, .dirty-mark, .t-caret, .tree-count";
+const LABEL_NOISE = ".menu-shortcut, .ctx-key, .cmdk-key, .menu-check, .dirty-mark, .t-caret, .tree-count, .choice-btn > small";
 const MAX_LABEL = 60;
 
 const realRect = (el: Element): Box => el.getBoundingClientRect();
