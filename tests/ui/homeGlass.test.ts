@@ -1,6 +1,7 @@
 import postcss, { type Rule } from "postcss";
 import * as sass from "sass";
 import { describe, expect, it } from "vitest";
+import { themes, type ShippedTheme } from "../../src/ui/theme";
 
 // Raw text through Vite, so the test needs no node types. Vitest would hand back
 // processed css for a plain .scss import, which is why the query is spelled out.
@@ -43,6 +44,25 @@ function decls(selector: string): Record<string, string> {
   return out;
 }
 
+// The last layer of a background list, the solid fill everything else sits on.
+function paperBase(background: string | undefined): string {
+  const layers = (background ?? "").split(/,(?![^(]*\))/);
+  return (layers.at(-1) ?? "").trim();
+}
+
+function luminance(hex: string): number {
+  const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const [r, g, b] = c.map((v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)) as [number, number, number];
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+const tokensSrc = scss.get("tokens") ?? "";
+const NOIR: Record<string, string> = Object.fromEntries(
+  [...tokensSrc.matchAll(/^\s*(--[a-z0-9-]+):\s*(#[0-9a-f]{6})\s*;/gim)].map((m) => [m[1], m[2]]),
+);
+const SOLARIZED_LIGHT: Record<string, string> =
+  (themes().find((t) => t.id === "solarized-light") as ShippedTheme | undefined)?.palette ?? {};
+
 const glass = [".home-side", ".home-tools", ".home-card", ".home-new-card", ".home-drawer"];
 
 describe("Home wears the app's glass", () => {
@@ -57,12 +77,23 @@ describe("Home wears the app's glass", () => {
     expect(decls(`${sel}::after`).background).toBe("var(--glass-rim)");
   });
 
-  it("dims the workspace behind Home the way a dialog does", () => {
-    const scrim = decls(".cmdk-backdrop");
+  it("puts Home on an opaque paper by default, not the dimmed workspace", () => {
     const d = decls(".home::before");
-    expect(d.background).toBe(scrim.background);
-    expect(d["backdrop-filter"]).toBe(scrim["backdrop-filter"]);
+    expect(d.background).not.toBe(decls(".cmdk-backdrop").background);
+    expect(d["backdrop-filter"]).toBeUndefined();
+    expect(d.background).not.toMatch(/#[0-9a-f]{3,8}\b|rgba?\(/i);
+    expect(paperBase(d.background)).toBe("var(--bg)");
     expect(decls(".home").background).toBe("transparent");
+  });
+
+  it.each([
+    ["FundaCAD Noir", NOIR, (l: number) => l < 0.05],
+    ["Solarized Light", SOLARIZED_LIGHT, (l: number) => l > 0.85],
+  ] as const)("gives %s a paper of its own tone", (_name, palette, ok) => {
+    const base = paperBase(decls(".home::before").background);
+    const hex = palette[base.slice(4, -1)] ?? "";
+    expect(hex, base).toMatch(/^#[0-9a-f]{6}$/i);
+    expect(ok(luminance(hex))).toBe(true);
   });
 
   // Any of these makes .home a backdrop root, and the glass inside it would blur nothing.
@@ -73,8 +104,8 @@ describe("Home wears the app's glass", () => {
     }
   });
 
-  it("puts an opaque backdrop behind Home when the glass cannot blur", () => {
-    expect(decls("html.no-glass-blur .home::before").background).toBe("var(--viewport-bg)");
+  it("keeps the same paper when the glass cannot blur", () => {
+    expect(decls("html.no-glass-blur .home::before").background).toBeUndefined();
   });
 
   it("takes every colour on Home from the theme", () => {
