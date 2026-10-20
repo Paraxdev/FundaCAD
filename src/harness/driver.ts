@@ -3,7 +3,7 @@
 // Loaded only in a dev build opened with ?harness=1.
 
 import { findControl, HarnessError, stamp, covered, toolPath } from "./locate";
-import { screenLines, walkControls, type WalkOptions } from "./screenTree";
+import { REGIONS, screenLines, walkControls, type WalkOptions } from "./screenTree";
 import * as read from "./readouts";
 import { settle, probe, describeQuiet, type SettleHost } from "./settle";
 import * as picks from "./picks";
@@ -65,10 +65,15 @@ export function createMethods(
     },
     startScreen: () => startScreen(doc),
     stageInert: () => !!doc.querySelector("#stage[inert]"),
-    screen: (a) => screenLines(walk(), {
-      ...(typeof a.region === "string" ? { region: a.region } : {}),
-      ...(typeof a.max === "number" ? { max: a.max } : {}),
-    }),
+    screen: (a) => {
+      if (typeof a.region === "string" && !(REGIONS as readonly string[]).includes(a.region)) {
+        throw new HarnessError(`no region "${a.region}", the regions are ${REGIONS.join(", ")}`, "BadArgs");
+      }
+      return screenLines(walk(), {
+        ...(typeof a.region === "string" ? { region: a.region } : {}),
+        ...(typeof a.max === "number" ? { max: a.max } : {}),
+      });
+    },
     locate: (a) => {
       const c = findControl(walk(), str(a, "target"));
       return { marker: stamp(c.el), ref: c.ref, label: c.label, role: c.role, disabled: c.disabled, covered: covered(c.el, doc) };
