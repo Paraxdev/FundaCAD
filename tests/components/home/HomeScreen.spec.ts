@@ -34,13 +34,15 @@ function callbacks(over: Partial<HomeCallbacks> = {}): HomeCallbacks {
   };
 }
 
-/** Every path exists unless listed in `missing`, edited at `mtime`. */
+/** Every path exists unless listed in `missing`, edited at `mtime`, its picture named after it. */
 function fakeLibrary(missing: string[] = [], mtime = 0): DocumentLibrary {
   return {
     stat: vi.fn(async (paths: string[]): Promise<FileStat[]> =>
       paths.map((path) => missing.includes(path)
         ? { path, exists: false, mtimeMs: null, size: null }
         : { path, exists: true, mtimeMs: mtime || null, size: 1 })),
+    thumbs: vi.fn(async (paths: string[]) => paths.map((p) => `data:image/jpeg;base64,${btoa(p)}`)),
+    putThumb: vi.fn(async () => {}),
   };
 }
 
@@ -273,5 +275,30 @@ describe("HomeScreen", () => {
     cards[1]!.click();
     await flushPromises();
     expect(cb.newFromTemplate).toHaveBeenCalledWith("wall-bracket");
+  });
+
+  it("loads a card's picture only once the card is in view", async () => {
+    const watched = new Map<Element, (e: { isIntersecting: boolean }[]) => void>();
+    vi.stubGlobal("IntersectionObserver", class {
+      constructor(private cb: (e: { isIntersecting: boolean }[]) => void) {}
+      observe(el: Element) { watched.set(el, this.cb); }
+      disconnect() {}
+    });
+    try {
+      const lib = fakeLibrary([], 5000);
+      open([{ path: "C:/w/a.funda", openedAt: 2 }, { path: "C:/w/b.funda", openedAt: 1 }], {}, lib);
+      await flushPromises();
+      expect(lib.thumbs).not.toHaveBeenCalled();
+      expect($(".home-card-pic img")).toBeNull();
+      const [first] = $$(".home-card");
+      watched.get(first!)!([{ isIntersecting: true }]);
+      await flushPromises();
+      expect(lib.thumbs).toHaveBeenCalledWith(["C:/w/a.funda"]);
+      const imgs = $$(".home-card-pic img");
+      expect(imgs.length).toBe(1);
+      expect(imgs[0]!.getAttribute("src")).toBe(`data:image/jpeg;base64,${btoa("C:/w/a.funda")}`);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

@@ -17,6 +17,7 @@ import { buildBodyTree, importTrees } from "../ui/browserTree";
 import { referencedGeometry } from "../document/versions";
 import { UnreadableDocumentError } from "../document/documentShape";
 import { noteRecent } from "./recentFiles";
+import { captureAfterOpen, captureThumbnail, storeThumbnail } from "./thumbnails";
 import { BINARY_DOC_EXT, DOC_EXT, LEGACY_DOC_EXTS, isDocumentExt } from "./documentExt";
 import { announceImportedBody } from "../plugins/contrib";
 import { askImportUnit, asksForUnit, type ImportUnit } from "./importUnit";
@@ -52,6 +53,7 @@ function referencedHashes(store: DocumentStore): string[] {
  *  would be impossible while its worker is down, with unsaved work on screen. Saving needs no
  *  geometry anyway; the blobs are already bytes on disk. */
 async function writeContainer(store: DocumentStore, path: string): Promise<string | null> {
+  const picture = captureThumbnail();
   const { invoke } = await import("@tauri-apps/api/core");
   try {
     await invoke("container_save", {
@@ -60,6 +62,7 @@ async function writeContainer(store: DocumentStore, path: string): Promise<strin
       hashes: referencedHashes(store),
       meshKeys: [],
     });
+    void storeThumbnail(path, picture);
     return null;
   } catch (e) {
     return errMsg(e);
@@ -345,8 +348,10 @@ async function finishOpen(
     return "unreadable";
   }
   // freshly opened == clean
-  if (path) store.markSaved(path);
-  else store.markOpenedWithoutPath(base);
+  if (path) {
+    store.markSaved(path);
+    captureAfterOpen(store, path);
+  } else store.markOpenedWithoutPath(base);
   // AFTER markSaved, so a document that needs a plugin still opens CLEAN. The
   // notice is about what this build can do with the file, never about the file
   // having been changed, and a freshly-opened document marked dirty would offer

@@ -1,0 +1,182 @@
+//! Preview pictures for Home's cards, cached in app data beside `recovery/`.
+//! A picture is served only while the document still has the time and size it
+//! had when the picture was taken, so an edit outside the app shows a
+//! placeholder rather than a wrong picture. No Tauri in here, see library.rs.
+
+use base64::Engine as _;
+use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
+
+use crate::library::stat_one;
+
+pub const GET_CAP: usize = 48;
+pub const MAX_BYTES: usize = 512 * 1024;
+pub const KEEP: usize = 1000;
+
+const JPEG: &str = "data:image/jpeg;base64,";
+const PNG: &str = "data:image/png;base64,";
+
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct Sidecar {
+    path: String,
+    mtime_ms: Option<u64>,
+    size: Option<u64>,
+    mime: String,
+}
+
+fn key(path: &str) -> String {
+    fundacad_format::container::hash_bytes(path.as_bytes())
+}
+
+fn decode(data_url: &str) -> Result<(&'static str, Vec<u8>), String> {
+    let (mime, body) = if let Some(b) = data_url.strip_prefix(JPEG) {
+        ("image/jpeg", b)
+    } else if let Some(b) = data_url.strip_prefix(PNG) {
+        ("image/png", b)
+    } else {
+        return Err("a preview must be a JPEG or PNG data URL".into());
+    };
+    if body.len() > MAX_BYTES * 4 / 3 + 4 {
+        return Err("the preview is too large".into());
+    }
+    let bytes = base64::engine::general_purpose::STANDARD.decode(body).map_err(|e| e.to_string())?;
+    if bytes.len() > MAX_BYTES {
+        return Err("the preview is too large".into());
+    }
+    Ok((mime, bytes))
+}
+
+pub fn put(dir: &Path, path: &str, data_url: &str) -> Result<(), String> {
+    let (mime, bytes) = decode(data_url)?;
+    let st = stat_one(path);
+    if !st.exists {
+        return Err("the document is not on disk".into());
+    }
+    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    let k = key(path);
+    let side = Sidecar { path: path.to_string(), mtime_ms: st.mtime_ms, size: st.size, mime: mime.into() };
+    let img = dir.join(format!("{k}.img"));
+    let json = dir.join(format!("{k}.json"));
+    write_atomic(&img, &bytes)?;
+    write_atomic(&json, serde_json::to_string(&side).map_err(|e| e.to_string())?.as_bytes())?;
+    prune(dir, KEEP);
+    Ok(())
+}
+
+fn write_atomic(target: &Path, bytes: &[u8]) -> Result<(), String> {
+    let tmp = target.with_extension("tmp");
+    std::fs::write(&tmp, bytes).map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp, target).map_err(|e| e.to_string())
+}
+
+pub fn get_one(dir: &Path, path: &str) -> Option<String> {
+    let k = key(path);
+    let side: Sidecar = serde_json::from_slice(&std::fs::read(dir.join(format!("{k}.json"))).ok()?).ok()?;
+    let st = stat_one(path);
+    if side.path != path || !st.exists || side.mtime_ms != st.mtime_ms || side.size != st.size {
+        return None;
+    }
+    let bytes = std::fs::read(dir.join(format!("{k}.img"))).ok()?;
+    let prefix = if side.mime == "image/png" { PNG } else { JPEG };
+    Some(format!("{prefix}{}", base64::engine::general_purpose::STANDARD.encode(bytes)))
+}
+
+pub fn get_all(dir: &Path, paths: &[String]) -> Vec<Option<String>> {
+    paths.iter().take(GET_CAP).map(|p| get_one(dir, p)).collect()
+}
+
+/// Keeps the `keep` most recently written pictures.
+pub fn prune(dir: &Path, keep: usize) {
+    let Ok(read) = std::fs::read_dir(dir) else { return };
+    let mut sides: Vec<(std::time::SystemTime, PathBuf)> = read
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|x| x == "json"))
+        .filter_map(|p| Some((std::fs::metadata(&p).ok()?.modified().ok()?, p)))
+        .collect();
+    if sides.len() <= keep {
+        return;
+    }
+    sides.sort_by(|a, b| b.0.cmp(&a.0));
+    for (_, side) in sides.into_iter().skip(keep) {
+        let _ = std::fs::remove_file(side.with_extension("img"));
+        let _ = std::fs::remove_file(&side);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("fundacad-thumbs-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn jpeg(bytes: &[u8]) -> String {
+        format!("{JPEG}{}", base64::engine::general_purpose::STANDARD.encode(bytes))
+    }
+
+    #[test]
+    fn a_matching_stamp_serves_the_picture() {
+        let dir = temp_dir("serve");
+        let doc = dir.join("a.funda");
+        std::fs::write(&doc, b"{}").unwrap();
+        let doc = doc.to_str().unwrap().to_string();
+        put(&dir.join("thumbs"), &doc, &jpeg(b"picture")).unwrap();
+        assert_eq!(get_one(&dir.join("thumbs"), &doc), Some(jpeg(b"picture")));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_changed_document_gives_no_picture() {
+        let dir = temp_dir("stale");
+        let doc = dir.join("a.funda");
+        std::fs::write(&doc, b"{}").unwrap();
+        let path = doc.to_str().unwrap().to_string();
+        put(&dir.join("thumbs"), &path, &jpeg(b"picture")).unwrap();
+        std::fs::write(&doc, b"{\"features\":[]}").unwrap();
+        assert_eq!(get_one(&dir.join("thumbs"), &path), None);
+        assert_eq!(get_all(&dir.join("thumbs"), &["Z:/nowhere.funda".to_string()]), vec![None]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn only_small_jpeg_or_png_data_urls_are_taken() {
+        let dir = temp_dir("reject");
+        let doc = dir.join("a.funda");
+        std::fs::write(&doc, b"{}").unwrap();
+        let path = doc.to_str().unwrap();
+        assert!(put(&dir, path, "data:text/html;base64,PGI+").is_err());
+        assert!(put(&dir, path, "https://example.com/a.jpg").is_err());
+        assert!(put(&dir, path, &jpeg(&vec![0u8; MAX_BYTES + 1])).is_err());
+        assert!(put(&dir, path, &format!("{PNG}AAAA")).is_ok());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn pruning_keeps_the_newest() {
+        let dir = temp_dir("prune");
+        for i in 0..5 {
+            let doc = dir.join(format!("{i}.funda"));
+            std::fs::write(&doc, b"{}").unwrap();
+            put(&dir.join("thumbs"), doc.to_str().unwrap(), &jpeg(b"x")).unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(20));
+        }
+        prune(&dir.join("thumbs"), 2);
+        let left = std::fs::read_dir(dir.join("thumbs")).unwrap().count();
+        assert_eq!(left, 4);
+        assert!(get_one(&dir.join("thumbs"), dir.join("4.funda").to_str().unwrap()).is_some());
+        assert!(get_one(&dir.join("thumbs"), dir.join("0.funda").to_str().unwrap()).is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn the_get_batch_is_capped() {
+        let paths: Vec<String> = (0..GET_CAP + 5).map(|i| format!("Z:/{i}.funda")).collect();
+        assert_eq!(get_all(&temp_dir("cap"), &paths).len(), GET_CAP);
+    }
+}

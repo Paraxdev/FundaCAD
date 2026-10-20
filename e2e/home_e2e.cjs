@@ -8,6 +8,7 @@
 //   6. Over the fake library: edit times, a missing file shows Not found and Remove takes it off.
 //   7. Search filters the cards, the sort changes their order, Ctrl+F finds the field.
 //   8. Each template opens as an untitled document that builds.
+//   9. With 300 documents, the cards in view show their pictures and only those are fetched.
 //
 //   engine --ws, vite, then
 //   SC_TOKEN=<engine token> node e2e/home_e2e.cjs
@@ -180,6 +181,43 @@ function check(name, ok, detail = "") {
       check(`${name} builds`, !got.error && got.bodies === 1, JSON.stringify(got));
       check(`${name} closes Home`, !(await homeUp()));
     }
+
+    console.log("9. pictures on 300 cards");
+    await page.evaluate(() => {
+      const c = document.createElement("canvas");
+      c.width = 48;
+      c.height = 30;
+      const g = c.getContext("2d");
+      g.fillStyle = "#c03020";
+      g.fillRect(0, 0, 48, 30);
+      const thumb = c.toDataURL("image/jpeg", 0.85);
+      const now = Date.now();
+      const files = Array.from({ length: 300 }, (_, i) => ({ path: `C:/many/doc${String(i).padStart(3, "0")}.funda`, mtimeMs: now - i * 1000, thumb }));
+      localStorage.setItem("fundacad.recentFiles", JSON.stringify(files.map((f, i) => ({ path: f.path, openedAt: now - i }))));
+      window.__fundacad.home.useFakeLibrary(files);
+    });
+    if (!(await homeUp())) await menu("File", "Home");
+    await page.waitForFunction(() => document.querySelectorAll(".home-card-pic img").length > 0, null, { timeout: 5000 }).catch(() => {});
+    await page.waitForTimeout(300);
+    const first = await page.evaluate(() => ({
+      cards: document.querySelectorAll(".home-card").length,
+      pics: document.querySelectorAll(".home-card-pic img").length,
+      asked: window.__fundacad.home.thumbRequests(),
+      firstPic: !!document.querySelector(".home-card .home-card-pic img"),
+      tall: document.querySelector(".home-card").getBoundingClientRect().height,
+    }));
+    if (process.env.SC_SHOTS) await page.screenshot({ path: `${process.env.SC_SHOTS}/home300.png` });
+    check("300 cards", first.cards === 300, `${first.cards}`);
+    check("the cards keep their height", first.tall > 150, `${first.tall}`);
+    check("the first card shows its picture", first.firstPic);
+    check("only cards near the view were fetched", first.asked.length > 0 && first.asked.length < 100, `${first.asked.length}`);
+    check("the last card was not fetched yet", !first.asked.includes("C:/many/doc299.funda"));
+    await page.evaluate(() => { const g = document.querySelector(".home-grid"); g.scrollTop = g.scrollHeight; });
+    await page.waitForFunction(() => window.__fundacad.home.thumbRequests().includes("C:/many/doc299.funda"), null, { timeout: 5000 }).catch(() => {});
+    const after = await page.evaluate(() => window.__fundacad.home.thumbRequests());
+    check("scrolling to the end fetches the last cards", after.includes("C:/many/doc299.funda"), `${after.length}`);
+    check("and still not every card", after.length < 300, `${after.length}`);
+    await page.keyboard.press("Escape");
   } finally {
     await browser.close();
   }

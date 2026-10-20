@@ -4003,11 +4003,73 @@ export class Viewport {
     const h = Math.max(1, Math.round(rect.height));
     const cap = this.scene.renderer.capabilities.maxTextureSize || 4096;
     const k = Math.max(1, Math.min(scale, cap / Math.max(w, h)));
+    return this.drawPicture(w, h, k, opts, () => this.canvas.toDataURL("image/png"));
+  }
 
+  /** A card picture for Home: the whole model from the front right corner at
+   *  `width` x `height`, as a JPEG over the viewport background, null for an
+   *  empty model. The camera is moved and put back within this call, so the
+   *  moved view is never painted. */
+  renderThumbnail(width: number, height: number): string | null {
+    const model = this.model;
+    if (!model || model.box.isEmpty()) return null;
+    const saved = this.rig.getState();
+    const bg = this.scene.renderer.getClearColor(new THREE.Color()).getStyle();
+    return this.drawPicture(
+      width,
+      height,
+      1,
+      { edges: true },
+      () => {
+        const out = document.createElement("canvas");
+        out.width = width;
+        out.height = height;
+        const g = out.getContext("2d");
+        if (!g) return null;
+        g.fillStyle = bg;
+        g.fillRect(0, 0, width, height);
+        g.drawImage(this.canvas, 0, 0, width, height);
+        return out.toDataURL("image/jpeg", 0.85);
+      },
+      {
+        enter: () => {
+          this.rig.resize(width, height);
+          this.rig.resetView(model.box);
+        },
+        leave: () => this.rig.setState(saved, false),
+      },
+    );
+  }
+
+  private drawPicture<T>(
+    w: number,
+    h: number,
+    k: number,
+    opts: { edges?: boolean; realtime?: boolean },
+    read: () => T,
+    camera?: { enter(): void; leave(): void },
+  ): T {
+    if (!camera) return this.drawPictureNow(w, h, k, opts, read);
+    camera.enter();
+    try {
+      return this.drawPictureNow(w, h, k, opts, read);
+    } finally {
+      camera.leave();
+      this.requestRender();
+    }
+  }
+
+  private drawPictureNow<T>(
+    w: number,
+    h: number,
+    k: number,
+    opts: { edges?: boolean; realtime?: boolean },
+    read: () => T,
+  ): T {
     const lines = this.model ? edgeObjects(this.model) : [];
     const dpr = this.scene.renderer.getPixelRatio();
-    const camera = this.rig.active;
-    const viewLayers = camera.layers.mask;
+    const active = this.rig.active;
+    const viewLayers = active.layers.mask;
 
     // A still is full quality even in potato mode: the tier, passes and environment
     // come back for this one render, and glass and emitters with the tier.
@@ -4017,10 +4079,9 @@ export class Viewport {
     if (stillLow !== wasLow) this.applyBodyFinish();
 
     // No selection, hover, grid, tool handle or any other overlay goes in the file.
-    camera.layers.mask = pictureMask(opts);
+    active.layers.mask = pictureMask(opts);
     const showOverlays = hideForPicture(this.scene.scene, this.scene.modelGroup);
     const narrowLines = widenLines(lines.map((e) => e.material), k);
-    let url = "";
     try {
       this.scene.renderer.setPixelRatio(1);
       this.scene.renderer.setSize(w * k, h * k, false);
@@ -4028,12 +4089,12 @@ export class Viewport {
       this.scene.post.focusDistance = this.rig.active.position.distanceTo(this.cameraTarget());
       const draw = () => {
         this.scene.post.render(this.rig.active, false, opts.realtime);
-        return this.canvas.toDataURL("image/png");
+        return read();
       };
-      url = this.highlighter ? this.highlighter.withoutSelectionPaint(draw) : draw();
+      return this.highlighter ? this.highlighter.withoutSelectionPaint(draw) : draw();
     } finally {
       showOverlays();
-      camera.layers.mask = viewLayers;
+      active.layers.mask = viewLayers;
       narrowLines();
       // Whatever happened, the viewport goes back to being the viewport. A throw
       // between the resize and the restore would otherwise leave the canvas
@@ -4046,7 +4107,6 @@ export class Viewport {
       this.resize();
       this.requestRender();
     }
-    return url;
   }
 
   // Counts frames the loop ACTUALLY draws. Render-on-demand means most rAF
