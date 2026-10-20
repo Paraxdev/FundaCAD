@@ -5524,6 +5524,67 @@
           }
         ]
       }
+    },
+    {
+      "name": "thin_extrude_l",
+      "document": {
+        "parameters": {},
+        "features": [
+          {
+            "id": "sk",
+            "type": "sketch",
+            "plane": {
+              "origin": [
+                0,
+                0,
+                0
+              ],
+              "normal": [
+                0,
+                0,
+                1
+              ],
+              "xdir": [
+                1,
+                0,
+                0
+              ]
+            },
+            "entities": [
+              {
+                "id": "a",
+                "type": "line",
+                "x1": 0,
+                "y1": 0,
+                "x2": 40,
+                "y2": 0
+              },
+              {
+                "id": "b",
+                "type": "line",
+                "x1": 40,
+                "y1": 0,
+                "x2": 40,
+                "y2": 30
+              }
+            ]
+          },
+          {
+            "id": "ex",
+            "type": "extrude",
+            "sketch": "sk",
+            "distance": 10,
+            "operation": "new",
+            "thin": true,
+            "curves": [
+              "a",
+              "b"
+            ],
+            "thickness": 2,
+            "side": "center"
+          }
+        ]
+      }
     }
   ]
 }
