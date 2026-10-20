@@ -153,7 +153,7 @@ with Session() as s:
 | `undo()`, `redo()` | the title bar buttons |
 | `expand(target, open=True)` | opens or closes an Items folder by its caret (a click on the row selects) |
 | `open_file(path, discard=True)` | File > Open, answering the file chooser and the unsaved changes question, refused when the document did not change |
-| `import_file(path)` | drops the file on the canvas, the way a browser tab imports a model |
+| `import_file(path)` | drops the file on the canvas, the way a browser tab imports a model; waits up to 300 s or `settle_timeout`, whichever is longer, and with `settle=False` returns once the file is dropped |
 | `save_as(path)` | File > Save As, the download lands at `path` |
 | `new_document(discard=True)` | Ctrl+N, answering the unsaved changes question |
 | `settle(trace=None, timeout=None)`, `wait_for(text, timeout=10)` | explicit waits, `wait_for` looks at the prompt, and at the messages logged and the labels shown since the last action began |
@@ -188,7 +188,9 @@ too), and the viewport neither drawing nor moving the camera. All of that has to
 in a row with nothing new in the document, the build or the log for 150 ms, which also covers a
 tool that makes its edit a moment after the click. `s.settle(trace=N)` waits for the path traced
 view to reach N samples as well. After 60 s (`settle_timeout=`) it fails with `SettleTimeout` and
-one line on what is still busy, for example `building, 2 requests in flight, socket open`.
+one line on what is still busy, for example `building, 2 requests in flight, socket open`. The
+work may still finish after that: `wait_for` a label, settle again, or open the session with a
+longer `settle_timeout`, which a recording keeps.
 
 If vite reloads the page, while it optimises dependencies on a cold start or after an edit it
 cannot hot swap, the session waits for the app again and closes the start screen again. The next

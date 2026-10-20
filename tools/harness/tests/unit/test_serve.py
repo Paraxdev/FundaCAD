@@ -176,7 +176,18 @@ def test_a_long_do_stops_starting_steps_before_the_relay_gives_up(tmp_path):
         "1. pressed Enter", "2. pressed Enter",
         "stopped before step 3 after 150 s, send steps 3 to 5 in a new ui_do",
     ]
-    assert s.settle_timeout == 60, "the session's own settle time comes back after the call"
+    assert s.settle_timeout == 60, "the session's own settle time is left alone"
+    assert s.settle_limit is None, "the cap ends with the call"
+
+
+def test_open_takes_a_settle_timeout_for_slow_work(tmp_path):
+    made = []
+    server = Server(lambda **kw: made.append(kw) or StubSession(tmp_path, **kw))
+    server.open(settle_timeout=140)
+    assert made[-1]["settle_timeout"] == 140
+    server.s.closed = True
+    with pytest.raises(Exception, match="settle_timeout is a number of seconds"):
+        server.open(settle_timeout="long")
 
 
 def test_a_wait_in_a_do_is_capped():

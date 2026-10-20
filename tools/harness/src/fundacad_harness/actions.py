@@ -22,6 +22,8 @@ SIDES = {"top", "bottom", "front", "back", "right", "left"}
 # A wide stage has no button that opens a closed Items or History, a person uses the keys.
 PANEL_KEYS = {"items": "Ctrl+Alt+s", "history": "Ctrl+Alt+h"}
 OPEN_WAIT_S = 10
+# A big STEP assembly takes minutes to read and build, far past an ordinary step.
+IMPORT_SETTLE_S = 300
 PANELS = ("history", "items", "views", "display", "versions", "snapping", "preferences")
 
 
@@ -68,6 +70,7 @@ def action(fn: Callable) -> Callable:
         outer = not getattr(self, "_in_action", False)
         if outer:
             self._mark = self.bridge.call("seq")
+            self._settling = settle
         self._in_action = True
         navs = self._navs
         try:
@@ -417,7 +420,9 @@ class Actions:
         """A browser tab imports a model by a file dropped on the canvas, as from the desktop."""
         full = self._repo_path(path)
         self._drop_on_canvas(full)
-        self.settle()
+        if not getattr(self, "_settling", True):
+            return f"dropped {Path(full).name}, the import runs on, wait_for or settle() to see it land", {"path": full}
+        self.settle(timeout=max(self.settle_timeout, IMPORT_SETTLE_S))
         n = len(self.bridge.call("bodies"))
         return f"dropped {Path(full).name}, {n} bod{'y' if n == 1 else 'ies'} now", {"path": full, "bodies": n}
 
@@ -524,7 +529,7 @@ class Actions:
                 self.page.keyboard.up(k)
 
     def _selection_after_click(self) -> dict:
-        self.bridge.call("settle", timeoutMs=int(self.settle_timeout * 1000))
+        self.settle()
         return self.bridge.call("selection")
 
     @staticmethod
