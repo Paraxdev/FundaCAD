@@ -713,16 +713,20 @@ jobs:
   # the beta build: red here means the engine is broken.
   rust-geom:
     # The self hosted runner keeps its target dir between runs, so only what
-    # changed recompiles. Never for pull requests: this repo is public and a
-    # fork's code must not run on it. vars.FAST_RUNNER off falls back to GitHub.
-    runs-on: ${{ (github.event_name != 'pull_request' && vars.FAST_RUNNER == 'true') && fromJSON('["self-hosted","fundacad"]') || 'ubuntu-22.04' }}
+    # changed recompiles. Only the owner's own pushes and manual runs go there,
+    # everyone else gets GitHub's runner; the runner's job-started hook refuses
+    # anything else too, since a fork pull request could edit this file.
+    # vars.FAST_RUNNER off falls back to GitHub.
+    runs-on: ${{ (github.event_name != 'pull_request' && github.actor == 'Paraxdev' && github.triggering_actor == 'Paraxdev' && vars.FAST_RUNNER == 'true') && fromJSON('["self-hosted","fundacad"]') || 'ubuntu-22.04' }}
     timeout-minutes: 240
+    permissions:
+      contents: read
     # Every test binary links the static OpenCASCADE, so full debug info filled
     # the runner's disk once the import suites grew. Line tables keep file:line
     # in panics.
     env:
       CARGO_PROFILE_DEV_DEBUG: line-tables-only
-      SELF_HOSTED: ${{ github.event_name != 'pull_request' && vars.FAST_RUNNER == 'true' }}
+      SELF_HOSTED: ${{ github.event_name != 'pull_request' && github.actor == 'Paraxdev' && github.triggering_actor == 'Paraxdev' && vars.FAST_RUNNER == 'true' }}
     steps:
       - uses: actions/checkout@v4
         with:
