@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { Viewport } from "../../src/viewport/viewport";
 import { createBridge, createMethods, harnessWanted, HARNESS_API, installHarness, startScreen, type HarnessHost } from "../../src/harness/driver";
 import { HarnessError } from "../../src/harness/locate";
 import { mountApp, rect } from "./fixture";
@@ -89,5 +90,28 @@ describe("locate", () => {
     document.querySelectorAll(".dim-input").forEach((e) => e.remove());
     expect(() => m.fieldValue!({ target: "sketch" })).toThrow(/is not a value field, no value box is open/);
     document.body.innerHTML = "";
+  });
+});
+
+const SOURCES = import.meta.glob(["../../src/main.ts", "../../src/viewport/viewport.ts"], {
+  query: "?raw", import: "default", eager: true,
+}) as Record<string, string>;
+const source = (path: string) => SOURCES[`../../${path}`]!;
+
+describe("what the harness relies on outside src/harness", () => {
+  it("main.ts loads the driver only behind import.meta.env.DEV, so a production build drops it", () => {
+    const main = source("src/main.ts");
+    const at = main.indexOf('import("./harness/driver")');
+    expect(at).toBeGreaterThan(0);
+    expect(main.slice(0, at)).toMatch(/if \(import\.meta\.env\.DEV && harnessWanted\([^)]*\)\) \{\s*void $/);
+    expect(main).not.toMatch(/^import .*harness\/driver/m);
+  });
+
+  it("the picture is not idle on a frame the camera moved", () => {
+    const idle = Object.getOwnPropertyDescriptor(Viewport.prototype, "renderIdle")!.get!;
+    expect(idle.call({ needsRender: false, lingerFrames: 0, frameMoved: false })).toBe(true);
+    expect(idle.call({ needsRender: false, lingerFrames: 0, frameMoved: true })).toBe(false);
+    const src = source("src/viewport/viewport.ts");
+    expect(src).toMatch(/const moved = this\.rig\.update\(dt\);\s*this\.frameMoved = moved;/);
   });
 });
