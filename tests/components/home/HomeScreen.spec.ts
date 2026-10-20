@@ -324,19 +324,56 @@ describe("HomeScreen", () => {
     expect(seen).toHaveBeenCalledOnce();
   });
 
-  it("starts a document from a template card", async () => {
+  it("keeps only Blank and Open at the top and lists the examples as cards", () => {
+    open([{ path: "C:/work/gear.funda", openedAt: 1 }]);
+    expect($$(".home-new-card").map((c) => c.querySelector(".home-new-name")!.textContent)).toEqual(["Blank", "Open…"]);
+    expect($(".home-new-template")).toBeNull();
+    expect($$(".home-example-name").map((n) => n.textContent)).toEqual(["Plate", "Wall bracket", "Pinned lever"]);
+    expect($$(".home-example-line").map((n) => n.textContent)).toEqual(["Example", "Example", "Example"]);
+    expect($(".home-examples")!.closest(".home-scroll")).toBe($(".home-grid")!.closest(".home-scroll"));
+    expect($(".home-section")!.textContent).toBe("Examples");
+  });
+
+  it("starts a document from an example card", async () => {
     const { cb } = open();
-    const cards = $$(".home-new-template");
-    expect(cards.map((c) => c.querySelector(".home-new-name")!.textContent)).toEqual(["Plate", "Wall bracket", "Pinned lever"]);
-    cards[1]!.click();
+    $$(".home-example")[1]!.click();
     await flushPromises();
     expect(cb.newFromTemplate).toHaveBeenCalledWith("wall-bracket");
   });
 
+  it("finds an example by name, and says nothing matches only when no example does either", async () => {
+    open([{ path: "C:/work/bracket.funda", openedAt: 2 }, { path: "C:/work/gear.funda", openedAt: 1 }]);
+    await flushPromises();
+    const field = document.querySelector<HTMLInputElement>(".home-search")!;
+    field.value = "LEVER";
+    field.dispatchEvent(new Event("input"));
+    await nextTick();
+    expect($$(".home-card")).toHaveLength(0);
+    expect($$(".home-example-name").map((n) => n.textContent)).toEqual(["Pinned lever"]);
+    expect($(".home-empty")).toBeNull();
+    field.value = "zzz";
+    field.dispatchEvent(new Event("input"));
+    await nextTick();
+    expect($$(".home-example")).toHaveLength(0);
+    expect($(".home-empty")!.textContent).toBe("No documents match");
+  });
+
+  it.each([
+    ["the desktop app", fakeLibrary(), "Documents you open or save appear here."],
+    ["the browser build", null, "Recent documents appear here in the desktop app."],
+  ] as const)("shows the examples with no recent documents in %s", (_where, lib, empty) => {
+    open([], {}, lib);
+    expect($$(".home-example")).toHaveLength(3);
+    expect($(".home-empty")!.textContent).toBe(empty);
+  });
+
   it("loads a card's picture only once the card is in view", async () => {
     const watched = new Map<Element, (e: { isIntersecting: boolean }[]) => void>();
+    const roots = new Set<Element | Document | null>();
     vi.stubGlobal("IntersectionObserver", class {
-      constructor(private cb: (e: { isIntersecting: boolean }[]) => void) {}
+      constructor(private cb: (e: { isIntersecting: boolean }[]) => void, opts?: IntersectionObserverInit) {
+        roots.add(opts?.root ?? null);
+      }
       observe(el: Element) { watched.set(el, this.cb); }
       disconnect() {}
     });
@@ -346,6 +383,8 @@ describe("HomeScreen", () => {
       await flushPromises();
       expect(lib.thumbs).not.toHaveBeenCalled();
       expect($(".home-card-pic img")).toBeNull();
+      // The scrolling box, a root that grows with its cards would see every card at once.
+      expect([...roots]).toEqual([$(".home-scroll")]);
       const [first] = $$(".home-card");
       watched.get(first!)!([{ isIntersecting: true }]);
       await flushPromises();

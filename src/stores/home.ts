@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { markRaw, ref, shallowRef } from "vue";
+import { computed, markRaw, ref, shallowRef } from "vue";
 import type { HomeCallbacks } from "../ui/home";
 
 export const useHomeStore = defineStore("home", () => {
@@ -8,6 +8,7 @@ export const useHomeStore = defineStore("home", () => {
   return {
     visible,
     callbacks,
+    shown: computed(() => visible.value && !!callbacks.value),
     bind: (cb: HomeCallbacks) => { callbacks.value = markRaw(cb); },
   };
 });

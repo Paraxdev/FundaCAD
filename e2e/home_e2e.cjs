@@ -1,13 +1,14 @@
 // Home, the start screen, in a real browser against the real geometry engine.
 //
 //   1. Startup shows Home over the stage, with its close button, and the keyboard stays on it.
+//      The title bar behind it is dimmed and takes no click or focus, all but the Home button.
 //   2. Blank closes it and leaves an empty document.
 //   3. File > Home and the title bar button bring it back, Escape closes it.
 //   4. With unsaved work, Blank asks before discarding it.
 //   5. A .funda dropped over Home opens and Home closes.
 //   6. Over the fake library: edit times, a missing file shows Not found and Remove takes it off.
 //   7. Search filters the cards, the sort changes their order, Ctrl+F finds the field.
-//   8. Each template opens as an untitled document that builds.
+//   8. Each example card opens its template as an untitled document that builds.
 //   9. With 300 documents, the cards in view show their pictures and only those are fetched.
 //  10. A folder added to Home lists its documents, narrow windows pick it from a Select, Remove takes it off.
 //  11. The Versions drawer: the open document's branches and versions, Restore (and Ctrl+Z), branch Open,
@@ -65,7 +66,10 @@ function check(name, ok, detail = "") {
     console.log("1b. keyboard");
     const focusIn = () => page.evaluate(() => {
       const a = document.activeElement;
-      return a?.closest(".home") ? "home" : a?.closest("#float-layer, #stage") ? "behind" : a?.tagName ?? "none";
+      if (a?.closest(".home")) return "home";
+      if (a?.id === "home-btn") return "home-btn";
+      if (a?.closest("#titlebar")) return "bar";
+      return a?.closest("#float-layer, #stage") ? "behind" : a?.tagName ?? "none";
     });
     check("Home has the focus at startup", (await focusIn()) === "home", await focusIn());
     const walk = [];
@@ -74,22 +78,44 @@ function check(name, ok, detail = "") {
       walk.push(await focusIn());
     }
     check("Tab never lands on what Home covers", !walk.includes("behind"), walk.join(" "));
+    check("Tab never lands in the title bar but on its Home button", !walk.includes("bar"), walk.join(" "));
     await page.keyboard.press("Control+k");
     await page.waitForSelector(".cmdk-backdrop", { timeout: 2000 }).catch(() => null);
     await page.keyboard.press("Escape");
     await page.waitForTimeout(200);
     const afterPalette = await page.evaluate(() => ({ palette: !!document.querySelector(".cmdk-backdrop"), home: !!document.querySelector("#stage .home") }));
     check("Escape closes the palette over Home and leaves Home up", !afterPalette.palette && afterPalette.home, JSON.stringify(afterPalette));
-    await page.click('.menu-btn:has-text("File")');
-    await page.keyboard.press("Escape");
+    const bar = await page.evaluate(() => {
+      const file = [...document.querySelectorAll(".menu-btn")].find((b) => b.textContent.trim() === "File");
+      const r = file.getBoundingClientRect();
+      const hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+      const home = document.querySelector("#home-btn");
+      return {
+        x: r.x + r.width / 2,
+        y: r.y + r.height / 2,
+        hitsFile: !!hit?.closest(".menu-btn"),
+        off: ["#menubar", "#undo-btn", "#docname", "#workspace-toggle"].every((sel) => !!document.querySelector(sel)?.closest("[inert]")),
+        dim: Number(getComputedStyle(document.querySelector("#workspace-toggle")).opacity),
+        homeLive: !home.closest("[inert]") && home.classList.contains("active"),
+      };
+    });
+    check("the title bar behind Home is inert and dimmed", !bar.hitsFile && bar.off && bar.dim < 0.5, JSON.stringify(bar));
+    check("its Home button stays live and shows Home is open", bar.homeLive, JSON.stringify(bar));
+    await page.mouse.click(bar.x, bar.y);
     await page.waitForTimeout(200);
-    const afterMenu = await page.evaluate(() => ({ menu: !!document.querySelector(".menu-popup:not(.hidden)"), home: !!document.querySelector("#stage .home") }));
-    check("Escape closes an open menu and leaves Home up", !afterMenu.menu && afterMenu.home, JSON.stringify(afterMenu));
+    const afterClick = await page.evaluate(() => ({ menu: !!document.querySelector(".menu-popup:not(.hidden)"), home: !!document.querySelector("#stage .home") }));
+    check("a click on File over Home opens no menu and leaves Home up", !afterClick.menu && afterClick.home, JSON.stringify(afterClick));
 
     console.log("2. Blank");
     await page.click(".home-new-blank");
     await page.waitForTimeout(300);
     check("Blank closes Home", !(await homeUp()));
+    const live = await page.evaluate(() => ({
+      inert: document.querySelectorAll("#titlebar [inert]").length,
+      dim: Number(getComputedStyle(document.querySelector("#workspace-toggle")).opacity),
+      active: document.querySelector("#home-btn").classList.contains("active"),
+    }));
+    check("the title bar is live again once Home closes", live.inert === 0 && live.dim === 1 && !live.active, JSON.stringify(live));
     const blank = await page.evaluate(() => window.store.document.features.length);
     check("the document is empty", blank === 0, String(blank));
 
@@ -196,7 +222,7 @@ function check(name, ok, detail = "") {
     console.log("8. templates");
     for (const name of ["Plate", "Wall bracket", "Pinned lever"]) {
       if (!(await homeUp())) await menu("File", "Home");
-      await page.click(`.home-new-template:has-text("${name}")`);
+      await page.click(`.home-example:has-text("${name}")`);
       const discard = await page.waitForSelector("button:has-text('Discard')", { timeout: 1500 }).catch(() => null);
       if (discard) await discard.click();
       await settle();
@@ -242,7 +268,7 @@ function check(name, ok, detail = "") {
     check("the first card shows its picture", first.firstPic);
     check("only cards near the view were fetched", first.asked.length > 0 && first.asked.length < 100, `${first.asked.length}`);
     check("the last card was not fetched yet", !first.asked.includes("C:/many/doc299.funda"));
-    await page.evaluate(() => { const g = document.querySelector(".home-grid"); g.scrollTop = g.scrollHeight; });
+    await page.evaluate(() => { const g = document.querySelector(".home-scroll"); g.scrollTop = g.scrollHeight; });
     await page.waitForFunction(() => window.__fundacad.home.thumbRequests().includes("C:/many/doc299.funda"), null, { timeout: 5000 }).catch(() => {});
     const after = await page.evaluate(() => window.__fundacad.home.thumbRequests());
     check("scrolling to the end fetches the last cards", after.includes("C:/many/doc299.funda"), `${after.length}`);
