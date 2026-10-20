@@ -216,10 +216,10 @@ async function screenshot() {
     <!-- On a narrow stage Items and History are drawers, and their switches
          go first, where a short column cannot scroll them out of sight. -->
     <div v-if="shell.narrow" class="float-group">
-      <IconButton icon="items" :title="fmtKeys('Items (Ctrl Alt S)')" :active="shell.itemsShown" @click="shell.toggleItems()" />
+      <IconButton icon="items" :title="fmtKeys('Items (Ctrl+Alt+S)')" :active="shell.itemsShown" @click="shell.toggleItems()" />
       <IconButton
         icon="history"
-        :title="fmtKeys(ui.sketchActive ? 'Sketch options (Ctrl Alt H)' : 'History (Ctrl Alt H)')"
+        :title="fmtKeys(ui.sketchActive ? 'Sketch options (Ctrl+Alt+H)' : 'History (Ctrl+Alt+H)')"
         :active="shell.historyShown"
         :badge="errorCount || null"
         @click="shell.toggleHistory()"
@@ -235,7 +235,7 @@ async function screenshot() {
         @click="open('grid', $event)"
       >{{ gridLabel }}</button>
       <IconButton icon="views" title="Views" :active="isOpen('views')" @click="open('views', $event)" />
-      <IconButton icon="view-reset" title="Reset camera (Shift Home)" @click="engine.handleAction('reset-camera')" />
+      <IconButton icon="view-reset" title="Reset camera (Shift+Home)" @click="engine.handleAction('reset-camera')" />
     </div>
     <div class="float-group view-modes" role="group" aria-label="View mode">
       <IconButton
@@ -256,7 +256,7 @@ async function screenshot() {
       <IconButton
         v-if="!shell.narrow"
         icon="history"
-        :title="fmtKeys('History (Ctrl Alt H)')"
+        :title="fmtKeys('History (Ctrl+Alt+H)')"
         :active="shell.historyOpen"
         :badge="errorCount || null"
         @click="shell.toggleHistory()"

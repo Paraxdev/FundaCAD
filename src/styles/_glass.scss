@@ -349,7 +349,13 @@
 .areachip {
   border-radius: var(--float-chip-radius);
 }
+/* .cmdk-card, .tgt-panel and .shortcut-hud-card are static in their own
+   partials, and without this their ::after rim resolves against the full screen
+   backdrop and is drawn around the window. */
 .modal-panel,
+.cmdk-card,
+.tgt-panel,
+.shortcut-hud-card,
 .toast,
 #renderdock {
   position: relative;
@@ -488,6 +494,13 @@
 .btn-primary:hover:not(:disabled) {
   background: var(--accent-hot);
   border-color: var(--accent-hot);
+}
+/* These shadows load after the shared ring in _base.scss at the same
+   specificity, so without this the ring never shows on them. */
+.btn:focus-visible,
+.pop-wide:focus-visible,
+.palette-btn:focus-visible {
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent-glow);
 }
 
 .sm-input,
