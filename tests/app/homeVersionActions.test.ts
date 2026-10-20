@@ -25,7 +25,7 @@ const repo = () => ({
   current: "main",
 });
 
-function fakeEngine(filePath: string | null = null, dirty = false) {
+function fakeEngine(filePath: string | null = null, dirty = false, toolAtWork = false) {
   const calls: string[] = [];
   const store = {
     dirty,
@@ -36,8 +36,15 @@ function fakeEngine(filePath: string | null = null, dirty = false) {
     markOpenedWithoutPath: vi.fn((name: string) => { calls.push(`copy ${name}`); }),
   };
   vi.mocked(openDocumentAtPath).mockClear();
-  const e = { store, sketch: { hasUncommittedEdits: false }, geometry: {} } as unknown as Engine;
-  return { e, store, calls };
+  const status: string[] = [];
+  const e = {
+    store,
+    sketch: { hasUncommittedEdits: false },
+    geometry: {},
+    toolAtWork: () => toolAtWork,
+    setStatus: (t: string) => { status.push(t); },
+  } as unknown as Engine;
+  return { e, store, calls, status };
 }
 
 describe("versions from Home", () => {
@@ -81,6 +88,15 @@ describe("versions from Home", () => {
     const failed = fakeEngine();
     expect(await openOnBranch(failed.e, "D:/p/part.funda", "wide")).toBe(false);
     expect(failed.calls).toEqual([]);
+  });
+
+  it("leaves the open document alone while a sketch or tool is at work on it", async () => {
+    const { e, calls, status } = fakeEngine("D:/p/part.funda", false, true);
+    expect(await openAtVersion(e, "D:/p/part.funda", "v2", false)).toBe(false);
+    expect(await openAtVersion(e, "D:/p/part.funda", "v2", true)).toBe(false);
+    expect(await openOnBranch(e, "D:/p/part.funda", "wide")).toBe(false);
+    expect(calls).toEqual([]);
+    expect(status[0]).toMatch(/^Finish the sketch or tool first/);
   });
 
   it("opens on a branch, switching only when the file is on another one", async () => {
