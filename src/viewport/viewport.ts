@@ -3,7 +3,7 @@
 // of the app uses: setModel(), fit(), pick callbacks, projection/view toggles.
 
 import * as THREE from "three";
-import { createScene, environmentKey, environmentRoomFor, type SceneBundle } from "./scene";
+import { createScene, environmentKey, environmentRoomFor, isHdrHeld, type SceneBundle } from "./scene";
 import {
   createCameraRig,
   type CameraRig,
@@ -64,7 +64,7 @@ import type { DocumentStore } from "../document/store";
 import type { BodyFinish } from "../document/materials";
 import { BodyFinishLayer, sameFinishMap, sameStringMap } from "./bodyFinish";
 import { hdrHashOf, onRenderPrefsChange, renderPrefs, setRenderPref } from "../ui/renderPrefs";
-import { bootViewMode, chooseViewMode, effectiveViewMode, resetPathTracedOverride, savedOverlays, type RenderTier, type ViewMode } from "../ui/viewMode";
+import { bootViewMode, chooseViewMode, effectiveViewMode, resetPathTracedOverride, savedGround, savedOverlays, type RenderTier, type ViewMode } from "../ui/viewMode";
 import { drawMask, markOverlay, overlayBit, overlayShown, pickLayers, pickMask, pictureMask, setPickLayers, syncOverlayLayers, type ActiveWork, type OverlayKind } from "./overlayKinds";
 import type { TraceLight, TraceLook } from "./pathtrace/backend";
 import { lensFor, type TraceLens } from "./pathtrace/camera";
@@ -81,7 +81,7 @@ import { wsCall, type DevCall } from "./pathtrace/devCall";
 import type { Call } from "./pathtrace/nativeScene";
 import type { TracerBackend } from "./pathtrace/backend";
 import type { TraceState } from "./pathtrace/state";
-import { onWorkspaceChange } from "../ui/workspace";
+import { onWorkspaceChange, workspace } from "../ui/workspace";
 import { invalidateThemeColors } from "./themeColors";
 import { onThemeChange } from "../ui/theme";
 import type { ViewCubeSide } from "../types";
@@ -146,6 +146,8 @@ import { hitScale } from "../input/pointerKind";
 import { setEmissionProgress } from "../ui/emissionProgress";
 import { DisposeQueue, detachModel } from "./disposeQueue";
 import { ShadowWatch } from "./shadowWatch";
+import { ContactShadow, catcherPlane, type CatcherPlane } from "./contactShadow";
+import { buildLightRig, type LightRig } from "./lightRig";
 import { hideForPicture, markInPicture, markNotInPicture, widenLines } from "./pictureScene";
 
 /** One box drag. The box previews by selecting every frame, so each frame starts
@@ -304,11 +306,14 @@ export class Viewport {
   private needsRender = true;
   private lingerFrames = 3;
   private shadowWatch = new ShadowWatch();
+  /** Public for the browser checks, which read its bake counter. */
+  readonly contactShadow = new ContactShadow();
 
   constructor(private canvas: HTMLCanvasElement) {
     this.scene = createScene(canvas);
     this.progressive = new ProgressiveModel(this.scene.modelGroup, disposeBody);
     this.scene.scene.add(markOverlay(this.datumGroup, "origin"));
+    this.scene.scene.add(this.contactShadow.group);
     const rect = canvas.getBoundingClientRect();
     this.rig = createCameraRig(canvas, rect.width / rect.height);
 
@@ -377,6 +382,7 @@ export class Viewport {
     onWorkspaceChange(() => {
       this.syncViewMode();
       this.overlays = savedOverlays();
+      this.requestRender(); // each workspace keeps its own ground
     });
     onRenderPrefsChange(() => {
       if (renderPrefs().tracer !== this.tracerPref) {
@@ -4192,6 +4198,16 @@ export class Viewport {
   }
 
   private scratchTarget = new THREE.Vector3();
+  private contactPlane(): CatcherPlane | null {
+    return this.model ? catcherPlane(this.model.box, this.targetGridZ) : null;
+  }
+
+  /** The light rig with this view's ground, the catcher the tracer should draw too. */
+  lightRig(): LightRig {
+    const p = this.contactPlane();
+    return buildLightRig(renderPrefs(), isHdrHeld, p && { workspace: workspace(), z: p.z, centre: p.centre, extent: p.extent });
+  }
+
   private loop = () => {
     // Never let a single bad frame kill the loop: if any step throws, log and
     // keep scheduling, so a transient camera/geometry glitch can't freeze the
@@ -4249,6 +4265,21 @@ export class Viewport {
         // on. Written every frame because the orbit distance changes every frame
         // a wheel is turned, and it costs one subtraction.
         this.scene.post.focusDistance = this.rig.active.position.distanceTo(t);
+        this.contactShadow.sync({
+          renderer: this.scene.renderer,
+          model: this.scene.modelGroup,
+          plane: this.contactPlane(),
+          state: {
+            ground: savedGround(),
+            lowPower: isRenderLowPower(),
+            potato: renderPrefs().potatoMode,
+            viewMode: this.scene.post.viewMode,
+            tracing: this.scene.post.viewMode === "pathtraced" && this.scene.post.traceShown,
+            xray: this.xray,
+          },
+          traceState: this.trace.state,
+          shadows: renderPrefs().shadows,
+        });
         const shadows = this.scene.renderer.shadowMap;
         // Shadows depend on the casters and the lights, never on the camera.
         this.shadowWatch.gate(this.needsRender, this.scene.scene, shadows, this.scene.post.drawsShadows);
