@@ -19,6 +19,10 @@ export interface NativeProbe {
   /** What cleans the cap; absent from an app older than the runtime load. */
   denoiser?: "oidn" | "filter" | undefined;
   reason?: string | undefined;
+  /** Why it refused: the greying reason the page shows. */
+  class?: "noadapter" | "cpu" | "limits" | "selfcheck" | undefined;
+  /** What the refused adapter binds, with the limits class. */
+  storageBuffers?: number | undefined;
 }
 
 export interface TracerEnv {

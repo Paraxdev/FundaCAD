@@ -12,6 +12,7 @@ import type { Denoise } from "../../ui/renderPrefs";
 import type { PictureOptions, TraceLook, TraceScene, TracerBackend } from "./backend";
 import type { TraceLens } from "./camera";
 import { NativeScene, type Call } from "./nativeScene";
+import { runSelfCheck } from "./selfCheck";
 import { bloomKey, bloomSide, type TraceBloomSettings } from "./tracePost";
 
 export interface NativeFrame {
@@ -333,6 +334,17 @@ interface Status {
   denoised: boolean;
   denoising: boolean;
   denoiseError: string | null;
+  picture?: { samples: number; total: number; denoising: boolean } | null;
+}
+
+const PICTURE_POLL_MS = 250;
+
+/** What a raw ipc::Response arrives as. */
+function base64(bytes: unknown): string {
+  const b = bytes instanceof ArrayBuffer ? new Uint8Array(bytes) : bytes instanceof Uint8Array ? bytes : Uint8Array.from(bytes as number[]);
+  let s = "";
+  for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000));
+  return btoa(s);
 }
 
 export class NativeTracer implements TracerBackend {
@@ -390,6 +402,8 @@ export class NativeTracer implements TracerBackend {
     this.source = c.source;
     // The native tracer outlives a page, so a bloom of the last one is cleared.
     this.syncBloom();
+    // After the connect, which is what opens the native tracer the check borrows its path from.
+    await runSelfCheck((cmd, args) => this.call(cmd, args as Record<string, unknown>));
   }
 
   setSize(cssWidth: number, cssHeight: number, pixelRatio: number) {
@@ -547,8 +561,37 @@ export class NativeTracer implements TracerBackend {
     if (this.link instanceof WebSocketLink) this.link.note(line);
   }
 
-  picture(_o: PictureOptions): Promise<string> {
-    return Promise.reject(new Error("The native tracer cannot save a picture yet"));
+  /** Traced on the native side into an accumulation of its own, so the
+   *  viewport's samples stay; the PNG comes back as bytes. */
+  async picture(o: PictureOptions): Promise<string> {
+    const cancelled = () => new DOMException("The picture was cancelled", "AbortError");
+    if (o.signal?.aborted) throw cancelled();
+    await this.scene.idle();
+    await this.bloomSent;
+    const abort = () => void this.call("pt_picture_cancel").catch(() => {});
+    o.signal?.addEventListener("abort", abort, { once: true });
+    let running = true;
+    void (async () => {
+      while (running) {
+        await new Promise((r) => setTimeout(r, PICTURE_POLL_MS));
+        if (!running) return;
+        const s = (await this.call("pt_status").catch(() => null)) as Status | null;
+        if (running && s?.picture) o.onProgress?.(Math.min(s.picture.samples, o.samples));
+      }
+    })();
+    try {
+      if (o.signal?.aborted) throw cancelled();
+      const png = await this.call("pt_picture", { width: o.width, height: o.height, samples: o.samples });
+      if (o.signal?.aborted) throw cancelled();
+      o.onProgress?.(o.samples);
+      return `data:image/png;base64,${base64(png)}`;
+    } catch (e) {
+      if (o.signal?.aborted) throw cancelled();
+      throw e instanceof Error ? e : new Error(String(e));
+    } finally {
+      running = false;
+      o.signal?.removeEventListener("abort", abort);
+    }
   }
 
   get denoised(): boolean {

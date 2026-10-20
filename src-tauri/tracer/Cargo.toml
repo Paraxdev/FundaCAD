@@ -20,8 +20,8 @@ sha2 = "0.10"
 zip = { version = "4", default-features = false, features = ["deflate-flate2"] }
 flate2 = "1"
 tar = "0.4"
+png = "0.17"
 
 [dev-dependencies]
-png = "0.17"
 # The binding and layout tests read the kernels as wgpu compiles them.
 naga = { version = "=30.0.1", features = ["wgsl-in"] }

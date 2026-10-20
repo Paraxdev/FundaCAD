@@ -245,3 +245,60 @@ describe("the native tracer backend", () => {
     });
   });
 });
+
+describe("a traced picture on the native tracer", () => {
+  function pictureCalls(answer: (cancelled: Promise<void>) => Promise<unknown>) {
+    const calls: [string, unknown][] = [];
+    let cancel!: () => void;
+    const cancelled = new Promise<void>((r) => (cancel = r));
+    const call = async (cmd: string, args?: unknown) => {
+      calls.push([cmd, args]);
+      if (cmd === "pt_status") return { samples: 1, fault: null, picture: { samples: 5, total: 8, denoising: false } };
+      if (cmd === "pt_picture_cancel") cancel();
+      if (cmd === "pt_picture") return answer(cancelled);
+      return undefined;
+    };
+    return { calls, ...setup(new FakeLink(), 1, call) };
+  }
+
+  it("traces it with pt_picture, reports pt_status progress and answers the PNG as a data URL", async () => {
+    vi.useFakeTimers();
+    try {
+      let finish!: (b: ArrayBuffer) => void;
+      const { t, calls } = pictureCalls(() => new Promise((r) => (finish = r)));
+      await t.init();
+      const seen: number[] = [];
+      const p = t.picture({ width: 6, height: 4, samples: 8, onProgress: (n) => seen.push(n) });
+      await vi.advanceTimersByTimeAsync(300);
+      expect(seen).toEqual([5]);
+      finish(new Uint8Array([137, 80, 78, 71]).buffer);
+      await expect(p).resolves.toBe("data:image/png;base64,iVBORw==");
+      expect(calls.find((c) => c[0] === "pt_picture")?.[1]).toEqual({ width: 6, height: 4, samples: 8 });
+      expect(seen.at(-1)).toBe(8);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("cancels the native picture on abort and rejects as an AbortError", async () => {
+    const { t, calls } = pictureCalls(async (cancelled) => {
+      await cancelled;
+      throw "the picture was cancelled";
+    });
+    await t.init();
+    const ac = new AbortController();
+    const p = t.picture({ width: 6, height: 4, samples: 8, signal: ac.signal });
+    await new Promise((r) => setTimeout(r, 0));
+    ac.abort();
+    await expect(p).rejects.toMatchObject({ name: "AbortError" });
+    expect(calls.map((c) => c[0])).toContain("pt_picture_cancel");
+  });
+
+  it("names why the native side refused the picture", async () => {
+    const { t } = pictureCalls(async () => {
+      throw "a 7680x4320 picture needs a 1013 MiB buffer";
+    });
+    await t.init();
+    await expect(t.picture({ width: 7680, height: 4320, samples: 8 })).rejects.toThrow("needs a 1013 MiB buffer");
+  });
+});
