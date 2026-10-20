@@ -42,7 +42,9 @@ done
 tag="v$version"
 
 cd "$(git rev-parse --show-toplevel)"
-git fetch --quiet --tags "$REMOTE" main dev
+git fetch --quiet --tags "$REMOTE" main
+git fetch --quiet "$REMOTE" dev \
+  || die "could not fetch dev from $REMOTE. If it does not exist yet, create it from main first (docs/ENGINE.md section 7)."
 
 git rev-parse -q --verify "refs/tags/$tag" >/dev/null && die "$tag already exists"
 
