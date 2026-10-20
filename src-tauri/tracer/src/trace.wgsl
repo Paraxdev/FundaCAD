@@ -1,10 +1,21 @@
 // Prepended by rq.wgsl or sw.wgsl, which define trace(o, d, tmax, shadow).
 
+struct Light {
+  // towards the light, 1 - cos of its angular radius (0 for a delta light)
+  dir: vec4f,
+  // irradiance, the chance a light sample picks it
+  color: vec4f,
+}
 struct U {
   w: u32, h: u32, sample: u32, row0: u32,
+  // flags: bit 0 writes the AOVs, bits 1 and 2 pick the estimator
   rows: u32, n_inst: u32, bounces: u32, flags: u32,
   eye: vec4f, fwd: vec4f, right: vec4f, up: vec4f,
-  sky_top: vec4f, sky_bottom: vec4f, sun_dir: vec4f, sun_color: vec4f, tone: vec4f,
+  sky_top: vec4f, sky_bottom: vec4f, tone: vec4f,
+  lights: array<Light, 4>,
+  n_lights: vec4u,
+  // rgb, w 1 when camera misses show it instead of the sky
+  background: vec4f,
 }
 struct Inst {
   o2w0: vec4f, o2w1: vec4f, o2w2: vec4f,
@@ -42,6 +53,10 @@ const PI = 3.14159265;
 const SOLID = 1u;
 const VERTEX_COLORS = 2u;
 const NO_LIGHT = 4u;
+const EST_NEE = 1u;
+const EST_BSDF = 2u;
+// The luminance an indirect contribution is scaled down to.
+const FIREFLY = 10.0;
 
 var<private> seed: u32;
 fn rnd() -> f32 {
@@ -50,25 +65,37 @@ fn rnd() -> f32 {
   w = (w >> 22u) ^ w;
   return f32(w) / 4294967296.0;
 }
-fn onb(n: vec3f, d: vec3f) -> vec3f {
+fn basis(n: vec3f) -> mat3x3f {
   let s = select(-1.0, 1.0, n.z >= 0.0);
   let a = -1.0 / (s + n.z);
   let b = n.x * n.y * a;
-  let t = vec3f(1.0 + s * n.x * n.x * a, s * b, -s * n.x);
-  let bt = vec3f(b, s + n.y * n.y * a, -n.y);
-  return d.x * t + d.y * bt + d.z * n;
+  return mat3x3f(vec3f(1.0 + s * n.x * n.x * a, s * b, -s * n.x), vec3f(b, s + n.y * n.y * a, -n.y), n);
 }
+fn onb(n: vec3f, d: vec3f) -> vec3f { return basis(n) * d; }
 fn lum(c: vec3f) -> f32 { return dot(c, vec3f(0.2126, 0.7152, 0.0722)); }
-fn schlick(f0: vec3f, c: f32) -> vec3f { return f0 + (1.0 - f0) * pow(1.0 - clamp(c, 0.0, 1.0), 5.0); }
-fn ggx_h(n: vec3f, a: f32) -> vec3f {
-  let r1 = rnd(); let r2 = 2.0 * PI * rnd();
-  let ct = sqrt((1.0 - r1) / (1.0 + (a * a - 1.0) * r1));
-  let st = sqrt(max(0.0, 1.0 - ct * ct));
-  return onb(n, vec3f(st * cos(r2), st * sin(r2), ct));
-}
+fn schlick(f0: vec3f, f90: f32, c: f32) -> vec3f { return f0 + (vec3f(f90) - f0) * pow(1.0 - clamp(c, 0.0, 1.0), 5.0); }
 fn g1(c: f32, a: f32) -> f32 {
   let a2 = a * a;
   return 2.0 * c / (c + sqrt(a2 + (1.0 - a2) * c * c));
+}
+// 1 - (n.h)^2 from the cross product, which keeps a near mirror lobe's peak in f32.
+fn d_ggx(n: vec3f, h: vec3f, a: f32) -> f32 {
+  let a2 = a * a;
+  let c = cross(n, h);
+  let nh = dot(n, h);
+  let t = dot(c, c) + nh * nh * a2;
+  return a2 / (PI * t * t);
+}
+// A normal visible from v, sampled in the spherical cap (Dupuy and Benyoub 2023).
+fn vndf(n: vec3f, v: vec3f, a: f32) -> vec3f {
+  let bm = basis(n);
+  let vl = transpose(bm) * v;
+  let vs = normalize(vec3f(a * vl.x, a * vl.y, max(vl.z, 1e-4)));
+  let phi = 2.0 * PI * rnd();
+  let z = (1.0 - rnd()) * (1.0 + vs.z) - vs.z;
+  let st = sqrt(clamp(1.0 - z * z, 0.0, 1.0));
+  let hs = vec3f(st * cos(phi), st * sin(phi), z) + vs;
+  return normalize(bm * vec3f(a * hs.x, a * hs.y, max(hs.z, 1e-6)));
 }
 fn fresnel(ci: f32, eta: f32) -> f32 {
   let s2 = eta * eta * (1.0 - ci * ci);
@@ -82,6 +109,74 @@ fn env(d: vec3f) -> vec3f {
   return mix(u.sky_bottom.rgb, u.sky_top.rgb, d.z * 0.5 + 0.5) * u.sky_top.w;
 }
 fn vcol(i: u32) -> vec3f { return unpack4x8unorm(cols[i]).rgb; }
+fn mis(a: f32, b: f32) -> f32 { return a * a / (a * a + b * b); }
+fn add(c: vec3f, clamped: bool) -> vec3f {
+  let l = lum(c);
+  if (clamped && l > FIREFLY) { return c * (FIREFLY / l); }
+  return c;
+}
+
+// The opaque layers: a clear coat over GGX specular over diffuse.
+struct Bsdf {
+  f0: vec3f, f90: f32,
+  diffuse: vec3f, a: f32,
+  // the chance a bounce under the coat samples the specular lobe
+  ps: f32,
+  coat: f32, ca: f32,
+  // the chance a bounce samples the coat, and what the coat lets through
+  pc: f32, base: f32,
+}
+// rgb f times n.l towards l, w the pdf a bounce picks l with.
+fn bsdf_eval(s: Bsdf, n: vec3f, v: vec3f, l: vec3f, nv: f32) -> vec4f {
+  let nl = dot(n, l);
+  if (nl <= 0.0) { return vec4f(0.0); }
+  let h = normalize(v + l);
+  let vh = max(dot(v, h), 1e-4);
+  let d = d_ggx(n, h, s.a);
+  let spec = schlick(s.f0, s.f90, vh) * d * g1(nv, s.a) * g1(nl, s.a) / (4.0 * nv * nl);
+  var f = s.base * (spec + s.diffuse / PI);
+  var pdf = s.ps * g1(nv, s.a) * d / (4.0 * nv) + (1.0 - s.ps) * nl / PI;
+  if (s.coat > 0.0) {
+    let dc = d_ggx(n, h, s.ca);
+    f += vec3f(s.coat * schlick(vec3f(0.04), 1.0, vh).x * dc * g1(nv, s.ca) * g1(nl, s.ca) / (4.0 * nv * nl));
+    pdf = s.pc * g1(nv, s.ca) * dc / (4.0 * nv) + (1.0 - s.pc) * pdf;
+  }
+  return vec4f(f * nl, pdf);
+}
+
+// rgb the radiance of the light discs along d, w the pdf a light sample picks d with.
+fn discs(d: vec3f) -> vec4f {
+  var r = vec4f(0.0);
+  for (var k = 0u; k < u.n_lights.x; k++) {
+    let li = u.lights[k];
+    if (li.dir.w > 0.0 && dot(d, li.dir.xyz) >= 1.0 - li.dir.w) {
+      let sa = 2.0 * PI * li.dir.w;
+      r += vec4f(li.color.rgb / sa, li.color.w / sa);
+    }
+  }
+  return r;
+}
+struct LightSample { l: vec3f, pdf: f32, e: vec3f }
+// One light picked by power and a direction inside its disc. e is radiance
+// over pdf; pdf is 0 for a delta light, which no bounce can find.
+fn sample_light() -> LightSample {
+  var r = rnd();
+  var k = 0u;
+  loop {
+    if (k + 1u >= u.n_lights.x || r < u.lights[k].color.w) { break; }
+    r -= u.lights[k].color.w;
+    k++;
+  }
+  let li = u.lights[k];
+  if (li.dir.w <= 0.0) { return LightSample(li.dir.xyz, 0.0, li.color.rgb / li.color.w); }
+  let q = rnd() * li.dir.w;
+  let st = sqrt(max(q * (2.0 - q), 0.0));
+  let phi = 2.0 * PI * rnd();
+  let l = onb(li.dir.xyz, vec3f(st * cos(phi), st * sin(phi), 1.0 - q));
+  let c = discs(l);
+  if (c.w <= 0.0) { return LightSample(l, 0.0, vec3f(0.0)); }
+  return LightSample(l, c.w, c.rgb / c.w);
+}
 
 @compute @workgroup_size(8, 8)
 fn main(@builtin(global_invocation_id) id: vec3u) {
@@ -97,14 +192,35 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
   var thr = vec3f(1.0);
   var col = vec3f(0.0);
   var channel = 3u;
+  let est = (u.flags >> 1u) & 3u;
+  let clamp_on = est == 0u;
+  // 0 from the camera, below 0 from a scatter with no light sample, else the
+  // pdf of the bounce that sent the ray.
+  var last_pdf = 0.0;
   for (var b = 0u; b < u.bounces; b++) {
     let h = trace(o, d, 1e30, false);
     if (!h.ok) {
-      col += thr * env(d);
-      if (b == 0u && (u.flags & 1u) != 0u) {
-        aov[pix * 2u] = vec4f(env(d), 1e30);
-        aov[pix * 2u + 1u] = vec4f(0.0);
+      if (last_pdf == 0.0) {
+        let bg = select(env(d), u.background.rgb, u.background.w > 0.0);
+        col += thr * bg;
+        if (b == 0u && (u.flags & 1u) != 0u) {
+          aov[pix * 2u] = vec4f(bg, 1e30);
+          aov[pix * 2u + 1u] = vec4f(0.0);
+        }
+        break;
       }
+      var c = env(d);
+      if (last_pdf != 0.0) {
+        let lc = discs(d);
+        if (lc.w > 0.0) {
+          var w = 1.0;
+          if (last_pdf > 0.0) {
+            if (est == EST_NEE) { w = 0.0; } else if (est != EST_BSDF) { w = mis(last_pdf, lc.w); }
+          }
+          c += lc.rgb * w;
+        }
+      }
+      col += add(thr * c, b >= 2u && clamp_on);
       break;
     }
     let it = insts[h.inst];
@@ -139,7 +255,7 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
     if (!front && (flags & SOLID) != 0u) {
       thr *= pow(max(m.attenuation.rgb, vec3f(1e-4)), vec3f(h.t / m.attenuation.w));
     }
-    col += thr * m.emission.rgb;
+    col += add(thr * m.emission.rgb, b >= 2u && clamp_on);
     if (rnd() > m.base.a) {
       o = p + d * eps;
       continue;
@@ -149,14 +265,14 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
     let metal = m.pbr.x;
     let alpha = max(m.pbr.y * m.pbr.y, 1e-4);
     let trans = m.pbr.z * (1.0 - metal);
-    if (m.coat.x > 0.0 && rnd() < m.coat.x * schlick(vec3f(0.04), nv).x) {
-      let hc = ggx_h(ns, max(m.coat.y * m.coat.y, 1e-4));
-      d = reflect(d, hc);
-      if (dot(d, ng) <= 0.0) { break; }
-      o = p + ng * eps;
-      continue;
-    }
     if (rnd() < trans) {
+      last_pdf = -1.0;
+      if (m.coat.x > 0.0 && rnd() < m.coat.x * schlick(vec3f(0.04), 1.0, nv).x) {
+        d = reflect(d, vndf(ns, v, max(m.coat.y * m.coat.y, 1e-4)));
+        if (dot(d, ng) <= 0.0) { break; }
+        o = p + ng * eps;
+        continue;
+      }
       var ior = m.pbr.w;
       if (m.coat.z > 0.0) {
         if (channel == 3u) {
@@ -169,7 +285,7 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
         ior += (f32(channel) - 1.0) * half;
       }
       let eta = select(ior, 1.0 / ior, front);
-      let hm = select(ggx_h(ns, alpha), ns, alpha < 1e-3);
+      let hm = select(vndf(ns, v, alpha), ns, alpha < 1e-3);
       let ci = dot(v, hm);
       if (rnd() < fresnel(ci, eta)) {
         d = reflect(d, hm);
@@ -183,33 +299,44 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
         }
       }
     } else {
-      let f0 = mix(vec3f(0.04 * m.coat.w) * m.specular.rgb, albedo, metal);
-      let fv = schlick(f0, nv);
-      let diffuse = albedo * (1.0 - metal) * (1.0 - fv);
-      if (u.sun_dir.w > 0.0) {
-        let l = u.sun_dir.xyz;
-        let nl = dot(ns, l);
-        if (nl > 0.0 && dot(ng, l) > 0.0 && !trace(p + ng * eps, l, 1e30, true).ok) {
-          col += thr * diffuse / PI * u.sun_color.rgb * nl;
+      var s: Bsdf;
+      s.f0 = mix(vec3f(0.04 * m.coat.w) * m.specular.rgb, albedo, metal);
+      s.f90 = mix(m.coat.w, 1.0, metal);
+      let fv = schlick(s.f0, s.f90, nv);
+      s.diffuse = albedo * (1.0 - metal) * (1.0 - fv);
+      s.a = alpha;
+      s.ps = mix(clamp(lum(fv), 0.05, 0.95), 1.0, metal);
+      s.coat = m.coat.x;
+      s.ca = max(m.coat.y * m.coat.y, 1e-4);
+      s.pc = m.coat.x * schlick(vec3f(0.04), 1.0, nv).x;
+      s.base = 1.0 - s.pc;
+      if (u.n_lights.x > 0u && est != EST_BSDF) {
+        let ls = sample_light();
+        if (dot(ls.l, ng) > 0.0) {
+          let f = bsdf_eval(s, ns, v, ls.l, nv);
+          if (any(f.rgb > vec3f(0.0)) && !trace(p + ng * eps, ls.l, 1e30, true).ok) {
+            var w = 1.0;
+            if (ls.pdf > 0.0 && est != EST_NEE) { w = mis(ls.pdf, f.w); }
+            col += add(thr * f.rgb * ls.e * w, b >= 1u && clamp_on);
+          }
         }
       }
-      let ps = mix(clamp(lum(fv), 0.05, 0.95), 1.0, metal);
-      if (rnd() < ps) {
-        let hm = ggx_h(ns, alpha);
-        let l = reflect(d, hm);
-        let nl = dot(ns, l);
-        if (nl <= 0.0 || dot(l, ng) <= 0.0) { break; }
-        let vh = max(dot(v, hm), 1e-4);
-        let nh = max(dot(ns, hm), 1e-4);
-        thr *= schlick(f0, vh) * g1(nv, alpha) * g1(nl, alpha) * vh / (nh * nv) / ps;
-        d = l;
+      var l: vec3f;
+      if (rnd() < s.pc) {
+        l = reflect(d, vndf(ns, v, s.ca));
+      } else if (rnd() < s.ps) {
+        l = reflect(d, vndf(ns, v, s.a));
       } else {
         let r1 = rnd(); let r2 = 2.0 * PI * rnd();
         let sr = sqrt(r1);
-        d = onb(ns, vec3f(sr * cos(r2), sr * sin(r2), sqrt(1.0 - r1)));
-        if (dot(d, ng) <= 0.0) { break; }
-        thr *= diffuse / (1.0 - ps);
+        l = onb(ns, vec3f(sr * cos(r2), sr * sin(r2), sqrt(1.0 - r1)));
       }
+      if (dot(l, ng) <= 0.0) { break; }
+      let f = bsdf_eval(s, ns, v, l, nv);
+      if (f.w <= 0.0) { break; }
+      thr *= f.rgb / f.w;
+      last_pdf = f.w;
+      d = l;
       o = p + ng * eps;
     }
     if (b >= 3u) {
@@ -219,5 +346,5 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
     }
   }
   if (any(col != col)) { col = vec3f(0.0); }
-  accum[pix] += vec4f(min(col, vec3f(64.0)), 1.0);
+  accum[pix] += vec4f(col, 1.0);
 }

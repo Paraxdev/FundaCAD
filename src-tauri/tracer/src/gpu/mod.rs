@@ -53,17 +53,93 @@ pub struct Camera {
     pub fov: f32,
 }
 
+/// A light at infinity, a disc of `angular_radius` degrees around `direction`.
+#[derive(Debug, Clone, Copy, PartialEq, Default, serde::Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct LightDesc {
+    /// Towards the light.
+    pub direction: [f32; 3],
+    /// Linear, the irradiance it gives a surface facing it.
+    pub color: [f32; 3],
+    /// Degrees, 0 for a delta light.
+    pub angular_radius: f32,
+}
+
+pub const MAX_LIGHTS: usize = 4;
+
+/// Up to MAX_LIGHTS lights, held inline so a Look stays Copy. A longer list
+/// keeps its strongest.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct Lights {
+    len: usize,
+    list: [LightDesc; MAX_LIGHTS],
+}
+
+impl Lights {
+    pub fn new(lights: &[LightDesc]) -> Lights {
+        let mut v: Vec<LightDesc> = lights.to_vec();
+        v.sort_by(|a, b| crate::bloom::luma(b.color).total_cmp(&crate::bloom::luma(a.color)));
+        let mut out = Lights::default();
+        for l in v.into_iter().take(MAX_LIGHTS) {
+            out.list[out.len] = l;
+            out.len += 1;
+        }
+        out
+    }
+
+    pub fn as_slice(&self) -> &[LightDesc] {
+        &self.list[..self.len]
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Lights {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        Ok(Lights::new(&Vec::<LightDesc>::deserialize(d)?))
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, serde::Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Look {
     pub sky_top: [f32; 3],
     pub sky_bottom: [f32; 3],
     pub env_intensity: f32,
-    /// Towards the light; a zero vector turns the sun off.
+    /// Towards the light; a zero vector turns the sun off. A delta light,
+    /// used only when `lights` is absent.
     pub sun_dir: [f32; 3],
     pub sun_color: [f32; 3],
     pub exposure: f32,
     pub bounces: u32,
+    pub lights: Option<Lights>,
+    /// What camera rays that miss show, linear. Absent, they show the sky.
+    pub background: Option<[f32; 3]>,
+}
+
+impl Look {
+    /// The lights traced: `lights`, or else the sun as one delta light.
+    pub fn light_list(&self) -> Lights {
+        if let Some(l) = self.lights {
+            return l;
+        }
+        let on = self.sun_dir.iter().any(|x| *x != 0.0) && self.sun_color.iter().any(|x| *x > 0.0);
+        let sun = [LightDesc { direction: self.sun_dir, color: self.sun_color, angular_radius: 0.0 }];
+        Lights::new(if on { &sun } else { &[] })
+    }
+}
+
+/// How the light at a surface is estimated. Tests compare them; the app
+/// always traces with Mis and its firefly clamp.
+#[doc(hidden)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Estimator {
+    #[default]
+    Default,
+    /// Light samples only, bounce rays never see a light.
+    Nee,
+    /// Bounce rays only, no light samples.
+    Bsdf,
+    /// Both, weighted by the power heuristic, without the clamp.
+    Mis,
 }
 
 impl Default for Look {
@@ -76,6 +152,8 @@ impl Default for Look {
             sun_color: [0.0; 3],
             exposure: 1.0,
             bounces: 6,
+            lights: None,
+            background: None,
         }
     }
 }
@@ -136,6 +214,7 @@ pub struct Tracer {
     cap: u32,
     camera: Camera,
     look: Look,
+    estimator: Estimator,
     held: Option<Held>,
     quality: Quality,
     job: Option<Job>,
@@ -234,7 +313,7 @@ impl Tracer {
 
         let uniform = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
-            size: 176,
+            size: frame::UNIFORM_SIZE,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -291,6 +370,7 @@ impl Tracer {
             cap: 256,
             camera: Camera { eye: [4.0, -6.0, 3.0], target: [0.0; 3], up: [0.0, 0.0, 1.0], fov: 50.0 },
             look: Look::default(),
+            estimator: Estimator::Default,
             held: None,
             quality: Quality::default(),
             job: None,
@@ -372,6 +452,14 @@ impl Tracer {
     pub fn set_look(&mut self, l: Look) {
         if l != self.look {
             self.look = l;
+            self.reset();
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn set_estimator(&mut self, e: Estimator) {
+        if e != self.estimator {
+            self.estimator = e;
             self.reset();
         }
     }

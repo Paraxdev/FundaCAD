@@ -249,3 +249,24 @@ pub fn ref_write_wanted_for() -> Option<Option<String>> {
     std::env::var_os("TRACER_REF_WRITE")?;
     Some(std::env::var("TRACER_REF_ONLY").ok())
 }
+
+pub const BALL_EYE: [f32; 3] = [4.0, -6.0, 3.0];
+pub const BALL_TARGET: [f32; 3] = [0.0, 0.0, 0.8];
+
+/// A unit ball at (0, 0, 1) and nothing else, finely tessellated so its
+/// shading normals sit on the analytic sphere's.
+pub fn ball_alone(t: &mut Tracer, look: Look, mat: PageMaterial, (w, h): (u32, u32)) {
+    t.resize(w, h);
+    t.set_camera(Camera { eye: BALL_EYE, target: BALL_TARGET, up: [0.0, 0.0, 1.0], fov: 40.0 });
+    t.set_look(look);
+    for key in t.set_bodies(vec![place("ball", "ball.fine", 1.0, [0.0, 0.0, 1.0], mat)]) {
+        t.add_mesh(&key, sphere(1.0, 192, 96));
+    }
+    t.apply();
+}
+
+/// The white furnace: the lone ball in a uniform sky of 1 with no lights.
+pub fn furnace(t: &mut Tracer, mat: PageMaterial, size: (u32, u32)) {
+    let look = Look { sky_top: [1.0; 3], sky_bottom: [1.0; 3], bounces: 64, ..Look::default() };
+    ball_alone(t, look, mat, size);
+}
