@@ -1,7 +1,8 @@
 // The High tier of the realtime frame, reached through the dev switch: edge lines
 // and the selection glow drawn over the model look as on the Standard frame, a
-// lit gizmo stays lit, the section view clips the prepass, a motion start and stop
-// compiles nothing, and per stage GPU times are logged.
+// lit gizmo stays lit, the prepass holds face normals, roughness and depth, the
+// section view clips it, a motion start and stop compiles nothing, and per stage
+// GPU times are logged.
 //
 // Usage (from the repo root, vite + engine `fundacad-engine --ws` running):
 //   SC_TOKEN=<engine token> SC_CHROME=<chrome exe> [SC_URL=http://localhost:5173/] \
@@ -223,6 +224,76 @@ const check = (name, ok, detail) => {
       return { written, far };
     });
     const open = await prepass();
+
+    // What the prepass holds: view space normals of the box faces, roughness in
+    // alpha and depth exactly where something was written.
+    const content = await page.evaluate(async () => {
+      const THREE = await import("/node_modules/three/build/three.module.js");
+      const v = window.viewport, post = v.scene.post, r = v.scene.renderer, cam = v.rig.active;
+      const h2f = (h) => { const s = h & 0x8000 ? -1 : 1, e = (h >> 10) & 31, f = h & 1023; return e === 0 ? s * 2 ** -14 * (f / 1024) : e === 31 ? NaN : s * 2 ** (e - 15) * (1 + f / 1024); };
+      const read = () => {
+        window.__rt.grab();
+        const t = post.prepassTarget, buf = new Uint16Array(t.width * t.height * 4);
+        r.readRenderTargetPixels(t, 0, 0, t.width, t.height, buf);
+        return { t, buf };
+      };
+      const alphaErr = (buf, want) => {
+        let worst = 0;
+        for (let i = 0; i < buf.length; i += 4) if (buf[i] || buf[i + 1] || buf[i + 2] || buf[i + 3]) worst = Math.max(worst, Math.abs(h2f(buf[i + 3]) - want));
+        return +worst.toFixed(4);
+      };
+      let mesh = null;
+      v.scene.modelGroup.traverse((o) => { if (!mesh && o.isMesh && o.userData.owner !== undefined) mesh = o; });
+      const rough = mesh.material.roughness;
+      const { t, buf } = read();
+      let written = 0, lmin = 9, lmax = -9;
+      const clusters = [];
+      for (let i = 0; i < buf.length; i += 4) {
+        if (!(buf[i] || buf[i + 1] || buf[i + 2] || buf[i + 3])) continue;
+        written++;
+        const n = [0, 1, 2].map((k) => h2f(buf[i + k]) * 2 - 1);
+        const l = Math.hypot(...n);
+        lmin = Math.min(lmin, l); lmax = Math.max(lmax, l);
+        let c = clusters.find((c) => Math.hypot(c.n[0] - n[0], c.n[1] - n[1], c.n[2] - n[2]) < 0.05);
+        if (!c) clusters.push((c = { n, count: 0 }));
+        c.count++;
+      }
+      cam.updateMatrixWorld();
+      const nm = new THREE.Matrix3().getNormalMatrix(cam.matrixWorldInverse);
+      const faces = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]].map((w) => new THREE.Vector3(...w).applyMatrix3(nm).normalize());
+      const faceErr = clusters.filter((c) => c.count > 500).map((c) => +Math.min(...faces.map((f) => Math.hypot(f.x - c.n[0], f.y - c.n[1], f.z - c.n[2]))).toFixed(4));
+      const alpha = alphaErr(buf, rough);
+      mesh.material.roughness = 0.2;
+      const followed = alphaErr(read().buf, 0.2);
+      mesh.material.roughness = rough;
+      read();
+      const q = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({
+        uniforms: { d: { value: t.depthTexture } },
+        vertexShader: "varying vec2 u; void main(){ u = uv; gl_Position = vec4(position.xy, 0., 1.); }",
+        fragmentShader: "uniform sampler2D d; varying vec2 u; void main(){ gl_FragColor = vec4(texture2D(d, u).r, 0., 0., 1.); }",
+        depthTest: false, depthWrite: false,
+      }));
+      const qs = new THREE.Scene();
+      qs.add(q);
+      const ft = new THREE.WebGLRenderTarget(t.width, t.height, { type: THREE.FloatType });
+      const prev = r.getRenderTarget();
+      r.setRenderTarget(ft);
+      r.render(qs, new THREE.OrthographicCamera());
+      r.setRenderTarget(prev);
+      const db = new Float32Array(t.width * t.height * 4);
+      r.readRenderTargetPixels(ft, 0, 0, t.width, t.height, db);
+      ft.dispose(); q.geometry.dispose(); q.material.dispose();
+      let depthWrong = 0;
+      for (let p = 0; p < t.width * t.height; p++) {
+        const i = p * 4, w = buf[i] || buf[i + 1] || buf[i + 2] || buf[i + 3];
+        if (w ? db[i] >= 1 : db[i] < 0.99999) depthWrong++;
+      }
+      return { written, len: [+lmin.toFixed(4), +lmax.toFixed(4)], faceErr, rough, alpha, followed, depthWrong };
+    });
+    check("the prepass normals are unit length", content.written > 1000 && content.len[0] > 0.99 && content.len[1] < 1.01, JSON.stringify(content.len));
+    check("each prepass normal is a box face's view space normal", content.faceErr.length > 0 && content.faceErr.every((e) => e < 0.01), JSON.stringify(content.faceErr));
+    check("the prepass alpha is the body's roughness and follows a change", content.alpha < 0.002 && content.followed < 0.002, JSON.stringify({ rough: content.rough, alpha: content.alpha, followed: content.followed }));
+    check("the prepass depth is written exactly where its colour is", content.depthWrong === 0, `${content.depthWrong} px`);
     await page.evaluate(async () => {
       const THREE = await import("/node_modules/three/build/three.module.js");
       window.viewport.setSectionView({ plane: new THREE.Plane(new THREE.Vector3(-1, 0, 0), 0), ghost: 0 });
@@ -255,7 +326,12 @@ const check = (name, ok, detail) => {
     await wait(500);
     const times = await page.evaluate(() => window.viewport.passTimes());
     console.log(`  info  GPU ms per stage at High ${JSON.stringify(times)}`);
-    check("the stages are timed", ["prepass", "main", "composer", "compose"].every((k) => typeof times[k] === "number") || typeof times.frame === "number", JSON.stringify(times));
+    const timer = await page.evaluate(() => window.viewport.scene.post.timer.kind);
+    if (timer === "timer-query") {
+      check("the stages are timed", ["prepass", "main", "composer", "compose"].every((k) => typeof times[k] === "number"), JSON.stringify(times));
+    } else {
+      console.log(`  info  per stage GPU times need EXT_disjoint_timer_query_webgl2, kind ${timer}`);
+    }
 
     await quality("standard");
     await grab("stdAgain");
