@@ -103,6 +103,7 @@ export interface WireRebuildResult {
   // where each tracked face and its positions went, same header, same reason
   trackedFaces?: RebuildResult["trackedFaces"];
   bodyIds?: RebuildResult["bodyIds"];
+  skippedFeatures?: RebuildResult["skippedFeatures"];
   // legacy direct-mesh shape (only when `protocol` is absent)
   mesh?: RebuildResult["mesh"];
   edges?: RebuildResult["edges"];
@@ -286,6 +287,7 @@ export class RebuildAssembly {
       head.datumMarks,
       head.trackedFaces,
       head.bodyIds,
+      head.skippedFeatures,
     ]);
     if (
       sig !== null && sig === lastSig && lastAssembled !== null
@@ -348,6 +350,7 @@ export class RebuildAssembly {
     if (head.datumMarks) out.datumMarks = head.datumMarks;
     if (head.trackedFaces) out.trackedFaces = head.trackedFaces;
     if (head.bodyIds) out.bodyIds = head.bodyIds;
+    if (head.skippedFeatures) out.skippedFeatures = head.skippedFeatures;
 
     const asm = new RebuildAssembly(out, arrays, plan, sig);
     // Stubs are backed by the cache, so they can be filled right now; only full

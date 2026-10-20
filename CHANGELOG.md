@@ -25,6 +25,11 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **History greys a feature this version does not know.** It keeps its place,
+  shows its type name, and says it is not included but kept and saved with the
+  file. Its values cannot be edited here, so it stays as the newer version wrote
+  it.
+
 - **A feature this version does not know no longer fails the build.** A file
   from a newer FundaCAD can hold a feature type this build has never heard of.
   It is now left out of the build and listed as skipped instead of raised as a

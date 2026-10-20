@@ -633,3 +633,23 @@ describe("FeatureProperties typed preview", () => {
     w.unmount();
   });
 });
+
+describe("FeatureProperties on a feature this version does not know", () => {
+  beforeEach(() => setActivePinia(createPinia()));
+
+  it("shows why it is left out and no fields to change", () => {
+    const doc: CadDocument = {
+      parameters: {},
+      features: [{ id: "w1", type: "futureWidget", size: 4 } as unknown as Feature],
+    };
+    const fake = makeEngine(doc);
+    (fake.engine.store as unknown as { buildState: unknown }).buildState = {
+      result: { skippedFeatures: [{ feature_id: "w1", type: "futureWidget", message: "unknown feature type: futureWidget" }] },
+    };
+    const w = render(fake, "w1");
+    expect(w.find(".param-note").text()).toBe(
+      "Not included: this version of FundaCAD does not know this feature type. It is kept and saved with the file.",
+    );
+    expect(w.findAll(".param-row")).toHaveLength(0);
+  });
+});

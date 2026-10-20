@@ -88,3 +88,23 @@ describe("editFeature: fillet/chamfer", () => {
     expect(state.statusCalls.length).toBe(1);
   });
 });
+
+describe("editFeature on a feature this version does not know", () => {
+  it("says it cannot edit it and opens nothing", () => {
+    const status: string[] = [];
+    const e = {
+      viewport: { highlightDatum: () => {} },
+      toolBusy: () => false,
+      dropBodyGizmo: () => {},
+      setStatus: (msg: string) => status.push(msg),
+      store: {
+        document: { features: [{ id: "w1", type: "futureWidget" }] },
+        isSuppressed: () => false,
+        rollbackIndex: 1,
+        buildState: { result: { skippedFeatures: [{ feature_id: "w1", type: "futureWidget", message: "" }] } },
+      },
+    } as unknown as Engine;
+    createSelection(e).editFeature("w1");
+    expect(status).toEqual(["This version of FundaCAD cannot edit this feature"]);
+  });
+});
