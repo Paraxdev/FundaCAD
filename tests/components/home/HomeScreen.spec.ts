@@ -351,6 +351,18 @@ describe("HomeScreen", () => {
       expect($$(".home-card-name").map((n) => n.textContent)).toEqual(["r"]);
     });
 
+    it("puts the narrow Show list back on its view when the folder dialog is cancelled", async () => {
+      const lib = fakeLibrary([], 0, {}, []);
+      open([{ path: "C:/r.funda", openedAt: 1 }], {}, lib);
+      await flushPromises();
+      const select = document.querySelector<HTMLSelectElement>(".home-view-select")!;
+      select.value = "add";
+      select.dispatchEvent(new Event("change"));
+      await flushPromises();
+      expect(lib.pickFolder).toHaveBeenCalledOnce();
+      expect(select.value).toBe("recent");
+    });
+
     it("removes a folder from Home and goes back to Recent", async () => {
       localStorage.setItem("fundacad.home.folders", JSON.stringify([{ path: "D:/proj", addedAt: 1 }]));
       open([], {}, fakeLibrary([], 0, { "D:/proj": proj }));
