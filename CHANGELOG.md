@@ -388,6 +388,17 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Changed
 
+- **Saving a .fundab with a big import is several times faster on a computer
+  with several cores.** A 69 MB imported STEP assembly saves in about 0.4
+  seconds instead of about 1.8, or 0.6 seconds on four cores. On one core it
+  takes as long as before. The file is the same size, and every FundaCAD that
+  reads .fundab opens it as before.
+
+- **A .fundab that was being opened when FundaCAD closed opens fine the next
+  time.** Its imported geometry, left half copied, made the next rebuild fail;
+  opening the file again now copies it whole. Opening a .fundab with a big
+  import for the first time on a computer is also a little faster.
+
 - **The Rust engine is the rolling beta now, and the Python engine is
   retired.** Builds of `main` publish to the
   [beta release](https://github.com/Paraxdev/fundacad/releases/tag/beta),
@@ -435,6 +446,10 @@ This file starts on 2026-08-03. For anything before that, see the
 - **Undo, Redo and the value box fields are named for screen readers.** The
   icon buttons and the inputs on the canvas and in a feature's properties now
   carry their names, not only a tooltip.
+
+- **A .fundab whose first few bytes are damaged opens again.** It was taken
+  for a text file and refused with "stream did not contain valid UTF-8". It now
+  opens from the copy of its header at the end, and says it was repaired.
 
 - **A document with a section this build cannot read still builds.** The
   engine refused the whole job when, say, a newer `materials` row or `versions`
