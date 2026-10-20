@@ -14,6 +14,7 @@ use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::time::Duration;
 
 use blake2::digest::consts::U16;
 use blake2::{Blake2b, Digest};
@@ -732,6 +733,11 @@ pub fn read_file_with(path: &Path, blob_dir: &Path, mesh_dir: Option<&Path>, car
         }
     }
 
+    if !jobs.is_empty() {
+        for dir in [Some(blob_dir), mesh_dir, carry_dir].into_iter().flatten() {
+            sweep_stale_tmp(dir);
+        }
+    }
     let failed = AtomicBool::new(false);
     let run = |j: &Job, rows: &[&segments::Row], threads: usize| -> Option<Result<RepairReport, String>> {
         if failed.load(Ordering::Relaxed) {
@@ -795,6 +801,29 @@ fn safe_key(key: &str) -> bool {
 }
 
 static TMP_SERIAL: AtomicUsize = AtomicUsize::new(0);
+
+/// Older than any extraction can take, so only an open that crashed left it.
+const STALE_TMP: Duration = Duration::from_secs(24 * 60 * 60);
+
+/// Remove the temporary files `extract` names that a crashed open left behind.
+fn sweep_stale_tmp(dir: &Path) {
+    let Ok(list) = std::fs::read_dir(dir) else { return };
+    for f in list.flatten() {
+        if !f.file_name().to_str().is_some_and(is_extract_tmp) {
+            continue;
+        }
+        let stale = f.metadata().and_then(|m| m.modified()).is_ok_and(|t| t.elapsed().is_ok_and(|age| age > STALE_TMP));
+        if stale {
+            let _ = std::fs::remove_file(f.path());
+        }
+    }
+}
+
+fn is_extract_tmp(name: &str) -> bool {
+    let digits = |s: Option<&str>| s.is_some_and(|s| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit()));
+    let mut parts = name.rsplit('.');
+    parts.next() == Some("tmp") && digits(parts.next()) && digits(parts.next()) && matches!(parts.next(), Some("bbrep" | "bin"))
+}
 
 /// Decode one section into `dest`, through a temporary name of its own so two
 /// opens of the same file never write into each other. Every thread reads
