@@ -13,6 +13,7 @@ use fundacad_core::schema::{FillRule, Num, ProjectedCurve, SketchEntity, SketchF
 use opencascade::primitives::Shape;
 
 use super::face_anchor::{face_anchor_plane, Placement};
+use super::thin::{Curve, Piece};
 use crate::builder::plane::{plane_of, PlaneRef};
 use crate::builder::{py_g, Ctx, FResult, Fail, SketchEntry};
 use crate::kernel::{self, BoolKind, Frame, Kind};
@@ -691,6 +692,67 @@ fn entity_edges(e: &Ent) -> FResult<Vec<Shape>> {
     })
 }
 
+fn polygon_points(x: f64, y: f64, r: f64, sides: f64, angle: f64) -> Vec<[f64; 2]> {
+    let n = py_round(sides).max(3);
+    let ang = angle.to_radians();
+    #[allow(clippy::cast_precision_loss)]
+    (0..n)
+        .map(|i| {
+            let t = ang + i as f64 / n as f64 * 2.0 * PI;
+            [x + t.cos() * r, y + t.sin() * r]
+        })
+        .collect()
+}
+
+/// The stretches a thin wall follows along a curve, None for what is no curve.
+fn thin_pieces(e: &Ent) -> Option<Result<Vec<Piece>, &'static str>> {
+    let closed = |pts: &[[f64; 2]]| -> Vec<Piece> {
+        (0..pts.len()).map(|k| Piece::Seg { a: pts[k], b: pts[(k + 1) % pts.len()] }).collect()
+    };
+    Some(Ok(match e {
+        Ent::Line { a, b } => vec![Piece::Seg { a: *a, b: *b }],
+        Ent::Arc { a, b, m } => vec![Piece::Arc { a: *a, m: *m, b: *b }],
+        Ent::Circle { r, x, y } => vec![Piece::Circle { c: [*x, *y], r: *r }],
+        Ent::Rect { w, h, x, y, angle } => closed(&rect_corners(*w, *h, *x, *y, *angle)),
+        Ent::Polygon { x, y, r, sides, angle } => closed(&polygon_points(*x, *y, *r, *sides, *angle)),
+        Ent::Slot { a, b, w } => {
+            let w = w / 2.0;
+            let (mut dx, mut dy) = (b[0] - a[0], b[1] - a[1]);
+            let l = dx.hypot(dy);
+            let l = if l == 0.0 { 1.0 } else { l };
+            dx /= l;
+            dy /= l;
+            let (nx, ny) = (-dy * w, dx * w);
+            let (a1, a2) = ([a[0] + nx, a[1] + ny], [a[0] - nx, a[1] - ny]);
+            let (b1, b2) = ([b[0] + nx, b[1] + ny], [b[0] - nx, b[1] - ny]);
+            vec![
+                Piece::Seg { a: a1, b: b1 },
+                Piece::Arc { a: b1, m: [b[0] + dx * w, b[1] + dy * w], b: b2 },
+                Piece::Seg { a: b2, b: a2 },
+                Piece::Arc { a: a2, m: [a[0] - dx * w, a[1] - dy * w], b: a1 },
+            ]
+        }
+        Ent::Projected(ProjectedCurve::Line(l)) => {
+            vec![Piece::Seg { a: [l.x1.get(), l.y1.get()], b: [l.x2.get(), l.y2.get()] }]
+        }
+        Ent::Projected(ProjectedCurve::Circle(c)) => vec![Piece::Circle { c: [c.x.get(), c.y.get()], r: c.r.get() }],
+        Ent::Projected(ProjectedCurve::Arc(a)) => vec![Piece::Arc {
+            a: [a.x1.get(), a.y1.get()],
+            m: [a.mx.get(), a.my.get()],
+            b: [a.x2.get(), a.y2.get()],
+        }],
+        Ent::Projected(ProjectedCurve::Poly(p)) => p
+            .pts
+            .windows(2)
+            .map(|w| Piece::Seg { a: [w[0][0].get(), w[0][1].get()], b: [w[1][0].get(), w[1][1].get()] })
+            .collect(),
+        Ent::Projected(_) => return Some(Err("projected curve")),
+        Ent::Ellipse { .. } => return Some(Err("ellipse")),
+        Ent::Spline(_) | Ent::Bspline { .. } => return Some(Err("spline")),
+        Ent::Point { .. } | Ent::Text(_) | Ent::Other => return None,
+    }))
+}
+
 /// `_entity_edge`: the one edge of a line, arc, circle or spline a text follows.
 fn path_edge(e: &Ent) -> Option<Shape> {
     match e {
@@ -881,7 +943,11 @@ pub fn build(ctx: &Ctx, f: &SketchFeature, followed: Option<Placement>) -> FResu
     let mut edges: Vec<Shape> = Vec::new();
     let mut all_edges: Vec<Shape> = Vec::new();
     let mut text_local: Vec<Shape> = Vec::new();
+    let mut curves: Vec<Curve> = Vec::new();
     for it in &items {
+        if let Some(pieces) = thin_pieces(&it.ent) {
+            curves.push(Curve { id: it.id.clone().filter(|s| !s.is_empty()), construction: it.construction, pieces });
+        }
         if it.construction {
             continue;
         }
@@ -997,6 +1063,7 @@ pub fn build(ctx: &Ctx, f: &SketchFeature, followed: Option<Placement>) -> FResu
         plane,
         edges: tool_edges,
         face: f.face.clone(),
+        curves,
     })
 }
 

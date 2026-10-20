@@ -19,6 +19,7 @@ pub mod pattern;
 mod primitives;
 mod revolve;
 pub mod text_on_face;
+pub mod thin;
 mod thread;
 pub mod sketch;
 mod press_pull;

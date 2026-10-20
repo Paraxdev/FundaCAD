@@ -324,6 +324,7 @@ export interface MechanismJoint {
 
 export type ExtrudeStart = "sketch" | "offset" | "face" | "plane" | "point";
 export type ExtrudeEnd = "distance" | "upToFace" | "upToPlane" | "upToPoint" | "throughAll";
+export type ThinSide = "center" | "inside" | "outside" | "twoSides";
 /** A datum point's id, or the vertex of `body` nearest `point`. */
 export type PointRef = string | { point: [number, number, number]; body?: string };
 export type PressPullMode = "auto" | "join" | "cut" | "new" | "intersect";
@@ -376,6 +377,15 @@ export type CoreFeature =
       upToPlane2?: string;
       upToPoint2?: PointRef;
       endOffset2?: Num;
+      // A wall `thickness` thick along sketch curve ids (every curve when absent), open or
+      // closed, instead of the closed areas. `inside` is the enclosed side, of an open chain
+      // the side it bends toward, of a straight one the left as drawn. `twoSides` puts
+      // `thickness` inside and `thickness2` outside.
+      thin?: boolean;
+      curves?: string[];
+      thickness?: Num;
+      side?: ThinSide;
+      thickness2?: Num;
     }
   // `profile`: -1 chamfer, 0 circular, +1 sharp corner.
   // `sizeType` "chord" reads `radius` as the width across the round. `tangentEdges`
