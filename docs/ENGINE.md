@@ -499,6 +499,18 @@ line out (`cargo run --release -p fundacad-geom --example bench_suite -- ...`):
 `FUNDACAD_BENCH_PHASES=1` adds a phase table (`crate::bench`).
 `FUNDACAD_THREADS` caps both the engine's rayon pool and OCCT's.
 
+`crates/fundacad-cli/examples/bench_open.rs` times the document file itself, for
+documents with big imports (`cargo run --release -p fundacad-cli --example bench_open -- ...`):
+
+| Stage | What it measures |
+|---|---|
+| `scan <out.stl> [--triangles N]` | writes a deterministic binary STL shaped like a reference scan, 2,000,000 triangles by default |
+| `pack <file> <out_stem>` | imports a file, saves it as `.fundab` and `.funda`, and times deflate level 1 and 6 and BLAKE2b on its biggest blob |
+| `open <file>` | reads the document into an empty blob store, stage by stage, then the engine side: blob read, `blob_to_shape`, a cold rebuild and the mesh |
+| `reopen <file>` | the same with the blob store already filled, the common case |
+
+`--repeat N` reports the median, `--threads N` sets `FUNDACAD_THREADS` for the file layer.
+
 The gates double as benchmarks: `fundacad-engine fillet-eval` over the 500 case
 corpus and `select-eval` over the 220 case one.
 
