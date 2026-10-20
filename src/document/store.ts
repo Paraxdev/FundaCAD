@@ -134,6 +134,28 @@ type UndoEntry = { kind: "doc"; doc: CadDocument } | { kind: "overlay"; undo: ()
 // Safe for `"hiddenBodies" in f` checks: no mutator writes an explicit undefined.
 const clone = (d: CadDocument): CadDocument => structuredClone(d);
 
+/** Every top level key the store reads or writes. Anything else in a file is
+ *  from a newer version and is carried. `geometry` is the JSON file's embedded
+ *  blob map, which the Rust reader takes out and the writer puts back. */
+export const KNOWN_DOC_KEYS: ReadonlySet<string> = new Set([
+  "version", "parameters", "paramDefs", "paramExtras", "features", "viewOverrides", "bodyIds",
+  "suppressed", "rollback", "sketchVisibility", "bodyVisibility", "planeVisibility", "bodyNames",
+  "bodyColors", "bodyElement", "bodyMaterial", "faceMaterials", "importColorSource", "elements",
+  "materials", "palette", "stress", "environment", "versions", "geometry",
+]);
+const ELEMENT_KEYS: ReadonlySet<string> = new Set(["id", "name", "parent"]);
+
+/** The entries of `raw` outside `known`, deep copied, as normalizeMaterial keeps
+ *  a material's unknown fields. */
+function carriedKeys(raw: Record<string, unknown>, known: ReadonlySet<string>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (known.has(k) || k === "__proto__" || v === undefined) continue;
+    out[k] = structuredClone(v);
+  }
+  return out;
+}
+
 const isIdMap = (v: unknown): v is Record<string, string> =>
   !!v && typeof v === "object" && !Array.isArray(v) && Object.values(v).every((x) => typeof x === "string");
 
@@ -266,6 +288,14 @@ export class DocumentStore {
   private stress: StressStudy | null = null;
   /** Off `doc` like the study, so an embedded panorama is never cloned onto the undo stack. */
   private environment: DocEnvironment | null = null;
+  /** Top level keys of the opened file this version does not know, written back
+   *  as they came. Off `doc`, so they ride neither the undo stack nor a rebuild. */
+  private unknownKeys: Record<string, unknown> = {};
+  /** A section this version could not read (a newer study or repo shape), kept
+   *  whole and written back while this document has none of its own. */
+  private unreadSections: { stress?: unknown; environment?: unknown; versions?: unknown } = {};
+  /** The `version` the open document was stamped with, 1 when it had none. */
+  openedVersion = FORMAT_VERSION;
   // static descriptor list driving toJSON/load below, in the exact on-disk key
   // order (palette piggybacks on bodyColors' condition, so isn't listed here).
   private readonly overlays: { overlay: Overlay<any>; mapValue?: (v: unknown) => any }[] = [
@@ -574,6 +604,9 @@ export class DocumentStore {
     this.repo = null;
     this.stress = null;
     this.environment = null;
+    this.unknownKeys = {};
+    this.unreadSections = {};
+    this.openedVersion = FORMAT_VERSION;
     this.path = null;
     this.pathlessName = null;
     this.isDirty = false;
@@ -2003,7 +2036,8 @@ export class DocumentStore {
     // Persist the geometry doc PLUS the non-geometry project state that lives in
     // the store (suppress set, rollback marker, sketch visibility) so reopening
     // restores the full session. Empty state is omitted to keep files clean.
-    const out: CadDocument = { ...this.doc, version: FORMAT_VERSION };
+    // A known key always wins over a carried one of the same name.
+    const out: CadDocument = { ...structuredClone(this.unknownKeys), ...this.doc, version: FORMAT_VERSION };
     if (this.suppressed.size) out.suppressed = [...this.suppressed];
     if (this.rollback !== null) out.rollback = this.rollback;
     for (const { overlay } of this.overlays) overlay.writeJSON(out as unknown as Record<string, unknown>);
@@ -2020,9 +2054,14 @@ export class DocumentStore {
     // reference it, and a synced/customized palette is project state in its own
     // right (the "design in loaded colors" premise) even with zero assignments.
     if (this.bodyColors.size || !this.paletteIsDefault()) out.palette = this.palette;
+    const unread = this.unreadSections;
+    const raw = out as unknown as Record<string, unknown>;
     if (this.stress) out.stress = structuredClone(this.stress);
+    else if (unread.stress !== undefined) raw["stress"] = structuredClone(unread.stress);
     if (this.environment) out.environment = { ...this.environment, settings: { ...this.environment.settings } };
+    else if (unread.environment !== undefined) raw["environment"] = structuredClone(unread.environment);
     if (withVersions && this.repo) out.versions = this.repo;
+    else if (withVersions && unread.versions !== undefined) raw["versions"] = structuredClone(unread.versions);
     return out;
   }
 
@@ -2117,6 +2156,12 @@ export class DocumentStore {
     this.repo = normalizeRepo(parsed.versions);
     this.stress = normalizeStressStudy(parsed.stress);
     this.environment = normalizeDocEnvironment(parsed.environment);
+    this.openedVersion = typeof parsed.version === "number" ? parsed.version : 1;
+    this.unknownKeys = carriedKeys(parsed as unknown as Record<string, unknown>, KNOWN_DOC_KEYS);
+    this.unreadSections = {};
+    if (parsed.versions != null && !this.repo) this.unreadSections.versions = structuredClone(parsed.versions);
+    if (parsed.stress != null && !this.stress) this.unreadSections.stress = structuredClone(parsed.stress);
+    if (parsed.environment != null && !this.environment) this.unreadSections.environment = structuredClone(parsed.environment);
     this.materials = parsed.materials?.length
       ? parsed.materials
           .map((m, i) => normalizeMaterial(m, i))
@@ -2125,6 +2170,7 @@ export class DocumentStore {
     this.elements = (parsed.elements ?? [])
       .filter((e) => e && typeof e.id === "string" && e.id)
       .map((e) => ({
+        ...carriedKeys(e as unknown as Record<string, unknown>, ELEMENT_KEYS),
         id: e.id,
         name: typeof e.name === "string" && e.name.trim() ? e.name : e.id,
         ...(typeof e.parent === "string" && e.parent ? { parent: e.parent } : {}),
