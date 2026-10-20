@@ -4,13 +4,14 @@
 // joint begin their preview only on the first change, mechanism and datum keep
 // theirs in place, a new sketch has no sketch id yet.
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
 import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import TimelineBar from "../../../src/components/shell/TimelineBar.vue";
 import { ENGINE } from "../../../src/app/engineKey";
 import { createSelection } from "../../../src/app/selection";
+import { DimInput } from "../../../src/sketch/dimInput";
 import { useTimelineStore } from "../../../src/stores/timeline";
 import { useSelectionStore } from "../../../src/stores/selection";
 import type { Engine } from "../../../src/app/engine";
@@ -20,6 +21,11 @@ vi.mock("../../../src/composables/useSelectionOffers", () => ({
 }));
 
 beforeEach(() => setActivePinia(createPinia()));
+
+const boxes: DimInput[] = [];
+afterEach(() => {
+  for (const b of boxes.splice(0)) b.dispose();
+});
 
 const NAMES = [
   "extrude", "edgeFeature", "targetEdit", "pressPull", "faceOffset", "draft", "thread", "textOnFace", "hole", "loft",
@@ -108,6 +114,17 @@ function mountBar(o: Opts = {}) {
   return { log, status, chip, dbl, tool };
 }
 
+/** A heads-up box with `text` typed into its one field, as a tool shows it. */
+function typedBox(text: string, onCommit: () => void) {
+  const box = new DimInput();
+  boxes.push(box);
+  box.show([{ name: "distance", label: "Distance", kind: "length" }], onCommit, () => {});
+  const input = document.querySelector<HTMLInputElement>(".dim-input input")!;
+  input.value = text;
+  input.dispatchEvent(new Event("input"));
+  return box;
+}
+
 describe("History row double click while another edit is open", () => {
   it("stands an open extrude edit down, then edits the clicked row", async () => {
     const m = mountBar({ tool: { name: "extrude", on: "ex1" }, preview: { id: "ex1" } });
@@ -158,6 +175,31 @@ describe("History row double click while another edit is open", () => {
     const m = mountBar({ sketch: { editing: null } });
     await m.dbl("ex1");
     expect(m.log).toEqual(["sketch.finish:true", "startEdit:extrude"]);
+  });
+
+  it("enters a value typed in the heads-up box instead of throwing it away", async () => {
+    const m = mountBar({ tool: { name: "extrude", on: "ex1" }, preview: { id: "ex1" } });
+    typedBox("5", () => { m.log.push("commit:extrude"); m.tool("extrude").active = false; });
+    await m.dbl("rv");
+    expect(m.log).toEqual(["commit:extrude", "startEdit:revolvePitch"]);
+  });
+
+  it("keeps the edit and says why when the typed value is refused", async () => {
+    const m = mountBar({ tool: { name: "extrude", on: "ex1" }, preview: { id: "ex1" } });
+    typedBox("abc", () => { m.log.push("commit:extrude"); m.tool("extrude").active = false; });
+    await m.dbl("rv");
+    expect(m.log).toEqual([]);
+    expect(m.tool("extrude").active).toBe(true);
+    expect(m.status.at(-1)).toMatch(/value being typed/);
+    expect(useSelectionStore().featureId).toBe("ex1");
+  });
+
+  it("keeps the edit and says so when entering the value leaves the tool open", async () => {
+    const m = mountBar({ tool: { name: "extrude", on: "ex1" }, preview: { id: "ex1" } });
+    typedBox("5", () => { m.log.push("commit:extrude"); });
+    await m.dbl("rv");
+    expect(m.log).toEqual(["commit:extrude"]);
+    expect(m.status.at(-1)).toMatch(/Finish this edit/);
   });
 
   it("leaves the edit alone on a double click of the row being edited", async () => {
