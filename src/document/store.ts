@@ -1791,6 +1791,36 @@ export class DocumentStore {
     return next.id;
   }
 
+  /** Add a plugin's preset as a plain copy under a fresh id and name, as one
+   *  undo step. Null when it is not a material once normalised. */
+  addMaterialPreset(raw: unknown): string | null {
+    const m = normalizeMaterial(raw);
+    if (!m) return null;
+    const taken = new Set(this.materials.map((x) => x.id));
+    const base = m.name.trim() ? m.name : "Material";
+    m.name = freshMaterialName(this.materials, base);
+    m.id = uniqueId(slugId(m.name), taken);
+    const entry = m;
+    const emit = () => {
+      this.markDirty();
+      this.emitBuild();
+    };
+    this.materials = [...this.materials, entry];
+    emit();
+    this.pushOverlayUndo({
+      undo: () => {
+        this.materials = this.materials.filter((x) => x.id !== entry.id);
+        this.dropMaterialUses(new Set([entry.id]));
+        emit();
+      },
+      redo: () => {
+        if (!this.materials.some((x) => x.id === entry.id)) this.materials = [...this.materials, entry];
+        emit();
+      },
+    });
+    return m.id;
+  }
+
   /** Change a material in place. Every body wearing it repaints, which is the
    *  whole point of a library: the colour is edited once, not per body. */
   updateMaterial(id: string, patch: Partial<Omit<MaterialDef, "id">>) {

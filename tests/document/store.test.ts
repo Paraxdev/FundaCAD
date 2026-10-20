@@ -490,6 +490,59 @@ describe("materials (what a body is made of, on screen)", () => {
     expect(again.toJSON()).toBe(reloaded.toJSON());
   });
 
+  it("keeps a material's fields this build does not know through add, update, save and load", () => {
+    const extra = { sheen: 0.4, anisotropy: { amount: 0.2, angle: 90 }, flakes: [1, 2], castsLight: true };
+    const id = store.addMaterial({ name: "Pearl", color: "#eeeeff", ...extra } as never);
+    store.updateMaterial(id, { roughness: 0.2 });
+    const reloaded = new DocumentStore(stubBackend([]), doc());
+    reloaded.load(store.toJSON());
+    expect(reloaded.materialLibrary.find((m) => m.id === id)).toEqual({
+      id, name: "Pearl", color: "#eeeeff", roughness: 0.2, ...extra,
+    });
+    const again = new DocumentStore(stubBackend([]), doc());
+    again.load(reloaded.toJSON());
+    expect(again.toJSON()).toBe(reloaded.toJSON());
+  });
+
+  it("adds a picked preset as a plain copy that survives save and load, in one undo step", () => {
+    const preset = { id: "x", name: "Bronze glaze", color: "#B5A642", metalness: 0.9, surfaceGraph: { nodes: [{ id: "o", type: "output" }], output: "o" } };
+    const id = store.addMaterialPreset(preset)!;
+    const again = store.addMaterialPreset(preset)!;
+    expect(new Set([id, again]).size).toBe(2);
+    expect(store.materialLibrary.find((m) => m.id === again)!.name).toBe("Bronze glaze 2");
+    expect(store.materialLibrary.find((m) => m.id === id)).toMatchObject({ name: "Bronze glaze", color: "#b5a642", metalness: 0.9 });
+    const reloaded = new DocumentStore(stubBackend([]), doc());
+    reloaded.load(store.toJSON());
+    expect(reloaded.materialLibrary.find((m) => m.id === id)).toEqual(store.materialLibrary.find((m) => m.id === id));
+    store.undo();
+    expect(store.materialLibrary.some((m) => m.id === again)).toBe(false);
+    expect(store.materialLibrary.some((m) => m.id === id)).toBe(true);
+  });
+
+  it("undoing a preset add removes only that preset and keeps later library work", () => {
+    const id = store.addMaterialPreset({ name: "Bronze glaze", color: "#B5A642" })!;
+    const later = store.addMaterial({ name: "Later" });
+    const starter = store.materialLibrary.find((m) => m.id !== id && m.id !== later)!;
+    store.updateMaterial(starter.id, { color: "#123456" });
+    store.undo();
+    expect(store.materialLibrary.some((m) => m.id === id)).toBe(false);
+    expect(store.materialLibrary.some((m) => m.id === later)).toBe(true);
+    expect(store.materialLibrary.find((m) => m.id === starter.id)!.color).toBe("#123456");
+    store.redo();
+    expect(store.materialLibrary.some((m) => m.id === id)).toBe(true);
+    expect(store.materialLibrary.some((m) => m.id === later)).toBe(true);
+  });
+
+  it("drops a preset that is not a material and tidies one that half is", () => {
+    const before = store.materialLibrary.length;
+    expect(store.addMaterialPreset({ name: "No colour" })).toBeNull();
+    expect(store.addMaterialPreset(null)).toBeNull();
+    expect(store.addMaterialPreset("steel")).toBeNull();
+    expect(store.materialLibrary.length).toBe(before);
+    const id = store.addMaterialPreset({ name: "Loud", color: "#fff", metalness: 7 })!;
+    expect(store.materialLibrary.find((m) => m.id === id)!.metalness).toBeLessThanOrEqual(1);
+  });
+
   it("a reopened untouched document still writes no materials block", () => {
     // The trap this is for: the library is normalised on load, so an entry that
     // was not already in normal form would come back different and the

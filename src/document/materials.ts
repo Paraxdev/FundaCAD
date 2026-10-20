@@ -336,8 +336,21 @@ export function normalizeMaterial(raw: unknown, index = 0): MaterialDef | null {
   if (surface) out.surface = surface;
   const graph = normalizeGraph(r["surfaceGraph"]);
   if (graph) out.surfaceGraph = graph;
+  // A later build's fields ride through, as the Rust schema's flattened extra
+  // does, so opening and saving here does not strip them.
+  const carried = out as unknown as Record<string, unknown>;
+  for (const key of Object.keys(r)) {
+    if (KNOWN_MATERIAL_KEYS.has(key) || key === "__proto__") continue;
+    carried[key] = structuredClone(r[key]);
+  }
   return out;
 }
+
+const KNOWN_MATERIAL_KEYS: ReadonlySet<string> = new Set([
+  "id", "name", "color", "colour", "hex", "metalness", "roughness", "opacity", "emissive", "clearcoat",
+  "ior", "thickness", "attenuationColor", "attenuationDistance", "dispersion", "iridescence",
+  "specularColor", "surface", "surfaceGraph",
+]);
 
 const NODE_TYPES: readonly SurfaceNode["type"][] = [
   "noise", "scratches", "brushed", "voronoi", "wave", "fresnel", "ramp", "colorramp", "mix", "math", "output",

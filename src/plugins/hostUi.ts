@@ -6,7 +6,7 @@
 // parse a file they never render. The split is along "does this drag Vue in",
 // which is the same line this repository's own two test projects are drawn on.
 //
-// Four components, and they earn their place by being the ones that carry
+// Four components (and the four rows of the Render dock, below), and they earn their place by being the ones that carry
 // BEHAVIOUR a plugin should not reimplement: a modal frame that gates global
 // shortcuts on mount and releases them on unmount, a floating panel that closes
 // on Escape, the icon set the rest of the window is drawn from, and the inline
@@ -17,3 +17,9 @@ export { default as FloatingPanel } from "../components/overlays/FloatingPanel.v
 export { default as Icon } from "../components/shell/Icon.vue";
 export { default as InlineLabel } from "../components/shell/InlineLabel.vue";
 export { default as ModalFrame } from "../components/overlays/ModalFrame.vue";
+
+// The rows the Render dock is made of, so a `renderSections` block matches it.
+export { default as RenderChoices } from "../components/shell/RenderChoices.vue";
+export { default as RenderSection } from "../components/shell/RenderSection.vue";
+export { default as RenderSlider } from "../components/shell/RenderSlider.vue";
+export { default as RenderSwitch } from "../components/shell/RenderSwitch.vue";
