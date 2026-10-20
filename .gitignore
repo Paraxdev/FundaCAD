@@ -17,6 +17,7 @@ sidecar/.venv/
 src-tauri/sidecar-runtime/
 __pycache__/
 *.pyc
+*.egg-info/
 
 # playwright / test artifacts
 .playwright-mcp/

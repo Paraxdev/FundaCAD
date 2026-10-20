@@ -82,6 +82,11 @@ export function selection(h: ReadHost, doc: Document = document): Selection {
   };
 }
 
+/** The element's own text, without its children's or a dev build's comments. */
+function ownText(el: Element): string {
+  return [...el.childNodes].filter((n) => n.nodeType === 3).map((n) => n.textContent).join("").trim();
+}
+
 function text(doc: Document, sel: string): string {
   return (doc.querySelector(sel)?.textContent ?? "").replace(/\s+/g, " ").trim();
 }
@@ -137,7 +142,7 @@ export function status(h: ReadHost, doc: Document = document): Status {
     mode: rail?.dataset.mode ?? "unknown",
     tool: running ? (running.getAttribute("aria-label") ?? running.textContent ?? "").replace(/\s*\([^()]*\)\s*$/, "").trim() : null,
     workspace: ws?.dataset.workspace ?? "model",
-    doc: docName ? (docName.firstChild?.textContent ?? "").trim() : h.store.fileName,
+    doc: docName ? ownText(docName) : h.store.fileName,
     dirty: h.store.dirty,
     undo: h.store.canUndo,
     redo: h.store.canRedo,
