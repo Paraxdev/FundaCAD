@@ -107,3 +107,18 @@ def test_a_file_is_not_written_into_a_folder_that_is_not_there(tmp_path):
         out_path(tmp_path / "c" / "Users" / "box.funda")
     assert not (tmp_path / "c").exists()
     assert out_path(tmp_path / "box.funda") == (tmp_path / "box.funda").resolve()
+
+
+def test_a_second_session_in_one_process_is_told_why(monkeypatch):
+    import playwright.sync_api as api
+    from fundacad_harness.errors import LaunchError
+
+    class Busy:
+        def start(self):
+            raise api.Error("It looks like you are using Playwright Sync API inside the asyncio loop.")
+
+    monkeypatch.setattr(api, "sync_playwright", lambda: Busy())
+    s = Session(engine=sys.executable, chrome=sys.executable, repo=REPO, open=False)
+    with pytest.raises(LaunchError, match="process of its own"):
+        s._launch_browser()
+    s.close()
