@@ -210,6 +210,29 @@ pub fn referenced_geometry(doc: &Map<String, Value>) -> Vec<String> {
     out
 }
 
+/// Every other hash shaped string anywhere in `doc`. A feature of a type this
+/// version does not know may name a blob in any field, so such geometry is
+/// embedded when the store has it and skipped when it does not.
+pub fn optional_geometry(doc: &Map<String, Value>) -> Vec<String> {
+    fn walk(v: &Value, out: &mut Vec<String>) {
+        match v {
+            Value::String(s) if is_hash(s) && !out.contains(s) => out.push(s.clone()),
+            Value::Array(a) => a.iter().for_each(|v| walk(v, out)),
+            Value::Object(o) => o.values().for_each(|v| walk(v, out)),
+            _ => {}
+        }
+    }
+    let strict = referenced_geometry(doc);
+    let mut out = Vec::new();
+    for (k, v) in doc {
+        if k != GEOMETRY_KEY {
+            walk(v, &mut out);
+        }
+    }
+    out.retain(|d| !strict.contains(d));
+    out
+}
+
 fn importing_features(doc: &Map<String, Value>, digests: &[String]) -> String {
     doc.get("features")
         .and_then(Value::as_array)
@@ -286,6 +309,11 @@ pub fn write_with(
             if missing.len() == 1 { "has" } else { "have" },
             root.display()
         ));
+    }
+    for digest in optional_geometry(&body) {
+        if let Some(data) = fetched.get(&digest).cloned().or_else(|| local_blob(&root, &digest)) {
+            geometry.insert(digest, Value::String(base64::engine::general_purpose::STANDARD.encode(data)));
+        }
     }
     let embedded = geometry.len();
     if embedded > 0 {

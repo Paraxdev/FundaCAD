@@ -71,11 +71,13 @@ fn is_hash(s: &str) -> bool {
 }
 
 /// `container_save` without the app handle.
+#[allow(clippy::too_many_arguments)]
 pub fn save_document(
     stores: &Stores,
     path: &std::path::Path,
     document_json: &str,
     hashes: Vec<String>,
+    optional_hashes: Vec<String>,
     mesh_keys: Vec<String>,
     carried: Vec<fundacad_format::fnda::Carried>,
     app_version: &str,
@@ -101,6 +103,14 @@ pub fn save_document(
              The previous file is unchanged.",
             missing.len()
         ));
+    }
+    // Hash shaped strings the document holds outside its imports, which a
+    // feature of a type this version does not know may use to name geometry.
+    for h in optional_hashes.into_iter().filter(|h| is_hash(h)) {
+        let p = stores.blobs.join(format!("{h}.bbrep"));
+        if p.exists() {
+            blobs.entry(h).or_insert(p);
+        }
     }
 
     let mut meshes = BTreeMap::new();
@@ -133,7 +143,8 @@ pub fn save_document(
 /// Write the document and the geometry it references to `path`, atomically.
 ///
 /// `hashes` are the content hashes the document's import features carry; the
-/// frontend collects them because it owns the document. Deliberately does NOT
+/// frontend collects them because it owns the document. `optional_hashes` are
+/// the other hash shaped strings in it, embedded when the store has them. Deliberately does NOT
 /// consult the engine, so a save never waits on a worker that crashed or is
 /// restarting.
 #[tauri::command]
@@ -143,6 +154,7 @@ pub async fn container_save(
     document_json: String,
     hashes: Vec<String>,
     mesh_keys: Vec<String>,
+    optional_hashes: Option<Vec<String>>,
     carried: Option<Vec<fundacad_format::fnda::Carried>>,
 ) -> Result<(), String> {
     let stores = Stores { blobs: blob_dir(&app)?, meshes: mesh_dir(&app)?, sections: section_dir(&app)? };
@@ -152,6 +164,7 @@ pub async fn container_save(
         std::path::Path::new(&path),
         &document_json,
         hashes,
+        optional_hashes.unwrap_or_default(),
         mesh_keys,
         carried.unwrap_or_default(),
         &app_version,

@@ -15,6 +15,7 @@ import {
 } from "./exportSettings";
 import { buildBodyTree, importTrees } from "../ui/browserTree";
 import { referencedGeometry } from "../document/versions";
+import { hashShapedStrings } from "../document/geometryRefs";
 import { UnreadableDocumentError } from "../document/documentShape";
 import { noteRecent } from "./recentFiles";
 import { BINARY_DOC_EXT, DOC_EXT, LEGACY_DOC_EXTS, isDocumentExt } from "./documentExt";
@@ -54,10 +55,14 @@ function referencedHashes(store: DocumentStore): string[] {
 async function writeContainer(store: DocumentStore, path: string): Promise<string | null> {
   const { invoke } = await import("@tauri-apps/api/core");
   try {
+    const doc = store.toObject();
+    const hashes = referencedHashes(store);
+    const optionalHashes = [...hashShapedStrings(doc)].filter((h) => !hashes.includes(h));
     await invoke("container_save", {
       path,
-      documentJson: store.toJSON(),
-      hashes: referencedHashes(store),
+      documentJson: JSON.stringify(doc, null, 2),
+      hashes,
+      optionalHashes,
       meshKeys: [],
       carried: store.carriedSections,
     });
