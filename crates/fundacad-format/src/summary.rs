@@ -31,24 +31,62 @@ pub struct Summary {
 #[derive(Deserialize)]
 struct Head {
     #[serde(default)]
-    versions: Option<RawRepo>,
+    versions: Lenient<RawRepo>,
 }
 
 #[derive(Deserialize)]
 struct RawRepo {
     #[serde(default)]
-    versions: Vec<Lenient<RawRow>>,
+    versions: Lenient<Vec<Lenient<RawRow>>>,
     #[serde(default)]
-    branches: BTreeMap<String, Lenient<String>>,
+    branches: Lenient<Pairs>,
     #[serde(default)]
     current: Lenient<String>,
+}
+
+/// A map read in file order, which the app's fallback branch depends on.
+struct Pairs(Vec<(String, Lenient<String>)>);
+
+impl<'de> Deserialize<'de> for Pairs {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        struct V;
+        impl<'de> serde::de::Visitor<'de> for V {
+            type Value = Pairs;
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str("a map")
+            }
+            fn visit_map<A: serde::de::MapAccess<'de>>(self, mut m: A) -> Result<Pairs, A::Error> {
+                let mut out = Vec::new();
+                while let Some(pair) = m.next_entry()? {
+                    out.push(pair);
+                }
+                Ok(Pairs(out))
+            }
+        }
+        d.deserialize_map(V)
+    }
+}
+
+/// The first of `names` in the order a JavaScript object lists its keys: whole
+/// number keys first, smallest first, then the rest as written.
+fn first_js_key<'a>(names: impl Iterator<Item = &'a String>) -> Option<&'a String> {
+    let index = |k: &str| {
+        k.parse::<u32>().ok().filter(|n| *n != u32::MAX && n.to_string() == k)
+    };
+    let names: Vec<&String> = names.collect();
+    names
+        .iter()
+        .filter_map(|k| index(k).map(|n| (n, *k)))
+        .min()
+        .map(|(_, k)| k)
+        .or_else(|| names.first().copied())
 }
 
 #[derive(Deserialize)]
 struct RawRow {
     id: String,
     #[serde(default)]
-    parent: Option<String>,
+    parent: Lenient<String>,
     branch: String,
     #[serde(default)]
     message: Lenient<String>,
@@ -92,32 +130,39 @@ impl<T> Lenient<T> {
 const MAIN_BRANCH: &str = "main";
 
 fn summarise(format: &'static str, head: Head) -> Summary {
-    let Some(repo) = head.versions else {
+    let Some(repo) = head.versions.ok() else {
         return Summary { format, versions: vec![], branches: BTreeMap::new(), current: MAIN_BRANCH.into() };
     };
     let versions: Vec<VersionRow> = repo
         .versions
+        .ok()
+        .unwrap_or_default()
         .into_iter()
         .filter_map(Lenient::ok)
         .map(|r| VersionRow {
             id: r.id,
-            parent: r.parent,
+            parent: r.parent.ok(),
             branch: r.branch,
             message: r.message.ok().unwrap_or_default(),
             time: r.time.ok().unwrap_or(0.0),
         })
         .collect();
-    let branches: BTreeMap<String, String> = repo
+    let pairs: Vec<(String, String)> = repo
         .branches
+        .ok()
+        .map(|p| p.0)
+        .unwrap_or_default()
         .into_iter()
         .filter_map(|(name, id)| id.ok().map(|id| (name, id)))
         .filter(|(_, id)| versions.iter().any(|v| &v.id == id))
         .collect();
+    let first = first_js_key(pairs.iter().map(|(name, _)| name)).cloned();
+    let branches: BTreeMap<String, String> = pairs.into_iter().collect();
     let current = repo
         .current
         .ok()
         .filter(|c| branches.contains_key(c))
-        .or_else(|| branches.keys().next().cloned())
+        .or(first)
         .unwrap_or_else(|| MAIN_BRANCH.into());
     Summary { format, versions, branches, current }
 }
@@ -237,6 +282,38 @@ mod tests {
         assert!(s.versions.is_empty() && s.branches.is_empty());
         assert_eq!(s.current, "main");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    fn summary_of(tag: &str, doc: &str) -> Summary {
+        let dir = tmpdir(tag);
+        let path = dir.join("part.funda");
+        std::fs::write(&path, doc).unwrap();
+        let s = read_summary(&path).unwrap().unwrap();
+        let _ = std::fs::remove_dir_all(&dir);
+        s
+    }
+
+    #[test]
+    fn rows_of_the_wrong_shape_are_read_as_the_app_reads_them() {
+        let row = r#"{ "id": "v1", "parent": 4, "branch": "main", "tree": { "features": [], "rest": "r" } }"#;
+        let s = summary_of("parent", &format!(r#"{{ "versions": {{ "versions": [{row}], "branches": {{ "main": "v1" }} }} }}"#));
+        assert_eq!(s.versions.len(), 1);
+        assert_eq!(s.versions[0].parent, None);
+        for repo in [r#""versions": 3"#, r#""versions": { "versions": {}, "branches": [] }"#] {
+            let s = summary_of("shape", &format!("{{ {repo} }}"));
+            assert!(s.versions.is_empty() && s.branches.is_empty());
+            assert_eq!(s.current, "main");
+        }
+    }
+
+    #[test]
+    fn with_no_current_branch_the_first_in_the_file_is_taken() {
+        let row = |id: &str| format!(r#"{{ "id": "{id}", "branch": "b", "tree": {{ "features": [], "rest": "r" }} }}"#);
+        let doc = |branches: &str| {
+            format!(r#"{{ "versions": {{ "versions": [{}, {}, {}], "branches": {{ {branches} }} }} }}"#, row("v1"), row("v2"), row("v3"))
+        };
+        assert_eq!(summary_of("order", &doc(r#""zeta": "v1", "alpha": "v2""#)).current, "zeta");
+        assert_eq!(summary_of("index", &doc(r#""zeta": "v1", "10": "v2", "2": "v3""#)).current, "2");
     }
 
     #[test]
