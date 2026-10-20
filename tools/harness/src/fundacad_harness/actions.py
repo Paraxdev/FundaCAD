@@ -173,6 +173,7 @@ class Actions:
     def type(self, target: str, text: str, enter: bool = False):
         """Types into a value box field or a properties row, `enter=True` presses Enter after."""
         hit, loc = self._locator(target)
+        self.bridge.call("fieldValue", target=hit["ref"])
         loc.click(timeout=5000)
         self.page.keyboard.press("Control+A")
         self.page.keyboard.type(str(text))

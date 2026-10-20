@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createBridge, createMethods, harnessWanted, HARNESS_API, installHarness, startScreen, type HarnessHost } from "../../src/harness/driver";
 import { HarnessError } from "../../src/harness/locate";
-import { rect } from "./fixture";
+import { mountApp, rect } from "./fixture";
 
 const host = {} as HarnessHost;
 
@@ -79,6 +79,15 @@ describe("locate", () => {
     document.body.innerHTML = `<div id="toolrail"><button>Sketch</button></div>`;
     const m = createMethods(host, document, { rect });
     expect(m.locate!({ target: "Sketch" })).toMatchObject({ label: "Sketch", region: "toolrail" });
+    document.body.innerHTML = "";
+  });
+
+  it("refuses to type into a control that is not a value field and names the fields", () => {
+    mountApp();
+    const m = createMethods(host, document, { rect });
+    expect(() => m.fieldValue!({ target: "sketch" })).toThrow(/^action:sketch "Sketch \(S\)" is not a value field, the value fields are field:angle$/);
+    document.querySelectorAll(".dim-input").forEach((e) => e.remove());
+    expect(() => m.fieldValue!({ target: "sketch" })).toThrow(/is not a value field, no value box is open/);
     document.body.innerHTML = "";
   });
 });

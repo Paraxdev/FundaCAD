@@ -2,7 +2,7 @@
 // are and what is on screen; every action is real input sent by the Python side.
 // Loaded only in a dev build opened with ?harness=1.
 
-import { findControl, HarnessError, stamp, covered, toolPath } from "./locate";
+import { findControl, HarnessError, noValueBox, stamp, covered, toolPath } from "./locate";
 import { REGIONS, screenLines, walkControls, type WalkOptions } from "./screenTree";
 import * as read from "./readouts";
 import { settle, probe, describeQuiet, type SettleHost } from "./settle";
@@ -90,9 +90,12 @@ export function createMethods(
       steps: toolPath(walk(), str(a, "label"), doc.querySelector<HTMLElement>("#toolrail")?.dataset.mode ?? "model"),
     }),
     fieldValue: (a) => {
-      const c = findControl(walk(), str(a, "target"));
+      const w = walk();
+      const c = findControl(w, str(a, "target"));
       if (!(c.el instanceof HTMLInputElement || c.el instanceof HTMLTextAreaElement)) {
-        throw new HarnessError(`${c.ref} is not a value field`, "BadArgs");
+        const fields = w.controls.filter((f) => f.ref.startsWith("field:") || f.ref.startsWith("prop:")).map((f) => f.ref);
+        const listed = fields.length ? `, the value fields are ${fields.slice(0, 8).join(", ")}` : noValueBox(w);
+        throw new HarnessError(`${c.ref} "${c.label}" is not a value field${listed}`, "BadArgs", fields.slice(0, 8));
       }
       const box = c.el.closest(".dim-input");
       const problem = box?.querySelector(".dim-problem")?.textContent

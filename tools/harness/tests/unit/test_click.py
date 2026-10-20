@@ -2,7 +2,10 @@ import sys
 import types
 from pathlib import Path
 
+import pytest
+
 from fundacad_harness import Session
+from fundacad_harness.errors import BadArgs
 
 REPO = Path(__file__).resolve().parents[4]
 
@@ -52,3 +55,21 @@ def test_a_key_hint_or_case_is_still_the_same_name():
 def test_a_ref_click_says_nothing_more():
     line = clicked("#undo-btn", {"ref": "#undo-btn", "label": "Undo", "region": "titlebar"})
     assert line.startswith('clicked #undo-btn "Undo", mode')
+
+
+def test_type_into_a_button_is_refused_before_anything_is_clicked():
+    class NoField(One):
+        def call(self, method, **args):
+            if method == "fieldValue":
+                raise BadArgs('text:"Display" "Display" is not a value field, no value box is open')
+            return super().call(method, **args)
+
+    s = Session(engine=sys.executable, chrome=sys.executable, repo=REPO, open=False)
+    s.bridge = NoField({"ref": 'text:"Display"', "label": "Display", "region": "titlebar"})
+    clicks = []
+    s.page = types.SimpleNamespace(locator=lambda sel: types.SimpleNamespace(click=lambda **k: clicks.append(sel)))
+    s.settle = lambda *a, **k: "settled"
+    with pytest.raises(BadArgs, match="no value box is open"):
+        s.type("D", "10")
+    assert clicks == []
+    s.close()
