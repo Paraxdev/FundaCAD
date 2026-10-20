@@ -141,7 +141,7 @@ with Session() as s:
 |---|---|
 | `click(target, button="left", double=False, mods=())` | clicks a control by ref or label, or `face:<sel>` / `edge:<sel>` on the canvas; a label click says the region it landed in, and when only the start of a name matched |
 | `tool(label)` | starts a rail tool, opening its category or family first; it counts as started when a tool runs or the mode or prompt changed, the step says when none did |
-| `type(target, text, enter=False)` | clicks a value box, selects all and types; refused before any click when the target is no value field |
+| `type(target, text, enter=False)` | clicks a value box, selects all and types; refused before any click when the target is no value field, and with `enter=True` fails with the app's message when the box is still open and says the value was wrong (Hole size `banana`) |
 | `press(*keys)` | `"Enter"`, `"Escape"`, `"Ctrl+Z"`, `"Shift+H"` |
 | `menu(path)` | `"File/Open..."`, three dots or the ellipsis both work |
 | `context_menu(on, item)` | right clicks a control or `face:<sel>`, then the row |

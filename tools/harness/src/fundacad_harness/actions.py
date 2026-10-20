@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from . import selectors
-from .errors import BadArgs, Disabled, HarnessError, NotFound, Occluded, SettleTimeout
+from .errors import BadArgs, Disabled, HarnessError, NotFound, Occluded, SettleTimeout, StepFailed
 from .keys import key, modifiers
 
 
@@ -27,6 +27,7 @@ ON_TOP = """(el) => {
     const top = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
     return !!top && (top === el || el.contains(top));
 }"""
+TWO_FRAMES = "() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))"
 # A big STEP assembly takes minutes to read and build, far past an ordinary step.
 IMPORT_SETTLE_S = 300
 PANELS = ("history", "items", "views", "display", "versions", "snapping", "preferences")
@@ -211,8 +212,15 @@ class Actions:
         value = self.bridge.call("fieldValue", target=hit["ref"])
         if enter:
             # A tool reads its value box once a frame, an Enter before that commits the old value.
-            self.page.evaluate("() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))")
+            self.page.evaluate(TWO_FRAMES)
             self.page.keyboard.press("Enter")
+            self.page.evaluate(TWO_FRAMES)
+            try:
+                after = self.bridge.call("fieldValue", target=hit["ref"])
+            except HarnessError:
+                after = {}
+            if after.get("problem"):
+                raise StepFailed(f'{hit["ref"]} "{hit["label"]}" did not take "{text}" on Enter: {after["problem"]}')
         problem = f', problem "{value["problem"]}"' if value.get("problem") else ""
         return f'typed "{text}" into {hit["ref"]} "{hit["label"]}"{problem}', {**value, "ref": hit["ref"], "label": hit["label"]}
 
