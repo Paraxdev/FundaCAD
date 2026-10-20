@@ -52,18 +52,19 @@ onMounted(async () => {
         <button class="home-branch-name" :title="`Show the versions on ${b}`" @click="picked = b">
           {{ b }}<span v-if="b === summary!.current" class="home-branch-current">current</span>
         </button>
-        <button class="home-drawer-act home-branch-open" @click="emit('branch', b)">Open</button>
+        <button class="home-drawer-act home-branch-open" :title="`Open the document on ${b}`" @click="emit('branch', b)">Open</button>
       </div>
 
       <div class="home-drawer-section">Versions on {{ shown }}</div>
+      <p class="home-drawer-hint">Restore brings a version back into the document, Ctrl+Z undoes it. Open copy starts a new document from it.</p>
       <div v-for="v in rows" :key="v.id" class="home-version">
         <div class="home-version-text">
           <span class="home-version-msg">{{ v.message || "Untitled version" }}</span>
           <span class="home-version-time">{{ ago(v.time) }}</span>
         </div>
         <div class="home-version-acts">
-          <button class="home-drawer-act home-version-restore" @click="emit('restore', v.id)">Restore</button>
-          <button class="home-drawer-act home-version-copy" @click="emit('copy', v.id)">Open copy</button>
+          <button class="home-drawer-act home-version-restore" title="Bring this version back into the document" @click="emit('restore', v.id)">Restore</button>
+          <button class="home-drawer-act home-version-copy" title="Start a new untitled document from this version" @click="emit('copy', v.id)">Open copy</button>
         </div>
       </div>
     </template>
