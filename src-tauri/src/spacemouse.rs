@@ -6,15 +6,15 @@
 //! (`spacemouse:motion`, `spacemouse:button`); the frontend maps them onto the
 //! camera + actions.
 //!
-//! Linux permissions: hidapi opens the `/dev/hidrawN` node, so the udev rule
-//! MUST target `SUBSYSTEM=="hidraw"`, a `SUBSYSTEM=="usb"` rule changes the usb
-//! node, not hidraw, and will NOT grant access. See `packaging/99-spacemouse.rules`:
+//! Linux: when `spacenavd` is running its socket is read first (see `spnav`), the
+//! daemon owns the device and no udev rule is needed. Without the socket hidapi
+//! opens the `/dev/hidrawN` node, so the udev rule MUST target
+//! `SUBSYSTEM=="hidraw"`, a `SUBSYSTEM=="usb"` rule changes the usb node, not
+//! hidraw, and will NOT grant access. See `packaging/99-spacemouse.rules`:
 //!   KERNEL=="hidraw*", ATTRS{idVendor}=="046d", MODE="0660", GROUP="input", TAG+="uaccess"
 //!   KERNEL=="hidraw*", ATTRS{idVendor}=="256f", MODE="0660", GROUP="input", TAG+="uaccess"
 //! Install: copy to `/etc/udev/rules.d/`, then
-//! `sudo udevadm control --reload && sudo udevadm trigger`, then replug. If
-//! `spacenavd` or the 3Dconnexion driver is running it may already hold the
-//! device, stop it to let FundaCAD read it directly.
+//! `sudo udevadm control --reload && sudo udevadm trigger`, then replug.
 //!
 //! Set FUNDACAD_SPACEMOUSE_DEBUG=1 to log raw reports for tuning (the old
 //! SINDRICAD_ spelling still works).
@@ -27,6 +27,9 @@ use std::time::Duration;
 use hidapi::{DeviceInfo, HidApi};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
+
+#[cfg(any(target_os = "linux", test))]
+mod spnav;
 
 // 3Dconnexion vendor ids: 0x256f (current 3Dconnexion), 0x046d (older Logitech-branded)
 const VENDORS: [u16; 2] = [0x256f, 0x046d];
@@ -230,17 +233,21 @@ fn start(app: AppHandle) {
         // The HID inventory is published whenever it CHANGES, see stream().
         let mut last_inventory: Option<String> = None;
         while WANTED.load(Ordering::SeqCst) {
-            match stream(&app, &mut last_inventory) {
-                Ok(()) => warned = false, // clean disconnect: a later failure is news again
-                Err(Blocked::NoDevice) => {} // nothing plugged in, normal, stay quiet
-                Err(Blocked::Unreadable { name, detail }) => {
-                    eprintln!("[spacemouse] found \"{name}\" but could not open it: {detail}");
-                    if !warned {
-                        warned = true;
-                        let _ = app.emit("spacemouse:blocked", DeviceBlocked { name, detail });
+            if through_daemon(&app) {
+                warned = false;
+            } else {
+                match stream(&app, &mut last_inventory) {
+                    Ok(()) => warned = false, // clean disconnect: a later failure is news again
+                    Err(Blocked::NoDevice) => {} // nothing plugged in, normal, stay quiet
+                    Err(Blocked::Unreadable { name, detail }) => {
+                        eprintln!("[spacemouse] found \"{name}\" but could not open it: {detail}");
+                        if !warned {
+                            warned = true;
+                            let _ = app.emit("spacemouse:blocked", DeviceBlocked { name, detail });
+                        }
                     }
+                    Err(Blocked::Other(e)) => eprintln!("[spacemouse] {e}"),
                 }
-                Err(Blocked::Other(e)) => eprintln!("[spacemouse] {e}"),
             }
             // The retry wait, in slices, so turning the capability off is felt
             // in a fraction of a second rather than after three of them.
@@ -264,6 +271,16 @@ fn start(app: AppHandle) {
         *is_alive = false;
         eprintln!("[spacemouse] reader stopped");
     });
+}
+
+#[cfg(target_os = "linux")]
+fn through_daemon(app: &AppHandle) -> bool {
+    spnav::serve(app)
+}
+
+#[cfg(not(target_os = "linux"))]
+fn through_daemon(_app: &AppHandle) -> bool {
+    false
 }
 
 /// Why the reader isn't running. Only `Unreadable` is worth telling the user
