@@ -51,7 +51,7 @@ describe("an import's colours and undo", () => {
     store.undo();
     expect(await adopting).toBe(false);
     expect(has(store, "b")).toBe(true);
-    recolorOnRedo(store, IMP, RED);
+    recolorOnRedo(store, imp(), RED);
 
     store.redo();
     await vi.waitFor(() => expect(store.bodyMaterialId("body9")).toBeDefined());
@@ -67,12 +67,36 @@ describe("an import's colours and undo", () => {
     const adopting = adoptImportedColors(store, IMP, RED, { joinImport: true });
     store.undo();
     expect(await adopting).toBe(false);
-    recolorOnRedo(store, IMP, RED);
+    recolorOnRedo(store, imp(), RED);
     store.addFeature(box("c"));
     expect(store.canRedo).toBe(false);
     store.addFeature(imp());
     await store.rebuildNow();
     await Promise.resolve();
     expect(store.bodyMaterialId("body9")).toBeUndefined();
+  });
+
+  it("an import undone during its rebuild puts no colours on a new feature that gets its id", async () => {
+    const store = new DocumentStore(backend(), { parameters: {}, features: [box("a")] });
+    store.addFeature(imp());
+    const adopting = adoptImportedColors(store, IMP, RED, { joinImport: true });
+    store.undo();
+    expect(await adopting).toBe(false);
+    recolorOnRedo(store, imp(), RED);
+    store.addFeature(box(IMP));
+    await store.rebuildNow();
+    await Promise.resolve();
+    expect(store.bodyMaterialId("body9")).toBeUndefined();
+  });
+
+  it("an import whose rebuild a document open cut short puts no colours on the opened one", async () => {
+    const store = new DocumentStore(backend(), { parameters: {}, features: [box("a")] });
+    store.addFeature(imp());
+    const adopting = adoptImportedColors(store, IMP, RED, { joinImport: true });
+    store.load(JSON.stringify({ parameters: {}, features: [imp()], materials: store.materialLibrary }));
+    await adopting;
+    await store.rebuildNow();
+    expect(store.bodyMaterialId("body9")).toBeUndefined();
+    expect(store.canUndo).toBe(false);
   });
 });

@@ -703,7 +703,7 @@ async function importWith(
   // assembly's product colours were read by the engine, carried in the
   // manifest, and then never looked at, so a file that arrived fully coloured
   // opened as three thousand identical grey bodies.
-  if (!(await adoptImportedColors(store, id, res, { joinImport: true }))) recolorOnRedo(store, id, res);
+  if (!(await adoptImportedColors(store, id, res, { joinImport: true }))) recolorOnRedo(store, imported, res);
 
   // The file carried ONE dominant colour. Say so, and let whoever has a use for
   // it decide.
@@ -724,12 +724,26 @@ async function importWith(
 
 /** An import undone while its rebuild ran put its colours on nothing. Its redo
  *  puts them on then, as part of that same step, or never. */
-export function recolorOnRedo(store: DocumentStore, featureId: string, res: Parameters<typeof adoptImportedColors>[2]) {
-  const off = store.onDocChange(() => {
-    if (store.document.features.some((f) => f.id === featureId)) {
-      off();
-      queueMicrotask(() => void adoptImportedColors(store, featureId, res, { joinImport: true, only: true }));
-    } else if (!store.canRedo) off();
+export function recolorOnRedo(store: DocumentStore, feature: Feature, res: Parameters<typeof adoptImportedColors>[2]) {
+  const same = (f: Feature) => f.type === feature.type && "source" in f && "source" in feature && f.source === feature.source;
+  // Note: an edit can hand a new feature the import's id, so only an undo or redo
+  // (a rewind, emitted just before its doc change) may bring the import back.
+  let rewound = false;
+  const offRewind = store.onRewind(() => {
+    rewound = true;
+    queueMicrotask(() => (rewound = false));
+  });
+  let offDoc: (() => void) | null = null;
+  offDoc = store.onDocChange(() => {
+    if (!offDoc) return;
+    const back = store.document.features.find((f) => f.id === feature.id);
+    if (!rewound || back || !store.canRedo) {
+      offRewind();
+      offDoc();
+    }
+    if (rewound && back && same(back)) {
+      queueMicrotask(() => void adoptImportedColors(store, feature.id, res, { joinImport: true, only: true }));
+    }
   });
 }
 
@@ -749,7 +763,8 @@ export function recolorOnRedo(store: DocumentStore, featureId: string, res: Para
  *
  *  The assignments are one undo step. With `joinImport` they join the step that
  *  added the feature while that step is still the newest, and with `only` they go
- *  on only then. False when the feature was not in the document after the build. */
+ *  on only then. False when the feature was not in the document after the build,
+ *  true without a write when another document was opened meanwhile. */
 export async function adoptImportedColors(
   store: DocumentStore,
   featureId: string,
@@ -790,7 +805,10 @@ export async function adoptImportedColors(
   const { add, byColor } = materialsForColors(wanted, store.materialLibrary);
   if (add.length) store.importMaterials(add);
 
-  await store.rebuildNow();
+  let opened = false;
+  const offOpen = store.onOpen(() => (opened = true));
+  await store.rebuildNow().finally(offOpen);
+  if (opened) return true;
   const bodies = store.buildState.result?.bodies ?? [];
   const feature = store.document.features.find((f) => f.id === featureId);
   if (!feature) return false;
