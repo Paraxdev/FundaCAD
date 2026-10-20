@@ -95,6 +95,29 @@ describe("overlay registry", () => {
     expect(pictureMask({ edges: true }) & overlayBit("handles")).toBe(0);
   });
 
+  it("lets reference images into a picture only when asked, and draws them in the view", () => {
+    expect(pictureMask({ references: true }) & overlayBit("references")).not.toBe(0);
+    expect(pictureMask({ edges: true }) & overlayBit("references")).toBe(0);
+    expect(drawMask(DEFAULT_OVERLAYS) & overlayBit("references")).not.toBe(0);
+    expect(OVERLAY_KINDS[OVERLAY_KINDS.length - 1]).toBe("references");
+  });
+
+  it("hides a reference image from a picture unless the picture asks for it", () => {
+    const scene = new THREE.Scene();
+    const model = new THREE.Group();
+    const quad = markOverlay(new THREE.Mesh(), "references");
+    const handle = markOverlay(new THREE.Mesh(), "handles");
+    scene.add(model, quad, handle);
+    const show = hideForPicture(scene, model);
+    expect(quad.visible).toBe(false);
+    show();
+    const showAgain = hideForPicture(scene, model, { references: true });
+    expect(quad.visible).toBe(true);
+    expect(handle.visible).toBe(false);
+    showAgain();
+    expect(handle.visible).toBe(true);
+  });
+
   it("fills a kind the saved state does not name with shown", () => {
     expect(asOverlays({ on: false, kinds: { grid: false } })).toEqual({
       on: false,

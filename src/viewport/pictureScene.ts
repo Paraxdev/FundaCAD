@@ -22,20 +22,22 @@ export function markNotInPicture<T extends THREE.Object3D>(o: T): T {
   return o;
 }
 
-function keepsTopLevel(o: THREE.Object3D, model: THREE.Object3D): boolean {
+function keepsTopLevel(o: THREE.Object3D, model: THREE.Object3D, references: boolean): boolean {
+  // The kind tag overlayKinds.ts writes, read by name since that module imports this one.
+  if (references && o.userData["overlay"] === "references") return true;
   return o === model || (o as THREE.Light).isLight === true || o.userData[KEEP] === true;
 }
 
 /** Hide everything in `scene` a picture must not show and return what puts each
  *  flag back as it was. */
-export function hideForPicture(scene: THREE.Scene, model: THREE.Object3D): () => void {
+export function hideForPicture(scene: THREE.Scene, model: THREE.Object3D, opts: { references?: boolean } = {}): () => void {
   const hidden: THREE.Object3D[] = [];
   const hide = (o: THREE.Object3D) => {
     if (!o.visible) return;
     o.visible = false;
     hidden.push(o);
   };
-  for (const o of scene.children) if (!keepsTopLevel(o, model)) hide(o);
+  for (const o of scene.children) if (!keepsTopLevel(o, model, opts.references === true)) hide(o);
   model.traverse((o) => { if (o.userData[DROP] === true) hide(o); });
   return () => {
     for (const o of hidden) o.visible = true;
