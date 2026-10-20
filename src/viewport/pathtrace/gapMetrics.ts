@@ -2,7 +2,9 @@
 // so vitest and an e2e script that injects the compiled source read the same
 // code. Both images are 8 bit sRGB RGBA, the mask is one byte per pixel and
 // pixels with a zero byte are left out of every number and drawn clear in the
-// heat map.
+// heat map. The SSIM windows are weighted by the mask too, so a masked out pixel
+// never reaches a masked in score. It is an offline check, about 300 ms and 160 MB
+// at 1080p, not something to run per frame.
 
 export interface GapImage {
   width: number;
@@ -18,7 +20,7 @@ export interface GapMetrics {
   deltaE: number;
   /** Mean luminance SSIM over the masked pixels, 1 for identical images. */
   ssim: number;
-  /** Mean linear luminance of a over that of b, 1 when they carry equal light. */
+  /** Mean linear luminance of a over that of b, 1 when they carry equal light, Infinity when only a does. */
   lumaRatio: number;
   /** RGBA, the per pixel colour difference on a blue to red ramp. */
   heat: Uint8ClampedArray;
@@ -33,10 +35,14 @@ const K2 = 0.03;
 
 const D65 = [0.95047, 1, 1.08883] as const;
 
-const toLinear = new Float64Array(256);
+const toLinearTable = new Float64Array(256);
 for (let i = 0; i < 256; i++) {
   const c = i / 255;
-  toLinear[i] = c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  toLinearTable[i] = c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+}
+
+function toLinear(v: number): number {
+  return toLinearTable[Math.min(255, Math.max(0, Math.round(v)))]!;
 }
 
 function labF(t: number): number {
@@ -44,9 +50,9 @@ function labF(t: number): number {
 }
 
 function lab(d: ArrayLike<number>, i: number, out: Float64Array): void {
-  const lr = toLinear[d[i]!]!;
-  const lg = toLinear[d[i + 1]!]!;
-  const lb = toLinear[d[i + 2]!]!;
+  const lr = toLinear(d[i]!);
+  const lg = toLinear(d[i + 1]!);
+  const lb = toLinear(d[i + 2]!);
   const fx = labF((0.4124564 * lr + 0.3575761 * lg + 0.1804375 * lb) / D65[0]);
   const fy = labF(0.2126729 * lr + 0.7151522 * lg + 0.072175 * lb);
   const fz = labF((0.0193339 * lr + 0.119192 * lg + 0.9503041 * lb) / D65[2]);
@@ -59,7 +65,7 @@ function luma(d: ArrayLike<number>, i: number): number {
 }
 
 function linearLuma(d: ArrayLike<number>, i: number): number {
-  return 0.2126 * toLinear[d[i]!]! + 0.7152 * toLinear[d[i + 1]!]! + 0.0722 * toLinear[d[i + 2]!]!;
+  return 0.2126 * toLinear(d[i]!) + 0.7152 * toLinear(d[i + 1]!) + 0.0722 * toLinear(d[i + 2]!);
 }
 
 function ramp(t: number, out: Uint8ClampedArray, at: number): void {
@@ -101,6 +107,7 @@ export function gapMetrics(a: GapImage, b: GapImage, mask?: ArrayLike<number>): 
   const aa = new Float64Array(n);
   const bb = new Float64Array(n);
   const ab = new Float64Array(n);
+  const wt = new Float64Array(n);
   const labA = new Float64Array(3);
   const labB = new Float64Array(3);
   const heat = new Uint8ClampedArray(n * 4);
@@ -110,14 +117,15 @@ export function gapMetrics(a: GapImage, b: GapImage, mask?: ArrayLike<number>): 
   let sumLinB = 0;
   for (let p = 0; p < n; p++) {
     const i = p * 4;
+    if (mask && !mask[p]) continue;
     const ya = luma(a.data, i);
     const yb = luma(b.data, i);
+    wt[p] = 1;
     la[p] = ya;
     lb[p] = yb;
     aa[p] = ya * ya;
     bb[p] = yb * yb;
     ab[p] = ya * yb;
-    if (mask && !mask[p]) continue;
     lab(a.data, i, labA);
     lab(b.data, i, labB);
     const delta = Math.hypot(labA[0]! - labB[0]!, labA[1]! - labB[1]!, labA[2]! - labB[2]!);
@@ -133,6 +141,7 @@ export function gapMetrics(a: GapImage, b: GapImage, mask?: ArrayLike<number>): 
   const saa = integral(aa, w, h);
   const sbb = integral(bb, w, h);
   const sab = integral(ab, w, h);
+  const swt = integral(wt, w, h);
 
   const c1 = (K1 * 255) ** 2;
   const c2 = (K2 * 255) ** 2;
@@ -144,7 +153,7 @@ export function gapMetrics(a: GapImage, b: GapImage, mask?: ArrayLike<number>): 
       if (mask && !mask[y * w + x]) continue;
       const x0 = Math.max(0, x - SSIM_RADIUS);
       const x1 = Math.min(w, x + SSIM_RADIUS + 1);
-      const count = (x1 - x0) * (y1 - y0);
+      const count = windowSum(swt, w, x0, y0, x1, y1);
       const ma = windowSum(sa, w, x0, y0, x1, y1) / count;
       const mb = windowSum(sb, w, x0, y0, x1, y1) / count;
       const va = Math.max(0, windowSum(saa, w, x0, y0, x1, y1) / count - ma * ma);
@@ -158,7 +167,7 @@ export function gapMetrics(a: GapImage, b: GapImage, mask?: ArrayLike<number>): 
     pixels,
     deltaE: pixels ? sumDelta / pixels : NaN,
     ssim: pixels ? sumSsim / pixels : NaN,
-    lumaRatio: pixels ? sumLinA / sumLinB : NaN,
+    lumaRatio: !pixels ? NaN : sumLinA === sumLinB ? 1 : sumLinA / sumLinB,
     heat,
   };
 }
