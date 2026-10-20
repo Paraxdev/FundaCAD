@@ -9,6 +9,9 @@ pub mod container;
 pub use fundacad_format::{fnda, json_doc};
 pub mod plugins;
 pub mod session_file;
+pub mod library;
+mod home_commands;
+pub mod thumbs;
 mod spacemouse;
 mod drop_paths;
 pub mod frames;
@@ -269,6 +272,11 @@ pub fn run() {
         container::container_open_bytes,
         container::container_verify,
         container::container_is_container,
+        home_commands::library_stat,
+        home_commands::library_list,
+        home_commands::doc_summary,
+        home_commands::thumb_get,
+        home_commands::thumb_put,
         plugins::plugin_list,
         plugins::plugin_inspect_url,
         plugins::plugin_inspect_file,

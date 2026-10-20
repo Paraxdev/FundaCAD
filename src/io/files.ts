@@ -4,6 +4,7 @@
 // get a path from the native save dialog and hand it to the engine, which
 // writes the file directly (no fs round-trip through the webview).
 
+import { suggestedSavePath } from "./saveFolder";
 import type { DocumentStore } from "../document/store";
 import { asFeature } from "../types";
 import type { GeometryBackend } from "../geometry/client";
@@ -17,6 +18,8 @@ import { buildBodyTree, importTrees } from "../ui/browserTree";
 import { referencedGeometry } from "../document/versions";
 import { UnreadableDocumentError } from "../document/documentShape";
 import { noteRecent } from "./recentFiles";
+import { closeHome } from "../ui/home";
+import { captureAfterOpen, captureThumbnail, storeThumbnail } from "./thumbnails";
 import { BINARY_DOC_EXT, DOC_EXT, LEGACY_DOC_EXTS, isDocumentExt } from "./documentExt";
 import { announceImportedBody } from "../plugins/contrib";
 import { askImportUnit, asksForUnit, type ImportUnit } from "./importUnit";
@@ -52,6 +55,7 @@ function referencedHashes(store: DocumentStore): string[] {
  *  would be impossible while its worker is down, with unsaved work on screen. Saving needs no
  *  geometry anyway; the blobs are already bytes on disk. */
 async function writeContainer(store: DocumentStore, path: string): Promise<string | null> {
+  const picture = captureThumbnail();
   const { invoke } = await import("@tauri-apps/api/core");
   try {
     await invoke("container_save", {
@@ -60,6 +64,7 @@ async function writeContainer(store: DocumentStore, path: string): Promise<strin
       hashes: referencedHashes(store),
       meshKeys: [],
     });
+    void storeThumbnail(path, picture);
     return null;
   } catch (e) {
     return errMsg(e);
@@ -91,7 +96,10 @@ export async function saveDocumentAs(store: DocumentStore) {
         { name: "FundaCAD Document (JSON)", extensions: [DOC_EXT, ...LEGACY_DOC_EXTS] },
         { name: "FundaCAD Binary Document (smaller)", extensions: [BINARY_DOC_EXT] },
       ],
-      defaultPath: store.filePath ?? (isDocumentExt(store.fileName.split(".").pop()?.toLowerCase()) ? store.fileName : `${store.fileName}.${DOC_EXT}`),
+      defaultPath: suggestedSavePath(
+        store.filePath,
+        isDocumentExt(store.fileName.split(".").pop()?.toLowerCase()) ? store.fileName : `${store.fileName}.${DOC_EXT}`,
+      ),
     });
     if (path) {
       const err = await writeContainer(store, path);
@@ -146,6 +154,7 @@ export async function openDocument(
       if (!(await mayReplace())) return;
       await openDocumentAtPath(store, path, geometry);
     } else {
+      closeHome();
       await importPath(store, geometry, path); // a mesh / CAD file → import as a body
     }
   } else {
@@ -248,7 +257,7 @@ async function migrateInlineGeometry(text: string, geometry: GeometryBackend): P
 }
 
 /** Open a document at a known path (no dialog), shared by Open…
- *  and the welcome screen's recent-files list.
+ *  and the Home screen's recent documents.
  *
  *  A v5 document is a ZIP and is read by Rust, which also extracts its geometry
  *  into the blob store before returning. A pre-v5 document is plain JSON and is
@@ -345,8 +354,10 @@ async function finishOpen(
     return "unreadable";
   }
   // freshly opened == clean
-  if (path) store.markSaved(path);
-  else store.markOpenedWithoutPath(base);
+  if (path) {
+    store.markSaved(path);
+    captureAfterOpen(store, path);
+  } else store.markOpenedWithoutPath(base);
   // AFTER markSaved, so a document that needs a plugin still opens CLEAN. The
   // notice is about what this build can do with the file, never about the file
   // having been changed, and a freshly-opened document marked dirty would offer

@@ -1284,6 +1284,39 @@ Object.assign(STILLS, {
     await ctx.park();
     await ctx.still("versions-panel", { x: 1000, y: 290, width: 420, height: 280 });
   },
+  // Three cards with real pictures: each template is built and drawn as a save would,
+  // then Home reads them from the dev fake library.
+  async home(ctx) {
+    const { page } = ctx;
+    const pics = [];
+    for (const id of ["plate", "wall-bracket", "pinned-lever"]) {
+      await page.evaluate(async (t) => {
+        const { templateText } = await import("/src/templates/index.ts");
+        window.store.load(await templateText(t));
+      }, id);
+      await sleep(400);
+      await ctx.settle(800);
+      pics.push(await page.evaluate(() => window.viewport.renderThumbnail(480, 300)));
+    }
+    await page.evaluate((thumbs) => {
+      window.store.newDocument();
+      const now = Date.now();
+      const files = [
+        { path: "D:/Projects/shelf/mounting plate.funda", mtimeMs: now - 40 * 60_000, thumb: thumbs[0] },
+        { path: "D:/Projects/shelf/wall bracket.funda", mtimeMs: now - 26 * 3600_000, thumb: thumbs[1] },
+        { path: "D:/Projects/press/lever arm.fundab", mtimeMs: now - 4 * 86400_000, thumb: thumbs[2] },
+      ];
+      localStorage.setItem("fundacad.recentFiles", JSON.stringify(files.map((f, i) => ({ path: f.path, openedAt: now - i * 1000 }))));
+      localStorage.setItem("fundacad.home.folders", JSON.stringify([{ path: "D:/Projects/shelf", addedAt: now }]));
+      localStorage.setItem("fundacad.welcomeOnStartup", "true");
+      window.__fundacad.home.useFakeLibrary(files);
+      window.__fundacad.handleAction("welcome");
+    }, pics);
+    await sleep(1500);
+    await page.mouse.move(W - 40, H - 40);
+    await sleep(300);
+    await ctx.still("home", { x: 0, y: 0, width: W, height: H });
+  },
   async "fasteners-window"(ctx) {
     await ctx.features(plate());
     await ctx.view("iso", 1);

@@ -80,12 +80,12 @@ describe("extToImportFormat", () => {
 
 // A v5 document is a ZIP; builds that predate it must SAY so rather than
 // showing a JSON syntax error, and must NOT drop the file from Recent while
-// telling the user to upgrade. `openDocumentAtPath` and the welcome-screen
+// telling the user to upgrade. `openDocumentAtPath` and the Home screen
 // wiring need Tauri + a DOM, neither of which this suite has (see
 // vitest.config.ts: "no DOM/Tauri APIs mocked yet"), so the DECISION is
 // unit-tested here and the wiring is left to the browser harness.
-// NOT COVERED by any unit test: that welcome.ts actually skips forgetRecent on
-// the "newerFormat" outcome. Stated rather than implied.
+// Home keeping the card on "newerFormat" and "unreadable" is pinned in
+// tests/components/home/HomeScreen.spec.ts.
 describe("IMPORT_EXTS", () => {
   it("offers only extensions the import reads as themselves", () => {
     for (const ext of IMPORT_EXTS) {
@@ -396,5 +396,43 @@ describe("extensions in any case", () => {
     expect(dialogExts(step.exts)).toEqual(["step", "STEP", "stp", "STP"]);
     expect(step.label).toContain("*.stp");
     expect(extToFormat("C:\out\Bracket.STP")).toBe("step");
+  });
+});
+
+describe("Open with a mesh or CAD file", () => {
+  const closeHome = vi.fn();
+  let picked = "";
+
+  beforeEach(() => {
+    closeHome.mockReset();
+    (globalThis as unknown as Record<string, unknown>).window = {
+      __TAURI_INTERNALS__: {},
+      addEventListener() {},
+      removeEventListener() {},
+    };
+    vi.doMock("@tauri-apps/plugin-dialog", () => ({ open: async () => picked, message: async () => {} }));
+    vi.doMock("../../src/ui/home", () => ({ closeHome }));
+  });
+
+  afterEach(() => {
+    vi.doUnmock("@tauri-apps/plugin-dialog");
+    vi.doUnmock("../../src/ui/home");
+    vi.resetModules();
+    delete (globalThis as unknown as Record<string, unknown>).window;
+  });
+
+  it("closes Home, as the file goes into the open document", async () => {
+    const imported: string[] = [];
+    const backend = {
+      async rebuild() { return { ok: false, error: { message: "stub" } }; },
+      async init() {}, onStatus() { return () => {}; }, connected: true,
+      async importGeometry(p: string) { imported.push(p); return { ok: false, cancelled: true }; },
+    } as unknown as GeometryBackend;
+    const store = new DocumentStore(backend, { parameters: {}, features: [] });
+    const { openDocument } = await import("../../src/io/files");
+    picked = "/tmp/part.step";
+    await openDocument(store, backend, async () => true);
+    expect(imported).toEqual(["/tmp/part.step"]);
+    expect(closeHome).toHaveBeenCalledTimes(1);
   });
 });

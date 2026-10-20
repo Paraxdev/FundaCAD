@@ -2,6 +2,7 @@ import type { Engine } from "../app/engine";
 import { mayDiscard } from "../app/documentActions";
 import { importFileBytes, importPath, openDocumentAtPath, openDocumentBytes, reportError, type OpenOutcome } from "./files";
 import { describeDropLeftovers, planDrop } from "./dropRouting";
+import { closeHome } from "../ui/home";
 
 /** A file dropped on the window: a real path when the desktop app could find
  *  one, else the browser's File object. */
@@ -29,6 +30,7 @@ export async function takeDroppedFiles(e: DropEngine, items: readonly DroppedFil
     // user just chose to discard.
     if (outcome !== "ok") return;
   }
+  if (plan.imports.length || plan.environments.length) closeHome();
   for (const item of plan.imports) {
     if (item.path) await importPath(e.store, e.geometry, item.path);
     else if (item.file) await importFileBytes(e.store, e.geometry, item.file);

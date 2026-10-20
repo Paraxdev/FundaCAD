@@ -48,16 +48,16 @@ function standDown(cancel: () => void) {
  *  runs by reading this predicate back. */
 export function createToolBusy(
   e: Engine,
-): Pick<Engine, "toolBusy" | "toolOwnsScreen" | "dropBodyGizmo" | "raiseBodyGizmo" | "restoreBodyGizmo" | "hasBody" | "altLeftOwned"> {
+): Pick<Engine, "toolBusy" | "toolOwnsScreen" | "toolAtWork" | "dropBodyGizmo" | "raiseBodyGizmo" | "restoreBodyGizmo" | "hasBody" | "altLeftOwned"> {
   // ONE predicate, read two ways. The only difference is whether the Move
   // gizmo counts, and it is spelled as a parameter rather than as a second list
   // so the other fifteen entries can never drift apart.
-  const busy = (moveCounts: boolean) => {
+  const busy = (moveCounts: boolean, modalCounts = true) => {
     const t = e.tools;
     return (
       e.sketch.active || modalTools(t).some((x) => x.active) ||
       (moveCounts && t.move.active) || t.measure.active || t.section.picking ||
-      e.planePick || isChoiceOpen() ||
+      e.planePick || (modalCounts && isChoiceOpen()) ||
       // A plugin's tool holds the window exactly as one of the above does.
       // Without this the app believes it is idle while a contributed tool
       // owns the pick: every Escape handler here is gated off, a second tool
@@ -80,6 +80,7 @@ export function createToolBusy(
     // gizmo by itself (app/viewportWiring.onBodySelectionChange), so counting
     // it here would mean no ambient affordance could ever show for a body.
     toolOwnsScreen: () => busy(false),
+    toolAtWork: () => busy(false, false),
     // See the note on Engine.dropBodyGizmo. Deliberately unconditional about
     // WHY the gizmo is up: an explicitly started Move over a body selection is
     // the same gizmo on the same bodies, so there is nothing for a caller to

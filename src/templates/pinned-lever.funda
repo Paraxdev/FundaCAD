@@ -1,0 +1,431 @@
+{
+  "parameters": {
+    "blendRadius": 2,
+    "eyeDiameter": 26,
+    "eyeRadius": 13,
+    "halfWidth": 10,
+    "leverLength": 100,
+    "leverWidth": 20,
+    "lowerEdge": -10,
+    "lugDepth": 3,
+    "lugEnd": 33,
+    "lugFace": -13,
+    "lugLength": 6,
+    "lugStart": 27,
+    "pinDiameter": 8,
+    "pinRadius": 4,
+    "stopDistance": 30,
+    "thickness": 10
+  },
+  "paramDefs": {
+    "leverLength": {
+      "expr": "100",
+      "value": 100,
+      "unit": "mm"
+    },
+    "leverWidth": {
+      "expr": "20",
+      "value": 20,
+      "unit": "mm"
+    },
+    "thickness": {
+      "expr": "10",
+      "value": 10,
+      "unit": "mm"
+    },
+    "eyeDiameter": {
+      "expr": "26",
+      "value": 26,
+      "unit": "mm"
+    },
+    "pinDiameter": {
+      "expr": "8",
+      "value": 8,
+      "unit": "mm"
+    },
+    "stopDistance": {
+      "expr": "30",
+      "value": 30,
+      "unit": "mm"
+    },
+    "lugLength": {
+      "expr": "6",
+      "value": 6,
+      "unit": "mm"
+    },
+    "lugDepth": {
+      "expr": "3",
+      "value": 3,
+      "unit": "mm"
+    },
+    "halfWidth": {
+      "expr": "leverWidth / 2",
+      "value": 10,
+      "unit": "mm"
+    },
+    "eyeRadius": {
+      "expr": "eyeDiameter / 2",
+      "value": 13,
+      "unit": "mm"
+    },
+    "pinRadius": {
+      "expr": "pinDiameter / 2",
+      "value": 4,
+      "unit": "mm"
+    },
+    "lugStart": {
+      "expr": "stopDistance - lugLength / 2",
+      "value": 27,
+      "unit": "mm"
+    },
+    "lugEnd": {
+      "expr": "stopDistance + lugLength / 2",
+      "value": 33,
+      "unit": "mm"
+    },
+    "lugFace": {
+      "expr": "-halfWidth - lugDepth",
+      "value": -13,
+      "unit": "mm"
+    },
+    "lowerEdge": {
+      "expr": "-halfWidth",
+      "value": -10,
+      "unit": "mm"
+    },
+    "blendRadius": {
+      "expr": "2",
+      "value": 2,
+      "unit": "mm"
+    },
+    "d1": {
+      "expr": "thickness",
+      "value": 10,
+      "unit": "mm",
+      "target": {
+        "kind": "feature",
+        "feature": "lever",
+        "field": "distance"
+      }
+    },
+    "d2": {
+      "expr": "thickness",
+      "value": 10,
+      "unit": "mm",
+      "target": {
+        "kind": "feature",
+        "feature": "pinHole",
+        "field": "distance"
+      }
+    },
+    "d3": {
+      "expr": "blendRadius",
+      "value": 2,
+      "unit": "mm",
+      "target": {
+        "kind": "feature",
+        "feature": "blends",
+        "field": "radius"
+      }
+    }
+  },
+  "features": [
+    {
+      "id": "outline",
+      "type": "sketch",
+      "name": "Lever outline",
+      "plane": "XY",
+      "entities": [
+        {
+          "type": "line",
+          "id": "arm_1",
+          "x1": 0,
+          "y1": "lowerEdge",
+          "x2": "lugStart",
+          "y2": "lowerEdge"
+        },
+        {
+          "type": "line",
+          "id": "arm_2",
+          "x1": "lugStart",
+          "y1": "lowerEdge",
+          "x2": "lugStart",
+          "y2": "lugFace"
+        },
+        {
+          "type": "line",
+          "id": "arm_3",
+          "x1": "lugStart",
+          "y1": "lugFace",
+          "x2": "lugEnd",
+          "y2": "lugFace"
+        },
+        {
+          "type": "line",
+          "id": "arm_4",
+          "x1": "lugEnd",
+          "y1": "lugFace",
+          "x2": "lugEnd",
+          "y2": "lowerEdge"
+        },
+        {
+          "type": "line",
+          "id": "arm_5",
+          "x1": "lugEnd",
+          "y1": "lowerEdge",
+          "x2": "leverLength",
+          "y2": "lowerEdge"
+        },
+        {
+          "type": "line",
+          "id": "arm_6",
+          "x1": "leverLength",
+          "y1": "lowerEdge",
+          "x2": "leverLength",
+          "y2": "halfWidth"
+        },
+        {
+          "type": "line",
+          "id": "arm_7",
+          "x1": "leverLength",
+          "y1": "halfWidth",
+          "x2": 0,
+          "y2": "halfWidth"
+        },
+        {
+          "type": "line",
+          "id": "arm_8",
+          "x1": 0,
+          "y1": "halfWidth",
+          "x2": 0,
+          "y2": "lowerEdge"
+        },
+        {
+          "id": "eye",
+          "type": "circle",
+          "x": 0,
+          "y": 0,
+          "radius": "eyeRadius"
+        }
+      ]
+    },
+    {
+      "id": "lever",
+      "type": "extrude",
+      "name": "Lever",
+      "sketch": "outline",
+      "distance": 10,
+      "operation": "new",
+      "hiddenBodies": []
+    },
+    {
+      "id": "pinSketch",
+      "type": "sketch",
+      "name": "Pin hole",
+      "plane": "XY",
+      "entities": [
+        {
+          "id": "hole",
+          "type": "circle",
+          "x": 0,
+          "y": 0,
+          "radius": "pinRadius"
+        }
+      ]
+    },
+    {
+      "id": "pinHole",
+      "type": "extrude",
+      "name": "Pin hole",
+      "sketch": "pinSketch",
+      "distance": 10,
+      "symmetric": true,
+      "operation": "cut",
+      "targets": [
+        "body1"
+      ],
+      "hiddenBodies": []
+    },
+    {
+      "id": "blends",
+      "type": "fillet",
+      "name": "Inside corners",
+      "edges": [
+        {
+          "kind": "edge",
+          "by": "match",
+          "fp": {
+            "mid": [
+              8.306623862917656,
+              -10.000000000000174,
+              5
+            ],
+            "dir": [
+              0,
+              0,
+              1
+            ],
+            "length": 10,
+            "curve": "line"
+          },
+          "body": "body1"
+        },
+        {
+          "kind": "edge",
+          "by": "match",
+          "fp": {
+            "mid": [
+              8.306623862917661,
+              10.000000000000172,
+              5
+            ],
+            "dir": [
+              0,
+              0,
+              1
+            ],
+            "length": 10,
+            "curve": "line"
+          },
+          "body": "body1"
+        },
+        {
+          "kind": "edge",
+          "by": "match",
+          "fp": {
+            "mid": [
+              27,
+              -10,
+              5
+            ],
+            "dir": [
+              0,
+              0,
+              1
+            ],
+            "length": 10,
+            "curve": "line"
+          },
+          "body": "body1"
+        },
+        {
+          "kind": "edge",
+          "by": "match",
+          "fp": {
+            "mid": [
+              33,
+              -10,
+              5
+            ],
+            "dir": [
+              0,
+              0,
+              1
+            ],
+            "length": 10,
+            "curve": "line"
+          },
+          "body": "body1"
+        }
+      ],
+      "radius": 2
+    }
+  ],
+  "bodyIds": {
+    "lever:0": "body1"
+  },
+  "version": 10,
+  "stress": {
+    "body": "body1",
+    "supports": [
+      {
+        "id": 1,
+        "type": "pinned",
+        "faces": [
+          {
+            "kind": "face",
+            "by": "nearest",
+            "point": [
+              -4,
+              0,
+              5
+            ],
+            "body": "body1"
+          }
+        ]
+      },
+      {
+        "id": 2,
+        "type": "slider",
+        "faces": [
+          {
+            "kind": "face",
+            "by": "match",
+            "fp": {
+              "centroid": [
+                30,
+                -13,
+                5
+              ],
+              "normal": [
+                0,
+                -1,
+                0
+              ],
+              "area": 60,
+              "surface": "plane"
+            },
+            "body": "body1"
+          }
+        ]
+      }
+    ],
+    "loads": [
+      {
+        "id": 1,
+        "kind": "force",
+        "faces": [
+          {
+            "kind": "face",
+            "by": "match",
+            "fp": {
+              "centroid": [
+                100,
+                -1.387778780781446e-17,
+                5
+              ],
+              "normal": [
+                1,
+                0,
+                0
+              ],
+              "area": 199.99999999999997,
+              "surface": "plane"
+            },
+            "body": "body1"
+          }
+        ],
+        "force": 70,
+        "direction": "-Y",
+        "custom": [
+          0,
+          0,
+          -1
+        ],
+        "pressure": 0.1
+      }
+    ],
+    "gravity": {
+      "on": false,
+      "direction": "-Z"
+    },
+    "material": "PETG",
+    "custom": {
+      "E": 2000,
+      "nu": 0.35,
+      "yield": 40,
+      "density": 1.2
+    },
+    "size": null
+  }
+}
