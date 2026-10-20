@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createBridge, harnessWanted, HARNESS_API, installHarness, startScreen, type HarnessHost } from "../../src/harness/driver";
+import { createBridge, createMethods, harnessWanted, HARNESS_API, installHarness, startScreen, type HarnessHost } from "../../src/harness/driver";
 import { HarnessError } from "../../src/harness/locate";
 
 const host = {} as HarnessHost;
@@ -51,5 +51,12 @@ describe("startScreen", () => {
     expect(startScreen()).toBe("welcome");
     document.body.innerHTML = "";
     expect(startScreen()).toBe("none");
+  });
+});
+
+describe("screen", () => {
+  it("names the regions when asked for one that does not exist", () => {
+    const m = createMethods(host, document);
+    expect(() => m.screen!({ region: "foo" })).toThrow(/regions are titlebar, menu, toolrail/);
   });
 });
