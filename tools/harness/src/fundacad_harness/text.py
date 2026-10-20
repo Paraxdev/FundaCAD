@@ -42,12 +42,21 @@ def history(value: dict) -> str:
     return "\n".join(lines)
 
 
-def bodies(rows: list[dict]) -> str:
-    lines = [f"bodies {len(rows)}"]
-    if rows:
-        w_id = max(len(r["id"]) for r in rows)
-        w_name = max(len(r["name"]) for r in rows)
-        for r in rows:
+BODY_ROWS = 40
+
+
+def bodies(rows: list[dict], max_rows: int = BODY_ROWS) -> str:
+    hidden = sum(not r.get("visible") for r in rows)
+    faults = sum(bool(r.get("fault")) for r in rows)
+    head = f"bodies {len(rows)}"
+    if len(rows) > max_rows:
+        head += f", {hidden} hidden, {faults} with a fault, the first {max_rows} below, raw=True has them all"
+    lines = [head]
+    shown = rows[:max_rows]
+    if shown:
+        w_id = max(len(r["id"]) for r in shown)
+        w_name = max(len(r["name"]) for r in shown)
+        for r in shown:
             state = "visible" if r.get("visible") else "hidden"
             fault = f"  fault: {r['fault']}" if r.get("fault") else ""
             lines.append(f"  {r['id']:<{w_id}}  {r['name']:<{w_name}}  {r['faces']} faces  {state}{fault}")
