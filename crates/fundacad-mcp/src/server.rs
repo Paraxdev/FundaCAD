@@ -1239,7 +1239,7 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
 
     #[tool(
         name = "export",
-        description = "Write the model to STEP, STL or 3MF. `separate` writes one file per body, named after the body; `body` writes one body, `bodies` a list of them, merged or with `separate`; `layFlat` turns the parts for printing. Refused if a feature failed to build, naming which, unless allowPartial:true is passed, in which case it writes the file anyway and still names the failures.",
+        description = "Write the model to STEP, STL or 3MF, or one sketch (`sketch`) or flat face (`face`) to DXF or SVG at true size in mm. `separate` writes one file per body, named after the body; `body` writes one body, `bodies` a list of them, merged or with `separate`; `layFlat` turns the parts for printing. Refused if a feature failed to build, naming which, unless allowPartial:true is passed, in which case it writes the file anyway and still names the failures.",
         input_schema = crate::tools::export()
     )]
     pub async fn t_export(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
@@ -1287,6 +1287,23 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
             }
         }
         let lay_flat = args.get("layFlat").filter(|v| truthy(Some(v))).cloned();
+        let flat = matches!(format.to_ascii_lowercase().as_str(), "dxf" | "svg");
+        let flat_source: Vec<(&str, Value)> = ["sketch", "face", "tolerance", "svg"]
+            .into_iter()
+            .filter_map(|k| args.get(k).filter(|v| !v.is_null()).map(|v| (k, v.clone())))
+            .collect();
+        if flat {
+            if separate || wanted.is_some() || !listed.is_empty() || lay_flat.is_some() {
+                return Ok(failure(
+                    "A DXF or SVG export draws one sketch or one flat face, so it takes `sketch` or                      `face`, not `body`, `bodies`, `separate` or `layFlat`.",
+                ));
+            }
+            if !flat_source.iter().any(|(k, _)| *k == "sketch" || *k == "face") {
+                return Ok(failure(
+                    "A DXF or SVG export needs `sketch` (a sketch id or name) or `face` (a face                      selector from inspect, with its body).",
+                ));
+            }
+        }
         let (link, mut doc) = {
             let mut st = self.state.lock().await;
             model::recompute_parameters(&mut st.doc);
@@ -1346,6 +1363,9 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
             ("path", json!(tmp_path.to_string_lossy())),
         ]);
         if let Some(obj) = payload.as_object_mut() {
+            if flat {
+                obj.extend(flat_source.iter().map(|(k, v)| ((*k).to_string(), v.clone())));
+            }
             if separate {
                 obj.insert("separate".into(), json!(true));
             }
@@ -1547,6 +1567,8 @@ fn format_exts(format: &str) -> &'static [&'static str] {
         "step" | "stp" => &["step", "stp"],
         "stl" => &["stl"],
         "3mf" => &["3mf"],
+        "dxf" => &["dxf"],
+        "svg" => &["svg"],
         _ => &[],
     }
 }

@@ -417,7 +417,16 @@ pub fn export() -> JsonObject {
     object(
         json!({
             "path": {"type": "string"},
-            "format": {"type": "string", "enum": ["step", "stl", "3mf"]},
+            "format": {"type": "string", "enum": ["step", "stl", "3mf", "dxf", "svg"],
+                       "description": "dxf (R12) and svg draw one sketch or one flat face at true                                        size in mm, give `sketch` or `face`"},
+            "sketch": {"type": "string",
+                       "description": "dxf or svg: the sketch to draw, by id or name"},
+            "face": {"type": "object",
+                     "description": "dxf or svg: one flat face to draw with its holes, a face                                      selector from inspect, set its body"},
+            "tolerance": {"type": "number",
+                          "description": "dxf or svg: how far in mm a curve that is not a line,                                           arc or circle may stray when drawn as a polyline                                           (default 0.01)"},
+            "svg": {"type": "object",
+                    "description": "svg: {fill: true} fills the closed outlines (default strokes                                     only, as a laser cutter reads them)"},
             "separate": {"type": "boolean",
                          "description": "one file per body, named after the body, in a folder \
                                          named after `path` (parts.stl writes parts/<name>.stl)"},
