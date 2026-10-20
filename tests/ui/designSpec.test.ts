@@ -17,6 +17,10 @@ const scssFiles = read(
   import.meta.glob("../../src/styles/*.scss", { query: "?raw", import: "default", eager: true }) as Record<string, string>,
 );
 
+const tsFiles = read(
+  import.meta.glob("../../src/**/*.ts", { query: "?raw", import: "default", eager: true }) as Record<string, string>,
+);
+
 const TOKENS = "src/styles/_tokens.scss";
 const GLASS = "src/styles/_glass.scss";
 
@@ -38,7 +42,6 @@ const COLOUR_BASELINE: Record<string, number> = {
   "src/styles/_console.scss": 4,
   "src/styles/_float.scss": 10,
   "src/styles/_glass.scss": 31,
-  "src/styles/_home.scss": 50,
   "src/styles/_inspector.scss": 15,
   "src/styles/_layout.scss": 6,
   "src/styles/_modals.scss": 120,
@@ -62,7 +65,6 @@ const FLAT_BASELINE: Record<string, number> = {
   "src/styles/_console.scss": 2,
   "src/styles/_float.scss": 2,
   "src/styles/_glass.scss": 2,
-  "src/styles/_home.scss": 8,
   "src/styles/_inspector.scss": 6,
   "src/styles/_layout.scss": 1,
   "src/styles/_modals.scss": 20,
@@ -145,8 +147,9 @@ function names(text: string, re: RegExp): Set<string> {
 
 const sources = new Map([...vueFiles, ...scssFiles]);
 const tokens = names(scssFiles.get(TOKENS) ?? "", /(--[\w-]+)\s*:/g);
-// Set where it is used: an inline :style, a setProperty, a local declaration.
-const local = new Set([...sources.values()].flatMap((t) => [...names(t, /['"`](--[\w-]+)['"`]/g), ...names(t, /(?<![\w(-])(--[\w-]+)\s*:/g)]));
+// Set where it is used: an inline :style, a setProperty, a local declaration, in a template, a
+// stylesheet or a TypeScript module (homeBackground.ts sets --home-image).
+const local = new Set([...sources.values(), ...tsFiles.values()].flatMap((t) => [...names(t, /['"`](--[\w-]+)['"`]/g), ...names(t, /(?<![\w(-])(--[\w-]+)\s*:/g)]));
 
 describe("design spec guard", () => {
   it("reads the sources", () => {
