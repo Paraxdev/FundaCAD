@@ -14,7 +14,11 @@ _API = "() => (window.__harness ? window.__harness.api : null)"
 
 def check_api(api: Any) -> None:
     if api is None:
-        raise DriverMismatch("this page has no harness driver, it needs a dev build with src/harness opened with ?harness=1")
+        raise DriverMismatch(
+            "this page has no harness driver, it needs a dev build with src/harness opened with ?harness=1."
+            " Right after vite rebuilt its dependencies (504 Outdated Optimize Dep in page.log) it loads without one,"
+            " a new session then works"
+        )
     if api != DRIVER_API:
         raise DriverMismatch(f"the page driver speaks api {api}, this package needs {DRIVER_API}")
 
