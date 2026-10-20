@@ -6,9 +6,6 @@
 //! decodes it as before, while a reader that has the segment index can inflate
 //! the segments apart, on all cores.
 
-// The read side is used by the parallel open.
-#![allow(dead_code)]
-
 use std::io::Write;
 
 use flate2::write::DeflateEncoder;

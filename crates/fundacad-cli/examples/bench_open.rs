@@ -8,7 +8,8 @@
 //! `pack` imports a file and saves it as `<stem>.fundab` and `<stem>.funda`.
 //! `open` reads a document into an empty blob store and rebuilds it cold,
 //! `reopen` reads it again with the store already filled, the common case.
-//! `--threads N` sets FUNDACAD_THREADS for the file layer.
+//! `--threads N` sets FUNDACAD_THREADS for the file layer, `--file-only` stops
+//! after it, before the engine stages.
 
 use std::collections::BTreeMap;
 use std::io::Write;
@@ -234,6 +235,11 @@ fn stage_open(args: &[String], refill: bool) {
         container::open_document_full(&path, &blob_dir, None, None).expect("the first open");
     }
     let doc_text = file_layer(&path, &blob_dir, repeat, refill);
+    if args.iter().any(|a| a == "--file-only") {
+        let _ = std::fs::remove_dir_all(&blob_dir);
+        let _ = std::fs::remove_dir_all(&cache);
+        return;
+    }
     let doc: Value = serde_json::from_str(&doc_text).unwrap();
     let typed: fundacad_core::CadDocument = serde_json::from_value(doc.clone()).expect("the document types");
 

@@ -283,6 +283,11 @@ user and suggests saving, which writes a clean copy.
 A reader that does not repair may skip step 3's reconstruction: concatenate the
 data shards directly and rely on step 4's hash to reject damage.
 
+The parity shards are only needed for a group with a damaged data shard, so
+FundaCAD reads a group's `k` data shards in one read and its `m` parity shards
+only then. It also refuses a section whose `stored_len` or group size is larger
+than the file, before sizing any buffer from them.
+
 ## Speed
 
 Measured with `bench_open` (docs/ENGINE.md 8.1), release build, a 32 thread
@@ -300,6 +305,27 @@ Saving a `.fundab` is almost all deflate (level 6, one core: 37 MiB/s on SV08,
 
 Deflate level 1 would be faster still, but makes SV08 17 percent bigger
 (ratio 0.414 against 0.355), so the level stays 6.
+
+A first open, with nothing of the document in the blob store yet, reads every
+segmented section by its index row: the groups of a window are read and
+repaired on all threads, the segments inside them are inflated on all threads,
+and the result is hashed and written in order. Sections without a row are
+extracted side by side, one per thread. A blob already in the store is skipped
+only when its length is right, so a torn one is extracted again. Times for the
+whole file layer of a first open (`open_file_empty_store`, the median of three
+runs of seven, each writing and syncing the blob):
+
+| First open | one stream | segments, 1 thread | 4 threads | 8 threads | 16 threads |
+|---|---|---|---|---|---|
+| SV08 | 282 ms | 222 ms | 213 ms | 190 ms | 132 ms |
+| scan | 251 ms | 210 ms | 108 ms | 97 ms | 89 ms |
+
+The rest is the BLAKE2b of the whole blob, which stays serial (about 1 GB/s,
+66 ms for SV08), and writing and syncing it. Runs on this machine vary by up to
+a factor of two with the file system, so only the ordering is firm. The file
+layer is a small part of a first open of SV08, whose engine side (shapes, the
+rebuild and the mesh) takes over ten seconds; for the scan it was about a
+fifth. A reopen finds every blob in the store and takes a few milliseconds.
 
 ## Older formats
 

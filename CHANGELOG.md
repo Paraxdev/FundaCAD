@@ -393,6 +393,12 @@ This file starts on 2026-08-03. For anything before that, see the
   assembly saves in a fraction of a second instead of about 2 seconds. The file
   is the same size, and every FundaCAD that reads .fundab opens it as before.
 
+- **Opening a .fundab whose geometry is not on this machine yet is faster.**
+  Its big geometry is decoded on all cores, and the smaller pieces side by side,
+  so a 48 MB scan takes about 90 ms instead of about 250 ms to unpack. A
+  geometry file left half written by a crash is unpacked again instead of
+  failing the next rebuild.
+
 - **The Rust engine is the rolling beta now, and the Python engine is
   retired.** Builds of `main` publish to the
   [beta release](https://github.com/Paraxdev/fundacad/releases/tag/beta),
