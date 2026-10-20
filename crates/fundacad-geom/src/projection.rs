@@ -580,7 +580,7 @@ pub fn project_geometry_result(req: &Map<String, Value>, watch: &dyn Watch) -> J
     let (Some(document), Some(plane_spec)) = (req.get("document"), req.get("plane")) else {
         return error_result(if req.contains_key("document") { "'plane'" } else { "'document'" });
     };
-    let typed: CadDocument = match serde_json::from_value(document.clone()) {
+    let typed: CadDocument = match CadDocument::from_value_lenient(document) {
         Ok(d) => d,
         Err(e) => return error_result(&format!("the document does not parse: {e}")),
     };

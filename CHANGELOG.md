@@ -380,6 +380,11 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Fixed
 
+- **A document with a section this build cannot read still builds.** The
+  engine refused the whole job when, say, a newer `materials` row or `versions`
+  repo did not fit, which an MCP session could send. It now leaves that section
+  out and builds the features.
+
 - **A body is measured as large as it is after a slanted cut through a spline
   face.** A lofted or organic face that is cut off at a slant has surface left
   over beyond the cut, and the exact bounding box counted that too. A revolve

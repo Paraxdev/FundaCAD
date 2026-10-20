@@ -72,7 +72,7 @@ fn rebuild_with(
 ) -> JobResult {
     let _beat = crate::heartbeat::install(watch.heartbeat());
     let _cancel = crate::cancel::install(watch.cancel_token());
-    let typed: CadDocument = match serde_json::from_value(doc.clone()) {
+    let typed: CadDocument = match CadDocument::from_value_lenient(doc) {
         Ok(d) => d,
         Err(e) => return error_result(&format!("the document does not parse: {e}")),
     };
