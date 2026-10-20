@@ -153,7 +153,7 @@ with Session() as s:
 | `click_at(sketch=(x, y) or world=(x, y, z) or screen=(x, y))`, `drag(from_, to, space="sketch")` | pointer at a sketch, world or screen point, `space` is `sketch`, `world` or `screen` |
 | `drag_handle(name, by=px or mm=value)` | drags a named handle along its axis; `mm=` lands near the value, the step says the value box values reached, type the exact value after |
 | `view(name)` | top, bottom, front, back, right, left, iso (the default view fitted to the model), default, fit, through the Views popover, a running tool keeps going |
-| `undo()`, `redo()` | the title bar buttons |
+| `undo()`, `redo()` | the title bar buttons; once the document holds an import they wait as long as `import_file`, and while an import reads its file both are off |
 | `expand(target, open=True)` | opens or closes an Items folder by its caret (a click on the row selects) |
 | `open_file(path, discard=True)` | File > Open, answering the file chooser and the unsaved changes question, refused when the document did not change |
 | `import_file(path)` | drops the file on the canvas, the way a browser tab imports a model; waits up to 300 s or `settle_timeout`, whichever is longer, and with `settle=False` returns once the file is dropped |
