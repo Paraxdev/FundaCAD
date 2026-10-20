@@ -256,6 +256,9 @@ fn in_disc(li: Light) -> vec3f {
 // Draws before the last upward one is kept: a map whose light grazes the
 // plane rarely passes the cosine coin.
 const GROUND_TRIES = 256u;
+// From this share of the half side out the shadow fades to none, so a low
+// light's shadow, longer than the square, ends without a seam.
+const GROUND_FADE = 0.75;
 // 0 when the light a sample picks by its share of the irradiance on the
 // ground is blocked from q, else 1: an open ground is exactly the background
 // and the mean is the share of the light the scene takes from it. Emitters
@@ -439,7 +442,9 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
         let sky = select(env(d), env_view(d), env_on());
         let bg = select(sky, u.background.rgb, u.background.w > 0.0 && u.n_lights.w == 0u);
         if (on_ground) {
-          col += thr * bg * ground_lit(gq);
+          let edge = max(abs(gq.x - u.ground0.x), abs(gq.y - u.ground0.y)) / u.ground0.w;
+          // 1 - f (1 - lit) keeps an open plane exactly the background.
+          col += thr * bg * (1.0 - (1.0 - smoothstep(GROUND_FADE, 1.0, edge)) * (1.0 - ground_lit(gq)));
           if ((u.flags & 1u) != 0u) {
             aov[pix * 2u] = vec4f(bg, dot(gq - plane, u.fwd.xyz));
             aov[pix * 2u + 1u] = vec4f(0.0, 0.0, 1.0, 1.0);
