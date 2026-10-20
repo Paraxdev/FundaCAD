@@ -21,7 +21,7 @@ use flate2::write::DeflateEncoder;
 use flate2::Compression;
 use reed_solomon_erasure::galois_8::ReedSolomon;
 
-use crate::{par, segments};
+use crate::{par, pread, segments};
 
 pub const MAGIC: &[u8; 8] = b"FUNDACAD";
 pub const TAIL_MAGIC: &[u8; 8] = b"FNDATAIL";
@@ -480,9 +480,63 @@ pub fn read_index(f: &mut File, report: &mut RepairReport) -> Result<Vec<Entry>,
     Err(DAMAGED.to_string())
 }
 
+/// A section's CRC table and the CRC-32 of its bytes, which the segment index
+/// records. A table cut short leaves its missing entries at zero, so those
+/// shards read as damaged and parity takes over.
+fn read_crcs(file: &File, entry: &Entry) -> Result<(Vec<u32>, u32), String> {
+    let len = file.metadata().map_err(io)?.len();
+    let count = entry.groups() * entry.shards_per_group();
+    let group_bytes = entry.layout.shard_size as u64 * entry.shards_per_group();
+    // Declared sizes larger than the file itself can only come from a hostile
+    // table, and would otherwise size the buffers below.
+    if entry.stored_len > len || count.saturating_mul(4) > len || group_bytes > len {
+        return Err(DAMAGED.to_string());
+    }
+    let mut raw = vec![0u8; (count * 4) as usize];
+    let _ = pread::read_at(file, &mut raw, entry.crc_table_offset());
+    let crcs = raw.chunks(4).map(|c| u32::from_le_bytes(c.try_into().unwrap())).collect();
+    Ok((crcs, crc32fast::hash(&raw)))
+}
+
+fn rs_of(entry: &Entry) -> Result<ReedSolomon, String> {
+    ReedSolomon::new(entry.layout.data_shards as usize, entry.layout.parity_shards as usize).map_err(|_| DAMAGED.to_string())
+}
+
+/// The stored bytes of group `g`, repaired, and how many data shards that took.
+/// The data shards come in one read; the parity shards are read only when one
+/// of them fails its CRC.
+fn load_group(file: &File, entry: &Entry, rs: &ReedSolomon, crcs: &[u32], g: u64) -> std::io::Result<(Vec<u8>, u64)> {
+    let l = entry.layout;
+    let size = l.shard_size as usize;
+    let (k, m) = (l.data_shards as usize, l.parity_shards as usize);
+    let base = entry.offset + g * (k + m) as u64 * size as u64;
+    let first = g as usize * (k + m);
+    let good = |i: usize, shard: &[u8]| shard.len() == size && crcs.get(first + i).is_some_and(|c| *c == crc32fast::hash(shard));
+
+    let mut data = vec![0u8; k * size];
+    let got = pread::read_at(file, &mut data, base)?;
+    data.truncate(got);
+    let bad: Vec<bool> = (0..k).map(|i| !good(i, data.get(i * size..(i + 1) * size).unwrap_or(&[]))).collect();
+    let repaired = bad.iter().filter(|b| **b).count() as u64;
+    if repaired > 0 {
+        let mut parity = vec![0u8; m * size];
+        let got = pread::read_at(file, &mut parity, base + (k * size) as u64)?;
+        parity.truncate(got);
+        let mut shards: Vec<Option<Vec<u8>>> = (0..k)
+            .map(|i| (!bad[i]).then(|| data[i * size..(i + 1) * size].to_vec()))
+            .chain((0..m).map(|i| parity.get(i * size..(i + 1) * size).filter(|s| good(k + i, s)).map(<[u8]>::to_vec)))
+            .collect();
+        rs.reconstruct_data(&mut shards).map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidData, DAMAGED))?;
+        data = shards.into_iter().take(k).flat_map(|s| s.expect("reconstructed")).collect();
+    }
+    let keep = (entry.stored_len - (g * (k * size) as u64)).min(data.len() as u64);
+    data.truncate(keep as usize);
+    Ok((data, repaired))
+}
+
 /// Reads a section's stored bytes, repairing each group as it is reached.
 struct SectionReader<'a> {
-    file: &'a mut File,
+    file: &'a File,
     entry: Entry,
     rs: ReedSolomon,
     crcs: Vec<u32>,
@@ -494,54 +548,20 @@ struct SectionReader<'a> {
 }
 
 impl<'a> SectionReader<'a> {
-    fn new(file: &'a mut File, entry: &Entry) -> Result<Self, String> {
-        let l = entry.layout;
-        let rs = ReedSolomon::new(l.data_shards as usize, l.parity_shards as usize).map_err(|_| DAMAGED.to_string())?;
-        let count = entry.groups() * entry.shards_per_group();
-        let mut raw = vec![0u8; (count * 4) as usize];
-        file.seek(SeekFrom::Start(entry.crc_table_offset())).map_err(io)?;
-        // A CRC table cut short leaves its missing entries at zero, so those
-        // shards read as damaged and parity takes over.
-        let _ = read_fully(file, &mut raw);
-        let crcs = raw.chunks(4).map(|c| u32::from_le_bytes(c.try_into().unwrap())).collect();
-        Ok(Self { file, entry: entry.clone(), rs, crcs, group: 0, buf: Vec::new(), pos: 0, remaining: entry.stored_len, repaired: 0 })
+    fn new(file: &'a File, entry: &Entry) -> Result<Self, String> {
+        let (crcs, _) = read_crcs(file, entry)?;
+        Self::with_crcs(file, entry, crcs)
     }
 
-    fn load_group(&mut self) -> std::io::Result<()> {
-        let l = self.entry.layout;
-        let size = l.shard_size as usize;
-        let n = self.entry.shards_per_group() as usize;
-        let base = self.entry.offset + self.group * n as u64 * size as u64;
-        self.file.seek(SeekFrom::Start(base))?;
-        let mut shards: Vec<Option<Vec<u8>>> = Vec::with_capacity(n);
-        let mut bad = 0u64;
-        for i in 0..n {
-            let mut shard = vec![0u8; size];
-            let got = read_fully(self.file, &mut shard)?;
-            let idx = (self.group as usize) * n + i;
-            let ok = got == size && self.crcs.get(idx).is_some_and(|c| *c == crc32fast::hash(&shard));
-            if ok {
-                shards.push(Some(shard));
-            } else {
-                shards.push(None);
-                if i < l.data_shards as usize {
-                    bad += 1;
-                }
-            }
-        }
-        if shards[..l.data_shards as usize].iter().any(|s| s.is_none()) {
-            self.rs
-                .reconstruct_data(&mut shards)
-                .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidData, DAMAGED))?;
-            self.repaired += bad;
-        }
-        self.buf.clear();
-        for s in shards.into_iter().take(l.data_shards as usize) {
-            self.buf.extend_from_slice(&s.expect("reconstructed"));
-        }
-        let keep = (self.remaining as usize).min(self.buf.len());
-        self.buf.truncate(keep);
-        self.remaining -= keep as u64;
+    fn with_crcs(file: &'a File, entry: &Entry, crcs: Vec<u32>) -> Result<Self, String> {
+        Ok(Self { file, entry: entry.clone(), rs: rs_of(entry)?, crcs, group: 0, buf: Vec::new(), pos: 0, remaining: entry.stored_len, repaired: 0 })
+    }
+
+    fn next_group(&mut self) -> std::io::Result<()> {
+        let (buf, repaired) = load_group(self.file, &self.entry, &self.rs, &self.crcs, self.group)?;
+        self.remaining -= buf.len() as u64;
+        self.buf = buf;
+        self.repaired += repaired;
         self.pos = 0;
         self.group += 1;
         Ok(())
@@ -554,7 +574,10 @@ impl Read for SectionReader<'_> {
             if self.remaining == 0 {
                 return Ok(0);
             }
-            self.load_group()?;
+            self.next_group()?;
+            if self.buf.is_empty() {
+                return Err(std::io::Error::new(std::io::ErrorKind::UnexpectedEof, DAMAGED));
+            }
         }
         let n = out.len().min(self.buf.len() - self.pos);
         out[..n].copy_from_slice(&self.buf[self.pos..self.pos + n]);
@@ -563,23 +586,21 @@ impl Read for SectionReader<'_> {
     }
 }
 
-fn read_fully(f: &mut File, buf: &mut [u8]) -> std::io::Result<usize> {
-    let mut got = 0;
-    while got < buf.len() {
-        match f.read(&mut buf[got..])? {
-            0 => break,
-            n => got += n,
-        }
-    }
-    Ok(got)
+/// Stream a section's raw bytes into `sink`, repaired and verified.
+fn read_section<S: Write>(file: &File, entry: &Entry, sink: &mut S, report: &mut RepairReport) -> Result<(), String> {
+    check_raw_len(entry)?;
+    let reader = SectionReader::new(file, entry)?;
+    decode_section(reader, entry, sink, report)
 }
 
-/// Stream a section's raw bytes into `sink`, repaired and verified.
-fn read_section<S: Write>(file: &mut File, entry: &Entry, sink: &mut S, report: &mut RepairReport) -> Result<(), String> {
+fn check_raw_len(entry: &Entry) -> Result<(), String> {
     if entry.raw_len > MAX_RAW {
         return Err(format!("This document expands to more than {} GiB and was refused.", MAX_RAW >> 30));
     }
-    let mut reader = SectionReader::new(file, entry)?;
+    Ok(())
+}
+
+fn decode_section<S: Write>(mut reader: SectionReader, entry: &Entry, sink: &mut S, report: &mut RepairReport) -> Result<(), String> {
     let mut hasher = Blake2b128::new();
     let mut total = 0u64;
     let mut buf = vec![0u8; 1 << 20];
@@ -640,7 +661,7 @@ pub fn read_file(path: &Path, blob_dir: &Path, mesh_dir: Option<&Path>, carry_di
     let entries = read_index(&mut f, &mut report)?;
     let doc = entries.iter().find(|e| e.kind == KIND_DOCUMENT).ok_or_else(|| DAMAGED.to_string())?;
     let mut cbor = Vec::new();
-    read_section(&mut f, doc, &mut cbor, &mut report)?;
+    read_section(&f, doc, &mut cbor, &mut report)?;
     let document_json = cbor_to_json(&cbor)?;
 
     std::fs::create_dir_all(blob_dir).map_err(io)?;
@@ -653,7 +674,7 @@ pub fn read_file(path: &Path, blob_dir: &Path, mesh_dir: Option<&Path>, carry_di
         if dest.exists() {
             continue;
         }
-        extract(&mut f, e, &dest, &mut report)?;
+        extract(&f, e, &dest, &mut report)?;
     }
     if let Some(dir) = mesh_dir {
         std::fs::create_dir_all(dir).map_err(io)?;
@@ -663,7 +684,7 @@ pub fn read_file(path: &Path, blob_dir: &Path, mesh_dir: Option<&Path>, carry_di
             }
             let dest = dir.join(format!("{}.bin", e.name));
             // A cached mesh that fails costs a re-tessellation, never the open.
-            let _ = extract(&mut f, e, &dest, &mut report);
+            let _ = extract(&f, e, &dest, &mut report);
         }
     }
     let mut carried = Vec::new();
@@ -673,7 +694,7 @@ pub fn read_file(path: &Path, blob_dir: &Path, mesh_dir: Option<&Path>, carry_di
             let hash = hex(&e.raw_hash);
             let dest = dir.join(format!("{hash}.bin"));
             // A section this version does not read never blocks the open.
-            if dest.exists() || extract(&mut f, e, &dest, &mut report).is_ok() {
+            if dest.exists() || extract(&f, e, &dest, &mut report).is_ok() {
                 carried.push(Carried { kind: e.kind, name: e.name.clone(), hash });
             }
         }
@@ -685,7 +706,7 @@ fn safe_key(key: &str) -> bool {
     !key.is_empty() && !key.contains("..") && key.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
 }
 
-fn extract(f: &mut File, e: &Entry, dest: &Path, report: &mut RepairReport) -> Result<(), String> {
+fn extract(f: &File, e: &Entry, dest: &Path, report: &mut RepairReport) -> Result<(), String> {
     let mut tmp = dest.as_os_str().to_os_string();
     tmp.push(".tmp");
     let tmp = PathBuf::from(tmp);
@@ -710,7 +731,7 @@ pub fn read_section_of_kind(path: &Path, kind: u8) -> Result<Option<Vec<u8>>, St
     let entries = read_index(&mut f, &mut report)?;
     let Some(entry) = entries.iter().find(|e| e.kind == kind) else { return Ok(None) };
     let mut out = Vec::new();
-    read_section(&mut f, entry, &mut out, &mut report)?;
+    read_section(&f, entry, &mut out, &mut report)?;
     Ok(Some(out))
 }
 
@@ -720,7 +741,7 @@ pub fn verify(path: &Path) -> Result<RepairReport, String> {
     let mut report = RepairReport::default();
     let entries = read_index(&mut f, &mut report)?;
     for e in entries.iter().filter(|e| e.kind <= KIND_SEGMENTS || carries(e)) {
-        read_section(&mut f, e, &mut std::io::sink(), &mut report)?;
+        read_section(&f, e, &mut std::io::sink(), &mut report)?;
     }
     Ok(report)
 }
@@ -1016,9 +1037,9 @@ mod tests {
     }
 
     fn stored_bytes(path: &Path, e: &Entry) -> Vec<u8> {
-        let mut f = File::open(path).unwrap();
+        let f = File::open(path).unwrap();
         let mut out = Vec::new();
-        SectionReader::new(&mut f, e).unwrap().read_to_end(&mut out).unwrap();
+        SectionReader::new(&f, e).unwrap().read_to_end(&mut out).unwrap();
         out
     }
 
@@ -1122,3 +1143,7 @@ mod tests {
         assert!(opened.carried.is_empty());
     }
 }
+
+#[cfg(test)]
+#[path = "fnda_read_tests.rs"]
+mod read_tests;
