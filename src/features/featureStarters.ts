@@ -28,6 +28,10 @@ import { choose } from "../ui/choice";
 import { pointInRegion } from "../sketch/region";
 import { setPrompt } from "../ui/prompt";
 import type { Axis3, AxisSpec, Feature, JointMode, MechanismJoint, PlaneDef, PlaneOf, PlaneSpec, PointAt, Selector, Vec3 } from "../types";
+import { asFeature } from "../types";
+import { toast } from "../ui/toast";
+import { resolveRealEntities } from "../sketch/resolve";
+import { defaultReach, looseEnds } from "../sketch/looseEnds";
 import { edgeMatchSelectorFrom } from "../viewport/edgeMatch";
 import type { Hit } from "../viewport/picking";
 import { isDrivable, nextJointId, NO_DRIVE } from "../document/mechanism";
@@ -1150,7 +1154,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       if (!only) {
         return mine.length
           ? `That sketch has ${mine.length} profiles, click the one you mean in the view`
-          : "That sketch shows no closed profile";
+          : `That sketch shows no closed profile${offerTie(pick.id)}`;
       }
       cleanup();
       requestAnimationFrame(() => onPick(only));
@@ -1868,7 +1872,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     }
     const chosen = hiddenChosenSketch();
     if (chosen) {
-      if (!extrude.start(committed, { sketch: chosen })) setStatus("That sketch has no closed profile to extrude", "");
+      if (!extrude.start(committed, { sketch: chosen })) setStatus(`That sketch has no closed profile to extrude${offerTie(chosen)}`, "");
       return;
     }
     if (overlay.regions.length === 0) {
@@ -1882,6 +1886,27 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
    *  being one an earlier extrude consumed and hid. Its profile cannot be
    *  clicked, so Extrude takes the sketch itself as the choice. An area already
    *  picked in the viewport is preferred over it. */
+  /** Why a sketch shows no profile, when loose ends are why, with a toast that ties them. */
+  function offerTie(sketchId: string): string {
+    const sk = asFeature(store.document.features.find((f) => f.id === sketchId), "sketch");
+    if (!sk?.entities) return "";
+    const ents = resolveRealEntities(sk, store.document.parameters);
+    const le = looseEnds(ents, sk.constraints ?? [], defaultReach(ents));
+    const n = le.untied.filter((u) => u.tieable).length;
+    if (!n) return le.open.length ? `, ${le.open.length} open end${le.open.length === 1 ? "" : "s"}` : "";
+    toast(`${n} loose end${n === 1 ? "" : "s"} keep that sketch open`, {
+      action: {
+        label: "Tie Loose Ends",
+        onClick: () => {
+          if (sketch.active) return;
+          sketch.enter(store.buildState.result?.sketchPlanes?.[sketchId] ?? sk.plane, store, sketchId);
+          void sketch.tieLooseEnds();
+        },
+      },
+    });
+    return `, ${n} loose end${n === 1 ? "" : "s"}`;
+  }
+
   function hiddenChosenSketch(): string | null {
     const id = getSelectedFeature();
     if (!id || !getSelectedFeatureExplicit()) return null;

@@ -91,6 +91,11 @@ export function createActions(e: Engine): (action: string) => void {
       return;
     }
     if (action === "finish") return void e.sketch.finish(true);
+    if (action === "tie-loose-ends") {
+      if (e.sketch.active) void e.sketch.tieLooseEnds();
+      else e.setStatus("Enter a sketch to tie its loose ends", "");
+      return;
+    }
     if (action === "palette") return void (palette.visible = true);
     // The arrow keys turn the view and nothing else: they leave a sketch open,
     // and a tool that reads the arrows itself (the pattern count) keeps them.
