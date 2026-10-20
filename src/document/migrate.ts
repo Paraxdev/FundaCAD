@@ -2,6 +2,11 @@
 // document in place and returns user-facing warnings. Idempotent, so it can run on
 // every load.
 //
+// Every step must also be shape guarded: rewrite only what still has the old
+// shape. A file a newer build wrote and this one saved is stamped with this
+// build's version (docs/FUNDA-FORMAT.md, Files from a newer version), so a newer
+// build runs its newer steps on data that may already be new.
+//
 // v1 -> v2: polygon.angle was RADIANS (the lone outlier) and is now degrees;
 //   dimension constraints gain a stable `id`; bare parameter names stored in
 //   numeric fields become model parameters with the field rewritten to the cached

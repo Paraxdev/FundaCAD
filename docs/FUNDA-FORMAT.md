@@ -19,7 +19,7 @@ document has imported bodies, one more top-level key comes last:
 
 ```json
 {
-  "version": 9,
+  "version": 10,
   "features": [ { "id": "f1", "type": "import", "geom": "5648909c8c0ccf6096c0e672255e68a0" } ],
   "geometry": {
     "5648909c8c0ccf6096c0e672255e68a0": "<base64 of the binary BREP>"
@@ -230,6 +230,31 @@ FundaCAD still reads every format it has written:
   open.
 
 Only JSON and format 2 are written.
+
+## Files from a newer version
+
+A file a newer FundaCAD wrote still opens, and saving it again loses nothing this
+version merely does not understand. The document `version` (`FORMAT_VERSION` in
+`src/document/migrate.ts`, `DOCUMENT_VERSION` in `crates/fundacad-core`) is not a
+gate: a reader never refuses a file for a higher number.
+
+Reader rules:
+
+- A feature of a type the reader does not know stays in the history where it is,
+  is not built, and is written back unchanged. So is a field it does not know on
+  a feature it does know.
+- A top level key the reader does not know is written back unchanged. `geometry`
+  is reserved for the JSON file's embedded blobs (above), never a document key.
+- A `stress`, `environment` or `versions` value the reader cannot read is kept
+  whole and written back for as long as the document has none of its own.
+
+Writer rules:
+
+- A writer stamps its own `version`, never the higher number it read, because
+  what it saves is in its own shapes. A newer reader therefore runs its newer
+  migrations on such a file again, so every migration must be shape guarded:
+  it rewrites only what still has the old shape, and leaves alone what already
+  has the new one.
 
 ## What the error correction does not cover
 
