@@ -97,6 +97,12 @@ function triDistance(tris: THREE.Triangle[], p: THREE.Vector3): number {
   return best;
 }
 
+function boundsOf(tris: THREE.Triangle[]): THREE.Box3 {
+  const box = new THREE.Box3();
+  for (const t of tris) box.expandByPoint(t.a).expandByPoint(t.b).expandByPoint(t.c);
+  return box;
+}
+
 /** Splits `body1:top` into the body and the words. */
 function splitBody(h: PickHost, sel: string): { bodies: Body[]; words: string; named: boolean } {
   const all = bodyList(h);
@@ -274,11 +280,17 @@ export function resolveEdge(h: PickHost, sel: string): Edge {
     const box = h.store.buildState.result?.bbox;
     const diag = box ? Math.hypot(box.max[0] - box.min[0], box.max[1] - box.min[1], box.max[2] - box.min[2]) : 100;
     const tol = Math.max(1e-3, diag * 2e-3);
+    const both = boundsOf(fa.tris).intersect(boundsOf(fb.tris)).expandByScalar(tol);
     const on = (e: Edge) => {
       const pts = edgePts(e);
-      return pts.filter((p) => triDistance(fa.tris, p) <= tol && triDistance(fb.tris, p) <= tol).length / pts.length;
+      let misses = Math.floor(pts.length * 0.1);
+      for (const p of pts) {
+        if (both.containsPoint(p) && triDistance(fa.tris, p) <= tol && triDistance(fb.tris, p) <= tol) continue;
+        if (--misses < 0) return false;
+      }
+      return true;
     };
-    const found = all.filter((e) => e.body === body.id && on(e) >= 0.9);
+    const found = all.filter((e) => e.body === body.id && on(e));
     if (!found.length) throw new HarnessError(`no edge between ${m[1]} and ${m[2]} on ${body.id}`, "NotFound");
     if (found.length > 1) throw new HarnessError(`${found.length} edges between ${m[1]} and ${m[2]}, pick one by near=`, "Ambiguous", found.map(edgeName));
     return found[0]!;

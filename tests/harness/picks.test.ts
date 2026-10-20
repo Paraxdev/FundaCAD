@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import * as THREE from "three";
 import { edgePoint, faceInfo, facePoint, planePoint, resolveEdge, resolveFace, sketchPoint, worldPoint, type PickHost } from "../../src/harness/picks";
 import { HarnessError } from "../../src/harness/locate";
@@ -169,6 +169,16 @@ describe("edges", () => {
     expect(resolveEdge(h, "body1:between top right").id).toBe("e-top-right");
     expect(resolveEdge(h, "body1:longest").id).toBe("e-top-front");
     expect(err(() => resolveEdge(h, "body1:between top bottom")).kind).toBe("NotFound");
+  });
+
+  it("measures only the edges inside both faces' bounds for between", () => {
+    const { h } = rig();
+    const edges = h.store.buildState.result!.edges as { id: string; body: string; points: V[] }[];
+    for (let i = 0; i < 200; i++) edges.push({ id: `far${i}`, body: "body1", points: [[0, 0, -50 - i], [40, 0, -50 - i]] });
+    const spy = vi.spyOn(THREE.Triangle.prototype, "closestPointToPoint");
+    expect(resolveEdge(h, "body1:between top front").id).toBe("e-top-front");
+    expect(spy.mock.calls.length).toBeLessThan(100);
+    spy.mockRestore();
   });
 
   it("verifies the point with the selection pick or the edge tools' pick", () => {
