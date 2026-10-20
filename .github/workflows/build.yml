@@ -366,12 +366,14 @@ jobs:
         uses: ./.github/actions/deb-gtk-depends
 
       # A week, the cap tests/build/artifactRetention.test.ts holds, so the
-      # beta release can be republished from them by hand.
+      # beta release can be republished from them by hand. A leg that failed
+      # after tauri-action still uploads, for debugging, but under a name the
+      # release and build-flatpak never download, so its files are not shipped.
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: fundacad-bundle-${{ matrix.platform }}
+          name: ${{ job.status == 'success' && 'fundacad-bundle' || 'failed-bundle' }}-${{ matrix.platform }}
           retention-days: 7
           if-no-files-found: warn
           path: |
