@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createBridge, createMethods, harnessWanted, HARNESS_API, installHarness, startScreen, type HarnessHost } from "../../src/harness/driver";
 import { HarnessError } from "../../src/harness/locate";
+import { rect } from "./fixture";
 
 const host = {} as HarnessHost;
 
@@ -59,5 +60,16 @@ describe("screen", () => {
   it("names the regions when asked for one that does not exist", () => {
     const m = createMethods(host, document);
     expect(() => m.screen!({ region: "foo" })).toThrow(/regions are titlebar, menu, toolrail/);
+  });
+
+  it("leaves out the labels that were there when the last action began, when asked for fresh ones", () => {
+    document.body.innerHTML = `<button id="docname">plate.json</button>`;
+    const m = createMethods(host, document, { rect });
+    m.seq!({});
+    document.body.insertAdjacentHTML("beforeend", `<button>plate saved</button>`);
+    const labels = (a: Record<string, unknown>) => (m.screen!(a) as { lines: unknown[][] }).lines.map((l) => l[3]);
+    expect(labels({ fresh: true })).toEqual(["plate saved"]);
+    expect(labels({}).filter(Boolean)).toEqual(["plate.json", "plate saved"]);
+    document.body.innerHTML = "";
   });
 });

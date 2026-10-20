@@ -59,6 +59,17 @@ export function createMethods(
     const base = onCanvas();
     return (x, y) => base(x, y) && !overHandle(h, x, y);
   };
+  // The labels on screen when the last action began, a wait looks only at the ones not among them.
+  let marked = new Set<string>();
+  const lines = (a: Args) => {
+    if (typeof a.region === "string" && !(REGIONS as readonly string[]).includes(a.region)) {
+      throw new HarnessError(`no region "${a.region}", the regions are ${REGIONS.join(", ")}`, "BadArgs");
+    }
+    return screenLines(walk(), {
+      ...(typeof a.region === "string" ? { region: a.region } : {}),
+      ...(typeof a.max === "number" ? { max: a.max } : {}),
+    });
+  };
   return {
     ready: () => {
       if (!doc.querySelector("#toolrail")) return { ready: false, why: "the tool rail is not mounted yet" };
@@ -68,13 +79,8 @@ export function createMethods(
     startScreen: () => startScreen(doc),
     stageInert: () => !!doc.querySelector("#stage[inert]"),
     screen: (a) => {
-      if (typeof a.region === "string" && !(REGIONS as readonly string[]).includes(a.region)) {
-        throw new HarnessError(`no region "${a.region}", the regions are ${REGIONS.join(", ")}`, "BadArgs");
-      }
-      return screenLines(walk(), {
-        ...(typeof a.region === "string" ? { region: a.region } : {}),
-        ...(typeof a.max === "number" ? { max: a.max } : {}),
-      });
+      const out = lines(a);
+      return a.fresh === true ? { ...out, lines: out.lines.filter((l) => l[3] && !marked.has(l[3])) } : out;
     },
     locate: (a) => {
       const c = findControl(walk(), str(a, "target"), { disabled: a.disabled === true });
@@ -98,7 +104,10 @@ export function createMethods(
     bodies: () => read.bodies(h),
     status: (a) => read.status(h, doc, since(a)),
     messages: (a) => read.messages(since(a)),
-    seq: () => read.seq(),
+    seq: () => {
+      marked = new Set(lines({ max: 1000 }).lines.map((l) => l[3]));
+      return read.seq();
+    },
     lastError: (a) => read.lastError(h, since(a)),
     settle: (a) => settle(h, {
       ...(typeof a.timeoutMs === "number" ? { timeoutMs: a.timeoutMs } : {}),

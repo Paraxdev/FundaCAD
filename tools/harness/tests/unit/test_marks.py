@@ -130,3 +130,22 @@ def test_a_reload_in_the_middle_of_a_step_is_named():
     with pytest.raises(HarnessError, match="press stopped, the page reloaded while it ran"):
         s.press("Enter")
     s.close()
+
+
+def test_a_wait_looks_only_at_labels_new_since_the_step():
+    b = LogBridge()
+    asked = []
+    plain = b.call
+
+    def call(method, **args):
+        if method == "screen":
+            asked.append(args)
+            return {"lines": [[0, "action:x", "button", "Export done", []]] if args.get("fresh") and len(asked) > 1 else []}
+        return plain(method, **args)
+
+    b.call = call
+    s = session(b)
+    s.press("Enter")
+    assert s.wait_for("export", timeout=1) == 'on screen "Export done"'
+    assert all(a.get("fresh") for a in asked)
+    s.close()

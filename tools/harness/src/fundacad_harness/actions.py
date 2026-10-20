@@ -599,13 +599,13 @@ class Actions:
         for r in self.bridge.call("messages", since=self._mark)["rows"]:
             if want in r["text"].lower():
                 return f'message "{r["text"]}"'
-        for r in self._control_rows():
+        for r in self.bridge.call("screen", max=1000, fresh=True)["lines"]:
             if want in r[3].lower():
                 return f'on screen "{r[3]}"'
         return None
 
     def wait_for(self, text: str, timeout: float = 10) -> str:
-        """Until the text shows in the prompt, the screen, or a message logged since the last action began."""
+        """Until the text shows in the prompt, a message logged or a label shown since the last action began."""
         self._ensure_page()
         end = time.monotonic() + timeout
         want = text.lower()
