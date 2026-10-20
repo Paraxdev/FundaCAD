@@ -179,6 +179,7 @@ describe("export runs as a cancellable busy op", () => {
     vi.doUnmock("@tauri-apps/plugin-dialog");
     vi.doUnmock("../../src/ui/choice");
     vi.doUnmock("../../src/stores/exportDialog");
+    vi.unstubAllGlobals();
     vi.resetModules();
     delete (globalThis as unknown as Record<string, unknown>).window;
   });
@@ -330,8 +331,12 @@ describe("export runs as a cancellable busy op", () => {
       open: async () => null,
       message: async (m: string) => void reported.push(m),
     }));
+    const kept = new Map([["fundacad.exportSettings", JSON.stringify({ format: "3mf" })]]);
+    vi.stubGlobal("localStorage", { getItem: (k: string) => kept.get(k) ?? null, setItem: (k: string, v: string) => void kept.set(k, v) });
     const { exportModel } = await import("../../src/io/files");
     await exportModel(store, backend, ["body1"], { sketch: "sk1", label: "Plate" }, "dxf");
+    const { loadExportSettings } = await import("../../src/io/exportSettings");
+    expect(loadExportSettings()).toMatchObject({ format: "3mf", tolerance: 1 });
     expect(asked).toMatchObject({ flat: { label: "Plate" }, format: "dxf" });
     expect(format).toBe("dxf");
     expect(sent).toMatchObject({ sketch: "sk1", tolerance: 1 });
