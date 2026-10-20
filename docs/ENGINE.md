@@ -2,9 +2,9 @@
 
 The Funda Engine is FundaCAD's geometry engine: Rust, OpenCASCADE 7.8.1
 statically linked, built into the same executable as the app. It ships as
-`main`'s rolling 1.0 beta. The sidecar, the previous engine, is retired and
-frozen on the `legacy` branch, which publishes nothing; the beta is the only
-release.
+`main`'s rolling 1.0 beta, and as `dev`'s development build ahead of it
+(section 7). The sidecar, the previous engine, is retired and frozen on the
+`legacy` branch, which publishes nothing.
 
 Related: [ARCHITECTURE.md](ARCHITECTURE.md) (what exists today),
 [PROTOCOL.md](PROTOCOL.md) (the wire contract the engine honours),
@@ -282,10 +282,11 @@ in the `rust-geom` job.
 
 ## 6. The `beta` rolling release
 
-Daily work lands on `dev`, which publishes the rolling `beta` release and
-`beta/latest.json`. It was published as `alpha` while the sidecar still
-published the beta from the `legacy` branch. The sidecar is retired now and
-`legacy` publishes nothing. Stable releases are cut from `main`, see section 7.
+A push to `main` publishes the rolling `beta` release and `beta/latest.json`.
+It was published as `alpha` while the sidecar still published the beta from
+the `legacy` branch. The sidecar is retired now and `legacy` publishes
+nothing. Daily work lands on `dev`, which publishes the `development` build
+ahead of the beta, see section 7.
 
 Two jobs in `.github/workflows/build.yml`, `bundle` and `release`, with the
 beta in its own `concurrency.group` (`release-beta`), a rolling tag moved in
@@ -294,9 +295,9 @@ the bundle:
 
 - The engine is a worker process of the same executable, reached over Tauri
   IPC (`src/geometry/transport.ts`).
-- `src-tauri/tauri.beta.conf.json` (or `tauri.stable.conf.json`, the same
-  file with the stable feed) on top of `tauri.conf.json` for the
-  release bundle settings and the MCP server beside the app. Neither declares
+- `src-tauri/tauri.beta.conf.json` (or `tauri.dev.conf.json` and
+  `tauri.stable.conf.json`, the same file with their own feed) on top of
+  `tauri.conf.json` for the release bundle settings and the MCP server beside the app. Neither declares
   a resource, so no sidecar runtime can be bundled, and the job checks the
   finished binary for the `engine_attach` command and the bundles for any
   sidecar runtime, so what shipped is a fact about the bytes rather than
@@ -314,11 +315,15 @@ build that cannot update itself is one people install once and never update
 again, so there is no world where the beta ships with no manifest at all.
 
 The endpoint is compiled into the binary (`tauri.conf.json`, or
-`tauri.stable.conf.json` for a stable build), so which feed a copy reads is
-settled when it is built and can never change afterwards:
+`tauri.dev.conf.json` and `tauri.stable.conf.json` for the other channels),
+so which feed a copy reads is settled when it is built and can never change
+afterwards:
 
-- a beta build from `dev` reads `releases/download/beta/latest.json`, which
+- a beta build from `main` reads `releases/download/beta/latest.json`, which
   only the beta `release` run writes;
+- a development build from `dev` reads
+  `releases/download/development/latest.json`, which only the development
+  `release` run writes;
 - a stable build reads `releases/latest/download/latest.json`, see section 7;
 - a sidecar build from `legacy` reads the same `beta/latest.json`. It is
   `0.2.x` and the Funda Engine is `1.0.x`, so those installs move to the
@@ -327,7 +332,7 @@ settled when it is built and can never change afterwards:
   The `alpha` release is gone, so those installs no longer update and take a
   new installer from the beta release.
 
-`tests/security/updater.test.ts` pins both endpoints and keeps the alpha one
+`tests/security/updater.test.ts` pins every endpoint and keeps the alpha one
 out of every config.
 
 ### 6.2 The version
@@ -365,12 +370,12 @@ worker reached over Tauri IPC, so the webview never opens a socket.
   leaves out.
 - The updater is still off everywhere. `tauri.conf.json` carries upstream's
   minisign pubkey, so `release` withholds `latest.json` and says so in
-  the notes, on both channels. Generating a keypair turns the feed
+  the notes, on every channel. Generating a keypair turns the feed
   on.
 - Plugin bundles ARE published to this release, packed by `bundle` with
   their geometry components and nothing else, and the app installs from it
-  (`RELEASE_TAG` in `src/plugins/index.ts`). A stable build installs from its
-  own release, which carries bundles from the same commit
+  (`RELEASE_TAG` in `src/plugins/index.ts`). A development or stable build
+  installs from its own release, which carries bundles from the same commit
   (`VITE_FUNDACAD_RELEASE`). Every plugin in the repository
   ships a component. A sidecar build shares one plugin directory with this
   one on a machine that has both, and a bundle the Funda Engine installed has
@@ -382,86 +387,113 @@ worker reached over Tauri IPC, so the webview never opens a socket.
 
 ## 7. Release channels
 
-| Branch or tag | Tests and installers | Publishes | Version | Update feed |
-| --- | --- | --- | --- | --- |
-| `dev` | yes | the rolling `beta` pre-release | `1.0.<run number>` | `releases/download/beta/latest.json` |
-| `main` | yes, a dry run whose output is thrown away | nothing | `1.0.<run number>` | the stable one, as a tag would build it |
-| tag `v1.<minor>.<patch>` on `main` | yes | a release named after the tag | `1.<minor>.<patch>` | `releases/latest/download/latest.json` |
-| pull request | tests, no installers | nothing | | |
+| Branch or tag | Tests | Installers | Publishes | Version | Update feed |
+| --- | --- | --- | --- | --- | --- |
+| `dev` | yes, may be red | built even when the tests are red | the rolling `development` pre-release, bleeding edge | `1.0.<run number>` | `releases/download/development/latest.json` |
+| `main` | yes | only once the tests are green | the rolling `beta` pre-release, somewhat stable | `1.0.<run number>` | `releases/download/beta/latest.json` |
+| tag `v1.<minor>.<patch>` on `main`, optional | yes | only once the tests are green | a release named after the tag | `1.<minor>.<patch>` | `releases/latest/download/latest.json` |
+| pull request | yes | none | nothing | | |
 
-The `channel` job in `build.yml` decides which row a run is. A tag that is not
-`v1.<minor>.<patch>` with a minor of 1 or more, or whose commit is not on
-`main`, fails it before anything is built.
+The `channel` job in `build.yml` decides which row a run is.
 
-A push to `main` builds the stable installers on all three platforms and
-publishes none of them, so a promotion runs the full build twice: once for the
-`main` push and once for the tag, which is the one that publishes.
+**`dev` is the bleeding edge.** Daily work lands there, and every push
+publishes the `development` build, so testers get a change with the next
+build. A red `test` or `rust-geom` does not hold the build back. The run still
+shows red, so the breakage is visible. A bundle leg that fails to build only
+leaves its own files out: the release keeps the earlier build's copies, the
+notes name what was not rebuilt, and `latest.json` leaves that platform out
+until the next build.
 
-A beta install only ever updates to the next beta and a stable install only to
-the next stable release. GitHub's latest release is never a pre-release, so
-the rolling beta cannot become what a stable install finds there. A new
-stable release is a draft until its installers and `latest.json` are up, and
-is then marked latest only while no higher stable release is published, so a
-fix to an older line cannot pull newer installs back to it. The minor is 1 or
-more, and both the `channel` job and `promote-stable.sh` refuse 0: the betas
-are `1.0.<run number>`, and a stable `1.0.x` would be older than the beta it
-replaces.
+**`main` is the beta, somewhat stable.** A push to `main` publishes the beta
+exactly as it did before `dev` existed, and only when `test`, `rust-geom`
+and every bundle leg are green. Changes reach `main` by promotion (7.1) or as
+a hotfix (7.2).
 
-### 7.1 Promoting dev to stable
+The two never touch each other's release. Each has its own tag, its own
+concurrency group (`release-development`, `release-beta`) and its own feed,
+baked into the binary. They are the same app with the same identifier, so
+switching channel is installing the other channel's installer. A
+development install only updates to the next development build and a beta
+install to the next beta. Both count up the same run number, so moving to a
+build with a lower version can need an uninstall first.
+
+The tag is `development` rather than `dev`: a tag and a branch with the same
+name make `git push origin dev` fail as ambiguous for anyone who fetched
+tags.
+
+**Stable tags are optional.** A `v1.<minor>.<patch>` tag on a commit of
+`main` still publishes a stable release with its own feed, but nothing sends
+people there. A tag that is not `v1.<minor>.<patch>` with a minor of 1 or
+more, or whose commit is not on `main`, fails `channel` before anything is
+built. The betas are `1.0.<run number>`, and a stable `1.0.x` would be older
+than the beta it replaces. A new stable release is a draft until its
+installers and `latest.json` are up, and is then marked latest only while no
+higher stable release is published. GitHub's latest release is never a
+pre-release, so neither rolling build can become what a stable install finds
+there.
+
+### 7.1 Promoting dev to main
 
 ```sh
-scripts/promote-stable.sh 1.2.0          # or --sha <commit on dev>
+scripts/promote.sh                   # the dev head, or --sha <commit on dev>
+scripts/promote.sh --push            # the same, and push main
+scripts/promote.sh --stable 1.2.0    # also tag the merge, optional
 ```
 
-It checks that a `build` run from a push of the dev head (or the given commit)
-has `test`, `rust-geom` and every `bundle` leg green, merges it into `main`
-with `--no-ff` in a throwaway worktree, tags the merge `v1.2.0` and prints the
-push. `e2e` is not gating, so a flake there does not block a promotion. A dev
+It checks that a `build` run from a push of that commit to `dev` has `test`,
+`rust-geom` and every `bundle` leg green. `dev` may be red, a promotion may
+not. It then merges the commit into `main` with `--no-ff` in a throwaway
+worktree and prints the push. `--push` pushes `main`, with the tag in the
+same atomic push when there is one. The `main` run tests again and publishes
+the beta.
+
+`e2e` is not gating, so a flake there does not block a promotion. A dev
 commit that only touches `manual/` starts no build at all, so promote an older
-one with `--sha`. `--push` pushes `main` and the tag in one atomic push, and
-the tag's run publishes the release. Your local `main` is not touched, fast
-forward it afterwards.
+one with `--sha`. Your local `main` is not touched, fast forward it
+afterwards.
 
 ### 7.2 Hotfixes
 
-A fix that cannot wait for the next promotion:
+A fix that cannot wait for the next promotion branches from `main`, merges
+into `main`, and `main` is merged back into `dev` straight away:
 
 ```sh
 git fetch origin
 git switch -c fix/thing origin/main      # branch from main
 # commit the fix
 git switch main && git merge --ff-only origin/main && git merge --no-ff fix/thing
-git tag -a v1.2.1 -m "FundaCAD v1.2.1"
-git push --atomic origin main refs/tags/v1.2.1
+git push origin main                     # the beta, once the run is green
 git switch dev && git merge --ff-only origin/dev && git merge main && git push origin dev
 ```
 
-`promote-stable.sh` leaves local `main` behind `origin/main`, which is why
-both branches are fast forwarded first: a stale `main` gets the push refused,
-and a stale `dev` merges an old `main`. Merge `main` back into `dev` straight
-away. Until then the next promotion can conflict, and `promote-stable.sh`
-stops and says so. The `dev` push publishes the beta again, with the fix in
-it.
+`promote.sh` leaves local `main` behind `origin/main`, which is why both
+branches are fast forwarded first: a stale `main` gets the push refused, and
+a stale `dev` merges an old `main`. Until `main` is merged back, the next
+promotion can conflict, and `promote.sh` stops and says so. For a stable
+release of the fix too, tag the merge and push it with `main`:
+`git tag -a v1.2.1 -m "FundaCAD v1.2.1"` and
+`git push --atomic origin main refs/tags/v1.2.1`.
 
-### 7.3 Rolling the split out
+### 7.3 Rolling the channels out
 
-The first time, in this order. Once the split is on `main`, `main` stops
-publishing the beta, and the README and the manual (deployed from `main`)
-send new users to `releases/latest`, which is a 404 until a stable release
-exists.
+The first time, in this order. Until now `main` published the beta with the
+old workflow and the `development` release does not exist yet.
 
-1. Create `dev` from `main`, merge the split into it and push `dev` alone.
-   That run publishes the beta, and existing beta installs keep updating from
-   the same feed.
-2. Move the `beta` tag onto `dev` by hand, with a token that has the
-   `workflow` scope. `GITHUB_TOKEN` may not move a tag across a commit that
-   changes a workflow file, so until then every `dev` run only warns and
-   leaves the tag, its source archives and the notes' range on the old
-   commit.
-3. Once that run is green, `scripts/promote-stable.sh 1.1.0 --push` merges
-   `dev` into `main` and pushes the tag with it, so `main` never has the new
-   links without a stable build on its way. `releases/latest` still 404s
-   until the tag's run has published, about an hour.
+1. Create the `development` tag by hand on the current `dev`, with your own
+   credentials: `git push origin refs/remotes/origin/dev:refs/tags/development`.
+   `GITHUB_TOKEN` may not create or move a tag onto a commit that changes a
+   workflow file, so without this the first run cannot create it and its
+   release job fails, saying so.
+2. Merge the channels change into `dev` and push `dev`. That run publishes
+   the `development` release. The tag move is refused for the same reason,
+   so the run warns and the release's source archives and the notes' range
+   stay on the old commit until the tag is moved by hand.
+3. Once that run's gating jobs are green, `scripts/promote.sh --push`. The
+   `main` run publishes the beta as before, from the same feed, so existing
+   beta installs keep updating. If it warns that the `beta` tag could not
+   move, move it by hand the same way. The README and the manual go live
+   from `main` with links to the beta and the development build, and both
+   exist by then.
 
 ## 8. Performance
 
