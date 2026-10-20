@@ -51,6 +51,7 @@ describe("the plugins this build offers", () => {
       "FundaCAD.Organic",
       "FundaCAD.PrintToolbox",
       "FundaCAD.Printing",
+      "FundaCAD.ReferenceImages",
       "FundaCAD.Screws",
       "FundaCAD.SpaceMouse",
       "FundaCAD.Texture",

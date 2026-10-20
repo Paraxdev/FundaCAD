@@ -1,0 +1,12 @@
+{
+  "id": "FundaCAD.ReferenceImages",
+  "name": "Reference images",
+  "version": "1.0.0",
+  "kind": "builtin",
+  "summary": "Put a photo or a drawing on a plane or a flat face, scale it from two points and a known distance, and sketch over it.",
+  "enabledByDefault": true,
+  "grants": [
+    "document.read",
+    "document.write"
+  ]
+}
