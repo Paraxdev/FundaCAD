@@ -77,6 +77,8 @@ import type { SurfaceBaker } from "./pathtrace/mirror";
 import { createSurfaceBaker, webglSurfaceShade } from "./pathtrace/surfaceBake";
 import { describeNative, describeProbe, probeNative, probeWebGpu, type GpuProbe } from "./pathtrace/probe";
 import { chooseTracer, createTracerOf, type NativeProbe, type TracerKind } from "./pathtrace/choose";
+import { wsCall, type DevCall } from "./pathtrace/devCall";
+import type { Call } from "./pathtrace/nativeScene";
 import type { TracerBackend } from "./pathtrace/backend";
 import type { TraceState } from "./pathtrace/state";
 import { onWorkspaceChange } from "../ui/workspace";
@@ -161,13 +163,23 @@ export interface AreaDrag {
  *  Vector3 per frame for a constant is litter in the hot path. Never written. */
 const WORLD_ORIGIN = new THREE.Vector3(0, 0, 0);
 
+let devServer: DevCall | null = null;
+
 /** ?tracer=native or ?tracer=webgpu overrides the preference for measuring,
- *  ?tracer=native-ws also forces the WebSocket path. */
-function devTracerSwitch(): { kind: TracerKind; prefer?: string } | null {
-  const pick = new URLSearchParams(globalThis.location?.search ?? "").get("tracer");
+ *  ?tracer=native-ws also forces the WebSocket path. In a dev build
+ *  ?tracer=native-dev&port=P runs the native tracer of tracer_serve outside
+ *  the app, with `ptoken`, else the engine's `token`. */
+function devTracerSwitch(): { kind: TracerKind; prefer?: string; call?: Call } | null {
+  const q = new URLSearchParams(globalThis.location?.search ?? "");
+  const pick = q.get("tracer");
   if (pick === "webgpu") return { kind: "webgpu" };
   if (pick === "native") return { kind: "native" };
   if (pick === "native-ws") return { kind: "native", prefer: "websocket" };
+  if (pick === "native-dev" && import.meta.env.DEV) {
+    const token = encodeURIComponent(q.get("ptoken") ?? q.get("token") ?? "");
+    devServer ??= wsCall(`ws://127.0.0.1:${Number(q.get("port"))}/?token=${token}`);
+    return { kind: "native", prefer: "websocket", call: devServer };
+  }
   return null;
 }
 
@@ -1016,7 +1028,7 @@ export class Viewport {
   }
 
   private async bootPathTrace() {
-    const native = probeNative().then((p) => {
+    const native = probeNative(devTracerSwitch()?.call).then((p) => {
       this.native = p;
       crumb(describeNative(p));
       this.tierChanged();
@@ -1048,7 +1060,7 @@ export class Viewport {
     });
     if (!kind) throw new Error("both tracers faulted this session");
     this.tracerKind = kind;
-    return createTracerOf(kind, dev?.prefer);
+    return createTracerOf(kind, dev?.prefer, dev?.call);
   }
 
   private dropTrace(why: string, off: boolean) {

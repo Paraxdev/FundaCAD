@@ -25,3 +25,12 @@ png = "0.17"
 [dev-dependencies]
 # The binding and layout tests read the kernels as wgpu compiles them.
 naga = { version = "=30.0.1", features = ["wgsl-in"] }
+# tracer_serve: the frames transport and the engine's token gate, no Tauri.
+fundacad-frames = { path = "../frames" }
+fundacad-engine = { path = "../../crates/fundacad-engine", features = ["ws"] }
+tungstenite = "0.29"
+
+# A test target too, so the crate's cargo test covers the command socket.
+[[example]]
+name = "tracer_serve"
+test = true
