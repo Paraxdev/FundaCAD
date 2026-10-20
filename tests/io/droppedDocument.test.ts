@@ -104,6 +104,26 @@ describe("a document dropped as bytes in the desktop app", () => {
     expect(store.dirty).toBe(false);
   });
 
+  it("hands the sections of a .fundab this version does not read back to the save", async () => {
+    const carried = [{ kind: 9, name: "futureIndex", hash: "0123456789abcdef0123456789abcdef" }];
+    reply = () => ({ document: DROPPED, repairedShards: 0, usedBackupIndex: false, wasContainer: true, carried });
+    vi.doMock("../../src/io/recentFiles", () => ({ noteRecent() {}, forgetRecent() {}, getRecentFiles: () => [] }));
+    vi.doMock("../../src/io/recovery", () => ({ clearRecovery: async () => {} }));
+    const { openDocumentAtPath, saveDocument } = await import("../../src/io/files");
+    const { store } = setup();
+    await openDocumentAtPath(store, "D:/work/newer.fundab");
+    expect(store.carriedSections).toEqual(carried);
+
+    await saveDocument(store);
+    const save = invoked.find((c) => c.cmd === "container_save");
+    expect((save?.args as { carried: unknown }).carried).toEqual(carried);
+
+    store.newDocument();
+    expect(store.carriedSections).toEqual([]);
+    vi.doUnmock("../../src/io/recentFiles");
+    vi.doUnmock("../../src/io/recovery");
+  });
+
   it("keeps the open document and imports nothing when Rust refuses it", async () => {
     reply = () => { throw "This document is damaged and cannot be opened."; };
     const { takeDroppedFiles } = await import("../../src/io/desktopDrop");
