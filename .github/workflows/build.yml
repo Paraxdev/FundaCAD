@@ -92,7 +92,6 @@ jobs:
       version: ${{ steps.pick.outputs.version }}
       sha: ${{ steps.pick.outputs.sha }}
       since: ${{ steps.pick.outputs.since }}
-      latest: ${{ steps.pick.outputs.latest }}
     steps:
       # Only a tag needs the history, to find main and the stable tags before it.
       - uses: actions/checkout@v4
@@ -108,7 +107,7 @@ jobs:
           REF_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          config='' release='' tag='' since='' latest=false
+          config='' release='' tag='' since=''
           version="1.0.${{ github.run_number }}"
           sha='${{ github.sha }}'
           # Minor 0 is the betas' 1.0.<run number>, which a stable 1.0.x
@@ -127,13 +126,10 @@ jobs:
               tags=$(git tag -l --merged origin/main 'v1.*' | grep -E "$stable" | sort -V)
               prev=$(printf '%s\n' "$tags" | grep -xF -B1 "$REF_NAME" | grep -vxF "$REF_NAME" || true)
               [ -z "$prev" ] || since=$(git rev-parse "$prev^{commit}")
-              # A hotfix to an older line must not become the release every
-              # stable install updates to.
-              [ "$(printf '%s\n' "$tags" | tail -1)" != "$REF_NAME" ] || latest=true
               ;;
           esac
           printf '%s=%s\n' config "$config" release "$release" tag "$tag" version "$version" \
-            sha "$sha" since "$since" latest "$latest" | tee -a "$GITHUB_OUTPUT"
+            sha "$sha" since "$since" | tee -a "$GITHUB_OUTPUT"
 
   # The installers (docs/ENGINE.md section 6), on three platforms. The
   # engine is a worker process of the same executable, and there is no Python
@@ -433,7 +429,7 @@ jobs:
   #
   # The beta has its own concurrency group and its own tag, moved in place,
   # never deleted. A stable release hangs off the tag that was pushed, and is
-  # only marked latest while no higher stable tag exists, because stable
+  # only marked latest while no higher stable release exists, because stable
   # installs read releases/latest (tauri.stable.conf.json).
   #
   # The updater endpoint is baked into the binary at build time
@@ -468,7 +464,6 @@ jobs:
       VERSION: ${{ needs.channel.outputs.version }}
       SHA: ${{ needs.channel.outputs.sha }}
       SINCE: ${{ needs.channel.outputs.since }}
-      LATEST: ${{ needs.channel.outputs.latest }}
     steps:
       # Before download-artifact: actions/checkout cleans the workspace by
       # default and would delete dist/.
@@ -673,11 +668,13 @@ jobs:
             fi
           else
             TITLE="FundaCAD $TAG"
+            # A new release starts as a draft and is published once its assets
+            # are up, so releases/latest never names one without installers or
+            # a feed.
             if gh release view "$TAG" --repo "$R" >/dev/null 2>&1; then
-              gh release edit "$TAG" --repo "$R" --prerelease=false --latest="$LATEST" \
-                --title "$TITLE" --notes-file notes.md
+              gh release edit "$TAG" --repo "$R" --title "$TITLE" --notes-file notes.md
             else
-              gh release create "$TAG" --repo "$R" --verify-tag --latest="$LATEST" \
+              gh release create "$TAG" --repo "$R" --verify-tag --draft --latest=false \
                 --title "$TITLE" --notes-file notes.md
             fi
           fi
@@ -703,6 +700,21 @@ jobs:
                 printf '%s\n' "$keep" | grep -qxF "$asset" \
                   || gh release delete-asset "$TAG" "$asset" --repo "$R" --yes || true
               done
+
+          if [ "$RELEASE" = stable ]; then
+            # Worked out here, against the releases published by now, not in
+            # `channel`: re-running failed jobs keeps channel's outputs, and a
+            # release published since then would be missed. A hotfix to an
+            # older line must not become the release every stable install
+            # updates to.
+            published=$(gh release list --repo "$R" --exclude-drafts --exclude-pre-releases \
+              --limit 1000 --json tagName --jq '.[].tagName')
+            newest=$(printf '%s\n%s\n' "$published" "$TAG" \
+              | grep -E '^v1\.([1-9][0-9]*)\.(0|[1-9][0-9]*)$' | sort -V | tail -1)
+            latest=false
+            [ "$newest" != "$TAG" ] || latest=true
+            gh release edit "$TAG" --repo "$R" --draft=false --prerelease=false --latest="$latest"
+          fi
 
   # Browser end-to-end checks for the imported-assembly Browser tree.
   #
