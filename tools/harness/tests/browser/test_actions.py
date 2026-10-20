@@ -1,8 +1,11 @@
 import pytest
 
+from fundacad_harness.errors import HarnessError
+
 pytestmark = pytest.mark.browser
 
 PLATE = "tools/harness/fixtures/plate.json"
+BLOCK = "tools/harness/fixtures/block.json"
 
 
 @pytest.fixture
@@ -110,3 +113,16 @@ def test_a_view_keeps_a_running_extrude_and_its_typed_depth(plate):
     plate.view("iso")
     plate.press("Enter")
     assert plate.history(raw=True)["count"] == 2
+
+
+def test_open_file_over_unsaved_changes_opens_the_new_file(plate):
+    plate.pick_face("top")
+    plate.tool("Press/Pull")
+    plate.type("D", "7", enter=True)
+    with pytest.raises(HarnessError, match="unsaved changes"):
+        plate.open_file(BLOCK, discard=False)
+    assert plate.status(raw=True)["doc"] == "plate.json"
+    assert plate.screen(region="dialog") == "nothing on screen"
+    assert str(plate.open_file(BLOCK)).startswith("opened block.json")
+    assert plate.status(raw=True)["doc"] == "block.json"
+    assert plate.history(raw=True)["count"] == 1

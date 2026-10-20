@@ -21,6 +21,7 @@ FOCUSED_FIELD = "() => { const a = document.activeElement; return a instanceof H
 SIDES = {"top", "bottom", "front", "back", "right", "left"}
 # A wide stage has no button that opens a closed Items or History, a person uses the keys.
 PANEL_KEYS = {"items": "Ctrl+Alt+s", "history": "Ctrl+Alt+h"}
+OPEN_WAIT_S = 10
 PANELS = ("history", "items", "views", "display", "versions", "snapping", "preferences")
 
 
@@ -340,10 +341,26 @@ class Actions:
         return full
 
     @action
-    def open_file(self, path: str | os.PathLike):
-        """File > Open, answering the file chooser with `path`."""
+    def open_file(self, path: str | os.PathLike, discard: bool = True):
+        """File > Open, answering the file chooser with `path`, dropping unsaved changes unless `discard=False`."""
         full = self._choose_file("File/Open...", path)
-        return f"opened {Path(full).name}", {"path": full}
+        name = Path(full).name
+        end = time.monotonic() + OPEN_WAIT_S
+        while True:
+            if self._answer_discard(discard):
+                break
+            st = self.bridge.call("status")
+            if st.get("doc") == name and not st.get("dirty"):
+                break
+            if time.monotonic() > end:
+                break
+            self.page.wait_for_timeout(50)
+        self.settle()
+        st = self.bridge.call("status")
+        if st.get("doc") != name:
+            why = f", error: {st['error']}" if st.get("error") else ""
+            raise HarnessError(f'File > Open did not open {name}, the document is still "{st.get("doc")}"{why}')
+        return f"opened {name}", {"path": full}
 
     @action
     def import_file(self, path: str | os.PathLike):
@@ -387,13 +404,22 @@ class Actions:
         """Ctrl+N, dropping unsaved changes unless `discard=False`."""
         self.page.keyboard.press("Control+N")
         self.page.wait_for_timeout(100)
-        rows = [r for r in self._control_rows() if r[0] == 1 and r[1]]
-        labels = [r for r in rows if r[3].lower().startswith(("discard", "don't save", "do not save"))]
-        if labels:
-            if not discard:
-                raise HarnessError("the document has unsaved changes, pass discard=True to drop them")
-            self._click_control(labels[0][1])
+        self._answer_discard(discard)
         return "new document"
+
+    def _answer_discard(self, discard: bool) -> bool:
+        """Answers the app's unsaved changes question when it is up, Cancel and a refusal for `discard=False`."""
+        rows = [r for r in self.bridge.call("screen", region="dialog", max=200)["lines"] if r[0] == 1 and r[1]]
+        labels = [r for r in rows if r[3].lower().startswith(("discard", "don't save", "do not save"))]
+        if not labels:
+            return False
+        if not discard:
+            cancel = [r for r in rows if r[3].lower() == "cancel"]
+            if cancel:
+                self._click_control(cancel[0][1])
+            raise HarnessError("the document has unsaved changes, pass discard=True to drop them")
+        self._click_control(labels[0][1])
+        return True
 
     # --- the canvas -----------------------------------------------------------
 

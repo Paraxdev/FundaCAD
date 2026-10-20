@@ -26,7 +26,7 @@ VERBS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "view": (("name",), ()),
     "undo": ((), ()),
     "redo": ((), ()),
-    "open_file": (("path",), ()),
+    "open_file": (("path",), ("discard",)),
     "import_file": (("path",), ()),
     "save_as": (("path",), ()),
     "new_document": ((), ("discard",)),

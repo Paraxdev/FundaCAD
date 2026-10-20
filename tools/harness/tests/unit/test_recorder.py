@@ -27,7 +27,7 @@ class StubBridge:
             ref, label = LABELS.get(args["target"]) or by_ref[args["target"]]
             return {"marker": "m", "ref": ref, "label": label}
         if method == "status":
-            return {"mode": "selection"}
+            return {"mode": "selection", "doc": "plate.json"}
         if method == "fieldValue":
             return {"text": "7", "typed": "7", "problem": None}
         if method == "toolPath":
