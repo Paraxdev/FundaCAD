@@ -7,6 +7,7 @@ import type { Feature } from "../types";
 import type { DatumPose } from "../document/datumPose";
 import { startDatumPoseEdit } from "../features/datumPlaneEdit";
 import { cancelActiveTools } from "./toolBusy";
+import { typedDimBox } from "../sketch/dimInput";
 
 /** Said when a feature's value cannot be dragged and has to be typed. One
  *  constant because three feature types say it and they used to say three
@@ -27,19 +28,35 @@ function whyNotEditable(e: Engine, id: string): string | null {
 }
 
 /** Close the edit another feature has open, the way switching to a new one does:
- *  a re-edited sketch is committed, a feature tool is stood down. Nothing happens
- *  while no edit is open, the open one is `except` itself, or `except` could not
- *  be edited anyway. A value typed in the properties panel is not an edit in
- *  this sense, its box ends its own preview when it loses focus. */
+ *  a sketch is committed, a feature tool is stood down. Keyed on the tools, not
+ *  on the edit preview, which an untouched edit has not begun yet and a dragged
+ *  datum or mechanism keeps in place. A value typed in the heads-up box and not
+ *  entered is entered first; when the box refuses it, or the tool is still open
+ *  after it, the edit stays and the status line says why. Nothing happens while
+ *  no edit is open, the open one is `except` itself, or `except` could not be
+ *  edited anyway. */
 export function closeOpenEdit(e: Engine, except: string): void {
   if (whyNotEditable(e, except)) return;
   if (e.sketch.active) {
-    const editing = e.sketch.editingSketchId;
-    if (editing && editing !== except) e.sketch.finish(true);
+    if (e.sketch.editingSketchId !== except) e.sketch.finish(true);
     return;
   }
-  const open = e.store.editPreviewId;
-  if (open && open !== except && !e.store.editPreviewInPlace) cancelActiveTools(e.tools);
+  if (!e.toolAtWork()) return;
+  if ((e.store.editPreviewId ?? e.selectedFeature) === except) return;
+  const typed = typedDimBox();
+  if (typed) {
+    if (!typed.confirm()) e.setStatus("Fix the value being typed or press Esc, then edit the other feature", "");
+    else if (e.toolAtWork()) e.setStatus("Finish this edit, then edit the other feature", "");
+    return;
+  }
+  cancelActiveTools(e.tools);
+}
+
+/** A double click on a feature row: close the open edit, then edit that feature. */
+export function switchEdit(e: Engine, id: string): void {
+  closeOpenEdit(e, id);
+  if (e.toolOwnsScreen()) return;
+  e.editFeature(id);
 }
 
 export function createSelection(
