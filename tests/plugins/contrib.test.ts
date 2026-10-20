@@ -26,6 +26,7 @@ import {
   onContribChange,
   resetContributions,
   service,
+  contributedMaterialPresets,
 } from "../../src/plugins/contrib";
 
 afterEach(() => resetContributions());
@@ -103,6 +104,16 @@ describe("what a plugin adds, and what it takes away again", () => {
     expect(contributedRenderSections("environment")).toEqual([]);
     off();
     expect(contributedRenderSections("material").map((s) => s.key)).toEqual(["A.One:a"]);
+  });
+
+  it("lists material presets by group, skips malformed groups and a plugin that throws", () => {
+    const red = { id: "r", name: "Red", color: "#ff0000" };
+    contribute("A.One", { materialPresets: () => [{ group: "Metals", materials: [red] }, { group: "Empty", materials: [] }] });
+    contribute("B.Bad", { materialPresets: () => { throw new Error("boom"); } });
+    const off = contribute("C.Three", { materialPresets: () => [{ group: "Paints", materials: [red] }] });
+    expect(contributedMaterialPresets().map((g) => g.group)).toEqual(["Metals", "Paints"]);
+    off();
+    expect(contributedMaterialPresets().map((g) => g.group)).toEqual(["Metals"]);
   });
 
   it("removes only the one that stopped", () => {

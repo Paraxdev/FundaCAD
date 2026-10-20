@@ -256,6 +256,7 @@ with everything it adds, and gets back the removal:
 | `overlays` | components mounted for the life of the capability |
 | `browserSections` | a panel in the browser, drawn as its own component |
 | `renderSections` | a block at the end of one Render dock tab (`material`, `environment` or `camera`), drawn as its own component |
+| `materialPresets` | `() => { group, materials }[]`, starting points under the Render dock's New material menu, one submenu per group |
 | `bodyMenu` | rows on a body's right-click menu |
 | `paint` | colours for bodies and faces, asked for fresh at every rebuild |
 | `palette` | the colours a tool may offer |
@@ -275,6 +276,12 @@ the dock, draw it with the rows from `fundacad/ui`: `RenderSection` (title, hint
 and a slot), `RenderSlider` (`label`, `value`, `min`, `max`, `step`, emits
 `update`), `RenderSwitch` (`label`, `value`, emits `update`) and `RenderChoices`
 (`label`, `value`, `options` of `{ id, label }`, emits `update`).
+
+A `materialPresets` entry is a `MaterialDef`. Picking one adds a plain copy to
+the document under a fresh id and name, as one undo step, so the file opens
+without the plugin. Each entry is normalised like a material read from a file,
+and one that is not a material is skipped. `MaterialDef`, `BodyFinish`,
+`SurfaceGraph` and `SurfaceNode` are exported as types from `fundacad`.
 
 Four things this deliberately is not. There is no generic "run this on event X".
 There is no way to replace a core behaviour: `app/actions.ts` reaches its own

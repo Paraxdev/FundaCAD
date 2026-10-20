@@ -42,6 +42,7 @@ import type { FeatureMeta } from "../ui/featureMeta";
 import type { FieldKind } from "../document/numFields";
 import type { TargetField } from "../features/selectionTargets";
 import type { PluginSettings } from "./settings";
+import type { MaterialDef } from "../document/materials";
 import { setPointerBindings, type PointerBinding, type PointerGesture } from "../viewport/navigator/bindings";
 import { setShortcutOverrides, type ShortcutOverride } from "../input/shortcuts";
 
@@ -115,6 +116,11 @@ export interface BrowserSection {
 }
 
 /** The tabs of the Render dock. */
+export interface MaterialPresetGroup {
+  group: string;
+  materials: MaterialDef[];
+}
+
 export type RenderTab = "material" | "environment" | "camera";
 
 /** A block a plugin adds to the end of one Render dock tab, drawn as its own
@@ -273,6 +279,11 @@ export interface Contribution {
   browserSections?: BrowserSection[];
   /** Blocks at the end of a Render dock tab. */
   renderSections?: RenderSection[];
+  /** Starting points for the Render dock's New material menu, one submenu per
+   *  group. Picking one adds a plain copy to the document, so the file does not
+   *  need the plugin to open. Each entry goes through the same normalising as a
+   *  material read from a file, and one that is not a material is skipped. */
+  materialPresets?: () => MaterialPresetGroup[];
   /** Blocks in Preferences.
    *
    *  A settings block that outlives the thing it configures is worse than a
@@ -464,6 +475,22 @@ export function contributedRenderSections(tab: RenderTab): { key: string; sectio
   for (const e of entries) {
     for (const section of e.c.renderSections ?? []) {
       if (section.tab === tab) out.push({ key: `${e.plugin}:${section.key}`, section });
+    }
+  }
+  return out;
+}
+
+export function contributedMaterialPresets(): MaterialPresetGroup[] {
+  const out: MaterialPresetGroup[] = [];
+  for (const e of entries) {
+    let groups: MaterialPresetGroup[] = [];
+    try {
+      groups = e.c.materialPresets?.() ?? [];
+    } catch {
+      continue;
+    }
+    for (const g of groups) {
+      if (g && typeof g.group === "string" && Array.isArray(g.materials) && g.materials.length) out.push(g);
     }
   }
   return out;
