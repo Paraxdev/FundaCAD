@@ -10,7 +10,7 @@ import { sketchRail } from "../ui/railDefs";
 export interface ReadHost {
   store: Pick<
     DocumentStore,
-    "document" | "buildState" | "rollbackIndex" | "isSuppressed" | "isBodyVisible" | "bodyMaterialId" | "bodyColorSlot" | "previewError" | "canUndo" | "canRedo" | "dirty" | "fileName"
+    "document" | "buildState" | "rollbackIndex" | "isSuppressed" | "isBodyVisible" | "bodyMaterialId" | "bodyColorSlot" | "busyState" | "previewError" | "canUndo" | "canRedo" | "dirty" | "fileName"
   >;
   viewport: Pick<Viewport, "getSelectedBodies" | "getSelectedFaceIds" | "selectedEdgeLines" | "faceIdToBodyId">;
 }
@@ -141,6 +141,14 @@ export interface Status {
   error: string | null;
   /** Warning buttons the view raises on its own, such as Low performance. */
   warnings: string[];
+  busy: string | null;
+}
+
+function busyText(h: ReadHost): string | null {
+  const b = h.store.busyState;
+  if (!b.active) return h.store.buildState.building ? "building" : null;
+  const pct = b.pct != null ? `${Math.round(b.pct)}%` : "";
+  return [b.label, [b.stage, pct].filter(Boolean).join(" ")].filter(Boolean).join(", ");
 }
 
 /** A sketch tool shows no running tool button, the rail lights its own button instead. */
@@ -177,5 +185,6 @@ export function status(h: ReadHost, doc: Document = document, since = 0): Status
     recent: last ? { seq: last.id, level: last.level, text: last.message, at: last.at } : null,
     error: lastError(h, since),
     warnings: [...doc.querySelectorAll("#viewcontrols .perf-warn")].map((b) => b.getAttribute("title") ?? "").filter(Boolean),
+    busy: busyText(h),
   };
 }

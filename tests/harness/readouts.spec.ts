@@ -6,7 +6,7 @@ import { toast } from "../../src/ui/toast";
 import { useToastStore } from "../../src/stores/toasts";
 import { mountApp } from "./fixture";
 
-function host(over: Partial<{ roll: number; suppressed: string[]; hidden: string[] }> = {}): read.ReadHost {
+function host(over: Partial<{ roll: number; suppressed: string[]; hidden: string[]; busy: object; building: boolean }> = {}): read.ReadHost {
   const features = [
     { id: "s1", type: "sketch" },
     { id: "e1", type: "extrude", name: "Plate" },
@@ -17,7 +17,7 @@ function host(over: Partial<{ roll: number; suppressed: string[]; hidden: string
     store: {
       document: { parameters: {}, features },
       buildState: {
-        building: false, progress: null, meshed: null, meshTotal: null, streamed: null, streamTotal: null,
+        building: over.building ?? false, progress: null, meshed: null, meshTotal: null, streamed: null, streamTotal: null,
         errorFeatureId: "d1", errorMessage: "the angle tips the face past vertical",
         result: {
           mesh: { positions: [], indices: [], faceIds: [] }, edges: [], bbox: { min: [0, 0, 0], max: [1, 1, 1] },
@@ -32,6 +32,7 @@ function host(over: Partial<{ roll: number; suppressed: string[]; hidden: string
       isBodyVisible: (id: string) => !(over.hidden ?? []).includes(id),
       bodyMaterialId: (id: string) => (id === "body1" ? "m-brass" : undefined),
       bodyColorSlot: (id: string) => (id === "body2" ? 2 : undefined),
+      busyState: { active: false, label: "", id: null, pct: null, stage: null, rebuild: false, waiting: null, ...over.busy },
       previewError: null,
       canUndo: true,
       canRedo: false,
@@ -97,6 +98,13 @@ describe("status", () => {
     expect(read.status(host()).tool).toBeNull();
     rail.dataset.mode = "model";
     delete rail.dataset.sketchTool;
+  });
+
+  it("says what the app is busy with, an import's stage and how far it got", () => {
+    expect(read.status(host()).busy).toBeNull();
+    expect(read.status(host({ busy: { active: true, label: "Importing ender3.step", stage: "Transferring shapes", pct: 40.4 } })).busy)
+      .toBe("Importing ender3.step, Transferring shapes 40%");
+    expect(read.status(host({ building: true })).busy).toBe("building");
   });
 
   it("names a warning the view raised, such as Low performance", () => {
