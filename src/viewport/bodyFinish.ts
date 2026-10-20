@@ -13,6 +13,9 @@ import { MAX_EMISSIVE_INTENSITY } from "../ui/renderPrefs";
 import { type AreaEmitter, areaEmitters, emitterLuminance, emitterPower, emitterPowerBound, emitterShadowNear, emitterStandoff } from "./emitters";
 import { installAreaLights } from "./areaLightShadows";
 import { markInPicture } from "./pictureScene";
+import { copyPatches, getPatch, removePatch, setPatch } from "./shaderPatches";
+import { RELIEF_PATCH, reliefAxis, reliefOrigin, reliefPatch, reliefUniforms, writeRelief, type ReliefUniforms } from "./relief";
+import type { ReliefMap } from "../plugins/contrib";
 
 /** Every rectangle light is evaluated for every lit pixel, so this is the budget. */
 const MAX_AREA_LIGHTS = 12;
@@ -95,6 +98,19 @@ export interface FinishHost {
   prepareLights?(show: THREE.Object3D, hide: THREE.Object3D | null): Promise<void>;
   /** How far the glowing bodies' lights have filled in, null when nothing is pending. */
   onEmitterProgress?(p: number | null): void;
+  /** Link the programs `obj` draws with in the scene's lights, resolving when they
+   *  are ready. Without it, a patch goes on the live materials at once. */
+  prepareMaterials?(obj: THREE.Object3D): Promise<void>;
+}
+
+interface ReliefBody {
+  /** Bound by every program of the body's materials, so only its values change. */
+  u: ReliefUniforms;
+  geo: THREE.BufferGeometry | null;
+  axis: string;
+  origin: number;
+  /** Drawn with ridges before, so a rebuild's fresh materials find the programs linked. */
+  shown: boolean;
 }
 
 export interface FinishOverlays {
@@ -139,6 +155,14 @@ export class BodyFinishLayer {
   /** Time a frame may spend fitting cold bodies before the rest waits a frame. */
   fitBudgetMs = 6;
 
+  private relief: ReliefMap = {};
+  private reliefBodies = new Map<string, ReliefBody>();
+  /** Materials whose relief programs are linked, and those being linked. */
+  private reliefWarm = new WeakSet<THREE.Material>();
+  private reliefLinking = new WeakSet<THREE.Material>();
+  private warmClones: THREE.Material[] = [];
+  private last: FinishOverlays | null = null;
+
   constructor(private host: FinishHost) {}
 
   /** Opacity takes the faintest of what applies, and stale is preferred over x-ray
@@ -147,6 +171,8 @@ export class BodyFinishLayer {
   apply(o: FinishOverlays) {
     const model = this.host.model();
     if (!model) return;
+    this.last = o;
+    const cold: { b: BodyMesh; u: ReliefUniforms }[] = [];
     const anyGhost = o.xray || o.stale;
     const baseOpacity = o.stale ? STALE_OPACITY : XRAY_OPACITY;
     const byBody = new Map<string, number[]>();
@@ -219,16 +245,117 @@ export class BodyFinishLayer {
         }
       }
       applyWireframe(mat, o.wireframe);
+      const rb = this.reliefFor(b);
+      const slots = extra ? extra.mats : [mat];
+      if (rb && !ghost) {
+        if (this.putRelief(slots, rb)) rb.shown = true;
+        else cold.push({ b, u: rb.u });
+      } else for (const m of slots) removePatch(m, RELIEF_PATCH);
       registerGlass(b.mesh, extra ? extra.mats.map(isGlassAuto) : [isGlassAuto(mat)]);
       if (glow > 0 || faceGlow) glowing.push({ b, glow, fids: byBody.get(b.id), bound: 0 });
     }
     this.startEmitters(model, glowing);
     this.bloomable = shiny || glowing.length > 0;
+    if (cold.length) this.warmRelief(cold);
+  }
+
+  /** Ridges per body. A body's entry is preferred over `all`, a null clears it. */
+  setRelief(map: ReliefMap) {
+    this.relief = map;
+    for (const s of this.reliefBodies.values()) s.geo = null;
+  }
+
+  /** A body moved for good, so its ridges restart from its new lowest point.
+   *  Not called while a drag moves it, the ridges slide with it until then. */
+  refreshReliefOrigins(): boolean {
+    for (const s of this.reliefBodies.values()) s.geo = null;
+    return this.relief.all !== undefined || Object.values(this.relief.bodies ?? {}).some((r) => r);
+  }
+
+  private reliefFor(b: BodyMesh): ReliefBody | null {
+    const bodies = this.relief.bodies;
+    const r = bodies && b.id in bodies ? bodies[b.id] : this.relief.all;
+    const axis = r ? reliefAxis(r) : null;
+    let s = this.reliefBodies.get(b.id);
+    if (!r || !axis) {
+      if (s) s.shown = false;
+      return null;
+    }
+    if (!s) {
+      s = { u: reliefUniforms(), geo: null, axis: "", origin: 0, shown: false };
+      this.reliefBodies.set(b.id, s);
+    }
+    const key = axis.toArray().join(",");
+    if (s.geo !== b.mesh.geometry || s.axis !== key) {
+      s.origin = reliefOrigin(b.mesh, axis);
+      s.geo = b.mesh.geometry;
+      s.axis = key;
+    }
+    writeRelief(s.u, r, axis, s.origin);
+    return s;
+  }
+
+  /** False when the materials' relief programs still have to be linked. */
+  private putRelief(mats: THREE.Material[], rb: ReliefBody): boolean {
+    const warm = !this.host.prepareMaterials || rb.shown
+      || mats.every((m) => getPatch(m, RELIEF_PATCH) || this.reliefWarm.has(m));
+    if (!warm) return false;
+    for (const m of mats) {
+      setPatch(m, reliefPatch(rb.u));
+      this.reliefWarm.add(m);
+    }
+    return true;
+  }
+
+  /** Links the programs on stand ins first, so the picture keeps its old look
+   *  until the new one can be drawn without a stall. */
+  private warmRelief(cold: { b: BodyMesh; u: ReliefUniforms }[]) {
+    const group = new THREE.Group();
+    const clones: THREE.Material[] = [];
+    const live: THREE.Material[] = [];
+    for (const { b, u } of cold) {
+      const own = this.host.savedMats().get(b.id) ?? b.mesh.material;
+      const list = Array.isArray(own) ? own : [own];
+      if (list.every((m) => this.reliefWarm.has(m) || this.reliefLinking.has(m))) continue;
+      const cl = list.map((m) => {
+        const c = m.clone();
+        copyPatches(m, c, () => true);
+        setPatch(c, reliefPatch(u));
+        clones.push(c);
+        live.push(m);
+        this.reliefLinking.add(m);
+        return c;
+      });
+      const mesh = new THREE.Mesh(b.mesh.geometry, Array.isArray(own) ? cl : cl[0]);
+      mesh.matrixAutoUpdate = false;
+      mesh.matrix.copy(b.mesh.matrixWorld);
+      mesh.matrixWorld.copy(b.mesh.matrixWorld);
+      group.add(mesh);
+    }
+    if (!group.children.length) return;
+    const done = () => {
+      // A stand in let go before the live material has drawn would free the program.
+      for (const c of this.warmClones) c.dispose();
+      this.warmClones = clones;
+      for (const m of live) {
+        this.reliefLinking.delete(m);
+        this.reliefWarm.add(m);
+      }
+      if (this.last) this.apply(this.last);
+      this.host.requestRender();
+    };
+    this.host.prepareMaterials!(group).then(done, (e) => {
+      console.warn("[viewport] relief programs could not be linked ahead:", e);
+      done();
+    });
   }
 
   /** Model gone: its lights go with it, or they light the next document's first preview. */
   clear() {
     this.dropFaceMaterials(() => true);
+    for (const c of this.warmClones) c.dispose();
+    this.warmClones = [];
+    this.reliefBodies.clear();
     this.job = null;
     this.fitProgress = null;
     this.syncEmitterLights([]);

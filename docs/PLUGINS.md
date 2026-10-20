@@ -259,6 +259,7 @@ with everything it adds, and gets back the removal:
 | `materialPresets` | `() => { group, materials }[]`, starting points under the Render dock's New material menu, one submenu per group |
 | `bodyMenu` | rows on a body's right-click menu |
 | `paint` | colours for bodies and faces, asked for fresh at every rebuild |
+| `relief` | `() => { all?, bodies? }`, fine parallel ridges drawn through a body's shading (`axis`, `pitch` in mm, `depth` as a fraction of the pitch, optional `tintJitter` and `cavity`); a body's entry is preferred over `all` and a null takes `all` off it; asked for fresh at every rebuild |
 | `palette` | the colours a tool may offer |
 | `importedBody` | an imported mesh carried a colour of its own |
 | `provides` | a value offered to OTHER plugins, by name |

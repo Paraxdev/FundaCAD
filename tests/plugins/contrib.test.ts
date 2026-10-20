@@ -20,6 +20,7 @@ import {
   contributedOverlays,
   contributedPaint,
   contributedPalette,
+  contributedRelief,
   contributedRenderSections,
   contributedRibbon,
   contributors,
@@ -190,6 +191,38 @@ describe("paint", () => {
     expect(contributedPaint().bodies.b1).toBe("#ff0000");
     colour = "#00ff00";
     expect(contributedPaint().bodies.b1).toBe("#00ff00");
+  });
+});
+
+describe("relief", () => {
+  const ridges = (pitch: number) => ({ axis: [0, 0, 1] as [number, number, number], pitch, depth: 0.35 });
+
+  it("is nothing until somebody contributes it", () => {
+    expect(contributedRelief()).toEqual({});
+  });
+
+  it("prefers the later all, merges bodies, and a body's null clears all for it", () => {
+    contribute("A.One", { relief: () => ({ all: ridges(0.2), bodies: { b1: ridges(0.1) } }) });
+    const off = contribute("B.Two", { relief: () => ({ all: ridges(0.3), bodies: { b2: null } }) });
+    expect(contributedRelief()).toEqual({ all: ridges(0.3), bodies: { b1: ridges(0.1), b2: null } });
+    off();
+    expect(contributedRelief()).toEqual({ all: ridges(0.2), bodies: { b1: ridges(0.1) } });
+  });
+
+  it("keeps an earlier all when a later contributor names only bodies", () => {
+    contribute("A.One", { relief: () => ({ all: ridges(0.2) }) });
+    contribute("B.Two", { relief: () => ({ bodies: { b1: ridges(0.1) } }) });
+    expect(contributedRelief()).toEqual({ all: ridges(0.2), bodies: { b1: ridges(0.1) } });
+  });
+
+  it("asks again every time and leaves with its plugin", () => {
+    let pitch = 0.2;
+    const off = contribute("A.One", { relief: () => ({ all: ridges(pitch) }) });
+    expect(contributedRelief().all?.pitch).toBe(0.2);
+    pitch = 0.1;
+    expect(contributedRelief().all?.pitch).toBe(0.1);
+    off();
+    expect(contributedRelief()).toEqual({});
   });
 });
 

@@ -21,7 +21,7 @@ const POINTS: readonly Point[] = [
 ];
 
 // Patches not listed here go after these, by name.
-const RANK = ["surface", "glassAuto"];
+const RANK = ["surface", "relief", "glassAuto"];
 
 const VARYINGS = {
   surfWorld: {

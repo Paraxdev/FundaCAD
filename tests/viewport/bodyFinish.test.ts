@@ -8,6 +8,7 @@ import * as THREE from "three";
 import { BodyFinishLayer, type FinishOverlays, sameFinishMap } from "../../src/viewport/bodyFinish";
 import { applyGlassLook, applyThinFilm, setRenderLowPower } from "../../src/viewport/render";
 import { previewKey } from "../../src/viewport/materialPreview";
+import { getPatch } from "../../src/viewport/shaderPatches";
 import type { BodyMesh, ModelView } from "../../src/viewport/render";
 import { type BodyFinish, FINISH, finishOf } from "../../src/document/materials";
 
@@ -169,5 +170,152 @@ describe("BodyFinishLayer reference scan", () => {
     f.bodyFinish = { s: { ...FINISH, roughness: 0.3 } };
     f.apply(base);
     expect(mat(scan).roughness).toBe(0.3);
+  });
+});
+
+describe("BodyFinishLayer relief", () => {
+  const ridges = (pitch: number, axis: [number, number, number] = [0, 0, 1]) => ({ axis, pitch, depth: 0.35 });
+  const program = (m: THREE.Material) => {
+    const shader = {
+      uniforms: {} as Record<string, THREE.IUniform>,
+      vertexShader: THREE.ShaderLib.physical.vertexShader,
+      fragmentShader: THREE.ShaderLib.physical.fragmentShader,
+    };
+    m.onBeforeCompile(shader as never, {} as never);
+    return shader;
+  };
+  const shared = (m: THREE.Material) => getPatch(m, "relief")?.shared as Record<string, THREE.IUniform> | undefined;
+
+  function slotted(id: string) {
+    const b = body(id);
+    const model = { bodies: [b], edges: [] } as unknown as ModelView;
+    const f = new BodyFinishLayer({
+      model: () => model,
+      scene: () => ({ renderer: { shadowMap: { enabled: false } } }) as never,
+      faceIdToBodyId: () => id,
+      addToScene: () => {},
+      requestRender: () => {},
+      savedMats: () => new Map(),
+    });
+    f.faceFinish = { 0: { ...FINISH, roughness: 0.2 } };
+    return { b, f };
+  }
+
+  it("is not there until something asks for it", () => {
+    const a = body("a");
+    const f = layer([a]);
+    f.apply(base);
+    expect(getPatch(mat(a), "relief")).toBeUndefined();
+    f.setRelief({ bodies: { a: null } });
+    f.apply(base);
+    expect(getPatch(mat(a), "relief")).toBeUndefined();
+  });
+
+  it("starts each body's ridges at its own lowest point along the axis, in world space", () => {
+    const a = body("a");
+    const b = body("b");
+    a.mesh.position.set(4, 0, 5);
+    b.mesh.position.set(-2, 0, -3);
+    const f = layer([a, b]);
+    f.setRelief({ all: ridges(0.2, [0, 0, 2]), bodies: { b: ridges(0.2, [1, 0, 0]) } });
+    f.apply(base);
+    expect(shared(mat(a))!.uReliefOrigin!.value).toBeCloseTo(5, 9);
+    expect((shared(mat(a))!.uReliefAxis!.value as THREE.Vector3).toArray()).toEqual([0, 0, 1]);
+    expect(shared(mat(b))!.uReliefOrigin!.value).toBeCloseTo(-2, 9);
+    expect(shared(mat(a))).not.toBe(shared(mat(b)));
+  });
+
+  it("keeps the origin while a drag moves the body and takes the new one on release", () => {
+    const a = body("a");
+    const f = layer([a]);
+    f.setRelief({ all: ridges(0.2) });
+    f.apply(base);
+    a.mesh.position.z = 7;
+    f.apply(base);
+    expect(shared(mat(a))!.uReliefOrigin!.value).toBeCloseTo(0, 9);
+    expect(f.refreshReliefOrigins()).toBe(true);
+    f.apply(base);
+    expect(shared(mat(a))!.uReliefOrigin!.value).toBeCloseTo(7, 9);
+  });
+
+  it("shares one uniform object between a body's base and face slot materials", () => {
+    const { b, f } = slotted("a");
+    f.setRelief({ all: ridges(0.2) });
+    f.apply(base);
+    const mats = b.mesh.material as THREE.Material[];
+    expect(mats.length).toBe(2);
+    expect(shared(mats[0]!)).toBeDefined();
+    expect(shared(mats[1]!)).toBe(shared(mats[0]!));
+    expect(program(mats[1]!).uniforms["uReliefPitch"]).toBe(program(mats[0]!).uniforms["uReliefPitch"]);
+  });
+
+  it("changes a pitch through the bound uniform, with no new program", () => {
+    const a = body("a");
+    const f = layer([a]);
+    f.setRelief({ all: ridges(0.2) });
+    f.apply(base);
+    const m = mat(a);
+    const key = m.customProgramCacheKey();
+    const version = m.version;
+    const bound = program(m).uniforms;
+    f.setRelief({ all: { ...ridges(0.1), depth: 0.5 } });
+    f.apply(base);
+    expect(m.customProgramCacheKey()).toBe(key);
+    expect(m.version).toBe(version);
+    expect(bound["uReliefPitch"]!.value).toBe(0.1);
+    expect(bound["uReliefDepth"]!.value).toBe(0.5);
+  });
+
+  it("drops while ghosted and comes back on the same uniform object", () => {
+    const { b, f } = slotted("a");
+    f.setRelief({ all: ridges(0.2) });
+    f.apply(base);
+    const mats = () => b.mesh.material as THREE.Material[];
+    const u = shared(mats()[0]!);
+    for (const o of [{ ...base, xray: true }, { ...base, stale: true }, { ...base, peek: new Set(["a"]) }]) {
+      f.apply(o);
+      for (const m of mats()) expect(getPatch(m, "relief")).toBeUndefined();
+      f.apply(base);
+      for (const m of mats()) expect(shared(m)).toBe(u);
+    }
+  });
+
+  it("links the programs on stand ins before the live materials switch", async () => {
+    const a = body("a");
+    const model = { bodies: [a], edges: [] } as unknown as ModelView;
+    let release!: () => void;
+    const linked: THREE.Material[] = [];
+    const f = new BodyFinishLayer({
+      model: () => model,
+      scene: () => ({ renderer: { shadowMap: { enabled: false } } }) as never,
+      faceIdToBodyId: () => null,
+      addToScene: () => {},
+      requestRender: () => {},
+      savedMats: () => new Map(),
+      prepareMaterials: (obj) => {
+        obj.traverse((o) => { if (o instanceof THREE.Mesh) linked.push(o.material as THREE.Material); });
+        return new Promise<void>((r) => { release = r; });
+      },
+    });
+    f.setRelief({ all: ridges(0.2) });
+    f.apply(base);
+    f.apply(base);
+    expect(getPatch(mat(a), "relief")).toBeUndefined();
+    expect(linked.length).toBe(1);
+    expect(linked[0]).not.toBe(mat(a));
+    expect(linked[0]!.customProgramCacheKey()).toContain("relief1");
+    release();
+    await Promise.resolve();
+    expect(getPatch(mat(a), "relief")).toBeDefined();
+    expect(mat(a).customProgramCacheKey()).toBe(linked[0]!.customProgramCacheKey());
+    f.setRelief({ all: ridges(0.3) });
+    f.apply(base);
+    expect(linked.length).toBe(1);
+
+    // A rebuild hands back a fresh material on the same key, already linked.
+    a.mesh.material = new THREE.MeshStandardMaterial();
+    f.apply(base);
+    expect(getPatch(mat(a), "relief")).toBeDefined();
+    expect(linked.length).toBe(1);
   });
 });
