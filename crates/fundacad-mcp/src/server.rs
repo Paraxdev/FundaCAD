@@ -80,7 +80,7 @@ pub const MUTATORS: &[&str] = &[
 
 /// Tools that need no document at all, so they must not be made to wait for
 /// one. `schema` in particular is what an agent reads BEFORE anything exists.
-pub const NO_DOCUMENT: &[&str] = &["schema"];
+pub const NO_DOCUMENT: &[&str] = &["schema", "ui_open", "ui_do", "ui_read", "ui_shot", "ui_close"];
 
 /// What the host puts in front of the model before its first call.
 ///
@@ -377,6 +377,7 @@ pub struct FundaCad {
     /// question at a time is the entire traffic pattern. It also makes the live
     /// pull, the tool and the push one atomic edit.
     turn: Arc<Mutex<()>>,
+    pub(crate) ui: Arc<Mutex<Option<crate::ui::UiBridge>>>,
 }
 
 impl FundaCad {
@@ -398,7 +399,16 @@ impl FundaCad {
             })),
             turn: Arc::new(Mutex::new(())),
             router: Arc::new(Self::tool_router()),
+            ui: Arc::new(Mutex::new(None)),
         }
+    }
+
+    /// The ui tools as well, which standalone gets and nothing else does.
+    pub fn with_ui(mut self) -> FundaCad {
+        let mut router = Self::tool_router();
+        router.merge(Self::ui_router());
+        self.router = Arc::new(router);
+        self
     }
 
     /// Decide where the engine comes from, once, at start-up. Split out of the
@@ -406,7 +416,10 @@ impl FundaCad {
     /// port.
     pub async fn attach(mode: Mode) -> Result<FundaCad, String> {
         let (link, app) = EngineLink::for_mode(mode, log).await?;
-        let server = FundaCad::with_link(link);
+        let mut server = FundaCad::with_link(link);
+        if mode == Mode::Standalone {
+            server = server.with_ui();
+        }
         if let Some(app) = app {
             let mut st = server.state.lock().await;
             st.app_build = app.build;
@@ -3189,6 +3202,7 @@ impl FundaCad {
                 st.uploads.keys().cloned().collect::<Vec<_>>(),
             )
         };
+        self.stop_ui().await;
         {
             let mut st = self.state.lock().await;
             for id in ids {

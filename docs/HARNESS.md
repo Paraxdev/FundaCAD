@@ -71,6 +71,7 @@ Environment:
 | `FUNDACAD_HARNESS_HEADED=1` | show the browser |
 | `FUNDACAD_HARNESS_KEEP=1` | keep the work folder |
 | `FUNDACAD_REPO` | the checkout, when the current folder is outside it |
+| `FUNDACAD_HARNESS_PYTHON` | the Python the MCP server runs `serve` in, see MCP |
 
 The engine is found in this order: `engine=`, `FUNDACAD_ENGINE_CMD`,
 `$CARGO_TARGET_DIR/{debug,release}`, `<repo>/target/{debug,release}` (newest first), then `PATH`.
@@ -218,6 +219,14 @@ Each reply is `{"id", "ok", "text"}`, plus `"png"` (base64) for `shot`. A `do` r
 order and stops at the first that fails, with one line per step and the status. A step names its
 verb in `do` and the verb's arguments by their Python names (`from` for `drag`); unknown keys are
 refused by name. `read` takes screen, history, bodies, status, errors, selection and handles.
+
+## MCP
+
+The MCP server in standalone mode (`FUNDACAD_MCP_MODE=standalone`) offers the same session as five
+tools, `ui_open`, `ui_do`, `ui_read`, `ui_shot` and `ui_close`, relayed to `serve` in a Python
+named by `FUNDACAD_HARNESS_PYTHON`. A `ui_do` step is a `do` step as above. Install the package
+into that Python, then see [MCP.md](MCP.md#driving-the-app-standalone-only) for the `.mcp.json`
+entry. Auto and attach never offer these tools.
 
 ## Troubleshooting
 

@@ -14,6 +14,7 @@
 //!   `describe`     an inspect report, as something worth reading
 //!   `schema`       the feature reference the agent reads first
 //!   `shadow`       running from a copy, so a build can replace the original
+//!   `ui`           the private app in a browser, standalone only
 //!
 //! There are two worlds, as there were: PRIVATE holds the document in this
 //! process and spawns its own engine, LIVE works on the document a running
@@ -40,6 +41,7 @@ pub mod shortcuts;
 pub mod sketchmerge;
 pub mod stress;
 pub mod tools;
+pub mod ui;
 pub mod upload;
 
 /// Runs the MCP server on stdio for either the standalone binary or the
