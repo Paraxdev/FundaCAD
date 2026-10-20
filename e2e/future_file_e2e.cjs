@@ -5,6 +5,7 @@
 //   2. That feature shows greyed in the history, not as an error, and a feature
 //      that needs its body says why it failed.
 //   3. Saving writes back what this version does not know.
+//   4. The placeholder offers no Edit, and a new document takes the notice down.
 //
 // Usage (from the repo root, with vite and the engine (`fundacad-engine --ws`) running):
 //   SC_TOKEN=<engine token> SC_CHROME=<chrome.exe> [SC_URL=http://localhost:5173/] [SC_ENGINE_PORT=8765] node e2e/future_file_e2e.cjs
@@ -69,7 +70,7 @@ const V99 = fs.readFileSync(path.join(__dirname, "../tests/fixtures/future/v99.f
   const bar = await page.evaluate(() => document.querySelector('.timeline-node[data-id="w1"]')?.className ?? null);
   check("w1 is a greyed placeholder, not an error", bar !== null && /placeholder/.test(bar) && !/\berror\b/.test(bar), String(bar));
   const fillet = await page.evaluate(() => window.store.buildState.result?.featureErrors?.find((e) => e.feature_id === "f1")?.message ?? "");
-  check("the fillet on its body says why it failed", /w1 was skipped/.test(fillet), fillet);
+  check("the fillet on its body says why it failed", /w1 is from a newer version/.test(fillet), fillet);
   const built = await page.evaluate(() => window.store.document.features.map((f) => f.id));
   check("the rest of the history is there", JSON.stringify(built) === '["s1","e1","w1","f1","b1"]', JSON.stringify(built));
 
@@ -78,6 +79,17 @@ const V99 = fs.readFileSync(path.join(__dirname, "../tests/fixtures/future/v99.f
   const input = JSON.parse(V99);
   check("futureKey comes back", JSON.stringify(saved.futureKey) === JSON.stringify(input.futureKey), JSON.stringify(saved.futureKey));
   check("w1 comes back", JSON.stringify(saved.features.find((f) => f.id === "w1")) === JSON.stringify(input.features.find((f) => f.id === "w1")));
+
+  console.log("4. moving on");
+  await page.click('.timeline-node[data-id="w1"]', { button: "right" });
+  await page.waitForTimeout(200);
+  const items = await page.evaluate(() => [...document.querySelectorAll(".context-menu .ctx-item")].map((e) => e.textContent?.trim() ?? ""));
+  await page.keyboard.press("Escape");
+  check("the placeholder's menu offers no Edit", items.length > 0 && !items.some((t) => /^Edit/.test(t)), JSON.stringify(items));
+  await page.evaluate(() => window.store.newDocument());
+  await page.waitForTimeout(600);
+  const left = await page.evaluate(() => [...document.querySelectorAll(".toast .toast-msg")].map((e) => e.textContent ?? "").filter((t) => /newer version/.test(t)));
+  check("a new document takes the notice down", left.length === 0, JSON.stringify(left));
 
   await browser.close();
   console.log(failures ? `FAILED: ${failures}` : "ALL PASS");
