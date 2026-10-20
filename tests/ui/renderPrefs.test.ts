@@ -75,6 +75,8 @@ describe("asRenderPrefs", () => {
       viewModeRender: DEFAULT_RENDER.viewModeRender,
       overlaysModel: DEFAULT_RENDER.overlaysModel,
       overlaysRender: DEFAULT_RENDER.overlaysRender,
+      groundModel: DEFAULT_RENDER.groundModel,
+      groundRender: DEFAULT_RENDER.groundRender,
       matcapStyle: DEFAULT_RENDER.matcapStyle,
       matcapTint: DEFAULT_RENDER.matcapTint,
       denoise: DEFAULT_RENDER.denoise,
@@ -251,5 +253,29 @@ describe("path traced backend", () => {
     setRenderPref("tracer", "metal" as never);
     expect(renderPrefs().tracer).toBe("webgpu");
     setRenderPref("tracer", DEFAULT_RENDER.tracer);
+  });
+});
+
+describe("ground", () => {
+  it("is none in both workspaces by default, like shadows", () => {
+    expect(DEFAULT_RENDER.groundModel).toBe("none");
+    expect(DEFAULT_RENDER.groundRender).toBe("none");
+    expect(DEFAULT_RENDER.shadows).toBe(false);
+  });
+
+  it("keeps only none or shadow per field", () => {
+    expect(asRenderPrefs({ groundModel: "shadow", groundRender: 7 })).toMatchObject({ groundModel: "shadow", groundRender: "none" });
+    for (const bad of ["Shadow", null, {}, true, "reflection"]) {
+      expect(asRenderPrefs({ groundModel: bad, groundRender: bad })).toMatchObject({ groundModel: "none", groundRender: "none" });
+    }
+  });
+
+  it("saves a choice and refuses a bad one", () => {
+    setRenderPref("groundRender", "shadow");
+    expect(renderPrefs().groundRender).toBe("shadow");
+    expect(renderPrefs().groundModel).toBe("none");
+    setRenderPref("groundRender", "bogus" as never);
+    expect(renderPrefs().groundRender).toBe("shadow");
+    setRenderPref("groundRender", DEFAULT_RENDER.groundRender);
   });
 });

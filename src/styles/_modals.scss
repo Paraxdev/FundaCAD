@@ -43,11 +43,6 @@
   font-weight: 600;
   letter-spacing: 0.3px;
 }
-.welcome-logo {
-  display: block;
-  height: 30px;
-  width: auto;
-}
 .modal-close {
   background: transparent;
   border: none;
@@ -293,7 +288,7 @@
   color: var(--text-dim, #9aa3af);
   display: flex;
   align-items: center;
-  /* Checkbox-to-label, the same rung as .welcome-startup and .ta-publish-public
+  /* Checkbox-to-label, the same rung as .home-startup and .ta-publish-public
      -- a label belongs to its box and must not float away from it. */
   gap: var(--s-2);
   cursor: pointer;
@@ -585,7 +580,7 @@
   display: flex;
   align-items: center;
   gap: var(--s-3);
-  /* List-row size, shared with .palette-row, .tree-folder and .welcome-recent. */
+  /* List-row size, shared with .palette-row, .tree-folder and .home-nav-row. */
   padding: var(--s-2) var(--s-3);
   border-radius: var(--r-md, 8px);
   color: var(--text, #e6e8ec);

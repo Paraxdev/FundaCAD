@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_RENDER } from "../../src/ui/renderPrefs";
 import { keyDirection } from "../../src/viewport/keyLight";
 import {
+  GROUND_ALBEDO,
   buildLightRig,
   environmentKeyOf,
   hemisphereKey,
@@ -70,5 +71,15 @@ describe("light rig", () => {
 
   it("carries a ground that is off until a pref turns it on", () => {
     expect(buildLightRig(DEFAULT_RENDER, none).ground.mode).toBe("none");
+    const floor = { workspace: "render" as const, z: -3, centre: [30, 0] as [number, number], extent: 120 };
+    expect(buildLightRig(DEFAULT_RENDER, none, floor).ground.mode).toBe("none");
+  });
+
+  it("publishes the catcher plane of the workspace whose ground asks for it", () => {
+    const floor = { workspace: "render" as const, z: -3, centre: [30, 0] as [number, number], extent: 120 };
+    const p = prefs({ groundRender: "shadow" });
+    expect(buildLightRig(p, none, floor).ground).toEqual({ mode: "shadow", z: -3, centre: [30, 0], extent: 120, albedo: GROUND_ALBEDO });
+    expect(buildLightRig(p, none, { ...floor, workspace: "model" }).ground.mode).toBe("none");
+    expect(buildLightRig(p, none).ground.mode).toBe("none");
   });
 });

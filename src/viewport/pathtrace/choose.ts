@@ -7,6 +7,7 @@
 
 import type { TracerPref } from "../../ui/renderPrefs";
 import type { TracerBackend } from "./backend";
+import type { Call } from "./nativeScene";
 
 export type TracerKind = "native" | "webgpu";
 
@@ -19,6 +20,10 @@ export interface NativeProbe {
   /** What cleans the cap; absent from an app older than the runtime load. */
   denoiser?: "oidn" | "filter" | undefined;
   reason?: string | undefined;
+  /** Why it refused: the greying reason the page shows. */
+  class?: "noadapter" | "cpu" | "limits" | "selfcheck" | undefined;
+  /** What the refused adapter binds, with the limits class. */
+  storageBuffers?: number | undefined;
 }
 
 export interface TracerEnv {
@@ -39,8 +44,13 @@ export function chooseTracer(pref: TracerPref, env: TracerEnv): TracerKind | nul
   return left.find((k) => !env.faulted?.has(k)) ?? left[0] ?? null;
 }
 
-/** `prefer` "websocket" skips the native shared buffers. */
-export async function createTracerOf(kind: TracerKind, prefer?: string): Promise<TracerBackend> {
-  if (kind === "native") return (await import("./nativeTracer")).createNativeTracer({ prefer });
+/** `prefer` "websocket" skips the native shared buffers. `call` stands in for
+ *  Tauri's invoke, the dev tracer server's socket outside the app. */
+export async function createTracerOf(kind: TracerKind, prefer?: string, call?: Call): Promise<TracerBackend> {
+  if (kind === "native") {
+    const { connectNative, createNativeTracer } = await import("./nativeTracer");
+    if (!call) return createNativeTracer({ prefer });
+    return createNativeTracer({ prefer, call, connect: (w, h, p) => connectNative(w, h, p, call) });
+  }
   return (await import("./webgpuTracer")).createWebGpuTracer();
 }

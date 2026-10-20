@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, useTemplateRef } from "vue";
+import { computed, onMounted, onUnmounted, ref, useTemplateRef, watch } from "vue";
+import { claimEscape } from "../../ui/escapeClaim";
 import Icon from "./Icon.vue";
 import type { MenuDef, MenuItem } from "../../ui/menu";
 
@@ -63,11 +64,17 @@ function onDown(e: PointerEvent) {
 function onKey(e: KeyboardEvent) {
   if (e.key === "Escape") openIndex.value = null;
 }
+let releaseEscape: (() => void) | null = null;
+watch(openIndex, (i) => {
+  if (i !== null) releaseEscape ??= claimEscape();
+  else { releaseEscape?.(); releaseEscape = null; }
+});
 onMounted(() => {
   document.addEventListener("pointerdown", onDown);
   document.addEventListener("keydown", onKey);
 });
 onUnmounted(() => {
+  releaseEscape?.();
   document.removeEventListener("pointerdown", onDown);
   document.removeEventListener("keydown", onKey);
 });

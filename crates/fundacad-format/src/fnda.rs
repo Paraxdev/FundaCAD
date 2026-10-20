@@ -599,6 +599,18 @@ fn extract(f: &mut File, e: &Entry, dest: &Path, report: &mut RepairReport) -> R
     std::fs::rename(&tmp, dest).map_err(io)
 }
 
+/// The raw bytes of the first section of `kind`, None when the file has none.
+/// Reads that one section only, so the geometry of a large file costs nothing.
+pub fn read_section_of_kind(path: &Path, kind: u8) -> Result<Option<Vec<u8>>, String> {
+    let mut f = File::open(path).map_err(io)?;
+    let mut report = RepairReport::default();
+    let entries = read_index(&mut f, &mut report)?;
+    let Some(entry) = entries.iter().find(|e| e.kind == kind) else { return Ok(None) };
+    let mut out = Vec::new();
+    read_section(&mut f, entry, &mut out, &mut report)?;
+    Ok(Some(out))
+}
+
 /// Check every section of a file without extracting anything.
 pub fn verify(path: &Path) -> Result<RepairReport, String> {
     let mut f = File::open(path).map_err(io)?;
