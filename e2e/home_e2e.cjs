@@ -62,6 +62,19 @@ function check(name, ok, detail = "") {
     const label = await page.getAttribute(".home .modal-close", "aria-label");
     check("its close button is .modal-close", label === "Back to the document", label);
 
+    console.log("1b. Escape over Home");
+    await page.keyboard.press("Control+k");
+    await page.waitForSelector(".cmdk-backdrop", { timeout: 2000 }).catch(() => null);
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(200);
+    const afterPalette = await page.evaluate(() => ({ palette: !!document.querySelector(".cmdk-backdrop"), home: !!document.querySelector("#stage .home") }));
+    check("Escape closes the palette over Home and leaves Home up", !afterPalette.palette && afterPalette.home, JSON.stringify(afterPalette));
+    await page.click('.menu-btn:has-text("File")');
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(200);
+    const afterMenu = await page.evaluate(() => ({ menu: !!document.querySelector(".menu-popup:not(.hidden)"), home: !!document.querySelector("#stage .home") }));
+    check("Escape closes an open menu and leaves Home up", !afterMenu.menu && afterMenu.home, JSON.stringify(afterMenu));
+
     console.log("2. Blank");
     await page.click(".home-new-blank");
     await page.waitForTimeout(300);

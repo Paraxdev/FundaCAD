@@ -47,6 +47,7 @@ function onKey(e: KeyboardEvent): void {
     e.preventDefault();
     e.stopImmediatePropagation();
     if (drawer.value) drawer.value = null;
+    else if (e.target === searchField.value && query.value) query.value = "";
     else close();
     return;
   }
