@@ -1,0 +1,65 @@
+{
+  "parameters": {
+    "thickness": 5
+  },
+  "paramDefs": {
+    "thickness": {
+      "expr": "5",
+      "value": 5,
+      "unit": "mm"
+    },
+    "d1": {
+      "expr": "thickness",
+      "value": 5,
+      "unit": "mm",
+      "target": {
+        "kind": "feature",
+        "feature": "f2",
+        "field": "distance"
+      }
+    }
+  },
+  "features": [
+    {
+      "id": "f1",
+      "type": "sketch",
+      "plane": "XY",
+      "entities": [
+        {
+          "type": "polygon",
+          "id": "e1",
+          "x": 0,
+          "y": 0,
+          "radius": 10,
+          "sides": 6,
+          "angle": 90
+        },
+        {
+          "type": "line",
+          "id": "e2",
+          "x1": 20,
+          "y1": 0,
+          "x2": 30,
+          "y2": 0
+        }
+      ],
+      "constraints": [
+        {
+          "type": "distance",
+          "line": "e2",
+          "value": 10,
+          "id": "c0"
+        }
+      ]
+    },
+    {
+      "id": "f2",
+      "type": "extrude",
+      "sketch": "f1",
+      "distance": 5,
+      "operation": "new",
+      "hiddenBodies": []
+    }
+  ],
+  "version": 10
+}
