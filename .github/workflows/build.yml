@@ -1,4 +1,4 @@
-# Cross-platform build + bundle for FundaCAD 1.0 beta: Tauri 2 around the Rust
+# Cross-platform build + bundle for FundaCAD 1.0: Tauri 2 around the Rust
 # geometry engine (docs/ENGINE.md), which runs as a worker process of the
 # same executable.
 #
@@ -8,7 +8,9 @@
 #
 # `bundle` + `release` publish the rolling `beta` release and its update feed
 # from `dev`, where daily work lands. `main` holds the known good state and
-# runs the same tests and builds, but publishes nothing. The retired Python
+# runs the same tests and builds, but publishes nothing. A `v1.<minor>.<patch>`
+# tag on a commit of `main` publishes a stable release with its own feed
+# (scripts/promote-stable.sh cuts one). The retired Python
 # engine is frozen on the `legacy` branch, which publishes nothing either.
 #
 # Scope: x86_64 Linux, Apple Silicon macOS, x86_64 Windows. (No Intel-mac / linux-arm64.)
@@ -18,6 +20,7 @@ name: build
 on:
   push:
     branches: [main, dev]
+    tags: ["v1.*.*"]
     paths-ignore:
       - "manual/**"
   pull_request:
@@ -85,21 +88,50 @@ jobs:
     outputs:
       config: ${{ steps.pick.outputs.config }}
       release: ${{ steps.pick.outputs.release }}
+      tag: ${{ steps.pick.outputs.tag }}
       version: ${{ steps.pick.outputs.version }}
+      sha: ${{ steps.pick.outputs.sha }}
+      since: ${{ steps.pick.outputs.since }}
+      latest: ${{ steps.pick.outputs.latest }}
     steps:
+      # Only a tag needs the history, to find main and the stable tags before it.
+      - uses: actions/checkout@v4
+        if: github.ref_type == 'tag'
+        with:
+          fetch-depth: 0
+          filter: tree:0
+
       - id: pick
         shell: bash
         env:
           REF: ${{ github.ref }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          config='' release=''
+          config='' release='' tag='' since='' latest=false
           version="1.0.${{ github.run_number }}"
+          sha='${{ github.sha }}'
+          stable='^v1\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
           case "$REF" in
-            refs/heads/dev)  config=beta release=beta ;;
-            refs/heads/main) config=beta ;;
+            refs/heads/dev)  config=beta release=beta tag=beta ;;
+            refs/heads/main) config=stable ;;
+            refs/tags/*)
+              [[ "$REF_NAME" =~ $stable ]] \
+                || { echo "::error::$REF_NAME is not a stable tag, those are v1.<minor>.<patch>"; exit 1; }
+              sha=$(git rev-parse HEAD)
+              git merge-base --is-ancestor "$sha" origin/main \
+                || { echo "::error::$REF_NAME points at ${sha:0:7}, which is not on main. Stable releases are cut from main only."; exit 1; }
+              config=stable release=stable tag="$REF_NAME" version="${REF_NAME#v}"
+              tags=$(git tag -l --merged origin/main 'v1.*' | grep -E "$stable" | sort -V)
+              prev=$(printf '%s\n' "$tags" | grep -xF -B1 "$REF_NAME" | grep -vxF "$REF_NAME" || true)
+              [ -z "$prev" ] || since=$(git rev-parse "$prev^{commit}")
+              # A hotfix to an older line must not become the release every
+              # stable install updates to.
+              [ "$(printf '%s\n' "$tags" | tail -1)" != "$REF_NAME" ] || latest=true
+              ;;
           esac
-          printf 'config=%s\nrelease=%s\nversion=%s\n' "$config" "$release" "$version" | tee -a "$GITHUB_OUTPUT"
+          printf '%s=%s\n' config "$config" release "$release" tag "$tag" version "$version" \
+            sha "$sha" since "$since" latest "$latest" | tee -a "$GITHUB_OUTPUT"
 
   # The installers (docs/ENGINE.md section 6), on three platforms. The
   # engine is a worker process of the same executable, and there is no Python
@@ -206,13 +238,14 @@ jobs:
         shell: bash
         run: |
           node -e "
-            for (const f of ['./src-tauri/tauri.conf.json', './src-tauri/tauri.beta.conf.json']) {
+            for (const f of ['./src-tauri/tauri.conf.json', './src-tauri/tauri.beta.conf.json', './src-tauri/tauri.stable.conf.json']) {
               if (require(f).bundle.resources) { console.error(f + ' bundles resources'); process.exit(1); }
             }
           "
 
-      # Rolling beta versioning, 1.0.<run_number>: the Rust engine is the
-      # major upgrade, against the retired Python engine's 0.2.
+      # Beta versioning, 1.0.<run_number>: the Rust engine is the major
+      # upgrade, against the retired Python engine's 0.2. A stable build takes
+      # its version from its tag.
       #
       # No `-beta` suffix: tauri's msi target refuses a version whose
       # pre-release identifier is not numeric ("optional pre-release identifier
@@ -278,6 +311,7 @@ jobs:
           # still shipping CMake 3, and the day one moves this is why it builds.
           CMAKE_POLICY_VERSION_MINIMUM: "3.5"
           NO_STRIP: true
+          VITE_FUNDACAD_RELEASE: ${{ needs.channel.outputs.tag || 'beta' }}
         with:
           args: --verbose --config src-tauri/tauri.${{ needs.channel.outputs.config }}.conf.json
 
@@ -393,9 +427,12 @@ jobs:
           if-no-files-found: error
           path: FundaCAD_*.flatpak
 
-  # Rolling "beta" pre-release, the Rust engine.
+  # The rolling "beta" pre-release from dev, or a stable release from a tag.
   #
-  # Its own concurrency group and its own tag, moved in place, never deleted.
+  # The beta has its own concurrency group and its own tag, moved in place,
+  # never deleted. A stable release hangs off the tag that was pushed, and is
+  # only marked latest while no higher stable tag exists, because stable
+  # installs read releases/latest (tauri.stable.conf.json).
   #
   # The updater endpoint is baked into the binary at build time
   # (tauri.conf.json points at beta/latest.json). Installs of the retired Python
@@ -414,7 +451,7 @@ jobs:
     # A failed Flatpak leaves it out of the release rather than holding the
     # release back: always() lets this run once build-flatpak has finished
     # either way.
-    if: always() && needs.bundle.result == 'success' && needs.channel.outputs.release == 'beta'
+    if: always() && needs.bundle.result == 'success' && needs.channel.outputs.release != ''
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     permissions:
@@ -424,6 +461,12 @@ jobs:
       cancel-in-progress: false
     env:
       GH_TOKEN: ${{ github.token }}
+      RELEASE: ${{ needs.channel.outputs.release }}
+      TAG: ${{ needs.channel.outputs.tag }}
+      VERSION: ${{ needs.channel.outputs.version }}
+      SHA: ${{ needs.channel.outputs.sha }}
+      SINCE: ${{ needs.channel.outputs.since }}
+      LATEST: ${{ needs.channel.outputs.latest }}
     steps:
       # Before download-artifact: actions/checkout cleans the workspace by
       # default and would delete dist/.
@@ -470,10 +513,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          v="1.0.${{ github.run_number }}"
-          base="https://github.com/${{ github.repository }}/releases/download/beta"
+          base="https://github.com/${{ github.repository }}/releases/download/$TAG"
           d="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          jq -n --arg v "$v" --arg d "$d" '{version:$v, pub_date:$d, platforms:{}}' > latest.json
+          jq -n --arg v "$VERSION" --arg d "$d" '{version:$v, pub_date:$d, platforms:{}}' > latest.json
           add() { # $1 = updater platform key, $2 = updater bundle path
             [ -n "$2" ] && [ -f "$2" ] || { echo "NOTE: no bundle for $1"; return 0; }
             sig="$2.sig"
@@ -486,7 +528,7 @@ jobs:
           add darwin-aarch64 release/FundaCAD-macos-arm64.app.tar.gz  # macos-14 runners are arm64
           cat latest.json
 
-      - name: Publish rolling beta release
+      - name: Publish the release
         shell: bash
         run: |
           set -euo pipefail
@@ -516,7 +558,6 @@ jobs:
           fi
 
           R='${{ github.repository }}'
-          SHA='${{ github.sha }}'
           MAX=25
 
           # The warning section 6 calls not optional, and it comes first
@@ -526,8 +567,7 @@ jobs:
           > ### Read this first
           >
           > **This is FundaCAD 1.0 on the Rust geometry engine.** It replaces
-          > the Python engine, which is retired. This rolling beta is the
-          > preview, rebuilt from every change that lands.
+          > the Python engine, which is retired.
           >
           > - If a model builds differently here than it did on the Python
           >   engine, a missing or changed face, a fillet that refuses, a
@@ -547,12 +587,23 @@ jobs:
 
           WARN
 
-          printf 'Rolling FundaCAD 1.0 beta (1.0.%s), Rust engine, rebuilt from `dev` at [`%s`](https://github.com/%s/commit/%s).\n' \
-            '${{ github.run_number }}' "${SHA:0:7}" "$R" "$SHA" >> notes.md
-
-          # The commit the rolling tag is on RIGHT NOW: the build this replaces.
-          # Read BEFORE the tag is moved, further down.
-          prev=$(gh api "repos/$R/git/ref/tags/beta" --jq .object.sha 2>/dev/null || true)
+          if [ "$RELEASE" = beta ]; then
+            printf 'Rolling FundaCAD 1.0 beta (%s), Rust engine, the preview rebuilt from `dev` at [`%s`](https://github.com/%s/commit/%s).\n' \
+              "$VERSION" "${SHA:0:7}" "$R" "$SHA" >> notes.md
+            if gh api "repos/$R/releases/latest" >/dev/null 2>&1; then
+              printf '\nThe stable release, the known good one, is [here](https://github.com/%s/releases/latest).\n' "$R" >> notes.md
+            fi
+            # The commit the rolling tag is on RIGHT NOW: the build this
+            # replaces. Read BEFORE the tag is moved, further down.
+            prev=$(gh api "repos/$R/git/ref/tags/beta" --jq .object.sha 2>/dev/null || true)
+            branch=dev
+          else
+            printf 'FundaCAD %s, the stable release, built from `main` at [`%s`](https://github.com/%s/commit/%s).\n' \
+              "$VERSION" "${SHA:0:7}" "$R" "$SHA" >> notes.md
+            printf '\nThe rolling beta, with the newest changes before they reach a stable release, is [here](https://github.com/%s/releases/tag/beta).\n' "$R" >> notes.md
+            prev="$SINCE"
+            branch=main
+          fi
           commits=''
           if [ -n "$prev" ] && [ "$prev" != "$SHA" ]; then
             commits=$(gh api "repos/$R/compare/$prev...$SHA" \
@@ -562,7 +613,7 @@ jobs:
           if [ -z "$commits" ] || [ "$(jq 'length' <<<"$commits")" -eq 0 ]; then
             commits=$(gh api "repos/$R/commits?sha=$SHA&per_page=$MAX" \
               --jq '[.[] | select((.parents | length) < 2)]')
-            span="the newest on \`dev\`"
+            span="the newest on \`$branch\`"
           fi
           total=$(jq 'length' <<<"$commits")
 
@@ -591,31 +642,42 @@ jobs:
             "$R" >> notes.md
           printf '\nThis build carries no Python runtime, so it is a fraction of the size of the Python engine builds.\n' >> notes.md
           if [ "$SELF_UPDATES" = yes ]; then
-            printf '\nInstalled copies update themselves from this release.\n' >> notes.md
+            printf '\nInstalled copies update themselves from the newest %s release.\n' "$RELEASE" >> notes.md
           else
             printf '\nThis build does not update itself, so take a new installer from this page when you want a newer one.\n' >> notes.md
           fi
-          # The SourceForge mirror's download button, which a hand edit added
-          # once and every rebuild of the notes then dropped.
-          printf '\n[![Download FundaCAD](https://a.fsdn.com/con/app/sf-download-button)](https://sourceforge.net/projects/fundacad/files/beta/)\n' >> notes.md
+          if [ "$RELEASE" = beta ]; then
+            # The SourceForge mirror's download button, which a hand edit added
+            # once and every rebuild of the notes then dropped.
+            printf '\n[![Download FundaCAD](https://a.fsdn.com/con/app/sf-download-button)](https://sourceforge.net/projects/fundacad/files/beta/)\n' >> notes.md
 
-          # Move the rolling tag onto this commit (create it if it is missing),
-          # so the release attached to it never stops existing. GitHub refuses
-          # this token a tag move across a commit that changes a workflow file,
-          # so a refused move keeps the old tag and still publishes this build.
-          gh api -X PATCH "repos/$R/git/refs/tags/beta" -f sha="$SHA" -F force=true \
-            || gh api -X POST "repos/$R/git/refs" -f ref=refs/tags/beta -f sha="$SHA" \
-            || { gh api "repos/$R/git/refs/tags/beta" >/dev/null 2>&1 \
-                   && echo "::warning::the beta tag could not move to $SHA (a workflow file changed), the installers are still this build"; } \
-            || { echo "::error::the beta tag is missing and could not be created"; exit 1; }
+            # Move the rolling tag onto this commit (create it if it is missing),
+            # so the release attached to it never stops existing. GitHub refuses
+            # this token a tag move across a commit that changes a workflow file,
+            # so a refused move keeps the old tag and still publishes this build.
+            gh api -X PATCH "repos/$R/git/refs/tags/beta" -f sha="$SHA" -F force=true \
+              || gh api -X POST "repos/$R/git/refs" -f ref=refs/tags/beta -f sha="$SHA" \
+              || { gh api "repos/$R/git/refs/tags/beta" >/dev/null 2>&1 \
+                     && echo "::warning::the beta tag could not move to $SHA (a workflow file changed), the installers are still this build"; } \
+              || { echo "::error::the beta tag is missing and could not be created"; exit 1; }
 
-          TITLE='FundaCAD 1.0 beta, Rust engine (rolling)'
-          if gh release view beta --repo "$R" >/dev/null 2>&1; then
-            gh release edit beta --repo "$R" --prerelease \
-              --title "$TITLE" --notes-file notes.md
+            TITLE='FundaCAD 1.0 beta, Rust engine (rolling)'
+            if gh release view beta --repo "$R" >/dev/null 2>&1; then
+              gh release edit beta --repo "$R" --prerelease \
+                --title "$TITLE" --notes-file notes.md
+            else
+              gh release create beta --repo "$R" --prerelease \
+                --title "$TITLE" --notes-file notes.md
+            fi
           else
-            gh release create beta --repo "$R" --prerelease \
-              --title "$TITLE" --notes-file notes.md
+            TITLE="FundaCAD $TAG"
+            if gh release view "$TAG" --repo "$R" >/dev/null 2>&1; then
+              gh release edit "$TAG" --repo "$R" --prerelease=false --latest="$LATEST" \
+                --title "$TITLE" --notes-file notes.md
+            else
+              gh release create "$TAG" --repo "$R" --verify-tag --latest="$LATEST" \
+                --title "$TITLE" --notes-file notes.md
+            fi
           fi
 
           # Binaries first, latest.json LAST, so the manifest on the release
@@ -623,10 +685,10 @@ jobs:
           # the binaries replace the ones the old manifest names: take that
           # manifest down first, or an installed copy could fetch the new
           # bytes against the old signature and refuse the update.
-          gh release delete-asset beta latest.json --repo "$R" --yes 2>/dev/null || true
-          gh release upload beta --repo "$R" --clobber $files
+          gh release delete-asset "$TAG" latest.json --repo "$R" --yes 2>/dev/null || true
+          gh release upload "$TAG" --repo "$R" --clobber $files
           if [ "$SELF_UPDATES" = yes ]; then
-            gh release upload beta --repo "$R" --clobber latest.json
+            gh release upload "$TAG" --repo "$R" --clobber latest.json
           else
             echo "latest.json withheld (see the warning above); the installers above are complete"
           fi
@@ -634,10 +696,10 @@ jobs:
           # Retire anything this build did not publish: a format dropped from
           # the build, and once, the versioned names from before the fixed ones.
           keep=$(for f in $files latest.json; do basename "$f"; done | sort -u)
-          gh release view beta --repo "$R" --json assets -q '.assets[].name' \
+          gh release view "$TAG" --repo "$R" --json assets -q '.assets[].name' \
             | while read -r asset; do
                 printf '%s\n' "$keep" | grep -qxF "$asset" \
-                  || gh release delete-asset beta "$asset" --repo "$R" --yes || true
+                  || gh release delete-asset "$TAG" "$asset" --repo "$R" --yes || true
               done
 
   # Browser end-to-end checks for the imported-assembly Browser tree.

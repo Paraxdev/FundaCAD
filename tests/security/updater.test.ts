@@ -34,6 +34,7 @@ import { describe, expect, it } from "vitest";
 
 import confRaw from "../../src-tauri/tauri.conf.json?raw";
 import releaseRaw from "../../src-tauri/tauri.beta.conf.json?raw";
+import stableRaw from "../../src-tauri/tauri.stable.conf.json?raw";
 
 const conf = JSON.parse(confRaw) as {
   plugins: { updater: { pubkey: string; endpoints: string[] } };
@@ -41,6 +42,10 @@ const conf = JSON.parse(confRaw) as {
 
 const release = JSON.parse(releaseRaw) as {
   plugins?: unknown;
+};
+
+const stable = JSON.parse(stableRaw) as {
+  plugins: { updater: { endpoints: string[] } };
 };
 
 /** Upstream's minisign public key, as inherited at the fork point. Recorded so
@@ -53,7 +58,7 @@ describe("updater", () => {
     // The endpoint is what makes the stale pubkey survivable. If updates came
     // from somewhere we do not control, holding the wrong public key would stop
     // being an inconvenience.
-    for (const url of conf.plugins.updater.endpoints) {
+    for (const url of [...conf.plugins.updater.endpoints, ...stable.plugins.updater.endpoints]) {
       expect(new URL(url).origin, `updater endpoint ${url}`).toBe("https://github.com");
       expect(new URL(url).pathname.startsWith("/Paraxdev/fundacad/"), `updater endpoint ${url}`)
         .toBe(true);
@@ -88,7 +93,24 @@ describe("updater", () => {
     expect(path(conf.plugins.updater.endpoints)).toEqual([
       "/Paraxdev/fundacad/releases/download/beta/latest.json",
     ]);
-    expect(confRaw + releaseRaw).not.toContain("/alpha/latest.json");
+    expect(confRaw + releaseRaw + stableRaw).not.toContain("/alpha/latest.json");
+  });
+
+  // GitHub's latest release is never a pre-release, so the rolling beta can
+  // never be what a stable install finds there.
+  it("a stable build reads the latest stable release's feed", () => {
+    const path = (urls: string[]) => urls.map((u) => new URL(u).pathname);
+    expect(path(stable.plugins.updater.endpoints)).toEqual([
+      "/Paraxdev/fundacad/releases/latest/download/latest.json",
+    ]);
+  });
+
+  // No pubkey of its own, so the release job's guard on the base config's key
+  // holds for stable builds too.
+  it("the stable config is the beta one with the feed swapped and nothing else", () => {
+    const { plugins, ...rest } = stable;
+    expect(rest).toEqual(release);
+    expect(plugins).toEqual({ updater: { endpoints: plugins.updater.endpoints } });
   });
 
   it("leaves the feed to the base config, so the release build cannot diverge from it", () => {
