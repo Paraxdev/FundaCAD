@@ -121,11 +121,15 @@ impl Tracer {
         let g = l.ground.filter(|g| g.mode == GroundMode::Shadow && g.extent > 0.0);
         // The luminance irradiance on the plane, which its shadow is a share of.
         let env_up = if env == 0 { 0.0 } else { (self.env.up * l.env_intensity).max(0.0) };
-        let up_light: f32 = lights.iter().map(|x| power(x.color) * norm(x.direction)[2].max(0.0)).sum::<f32>() + env_up;
+        // With no map the gradient lights the scene; its irradiance on a face
+        // up is pi (5 top + bottom) / 6.
+        let sky_mix = [0, 1, 2].map(|i| (5.0 * l.sky_top[i] + l.sky_bottom[i]) / 6.0);
+        let sky_up = if env == 0 { (std::f32::consts::PI * power(sky_mix) * l.env_intensity).max(0.0) } else { 0.0 };
+        let up_light: f32 = lights.iter().map(|x| power(x.color) * norm(x.direction)[2].max(0.0)).sum::<f32>() + env_up + sky_up;
         let ground_on = g.is_some() && up_light > 0.0;
         let g = g.unwrap_or_default();
         data.extend([g.centre[0], g.centre[1], g.z, g.extent * 0.5]);
-        data.extend([ground_on as u32 as f32, env_up, 0.0, 0.0]);
+        data.extend([ground_on as u32 as f32, env_up, sky_up, 0.0]);
         debug_assert_eq!(data.len() * 4, UNIFORM_SIZE as usize);
         self.queue.write_buffer(&self.uniform, 0, bytes(&data));
     }

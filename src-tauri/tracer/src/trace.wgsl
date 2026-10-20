@@ -26,7 +26,8 @@ struct U {
   emit: vec4u,
   // the ground's centre, height and half its side
   ground0: vec4f,
-  // x 1 when camera rays show its shadow, y the map's luminance irradiance on it
+  // x 1 when camera rays show its shadow, y the map's luminance irradiance on
+  // it, z the gradient's when no map is held
   ground1: vec4f,
 }
 struct Inst {
@@ -257,7 +258,7 @@ fn in_disc(li: Light) -> vec3f {
 // and the mean is the share of the light the scene takes from it. Emitters
 // are left out, their irradiance on the plane has no closed form.
 fn ground_lit(q: vec3f) -> f32 {
-  var total = u.ground1.y;
+  var total = u.ground1.y + u.ground1.z;
   for (var k = 0u; k < u.n_lights.x; k++) {
     total += lum(u.lights[k].color.rgb) * max(u.lights[k].dir.z, 0.0);
   }
@@ -272,11 +273,27 @@ fn ground_lit(q: vec3f) -> f32 {
     }
     r -= w;
   }
-  if (!picked && u.ground1.y > 0.0) {
-    // By the map's pdf, kept with chance l.z: by its radiance times the cosine.
+  if (!picked) {
+    let by_map = r < u.ground1.y || u.ground1.z <= 0.0;
+    if (by_map && u.ground1.y <= 0.0) { return 1.0; }
+    // The gradient is linear in z, so its brightest upward radiance is at the zenith or the horizon.
+    let top = max(lum(env(vec3f(0.0, 0.0, 1.0))), lum(env(vec3f(1.0, 0.0, 0.0))));
+    // By the map's pdf kept with chance l.z, or by the cosine kept by the
+    // gradient's radiance: either way by radiance times the cosine.
     for (var i = 0u; i < 64u; i++) {
-      let e = sample_env();
-      if (rnd() < e.z) {
+      var e: vec3f;
+      var keep: f32;
+      if (by_map) {
+        e = sample_env();
+        keep = e.z;
+      } else {
+        let phi = 2.0 * PI * rnd();
+        let s2 = rnd();
+        let sr = sqrt(s2);
+        e = vec3f(sr * cos(phi), sr * sin(phi), sqrt(1.0 - s2));
+        keep = lum(env(e)) / top;
+      }
+      if (rnd() < keep) {
         l = e;
         picked = true;
         break;
