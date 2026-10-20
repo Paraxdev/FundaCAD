@@ -52,6 +52,13 @@ export function closeOpenEdit(e: Engine, except: string): void {
   cancelActiveTools(e.tools);
 }
 
+/** A double click on a feature row: close the open edit, then edit that feature. */
+export function switchEdit(e: Engine, id: string): void {
+  closeOpenEdit(e, id);
+  if (e.toolOwnsScreen()) return;
+  e.editFeature(id);
+}
+
 export function createSelection(
   e: Engine,
 ): Pick<Engine, "selectFeature" | "editFeature" | "featureForFace" | "deleteSelectedFace"> {
