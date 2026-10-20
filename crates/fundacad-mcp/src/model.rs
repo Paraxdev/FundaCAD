@@ -54,6 +54,62 @@ pub fn new_document() -> Doc {
     d
 }
 
+/// Feature types in `doc` neither the engine nor a shipped plugin knows, with how
+/// many features use each, most used first. A file from a newer FundaCAD holds them.
+pub fn unknown_feature_types(doc: &Doc) -> Vec<(String, usize)> {
+    let mut out: Vec<(String, usize)> = Vec::new();
+    for f in features(doc) {
+        let Some(t) = f.get("type").and_then(Value::as_str) else { continue };
+        if Feature::is_core_type(t) || crate::schema::features().contains_key(t) {
+            continue;
+        }
+        match out.iter_mut().find(|(n, _)| n == t) {
+            Some((_, c)) => *c += 1,
+            None => out.push((t.to_owned(), 1)),
+        }
+    }
+    out.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    out
+}
+
+/// What `doc_open` adds about a file from a newer version, the same facts the
+/// app's open notice gives. `None` for a file this build reads whole.
+pub fn newer_file_note(doc: &Doc) -> Option<String> {
+    let stamp = doc.get("version").and_then(Value::as_i64).unwrap_or(1);
+    let newer = stamp > FORMAT_VERSION;
+    let unknown = unknown_feature_types(doc);
+    let mut out = String::new();
+    if newer {
+        out.push_str(&format!(
+            "this file is from a newer version of FundaCAD (document version {stamp}, this build reads up to {FORMAT_VERSION})."
+        ));
+    }
+    let total: usize = unknown.iter().map(|(_, c)| c).sum();
+    if total > 0 {
+        let names = unknown
+            .iter()
+            .map(|(t, c)| if *c > 1 { format!("{t} ({c})") } else { t.clone() })
+            .collect::<Vec<_>>()
+            .join(", ");
+        let who = if newer { "this version" } else { "this version of FundaCAD" };
+        if !out.is_empty() {
+            out.push(' ');
+        }
+        if total == 1 {
+            out.push_str(&format!(
+                "1 feature was not included because {who} does not know it: {names}. It is kept and saved with the file. Bodies after it may differ."
+            ));
+        } else {
+            out.push_str(&format!(
+                "{total} features were not included because {who} does not know them: {names}. They are kept and saved with the file. Bodies after them may differ."
+            ));
+        }
+    } else if newer {
+        out.push_str(" Anything this version does not know is kept and saved with the file.");
+    }
+    (!out.is_empty()).then_some(out)
+}
+
 /// `parameters` and `paramDefs`, added when a document arrived without them.
 pub fn fill_defaults(doc: &mut Doc) {
     doc.entry("parameters").or_insert_with(|| json!({}));
