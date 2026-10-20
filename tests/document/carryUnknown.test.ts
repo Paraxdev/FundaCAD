@@ -149,6 +149,14 @@ describe("a section this version cannot read", () => {
     expect(store.toObject(false)).not.toHaveProperty("versions");
   });
 
+  it("says it holds versions it cannot read until a version made here replaces them", () => {
+    const store = opened({ features: [], versions: { futureRepo: true } });
+    expect(store.hasUnreadVersions()).toBe(true);
+    store.saveVersion("here");
+    expect(store.hasUnreadVersions()).toBe(false);
+    expect(opened({ features: [] }).hasUnreadVersions()).toBe(false);
+  });
+
   it("comes through the recovery envelope, which is toObject then load", () => {
     const store = opened({ features: [], stress: newer, futureKey: FUTURE });
     const back = opened(JSON.parse(JSON.stringify(store.toObject())) as CadDocument);
