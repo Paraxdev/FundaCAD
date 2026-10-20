@@ -45,7 +45,8 @@ with Session() as s:
 and a fresh headless Chrome, then waits for the app and closes the start screen (Home, or the
 Welcome dialog on older trees). It never touches port 5173 or 8765, an open app window, or any
 process it did not start. Leaving the `with` block, `s.close()`, an exception or interpreter exit
-stops all of it.
+stops all of it. On Windows so does a hard kill of the Python, such as a shell tool's timeout; on
+Linux that leaves the engine and vite running, `s.pids()` names them.
 
 Options:
 

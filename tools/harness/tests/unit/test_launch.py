@@ -136,3 +136,31 @@ def test_repo_is_found_by_walking_up(tmp_path, monkeypatch):
     deep = tmp_path / "x" / "y"
     deep.mkdir(parents=True)
     assert launch.find_repo(start=deep) == tmp_path
+
+
+@pytest.mark.skipif(os.name != "nt", reason="the job object is the Windows guard")
+def test_a_hard_killed_python_takes_its_children_with_it(tmp_path):
+    import ctypes
+    parent = subprocess.Popen(
+        [sys.executable, "-c", (
+            "import os, sys, time\n"
+            "from pathlib import Path\n"
+            "from fundacad_harness.launch import spawn\n"
+            "p = spawn('nap', [sys.executable, '-c', 'import time; time.sleep(60)'], Path.cwd(), dict(os.environ),"
+            f" Path(r'{tmp_path}') / 'nap.log')\n"
+            "print(p.pid, flush=True)\n"
+            "time.sleep(60)\n"
+        )],
+        stdout=subprocess.PIPE, text=True,
+    )
+    child = int(parent.stdout.readline())
+    k32 = ctypes.WinDLL("kernel32")
+    k32.OpenProcess.restype = ctypes.c_void_p
+    handle = k32.OpenProcess(0x00100000, False, child)
+    assert handle, "the child is running"
+    parent.kill()
+    parent.wait(10)
+    try:
+        assert k32.WaitForSingleObject(ctypes.c_void_p(handle), 10_000) == 0, "the child outlived a TerminateProcess of its Python"
+    finally:
+        k32.CloseHandle(ctypes.c_void_p(handle))
