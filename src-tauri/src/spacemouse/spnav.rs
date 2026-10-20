@@ -6,7 +6,9 @@
 //! (0 motion, 1 button press, 2 button release). Motion is then x y z rx ry rz and
 //! the milliseconds since the last record, a button record carries its number.
 
+use std::cell::Cell;
 use std::io::{self, Read};
+use std::time::{Duration, Instant};
 
 pub const RECORD_BYTES: usize = 32;
 
@@ -109,23 +111,51 @@ pub fn pump(
     Ok(())
 }
 
+/// `pump` for a daemon that may run without a device it supports: `Ok(false)` when
+/// it said nothing within `grace` (`None` waits for ever), so the caller reads the
+/// device itself. Once it has spoken it is kept until `wanted` says stop or it ends.
+pub fn relay(
+    src: impl Read,
+    wanted: impl Fn() -> bool,
+    grace: Option<Duration>,
+    mut on_event: impl FnMut(Event),
+) -> io::Result<bool> {
+    let heard = Cell::new(false);
+    let started = Instant::now();
+    pump(
+        src,
+        || wanted() && (heard.get() || grace.is_none_or(|g| started.elapsed() < g)),
+        |event| {
+            heard.set(true);
+            on_event(event);
+        },
+    )?;
+    Ok(heard.get() || !wanted())
+}
+
 #[cfg(target_os = "linux")]
 pub use daemon::serve;
 
 #[cfg(target_os = "linux")]
 mod daemon {
     use std::os::unix::net::UnixStream;
-    use std::sync::atomic::Ordering;
+    use std::sync::atomic::{AtomicBool, Ordering};
     use std::time::Duration;
 
     use tauri::{AppHandle, Emitter};
 
-    use super::{apply_button, pump, Event, SOCKETS};
+    use super::{apply_button, relay, Event, SOCKETS};
     use crate::spacemouse::{emit_motion, publish, Buttons, DeviceInventory, WANTED};
 
+    /// A daemon that has sent a record in this run owns a device, so a later silent
+    /// connection is only an idle mouse.
+    static DEVICE_SEEN: AtomicBool = AtomicBool::new(false);
+    const GRACE: Duration = Duration::from_secs(5);
+
     /// Streams the daemon's events to the page. `false` when there is no daemon
-    /// socket, so the caller falls back to the HID device, `true` once a
-    /// connection has been served until it ended.
+    /// socket, or it sent nothing in `GRACE` and may not own the device, so the
+    /// caller falls back to the HID device, `true` once a connection has been
+    /// served until it ended.
     pub fn serve(app: &AppHandle) -> bool {
         let Some((path, stream)) = SOCKETS
             .iter()
@@ -149,19 +179,29 @@ mod daemon {
             },
         );
         let mut mask = 0u32;
-        let ended = pump(
+        let grace = (!DEVICE_SEEN.load(Ordering::SeqCst)).then_some(GRACE);
+        let ended = relay(
             stream,
             || WANTED.load(Ordering::SeqCst),
-            |event| match event {
-                Event::Motion { t, r } => emit_motion(app, t, r),
-                Event::Button { number, pressed } => {
-                    mask = apply_button(mask, number, pressed);
-                    let _ = app.emit("spacemouse:button", Buttons { mask });
+            grace,
+            |event| {
+                DEVICE_SEEN.store(true, Ordering::SeqCst);
+                match event {
+                    Event::Motion { t, r } => emit_motion(app, t, r),
+                    Event::Button { number, pressed } => {
+                        mask = apply_button(mask, number, pressed);
+                        let _ = app.emit("spacemouse:button", Buttons { mask });
+                    }
                 }
             },
         );
-        if let Err(e) = ended {
-            eprintln!("[spacemouse] spacenavd connection ended: {e}");
+        match ended {
+            Ok(false) => {
+                eprintln!("[spacemouse] spacenavd sent nothing, reading the device directly");
+                return false;
+            }
+            Err(e) => eprintln!("[spacemouse] spacenavd connection ended: {e}"),
+            Ok(true) => {}
         }
         true
     }
@@ -287,6 +327,46 @@ mod tests {
                 }
             ]
         );
+    }
+
+    struct Idle;
+    impl Read for Idle {
+        fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
+            std::thread::sleep(Duration::from_millis(2));
+            Err(io::ErrorKind::WouldBlock.into())
+        }
+    }
+
+    struct OneThenIdle(Vec<u8>);
+    impl Read for OneThenIdle {
+        fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+            if self.0.is_empty() {
+                return Idle.read(buf);
+            }
+            let n = self.0.len().min(buf.len());
+            buf[..n].copy_from_slice(&self.0[..n]);
+            self.0.drain(..n);
+            Ok(n)
+        }
+    }
+
+    #[test]
+    fn a_daemon_that_stays_silent_past_the_grace_hands_over_to_the_device() {
+        let grace = Some(Duration::from_millis(30));
+        assert!(!relay(Idle, || true, grace, |_| {}).unwrap());
+    }
+
+    #[test]
+    fn a_daemon_that_spoke_is_kept_and_an_unlimited_wait_is_too() {
+        let grace = Some(Duration::from_millis(30));
+        let mut seen = 0;
+        let spoke = OneThenIdle(record([1, 0, 0, 0, 0, 0, 0, 0]).to_vec());
+        let stop_at = Instant::now() + Duration::from_millis(100);
+        let kept = relay(spoke, || Instant::now() < stop_at, grace, |_| seen += 1).unwrap();
+        assert!(kept);
+        assert_eq!(seen, 1);
+        let stop_at = Instant::now() + Duration::from_millis(60);
+        assert!(relay(Idle, || Instant::now() < stop_at, None, |_| {}).unwrap());
     }
 
     #[test]
