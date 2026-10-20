@@ -20,7 +20,7 @@ def alive(pid: int) -> bool:
 
 
 def test_open_shows_the_app_and_close_stops_everything():
-    s = Session()
+    s = Session(keep=False)
     try:
         assert s.start_screen in ("home", "welcome")
         assert s.call("startScreen") == "none"
