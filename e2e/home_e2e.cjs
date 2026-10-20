@@ -5,6 +5,7 @@
 //   3. File > Home and the title bar button bring it back, Escape closes it.
 //   4. With unsaved work, Blank asks before discarding it.
 //   5. A .funda dropped over Home opens and Home closes.
+//   6. Over the fake library: edit times, a missing file shows Not found and Remove takes it off.
 //
 //   engine --ws, vite, then
 //   SC_TOKEN=<engine token> node e2e/home_e2e.cjs
@@ -103,6 +104,31 @@ function check(name, ok, detail = "") {
     const dropped = await page.evaluate(() => ({ name: window.store.fileName, n: window.store.document.features.length }));
     check("the dropped document opened", /dropped/.test(dropped.name) && dropped.n === 1, JSON.stringify(dropped));
     check("Home closed", !(await homeUp()));
+
+    console.log("6. recent documents over the fake library");
+    await page.evaluate(() => {
+      const now = Date.now();
+      localStorage.setItem("fundacad.recentFiles", JSON.stringify([
+        { path: "C:/work/bracket.funda", openedAt: now - 1000 },
+        { path: "C:/work/gone.funda", openedAt: now - 2000 },
+      ]));
+      window.__fundacad.home.useFakeLibrary([{ path: "C:/work/bracket.funda", mtimeMs: now - 3 * 3600_000 }]);
+    });
+    await menu("File", "Home");
+    await page.waitForTimeout(300);
+    const cards = await page.$$eval(".home-card", (els) => els.map((el) => ({
+      name: el.querySelector(".home-card-name").textContent,
+      time: el.querySelector(".home-card-time").textContent,
+      badge: el.querySelector(".home-badge")?.textContent ?? "",
+    })));
+    check("two cards", cards.length === 2, JSON.stringify(cards));
+    check("the edit time comes from the file", cards[0]?.time === "Edited 3 h ago", cards[0]?.time);
+    check("the missing file is marked", cards[1]?.badge === "Not found", JSON.stringify(cards[1]));
+    await page.click(".home-card.missing");
+    await page.click("button:has-text('Remove from list')");
+    await page.waitForTimeout(200);
+    const left = await page.$$eval(".home-card-name", (els) => els.map((el) => el.textContent));
+    check("Remove takes it off", JSON.stringify(left) === '["bracket"]', JSON.stringify(left));
   } finally {
     await browser.close();
   }
