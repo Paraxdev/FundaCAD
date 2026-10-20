@@ -25,7 +25,7 @@ import {
   asHex, materialsForColors, nodeColors, parseLibrary, serializeLibrary,
 } from "../document/materials";
 import { importedBodyColors } from "../document/faceColors";
-import { missingPluginMessage, missingPlugins } from "../document/missingPlugins";
+import { openNotices } from "../document/openNotice";
 import type { FaceColorRuns } from "../types";
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;
@@ -166,7 +166,7 @@ export async function openDocumentText(store: DocumentStore, name: string, text:
   // No real path, but the name is enough for the title bar to show what is
   // open and drop the unsaved marker, same as a Tauri Open does.
   store.markSaved(name);
-  await warnAboutMissingPlugins(store);
+  await warnAboutOpen(store);
   return "ok";
 }
 
@@ -259,7 +259,8 @@ async function migrateInlineGeometry(text: string, geometry: GeometryBackend): P
  *  PREVIOUS document's path. That is harmless here only because geometry is
  *  resolved by content hash out of the blob store, which needs no path at all.
  *  Do not add anything to the rebuild path that depends on `store.filePath`. */
-/** Tell the person, once, that this document uses a plugin they do not have.
+/** Tell the person, once, that this document uses a plugin they do not have, or
+ *  holds features this version does not know (document/openNotice.ts).
  *
  *  WHY A TOAST AND NOT A REFUSAL. The document is fine. Every value is in it,
  *  the save path writes them back untouched, and the features that do not need
@@ -267,18 +268,16 @@ async function migrateInlineGeometry(text: string, geometry: GeometryBackend): P
  *  turns one kind of feature into geometry, so the honest report is a heads-up
  *  with the plugin's name in it, not a dialog in the way of a file that opens.
  *
- *  Once per open, at the document level, rather than per feature. The build
- *  already turns each affected row red with the same explanation (see
- *  the Python engine's `plugin_geometry.py`), and thirty red rows do not tell you what to
- *  install any better than one sentence does.
+ *  Once per open, at the document level, rather than per feature. Thirty rows
+ *  in History do not tell you what to install any better than one sentence does.
  *
  *  Longer than the default timeout on purpose: this one has an instruction in
  *  it, and a notice you are meant to ACT on has to outlast the glance. */
-async function warnAboutMissingPlugins(store: DocumentStore) {
-  const missing = missingPlugins(store.document);
-  if (!missing.length) return;
+async function warnAboutOpen(store: DocumentStore) {
+  const notices = openNotices(store.document, store.openedVersion);
+  if (!notices.length) return;
   const { toast } = await import("../ui/toast");
-  for (const m of missing) toast(missingPluginMessage(m), { kind: "info", timeout: 12000 });
+  for (const n of notices) toast(n.message, { kind: n.kind, timeout: 12000, ...(n.detail ? { detail: n.detail } : {}) });
 }
 
 export async function openDocumentAtPath(
@@ -351,7 +350,7 @@ async function finishOpen(
   // notice is about what this build can do with the file, never about the file
   // having been changed, and a freshly-opened document marked dirty would offer
   // to save over the original on the way out.
-  await warnAboutMissingPlugins(store);
+  await warnAboutOpen(store);
   if (path) noteRecent(path);
   if (geometry) void import("./fundaLinks").then((m) => m.checkLinks(store, geometry));
   if (repaired) {

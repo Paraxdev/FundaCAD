@@ -83,6 +83,27 @@ describe("a document dropped as bytes in the desktop app", () => {
     expect(store.fileName).toBe("Untitled");
   });
 
+  it("says once what a newer file holds that this version leaves out, and stays clean", async () => {
+    const toasts: { message: string; kind: string | undefined }[] = [];
+    vi.doMock("../../src/ui/toast", () => ({
+      toast: (message: string, opts: { kind?: string } = {}) => void toasts.push({ message, kind: opts.kind }),
+    }));
+    reply = () => ({
+      document: JSON.stringify({ version: 99, parameters: {}, features: [{ id: "w1", type: "futureWidget" }] }),
+      repairedShards: 0, usedBackupIndex: false, wasContainer: true,
+    });
+    const { takeDroppedFiles } = await import("../../src/io/desktopDrop");
+    const { store, engine } = setup();
+    await takeDroppedFiles(engine, [{ name: "newer.funda", path: null, file: new File(["{}"], "newer.funda") }]);
+    vi.doUnmock("../../src/ui/toast");
+
+    expect(toasts).toEqual([{
+      message: "Opened a file from a newer version of FundaCAD. 1 feature was not included because this version does not know it: futureWidget. It is kept and saved with the file. Bodies after it may differ.",
+      kind: "warning",
+    }]);
+    expect(store.dirty).toBe(false);
+  });
+
   it("keeps the open document and imports nothing when Rust refuses it", async () => {
     reply = () => { throw "This document is damaged and cannot be opened."; };
     const { takeDroppedFiles } = await import("../../src/io/desktopDrop");

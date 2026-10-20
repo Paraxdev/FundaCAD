@@ -119,12 +119,9 @@ export const FORMAT_VERSION = 10;
 
 export function migrateDocument(parsed: CadDocument): string[] {
   const version = parsed.version ?? 1;
-  if (version > FORMAT_VERSION) {
-    // Best effort: load what we understand, but don't rewrite shapes we don't.
-    return [
-      "This file was made by a newer version of FundaCAD, unknown data (e.g. parameter expressions) may be lost if you save it here.",
-    ];
-  }
+  // Nothing to migrate in a newer file. What it holds that this version does not
+  // know is kept (store.ts) and the open notice says so (openNotice.ts).
+  if (version > FORMAT_VERSION) return [];
 
   const features = parsed.features ?? [];
   const params = parsed.parameters ?? {};

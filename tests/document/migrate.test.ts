@@ -24,12 +24,11 @@ describe("migrateDocument", () => {
     expect((already.features[0] as { entities: { angle: number }[] }).entities[0]!.angle).toBe(90);
   });
 
-  it("warns and leaves newer-version docs untouched", () => {
+  it("leaves a newer-version doc untouched and quiet, the open notice speaks for it", () => {
     const doc = v1({ version: FORMAT_VERSION + 1, parameters: { w: 4 } });
-    const warnings = migrateDocument(doc);
-    expect(warnings.length).toBe(1);
-    expect(warnings[0]).toMatch(/newer version/);
-    expect(doc.paramDefs).toBeUndefined();
+    const before = JSON.stringify(doc);
+    expect(migrateDocument(doc)).toEqual([]);
+    expect(JSON.stringify(doc)).toBe(before);
   });
 
   it("converts bare-name feature fields to dN model params and seeds user params", () => {

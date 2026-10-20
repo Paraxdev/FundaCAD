@@ -25,6 +25,11 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **Opening a file from a newer version says what it leaves out.** One notice
+  names the features this version does not know, says they are kept and saved
+  with the file, and that bodies after them may differ. It replaces the old
+  warning that unknown data may be lost, which is no longer true.
+
 - **Saving keeps what a newer version wrote.** Top level data, element fields
   and a stress study, environment or saved versions this version cannot read
   are written back unchanged, so opening a newer file here and saving it does
