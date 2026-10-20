@@ -398,3 +398,41 @@ describe("extensions in any case", () => {
     expect(extToFormat("C:\out\Bracket.STP")).toBe("step");
   });
 });
+
+describe("Open with a mesh or CAD file", () => {
+  const closeHome = vi.fn();
+  let picked = "";
+
+  beforeEach(() => {
+    closeHome.mockReset();
+    (globalThis as unknown as Record<string, unknown>).window = {
+      __TAURI_INTERNALS__: {},
+      addEventListener() {},
+      removeEventListener() {},
+    };
+    vi.doMock("@tauri-apps/plugin-dialog", () => ({ open: async () => picked, message: async () => {} }));
+    vi.doMock("../../src/ui/home", () => ({ closeHome }));
+  });
+
+  afterEach(() => {
+    vi.doUnmock("@tauri-apps/plugin-dialog");
+    vi.doUnmock("../../src/ui/home");
+    vi.resetModules();
+    delete (globalThis as unknown as Record<string, unknown>).window;
+  });
+
+  it("closes Home, as the file goes into the open document", async () => {
+    const imported: string[] = [];
+    const backend = {
+      async rebuild() { return { ok: false, error: { message: "stub" } }; },
+      async init() {}, onStatus() { return () => {}; }, connected: true,
+      async importGeometry(p: string) { imported.push(p); return { ok: false, cancelled: true }; },
+    } as unknown as GeometryBackend;
+    const store = new DocumentStore(backend, { parameters: {}, features: [] });
+    const { openDocument } = await import("../../src/io/files");
+    picked = "/tmp/part.step";
+    await openDocument(store, backend, async () => true);
+    expect(imported).toEqual(["/tmp/part.step"]);
+    expect(closeHome).toHaveBeenCalledTimes(1);
+  });
+});

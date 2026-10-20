@@ -18,6 +18,7 @@ import { buildBodyTree, importTrees } from "../ui/browserTree";
 import { referencedGeometry } from "../document/versions";
 import { UnreadableDocumentError } from "../document/documentShape";
 import { noteRecent } from "./recentFiles";
+import { closeHome } from "../ui/home";
 import { captureAfterOpen, captureThumbnail, storeThumbnail } from "./thumbnails";
 import { BINARY_DOC_EXT, DOC_EXT, LEGACY_DOC_EXTS, isDocumentExt } from "./documentExt";
 import { announceImportedBody } from "../plugins/contrib";
@@ -153,6 +154,7 @@ export async function openDocument(
       if (!(await mayReplace())) return;
       await openDocumentAtPath(store, path, geometry);
     } else {
+      closeHome();
       await importPath(store, geometry, path); // a mesh / CAD file → import as a body
     }
   } else {
