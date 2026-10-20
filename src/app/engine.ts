@@ -53,9 +53,11 @@ import { createBugReporter } from "../ui/bugReporter";
 
 import { useRibbonStore } from "../stores/ribbon";
 import { useCommandPaletteStore } from "../stores/commandPalette";
-import { WelcomeScreen, welcomeOnStartup } from "../ui/welcome";
+import { welcomeOnStartup } from "../ui/welcome";
+import { Home } from "../ui/home";
+import { wireHomeOnOpen } from "./homeWiring";
+import { setThumbnailSource } from "../io/thumbnails";
 import { scheduleStartupUpdateCheck } from "../ui/updates";
-import { openDocumentAtPath } from "../io/files";
 
 import { installEngineDiedToast } from "./engineWatch";
 import { activatePlugins } from "../plugins/activate";
@@ -65,7 +67,7 @@ import { ThreadTool } from "../features/threadTool";
 import { TextOnFaceTool } from "../features/textOnFaceTool";
 import { HoleTool } from "../features/holeTool";
 import { cancelActiveTools, createToolBusy } from "./toolBusy";
-import { createDocumentActions } from "./documentActions";
+import { createDocumentActions, newFromTemplate, openAtVersion, openOnBranch, openPathGuarded } from "./documentActions";
 import { endPickSession } from "../ui/treePick";
 import { createDatumPlanes } from "./datumPlanes";
 import { createSketchVisibility } from "./sketchVisibility";
@@ -114,7 +116,7 @@ export interface EngineTools {
 }
 
 export interface EngineUi {
-  welcome: WelcomeScreen;
+  home: Home;
   panels: ReturnType<typeof createPanels>;
 }
 
@@ -169,6 +171,9 @@ export interface Engine {
    *  Every other entry still counts, including a Move started deliberately over
    *  a selection that is not a body's, which is a mode. */
   toolOwnsScreen(): boolean;
+  /** toolOwnsScreen(), minus a modal open over the app (Home counts as one), so
+   *  true only while a sketch or tool is at work on the document itself. */
+  toolAtWork(): boolean;
   /** Stand the ambient Move gizmo down, so a body verb can run.
    *
    *  The other half of toolOwnsScreen. Showing an offer over a body is not
@@ -484,11 +489,18 @@ export function mountUi(e: Engine): void {
     }
   });
 
-  e.ui.welcome = new WelcomeScreen({
-    onNew: () => void e.newDocument(),
-    onOpen: () => void e.openDoc(),
-    onOpenPath: (path) => openDocumentAtPath(e.store, path, e.geometry),
+  e.ui.home = new Home({
+    newDocument: () => e.newDocument(),
+    openDoc: () => e.openDoc(),
+    newFromTemplate: (id) => newFromTemplate(e, id),
+    openPath: (path) => openPathGuarded(e, path),
+    currentPath: () => e.store.filePath,
+    currentVersions: () => e.store.versionRepo,
+    openVersion: (path, id, copy) => openAtVersion(e, path, id, copy),
+    openBranch: (path, name) => openOnBranch(e, path, name),
   });
+  wireHomeOnOpen(e.store, e.ui.home);
+  setThumbnailSource(() => e.viewport.renderThumbnail(480, 300));
 
   e.starters = createFeatureStarters({
     store: e.store,
@@ -559,8 +571,7 @@ export function mountUi(e: Engine): void {
   // (The menubar is components/shell/MenuBar.vue now, TitleBar.vue calls
   // buildMenubar(engine) itself, so there is nothing to construct here.)
 
-  // show the welcome screen unless the user turned it off (its footer checkbox)
-  if (welcomeOnStartup()) e.ui.welcome.open();
+  if (welcomeOnStartup()) e.ui.home.open();
   scheduleStartupUpdateCheck();
 
   installTitlebar(e);

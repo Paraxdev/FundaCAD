@@ -12,6 +12,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { createToolBusy, restoreWhenIdle } from "../../src/app/toolBusy";
 import type { Engine } from "../../src/app/engine";
+import { pushModal } from "../../src/ui/choice";
 
 // isChoiceOpen() is a term of the predicate and reads a store, so the
 // predicates need a pinia even though nothing here opens a dialog.
@@ -71,6 +72,18 @@ describe("toolBusy versus toolOwnsScreen", () => {
   it("still counts a Move that is up alongside another tool", () => {
     const t = createToolBusy(fakeEngine({ move: true, extrude: true }).e);
     expect(t.toolOwnsScreen()).toBe(true);
+  });
+});
+
+describe("toolAtWork", () => {
+  it("counts a sketch or tool but not a modal such as Home open over the app", () => {
+    pushModal();
+    const idle = createToolBusy(fakeEngine().e);
+    expect(idle.toolOwnsScreen()).toBe(true);
+    expect(idle.toolAtWork()).toBe(false);
+    expect(createToolBusy(fakeEngine({ sketch: true }).e).toolAtWork()).toBe(true);
+    expect(createToolBusy(fakeEngine({ extrude: true }).e).toolAtWork()).toBe(true);
+    expect(createToolBusy(fakeEngine({ move: true }).e).toolAtWork()).toBe(false);
   });
 });
 
