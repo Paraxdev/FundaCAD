@@ -23,6 +23,7 @@ import { setTextBackend } from "../sketch/textCache";
 import { solveSketchFeature } from "../sketch/headlessSolve";
 import { initSolver } from "../sketch/solver";
 import { installAutosave, checkRecovery } from "../io/recovery";
+import { installLaunchPaths } from "../io/launchPaths";
 import { toast } from "../ui/toast";
 import { logWarning } from "../ui/logStore";
 import { crumb } from "../diagnostics/breadcrumbs";
@@ -229,6 +230,9 @@ export interface Engine {
   setStatus(text: string, cls: "" | "connected" | "error"): void;
 }
 
+/** Settled once the restore-on-launch question is answered or was never asked. */
+let recoveryAsked: Promise<void> = Promise.resolve();
+
 export function createEngine(canvas: HTMLCanvasElement): Engine {
   // Filled top-to-bottom in exactly the order main.ts's statements ran. Members
   // are read through `e` rather than captured, so a block installed early can
@@ -300,7 +304,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   e.bridge = createDocBridge(e.store);
   // crash-safety: periodic recovery snapshots + restore-on-launch prompt
   installAutosave(e.store);
-  void checkRecovery(e.store);
+  recoveryAsked = checkRecovery(e.store);
 
   // Sharing this window's document with an assistant working through MCP. AFTER
   // the store exists and before anything can edit it, so the very first publish
@@ -572,6 +576,7 @@ export function mountUi(e: Engine): void {
   // buildMenubar(engine) itself, so there is nothing to construct here.)
 
   if (welcomeOnStartup()) e.ui.home.open();
+  installLaunchPaths(e, recoveryAsked);
   scheduleStartupUpdateCheck();
 
   installTitlebar(e);
