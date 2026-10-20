@@ -6,7 +6,7 @@ fn trace(o: vec3f, d: vec3f, tmax: f32, shadow: bool) -> Hit {
   var h: Hit;
   h.ok = false;
   h.t = tmax;
-  var stack: array<u32, 48>;
+  var stack: array<u32, STACK>;
   for (var ii = 0u; ii < u.n_inst; ii++) {
     let it = insts[ii];
     let lo = vec3f(dot(it.w2o0, vec4f(o, 1.0)), dot(it.w2o1, vec4f(o, 1.0)), dot(it.w2o2, vec4f(o, 1.0)));
@@ -28,7 +28,7 @@ fn trace(o: vec3f, d: vec3f, tmax: f32, shadow: bool) -> Hit {
       let first = bitcast<u32>(n0.w);
       let cnt = bitcast<u32>(n1.w);
       if (cnt == 0u) {
-        if (sp + 2u > 48u) { continue; }
+        if (sp + 2u > STACK) { continue; }
         stack[sp] = first; stack[sp + 1u] = first + 1u; sp += 2u;
         continue;
       }

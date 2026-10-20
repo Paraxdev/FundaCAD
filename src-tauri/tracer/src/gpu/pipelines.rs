@@ -11,12 +11,13 @@ pub(super) struct Pipelines {
 }
 
 /// The trace kernel for a path: its `trace` function, then the shared body.
+/// The software walk sizes its stack by the depth the BVH build allows.
 pub(super) fn trace_source(path: Path) -> String {
-    format!(
-        "{}\n{}",
-        if path == Path::RayQuery { include_str!("../rq.wgsl") } else { include_str!("../sw.wgsl") },
-        include_str!("../trace.wgsl")
-    )
+    let walk = match path {
+        Path::RayQuery => include_str!("../rq.wgsl").to_string(),
+        Path::Software => format!("const STACK: u32 = {}u;\n{}", crate::bvh::STACK, include_str!("../sw.wgsl")),
+    };
+    format!("{walk}\n{}", include_str!("../trace.wgsl"))
 }
 
 impl Pipelines {
