@@ -211,15 +211,26 @@ class Actions:
 
     @action
     def undo(self):
-        """The title bar Undo button."""
-        self._click_control("#undo-btn")
-        return "clicked #undo-btn"
+        """The title bar Undo button, the step says what it changed."""
+        return self._undo_redo("#undo-btn")
 
     @action
     def redo(self):
-        """The title bar Redo button."""
-        self._click_control("#redo-btn")
-        return "clicked #redo-btn"
+        """The title bar Redo button, the step says what it changed."""
+        return self._undo_redo("#redo-btn")
+
+    def _model_counts(self) -> tuple[int, int]:
+        return self.bridge.call("history")["count"], len(self.bridge.call("bodies"))
+
+    def _undo_redo(self, ref: str) -> str:
+        before = self._model_counts()
+        self._click_control(ref)
+        self.settle()
+        after = self._model_counts()
+        if after == before:
+            return f"clicked {ref}, still {after[0]} features and {after[1]} bodies"
+        moved = [f"{what} {a} to {b}" for what, a, b in zip(("features", "bodies"), before, after) if a != b]
+        return f"clicked {ref}, {', '.join(moved)}"
 
     @action
     def command(self, name: str):

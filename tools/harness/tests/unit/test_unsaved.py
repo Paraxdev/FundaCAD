@@ -111,3 +111,27 @@ def test_a_canvas_pick_under_a_dialog_says_the_dialog_is_the_cause():
     with pytest.raises(Occluded, match='try s.view\\("front"\\)'):
         s.pick_face("front")
     s.close()
+
+
+class Counts(App):
+    def __init__(self, steps):
+        super().__init__()
+        self.steps, self.at = steps, 0
+
+    def call(self, method, **args):
+        if method == "history":
+            return {"count": self.steps[self.at][0]}
+        if method == "bodies":
+            return [{}] * self.steps[self.at][1]
+        if method == "locate":
+            self.at += 1
+            return {"marker": "m", "ref": args["target"], "label": args["target"]}
+        return super().call(method, **args)
+
+
+def test_undo_says_what_changed_and_when_nothing_counted_did():
+    app = Counts([(2, 8), (2, 8), (1, 1)])
+    s = session(app)
+    assert str(s.undo()).startswith("clicked #undo-btn, still 2 features and 8 bodies,")
+    assert str(s.undo()).startswith("clicked #undo-btn, features 2 to 1, bodies 8 to 1,")
+    s.close()
