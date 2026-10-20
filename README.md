@@ -25,7 +25,7 @@ Get the build for your system from the [beta](https://github.com/Paraxdev/fundac
 It is the normal download, and somewhat stable. Testers who want every change
 the day it lands can take the [development build](https://github.com/Paraxdev/fundacad/releases/tag/development)
 instead. It is the bleeding edge and can be broken.
-An install only ever updates to a newer build of the same kind. There is no account and no cloud, and your files stay on your disk. The builds are not code
+An install only ever updates to a newer build of the same kind, and on Linux only the AppImage updates itself. There is no account and no cloud, and your files stay on your disk. The builds are not code
 signed, so Windows and macOS will warn you on the first start. The
 [install page](https://paraxdev.github.io/FundaCAD/start/install/) shows how to get past that.
 
