@@ -43,6 +43,12 @@ modules:
         path: ../../src-tauri/icons/128x128.png
       - type: file
         path: ../../src-tauri/icons/128x128@2x.png
+      - type: file
+        path: ../../src-tauri/icons/64x64.png
+      - type: file
+        path: ../../src-tauri/icons/icon.png
+      - type: file
+        path: ../../assets/brand/fundacad-mark.svg
     build-commands:
       - ar x fundacad.deb
       - tar -xf data.tar.* usr/bin/fundacad
@@ -55,3 +61,6 @@ modules:
       - install -Dm644 32x32.png /app/share/icons/hicolor/32x32/apps/dev.fundacad.app.png
       - install -Dm644 128x128.png /app/share/icons/hicolor/128x128/apps/dev.fundacad.app.png
       - install -Dm644 128x128@2x.png /app/share/icons/hicolor/256x256/apps/dev.fundacad.app.png
+      - install -Dm644 64x64.png /app/share/icons/hicolor/64x64/apps/dev.fundacad.app.png
+      - install -Dm644 icon.png /app/share/icons/hicolor/512x512/apps/dev.fundacad.app.png
+      - install -Dm644 fundacad-mark.svg /app/share/icons/hicolor/scalable/apps/dev.fundacad.app.svg
