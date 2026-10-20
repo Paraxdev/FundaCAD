@@ -171,6 +171,8 @@ class Actions:
             hit = self._click_control(s["ref"], s["button"])
             if i < len(steps) - 1:
                 self.page.wait_for_timeout(50)
+        if not getattr(self, "_settling", True):
+            return f'clicked {hit["ref"]} "{hit["label"]}"', hit
         self.settle()
         after = self.bridge.call("status", since=self._mark)
         asks = after.get("prompt") and after["prompt"] != before.get("prompt")
@@ -261,6 +263,8 @@ class Actions:
     def _undo_redo(self, ref: str) -> str:
         before = self._model_counts()
         self._click_control(ref)
+        if not getattr(self, "_settling", True):
+            return f"clicked {ref}"
         self.settle()
         after = self._model_counts()
         if after == before:
