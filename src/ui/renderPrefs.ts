@@ -166,6 +166,11 @@ export type TracerPref = (typeof TRACER_PREFS)[number];
 export const GROUNDS = ["none", "shadow"] as const;
 export type Ground = (typeof GROUNDS)[number];
 
+/** How much the realtime view draws. Auto behaves as Standard until the machine
+ *  can be measured; High is refused on a low power tier (viewport/realtimePipeline.ts). */
+export const REALTIME_QUALITY_PREFS = ["auto", "standard", "high"] as const;
+export type RealtimeQualityPref = (typeof REALTIME_QUALITY_PREFS)[number];
+
 export interface RenderPrefs {
   environment: EnvironmentChoice;
   /** An imported panorama's turn about the up axis, degrees, and its exposure
@@ -234,6 +239,7 @@ export interface RenderPrefs {
   matcapTint: boolean;
   denoise: Denoise;
   tracer: TracerPref;
+  realtimeQuality: RealtimeQualityPref;
 }
 
 /** What the f-stop numbers mean to the blur pass, and the range the control
@@ -284,6 +290,7 @@ export const DEFAULT_RENDER: RenderPrefs = {
   matcapTint: true,
   denoise: "standard",
   tracer: "auto",
+  realtimeQuality: "auto",
 };
 
 export const MIN_BRIGHTNESS = 0.4;
@@ -333,6 +340,10 @@ export function asDenoise(v: unknown): Denoise | null {
 
 export function asTracerPref(v: unknown): TracerPref | null {
   return TRACER_PREFS.includes(v as TracerPref) ? (v as TracerPref) : null;
+}
+
+export function asRealtimeQuality(v: unknown): RealtimeQualityPref | null {
+  return REALTIME_QUALITY_PREFS.includes(v as RealtimeQualityPref) ? (v as RealtimeQualityPref) : null;
 }
 
 export function asGround(v: unknown): Ground | null {
@@ -428,6 +439,7 @@ export function asRenderPrefs(v: unknown): RenderPrefs {
     matcapTint: typeof o["matcapTint"] === "boolean" ? o["matcapTint"] : DEFAULT_RENDER.matcapTint,
     denoise: asDenoise(o["denoise"]) ?? DEFAULT_RENDER.denoise,
     tracer: asTracerPref(o["tracer"]) ?? DEFAULT_RENDER.tracer,
+    realtimeQuality: asRealtimeQuality(o["realtimeQuality"]) ?? DEFAULT_RENDER.realtimeQuality,
   };
 }
 
@@ -473,6 +485,7 @@ export function setRenderPref<K extends keyof RenderPrefs>(key: K, value: Render
                               : key === "matcapTint" ? (typeof value === "boolean" ? value : null)
                                 : key === "denoise" ? asDenoise(value)
                                   : key === "tracer" ? asTracerPref(value)
+                                    : key === "realtimeQuality" ? asRealtimeQuality(value)
                                     : asBrightness(value);
   if (ok === null || current[key] === ok) return;
   // A fresh object rather than a mutation, so a subscriber may hold the result

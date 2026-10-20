@@ -4,11 +4,39 @@
 // canvas, so they are never bloomed, blurred or tone mapped twice.
 
 import * as THREE from "three";
-import type { ViewMode } from "../ui/renderPrefs";
+import type { RealtimeQualityPref, ViewMode } from "../ui/renderPrefs";
 import { isGlassAuto } from "./glassThickness";
 import { mirror } from "./potato";
 
 export type RealtimeQuality = "standard" | "high";
+/** What the machine is: Light and Potato (`lowPower`), a machine detected as weak
+ *  (`auto`) and a software renderer. */
+export interface QualityTier {
+  lowPower: boolean;
+  auto: boolean;
+  software: boolean;
+}
+
+export const HIGH_NEEDS_GPU = "This computer draws with software graphics, which is too slow for High.";
+export const HIGH_NEEDS_POWER = "This computer was detected as low powered, so High is off.";
+export const HIGH_NEEDS_FULL = "High is off while performance mode or potato mode is on.";
+
+/** Why High is refused on this tier, or null where it is offered. */
+export function highRefusal(t: QualityTier): string | null {
+  if (t.software) return HIGH_NEEDS_GPU;
+  if (t.auto) return HIGH_NEEDS_POWER;
+  if (t.lowPower) return HIGH_NEEDS_FULL;
+  return null;
+}
+
+/** The quality the realtime view runs at for a saved choice. Auto is Standard
+ *  until the machine is measured. `reason` is why High is refused on this tier,
+ *  whatever was chosen, for the tooltip of the row. */
+export function resolveRealtimeQuality(pref: RealtimeQualityPref, t: QualityTier): { quality: RealtimeQuality; reason: string | null } {
+  const reason = highRefusal(t);
+  return { quality: pref === "high" && reason === null ? "high" : "standard", reason };
+}
+
 export type Stage = "prepass" | "model" | "bokeh" | "bloom" | "output" | "compose";
 
 /** What the viewport knows about a frame and PostChain does not. Null for a frame
@@ -190,11 +218,7 @@ export class ModelPrepass {
     this.target.depthTexture = new THREE.DepthTexture(1, 1, THREE.UnsignedIntType);
   }
 
-  render(r: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera): void {
-    r.getDrawingBufferSize(this.dims);
-    const w = Math.max(1, Math.floor(this.dims.x));
-    const h = Math.max(1, Math.floor(this.dims.y));
-    if (this.target.width !== w || this.target.height !== h) this.target.setSize(w, h);
+  private swapFor(scene: THREE.Scene): { swap: Swapped[]; hide: THREE.Object3D[] } {
     const swap: Swapped[] = [];
     const hide: THREE.Object3D[] = [];
     scene.traverseVisible((o) => {
@@ -214,6 +238,32 @@ export class ModelPrepass {
       };
       swap.push({ mesh: o, material: Array.isArray(o.material) ? o.material.map(twin) : twin(o.material) });
     });
+    return { swap, hide };
+  }
+
+  /** Links the twins' programs for the scene as it is, resolving when they are ready. */
+  warm(r: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera): Promise<void> {
+    const { swap, hide } = this.swapFor(scene);
+    const prevTarget = r.getRenderTarget();
+    let ready: Promise<unknown> = Promise.resolve();
+    try {
+      drawSwapped(r, scene, camera, swap, hide, MODEL_MASK, () => {
+        r.setRenderTarget(this.target);
+        ready = r.compileAsync(scene, camera);
+      });
+    } finally {
+      r.setRenderTarget(prevTarget);
+      this.twins.prune();
+    }
+    return ready.then(() => {});
+  }
+
+  render(r: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera): void {
+    r.getDrawingBufferSize(this.dims);
+    const w = Math.max(1, Math.floor(this.dims.x));
+    const h = Math.max(1, Math.floor(this.dims.y));
+    if (this.target.width !== w || this.target.height !== h) this.target.setSize(w, h);
+    const { swap, hide } = this.swapFor(scene);
     const prevTarget = r.getRenderTarget();
     r.getClearColor(this.clearWas);
     const alpha = r.getClearAlpha();
@@ -257,7 +307,7 @@ function depthTwin(): THREE.MeshBasicMaterial {
 export class OverlayCompose {
   private twins = new Twins(depthTwin);
 
-  render(r: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera): void {
+  private swapFor(scene: THREE.Scene): { swap: Swapped[]; hide: THREE.Object3D[] } {
     const swap: Swapped[] = [];
     const hide: THREE.Object3D[] = [];
     scene.traverseVisible((o) => {
@@ -275,6 +325,25 @@ export class OverlayCompose {
       };
       swap.push({ mesh, material: Array.isArray(mesh.material) ? mesh.material.map(twin) : twin(mesh.material) });
     });
+    return { swap, hide };
+  }
+
+  /** Links the depth twins' programs for the scene as it is, resolving when they are ready. */
+  warm(r: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera): Promise<void> {
+    const { swap, hide } = this.swapFor(scene);
+    let ready: Promise<unknown> = Promise.resolve();
+    try {
+      drawSwapped(r, scene, camera, swap, hide, camera.layers.mask, () => {
+        ready = r.compileAsync(scene, camera);
+      });
+    } finally {
+      this.twins.prune();
+    }
+    return ready.then(() => {});
+  }
+
+  render(r: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.Camera): void {
+    const { swap, hide } = this.swapFor(scene);
     const auto = r.autoClear;
     try {
       drawSwapped(r, scene, camera, swap, hide, camera.layers.mask, () => {

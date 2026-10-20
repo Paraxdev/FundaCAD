@@ -3,7 +3,7 @@
 // the overlays are drawn after it on the canvas, with everything given back.
 import { afterEach, describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { stagesFor, type FrameState } from "../../src/viewport/realtimePipeline";
+import { HIGH_NEEDS_FULL, HIGH_NEEDS_GPU, HIGH_NEEDS_POWER, resolveRealtimeQuality, stagesFor, type FrameState } from "../../src/viewport/realtimePipeline";
 import { PostChain } from "../../src/viewport/scene";
 import { DEFAULT_RENDER, setRenderPref } from "../../src/ui/renderPrefs";
 
@@ -64,6 +64,27 @@ describe("stagesFor", () => {
   });
 });
 
+describe("resolveRealtimeQuality", () => {
+  const full = { lowPower: false, auto: false, software: false };
+
+  it("gives High only where it was chosen and the tier offers it", () => {
+    expect(resolveRealtimeQuality("high", full)).toEqual({ quality: "high", reason: null });
+    expect(resolveRealtimeQuality("standard", full)).toEqual({ quality: "standard", reason: null });
+    expect(resolveRealtimeQuality("auto", full)).toEqual({ quality: "standard", reason: null });
+  });
+
+  it("gives Standard with a reason on Light, Potato, a weak machine and a software renderer", () => {
+    expect(resolveRealtimeQuality("high", { ...full, lowPower: true })).toEqual({ quality: "standard", reason: HIGH_NEEDS_FULL });
+    expect(resolveRealtimeQuality("high", { lowPower: true, auto: true, software: false })).toEqual({ quality: "standard", reason: HIGH_NEEDS_POWER });
+    expect(resolveRealtimeQuality("high", { lowPower: true, auto: true, software: true })).toEqual({ quality: "standard", reason: HIGH_NEEDS_GPU });
+    expect(resolveRealtimeQuality("high", { ...full, software: true })).toEqual({ quality: "standard", reason: HIGH_NEEDS_GPU });
+  });
+
+  it("still names the refusal when High was not chosen, for the row's tooltip", () => {
+    expect(resolveRealtimeQuality("auto", { ...full, lowPower: true }).reason).toBe(HIGH_NEEDS_FULL);
+  });
+});
+
 interface Draw { target: unknown; mask: number; background: unknown; autoClear: boolean; autoUpdate: boolean; materials: unknown[] }
 
 function highChain() {
@@ -85,7 +106,15 @@ function highChain() {
   const camera = new THREE.PerspectiveCamera();
   camera.layers.enableAll();
   const full = camera.layers.mask;
+  const compiles: { target: unknown; materials: unknown[] }[] = [];
+  let release: () => void = () => {};
   const renderer = {
+    compileAsync: (sc: THREE.Scene) => {
+      const materials: unknown[] = [];
+      sc.traverseVisible((o) => { if ((o as THREE.Mesh).isMesh && o.layers.test(camera.layers)) materials.push((o as THREE.Mesh).material); });
+      compiles.push({ target, materials });
+      return new Promise<void>((resolve) => { const was = release; release = () => { was(); resolve(); }; });
+    },
     toneMapping: THREE.NeutralToneMapping,
     toneMappingExposure: 1,
     autoClear: true,
@@ -129,8 +158,69 @@ function highChain() {
   setRenderPref("bloom", 0);
   setRenderPref("focusBlur", 0);
   const originals = [body.material, glass.material, handle.material];
-  return { post, scene, camera, full, draws, composed, renderer, originals, body, glass, handle, cap, throwAt: (n: number) => { throwOn = n; } };
+  return { post, scene, camera, full, draws, composed, compiles, release: () => release(), renderer, originals, body, glass, handle, cap, throwAt: (n: number) => { throwOn = n; } };
 }
+
+describe("PostChain quality switch", () => {
+  afterEach(() => {
+    setRenderPref("bloom", DEFAULT_RENDER.bloom);
+    setRenderPref("focusBlur", DEFAULT_RENDER.focusBlur);
+  });
+
+  const facts = { moving: false, ghosted: false };
+  const tick = () => new Promise<void>((r) => setTimeout(r, 0));
+
+  it("keeps drawing the old stages until the High programs have linked, then swaps", async () => {
+    const c = highChain();
+    c.post.realtimeQuality = "standard";
+    const swapped = c.post.switchRealtimeQuality("high", c.camera);
+    await tick();
+    expect(c.compiles).toHaveLength(2);
+    c.post.render(c.camera, false, false, facts);
+    expect(c.post.highStages).toBeNull();
+    expect(c.composed).toEqual([]);
+    expect(c.draws.map((d) => d.background)).toEqual([c.scene.background]);
+    c.release();
+    await swapped;
+    c.post.render(c.camera, false, false, facts);
+    expect(c.post.highStages).toEqual(["prepass", "model", "output", "compose"]);
+  });
+
+  it("links the prepass twins into the prepass target and the depth twins on the canvas, the model's own materials left alone", async () => {
+    const c = highChain();
+    c.post.realtimeQuality = "standard";
+    const swapped = c.post.switchRealtimeQuality("high", c.camera);
+    await tick();
+    const [prepass, overlay] = c.compiles as [(typeof c.compiles)[number], (typeof c.compiles)[number]];
+    expect(prepass.target).not.toBeNull();
+    expect(prepass.materials).toHaveLength(1);
+    expect(prepass.materials[0]).toBeInstanceOf(THREE.MeshNormalMaterial);
+    expect(overlay.target).toBeNull();
+    expect(overlay.materials.filter((m) => (m as THREE.Material).colorWrite === false)).toHaveLength(overlay.materials.length - 1);
+    expect([c.body.material, c.glass.material, c.handle.material]).toEqual(c.originals);
+    c.release();
+    await swapped;
+  });
+
+  it("drops back to Standard at once, and a High still waiting does not swap in afterwards", async () => {
+    const c = highChain();
+    c.post.realtimeQuality = "standard";
+    const high = c.post.switchRealtimeQuality("high", c.camera);
+    await tick();
+    await c.post.switchRealtimeQuality("standard", c.camera);
+    c.release();
+    await high;
+    c.post.render(c.camera, false, false, facts);
+    expect(c.post.highStages).toBeNull();
+    expect(c.post.prepassTarget).toBeNull();
+  });
+
+  it("does not link anything when the quality is already the one asked for", async () => {
+    const c = highChain();
+    await c.post.switchRealtimeQuality("high", c.camera);
+    expect(c.compiles).toEqual([]);
+  });
+});
 
 describe("PostChain at High", () => {
   afterEach(() => {
