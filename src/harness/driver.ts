@@ -84,7 +84,7 @@ export function createMethods(
     },
     locate: (a) => {
       const c = findControl(walk(), str(a, "target"), { disabled: a.disabled === true });
-      return { marker: stamp(c.el), ref: c.ref, label: c.label, role: c.role, disabled: c.disabled, covered: covered(c.el, doc) };
+      return { marker: stamp(c.el), ref: c.ref, label: c.label, role: c.role, region: c.region, disabled: c.disabled, covered: covered(c.el, doc) };
     },
     toolPath: (a) => ({
       steps: toolPath(walk(), str(a, "label"), doc.querySelector<HTMLElement>("#toolrail")?.dataset.mode ?? "model"),

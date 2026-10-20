@@ -136,7 +136,7 @@ with Session() as s:
 
 | verb | what a person does |
 |---|---|
-| `click(target, button="left", double=False, mods=())` | clicks a control by ref or label, or `face:<sel>` / `edge:<sel>` on the canvas |
+| `click(target, button="left", double=False, mods=())` | clicks a control by ref or label, or `face:<sel>` / `edge:<sel>` on the canvas; a label click says the region it landed in, and when only the start of a name matched |
 | `tool(label)` | starts a rail tool, opening its category or family first |
 | `type(target, text, enter=False)` | clicks a value box, selects all and types |
 | `press(*keys)` | `"Enter"`, `"Escape"`, `"Ctrl+Z"`, `"Shift+H"` |
