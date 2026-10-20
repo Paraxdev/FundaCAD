@@ -155,4 +155,28 @@ mod t {
         eprintln!("corner {} -> {}", at(&a, 2, 2), at(&b, 2, 2));
         assert!(at(&b, 2, 2).abs_diff(at(&a, 2, 2)) <= 1, "the sky bloomed");
     }
+
+    #[test]
+    fn a_lost_device_leaves_a_fault_and_no_panic() {
+        for software in [true, false] {
+            let Ok(mut t) = Tracer::new(TracerOptions { software, ..Default::default() }) else {
+                eprintln!("skipped: no adapter");
+                return;
+            };
+            t.frame(32, 24, Duration::from_millis(12));
+            assert_eq!(t.fault(), None);
+            t.lose_device_for_test();
+            let px = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| t.frame(32, 24, Duration::from_millis(12))));
+            let px = px.expect("a lost device panicked");
+            assert_eq!(px.len(), 32 * 24 * 4);
+            let fault = t.fault().expect("no fault after the loss");
+            assert!(fault.contains("lost"), "{fault}");
+            let again = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                t.set_frame_budget(65_536);
+                t.set_cap(8);
+                t.frame(48, 24, Duration::from_millis(12))
+            }));
+            assert!(again.is_ok(), "a call after the loss panicked");
+        }
+    }
 }

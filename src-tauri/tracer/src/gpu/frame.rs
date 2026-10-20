@@ -90,7 +90,7 @@ impl Tracer {
         let before = self.sample;
         loop {
             let t = Instant::now();
-            if start.elapsed() >= budget || !self.step() {
+            if start.elapsed() >= budget || self.fault().is_some() || !self.step() {
                 break;
             }
             self.wait();
@@ -105,8 +105,11 @@ impl Tracer {
     /// `budget` and resolves. At the cap it hands out the held frame without
     /// touching the GPU, and the denoised one once it lands; below it a
     /// software band that ends mid sample still traces on, so the sample count
-    /// is no sign of a finished picture.
+    /// is no sign of a finished picture. Black once the device faulted.
     pub fn frame(&mut self, w: u32, h: u32, budget: Duration) -> Vec<u8> {
+        if self.fault().is_some() {
+            return vec![0; w.max(1) as usize * h.max(1) as usize * 4];
+        }
         self.resize(w, h);
         self.apply();
         if self.done() && self.held.as_ref().is_some_and(|h| h.key == self.key()) {
@@ -151,9 +154,17 @@ impl Tracer {
         let mut enc = self.device.create_command_encoder(&Default::default());
         enc.copy_buffer_to_buffer(src, 0, &staging, 0, size);
         self.queue.submit([enc.finish()]);
-        staging.slice(..).map_async(wgpu::MapMode::Read, |_| {});
+        let (tx, rx) = std::sync::mpsc::channel();
+        staging.slice(..).map_async(wgpu::MapMode::Read, move |r| {
+            let _ = tx.send(r.is_ok());
+        });
         self.wait();
-        let v = staging.slice(..).get_mapped_range().expect("mapped").to_vec();
+        if !rx.try_recv().unwrap_or(false) || self.fault().is_some() {
+            return vec![0; size as usize];
+        }
+        let Ok(v) = staging.slice(..).get_mapped_range().map(|r| r.to_vec()) else {
+            return vec![0; size as usize];
+        };
         staging.unmap();
         v
     }

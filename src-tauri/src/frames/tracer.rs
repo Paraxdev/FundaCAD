@@ -20,6 +20,19 @@ struct State {
     fault: Option<String>,
 }
 
+impl State {
+    /// Takes up a loss or error the device reported, even one raised by a
+    /// command with no frame since.
+    fn take_fault(&mut self) {
+        if self.fault.is_none() {
+            if let Some(f) = self.tracer.fault() {
+                eprintln!("[frames] tracer fault: {f}");
+                self.fault = Some(f);
+            }
+        }
+    }
+}
+
 pub struct TracerSource(Mutex<State>);
 
 static TRACER: Reopen<TracerSource> = Reopen::new();
@@ -79,12 +92,16 @@ impl TracerSource {
 impl FrameSource for TracerSource {
     fn render(&self, out: &mut [u8], width: u32, height: u32, _seq: u32) {
         let mut s = self.lock();
+        s.take_fault();
         if s.fault.is_some() {
             out.fill(0);
             return;
         }
         match catch_unwind(AssertUnwindSafe(|| s.tracer.frame(width, height, TRACE_BUDGET))) {
-            Ok(px) if px.len() == out.len() => out.copy_from_slice(&px),
+            Ok(px) if px.len() == out.len() => {
+                out.copy_from_slice(&px);
+                s.take_fault();
+            }
             Ok(px) => {
                 s.fault = Some(format!("a {} byte frame for a {} byte slot", px.len(), out.len()));
                 out.fill(0);
@@ -106,10 +123,13 @@ impl FrameSource for TracerSource {
 fn with<T>(f: impl FnOnce(&mut Tracer) -> T) -> Result<T, String> {
     let t = open()?;
     let mut s = t.lock();
+    s.take_fault();
     if let Some(f) = &s.fault {
         return Err(format!("the native tracer stopped: {f}"));
     }
-    Ok(f(&mut s.tracer))
+    let r = f(&mut s.tracer);
+    s.take_fault();
+    Ok(r)
 }
 
 fn raw(request: &Request<'_>) -> Result<Vec<u8>, String> {
@@ -200,6 +220,7 @@ pub fn pt_status() -> Result<Status, String> {
     let t = open()?;
     let mut s = t.lock();
     s.tracer.poll_denoise();
+    s.take_fault();
     Ok(Status {
         samples: s.tracer.samples(),
         generation: s.tracer.generation(),

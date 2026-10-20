@@ -5,7 +5,7 @@ mod pipelines;
 mod upload;
 
 use std::collections::HashMap;
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc, Mutex};
 
 use crate::bloom::{Bloom, Chain};
 use crate::denoise::{self, Denoiser, Quality};
@@ -135,6 +135,16 @@ pub struct Tracer {
     quality: Quality,
     job: Option<Job>,
     denoise_error: Option<String>,
+    fault: Arc<Mutex<Fault>>,
+}
+
+/// The first loss and the first uncaptured error. Not behind the frames
+/// State lock: wgpu runs both handlers inside the call that hit them, which
+/// already holds that lock.
+#[derive(Default)]
+struct Fault {
+    lost: Option<String>,
+    error: Option<String>,
 }
 
 /// The last frame handed out, shown again while nothing can change it.
@@ -208,6 +218,17 @@ impl Tracer {
         }))
         .map_err(|e| e.to_string())?;
         let path = if hw { Path::RayQuery } else { Path::Software };
+        let fault = Arc::new(Mutex::new(Fault::default()));
+        let f = fault.clone();
+        device.set_device_lost_callback(move |reason, msg| {
+            let mut f = f.lock().unwrap_or_else(|p| p.into_inner());
+            f.lost.get_or_insert_with(|| format!("the graphics device was lost ({reason:?}: {msg})"));
+        });
+        let f = fault.clone();
+        device.on_uncaptured_error(Arc::new(move |e: wgpu::Error| {
+            let mut f = f.lock().unwrap_or_else(|p| p.into_inner());
+            f.error.get_or_insert_with(|| e.to_string());
+        }));
 
         let pipes = Pipelines::new(&device, path);
 
@@ -281,6 +302,7 @@ impl Tracer {
             quality: Quality::default(),
             job: None,
             denoise_error: None,
+            fault,
         };
         t.resize(64, 64);
         Ok(t)
@@ -288,6 +310,16 @@ impl Tracer {
 
     pub fn path(&self) -> Path {
         self.path
+    }
+    /// Why the GPU stopped: a lost device, else the first error wgpu raised.
+    /// Once set, frames are black and no GPU work follows.
+    pub fn fault(&self) -> Option<String> {
+        let f = self.fault.lock().unwrap_or_else(|p| p.into_inner());
+        f.lost.clone().or_else(|| f.error.clone())
+    }
+    #[doc(hidden)]
+    pub fn lose_device_for_test(&self) {
+        self.device.destroy();
     }
     pub fn adapter(&self) -> &str {
         &self.adapter
