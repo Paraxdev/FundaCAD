@@ -144,7 +144,7 @@ with Session() as s:
 | `context_menu(on, item)` | right clicks a control or `face:<sel>`, then the row |
 | `panel(name, open=True)` | history, items, preferences and the other panel buttons, only if not already in that state |
 | `command(name)` | Ctrl+F, the name, Enter |
-| `pick_face(sel, add=False, exact=False)` | clicks a face; a click that took the body is followed by a second one, as a person does |
+| `pick_face(sel, add=False, exact=False)` | clicks a face; a click that took the body is followed by a second one, as a person does; `add` holds Ctrl and leaves a face that is already selected as it is |
 | `pick_edge(sel, add=False, exact=False, via="select")` | clicks an edge, `via="edge"` for the edge tools |
 | `pick_plane(name)` | `XY`, `XZ`, `YZ` or a datum plane's id |
 | `click_at(sketch=(x, y) or world=(x, y, z) or screen=(x, y))`, `drag(from_, to, space="sketch")` | pointer at a sketch, world or screen point, `space` is `sketch`, `world` or `screen` |

@@ -495,9 +495,17 @@ class Actions:
         self.bridge.call("settle", timeoutMs=int(self.settle_timeout * 1000))
         return self.bridge.call("selection")
 
+    @staticmethod
+    def _selected(kind: str, p: dict, got: dict, via: str) -> bool:
+        if kind == "face":
+            return [p["body"], p["index"]] in got["faces"]
+        return via == "select" and p["edgeId"] in got["edges"]
+
     def _pick(self, kind: str, sel: str, add: bool, exact: bool, via: str = "select") -> tuple[str, dict]:
         mods = (["Ctrl"] if add else []) + (["Shift"] if exact else [])
         p = self._canvas_point(kind, sel, via)
+        if add and self._selected(kind, p, self.bridge.call("selection"), via):
+            return f"kept {p['what']}, it was already selected and Ctrl would take it off", p
         self._mouse_click(p["x"], p["y"], mods=mods)
         got = self._selection_after_click()
         if kind == "face" and [p["body"], p["index"]] not in got["faces"] and p["body"] in got["bodies"]:
