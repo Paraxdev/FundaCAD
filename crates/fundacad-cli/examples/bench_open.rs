@@ -56,11 +56,39 @@ fn median_of<T>(repeat: usize, mut run: impl FnMut() -> (Duration, T)) -> (f64, 
     (ms(times[times.len() / 2]), last.expect("one run"))
 }
 
-fn fresh_dir(tag: &str) -> PathBuf {
+/// A temp directory removed when it goes out of scope, a failed run included.
+struct Scratch(PathBuf);
+
+impl std::ops::Deref for Scratch {
+    type Target = Path;
+    fn deref(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl AsRef<Path> for Scratch {
+    fn as_ref(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl AsRef<std::ffi::OsStr> for Scratch {
+    fn as_ref(&self) -> &std::ffi::OsStr {
+        self.0.as_os_str()
+    }
+}
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+fn fresh_dir(tag: &str) -> Scratch {
     let d = std::env::temp_dir().join(format!("fundacad-bench-open-{tag}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&d);
     std::fs::create_dir_all(&d).expect("a temp directory");
-    d
+    Scratch(d)
 }
 
 fn dir_bytes(dir: &Path) -> u64 {
@@ -141,7 +169,7 @@ fn stage_pack(args: &[String]) {
     emit("import", ms(t.elapsed()), std::fs::metadata(source).map(|m| m.len()).unwrap_or(0), json!({}));
     feature.insert("id".into(), json!("im"));
     feature.insert("type".into(), json!("import"));
-    let doc = json!({"version": 11, "parameters": {}, "features": [Value::Object(feature)]});
+    let doc = json!({"version": fundacad_core::schema::DOCUMENT_VERSION, "parameters": {}, "features": [Value::Object(feature)]});
     let doc_text = serde_json::to_string_pretty(&doc).unwrap();
 
     let mut blobs = BTreeMap::new();
