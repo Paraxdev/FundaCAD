@@ -148,6 +148,18 @@ describe("looseEnds detection", () => {
     expect(refs(le.untied)).toEqual(["r:1"]);
   });
 
+  it("among thousands of curves a near miss on a long line or a big circle is still found", () => {
+    const ents: ResolvedEntity[] = Array.from({ length: 3000 }, (_, i) => L("s" + i, (i % 60) * 10, Math.floor(i / 60) * 10, (i % 60) * 10 + 4, Math.floor(i / 60) * 10 + 3));
+    ents.push(L("long", 0, -50, 1000, -50), L("t", 500, -49.95, 500, -40));
+    ents.push({ type: "circle", id: "c", x: 2000, y: 0, radius: 100 }, L("u", 2100.05, 0, 2150, 0));
+    const le = looseEnds(ents, [], 0.1);
+    expect(le.untied.map((u) => [u.entity, u.p, u.touches])).toEqual([
+      ["t", 0, { kind: "curve", entity: "long" }],
+      ["u", 0, { kind: "curve", entity: "c" }],
+    ]);
+    expect(le.open).toHaveLength(6004);
+  });
+
   it("two ends held at one construction end are tied to each other", () => {
     const ents = [L("a", 0, 0, 5, 0), L("b", 5, 0, 5, 5), L("k", 5, 0, 9, 9, true)];
     const le = looseEnds(ents, [co("a", 1, "k", 0), co("k", 0, "b", 0)], 0.1);

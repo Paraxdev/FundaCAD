@@ -73,6 +73,80 @@ function curveDist(c: Curve, x: number, y: number): number {
   return best;
 }
 
+/** A uniform grid over the curves, so an end only measures the curves near it.
+ *  Cells hold curve indices, a hashed cell key may collide, which only adds a
+ *  candidate the distance test then drops. */
+class CurveIndex {
+  private cells = new Map<number, number[]>();
+  private big: number[] = [];
+  private stamp: Int32Array;
+  private turn = 0;
+  private cell: number;
+  constructor(readonly curves: Curve[], private tol: number) {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, segs = 0;
+    for (const c of curves) {
+      minX = Math.min(minX, c.minX); minY = Math.min(minY, c.minY);
+      maxX = Math.max(maxX, c.maxX); maxY = Math.max(maxY, c.maxY);
+      segs += Math.max(1, c.pts.length - 1);
+    }
+    const area = Number.isFinite(minX) ? (maxX - minX) * (maxY - minY) : 0;
+    this.cell = Math.max(2 * tol, Math.sqrt(area / Math.max(1, segs)), 1e-9);
+    this.stamp = new Int32Array(curves.length);
+    curves.forEach((c, i) => this.insert(c, i));
+  }
+  private hash(cx: number, cy: number): number {
+    return Math.imul(cx, 73856093) ^ Math.imul(cy, 19349663);
+  }
+  private box(i: number, x0: number, y0: number, x1: number, y1: number): boolean {
+    const t = this.tol, k = this.cell;
+    const ax = Math.floor((x0 - t) / k), bx = Math.floor((x1 + t) / k);
+    const ay = Math.floor((y0 - t) / k), by = Math.floor((y1 + t) / k);
+    if ((bx - ax + 1) * (by - ay + 1) > 4096) return false;
+    for (let cx = ax; cx <= bx; cx++) {
+      for (let cy = ay; cy <= by; cy++) {
+        const h = this.hash(cx, cy);
+        const list = this.cells.get(h);
+        if (!list) this.cells.set(h, [i]);
+        else if (list[list.length - 1] !== i) list.push(i);
+      }
+    }
+    return true;
+  }
+  private insert(c: Curve, i: number) {
+    const e = c.e;
+    const round = e.type === "circle" || (e.type === "projected" && e.curve.kind === "circle");
+    if (round || c.pts.length < 2) {
+      if (!this.box(i, c.minX, c.minY, c.maxX, c.maxY)) this.big.push(i);
+      return;
+    }
+    for (let s = 0; s < c.pts.length - 1; s++) {
+      const a = c.pts[s]!, b = c.pts[s + 1]!;
+      const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / this.cell));
+      for (let j = 0; j < n; j++) {
+        const x0 = a.x + ((b.x - a.x) * j) / n, y0 = a.y + ((b.y - a.y) * j) / n;
+        const x1 = a.x + ((b.x - a.x) * (j + 1)) / n, y1 = a.y + ((b.y - a.y) * (j + 1)) / n;
+        if (!this.box(i, Math.min(x0, x1), Math.min(y0, y1), Math.max(x0, x1), Math.max(y0, y1))) {
+          this.big.push(i);
+          return;
+        }
+      }
+    }
+  }
+  /** Each curve whose sampled path passes within the reach of (x, y), once. */
+  near(x: number, y: number): Curve[] {
+    const turn = ++this.turn;
+    const out: Curve[] = [];
+    const take = (i: number) => {
+      if (this.stamp[i] === turn) return;
+      this.stamp[i] = turn;
+      out.push(this.curves[i]!);
+    };
+    for (const i of this.cells.get(this.hash(Math.floor(x / this.cell), Math.floor(y / this.cell))) ?? []) take(i);
+    for (const i of this.big) take(i);
+    return out;
+  }
+}
+
 const key = (entity: string, p: number) => `${entity}\u0000${p}`;
 
 class Joins {
@@ -162,9 +236,9 @@ export function looseEnds(
     const list = grid.get(k);
     if (list) list.push(t); else grid.set(k, [t]);
   }
-  let curves: Curve[] | null = null;
-  const curveList = (): Curve[] => {
-    curves ??= profile.map((e) => {
+  let index: CurveIndex | null = null;
+  const nearCurves = (x: number, y: number): Curve[] => {
+    index ??= new CurveIndex(profile.map((e) => {
       const pts = entityPolyline(e).map((v) => ({ x: v.x, y: v.y }));
       let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
       for (const q of pts) {
@@ -172,8 +246,8 @@ export function looseEnds(
         maxX = Math.max(maxX, q.x); maxY = Math.max(maxY, q.y);
       }
       return { e, pts, minX, minY, maxX, maxY };
-    });
-    return curves;
+    }), tolMm);
+    return index.near(x, y);
   };
 
   const open: EndRef[] = [];
@@ -199,7 +273,7 @@ export function looseEnds(
     }
     let near: Curve | null = null;
     let nearD = Infinity;
-    for (const c of curveList()) {
+    for (const c of nearCurves(end.x, end.y)) {
       if (c.e.id === end.entity) continue;
       if (end.x < c.minX - tolMm || end.x > c.maxX + tolMm || end.y < c.minY - tolMm || end.y > c.maxY + tolMm) continue;
       const d = curveDist(c, end.x, end.y);
