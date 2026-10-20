@@ -28,6 +28,11 @@ def _flag(name: str) -> bool:
 
 
 class Session(Actions):
+    """A private app: its own engine, vite and headless Chrome, driven through the real controls.
+
+    Actions (click, tool, type, press, menu, pick_face, drag_handle, undo, ...) return a one line
+    Step. Readouts (screen, history, bodies, status, selection, last_error) return short text, or
+    the JSON with `raw=True`. docs/HARNESS.md has the whole guide."""
     def __init__(
         self,
         engine: str | os.PathLike | None = None,
@@ -89,6 +94,7 @@ class Session(Actions):
     # --- lifecycle ---------------------------------------------------------
 
     def open(self) -> str:
+        """Starts vite, the engine and Chrome, waits for the app and closes the start screen."""
         try:
             warn = stale_warning(self.engine_cmd, self.repo)
             if warn:
@@ -200,6 +206,7 @@ class Session(Actions):
         self._mark = self.bridge.call("seq")
 
     def close(self) -> str:
+        """Stops everything this session started; its logs stay after a launch failure or an exception out of a `with` block, everything with `keep`."""
         if self.closed:
             return "already closed"
         self.closed = True
@@ -248,6 +255,7 @@ class Session(Actions):
         return self.bridge.call(method, **args)
 
     def settle(self, trace: int | None = None, timeout: float | None = None) -> str:
+        """Waits until rebuilds, previews, the camera and the picture are quiet; every action already does."""
         args: dict[str, Any] = {"timeoutMs": int((timeout or self.settle_timeout) * 1000)}
         if trace is not None:
             args["trace"] = trace
@@ -255,6 +263,7 @@ class Session(Actions):
         return f"settled in {r['ms']} ms"
 
     def dismiss_start(self) -> str:
+        """Closes the start screen (Home or the Welcome dialog); `open()` already does."""
         kind = self.bridge.call("startScreen")
         if kind != "none":
             close = self.page.locator(".home .modal-close, .modal-overlay .modal-close").first
@@ -283,6 +292,7 @@ class Session(Actions):
     # --- readouts ----------------------------------------------------------
 
     def screen(self, region: str | None = None, max: int | None = None, raw: bool = False):
+        """The visible controls as a short tree, one ref per control, or one region of it."""
         args: dict[str, Any] = {}
         if region:
             args["region"] = region
@@ -292,10 +302,12 @@ class Session(Actions):
         return v if raw else text.screen(v)
 
     def history(self, raw: bool = False):
+        """The features in order with their type and state."""
         v = self.call("history")
         return v if raw else text.history(v)
 
     def bodies(self, raw: bool = False):
+        """The bodies with their face count and visibility."""
         v = self.call("bodies")
         return v if raw else text.bodies(v)
 
@@ -305,6 +317,7 @@ class Session(Actions):
         return v if raw else text.status(v)
 
     def selection(self, raw: bool = False):
+        """The selected bodies, faces and edges."""
         v = self.call("selection")
         return v if raw else text.selection(v)
 
@@ -318,16 +331,20 @@ class Session(Actions):
         return text.one_line(self.call("lastError", since=self._mark))
 
     def messages(self, since: int | None = None, raw: bool = False):
+        """The log and toast lines after a sequence number."""
         v = self.call("messages", since=since or 0)
         return v if raw else text.messages(v)
 
     def pids(self) -> list[int]:
+        """The process ids of the engine and vite this session started."""
         return [p.pid for p in self.procs]
 
     def page_errors(self) -> list[str]:
+        """Uncaught page errors seen so far."""
         return list(self._page_errors)
 
     def screenshot(self, path: str | os.PathLike | None = None, target: str | None = None) -> str:
+        """Saves a PNG of the page, or of one control, and returns its full path."""
         self._ensure_page()
         if path is None:
             shots = self.work / "shots"
