@@ -19,35 +19,7 @@ pub fn ref_path(name: &str) -> String {
     format!("{}/tests/refs/{name}.png", env!("CARGO_MANIFEST_DIR"))
 }
 
-pub fn sphere(r: f32, su: u32, sv: u32) -> Mesh {
-    let mut m = Mesh::default();
-    for j in 0..=sv {
-        let th = std::f32::consts::PI * j as f32 / sv as f32;
-        for i in 0..=su {
-            let ph = std::f32::consts::TAU * i as f32 / su as f32;
-            let n = [th.sin() * ph.cos(), th.sin() * ph.sin(), th.cos()];
-            m.positions.push(n.map(|c| c * r));
-            m.normals.push(n);
-        }
-    }
-    for j in 0..sv {
-        for i in 0..su {
-            let a = j * (su + 1) + i;
-            let b = a + su + 1;
-            m.indices.extend([a, b, a + 1, a + 1, b, b + 1]);
-        }
-    }
-    m
-}
-
-pub fn floor(s: f32) -> Mesh {
-    Mesh {
-        positions: vec![[-s, -s, 0.0], [s, -s, 0.0], [s, s, 0.0], [-s, s, 0.0]],
-        normals: vec![[0.0, 0.0, 1.0]; 4],
-        indices: vec![0, 1, 2, 0, 2, 3],
-        ..Default::default()
-    }
-}
+pub use fundacad_tracer::selfcheck::{floor, sphere};
 
 /// An axis aligned box with flat faces, centred on the origin.
 pub fn cuboid(hx: f32, hy: f32, hz: f32) -> Mesh {
@@ -229,26 +201,7 @@ pub fn build(t: &mut Tracer, name: &str, size: Option<(u32, u32)>) {
     t.apply();
 }
 
-/// Khronos PBR Neutral then sRGB, the same as resolve.wgsl, as 16 bit.
-pub fn display16(c: [f32; 3]) -> [u16; 3] {
-    let start = 0.8 - 0.04;
-    let x = c[0].min(c[1]).min(c[2]);
-    let off = if x < 0.08 { x - 6.25 * x * x } else { 0.04 };
-    let mut c = c.map(|v| v - off);
-    let peak = c[0].max(c[1]).max(c[2]);
-    if peak >= start {
-        let d = 1.0 - start;
-        let np = 1.0 - d * d / (peak + d - start);
-        c = c.map(|v| v * np / peak);
-        let g = 1.0 - 1.0 / (0.15 * (peak - np) + 1.0);
-        c = c.map(|v| v + (np - v) * g);
-    }
-    c.map(|v| {
-        let v = v.clamp(0.0, 1.0);
-        let s = if v <= 0.0031308 { v * 12.92 } else { 1.055 * v.powf(1.0 / 2.4) - 0.055 };
-        (s * 65535.0).round() as u16
-    })
-}
+pub use fundacad_tracer::display16;
 
 pub fn write_ref(name: &str, hdr: &[[f32; 3]], w: u32, h: u32) {
     let path = ref_path(name);

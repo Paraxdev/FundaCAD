@@ -313,6 +313,7 @@ pub fn run() {
         frames::tracer::pt_picture,
         frames::tracer::pt_picture_cancel,
         frames::tracer::pt_probe,
+        frames::tracer::pt_selfcheck,
         frames::denoiser::pt_denoiser,
         frames::denoiser::pt_denoiser_download
     ]);

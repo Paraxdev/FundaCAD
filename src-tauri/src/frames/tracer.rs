@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
 use fundacad_frames::{FrameSource, Reopen};
-use fundacad_tracer::{decode_colors, decode_mesh, denoise, encode_png, Bloom, BodyDesc, Camera, Denoiser, Look, Path, Picture, Quality, Refusal, Tracer, TracerOptions};
+use fundacad_tracer::{decode_colors, decode_mesh, denoise, encode_png, Bloom, BodyDesc, Camera, Denoiser, Look, Path, Picture, Quality, Refusal, SelfCheck, Tracer, TracerOptions};
 use serde::Serialize;
 use tauri::ipc::{InvokeBody, Request};
 
@@ -272,6 +272,15 @@ pub fn pt_status() -> Result<Status, String> {
 #[tauri::command]
 pub async fn pt_picture(width: u32, height: u32, samples: u32) -> Result<tauri::ipc::Response, String> {
     tauri::async_runtime::spawn_blocking(move || picture(width, height, samples).map(tauri::ipc::Response::new))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// golden_small traced beside the viewport's tracer and held against its
+/// reference: the difference, the threshold, ms and path.
+#[tauri::command]
+pub async fn pt_selfcheck() -> Result<SelfCheck, String> {
+    tauri::async_runtime::spawn_blocking(|| with(|t| t.self_check()).and_then(|c| c))
         .await
         .map_err(|e| e.to_string())?
 }
