@@ -158,3 +158,14 @@ def test_type_with_enter_says_when_the_hole_size_was_refused(plate):
     assert plate.history(raw=True)["count"] == 1
     plate.type("Size", "M6", enter=True)
     assert plate.history(raw=True)["count"] == 2
+
+
+def test_pick_face_while_hole_waits_for_a_face_succeeds_once_and_a_retry_adds_no_second_hole(plate):
+    plate.tool("Hole")
+    assert "Click a flat face" in plate.status(raw=True)["prompt"]
+    step = plate.pick_face("top")
+    assert "Hole tool took the click" in str(step)
+    assert "1 hole" in plate.status(raw=True)["prompt"]
+    with pytest.raises(HarnessError, match="already took this pick"):
+        plate.pick_face("top")
+    assert "1 hole" in plate.status(raw=True)["prompt"]

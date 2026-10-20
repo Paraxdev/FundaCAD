@@ -599,20 +599,39 @@ class Actions:
             return [p["body"], p["index"]] in got["faces"]
         return via == "select" and p["edgeId"] in got["edges"]
 
+    @staticmethod
+    def _tool_state(st: dict) -> tuple:
+        return (st.get("tool"), st.get("prompt"), st.get("undo"), st.get("dirty"))
+
     def _pick(self, kind: str, sel: str, add: bool, exact: bool, via: str = "select") -> tuple[str, dict]:
         mods = (["Ctrl"] if add else []) + (["Shift"] if exact else [])
         p = self._canvas_point(kind, sel, via)
         if add and self._selected(kind, p, self.bridge.call("selection"), via):
             return f"kept {p['what']}, it was already selected and Ctrl would take it off", p
+        before = self._tool_state(self.bridge.call("status")) if kind == "face" else None
+        if before is not None and getattr(self, "_took", None) == (sel, tuple(mods), before):
+            raise HarnessError(
+                f"the {before[0] or 'running'} tool already took this pick and nothing has changed since, picking again would add another, "
+                f'use click("face:{sel}") if that is wanted, or Escape to leave the tool'
+            )
         self._mouse_click(p["x"], p["y"], mods=mods)
         got = self._selection_after_click()
+        if kind == "face" and [p["body"], p["index"]] not in got["faces"]:
+            # A running tool (Hole, Mirror, ...) takes the click as its own, the face is then not selected.
+            after = self._tool_state(self.bridge.call("status"))
+            if (before[0] or after[0]) and after != before:
+                self._took = (sel, tuple(mods), after)
+                return f"picked {p['what']}, the {after[0] or before[0]} tool took the click", {**p, "selection": got, "tookClick": True}
         if kind == "face" and [p["body"], p["index"]] not in got["faces"] and p["body"] in got["bodies"]:
             self.page.wait_for_timeout(400)
             p = self._canvas_point(kind, sel, via)
             self._mouse_click(p["x"], p["y"], mods=mods)
             got = self._selection_after_click()
         if kind == "face" and [p["body"], p["index"]] not in got["faces"]:
-            raise HarnessError(f"clicked {p['what']} but the selection is {got['faces'] or got['bodies'] or 'empty'}")
+            raise HarnessError(
+                f"clicked {p['what']} but the selection is {got['faces'] or got['bodies'] or 'empty'}, "
+                "and no tool or prompt took the click, so it had no effect"
+            )
         if kind == "edge" and via == "select" and p["edgeId"] not in got["edges"]:
             raise HarnessError(f"clicked {p['what']} but the selection is {got['edges'] or 'empty'}")
         return f"picked {p['what']}", {**p, "selection": got}
