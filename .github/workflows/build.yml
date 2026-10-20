@@ -111,13 +111,15 @@ jobs:
           config='' release='' tag='' since='' latest=false
           version="1.0.${{ github.run_number }}"
           sha='${{ github.sha }}'
-          stable='^v1\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+          # Minor 0 is the betas' 1.0.<run number>, which a stable 1.0.x
+          # would be older than.
+          stable='^v1\.([1-9][0-9]*)\.(0|[1-9][0-9]*)$'
           case "$REF" in
             refs/heads/dev)  config=beta release=beta tag=beta ;;
             refs/heads/main) config=stable ;;
             refs/tags/*)
               [[ "$REF_NAME" =~ $stable ]] \
-                || { echo "::error::$REF_NAME is not a stable tag, those are v1.<minor>.<patch>"; exit 1; }
+                || { echo "::error::$REF_NAME is not a stable tag, those are v1.<minor>.<patch> with a minor of 1 or more"; exit 1; }
               sha=$(git rev-parse HEAD)
               git merge-base --is-ancestor "$sha" origin/main \
                 || { echo "::error::$REF_NAME points at ${sha:0:7}, which is not on main. Stable releases are cut from main only."; exit 1; }
