@@ -14,6 +14,7 @@ describe("harness gate", () => {
     expect(harnessWanted("?harness=1", false)).toBe(false);
     expect(harnessWanted("?token=x", true)).toBe(false);
     expect(harnessWanted("?harness=yes", true)).toBe(false);
+    expect(harnessWanted("?harness=10", true)).toBe(false);
   });
 
   it("publishes the bridge with its api number", () => {

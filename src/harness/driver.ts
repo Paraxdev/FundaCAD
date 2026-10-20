@@ -8,6 +8,9 @@ import * as read from "./readouts";
 import { settle, probe, describeQuiet, type SettleHost } from "./settle";
 import * as picks from "./picks";
 import { handleList, handlePoint, overHandle, type HandleHost } from "./handles";
+import { harnessWanted } from "./wanted";
+
+export { harnessWanted };
 
 export const HARNESS_API = 1;
 
@@ -21,9 +24,6 @@ export interface HarnessBridge {
   call(method: string, args?: Args): Promise<{ ok: true; value: unknown } | { ok: false; error: { kind: string; message: string; candidates: string[] } }>;
 }
 
-export function harnessWanted(search: string, dev: boolean): boolean {
-  return dev && new URLSearchParams(search).get("harness") === "1";
-}
 
 const str = (a: Args, k: string): string => {
   const v = a[k];
