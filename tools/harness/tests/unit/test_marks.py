@@ -106,3 +106,27 @@ def test_a_reload_is_taken_again_a_while_after_the_last_one():
     with pytest.raises(HarnessError, match="reloaded twice in 30 s"):
         s._ensure_page()
     s.close()
+
+
+def test_the_step_after_a_reload_says_the_document_is_new():
+    s = session(LogBridge())
+    s._wait_driver = lambda: None
+    s.dismiss_start = lambda: "none"
+    s._navs += 1
+    assert str(s.press("Enter")).startswith("pressed Enter, the page reloaded before this step, a browser tab keeps no document")
+    assert "reloaded" not in str(s.press("Enter"))
+    assert any("reloaded" in w for w in s.warnings)
+    s.close()
+
+
+def test_a_reload_in_the_middle_of_a_step_is_named():
+    s = session(LogBridge())
+
+    def reload(k):
+        s._navs += 1
+        raise RuntimeError("Page.evaluate: Execution context was destroyed")
+
+    s.page.keyboard.press = reload
+    with pytest.raises(HarnessError, match="press stopped, the page reloaded while it ran"):
+        s.press("Enter")
+    s.close()
