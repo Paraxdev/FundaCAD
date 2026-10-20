@@ -14,6 +14,7 @@ mod home_commands;
 pub mod thumbs;
 mod spacemouse;
 mod drop_paths;
+mod launch;
 pub mod frames;
 pub mod safe_mode;
 pub mod settings_files;
@@ -321,16 +322,15 @@ pub fn run() {
     let builder = tauri::Builder::default()
         // MUST be registered before every other plugin (Tauri's documented
         // requirement). A second launch focuses the window that is already open
-        // instead of starting a second app on the same documents and plugins.
-        // No `fileAssociations` exist, so `argv` carries nothing worth forwarding;
-        // if one is ever added, this callback has to hand it to the running
-        // instance or double-clicking a document file will silently do nothing.
-        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+        // instead of starting a second app on the same documents and plugins,
+        // and hands it the documents the second launch was given (launch.rs).
+        .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
             if let Some(w) = app.get_webview_window("main") {
                 let _ = w.unminimize(); // a minimized window would otherwise just blink
                 let _ = w.show();
                 let _ = w.set_focus();
             }
+            launch::queue_second_launch(app, argv, &cwd);
         }))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
@@ -354,6 +354,7 @@ pub fn run() {
         updates_supported,
         frontend_ready,
         safe_mode_exit,
+        launch::take_launch_paths,
         recovery_write,
         recovery_read,
         recovery_list,
@@ -420,6 +421,7 @@ pub fn run() {
 
     let app = builder
         .manage(spacemouse::Inventory::default())
+        .manage(launch::LaunchPaths::default())
         // The files a person has handed to a plugin this session. Session-lived
         // and nowhere on disk: a plugin cannot come back tomorrow holding a
         // token for a file somebody forgot they had offered it.
@@ -440,6 +442,7 @@ pub fn run() {
                     println!("[settings] a settings file did not read and was kept as {}", kept.display());
                 }
             }
+            launch::queue_first_launch(app);
             app.manage(engine::Engine::start(app.handle()));
             if reason.is_none() {
                 frames::denoiser::load_installed(app.handle());

@@ -3,7 +3,7 @@
 // one-click restart-and-update.
 // Only meaningful where the updater can actually replace the install, the NSIS
 // install on Windows, the .app on macOS, the AppImage on Linux, so the Rust
-// `updates_supported` command gates deb/rpm installs (and plain-browser dev) out.
+// `updates_supported` command gates deb, rpm and Flatpak installs (and plain-browser dev) out.
 
 import { choose } from "./choice";
 import { toast } from "./toast";
@@ -44,7 +44,7 @@ export async function showAbout(): Promise<void> {
  *  "not applicable here", and failures (the quiet startup check stays silent). */
 export async function checkForUpdates(interactive: boolean): Promise<void> {
   if (!(await updatesSupported())) {
-    if (interactive) toast("This install updates through your package manager, not in-app.");
+    if (interactive) toast("This install does not update itself. Install the newer file from the releases page over it.", { timeout: 8000 });
     return;
   }
   try {

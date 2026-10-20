@@ -62,6 +62,10 @@ jobs:
       - name: Frontend unit tests (vitest)
         run: npx vitest run
 
+      # The driver the bundle legs start each package with, against a fake server.
+      - name: Bundle smoke driver tests
+        run: python3 tests/build/test_bundle_smoke.py
+
       # The plugin sandbox is a worker ENTRY, so Rollup treats its exports as
       # unreachable and drops them. That produced a chunk with none of the
       # sandbox in it, past every unit test, and would have failed at the first
@@ -365,6 +369,92 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         uses: ./.github/actions/deb-gtk-depends
 
+      # Started, not only grepped: each package runs its own MCP server, which
+      # starts the same binary as its engine, and builds a 30x20x10 box. After
+      # the two package rewrites above, so what starts is what ships, and before
+      # the upload, so a red smoke names the upload failed-bundle. On dev that
+      # is an annotation and the development build still ships, on main it
+      # fails the leg and holds the beta (docs/ENGINE.md section 7). This runner
+      # has every library linux-deps installs, so a wrong Depends still passes
+      # here; the Flatpak's clean runtime and a container job are what catch it.
+      - name: Start the AppImage and the .deb's binary and build a box
+        if: matrix.platform == 'ubuntu-22.04'
+        continue-on-error: ${{ needs.channel.outputs.gated == 'false' }}
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          set -euo pipefail
+          img=$(find src-tauri/target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' | head -1)
+          deb=$(find src-tauri/target/release/bundle/deb -maxdepth 1 -name '*.deb' | head -1)
+          if [ -z "$img" ] || [ -z "$deb" ]; then echo "::error::no AppImage or .deb to start"; exit 1; fi
+          chmod +x "$img"
+          fuse=()
+          if ! { [ -e /dev/fuse ] && { command -v fusermount3 || command -v fusermount; } >/dev/null; }; then
+            echo "No FUSE on this runner, the AppImage runs extracted"
+            fuse=(--appimage-extract-and-run)
+          fi
+          red=0
+          if ! python3 scripts/bundle-smoke.py --work "$RUNNER_TEMP/smoke-appimage" -- "$img" "${fuse[@]}" --mcp; then
+            # The runtime names FUSE when it cannot mount, which is this
+            # runner, not the package; anything else is the package.
+            if [ ${#fuse[@]} -eq 0 ] && grep -qi fuse "$RUNNER_TEMP/smoke-appimage/server.log"; then
+              echo "::warning::the AppImage could not mount here, it runs extracted"
+              python3 scripts/bundle-smoke.py --work "$RUNNER_TEMP/smoke-appimage-x" -- "$img" --appimage-extract-and-run --mcp || red=1
+            else
+              red=1
+            fi
+          fi
+          # The .deb as well when the AppImage was red, so one run names both.
+          dpkg-deb -x "$deb" "$RUNNER_TEMP/deb-root"
+          python3 scripts/bundle-smoke.py --work "$RUNNER_TEMP/smoke-deb" -- "$RUNNER_TEMP/deb-root/usr/bin/fundacad" --mcp || red=1
+          exit "$red"
+
+      # The window as well: the AppImage under Xvfb, and a box built through
+      # the server attached to it. An attached edit only returns once the
+      # page has adopted it, so this proves WebKit loaded the page and its
+      # scripts run. Not a gate until it has run green on the runner.
+      - name: Open the AppImage window under Xvfb and build a box in it
+        if: matrix.platform == 'ubuntu-22.04'
+        continue-on-error: true
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo timeout -k 10 300 apt-get install -y -qq xvfb
+          img=$(find src-tauri/target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' | head -1)
+          fuse=()
+          if ! { [ -e /dev/fuse ] && { command -v fusermount3 || command -v fusermount; } >/dev/null; }; then
+            fuse=(--appimage-extract-and-run)
+          fi
+          export XDG_DATA_HOME="$RUNNER_TEMP/gui-data" WEBKIT_DISABLE_COMPOSITING_MODE=1 LIBGL_ALWAYS_SOFTWARE=1
+          session="$XDG_DATA_HOME/dev.fundacad.app/session.json"
+          mkdir -p "$XDG_DATA_HOME"
+          setsid xvfb-run -a "$img" "${fuse[@]}" > "$RUNNER_TEMP/gui.log" 2>&1 &
+          gui=$!
+          trap 'kill -- -"$gui" 2>/dev/null || true' EXIT
+          for _ in $(seq 120); do [ -f "$session" ] && break; sleep 1; done
+          if [ ! -f "$session" ]; then
+            echo "::error::the app wrote no session file in 120 s"; tail -n 50 "$RUNNER_TEMP/gui.log"; exit 1
+          fi
+          FUNDACAD_MCP_MODE=attach FUNDACAD_SESSION_FILE="$session" \
+            python3 scripts/bundle-smoke.py --work "$RUNNER_TEMP/smoke-gui" -- "$RUNNER_TEMP/deb-root/usr/bin/fundacad" --mcp
+
+      # The portable exe the release uploads, and the macOS app's binary, which
+      # Tauri names after the binary or the product depending on its version.
+      - name: Start the shipped executable and build a box
+        if: matrix.platform != 'ubuntu-22.04'
+        continue-on-error: ${{ needs.channel.outputs.gated == 'false' }}
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$RUNNER_OS" in
+            Windows) bin=src-tauri/target/release/fundacad.exe py=python ;;
+            macOS) bin=$(find src-tauri/target/release/bundle/macos -ipath '*.app/Contents/MacOS/fundacad' | head -1) py=python3 ;;
+          esac
+          if [ -z "${bin:-}" ] || [ ! -f "$bin" ]; then echo "::error::no executable to start"; exit 1; fi
+          "$py" scripts/bundle-smoke.py --work "$RUNNER_TEMP/smoke-exe" -- "$bin" --mcp
+
       # A week, the cap tests/build/artifactRetention.test.ts holds, so the
       # beta release can be republished from them by hand. A leg that failed
       # after tauri-action still uploads, for debugging, but under a name the
@@ -435,6 +525,16 @@ jobs:
             echo "::error::the runtime lacks a library the binary needs"; exit 1
           fi
           ls -lh "FundaCAD_${v}_x86_64.flatpak"
+
+      # The installed Flatpak as a user starts it. The sandbox holds only the
+      # GNOME runtime and /app, so a library the package lacks fails here.
+      - name: Start the Flatpak and build a box
+        continue-on-error: ${{ needs.channel.outputs.gated == 'false' }}
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          python3 scripts/bundle-smoke.py --work "$RUNNER_TEMP/smoke-flatpak" -- \
+            flatpak run --env=FUNDACAD_MCP_MODE=standalone dev.fundacad.app --mcp
 
       - name: Upload the Flatpak
         uses: actions/upload-artifact@v4
