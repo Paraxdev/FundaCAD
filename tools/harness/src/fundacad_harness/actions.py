@@ -400,6 +400,7 @@ class Actions:
     @action
     def open_file(self, path: str | os.PathLike, discard: bool = True):
         """File > Open, answering the file chooser with `path`, dropping unsaved changes unless `discard=False`."""
+        was = self.bridge.call("history")
         full = self._choose_file("File/Open...", path)
         name = Path(full).name
         end = time.monotonic() + OPEN_WAIT_S
@@ -414,8 +415,12 @@ class Actions:
             self.page.wait_for_timeout(50)
         self.settle()
         st = self.bridge.call("status")
-        if st.get("doc") != name:
-            why = f", error: {st['error']}" if st.get("error") else ""
+        # A refused file of the open document's own name leaves the name as it was, and the history too.
+        refused = [r["text"] for r in self.bridge.call("messages", since=self._mark)["rows"] if r["level"] == "error"]
+        if refused and self.bridge.call("history") != was:
+            refused = []
+        if st.get("doc") != name or refused:
+            why = f", error: {refused[-1] if refused else st['error']}" if refused or st.get("error") else ""
             raise HarnessError(f'File > Open did not open {name}, the document is still "{st.get("doc")}"{why}')
         return f"opened {name}", {"path": full}
 

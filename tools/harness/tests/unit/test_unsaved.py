@@ -18,6 +18,8 @@ class App:
     def __init__(self, opens=True):
         self.doc, self.dirty, self.rows, self.opens = "plate.json", True, [], opens
         self.clicked: list[str] = []
+        self.errors: list[str] = []
+        self.features = ["e1"]
 
     def pick(self, name):
         if self.dirty:
@@ -30,7 +32,9 @@ class App:
         if method == "seq":
             return 0
         if method == "messages":
-            return {"seq": 0, "rows": []}
+            return {"seq": 0, "rows": [{"level": "error", "text": t} for t in self.errors]}
+        if method == "history":
+            return {"count": len(self.features), "rows": list(self.features)}
         if method == "status":
             return {"mode": "model", "doc": self.doc, "dirty": self.dirty}
         if method == "screen":
@@ -134,4 +138,29 @@ def test_undo_says_what_changed_and_when_nothing_counted_did():
     s = session(app)
     assert str(s.undo()).startswith("clicked #undo-btn, still 2 features and 8 bodies,")
     assert str(s.undo()).startswith("clicked #undo-btn, features 2 to 1, bodies 8 to 1,")
+    s.close()
+
+
+def test_open_file_of_a_refused_file_with_the_open_documents_name_says_it_did_not_open():
+    app = App(opens=False)
+    app.dirty = False
+    s = session(app)
+    s._choose_file = lambda menu, path: (app.errors.append("This file is not a FundaCAD document"), str(path))[1]
+    with pytest.raises(HarnessError, match='did not open plate.json, .*error: This file is not a FundaCAD document'):
+        s.open_file(REPO / "tools/harness/fixtures/plate.json")
+    s.close()
+
+
+def test_open_file_whose_model_fails_to_build_still_opened():
+    app = App()
+    app.dirty = False
+    s = session(app)
+
+    def pick(menu, path):
+        app.doc, app.features = Path(path).name, ["e1", "f9"]
+        app.errors.append("Fillet failed")
+        return str(path)
+
+    s._choose_file = pick
+    assert str(s.open_file(BLOCK)).startswith("opened block.json,")
     s.close()
