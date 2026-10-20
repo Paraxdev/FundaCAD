@@ -19,6 +19,14 @@ class Canvas:
         self.lands, self.sel = lands, {"faces": [], "edges": [], "bodies": [], **(selected or {})}
         self.clicks: list[tuple] = []
         self.held: list[str] = []
+        self.tool: str | None = None
+        self.holes = 0
+
+    def status(self):
+        if self.tool is None:
+            return {}
+        what = "Click a flat face where the hole goes" if not self.holes else f"Simple M3 · {self.holes} hole"
+        return {"tool": self.tool, "prompt": what, "undo": False, "dirty": bool(self.holes)}
 
     def call(self, method, **args):
         if method in ("seq", "settle"):
@@ -26,7 +34,7 @@ class Canvas:
         if method == "messages":
             return {"seq": 0, "rows": []}
         if method == "status":
-            return {"mode": "model"}
+            return {"mode": "model", **self.status()}
         if method == "facePoint":
             return dict(FACE)
         if method == "edgePoint":
@@ -37,6 +45,9 @@ class Canvas:
 
     def click(self, x, y, button="left"):
         self.clicks.append((x, y, tuple(self.held)))
+        if self.tool == "Hole":
+            self.holes += 1
+            return
         if self.lands is None:
             if "Control" not in self.held:
                 self.sel = dict(faces=[], edges=[], bodies=[])
@@ -99,4 +110,33 @@ def test_adding_a_face_holds_ctrl_and_keeps_the_others():
     s = session(app)
     assert str(s.pick_face("top", add=True)).startswith("picked face body1:index=3")
     assert app.clicks == [(10, 20, ("Control",))] and app.sel["faces"] == [["body1", 1], ["body1", 3]]
+    s.close()
+
+
+def test_pick_face_while_hole_waits_for_a_face_succeeds_once_and_places_one_hole():
+    app = Canvas(("faces", ["body1", 3]))
+    app.tool = "Hole"
+    s = session(app)
+    step = s.pick_face("top")
+    assert str(step).startswith("picked face body1:index=3") and "Hole tool took the click" in str(step)
+    assert step.data["tookClick"] and app.holes == 1 and len(app.clicks) == 1
+    s.close()
+
+
+def test_a_second_pick_face_after_the_tool_took_the_first_is_refused_and_adds_nothing():
+    app = Canvas(("faces", ["body1", 3]))
+    app.tool = "Hole"
+    s = session(app)
+    s.pick_face("top")
+    with pytest.raises(HarnessError, match=r"Hole tool already took this pick.*click\(\"face:top\"\)"):
+        s.pick_face("top")
+    assert app.holes == 1 and len(app.clicks) == 1
+    s.close()
+
+
+def test_a_pick_nothing_took_says_the_click_had_no_effect():
+    app = Canvas(None)
+    s = session(app)
+    with pytest.raises(HarnessError, match="but the selection is empty, and no tool or prompt took the click, so it had no effect"):
+        s.pick_face("top")
     s.close()
