@@ -158,3 +158,25 @@ def test_a_wait_looks_only_at_labels_new_since_the_step():
     assert s.wait_for("export", timeout=1) == 'on screen "Export done"'
     assert all(a.get("fresh") for a in asked)
     s.close()
+
+
+class Labelled(LogBridge):
+    def call(self, method, **args):
+        if method == "screen":
+            self.calls.append((method, args))
+            return {"lines": [] if args.get("fresh") else [[1, "item:body1", "button", "Box", []]]}
+        return super().call(method, **args)
+
+
+def test_a_wait_for_text_from_before_the_step_says_it_was_there_already(tmp_path):
+    b = Labelled()
+    s = session(b)
+    b.add("info", "Saved a.funda")
+    s.press("Enter")
+    with pytest.raises(HarnessError, match='"box" was on screen before the last step began'):
+        s.wait_for("box", timeout=0.2)
+    with pytest.raises(HarnessError, match='"saved" was said before the last step began'):
+        s.wait_for("saved", timeout=0.2)
+    with pytest.raises(HarnessError, match='"nothing" did not show in 0.2 s$'):
+        s.wait_for("nothing", timeout=0.2)
+    s.close()

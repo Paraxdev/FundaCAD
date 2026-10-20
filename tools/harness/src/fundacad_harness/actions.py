@@ -676,6 +676,15 @@ class Actions:
                 return f'on screen "{r[3]}"'
         return None
 
+    def _seen_before(self, want: str) -> str:
+        if any(want in r["text"].lower() for r in self.bridge.call("messages", since=0)["rows"]):
+            where = "said"
+        elif any(want in r[3].lower() for r in self.bridge.call("screen", max=1000)["lines"]):
+            where = "on screen"
+        else:
+            return ""
+        return f', "{want}" was {where} before the last step began and wait_for takes only what is new, read it with s.screen() or s.messages()'
+
     def wait_for(self, text: str, timeout: float = 10) -> str:
         """Until the text shows in the prompt, a message logged or a label shown since the last action began."""
         self._ensure_page()
@@ -687,5 +696,5 @@ class Actions:
                 self._recorded("wait_for", (text,), {} if timeout == 10 else {"timeout": timeout}, seen)
                 return seen
             if time.monotonic() > end:
-                raise HarnessError(f'"{text}" did not show in {timeout:g} s')
+                raise HarnessError(f'"{text}" did not show in {timeout:g} s{self._seen_before(want)}')
             time.sleep(0.15)
