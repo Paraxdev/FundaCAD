@@ -42,7 +42,7 @@ async fn a_newer_file_names_the_feature_types_this_build_does_not_know() {
             format!(
                 "this file is from a newer version of FundaCAD (document version 12, this build reads up to {FORMAT_VERSION}). \
                  3 features were not included because this version does not know them: futureWidget (2), fooBar. \
-                 They are kept and saved with the file. Bodies after them may differ."
+                 They are kept and saved with the file. Bodies after them may differ. Update FundaCAD to build them."
             )
             .as_str()
         ),
@@ -66,6 +66,27 @@ async fn a_newer_file_of_known_types_says_only_that_it_is_newer() {
     assert!(
         note_of(&reply).is_some_and(|n| n.starts_with("this file is from a newer version")
             && n.ends_with("Anything this version does not know is kept and saved with the file.")),
+        "{reply}"
+    );
+}
+
+#[tokio::test]
+async fn an_older_file_with_an_old_type_says_to_update_it_in_the_app() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/versions/v8.funda");
+    let doc: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let reply = open(doc).await;
+    let note = note_of(&reply).unwrap_or_default();
+    assert!(note.starts_with("this file is from an older version of FundaCAD (document version 8)"), "{reply}");
+    assert!(note.contains("1 feature is not built here: combine."), "{reply}");
+    assert!(!note.contains("does not know"), "combine is an old name, not an unknown one: {reply}");
+}
+
+#[tokio::test]
+async fn a_current_file_with_a_type_nothing_here_knows_points_at_a_plugin() {
+    let reply = open(json!({"version": FORMAT_VERSION, "parameters": {}, "features": [{"id": "w1", "type": "futureWidget"}]})).await;
+    assert_eq!(
+        note_of(&reply),
+        Some("1 feature needs a plugin that is not running here: futureWidget. It is kept and saved with the file. Bodies after it may differ."),
         "{reply}"
     );
 }

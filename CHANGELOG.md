@@ -35,7 +35,8 @@ This file starts on 2026-08-03. For anything before that, see the
 
 - **MCP `doc_open` says when a file is from a newer version**, with a `note:`
   line naming the feature types this build does not know, the same facts the
-  app's open notice gives.
+  app's open notice gives. An older file with a feature type the app renames on
+  open is told apart, with a note to open and save it in the app first.
 
 - **Opening a file from a newer version says what it leaves out.** One notice
   names the features this version does not know, says they are kept and saved

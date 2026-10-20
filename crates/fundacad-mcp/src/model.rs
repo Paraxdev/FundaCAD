@@ -72,42 +72,49 @@ pub fn unknown_feature_types(doc: &Doc) -> Vec<(String, usize)> {
     out
 }
 
-/// What `doc_open` adds about a file from a newer version, the same facts the
+/// What `doc_open` adds about a file from another version, the same facts the
 /// app's open notice gives. `None` for a file this build reads whole.
+///
+/// Types are named by their ids, which is what `feature_add` and `schema` take.
 pub fn newer_file_note(doc: &Doc) -> Option<String> {
     let stamp = doc.get("version").and_then(Value::as_i64).unwrap_or(1);
     let newer = stamp > FORMAT_VERSION;
     let unknown = unknown_feature_types(doc);
-    let mut out = String::new();
+    let total: usize = unknown.iter().map(|(_, c)| c).sum();
+    let names = unknown
+        .iter()
+        .map(|(t, c)| if *c > 1 { format!("{t} ({c})") } else { t.clone() })
+        .collect::<Vec<_>>()
+        .join(", ");
+    let one = total == 1;
+    let (it, subject, is) = if one { ("it", "It", "is") } else { ("them", "They", "are") };
+    let kept = format!("{subject} {is} kept and saved with the file. Bodies after {it} may differ.");
+    let count = if one { "1 feature".to_owned() } else { format!("{total} features") };
     if newer {
-        out.push_str(&format!(
+        let head = format!(
             "this file is from a newer version of FundaCAD (document version {stamp}, this build reads up to {FORMAT_VERSION})."
+        );
+        if total == 0 {
+            return Some(format!("{head} Anything this version does not know is kept and saved with the file."));
+        }
+        let was = if one { "was" } else { "were" };
+        return Some(format!(
+            "{head} {count} {was} not included because this version does not know {it}: {names}. {kept} Update FundaCAD to build {it}."
         ));
     }
-    let total: usize = unknown.iter().map(|(_, c)| c).sum();
-    if total > 0 {
-        let names = unknown
-            .iter()
-            .map(|(t, c)| if *c > 1 { format!("{t} ({c})") } else { t.clone() })
-            .collect::<Vec<_>>()
-            .join(", ");
-        let who = if newer { "this version" } else { "this version of FundaCAD" };
-        if !out.is_empty() {
-            out.push(' ');
-        }
-        if total == 1 {
-            out.push_str(&format!(
-                "1 feature was not included because {who} does not know it: {names}. It is kept and saved with the file. Bodies after it may differ."
-            ));
-        } else {
-            out.push_str(&format!(
-                "{total} features were not included because {who} does not know them: {names}. They are kept and saved with the file. Bodies after them may differ."
-            ));
-        }
-    } else if newer {
-        out.push_str(" Anything this version does not know is kept and saved with the file.");
+    if total == 0 {
+        return None;
     }
-    (!out.is_empty()).then_some(out)
+    // The app updates an old file when it opens it (src/document/migrate.ts),
+    // MCP reads it as written, so an old feature type is not built here.
+    if stamp < FORMAT_VERSION {
+        return Some(format!(
+            "this file is from an older version of FundaCAD (document version {stamp}), which MCP reads as written, \
+             without the updates the app makes when it opens one. {count} {is} not built here: {names}. \
+             Open the file in the app and save it there to update it."
+        ));
+    }
+    Some(format!("{count} {} a plugin that is not running here: {names}. {kept}", if one { "needs" } else { "need" }))
 }
 
 /// `parameters` and `paramDefs`, added when a document arrived without them.
