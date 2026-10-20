@@ -34,9 +34,9 @@ fn unit(value: i32) -> f32 {
     scaled.clamp(-i64::from(i16::MAX), i64::from(i16::MAX)) as f32
 }
 
-/// The daemon's frame has x right, y away from the user and z up, the HID one has
-/// x right, y towards the user and z down, so y and z and the rotations about them
-/// change sign.
+/// The daemon swaps the device's y and z (and ry, rz) and then negates them, so its
+/// y is the lift and its z the push or pull, while the HID report has x right, y
+/// towards the user and z down. Back to that frame the two swap again and change sign.
 pub fn decode(record: &[u8; RECORD_BYTES]) -> Option<Event> {
     let mut data = [0i32; 8];
     for (slot, bytes) in data.iter_mut().zip(record.chunks_exact(4)) {
@@ -45,8 +45,8 @@ pub fn decode(record: &[u8; RECORD_BYTES]) -> Option<Event> {
     let [kind, a, b, c, d, e, f, _period] = data;
     match kind {
         0 => Some(Event::Motion {
-            t: [unit(a), -unit(b), -unit(c)],
-            r: [unit(d), -unit(e), -unit(f)],
+            t: [unit(a), -unit(c), -unit(b)],
+            r: [unit(d), -unit(f), -unit(e)],
         }),
         1 | 2 => Some(Event::Button {
             number: a,
@@ -188,6 +188,15 @@ mod tests {
                 r: [175.0, -175.0, -175.0]
             })
         );
+        // The daemon swaps y and z before it sends: its y is a lift, its z a push
+        // or pull, the HID report has them the other way round.
+        assert_eq!(
+            decode(&record([0, 0, 100, 200, 10, 20, 30, 8])),
+            Some(Event::Motion {
+                t: [0.0, -140.0, -70.0],
+                r: [7.0, -21.0, -14.0]
+            })
+        );
         assert_eq!(
             decode(&record([0, 0, 0, 0, 0, 0, 0, 1200])),
             Some(Event::Motion {
@@ -212,7 +221,7 @@ mod tests {
         assert_eq!(
             decode(&extreme),
             Some(Event::Motion {
-                t: [-32767.0, 32767.0, -32767.0],
+                t: [-32767.0, -32767.0, 32767.0],
                 r: [32767.0, 32767.0, 32767.0]
             })
         );
@@ -311,7 +320,7 @@ mod tests {
             seen,
             [
                 Event::Motion {
-                    t: [0.0, -350.0, 0.0],
+                    t: [0.0, 0.0, -350.0],
                     r: [0.0; 3]
                 },
                 Event::Button {
