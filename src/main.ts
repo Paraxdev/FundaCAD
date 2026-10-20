@@ -28,6 +28,7 @@ import { createEngine, mountUi } from "./app/engine";
 import { ENGINE } from "./app/engineKey";
 import { installDevGlobals } from "./app/devGlobals";
 import { invoke } from "@tauri-apps/api/core";
+import { harnessWanted } from "./harness/wanted";
 
 // Installed before anything is constructed, so a failure inside createEngine
 // still reaches the user rather than leaving a blank viewport.
@@ -76,3 +77,7 @@ requestAnimationFrame(() =>
 );
 
 installDevGlobals(engine);
+// import.meta.env.DEV first, so a production build drops the driver chunk.
+if (import.meta.env.DEV && harnessWanted(location.search, true)) {
+  void import("./harness/driver").then((m) => m.installHarness(engine));
+}

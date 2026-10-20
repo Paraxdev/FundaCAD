@@ -37,7 +37,7 @@ import { WORLD_FRAME, bodyMoveTarget, type Frame, type MoveCommit, type MoveTarg
 import { setPrompt } from "../ui/prompt";
 import { fmtLength, snap } from "../ui/units";
 import { gizmoMoveStep, gizmoRotateStep, snapScaleFactor } from "../viewport/gizmoStep";
-import { axisDragDistance } from "./manipulator";
+import { axisDragDistance, nameHandle } from "./manipulator";
 import {
   angleDelta,
   angleInFrame,
@@ -56,6 +56,7 @@ import { createSlimRing, ringLook, type SlimRing } from "./slimRing";
 
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 const HOT = 0xffe9a8; // hovered / grabbed handle
+const AXIS_NAME = ["x", "y", "z"];
 const AXES = [
   { dir: new THREE.Vector3(1, 0, 0), color: 0xff5a5a }, // X red
   { dir: new THREE.Vector3(0, 1, 0), color: 0x5ad15a }, // Y green
@@ -795,6 +796,7 @@ export class MoveTool {
         shaft.renderOrder = 999;
         head.renderOrder = 999;
         arrow.userData.axis = i;
+        nameHandle(arrow, `arrow ${AXIS_NAME[i]}`);
         g.add(arrow);
         this.arrows.push({ group: arrow, mat, axis: i });
       }
@@ -807,6 +809,7 @@ export class MoveTool {
         // A torus is built in the XY plane, so its own axis is +Z.
         ring.group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), dir);
         ring.band.userData.ring = i;
+        nameHandle(ring.group, `ring ${AXIS_NAME[i]}`);
         g.add(ring.group);
         this.rings.push({ ring, axis: i });
       }
@@ -822,6 +825,7 @@ export class MoveTool {
         cube.position.copy(dir).multiplyScalar(SCALE_AT);
         cube.renderOrder = 999;
         cube.userData.size = i;
+        nameHandle(cube, `size ${AXIS_NAME[i]}`);
         g.add(cube);
         this.cubes.push({ mesh: cube, mat: cmat, axis: i });
       }
@@ -854,6 +858,7 @@ export class MoveTool {
       phit.quaternion.copy(quad.quaternion);
       phit.position.copy(centre);
       phit.userData.plane = i;
+      nameHandle(phit, `plane ${[AXIS_NAME[u], AXIS_NAME[v]].sort().join("")}`);
       g.add(quad, phit);
       this.planes.push({ mesh: quad, hit: phit, mat: pmat, axis: i });
     }
@@ -863,6 +868,7 @@ export class MoveTool {
     const dot = new THREE.Mesh(new THREE.SphereGeometry(ORIGIN_R, 20, 14), omat);
     dot.renderOrder = 1000; // over the arrows' roots, which meet here
     dot.userData.origin = true;
+    nameHandle(dot, "origin");
     g.add(dot);
     this.origin = { mesh: dot, mat: omat };
 

@@ -181,6 +181,7 @@ function onDrop(e: DragEvent) {
 <template>
   <div
     class="feature-row tree-child"
+    :data-id="id"
     :class="{ selected: selected, error: error, 'drop-into': inside > 0 }"
     :style="style"
     :title="title"
@@ -206,6 +207,7 @@ function onDrop(e: DragEvent) {
       v-if="toggleVis || eyeDown"
       class="tree-eye"
       :title="fmtKeys('Show/hide · drag across eyes to show or hide many · Alt+click to show only this')"
+      :data-visible="visible !== false"
       @pointerdown.stop="onEyeDown"
       @click.stop="onEyeClick"
       @dblclick.stop

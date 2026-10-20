@@ -16,7 +16,7 @@ import type { Feature, Selector } from "../types";
 import { DimInput } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
 import { snap } from "../ui/units";
-import { axisDragDistance, createDragHandle, type DragHandle } from "./manipulator";
+import { axisDragDistance, createDragHandle, nameHandle, type DragHandle } from "./manipulator";
 import { MAX_DRAFT_DEG, draftAngle, draftDelta, draftLever, pullAxisFor, type Axis3 } from "./draftMath";
 import { CanvasGesture } from "./canvasGesture";
 import { previewVerdict } from "./previewVerdict";
@@ -266,7 +266,7 @@ export class DraftTool {
 
   /** The shared drag handle; tick() scales it to a constant screen size. */
   private buildGizmo() {
-    this.handle = createDragHandle();
+    this.handle = nameHandle(createDragHandle(), "angle");
     const g = this.handle.group;
     this.gizmo = g;
     this.viewport.addToScene(g);

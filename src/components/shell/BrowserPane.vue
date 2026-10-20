@@ -877,6 +877,7 @@ onUnmounted(() => root.value?.removeEventListener("wheel", onWheel));
     <template v-for="n in nodes" :key="n.k">
       <TreeFolder
         v-if="n.kind === 'folder'"
+        :data-key="n.key"
         :label="n.label"
         :icon="n.icon"
         :count="n.count"

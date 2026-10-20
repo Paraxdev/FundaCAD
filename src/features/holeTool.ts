@@ -531,6 +531,8 @@ export class HoleTool {
       setPrompt("Click the face to place a hole first · Esc");
       return;
     }
+    // An Enter within a frame of the last key comes before tick() has read the box.
+    this.tick();
     const typed = this.typedProblem();
     if (typed) return this.dim.flag(typed);
     if (this.previewTimer) {

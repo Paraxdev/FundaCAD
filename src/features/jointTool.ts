@@ -29,6 +29,7 @@ import { snap } from "../ui/units";
 import {
   axisDragDistance,
   createDragHandle,
+  nameHandle,
   createRotationArc,
   leanOutOfView,
   type DragHandle,
@@ -131,10 +132,10 @@ export class JointTool {
 
     this.viewport.suspendPicking = true;
     this.gesture.attach();
-    this.handle = createDragHandle();
+    this.handle = nameHandle(createDragHandle(), "offset");
     this.gizmo = this.handle.group;
     this.viewport.addToScene(this.gizmo);
-    this.dialHandle = createRotationArc();
+    this.dialHandle = nameHandle(createRotationArc(), "angle");
     this.dial = this.dialHandle.group;
     this.viewport.addToScene(this.dial);
     this.dim.show(

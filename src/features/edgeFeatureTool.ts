@@ -34,6 +34,7 @@ import { DimInput } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
 import {
   createDragHandle,
+  nameHandle,
   edgeHandleAxis,
   fluentRelease,
   HANDLE_UP,
@@ -1385,7 +1386,7 @@ export class EdgeFeatureTool {
   }
 
   private buildGizmo() {
-    this.handle = createDragHandle();
+    this.handle = nameHandle(createDragHandle(), "size");
     this.gizmo = this.handle.group;
     this.viewport.addToScene(this.gizmo);
   }

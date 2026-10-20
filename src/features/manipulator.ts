@@ -442,6 +442,14 @@ export function createDragHandle(tone: HandleTone = "idle"): DragHandle {
   };
 }
 
+/** Names a handle for the agent harness (src/harness/handles.ts), which finds
+ *  visible named objects in the scene and aims at them. */
+export function nameHandle<T extends DragHandle | THREE.Object3D>(h: T, name: string): T {
+  const obj = h instanceof THREE.Object3D ? h : h.group;
+  obj.userData.handle = name;
+  return h;
+}
+
 /** Radius of the rotation arc, in pixels (its own units). Sized to read clearly
  *  as a rotation control capping the straight handle, not a faint hair above it. */
 const ARC_RADIUS = 21;

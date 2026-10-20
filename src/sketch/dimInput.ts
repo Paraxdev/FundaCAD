@@ -315,6 +315,7 @@ export class DimInput {
     this.fields = defs.map((def) => {
       const wrap = document.createElement("label");
       wrap.className = "dim-field";
+      wrap.dataset.field = def.name;
       const tag = document.createElement(def.choices ? "button" : "span");
       tag.className = def.choices ? "dim-name dim-unit dim-choice" : "dim-name";
       if (tag instanceof HTMLButtonElement) tag.type = "button";
@@ -398,6 +399,7 @@ export class DimInput {
     const ok = document.createElement("button");
     ok.className = "dim-btn dim-ok";
     ok.title = "Confirm (Enter)";
+    ok.setAttribute("aria-label", "Confirm");
     ok.appendChild(iconElement("check", 13));
     ok.addEventListener("pointerdown", (e) => {
       e.preventDefault();
@@ -410,6 +412,7 @@ export class DimInput {
       const no = document.createElement("button");
       no.className = "dim-btn dim-no";
       no.title = "Cancel (Esc)";
+      no.setAttribute("aria-label", "Cancel");
       no.appendChild(iconElement("close", 13));
       no.addEventListener("pointerdown", (e) => {
         e.preventDefault();
@@ -550,6 +553,7 @@ export class DimInput {
       tag.removeAttribute("title");
     }
     if (f.def.choices) tag.appendChild(iconElement("caretDown", 10));
+    f.input.setAttribute("aria-label", f.def.label);
   }
 
   private choose(f: Field, id: string, typed: boolean) {

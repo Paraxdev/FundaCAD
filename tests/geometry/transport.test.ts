@@ -32,7 +32,12 @@ vi.mock("@tauri-apps/api/event", () => ({
   },
 }));
 
-import { EngineTransport, IpcTransport, type TransportSink } from "../../src/geometry/transport";
+import {
+  EngineTransport,
+  IpcTransport,
+  engineUrl,
+  type TransportSink,
+} from "../../src/geometry/transport";
 
 function sink() {
   const log: (string | ArrayBuffer | "open" | "closed")[] = [];
@@ -126,5 +131,26 @@ describe("EngineTransport", () => {
     expect(host.channel).toBeNull();
     expect(opened).toEqual(["ws://127.0.0.1:8765/?token=t"]);
     vi.unstubAllGlobals();
+  });
+});
+
+describe("engineUrl", () => {
+  it("defaults to port 8765", () => {
+    expect(engineUrl("", true)).toBe("ws://127.0.0.1:8765");
+    expect(engineUrl("?token=abc", true)).toBe("ws://127.0.0.1:8765");
+  });
+
+  it("takes ?engine= in a dev build", () => {
+    expect(engineUrl("?token=t&engine=9123", true)).toBe("ws://127.0.0.1:9123");
+  });
+
+  it("ignores a port that is not a plain number in range", () => {
+    for (const bad of ["abc", "0", "70000", "91.2", "-5", "localhost:9000", "1e3", ""]) {
+      expect(engineUrl(`?engine=${encodeURIComponent(bad)}`, true)).toBe("ws://127.0.0.1:8765");
+    }
+  });
+
+  it("ignores ?engine= in a production build", () => {
+    expect(engineUrl("?engine=9123", false)).toBe("ws://127.0.0.1:8765");
   });
 });

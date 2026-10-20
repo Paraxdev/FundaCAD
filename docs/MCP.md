@@ -358,6 +358,47 @@ the PNG from `png.rs`): arrays in and an image out, no browser and no GPU. It is
 deliberately plain. The app's own renderer stays the authority for what a person
 sees; this answers "did that do what I meant".
 
+## Driving the app (standalone only)
+
+With `FUNDACAD_MCP_MODE=standalone` the server offers five more tools that use a
+private copy of the app the way a person does, in a browser against its own
+engine, through the agent harness (`tools/harness`, [HARNESS.md](HARNESS.md)).
+They are never offered in `auto` or `attach`, so they can never touch the
+window someone is working in.
+
+| tool | what it is for |
+| --- | --- |
+| `ui_open` | start the private app (`headed`, `record`, `viewport`, `gpu`, `settle_timeout`), about 10 s; a second call says what is open |
+| `ui_do` | steps in order, `[{"do": "tool", "label": "Extrude"}, {"do": "type", "target": "D", "text": "20"}]`, stopping at the first that fails |
+| `ui_read` | screen, history, bodies, status, errors, selection or handles, as short text |
+| `ui_shot` | a PNG of the page or one control, `max_px` at most 1600 |
+| `ui_close` | stop the app, its browser and its engine |
+
+The tools relay to `python -m fundacad_harness serve`, started on the first
+`ui_open` with `FUNDACAD_HARNESS_PYTHON` (else `python`, or `python3` off
+Windows) and handed this server's engine command. That Python needs the
+package: `pip install -e tools/harness`. Without it `ui_open` says so and the
+other tools work as before. The child dies with the server, inside the same
+kind of job object as the engine on Windows. A call with no answer in 180 s
+stops it, and the next `ui_open` starts fresh; a `ui_do` starts no step after
+120 s and says which steps to send again, so a long list does not get there. No
+step waits past 150 s into a call, so an import that takes longer answers
+`not settled`, and `ui_read` later shows it landed.
+
+The private app's document is its own: `doc_get` and `inspect` do not see it.
+To measure what the steps built, `save_as` a `.funda` file in a `ui_do`, then
+`doc_open` it and `inspect`.
+
+`.mcp.json` stays the live server. A second entry for the private app:
+
+```json
+{ "mcpServers": { "fundacad-ui": {
+    "command": "node",
+    "args": ["scripts/mcp-rust.mjs"],
+    "env": { "FUNDACAD_MCP_MODE": "standalone",
+             "FUNDACAD_HARNESS_PYTHON": "<full path to the venv python>" } } } }
+```
+
 ## Driving it without an MCP host
 
 `crates/fundacad-mcp/tools/client.py` is a small generic MCP client. It speaks
@@ -415,6 +456,7 @@ one-shot calls is not a session, use `--script`, which is either a JSON array of
 | --- | --- |
 | `src/server.rs` | the protocol and the tools |
 | `src/tools.rs` | the tools' input schemas and descriptions |
+| `src/ui.rs` | the ui tools and the harness child they relay to |
 | `src/upload.rs` | inline `doc_import` content: decoding, pieces, archives |
 | `src/link.rs` | finding and spawning the engine, its lifetime, the Windows job object |
 | `src/app_session.rs`, `src/live.rs` | finding a running window and the live session |

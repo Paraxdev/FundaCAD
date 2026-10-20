@@ -662,6 +662,7 @@ async function importWith(
   const res = await store.runBusy(
     `Importing ${path.split(/[\\/]/).pop() ?? "file"}`,
     (onStarted) => read(onStarted, unit),
+    { holdHistory: true },
   );
   if (!res.ok) {
     if (res.cancelled) {
@@ -703,7 +704,8 @@ async function importWith(
   // assembly's product colours were read by the engine, carried in the
   // manifest, and then never looked at, so a file that arrived fully coloured
   // opened as three thousand identical grey bodies.
-  await adoptImportedColors(store, id, res);
+  const source = importSource(imported);
+  if (!(await adoptImportedColors(store, id, res, { joinImport: true, source }))) recolorOnRedo(store, imported, res);
 
   // The file carried ONE dominant colour. Say so, and let whoever has a use for
   // it decide.
@@ -722,6 +724,38 @@ async function importWith(
   await announceImportedBody(id, res.color);
 }
 
+const importSource = (f: Feature) =>
+  f.type === "import" ? (f as Extract<Feature, { type: "import" }>).source : undefined;
+
+/** An import undone while its rebuild ran put its colours on nothing. Its redo
+ *  puts them on then, as part of that same step, or never. */
+export function recolorOnRedo(store: DocumentStore, feature: Feature, res: Parameters<typeof adoptImportedColors>[2]) {
+  // Note: an edit can hand a new feature the import's id, so only an undo or redo
+  // (a rewind, emitted just before its doc change) may bring the import back.
+  let rewound = false;
+  const offRewind = store.onRewind(() => {
+    rewound = true;
+    queueMicrotask(() => (rewound = false));
+  });
+  let offDoc: (() => void) | null = null;
+  offDoc = store.onDocChange(() => {
+    if (!offDoc) return;
+    const back = store.document.features.find((f) => f.id === feature.id);
+    if (!rewound || back || !store.canRedo) {
+      offRewind();
+      offDoc();
+    }
+    if (rewound && back) {
+      const source = importSource(feature);
+      queueMicrotask(() => {
+        adoptImportedColors(store, feature.id, res, { joinImport: true, only: true, source }).catch((e) =>
+          console.warn("import colours not put back", e),
+        );
+      });
+    }
+  });
+}
+
 /** Make materials out of the colours an import carried, and put them on the
  *  bodies it produced.
  *
@@ -736,8 +770,10 @@ async function importWith(
  *  binds it to a per-part colour. A single-body import has no tree, so its one
  *  colour goes on whatever bodies the feature owns, which `faceOwners` answers.
  *
- *  Assignments are display-only overlays, so this adds no second undo step on
- *  top of the import itself. */
+ *  The assignments are one undo step. With `joinImport` they join the step that
+ *  added the feature while that step is still the newest, and with `only` they go
+ *  on only then. False when the feature was not in the document after the build,
+ *  true without a write when another document was opened meanwhile. */
 export async function adoptImportedColors(
   store: DocumentStore,
   featureId: string,
@@ -746,7 +782,8 @@ export async function adoptImportedColors(
     nodes?: { name: string; parent: number | null; color?: string }[] | undefined;
     parts?: { node: number; faces: number; faceColors?: FaceColorRuns; color?: string }[] | undefined;
   },
-) {
+  opts: { joinImport?: boolean; only?: boolean; source?: string | undefined } = {},
+): Promise<boolean> {
   const perNode = res.nodes ? nodeColors(res.nodes) : null;
   // Normalised once, here, because it is the KEY into the map materialsForColors
   // hands back and that map is keyed by the normalised form. nodeColors already
@@ -772,15 +809,22 @@ export async function adoptImportedColors(
       if (c) wanted.push({ color: c });
     }
   }
-  if (!wanted.length) return;
+  if (!wanted.length) return true;
 
   const { add, byColor } = materialsForColors(wanted, store.materialLibrary);
   if (add.length) store.importMaterials(add);
 
-  await store.rebuildNow();
+  let opened = false;
+  const offOpen = store.onOpen(() => (opened = true));
+  await store.rebuildNow().finally(offOpen);
+  if (opened) return true;
   const bodies = store.buildState.result?.bodies ?? [];
+  // Note: after an undo nextId() hands this id to the next feature drawn, so the
+  // id alone does not say the import is still there.
   const feature = store.document.features.find((f) => f.id === featureId);
-  const picks = importedBodyColors(bodies, feature ? [feature] : [], (id) => store.importColorSource(id));
+  if (!feature || feature.type !== "import") return false;
+  if (opts.source !== undefined && importSource(feature) !== opts.source) return false;
+  const picks = importedBodyColors(bodies, [feature], (id) => store.importColorSource(id));
   // One batched write per material, not one per body: an assembly is thousands
   // of bodies and every write re-emits the build.
   const byMaterial = new Map<string, string[]>();
@@ -802,7 +846,13 @@ export async function adoptImportedColors(
       claim(b.id, single ?? undefined);
     }
   }
-  for (const [material, ids] of byMaterial) store.setBodiesMaterial(ids, material);
+  const has = (d: { features: { id: string }[] }) => d.features.some((f) => f.id === featureId);
+  store.undoAsOne(
+    () => { for (const [material, ids] of byMaterial) store.setBodiesMaterial(ids, material); },
+    opts.joinImport ? (before) => !has(before) && has(store.document) : undefined,
+    { only: !!opts.only },
+  );
+  return true;
 }
 
 /** Surface an error to the user, a native dialog in the app, console otherwise.

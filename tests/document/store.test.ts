@@ -442,6 +442,137 @@ describe("undo covers material, rename and colour too, not just visibility (FI-5
     expect(store.bodyColorSlot("body1")).toBe(1);
   });
 
+  const has = (id: string) => (d: CadDocument) => d.features.some((f) => f.id === id);
+  const added = (id: string) => (before: CadDocument) => !has(id)(before) && has(id)(store.document);
+  const box = (id: string) => ({ id, type: "box", length: 1, width: 1, height: 1 }) as Feature;
+
+  it("joins the materials put on a new feature's bodies to the step that added it", () => {
+    const before = store.document.features.length;
+    store.addFeature(box("nb8"));
+    store.undoAsOne(() => {
+      store.setBodiesMaterial(["body1"], "m-brass");
+      store.setBodyColorSlot("body1", 2);
+    }, added("nb8"));
+
+    store.undo();
+    expect(store.document.features.length).toBe(before);
+    expect(store.bodyMaterialId("body1")).toBeUndefined();
+    expect(store.bodyColorSlot("body1")).toBeUndefined();
+
+    store.redo();
+    expect(store.document.features.length).toBe(before + 1);
+    expect(store.bodyMaterialId("body1")).toBe("m-brass");
+    expect(store.bodyColorSlot("body1")).toBe(2);
+    expect(store.canRedo).toBe(false);
+    store.undo();
+    expect(store.document.features.length).toBe(before);
+  });
+
+  it("never joins steps that came before the feature, even when the user undid past it", () => {
+    store.addFeature(box("a0"));
+    store.addFeature(box("a1"));
+    store.setBodyName("body1", "Before");
+    store.addFeature(box("nb9"));
+    store.undo();
+    store.undo();
+    const ran = store.undoAsOne(() => store.setBodiesMaterial(["body1"], "m-brass"), added("nb9"), { only: true });
+    expect(ran).toBe(false);
+    expect(store.bodyMaterialId("body1")).toBeUndefined();
+    store.undo();
+    expect(store.document.features.some((f) => f.id === "a1")).toBe(false);
+    expect(store.document.features.some((f) => f.id === "a0")).toBe(true);
+  });
+
+  it("keeps an edit made after the feature its own step, and the materials one step of their own", () => {
+    store.addFeature(box("nb10"));
+    store.addFeature(box("edit"));
+    expect(store.undoAsOne(() => {
+      store.setBodiesMaterial(["body1"], "m-brass");
+      store.setBodiesMaterial(["body2"], "m-steel");
+    }, added("nb10"))).toBe(false);
+
+    store.undo();
+    expect(store.bodyMaterialId("body1")).toBeUndefined();
+    expect(store.bodyMaterialId("body2")).toBeUndefined();
+    expect(store.document.features.some((f) => f.id === "edit")).toBe(true);
+    store.undo();
+    expect(store.document.features.some((f) => f.id === "edit")).toBe(false);
+    expect(store.document.features.some((f) => f.id === "nb10")).toBe(true);
+    store.undo();
+    expect(store.document.features.some((f) => f.id === "nb10")).toBe(false);
+  });
+
+  it("joins the redo that brought the feature back, and keeps what is left to redo", () => {
+    store.addFeature(box("nb11"));
+    store.addFeature(box("later"));
+    store.undo();
+    store.undo();
+    store.redo();
+    expect(store.undoAsOne(() => store.setBodiesMaterial(["body1"], "m-brass"), added("nb11"), { only: true })).toBe(true);
+    expect(store.canRedo).toBe(true);
+    store.undo();
+    expect(store.bodyMaterialId("body1")).toBeUndefined();
+    expect(store.document.features.some((f) => f.id === "nb11")).toBe(false);
+  });
+
+  it("makes the steps it took its own step and drops what was left to redo", () => {
+    store.addFeature(box("r1"));
+    store.undo();
+    expect(store.undoAsOne(() => store.setBodiesMaterial(["body1"], "m-brass"))).toBe(false);
+    expect(store.canRedo).toBe(false);
+  });
+
+  it("takes back a group's steps newest first", () => {
+    store.undoAsOne(() => {
+      store.setBodiesMaterial(["body1"], "m-brass");
+      store.setBodiesMaterial(["body1"], "m-steel");
+    });
+    store.undo();
+    expect(store.bodyMaterialId("body1")).toBeUndefined();
+    store.redo();
+    expect(store.bodyMaterialId("body1")).toBe("m-steel");
+  });
+
+  it("holds undo and redo while a busy run that holds the history goes on", async () => {
+    store.addFeature(box("h1"));
+    store.addFeature(box("h2"));
+    store.undo();
+    let finish!: () => void;
+    const seen: boolean[] = [];
+    const off = store.onBusy(() => seen.push(store.canUndo));
+    const reading = store.runBusy("Importing a.step", () => new Promise<void>((r) => (finish = r)), { holdHistory: true });
+    expect([store.canUndo, store.canRedo]).toEqual([false, false]);
+    store.undo();
+    store.redo();
+    expect(store.document.features.some((f) => f.id === "h1")).toBe(true);
+    expect(store.document.features.some((f) => f.id === "h2")).toBe(false);
+    finish();
+    await reading;
+    off();
+    expect(seen.at(-1)).toBe(true);
+    expect([store.canUndo, store.canRedo]).toEqual([true, true]);
+    store.redo();
+    expect(store.document.features.some((f) => f.id === "h2")).toBe(true);
+  });
+
+  it("leaves undo alone during a busy run that does not hold the history", () => {
+    store.addFeature(box("h3"));
+    void store.runBusy("Rebuilding", () => new Promise<void>(() => {}));
+    store.undo();
+    expect(store.document.features.some((f) => f.id === "h3")).toBe(false);
+  });
+
+  it("makes sixty material writes one step, so the cap keeps the feature step under them", () => {
+    store.addFeature(box("nb12"));
+    store.undoAsOne(() => {
+      for (let i = 0; i < 60; i++) store.setBodiesMaterial([`b${i}`], "m-brass");
+    }, added("nb12"));
+    store.undo();
+    expect(store.bodyMaterialId("b0")).toBeUndefined();
+    expect(store.bodyMaterialId("b59")).toBeUndefined();
+    expect(store.document.features.some((f) => f.id === "nb12")).toBe(false);
+  });
+
   it("setFacesMaterial and clearFaceMaterials are undo steps too", () => {
     store.setFacesMaterial([{ body: "body1", face: 0 }], "m-brass");
     expect(store.faceMaterialId("body1", 0)).toBe("m-brass");

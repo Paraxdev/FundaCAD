@@ -201,6 +201,11 @@ const MOTION_RESTORE_MAX_MS = 2500;
 const MAX_RESIZE_WAIT_MS = 250;
 
 export class Viewport {
+  /** Nothing is left to draw and the camera did not move on the last frame. */
+  get renderIdle(): boolean {
+    return !this.needsRender && this.lingerFrames === 0 && !this.frameMoved;
+  }
+
   readonly scene: SceneBundle;
   readonly rig: CameraRig;
   private cube: ViewCube;
@@ -305,6 +310,7 @@ export class Viewport {
   // linger frames remain for effects that settle a frame late.
   private needsRender = true;
   private lingerFrames = 3;
+  private frameMoved = false;
   private shadowWatch = new ShadowWatch();
   /** Public for the browser checks, which read its bake counter. */
   readonly contactShadow = new ContactShadow();
@@ -4286,6 +4292,7 @@ export class Viewport {
       const dt = this.timer.update().getDelta();
       // Always advanced so damping and transitions progress; returns whether it moved.
       const moved = this.rig.update(dt);
+      this.frameMoved = moved;
       const resized = this.applyMotionScale(moved, now);
       if (resized === "changed" || (resized === "wait" && moved)) this.requestRender();
       this.syncOverlayMask();
