@@ -145,7 +145,7 @@ onUnmounted(() => {
 
     <div class="home-main">
       <div class="home-head">
-        <NewStrip @blank="cb.newDocument()" @open="cb.openDoc()" />
+        <NewStrip @blank="cb.newDocument()" @open="cb.openDoc()" @template="(id) => cb.newFromTemplate(id)" />
         <button class="modal-close" aria-label="Back to the document" title="Back to the document" @click="close()">
           <Icon name="close" :size="15" />
         </button>

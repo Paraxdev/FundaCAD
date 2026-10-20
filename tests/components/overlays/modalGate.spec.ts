@@ -73,6 +73,7 @@ function fakeBugDeps(): BugReportDeps {
 const fakeHomeCallbacks = (): HomeCallbacks => ({
   newDocument: async () => {},
   openDoc: async () => {},
+  newFromTemplate: async () => {},
   openPath: async () => "ok",
   currentPath: () => null,
 });

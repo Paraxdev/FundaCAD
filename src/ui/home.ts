@@ -4,6 +4,7 @@ import type { OpenOutcome } from "../io/files";
 export interface HomeCallbacks {
   newDocument: () => Promise<void>;
   openDoc: () => Promise<void>;
+  newFromTemplate: (id: string) => Promise<void>;
   openPath: (path: string) => Promise<OpenOutcome | "cancelled">;
   currentPath: () => string | null;
 }

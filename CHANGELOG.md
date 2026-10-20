@@ -34,6 +34,10 @@ This file starts on 2026-08-03. For anything before that, see the
   from its card or its right click menu, and the list keeps 50 documents.
   Search by name or folder (Ctrl+F) and sort by last opened, last edited or
   name.
+- **Templates.** Home starts a new document from a built-in template: a
+  plate with four holes sized by parameters, and the wall bracket and pinned
+  lever with their stress studies ready to run. The document starts untitled,
+  so Save asks where to keep it.
 - **Mechanisms.** A `mechanism` feature joins bodies with revolute, slider and
   rigid joints, closed loops included, and poses them all at once: the ground
   stays put, one joint is driven to an `angle` or `offset`, and every other

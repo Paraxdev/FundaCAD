@@ -27,6 +27,7 @@ function callbacks(over: Partial<HomeCallbacks> = {}): HomeCallbacks {
   return {
     newDocument: vi.fn(async () => {}),
     openDoc: vi.fn(async () => {}),
+    newFromTemplate: vi.fn(async () => {}),
     openPath: vi.fn(async () => "ok" as const),
     currentPath: () => null,
     ...over,
@@ -263,5 +264,14 @@ describe("HomeScreen", () => {
     field.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true }));
     window.removeEventListener("keydown", seen);
     expect(seen).toHaveBeenCalledOnce();
+  });
+
+  it("starts a document from a template card", async () => {
+    const { cb } = open();
+    const cards = $$(".home-new-template");
+    expect(cards.map((c) => c.querySelector(".home-new-name")!.textContent)).toEqual(["Plate", "Wall bracket", "Pinned lever"]);
+    cards[1]!.click();
+    await flushPromises();
+    expect(cb.newFromTemplate).toHaveBeenCalledWith("wall-bracket");
   });
 });

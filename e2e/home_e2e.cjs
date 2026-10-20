@@ -7,6 +7,7 @@
 //   5. A .funda dropped over Home opens and Home closes.
 //   6. Over the fake library: edit times, a missing file shows Not found and Remove takes it off.
 //   7. Search filters the cards, the sort changes their order, Ctrl+F finds the field.
+//   8. Each template opens as an untitled document that builds.
 //
 //   engine --ws, vite, then
 //   SC_TOKEN=<engine token> node e2e/home_e2e.cjs
@@ -163,6 +164,22 @@ function check(name, ok, detail = "") {
     await page.selectOption(".home-sort", "edited");
     check("Last edited sorts by the file time", (await names()) === "gear,axle,bracket", await names());
     await page.selectOption(".home-sort", "opened");
+
+    console.log("8. templates");
+    for (const name of ["Plate", "Wall bracket", "Pinned lever"]) {
+      if (!(await homeUp())) await menu("File", "Home");
+      await page.click(`.home-new-template:has-text("${name}")`);
+      const discard = await page.waitForSelector("button:has-text('Discard')", { timeout: 1500 }).catch(() => null);
+      if (discard) await discard.click();
+      await settle();
+      const got = await page.evaluate(() => ({
+        name: window.store.fileName, path: window.store.filePath, dirty: window.store.dirty,
+        error: window.store.buildState.errorMessage, bodies: window.store.buildState.result?.bodies?.length ?? 0,
+      }));
+      check(`${name} opens untitled and clean`, got.name === name && got.path === null && !got.dirty, JSON.stringify(got));
+      check(`${name} builds`, !got.error && got.bodies === 1, JSON.stringify(got));
+      check(`${name} closes Home`, !(await homeUp()));
+    }
   } finally {
     await browser.close();
   }
