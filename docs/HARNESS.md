@@ -98,7 +98,7 @@ Every readout is a few lines of text. Pass `raw=True` for the JSON it was made f
 | `s.screen(region=None)` | the visible controls as a short tree, one ref per control |
 | `s.history()` | the features, their type and any error, suppressed or rolled back state |
 | `s.bodies()` | bodies with face count and visibility, the first 40 with counts when there are more |
-| `s.status()` | mode, running tool, workspace, document, undo and redo, prompt, selection, the newest message and error since the last action began |
+| `s.status()` | mode, running tool, workspace, document, undo and redo, prompt, selection, the newest message and error since the last action began, and a warning the view raised itself (Low performance in a headless browser) |
 | `s.selection()` | selected bodies, faces and edges |
 | `s.handles()` | the named handles a tool has up, with their screen point or `covered` |
 | `s.last_error()` | a failed build or refused preview, else an error logged since the last action began, or `none` |

@@ -133,6 +133,8 @@ export interface Status {
   selection: string;
   recent: Message | null;
   error: string | null;
+  /** Warning buttons the view raises on its own, such as Low performance. */
+  warnings: string[];
 }
 
 export function status(h: ReadHost, doc: Document = document, since = 0): Status {
@@ -156,5 +158,6 @@ export function status(h: ReadHost, doc: Document = document, since = 0): Status
     selection: text(doc, "[data-testid=selection-readout]"),
     recent: last ? { seq: last.id, level: last.level, text: last.message, at: last.at } : null,
     error: lastError(h, since),
+    warnings: [...doc.querySelectorAll("#viewcontrols .perf-warn")].map((b) => b.getAttribute("title") ?? "").filter(Boolean),
   };
 }
