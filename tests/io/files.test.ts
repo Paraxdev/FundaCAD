@@ -80,12 +80,12 @@ describe("extToImportFormat", () => {
 
 // A v5 document is a ZIP; builds that predate it must SAY so rather than
 // showing a JSON syntax error, and must NOT drop the file from Recent while
-// telling the user to upgrade. `openDocumentAtPath` and the welcome-screen
+// telling the user to upgrade. `openDocumentAtPath` and the Home screen
 // wiring need Tauri + a DOM, neither of which this suite has (see
 // vitest.config.ts: "no DOM/Tauri APIs mocked yet"), so the DECISION is
 // unit-tested here and the wiring is left to the browser harness.
-// NOT COVERED by any unit test: that welcome.ts actually skips forgetRecent on
-// the "newerFormat" outcome. Stated rather than implied.
+// Home keeping the card on "newerFormat" and "unreadable" is pinned in
+// tests/components/home/HomeScreen.spec.ts.
 describe("IMPORT_EXTS", () => {
   it("offers only extensions the import reads as themselves", () => {
     for (const ext of IMPORT_EXTS) {

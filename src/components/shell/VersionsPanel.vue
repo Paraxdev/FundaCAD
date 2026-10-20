@@ -8,6 +8,7 @@ import { useDocValue, useMetaValue } from "../../app/useDoc";
 import { diffTrees, log, snapshotOf, versionById, type Version, type VersionDiff } from "../../document/versions";
 import { featureMeta } from "../../ui/featureMeta";
 import { toast } from "../../ui/toast";
+import { ago } from "../../ui/timeAgo";
 import Icon from "./Icon.vue";
 
 const engine = useEngine();
@@ -100,16 +101,6 @@ function changedNames(v: Version): { kind: string; name: string }[] {
     ...d.changed.map((id) => ({ kind: "changed", name: label(id, here) })),
     ...d.removed.map((id) => ({ kind: "removed", name: label(id, before) })),
   ];
-}
-
-function ago(time: number): string {
-  const s = Math.max(0, Math.round((Date.now() - time) / 1000));
-  if (s < 60) return "just now";
-  const m = Math.round(s / 60);
-  if (m < 60) return `${m} min ago`;
-  const h = Math.round(m / 60);
-  if (h < 24) return `${h} h ago`;
-  return new Date(time).toLocaleDateString();
 }
 </script>
 

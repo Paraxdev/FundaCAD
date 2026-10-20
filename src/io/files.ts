@@ -248,7 +248,7 @@ async function migrateInlineGeometry(text: string, geometry: GeometryBackend): P
 }
 
 /** Open a document at a known path (no dialog), shared by Open…
- *  and the welcome screen's recent-files list.
+ *  and the Home screen's recent documents.
  *
  *  A v5 document is a ZIP and is read by Rust, which also extracts its geometry
  *  into the blob store before returning. A pre-v5 document is plain JSON and is

@@ -26,11 +26,12 @@ import { enableAutoUnmount, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { useModalStore } from "../../../src/stores/modals";
 import { useDialogStore } from "../../../src/stores/dialogs";
+import { useHomeStore } from "../../../src/stores/home";
 import type { BugReportDeps } from "../../../src/ui/bugReporter";
-import type { WelcomeCallbacks } from "../../../src/ui/welcome";
+import type { HomeCallbacks } from "../../../src/ui/home";
 import BugReportDialog from "../../../src/components/overlays/BugReportDialog.vue";
 import PreferencesDialog from "../../../src/components/overlays/PreferencesDialog.vue";
-import WelcomeModal from "../../../src/components/overlays/WelcomeModal.vue";
+import HomeScreen from "../../../src/components/home/HomeScreen.vue";
 
 // Every dialog installs a capture-phase window key trap for its lifetime. A
 // wrapper left mounted would keep swallowing Escape in the NEXT test.
@@ -43,8 +44,9 @@ const $ = (sel: string) => document.querySelector<HTMLElement>(sel);
 const Host = defineComponent({
   setup() {
     const dialogs = useDialogStore();
+    const home = useHomeStore();
     return () => [
-      dialogs.welcome && dialogs.welcomeCallbacks ? h(WelcomeModal) : null,
+      home.visible && home.callbacks ? h(HomeScreen) : null,
       dialogs.preferences ? h(PreferencesDialog) : null,
       dialogs.bugReport && dialogs.bugDeps ? h(BugReportDialog) : null,
     ];
@@ -68,10 +70,12 @@ function fakeBugDeps(): BugReportDeps {
   } as unknown as BugReportDeps;
 }
 
-const fakeWelcomeCallbacks = (): WelcomeCallbacks => ({
-  onNew: () => {},
-  onOpen: () => {},
-  onOpenPath: async () => "ok",
+const fakeHomeCallbacks = (): HomeCallbacks => ({
+  desktop: false,
+  newDocument: async () => {},
+  openDoc: async () => {},
+  openPath: async () => "ok",
+  currentPath: () => null,
 });
 
 describe("modal depth gate", () => {
@@ -112,21 +116,16 @@ describe("modal depth gate", () => {
     expect(depth()).toBe(0);
   });
 
-  it("counts the welcome screen once and releases it on the backdrop", async () => {
-    const dialogs = useDialogStore();
-    dialogs.bindWelcome(fakeWelcomeCallbacks());
-    dialogs.welcome = true;
+  it("counts Home once and releases it on its close button", async () => {
+    const home = useHomeStore();
+    home.bind(fakeHomeCallbacks());
+    home.visible = true;
     await nextTick();
     expect(depth()).toBe(1);
 
-    // .self: the overlay dismisses, a pointerdown inside the panel does not.
-    $(".modal-panel")!.dispatchEvent(new Event("pointerdown", { bubbles: true }));
+    click(".modal-close");
     await nextTick();
-    expect(depth()).toBe(1);
-
-    $(".modal-overlay")!.dispatchEvent(new Event("pointerdown", { bubbles: true }));
-    await nextTick();
-    expect(dialogs.welcome).toBe(false);
+    expect(home.visible).toBe(false);
     expect(depth()).toBe(0);
   });
 
@@ -143,17 +142,15 @@ describe("modal depth gate", () => {
   });
 
   it("nests rather than double-counting when dialogs stack", async () => {
-    // The bug button is reachable with the welcome screen up, so these two
-    // genuinely stack. Each has to give its own count back.
-    //
-    // One Escape dismisses ONE of them: every trap calls
-    // stopImmediatePropagation, and capture listeners on window fire in
-    // registration order, so the dialog that opened first catches it. That is the
-    // imperative behaviour too, and it is why the count is per-dialog.
+    // The bug button is reachable with Home up, so these two genuinely stack.
+    // Each has to give its own count back, and one Escape dismisses ONE of them:
+    // Home opened first and its trap fires first, but it stands aside while a
+    // dialog is above it, so the top one goes first.
     const dialogs = useDialogStore();
-    dialogs.bindWelcome(fakeWelcomeCallbacks());
+    const home = useHomeStore();
+    home.bind(fakeHomeCallbacks());
     dialogs.bindBugReporter(fakeBugDeps());
-    dialogs.welcome = true;
+    home.visible = true;
     await nextTick();
     dialogs.bugReport = true;
     await nextTick();
@@ -161,12 +158,12 @@ describe("modal depth gate", () => {
 
     esc();
     await nextTick();
-    expect(dialogs.welcome).toBe(false);
+    expect(dialogs.bugReport).toBe(false);
     expect(depth()).toBe(1);
 
     esc();
     await nextTick();
-    expect(dialogs.bugReport).toBe(false);
+    expect(home.visible).toBe(false);
     expect(depth()).toBe(0);
   });
 });
