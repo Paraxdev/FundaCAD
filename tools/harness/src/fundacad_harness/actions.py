@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from . import selectors
-from .errors import BadArgs, Disabled, HarnessError, NotFound, Occluded
+from .errors import BadArgs, Disabled, HarnessError, NotFound, Occluded, SettleTimeout
 from .keys import key, modifiers
 
 
@@ -78,10 +78,17 @@ def action(fn: Callable) -> Callable:
             self._settling = settle
         self._in_action = True
         navs = self._navs
+        began = time.monotonic()
         try:
             done = fn(self, *args, **kwargs)
             if settle:
                 self.settle()
+        except SettleTimeout:
+            # The action took place, only its wait ran out; the settle() that waits it out is recorded too.
+            if outer and self._navs == navs:
+                self._owed_since = began
+                self._recorded(fn.__name__, args, {**kwargs, "settle": False}, None)
+            raise
         except Exception as e:
             if self._navs == navs or isinstance(e, HarnessError):
                 raise

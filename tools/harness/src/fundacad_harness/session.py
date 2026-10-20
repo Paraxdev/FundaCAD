@@ -296,6 +296,11 @@ class Session(Actions):
                 f"{e}. The app may still be working on it: wait_for a label or settle() again,"
                 f" or open the session with a longer settle_timeout (now {self.settle_timeout:g} s)"
             ) from None
+        if not getattr(self, "_in_action", False) and self.recorder is not None:
+            owed, self._owed_since = getattr(self, "_owed_since", None), None
+            if owed is not None:
+                timeout = max(timeout or self.settle_timeout, int(time.monotonic() - owed) + 30)
+            self.recorder.add("settle", (), {} if timeout is None else {"timeout": timeout}, None)
         return f"settled in {r['ms']} ms"
 
     def dismiss_start(self) -> str:

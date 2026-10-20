@@ -4,6 +4,8 @@ import sys
 import types
 from pathlib import Path
 
+import pytest
+
 from fundacad_harness import Session
 from fundacad_harness.recorder import Recorder, literal
 
@@ -17,6 +19,7 @@ LABELS = {
     "menu:File": ("menu:File", "File"),
     "menu:File/Open…": ("menu:File/Open…", "Open…"),
     "#undo-btn": ("#undo-btn", "Undo"),
+    "#redo-btn": ("#redo-btn", "Redo"),
 }
 
 
@@ -163,4 +166,31 @@ def test_a_walk_called_by_keywords_records_the_same_as_by_position(tmp_path):
         '    s.type("field:distance", "7", enter=True)  # "Distance"',
         '    s.context_menu("feature:e1", "ctx:Delete")  # "Extrude 1", "Delete"',
         '    s.open_file("tools/harness/fixtures/plate.json")',
+    ]
+
+
+def test_an_action_that_timed_out_is_recorded_and_so_is_the_settle_that_waited_it_out(tmp_path):
+    from fundacad_harness.errors import SettleTimeout
+    out = tmp_path / "late.py"
+    s = Session(engine=sys.executable, chrome=sys.executable, repo=REPO, record=out, open=False)
+    s.bridge, s.page = StubBridge(), StubPage()
+    plain = s.bridge.call
+    late = iter([True, True])
+
+    def call(method, **args):
+        if method == "settle" and next(late, False):
+            raise SettleTimeout("not settled after 60 s: build")
+        return plain(method, **args)
+    s.bridge.call = call
+    with pytest.raises(SettleTimeout):
+        s.redo()
+    with pytest.raises(SettleTimeout):
+        s.settle()
+    s.settle()
+    s.settle(timeout=5)
+    s.close()
+    assert out.read_text(encoding="utf-8").splitlines()[4:] == [
+        "    s.redo(settle=False)",
+        "    s.settle(timeout=60)",
+        "    s.settle(timeout=5)",
     ]
