@@ -27,6 +27,7 @@ import { installGlobalErrorHandlers } from "./app/errors";
 import { createEngine, mountUi } from "./app/engine";
 import { ENGINE } from "./app/engineKey";
 import { installDevGlobals } from "./app/devGlobals";
+import { harnessWanted } from "./harness/wanted";
 
 // Installed before anything is constructed, so a failure inside createEngine
 // still reaches the user rather than leaving a blank viewport.
@@ -66,6 +67,7 @@ app.mount("#app");
 mountUi(engine);
 
 installDevGlobals(engine);
-if (import.meta.env.DEV && location.search.includes("harness=1")) {
+// import.meta.env.DEV first, so a production build drops the driver chunk.
+if (import.meta.env.DEV && harnessWanted(location.search, true)) {
   void import("./harness/driver").then((m) => m.installHarness(engine));
 }
