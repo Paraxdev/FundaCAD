@@ -194,3 +194,21 @@ def test_a_wait_started_late_in_a_do_ends_by_the_settle_limit(tmp_path):
     ok, text = server.do([{"do": "wait_for", "text": "a", "timeout": 60}, {"do": "wait_for", "text": "b", "timeout": 60}, {"do": "wait_for", "text": "c", "timeout": 60}, {"do": "wait_for", "text": "d"}])
     assert ok is True, text
     assert waits == [60, 50, 31, 10]
+
+
+def test_read_takes_only_the_readouts(tmp_path):
+    replies, made = talk(
+        tmp_path,
+        {"id": 1, "call": "open"},
+        {"id": 2, "call": "read", "args": {"what": "close"}},
+    )
+    assert replies[1]["ok"] is False
+    assert 'cannot read "close", the readouts are screen, history' in replies[1]["text"]
+    assert made[0].closed, "only by the end of input"
+
+
+def test_a_press_step_with_a_list_presses_each_key():
+    s = StubSession(None)
+    steps.run(s, {"do": "press", "keys": ["Escape", "Enter"]})
+    steps.run(s, {"do": "press", "keys": "Control+S"})
+    assert [c[1] for c in s.calls] == [("Escape", "Enter"), ("Control+S",)]

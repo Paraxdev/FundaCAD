@@ -107,4 +107,14 @@ describe("named handles", () => {
     expect(overHandle(h, 400, 280)).toBe(true);
     expect(overHandle(h, 700, 100)).toBe(false);
   });
+
+  it("counts a press a few pixels off the handle as on it", () => {
+    const { h, scene } = rig();
+    scene.add(nameHandle(createDragHandle(), "origin").group);
+    let x = 400;
+    while (overHandle(h, x, 300, 0) && x < 800) x++;
+    expect(x).toBeLessThan(800);
+    expect(overHandle(h, x + 3, 300, 0)).toBe(false);
+    expect(overHandle(h, x + 3, 300)).toBe(true);
+  });
 });
