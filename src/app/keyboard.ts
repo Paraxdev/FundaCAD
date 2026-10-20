@@ -92,13 +92,14 @@ export function installKeyboard(e: Engine): void {
   // file shortcuts (work everywhere, even mid-sketch)
   window.addEventListener("keydown", (ev) => {
     if (!(ev.ctrlKey || ev.metaKey)) return;
-    // Option makes a different character on macOS (Option+S is "ß"), so the
-    // letter comes from the physical key there.
-    const k = ev.altKey && /^Key[A-Z]$/.test(ev.code) ? ev.code.slice(3).toLowerCase() : ev.key.toLowerCase();
+    const k = ev.key.toLowerCase();
     if (ev.altKey) {
       // Note: Ctrl+Alt must be resolved first, or Ctrl+Alt+S would also save.
-      if (k === "s") { ev.preventDefault(); useShellStore().toggleItems(); }
-      else if (k === "h") { ev.preventDefault(); useShellStore().toggleHistory(); }
+      // Option makes another character on macOS (Option+S is "ß"), so the
+      // physical key counts too, while key still serves non-QWERTY layouts.
+      const is = (letter: string) => k === letter || ev.code === `Key${letter.toUpperCase()}`;
+      if (is("s")) { ev.preventDefault(); useShellStore().toggleItems(); }
+      else if (is("h")) { ev.preventDefault(); useShellStore().toggleHistory(); }
       return;
     }
     if (k === "f" && !ev.shiftKey) { ev.preventDefault(); useCommandPaletteStore().toggle(e.sketch.active ? "sketch" : "model"); }
