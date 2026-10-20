@@ -50,6 +50,7 @@ import { actOn as actOnSelection, EMPTY_SELECTION, modsOf, selectGroup, selectRo
 import { VisibilityPaint } from "../../ui/visibilityPaint";
 import { routeTreeClick, treePickWaiting, type TreePick } from "../../ui/treePick";
 import { featurePick } from "../../app/featurePick";
+import { switchEdit } from "../../app/selection";
 import { contributedBrowserSections, contributedPalette, onContribChange } from "../../plugins/contrib";
 import type { Component } from "vue";
 import { featuresOf } from "../../types";
@@ -191,11 +192,12 @@ function viaTool(pick: () => TreePick, own: (e: MouseEvent) => void) {
   };
 }
 
-/** Double-click: the click before it already went to the tool, or said why not. */
-function unlessWaiting(own: () => void) {
+/** Double-click: a tool waiting for a pick already took the click before it.
+ *  Any other open edit is closed and the row's feature edited instead. */
+function editRow(id: string) {
   return () => {
-    if (treePickWaiting() || busyHint()) return;
-    own();
+    if (treePickWaiting()) return;
+    switchEdit(engine, id);
   };
 }
 
@@ -748,7 +750,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
       selected: selection.featureId === f.id,
       error: errId === f.id,
       activate: viaTool(() => ({ kind: "feature", id: f.id }), () => engine.selectFeature(f.id)),
-      edit: unlessWaiting(() => engine.editFeature(f.id)),
+      edit: editRow(f.id),
       rename: (name: string) => store.updateFeature(f.id, { name } as Partial<Feature>),
       remove: () => store.removeFeature(f.id),
       title: `Joint ${i + 1} · select or double-click to adjust its offset/angle handles · right-click to Rename / Delete`,
@@ -772,7 +774,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
       selected: selection.featureId === f.id,
       error: errId === f.id,
       activate: viaTool(() => ({ kind: "feature", id: f.id }), () => engine.selectFeature(f.id)),
-      edit: unlessWaiting(() => engine.editFeature(f.id)),
+      edit: editRow(f.id),
       rename: (name: string) => store.updateFeature(f.id, { name } as Partial<Feature>),
       remove: () => store.removeFeature(f.id),
       title: `Mechanism ${i + 1} on ${nameOf(f.ground)} · double-click to drag its drive · right-click to Rename / Delete`,
@@ -791,7 +793,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
     error: errId === f.id,
     ...eye({ category: "sketches", key: f.id }, engine.isSketchVisible(f.id)),
     activate: viaTool(() => ({ kind: "sketch", id: f.id }), (e) => selectSketch(f.id, e)),
-    edit: unlessWaiting(() => engine.editFeature(f.id)),
+    edit: editRow(f.id),
     extraMenu: [visibilityMenu("sketches", actOnSelection(pickedSketches, f.id), "sketches")],
     rename: (name: string) => store.updateFeature(f.id, { name } as Partial<Feature>),
     remove: () => store.removeFeature(f.id),
