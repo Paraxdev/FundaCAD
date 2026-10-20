@@ -9,6 +9,7 @@
 //   7. Search filters the cards, the sort changes their order, Ctrl+F finds the field.
 //   8. Each template opens as an untitled document that builds.
 //   9. With 300 documents, the cards in view show their pictures and only those are fetched.
+//  10. A folder added to Home lists its documents, narrow windows pick it from a Select, Remove takes it off.
 //
 //   engine --ws, vite, then
 //   SC_TOKEN=<engine token> node e2e/home_e2e.cjs
@@ -217,6 +218,47 @@ function check(name, ok, detail = "") {
     const after = await page.evaluate(() => window.__fundacad.home.thumbRequests());
     check("scrolling to the end fetches the last cards", after.includes("C:/many/doc299.funda"), `${after.length}`);
     check("and still not every card", after.length < 300, `${after.length}`);
+    await page.keyboard.press("Escape");
+
+    console.log("10. folders");
+    await page.evaluate(() => {
+      const now = Date.now();
+      localStorage.setItem("fundacad.recentFiles", "[]");
+      localStorage.removeItem("fundacad.home.folders");
+      window.__fundacad.home.useFakeLibrary([
+        { path: "D:/proj/gearbox.funda", mtimeMs: now - 1000 },
+        { path: "D:/proj/parts/shaft.fundab", mtimeMs: now - 5000 },
+        { path: "D:/other/elsewhere.funda", mtimeMs: now },
+      ], ["D:/proj"]);
+    });
+    await menu("File", "Home");
+    await page.click(".home-add-folder");
+    await page.waitForSelector(".home-folder-row.active", { timeout: 3000 }).catch(() => {});
+    const folderCards = await page.$$eval(".home-card-name", (els) => els.map((e) => e.textContent).join(","));
+    check("the added folder is listed", (await page.textContent(".home-folder-row").catch(() => ""))?.trim() === "proj");
+    check("its documents and those of its subfolders show", folderCards === "gearbox,shaft", folderCards);
+    const sorts = await page.$$eval(".home-sort option", (els) => els.map((e) => e.textContent).join(","));
+    check("a folder sorts by edit time or name", sorts === "Last edited,Name", sorts);
+    await page.setViewportSize({ width: 700, height: 900 });
+    await page.waitForTimeout(300);
+    const narrow = await page.evaluate(() => ({
+      side: getComputedStyle(document.querySelector(".home-side")).display,
+      select: getComputedStyle(document.querySelector(".home-view-select")).display,
+      options: [...document.querySelectorAll(".home-view-select option")].map((o) => o.textContent).join(","),
+    }));
+    check("a narrow window picks the folder from a Select", narrow.side === "none" && narrow.select !== "none"
+      && narrow.options === "Recent,proj,Add folder…", JSON.stringify(narrow));
+    await page.selectOption(".home-view-select", "recent");
+    await page.waitForTimeout(200);
+    check("the Select goes back to Recent", (await page.$$(".home-card")).length === 0);
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await page.waitForTimeout(300);
+    await page.click(".home-folder-row", { button: "right" });
+    await page.click(".ctx-item:has-text('Remove from Home')");
+    await page.waitForTimeout(200);
+    check("Remove from Home takes the folder off", (await page.$$(".home-folder-row")).length === 0);
+    const stored = await page.evaluate(() => localStorage.getItem("fundacad.home.folders"));
+    check("and forgets it", stored === "[]", stored);
     await page.keyboard.press("Escape");
   } finally {
     await browser.close();

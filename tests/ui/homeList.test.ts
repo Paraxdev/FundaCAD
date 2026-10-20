@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildEntries, displayName, filterEntries, folderLabel, folderPath, sortEntries, type HomeEntry } from "../../src/ui/homeList";
+import { buildEntries, displayName, filterEntries, folderEntries, folderLabel, folderName, folderPath, folderSort, sortEntries, type HomeEntry } from "../../src/ui/homeList";
 
 describe("displayName", () => {
   it("drops the folder and the extension", () => {
@@ -90,5 +90,33 @@ describe("filterEntries", () => {
   it("needs every word to match", () => {
     expect(names("parts lev")).toEqual(["Lever"]);
     expect(names("parts nope")).toEqual([]);
+  });
+});
+
+describe("folderEntries", () => {
+  it("makes a card per listed document, with the open time it also has in Recent", () => {
+    const files = [
+      { path: "D:/proj/a.funda", exists: true, mtimeMs: 50, size: 1 },
+      { path: "D:/proj/sub/b.fundab", exists: true, mtimeMs: 70, size: 1 },
+    ];
+    const out = folderEntries(files, [{ path: "D:/proj/a.funda", openedAt: 9 }], "D:/proj/sub/b.fundab");
+    expect(out).toEqual([
+      { path: "D:/proj/a.funda", name: "a", folder: "D:/proj", openedAt: 9, editedAt: 50, missing: false, open: false },
+      { path: "D:/proj/sub/b.fundab", name: "b", folder: "proj/sub", openedAt: null, editedAt: 70, missing: false, open: true },
+    ]);
+  });
+
+  it("sorts a folder by edit time where Recent would sort by open time", () => {
+    expect(folderSort("opened")).toBe("edited");
+    expect(folderSort("edited")).toBe("edited");
+    expect(folderSort("name")).toBe("name");
+  });
+});
+
+describe("folderName", () => {
+  it("is the last folder, dots kept", () => {
+    expect(folderName("D:/work/my.parts")).toBe("my.parts");
+    expect(folderName("D:/work/gearbox/")).toBe("gearbox");
+    expect(folderName("/")).toBe("/");
   });
 });

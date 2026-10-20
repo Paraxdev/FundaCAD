@@ -65,3 +65,29 @@ export function filterEntries(entries: readonly HomeEntry[], query: string): Hom
     return words.every((w) => hay.includes(w));
   });
 }
+
+/** A folder view's cards: what the listing found, with the open time where the document is also recent. */
+export function folderEntries(
+  files: readonly FileStat[],
+  recents: readonly RecentFile[],
+  openPath: string | null,
+): HomeEntry[] {
+  const opened = new Map(recents.map((r) => [r.path, r.openedAt]));
+  return files.map((f) => ({
+    path: f.path,
+    name: displayName(f.path),
+    folder: folderLabel(f.path),
+    openedAt: opened.get(f.path) ?? null,
+    editedAt: f.mtimeMs,
+    missing: false,
+    open: f.path === openPath,
+  }));
+}
+
+/** A folder view has no open order of its own, so it sorts by edit time instead. */
+export const folderSort = (mode: SortMode): SortMode => (mode === "opened" ? "edited" : mode);
+
+/** The last name in a folder path, the whole path for a drive root. */
+export function folderName(dir: string): string {
+  return parts(dir).filter(Boolean).pop() ?? dir;
+}

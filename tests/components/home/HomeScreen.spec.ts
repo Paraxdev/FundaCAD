@@ -11,7 +11,8 @@ import { useHomeStore } from "../../../src/stores/home";
 import { choose } from "../../../src/ui/choice";
 import type { HomeCallbacks } from "../../../src/ui/home";
 import type { OpenOutcome } from "../../../src/io/files";
-import { setLibrary, type DocumentLibrary, type FileStat } from "../../../src/io/library";
+import { setLibrary, type DocumentLibrary, type FileStat, type FolderListing } from "../../../src/io/library";
+import { saveFolder, setSaveFolder } from "../../../src/io/saveFolder";
 import ContextMenuHost from "../../../src/components/overlays/ContextMenuHost.vue";
 import HomeScreen from "../../../src/components/home/HomeScreen.vue";
 import ModalHost from "../../../src/components/overlays/ModalHost.vue";
@@ -34,9 +35,21 @@ function callbacks(over: Partial<HomeCallbacks> = {}): HomeCallbacks {
   };
 }
 
-/** Every path exists unless listed in `missing`, edited at `mtime`, its picture named after it. */
-function fakeLibrary(missing: string[] = [], mtime = 0): DocumentLibrary {
+/** Every path exists unless listed in `missing`, edited at `mtime`, its picture named after it.
+ *  `folders` are the listings, `picks` what the folder dialog hands out. */
+function fakeLibrary(
+  missing: string[] = [],
+  mtime = 0,
+  folders: Record<string, FolderListing> = {},
+  picks: string[] = [],
+): DocumentLibrary {
   return {
+    list: vi.fn(async (dir: string) => {
+      const l = folders[dir];
+      if (!l) throw new Error("not found");
+      return l;
+    }),
+    pickFolder: vi.fn(async () => picks.shift() ?? null),
     stat: vi.fn(async (paths: string[]): Promise<FileStat[]> =>
       paths.map((path) => missing.includes(path)
         ? { path, exists: false, mtimeMs: null, size: null }
@@ -300,5 +313,90 @@ describe("HomeScreen", () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+
+  describe("folders", () => {
+    const stat = (path: string, mtimeMs: number): FileStat => ({ path, exists: true, mtimeMs, size: 1 });
+    const proj: FolderListing = {
+      files: [stat("D:/proj/b.funda", 30), stat("D:/proj/sub/a.funda", 20)],
+      truncated: false,
+    };
+    const rows = () => $$(".home-nav-row").map((r) => r.textContent?.trim());
+    const menuRows = () => [...document.querySelectorAll<HTMLElement>(".ctx-menu button, .ctx-item")];
+
+    beforeEach(() => setSaveFolder(null));
+
+    it("adds a folder from the dialog and lists its documents", async () => {
+      const lib = fakeLibrary([], 0, { "D:/proj": proj }, ["D:/proj"]);
+      open([{ path: "C:/r.funda", openedAt: 1 }], {}, lib);
+      await flushPromises();
+      $(".home-add-folder")!.click();
+      await flushPromises();
+      expect(rows()).toEqual(["Recent", "proj", "Add folder…"]);
+      expect($(".home-folder-row.active")!.getAttribute("title")).toBe("D:/proj");
+      expect($$(".home-card-name").map((n) => n.textContent)).toEqual(["b", "a"]);
+      expect(JSON.parse(localStorage.getItem("fundacad.home.folders")!)[0].path).toBe("D:/proj");
+      const sort = document.querySelector<HTMLSelectElement>(".home-sort")!;
+      expect([...sort.options].map((o) => o.textContent)).toEqual(["Last edited", "Name"]);
+      $(".home-nav-row")!.click();
+      await flushPromises();
+      expect($$(".home-card-name").map((n) => n.textContent)).toEqual(["r"]);
+    });
+
+    it("removes a folder from Home and goes back to Recent", async () => {
+      localStorage.setItem("fundacad.home.folders", JSON.stringify([{ path: "D:/proj", addedAt: 1 }]));
+      open([], {}, fakeLibrary([], 0, { "D:/proj": proj }));
+      mount(ContextMenuHost, { attachTo: document.body });
+      $(".home-folder-row")!.click();
+      await flushPromises();
+      $(".home-card")!.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+      await nextTick();
+      expect(menuRows().map((r) => r.textContent?.trim())).not.toContain("Remove from list");
+      key("Escape");
+      $(".home-folder-row")!.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+      await nextTick();
+      menuRows().find((r) => r.textContent?.trim() === "Remove from Home")!.click();
+      await flushPromises();
+      expect(rows()).toEqual(["Recent", "Add folder…"]);
+      expect($(".home-nav-row.active")!.textContent).toBe("Recent");
+      expect(localStorage.getItem("fundacad.home.folders")).toBe("[]");
+    });
+
+    it("says when a folder holds more than it lists, or cannot be read", async () => {
+      localStorage.setItem("fundacad.home.folders", JSON.stringify([
+        { path: "D:/big", addedAt: 1 }, { path: "D:/gone", addedAt: 2 },
+      ]));
+      open([], {}, fakeLibrary([], 0, { "D:/big": { files: proj.files, truncated: true } }));
+      const [big, gone] = $$(".home-folder-row");
+      big!.click();
+      await flushPromises();
+      expect($(".home-note")!.textContent?.trim()).toBe("Showing the first 2000 documents");
+      gone!.click();
+      await flushPromises();
+      expect($(".home-note")).toBeNull();
+      expect($(".home-empty")!.textContent).toBe("gone could not be read.");
+    });
+
+    it("starts a new document from a folder view in that folder", async () => {
+      localStorage.setItem("fundacad.home.folders", JSON.stringify([{ path: "D:/proj", addedAt: 1 }]));
+      let refuse = true;
+      const { home } = open([], {
+        newDocument: vi.fn(async () => { if (!refuse) home.visible = false; }),
+      }, fakeLibrary([], 0, { "D:/proj": proj }));
+      $(".home-folder-row")!.click();
+      await flushPromises();
+      $(".home-new-blank")!.click();
+      await flushPromises();
+      expect(saveFolder()).toBeNull();
+      refuse = false;
+      $(".home-new-blank")!.click();
+      await flushPromises();
+      expect(saveFolder()).toBe("D:/proj");
+    });
+
+    it("has no folders in the browser build", () => {
+      open([], {}, null);
+      expect(rows()).toEqual(["Recent"]);
+    });
   });
 });

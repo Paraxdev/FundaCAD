@@ -16,6 +16,8 @@ const flush = async () => {
 function fakeLib(cached: string | null = null) {
   const lib = {
     stat: vi.fn(async () => []),
+    list: vi.fn(async () => ({ files: [], truncated: false })),
+    pickFolder: vi.fn(async () => null),
     thumbs: vi.fn(async (paths: string[]) => paths.map(() => cached)),
     putThumb: vi.fn(async () => {}),
   } satisfies DocumentLibrary;

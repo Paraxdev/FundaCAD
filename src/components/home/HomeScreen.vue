@@ -5,17 +5,20 @@ import { useModalStore } from "../../stores/modals";
 import { useModalGate } from "../../composables/useModalGate";
 import { welcomeOnStartup, setWelcomeOnStartup } from "../../ui/welcome";
 import { forgetRecent, getRecentFiles } from "../../io/recentFiles";
-import { library, type FileStat } from "../../io/library";
+import { library, type FileStat, type FolderListing } from "../../io/library";
+import { addFolder, getFolders, removeFolder } from "../../io/homeFolders";
+import { setSaveFolder } from "../../io/saveFolder";
 import { useContextMenuStore } from "../../stores/contextMenu";
 import { choose } from "../../ui/choice";
 import { contextMenu } from "../../ui/menu";
 import { escapeClaimed } from "../../ui/escapeClaim";
-import { buildEntries, filterEntries, sortEntries, type HomeEntry, type SortMode } from "../../ui/homeList";
+import { buildEntries, filterEntries, folderEntries, folderName, folderSort, sortEntries, type HomeEntry, type SortMode } from "../../ui/homeList";
 import { readSetting } from "../../ui/storedSetting";
 import { thumbQueueFor } from "../../ui/thumbQueue";
 import { getTheme, onThemeChange, themeMode } from "../../ui/theme";
 import Icon from "../shell/Icon.vue";
 import DocCard from "./DocCard.vue";
+import HomeSidebar from "./HomeSidebar.vue";
 import NewStrip from "./NewStrip.vue";
 import logoDarkUrl from "../../../assets/brand/fundacad-lockup-app.svg";
 import logoLightUrl from "../../../assets/brand/fundacad-lockup-app-light.svg";
@@ -79,8 +82,27 @@ watch(sort, (v) => {
   try { localStorage.setItem(SORT_KEY, v); } catch { /* blocked storage keeps the default */ }
 });
 const searchField = ref<HTMLInputElement | null>(null);
-const all = computed(() => buildEntries(recents.value, cb.currentPath(), stats.value));
-const entries = computed(() => sortEntries(filterEntries(all.value, query.value), sort.value));
+
+const folders = ref(getFolders());
+/** "recent" or the path of a folder. */
+const view = ref("recent");
+const listings = ref(new Map<string, FolderListing | Error>());
+const loading = ref<string | null>(null);
+const inFolder = computed(() => view.value !== "recent");
+const listing = computed(() => (inFolder.value ? listings.value.get(view.value) ?? null : null));
+
+const sorts = computed(() => (inFolder.value ? SORTS.filter((s) => s.value !== "opened") : SORTS));
+const shownSort = computed<SortMode>({
+  get: () => (inFolder.value ? folderSort(sort.value) : sort.value),
+  set: (v) => { sort.value = v; },
+});
+
+const all = computed(() => {
+  if (!inFolder.value) return buildEntries(recents.value, cb.currentPath(), stats.value);
+  const l = listing.value;
+  return l && !(l instanceof Error) ? folderEntries(l.files, recents.value, cb.currentPath()) : [];
+});
+const entries = computed(() => sortEntries(filterEntries(all.value, query.value), shownSort.value));
 const unreadable = ref(new Set<string>());
 
 async function refreshStats(): Promise<void> {
@@ -91,6 +113,46 @@ async function refreshStats(): Promise<void> {
   } catch (err) {
     console.warn("[home] stat failed", err);
   }
+}
+
+async function showView(next: string): Promise<void> {
+  view.value = next;
+  if (next === "recent" || !lib) return;
+  loading.value = next;
+  let got: FolderListing | Error;
+  try {
+    got = await lib.list(next);
+  } catch (err) {
+    got = err instanceof Error ? err : new Error(String(err));
+  }
+  listings.value = new Map(listings.value).set(next, got);
+  if (loading.value === next) loading.value = null;
+}
+
+async function pickFolder(): Promise<void> {
+  if (!lib) return;
+  const dir = await lib.pickFolder();
+  if (!dir) return;
+  addFolder(dir);
+  folders.value = getFolders();
+  if (folders.value.some((f) => f.path === dir)) await showView(dir);
+}
+
+function dropFolder(dir: string): void {
+  removeFolder(dir);
+  folders.value = getFolders();
+  if (view.value === dir) view.value = "recent";
+}
+
+function folderMenu(dir: string, ev: MouseEvent): void {
+  contextMenu(ev.clientX, ev.clientY, [{ label: "Remove from Home", onClick: () => dropFolder(dir) }]);
+}
+
+/** Only once Home has closed is the new document the one on screen, a refused discard leaves it up. */
+async function startNew(start: () => Promise<void>): Promise<void> {
+  const dir = inFolder.value ? view.value : null;
+  await start();
+  if (dir && !home.visible) setSaveFolder(dir);
 }
 
 function forget(path: string): void {
@@ -116,10 +178,18 @@ async function openEntry(entry: HomeEntry): Promise<void> {
 function entryMenu(entry: HomeEntry, ev: MouseEvent): void {
   contextMenu(ev.clientX, ev.clientY, [
     { label: "Open", onClick: () => void openEntry(entry) },
-    { label: "Remove from list", onClick: () => forget(entry.path) },
+    ...(inFolder.value ? [] : [{ label: "Remove from list", onClick: () => forget(entry.path) }]),
     { separator: true, label: "" },
     { label: "Copy path", onClick: () => void navigator.clipboard?.writeText(entry.path).catch(() => {}) },
   ]);
+}
+
+function onViewSelect(v: string): void {
+  if (v === "add") {
+    void pickFolder();
+    return;
+  }
+  void showView(v);
 }
 
 const showOnStartup = ref(welcomeOnStartup());
@@ -140,20 +210,40 @@ onUnmounted(() => {
   <div class="home" role="dialog" aria-label="Home">
     <aside class="home-side">
       <img :src="logoUrl" alt="FundaCAD" class="home-logo" />
-      <nav class="home-nav">
-        <button class="home-nav-row active">Recent</button>
-      </nav>
+      <HomeSidebar
+        :folders="folders"
+        :view="view"
+        :loading="loading"
+        :can-add="!!lib"
+        @view="(v) => void showView(v)"
+        @add="pickFolder()"
+        @menu="folderMenu"
+      />
     </aside>
 
     <div class="home-main">
       <div class="home-head">
-        <NewStrip @blank="cb.newDocument()" @open="cb.openDoc()" @template="(id) => cb.newFromTemplate(id)" />
+        <NewStrip
+          @blank="startNew(() => cb.newDocument())"
+          @open="cb.openDoc()"
+          @template="(id) => startNew(() => cb.newFromTemplate(id))"
+        />
         <button class="modal-close" aria-label="Back to the document" title="Back to the document" @click="close()">
           <Icon name="close" :size="15" />
         </button>
       </div>
 
-      <div v-if="lib && all.length" class="home-tools">
+      <div v-if="lib && (all.length || folders.length)" class="home-tools">
+        <select
+          class="home-view-select"
+          :value="view"
+          aria-label="Show"
+          @change="onViewSelect(($event.target as HTMLSelectElement).value)"
+        >
+          <option value="recent">Recent</option>
+          <option v-for="f in folders" :key="f.path" :value="f.path">{{ folderName(f.path) }}</option>
+          <option value="add">Add folder…</option>
+        </select>
         <input
           ref="searchField"
           v-model="query"
@@ -163,11 +253,14 @@ onUnmounted(() => {
           aria-label="Search documents"
           spellcheck="false"
         />
-        <select v-model="sort" class="home-sort" aria-label="Sort by">
-          <option v-for="s in SORTS" :key="s.value" :value="s.value">{{ s.label }}</option>
+        <select v-model="shownSort" class="home-sort" aria-label="Sort by">
+          <option v-for="s in sorts" :key="s.value" :value="s.value">{{ s.label }}</option>
         </select>
       </div>
 
+      <p v-if="listing && !(listing instanceof Error) && listing.truncated" class="home-note">
+        Showing the first 2000 documents
+      </p>
       <div v-if="lib && entries.length" class="home-grid">
         <DocCard
           v-for="e in entries"
@@ -180,6 +273,9 @@ onUnmounted(() => {
         />
       </div>
       <p v-else-if="lib && all.length" class="home-empty">No documents match</p>
+      <p v-else-if="listing instanceof Error" class="home-empty">{{ folderName(view) }} could not be read.</p>
+      <p v-else-if="inFolder && listing" class="home-empty">No documents in this folder.</p>
+      <p v-else-if="inFolder" class="home-empty">Looking for documents…</p>
       <p v-else-if="lib" class="home-empty">Documents you open or save appear here.</p>
       <p v-else class="home-empty">Recent documents appear here in the desktop app.</p>
 

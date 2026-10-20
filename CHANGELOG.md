@@ -43,6 +43,11 @@ This file starts on 2026-08-03. For anything before that, see the
   has none. The pictures are kept on this computer and load as the cards scroll
   into view, so a list of hundreds of documents stays quick. A document changed
   by another program shows a plain card until you open it again.
+- **Project folders on Home.** Add folder puts a folder of your own under
+  Folders, and its view lists the documents in it and in its subfolders, four
+  levels deep, sorted by last edited or name. Blank or a template started from
+  a folder view saves into that folder by default. Remove from Home, on the
+  folder's right click menu, takes it off Home and leaves it on disk.
 - **Mechanisms.** A `mechanism` feature joins bodies with revolute, slider and
   rigid joints, closed loops included, and poses them all at once: the ground
   stays put, one joint is driven to an `angle` or `offset`, and every other
