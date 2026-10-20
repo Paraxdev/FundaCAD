@@ -182,3 +182,15 @@ def test_a_long_do_stops_starting_steps_before_the_relay_gives_up(tmp_path):
 def test_a_wait_in_a_do_is_capped():
     with pytest.raises(Exception, match="up to 60 s"):
         steps.check({"do": "wait_for", "text": "x", "timeout": 200})
+
+
+def test_a_wait_started_late_in_a_do_ends_by_the_settle_limit(tmp_path):
+    ticks = iter([0, 0, 100, 119, 119])
+    s = StubSession(tmp_path)
+    waits = []
+    s.wait_for = lambda text, timeout=10, **kw: waits.append(timeout) or f"saw {text}"
+    server = Server(lambda **kw: s, clock=lambda: next(ticks))
+    server.open()
+    ok, text = server.do([{"do": "wait_for", "text": "a", "timeout": 60}, {"do": "wait_for", "text": "b", "timeout": 60}, {"do": "wait_for", "text": "c", "timeout": 60}, {"do": "wait_for", "text": "d"}])
+    assert ok is True, text
+    assert waits == [60, 50, 31, 10]
