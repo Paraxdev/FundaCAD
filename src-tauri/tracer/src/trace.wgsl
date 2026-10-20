@@ -11,11 +11,19 @@ struct Inst {
   w2o0: vec4f, w2o1: vec4f, w2o2: vec4f,
   // vertex base, index base, material base, triangle base
   base: vec4u,
-  // node base, material count, flags, unused
+  // node base, material count, flags (bit 0 relief, bit 1 emitters), emitter table offset
   extra: vec4u,
+  // axis xyz, pitch
+  relief0: vec4f,
+  // origin, depth, tint jitter, cavity
+  relief1: vec4f,
 }
 struct Mat {
   base: vec4f, emission: vec4f, pbr: vec4f, attenuation: vec4f, coat: vec4f, specular: vec4f, sheen: vec4f,
+  // iridescence, iridescence ior, thickness min, thickness max
+  film: vec4f,
+  // anisotropy, scatter distance, flakes, flake size
+  finish: vec4f,
 }
 struct Hit { ok: bool, t: f32, inst: u32, prim: u32, bary: vec2f }
 
@@ -33,6 +41,7 @@ struct Hit { ok: bool, t: f32, inst: u32, prim: u32, bary: vec2f }
 const PI = 3.14159265;
 const SOLID = 1u;
 const VERTEX_COLORS = 2u;
+const NO_LIGHT = 4u;
 
 var<private> seed: u32;
 fn rnd() -> f32 {

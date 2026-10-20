@@ -23,3 +23,5 @@ tar = "0.4"
 
 [dev-dependencies]
 png = "0.17"
+# The binding and layout tests read the kernels as wgpu compiles them.
+naga = { version = "=30.0.1", features = ["wgsl-in"] }
