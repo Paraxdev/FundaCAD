@@ -3,6 +3,7 @@ import { choose } from "../ui/choice";
 import type { Engine } from "./engine";
 import { TEMPLATES, templateText } from "../templates";
 import { copyName } from "../ui/homeVersions";
+import { closeHome } from "../ui/home";
 
 /** An open sketch's edits reach the store only when the sketch is finished, so
  *  `store.dirty` alone misses them. */
@@ -102,7 +103,8 @@ export function createDocumentActions(
     // The Move gizmo is put away first, and with it a re-open still waiting for
     // a drag's rebuild: left armed, that re-open landed on the undone model and
     // took focus into its field (FI-2).
-    doUndo() { e.tools.move.cancel(); if (!e.sketch.undoEdit()) e.store.undo(); },
-    doRedo() { e.tools.move.cancel(); if (!e.sketch.redoEdit()) e.store.redo(); },
+    // Home closes, so an undo from the title bar or a menu is seen on the document it changes.
+    doUndo() { closeHome(); e.tools.move.cancel(); if (!e.sketch.undoEdit()) e.store.undo(); },
+    doRedo() { closeHome(); e.tools.move.cancel(); if (!e.sketch.redoEdit()) e.store.redo(); },
   };
 }
