@@ -51,7 +51,7 @@ describe("a file from a newer version", () => {
     const { store } = openAndSave();
     expect(store.openedVersion).toBe(99);
     expect(openNotices(store.document, store.openedVersion).map((n) => n.message)).toEqual([
-      "Opened a file from a newer version of FundaCAD. 1 feature was not included because this version does not know it: futureWidget. It is kept and saved with the file. Bodies after it may differ.",
+      "Opened a file from a newer version of FundaCAD. 1 feature was not included because this version does not know it: futureWidget. It is kept and saved with the file. Bodies after it may differ. Update FundaCAD to build it.",
     ]);
   });
 });

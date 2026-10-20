@@ -11,7 +11,7 @@
 // sentence. Getting that backwards paints a failed feature as a successful one.
 
 import { describe, it, expect } from "vitest";
-import { featureFailures, featureNotes, featurePlaceholders } from "../../src/ui/featureNotes";
+import { featureFailures, featureNotes, featurePlaceholders, placeholderNote } from "../../src/ui/featureNotes";
 
 describe("featureNotes", () => {
   it("is empty when a build reported nothing", () => {
@@ -102,5 +102,17 @@ describe("featurePlaceholders", () => {
 
   it("is empty for a build that skipped nothing", () => {
     expect(featurePlaceholders({}).size).toBe(0);
+  });
+});
+
+describe("placeholderNote", () => {
+  it("names the plugin when a shipped one declares the type", () => {
+    expect(placeholderNote("texture")).toBe(
+      'Not included: it needs the "Surface Texture" plugin, which is not running here. It is kept and saved with the file.',
+    );
+  });
+
+  it("says this version does not know a type nothing here declares", () => {
+    expect(placeholderNote("futureWidget")).toContain("this version of FundaCAD does not know this feature type");
   });
 });

@@ -60,6 +60,11 @@ function declaredOwners(): Map<string, { id: string; name: string }> {
   return out;
 }
 
+/** The shipped plugin that declares this feature type, if any. */
+export function featureTypeOwner(type: string): { id: string; name: string } | null {
+  return declaredOwners().get(type) ?? null;
+}
+
 /** Whether this build can build a feature of this type right now. */
 function buildable(type: string, live: ReadonlySet<string>): boolean {
   return isCoreFeatureType(type) || live.has(type);

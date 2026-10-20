@@ -648,7 +648,7 @@ describe("FeatureProperties on a feature this version does not know", () => {
     };
     const w = render(fake, "w1");
     expect(w.find(".param-note").text()).toBe(
-      "Not included: this version of FundaCAD does not know this feature type. It is kept and saved with the file.",
+      "Not included: this version of FundaCAD does not know this feature type. It is kept and saved with the file. A newer FundaCAD or a plugin can build it.",
     );
     expect(w.findAll(".param-row")).toHaveLength(0);
   });

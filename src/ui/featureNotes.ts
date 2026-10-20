@@ -17,6 +17,8 @@
 // the chip the day it lands rather than the day someone remembers to extend a
 // list here.
 
+import { featureTypeOwner } from "../document/missingPlugins";
+
 /** The subset of a build result this reads. Structural, not the real types, so
  *  a caller can pass a partial build (a test, a resumed cache hit) without
  *  constructing a whole RebuildResult. */
@@ -81,6 +83,9 @@ export function featurePlaceholders(src: PlaceholderSources): Map<string, string
   return new Map((src.skippedFeatures ?? []).map((s) => [s.feature_id, s.type]));
 }
 
-/** What a placeholder chip and its properties say. */
-export const PLACEHOLDER_NOTE =
-  "Not included: this version of FundaCAD does not know this feature type. It is kept and saved with the file.";
+/** What a placeholder chip and its properties say about a feature of `type`. */
+export function placeholderNote(type: string): string {
+  const owner = featureTypeOwner(type);
+  if (owner) return `Not included: it needs the "${owner.name}" plugin, which is not running here. It is kept and saved with the file.`;
+  return "Not included: this version of FundaCAD does not know this feature type. It is kept and saved with the file. A newer FundaCAD or a plugin can build it.";
+}
