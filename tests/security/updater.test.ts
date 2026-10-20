@@ -139,15 +139,12 @@ describe("updater", () => {
     expect(release.plugins).toBeUndefined();
   });
 
-  it("still carries UPSTREAM's key, which the release job must refuse", () => {
-    // A live record of the thing that is not done yet, so it cannot be forgotten
-    // quietly. When the key is replaced this test fails, and the correct fix is
-    // to delete it along with UPSTREAM_PUBKEY above and the guard in the release
-    // job, because the problem is then gone.
+  // The release job still refuses upstream's key, so a merge that brings it
+  // back costs the feed rather than shipping updates nobody can verify.
+  it("carries this project's own key, not upstream's", () => {
     expect(
       conf.plugins.updater.pubkey,
-      "the updater pubkey is no longer upstream's, so remove this test, " +
-        "UPSTREAM_PUBKEY, and the pubkey guard in .github/workflows/build.yml",
-    ).toBe(UPSTREAM_PUBKEY);
+      "the updater pubkey is upstream's again, so no update this project signs would verify",
+    ).not.toBe(UPSTREAM_PUBKEY);
   });
 });
