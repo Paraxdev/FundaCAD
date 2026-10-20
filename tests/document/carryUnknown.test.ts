@@ -156,3 +156,22 @@ describe("a section this version cannot read", () => {
     expect(saved(back)["futureKey"]).toEqual(FUTURE);
   });
 });
+
+describe("sections of a .fundab this version does not read", () => {
+  const carried = [{ kind: 99, name: "future", hash: "0".repeat(32) }];
+  const box = { id: "b1", type: "box", length: 1, width: 1, height: 1 };
+
+  it("stay through a replacing load of the same document", () => {
+    const store = opened({ parameters: {}, features: [box] });
+    store.carriedSections = carried;
+    store.loadDocument({ parameters: {}, features: [{ ...box, length: 2 }] } as unknown as CadDocument, { replace: true });
+    expect(store.carriedSections).toEqual(carried);
+  });
+
+  it("go when a replacing load brings a different document", () => {
+    const store = opened({ parameters: {}, features: [box] });
+    store.carriedSections = carried;
+    store.loadDocument({ parameters: {}, features: [{ ...box, id: "other" }] } as unknown as CadDocument, { replace: true });
+    expect(store.carriedSections).toEqual([]);
+  });
+});

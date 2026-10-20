@@ -42,9 +42,6 @@ import { writeTarget } from "./numFields";
 import { markReceived, markSent } from "../diagnostics/rebuildTiming";
 import { featureMeta } from "../ui/featureMeta";
 
-/** An expression typed on a sketch dimension while the sketch was OPEN, the
- *  dim isn't in the document until the sketch commits, so the binding travels
- *  with the commit (addFeature/replaceFeature) and lands in the same mutate. */
 /** A section of a `.fundab` this version does not read (docs/FUNDA-FORMAT.md). */
 export interface CarriedSection {
   kind: number;
@@ -52,6 +49,9 @@ export interface CarriedSection {
   hash: string;
 }
 
+/** An expression typed on a sketch dimension while the sketch was OPEN, the
+ *  dim isn't in the document until the sketch commits, so the binding travels
+ *  with the commit (addFeature/replaceFeature) and lands in the same mutate. */
 export interface SketchBinding {
   target: ParamTarget;
   expr: string;
@@ -151,6 +151,11 @@ export const KNOWN_DOC_KEYS: ReadonlySet<string> = new Set([
   "materials", "palette", "stress", "environment", "versions", "geometry",
 ]);
 const ELEMENT_KEYS: ReadonlySet<string> = new Set(["id", "name", "parent"]);
+
+function sharesAFeature(a: readonly Feature[], b: readonly Feature[]): boolean {
+  const ids = new Set(a.map((f) => f.id));
+  return b.some((f) => ids.has(f.id));
+}
 
 /** The entries of `raw` outside `known`, deep copied, as normalizeMaterial keeps
  *  a material's unknown fields. */
@@ -2111,7 +2116,9 @@ export class DocumentStore {
     const repo = this.repo;
     if (!repo) return;
     const snapshot = snapshotOf(repo, id);
+    const carried = this.carriedSections;
     this.load(JSON.stringify(snapshot), { replace: true });
+    this.carriedSections = carried;
     this.repo = repo;
     this.emitMeta();
   }
@@ -2168,7 +2175,9 @@ export class DocumentStore {
     this.stress = normalizeStressStudy(parsed.stress);
     this.environment = normalizeDocEnvironment(parsed.environment);
     this.openedVersion = typeof parsed.version === "number" ? parsed.version : 1;
-    if (!opts.replace) this.carriedSections = [];
+    // A replacing load sharing no feature with this one is a different document
+    // after all, and sections it did not come with must not be saved into it.
+    if (!opts.replace || !sharesAFeature(this.doc.features, parsed.features ?? [])) this.carriedSections = [];
     this.unknownKeys = carriedKeys(parsed as unknown as Record<string, unknown>, KNOWN_DOC_KEYS);
     this.unreadSections = {};
     if (parsed.versions != null && !this.repo) this.unreadSections.versions = structuredClone(parsed.versions);
