@@ -21,6 +21,8 @@ class App:
         self.errors: list[str] = []
         self.features = ["e1"]
         self.modal = True
+        self.loads = 0
+        self.late_errors: list[str] = []
 
     def pick(self, name):
         if self.dirty:
@@ -28,11 +30,17 @@ class App:
             self.next = name
         elif self.opens:
             self.doc = name
+            self.loads += 1
 
     def call(self, method, **args):
         if method == "seq":
             return 0
+        if method == "opens":
+            return self.loads
         if method == "messages":
+            if self.late_errors:
+                self.errors.append(self.late_errors.pop())
+                return {"seq": 0, "rows": []}
             return {"seq": 0, "rows": [{"level": "error", "text": t} for t in self.errors]}
         if method == "history":
             return {"count": len(self.features), "rows": list(self.features)}
@@ -48,6 +56,7 @@ class App:
                 self.rows, self.dirty = [], False
                 if self.opens:
                     self.doc = self.next
+                    self.loads += 1
             elif t == "choice:Cancel":
                 self.rows = []
             return {"marker": "m", "ref": t, "label": t}
@@ -208,9 +217,35 @@ def test_open_file_whose_model_fails_to_build_still_opened():
 
     def pick(menu, path):
         app.doc, app.features = Path(path).name, ["e1", "f9"]
+        app.loads += 1
         app.errors.append("Fillet failed")
         return str(path)
 
     s._choose_file = pick
     assert str(s.open_file(BLOCK)).startswith("opened block.json,")
+    s.close()
+
+
+def test_open_file_with_settle_false_of_a_refused_file_with_the_open_documents_name_waits_for_the_refusal():
+    app = App(opens=False)
+    app.dirty = False
+    s = session(app)
+    s._choose_file = lambda menu, path: (app.late_errors.append("This file is not a FundaCAD document"), str(path))[1]
+    with pytest.raises(HarnessError, match="did not open plate.json, .*error: This file is not a FundaCAD document"):
+        s.open_file(REPO / "tools/harness/fixtures/plate.json", settle=False)
+    s.close()
+
+
+def test_open_file_of_the_open_document_again_opened_even_with_an_error_logged():
+    app = App()
+    app.dirty = False
+    s = session(app)
+
+    def pick(menu, path):
+        app.loads += 1
+        app.errors.append("a linked file is missing")
+        return str(path)
+
+    s._choose_file = pick
+    assert str(s.open_file(REPO / "tools/harness/fixtures/plate.json")).startswith("opened plate.json")
     s.close()

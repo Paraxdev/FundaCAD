@@ -9,12 +9,13 @@ import { settle, probe, describeQuiet, type SettleHost } from "./settle";
 import * as picks from "./picks";
 import { handleList, handlePoint, overHandle, type HandleHost } from "./handles";
 import { harnessWanted } from "./wanted";
+import type { DocumentStore } from "../document/store";
 
 export { harnessWanted };
 
 export const HARNESS_API = 1;
 
-export type HarnessHost = read.ReadHost & SettleHost & picks.PickHost & HandleHost;
+export type HarnessHost = read.ReadHost & SettleHost & picks.PickHost & HandleHost & { store: Pick<DocumentStore, "onOpen"> };
 
 type Args = Record<string, unknown>;
 type Method = (args: Args) => unknown;
@@ -59,6 +60,9 @@ export function createMethods(
     const base = onCanvas();
     return (x, y) => base(x, y) && !overHandle(h, x, y);
   };
+  // A refused file leaves the document as it was, name and all, so only a load says a file opened.
+  let opens = 0;
+  h.store?.onOpen?.(() => opens++);
   // The labels on screen when the last action began, a wait looks only at the ones not among them.
   let marked = new Set<string>();
   const lines = (a: Args) => {
@@ -104,6 +108,7 @@ export function createMethods(
     },
     selection: () => read.selection(h, doc),
     history: () => read.history(h),
+    opens: () => opens,
     bodies: () => read.bodies(h),
     status: (a) => read.status(h, doc, since(a)),
     messages: (a) => read.messages(since(a)),

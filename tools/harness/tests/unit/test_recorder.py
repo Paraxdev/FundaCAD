@@ -46,6 +46,9 @@ class StubBridge:
             return []
         if method == "seq":
             return 0
+        if method == "opens":
+            self.loads = getattr(self, "loads", 0) + 1
+            return self.loads
         raise AssertionError(method)
 
 
