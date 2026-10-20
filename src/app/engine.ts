@@ -65,7 +65,7 @@ import { ThreadTool } from "../features/threadTool";
 import { TextOnFaceTool } from "../features/textOnFaceTool";
 import { HoleTool } from "../features/holeTool";
 import { cancelActiveTools, createToolBusy } from "./toolBusy";
-import { createDocumentActions, openPathGuarded } from "./documentActions";
+import { createDocumentActions, newFromTemplate, openPathGuarded } from "./documentActions";
 import { endPickSession } from "../ui/treePick";
 import { createDatumPlanes } from "./datumPlanes";
 import { createSketchVisibility } from "./sketchVisibility";
@@ -487,6 +487,7 @@ export function mountUi(e: Engine): void {
   e.ui.home = new Home({
     newDocument: () => e.newDocument(),
     openDoc: () => e.openDoc(),
+    newFromTemplate: (id) => newFromTemplate(e, id),
     openPath: (path) => openPathGuarded(e, path),
     currentPath: () => e.store.filePath,
   });

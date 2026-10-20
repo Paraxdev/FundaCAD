@@ -1,6 +1,7 @@
 import { openDocument, openDocumentAtPath, type OpenOutcome } from "../io/files";
 import { choose } from "../ui/choice";
 import type { Engine } from "./engine";
+import { TEMPLATES, templateText } from "../templates";
 
 /** An open sketch's edits reach the store only when the sketch is finished, so
  *  `store.dirty` alone misses them. */
@@ -25,6 +26,15 @@ export async function openPathGuarded(
   const name = path.split(/[\\/]/).pop() ?? path;
   if (!(await mayDiscard(e, `Discard unsaved changes and open ${name}?`))) return "cancelled";
   return openDocumentAtPath(e.store, path, e.geometry);
+}
+
+/** Save then asks where to keep it, so the template itself is never written. */
+export async function newFromTemplate(e: Pick<Engine, "store" | "sketch">, id: string): Promise<void> {
+  const info = TEMPLATES.find((t) => t.id === id);
+  if (!info) return;
+  if (!(await mayDiscard(e, "Discard unsaved changes and start a new document?"))) return;
+  e.store.load(await templateText(id));
+  e.store.markOpenedWithoutPath(info.name);
 }
 
 export function createDocumentActions(
