@@ -380,7 +380,12 @@ Windows) and handed this server's engine command. That Python needs the
 package: `pip install -e tools/harness`. Without it `ui_open` says so and the
 other tools work as before. The child dies with the server, inside the same
 kind of job object as the engine on Windows. A call with no answer in 180 s
-stops it, and the next `ui_open` starts fresh.
+stops it, and the next `ui_open` starts fresh; a `ui_do` starts no step after
+120 s and says which steps to send again, so a long list does not get there.
+
+The private app's document is its own: `doc_get` and `inspect` do not see it.
+To measure what the steps built, `save_as` a `.funda` file in a `ui_do`, then
+`doc_open` it and `inspect`.
 
 `.mcp.json` stays the live server. A second entry for the private app:
 

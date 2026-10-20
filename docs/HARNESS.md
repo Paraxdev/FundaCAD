@@ -253,6 +253,10 @@ named by `FUNDACAD_HARNESS_PYTHON`. A `ui_do` step is a `do` step as above. Inst
 into that Python, then see [MCP.md](MCP.md#driving-the-app-standalone-only) for the `.mcp.json`
 entry. Auto and attach never offer these tools.
 
+The private app has its own document. `doc_get` and `inspect` read the MCP server's document, not
+that one, so right after a `ui_do` they say there are no bodies. To measure what the steps built,
+`save_as` it to a `.funda` file, then `doc_open` that file and `inspect` it.
+
 ## Porting an e2e script
 
 The scripts in `e2e/*.cjs` reach into `window.store`, `window.tree` and the tools' own fields, so
