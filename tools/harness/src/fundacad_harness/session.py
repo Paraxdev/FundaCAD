@@ -205,6 +205,9 @@ class Session(Actions):
         recorded = f", recorded {self.recorder.write()}" if self.recorder else ""
         kept = self.keep or self.failed
         if kept:
+            if not self.keep:
+                for heavy in ("blobs", "cache"):
+                    shutil.rmtree(self.work / heavy, ignore_errors=True)
             print(f"fundacad-harness: logs kept in {self.work}", file=sys.stderr)
         else:
             shutil.rmtree(self.work, ignore_errors=True)
@@ -228,11 +231,7 @@ class Session(Actions):
     def call(self, method: str, **args: Any) -> Any:
         """One raw driver call, for what the readouts do not cover."""
         self._ensure_page()
-        try:
-            return self.bridge.call(method, **args)
-        except HarnessError:
-            self.failed = True
-            raise
+        return self.bridge.call(method, **args)
 
     def settle(self, trace: int | None = None, timeout: float | None = None) -> str:
         args: dict[str, Any] = {"timeoutMs": int((timeout or self.settle_timeout) * 1000)}

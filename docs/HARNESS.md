@@ -269,8 +269,10 @@ asserts on readout text, and put the port in `tools/harness/examples/` with a te
   `src/harness`; the harness only drives a dev build.
 - `the page driver speaks api N`: the package and the checkout are from different times, reinstall
   the package from this checkout.
-- A launch failure prints the end of the engine or vite log. With `keep=True` the whole work folder
-  stays: `engine.log`, `vite.log`, `page.log` (console and page errors) and `shots/`.
+- A launch failure prints the end of the engine or vite log. A launch failure, or an exception out
+  of a `with Session()` block, keeps the logs in the work folder: `engine.log`, `vite.log`, `page.log`
+  (console and page errors) and `shots/`. With `keep=True` the engine's blobs and cache stay too.
+  A refused action that the script catches keeps nothing.
 
 ## The rule
 
