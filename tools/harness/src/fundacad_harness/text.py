@@ -77,6 +77,8 @@ def status(v: dict, now: float | None = None) -> str:
         f"mode {v.get('mode')} | tool {v.get('tool') or 'none'} | workspace {v.get('workspace')} | doc {doc}"
         f" | undo {yn(v.get('undo'))} redo {yn(v.get('redo'))}",
     ]
+    if v.get("busy"):
+        lines.append(f"busy: {v['busy']}")
     if v.get("prompt"):
         lines.append(f"prompt: {v['prompt']}")
     if v.get("selection"):

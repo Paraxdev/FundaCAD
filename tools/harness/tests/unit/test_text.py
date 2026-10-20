@@ -60,6 +60,8 @@ def test_status_text():
     ]
     v["warnings"] = ["Low performance"]
     assert text.status(v, now=1002).splitlines()[-1] == "warning: Low performance (the view's own warning button)"
+    v["busy"] = "Importing ender3.step, Transferring shapes 40%"
+    assert text.status(v, now=1002).splitlines()[1] == "busy: Importing ender3.step, Transferring shapes 40%"
 
 
 def test_selection_text():
