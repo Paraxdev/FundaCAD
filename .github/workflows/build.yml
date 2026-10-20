@@ -122,7 +122,8 @@ jobs:
             refs/heads/main) config=beta release=beta tag=beta ;;
             refs/tags/*)
               # Optional now, nothing sends people to a stable release, but
-              # the path still works for a tag pushed by hand.
+              # the path still works for a tag pushed by hand or by
+              # scripts/promote.sh --stable.
               [[ "$REF_NAME" =~ $stable ]] \
                 || { echo "::error::$REF_NAME is not a stable tag, those are v1.<minor>.<patch> with a minor of 1 or more"; exit 1; }
               sha=$(git rev-parse HEAD)
