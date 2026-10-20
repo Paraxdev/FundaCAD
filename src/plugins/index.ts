@@ -44,10 +44,12 @@ import type { RunOutcome } from "./runner/host";
  *  copy decides which of them get the label. */
 const RELEASES = "https://github.com/Paraxdev/fundacad/releases/download/";
 
-/** The release the assets hang off, the rolling beta the installers and the
- *  update feed use. Its bundles carry the geometry components the engine's
- *  plugin host runs, built from the same commit as the host. */
-export const RELEASE_TAG = "beta";
+/** The release the assets hang off, the one this build was published as:
+ *  the rolling beta, or a stable release's own tag, which the release build
+ *  passes in VITE_FUNDACAD_RELEASE. Its bundles carry the geometry components
+ *  the engine's plugin host runs, built from the same commit as the host. */
+export const RELEASE_TAG: string =
+  (import.meta.env.VITE_FUNDACAD_RELEASE as string | undefined) || "beta";
 
 export interface OfficialPlugin {
   manifest: PluginManifest;

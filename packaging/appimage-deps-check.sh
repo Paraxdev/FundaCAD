@@ -7,7 +7,7 @@
 # Installing it ourselves would need root and cannot work on read-only
 # systems, so this only tells the user what to run.
 
-FUNDACAD_RELEASES=https://github.com/Paraxdev/FundaCAD/releases/tag/beta
+FUNDACAD_RELEASES=https://github.com/Paraxdev/FundaCAD/releases
 
 fundacad_deps_check() {
   local bin="$1" missing
