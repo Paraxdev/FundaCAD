@@ -1800,15 +1800,24 @@ export class DocumentStore {
     const base = m.name.trim() ? m.name : "Material";
     m.name = freshMaterialName(this.materials, base);
     m.id = uniqueId(slugId(m.name), taken);
-    const before = this.materials;
-    const after = [...before, m];
-    const apply = (list: MaterialDef[]) => {
-      this.materials = list;
+    const entry = m;
+    const emit = () => {
       this.markDirty();
       this.emitBuild();
     };
-    apply(after);
-    this.pushOverlayUndo({ undo: () => apply(before), redo: () => apply(after) });
+    this.materials = [...this.materials, entry];
+    emit();
+    this.pushOverlayUndo({
+      undo: () => {
+        this.materials = this.materials.filter((x) => x.id !== entry.id);
+        this.dropMaterialUses(new Set([entry.id]));
+        emit();
+      },
+      redo: () => {
+        if (!this.materials.some((x) => x.id === entry.id)) this.materials = [...this.materials, entry];
+        emit();
+      },
+    });
     return m.id;
   }
 
