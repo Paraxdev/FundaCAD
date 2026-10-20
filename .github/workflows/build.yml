@@ -455,7 +455,9 @@ jobs:
     permissions:
       contents: write
     concurrency:
-      group: release-${{ needs.channel.outputs.release }}
+      # Per tag: a group keeps one pending job and cancels an older pending
+      # one, which would drop a stable release when three tags queue up.
+      group: release-${{ needs.channel.outputs.tag }}
       cancel-in-progress: false
     env:
       GH_TOKEN: ${{ github.token }}
