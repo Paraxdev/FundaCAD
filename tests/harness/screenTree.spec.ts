@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { matchName, screenLines, walkControls } from "../../src/harness/screenTree";
+import { mount } from "@vue/test-utils";
+import Tabs from "../../src/components/ui/Tabs.vue";
 import { mountApp, rect } from "./fixture";
 
 beforeEach(() => mountApp());
@@ -50,6 +52,17 @@ describe("walkControls", () => {
       '<div class="choice-backdrop"><button class="choice-btn"><span>Box</span><small>l×w×h</small></button></div>');
     const box = walkControls(document, { rect }).controls.find((c) => c.ref.startsWith("choice:"))!;
     expect([box.ref, box.label]).toEqual(["choice:Box", "Box"]);
+  });
+
+  it("names a tab by its value, so a tab and a button with one label stay apart", () => {
+    const tabs = mount(Tabs, {
+      props: { tabs: [{ value: "views", label: "Views" }, { value: "appearance", label: "Appearance" }], modelValue: "views" },
+      attachTo: document.body,
+    });
+    document.body.insertAdjacentHTML("beforeend", '<button class="icon-btn" aria-label="Views"></button>');
+    const views = walkControls(document, { rect }).controls.filter((c) => c.label === "Views").map((c) => c.ref);
+    expect(views.sort()).toEqual(["tab:views", 'text:"Views"']);
+    tabs.unmount();
   });
 
   it("counts rows scrolled out of their list", () => {
