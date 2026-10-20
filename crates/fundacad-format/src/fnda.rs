@@ -820,6 +820,8 @@ fn extract_to(file: &File, e: &Entry, tmp: &Path, rows: &[&segments::Row], threa
         let mut out = BufWriter::new(File::create(tmp).map_err(io)?);
         if let Some(report) = read_segmented(file, e, row, &crcs, threads, &mut out)? {
             finish(out)?;
+            #[cfg(test)]
+            test_hooks::note_fast_section();
             return Ok(report);
         }
     }
@@ -853,7 +855,6 @@ fn read_segmented<W: Write>(file: &File, e: &Entry, row: &segments::Row, crcs: &
             pending.extend_from_slice(&bytes);
         }
         g += n;
-        let first = seg;
         let mut spans = Vec::new();
         let mut end = 0usize;
         while let Some(s) = row.segments.get(seg).filter(|s| end + s.stored as usize <= pending.len()) {
@@ -861,19 +862,70 @@ fn read_segmented<W: Write>(file: &File, e: &Entry, row: &segments::Row, crcs: &
             end += s.stored as usize;
             seg += 1;
         }
-        let decoded = par::map_indexed(seg - first, threads, |i| {
-            let (a, b, raw) = spans[i];
-            segments::inflate(&pending[a..b], raw)
-        });
-        for d in decoded {
-            let Some(d) = d else { return Ok(None) };
-            hasher.update(&d);
-            out.write_all(&d).map_err(io)?;
+        for batch in inflate_batches(&spans, threads) {
+            #[cfg(test)]
+            test_hooks::note_batch(batch.iter().map(|s| s.2 as u64).sum());
+            let decoded = par::map_indexed(batch.len(), threads, |i| {
+                let (a, b, raw) = batch[i];
+                segments::inflate(&pending[a..b], raw)
+            });
+            for d in decoded {
+                let Some(d) = d else { return Ok(None) };
+                hasher.update(&d);
+                out.write_all(&d).map_err(io)?;
+            }
         }
         pending.drain(..end);
     }
     let whole = seg == row.segments.len() && pending.is_empty() && hasher.finalize().as_slice() == e.raw_hash;
     Ok(whole.then_some(report))
+}
+
+/// Raw bytes inflated at once per thread. A window is cut by stored bytes, and
+/// very redundant data would otherwise inflate to many times that in memory.
+pub(crate) const INFLATE_RAW_PER_THREAD: u64 = 4 << 20;
+
+/// Consecutive runs of `spans` (start, end, raw length) whose raw lengths add up
+/// to at most the per thread budget, a single segment over it alone.
+fn inflate_batches(spans: &[(usize, usize, usize)], threads: usize) -> Vec<&[(usize, usize, usize)]> {
+    let cap = INFLATE_RAW_PER_THREAD * threads.max(1) as u64;
+    let mut out = Vec::new();
+    let mut start = 0;
+    while start < spans.len() {
+        let mut raw = spans[start].2 as u64;
+        let mut stop = start + 1;
+        while stop < spans.len() && raw + spans[stop].2 as u64 <= cap {
+            raw += spans[stop].2 as u64;
+            stop += 1;
+        }
+        out.push(&spans[start..stop]);
+        start = stop;
+    }
+    out
+}
+
+#[cfg(test)]
+pub(crate) mod test_hooks {
+    use std::cell::Cell;
+
+    thread_local! {
+        static FAST_SECTIONS: Cell<usize> = const { Cell::new(0) };
+        static LARGEST_BATCH: Cell<u64> = const { Cell::new(0) };
+    }
+
+    pub fn note_fast_section() {
+        FAST_SECTIONS.with(|c| c.set(c.get() + 1));
+    }
+
+    pub fn note_batch(raw: u64) {
+        LARGEST_BATCH.with(|c| c.set(c.get().max(raw)));
+    }
+
+    /// Sections this thread read by their index row, and the most raw bytes it
+    /// inflated in one batch, since the last call.
+    pub fn take() -> (usize, u64) {
+        (FAST_SECTIONS.with(|c| c.replace(0)), LARGEST_BATCH.with(|c| c.replace(0)))
+    }
 }
 
 /// The raw bytes of the first section of `kind`, None when the file has none.
