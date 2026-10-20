@@ -1,8 +1,8 @@
 // Ridges contributed across a body, in a real browser with a real WebGL renderer.
 //
 // The unit tests pin the profile, the uniforms and the program key. This measures
-// the picture: a 20 mm cube seen square on, ridges contributed through the DEV
-// hook, every still decoded in the page. The ridge period has to match the pitch
+// the picture: a 20 mm cube seen square on, ridges switched on through the Printed
+// look plugin's settings, every still decoded in the page. The ridge period has to match the pitch
 // in pixels, the face across the axis has to stay quiet, far away the face must
 // neither shimmer nor change brightness (the fade and the roughness fold), and no
 // pitch change, motion start or motion stop may link a new program.
@@ -81,9 +81,18 @@ const PITCH = 0.3;
           if (zoomOut !== 1) { cam.zoom /= zoomOut; cam.updateProjectionMatrix(); v.requestRender(); }
           await raf(); await raf(); await wait(200);
         },
-        relief(r) {
-          window.__off?.();
-          window.__off = r ? window.__fundacad.contribute("Test.Relief", { relief: () => ({ all: r }) }) : null;
+        async relief(r) {
+          const m = await import("/src/plugins/settings.ts");
+          let s = m.pluginSettingsOf("FundaCAD.PrintLook");
+          for (let i = 0; !s && i < 50; i++) { await wait(100); s = m.pluginSettingsOf("FundaCAD.PrintLook"); }
+          if (!r) { s.set("layerLines", false); return; }
+          const dir = { "0,0,1": "+Z", "0,0,-1": "-Z", "1,0,0": "+X", "-1,0,0": "-X", "0,1,0": "+Y", "0,-1,0": "-Y" }[r.axis.join(",")];
+          s.set("direction", dir);
+          s.set("layerHeight", r.pitch);
+          s.set("depth", r.depth);
+          s.set("variation", r.tintJitter ?? 0);
+          s.set("grooveShading", r.cavity ?? 0);
+          s.set("layerLines", true);
         },
         async settle() { for (let i = 0; i < 60; i++) { v.requestRender(); await raf(); } await wait(300); },
         async still(name) {
@@ -245,7 +254,7 @@ const PITCH = 0.3;
     // --- frame time, relief on and off --------------------------------------------
     await page.evaluate(() => window.__r.view("front"));
     const frames = (on) => page.evaluate(async ([on, r]) => {
-      window.__r.relief(on ? r : null);
+      await window.__r.relief(on ? r : null);
       await window.__r.settle();
       const v = window.viewport, gl = v.scene.renderer.getContext(), px = new Uint8Array(4);
       const raf = () => new Promise((res) => requestAnimationFrame(res));

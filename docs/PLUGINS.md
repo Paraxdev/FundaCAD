@@ -105,6 +105,7 @@ hurts.
 | `FundaCAD.SpaceMouse` | navigating and moving with a 3D mouse | `device.input`, `document.read`, `document.write` | `builtin` |
 | `FundaCAD.Gamepad` | flying the view and running commands from a game controller or a Steam Deck | `device.input`, `document.read`, `document.write` | `builtin` |
 | `FundaCAD.MultiColor` | filament slots, per body and per texture colour | `document.read`, `document.write` | `builtin` |
+| `FundaCAD.PrintLook` | layer lines drawn across bodies in the Realtime view | `document.read` | `builtin` |
 | `FundaCAD.Organic` | node bodies: rounded solids from sized nodes linked into smooth limbs | `document.read`, `document.write` | `builtin` |
 | `FundaCAD.Texture` | a printed surface texture on picked faces or a whole body | `document.read`, `document.write`, `files.read` | `builtin` |
 | `FundaCAD.Navigation` | mouse button presets, an opt-in radial menu and a shortcut rebinding panel | `input.remap`, `document.read` | `builtin` |
@@ -534,6 +535,8 @@ plugins/
                            panel.ts, NodePanel.vue, geometry-rs/
   FundaCAD.MultiColor/     manifest.json, README.md, main.ts, palette.ts,
                            PaletteSection.vue
+  FundaCAD.PrintLook/      manifest.json, README.md, main.ts, look.ts, settings.ts,
+                           LayerLinesSection.vue
   FundaCAD.PrintToolbox/   manifest.json, README.md, main.ts, printForm.ts,
                            faceTool.ts, geometry-rs/
   FundaCAD.Printing/       manifest.json, README.md, main.ts, printerClient.ts,
