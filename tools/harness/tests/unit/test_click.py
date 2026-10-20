@@ -73,3 +73,27 @@ def test_type_into_a_button_is_refused_before_anything_is_clicked():
         s.type("D", "10")
     assert clicks == []
     s.close()
+
+
+def test_type_with_enter_says_when_the_app_refused_the_value():
+    from fundacad_harness.errors import StepFailed
+    said = 'Size: "M12" is not a size, type M5 or a diameter'
+
+    class Refusing(One):
+        reads = 0
+
+        def call(self, method, **args):
+            if method == "fieldValue":
+                self.reads += 1
+                return {"text": "M12", "typed": True, "problem": said if self.reads > 2 else ""}
+            return super().call(method, **args)
+
+    s = Session(engine=sys.executable, chrome=sys.executable, repo=REPO, open=False)
+    s.bridge = Refusing({"ref": "field:size", "label": "Size", "region": "valuebox"})
+    keys = types.SimpleNamespace(press=lambda k: None, type=lambda t: None)
+    s.page = types.SimpleNamespace(locator=lambda sel: types.SimpleNamespace(click=lambda **k: None),
+                                   keyboard=keys, evaluate=lambda js: None)
+    s.settle = lambda *a, **k: "settled"
+    with pytest.raises(StepFailed, match=r'field:size "Size" did not take "M12" on Enter: Size: "M12" is not a size'):
+        s.type("Size", "M12", enter=True)
+    s.close()

@@ -1,6 +1,6 @@
 import pytest
 
-from fundacad_harness.errors import HarnessError
+from fundacad_harness.errors import HarnessError, StepFailed
 
 pytestmark = pytest.mark.browser
 
@@ -148,3 +148,13 @@ def test_import_file_drops_a_mesh_and_counts_the_bodies(s, tmp_path):
     step = s.import_file(stl)
     assert str(step).startswith("dropped tetra.stl, 1 body now")
     assert s.page.locator("input[data-harness-drop]").count() == 0
+
+
+def test_type_with_enter_says_when_the_hole_size_was_refused(plate):
+    plate.pick_face("top")
+    plate.tool("Hole")
+    with pytest.raises(StepFailed, match='did not take "banana" on Enter: Size: "banana" is not a size'):
+        plate.type("Size", "banana", enter=True)
+    assert plate.history(raw=True)["count"] == 1
+    plate.type("Size", "M6", enter=True)
+    assert plate.history(raw=True)["count"] == 2
