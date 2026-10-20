@@ -342,6 +342,23 @@ fn lamp_bodies(lamp: PageMaterial, at: [f32; 3], stretch: f32) -> Vec<fundacad_t
 const LAMP_EYE: [f32; 3] = [3.0, -4.0, 2.5];
 const LAMP_TARGET: [f32; 3] = [0.0, 0.0, 0.5];
 
+/// Whether pixel `i` of the 64 x 48 lamp scene may see the unstretched lamp
+/// at LAMP_AT, its outline widened by a pixel and a half.
+fn on_lamp(i: usize) -> bool {
+    let (w, h) = (64.0, 48.0);
+    let (x, y) = ((i % 64) as f32 + 0.5, (i / 64) as f32 + 0.5);
+    let fwd = norm([0, 1, 2].map(|k| LAMP_TARGET[k] - LAMP_EYE[k]));
+    let right = norm(cross(fwd, [0.0, 0.0, 1.0]));
+    let up = cross(right, fwd);
+    let th = 20f32.to_radians().tan();
+    let (px, py) = (x / w * 2.0 - 1.0, 1.0 - y / h * 2.0);
+    let d = norm([0, 1, 2].map(|k| fwd[k] + px * right[k] * th * w / h + py * up[k] * th));
+    let c = [0, 1, 2].map(|k| LAMP_AT[k] - LAMP_EYE[k]);
+    let dist = dot(c, c).sqrt();
+    let angle = (dot(d, c) / dist).clamp(-1.0, 1.0).acos();
+    angle < (0.4 / dist).asin() + 1.5 * 2.0 * th / h
+}
+
 fn lamp_scene(t: &mut Tracer, bodies: Vec<fundacad_tracer::BodyDesc>, spp: u32) -> Vec<[f32; 3]> {
     t.resize(64, 48);
     t.set_camera(fundacad_tracer::Camera { eye: LAMP_EYE, target: LAMP_TARGET, up: [0.0, 0.0, 1.0], fov: 40.0 });
@@ -372,6 +389,36 @@ fn emitter_nee_bsdf_and_mis_agree() {
         println!("{e:?} against Mis: mean luminance {m:.4} and {:.4}, 8x8 blocks differ by {mad:.3} of 255 on average", runs[0].1);
         assert!(mad < 1.0 && (m / runs[0].1 - 1.0).abs() < 0.005, "{e:?} differs from Mis by {mad:.3} of 255, means {m:.4} and {:.4}", runs[0].1);
     }
+}
+
+/// A lamp marked noLight shows its glow to the camera and lights nothing:
+/// every other pixel is the picture of the same lamp switched off.
+#[test]
+fn a_no_light_emitter_glows_and_lights_nothing() {
+    let Some(mut t) = tracer() else { return };
+    let glow: PageMaterial = serde_json::from_str(r#"{"color":[0,0,0],"emissive":[1,0.9,0.7],"emissiveIntensity":12,"noLight":true}"#).unwrap();
+    assert!(glow.no_light);
+    let pic = |t: &mut Tracer, m: PageMaterial| {
+        lamp_scene(t, lamp_bodies(m, LAMP_AT, 1.0), 64);
+        t.resolve()
+    };
+    let lit = pic(&mut t, glowing([1.0, 0.9, 0.7]));
+    let off = pic(&mut t, glowing([0.0; 3]));
+    let only = pic(&mut t, glow);
+    let px = |rgba: &[u8], i: usize| (rgba[i * 4] as f64 + rgba[i * 4 + 1] as f64 + rgba[i * 4 + 2] as f64) / 3.0;
+    let (mut glowing_px, mut plate_lit, mut plate_off) = (0, 0.0, 0.0);
+    for i in 0..lit.len() / 4 {
+        if on_lamp(i) {
+            glowing_px += (px(&only, i) > 200.0) as usize;
+            continue;
+        }
+        assert_eq!(&only[i * 4..i * 4 + 3], &off[i * 4..i * 4 + 3], "pixel {i} is lit by a noLight lamp");
+        plate_lit += px(&lit, i);
+        plate_off += px(&off, i);
+    }
+    println!("{glowing_px} glowing pixels, the plate sums to {plate_lit:.0} lit and {plate_off:.0} with the lamp off");
+    assert!(glowing_px > 20, "the noLight lamp shows {glowing_px} glowing pixels");
+    assert!(plate_lit > 3.0 * plate_off, "the lamp lights the plate when it may: {plate_lit} against {plate_off}");
 }
 
 /// The emitter table is built with the instance rows: a camera move uploads

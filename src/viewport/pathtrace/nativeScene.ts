@@ -42,6 +42,8 @@ export function pageMaterial(m: THREE.Material) {
     clearcoatRoughness: p.clearcoatRoughness,
     opacity: m.opacity,
     vertexColors: m.vertexColors,
+    // Set by pathtrace/materials.ts on a glow that should light nothing.
+    ...(m.userData.noLight === true ? { noLight: true } : {}),
   };
 }
 
