@@ -15,6 +15,11 @@ pub const EDGE_DEFLECTION: f64 = 0.01;
 /// an odd point count.
 pub const EDGE_MIN_SEG: usize = 4;
 pub const EDGE_MAX_SEG: usize = 512;
+/// A sample is kept while no segment strays more than this many deflections
+/// from the curve. OCCT's quasi uniform sampler measures its sag from the end
+/// tangents, and takes a whole helix turn, whose end tangents are parallel,
+/// as one chord; its other results land on the target and are kept as they are.
+pub const EDGE_SLACK: f64 = 4.0;
 /// Segments of the parameter walk used when the deflection sampler cannot run.
 pub const EDGE_FALLBACK_SEG: usize = 24;
 
@@ -128,7 +133,7 @@ fn sample_by_deflection(
         return None;
     }
     if n - 1 < min_seg {
-        return uniform_param_points(access, e, min_seg);
+        return checked_walk(access, e, deflection, min_seg, max_seg);
     }
     let picks: Vec<usize> = if n - 1 > max_seg {
         (0..=max_seg)
@@ -137,16 +142,104 @@ fn sample_by_deflection(
     } else {
         (0..n).collect()
     };
+    let decimated = picks.len() < n;
     let mut out: Vec<[f64; 3]> = picks.iter().map(|&i| pts[i]).collect();
+    let mut us: Vec<f64> = picks.iter().map(|&i| params[i]).collect();
     if out.len() % 2 == 0 {
         // The frontend names an edge by its index-middle point, stored in saved
         // selectors; an odd count keeps that point the parametric midpoint.
         let j = out.len() / 2;
-        let umid = 0.5 * (params[picks[j - 1]] + params[picks[j]]);
+        let umid = 0.5 * (us[j - 1] + us[j]);
         let mid = access.edge_values(e, &[umid])?;
         out.insert(j, *mid.first()?);
+        us.insert(j, umid);
+    }
+    if !decimated && mid_sag(access, e, &out, &us).is_some_and(|m| m.2 > EDGE_SLACK * deflection) {
+        return checked_walk(access, e, deflection, min_seg, max_seg).or(Some(out));
     }
     Some(out)
+}
+
+/// A uniform parameter walk of `min_seg` segments, kept if it is within the
+/// slack, else doubled until it is within `deflection` or reaches `max_seg`.
+/// Every count is `min_seg` times a power of two, so the middle point stays
+/// the parametric midpoint.
+fn checked_walk(
+    access: &MeshAccess,
+    e: usize,
+    deflection: f64,
+    min_seg: usize,
+    max_seg: usize,
+) -> Option<Vec<[f64; 3]>> {
+    let (u0, u1) = access.edge_range(e)?;
+    if u1.partial_cmp(&u0) != Some(std::cmp::Ordering::Greater) {
+        return None;
+    }
+    let mut us: Vec<f64> = (0..=min_seg)
+        .map(|j| u0 + (u1 - u0) * (j as f64 / min_seg as f64))
+        .collect();
+    let mut pts = access.edge_values(e, &us)?;
+    let mut limit = EDGE_SLACK * deflection;
+    while us.len() - 1 < max_seg {
+        let Some((mids, mid_pts, worst)) = mid_sag(access, e, &pts, &us) else {
+            break;
+        };
+        if worst <= limit {
+            break;
+        }
+        let (mut nu, mut np) = (Vec::with_capacity(2 * us.len()), Vec::with_capacity(2 * us.len()));
+        for k in 0..mids.len() {
+            nu.extend([us[k], mids[k]]);
+            np.extend([pts[k], mid_pts[k]]);
+        }
+        nu.push(us[mids.len()]);
+        np.push(pts[mids.len()]);
+        (us, pts) = (nu, np);
+        limit = deflection;
+    }
+    Some(pts)
+}
+
+/// Each segment's middle parameter, the curve's point there and the worst
+/// distance from the curve to its segment. The curve is also probed at the
+/// golden section of every segment: a helix that turns a whole number of times
+/// per segment meets the chord at its middle, never at an irrational fraction.
+fn mid_sag(
+    access: &MeshAccess,
+    e: usize,
+    pts: &[[f64; 3]],
+    us: &[f64],
+) -> Option<(Vec<f64>, Vec<[f64; 3]>, f64)> {
+    const PROBES: [f64; 3] = [0.5, 0.381_966_011_250_105, 0.618_033_988_749_895];
+    if pts.len() != us.len() {
+        return None;
+    }
+    let probes: Vec<f64> = us
+        .windows(2)
+        .flat_map(|w| PROBES.map(|f| w[0] + (w[1] - w[0]) * f))
+        .collect();
+    let at = access.edge_values(e, &probes)?;
+    if at.len() != probes.len() {
+        return None;
+    }
+    let worst = (0..at.len())
+        .map(|i| to_segment(at[i], pts[i / 3], pts[i / 3 + 1]))
+        .fold(0.0f64, f64::max);
+    let mids = probes.iter().step_by(3).copied().collect();
+    let mid_pts = at.iter().step_by(3).copied().collect();
+    Some((mids, mid_pts, worst))
+}
+
+fn to_segment(p: [f64; 3], a: [f64; 3], b: [f64; 3]) -> f64 {
+    let ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    let ap = [p[0] - a[0], p[1] - a[1], p[2] - a[2]];
+    let len2 = ab[0] * ab[0] + ab[1] * ab[1] + ab[2] * ab[2];
+    let t = if len2 > 0.0 {
+        ((ap[0] * ab[0] + ap[1] * ab[1] + ap[2] * ab[2]) / len2).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    (0..3).map(|k| (ap[k] - t * ab[k]).powi(2)).sum::<f64>().sqrt()
 }
 
 /// Whether the two faces on either side share a tangent plane along the edge,
