@@ -6,9 +6,10 @@
 # the 7.8.1 sources and builds them statically into the binary. So this
 # workflow has no brew, vcpkg or apt OCCT step.
 #
-# `build-beta` + `release-beta` publish the rolling `beta` release and its
-# update feed from `main`. It is the only release. The retired Python engine is
-# frozen on the `legacy` branch, which publishes nothing.
+# `bundle` + `release` publish the rolling `beta` release and its update feed
+# from `dev`, where daily work lands. `main` holds the known good state and
+# runs the same tests and builds, but publishes nothing. The retired Python
+# engine is frozen on the `legacy` branch, which publishes nothing either.
 #
 # Scope: x86_64 Linux, Apple Silicon macOS, x86_64 Windows. (No Intel-mac / linux-arm64.)
 
@@ -16,7 +17,7 @@ name: build
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
     paths-ignore:
       - "manual/**"
   pull_request:
@@ -74,7 +75,33 @@ jobs:
       - name: The app ships no plugin code
         run: node scripts/check-no-plugin-code.mjs
 
-  # The beta build (docs/ENGINE.md section 6), on three platforms. The
+  # What this run builds and where it goes (docs/ENGINE.md section 7). `config`
+  # is empty on a ref that builds no installers, `release` on one that builds
+  # them and publishes nothing.
+  channel:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    outputs:
+      config: ${{ steps.pick.outputs.config }}
+      release: ${{ steps.pick.outputs.release }}
+      version: ${{ steps.pick.outputs.version }}
+    steps:
+      - id: pick
+        shell: bash
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          set -euo pipefail
+          config='' release=''
+          version="1.0.${{ github.run_number }}"
+          case "$REF" in
+            refs/heads/dev)  config=beta release=beta ;;
+            refs/heads/main) config=beta ;;
+          esac
+          printf 'config=%s\nrelease=%s\nversion=%s\n' "$config" "$release" "$version" | tee -a "$GITHUB_OUTPUT"
+
+  # The installers (docs/ENGINE.md section 6), on three platforms. The
   # engine is a worker process of the same executable, and there is no Python
   # in the bundle at all.
   #
@@ -82,13 +109,11 @@ jobs:
   # compiled from source into the binary on each platform, twenty minutes cold,
   # and a pull request is already told whether the engine compiles by the
   # `rust-geom` job.
-  build-beta:
-    needs: [test, rust-geom]
+  bundle:
+    needs: [channel, test, rust-geom]
     permissions:
       contents: write # tauri-action may attach artifacts to a draft release
-    if: >-
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-      && github.ref == 'refs/heads/main'
+    if: needs.channel.outputs.config != ''
     strategy:
       fail-fast: false
       matrix:
@@ -194,17 +219,17 @@ jobs:
       # in app version must be numeric-only"), so it fails the Windows leg
       # outright and NSIS silently rewrites it to 0 in VIProductVersion. The
       # tag, the title and the update feed say beta instead.
-      - name: Stamp rolling version
+      - name: Stamp the version
         shell: bash
         run: |
-          v="1.0.${{ github.run_number }}"
+          v="${{ needs.channel.outputs.version }}"
           node -e "const fs=require('fs');const f='src-tauri/tauri.conf.json';const j=JSON.parse(fs.readFileSync(f));j.version='$v';fs.writeFileSync(f,JSON.stringify(j,null,2)+'\n')"
           echo "stamped $v"
 
       - name: Disable updater artifacts when they could not be trusted
         uses: ./.github/actions/updater-artifacts
         with:
-          config: src-tauri/tauri.beta.conf.json
+          config: src-tauri/tauri.${{ needs.channel.outputs.config }}.conf.json
           signing-key: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
 
       # Plugin bundles for this release, built from the same commit as the
@@ -236,7 +261,7 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         uses: actions/upload-artifact@v4
         with:
-          name: fundacad-beta-plugins
+          name: fundacad-bundle-plugins
           retention-days: 7
           if-no-files-found: error
           path: dist-plugins/plugin-*.zip
@@ -254,7 +279,7 @@ jobs:
           CMAKE_POLICY_VERSION_MINIMUM: "3.5"
           NO_STRIP: true
         with:
-          args: --verbose --config src-tauri/tauri.beta.conf.json
+          args: --verbose --config src-tauri/tauri.${{ needs.channel.outputs.config }}.conf.json
 
       # Checked against the bytes rather than the arguments: `engine_attach` is
       # the IPC command the webview reaches the engine through
@@ -302,7 +327,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: fundacad-beta-${{ matrix.platform }}
+          name: fundacad-bundle-${{ matrix.platform }}
           retention-days: 7
           if-no-files-found: warn
           path: |
@@ -322,7 +347,7 @@ jobs:
   # (appimage-unbundle), so this is what runs on NixOS, rpm-ostree and other
   # read-only systems. Manifest: packaging/flatpak/dev.fundacad.app.yml.
   build-flatpak:
-    needs: build-beta
+    needs: bundle
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -330,7 +355,7 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: fundacad-beta-ubuntu-22.04
+          name: fundacad-bundle-ubuntu-22.04
           path: linux
 
       - name: Build the Flatpak
@@ -363,7 +388,7 @@ jobs:
       - name: Upload the Flatpak
         uses: actions/upload-artifact@v4
         with:
-          name: fundacad-beta-flatpak
+          name: fundacad-bundle-flatpak
           retention-days: 7
           if-no-files-found: error
           path: FundaCAD_*.flatpak
@@ -380,25 +405,22 @@ jobs:
   # one people install once and never update; tests/security/updater.test.ts
   # pins the endpoint.
   #
-  # Its own plugin bundles, built by build-beta from the same commit as the
+  # Its own plugin bundles, built by `bundle` from the same commit as the
   # engine whose plugin host runs their geometry components. The app installs
   # plugins from this release (RELEASE_TAG in src/plugins/index.ts).
 
-  release-beta:
-    needs: [build-beta, build-flatpak]
+  release:
+    needs: [channel, bundle, build-flatpak]
     # A failed Flatpak leaves it out of the release rather than holding the
     # release back: always() lets this run once build-flatpak has finished
     # either way.
-    if: >-
-      always() && needs.build-beta.result == 'success'
-      && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-      && github.ref == 'refs/heads/main'
+    if: always() && needs.bundle.result == 'success' && needs.channel.outputs.release == 'beta'
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     permissions:
       contents: write
     concurrency:
-      group: release-beta
+      group: release-${{ needs.channel.outputs.release }}
       cancel-in-progress: false
     env:
       GH_TOKEN: ${{ github.token }}
@@ -410,7 +432,7 @@ jobs:
       # By pattern, so only this build's installers and bundles reach dist/.
       - uses: actions/download-artifact@v4
         with:
-          pattern: fundacad-beta-*
+          pattern: fundacad-bundle-*
           path: dist
 
       # One fixed name per platform and format, with no version in it, so every
@@ -504,8 +526,8 @@ jobs:
           > ### Read this first
           >
           > **This is FundaCAD 1.0 on the Rust geometry engine.** It replaces
-          > the Python engine, which is retired, and this rolling beta is the
-          > only FundaCAD release.
+          > the Python engine, which is retired. This rolling beta is the
+          > preview, rebuilt from every change that lands.
           >
           > - If a model builds differently here than it did on the Python
           >   engine, a missing or changed face, a fillet that refuses, a
@@ -525,7 +547,7 @@ jobs:
 
           WARN
 
-          printf 'Rolling FundaCAD 1.0 beta (1.0.%s), Rust engine, rebuilt from `main` at [`%s`](https://github.com/%s/commit/%s).\n' \
+          printf 'Rolling FundaCAD 1.0 beta (1.0.%s), Rust engine, rebuilt from `dev` at [`%s`](https://github.com/%s/commit/%s).\n' \
             '${{ github.run_number }}' "${SHA:0:7}" "$R" "$SHA" >> notes.md
 
           # The commit the rolling tag is on RIGHT NOW: the build this replaces.
@@ -540,7 +562,7 @@ jobs:
           if [ -z "$commits" ] || [ "$(jq 'length' <<<"$commits")" -eq 0 ]; then
             commits=$(gh api "repos/$R/commits?sha=$SHA&per_page=$MAX" \
               --jq '[.[] | select((.parents | length) < 2)]')
-            span="the newest on \`main\`"
+            span="the newest on \`dev\`"
           fi
           total=$(jq 'length' <<<"$commits")
 
@@ -763,8 +785,8 @@ jobs:
             . -> target
             src-tauri -> target
 
-      # The same kernel and key as build-beta's, so the two jobs share it. Keep
-      # it after rust-cache, see build-beta.
+      # The same kernel and key as bundle's, so the two jobs share it. Keep
+      # it after rust-cache, see bundle.
       - name: Cache the static OpenCASCADE build
         if: env.SELF_HOSTED != 'true'
         uses: actions/cache@v4
