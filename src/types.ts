@@ -866,6 +866,9 @@ export interface RebuildResult {
   // `code` is a machine category the UI can act on.
   featureError?: { feature_id?: string; message: string; code?: string };
   featureErrors?: { feature_id?: string; message: string; code?: string; detail?: FeatureErrorDetail }[];
+  /** Features of a type the engine does not know (a file from a newer version), left out
+   *  of the build and kept in the document. Not errors. */
+  skippedFeatures?: { feature_id: string; type: string; message: string }[];
   // projected-curve refresh entries from this rebuild (absent at steady state);
   // the store lands them via a derived, no-undo commit, see
   // DocumentStore.commitProjectionRefresh.
