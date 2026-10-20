@@ -205,12 +205,14 @@ function entryMenu(entry: HomeEntry, ev: MouseEvent): void {
   ]);
 }
 
-function onViewSelect(v: string): void {
-  if (v === "add") {
+function onViewSelect(el: HTMLSelectElement): void {
+  if (el.value === "add") {
+    // A cancelled dialog changes no view, so nothing would re-render the select.
+    el.value = view.value;
     void pickFolder();
     return;
   }
-  void showView(v);
+  void showView(el.value);
 }
 
 const showOnStartup = ref(welcomeOnStartup());
@@ -259,7 +261,7 @@ onUnmounted(() => {
           class="home-view-select"
           :value="view"
           aria-label="Show"
-          @change="onViewSelect(($event.target as HTMLSelectElement).value)"
+          @change="onViewSelect($event.target as HTMLSelectElement)"
         >
           <option value="recent">Recent</option>
           <option v-for="f in folders" :key="f.path" :value="f.path">{{ folderName(f.path) }}</option>
