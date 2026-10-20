@@ -98,3 +98,12 @@ def test_preferences_opens_from_the_menu_item_with_an_ellipsis():
     s.panel("preferences")
     assert s.bridge.clicked == ["menu:Edit", "menu:Edit/Preferences…"]
     s.close()
+
+
+def test_a_file_is_not_written_into_a_folder_that_is_not_there(tmp_path):
+    from fundacad_harness.actions import out_path
+    from fundacad_harness.errors import BadArgs
+    with pytest.raises(BadArgs, match="no folder"):
+        out_path(tmp_path / "c" / "Users" / "box.funda")
+    assert not (tmp_path / "c").exists()
+    assert out_path(tmp_path / "box.funda") == (tmp_path / "box.funda").resolve()
