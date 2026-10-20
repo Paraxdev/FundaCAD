@@ -58,8 +58,12 @@
 .home-nav-row:hover {
   background: var(--raised, #22262e);
 }
+/* The text keeps the theme's text colour: the accent on its own tint is too faint in light themes. */
 .home-nav-row.active {
+  color: var(--text, #e6e8ec);
+  font-weight: 600;
   background: var(--accent-tint, rgba(75, 249, 188, 0.14));
+  box-shadow: inset 2px 0 0 var(--accent, #4bf9bc);
 }
 .home-main {
   display: flex;
