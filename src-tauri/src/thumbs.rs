@@ -64,10 +64,22 @@ pub fn put(dir: &Path, path: &str, data_url: &str) -> Result<(), String> {
     Ok(())
 }
 
+/// A save and the capture after an open can put one document's picture at once,
+/// so every write gets a temporary file of its own.
+fn tmp_path(target: &Path) -> PathBuf {
+    static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let name = target.file_name().map(|f| f.to_string_lossy().into_owned()).unwrap_or_default();
+    target.with_file_name(format!("{name}.{}.{n}.tmp", std::process::id()))
+}
+
 fn write_atomic(target: &Path, bytes: &[u8]) -> Result<(), String> {
-    let tmp = target.with_extension("tmp");
-    std::fs::write(&tmp, bytes).map_err(|e| e.to_string())?;
-    std::fs::rename(&tmp, target).map_err(|e| e.to_string())
+    let tmp = tmp_path(target);
+    let done = std::fs::write(&tmp, bytes).and_then(|_| std::fs::rename(&tmp, target));
+    if done.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    done.map_err(|e| e.to_string())
 }
 
 pub fn get_one(dir: &Path, path: &str) -> Option<String> {
@@ -114,6 +126,17 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn writes_never_share_a_temporary_file() {
+        let dir = Path::new("thumbs");
+        let a = tmp_path(&dir.join("k.img"));
+        let b = tmp_path(&dir.join("k.img"));
+        let c = tmp_path(&dir.join("k.json"));
+        assert_ne!(a, b);
+        assert_ne!(a.file_stem(), c.file_stem());
+        assert!(a.to_string_lossy().ends_with(".tmp"));
     }
 
     fn jpeg(bytes: &[u8]) -> String {
