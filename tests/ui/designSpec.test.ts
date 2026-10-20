@@ -1,6 +1,6 @@
-// The guard behind docs/DESIGN.md. It cannot see a screen, so it holds the three
-// rules a reviewer misses most: colours come from the tokens, blur comes from the
-// glass, and every token a rule reads exists.
+// The guard behind docs/DESIGN.md. It cannot see a screen, so it holds the rules
+// a reviewer misses most: colours come from the tokens, blur comes from the glass,
+// no new flat slab or hard shadow appears, and every token a rule reads exists.
 //
 // Sources come through Vite (import.meta.glob with ?raw), so the test needs no
 // node types. vitest.config.ts lets ?raw through for .scss, or it hands back "".
@@ -20,8 +20,9 @@ const scssFiles = read(
 const TOKENS = "src/styles/_tokens.scss";
 const GLASS = "src/styles/_glass.scss";
 
-// The colour literals each file holds today. A file may go down, never up; a
-// file not listed starts at zero. Write a token (or color-mix of tokens) instead.
+// The colour literals each file holds today. A file not listed starts at zero.
+// The count must match exactly, so a cleanup lowers the number in the same commit
+// and the ratchet never leaves room for new literals.
 const COLOUR_BASELINE: Record<string, number> = {
   "src/components/overlays/PluginSettingsForm.vue": 2,
   "src/components/overlays/RadialMenuHost.vue": 2,
@@ -48,6 +49,31 @@ const COLOUR_BASELINE: Record<string, number> = {
   "src/styles/_timeline.scss": 5,
   "src/styles/_titlebar.scss": 1,
   "src/styles/_utilities.scss": 13,
+};
+
+// Declarations, outside a hover, press, focus or selected rule, that fill with
+// --panel, --panel-2, --raised or --raised-2, or cast --shadow-1/2/3. That is how
+// the flat Home was built. Most of these are flat bases _glass.scss repaints,
+// inset wells or title bar chrome. Exact counts, as above: a new floating surface
+// goes on the _glass.scss lists instead of raising a number here.
+const FLAT_BASELINE: Record<string, number> = {
+  "src/components/overlays/FilletMembers.vue": 1,
+  "src/styles/_browser.scss": 5,
+  "src/styles/_console.scss": 2,
+  "src/styles/_float.scss": 2,
+  "src/styles/_glass.scss": 2,
+  "src/styles/_home.scss": 8,
+  "src/styles/_inspector.scss": 6,
+  "src/styles/_layout.scss": 1,
+  "src/styles/_modals.scss": 20,
+  "src/styles/_notice.scss": 1,
+  "src/styles/_palette.scss": 2,
+  "src/styles/_prefs.scss": 3,
+  "src/styles/_renderdock.scss": 8,
+  "src/styles/_targetedit.scss": 2,
+  "src/styles/_timeline.scss": 7,
+  "src/styles/_titlebar.scss": 8,
+  "src/styles/_utilities.scss": 18,
 };
 
 // Blurs written by hand outside _glass.scss. Anything new uses var(--float-blur),
@@ -89,6 +115,23 @@ function colourLiterals(path: string, text: string): number {
   );
 }
 
+const STATE = /:hover|:active|:focus|:checked|:disabled|\.(?:active|on|selected|open|holding|disabled)(?![\w-])|\[aria-/;
+const FLAT_FILL = /^var\(--(?:panel|panel-2|raised|raised-2)(?:\s*,[^)]*)?\)$/;
+const HARD_SHADOW = /var\(--shadow-[123](?![\w-])/;
+
+function flatSurfaces(path: string, text: string): string[] {
+  return [...styleOf(path, text).matchAll(/([^{};]+)\{([^{}]*)\}/g)]
+    .map((m) => ({ selector: (m[1] ?? "").trim().replace(/\s+/g, " "), body: m[2] ?? "" }))
+    .filter(({ selector }) => !selector.startsWith("@") && !STATE.test(selector))
+    .flatMap(({ selector, body }) =>
+      declarations(`{${body}}`)
+        .filter(({ prop, value }) =>
+          ((prop === "background" || prop === "background-color") && FLAT_FILL.test(value.trim())) ||
+          (prop === "box-shadow" && HARD_SHADOW.test(value)))
+        .map(() => selector),
+    );
+}
+
 function handBlurs(path: string, text: string): string[] {
   return declarations(styleOf(path, text))
     .filter(({ prop }) => prop === "backdrop-filter" || prop === "-webkit-backdrop-filter")
@@ -115,12 +158,22 @@ describe("design spec guard", () => {
   });
 
   it("adds no raw colour literal to a component or stylesheet", () => {
-    const grown = [...sources]
+    const changed = [...sources]
       .filter(([path]) => path !== TOKENS)
       .map(([path, text]) => ({ path, count: colourLiterals(path, text), baseline: COLOUR_BASELINE[path] ?? 0 }))
-      .filter(({ count, baseline }) => count > baseline);
-    // Use var(--token), or color-mix(in srgb, var(--token) N%, transparent). See docs/DESIGN.md, Tokens.
-    expect(grown).toEqual([]);
+      .filter(({ count, baseline }) => count !== baseline);
+    // Above the baseline: use var(--token), or color-mix(in srgb, var(--token) N%, transparent),
+    // see docs/DESIGN.md, Tokens. Below it: lower the number in COLOUR_BASELINE.
+    expect(changed).toEqual([]);
+  });
+
+  it("adds no flat slab or hard shadow", () => {
+    const changed = [...sources]
+      .map(([path, text]) => ({ path, selectors: flatSurfaces(path, text), baseline: FLAT_BASELINE[path] ?? 0 }))
+      .filter(({ selectors, baseline }) => selectors.length !== baseline);
+    // Above the baseline: a floating surface is glass, so reuse a glass class or add the selector
+    // to the lists in _glass.scss, see docs/DESIGN.md, The glass recipe. Below it: lower FLAT_BASELINE.
+    expect(changed).toEqual([]);
   });
 
   it("blurs only through the glass", () => {
@@ -142,6 +195,8 @@ describe("design spec guard", () => {
   it("finds what the check helpers are meant to find", () => {
     expect(colourLiterals("x.vue", "<template/><style>.a { color: #fff; background: rgba(0,0,0,.5); border-color: white }</style>")).toBe(3);
     expect(colourLiterals("x.scss", "#viewport .add, #fade { color: var(--text); }")).toBe(0);
+    expect(flatSurfaces("x.scss", ".a { background: var(--panel); } .a:hover { background: var(--raised); } .b { box-shadow: var(--shadow-2); }")).toEqual([".a", ".b"]);
+    expect(flatSurfaces("x.scss", ".a { background: var(--glass-sheen), var(--float-bg); color: var(--panel); }")).toEqual([]);
     expect(handBlurs("x.scss", ".a { backdrop-filter: var(--float-blur); } .b { backdrop-filter: blur(8px); }")).toEqual(["blur(8px)"]);
   });
 });
