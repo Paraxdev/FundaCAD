@@ -184,6 +184,10 @@ open_enum! {
     pub enum ImportColorSource { Bodies = "bodies", Faces = "faces" }
 }
 
+/// The document `version` this build writes, `FORMAT_VERSION` in
+/// src/document/migrate.ts (tests/registry.rs keeps the two equal).
+pub const DOCUMENT_VERSION: u32 = 10;
+
 type Side<T> = Option<IndexMap<String, T>>;
 
 plain_struct!(
