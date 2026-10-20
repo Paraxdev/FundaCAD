@@ -74,5 +74,7 @@ describe("documentExt", () => {
     // only the LAST one, and only at the end
     expect(stripDocumentExt("v1.funda.funda")).toBe("v1.funda");
     expect(stripDocumentExt("funda.stl")).toBe("funda.stl");
+    expect(stripDocumentExt("bracketXneocad")).toBe("bracketXneocad");
+    expect(stripDocumentExt("bracket-funda")).toBe("bracket-funda");
   });
 });

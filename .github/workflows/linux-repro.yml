@@ -8,6 +8,9 @@ on:
   push:
     branches: ["diag/**"]
 
+permissions:
+  contents: read
+
 jobs:
   shipped:
     runs-on: ubuntu-22.04
