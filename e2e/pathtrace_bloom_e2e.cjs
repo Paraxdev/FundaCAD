@@ -70,7 +70,8 @@ let serve = null;
   }
   const browser = await chromium.launch({
     ...(EXE ? { executablePath: EXE } : { channel: "chrome" }),
-    args: ["--no-sandbox", "--enable-gpu", "--ignore-gpu-blocklist", "--enable-unsafe-webgpu"],
+    // The native page still draws Realtime with WebGL, and a runner without a GPU has none unless ANGLE is told to use SwiftShader.
+    args: ["--no-sandbox", "--enable-gpu", "--ignore-gpu-blocklist", "--enable-unsafe-webgpu", ...(NATIVE ? ["--use-angle=swiftshader"] : [])],
   });
   try {
     const page = await browser.newPage({ viewport: { width: VW, height: VH } });
@@ -183,7 +184,10 @@ let serve = null;
 
     await setPref("bloom", 0);
     await settle();
-    await page.click('[data-view-mode="pathtraced"]');
+    // A software WebGL renderer reads as a low powered computer, which greys Path traced until a second click lifts it.
+    const pt = '[data-view-mode="pathtraced"]';
+    if ((await page.getAttribute(pt, "aria-disabled")) === "true") await page.click(pt, { force: true });
+    await page.click(pt, { force: true });
     const done = await waitDone();
     check(`the tracer runs on ${NATIVE ? "the native tracer" : "WebGPU"}`, BACKEND.test(done.backend), done.backend);
     await settle();
