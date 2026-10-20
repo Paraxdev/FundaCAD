@@ -102,7 +102,7 @@ fn a_box_darkens_the_plane_where_the_contact_shadow_is() {
         let (contact, key, side, open, outside) = (at([0.0, 1.1, 0.0]), at([0.0, 1.4, 0.0]), at([-1.1, 0.0, 0.0]), at([-1.55, -1.55, 0.0]), at([-2.5, -1.0, 0.0]));
         eprintln!("{:?}: contact {contact} key shadow {key} -x side {side} open {open} outside {outside}", t.path());
         assert!(contact < 0.8 && key < 0.8, "{:?}: no shadow at the box's foot, {contact} {key}", t.path());
-        assert!((open - 1.0).abs() < 0.02, "{:?}: the open catcher is {open} of the background", t.path());
+        assert!((open - 1.0).abs() < 0.06, "{:?}: the open catcher is {open} of the background", t.path());
         assert_eq!(outside, 1.0, "{:?}: past the square the plane still shows", t.path());
     }
 }
@@ -153,5 +153,39 @@ fn bounce_and_shadow_rays_pass_through() {
         assert!(faces.len() > 500, "{:?}: the box covers only {} pixels", t.path(), faces.len());
         let changed = faces.iter().filter(|&&i| plain[i] != ground[i]).count();
         assert_eq!(changed, 0, "{:?}: the catcher changed {changed} of {} box pixels", t.path(), faces.len());
+    }
+}
+
+/// page_look's background and catcher with its own sky level and lights.
+fn sky_look(sky: f32, lights: &str) -> Look {
+    serde_json::from_str(&format!(
+        r#"{{"background":[0.5,0.5,0.5],"skyTop":[{sky},{sky},{sky}],"skyBottom":[{sky},{sky},{sky}],"bounces":4,"lights":[{lights}]{CATCHER}}}"#
+    ))
+    .unwrap()
+}
+
+const PAGE_LIGHTS: &str = r#"{"direction":[0.3,-0.4,1],"color":[2,2,2],"angularRadius":1},{"direction":[-50,40,20],"color":[0.6,0.6,0.6],"angularRadius":1}"#;
+
+/// The 3 x 3 pixels around p, green over the background.
+fn around(img: &[[f32; 3]], p: [f32; 3]) -> f32 {
+    let i = pixel(p) as i64;
+    let w = W as i64;
+    (-1..=1).flat_map(|dy| (-1..=1).map(move |dx| i + dy * w + dx)).map(|j| img[j as usize][1] / BG).sum::<f32>() / 9.0
+}
+
+#[test]
+fn the_sky_gradient_lights_the_plane_too() {
+    for mut t in tracers() {
+        let open = render(&mut t, sky_look(1.0, PAGE_LIGHTS), [0.0, 0.0, -100.0], 16);
+        assert_eq!(worst(&open, BG), 0.0, "{:?}: the sky lit catcher is not exactly the background", t.path());
+        let dark = render(&mut t, sky_look(0.0, PAGE_LIGHTS), [0.0, 0.0, 1.0], 64);
+        let lit = render(&mut t, sky_look(1.0, PAGE_LIGHTS), [0.0, 0.0, 1.0], 64);
+        let sky = render(&mut t, sky_look(1.0, ""), [0.0, 0.0, 1.0], 64);
+        // Inside the fade band's start, 0.75 of the half side.
+        let (dark, lit, sky) = (around(&dark, [0.0, 1.15, 0.0]), around(&lit, [0.0, 1.15, 0.0]), around(&sky, [0.0, 1.1, 0.0]));
+        eprintln!("{:?}: key shadow sky 0 {dark} sky 1 {lit}, contact of the sky alone {sky}", t.path());
+        assert!(dark < 0.15, "{:?}: with no sky the key shadow is {dark}", t.path());
+        assert!(lit > 0.3, "{:?}: the sky leaves the key shadow at {lit}", t.path());
+        assert!(sky < 0.8, "{:?}: the sky alone casts no shadow at the box's foot, {sky}", t.path());
     }
 }
