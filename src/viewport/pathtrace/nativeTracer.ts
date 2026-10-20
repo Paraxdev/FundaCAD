@@ -363,6 +363,10 @@ export class NativeTracer implements TracerBackend {
   private height = 1;
   private scale = 1;
   private resizeTimer: ReturnType<typeof setTimeout> | null = null;
+  private resizing = 0;
+  /** False from a size change until a frame of the new size lands: the app
+   *  counts the old size's samples till then, which can stand at the cap. */
+  private sized = true;
   private times: number[] = [];
   private source = "";
   private disposed = false;
@@ -416,17 +420,24 @@ export class NativeTracer implements TracerBackend {
 
   private queueResize() {
     if (this.resizeTimer) clearTimeout(this.resizeTimer);
+    this.sized = false;
     this.resizeTimer = setTimeout(() => {
       this.resizeTimer = null;
       this.syncBloom();
       const w = Math.max(1, Math.floor(this.width * this.scale));
       const h = Math.max(1, Math.floor(this.height * this.scale));
-      this.link?.resize(w, h).then(
+      if (!this.link) return;
+      this.resizing++;
+      this.link.resize(w, h).then(
         (g) => {
+          this.resizing--;
           this.generation = Math.max(this.generation, g);
           this.reset();
         },
-        (e) => this.fault(`The native frames could not resize: ${String(e)}`),
+        (e) => {
+          this.resizing--;
+          this.fault(`The native frames could not resize: ${String(e)}`);
+        },
       );
     }, RESIZE_SETTLE_MS);
   }
@@ -536,6 +547,7 @@ export class NativeTracer implements TracerBackend {
       if (frame.generation >= this.generation && whole && !this.disposed) {
         this.blit.upload(frame);
         this.count++;
+        if (!this.resizeTimer && !this.resizing) this.sized = true;
       }
     } finally {
       frame.release();
@@ -610,7 +622,7 @@ export class NativeTracer implements TracerBackend {
       throw e;
     }
     if (s.fault) this.fault(`The native tracer stopped: ${s.fault}`);
-    return s.samples;
+    return this.sized ? s.samples : 0;
   }
 
   private call(cmd: string, args?: Record<string, unknown>): Promise<unknown> {

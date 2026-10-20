@@ -105,6 +105,30 @@ describe("the native tracer backend", () => {
     }
   });
 
+  it("counts no sample of the old size until a frame of the new size lands", async () => {
+    vi.useFakeTimers();
+    try {
+      const link = new FakeLink();
+      link.resizeTo = 5;
+      const { t } = setup(link, 1, async (cmd) => (cmd === "pt_status" ? { samples: 256, fault: null } : undefined));
+      await t.init();
+      t.setSize(100, 50, 1);
+      expect(await t.samples()).toBe(0);
+      await t.renderSample(0);
+      expect(await t.samples()).toBe(0);
+      await vi.advanceTimersByTimeAsync(200);
+      expect(await t.samples()).toBe(0);
+      link.queue = [{ generation: 5, width: 2, height: 2 }, { generation: 5, width: 2, height: 2 }];
+      // The prefetch was asked for before the resize.
+      await t.renderSample(0);
+      expect(await t.samples()).toBe(0);
+      await t.renderSample(0);
+      expect(await t.samples()).toBe(256);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("faults when the app has no tracer to report on instead of counting its own frames", async () => {
     const link = new FakeLink();
     const { t } = setup(link, 1, async (cmd) => {
