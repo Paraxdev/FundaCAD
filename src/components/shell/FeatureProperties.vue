@@ -74,6 +74,7 @@ import { mechanismDriveChoice, mechanismDrivePatch } from "../../document/mechan
 import { targetsFor } from "../../features/selectionTargets";
 import { featureLabel } from "../../features/patternSources";
 import { holeChoicePatch } from "../../features/holeStandards";
+import { thinTogglePatch } from "../../features/thinExtrude";
 import { asFeature } from "../../types";
 import type { DimField, Feature, Num, ParamTarget } from "../../types";
 
@@ -344,6 +345,7 @@ function setOption(field: string, value: string | boolean) {
   if (f?.type === "chamfer" && field === "chamferType" && value === "twoDistance" && f.distance2 == null) {
     patch.distance2 = f.distance;
   }
+  if (f?.type === "extrude" && field === "thin") patch = thinTogglePatch(f, value === true);
   store.updateFeature(props.featureId, patch as unknown as Partial<Feature>);
 }
 
