@@ -99,4 +99,26 @@ describe("an import's colours and undo", () => {
     expect(store.bodyMaterialId("body9")).toBeUndefined();
     expect(store.canUndo).toBe(false);
   });
+
+  it("an import undone during its rebuild puts no colours on a feature drawn before the rebuild ends", async () => {
+    const store = new DocumentStore(backend(), { parameters: {}, features: [box("a")] });
+    store.addFeature(imp());
+    const adopting = adoptImportedColors(store, IMP, RED, { joinImport: true, source: "a.step" });
+    store.undo();
+    store.addFeature(box(IMP));
+    expect(await adopting).toBe(false);
+    expect(store.bodyMaterialId("body9")).toBeUndefined();
+    store.undo();
+    expect(store.document.features.map((f) => f.id)).toEqual(["a"]);
+  });
+
+  it("an import undone during its rebuild puts no colours on another file's import that gets its id", async () => {
+    const store = new DocumentStore(backend(), { parameters: {}, features: [box("a")] });
+    store.addFeature(imp());
+    const adopting = adoptImportedColors(store, IMP, RED, { joinImport: true, source: "a.step" });
+    store.undo();
+    store.addFeature({ ...imp(), source: "b.step" } as Feature);
+    expect(await adopting).toBe(false);
+    expect(store.bodyMaterialId("body9")).toBeUndefined();
+  });
 });

@@ -703,7 +703,8 @@ async function importWith(
   // assembly's product colours were read by the engine, carried in the
   // manifest, and then never looked at, so a file that arrived fully coloured
   // opened as three thousand identical grey bodies.
-  if (!(await adoptImportedColors(store, id, res, { joinImport: true }))) recolorOnRedo(store, imported, res);
+  const source = importSource(imported);
+  if (!(await adoptImportedColors(store, id, res, { joinImport: true, source }))) recolorOnRedo(store, imported, res);
 
   // The file carried ONE dominant colour. Say so, and let whoever has a use for
   // it decide.
@@ -721,6 +722,9 @@ async function importWith(
   if (res.color === undefined) return;
   await announceImportedBody(id, res.color);
 }
+
+const importSource = (f: Feature) =>
+  f.type === "import" ? (f as Extract<Feature, { type: "import" }>).source : undefined;
 
 /** An import undone while its rebuild ran put its colours on nothing. Its redo
  *  puts them on then, as part of that same step, or never. */
@@ -742,7 +746,12 @@ export function recolorOnRedo(store: DocumentStore, feature: Feature, res: Param
       offDoc();
     }
     if (rewound && back && same(back)) {
-      queueMicrotask(() => void adoptImportedColors(store, feature.id, res, { joinImport: true, only: true }));
+      const source = importSource(back);
+      queueMicrotask(() => {
+        adoptImportedColors(store, feature.id, res, { joinImport: true, only: true, source }).catch((e) =>
+          console.warn("import colours not put back", e),
+        );
+      });
     }
   });
 }
@@ -773,7 +782,7 @@ export async function adoptImportedColors(
     nodes?: { name: string; parent: number | null; color?: string }[] | undefined;
     parts?: { node: number; faces: number; faceColors?: FaceColorRuns; color?: string }[] | undefined;
   },
-  opts: { joinImport?: boolean; only?: boolean } = {},
+  opts: { joinImport?: boolean; only?: boolean; source?: string | undefined } = {},
 ): Promise<boolean> {
   const perNode = res.nodes ? nodeColors(res.nodes) : null;
   // Normalised once, here, because it is the KEY into the map materialsForColors
@@ -810,8 +819,11 @@ export async function adoptImportedColors(
   await store.rebuildNow().finally(offOpen);
   if (opened) return true;
   const bodies = store.buildState.result?.bodies ?? [];
+  // Note: after an undo nextId() hands this id to the next feature drawn, so the
+  // id alone does not say the import is still there.
   const feature = store.document.features.find((f) => f.id === featureId);
-  if (!feature) return false;
+  if (!feature || feature.type !== "import") return false;
+  if (opts.source !== undefined && importSource(feature) !== opts.source) return false;
   const picks = importedBodyColors(bodies, [feature], (id) => store.importColorSource(id));
   // One batched write per material, not one per body: an assembly is thousands
   // of bodies and every write re-emits the build.
