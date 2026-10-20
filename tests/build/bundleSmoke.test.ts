@@ -25,7 +25,7 @@ function steps(jobText: string): Step[] {
   return jobText
     .split(/^ {6}- /m)
     .slice(1)
-    .map((text) => ({ name: /name: (.*)/.exec(text)?.[1].trim() ?? "", text }));
+    .map((text) => ({ name: /name: (.*)/.exec(text)?.[1]?.trim() ?? "", text }));
 }
 
 const GATE = "continue-on-error: ${{ needs.channel.outputs.gated == 'false' }}";
@@ -77,10 +77,11 @@ describe("the Flatpak job", () => {
   it("runs the installed Flatpak before it uploads it", () => {
     const i = all.findIndex(runsSmoke);
     expect(i).toBeGreaterThanOrEqual(0);
-    expect(all[i].text).toMatch(/flatpak run [^\n]*dev\.fundacad\.app --mcp/);
+    const smoke = all[i]?.text ?? "";
+    expect(smoke).toMatch(/flatpak run [^\n]*dev\.fundacad\.app --mcp/);
     expect(i).toBeGreaterThan(indexOf(all, "Build the Flatpak"));
     expect(i).toBeLessThan(indexOf(all, "Upload the Flatpak"));
-    expect(all[i].text).toContain(GATE);
+    expect(smoke).toContain(GATE);
   });
 });
 
