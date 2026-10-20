@@ -182,8 +182,9 @@ tool that makes its edit a moment after the click. `s.settle(trace=N)` waits for
 view to reach N samples as well. After 60 s (`settle_timeout=`) it fails with `SettleTimeout` and
 one line on what is still busy, for example `building, 2 requests in flight, socket open`.
 
-If vite reloads the page once while it optimises dependencies on a cold start, the session waits
-for the app again and closes the start screen again. A second reload is an error.
+If vite reloads the page, while it optimises dependencies on a cold start or after an edit it
+cannot hot swap, the session waits for the app again and closes the start screen again. A second
+reload within 30 s is an error.
 
 ## Recording
 

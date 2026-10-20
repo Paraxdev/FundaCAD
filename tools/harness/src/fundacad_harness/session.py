@@ -20,6 +20,9 @@ from .recorder import Recorder
 from .launch import Proc, find_engine, find_repo, stale_warning, start_engine, start_vite
 
 
+RELOAD_WINDOW = 30
+
+
 def _flag(name: str) -> bool:
     return os.environ.get(name, "") not in ("", "0", "false", "no")
 
@@ -63,7 +66,8 @@ class Session(Actions):
         self.bridge: Bridge | None = None
         self._navs = 0
         self._seen_navs = 0
-        self._reloads = 0
+        self._reload_at: float | None = None
+        self._clock = time.monotonic
         self._page_errors: list[str] = []
         self._page_log = None
         self.warnings: list[str] = []
@@ -173,17 +177,19 @@ class Session(Actions):
         raise LaunchError(f"the app did not get ready in {int(timeout)} s: {why}")
 
     def _ensure_page(self) -> None:
-        """Vite may reload the page once while it optimises dependencies on a cold start."""
+        """Vite reloads the page while it optimises dependencies, or after an edit it cannot hot swap."""
         if self.closed:
             raise HarnessError("this session is closed")
         if self._navs == self._seen_navs:
             return
-        self._reloads += 1
-        if self._reloads > 1:
-            raise HarnessError("the page reloaded twice, see page.log in " + str(self.work))
+        now = self._clock()
+        if self._reload_at is not None and now - self._reload_at < RELOAD_WINDOW:
+            raise HarnessError(f"the page reloaded twice in {RELOAD_WINDOW} s, see page.log in {self.work}")
+        self._reload_at = now
         self._wait_driver()
         self._seen_navs = self._navs
         self.dismiss_start()
+        self._mark = self.bridge.call("seq")
 
     def close(self) -> str:
         if self.closed:
