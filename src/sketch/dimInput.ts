@@ -384,6 +384,7 @@ export class DimInput {
     const ok = document.createElement("button");
     ok.className = "dim-btn dim-ok";
     ok.title = "Confirm (Enter)";
+    ok.setAttribute("aria-label", "Confirm");
     ok.appendChild(iconElement("check", 13));
     ok.addEventListener("pointerdown", (e) => {
       e.preventDefault();
@@ -396,6 +397,7 @@ export class DimInput {
       const no = document.createElement("button");
       no.className = "dim-btn dim-no";
       no.title = "Cancel (Esc)";
+      no.setAttribute("aria-label", "Cancel");
       no.appendChild(iconElement("close", 13));
       no.addEventListener("pointerdown", (e) => {
         e.preventDefault();
@@ -536,6 +538,7 @@ export class DimInput {
       tag.removeAttribute("title");
     }
     if (f.def.choices) tag.appendChild(iconElement("caretDown", 10));
+    f.input.setAttribute("aria-label", f.def.label);
   }
 
   private choose(f: Field, id: string, typed: boolean) {
