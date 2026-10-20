@@ -397,7 +397,8 @@ jobs:
     # On dev another leg's failure does not stop the Linux .deb's Flatpak.
     if: >-
       !cancelled() && (needs.bundle.result == 'success'
-        || (needs.bundle.result == 'failure' && needs.channel.outputs.gated == 'false'))
+        || (needs.channel.outputs.gated == 'false'
+            && (needs.bundle.result == 'failure' || needs.bundle.result == 'cancelled')))
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -469,11 +470,14 @@ jobs:
     needs: [channel, bundle, build-flatpak]
     # A failed Flatpak leaves it out of the release rather than holding the
     # release back: always() lets this run once build-flatpak has finished
-    # either way. On dev a failed bundle leg does the same for its own files.
+    # either way. On dev a failed bundle leg does the same for its own files,
+    # unless the run itself was cancelled. A leg that hits its timeout can
+    # report as cancelled while the run is not.
     if: >-
       always() && needs.channel.outputs.release != ''
       && (needs.bundle.result == 'success'
-          || (needs.bundle.result == 'failure' && needs.channel.outputs.gated == 'false'))
+          || (needs.channel.outputs.gated == 'false' && !cancelled()
+              && (needs.bundle.result == 'failure' || needs.bundle.result == 'cancelled')))
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     permissions:
