@@ -225,5 +225,7 @@ mod tests {
         let glow = pack_material(&crate::material::PageMaterial { emissive: Some([1.0; 3]), emissive_intensity: Some(4.0), ..Default::default() });
         let xf = [2.0, 0.0, 0.0, 5.0, 0.0, 3.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0];
         assert!((tri_powers(&mesh, &xf, &[glow])[0] - 0.5 * 6.0 * 4.0).abs() < 1e-4);
+        let none = pack_material(&crate::material::PageMaterial { no_light: true, ..Default::default() });
+        assert_eq!(tri_powers(&mesh, &xf, &[none]), vec![0.0]);
     }
 }

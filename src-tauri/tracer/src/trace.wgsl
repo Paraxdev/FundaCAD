@@ -346,6 +346,8 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
   // 0 from the camera, below 0 from a scatter with no light sample, else the
   // pdf of the bounce that sent the ray.
   var last_pdf = 0.0;
+  // From the camera through specular transmission only, where a noLight glow shows.
+  var seen = true;
   for (var b = 0u; b < u.bounces; b++) {
     let h = trace(o, d, 1e30, false);
     if (!h.ok) {
@@ -402,11 +404,15 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
     if (!front && (flags & SOLID) != 0u) {
       thr *= pow(max(m.attenuation.rgb, vec3f(1e-4)), vec3f(h.t / m.attenuation.w));
     }
-    var we = 1.0;
-    if (last_pdf > 0.0 && (it.extra.z & 2u) != 0u && lum(m.emission.rgb) > 0.0) {
-      if (est == EST_NEE) { we = 0.0; } else if (est != EST_BSDF) { we = mis(last_pdf, n_samples() * em_pdf(m, h.t, abs(dot(ng, d)))); }
+    if ((flags & NO_LIGHT) != 0u) {
+      if (seen) { col += thr * m.emission.rgb; }
+    } else {
+      var we = 1.0;
+      if (last_pdf > 0.0 && (it.extra.z & 2u) != 0u && lum(m.emission.rgb) > 0.0) {
+        if (est == EST_NEE) { we = 0.0; } else if (est != EST_BSDF) { we = mis(last_pdf, n_samples() * em_pdf(m, h.t, abs(dot(ng, d)))); }
+      }
+      col += add(thr * m.emission.rgb * we, b >= 2u && clamp_on);
     }
-    col += add(thr * m.emission.rgb * we, b >= 2u && clamp_on);
     if (rnd() > m.base.a) {
       o = p + d * eps;
       continue;
@@ -461,6 +467,7 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
       s.ca = max(m.coat.y * m.coat.y, 1e-4);
       s.pc = m.coat.x * schlick(vec3f(0.04), 1.0, nv).x;
       s.base = 1.0 - s.pc;
+      seen = false;
       if ((u.n_lights.x > 0u || (env_on() && env_chance() > 0.0) || u.emit.y > 0u) && est != EST_BSDF) {
         let n = n_samples();
         for (var k = 0.0; k < n; k += 1.0) {

@@ -117,6 +117,16 @@ describe("native tracer scene feed", () => {
     expect(lamp.emissiveIntensity).toBe(3);
   });
 
+  it("a glow only material goes with noLight, any other without it", () => {
+    const glow = new THREE.MeshPhysicalMaterial({ emissive: 0xffffff });
+    glow.userData.noLight = true;
+    expect(pageMaterial(glow).noLight).toBe(true);
+    const lamp = new THREE.MeshPhysicalMaterial({ emissive: 0xffffff });
+    lamp.userData.noLight = "yes";
+    expect(pageMaterial(lamp)).not.toHaveProperty("noLight");
+    expect(pageMaterial(new THREE.MeshPhysicalMaterial())).not.toHaveProperty("noLight");
+  });
+
   it("an orthographic camera becomes a far narrow one framing the same height", () => {
     const o = new THREE.OrthographicCamera(-2, 2, 1, -1, 0.1, 100);
     o.position.set(0, 0, 10);
