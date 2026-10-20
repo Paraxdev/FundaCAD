@@ -158,8 +158,14 @@ export function nativeLook(look: TraceLook) {
     exposure: look.exposure,
     background: bg,
     environmentBehind: !!look.environmentBehind,
-    ...(look.rig ? { lights: nativeLights(look.rig) } : {}),
+    ...(look.rig ? { lights: nativeLights(look.rig), ground: nativeGround(look.rig) } : {}),
   };
+}
+
+/** The catcher Realtime draws, which the tracer shows as a shadow on the background. */
+export function nativeGround(rig: LightRig) {
+  const g = rig.ground;
+  return { mode: g.mode, z: g.z, centre: [g.centre[0], g.centre[1]], extent: g.extent, albedo: g.albedo };
 }
 
 /** The pt_env body for `look`'s environment: an imported panorama's own pixels
