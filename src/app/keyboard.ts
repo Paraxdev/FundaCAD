@@ -4,6 +4,7 @@ import { saveDocument, saveDocumentAs, exportModel } from "../io/files";
 import { SKETCH_TOOLS } from "./actionTables";
 import { logError, toggleConsole } from "../ui/logStore";
 import { useDialogStore } from "../stores/dialogs";
+import { isMac } from "../input/platform";
 import { useShellStore } from "../stores/shell";
 import { useCommandPaletteStore } from "../stores/commandPalette";
 import type { Engine } from "./engine";
@@ -95,9 +96,11 @@ export function installKeyboard(e: Engine): void {
     const k = ev.key.toLowerCase();
     if (ev.altKey) {
       // Note: Ctrl+Alt must be resolved first, or Ctrl+Alt+S would also save.
-      // Option makes another character on macOS (Option+S is "ß"), so the
-      // physical key counts too, while key still serves non-QWERTY layouts.
-      const is = (letter: string) => k === letter || ev.code === `Key${letter.toUpperCase()}`;
+      // Option makes another character on macOS (Option+S is "ß"), so there
+      // the physical key counts too. Elsewhere only the typed letter does:
+      // AltGr reports Ctrl+Alt on Windows and types a letter of its own.
+      const mac = isMac();
+      const is = (letter: string) => k === letter || (mac && ev.code === `Key${letter.toUpperCase()}`);
       if (is("s")) { ev.preventDefault(); useShellStore().toggleItems(); }
       else if (is("h")) { ev.preventDefault(); useShellStore().toggleHistory(); }
       return;
