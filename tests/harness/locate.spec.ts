@@ -53,6 +53,19 @@ describe("findControl", () => {
     expect(e.message).toMatch(/^no visible control "Extrud 2": did you mean feature:e1 "Extrude 1"/);
     expect(fail("action:nope").kind).toBe("NotFound");
   });
+
+  it("leaves out hints that only share a few letters or the middle of a word", () => {
+    document.body.insertAdjacentHTML("beforeend",
+      '<nav id="toolrail"><button data-action="isolate">Isolate Off</button><button data-group="print">3D Printing Toolbox</button></nav>');
+    expect(fail("isometric").message).toBe('no visible control "isometric"');
+    expect(fail("Box").message).toBe('no visible control "Box"');
+    expect(fail("Tool").message).toContain('group:print "3D Printing Toolbox"');
+  });
+
+  it("hints a missing menu item with the items of that menu", () => {
+    const e = fail("menu:Edit/Nope");
+    expect(e.candidates).toEqual(['menu:Edit/Preferences... "Preferences..."']);
+  });
 });
 
 describe("stamp", () => {

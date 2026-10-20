@@ -20,15 +20,27 @@ export const isRef = (target: string) => REF.test(target);
 
 const describe = (c: Control) => `${c.ref} "${c.label}"`;
 
+const words = (s: string) => s.split(/[\s:/._#"-]+/).filter(Boolean);
+
+function sharedStart(a: string, b: string): number {
+  let i = 0;
+  while (i < a.length && i < b.length && a[i] === b[i]) i++;
+  return i;
+}
+
 function nearMisses(walk: Walk, target: string): string[] {
+  const menu = /^menu:([^/]+)\//.exec(target);
+  const items = menu ? walk.controls.filter((c) => c.ref.startsWith(`menu:${menu[1]}/`)) : [];
+  if (items.length) return items.slice(0, 8).map(describe);
   const want = matchName(target.replace(REF, ""));
-  const head = want.slice(0, 3);
+  if (!want) return [];
+  const close = Math.max(3, Math.ceil(want.length / 2));
   const scored = walk.controls
     .map((c) => {
       const name = matchName(c.label);
-      const ref = c.ref.toLowerCase();
-      const score = name.includes(want) || ref.includes(want) ? 3
-        : head && (name.startsWith(head) || ref.includes(head)) ? 2
+      const starts = [name, ...words(name), ...words(c.ref.toLowerCase())].some((w) => w.startsWith(want));
+      const score = starts ? 3
+        : sharedStart(name, want) >= close ? 2
           : want.includes(name) && name.length > 2 ? 1 : 0;
       return { c, score };
     })
