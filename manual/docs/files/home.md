@@ -2,13 +2,13 @@
 
 Home is where FundaCAD starts. It shows the documents you worked on, starts new ones and takes you back to any version of a document.
 
-![Home with three recent documents and the New strip](../img/home.png)
+![Home with Blank and Open at the top, three recent documents and the examples under them](../img/home.png)
 
 Click a card to open the document. Each card shows a picture of the model from its last save, the folder it is in and when it was last edited. A card marked Not found points to a file that was moved or deleted, click it to take it off the list.
 
-Blank starts an empty document. A template starts one that already has parameters and a few steps, and Save then asks where to keep it. Open… finds a file on disk.
+Blank starts an empty document and Open… finds a file on disk. The Examples under your documents start one that already has parameters and a few steps, and Save then asks where to keep it.
 
-Type in the search field, or press Ctrl+F, to find a document by name or folder, and pick the order next to it. Esc in the search field clears it.
+Type in the search field, or press Ctrl+F, to find a document by name or folder, or an example by name, and pick the order next to it. Esc in the search field clears it.
 
 Add folder puts a folder of your own under Folders, to keep the documents of one project together. Home lists the documents in it and in its subfolders, and a document you start there is saved into it. Right click the folder and choose Remove from Home to take it off, the folder stays on disk.
 
