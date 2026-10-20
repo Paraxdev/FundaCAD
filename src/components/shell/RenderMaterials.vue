@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { fmtKeys } from "../../input/platform";
 import RenderSections from "./RenderSections.vue";
 // The material half of the Render workspace: what this document can be made of,
 // what it IS made of, and the editor for one of them.
@@ -443,7 +444,7 @@ async function doImport() {
         class="rd-used"
         :class="{ 'is-selected': selectedSet.has(m.id) }"
         draggable="true"
-        :title="`${m.name}, ${finishLabel(m)}. Drag onto a face. Ctrl or Shift click picks several, right-click for Delete.`"
+        :title="fmtKeys(`${m.name}, ${finishLabel(m)}. Drag onto a face. Ctrl or Shift click picks several, right-click for Delete.`)"
         @click="pick(m.id, $event, used)"
         @contextmenu="openMenu($event, m)"
         @dragstart="onDragStart($event, m)"
