@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+# Promote a green dev build to a stable release (docs/ENGINE.md section 7).
+#
+#   scripts/promote-stable.sh 1.2.0 [--sha <commit on dev>] [--push]
+#
+# Merges the dev head (or the given commit) into main with --no-ff, tags the
+# merge v1.2.0, and prints the push. With --push it pushes main and the tag in
+# one atomic push, and the tag's build publishes the release.
+#
+# The merge is made in a throwaway worktree on origin/main, so it works while
+# main is checked out somewhere else, and your local main is left as it was.
+set -euo pipefail
+
+REPO=Paraxdev/FundaCAD
+REMOTE=origin
+
+usage() {
+  echo "usage: $0 <1.minor.patch> [--sha <commit on dev>] [--push]" >&2
+  exit 2
+}
+
+die() {
+  echo "promote-stable: $*" >&2
+  exit 1
+}
+
+version='' sha='' push=no
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --push) push=yes ;;
+    --sha) [ $# -ge 2 ] || usage; sha=$2; shift ;;
+    -h|--help) usage ;;
+    -*) usage ;;
+    *) [ -z "$version" ] || usage; version=${1#v} ;;
+  esac
+  shift
+done
+[ -n "$version" ] || usage
+[[ "$version" =~ ^1\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] \
+  || die "$version is not a stable version, those are 1.<minor>.<patch>"
+tag="v$version"
+
+cd "$(git rev-parse --show-toplevel)"
+git fetch --quiet --tags "$REMOTE" main dev
+
+git rev-parse -q --verify "refs/tags/$tag" >/dev/null && die "$tag already exists"
+
+newest=$(git tag -l 'v1.*' | grep -E '^v1\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' | sort -V | tail -1 || true)
+if [ -n "$newest" ] && [ "$(printf '%s\n%s\n' "$newest" "$tag" | sort -V | tail -1)" != "$tag" ]; then
+  die "$tag is not newer than $newest"
+fi
+
+if [ -z "$sha" ]; then
+  sha=$(git rev-parse "$REMOTE/dev")
+else
+  sha=$(git rev-parse --verify "$sha^{commit}") || die "no such commit: $sha"
+  git merge-base --is-ancestor "$sha" "$REMOTE/dev" || die "${sha:0:7} is not on $REMOTE/dev"
+fi
+if git merge-base --is-ancestor "$sha" "$REMOTE/main"; then
+  die "${sha:0:7} is already on main, there is nothing to promote. To release main as it is, tag it by hand (docs/ENGINE.md section 7)."
+fi
+
+echo "checking for a green build of ${sha:0:7} on dev..."
+run=$(gh run list -R "$REPO" --branch dev --workflow build.yml --commit "$sha" \
+  --status success --limit 1 --json url --jq '.[0].url // empty')
+[ -n "$run" ] || die "no successful build run on dev for ${sha:0:7} yet, see: gh run list -R $REPO --branch dev"
+echo "green: $run"
+
+tmp=$(mktemp -d)
+cleanup() { git worktree remove --force "$tmp" 2>/dev/null || rm -rf "$tmp"; }
+trap cleanup EXIT
+git worktree add --quiet --detach "$tmp" "$REMOTE/main"
+git -C "$tmp" merge --no-ff --quiet -m "merge: dev into main for $tag" "$sha" \
+  || die "dev does not merge cleanly into main. Merge main into dev first (a hotfix that was never merged back), then try again."
+merge=$(git -C "$tmp" rev-parse HEAD)
+
+git tag -a "$tag" -m "FundaCAD $tag" "$merge"
+echo "tagged $tag on ${merge:0:7}, the merge of ${sha:0:7} into main"
+
+pushcmd=(git push --atomic "$REMOTE" "$merge:refs/heads/main" "refs/tags/$tag")
+if [ "$push" = yes ]; then
+  "${pushcmd[@]}"
+  echo "pushed, the $tag build publishes the release: gh run list -R $REPO --branch $tag"
+else
+  echo "nothing is pushed yet. To publish:"
+  echo "  ${pushcmd[*]}"
+  echo "To undo instead:"
+  echo "  git tag -d $tag"
+fi
+echo "your local main is unchanged, update it with: git fetch $REMOTE && git checkout main && git merge --ff-only $REMOTE/main"
