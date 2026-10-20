@@ -16,7 +16,14 @@
 #viewport .prompt,
 .dim-field,
 .dim-btn,
-.dim-unit-menu {
+.dim-unit-menu,
+.home-side,
+.home-tools,
+.home-new-card,
+.home-card,
+.home-card-versions,
+.home-badge,
+.home-foot {
   corner-shape: squircle;
   background: var(--glass-sheen), var(--float-bg);
   -webkit-backdrop-filter: var(--float-blur);
@@ -36,23 +43,33 @@
 .float-group,
 .float-popover,
 .choice-card,
-.float-right .palette {
+.float-right .palette,
+.home-side {
   border-radius: var(--float-radius);
 }
 .rail-tile,
-.context-menu {
+.context-menu,
+.home-tools,
+.home-new-card,
+.home-card {
   border-radius: var(--float-tile-radius);
 }
 .rail-pill,
 .dim-field,
 .dim-btn,
-.dim-unit-menu {
+.dim-unit-menu,
+.home-card-versions,
+.home-badge,
+.home-foot {
   border-radius: var(--float-chip-radius);
 }
 
 .float-card,
 .choice-card,
-.float-right .palette {
+.float-right .palette,
+.home-side,
+.home-tools,
+.home-new-card {
   position: relative;
 }
 
@@ -62,7 +79,11 @@
 .rail-tile::after,
 .context-menu::after,
 .choice-card::after,
-.float-right .palette::after {
+.float-right .palette::after,
+.home-side::after,
+.home-tools::after,
+.home-new-card::after,
+.home-card::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -81,7 +102,9 @@
 
 /* ---- rail -------------------------------------------------------------------- */
 
-.rail-tile {
+.rail-tile,
+.home-new-card,
+.home-card {
   transition:
     transform var(--t-fast) var(--ease),
     background var(--t-fast) var(--ease),
@@ -89,12 +112,20 @@
     box-shadow var(--t-fast) var(--ease),
     color var(--t-fast) var(--ease);
 }
-.rail-btn:hover .rail-tile {
+.rail-btn:hover .rail-tile,
+.home-new-card:hover,
+.home-card:hover {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.02) 62%), var(--float-bg);
   transform: translateY(-1px);
 }
 .rail-btn:active .rail-tile {
   transform: scale(0.94);
+}
+.home-new-card:hover,
+.home-card:hover,
+.home-card:focus-visible,
+.home-card-versions:hover {
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
 }
 .rail-btn.active .rail-tile,
 .rail-btn.holding .rail-tile,
@@ -179,7 +210,9 @@
 
 .feature-row.selected,
 #timeline .timeline-node.selected,
-.opt-row.selected {
+.opt-row.selected,
+.home-nav-row.active,
+.home-branch.shown {
   background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 22%, transparent), color-mix(in srgb, var(--accent) 6%, transparent));
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 26%, transparent);
   color: var(--accent-hot);
@@ -191,7 +224,8 @@
 .context-menu {
   padding: 5px;
 }
-.ctx-item:hover {
+.ctx-item:hover,
+.home-nav-row:hover:not(.active) {
   background: color-mix(in srgb, var(--accent) 16%, transparent);
 }
 
@@ -258,7 +292,8 @@
 .shortcut-hud-card,
 #renderdock,
 .ne-overlay,
-.areachip {
+.areachip,
+.home-drawer {
   corner-shape: squircle;
   background: var(--glass-sheen), var(--float-bg-solid);
   -webkit-backdrop-filter: var(--float-blur);
@@ -274,7 +309,8 @@
 .shortcut-hud-card,
 #renderdock,
 .ne-overlay,
-.areachip {
+.areachip,
+.home-drawer {
   box-shadow: var(--glass-inset), var(--float-shadow);
 }
 /* Everything else in the list above floats directly over the viewport, where
@@ -293,7 +329,8 @@
 .tgt-panel,
 .shortcut-hud-card,
 #renderdock,
-.ne-overlay {
+.ne-overlay,
+.home-drawer {
   border-radius: var(--float-radius);
 }
 .menu-popup,
@@ -317,7 +354,8 @@
 .tgt-panel::after,
 .shortcut-hud-card::after,
 #renderdock::after,
-.ne-overlay::after {
+.ne-overlay::after,
+.home-drawer::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -353,7 +391,8 @@
 }
 
 .modal-overlay,
-.cmdk-backdrop {
+.cmdk-backdrop,
+.home::before {
   background: rgba(5, 4, 9, 0.35);
   -webkit-backdrop-filter: blur(6px) saturate(1.2);
           backdrop-filter: blur(6px) saturate(1.2);
@@ -372,7 +411,14 @@
 .menu-item,
 .cmdk-item,
 .tb-btn,
-.seg-btn {
+.seg-btn,
+.home-search,
+.home-sort,
+.home-view-select,
+.home-nav-row,
+.home-branch,
+.home-version,
+.home-drawer-act {
   corner-shape: squircle;
 }
 .btn,
@@ -383,19 +429,28 @@
 .rd-used,
 .toast-action,
 .menu-item,
-.cmdk-item {
+.cmdk-item,
+.home-search,
+.home-sort,
+.home-view-select,
+.home-nav-row,
+.home-branch,
+.home-version,
+.home-drawer-act {
   border-radius: var(--float-chip-radius);
 }
 .rd-tile {
   border-radius: var(--float-tile-radius);
 }
 
-.btn {
+.btn,
+.home-drawer-act {
   background: rgba(255, 255, 255, 0.06);
   border-color: rgba(255, 255, 255, 0.1);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
-.btn:hover:not(:disabled) {
+.btn:hover:not(:disabled),
+.home-drawer-act:hover {
   background: rgba(255, 255, 255, 0.1);
   border-color: color-mix(in srgb, var(--accent) 45%, transparent);
 }
@@ -410,22 +465,37 @@
 }
 
 .sm-input,
-.sm-select {
+.sm-select,
+.home-search,
+.home-sort,
+.home-view-select {
   background-color: rgba(255, 255, 255, 0.04);
   border-color: rgba(255, 255, 255, 0.1);
 }
 .sm-input:focus,
-.sm-select:focus {
+.sm-select:focus,
+.home-search:focus,
+.home-sort:focus,
+.home-view-select:focus {
   border-color: color-mix(in srgb, var(--accent) 60%, transparent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent);
 }
-.sm-select option {
+.sm-select option,
+.home-sort option,
+.home-view-select option {
   background: var(--panel-2);
 }
 
 .menu-item:hover,
 .cmdk-item.active {
   background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+/* ---- Home ------------------------------------------------------------------------ */
+
+/* The text keeps the theme's text colour: the accent on its own tint is too faint in light themes. */
+.home-nav-row.active {
+  color: var(--text);
 }
 
 /* ---- no blur (ui/glassBlur.ts) ------------------------------------------------ */
@@ -443,4 +513,8 @@ html.no-glass-blur *::before,
 html.no-glass-blur *::after {
   -webkit-backdrop-filter: none !important;
           backdrop-filter: none !important;
+}
+/* Without the blur the scrim would show the float cards sharp through it. */
+html.no-glass-blur .home::before {
+  background: var(--viewport-bg);
 }

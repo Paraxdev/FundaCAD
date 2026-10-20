@@ -5,15 +5,24 @@
   z-index: calc(var(--z-float) + 1);
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);
-  background: var(--panel, #16181d);
-  color: var(--text, #e6e8ec);
+  background: transparent;
+  color: var(--text);
+}
+/* The scrim is a layer of its own: a filter on .home itself would make it the
+   backdrop root of the glass inside, which would then blur nothing. */
+.home::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
 }
 .home-side {
   display: flex;
   flex-direction: column;
   gap: var(--s-4);
+  margin: var(--float-gap);
   padding: var(--s-5) var(--s-4);
-  border-right: 1px solid var(--line, #262a31);
   min-height: 0;
   overflow-y: auto;
 }
@@ -35,7 +44,7 @@
   font-weight: 600;
   letter-spacing: 0.4px;
   text-transform: uppercase;
-  color: var(--text-dim, #9aa3af);
+  color: var(--text-dim);
 }
 .home-nav-row {
   display: flex;
@@ -46,8 +55,7 @@
   padding: var(--s-2) var(--s-3);
   background: transparent;
   border: none;
-  border-radius: var(--r-sm, 6px);
-  color: var(--text, #e6e8ec);
+  color: var(--text);
   font-size: 12px;
   text-align: left;
   cursor: pointer;
@@ -55,15 +63,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.home-nav-row:hover {
-  background: var(--raised, #22262e);
-}
-/* The text keeps the theme's text colour: the accent on its own tint is too faint in light themes. */
 .home-nav-row.active {
-  color: var(--text, #e6e8ec);
   font-weight: 600;
-  background: var(--accent-tint, rgba(75, 249, 188, 0.14));
-  box-shadow: inset 2px 0 0 var(--accent, #4bf9bc);
 }
 .home-main {
   display: flex;
@@ -94,22 +95,15 @@
   width: 112px;
   flex: none;
   padding: var(--s-3);
-  background: var(--raised, #22262e);
-  border: 1px solid var(--line, #262a31);
-  border-radius: var(--r-md, 8px);
-  color: var(--text, #e6e8ec);
+  color: var(--text);
   cursor: pointer;
-}
-.home-new-card:hover,
-.home-card:hover {
-  border-color: var(--accent, #4bf9bc);
 }
 .home-new-pic {
   display: grid;
   place-items: center;
   width: 100%;
   aspect-ratio: 8 / 5;
-  color: var(--text-dim, #9aa3af);
+  color: var(--text-dim);
 }
 .home-new-name {
   font-size: 12px;
@@ -117,7 +111,8 @@
 .home-tools {
   display: flex;
   gap: var(--s-3);
-  padding: var(--s-2) var(--s-5);
+  margin: var(--s-2) var(--s-5);
+  padding: var(--s-2);
 }
 .home-search {
   flex: 1;
@@ -129,16 +124,16 @@
 .home-view-select {
   height: 28px;
   padding: 0 var(--s-3);
-  background: var(--raised, #22262e);
-  border: 1px solid var(--line, #262a31);
-  border-radius: var(--r-sm, 6px);
-  color: var(--text, #e6e8ec);
+  border-width: 1px;
+  border-style: solid;
+  color: var(--text);
   font-size: 12px;
 }
 .home-grid {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   // Auto rows in a fixed height grid share its height out once there are more
@@ -148,11 +143,23 @@
   gap: var(--s-4);
   padding: var(--s-3) var(--s-5) var(--s-5);
 }
+/* content-visibility clips paint to the cell, so the cell bleeds past its grid
+   area by the reach of --float-shadow and the card keeps its whole shadow. The
+   bleed takes no clicks, or it would steal them from the neighbouring cards. */
+$card-bleed-top: 8px;
+$card-bleed-side: 26px;
+$card-bleed-bottom: 44px;
 .home-cell {
   position: relative;
   min-width: 0;
+  margin: (-$card-bleed-top) (-$card-bleed-side) (-$card-bleed-bottom);
+  padding: $card-bleed-top $card-bleed-side $card-bleed-bottom;
+  pointer-events: none;
   content-visibility: auto;
   contain-intrinsic-size: auto 200px;
+}
+.home-cell > * {
+  pointer-events: auto;
 }
 .home-card {
   position: relative;
@@ -162,19 +169,15 @@
   gap: var(--s-0);
   min-width: 0;
   padding: 0 0 var(--s-3);
-  background: var(--raised, #22262e);
-  border: 1px solid var(--line, #262a31);
-  border-radius: var(--r-md, 8px);
-  color: var(--text, #e6e8ec);
+  color: var(--text);
   text-align: left;
   cursor: pointer;
   width: 100%;
   height: 100%;
   overflow: hidden;
 }
-/* Inside the card: the cell's content-visibility clips anything drawn outside it. */
 .home-card:focus-visible {
-  outline: 2px solid var(--accent, #4bf9bc);
+  outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
 .home-card.missing {
@@ -186,8 +189,8 @@
   aspect-ratio: 8 / 5;
   margin-bottom: var(--s-2);
   /* The colour pictures are drawn over, so a card with none looks like one still to come. */
-  background: var(--viewport-bg, #1b1e24);
-  color: var(--text-dim, #9aa3af);
+  background: var(--viewport-bg);
+  color: var(--text-dim);
   overflow: hidden;
 }
 .home-card-pic img {
@@ -210,16 +213,13 @@
 .home-card-folder,
 .home-card-time {
   font-size: 11px;
-  color: var(--text-dim, #9aa3af);
+  color: var(--text-dim);
 }
 .home-badge {
   position: absolute;
   top: var(--s-2);
   left: var(--s-2);
   padding: var(--s-0) var(--s-2);
-  border-radius: var(--r-sm, 6px);
-  background: var(--panel, #16181d);
-  border: 1px solid var(--line, #262a31);
   font-size: 10px;
   font-weight: 600;
 }
@@ -228,19 +228,21 @@
   margin: 0;
   padding: var(--s-5);
   font-size: 12px;
-  color: var(--text-dim, #9aa3af);
+  color: var(--text-dim);
 }
+/* A chip of glass of its own, the label is unreadable on the bare scrim over a light viewport. */
 .home-foot {
   display: flex;
-  padding: var(--s-4) var(--s-5);
-  border-top: 1px solid var(--line, #262a31);
+  align-self: flex-start;
+  margin: var(--s-2) var(--s-5) var(--s-4);
+  padding: var(--s-2) var(--s-3);
 }
 .home-startup {
   display: flex;
   align-items: center;
   gap: var(--s-2);
   font-size: 12px;
-  color: var(--text-dim, #9aa3af);
+  color: var(--text-dim);
   cursor: pointer;
 }
 #stage.narrow .home {
@@ -271,13 +273,13 @@
   text-overflow: ellipsis;
 }
 .home-folder-row[aria-busy="true"] {
-  color: var(--text-dim, #9aa3af);
+  color: var(--text-dim);
 }
 .home-note {
   margin: 0;
   padding: 0 var(--s-5) var(--s-2);
   font-size: 11px;
-  color: var(--text-dim, #9aa3af);
+  color: var(--text-dim);
 }
 .home-view-select {
   display: none;
@@ -287,17 +289,14 @@
 }
 .home-card-versions {
   position: absolute;
-  top: var(--s-2);
-  right: var(--s-2);
+  top: calc(#{$card-bleed-top} + var(--s-2));
+  right: calc(#{$card-bleed-side} + var(--s-2));
   display: grid;
   place-items: center;
   width: 26px;
   height: 26px;
   padding: 0;
-  background: var(--panel, #16181d);
-  border: 1px solid var(--line, #262a31);
-  border-radius: var(--r-sm, 6px);
-  color: var(--text, #e6e8ec);
+  color: var(--text);
   cursor: pointer;
   opacity: 0.5;
 }
@@ -310,23 +309,17 @@
     opacity: 1;
   }
 }
-.home-card-versions:hover {
-  border-color: var(--accent, #4bf9bc);
-}
 .home-drawer {
   position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
+  top: var(--s-3);
+  right: var(--s-3);
+  bottom: var(--s-3);
   z-index: 1;
   display: flex;
   flex-direction: column;
   gap: var(--s-1);
-  width: min(340px, 100%);
+  width: min(340px, calc(100% - 2 * var(--s-3)));
   padding: var(--s-4);
-  background: var(--panel, #16181d);
-  border-left: 1px solid var(--line, #262a31);
-  box-shadow: -8px 0 24px rgba(0, 0, 0, 0.3);
   overflow-y: auto;
 }
 .home-drawer-head {
@@ -352,18 +345,18 @@
   padding: 0;
   background: transparent;
   border: none;
-  color: var(--text-dim, #9aa3af);
+  color: var(--text-dim);
   cursor: pointer;
 }
 .home-drawer-note {
   margin: 0;
   font-size: 12px;
-  color: var(--text-dim, #9aa3af);
+  color: var(--text-dim);
 }
 .home-drawer-hint {
   margin: 0;
   font-size: 11px;
-  color: var(--text-dim, #9aa3af);
+  color: var(--text-dim);
 }
 .home-drawer-section {
   margin-top: var(--s-3);
@@ -371,7 +364,7 @@
   font-weight: 600;
   letter-spacing: 0.4px;
   text-transform: uppercase;
-  color: var(--text-dim, #9aa3af);
+  color: var(--text-dim);
 }
 .home-branch,
 .home-version {
@@ -379,10 +372,6 @@
   align-items: center;
   gap: var(--s-2);
   padding: var(--s-1) var(--s-2);
-  border-radius: var(--r-sm, 6px);
-}
-.home-branch.shown {
-  background: var(--accent-tint, rgba(75, 249, 188, 0.14));
 }
 .home-branch-name {
   flex: 1;
@@ -393,14 +382,14 @@
   padding: 0;
   background: transparent;
   border: none;
-  color: var(--text, #e6e8ec);
+  color: var(--text);
   font-size: 12px;
   text-align: left;
   cursor: pointer;
 }
 .home-branch-current {
   font-size: 10px;
-  color: var(--text-dim, #9aa3af);
+  color: var(--text-dim);
 }
 .home-version-text {
   flex: 1;
@@ -416,7 +405,7 @@
 }
 .home-version-time {
   font-size: 11px;
-  color: var(--text-dim, #9aa3af);
+  color: var(--text-dim);
 }
 .home-version-acts {
   display: flex;
@@ -425,14 +414,10 @@
 .home-drawer-act {
   height: 24px;
   padding: 0 var(--s-2);
-  background: var(--raised, #22262e);
-  border: 1px solid var(--line, #262a31);
-  border-radius: var(--r-sm, 6px);
-  color: var(--text, #e6e8ec);
+  border-width: 1px;
+  border-style: solid;
+  color: var(--text);
   font-size: 11px;
   white-space: nowrap;
   cursor: pointer;
-}
-.home-drawer-act:hover {
-  border-color: var(--accent, #4bf9bc);
 }
