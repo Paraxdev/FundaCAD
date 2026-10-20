@@ -57,6 +57,66 @@ pub struct Instance<'a, B> {
     pub xf: [f32; 12],
 }
 
+/// `GpuInst::extra[2]` bits: the body carries layer line relief (tracer-relief).
+pub const INST_RELIEF: u32 = 1;
+/// `GpuInst::extra[2]` bits: the body has emitters in the light table.
+pub const INST_EMITTERS: u32 = 2;
+/// `GpuInst::extra[3]` for a body without an emitter table.
+pub const NO_EMITTERS: u32 = u32::MAX;
+
+/// Ten vec4s, 160 bytes, the layout the shader's `Inst` struct reads.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct GpuInst {
+    /// Object to world, row major 3x4.
+    pub o2w: [f32; 12],
+    pub w2o: [f32; 12],
+    /// vertex base, index base, material base, triangle base
+    pub base: [u32; 4],
+    /// node base, material count, INST_ flag bits, emitter table offset
+    pub extra: [u32; 4],
+    /// relief axis xyz, pitch mm
+    pub relief0: [f32; 4],
+    /// relief origin mm, depth, tint jitter, cavity
+    pub relief1: [f32; 4],
+}
+
+/// One instance of a body whose mesh starts at `mesh` (vertex, index,
+/// triangle and node base) and whose materials start at `mat_base`.
+pub fn pack_inst(xf: &[f32; 12], mesh: [u32; 4], mat_base: u32, mat_count: u32) -> GpuInst {
+    GpuInst {
+        o2w: *xf,
+        w2o: inverse(xf),
+        base: [mesh[0], mesh[1], mat_base, mesh[2]],
+        extra: [mesh[3], mat_count, 0, NO_EMITTERS],
+        relief0: [0.0; 4],
+        relief1: [0.0; 4],
+    }
+}
+
+/// Row major 3x4 affine inverse.
+fn inverse(m: &[f32; 12]) -> [f32; 12] {
+    let (a, b, c) = (m[0], m[1], m[2]);
+    let (d, e, f) = (m[4], m[5], m[6]);
+    let (g, h, i) = (m[8], m[9], m[10]);
+    let det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
+    let k = if det.abs() > 1e-30 { 1.0 / det } else { 0.0 };
+    let r = [
+        (e * i - f * h) * k, (c * h - b * i) * k, (b * f - c * e) * k,
+        (f * g - d * i) * k, (a * i - c * g) * k, (c * d - a * f) * k,
+        (d * h - e * g) * k, (b * g - a * h) * k, (a * e - b * d) * k,
+    ];
+    let t = [m[3], m[7], m[11]];
+    let mut out = [0.0; 12];
+    for row in 0..3 {
+        out[row * 4] = r[row * 3];
+        out[row * 4 + 1] = r[row * 3 + 1];
+        out[row * 4 + 2] = r[row * 3 + 2];
+        out[row * 4 + 3] = -(r[row * 3] * t[0] + r[row * 3 + 1] * t[1] + r[row * 3 + 2] * t[2]);
+    }
+    out
+}
+
 pub trait Accel {
     type Blas;
     fn build_blas(&mut self, mesh: &Mesh) -> Self::Blas;
@@ -319,5 +379,18 @@ mod tests {
         b.matrix[12] = 7.0;
         b.matrix[1] = 2.0;
         assert_eq!(b.xf(), [1., 0., 0., 7., 2., 1., 0., 0., 0., 0., 1., 0.]);
+    }
+
+    #[test]
+    fn the_inst_pack_is_ten_vec4_with_relief_and_emitters_off() {
+        assert_eq!(std::mem::size_of::<GpuInst>(), 160);
+        let xf = [2., 0., 0., 1., 0., 1., 0., 2., 0., 0., 1., 3.];
+        let i = pack_inst(&xf, [10, 20, 30, 40], 5, 3);
+        assert_eq!(i.o2w, xf);
+        assert_eq!(i.w2o, [0.5, 0., 0., -0.5, 0., 1., 0., -2., 0., 0., 1., -3.]);
+        assert_eq!(i.base, [10, 20, 5, 30]);
+        assert_eq!(i.extra, [40, 3, 0, NO_EMITTERS]);
+        assert_eq!(i.extra[2] & (INST_RELIEF | INST_EMITTERS), 0);
+        assert_eq!((i.relief0, i.relief1), ([0.0; 4], [0.0; 4]));
     }
 }

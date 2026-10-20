@@ -152,4 +152,22 @@ mod tests {
             assert!(n <= STORAGE_FLOOR, "{path:?} binds {n} storage buffers over the floor of {STORAGE_FLOOR}");
         }
     }
+
+    fn span(path: Path, name: &str) -> u32 {
+        let m = naga::front::wgsl::parse_str(&trace_source(path)).unwrap();
+        let mut l = naga::proc::Layouter::default();
+        l.update(m.to_ctx()).unwrap();
+        let (h, _) = m.types.iter().find(|(_, t)| t.name.as_deref() == Some(name)).expect(name);
+        l[h].size
+    }
+
+    #[test]
+    fn the_kernel_reads_the_packed_strides() {
+        for path in [Path::Software, Path::RayQuery] {
+            assert_eq!(span(path, "Mat"), 144, "{path:?}");
+            assert_eq!(span(path, "Inst"), 160, "{path:?}");
+            assert_eq!(span(path, "Mat") as usize, std::mem::size_of::<crate::material::GpuMaterial>());
+            assert_eq!(span(path, "Inst") as usize, std::mem::size_of::<crate::scene::GpuInst>());
+        }
+    }
 }

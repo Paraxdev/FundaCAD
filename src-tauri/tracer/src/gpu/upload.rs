@@ -1,32 +1,10 @@
 use std::collections::HashMap;
 
-use crate::material::{pack_material, tri_slots, GpuMaterial, FLAG_VERTEX_COLORS};
+use crate::material::{pack_material, tri_slots, GpuMaterial};
+use crate::scene::{pack_inst, GpuInst};
 
 use super::accel::GpuBlas;
 use super::{buffer, bytes, Tracer};
-
-/// Row major 3x4 affine inverse.
-fn inverse(m: &[f32; 12]) -> [f32; 12] {
-    let (a, b, c) = (m[0], m[1], m[2]);
-    let (d, e, f) = (m[4], m[5], m[6]);
-    let (g, h, i) = (m[8], m[9], m[10]);
-    let det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
-    let k = if det.abs() > 1e-30 { 1.0 / det } else { 0.0 };
-    let r = [
-        (e * i - f * h) * k, (c * h - b * i) * k, (b * f - c * e) * k,
-        (f * g - d * i) * k, (a * i - c * g) * k, (c * d - a * f) * k,
-        (d * h - e * g) * k, (b * g - a * h) * k, (a * e - b * d) * k,
-    ];
-    let t = [m[3], m[7], m[11]];
-    let mut out = [0.0; 12];
-    for row in 0..3 {
-        out[row * 4] = r[row * 3];
-        out[row * 4 + 1] = r[row * 3 + 1];
-        out[row * 4 + 2] = r[row * 3 + 2];
-        out[row * 4 + 3] = -(r[row * 3] * t[0] + r[row * 3 + 1] * t[1] + r[row * 3 + 2] * t[2]);
-    }
-    out
-}
 
 pub(super) struct Shading {
     pub(super) pos: wgpu::Buffer,
@@ -94,28 +72,24 @@ impl Tracer {
     }
 
     pub(super) fn upload_instances(&mut self) {
-        let mut rows: Vec<f32> = vec![];
+        let mut rows: Vec<GpuInst> = vec![];
         let mut mats: Vec<GpuMaterial> = vec![];
         let insts = self.scene.instances();
         for inst in &insts {
             let off = self.shading.offsets.get(&inst.body.key).copied().unwrap_or_default();
-            rows.extend_from_slice(&inst.xf);
-            rows.extend_from_slice(&inverse(&inst.xf));
             let base = mats.len() as u32;
             let mut body: Vec<GpuMaterial> = inst.body.materials.iter().map(pack_material).collect();
             if body.is_empty() {
                 body.push(pack_material(&Default::default()));
             }
-            let colors = body.iter().any(|m| m.flags() & FLAG_VERTEX_COLORS != 0) as u32;
-            let n = body.len() as u32;
+            rows.push(pack_inst(&inst.xf, off, base, body.len() as u32));
             mats.extend(body);
-            rows.extend([off[0], off[1], base, off[2], off[3], n, colors, 0].map(f32::from_bits));
         }
         self.n_inst = insts.len() as u32;
         // A runtime array binding needs room for one element even when the
         // loop traces before the first mesh lands; n_inst keeps it unread.
         if rows.is_empty() {
-            rows.resize(32, 0.0);
+            rows.push(pack_inst(&[0.0; 12], [0; 4], 0, 0));
         }
         if mats.is_empty() {
             mats.push(pack_material(&Default::default()));

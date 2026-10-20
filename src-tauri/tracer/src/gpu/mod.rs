@@ -230,7 +230,7 @@ impl Tracer {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        // Room for one element of the largest bound struct (Inst, 128 bytes):
+        // Room for one element of the largest bound struct (Inst, 160 bytes):
         // frames run before the first scene lands.
         let empty = |d: &wgpu::Device| storage(d, 256, wgpu::BufferUsages::empty());
         let shading = Shading {
