@@ -1,6 +1,7 @@
 import { contribute } from "fundacad";
 import type { Engine } from "fundacad";
 import LayerLinesSection from "./LayerLinesSection.vue";
+import { FILAMENT_GROUP, FILAMENT_PRESETS } from "./presets";
 import { reliefFrom, type LookValues } from "./look";
 import { PLUGIN_ID, settings } from "./settings";
 
@@ -14,6 +15,7 @@ const toggle = () => void settings.set("layerLines", !settings.get("layerLines")
 /** Start the capability. Returns the teardown that stops it. */
 export async function activate(_e: Engine): Promise<() => void> {
   const off = contribute(PLUGIN_ID, {
+    materialPresets: () => [{ group: FILAMENT_GROUP, materials: FILAMENT_PRESETS.map((m) => ({ ...m })) }],
     relief: () => {
       const r = current();
       return r ? { all: r } : {};
