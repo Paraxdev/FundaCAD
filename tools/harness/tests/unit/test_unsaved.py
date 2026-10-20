@@ -152,6 +152,35 @@ def test_undo_says_what_changed_and_when_nothing_counted_did():
     s.close()
 
 
+class Looks(App):
+    def __init__(self, steps):
+        super().__init__()
+        self.steps, self.at = steps, 0
+
+    def call(self, method, **args):
+        if method == "history":
+            return {"count": 1, "rows": [{"id": "e1"}]}
+        if method == "bodies":
+            return self.steps[self.at]
+        if method == "locate":
+            self.at += 1
+            return {"marker": "m", "ref": args["target"], "label": args["target"]}
+        return super().call(method, **args)
+
+
+def test_undo_of_a_colour_or_an_eye_says_which_bodies_changed():
+    red = {"id": "body1", "visible": True, "material": "m-red", "slot": None}
+    plain = {**red, "material": None}
+    other = {**red, "id": "body2"}
+    hidden = {**other, "visible": False}
+    app = Looks([[red, other], [plain, other], [plain, hidden], [{**plain, "slot": 2}, hidden]])
+    s = session(app)
+    assert str(s.undo()).startswith("clicked #undo-btn, 1 body changed material,")
+    assert str(s.undo()).startswith("clicked #undo-btn, 1 body shown or hidden,")
+    assert str(s.redo()).startswith("clicked #redo-btn, 1 body changed colour,")
+    s.close()
+
+
 def test_open_file_of_a_refused_file_with_the_open_documents_name_says_it_did_not_open():
     app = App(opens=False)
     app.dirty = False
