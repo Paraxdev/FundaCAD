@@ -278,14 +278,20 @@ class Session(Actions):
     def settle(self, trace: int | None = None, timeout: float | None = None) -> str:
         """Waits until rebuilds, previews, the camera and the picture are quiet; every action already does."""
         wait = timeout or self.settle_timeout
-        if self.settle_limit is not None:
-            wait = min(wait, self.settle_limit)
+        capped = self.settle_limit is not None and self.settle_limit < wait
+        if capped:
+            wait = self.settle_limit
         args: dict[str, Any] = {"timeoutMs": int(wait * 1000)}
         if trace is not None:
             args["trace"] = trace
         try:
             r = self.call("settle", **args)
         except SettleTimeout as e:
+            if capped:
+                raise SettleTimeout(
+                    f"{e}. The app may still be working on it, this call had {wait:g} s left to wait:"
+                    " settle() again in a new call"
+                ) from None
             raise SettleTimeout(
                 f"{e}. The app may still be working on it: wait_for a label or settle() again,"
                 f" or open the session with a longer settle_timeout (now {self.settle_timeout:g} s)"

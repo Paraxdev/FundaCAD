@@ -223,3 +223,15 @@ def test_a_press_step_with_a_list_presses_each_key():
     steps.run(s, {"do": "press", "keys": ["Escape", "Enter"]})
     steps.run(s, {"do": "press", "keys": "Control+S"})
     assert [c[1] for c in s.calls] == [("Escape", "Enter"), ("Control+S",)]
+
+
+def test_each_step_of_a_do_may_wait_only_for_what_is_left_of_the_call(tmp_path):
+    ticks = iter([0, 0, 100, 118])
+    s = StubSession(tmp_path)
+    limits = []
+    s.press = lambda *keys, **kw: limits.append(s.settle_limit) or "pressed"
+    server = Server(lambda **kw: s, clock=lambda: next(ticks))
+    server.open()
+    ok, text = server.do([{"do": "press", "keys": "Enter"}] * 3)
+    assert ok is True, text
+    assert limits == [150, 50, 32]

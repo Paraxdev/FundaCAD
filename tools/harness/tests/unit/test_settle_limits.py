@@ -140,3 +140,22 @@ def test_undo_and_redo_of_an_import_wait_as_long_as_the_import():
     s.redo()
     assert s.bridge.settles[0] == 300_000
     s.close()
+
+
+def test_tool_with_settle_false_only_clicks():
+    s = session()
+    s._click_control = lambda ref, *a: {"ref": ref, "label": "Box"}
+    calls = s.bridge.call
+    s.bridge.call = lambda m, **a: {"steps": [{"ref": "#t-box", "button": "left"}]} if m == "toolPath" else {"lines": []} if m == "screen" else calls(m, **a)
+    assert str(s.tool("Box", settle=False)).startswith('clicked #t-box "Box"')
+    assert s.bridge.settles == []
+    s.close()
+
+
+def test_a_settle_cut_short_by_the_call_says_a_longer_settle_timeout_will_not_help():
+    s = session()
+    s.bridge.busy = True
+    s.settle_limit = 20
+    with pytest.raises(SettleTimeout, match=r"not settled after 20 s: socket open\. The app may still be working on it, this call had 20 s left to wait: settle\(\) again in a new call"):
+        s.settle()
+    s.close()
