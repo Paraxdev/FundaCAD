@@ -79,3 +79,10 @@ def test_a_recording_keeps_a_longer_settle_timeout(tmp_path):
     assert "Session(settle_timeout=150)" in s.recorder.source()
     s.close()
 
+
+def test_undo_with_settle_false_only_clicks():
+    s = session()
+    s._click_control = lambda ref, *a: {"ref": ref, "label": "Undo"}
+    assert str(s.undo(settle=False)).startswith("clicked #undo-btn, mode model")
+    assert s.bridge.settles == []
+    s.close()
