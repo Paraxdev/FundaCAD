@@ -961,6 +961,18 @@ describe("suppress and unsuppress are undo steps", () => {
     expect(store.document.features.length).toBe(4);
   });
 
+  it("undoing a suppress after the feature was removed and restored leaves it unsuppressed", () => {
+    store.toggleSuppress("f1");
+    store.removeFeature("f1");
+    store.undo();
+    expect(store.isSuppressed("f1")).toBe(false);
+    store.undo();
+    expect(store.isSuppressed("f1")).toBe(false);
+    expect(store.document.features.map((f) => f.id)).toContain("f1");
+    store.redo();
+    expect(store.isSuppressed("f1")).toBe(true);
+  });
+
   it("undo rebuilds without the suppression", async () => {
     const rebuilds: CadDocument[] = [];
     const s = new DocumentStore(stubBackend(rebuilds), doc());
