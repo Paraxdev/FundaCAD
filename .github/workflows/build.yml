@@ -853,6 +853,7 @@ jobs:
           name: harness-logs
           path: ${{ runner.temp }}/harness
           if-no-files-found: ignore
+          retention-days: 7
 
       - name: Engine log on failure
         if: failure()
