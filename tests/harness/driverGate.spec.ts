@@ -73,3 +73,12 @@ describe("screen", () => {
     document.body.innerHTML = "";
   });
 });
+
+describe("locate", () => {
+  it("says which region the control it found is in", () => {
+    document.body.innerHTML = `<div id="toolrail"><button>Sketch</button></div>`;
+    const m = createMethods(host, document, { rect });
+    expect(m.locate!({ target: "Sketch" })).toMatchObject({ label: "Sketch", region: "toolrail" });
+    document.body.innerHTML = "";
+  });
+});

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import functools
 import os
+import re
 import time
 from pathlib import Path
 from typing import Any, Callable
@@ -43,6 +44,21 @@ class Step:
         return self.text
 
     __repr__ = __str__
+
+
+def _name(label: str) -> str:
+    return " ".join(re.sub(r"\s*\([^()]*\)\s*$", "", label).split()).lower()
+
+
+def found_by(target: str, hit: dict) -> str:
+    """Where a label landed, so a click on a namesake elsewhere (a History row called Sketch) shows."""
+    base = re.sub(r"#\d+$", "", target)
+    if selectors.is_ref(base):
+        return ""
+    where = f' in {hit["region"]}' if hit.get("region") else ""
+    if _name(hit["label"]) != _name(base):
+        where += f', no control is named "{base}", this is the one label that starts so'
+    return where
 
 
 def action(fn: Callable) -> Callable:
@@ -128,7 +144,7 @@ class Actions:
             return f"clicked {p['what']}", p
         hit = self._click_control(target, button, double, mods)
         verb = "double clicked" if double else "right clicked" if button == "right" else "clicked"
-        return f'{verb} {hit["ref"]} "{hit["label"]}"', hit
+        return f'{verb} {hit["ref"]} "{hit["label"]}"{found_by(target, hit)}', hit
 
     @action
     def expand(self, target: str, open: bool = True):
