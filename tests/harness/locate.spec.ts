@@ -118,7 +118,10 @@ describe("toolPath", () => {
     expect(toolPath(walk(), "3 point", "sketch", rail)[0]).toEqual({ ref: "family:fam:circle", button: "right" });
   });
 
-  it("keeps the not found error when no family has it", () => {
-    expect(() => toolPath(walk(), "Loft", "model", rail)).toThrow(/no visible control "Loft"/);
+  it("says where tools live when no family has it", () => {
+    expect(() => toolPath(walk(), "Loft", "model", rail)).toThrow(
+      'no tool "Loft" in the rail: click a family to list its tools (family:cat:CREATE "Create",'
+      + ` family:cat:MODIFY "Modify"), a tool's own choices, such as the shapes of Primitive, show once it starts`,
+    );
   });
 });

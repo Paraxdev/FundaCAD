@@ -153,6 +153,12 @@ export function toolPath(walk: Walk, label: string, mode: string, defs?: RailEnt
         ];
       }
     }
-    throw err;
+    const families = rail.controls.filter((c) => c.ref.startsWith("family:"));
+    throw new HarnessError(
+      `no tool "${label}" in the rail: click a family to list its tools (${families.map(describe).join(", ")}),`
+        + " a tool's own choices, such as the shapes of Primitive, show once it starts",
+      "NotFound",
+      families.map(describe),
+    );
   }
 }
