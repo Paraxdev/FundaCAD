@@ -280,7 +280,7 @@ export function resolveEdge(h: PickHost, sel: string): Edge {
     const box = h.store.buildState.result?.bbox;
     const diag = box ? Math.hypot(box.max[0] - box.min[0], box.max[1] - box.min[1], box.max[2] - box.min[2]) : 100;
     const tol = Math.max(1e-3, diag * 2e-3);
-    const both = boundsOf(fa.tris).intersect(boundsOf(fb.tris)).expandByScalar(tol);
+    const both = boundsOf(fa.tris).expandByScalar(tol).intersect(boundsOf(fb.tris).expandByScalar(tol));
     const on = (e: Edge) => {
       const pts = edgePts(e);
       let misses = Math.floor(pts.length * 0.1);
