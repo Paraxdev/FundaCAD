@@ -13,6 +13,7 @@ use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use blake2::digest::consts::U16;
 use blake2::{Blake2b, Digest};
@@ -652,10 +653,41 @@ pub struct Opened {
     pub carried: Vec<Carried>,
 }
 
+/// How a file is read. Only the speed depends on `threads`, never the result.
+#[derive(Clone, Copy, Debug)]
+pub struct ReadOptions {
+    pub threads: usize,
+}
+
+impl Default for ReadOptions {
+    fn default() -> Self {
+        ReadOptions { threads: par::threads() }
+    }
+}
+
 /// Open a file: the document as JSON, with every geometry blob and cached mesh
 /// extracted into its store, each verified before it is published under its hash.
 /// With `carry_dir`, sections of a kind this version does not read land there too.
 pub fn read_file(path: &Path, blob_dir: &Path, mesh_dir: Option<&Path>, carry_dir: Option<&Path>) -> Result<Opened, String> {
+    read_file_with(path, blob_dir, mesh_dir, carry_dir, &ReadOptions::default())
+}
+
+enum Role {
+    Geometry,
+    Mesh,
+    Carried(usize),
+}
+
+struct Job<'a> {
+    entry: &'a Entry,
+    dest: PathBuf,
+    role: Role,
+    rows: Vec<&'a segments::Row>,
+}
+
+/// Sections the segment index describes are decoded one at a time on all
+/// threads; the others are extracted side by side, one per thread.
+pub fn read_file_with(path: &Path, blob_dir: &Path, mesh_dir: Option<&Path>, carry_dir: Option<&Path>, o: &ReadOptions) -> Result<Opened, String> {
     let mut f = File::open(path).map_err(io)?;
     let mut report = RepairReport::default();
     let entries = read_index(&mut f, &mut report)?;
@@ -663,7 +695,12 @@ pub fn read_file(path: &Path, blob_dir: &Path, mesh_dir: Option<&Path>, carry_di
     let mut cbor = Vec::new();
     read_section(&f, doc, &mut cbor, &mut report)?;
     let document_json = cbor_to_json(&cbor)?;
+    let rows = segment_rows(&f, &entries, &mut report);
+    let rows_of = |e: &Entry| -> Vec<&segments::Row> {
+        rows.iter().filter(|r| r.kind == e.kind && r.raw_hash == e.raw_hash && r.stored_len == e.stored_len).collect()
+    };
 
+    let mut jobs = Vec::new();
     std::fs::create_dir_all(blob_dir).map_err(io)?;
     for e in entries.iter().filter(|e| e.kind == KIND_GEOMETRY) {
         let hash = hex(&e.raw_hash);
@@ -671,56 +708,172 @@ pub fn read_file(path: &Path, blob_dir: &Path, mesh_dir: Option<&Path>, carry_di
             return Err(DAMAGED.to_string());
         }
         let dest = blob_dir.join(format!("{hash}.bbrep"));
-        if dest.exists() {
-            continue;
+        if !published(&dest, e.raw_len) {
+            jobs.push(Job { entry: e, dest, role: Role::Geometry, rows: rows_of(e) });
         }
-        extract(&f, e, &dest, &mut report)?;
     }
     if let Some(dir) = mesh_dir {
         std::fs::create_dir_all(dir).map_err(io)?;
-        for e in entries.iter().filter(|e| e.kind == KIND_MESH) {
-            if !safe_key(&e.name) {
-                continue;
-            }
-            let dest = dir.join(format!("{}.bin", e.name));
-            // A cached mesh that fails costs a re-tessellation, never the open.
-            let _ = extract(&f, e, &dest, &mut report);
+        for e in entries.iter().filter(|e| e.kind == KIND_MESH && safe_key(&e.name)) {
+            jobs.push(Job { entry: e, dest: dir.join(format!("{}.bin", e.name)), role: Role::Mesh, rows: rows_of(e) });
         }
     }
-    let mut carried = Vec::new();
+    let mut carried: Vec<(Carried, bool)> = Vec::new();
     if let Some(dir) = carry_dir {
         std::fs::create_dir_all(dir).map_err(io)?;
         for e in entries.iter().filter(|e| carries(e)) {
             let hash = hex(&e.raw_hash);
             let dest = dir.join(format!("{hash}.bin"));
-            // A section this version does not read never blocks the open.
-            if dest.exists() || extract(&f, e, &dest, &mut report).is_ok() {
-                carried.push(Carried { kind: e.kind, name: e.name.clone(), hash });
+            let have = published(&dest, e.raw_len);
+            if !have {
+                jobs.push(Job { entry: e, dest, role: Role::Carried(carried.len()), rows: rows_of(e) });
             }
+            carried.push((Carried { kind: e.kind, name: e.name.clone(), hash }, have));
         }
     }
+
+    let mut results: Vec<Option<Result<RepairReport, String>>> = jobs.iter().map(|_| None).collect();
+    let (big, small): (Vec<usize>, Vec<usize>) = (0..jobs.len()).partition(|&i| !jobs[i].rows.is_empty());
+    for &i in &big {
+        results[i] = Some(extract(&f, jobs[i].entry, &jobs[i].dest, &jobs[i].rows, o.threads));
+    }
+    let done = par::map_indexed(small.len(), o.threads, |n| {
+        let j = &jobs[small[n]];
+        extract(&f, j.entry, &j.dest, &[], 1)
+    });
+    for (n, r) in done.into_iter().enumerate() {
+        results[small[n]] = Some(r);
+    }
+    for (job, r) in jobs.iter().zip(results) {
+        match (r.expect("every job ran"), &job.role) {
+            (Ok(r), role) => {
+                report.repaired_shards += r.repaired_shards;
+                if let Role::Carried(i) = role {
+                    carried[*i].1 = true;
+                }
+            }
+            (Err(err), Role::Geometry) => return Err(err),
+            // A cached mesh that fails costs a re-tessellation, and a section
+            // this version does not read never blocks the open.
+            (Err(_), Role::Mesh | Role::Carried(_)) => {}
+        }
+    }
+    let carried = carried.into_iter().filter(|(_, ok)| *ok).map(|(c, _)| c).collect();
     Ok(Opened { document_json, entries, report, carried })
+}
+
+/// The rows of the file's segment index, none when it has none or it cannot be read.
+fn segment_rows(f: &File, entries: &[Entry], report: &mut RepairReport) -> Vec<segments::Row> {
+    let Some(e) = entries.iter().find(|e| e.kind == KIND_SEGMENTS && e.raw_len <= segments::MAX_INDEX_RAW) else {
+        return Vec::new();
+    };
+    let mut bytes = Vec::new();
+    let mut mine = RepairReport::default();
+    if read_section(f, e, &mut bytes, &mut mine).is_err() {
+        return Vec::new();
+    }
+    report.repaired_shards += mine.repaired_shards;
+    segments::decode(&bytes)
+}
+
+/// A blob already in a store is trusted by its name only when it is whole.
+fn published(dest: &Path, raw_len: u64) -> bool {
+    std::fs::metadata(dest).is_ok_and(|m| m.is_file() && m.len() == raw_len)
 }
 
 fn safe_key(key: &str) -> bool {
     !key.is_empty() && !key.contains("..") && key.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
 }
 
-fn extract(f: &File, e: &Entry, dest: &Path, report: &mut RepairReport) -> Result<(), String> {
+static TMP_SERIAL: AtomicUsize = AtomicUsize::new(0);
+
+/// Decode one section into `dest`, through a temporary name of its own so two
+/// opens of the same file never write into each other. Every thread reads
+/// through the one handle the open started with: a save that renames a new file
+/// over the path meanwhile must not mix its sections into this read.
+fn extract(file: &File, e: &Entry, dest: &Path, rows: &[&segments::Row], threads: usize) -> Result<RepairReport, String> {
+    check_raw_len(e)?;
     let mut tmp = dest.as_os_str().to_os_string();
-    tmp.push(".tmp");
+    tmp.push(format!(".{}.{}.tmp", std::process::id(), TMP_SERIAL.fetch_add(1, Ordering::Relaxed)));
     let tmp = PathBuf::from(tmp);
-    let mut run = || -> Result<(), String> {
-        let mut out = BufWriter::new(File::create(&tmp).map_err(io)?);
-        read_section(f, e, &mut out, report)?;
-        let file = out.into_inner().map_err(|e| e.to_string())?;
-        file.sync_all().map_err(io)
+    let report = match extract_to(file, e, &tmp, rows, threads) {
+        Ok(r) => r,
+        Err(err) => {
+            let _ = std::fs::remove_file(&tmp);
+            return Err(err);
+        }
     };
-    if let Err(err) = run() {
-        let _ = std::fs::remove_file(&tmp);
-        return Err(err);
+    match std::fs::rename(&tmp, dest) {
+        Ok(()) => Ok(report),
+        Err(err) => {
+            let _ = std::fs::remove_file(&tmp);
+            // Another open published the same verified bytes first and holds them open.
+            if published(dest, e.raw_len) { Ok(report) } else { Err(io(err)) }
+        }
     }
-    std::fs::rename(&tmp, dest).map_err(io)
+}
+
+fn extract_to(file: &File, e: &Entry, tmp: &Path, rows: &[&segments::Row], threads: usize) -> Result<RepairReport, String> {
+    let (crcs, table_crc) = read_crcs(file, e)?;
+    let finish = |out: BufWriter<File>| -> Result<(), String> { out.into_inner().map_err(|e| e.to_string())?.sync_all().map_err(io) };
+    if let Some(row) = rows.iter().find(|r| segments::matches(r, e.kind, e.codec, &e.raw_hash, e.stored_len, e.raw_len, table_crc)) {
+        let mut out = BufWriter::new(File::create(tmp).map_err(io)?);
+        if let Some(report) = read_segmented(file, e, row, &crcs, threads, &mut out)? {
+            finish(out)?;
+            return Ok(report);
+        }
+    }
+    let mut report = RepairReport::default();
+    let mut out = BufWriter::new(File::create(tmp).map_err(io)?);
+    decode_section(SectionReader::with_crcs(file, e, crcs)?, e, &mut out, &mut report)?;
+    finish(out)?;
+    Ok(report)
+}
+
+/// Decode a section by the segments its index row names: groups are read and
+/// repaired a window at a time on all threads, the segments that end inside
+/// the window are inflated on all threads, then hashed and written in order.
+/// None when a segment or the whole does not come out as the row promised, so
+/// the caller reads the section as one stream instead. Damage beyond the
+/// parity is an error either way.
+fn read_segmented<W: Write>(file: &File, e: &Entry, row: &segments::Row, crcs: &[u32], threads: usize, out: &mut W) -> Result<Option<RepairReport>, String> {
+    let rs = rs_of(e)?;
+    let groups = e.groups();
+    let window = 2 * threads.max(1) as u64;
+    let mut report = RepairReport::default();
+    let mut hasher = Blake2b128::new();
+    let mut pending: Vec<u8> = Vec::new();
+    let (mut seg, mut g) = (0usize, 0u64);
+    while g < groups {
+        let n = window.min(groups - g);
+        let loaded = par::map_indexed(n as usize, threads, |i| load_group(file, e, &rs, crcs, g + i as u64));
+        for l in loaded {
+            let (bytes, repaired) = l.map_err(|_| DAMAGED.to_string())?;
+            report.repaired_shards += repaired;
+            pending.extend_from_slice(&bytes);
+        }
+        g += n;
+        let first = seg;
+        let mut spans = Vec::new();
+        let mut end = 0usize;
+        while let Some(s) = row.segments.get(seg).filter(|s| end + s.stored as usize <= pending.len()) {
+            spans.push((end, end + s.stored as usize, s.raw as usize));
+            end += s.stored as usize;
+            seg += 1;
+        }
+        let decoded = par::map_indexed(seg - first, threads, |i| {
+            let (a, b, raw) = spans[i];
+            segments::inflate(&pending[a..b], raw)
+        });
+        for d in decoded {
+            let Some(d) = d else { return Ok(None) };
+            hasher.update(&d);
+            out.write_all(&d).map_err(io)?;
+        }
+        pending.drain(..end);
+    }
+    let whole = seg == row.segments.len() && pending.is_empty() && hasher.finalize().as_slice() == e.raw_hash;
+    Ok(whole.then_some(report))
 }
 
 /// The raw bytes of the first section of `kind`, None when the file has none.
@@ -1147,3 +1300,7 @@ mod tests {
 #[cfg(test)]
 #[path = "fnda_read_tests.rs"]
 mod read_tests;
+
+#[cfg(test)]
+#[path = "fnda_open_tests.rs"]
+mod open_tests;
