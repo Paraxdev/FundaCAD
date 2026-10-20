@@ -3985,8 +3985,17 @@ export class Viewport {
     this.requestRender();
   }
 
+  /** Dev only until the quality setting exists: High draws the model through its
+   *  own passes and the overlays over them. */
+  setRealtimeQuality(q: "standard" | "high"): void {
+    if (q !== "standard" && q !== "high") return;
+    this.scene.post.realtimeQuality = q;
+    this.requestRender();
+  }
+
   /** Rolling median GPU ms per pass of the realtime frame (shadow, glassBack,
-   *  main, composer), or just `frame` where the browser has no timer queries. */
+   *  main, composer, and at High prepass and compose), or just `frame` where the
+   *  browser has no timer queries. */
   passTimes(): Record<string, number> {
     return this.scene.post.timer.medians();
   }
@@ -4352,7 +4361,10 @@ export class Viewport {
         // Shadows depend on the casters and the lights, never on the camera.
         this.shadowWatch.gate(this.needsRender, this.scene.scene, shadows, this.scene.post.drawsShadows);
         try {
-          this.scene.post.render(this.rig.active, this.motionActive && this.motionScale < 1);
+          this.scene.post.render(this.rig.active, this.motionActive && this.motionScale < 1, false, {
+            moving: this.motionActive,
+            ghosted: this.xray || this.wireframe || this.stale || this.peek.size > 0 || this.sketchDimmed,
+          });
         } finally {
           shadows.autoUpdate = true;
         }
