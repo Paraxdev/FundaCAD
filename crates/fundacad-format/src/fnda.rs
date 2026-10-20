@@ -13,7 +13,7 @@ use std::collections::BTreeMap;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use blake2::digest::consts::U16;
 use blake2::{Blake2b, Digest};
@@ -732,30 +732,39 @@ pub fn read_file_with(path: &Path, blob_dir: &Path, mesh_dir: Option<&Path>, car
         }
     }
 
+    let failed = AtomicBool::new(false);
+    let run = |j: &Job, rows: &[&segments::Row], threads: usize| -> Option<Result<RepairReport, String>> {
+        if failed.load(Ordering::Relaxed) {
+            return None;
+        }
+        let r = extract(&f, j.entry, &j.dest, rows, threads);
+        if r.is_err() && matches!(j.role, Role::Geometry) {
+            failed.store(true, Ordering::Relaxed);
+        }
+        Some(r)
+    };
     let mut results: Vec<Option<Result<RepairReport, String>>> = jobs.iter().map(|_| None).collect();
     let (big, small): (Vec<usize>, Vec<usize>) = (0..jobs.len()).partition(|&i| !jobs[i].rows.is_empty());
     for &i in &big {
-        results[i] = Some(extract(&f, jobs[i].entry, &jobs[i].dest, &jobs[i].rows, o.threads));
+        results[i] = run(&jobs[i], &jobs[i].rows, o.threads);
     }
-    let done = par::map_indexed(small.len(), o.threads, |n| {
-        let j = &jobs[small[n]];
-        extract(&f, j.entry, &j.dest, &[], 1)
-    });
+    let done = par::map_indexed(small.len(), o.threads, |n| run(&jobs[small[n]], &[], 1));
     for (n, r) in done.into_iter().enumerate() {
-        results[small[n]] = Some(r);
+        results[small[n]] = r;
+    }
+    for (job, r) in jobs.iter().zip(&results) {
+        if let (Role::Geometry, Some(Err(err))) = (&job.role, r) {
+            return Err(err.clone());
+        }
     }
     for (job, r) in jobs.iter().zip(results) {
-        match (r.expect("every job ran"), &job.role) {
-            (Ok(r), role) => {
-                report.repaired_shards += r.repaired_shards;
-                if let Role::Carried(i) = role {
-                    carried[*i].1 = true;
-                }
+        // A cached mesh that fails costs a re-tessellation, and a section
+        // this version does not read never blocks the open.
+        if let Some(Ok(r)) = r {
+            report.repaired_shards += r.repaired_shards;
+            if let Role::Carried(i) = job.role {
+                carried[i].1 = true;
             }
-            (Err(err), Role::Geometry) => return Err(err),
-            // A cached mesh that fails costs a re-tessellation, and a section
-            // this version does not read never blocks the open.
-            (Err(_), Role::Mesh | Role::Carried(_)) => {}
         }
     }
     let carried = carried.into_iter().filter(|(_, ok)| *ok).map(|(c, _)| c).collect();
