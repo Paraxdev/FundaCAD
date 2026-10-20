@@ -1292,7 +1292,7 @@ pub fn sketch_outline_result(req: &serde_json::Map<String, serde_json::Value>, w
         .and_then(Value::as_array)
         .map(|a| a.iter().filter_map(Value::as_str).collect())
         .unwrap_or_default();
-    let doc: fundacad_core::CadDocument = match serde_json::from_value(raw.clone()) {
+    let doc: fundacad_core::CadDocument = match fundacad_core::CadDocument::from_value_lenient(raw) {
         Ok(d) => d,
         Err(e) => return fundacad_engine::error_result(&format!("the document does not parse: {e}")),
     };
