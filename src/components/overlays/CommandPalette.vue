@@ -102,12 +102,13 @@ function onKey(e: KeyboardEvent) {
     <!-- .self: only a click on the backdrop itself dismisses, never one that
          bubbled up out of the card. -->
     <div v-if="cmdk.open" class="cmdk-backdrop" @pointerdown.self="cmdk.close()">
-      <div class="cmdk-card">
+      <div class="cmdk-card" role="dialog" aria-modal="true" aria-label="Command palette">
         <input
           ref="input"
           v-model="query"
           class="cmdk-input"
           placeholder="Search commands…"
+          aria-label="Search commands"
           spellcheck="false"
           @keydown="onKey"
         />
