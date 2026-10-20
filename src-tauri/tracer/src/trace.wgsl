@@ -24,6 +24,10 @@ struct U {
   // emitter table start in lights (vec4s), its entries, the chance a light
   // sample picks an emitter and the table's total power, both as f32 bits
   emit: vec4u,
+  // the ground's centre, height and half its side
+  ground0: vec4f,
+  // x 1 when camera rays show its shadow, y the map's luminance irradiance on it
+  ground1: vec4f,
 }
 struct Inst {
   o2w0: vec4f, o2w1: vec4f, o2w2: vec4f,
@@ -241,6 +245,48 @@ fn discs(d: vec3f) -> vec4f {
   }
   return r;
 }
+fn in_disc(li: Light) -> vec3f {
+  if (li.dir.w <= 0.0) { return li.dir.xyz; }
+  let q = rnd() * li.dir.w;
+  let st = sqrt(max(q * (2.0 - q), 0.0));
+  let phi = 2.0 * PI * rnd();
+  return onb(li.dir.xyz, vec3f(st * cos(phi), st * sin(phi), 1.0 - q));
+}
+// 0 when the light a sample picks by its share of the irradiance on the
+// ground is blocked from q, else 1: an open ground is exactly the background
+// and the mean is the share of the light the scene takes from it. Emitters
+// are left out, their irradiance on the plane has no closed form.
+fn ground_lit(q: vec3f) -> f32 {
+  var total = u.ground1.y;
+  for (var k = 0u; k < u.n_lights.x; k++) {
+    total += lum(u.lights[k].color.rgb) * max(u.lights[k].dir.z, 0.0);
+  }
+  var r = rnd() * total;
+  var l = vec3f(0.0);
+  var picked = false;
+  for (var k = 0u; k < u.n_lights.x; k++) {
+    let w = lum(u.lights[k].color.rgb) * max(u.lights[k].dir.z, 0.0);
+    if (!picked && w > 0.0 && r < w) {
+      l = in_disc(u.lights[k]);
+      picked = true;
+    }
+    r -= w;
+  }
+  if (!picked && u.ground1.y > 0.0) {
+    // By the map's pdf, kept with chance l.z: by its radiance times the cosine.
+    for (var i = 0u; i < 64u; i++) {
+      let e = sample_env();
+      if (rnd() < e.z) {
+        l = e;
+        picked = true;
+        break;
+      }
+    }
+  }
+  if (!picked || l.z <= 0.0) { return 1.0; }
+  let eps = 1e-4 * max(1.0, max(abs(q.x), max(abs(q.y), abs(q.z))));
+  return select(1.0, 0.0, trace(q + vec3f(0.0, 0.0, eps), l, 1e30, true).ok);
+}
 // t is how far the shadow ray goes.
 struct LightSample { l: vec3f, pdf: f32, e: vec3f, t: f32 }
 // One light picked by power and a direction inside its disc. e is radiance
@@ -255,10 +301,7 @@ fn sample_light() -> LightSample {
   }
   let li = u.lights[k];
   if (li.dir.w <= 0.0) { return LightSample(li.dir.xyz, 0.0, li.color.rgb / li.color.w, 1e30); }
-  let q = rnd() * li.dir.w;
-  let st = sqrt(max(q * (2.0 - q), 0.0));
-  let phi = 2.0 * PI * rnd();
-  let l = onb(li.dir.xyz, vec3f(st * cos(phi), st * sin(phi), 1.0 - q));
+  let l = in_disc(li);
   let c = discs(l);
   if (c.w <= 0.0) { return LightSample(l, 0.0, vec3f(0.0), 1e30); }
   return LightSample(l, c.w, c.rgb / c.w, 1e30);
@@ -366,10 +409,23 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
   var seen = true;
   for (var b = 0u; b < u.bounces; b++) {
     let h = trace(o, d, 1e30, false);
-    if (!h.ok) {
+    // The ground, seen by camera rays only and from above only.
+    let gt = (u.ground0.z - o.z) / d.z;
+    let gq = o + d * gt;
+    let on_ground = b == 0u && u.ground1.x > 0.0 && d.z < 0.0 && gt > 0.0
+      && all(abs(gq.xy - u.ground0.xy) <= vec2f(u.ground0.w)) && (!h.ok || gt < h.t);
+    if (!h.ok || on_ground) {
       if (last_pdf == 0.0) {
         let sky = select(env(d), env_view(d), env_on());
         let bg = select(sky, u.background.rgb, u.background.w > 0.0 && u.n_lights.w == 0u);
+        if (on_ground) {
+          col += thr * bg * ground_lit(gq);
+          if ((u.flags & 1u) != 0u) {
+            aov[pix * 2u] = vec4f(bg, dot(gq - plane, u.fwd.xyz));
+            aov[pix * 2u + 1u] = vec4f(0.0, 0.0, 1.0, 1.0);
+          }
+          break;
+        }
         col += thr * bg;
         if (b == 0u && (u.flags & 1u) != 0u) {
           aov[pix * 2u] = vec4f(bg, 1e30);

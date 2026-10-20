@@ -5,8 +5,9 @@ import ENV_DIRECTIONS from "../fixtures/env_directions.json";
 import { envFrame, meshFrame, NativeScene, nativeCamera, nativeLook, pageMaterial } from "../../src/viewport/pathtrace/nativeScene";
 import { equirectDirection, halfEquirect, hdrEnvironment, hemiAt, type EnvLayout } from "../../src/viewport/pathtrace/environment";
 import { registerHdr } from "../../src/viewport/hdrRegistry";
-import { DEFAULT_RENDER } from "../../src/ui/renderPrefs";
-import { buildLightRig, FILL_INTENSITY, KEY_INTENSITY, SUN_ANGULAR_RADIUS, type RigLight } from "../../src/viewport/lightRig";
+import { DEFAULT_RENDER, type Ground } from "../../src/ui/renderPrefs";
+import { buildLightRig, FILL_INTENSITY, GROUND_ALBEDO, KEY_INTENSITY, SUN_ANGULAR_RADIUS, type GroundFloor, type RigLight } from "../../src/viewport/lightRig";
+import { lookSignature } from "../../src/viewport/pathtrace/host";
 import type { TraceLook } from "../../src/viewport/pathtrace/backend";
 
 function body(id: string, etag: string, color?: boolean) {
@@ -217,6 +218,25 @@ describe("native look", () => {
   it("a look without a rig sends no lights", () => {
     const { rig: _, ...bare } = look(1);
     expect(nativeLook(bare).lights).toBeUndefined();
+    expect(nativeLook(bare).ground).toBeUndefined();
+  });
+
+  it("sends the catcher Realtime draws as the ground, none by default", () => {
+    const floor = { workspace: "model" as const, z: 0.5, centre: [1, 2] as [number, number], extent: 3.2 };
+    const shadow = { ...look(1), rig: buildLightRig({ ...DEFAULT_RENDER, groundModel: "shadow" }, () => false, floor) };
+    expect(nativeLook(shadow).ground).toEqual({ mode: "shadow", z: 0.5, centre: [1, 2], extent: 3.2, albedo: GROUND_ALBEDO });
+    expect(nativeLook(look(1)).ground!.mode).toBe("none");
+  });
+
+  it("a new ground mode, height, centre or size sends the look again", () => {
+    const same = look(1);
+    const at = (groundModel: Ground, floor: GroundFloor) => lookSignature({ ...same, rig: buildLightRig({ ...DEFAULT_RENDER, groundModel }, () => false, floor) });
+    const floor: GroundFloor = { workspace: "model", z: 0, centre: [0, 0], extent: 2 };
+    const base = at("shadow", floor);
+    expect(at("shadow", { ...floor })).toBe(base);
+    for (const other of [at("none", floor), at("shadow", { ...floor, z: 1 }), at("shadow", { ...floor, centre: [0, 1] }), at("shadow", { ...floor, extent: 3 })]) {
+      expect(other).not.toBe(base);
+    }
   });
 });
 

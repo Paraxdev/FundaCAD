@@ -42,7 +42,7 @@ pub struct Environment {
 /// conditional CDF, 4 floats per vec4. Header 0: width, height, marginal
 /// offset, conditional offset, in floats. Header 1: the mean radiance's
 /// luminance over the sphere, the first free vec4 (where a later table
-/// starts).
+/// starts), the luminance irradiance on a face looking up +Z.
 pub const HEADER_VEC4S: usize = 2;
 
 pub fn f16_to_f32(h: u16) -> f32 {
@@ -120,6 +120,7 @@ impl Environment {
         let mut f = vec![0f32; conditional + w * h];
         let mut rows = vec![0f64; h];
         let mut radiance = 0f64;
+        let mut up = 0f64;
         for r in 0..h {
             let sin = self.row_theta(r as u32).sin() as f64;
             let mut acc = 0f64;
@@ -127,6 +128,8 @@ impl Environment {
             for c in 0..w {
                 let l = luminance(self.texel(c as u32, r as u32)).max(0.0) as f64;
                 radiance += l * sin;
+                let z = direction(self.up, (c as f32 + 0.5) / w as f32, (r as f32 + 0.5) / h as f32)[2].max(0.0) as f64;
+                up += l * z * sin;
                 lums[c] = l;
                 acc += l;
             }
@@ -147,7 +150,8 @@ impl Environment {
         }
         f[marginal + h - 1] = 1.0;
         // Mean over the sphere: sum of L sin dtheta dphi over 4 pi.
-        let mean = radiance * (2.0 * PI as f64 / w as f64) * (PI as f64 / h as f64) / (4.0 * PI as f64);
+        let texel = (2.0 * PI as f64 / w as f64) * (PI as f64 / h as f64);
+        let mean = radiance * texel / (4.0 * PI as f64);
         let n = f.len().div_ceil(4);
         f.resize(n * 4, 0.0);
         f[0] = w as f32;
@@ -156,6 +160,7 @@ impl Environment {
         f[3] = conditional as f32;
         f[4] = mean as f32;
         f[5] = n as f32;
+        f[6] = (up * texel) as f32;
         f.chunks_exact(4).map(|c| [c[0], c[1], c[2], c[3]]).collect()
     }
 }
@@ -330,5 +335,15 @@ mod tests {
         let t = e.tables();
         assert_eq!(t[1][1] as usize, t.len());
         assert!((t[1][0] - 1.0).abs() < 4e-2, "a white sphere has mean radiance 1, got {}", t[1][0]);
+    }
+
+    #[test]
+    fn the_up_irradiance_follows_the_layout() {
+        for up in [Up::Y, Up::Z] {
+            let white = Environment::from_rgb("w", 64, 32, up, |_, _| [1.0; 3]).tables()[1][2];
+            assert!((white - PI).abs() < 1e-2, "{up:?}: a white sphere gives an up face pi, got {white}");
+            let sky = Environment::from_rgb("s", 64, 32, up, |c, r| if direction(up, (c as f32 + 0.5) / 64.0, (r as f32 + 0.5) / 32.0)[2] > 0.0 { [0.0; 3] } else { [1.0; 3] });
+            assert_eq!(sky.tables()[1][2], 0.0, "{up:?}: light from below reaches an up face");
+        }
     }
 }

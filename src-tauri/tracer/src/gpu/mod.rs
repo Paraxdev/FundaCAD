@@ -146,6 +146,32 @@ pub struct Look {
     pub background: Option<[f32; 3]>,
     /// Camera misses show the environment map over the background.
     pub environment_behind: bool,
+    pub ground: Option<Ground>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum GroundMode {
+    /// Camera rays show the background darkened by the light the scene
+    /// blocks from the plane; bounce and shadow rays pass through it.
+    Shadow,
+    /// Also any mode a later page sends.
+    #[default]
+    #[serde(other)]
+    None,
+}
+
+/// The rig's ground: a square of side `extent` around `centre` at height `z`,
+/// seen from above only.
+#[derive(Debug, Clone, Copy, PartialEq, Default, serde::Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Ground {
+    pub mode: GroundMode,
+    pub z: f32,
+    pub centre: [f32; 2],
+    pub extent: f32,
+    /// Sent for a lit ground, unused by the shadow mode.
+    pub albedo: f32,
 }
 
 impl Look {
@@ -188,6 +214,7 @@ impl Default for Look {
             lights: None,
             background: None,
             environment_behind: false,
+            ground: None,
         }
     }
 }

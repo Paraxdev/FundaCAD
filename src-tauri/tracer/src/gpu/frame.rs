@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use crate::bloom::{self, Bloom, Chain};
 
-use super::{bytes, Estimator, FrameKey, Held, Tracer, MAX_LIGHTS};
+use super::{bytes, Estimator, FrameKey, GroundMode, Held, Tracer, MAX_LIGHTS};
 
 /// What one dispatch aims for, short enough that the compositor and
 /// the WebGPU viewport keep their frames, long enough to amortise a submit.
@@ -24,8 +24,8 @@ pub fn adapt_rows(rows: u32, width: u32, height: u32, took: Duration, target: Du
 pub const MIN_BAND_PATHS: u32 = 65_536;
 
 /// U in trace.wgsl: 8 words, 7 vec4s, 4 lights of 2 vec4s, the light count,
-/// the background and the emitter table.
-pub(super) const UNIFORM_SIZE: u64 = 32 + 7 * 16 + 8 * 16 + 3 * 16;
+/// the background, the emitter table and the ground's two.
+pub(super) const UNIFORM_SIZE: u64 = 32 + 7 * 16 + 8 * 16 + 5 * 16;
 
 /// What a light is picked by, its share of the lights' luminance.
 fn power(c: [f32; 3]) -> f32 {
@@ -118,6 +118,14 @@ impl Tracer {
         let p_em: f32 = if em.count == 0 { 0.0 } else if others { 0.5 } else { 1.0 };
         let em_base = self.env.tables.len() as u32;
         data.extend([em_base, em.count, p_em.to_bits(), em.total.to_bits()].map(f32::from_bits));
+        let g = l.ground.filter(|g| g.mode == GroundMode::Shadow && g.extent > 0.0);
+        // The luminance irradiance on the plane, which its shadow is a share of.
+        let env_up = if env == 0 { 0.0 } else { (self.env.up * l.env_intensity).max(0.0) };
+        let up_light: f32 = lights.iter().map(|x| power(x.color) * norm(x.direction)[2].max(0.0)).sum::<f32>() + env_up;
+        let ground_on = g.is_some() && up_light > 0.0;
+        let g = g.unwrap_or_default();
+        data.extend([g.centre[0], g.centre[1], g.z, g.extent * 0.5]);
+        data.extend([ground_on as u32 as f32, env_up, 0.0, 0.0]);
         debug_assert_eq!(data.len() * 4, UNIFORM_SIZE as usize);
         self.queue.write_buffer(&self.uniform, 0, bytes(&data));
     }

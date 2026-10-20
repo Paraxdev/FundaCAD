@@ -52,8 +52,10 @@ export interface TraceFrame {
 export function lookSignature(l: TraceLook): string {
   const lights = l.lights.map((x) => [x.color.getHex(), x.intensity, ...x.position.toArray(), ...x.target.toArray()].join(","));
   const rig = (l.rig?.lights ?? []).map((x) => [...x.direction, x.colour, x.intensity, x.angularRadius, x.realtimeOnly ? 1 : 0].join(","));
+  const g = l.rig?.ground;
+  const ground = g ? [g.mode, g.z, ...g.centre, g.extent, g.albedo].join(",") : "";
   return [
-    lights.join(";"), rig.join(";"), l.background.toArray().join(","), l.environment.uuid, l.environment.version, l.environmentBehind ? 1 : 0,
+    lights.join(";"), rig.join(";"), ground, l.background.toArray().join(","), l.environment.uuid, l.environment.version, l.environmentBehind ? 1 : 0,
     l.brightness, l.toneMapping, l.exposure,
   ].join("|");
 }
