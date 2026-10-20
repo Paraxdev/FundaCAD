@@ -4019,7 +4019,8 @@ export class Viewport {
       width,
       height,
       1,
-      { edges: true },
+      // realtime: the traced view paints on its own surface, which this canvas never holds.
+      { edges: true, realtime: true },
       () => {
         const out = document.createElement("canvas");
         out.width = width;

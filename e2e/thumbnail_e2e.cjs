@@ -2,7 +2,8 @@
 //
 //   1. A built box gives a 480 x 300 JPEG that is not one flat colour.
 //   2. The camera, the canvas size and the user's view are as they were.
-//   3. An empty document gives no picture.
+//   3. The path traced view, where the browser has a tracer, gives the model too.
+//   4. An empty document gives no picture.
 //
 //   engine --ws, vite, then
 //   SC_TOKEN=<engine token> node e2e/thumbnail_e2e.cjs [out.jpg]
@@ -60,7 +61,7 @@ function check(name, ok, detail = "") {
     });
     await page.waitForTimeout(500);
 
-    const shot = await page.evaluate(async () => {
+    const takeShot = () => page.evaluate(async () => {
       const v = window.viewport;
       const canvas = v.canvas;
       const before = { cam: JSON.stringify(v.rig.getState()), w: canvas.width, h: canvas.height };
@@ -86,6 +87,7 @@ function check(name, ok, detail = "") {
       for (let y = 0; y < c.height; y++) edge += off(1, y) + off(c.width - 2, y);
       return { url, before, after, w: img.width, h: img.height, colours: colours.size, edge, centre: off(c.width >> 1, c.height >> 1) };
     });
+    const shot = await takeShot();
     if (process.argv[2]) fs.writeFileSync(process.argv[2], Buffer.from(shot.url.split(",")[1], "base64"));
     check("a JPEG", shot.url.startsWith("data:image/jpeg;base64,"), shot.url.slice(0, 30));
     check("480 x 300", shot.w === 480 && shot.h === 300, `${shot.w} x ${shot.h}`);
@@ -95,6 +97,21 @@ function check(name, ok, detail = "") {
     check("the camera is where the user left it", shot.before.cam === shot.after.cam, `${shot.before.cam} vs ${shot.after.cam}`);
     check("the canvas keeps its size", shot.before.w === shot.after.w && shot.before.h === shot.after.h,
       `${shot.before.w}x${shot.before.h} vs ${shot.after.w}x${shot.after.h}`);
+
+    const pt = await page.$('[data-view-mode="pathtraced"]');
+    const offered = pt && (await pt.getAttribute("aria-disabled")) !== "true";
+    if (!offered) {
+      console.log("SKIP the path traced view: no tracer in this browser");
+    } else {
+      await pt.click();
+      const shown = await page.waitForFunction(() => window.viewport.traceStatus.shown, null, { timeout: 90000, polling: 100 })
+        .then(() => true, () => false);
+      check("the path traced view shows", shown);
+      const traced = await takeShot();
+      check("in the path traced view the picture is not one flat colour", traced.colours > 4 && traced.centre, `${traced.colours} colours`);
+      await page.click('[data-view-mode="realtime"]');
+      await page.waitForTimeout(300);
+    }
 
     await page.evaluate(() => window.__fundacad.handleAction("new"));
     const discard = await page.waitForSelector("button:has-text('Discard')", { timeout: 1500 }).catch(() => null);
