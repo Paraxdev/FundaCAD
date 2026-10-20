@@ -105,13 +105,19 @@ export function messages(since = 0): { seq: number; rows: Message[] } {
   return { seq: all.length ? all[all.length - 1]!.id : since, rows };
 }
 
-/** The newest error: a failed build, a refused preview, or a logged error. */
-export function lastError(h: ReadHost): string | null {
+/** The newest log id, the mark a step takes so its readouts skip older messages. */
+export function seq(): number {
+  const all = logEntries();
+  return all.length ? all[all.length - 1]!.id : 0;
+}
+
+/** The newest error: a failed build, a refused preview, or an error logged after `since`. */
+export function lastError(h: ReadHost, since = 0): string | null {
   const b = h.store.buildState;
   if (b.heldRefusal) return b.heldRefusal.message;
   if (h.store.previewError) return h.store.previewError;
   if (b.errorMessage) return b.errorMessage;
-  const errs = logEntries().filter((e) => e.level === "error");
+  const errs = logEntries().filter((e) => e.level === "error" && e.id > since);
   return errs.length ? errs[errs.length - 1]!.message : null;
 }
 
@@ -129,7 +135,7 @@ export interface Status {
   error: string | null;
 }
 
-export function status(h: ReadHost, doc: Document = document): Status {
+export function status(h: ReadHost, doc: Document = document, since = 0): Status {
   const rail = doc.querySelector<HTMLElement>("#toolrail");
   const running = doc.querySelector<HTMLElement>('[data-action="running-tool"]');
   const ws = doc.querySelector<HTMLElement>('[data-workspace][aria-pressed="true"]');
@@ -137,7 +143,7 @@ export function status(h: ReadHost, doc: Document = document): Status {
   const promptEl = doc.querySelector("#prompt");
   const prompt = promptEl?.closest(".hidden") ? "" : text(doc, "#prompt");
   const log = logEntries();
-  const last = log[log.length - 1];
+  const last = log.length && log[log.length - 1]!.id > since ? log[log.length - 1] : undefined;
   return {
     mode: rail?.dataset.mode ?? "unknown",
     tool: running ? (running.getAttribute("aria-label") ?? running.textContent ?? "").replace(/\s*\([^()]*\)\s*$/, "").trim() : null,
@@ -149,6 +155,6 @@ export function status(h: ReadHost, doc: Document = document): Status {
     prompt,
     selection: text(doc, "[data-testid=selection-readout]"),
     recent: last ? { seq: last.id, level: last.level, text: last.message, at: last.at } : null,
-    error: lastError(h),
+    error: lastError(h, since),
   };
 }
