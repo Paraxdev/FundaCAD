@@ -10,8 +10,11 @@ struct U {
   w: u32, h: u32, sample: u32, row0: u32,
   // flags: bit 0 writes the AOVs, bits 1 and 2 pick the estimator
   rows: u32, n_inst: u32, bounces: u32, flags: u32,
+  // eye.w the lens aperture radius, fwd.w its focus distance; fwd is unit
   eye: vec4f, fwd: vec4f, right: vec4f, up: vec4f,
-  sky_top: vec4f, sky_bottom: vec4f, tone: vec4f,
+  sky_top: vec4f, sky_bottom: vec4f,
+  // tone.y 1 for ortho, tone.z how far behind the eye ortho rays start
+  tone: vec4f,
   lights: array<Light, 4>,
   // discs, environment layout (0 none, 1 Y up, 2 Z up), the chance a light
   // sample picks the environment as f32 bits, 1 when camera misses show it
@@ -338,6 +341,19 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
   let py = 1.0 - (f32(y) + rnd()) / f32(u.h) * 2.0;
   var o = u.eye.xyz;
   var d = normalize(u.fwd.xyz + px * u.right.xyz + py * u.up.xyz);
+  // The view plane, tone.z behind the eye so bodies behind it still show.
+  let plane = u.eye.xyz - u.fwd.xyz * u.tone.z;
+  if (u.tone.y > 0.0) {
+    o = plane + px * u.right.xyz + py * u.up.xyz;
+    d = u.fwd.xyz;
+  } else if (u.eye.w > 0.0) {
+    // Only here, so a pinhole draws the same random sequence as before.
+    let focus = o + d * (u.fwd.w / dot(d, u.fwd.xyz));
+    let r = u.eye.w * sqrt(rnd());
+    let a = 2.0 * PI * rnd();
+    o += r * (cos(a) * normalize(u.right.xyz) + sin(a) * normalize(u.up.xyz));
+    d = normalize(focus - o);
+  }
   var thr = vec3f(1.0);
   var col = vec3f(0.0);
   var channel = 3u;
@@ -397,7 +413,7 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
       albedo *= w0 * vcol(i0) + h.bary.x * vcol(i1) + h.bary.y * vcol(i2);
     }
     if (b == 0u && (u.flags & 1u) != 0u) {
-      aov[pix * 2u] = vec4f(albedo, dot(p - u.eye.xyz, normalize(u.fwd.xyz)));
+      aov[pix * 2u] = vec4f(albedo, dot(p - plane, u.fwd.xyz));
       aov[pix * 2u + 1u] = vec4f(ns, 1.0);
     }
     // Light absorbed on the way through a solid, Beer's law from its colour at its distance.

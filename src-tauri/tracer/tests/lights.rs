@@ -207,7 +207,7 @@ fn lit(lights: &[LightDesc], sky: f32) -> Look {
 /// The golden scene's ball and floor, `ball` the ball's material.
 fn on_floor(t: &mut Tracer, look: Look, ball: PageMaterial, spp: u32) -> Vec<[f32; 3]> {
     t.resize(64, 48);
-    t.set_camera(fundacad_tracer::Camera { eye: BALL_EYE, target: BALL_TARGET, up: [0.0, 0.0, 1.0], fov: 40.0 });
+    t.set_camera(fundacad_tracer::Camera { eye: BALL_EYE, target: BALL_TARGET, up: [0.0, 0.0, 1.0], fov: 40.0, ..Default::default() });
     t.set_look(look);
     let bodies = vec![place("ball", "ball.1", 1.0, [0.0, 0.0, 1.0], ball), place("floor", "floor.1", 1.0, [0.0; 3], matte([0.7; 3]))];
     for key in t.set_bodies(bodies) {
@@ -361,7 +361,7 @@ fn on_lamp(i: usize) -> bool {
 
 fn lamp_scene(t: &mut Tracer, bodies: Vec<fundacad_tracer::BodyDesc>, spp: u32) -> Vec<[f32; 3]> {
     t.resize(64, 48);
-    t.set_camera(fundacad_tracer::Camera { eye: LAMP_EYE, target: LAMP_TARGET, up: [0.0, 0.0, 1.0], fov: 40.0 });
+    t.set_camera(fundacad_tracer::Camera { eye: LAMP_EYE, target: LAMP_TARGET, up: [0.0, 0.0, 1.0], fov: 40.0, ..Default::default() });
     t.set_look(Look { sky_top: [0.02; 3], sky_bottom: [0.02; 3], ..Look::default() });
     for key in t.set_bodies(bodies) {
         t.add_mesh(&key, if key.starts_with("floor") { floor(20.0) } else { sphere(0.4, 24, 12) });
@@ -428,7 +428,7 @@ fn a_camera_move_uploads_nothing() {
     let Some(mut t) = tracer() else { return };
     lamp_scene(&mut t, lamp_bodies(glowing([1.0, 0.9, 0.7]), LAMP_AT, 1.0), 4);
     let n = t.instance_uploads();
-    t.set_camera(fundacad_tracer::Camera { eye: [3.5, -4.0, 2.5], target: [0.0, 0.0, 0.5], up: [0.0, 0.0, 1.0], fov: 40.0 });
+    t.set_camera(fundacad_tracer::Camera { eye: [3.5, -4.0, 2.5], target: [0.0, 0.0, 0.5], up: [0.0, 0.0, 1.0], fov: 40.0, ..Default::default() });
     t.apply();
     assert_eq!(t.instance_uploads(), n, "a camera move uploaded the instances");
     let moved = [1.2, 0.6, 0.9];

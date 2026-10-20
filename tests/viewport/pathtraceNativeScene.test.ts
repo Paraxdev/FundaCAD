@@ -127,12 +127,39 @@ describe("native tracer scene feed", () => {
     expect(pageMaterial(new THREE.MeshPhysicalMaterial())).not.toHaveProperty("noLight");
   });
 
-  it("an orthographic camera becomes a far narrow one framing the same height", () => {
+  it("a perspective camera goes with its field of view and the lens it is given", () => {
+    const p = new THREE.PerspectiveCamera(35, 1.5, 0.1, 100);
+    p.position.set(0, -10, 0);
+    p.lookAt(0, 0, 0);
+    const plain = nativeCamera(p, null);
+    expect(plain.fov).toBe(35);
+    expect(plain.ortho).toBeNull();
+    expect(plain.lens).toBeNull();
+    expect(plain.eye[1]).toBeCloseTo(-10, 6);
+    const lens = { focusDistance: 10, apertureRadius: 0.25 };
+    expect(nativeCamera(p, lens).lens).toEqual(lens);
+  });
+
+  it("an orthographic camera keeps its eye and sends the half height it frames", () => {
     const o = new THREE.OrthographicCamera(-2, 2, 1, -1, 0.1, 100);
     o.position.set(0, 0, 10);
+    o.zoom = 2;
+    const c = nativeCamera(o, { focusDistance: 10, apertureRadius: 0.25 });
+    expect(c.eye[0]).toBeCloseTo(0, 6);
+    expect(c.eye[1]).toBeCloseTo(0, 6);
+    expect(c.eye[2]).toBeCloseTo(10, 6);
+    expect(c.target[2]).toBeCloseTo(9, 6);
+    expect(c.ortho).toEqual({ halfHeight: 0.5 });
+    expect(c.lens).toBeNull();
+  });
+
+  it("an off centre orthographic frustum moves the eye to its centre", () => {
+    const o = new THREE.OrthographicCamera(0, 4, 3, 1, 0.1, 100);
+    o.position.set(0, 0, 10);
     const c = nativeCamera(o, null);
-    const dist = c.eye[2]! - 0;
-    expect(Math.tan(THREE.MathUtils.degToRad(c.fov / 2)) * dist).toBeCloseTo(1 + Math.tan(THREE.MathUtils.degToRad(c.fov / 2)) * 10, 3);
+    expect(c.eye[0]).toBeCloseTo(2, 6);
+    expect(c.eye[1]).toBeCloseTo(2, 6);
+    expect(c.ortho).toEqual({ halfHeight: 1 });
   });
 });
 

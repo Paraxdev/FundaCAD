@@ -44,8 +44,27 @@ impl Tracer {
         let fwd = norm(sub(c.target, c.eye));
         let right = norm(cross(fwd, c.up));
         let up = cross(right, fwd);
-        let th = (c.fov.to_radians() * 0.5).tan();
         let aspect = self.w as f32 / self.h as f32;
+        let dot = |a: [f32; 3], b: [f32; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+        let (th, ortho, pull) = match c.ortho {
+            Some(o) => {
+                // Behind every visible body, so none is clipped and the depth
+                // AOV stays small and positive for the denoiser's relative test.
+                let pull = self.bounds.map_or(0.0, |[lo, hi]| {
+                    let near = (0..8)
+                        .map(|k| [if k & 1 == 0 { lo[0] } else { hi[0] }, if k & 2 == 0 { lo[1] } else { hi[1] }, if k & 4 == 0 { lo[2] } else { hi[2] }])
+                        .map(|p| dot(sub(p, c.eye), fwd))
+                        .fold(f32::INFINITY, f32::min);
+                    (0.01 * dot(sub(hi, lo), sub(hi, lo)).sqrt() - near).max(0.0)
+                });
+                (o.half_height, 1.0, pull)
+            }
+            None => ((c.fov.to_radians() * 0.5).tan(), 0.0, 0.0),
+        };
+        let (aperture, focus) = match c.lens {
+            Some(l) if c.ortho.is_none() && l.aperture_radius > 0.0 && l.focus_distance > 0.0 => (l.aperture_radius, l.focus_distance),
+            _ => (0.0, 0.0),
+        };
         let l = &self.look;
         let est = match self.estimator {
             Estimator::Default => 0,
@@ -58,13 +77,13 @@ impl Tracer {
         let mut data: Vec<f32> = ints.map(f32::from_bits).to_vec();
         let v4 = |v: [f32; 3], w: f32| [v[0], v[1], v[2], w];
         for v in [
-            v4(c.eye, 0.0),
-            v4(fwd, 0.0),
+            v4(c.eye, aperture),
+            v4(fwd, focus),
             v4(right.map(|x| x * th * aspect), 0.0),
             v4(up.map(|x| x * th), 0.0),
             v4(l.sky_top, l.env_intensity),
             v4(l.sky_bottom, 0.0),
-            [l.exposure, 0.0, 0.0, 0.0],
+            [l.exposure, ortho, pull, 0.0],
         ] {
             data.extend(v);
         }
