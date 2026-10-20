@@ -193,7 +193,8 @@ fed exactly `Si` gives exactly that segment's raw bytes. Segments carry no
 dictionary from the one before, which costs well under 0.5 percent in size.
 
 Where the segments start is in the segment index, a section of kind `4` named
-`segments`, written after the sections it describes. All integers little-endian:
+`segments`, codec `1` (deflate) like the others, written after the sections it
+describes. All integers little-endian:
 
 | Size | Field |
 |---|---|
@@ -310,7 +311,8 @@ Deflate level 1 would be faster still, but makes SV08 17 percent bigger
 A first open, with nothing of the document in the blob store yet, reads every
 segmented section by its index row: the groups of a window are read and
 repaired on all threads, the segments inside them are inflated on all threads,
-and the result is hashed and written in order. Sections without a row are
+at most 4 MiB raw per thread at a time so very redundant data costs no more
+memory than plain data, and the result is hashed and written in order. Sections without a row are
 extracted side by side, one per thread. A blob already in the store is skipped
 only when its length is right, so a torn one is extracted again. Times for the
 whole file layer of a first open (`open_file_empty_store`, the median of three
@@ -363,8 +365,9 @@ Reader rules:
   be verified or written back, so it is skipped, and a damaged one never stops
   the open. A document or geometry section in another codec is damage: the open
   fails. So a new codec can never be used for kinds `0` to `3` while released
-  readers do not know it. Readers from before minor `1` carry the segment index
-  as an unknown kind, which the index's match rule makes harmless.
+  readers do not know it. Readers from before minor `1` skip the segment index,
+  or carry it as an unknown kind; the index's match rule makes either harmless,
+  and an index dropped on save costs only speed.
 
 Writer rules:
 
