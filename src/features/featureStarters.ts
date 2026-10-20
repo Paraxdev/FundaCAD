@@ -1882,10 +1882,6 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     extrude.start(committed);
   }
 
-  /** A sketch the user picked in the tree that shows no areas, the usual case
-   *  being one an earlier extrude consumed and hid. Its profile cannot be
-   *  clicked, so Extrude takes the sketch itself as the choice. An area already
-   *  picked in the viewport is preferred over it. */
   /** Why a sketch shows no profile, when loose ends are why, with a toast that ties them. */
   function offerTie(sketchId: string): string {
     const sk = asFeature(store.document.features.find((f) => f.id === sketchId), "sketch");
@@ -1907,6 +1903,10 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     return `, ${n} loose end${n === 1 ? "" : "s"}`;
   }
 
+  /** A sketch the user picked in the tree that shows no areas, the usual case
+   *  being one an earlier extrude consumed and hid. Its profile cannot be
+   *  clicked, so Extrude takes the sketch itself as the choice. An area already
+   *  picked in the viewport is preferred over it. */
   function hiddenChosenSketch(): string | null {
     const id = getSelectedFeature();
     if (!id || !getSelectedFeatureExplicit()) return null;
