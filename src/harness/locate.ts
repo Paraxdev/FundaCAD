@@ -71,6 +71,14 @@ function pickOne(matches: Control[], target: string, walk: Walk, index: number |
     throw new HarnessError(`"${target}" matches ${enabled.length} controls: ${list.slice(0, 8).join(", ")}`, "Ambiguous", list.slice(0, 8));
   }
   if (matches.length) throw new HarnessError(`${describe(matches[0]!)} is disabled`, "Disabled", matches.map(describe));
+  const related = walk.controls.find((c) => c.ref === "testid:history-related" && c.flags.includes("on"));
+  if (related && target.startsWith("feature:")) {
+    throw new HarnessError(
+      `no visible control "${target}", History shows only what relates to the selection, press Escape to clear the selection or click ${related.ref}`,
+      "NotFound",
+      [describe(related)],
+    );
+  }
   const near = nearMisses(walk, target);
   throw new HarnessError(
     `no visible control "${target}"${near.length ? `: did you mean ${near.join(", ")}` : ""}`,

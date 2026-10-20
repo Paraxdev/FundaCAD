@@ -62,6 +62,13 @@ describe("findControl", () => {
     expect(fail("Tool").message).toContain('group:print "3D Printing Toolbox"');
   });
 
+  it("says when History shows only what relates to the selection", () => {
+    document.body.insertAdjacentHTML("beforeend",
+      '<button class="timeline-related on" data-testid="history-related">Related to Selection · 1</button>');
+    expect(fail("feature:f9").message).toBe('no visible control "feature:f9", History shows only what relates to'
+      + " the selection, press Escape to clear the selection or click testid:history-related");
+  });
+
   it("hints a missing menu item with the items of that menu", () => {
     const e = fail("menu:Edit/Nope");
     expect(e.candidates).toEqual(['menu:Edit/Preferences... "Preferences..."']);
