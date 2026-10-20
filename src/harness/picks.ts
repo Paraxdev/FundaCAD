@@ -336,7 +336,9 @@ export function planePoint(h: PickHost, name: string, onCanvas: CanvasTest = can
   const { obj, base } = planeObject(h, name);
   if (!shown(obj)) {
     throw new HarnessError(
-      `plane ${name} is hidden, a plane shows while a tool asks for one, or with Origin and planes in the Display panel`,
+      h.sketch.active
+        ? `plane ${name} is hidden, a sketch is open and already on its plane, finish it to start one on another`
+        : `plane ${name} is hidden, a plane shows while a tool asks for one, or with Origin and planes in the Display panel`,
       "Occluded",
     );
   }

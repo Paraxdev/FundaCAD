@@ -244,6 +244,15 @@ describe("planes and free points", () => {
     expect(e.message).toContain("a plane shows while a tool asks for one, or with Origin and planes in the Display panel");
   });
 
+  it("says a sketch already open is why its planes are hidden", () => {
+    const { h } = rig();
+    h.viewport.scene.planes.XY.visible = false;
+    (h.sketch as { active: boolean }).active = true;
+    expect(err(() => planePoint(h, "XY", all)).message).toBe(
+      "plane XY is hidden, a sketch is open and already on its plane, finish it to start one on another",
+    );
+  });
+
   it("projects world and sketch points and reports a covered one", () => {
     const { h } = rig();
     expect(worldPoint(h, 1, 0, 0, () => false)).toEqual({ x: 110, y: 500, covered: true });
