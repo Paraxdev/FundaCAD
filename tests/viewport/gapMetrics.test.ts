@@ -63,9 +63,29 @@ describe("gapMetrics", () => {
     expect(m.pixels).toBe(32);
     expect(m.deltaE).toBe(0);
     expect(m.lumaRatio).toBeCloseTo(1, 12);
+    expect(m.ssim).toBeCloseTo(1, 12);
     expect(m.heat[6 * 4 + 3]).toBe(0);
     expect(m.heat[1 * 4 + 3]).toBe(255);
     expect(gapMetrics(a, b).deltaE).toBeGreaterThan(10);
+  });
+
+  it("keeps the SSIM of the masked in half clear of the differing outside", () => {
+    const a = image(16, 16, (x, y) => (x < 8 ? pattern(x, y) : [255, 0, 0]));
+    const b = image(16, 16, pattern);
+    const mask = new Uint8Array(256);
+    for (let y = 0; y < 16; y++) for (let x = 0; x < 8; x++) mask[y * 16 + x] = 1;
+    expect(gapMetrics(a, b, mask).ssim).toBeCloseTo(1, 12);
+  });
+
+  it("scores two black images as equal light", () => {
+    const m = gapMetrics(image(4, 4, flat(0)), image(4, 4, flat(0)));
+    expect(m.lumaRatio).toBe(1);
+  });
+
+  it("clamps channel values outside 0 to 255", () => {
+    const wild: GapImage = { width: 1, height: 1, data: [300, -5, 127.6, 255] };
+    const m = gapMetrics(wild, { width: 1, height: 1, data: [255, 0, 128, 255] });
+    expect(m.deltaE).toBeCloseTo(0, 9);
   });
 
   it("reports nothing measurable for an empty mask", () => {
