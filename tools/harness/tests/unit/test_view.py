@@ -38,7 +38,11 @@ class App:
                 self.open = not self.open
             elif self.closes_itself:
                 self.open = False
+            if t == "Home":
+                self.start = "home"
             return {"marker": "m", "ref": t, "label": t.removeprefix("opt:")}
+        if method == "startScreen":
+            return getattr(self, "start", "none")
         raise AssertionError(method)
 
     def press(self, k):
@@ -97,3 +101,14 @@ def test_an_unknown_view_closes_the_popover_and_names_the_views():
         s.view("sideways")
     assert not app.open and app.tool_escapes == 0
     s.close()
+
+
+def test_the_home_view_says_it_opened_the_start_screen():
+    LABELS.append("Home")
+    try:
+        app = App()
+        s = session(app)
+        assert 'view Home, it opened the home start screen, dismiss_start() or press("Escape") closes it' in str(s.view("Home"))
+        s.close()
+    finally:
+        LABELS.remove("Home")

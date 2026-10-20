@@ -365,7 +365,11 @@ class Actions:
             self._close_views(button, field)
             raise NotFound(f'no view "{name}", the views are {", ".join([*VIEW_CLICKS, *sorted(SIDES)])} or a label in the Views popover') from None
         self._close_views(button, field)
-        return f'view {" then ".join(h["label"] for h in hits)}', hits[-1]
+        said = f'view {" then ".join(h["label"] for h in hits)}'
+        start = self.bridge.call("startScreen")
+        if start != "none":
+            said += f', it opened the {start} start screen, dismiss_start() or press("Escape") closes it'
+        return said, hits[-1]
 
     def _views_open(self) -> bool:
         return bool(self.page.locator(VIEWS_POPOVER).count())
