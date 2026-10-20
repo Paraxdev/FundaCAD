@@ -272,7 +272,11 @@ class Actions:
         label = VIEW_LABELS.get(want, name)
         self._click_control("Views")
         self.page.wait_for_timeout(50)
-        hit = self._click_control(label if selectors.is_ref(label) else f"opt:{label}" if want in SIDES else label)
+        try:
+            hit = self._click_control(label if selectors.is_ref(label) else f"opt:{label}" if want in SIDES else label)
+        except NotFound:
+            self.page.keyboard.press("Escape")
+            raise NotFound(f'no view "{name}", the views are {", ".join([*VIEW_LABELS, *sorted(SIDES)])} or a label in the Views popover') from None
         self.page.keyboard.press("Escape")
         return f'view {hit["label"]}', hit
 
