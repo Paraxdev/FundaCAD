@@ -42,7 +42,7 @@ onMounted(() => {
       if (inView) ask();
       else props.thumbs?.cancel(props.entry.path);
     },
-    { root: root.value?.closest(".home-grid") ?? null, rootMargin: "200px" },
+    { root: root.value?.closest(".home-scroll") ?? null, rootMargin: "200px" },
   );
   watcher.observe(root.value!);
 });

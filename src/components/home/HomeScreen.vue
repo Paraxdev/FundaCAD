@@ -12,12 +12,15 @@ import { useContextMenuStore } from "../../stores/contextMenu";
 import { choose } from "../../ui/choice";
 import { contextMenu } from "../../ui/menu";
 import { escapeClaimed } from "../../ui/escapeClaim";
-import { buildEntries, filterEntries, folderEntries, folderName, folderSort, sortEntries, type HomeEntry, type SortMode } from "../../ui/homeList";
+import { buildEntries, filterEntries, folderEntries, folderName, folderSort, matchesQuery, sortEntries, type HomeEntry, type SortMode } from "../../ui/homeList";
+import { TEMPLATES } from "../../templates";
 import { readSetting } from "../../ui/storedSetting";
 import { thumbQueueFor } from "../../ui/thumbQueue";
 import { getTheme, onThemeChange, themeMode } from "../../ui/theme";
+import { getHomeBackground, homeBackgroundClass, homeBackgroundStyle, loadHomeImage, onHomeBackgroundChange } from "../../ui/homeBackground";
 import Icon from "../shell/Icon.vue";
 import DocCard from "./DocCard.vue";
+import ExampleCard from "./ExampleCard.vue";
 import HomeSidebar from "./HomeSidebar.vue";
 import VersionsDrawer from "./VersionsDrawer.vue";
 import { liveSummary } from "../../ui/homeVersions";
@@ -107,6 +110,7 @@ const all = computed(() => {
   return l && !(l instanceof Error) ? folderEntries(l.files, recents.value, cb.currentPath()) : [];
 });
 const entries = computed(() => sortEntries(filterEntries(all.value, query.value), shownSort.value));
+const examples = computed(() => TEMPLATES.filter((t) => matchesQuery(t.name, query.value)));
 const unreadable = ref(new Set<string>());
 
 async function refreshStats(): Promise<void> {
@@ -222,6 +226,20 @@ watch(showOnStartup, setWelcomeOnStartup);
 const root = ref<HTMLElement | null>(null);
 let focusBefore: Element | null = null;
 
+const background = ref(getHomeBackground());
+const imageUrl = ref<string | null>(null);
+let imageLoad = 0;
+async function syncBackground() {
+  background.value = getHomeBackground();
+  const ticket = ++imageLoad;
+  const blob = background.value === "image" ? await loadHomeImage() : undefined;
+  if (ticket !== imageLoad) return;
+  if (imageUrl.value) URL.revokeObjectURL(imageUrl.value);
+  imageUrl.value = blob ? URL.createObjectURL(blob) : null;
+}
+const offBackground = onHomeBackgroundChange(() => void syncBackground());
+void syncBackground();
+
 onMounted(() => {
   ownDepth = modals.depth;
   window.addEventListener("keydown", onKey, true);
@@ -233,13 +251,23 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener("keydown", onKey, true);
   offTheme();
+  offBackground();
+  imageLoad++;
+  if (imageUrl.value) URL.revokeObjectURL(imageUrl.value);
   const lost = !document.activeElement || document.activeElement === document.body;
   if (lost && focusBefore instanceof HTMLElement && focusBefore.isConnected) focusBefore.focus({ preventScroll: true });
 });
 </script>
 
 <template>
-  <div ref="root" class="home" role="dialog" aria-label="Home">
+  <div
+    ref="root"
+    class="home"
+    :class="homeBackgroundClass(background, imageUrl)"
+    :style="homeBackgroundStyle(background, imageUrl)"
+    role="dialog"
+    aria-label="Home"
+  >
     <aside class="home-side">
       <img :src="logoUrl" alt="FundaCAD" class="home-logo" />
       <HomeSidebar
@@ -255,11 +283,7 @@ onUnmounted(() => {
 
     <div class="home-main">
       <div class="home-head">
-        <NewStrip
-          @blank="startNew(() => cb.newDocument())"
-          @open="cb.openDoc()"
-          @template="(id) => startNew(() => cb.newFromTemplate(id))"
-        />
+        <NewStrip @blank="startNew(() => cb.newDocument())" @open="cb.openDoc()" />
         <button class="modal-close" aria-label="Back to the document" title="Back to the document" @click="close()">
           <Icon name="close" :size="15" />
         </button>
@@ -293,24 +317,40 @@ onUnmounted(() => {
       <p v-if="listing && !(listing instanceof Error) && listing.truncated" class="home-note">
         Showing the first 2000 documents
       </p>
-      <div v-if="lib && entries.length" class="home-grid">
-        <DocCard
-          v-for="e in entries"
-          :key="e.path"
-          :entry="e"
-          :unreadable="unreadable.has(e.path)"
-          :thumbs="thumbs"
-          @open="openEntry(e)"
-          @menu="entryMenu(e, $event)"
-          @versions="drawer = e"
-        />
+      <div class="home-scroll">
+        <div v-if="lib && entries.length" class="home-grid">
+          <DocCard
+            v-for="e in entries"
+            :key="e.path"
+            :entry="e"
+            :unreadable="unreadable.has(e.path)"
+            :thumbs="thumbs"
+            @open="openEntry(e)"
+            @menu="entryMenu(e, $event)"
+            @versions="drawer = e"
+          />
+        </div>
+        <template v-else-if="lib && all.length">
+          <p v-if="!examples.length" class="home-empty">No documents match</p>
+        </template>
+        <p v-else-if="listing instanceof Error" class="home-empty">{{ folderName(view) }} could not be read.</p>
+        <p v-else-if="inFolder && listing" class="home-empty">No documents in this folder.</p>
+        <p v-else-if="inFolder" class="home-empty">Looking for documents…</p>
+        <p v-else-if="lib" class="home-empty">Documents you open or save appear here.</p>
+        <p v-else class="home-empty">Recent documents appear here in the desktop app.</p>
+
+        <template v-if="examples.length">
+          <h2 class="home-section">Examples</h2>
+          <div class="home-grid home-examples">
+            <ExampleCard
+              v-for="t in examples"
+              :key="t.id"
+              :example="t"
+              @open="startNew(() => cb.newFromTemplate(t.id))"
+            />
+          </div>
+        </template>
       </div>
-      <p v-else-if="lib && all.length" class="home-empty">No documents match</p>
-      <p v-else-if="listing instanceof Error" class="home-empty">{{ folderName(view) }} could not be read.</p>
-      <p v-else-if="inFolder && listing" class="home-empty">No documents in this folder.</p>
-      <p v-else-if="inFolder" class="home-empty">Looking for documents…</p>
-      <p v-else-if="lib" class="home-empty">Documents you open or save appear here.</p>
-      <p v-else class="home-empty">Recent documents appear here in the desktop app.</p>
 
       <VersionsDrawer
         v-if="drawer"

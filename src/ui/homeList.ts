@@ -57,13 +57,14 @@ export function sortEntries(entries: readonly HomeEntry[], mode: SortMode): Home
   return [...entries].sort((a, b) => (mode === "name" ? 0 : time(b) - time(a)) || byName(a, b));
 }
 
+/** Every word of the query is somewhere in the text, case and accents ignored. */
+export function matchesQuery(text: string, query: string): boolean {
+  const hay = fold(text);
+  return fold(query).split(/\s+/).filter(Boolean).every((w) => hay.includes(w));
+}
+
 export function filterEntries(entries: readonly HomeEntry[], query: string): HomeEntry[] {
-  const words = fold(query).split(/\s+/).filter(Boolean);
-  if (!words.length) return [...entries];
-  return entries.filter((e) => {
-    const hay = fold(`${e.name} ${e.folder}`);
-    return words.every((w) => hay.includes(w));
-  });
+  return entries.filter((e) => matchesQuery(`${e.name} ${e.folder}`, query));
 }
 
 /** A folder view's cards: what the listing found, with the open time where the document is also recent. */

@@ -170,6 +170,22 @@
   opacity: 0.3;
   cursor: default;
 }
+.tb-rest {
+  display: contents;
+}
+/* Under Home the controls for the hidden workspace read as switched off, inert
+   takes their clicks, hover and focus. A display: contents box paints nothing
+   of its own, so the dimming goes on its children. */
+#titlebar.home-up .brand,
+#titlebar.home-up .tb-rest > * {
+  opacity: 0.38;
+  filter: grayscale(1);
+}
+#home-btn.active {
+  border-color: var(--accent);
+  background: var(--accent-tint-2);
+  color: var(--accent-hot);
+}
 
 /* ---- "?" shortcut cheat-sheet HUD ---- */
 .shortcut-hud {
