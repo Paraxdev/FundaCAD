@@ -63,11 +63,15 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="fundacad-harness")
     sub = ap.add_subparsers(dest="cmd", required=True)
     sub.add_parser("doctor", help="say what a session would launch")
+    sub.add_parser("serve", help="answer JSON lines on stdin, for the MCP server")
     sm = sub.add_parser("smoke", help="run the smoke tests")
     sm.add_argument("pytest_args", nargs="*")
     args = ap.parse_args(argv)
     if args.cmd == "doctor":
         return doctor()
+    if args.cmd == "serve":
+        from .serve import main as serve
+        return serve()
     if args.cmd == "smoke":
         return smoke(args.pytest_args)
     return 2

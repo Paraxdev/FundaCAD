@@ -200,6 +200,25 @@ eye, save and reopen), `refused_commit.py` (a refused draft keeps the tool open)
 `extrude_reedit.py` (reopening a whole sketch extrude). `tests/browser/test_examples.py` runs them
 in the smoke set. The fixtures they open are described in `tools/harness/fixtures/README.md`.
 
+## serve
+
+`fundacad-harness serve` (or `python -m fundacad_harness serve`) holds one session and answers
+one JSON object per line on stdin, which is how the MCP server drives it. stdout carries only
+replies, logs go to stderr, and the session closes when stdin ends.
+
+```json
+{"id": 1, "call": "open", "args": {"viewport": "1400x900"}}
+{"id": 2, "call": "do", "args": {"steps": [{"do": "tool", "label": "Revolve"}, {"do": "press", "keys": "Escape"}]}}
+{"id": 3, "call": "read", "args": {"what": ["history", "errors"]}}
+{"id": 4, "call": "shot", "args": {"max_px": 1000}}
+{"id": 5, "call": "close"}
+```
+
+Each reply is `{"id", "ok", "text"}`, plus `"png"` (base64) for `shot`. A `do` runs its steps in
+order and stops at the first that fails, with one line per step and the status. A step names its
+verb in `do` and the verb's arguments by their Python names (`from` for `drag`); unknown keys are
+refused by name. `read` takes screen, history, bodies, status, errors, selection and handles.
+
 ## Troubleshooting
 
 - `no engine found`: build one with `cargo build -p fundacad-cli`, or set `FUNDACAD_ENGINE_CMD`.
