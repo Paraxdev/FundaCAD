@@ -202,6 +202,18 @@ pub fn sketch_merge() -> JsonObject {
     )
 }
 
+pub fn sketch_tie() -> JsonObject {
+    object(
+        json!({
+            "sketch": {"type": "string", "description": "the sketch's feature id"},
+            "tolerance": {"type": "number",
+                          "description": "how far apart, in mm, an end and what it touches may be (default 1% of the sketch's size)"},
+            "build": {"type": "boolean", "description": "build after tying (default false)"}
+        }),
+        &["sketch"],
+    )
+}
+
 pub fn printability() -> JsonObject {
     object(
         json!({
@@ -351,6 +363,10 @@ pub fn inspect() -> JsonObject {
     object(
         json!({
             "body": {"type": "string", "description": "one body id; all of them if omitted"},
+            "sketch": {"type": "string",
+                       "description": "a sketch's feature id: report its loose ends instead of the bodies"},
+            "tolerance": {"type": "number",
+                          "description": "with `sketch`: the reach, in mm, of an end to another curve (default 1% of the sketch's size)"},
             "detail": {"type": "boolean",
                        "description": "list every face and edge (default: summary only)"},
             "selectors": {"type": "boolean",
