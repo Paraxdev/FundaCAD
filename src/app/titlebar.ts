@@ -14,8 +14,9 @@ export function installTitlebar(e: Engine): void {
   const ui = useUiStore();
 
   // Note: the store emits before it moves the entry between its undo and redo stacks, so
-  // they are read a moment later. A material, colour or visibility change and its undo
-  // emit no doc change, only a build.
+  // they are read a moment later. A material, colour or body visibility change and its
+  // undo emit only a build. A plane or sketch eye emits neither, so the buttons catch up
+  // with the next change.
   const syncUndo = () => queueMicrotask(() => {
     ui.canUndo = e.store.canUndo;
     ui.canRedo = e.store.canRedo;
