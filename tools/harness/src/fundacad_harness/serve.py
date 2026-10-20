@@ -6,6 +6,7 @@ import base64
 import json
 import sys
 import time
+from pathlib import Path
 from typing import Any, Callable, TextIO
 
 from . import steps
@@ -109,12 +110,14 @@ class Server:
 
     def shot(self, target: str | None = None, max_px: int = 1000) -> tuple[str, str]:
         s = self._need()
-        path = s.screenshot(target=target)
-        with open(path, "rb") as f:
-            raw = base64.b64encode(f.read()).decode("ascii")
+        path = Path(s.screenshot(target=target))
+        raw = base64.b64encode(path.read_bytes()).decode("ascii")
         px = max(64, min(int(max_px), MAX_PX))
         png = s.page.evaluate(SHRINK, [raw, px])
-        return f"screenshot{' of ' + target if target else ''}, at most {px} px, also at {path}", png
+        if getattr(s, "keep", False):
+            return f"screenshot{' of ' + target if target else ''}, at most {px} px, also at {path}", png
+        path.unlink(missing_ok=True)
+        return f"screenshot{' of ' + target if target else ''}, at most {px} px", png
 
     def close(self) -> str:
         if self.s is None:
