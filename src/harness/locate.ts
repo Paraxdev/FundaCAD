@@ -32,6 +32,8 @@ function nearMisses(walk: Walk, target: string): string[] {
   const menu = /^menu:([^/]+)\//.exec(target);
   const items = menu ? walk.controls.filter((c) => c.ref.startsWith(`menu:${menu[1]}/`)) : [];
   if (items.length) return items.slice(0, 8).map(describe);
+  const kind = /^(field|prop):/.exec(target)?.[0];
+  const same = kind ? walk.controls.filter((c) => c.ref.startsWith(kind)) : [];
   const want = matchName(target.replace(REF, ""));
   if (!want) return [];
   const close = Math.max(3, Math.ceil(want.length / 2));
@@ -54,7 +56,14 @@ function nearMisses(walk: Walk, target: string): string[] {
     out.push(describe(c));
     if (out.length === 8) break;
   }
-  return out;
+  return out.length ? out : same.slice(0, 8).map(describe);
+}
+
+/** Said when a value field is wanted and none is on screen. */
+export function noValueBox(walk: Walk): string {
+  return walk.controls.some((c) => c.ref.startsWith("field:"))
+    ? ""
+    : ", no value box is open, the tool may still be waiting for a pick";
 }
 
 function pickOne(matches: Control[], target: string, walk: Walk, index: number | null, anyState = false): Control {
@@ -80,8 +89,9 @@ function pickOne(matches: Control[], target: string, walk: Walk, index: number |
     );
   }
   const near = nearMisses(walk, target);
+  const box = target.startsWith("field:") ? noValueBox(walk) : "";
   throw new HarnessError(
-    `no visible control "${target}"${near.length ? `: did you mean ${near.join(", ")}` : ""}`,
+    `no visible control "${target}"${box}${near.length ? `: did you mean ${near.join(", ")}` : ""}`,
     "NotFound",
     near,
   );

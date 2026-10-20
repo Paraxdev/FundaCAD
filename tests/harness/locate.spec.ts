@@ -69,6 +69,12 @@ describe("findControl", () => {
       + " the selection, press Escape to clear the selection or click testid:history-related");
   });
 
+  it("hints a missing value field with the fields on screen, or says no value box is open", () => {
+    expect(fail("field:size").message).toContain('did you mean field:angle "Angle"');
+    document.querySelectorAll(".dim-input").forEach((e) => e.remove());
+    expect(fail("field:angle").message).toBe('no visible control "field:angle", no value box is open, the tool may still be waiting for a pick');
+  });
+
   it("hints a missing menu item with the items of that menu", () => {
     const e = fail("menu:Edit/Nope");
     expect(e.candidates).toEqual(['menu:Edit/Preferences... "Preferences..."']);
