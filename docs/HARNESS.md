@@ -288,7 +288,8 @@ asserts on readout text, and put the port in `tools/harness/examples/` with a te
 - A launch failure prints the end of the engine or vite log. A launch failure, or an exception out
   of a `with Session()` block, keeps the logs in the work folder: `engine.log`, `vite.log`, `page.log`
   (console and page errors) and `shots/`. With `keep=True` the engine's blobs and cache stay too.
-  A refused action that the script catches keeps nothing.
+  A refused action that the script catches keeps nothing. When a clean close cannot remove its work
+  folder (a file still held), it says `could not remove <folder>` and the close line names it.
 
 ## The rule
 
