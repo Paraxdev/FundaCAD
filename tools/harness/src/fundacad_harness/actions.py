@@ -468,7 +468,18 @@ class Actions:
         for i in range(1, 13):
             m.move(h["x"] + dx * px * i / 12, h["y"] + dy * px * i / 12)
         m.up()
-        return f"dragged handle {h['name']} by {round(px)} px", h
+        self.page.wait_for_timeout(50)
+        values = self._value_box()
+        reached = f", value box {values}" if values else ""
+        return f"dragged handle {h['name']} by {round(px)} px{reached}", {**h, "values": values}
+
+    def _value_box(self) -> str:
+        """The value box fields as `field:distance 4.75`, a drag by mm lands near the value, not on it."""
+        out = []
+        for r in self.bridge.call("screen", region="valuebox", max=50)["lines"]:
+            if r[0] == 1 and r[1].startswith("field:"):
+                out.append(f'{r[1]} {self.bridge.call("fieldValue", target=r[1])["text"]}')
+        return ", ".join(out)
 
     # --- waiting --------------------------------------------------------------
 
