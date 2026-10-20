@@ -50,6 +50,8 @@ const MARKERS = [
   ["FundaCAD.Screws", "Make a custom one from this"],
   ["FundaCAD.Navigation", "Middle orbits, Shift+middle pans"],
   ["FundaCAD.Navigation", "fundacad.navigation.plugin"],
+  ["FundaCAD.ReferenceImages", "Click the first point on the image"],
+  ["FundaCAD.ReferenceImages", "ri-file-input"],
 ];
 
 if (!existsSync(dir)) {

@@ -93,6 +93,7 @@ const CAPABILITIES: Record<string, (path: string) => boolean> = {
   "the fastener library": (p) => p.includes("/plugins/FundaCAD.Screws/"),
   "node bodies": (p) => p.includes("/plugins/FundaCAD.Organic/"),
   "the mouse and key presets": (p) => p.includes("/plugins/FundaCAD.Navigation/"),
+  "reference images": (p) => p.includes("/plugins/FundaCAD.ReferenceImages/"),
 };
 
 /** Static import specifiers in a file, skipping `import type` (erased) and
