@@ -107,7 +107,7 @@ export function buildMenubar(e: Engine): MenuDef[] {
       label: "Help",
       items: [
         { label: "Keyboard Shortcuts", shortcut: "?", onClick: () => toggleShortcutHUD() },
-        { label: "Welcome Screen", onClick: () => e.ui.welcome.open() },
+        { label: "Home", onClick: () => e.ui.home.open() },
         { label: "Issue Tracker", onClick: () => void openExternal(ISSUES_URL) },
         { separator: true, label: "" },
         { label: "Check for Updates…", onClick: () => void checkForUpdates(true) },

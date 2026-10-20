@@ -1,4 +1,4 @@
-// Recent-files list for the welcome screen. Display concern → localStorage
+// Recent-files list for the Home screen. Display concern → localStorage
 // (same convention as the other fundacad.* keys); paths are not secrets. Newest
 // first, deduped by path, capped.
 

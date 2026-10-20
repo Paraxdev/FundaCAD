@@ -24,7 +24,6 @@ import InterferencePanel from "./components/overlays/InterferencePanel.vue";
 import StressPanel from "./components/overlays/StressPanel.vue";
 import OverhangPanel from "./components/overlays/OverhangPanel.vue";
 import ParamsDialog from "./components/overlays/ParamsDialog.vue";
-import WelcomeModal from "./components/overlays/WelcomeModal.vue";
 import PreferencesDialog from "./components/overlays/PreferencesDialog.vue";
 import ExportDialog from "./components/overlays/ExportDialog.vue";
 import BugReportDialog from "./components/overlays/BugReportDialog.vue";
@@ -38,11 +37,14 @@ import { onMounted, onUnmounted, ref, shallowRef, useTemplateRef, watch } from "
 import { useEngine } from "./app/engineKey";
 import { isNarrowStage } from "./ui/layoutBreakpoints";
 import { useDialogStore } from "./stores/dialogs";
+import { useHomeStore } from "./stores/home";
+import HomeScreen from "./components/home/HomeScreen.vue";
 import { useExportDialogStore } from "./stores/exportDialog";
 import { useToolPanelStore } from "./stores/toolPanels";
 import { contributedOverlays, onContribChange } from "./plugins/contrib";
 
 const dialogs = useDialogStore();
+const home = useHomeStore();
 const exportDialog = useExportDialogStore();
 const toolPanels = useToolPanelStore();
 const shell = useShellStore();
@@ -120,6 +122,8 @@ watch(() => ui.sketchActive, () => shell.closeDrawer());
           <TimelineBar v-else-if="!ui.sketchActive && shell.historyShown" />
         </div>
       </div>
+      <!-- Covers the canvas rather than hiding it, so the viewport keeps its size. -->
+      <HomeScreen v-if="home.visible && home.callbacks" />
     </div>
     <!-- Present only in the Render workspace; it mounts nothing in the other
          one, so the grid track collapses. -->
@@ -163,8 +167,7 @@ watch(() => ui.sketchActive, () => shell.closeDrawer());
        and unmount IS closed, which is what lets the ones that gate global
        shortcuts push/pop the modal depth in onMounted/onUnmounted and never
        leak a count (composables/useModalGate.ts). They are independent because
-       they genuinely stack, the welcome screen opens sign-in over itself. -->
-  <WelcomeModal v-if="dialogs.welcome && dialogs.welcomeCallbacks" />
+       they genuinely stack. -->
   <PreferencesDialog v-if="dialogs.preferences" />
   <ExportDialog v-if="exportDialog.request" />
   <BugReportDialog v-if="dialogs.bugReport && dialogs.bugDeps" />

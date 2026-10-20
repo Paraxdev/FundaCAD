@@ -23,7 +23,7 @@ export function isChoiceOpen(): boolean {
   return useModalStore().depth > 0;
 }
 
-/** For modals built outside this module (welcome screen, sign-in, publish form):
+/** For modals built outside this module (Home, sign-in, publish form):
  *  count them in the same gate so global shortcuts stay blocked underneath. */
 export function pushModal(): void {
   useModalStore().depth++;

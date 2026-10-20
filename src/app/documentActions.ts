@@ -1,4 +1,4 @@
-import { openDocument } from "../io/files";
+import { openDocument, openDocumentAtPath, type OpenOutcome } from "../io/files";
 import { choose } from "../ui/choice";
 import type { Engine } from "./engine";
 
@@ -16,6 +16,15 @@ export async function mayDiscard(e: Pick<Engine, "store" | "sketch">, question: 
     { value: "cancel", label: "Cancel" },
   ]);
   return pick === "discard";
+}
+
+export async function openPathGuarded(
+  e: Pick<Engine, "store" | "sketch" | "geometry">,
+  path: string,
+): Promise<OpenOutcome | "cancelled"> {
+  const name = path.split(/[\\/]/).pop() ?? path;
+  if (!(await mayDiscard(e, `Discard unsaved changes and open ${name}?`))) return "cancelled";
+  return openDocumentAtPath(e.store, path, e.geometry);
 }
 
 export function createDocumentActions(

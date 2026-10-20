@@ -53,9 +53,9 @@ import { createBugReporter } from "../ui/bugReporter";
 
 import { useRibbonStore } from "../stores/ribbon";
 import { useCommandPaletteStore } from "../stores/commandPalette";
-import { WelcomeScreen, welcomeOnStartup } from "../ui/welcome";
+import { welcomeOnStartup } from "../ui/welcome";
+import { Home } from "../ui/home";
 import { scheduleStartupUpdateCheck } from "../ui/updates";
-import { openDocumentAtPath } from "../io/files";
 
 import { installEngineDiedToast } from "./engineWatch";
 import { activatePlugins } from "../plugins/activate";
@@ -65,7 +65,7 @@ import { ThreadTool } from "../features/threadTool";
 import { TextOnFaceTool } from "../features/textOnFaceTool";
 import { HoleTool } from "../features/holeTool";
 import { cancelActiveTools, createToolBusy } from "./toolBusy";
-import { createDocumentActions } from "./documentActions";
+import { createDocumentActions, openPathGuarded } from "./documentActions";
 import { endPickSession } from "../ui/treePick";
 import { createDatumPlanes } from "./datumPlanes";
 import { createSketchVisibility } from "./sketchVisibility";
@@ -114,7 +114,7 @@ export interface EngineTools {
 }
 
 export interface EngineUi {
-  welcome: WelcomeScreen;
+  home: Home;
   panels: ReturnType<typeof createPanels>;
 }
 
@@ -484,11 +484,15 @@ export function mountUi(e: Engine): void {
     }
   });
 
-  e.ui.welcome = new WelcomeScreen({
-    onNew: () => void e.newDocument(),
-    onOpen: () => void e.openDoc(),
-    onOpenPath: (path) => openDocumentAtPath(e.store, path, e.geometry),
+  e.ui.home = new Home({
+    desktop: "__TAURI_INTERNALS__" in window,
+    newDocument: () => e.newDocument(),
+    openDoc: () => e.openDoc(),
+    openPath: (path) => openPathGuarded(e, path),
+    currentPath: () => e.store.filePath,
   });
+  // emitOpen fires before the new document is applied, so this must read nothing from the store.
+  e.store.onOpen(() => e.ui.home.close());
 
   e.starters = createFeatureStarters({
     store: e.store,
@@ -559,8 +563,7 @@ export function mountUi(e: Engine): void {
   // (The menubar is components/shell/MenuBar.vue now, TitleBar.vue calls
   // buildMenubar(engine) itself, so there is nothing to construct here.)
 
-  // show the welcome screen unless the user turned it off (its footer checkbox)
-  if (welcomeOnStartup()) e.ui.welcome.open();
+  if (welcomeOnStartup()) e.ui.home.open();
   scheduleStartupUpdateCheck();
 
   installTitlebar(e);

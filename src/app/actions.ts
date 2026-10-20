@@ -199,7 +199,7 @@ export function createActions(e: Engine): (action: string) => void {
         void exportModel(e.store, e.geometry, e.viewport.selectionBodyIds());
         break;
       case "welcome":
-        e.ui.welcome.open();
+        e.ui.home.open();
         break;
       case "materials":
         // Not a dialog any more. Materials are edited in the Render workspace,
