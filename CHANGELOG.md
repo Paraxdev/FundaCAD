@@ -384,6 +384,10 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Fixed
 
+- **Undo, Redo and the value box fields are named for screen readers.** The
+  icon buttons and the inputs on the canvas and in a feature's properties now
+  carry their names, not only a tooltip.
+
 - **A body is measured as large as it is after a slanted cut through a spline
   face.** A lofted or organic face that is cut off at a slant has surface left
   over beyond the cut, and the exact bounding box counted that too. A revolve

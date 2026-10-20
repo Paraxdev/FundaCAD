@@ -454,3 +454,23 @@ describe("DimInput's choice on a field's name", () => {
     expect(Number(input().value)).toBeCloseTo(0.39, 2);
   });
 });
+
+describe("DimInput names", () => {
+  it("names each input with its field label, and the two buttons", () => {
+    dim.show(
+      [{ name: "depth", label: "D" }, { name: "angle", label: "Taper angle", icon: "angle", kind: "angle" }],
+      () => {},
+      () => {},
+    );
+    const inputs = [...root().querySelectorAll("input")];
+    expect(inputs.map((i) => i.getAttribute("aria-label"))).toEqual(["D", "Taper angle"]);
+    expect(root().querySelector(".dim-ok")!.getAttribute("aria-label")).toBe("Confirm");
+    expect(root().querySelector(".dim-no")!.getAttribute("aria-label")).toBe("Cancel");
+  });
+
+  it("renames the input when the field label changes", () => {
+    dim.show([{ name: "r", label: "R" }], () => {});
+    dim.setFieldLabel("r", "Diameter");
+    expect(root().querySelector("input")!.getAttribute("aria-label")).toBe("Diameter");
+  });
+});

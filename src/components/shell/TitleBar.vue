@@ -59,6 +59,7 @@ onUnmounted(() => { offPlugins?.(); offTheme?.(); });
       id="undo-btn"
       class="tb-btn"
       title="Undo (Ctrl+Z)"
+      aria-label="Undo"
       :disabled="!ui.canUndo"
       @click="engine.doUndo()"
     ><Icon name="undo" :size="15" /></button>
@@ -66,6 +67,7 @@ onUnmounted(() => { offPlugins?.(); offTheme?.(); });
       id="redo-btn"
       class="tb-btn"
       title="Redo (Ctrl+Y)"
+      aria-label="Redo"
       :disabled="!ui.canRedo"
       @click="engine.doRedo()"
     ><Icon name="redo" :size="15" /></button>

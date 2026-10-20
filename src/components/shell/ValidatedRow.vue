@@ -51,6 +51,7 @@ function onPickUnit(e: MouseEvent) {
     <label>{{ label }}</label>
     <div class="param-value">
       <ValidatedInput
+        :aria-label="label"
         :value="value"
         :commit="commit"
         :hint="hint"

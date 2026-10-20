@@ -166,3 +166,10 @@ describe("ValidatedRow", () => {
     expect(w.find(".dim-unit").exists()).toBe(false);
   });
 });
+
+describe("ValidatedRow name", () => {
+  it("names its input with the row label", () => {
+    const w = mountRow({ value: "5" });
+    expect(w.get("input").attributes("aria-label")).toBe("Width");
+  });
+});
