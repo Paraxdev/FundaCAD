@@ -19,6 +19,10 @@ fn probe_report(app: tauri::AppHandle, json: String) {
 }
 
 fn main() {
+    // Where the WebSocket transport serves (Linux, macOS), only the app's own origins pass the gate.
+    if std::env::var_os("FUNDACAD_EXTRA_ORIGINS").is_none() {
+        std::env::set_var("FUNDACAD_EXTRA_ORIGINS", "http://localhost:5174");
+    }
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
             fundacad_lib::frames::frames_open,
