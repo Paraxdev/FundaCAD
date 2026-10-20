@@ -131,6 +131,15 @@ fn hi(segs: &[Seg]) -> [f64; 2] {
     segs.iter().flat_map(|s| samples(s, 400)).fold([f64::MIN; 2], |b, p| [b[0].max(p[0]), b[1].max(p[1])])
 }
 
+fn shifted(segs: &[Seg], d: [f64; 2]) -> Vec<Seg> {
+    segs.iter().map(|s| match s {
+        Seg::Line(p, q) => Seg::Line([p[0] + d[0], p[1] + d[1]], [q[0] + d[0], q[1] + d[1]]),
+        Seg::Arc { c, r, a0, sweep } => Seg::Arc { c: [c[0] + d[0], c[1] + d[1]], r: *r, a0: *a0, sweep: *sweep },
+        Seg::Circle { c, r } => Seg::Circle { c: [c[0] + d[0], c[1] + d[1]], r: *r },
+        Seg::Poly(p) => Seg::Poly(p.iter().map(|q| [q[0] + d[0], q[1] + d[1]]).collect()),
+    }).collect()
+}
+
 /// The larger of the two one sided distances, on 200 samples per curve, after
 /// moving `b` so the two drawings' lower left corners meet when `align`.
 fn hausdorff(a: &[Seg], b: &[Seg], align: bool) -> f64 {
@@ -140,12 +149,7 @@ fn hausdorff(a: &[Seg], b: &[Seg], align: bool) -> f64 {
     } else {
         [0.0; 2]
     };
-    let moved: Vec<Seg> = b.iter().map(|s| match s {
-        Seg::Line(p, q) => Seg::Line([p[0] + shift[0], p[1] + shift[1]], [q[0] + shift[0], q[1] + shift[1]]),
-        Seg::Arc { c, r, a0, sweep } => Seg::Arc { c: [c[0] + shift[0], c[1] + shift[1]], r: *r, a0: *a0, sweep: *sweep },
-        Seg::Circle { c, r } => Seg::Circle { c: [c[0] + shift[0], c[1] + shift[1]], r: *r },
-        Seg::Poly(p) => Seg::Poly(p.iter().map(|q| [q[0] + shift[0], q[1] + shift[1]]).collect()),
-    }).collect();
+    let moved = shifted(b, shift);
     let one = |x: &[Seg], y: &[Seg]| {
         let ch = chords(y);
         x.iter().flat_map(|s| samples(s, 200)).map(|p| dist_to(p, &ch)).fold(0.0, f64::max)
@@ -272,10 +276,22 @@ fn a_planar_face_exports_with_its_holes() {
     let a = filled_area(&r);
     assert!((a - want).abs() < 1e-6, "area {a}, want {want}");
 
+    let src = segs_of_sketch(&plate_doc()["features"][0]["entities"], None);
     let p = export(&plate_doc(), json!({"format": "svg", "face": top()}), "face-own-frame.svg");
     let r = import(&p, "svg");
-    let d = hausdorff(&segs_of_sketch(&plate_doc()["features"][0]["entities"], None), &imported_segs(&r), true);
+    let d = hausdorff(&src, &imported_segs(&r), true);
     assert!(d <= 1e-6, "the face in its own frame is {d} mm off");
+
+    // Without a plane the face is drawn about its area centre.
+    let centre = [(800.0 * 20.0 - 16.0 * PI * 30.0) / want, 10.0];
+    let expect = shifted(&src, [-centre[0], -centre[1]]);
+    let p = export(&plate_doc(), json!({"format": "dxf", "face": top()}), "face-own-frame.dxf");
+    let d = hausdorff(&expect, &imported_segs(&import(&p, "dxf")), false);
+    assert!(d <= 1e-6, "the face in its own frame is {d} mm off its area centre");
+    let text = std::fs::read_to_string(dir().join("face-own-frame.svg")).unwrap();
+    let i = text.find(" viewBox=\"").unwrap() + 10;
+    let vb: Vec<f64> = text[i..i + text[i..].find('"').unwrap()].split(' ').map(|v| v.parse().unwrap()).collect();
+    assert!((vb[0] - (-centre[0] - 0.5)).abs() < 1e-6, "viewBox {vb:?} starts off the area centre");
 }
 
 #[test]
@@ -305,3 +321,4 @@ fn a_curved_face_is_refused() {
     let m = refusal(&doc, json!({"format": "svg"}));
     assert!(m.contains("pick a sketch or a flat face"), "{m}");
 }
+

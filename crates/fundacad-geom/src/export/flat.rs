@@ -300,7 +300,7 @@ fn face_frame(face: &Shape, plane: Option<&Value>) -> FResult<Frame> {
         });
     }
     let n = kernel::face_plane_normal(face).ok_or_else(|| Fail::msg("a DXF or SVG export needs a flat face"))?;
-    let c = kernel::face_area_centre(face).map_or([0.0; 3], |c| [c[0], c[1], c[2]]);
+    let c = kernel::face_area_centre(face).map_or([0.0; 3], |c| [c[1], c[2], c[3]]);
     Ok(frame_for_normal(c, n))
 }
 
