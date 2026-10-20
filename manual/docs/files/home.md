@@ -16,4 +16,6 @@ Versions on a card lists the document's branches and saved versions. Open on a b
 
 Press Esc or the close button to go back to your document. File > Home and the home button in the title bar bring Home back. Turn off Show Home on startup to start straight on an empty document.
 
+Home sits on a plain paper background. In Preferences > Appearance, Home background can show your workspace dimmed behind it instead, or a PNG or JPEG picture of your own.
+
 The pictures are kept on this computer, so a document copied from elsewhere shows its picture after you open it once.

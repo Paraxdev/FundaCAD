@@ -391,7 +391,8 @@
 }
 
 .modal-overlay,
-.cmdk-backdrop {
+.cmdk-backdrop,
+.home.bg-workspace::before {
   background: rgba(5, 4, 9, 0.35);
   -webkit-backdrop-filter: blur(6px) saturate(1.2);
           backdrop-filter: blur(6px) saturate(1.2);
@@ -405,6 +406,12 @@
     url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
     radial-gradient(70% 60% at 85% 0%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 70%),
     radial-gradient(130% 100% at 35% 0%, color-mix(in srgb, var(--raised) 26%, transparent), transparent 80%),
+    var(--bg);
+}
+.home.bg-image::before {
+  background:
+    linear-gradient(color-mix(in srgb, var(--bg) 55%, transparent), color-mix(in srgb, var(--bg) 55%, transparent)),
+    var(--home-image) center / cover no-repeat,
     var(--bg);
 }
 
@@ -523,4 +530,8 @@ html.no-glass-blur *::before,
 html.no-glass-blur *::after {
   -webkit-backdrop-filter: none !important;
           backdrop-filter: none !important;
+}
+/* Without the blur the scrim would show the float cards sharp through it. */
+html.no-glass-blur .home.bg-workspace::before {
+  background: var(--viewport-bg);
 }
