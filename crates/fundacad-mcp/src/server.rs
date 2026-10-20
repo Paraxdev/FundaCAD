@@ -826,6 +826,7 @@ impl FundaCad {
         st.path = Some(path.clone());
         st.invalidate();
         st.reported = None;
+        let newer = model::newer_file_note(&st.doc).map_or(String::new(), |n| format!("\nnote: {n}"));
         let issues = model::recompute_parameters(&mut st.doc);
         let note = if issues.is_empty() {
             String::new()
@@ -840,7 +841,7 @@ impl FundaCad {
             )
         };
         Ok(text(format!(
-            "Opened {}: {} features, {} parameters.{note}{pushed_note}",
+            "Opened {}: {} features, {} parameters.{newer}{note}{pushed_note}",
             path.display(),
             model::features(&st.doc).len(),
             model::param_defs(&st.doc).len()

@@ -195,7 +195,7 @@ which a fresh engine could no longer start one and every build failed.
 | tool | what it is for |
 | --- | --- |
 | `schema` | every feature type, its fields, an example and its traps. Read first. |
-| `doc_new` / `doc_open` / `doc_save` / `doc_get` / `doc_set` | the document |
+| `doc_new` / `doc_open` / `doc_save` / `doc_get` / `doc_set` | the document. `doc_open` of a file from a newer FundaCAD adds a `note:` line naming the feature types this build does not know; they are kept and saved with the file |
 | `param_set` / `param_remove` | the parameter table (this is what makes it parametric) |
 | `feature_add` / `feature_update` / `feature_remove` / `feature_move` | the timeline |
 | `edit` | several of the above and `param_set` in one call, all or nothing, optionally building once at the end |
