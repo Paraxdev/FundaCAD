@@ -278,6 +278,21 @@ describe("HomeScreen", () => {
     expect(document.activeElement).toBe($(".home-search"));
   });
 
+  it("clears the search on Escape before it closes", async () => {
+    const { home } = open([{ path: "C:/a.funda", openedAt: 1 }, { path: "C:/b.funda", openedAt: 2 }]);
+    const field = document.querySelector<HTMLInputElement>(".home-search")!;
+    field.value = "a";
+    field.dispatchEvent(new Event("input"));
+    await nextTick();
+    field.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    await nextTick();
+    expect(home.visible).toBe(true);
+    expect(field.value).toBe("");
+    expect($$(".home-card-name")).toHaveLength(2);
+    field.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+    expect(home.visible).toBe(false);
+  });
+
   it("lets undo work inside the search field", () => {
     open([{ path: "C:/a.funda", openedAt: 1 }]);
     const field = $(".home-search")!;
