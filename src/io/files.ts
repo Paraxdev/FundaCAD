@@ -12,7 +12,7 @@ import type { CadDocument, ExportFormat, Feature, ImportFormat, PlaneDef } from 
 import { clearRecovery } from "./recovery";
 import {
   clampTolerance, exportFileName, exportScopeFromSelection, FORMATS, isFlatFormat, isMeshFormat, lastExportDir, meshWire,
-  rememberExportDir, saveExportSettings, type FlatSource,
+  loadExportSettings, rememberExportDir, saveExportSettings, type FlatSource,
 } from "./exportSettings";
 import { buildBodyTree, importTrees } from "../ui/browserTree";
 import { referencedGeometry } from "../document/versions";
@@ -440,7 +440,9 @@ export async function exportModel(
   });
   if (!choice) return;
   const { settings, scope } = choice;
-  saveExportSettings(settings);
+  // The dialog offers DXF and SVG only with a 2D source, so the next plain
+  // export would drop either for the default rather than the last 3D format.
+  saveExportSettings(isFlatFormat(settings.format) ? { ...settings, format: loadExportSettings().format } : settings);
   if (!isTauri()) {
     // The engine writes an export straight to a path on disk (see the file
     // header), a plain browser has no such path to hand it and no protocol for
