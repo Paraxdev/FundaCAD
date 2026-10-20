@@ -398,6 +398,11 @@ export class DocumentStore {
     return this.busy;
   }
 
+  /** An edit is waiting out the rebuild debounce. */
+  get rebuildPending(): boolean {
+    return this.rebuildTimer != null;
+  }
+
   onBusy(fn: BusyListener): () => void {
     this.busyListeners.add(fn);
     fn(this.busy);

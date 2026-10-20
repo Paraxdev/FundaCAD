@@ -169,6 +169,7 @@ function onDrop(e: DragEvent) {
        icon, so its element carries no text to read it off. -->
   <div
     class="tree-folder"
+    :data-id="id"
     :class="{ 'drop-into': inside > 0, selected: selected }"
     :style="style"
     :aria-expanded="!collapsed"

@@ -66,3 +66,6 @@ app.mount("#app");
 mountUi(engine);
 
 installDevGlobals(engine);
+if (import.meta.env.DEV && location.search.includes("harness=1")) {
+  void import("./harness/driver").then((m) => m.installHarness(engine));
+}

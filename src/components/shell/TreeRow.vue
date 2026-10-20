@@ -180,6 +180,7 @@ function onDrop(e: DragEvent) {
 <template>
   <div
     class="feature-row tree-child"
+    :data-id="id"
     :class="{ selected: selected, error: error, 'drop-into': inside > 0 }"
     :style="style"
     :title="title"

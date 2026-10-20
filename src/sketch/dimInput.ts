@@ -302,6 +302,7 @@ export class DimInput {
     this.fields = defs.map((def) => {
       const wrap = document.createElement("label");
       wrap.className = "dim-field";
+      wrap.dataset.field = def.name;
       const tag = document.createElement(def.choices ? "button" : "span");
       tag.className = def.choices ? "dim-name dim-unit dim-choice" : "dim-name";
       if (tag instanceof HTMLButtonElement) tag.type = "button";

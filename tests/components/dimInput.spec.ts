@@ -464,6 +464,7 @@ describe("DimInput names", () => {
     );
     const inputs = [...root().querySelectorAll("input")];
     expect(inputs.map((i) => i.getAttribute("aria-label"))).toEqual(["D", "Taper angle"]);
+    expect([...root().querySelectorAll<HTMLElement>(".dim-field")].map((f) => f.dataset.field)).toEqual(["depth", "angle"]);
     expect(root().querySelector(".dim-ok")!.getAttribute("aria-label")).toBe("Confirm");
     expect(root().querySelector(".dim-no")!.getAttribute("aria-label")).toBe("Cancel");
   });
