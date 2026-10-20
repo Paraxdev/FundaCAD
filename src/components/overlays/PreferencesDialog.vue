@@ -19,6 +19,8 @@
 
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useDialogStore } from "../../stores/dialogs";
+import { useModalStore } from "../../stores/modals";
+import { escapeClaimed } from "../../ui/escapeClaim";
 import { pluginFocus } from "../../plugins/settingsFocus";
 import { useModalGate } from "../../composables/useModalGate";
 import ModalFrame from "./ModalFrame.vue";
@@ -78,6 +80,16 @@ const close = () => { dialogs.preferences = false; };
 // text-sized targets and single-letter tool keys would fire underneath it.
 useModalGate();
 
+const modals = useModalStore();
+let ownDepth = 0;
+// A choice raised over this dialog, or a popover inside it, takes its own Escape.
+function onKey(e: KeyboardEvent) {
+  if (e.key !== "Escape" || modals.current !== null || modals.depth !== ownDepth || escapeClaimed()) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  close();
+}
+
 const theme = ref(getTheme());
 // The roster is no longer a constant, uploading and removing a palette grows and
 // shrinks it, so it is mirrored in a ref and re-read whenever the library moves.
@@ -100,6 +112,8 @@ const classicCamera = ref(navigatorChoice() === "legacy");
 
 const stops: (() => void)[] = [];
 onMounted(() => {
+  ownDepth = modals.depth;
+  window.addEventListener("keydown", onKey, true);
   stops.push(
     onThemeChange(() => { theme.value = getTheme(); themeList.value = themes(); }),
     onIconPackChange(() => { pack.value = getIconPack(); }),
@@ -111,7 +125,10 @@ onMounted(() => {
     onDetectedWheelChange(() => { detectedWheel.value = getDetectedWheel(); }),
   );
 });
-onUnmounted(() => { for (const stop of stops) stop(); });
+onUnmounted(() => {
+  window.removeEventListener("keydown", onKey, true);
+  for (const stop of stops) stop();
+});
 
 // A plugin's settings are under its own row in Plugins, not a category here.
 const categories = computed(() => [

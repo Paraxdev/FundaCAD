@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { fmtKeys } from "../../input/platform";
 import { computed, watch, onUnmounted } from "vue";
 import { useUiStore } from "../../stores/ui";
 import { shortcutHudGroups } from "../../input/shortcuts";
@@ -44,7 +45,7 @@ onUnmounted(unbind);
         <div v-for="g in groups" :key="g.name" class="shortcut-hud-group">
           <h4>{{ g.name }}</h4>
           <div v-for="(r, i) in g.rows" :key="i" class="shortcut-hud-row">
-            <kbd>{{ r.key }}</kbd><span>{{ r.label }}</span>
+            <kbd>{{ fmtKeys(r.key) }}</kbd><span>{{ r.label }}</span>
             <span v-if="r.changed" class="shortcut-hud-changed">changed</span>
           </div>
         </div>

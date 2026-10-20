@@ -35,6 +35,7 @@ import { describe, expect, it } from "vitest";
 import confRaw from "../../src-tauri/tauri.conf.json?raw";
 import releaseRaw from "../../src-tauri/tauri.beta.conf.json?raw";
 import stableRaw from "../../src-tauri/tauri.stable.conf.json?raw";
+import devRaw from "../../src-tauri/tauri.dev.conf.json?raw";
 
 const conf = JSON.parse(confRaw) as {
   plugins: { updater: { pubkey: string; endpoints: string[] } };
@@ -48,6 +49,10 @@ const stable = JSON.parse(stableRaw) as {
   plugins: { updater: { endpoints: string[] } };
 };
 
+const dev = JSON.parse(devRaw) as {
+  plugins: { updater: { endpoints: string[] } };
+};
+
 /** Upstream's minisign public key, as inherited at the fork point. Recorded so
  *  the check names what it found rather than saying only "wrong". */
 const UPSTREAM_PUBKEY =
@@ -58,7 +63,11 @@ describe("updater", () => {
     // The endpoint is what makes the stale pubkey survivable. If updates came
     // from somewhere we do not control, holding the wrong public key would stop
     // being an inconvenience.
-    for (const url of [...conf.plugins.updater.endpoints, ...stable.plugins.updater.endpoints]) {
+    for (const url of [
+      ...conf.plugins.updater.endpoints,
+      ...stable.plugins.updater.endpoints,
+      ...dev.plugins.updater.endpoints,
+    ]) {
       expect(new URL(url).origin, `updater endpoint ${url}`).toBe("https://github.com");
       expect(new URL(url).pathname.startsWith("/Paraxdev/fundacad/"), `updater endpoint ${url}`)
         .toBe(true);
@@ -80,7 +89,7 @@ describe("updater", () => {
 
   // The endpoint is baked into the binary at build time, so which feed a copy
   // reads is decided by the config it was built with and can never change
-  // afterwards. This branch builds the rolling beta, which reads
+  // afterwards. A push to main builds the rolling beta, which reads
   // beta/latest.json. The retired alpha feed is only a mirror the release job
   // writes so old alpha installs move over, and nothing built now may read it,
   // or dropping the mirror would strand every copy built in the meantime.
@@ -93,7 +102,7 @@ describe("updater", () => {
     expect(path(conf.plugins.updater.endpoints)).toEqual([
       "/Paraxdev/fundacad/releases/download/beta/latest.json",
     ]);
-    expect(confRaw + releaseRaw + stableRaw).not.toContain("/alpha/latest.json");
+    expect(confRaw + releaseRaw + stableRaw + devRaw).not.toContain("/alpha/latest.json");
   });
 
   // GitHub's latest release is never a pre-release, so the rolling beta can
@@ -105,10 +114,23 @@ describe("updater", () => {
     ]);
   });
 
-  // No pubkey of its own, so the release job's guard on the base config's key
-  // holds for stable builds too.
-  it("the stable config is the beta one with the feed swapped and nothing else", () => {
-    const { plugins, ...rest } = stable;
+  // Its own feed, so a development install never updates to a beta and the
+  // development release can never move a beta install.
+  it("a development build reads the development release's feed", () => {
+    const path = (urls: string[]) => urls.map((u) => new URL(u).pathname);
+    expect(path(dev.plugins.updater.endpoints)).toEqual([
+      "/Paraxdev/fundacad/releases/download/development/latest.json",
+    ]);
+  });
+
+  // No pubkey or identifier of its own, so the release job's guard on the
+  // base config's key holds for every channel, and installing another
+  // channel's installer replaces the app instead of adding a second one.
+  it.each([
+    ["stable", stable],
+    ["development", dev],
+  ])("the %s config is the beta one with the feed swapped and nothing else", (_, cfg) => {
+    const { plugins, ...rest } = cfg;
     expect(rest).toEqual(release);
     expect(plugins).toEqual({ updater: { endpoints: plugins.updater.endpoints } });
   });

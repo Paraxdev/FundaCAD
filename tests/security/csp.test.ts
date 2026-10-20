@@ -28,6 +28,7 @@ import { describe, expect, it } from "vitest";
 import confRaw from "../../src-tauri/tauri.conf.json?raw";
 import releaseRaw from "../../src-tauri/tauri.beta.conf.json?raw";
 import stableRaw from "../../src-tauri/tauri.stable.conf.json?raw";
+import devRaw from "../../src-tauri/tauri.dev.conf.json?raw";
 // The glue the app actually loads: src/sketch/solver.ts imports
 // `@salusoft89/planegcs`, which resolves to this file.
 import glue from "../../node_modules/@salusoft89/planegcs/dist/planegcs_dist/planegcs.js?raw";
@@ -42,6 +43,7 @@ const conf = JSON.parse(confRaw) as {
 
 const release = JSON.parse(releaseRaw) as { app?: unknown };
 const stable = JSON.parse(stableRaw) as { app?: unknown };
+const dev = JSON.parse(devRaw) as { app?: unknown };
 
 /** One CSP directive's source list. */
 function directive(csp: string, name: string): string[] {
@@ -169,5 +171,6 @@ describe("the engine's reach", () => {
   it("leaves the policy to the base config, so the release build ships this one", () => {
     expect(release.app).toBeUndefined();
     expect(stable.app).toBeUndefined();
+    expect(dev.app).toBeUndefined();
   });
 });

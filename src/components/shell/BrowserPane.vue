@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { fmtKeys } from "../../input/platform";
 // Left browser, MCAD-style: object-oriented, collapsible folders rather than a
 // flat feature list. Origin (the three base planes, click to start a sketch on
 // one), Bodies (grouped by the imported assembly tree when there is one) and
@@ -50,6 +51,7 @@ import { actOn as actOnSelection, EMPTY_SELECTION, modsOf, selectGroup, selectRo
 import { VisibilityPaint } from "../../ui/visibilityPaint";
 import { routeTreeClick, treePickWaiting, type TreePick } from "../../ui/treePick";
 import { featurePick } from "../../app/featurePick";
+import { switchEdit } from "../../app/selection";
 import { contributedBrowserSections, contributedPalette, onContribChange } from "../../plugins/contrib";
 import type { Component } from "vue";
 import { featuresOf } from "../../types";
@@ -191,11 +193,12 @@ function viaTool(pick: () => TreePick, own: (e: MouseEvent) => void) {
   };
 }
 
-/** Double-click: the click before it already went to the tool, or said why not. */
-function unlessWaiting(own: () => void) {
+/** Double-click: a tool waiting for a pick already took the click before it.
+ *  Any other open edit is closed and the row's feature edited instead. */
+function editRow(id: string) {
   return () => {
-    if (treePickWaiting() || busyHint()) return;
-    own();
+    if (treePickWaiting()) return;
+    switchEdit(engine, id);
   };
 }
 
@@ -654,7 +657,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
       dropHere: () => dropOntoBody(b.id),
       rename: (name: string) => store.setBodyName(b.id, name),
       remove: () => store.removeBody(b.id),
-      title: "Click to select (Ctrl+click adds, Shift+click takes a run) · drag onto another body to group them, or into an element · double-click to rename · right-click for Move / Material / Visibility / Rename / Delete · drag across eyes to show or hide many",
+      title: fmtKeys("Click to select (Ctrl+click adds, Shift+click takes a run) · drag onto another body to group them, or into an element · double-click to rename · right-click for Move / Material / Visibility / Rename / Delete · drag across eyes to show or hide many"),
     };
   };
 
@@ -748,7 +751,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
       selected: selection.featureId === f.id,
       error: errId === f.id,
       activate: viaTool(() => ({ kind: "feature", id: f.id }), () => engine.selectFeature(f.id)),
-      edit: unlessWaiting(() => engine.editFeature(f.id)),
+      edit: editRow(f.id),
       rename: (name: string) => store.updateFeature(f.id, { name } as Partial<Feature>),
       remove: () => store.removeFeature(f.id),
       title: `Joint ${i + 1} · select or double-click to adjust its offset/angle handles · right-click to Rename / Delete`,
@@ -772,7 +775,7 @@ const nodes = useDocValue((doc): TreeNode[] => {
       selected: selection.featureId === f.id,
       error: errId === f.id,
       activate: viaTool(() => ({ kind: "feature", id: f.id }), () => engine.selectFeature(f.id)),
-      edit: unlessWaiting(() => engine.editFeature(f.id)),
+      edit: editRow(f.id),
       rename: (name: string) => store.updateFeature(f.id, { name } as Partial<Feature>),
       remove: () => store.removeFeature(f.id),
       title: `Mechanism ${i + 1} on ${nameOf(f.ground)} · double-click to drag its drive · right-click to Rename / Delete`,
@@ -791,11 +794,11 @@ const nodes = useDocValue((doc): TreeNode[] => {
     error: errId === f.id,
     ...eye({ category: "sketches", key: f.id }, engine.isSketchVisible(f.id)),
     activate: viaTool(() => ({ kind: "sketch", id: f.id }), (e) => selectSketch(f.id, e)),
-    edit: unlessWaiting(() => engine.editFeature(f.id)),
+    edit: editRow(f.id),
     extraMenu: [visibilityMenu("sketches", actOnSelection(pickedSketches, f.id), "sketches")],
     rename: (name: string) => store.updateFeature(f.id, { name } as Partial<Feature>),
     remove: () => store.removeFeature(f.id),
-    title: "Click to select (Ctrl+click adds, Shift+click takes a run) · double-click to edit · right-click for Visibility / Edit / Rename / Delete · drag across eyes to show or hide many",
+    title: fmtKeys("Click to select (Ctrl+click adds, Shift+click takes a run) · double-click to edit · right-click for Visibility / Edit / Rename / Delete · drag across eyes to show or hide many"),
   })));
 
   return out;
@@ -857,7 +860,7 @@ onUnmounted(() => root.value?.removeEventListener("wheel", onWheel));
   <aside id="browser" class="float-card">
     <div class="float-card-head">
       <span class="float-card-title">Items</span>
-      <button class="float-card-close" title="Hide the items (Ctrl Alt S)" @click="shell.setItems(false)"><Icon name="close" :size="14" /></button>
+      <button class="float-card-close" :title="fmtKeys('Hide the items (Ctrl Alt S)')" @click="shell.setItems(false)"><Icon name="close" :size="14" /></button>
     </div>
     <div class="browser-title">
       <select
