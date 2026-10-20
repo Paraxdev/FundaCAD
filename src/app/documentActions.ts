@@ -38,7 +38,15 @@ export async function newFromTemplate(e: Pick<Engine, "store" | "sketch">, id: s
   e.store.markOpenedWithoutPath(info.name);
 }
 
-type VersionEngine = Pick<Engine, "store" | "sketch" | "geometry">;
+type VersionEngine = Pick<Engine, "store" | "sketch" | "geometry" | "toolAtWork" | "setStatus">;
+
+/** A version or branch loads in place, which ends no sketch or tool the way an
+ *  open does, so one still at work on the open document holds it back. */
+function heldBack(e: VersionEngine, path: string): boolean {
+  if (e.store.filePath !== path || !e.toolAtWork()) return false;
+  e.setStatus("Finish the sketch or tool first, then try again", "");
+  return true;
+}
 
 /** The document at `path` on screen: the open one as it is, unsaved versions and
  *  all, or opened from disk after the usual question. */
@@ -50,6 +58,7 @@ async function reach(e: VersionEngine, path: string): Promise<boolean> {
 /** Brings a version back as one undo step, the file is unchanged until Save. A copy
  *  also drops the path, so Save asks where and the original stays as it is. */
 export async function openAtVersion(e: VersionEngine, path: string, id: string, copy: boolean): Promise<boolean> {
+  if (heldBack(e, path)) return false;
   if (copy && e.store.filePath === path && !(await mayDiscard(e, "Discard unsaved changes and open a copy?"))) {
     return false;
   }
@@ -63,6 +72,7 @@ export async function openAtVersion(e: VersionEngine, path: string, id: string, 
 
 /** Opening on the branch the file is already on keeps its saved state, which may be newer than the branch's last version. */
 export async function openOnBranch(e: VersionEngine, path: string, name: string): Promise<boolean> {
+  if (heldBack(e, path)) return false;
   if (!(await reach(e, path))) return false;
   const repo = e.store.versionRepo;
   if (!repo?.branches[name]) return false;

@@ -171,6 +171,9 @@ export interface Engine {
    *  Every other entry still counts, including a Move started deliberately over
    *  a selection that is not a body's, which is a mode. */
   toolOwnsScreen(): boolean;
+  /** toolOwnsScreen(), minus a modal open over the app (Home counts as one), so
+   *  true only while a sketch or tool is at work on the document itself. */
+  toolAtWork(): boolean;
   /** Stand the ambient Move gizmo down, so a body verb can run.
    *
    *  The other half of toolOwnsScreen. Showing an offer over a body is not
