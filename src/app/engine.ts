@@ -55,7 +55,7 @@ import { useRibbonStore } from "../stores/ribbon";
 import { useCommandPaletteStore } from "../stores/commandPalette";
 import { welcomeOnStartup } from "../ui/welcome";
 import { Home } from "../ui/home";
-import { setSaveFolder } from "../io/saveFolder";
+import { wireHomeOnOpen } from "./homeWiring";
 import { setThumbnailSource } from "../io/thumbnails";
 import { scheduleStartupUpdateCheck } from "../ui/updates";
 
@@ -499,8 +499,7 @@ export function mountUi(e: Engine): void {
     openVersion: (path, id, copy) => openAtVersion(e, path, id, copy),
     openBranch: (path, name) => openOnBranch(e, path, name),
   });
-  // emitOpen fires before the new document is applied, so this must read nothing from the store.
-  e.store.onOpen(() => { e.ui.home.close(); setSaveFolder(null); });
+  wireHomeOnOpen(e.store, e.ui.home);
   setThumbnailSource(() => e.viewport.renderThumbnail(480, 300));
 
   e.starters = createFeatureStarters({
