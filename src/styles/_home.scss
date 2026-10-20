@@ -172,9 +172,10 @@
   height: 100%;
   overflow: hidden;
 }
+/* Inside the card: the cell's content-visibility clips anything drawn outside it. */
 .home-card:focus-visible {
   outline: 2px solid var(--accent, #4bf9bc);
-  outline-offset: 2px;
+  outline-offset: -2px;
 }
 .home-card.missing {
   opacity: 0.55;
@@ -184,7 +185,8 @@
   place-items: center;
   aspect-ratio: 8 / 5;
   margin-bottom: var(--s-2);
-  background: var(--bg, #050409);
+  /* The colour pictures are drawn over, so a card with none looks like one still to come. */
+  background: var(--viewport-bg, #1b1e24);
   color: var(--text-dim, #9aa3af);
   overflow: hidden;
 }
@@ -297,7 +299,7 @@
   border-radius: var(--r-sm, 6px);
   color: var(--text, #e6e8ec);
   cursor: pointer;
-  opacity: 0;
+  opacity: 0.5;
 }
 .home-cell:hover .home-card-versions,
 .home-cell:focus-within .home-card-versions {
