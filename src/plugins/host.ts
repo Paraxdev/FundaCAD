@@ -53,6 +53,7 @@ export type {
   BrowserSection,
   Contribution,
   FeatureTypeContribution,
+  MaterialPresetGroup,
   MenuContribution,
   Paint,
   PaletteEntry,
@@ -182,6 +183,7 @@ export {
   trialConfiguration,
 } from "../params/extras";
 export type { CheckResult } from "../params/extras";
+export type { BodyFinish, MaterialDef, SurfaceGraph, SurfaceNode } from "../document/materials";
 export { evalExpr } from "../params/eval";
 export type { ParamCheck, ParamConfiguration, ParamControl, ParamDef, ParamExtras } from "../types";
 

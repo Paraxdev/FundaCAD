@@ -32,6 +32,7 @@ import { emissionProgress, onEmissionProgress } from "../../ui/emissionProgress"
 import SurfaceNodeEditor from "./SurfaceNodeEditor.vue";
 import { contextMenu, type CtxItem } from "../../ui/menu";
 import { choose } from "../../ui/choice";
+import { contributedMaterialPresets } from "../../plugins/contrib";
 import { modsOf, selectRow } from "../../ui/rowSelection";
 
 const engine = useEngine();
@@ -218,6 +219,25 @@ function addMaterial() {
     id: undefined as unknown as string,
   });
   selectOnly(id);
+}
+
+function newMaterialMenu(e: MouseEvent) {
+  const groups = contributedMaterialPresets();
+  if (!groups.length) return addMaterial();
+  const at = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  const items: CtxItem[] = [{ label: "Blank", onClick: () => addMaterial() }];
+  for (const g of groups) {
+    items.push({
+      label: g.group,
+      children: g.materials.map((m) => ({ label: m.name, swatch: m.color, onClick: () => addPreset(m) })),
+    });
+  }
+  contextMenu(at.left, at.bottom, items);
+}
+
+function addPreset(raw: unknown) {
+  const id = store.addMaterialPreset(raw);
+  if (id) selectOnly(id);
 }
 
 /** Push one edited field. Every control calls this, so there is one place where
@@ -449,7 +469,7 @@ async function doImport() {
     <section class="rd-section">
       <h3 class="rd-head">
         Library <span class="tree-count">{{ all.length }}</span>
-        <button class="rd-mini" title="New material" @click="addMaterial()">
+        <button class="rd-mini" title="New material" @click="newMaterialMenu($event)">
           <Icon name="plus" :size="13" />New
         </button>
       </h3>

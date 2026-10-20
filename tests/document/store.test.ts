@@ -504,6 +504,31 @@ describe("materials (what a body is made of, on screen)", () => {
     expect(again.toJSON()).toBe(reloaded.toJSON());
   });
 
+  it("adds a picked preset as a plain copy that survives save and load, in one undo step", () => {
+    const preset = { id: "x", name: "Bronze glaze", color: "#B5A642", metalness: 0.9, surfaceGraph: { nodes: [{ id: "o", type: "output" }], output: "o" } };
+    const id = store.addMaterialPreset(preset)!;
+    const again = store.addMaterialPreset(preset)!;
+    expect(new Set([id, again]).size).toBe(2);
+    expect(store.materialLibrary.find((m) => m.id === again)!.name).toBe("Bronze glaze 2");
+    expect(store.materialLibrary.find((m) => m.id === id)).toMatchObject({ name: "Bronze glaze", color: "#b5a642", metalness: 0.9 });
+    const reloaded = new DocumentStore(stubBackend([]), doc());
+    reloaded.load(store.toJSON());
+    expect(reloaded.materialLibrary.find((m) => m.id === id)).toEqual(store.materialLibrary.find((m) => m.id === id));
+    store.undo();
+    expect(store.materialLibrary.some((m) => m.id === again)).toBe(false);
+    expect(store.materialLibrary.some((m) => m.id === id)).toBe(true);
+  });
+
+  it("drops a preset that is not a material and tidies one that half is", () => {
+    const before = store.materialLibrary.length;
+    expect(store.addMaterialPreset({ name: "No colour" })).toBeNull();
+    expect(store.addMaterialPreset(null)).toBeNull();
+    expect(store.addMaterialPreset("steel")).toBeNull();
+    expect(store.materialLibrary.length).toBe(before);
+    const id = store.addMaterialPreset({ name: "Loud", color: "#fff", metalness: 7 })!;
+    expect(store.materialLibrary.find((m) => m.id === id)!.metalness).toBeLessThanOrEqual(1);
+  });
+
   it("a reopened untouched document still writes no materials block", () => {
     // The trap this is for: the library is normalised on load, so an entry that
     // was not already in normal form would come back different and the
