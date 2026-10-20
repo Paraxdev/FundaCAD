@@ -293,8 +293,12 @@ async function migrateInlineGeometry(text: string, geometry: GeometryBackend): P
 async function warnAboutOpen(store: DocumentStore) {
   const notices = openNotices(store.document, store.openedVersion);
   if (!notices.length) return;
-  const { toast } = await import("../ui/toast");
-  for (const n of notices) toast(n.message, { kind: n.kind, timeout: 12000, ...(n.detail ? { detail: n.detail } : {}) });
+  const { dismissToast, toast } = await import("../ui/toast");
+  const ids = notices.map((n) => toast(n.message, { kind: n.kind, timeout: 12000, ...(n.detail ? { detail: n.detail } : {}) }));
+  const off = store.onOpen(() => {
+    off();
+    for (const id of ids) if (id !== null) dismissToast(id);
+  });
 }
 
 export async function openDocumentAtPath(
