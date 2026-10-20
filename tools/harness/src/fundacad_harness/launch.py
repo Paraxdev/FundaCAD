@@ -287,6 +287,10 @@ def start_vite(repo: Path, work: Path, timeout: float = 60) -> tuple[Proc, int]:
     vite = repo / "node_modules" / "vite" / "bin" / "vite.js"
     if not vite.is_file():
         raise LaunchError(f"no {vite}, run npm ci in {repo}")
+    real = (repo / "node_modules").resolve()
+    if real.name != "node_modules":
+        raise LaunchError(f"{repo / 'node_modules'} links to {real}, node resolves packages only from a folder"
+                          " named node_modules, so link to one of that name")
     node = shutil.which("node")
     if not node:
         raise LaunchError("node is not on PATH")
