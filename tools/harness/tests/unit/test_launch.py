@@ -189,3 +189,24 @@ def test_stop_takes_the_child_and_what_it_started(tmp_path):
         assert k32.WaitForSingleObject(ctypes.c_void_p(handle), 10_000) == 0, "the grandchild outlived stop()"
     finally:
         k32.CloseHandle(ctypes.c_void_p(handle))
+
+
+def _link(link: Path, target: Path) -> None:
+    try:
+        os.symlink(target, link, target_is_directory=True)
+    except OSError:
+        if os.name != "nt":
+            raise
+        import _winapi
+        _winapi.CreateJunction(str(target), str(link))
+
+
+def test_vite_refuses_a_node_modules_link_to_a_folder_of_another_name(tmp_path):
+    real = tmp_path / "nm"
+    (real / "vite" / "bin").mkdir(parents=True)
+    (real / "vite" / "bin" / "vite.js").write_text("")
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _link(repo / "node_modules", real)
+    with pytest.raises(LaunchError, match=r"node_modules links to .*nm, node resolves packages only from a folder named node_modules"):
+        launch.start_vite(repo, tmp_path)
