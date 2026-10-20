@@ -16,7 +16,9 @@ import { fakeLibrary, type FakeFile, type FakeLibrary } from "../io/fakeLibrary"
  *
  *  The e2e scripts in e2e/*.cjs drive the app entirely through these, so the
  *  names here are a contract: `store`, `tree`, `viewport` and `geometry` are all
- *  waited on by `page.waitForFunction` before any test step runs. */
+ *  waited on by `page.waitForFunction` before any test step runs. New scripts
+ *  use the agent harness instead (src/harness, docs/HARNESS.md), these stay
+ *  for the old ones until they are ported. */
 export function installDevGlobals(e: Engine): void {
   if (!import.meta.env.DEV) return;
   const w = window as any;
