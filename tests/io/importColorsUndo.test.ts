@@ -121,4 +121,61 @@ describe("an import's colours and undo", () => {
     expect(await adopting).toBe(false);
     expect(store.bodyMaterialId("body9")).toBeUndefined();
   });
+
+  it("keeps an edit made during the import's rebuild its own step, and the colours one of their own", async () => {
+    const store = new DocumentStore(backend(), { parameters: {}, features: [box("a")] });
+    store.addFeature(imp());
+    const adopting = adoptImportedColors(store, IMP, RED, { joinImport: true, source: "a.step" });
+    store.addFeature(box("z"));
+    expect(await adopting).toBe(true);
+    store.undo();
+    expect(store.bodyMaterialId("body9")).toBeUndefined();
+    expect(has(store, "z")).toBe(true);
+    store.undo();
+    expect(has(store, "z")).toBe(false);
+    expect(has(store, IMP)).toBe(true);
+  });
+
+  it("puts no colours on with a redo that an edit followed before its rebuild ended", async () => {
+    const store = new DocumentStore(backend(), { parameters: {}, features: [box("a")] });
+    store.addFeature(imp());
+    const adopting = adoptImportedColors(store, IMP, RED, { joinImport: true });
+    store.undo();
+    expect(await adopting).toBe(false);
+    recolorOnRedo(store, imp(), RED);
+    store.redo();
+    await Promise.resolve();
+    store.addFeature(box("z"));
+    await store.rebuildNow();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(store.bodyMaterialId("body9")).toBeUndefined();
+  });
+
+  it("puts no colours on the same file imported again as a new edit", async () => {
+    const store = new DocumentStore(backend(), { parameters: {}, features: [box("a")] });
+    store.addFeature(imp());
+    const adopting = adoptImportedColors(store, IMP, RED, { joinImport: true });
+    store.undo();
+    expect(await adopting).toBe(false);
+    recolorOnRedo(store, imp(), RED);
+    store.addFeature(imp());
+    await store.rebuildNow();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(store.bodyMaterialId("body9")).toBeUndefined();
+  });
+
+  it("puts no colours on another file's import that an undo brings back under the same id", async () => {
+    const store = new DocumentStore(backend(), { parameters: {}, features: [box("a")] });
+    store.addFeature({ ...imp(), source: "b.step" } as Feature);
+    store.removeFeature(IMP);
+    store.addFeature(imp());
+    const adopting = adoptImportedColors(store, IMP, RED, { joinImport: true });
+    store.undo();
+    expect(await adopting).toBe(false);
+    recolorOnRedo(store, imp(), RED);
+    store.undo();
+    await store.rebuildNow();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(store.bodyMaterialId("body9")).toBeUndefined();
+  });
 });
