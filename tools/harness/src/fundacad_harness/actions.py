@@ -424,6 +424,19 @@ class Actions:
     # --- the canvas -----------------------------------------------------------
 
     def _canvas_point(self, kind: str, sel: str, via: str = "select") -> dict:
+        try:
+            return self._canvas_point_of(kind, sel, via)
+        except Occluded as e:
+            raise Occluded(self._dialog_first(str(e))) from None
+
+    def _dialog_first(self, why: str) -> str:
+        """Every canvas point is under an open dialog's backdrop, which no view change fixes."""
+        rows = [r for r in self.bridge.call("screen", region="dialog", max=50)["lines"] if r[0] == 1 and r[1]]
+        if not rows:
+            return why
+        return f'a dialog is open over the canvas ({", ".join(r[1] for r in rows[:6])}), answer or close it first'
+
+    def _canvas_point_of(self, kind: str, sel: str, via: str) -> dict:
         if kind == "face":
             return self.bridge.call("facePoint", select=sel)
         if kind == "edge":
@@ -495,7 +508,7 @@ class Actions:
         else:
             p = self.bridge.call("worldPoint", x=world[0], y=world[1], z=world[2])
         if p["covered"]:
-            raise Occluded(f"{sketch or world} is off the canvas or under a panel")
+            raise Occluded(self._dialog_first(f"{sketch or world} is off the canvas or under a panel"))
         return p
 
     @action

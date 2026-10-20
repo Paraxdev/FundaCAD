@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from fundacad_harness import Session, actions
-from fundacad_harness.errors import HarnessError
+from fundacad_harness.errors import HarnessError, Occluded
 
 REPO = Path(__file__).resolve().parents[4]
 BLOCK = str(REPO / "tools/harness/fixtures/block.json")
@@ -45,6 +45,8 @@ class App:
             elif t == "choice:Cancel":
                 self.rows = []
             return {"marker": "m", "ref": t, "label": t}
+        if method == "facePoint":
+            raise Occluded('face body1:index=1 -y area 480 cannot be clicked from this view, try s.view("front")')
         raise AssertionError(method)
 
 
@@ -98,3 +100,14 @@ def test_new_document_keeping_unsaved_changes_cancels_and_says_so():
     assert app.clicked[-1] == "choice:Discard"
     s.close()
 
+
+def test_a_canvas_pick_under_a_dialog_says_the_dialog_is_the_cause():
+    app = App()
+    app.rows = list(QUESTION)
+    s = session(app)
+    with pytest.raises(Occluded, match=r"a dialog is open over the canvas \(choice:Discard, choice:Cancel\)"):
+        s.pick_face("front")
+    app.rows = []
+    with pytest.raises(Occluded, match='try s.view\\("front"\\)'):
+        s.pick_face("front")
+    s.close()
