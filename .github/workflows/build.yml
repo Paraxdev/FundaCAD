@@ -6,12 +6,14 @@
 # the 7.8.1 sources and builds them statically into the binary. So this
 # workflow has no brew, vcpkg or apt OCCT step.
 #
-# `bundle` + `release` publish the rolling `beta` release and its update feed
-# from `dev`, where daily work lands. `main` holds the known good state and
-# runs the same tests and builds, but publishes nothing. A `v1.<minor>.<patch>`
-# tag on a commit of `main` publishes a stable release with its own feed
-# (scripts/promote-stable.sh cuts one). The retired Python
-# engine is frozen on the `legacy` branch, which publishes nothing either.
+# `bundle` + `release` publish two rolling pre-releases, each with its own
+# update feed (docs/ENGINE.md section 7). A push to `main` publishes the
+# `beta`, once every gating job is green. A push to `dev`, where daily work
+# lands, publishes the bleeding edge `development` build even when its tests
+# are red, and the run still shows red. A
+# `v1.<minor>.<patch>` tag on a commit of `main` still publishes a stable
+# release, though nothing sends people there. The retired Python engine is
+# frozen on the `legacy` branch, which publishes nothing.
 #
 # Scope: x86_64 Linux, Apple Silicon macOS, x86_64 Windows. (No Intel-mac / linux-arm64.)
 
@@ -32,9 +34,9 @@ permissions:
   contents: read
 
 jobs:
-  # Gates the build matrix with the frontend checks, BEFORE any installer is
-  # built. Runs once on Linux only. The engine's own tests are `rust-geom`,
-  # which gates the build too.
+  # Gates the beta and stable installers with the frontend checks, BEFORE any
+  # of them is built. Runs once on Linux only. The engine's own tests are
+  # `rust-geom`, which gates them too. On dev both only report.
   test:
     runs-on: ubuntu-22.04
     timeout-minutes: 30
@@ -79,8 +81,9 @@ jobs:
         run: node scripts/check-no-plugin-code.mjs
 
   # What this run builds and where it goes (docs/ENGINE.md section 7). `config`
-  # is empty on a ref that builds no installers, `release` on one that builds
-  # them and publishes nothing.
+  # is empty on a ref that builds no installers. `gated` is false on dev, whose
+  # installers still start after `test` and `rust-geom` finish but do not need
+  # them green, and where a failed bundle leg only leaves its own files out.
   channel:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-22.04
@@ -92,6 +95,7 @@ jobs:
       version: ${{ steps.pick.outputs.version }}
       sha: ${{ steps.pick.outputs.sha }}
       since: ${{ steps.pick.outputs.since }}
+      gated: ${{ steps.pick.outputs.gated }}
     steps:
       # Only a tag needs the history, to find main and the stable tags before it.
       - uses: actions/checkout@v4
@@ -107,16 +111,19 @@ jobs:
           REF_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
-          config='' release='' tag='' since=''
+          config='' release='' tag='' since='' gated=true
           version="1.0.${{ github.run_number }}"
           sha='${{ github.sha }}'
           # Minor 0 is the betas' 1.0.<run number>, which a stable 1.0.x
           # would be older than.
           stable='^v1\.([1-9][0-9]*)\.(0|[1-9][0-9]*)$'
           case "$REF" in
-            refs/heads/dev)  config=beta release=beta tag=beta ;;
-            refs/heads/main) config=stable ;;
+            refs/heads/dev)  config=dev release=development tag=development gated=false ;;
+            refs/heads/main) config=beta release=beta tag=beta ;;
             refs/tags/*)
+              # Optional now, nothing sends people to a stable release, but
+              # the path still works for a tag pushed by hand or by
+              # scripts/promote.sh --stable.
               [[ "$REF_NAME" =~ $stable ]] \
                 || { echo "::error::$REF_NAME is not a stable tag, those are v1.<minor>.<patch> with a minor of 1 or more"; exit 1; }
               sha=$(git rev-parse HEAD)
@@ -129,7 +136,7 @@ jobs:
               ;;
           esac
           printf '%s=%s\n' config "$config" release "$release" tag "$tag" version "$version" \
-            sha "$sha" since "$since" | tee -a "$GITHUB_OUTPUT"
+            sha "$sha" since "$since" gated "$gated" | tee -a "$GITHUB_OUTPUT"
 
   # The installers (docs/ENGINE.md section 6), on three platforms. The
   # engine is a worker process of the same executable, and there is no Python
@@ -143,7 +150,10 @@ jobs:
     needs: [channel, test, rust-geom]
     permissions:
       contents: write # tauri-action may attach artifacts to a draft release
-    if: needs.channel.outputs.config != ''
+    if: >-
+      !cancelled() && needs.channel.outputs.config != ''
+      && (needs.channel.outputs.gated == 'false'
+          || (needs.test.result == 'success' && needs.rust-geom.result == 'success'))
     strategy:
       fail-fast: false
       matrix:
@@ -238,20 +248,20 @@ jobs:
         shell: bash
         run: |
           node -e "
-            for (const f of ['./src-tauri/tauri.conf.json', './src-tauri/tauri.beta.conf.json', './src-tauri/tauri.stable.conf.json']) {
+            for (const f of ['./src-tauri/tauri.conf.json', './src-tauri/tauri.beta.conf.json', './src-tauri/tauri.dev.conf.json', './src-tauri/tauri.stable.conf.json']) {
               if (require(f).bundle.resources) { console.error(f + ' bundles resources'); process.exit(1); }
             }
           "
 
-      # Beta versioning, 1.0.<run_number>: the Rust engine is the major
-      # upgrade, against the retired Python engine's 0.2. A stable build takes
-      # its version from its tag.
+      # Rolling versioning, 1.0.<run_number>, for the beta and the development
+      # build alike: the Rust engine is the major upgrade, against the retired
+      # Python engine's 0.2. A stable build takes its version from its tag.
       #
       # No `-beta` suffix: tauri's msi target refuses a version whose
       # pre-release identifier is not numeric ("optional pre-release identifier
       # in app version must be numeric-only"), so it fails the Windows leg
       # outright and NSIS silently rewrites it to 0 in VIProductVersion. The
-      # tag, the title and the update feed say beta instead.
+      # tag, the title and the update feed name the channel instead.
       - name: Stamp the version
         shell: bash
         run: |
@@ -356,12 +366,14 @@ jobs:
         uses: ./.github/actions/deb-gtk-depends
 
       # A week, the cap tests/build/artifactRetention.test.ts holds, so the
-      # beta release can be republished from them by hand.
+      # beta release can be republished from them by hand. A leg that failed
+      # after tauri-action still uploads, for debugging, but under a name the
+      # release and build-flatpak never download, so its files are not shipped.
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: fundacad-bundle-${{ matrix.platform }}
+          name: ${{ job.status == 'success' && 'fundacad-bundle' || 'failed-bundle' }}-${{ matrix.platform }}
           retention-days: 7
           if-no-files-found: warn
           path: |
@@ -381,7 +393,12 @@ jobs:
   # (appimage-unbundle), so this is what runs on NixOS, rpm-ostree and other
   # read-only systems. Manifest: packaging/flatpak/dev.fundacad.app.yml.
   build-flatpak:
-    needs: bundle
+    needs: [channel, bundle]
+    # On dev another leg's failure does not stop the Linux .deb's Flatpak.
+    if: >-
+      !cancelled() && (needs.bundle.result == 'success'
+        || (needs.channel.outputs.gated == 'false'
+            && (needs.bundle.result == 'failure' || needs.bundle.result == 'cancelled')))
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -427,15 +444,18 @@ jobs:
           if-no-files-found: error
           path: FundaCAD_*.flatpak
 
-  # The rolling "beta" pre-release from dev, or a stable release from a tag.
+  # The rolling "beta" pre-release from main, the rolling "development"
+  # pre-release from dev, or a stable release from a tag.
   #
-  # The beta has its own concurrency group and its own tag, moved in place,
-  # never deleted. A stable release hangs off the tag that was pushed, and is
-  # only marked latest while no higher stable release exists, because stable
-  # installs read releases/latest (tauri.stable.conf.json).
+  # Each rolling release has its own concurrency group and its own tag, moved
+  # in place, never deleted, so a development run never touches the beta's
+  # tag, release or feed. A stable release hangs off the tag that was pushed,
+  # and is only marked latest while no higher stable release exists, because
+  # stable installs read releases/latest (tauri.stable.conf.json).
   #
   # The updater endpoint is baked into the binary at build time
-  # (tauri.conf.json points at beta/latest.json). Installs of the retired Python
+  # (tauri.conf.json points at beta/latest.json, tauri.dev.conf.json at
+  # development/latest.json). Installs of the retired Python
   # engine read the same feed, and 1.0.x is newer than their 0.2.x, so they move
   # to this build too, which is intended. Section 6's own answer, publish no
   # manifest at all, was rejected because a rolling build that cannot roll is
@@ -450,8 +470,14 @@ jobs:
     needs: [channel, bundle, build-flatpak]
     # A failed Flatpak leaves it out of the release rather than holding the
     # release back: always() lets this run once build-flatpak has finished
-    # either way.
-    if: always() && needs.bundle.result == 'success' && needs.channel.outputs.release != ''
+    # either way. On dev a failed bundle leg does the same for its own files,
+    # unless the run itself was cancelled. A leg that hits its timeout can
+    # report as cancelled while the run is not.
+    if: >-
+      always() && needs.channel.outputs.release != ''
+      && (needs.bundle.result == 'success'
+          || (needs.channel.outputs.gated == 'false' && !cancelled()
+              && (needs.bundle.result == 'failure' || needs.bundle.result == 'cancelled')))
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     permissions:
@@ -490,10 +516,11 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release
+          : > missing.txt
           put() { # $1 = find pattern under dist, $2 = published name
             local src
             src=$(find dist -type f -name "$1" | head -1)
-            [ -n "$src" ] || { echo "NOTE: no $1 in this build, $2 left out"; return 0; }
+            [ -n "$src" ] || { echo "NOTE: no $1 in this build, $2 left out"; echo "$2" >> missing.txt; return 0; }
             cp "$src" "release/$2"
             [ ! -f "$src.sig" ] || cp "$src.sig" "release/$2.sig"
             echo "$(basename "$src") -> $2"
@@ -508,6 +535,7 @@ jobs:
           put '*.dmg'         FundaCAD-macos-arm64.dmg
           put '*.app.tar.gz'  FundaCAD-macos-arm64.app.tar.gz
           find dist -type f -name 'plugin-*.zip' -exec cp {} release/ \;
+          ls release/plugin-*.zip >/dev/null 2>&1 || echo 'the plugin bundles' >> missing.txt
           ls -l release
 
       - name: Assemble latest.json
@@ -536,10 +564,19 @@ jobs:
           # Every name in release/ is fixed and has no spaces, so plain
           # word-splitting is safe here.
           files=$(find release -type f | sort)
+          grep -v '^release/plugin-' <<<"$files" | grep -q . \
+            || { echo "::error::no installers to publish"; exit 1; }
           # The plugin bundles this build installs from (RELEASE_TAG in
-          # src/plugins/index.ts). Without them every offered plugin is a 404.
-          grep -q 'plugin-' <<<"$files" \
-            || { echo "::error::no plugin bundles to publish"; exit 1; }
+          # src/plugins/index.ts). Without them every offered plugin is a 404,
+          # which on dev a failed Linux leg may leave to the previous build's.
+          if [ "$RELEASE" != development ]; then
+            grep -q 'plugin-' <<<"$files" \
+              || { echo "::error::no plugin bundles to publish"; exit 1; }
+          fi
+          partial=''
+          if [ "$RELEASE" = development ] && [ -s missing.txt ]; then
+            partial=$(paste -sd, missing.txt | sed 's/,/, /g')
+          fi
           # Updates in place, never delete and recreate: a release that was
           # recreated once stayed gone for two hours.
 
@@ -589,14 +626,13 @@ jobs:
           WARN
 
           if [ "$RELEASE" = beta ]; then
-            printf 'Rolling FundaCAD 1.0 beta (%s), Rust engine, the preview rebuilt from `dev` at [`%s`](https://github.com/%s/commit/%s).\n' \
+            printf 'Rolling FundaCAD 1.0 beta (%s), Rust engine, rebuilt from `main` at [`%s`](https://github.com/%s/commit/%s).\n' \
               "$VERSION" "${SHA:0:7}" "$R" "$SHA" >> notes.md
-            if gh api "repos/$R/releases/latest" >/dev/null 2>&1; then
-              printf '\nThe stable release, the known good one, is [here](https://github.com/%s/releases/latest).\n' "$R" >> notes.md
-            fi
-            # The commit the rolling tag is on RIGHT NOW: the build this
-            # replaces. Read BEFORE the tag is moved, further down.
-            prev=$(gh api "repos/$R/git/ref/tags/beta" --jq .object.sha 2>/dev/null || true)
+            branch=main
+          elif [ "$RELEASE" = development ]; then
+            printf 'FundaCAD development build (%s), bleeding edge, rebuilt from `dev` at [`%s`](https://github.com/%s/commit/%s).\n' \
+              "$VERSION" "${SHA:0:7}" "$R" "$SHA" >> notes.md
+            printf '\nIt has every change as soon as it lands, and it can be broken. The [beta](https://github.com/%s/releases/tag/beta) is the somewhat stable one.\n' "$R" >> notes.md
             branch=dev
           else
             printf 'FundaCAD %s, the stable release, built from `main` at [`%s`](https://github.com/%s/commit/%s).\n' \
@@ -604,6 +640,11 @@ jobs:
             printf '\nThe rolling beta, with the newest changes before they reach a stable release, is [here](https://github.com/%s/releases/tag/beta).\n' "$R" >> notes.md
             prev="$SINCE"
             branch=main
+          fi
+          if [ "$RELEASE" != stable ]; then
+            # The commit the rolling tag is on RIGHT NOW: the build this
+            # replaces. Read BEFORE the tag is moved, further down.
+            prev=$(gh api "repos/$R/git/ref/tags/$TAG" --jq .object.sha 2>/dev/null || true)
           fi
           commits=''
           if [ -n "$prev" ] && [ "$prev" != "$SHA" ]; then
@@ -642,6 +683,9 @@ jobs:
           printf '\n---\n\nUnsigned: Windows SmartScreen needs "More info", then "Run anyway"; macOS may call the app damaged, which `xattr -dr com.apple.quarantine /Applications/FundaCAD.app` clears. [Install notes](https://github.com/%s#install).\n' \
             "$R" >> notes.md
           printf '\nThis build carries no Python runtime, so it is a fraction of the size of the Python engine builds.\n' >> notes.md
+          if [ -n "$partial" ]; then
+            printf '\nNot rebuilt this time, so any copy here is from an earlier build: %s.\n' "$partial" >> notes.md
+          fi
           if [ "$SELF_UPDATES" = yes ]; then
             printf '\nInstalled copies update themselves from the newest %s release.\n' "$RELEASE" >> notes.md
           else
@@ -651,23 +695,28 @@ jobs:
             # The SourceForge mirror's download button, which a hand edit added
             # once and every rebuild of the notes then dropped.
             printf '\n[![Download FundaCAD](https://a.fsdn.com/con/app/sf-download-button)](https://sourceforge.net/projects/fundacad/files/beta/)\n' >> notes.md
-
+          fi
+          if [ "$RELEASE" != stable ]; then
             # Move the rolling tag onto this commit (create it if it is missing),
             # so the release attached to it never stops existing. GitHub refuses
             # this token a tag move across a commit that changes a workflow file,
             # so a refused move keeps the old tag and still publishes this build.
-            gh api -X PATCH "repos/$R/git/refs/tags/beta" -f sha="$SHA" -F force=true \
-              || gh api -X POST "repos/$R/git/refs" -f ref=refs/tags/beta -f sha="$SHA" \
-              || { gh api "repos/$R/git/refs/tags/beta" >/dev/null 2>&1 \
-                     && echo "::warning::the beta tag could not move to $SHA (a workflow file changed), the installers are still this build"; } \
-              || { echo "::error::the beta tag is missing and could not be created"; exit 1; }
+            gh api -X PATCH "repos/$R/git/refs/tags/$TAG" -f sha="$SHA" -F force=true \
+              || gh api -X POST "repos/$R/git/refs" -f ref="refs/tags/$TAG" -f sha="$SHA" \
+              || { gh api "repos/$R/git/refs/tags/$TAG" >/dev/null 2>&1 \
+                     && echo "::warning::the $TAG tag could not move to $SHA (a workflow file changed), the installers are still this build"; } \
+              || { echo "::error::the $TAG tag is missing and could not be created. Push it once by hand with a token that may change workflow files: git push origin $SHA:refs/tags/$TAG"; exit 1; }
 
-            TITLE='FundaCAD 1.0 beta, Rust engine (rolling)'
-            if gh release view beta --repo "$R" >/dev/null 2>&1; then
-              gh release edit beta --repo "$R" --prerelease \
+            if [ "$RELEASE" = beta ]; then
+              TITLE='FundaCAD 1.0 beta, Rust engine (rolling)'
+            else
+              TITLE='FundaCAD 1.0 development build, bleeding edge (rolling)'
+            fi
+            if gh release view "$TAG" --repo "$R" >/dev/null 2>&1; then
+              gh release edit "$TAG" --repo "$R" --prerelease \
                 --title "$TITLE" --notes-file notes.md
             else
-              gh release create beta --repo "$R" --prerelease \
+              gh release create "$TAG" --repo "$R" --prerelease \
                 --title "$TITLE" --notes-file notes.md
             fi
           else
@@ -698,12 +747,17 @@ jobs:
 
           # Retire anything this build did not publish: a format dropped from
           # the build, and once, the versioned names from before the fixed ones.
+          # A partial development build keeps the earlier build's files instead.
           keep=$(for f in $files latest.json; do basename "$f"; done | sort -u)
-          gh release view "$TAG" --repo "$R" --json assets -q '.assets[].name' \
-            | while read -r asset; do
-                printf '%s\n' "$keep" | grep -qxF "$asset" \
-                  || gh release delete-asset "$TAG" "$asset" --repo "$R" --yes || true
-              done
+          if [ -n "$partial" ]; then
+            echo "not every file was rebuilt, so nothing is retired this time"
+          else
+            gh release view "$TAG" --repo "$R" --json assets -q '.assets[].name' \
+              | while read -r asset; do
+                  printf '%s\n' "$keep" | grep -qxF "$asset" \
+                    || gh release delete-asset "$TAG" "$asset" --repo "$R" --yes || true
+                done
+          fi
 
           if [ "$RELEASE" = stable ]; then
             # Worked out here, against the releases published by now, not in
@@ -833,7 +887,8 @@ jobs:
   # it. It compiles OpenCASCADE 7.8.1 from source through the occt-sys crate,
   # which is long on a cold runner and short once target/OCCT is cached, so the
   # static kernel gets its own cache keyed on the crate that builds it. It gates
-  # the beta build: red here means the engine is broken.
+  # the beta and stable builds, not the development one: red here means the
+  # engine is broken.
   rust-geom:
     # The self hosted runner keeps its target dir between runs, so only what
     # changed recompiles. Only the owner's own pushes and manual runs go there,

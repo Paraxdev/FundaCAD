@@ -78,10 +78,10 @@ describe("the plugins this build offers", () => {
     }
   });
 
-  it("installs from the rolling beta release unless built for a stable one", () => {
+  it("installs from the rolling beta release unless built for another one", () => {
     // The engine runs plugin geometry as components, which the release carries
-    // from the same commit as its host. Only the stable release build names
-    // its own tag.
+    // from the same commit as its host. The development and stable release
+    // builds name their own tag.
     expect(RELEASE_TAG).toBe("beta");
     for (const p of officialPlugins()) {
       expect(p.url).toBe(`${RELEASES}beta/${p.asset}`);
