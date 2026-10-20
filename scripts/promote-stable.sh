@@ -98,7 +98,7 @@ echo "tagged $tag on ${merge:0:7}, the merge of ${sha:0:7} into main"
 
 pushcmd=(git push --atomic "$REMOTE" "$merge:refs/heads/main" "refs/tags/$tag")
 if [ "$push" = yes ]; then
-  "${pushcmd[@]}"
+  "${pushcmd[@]}" || die "the push failed and nothing is published. Drop the local tag before trying again: git tag -d $tag"
   echo "pushed, the $tag build publishes the release: gh run list -R $REPO --branch $tag"
 else
   echo "nothing is pushed yet. To publish:"
