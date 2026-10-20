@@ -388,16 +388,16 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Changed
 
-- **Saving a document with a big import is several times faster.** A .fundab
-  compresses its big geometry in pieces on all cores: a 69 MB imported STEP
-  assembly saves in a fraction of a second instead of about 2 seconds. The file
-  is the same size, and every FundaCAD that reads .fundab opens it as before.
+- **Saving a .fundab with a big import is several times faster on a computer
+  with several cores.** A 69 MB imported STEP assembly saves in about 0.4
+  seconds instead of about 1.8, or 0.6 seconds on four cores. On one core it
+  takes as long as before. The file is the same size, and every FundaCAD that
+  reads .fundab opens it as before.
 
-- **Opening a .fundab whose geometry is not on this machine yet is faster.**
-  Its big geometry is decoded on all cores, and the smaller pieces side by side,
-  so a 48 MB scan takes about 90 ms instead of about 250 ms to unpack. A
-  geometry file left half written by a crash is unpacked again instead of
-  failing the next rebuild.
+- **A .fundab that was being opened when FundaCAD closed opens fine the next
+  time.** Its imported geometry, left half copied, made the next rebuild fail;
+  opening the file again now copies it whole. Opening a .fundab with a big
+  import for the first time on a computer is also a little faster.
 
 - **The Rust engine is the rolling beta now, and the Python engine is
   retired.** Builds of `main` publish to the
