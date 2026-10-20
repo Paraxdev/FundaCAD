@@ -49,6 +49,7 @@ describe("the plugins this build offers", () => {
       "FundaCAD.Navigation",
       "FundaCAD.Onshape",
       "FundaCAD.Organic",
+      "FundaCAD.PrintLook",
       "FundaCAD.PrintToolbox",
       "FundaCAD.Printing",
       "FundaCAD.Screws",
