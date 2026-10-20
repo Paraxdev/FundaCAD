@@ -121,7 +121,8 @@
   max-width: 360px;
 }
 .home-search,
-.home-sort {
+.home-sort,
+.home-view-select {
   height: 28px;
   padding: 0 var(--s-3);
   background: var(--raised, #22262e);
@@ -235,4 +236,24 @@
 }
 #stage.narrow .home-side {
   display: none;
+}
+.home-nav-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.home-folder-row[aria-busy="true"] {
+  color: var(--text-dim, #9aa3af);
+}
+.home-note {
+  margin: 0;
+  padding: 0 var(--s-5) var(--s-2);
+  font-size: 11px;
+  color: var(--text-dim, #9aa3af);
+}
+.home-view-select {
+  display: none;
+}
+#stage.narrow .home-view-select {
+  display: block;
 }

@@ -4,6 +4,7 @@
 // get a path from the native save dialog and hand it to the engine, which
 // writes the file directly (no fs round-trip through the webview).
 
+import { suggestedSavePath } from "./saveFolder";
 import type { DocumentStore } from "../document/store";
 import { asFeature } from "../types";
 import type { GeometryBackend } from "../geometry/client";
@@ -94,7 +95,10 @@ export async function saveDocumentAs(store: DocumentStore) {
         { name: "FundaCAD Document (JSON)", extensions: [DOC_EXT, ...LEGACY_DOC_EXTS] },
         { name: "FundaCAD Binary Document (smaller)", extensions: [BINARY_DOC_EXT] },
       ],
-      defaultPath: store.filePath ?? (isDocumentExt(store.fileName.split(".").pop()?.toLowerCase()) ? store.fileName : `${store.fileName}.${DOC_EXT}`),
+      defaultPath: suggestedSavePath(
+        store.filePath,
+        isDocumentExt(store.fileName.split(".").pop()?.toLowerCase()) ? store.fileName : `${store.fileName}.${DOC_EXT}`,
+      ),
     });
     if (path) {
       const err = await writeContainer(store, path);

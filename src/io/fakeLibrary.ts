@@ -12,8 +12,15 @@ export interface FakeLibrary extends DocumentLibrary {
   readonly thumbRequests: string[];
 }
 
-/** A disk made of a list, for the browser e2e, which has no Tauri. */
-export function fakeLibrary(files: readonly FakeFile[]): FakeLibrary {
+const inside = (dir: string, path: string) => {
+  const d = dir.replace(/[\\/]+$/, "");
+  return path.length > d.length && path.startsWith(d) && /[\\/]/.test(path[d.length]!);
+};
+
+/** A disk made of a list, for the browser e2e, which has no Tauri. `picks` are
+ *  the folders the folder dialog hands out, one per call. */
+export function fakeLibrary(files: readonly FakeFile[], picks: readonly string[] = []): FakeLibrary {
+  const queue = [...picks];
   const byPath = new Map(files.map((f) => [f.path, { ...f }]));
   const thumbRequests: string[] = [];
   const there = (path: string) => {
@@ -29,6 +36,14 @@ export function fakeLibrary(files: readonly FakeFile[]): FakeLibrary {
           ? { path, exists: true, mtimeMs: f.mtimeMs ?? null, size: 1 }
           : { path, exists: false, mtimeMs: null, size: null };
       });
+    },
+    async list(dir) {
+      const found = [...byPath.values()].filter((f) => f.exists !== false && inside(dir, f.path));
+      if (!found.length && !picks.includes(dir)) throw new Error(`${dir} was not found`);
+      return { files: await this.stat(found.map((f) => f.path)), truncated: false };
+    },
+    async pickFolder() {
+      return queue.shift() ?? null;
     },
     async thumbs(paths) {
       thumbRequests.push(...paths);
