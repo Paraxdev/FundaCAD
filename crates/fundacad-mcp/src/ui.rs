@@ -258,7 +258,7 @@ impl FundaCad {
 impl FundaCad {
     #[tool(
         name = "ui_open",
-        description = "Open a private copy of the FundaCAD app in a browser, against its own engine, to use it the way a person does: real clicks, typing and drags. It is never the user's window. Takes about 10 s. A second call says what is open. Then ui_do to act, ui_read to see, ui_shot for a picture, ui_close when done.",
+        description = "Open a private copy of the FundaCAD app in a browser, against its own engine, to use it the way a person does: real clicks, typing and drags. It is never the user's window, and its document is its own: doc_get and inspect do not see it, so to measure what you built, ui_do save_as a .funda file, then doc_open and inspect it. Takes about 10 s. A second call says what is open. Then ui_do to act, ui_read to see, ui_shot for a picture, ui_close when done.",
         input_schema = crate::tools::ui_open()
     )]
     pub async fn t_ui_open(&self, args: JsonObject) -> Result<CallToolResult, McpError> {

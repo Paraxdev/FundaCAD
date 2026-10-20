@@ -457,10 +457,11 @@ pub fn ui_do() -> JsonObject {
                     drag {from, to, space?}; drag_handle {name, by? px | mm?}; \
                     view {name} (iso, top, front, right, fit); undo; redo; \
                     open_file {path}; import_file {path}; save_as {path}; new_document {discard?}; \
-                    wait_for {text, timeout?}. \
+                    wait_for {text, timeout? up to 60 s}. \
                     Face selectors: [body:]top|bottom|front|back|left|right|+x..-z|largest|smallest|near=x,y,z|index=n. \
                     Edge selectors: near=x,y,z|between <face> <face>|longest|shortest. \
-                    Every step but wait_for waits for the app to settle unless settle is false",
+                    Every step but wait_for waits for the app to settle unless settle is false. \
+                    A call starts no step after 120 s and says which steps to send again",
                 "items": {"type": "object"}
             }
         }),
