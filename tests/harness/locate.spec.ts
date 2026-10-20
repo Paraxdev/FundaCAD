@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { findControl, HarnessError, stamp, toolPath } from "../../src/harness/locate";
+import { covered, findControl, HarnessError, stamp, toolPath } from "../../src/harness/locate";
 import { walkControls } from "../../src/harness/screenTree";
 import type { RailEntry } from "../../src/ui/railDefs";
 import { mountApp, rect } from "./fixture";
@@ -123,5 +123,31 @@ describe("toolPath", () => {
       'no tool "Loft" in the rail: click a family to list its tools (family:cat:CREATE "Create",'
       + ` family:cat:MODIFY "Modify"), a tool's own choices, such as the shapes of Primitive, show once it starts`,
     );
+  });
+});
+
+describe("covered", () => {
+  const box = (w: number) => {
+    const el = document.createElement("button");
+    el.getBoundingClientRect = () => ({ left: 10, top: 10, width: w, height: w }) as DOMRect;
+    const inner = el.appendChild(document.createElement("span"));
+    const parent = document.createElement("div");
+    parent.appendChild(el);
+    return { el, inner, parent };
+  };
+  const at = (top: Element | null) => ({ elementFromPoint: () => top }) as unknown as Document;
+
+  it("tells when another element is drawn over the middle", () => {
+    const { el } = box(20);
+    expect(covered(el, at(document.createElement("div")))).toBe(true);
+  });
+
+  it("leaves the element, its children and its parents alone", () => {
+    const { el, inner, parent } = box(20);
+    expect(covered(el, at(el))).toBe(false);
+    expect(covered(el, at(inner))).toBe(false);
+    expect(covered(el, at(parent))).toBe(false);
+    expect(covered(el, at(null))).toBe(false);
+    expect(covered(box(0).el, at(document.createElement("div")))).toBe(false);
   });
 });

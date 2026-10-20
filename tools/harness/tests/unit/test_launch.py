@@ -164,3 +164,28 @@ def test_a_hard_killed_python_takes_its_children_with_it(tmp_path):
         assert k32.WaitForSingleObject(ctypes.c_void_p(handle), 10_000) == 0, "the child outlived a TerminateProcess of its Python"
     finally:
         k32.CloseHandle(ctypes.c_void_p(handle))
+
+
+@pytest.mark.skipif(os.name != "nt", reason="the Windows process tree")
+def test_stop_takes_the_child_and_what_it_started(tmp_path):
+    import ctypes
+    pid_file = tmp_path / "grandchild.pid"
+    tree = [sys.executable, "-c", (
+        "import subprocess, sys, time\n"
+        "g = subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'])\n"
+        f"open(r'{pid_file}', 'w').write(str(g.pid))\n"
+        "time.sleep(60)\n"
+    )]
+    mine = launch.spawn("tree", tree, tmp_path, dict(os.environ), tmp_path / "tree.log")
+    deadline = time.time() + 20
+    while not (pid_file.exists() and pid_file.read_text()) and time.time() < deadline:
+        time.sleep(0.05)
+    k32 = ctypes.WinDLL("kernel32")
+    k32.OpenProcess.restype = ctypes.c_void_p
+    handle = k32.OpenProcess(0x00100000, False, int(pid_file.read_text()))
+    assert handle, "the grandchild is running"
+    try:
+        mine.stop()
+        assert k32.WaitForSingleObject(ctypes.c_void_p(handle), 10_000) == 0, "the grandchild outlived stop()"
+    finally:
+        k32.CloseHandle(ctypes.c_void_p(handle))

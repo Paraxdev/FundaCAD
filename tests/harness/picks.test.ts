@@ -109,6 +109,25 @@ describe("face selectors", () => {
     expect(resolveFace(h, "body2:normal=0,0,2").faceId).toBe(6);
   });
 
+  it("answers a side only with a flat face, never a bigger shallow dome", () => {
+    const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
+    const r = 10 * Math.tan((1.5 * Math.PI) / 180);
+    const roof = [
+      new THREE.Triangle(v(-10, 0, 0), v(0, 0, r), v(0, 10, r)),
+      new THREE.Triangle(v(-10, 0, 0), v(0, 10, r), v(-10, 10, 0)),
+      new THREE.Triangle(v(0, 0, r), v(10, 0, 0), v(10, 10, 0)),
+      new THREE.Triangle(v(0, 0, r), v(10, 10, 0), v(0, 10, r)),
+    ];
+    const flat = [new THREE.Triangle(v(20, 0, 0), v(21, 0, 0), v(21, 1, 0))];
+    const faces = [roof, flat];
+    const host = {
+      store: { buildState: { result: { bodies: [{ id: "body1", name: "Dome", faceStart: 0, faceCount: 2 }], edges: [] } } },
+      viewport: { faceTriangles: (fid: number) => faces[fid] ?? [] },
+    } as unknown as PickHost;
+    expect(faceInfo(roof, "body1", 0, 0).planar).toBe(false);
+    expect(resolveFace(host, "top").index).toBe(1);
+  });
+
   it("maps index= through the body's face range", () => {
     const f = resolveFace(h, "body2:index=3");
     expect(f.faceId).toBe(9);

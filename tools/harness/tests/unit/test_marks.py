@@ -72,6 +72,15 @@ def test_a_step_says_what_the_app_said_while_it_ran(tmp_path):
     s.close()
 
 
+def test_a_step_names_an_error_once_and_not_as_a_message(tmp_path):
+    b = LogBridge()
+    s = session(b, on_key=lambda k: b.add("error", "Extrude failed"))
+    line = str(s.press("Enter"))
+    assert line.endswith(", error: Extrude failed")
+    assert "said" not in line
+    s.close()
+
+
 def test_a_refused_lookup_does_not_keep_the_work_folder():
     b = LogBridge()
     s = session(b)
