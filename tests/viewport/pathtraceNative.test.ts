@@ -1,6 +1,9 @@
+import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
 import type { TracerBackend } from "../../src/viewport/pathtrace/backend";
 import { NativeTracer, type Blit, type FrameLink, type NativeFrame } from "../../src/viewport/pathtrace/nativeTracer";
+import { halfEquirect } from "../../src/viewport/pathtrace/environment";
+import type { TraceLook } from "../../src/viewport/pathtrace/backend";
 
 class FakeLink implements FrameLink {
   readonly kind = "fake";
@@ -140,6 +143,48 @@ describe("the native tracer backend", () => {
     await t.renderSample(0);
     await expect(t.samples()).rejects.toThrow("no native tracer");
     expect(faults).toEqual(["The native tracer stopped: no native tracer on this machine"]);
+  });
+
+  describe("a status asked while pt_* calls are queued", () => {
+    const roomLook = (key: string): TraceLook => {
+      const tex = halfEquirect(new Uint16Array(4 * 2 * 4), 4, 2);
+      tex.userData.envKey = key;
+      return { lights: [], background: new THREE.Color(), environment: tex, brightness: 1, toneMapping: THREE.NeutralToneMapping, exposure: 1 };
+    };
+    const slowEnv = () => {
+      const order: string[] = [];
+      let release!: () => void;
+      const landed = new Promise<void>((r) => (release = r));
+      const call = async (cmd: string) => {
+        order.push(cmd);
+        if (cmd === "pt_env") await landed;
+        if (cmd === "pt_status") return { samples: 256, fault: null };
+        return null;
+      };
+      return { order, release, ...setup(new FakeLink(), 1, call) };
+    };
+
+    it("counts no sample until the calls queued before it have landed", async () => {
+      const { t, order, release } = slowEnv();
+      await t.init();
+      t.updateLook(roomLook("studio|h1"));
+      const s = t.samples();
+      await new Promise((r) => setTimeout(r, 10));
+      expect(order.filter((c) => c.startsWith("pt_look") || c === "pt_env" || c === "pt_status")).toEqual(["pt_look", "pt_env"]);
+      release();
+      expect(await s).toBe(256);
+      expect(order.slice(-3)).toEqual(["pt_look", "pt_env", "pt_status"]);
+    });
+
+    it("answers 0 when a reset overtook it while it waited", async () => {
+      const { t, release } = slowEnv();
+      await t.init();
+      t.updateLook(roomLook("studio|h1"));
+      const s = t.samples();
+      t.updateLook(roomLook("studio|h1"));
+      release();
+      expect(await s).toBe(0);
+    });
   });
 
   describe("at the sample cap", () => {
