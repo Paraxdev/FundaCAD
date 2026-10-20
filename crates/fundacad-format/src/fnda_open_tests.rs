@@ -255,8 +255,7 @@ fn damage_beyond_parity_in_a_segmented_blob_fails_and_publishes_nothing() {
     let store = dir.join("blobs");
     let err = open(&path, &store, 4).err().unwrap();
     assert!(err.contains("damaged"), "{err}");
-    assert!(!store.join(format!("{}.bbrep", hash_hex(&blobs[0]))).exists());
-    assert!(std::fs::read_dir(&store).unwrap().all(|f| !f.unwrap().path().to_string_lossy().ends_with(".tmp")));
+    assert_eq!(std::fs::read_dir(&store).unwrap().count(), 0, "the open stops at the first broken geometry");
 }
 
 #[test]
