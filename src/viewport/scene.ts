@@ -829,7 +829,7 @@ export function environmentKey(p: Readonly<RenderPrefs>): string | null {
   return environmentKeyOf(p, isHdrHeld);
 }
 
-function isHdrHeld(hash: string): boolean {
+export function isHdrHeld(hash: string): boolean {
   return heldHdr(hash) !== null;
 }
 

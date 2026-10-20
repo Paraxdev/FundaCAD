@@ -2,8 +2,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_RENDER, renderPrefs, setRenderPref } from "../../src/ui/renderPrefs";
 import { setWorkspace } from "../../src/ui/workspace";
 import {
-  PATH_TRACING_AUTO, PATH_TRACING_NO_GPU, PATH_TRACING_OFF, asViewMode, bootViewMode, chooseViewMode,
-  effectiveViewMode, nextViewMode, pathTracedBlock, requestPathTraced, resetPathTracedOverride, savedViewMode,
+  PATH_TRACING_AUTO, PATH_TRACING_CPU, PATH_TRACING_NO_ADAPTER, PATH_TRACING_NO_GPU, PATH_TRACING_OFF,
+  PATH_TRACING_SELF_CHECK, asViewMode, pathTracingLimits, bootViewMode, chooseViewMode,
+  effectiveViewMode, nextViewMode, pathTracedBlock, requestPathTraced, resetPathTracedOverride, savedGround, savedViewMode,
+  setGround,
 } from "../../src/ui/viewMode";
 
 const fast = { lowPower: false, auto: false, webgpu: true };
@@ -86,6 +88,27 @@ describe("Path traced", () => {
     expect(PATH_TRACING_NO_GPU).toBe("Path tracing needs a GPU tracer, which this system does not have");
     expect(chooseViewMode("pathtraced", none)).toBe(false);
     expect(nextViewMode("realtime", 1, none)).toBe("matcap");
+  });
+
+  it("names why the native tracer refused this computer", () => {
+    const refused = (native: object) => pathTracedBlock({ ...noGpu, native: { available: false, ...native } });
+    expect(refused({ class: "noadapter" })).toEqual({ reason: "nogpu", tooltip: PATH_TRACING_NO_ADAPTER });
+    expect(refused({ class: "cpu" })).toEqual({ reason: "nogpu", tooltip: PATH_TRACING_CPU });
+    expect(refused({ class: "limits", storageBuffers: 8 })).toEqual({ reason: "nogpu", tooltip: pathTracingLimits(8) });
+    expect(pathTracingLimits(8)).toBe("This graphics card binds 8 storage buffers and path tracing needs 12");
+    expect(refused({ class: "limits" })!.tooltip).toBe(PATH_TRACING_NO_GPU);
+    expect(refused({ class: "selfcheck" })).toEqual({ reason: "nogpu", tooltip: PATH_TRACING_SELF_CHECK });
+    expect(refused({ class: "later" })!.tooltip).toBe(PATH_TRACING_NO_GPU);
+    for (const t of [PATH_TRACING_NO_ADAPTER, PATH_TRACING_CPU, pathTracingLimits(8), PATH_TRACING_SELF_CHECK]) {
+      expect([0x2013, 0x2014].some((c) => t.includes(String.fromCharCode(c)))).toBe(false);
+      expect(t).not.toMatch(/\s-\s/);
+    }
+    const cpu = { ...noGpu, native: { available: false, class: "cpu" as const } };
+    expect(pathTracedBlock({ ...cpu, lowPower: true })!.tooltip).toBe(PATH_TRACING_OFF);
+    expect(pathTracedBlock({ ...cpu, lowPower: true, auto: true })!.tooltip).toBe(`${PATH_TRACING_OFF} ${PATH_TRACING_AUTO}`);
+    expect(requestPathTraced({ ...cpu, lowPower: true }, 0)).toEqual({ result: "blocked", message: PATH_TRACING_OFF });
+    expect(requestPathTraced({ ...cpu, lowPower: true }, 1000)).toEqual({ result: "blocked", message: PATH_TRACING_OFF });
+    expect(requestPathTraced(cpu, 2000)).toEqual({ result: "blocked", message: PATH_TRACING_CPU });
   });
 
   it("runs on the native tracer where the web view has no WebGPU", () => {
@@ -194,5 +217,25 @@ describe("the session override of the performance block", () => {
     vi.resetModules();
     const fresh = await import("../../src/ui/viewMode");
     expect(fresh.pathTracedBlock(perf)?.reason).toBe("perf");
+  });
+});
+
+describe("ground per workspace", () => {
+  afterEach(() => {
+    setRenderPref("groundModel", DEFAULT_RENDER.groundModel);
+    setRenderPref("groundRender", DEFAULT_RENDER.groundRender);
+  });
+
+  it("reads and writes only the current workspace's choice", () => {
+    setWorkspace("render");
+    setGround("shadow");
+    expect(renderPrefs().groundRender).toBe("shadow");
+    expect(renderPrefs().groundModel).toBe("none");
+    expect(savedGround()).toBe("shadow");
+    expect(savedGround("model")).toBe("none");
+    setGround("shadow", "model");
+    setGround("none", "render");
+    expect(savedGround("model")).toBe("shadow");
+    expect(savedGround("render")).toBe("none");
   });
 });

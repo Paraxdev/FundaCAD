@@ -4,7 +4,8 @@
 // is lost when the ribbon collapses tools into overflow, and shortcut-less /
 // right-click-only commands become findable by name.
 
-import { computed, nextTick, ref, useTemplateRef, watch } from "vue";
+import { computed, nextTick, onUnmounted, ref, useTemplateRef, watch } from "vue";
+import { claimEscape } from "../../ui/escapeClaim";
 import { useCommandPaletteStore } from "../../stores/commandPalette";
 import { allCommands } from "../../ui/commands";
 import { score } from "../../ui/commandScore";
@@ -44,10 +45,18 @@ watch(results, () => {
 // Reset and focus on open. The input is created in the same flush, so focus has
 // to wait for it; on close the query is cleared so the next Ctrl+K starts fresh
 // (the old implementation got this by destroying the DOM).
+// Claimed so a screen under the palette, such as Home, leaves its Escape to it.
+let releaseEscape: (() => void) | null = null;
+onUnmounted(() => releaseEscape?.());
 watch(
   () => cmdk.open,
   async (isOpen) => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      releaseEscape?.();
+      releaseEscape = null;
+      return;
+    }
+    releaseEscape ??= claimEscape();
     query.value = "";
     active.value = 0;
     await nextTick();

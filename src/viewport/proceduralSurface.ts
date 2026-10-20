@@ -4,7 +4,7 @@
 // sampled TRIPLANAR in world space, because a CAD tessellation carries positions
 // and normals but no texture coordinates to hang a map on.
 //
-// Injected with onBeforeCompile rather than a whole custom material, so the body
+// Injected as a shaderPatches patch rather than a whole custom material, so the body
 // keeps the physical PBR shader (metalness, clearcoat, the lights, the
 // environment) and this only edits roughness, normal and colour on the way
 // through. Off (spec null) leaves the shader byte-identical to the stock one.
@@ -18,6 +18,7 @@
 
 import * as THREE from "three";
 import type { SurfaceGraph, SurfaceNode, SurfaceSpec } from "../document/materials";
+import { copyPatches, removePatch, setPatch, type ShaderPatch } from "./shaderPatches";
 
 const SURF_KIND: Record<SurfaceSpec["kind"], number> = {
   noise: 0, scratches: 1, brushed: 2, voronoi: 3, wave: 4,
@@ -38,11 +39,6 @@ export function graphKey(g: SurfaceGraph | undefined): string {
 
 // --- shared GLSL: the generator functions, parameterised so the picker (via
 // uniforms) and the graph (via baked literals) both call the same code. -------
-const SURF_VARYINGS = /* glsl */`
-varying vec3 vSurfWPos;
-varying vec3 vSurfWNorm;
-`;
-
 const SURF_FUNCS = /* glsl */`
 float sHash(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
 float sNoise(vec3 x){
@@ -108,40 +104,50 @@ float sGen(vec3 wp, vec3 wn, int kind, float scale, float angle){
 }
 `;
 
-// Carry world position + world normal to the fragment. Shared by both paths.
-function injectVarying(vertexShader: string): string {
-  return vertexShader
-    .replace("#include <common>", "#include <common>\nvarying vec3 vSurfWPos;\nvarying vec3 vSurfWNorm;")
-    .replace(
-      "#include <worldpos_vertex>",
-      "#include <worldpos_vertex>\n  vSurfWPos = (modelMatrix * vec4(position, 1.0)).xyz;\n  vSurfWNorm = normalize(mat3(modelMatrix) * normal);",
-    );
-}
-
 type Physical = THREE.MeshStandardMaterial & {
   userData: { surfKey?: string; surfUniforms?: Record<string, THREE.IUniform> };
 };
 
-// three reuses a compiled program whenever customProgramCacheKey repeats, and its
-// default is onBeforeCompile's source text, which is the same closure for every
-// graph, so each surface names its own program. Without a surface the own
-// overrides go and the material shares the stock program again.
-function setProgramKey(m: THREE.Material, key: string | undefined): void {
-  const own = m as { onBeforeCompile?: unknown; customProgramCacheKey?: unknown };
-  if (key === undefined) {
-    delete own.onBeforeCompile;
-    delete own.customProgramCacheKey;
-  } else {
-    m.customProgramCacheKey = () => key;
-  }
+const PICK_UNIFORMS = /* glsl */`
+uniform int uSurfKind; uniform float uSurfScale; uniform float uSurfAmount; uniform float uSurfAngle;
+uniform float uSurfBump; uniform vec3 uSurfColor; uniform float uSurfColorAmt;
+float sPickHeight(vec3 wp, vec3 wn){ return sGen(wp, wn, uSurfKind, uSurfScale, uSurfAngle); }
+`;
+
+const PICK_PATCH = {
+  name: "surface",
+  key: "surf-pick",
+  varyings: ["surfWorld"],
+  after: {
+    common: SURF_FUNCS + PICK_UNIFORMS,
+    color_fragment: "  float sH = sPickHeight(vSurfWPos, vSurfWNorm);\n  diffuseColor.rgb = mix(diffuseColor.rgb, uSurfColor, uSurfColorAmt * sH);",
+    roughnessmap_fragment: "  roughnessFactor = clamp(roughnessFactor + uSurfAmount * (sPickHeight(vSurfWPos, vSurfWNorm) - 0.5), 0.04, 1.0);",
+    normal_fragment_begin: bumpGLSL("sPickHeight(P, wn)", "uSurfBump"),
+  },
+} satisfies ShaderPatch;
+
+function graphPatch(key: string, compiled: string): ShaderPatch {
+  return {
+    name: "surface",
+    key,
+    varyings: ["surfWorld"],
+    after: {
+      common: SURF_FUNCS + STRUCT_GLSL + compiled,
+      color_fragment: "  SurfOut sO = sGraph(vSurfWPos, vSurfWNorm);\n  diffuseColor.rgb = mix(diffuseColor.rgb, sO.tint, sO.tintAmt);",
+      roughnessmap_fragment: "  roughnessFactor = clamp(roughnessFactor + sO.roughAmt * (sO.rough - 0.5), 0.04, 1.0);",
+      normal_fragment_begin: bumpGLSL("sGraph(P, wn).bump", "sO.bumpAmt"),
+    },
+  };
 }
 
 /** Material.clone JSON-copies userData (the Color uniform turns into a plain
- *  object) but not onBeforeCompile, so a clone has to shed the surface state. */
+ *  object) and copies no shader patch, so the clone sheds the surface and gets
+ *  the other patches back. */
 export function cloneWithoutSurface<T extends THREE.Material>(mat: T): T {
   const c = mat.clone() as T;
   delete c.userData.surfKey;
   delete c.userData.surfUniforms;
+  copyPatches(mat, c, (p) => p.name !== "surface");
   return c;
 }
 
@@ -149,7 +155,6 @@ export function cloneWithoutSurface<T extends THREE.Material>(mat: T): T {
 export function applySurface(mat: THREE.Material, spec: SurfaceSpec | undefined): void {
   const m = mat as Physical;
   const key = surfaceKey(spec);
-  const had = !!m.userData.surfKey;
   if (m.userData.surfKey === key) {
     if (spec && m.userData.surfUniforms) writeUniforms(m.userData.surfUniforms, spec);
     return;
@@ -157,9 +162,8 @@ export function applySurface(mat: THREE.Material, spec: SurfaceSpec | undefined)
   if (m.userData.surfKey?.startsWith("g:")) m.dispose();
   m.userData.surfKey = key;
   if (!spec) {
-    setProgramKey(m, undefined);
+    removePatch(m, "surface");
     delete m.userData.surfUniforms;
-    if (had) m.needsUpdate = true;
     return;
   }
   const uniforms: Record<string, THREE.IUniform> = {
@@ -169,32 +173,7 @@ export function applySurface(mat: THREE.Material, spec: SurfaceSpec | undefined)
     uSurfColorAmt: { value: spec.colorAmount ?? 0 },
   };
   writeUniforms(uniforms, spec);
-  m.userData.surfUniforms = uniforms;
-  const UNIFORMS = /* glsl */`
-uniform int uSurfKind; uniform float uSurfScale; uniform float uSurfAmount; uniform float uSurfAngle;
-uniform float uSurfBump; uniform vec3 uSurfColor; uniform float uSurfColorAmt;
-float sPickHeight(vec3 wp, vec3 wn){ return sGen(wp, wn, uSurfKind, uSurfScale, uSurfAngle); }
-`;
-  m.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, uniforms);
-    shader.vertexShader = injectVarying(shader.vertexShader);
-    shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", "#include <common>\n" + SURF_VARYINGS + SURF_FUNCS + UNIFORMS)
-      .replace(
-        "#include <color_fragment>",
-        "#include <color_fragment>\n  float sH = sPickHeight(vSurfWPos, vSurfWNorm);\n  diffuseColor.rgb = mix(diffuseColor.rgb, uSurfColor, uSurfColorAmt * sH);",
-      )
-      .replace(
-        "#include <roughnessmap_fragment>",
-        "#include <roughnessmap_fragment>\n  roughnessFactor = clamp(roughnessFactor + uSurfAmount * (sPickHeight(vSurfWPos, vSurfWNorm) - 0.5), 0.04, 1.0);",
-      )
-      .replace(
-        "#include <normal_fragment_begin>",
-        "#include <normal_fragment_begin>\n" + bumpGLSL("sPickHeight(P, wn)", "uSurfBump"),
-      );
-  };
-  setProgramKey(m, "surf-pick");
-  m.needsUpdate = true;
+  m.userData.surfUniforms = setPatch(m, { ...PICK_PATCH, uniforms }).uniforms;
 }
 
 // --- the graph path: compile the node graph, bake the params ----------------
@@ -209,30 +188,10 @@ export function applySurfaceGraph(mat: THREE.Material, graph: SurfaceGraph | und
   m.userData.surfKey = key;
   delete m.userData.surfUniforms;
   if (!graph) {
-    setProgramKey(m, undefined);
-    if (prev) m.needsUpdate = true;
+    removePatch(m, "surface");
     return;
   }
-  const compiled = compileGraph(graph);
-  m.onBeforeCompile = (shader) => {
-    shader.vertexShader = injectVarying(shader.vertexShader);
-    shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", "#include <common>\n" + SURF_VARYINGS + SURF_FUNCS + STRUCT_GLSL + compiled)
-      .replace(
-        "#include <color_fragment>",
-        "#include <color_fragment>\n  SurfOut sO = sGraph(vSurfWPos, vSurfWNorm);\n  diffuseColor.rgb = mix(diffuseColor.rgb, sO.tint, sO.tintAmt);",
-      )
-      .replace(
-        "#include <roughnessmap_fragment>",
-        "#include <roughnessmap_fragment>\n  roughnessFactor = clamp(roughnessFactor + sO.roughAmt * (sO.rough - 0.5), 0.04, 1.0);",
-      )
-      .replace(
-        "#include <normal_fragment_begin>",
-        "#include <normal_fragment_begin>\n" + bumpGLSL("sGraph(P, wn).bump", "sO.bumpAmt"),
-      );
-  };
-  setProgramKey(m, key);
-  m.needsUpdate = true;
+  setPatch(m, graphPatch(key, compileGraph(graph)));
 }
 
 export interface SurfaceBakeShader {

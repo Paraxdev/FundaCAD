@@ -24,7 +24,6 @@ import InterferencePanel from "./components/overlays/InterferencePanel.vue";
 import StressPanel from "./components/overlays/StressPanel.vue";
 import OverhangPanel from "./components/overlays/OverhangPanel.vue";
 import ParamsDialog from "./components/overlays/ParamsDialog.vue";
-import WelcomeModal from "./components/overlays/WelcomeModal.vue";
 import PreferencesDialog from "./components/overlays/PreferencesDialog.vue";
 import ExportDialog from "./components/overlays/ExportDialog.vue";
 import BugReportDialog from "./components/overlays/BugReportDialog.vue";
@@ -34,15 +33,18 @@ import TextToolPanel from "./components/overlays/TextToolPanel.vue";
 import FilletMembers from "./components/overlays/FilletMembers.vue";
 import ProjectFilterBar from "./components/overlays/ProjectFilterBar.vue";
 import MeasureReadout from "./components/overlays/MeasureReadout.vue";
-import { onMounted, onUnmounted, ref, shallowRef, useTemplateRef, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, shallowRef, useTemplateRef, watch } from "vue";
 import { useEngine } from "./app/engineKey";
 import { isNarrowStage } from "./ui/layoutBreakpoints";
 import { useDialogStore } from "./stores/dialogs";
+import { useHomeStore } from "./stores/home";
+import HomeScreen from "./components/home/HomeScreen.vue";
 import { useExportDialogStore } from "./stores/exportDialog";
 import { useToolPanelStore } from "./stores/toolPanels";
 import { contributedOverlays, onContribChange } from "./plugins/contrib";
 
 const dialogs = useDialogStore();
+const home = useHomeStore();
 const exportDialog = useExportDialogStore();
 const toolPanels = useToolPanelStore();
 const shell = useShellStore();
@@ -77,6 +79,8 @@ onMounted(() => {
 });
 onUnmounted(() => offContrib?.());
 
+const homeUp = computed(() => home.visible && !!home.callbacks);
+
 const stage = useTemplateRef<HTMLElement>("stage");
 let stageRo: ResizeObserver | null = null;
 onMounted(() => {
@@ -102,8 +106,9 @@ watch(() => ui.sketchActive, () => shell.closeDrawer());
          float layer takes no pointer events itself, only its cards do, so the
          model can be picked through every gap between them. -->
     <div id="stage" ref="stage" :class="{ narrow: shell.narrow }">
-      <ViewportPane />
-      <div id="float-layer">
+      <!-- Inert under Home, so Tab and screen readers stay on what is on screen. -->
+      <ViewportPane :inert="homeUp" />
+      <div id="float-layer" :inert="homeUp">
         <div class="float-left">
           <!-- Items on top, the blend's edge list docked under it (shrinking
                Items while a fillet/chamfer is being edited), the rail beside. -->
@@ -120,6 +125,8 @@ watch(() => ui.sketchActive, () => shell.closeDrawer());
           <TimelineBar v-else-if="!ui.sketchActive && shell.historyShown" />
         </div>
       </div>
+      <!-- Covers the canvas rather than hiding it, so the viewport keeps its size. -->
+      <HomeScreen v-if="homeUp" />
     </div>
     <!-- Present only in the Render workspace; it mounts nothing in the other
          one, so the grid track collapses. -->
@@ -163,8 +170,7 @@ watch(() => ui.sketchActive, () => shell.closeDrawer());
        and unmount IS closed, which is what lets the ones that gate global
        shortcuts push/pop the modal depth in onMounted/onUnmounted and never
        leak a count (composables/useModalGate.ts). They are independent because
-       they genuinely stack, the welcome screen opens sign-in over itself. -->
-  <WelcomeModal v-if="dialogs.welcome && dialogs.welcomeCallbacks" />
+       they genuinely stack. -->
   <PreferencesDialog v-if="dialogs.preferences" />
   <ExportDialog v-if="exportDialog.request" />
   <BugReportDialog v-if="dialogs.bugReport && dialogs.bugDeps" />

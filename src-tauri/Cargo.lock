@@ -2074,6 +2074,8 @@ name = "fundacad-tracer"
 version = "0.1.0"
 dependencies = [
  "flate2",
+ "fundacad-engine",
+ "fundacad-frames",
  "futures-executor",
  "libloading 0.8.9",
  "naga",
@@ -2082,6 +2084,7 @@ dependencies = [
  "serde_json",
  "sha2 0.10.9",
  "tar",
+ "tungstenite",
  "wgpu",
  "zip 4.6.1",
 ]

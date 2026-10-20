@@ -40,7 +40,7 @@ nav = [
     { "Stress" = ["inspect/stress.md", "inspect/stress-results.md"] },
   ] },
   { "Render" = ["render/materials.md", "render/editing.md", "render/graph.md", "render/environment.md", "render/view-modes.md"] },
-  { "Files" = ["files/save.md", "files/versions.md", "files/link.md", "files/import.md", "files/export.md"] },
+  { "Files" = ["files/home.md", "files/save.md", "files/versions.md", "files/link.md", "files/import.md", "files/export.md"] },
   { "Plugins" = [
     "plugins/index.md",
     "plugins/extra-parameters.md",

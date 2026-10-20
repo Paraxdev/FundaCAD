@@ -3,7 +3,7 @@
 // of the app uses: setModel(), fit(), pick callbacks, projection/view toggles.
 
 import * as THREE from "three";
-import { createScene, environmentKey, environmentRoomFor, type SceneBundle } from "./scene";
+import { createScene, environmentKey, environmentRoomFor, isHdrHeld, type SceneBundle } from "./scene";
 import {
   createCameraRig,
   type CameraRig,
@@ -64,7 +64,7 @@ import type { DocumentStore } from "../document/store";
 import type { BodyFinish } from "../document/materials";
 import { BodyFinishLayer, sameFinishMap, sameStringMap } from "./bodyFinish";
 import { hdrHashOf, onRenderPrefsChange, renderPrefs, setRenderPref } from "../ui/renderPrefs";
-import { bootViewMode, chooseViewMode, effectiveViewMode, resetPathTracedOverride, savedOverlays, type RenderTier, type ViewMode } from "../ui/viewMode";
+import { bootViewMode, chooseViewMode, effectiveViewMode, resetPathTracedOverride, savedGround, savedOverlays, type RenderTier, type ViewMode } from "../ui/viewMode";
 import { drawMask, markOverlay, overlayBit, overlayShown, pickLayers, pickMask, pictureMask, setPickLayers, syncOverlayLayers, type ActiveWork, type OverlayKind } from "./overlayKinds";
 import type { TraceLight, TraceLook } from "./pathtrace/backend";
 import { lensFor, type TraceLens } from "./pathtrace/camera";
@@ -77,9 +77,11 @@ import type { SurfaceBaker } from "./pathtrace/mirror";
 import { createSurfaceBaker, webglSurfaceShade } from "./pathtrace/surfaceBake";
 import { describeNative, describeProbe, probeNative, probeWebGpu, type GpuProbe } from "./pathtrace/probe";
 import { chooseTracer, createTracerOf, type NativeProbe, type TracerKind } from "./pathtrace/choose";
+import { wsCall, type DevCall } from "./pathtrace/devCall";
+import type { Call } from "./pathtrace/nativeScene";
 import type { TracerBackend } from "./pathtrace/backend";
 import type { TraceState } from "./pathtrace/state";
-import { onWorkspaceChange } from "../ui/workspace";
+import { onWorkspaceChange, workspace } from "../ui/workspace";
 import { invalidateThemeColors } from "./themeColors";
 import { onThemeChange } from "../ui/theme";
 import type { ViewCubeSide } from "../types";
@@ -144,6 +146,8 @@ import { hitScale } from "../input/pointerKind";
 import { setEmissionProgress } from "../ui/emissionProgress";
 import { DisposeQueue, detachModel } from "./disposeQueue";
 import { ShadowWatch } from "./shadowWatch";
+import { ContactShadow, catcherPlane, type CatcherPlane } from "./contactShadow";
+import { buildLightRig, type LightRig } from "./lightRig";
 import { hideForPicture, markInPicture, markNotInPicture, widenLines } from "./pictureScene";
 
 /** One box drag. The box previews by selecting every frame, so each frame starts
@@ -161,13 +165,23 @@ export interface AreaDrag {
  *  Vector3 per frame for a constant is litter in the hot path. Never written. */
 const WORLD_ORIGIN = new THREE.Vector3(0, 0, 0);
 
+let devServer: DevCall | null = null;
+
 /** ?tracer=native or ?tracer=webgpu overrides the preference for measuring,
- *  ?tracer=native-ws also forces the WebSocket path. */
-function devTracerSwitch(): { kind: TracerKind; prefer?: string } | null {
-  const pick = new URLSearchParams(globalThis.location?.search ?? "").get("tracer");
+ *  ?tracer=native-ws also forces the WebSocket path. In a dev build
+ *  ?tracer=native-dev&port=P runs the native tracer of tracer_serve outside
+ *  the app, with `ptoken`, else the engine's `token`. */
+function devTracerSwitch(): { kind: TracerKind; prefer?: string; call?: Call } | null {
+  const q = new URLSearchParams(globalThis.location?.search ?? "");
+  const pick = q.get("tracer");
   if (pick === "webgpu") return { kind: "webgpu" };
   if (pick === "native") return { kind: "native" };
   if (pick === "native-ws") return { kind: "native", prefer: "websocket" };
+  if (pick === "native-dev" && import.meta.env.DEV) {
+    const token = encodeURIComponent(q.get("ptoken") ?? q.get("token") ?? "");
+    devServer ??= wsCall(`ws://127.0.0.1:${Number(q.get("port"))}/?token=${token}`);
+    return { kind: "native", prefer: "websocket", call: devServer };
+  }
   return null;
 }
 
@@ -292,11 +306,14 @@ export class Viewport {
   private needsRender = true;
   private lingerFrames = 3;
   private shadowWatch = new ShadowWatch();
+  /** Public for the browser checks, which read its bake counter. */
+  readonly contactShadow = new ContactShadow();
 
   constructor(private canvas: HTMLCanvasElement) {
     this.scene = createScene(canvas);
     this.progressive = new ProgressiveModel(this.scene.modelGroup, disposeBody);
     this.scene.scene.add(markOverlay(this.datumGroup, "origin"));
+    this.scene.scene.add(this.contactShadow.group);
     const rect = canvas.getBoundingClientRect();
     this.rig = createCameraRig(canvas, rect.width / rect.height);
 
@@ -365,6 +382,7 @@ export class Viewport {
     onWorkspaceChange(() => {
       this.syncViewMode();
       this.overlays = savedOverlays();
+      this.requestRender(); // each workspace keeps its own ground
     });
     onRenderPrefsChange(() => {
       if (renderPrefs().tracer !== this.tracerPref) {
@@ -1016,7 +1034,7 @@ export class Viewport {
   }
 
   private async bootPathTrace() {
-    const native = probeNative().then((p) => {
+    const native = probeNative(devTracerSwitch()?.call).then((p) => {
       this.native = p;
       crumb(describeNative(p));
       this.tierChanged();
@@ -1048,7 +1066,7 @@ export class Viewport {
     });
     if (!kind) throw new Error("both tracers faulted this session");
     this.tracerKind = kind;
-    return createTracerOf(kind, dev?.prefer);
+    return createTracerOf(kind, dev?.prefer, dev?.call);
   }
 
   private dropTrace(why: string, off: boolean) {
@@ -4003,11 +4021,81 @@ export class Viewport {
     const h = Math.max(1, Math.round(rect.height));
     const cap = this.scene.renderer.capabilities.maxTextureSize || 4096;
     const k = Math.max(1, Math.min(scale, cap / Math.max(w, h)));
+    return this.drawPicture(w, h, k, opts, () => this.canvas.toDataURL("image/png"));
+  }
 
+  /** A card picture for Home: the whole model from the front right corner at
+   *  `width` x `height`, as a JPEG over the viewport background, null for an
+   *  empty model. The camera is moved and put back within this call, so the
+   *  moved view is never painted. */
+  renderThumbnail(width: number, height: number): string | null {
+    const model = this.model;
+    if (!model || model.box.isEmpty()) return null;
+    const saved = this.rig.getState();
+    const bg = this.scene.renderer.getClearColor(new THREE.Color()).getStyle();
+    return this.drawPicture(
+      width,
+      height,
+      1,
+      // realtime: the traced view paints on its own surface, which this canvas never holds.
+      { edges: true, realtime: true },
+      () => {
+        const out = document.createElement("canvas");
+        out.width = width;
+        out.height = height;
+        const g = out.getContext("2d");
+        if (!g) return null;
+        g.fillStyle = bg;
+        g.fillRect(0, 0, width, height);
+        g.drawImage(this.canvas, 0, 0, width, height);
+        return out.toDataURL("image/jpeg", 0.85);
+      },
+      {
+        // The rig only moves the camera on its next update, and resetView's fit is a
+        // flight, so the fit is repeated without one and committed here.
+        enter: () => {
+          this.rig.resize(width, height);
+          this.rig.resetView(model.box);
+          this.rig.fit(model.box, { animate: false });
+          this.rig.update(0);
+        },
+        leave: () => {
+          this.rig.setState(saved, false);
+          this.rig.update(0);
+        },
+      },
+    );
+  }
+
+  private drawPicture<T>(
+    w: number,
+    h: number,
+    k: number,
+    opts: { edges?: boolean; realtime?: boolean },
+    read: () => T,
+    camera?: { enter(): void; leave(): void },
+  ): T {
+    if (!camera) return this.drawPictureNow(w, h, k, opts, read);
+    camera.enter();
+    try {
+      return this.drawPictureNow(w, h, k, opts, read);
+    } finally {
+      camera.leave();
+      this.requestRender();
+    }
+  }
+
+  private drawPictureNow<T>(
+    w: number,
+    h: number,
+    k: number,
+    opts: { edges?: boolean; realtime?: boolean },
+    read: () => T,
+  ): T {
     const lines = this.model ? edgeObjects(this.model) : [];
     const dpr = this.scene.renderer.getPixelRatio();
-    const camera = this.rig.active;
-    const viewLayers = camera.layers.mask;
+    const active = this.rig.active;
+    const viewLayers = active.layers.mask;
 
     // A still is full quality even in potato mode: the tier, passes and environment
     // come back for this one render, and glass and emitters with the tier.
@@ -4017,10 +4105,9 @@ export class Viewport {
     if (stillLow !== wasLow) this.applyBodyFinish();
 
     // No selection, hover, grid, tool handle or any other overlay goes in the file.
-    camera.layers.mask = pictureMask(opts);
+    active.layers.mask = pictureMask(opts);
     const showOverlays = hideForPicture(this.scene.scene, this.scene.modelGroup);
     const narrowLines = widenLines(lines.map((e) => e.material), k);
-    let url = "";
     try {
       this.scene.renderer.setPixelRatio(1);
       this.scene.renderer.setSize(w * k, h * k, false);
@@ -4028,12 +4115,12 @@ export class Viewport {
       this.scene.post.focusDistance = this.rig.active.position.distanceTo(this.cameraTarget());
       const draw = () => {
         this.scene.post.render(this.rig.active, false, opts.realtime);
-        return this.canvas.toDataURL("image/png");
+        return read();
       };
-      url = this.highlighter ? this.highlighter.withoutSelectionPaint(draw) : draw();
+      return this.highlighter ? this.highlighter.withoutSelectionPaint(draw) : draw();
     } finally {
       showOverlays();
-      camera.layers.mask = viewLayers;
+      active.layers.mask = viewLayers;
       narrowLines();
       // Whatever happened, the viewport goes back to being the viewport. A throw
       // between the resize and the restore would otherwise leave the canvas
@@ -4046,7 +4133,6 @@ export class Viewport {
       this.resize();
       this.requestRender();
     }
-    return url;
   }
 
   // Counts frames the loop ACTUALLY draws. Render-on-demand means most rAF
@@ -4180,6 +4266,16 @@ export class Viewport {
   }
 
   private scratchTarget = new THREE.Vector3();
+  private contactPlane(): CatcherPlane | null {
+    return this.model ? catcherPlane(this.model.box, this.targetGridZ) : null;
+  }
+
+  /** The light rig with this view's ground, the catcher the tracer should draw too. */
+  lightRig(): LightRig {
+    const p = this.contactPlane();
+    return buildLightRig(renderPrefs(), isHdrHeld, p && { workspace: workspace(), z: p.z, centre: p.centre, extent: p.extent });
+  }
+
   private loop = () => {
     // Never let a single bad frame kill the loop: if any step throws, log and
     // keep scheduling, so a transient camera/geometry glitch can't freeze the
@@ -4237,6 +4333,21 @@ export class Viewport {
         // on. Written every frame because the orbit distance changes every frame
         // a wheel is turned, and it costs one subtraction.
         this.scene.post.focusDistance = this.rig.active.position.distanceTo(t);
+        this.contactShadow.sync({
+          renderer: this.scene.renderer,
+          model: this.scene.modelGroup,
+          plane: this.contactPlane(),
+          state: {
+            ground: savedGround(),
+            lowPower: isRenderLowPower(),
+            potato: renderPrefs().potatoMode,
+            viewMode: this.scene.post.viewMode,
+            tracing: this.scene.post.viewMode === "pathtraced" && this.scene.post.traceShown,
+            xray: this.xray,
+          },
+          traceState: this.trace.state,
+          shadows: renderPrefs().shadows,
+        });
         const shadows = this.scene.renderer.shadowMap;
         // Shadows depend on the casters and the lights, never on the camera.
         this.shadowWatch.gate(this.needsRender, this.scene.scene, shadows, this.scene.post.drawsShadows);

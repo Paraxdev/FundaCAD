@@ -1,22 +1,27 @@
 mod accel;
+mod adapter;
 mod bindings;
 mod frame;
+mod picture;
 mod pipelines;
 mod upload;
 
 use std::collections::HashMap;
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc, Mutex};
 
 use crate::bloom::{Bloom, Chain};
 use crate::denoise::{self, Denoiser, Quality};
 use crate::scene::{BodyDesc, Commit, Mesh, Scene};
 
 use accel::{make_tlas, GpuAccel};
+pub use adapter::{choose, Candidate, Refusal};
+pub use picture::{encode_png, picture_refusal, Picture};
 use pipelines::Pipelines;
 pub(crate) use pipelines::pipeline_at;
 use upload::Shading;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Path {
     RayQuery,
     Software,
@@ -135,6 +140,17 @@ pub struct Tracer {
     quality: Quality,
     job: Option<Job>,
     denoise_error: Option<String>,
+    fault: Arc<Mutex<Fault>>,
+    buffer_limit: u64,
+}
+
+/// The first loss and the first uncaptured error. Not behind the frames
+/// State lock: wgpu runs both handlers inside the call that hit them, which
+/// already holds that lock.
+#[derive(Default)]
+struct Fault {
+    lost: Option<String>,
+    error: Option<String>,
 }
 
 /// The last frame handed out, shown again while nothing can change it.
@@ -167,29 +183,14 @@ struct Job {
 
 
 impl Tracer {
-    pub fn new(opts: TracerOptions) -> Result<Tracer, String> {
+    pub fn new(opts: TracerOptions) -> Result<Tracer, Refusal> {
         let mut desc = wgpu::InstanceDescriptor::new_without_display_handle();
         desc.backends = opts.backends;
         let instance = wgpu::Instance::new(desc);
-        let adapters = futures_executor::block_on(instance.enumerate_adapters(opts.backends));
-        let rank = |b: wgpu::Backend| match b {
-            wgpu::Backend::Vulkan => 0u8,
-            wgpu::Backend::Dx12 => 1,
-            wgpu::Backend::Metal => 2,
-            _ => 3,
-        };
-        let adapter = adapters
-            .into_iter()
-            .min_by_key(|a| {
-                let i = a.get_info();
-                (rank(i.backend), u8::from(i.device_type != wgpu::DeviceType::DiscreteGpu))
-            })
-            .ok_or("no adapter")?;
-        // CI sets this for lavapipe; the refusal of CPU adapters lands in tracer-robustness.
-        let _allow_cpu = std::env::var_os("FUNDACAD_TRACER_ALLOW_CPU").is_some();
-        if adapter.limits().max_storage_buffers_per_shader_stage < bindings::STORAGE_FLOOR {
-            return Err(format!("{} binds too few storage buffers", adapter.get_info().name));
-        }
+        let mut adapters = futures_executor::block_on(instance.enumerate_adapters(opts.backends));
+        let allow_cpu = std::env::var_os("FUNDACAD_TRACER_ALLOW_CPU").is_some();
+        let found: Vec<Candidate> = adapters.iter().map(Candidate::of).collect();
+        let adapter = adapters.swap_remove(choose(&found, allow_cpu)?);
         let hw = !opts.software && adapter.features().contains(wgpu::Features::EXPERIMENTAL_RAY_QUERY);
         let info = adapter.get_info();
         // Default limits leave every acceleration structure limit at 0 and
@@ -206,8 +207,21 @@ impl Tracer {
             },
             ..Default::default()
         }))
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| Refusal::Device(e.to_string()))?;
         let path = if hw { Path::RayQuery } else { Path::Software };
+        let limits = device.limits();
+        let buffer_limit = limits.max_buffer_size.min(limits.max_storage_buffer_binding_size as u64);
+        let fault = Arc::new(Mutex::new(Fault::default()));
+        let f = fault.clone();
+        device.set_device_lost_callback(move |reason, msg| {
+            let mut f = f.lock().unwrap_or_else(|p| p.into_inner());
+            f.lost.get_or_insert_with(|| format!("the graphics device was lost ({reason:?}: {msg})"));
+        });
+        let f = fault.clone();
+        device.on_uncaptured_error(Arc::new(move |e: wgpu::Error| {
+            let mut f = f.lock().unwrap_or_else(|p| p.into_inner());
+            f.error.get_or_insert_with(|| e.to_string());
+        }));
 
         let pipes = Pipelines::new(&device, path);
 
@@ -281,6 +295,8 @@ impl Tracer {
             quality: Quality::default(),
             job: None,
             denoise_error: None,
+            fault,
+            buffer_limit,
         };
         t.resize(64, 64);
         Ok(t)
@@ -288,6 +304,16 @@ impl Tracer {
 
     pub fn path(&self) -> Path {
         self.path
+    }
+    /// Why the GPU stopped: a lost device, else the first error wgpu raised.
+    /// Once set, frames are black and no GPU work follows.
+    pub fn fault(&self) -> Option<String> {
+        let f = self.fault.lock().unwrap_or_else(|p| p.into_inner());
+        f.lost.clone().or_else(|| f.error.clone())
+    }
+    #[doc(hidden)]
+    pub fn lose_device_for_test(&self) {
+        self.device.destroy();
     }
     pub fn adapter(&self) -> &str {
         &self.adapter
@@ -318,20 +344,18 @@ impl Tracer {
         self.aov = storage(&self.device, px * 32, wgpu::BufferUsages::COPY_SRC);
         self.out = storage(&self.device, px * 4, wgpu::BufferUsages::COPY_SRC);
         self.hdr = storage(&self.device, px * 16, wgpu::BufferUsages::empty());
-        if self.path == Path::RayQuery || self.rows == 0 {
+        if self.rows == 0 {
             self.rows = h;
         }
         self.resolve_bind = None;
         self.reset();
     }
 
-    /// The software path traces about this many paths per dispatch, so one
-    /// dispatch never holds the GPU long enough to stall the UI.
+    /// The first dispatch traces about this many paths, so one dispatch never
+    /// holds the GPU long enough to stall the UI or trip the driver's timeout.
     pub fn set_frame_budget(&mut self, paths: u32) {
-        if self.path == Path::Software {
-            self.rows = (paths / self.w).clamp(8, self.h.next_multiple_of(8)).next_multiple_of(8);
-            self.reset();
-        }
+        self.rows = (paths / self.w).clamp(8, self.h.next_multiple_of(8)).next_multiple_of(8);
+        self.reset();
     }
 
     pub fn set_cap(&mut self, cap: u32) {
@@ -442,12 +466,9 @@ impl Tracer {
         self.denoise_error.as_deref()
     }
 
-    fn start_denoise(&mut self) {
-        if self.quality == Quality::Off {
-            return;
-        }
+    fn denoise_input(&self) -> denoise::Input {
         let aov = self.read_aovs();
-        let input = denoise::Input {
+        denoise::Input {
             width: self.w as usize,
             height: self.h as usize,
             color: self.read_hdr().into_iter().flatten().collect(),
@@ -455,7 +476,14 @@ impl Tracer {
             normal: aov.iter().skip(1).step_by(2).flat_map(|n| [n[0], n[1], n[2]]).collect(),
             depth: aov.chunks_exact(2).map(|p| if p[1][3] > 0.0 { p[0][3] } else { 0.0 }).collect(),
             samples: self.sample,
-        };
+        }
+    }
+
+    fn start_denoise(&mut self) {
+        if self.quality == Quality::Off {
+            return;
+        }
+        let input = self.denoise_input();
         let (tx, rx) = mpsc::channel();
         let quality = self.quality;
         let e = if self.look.exposure > 0.0 { self.look.exposure } else { 1.0 };
