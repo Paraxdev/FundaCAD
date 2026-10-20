@@ -418,6 +418,11 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Fixed
 
+- **One Undo takes back an import and the colours its file carried.** Each
+  colour used to be an undo step of its own, so a coloured assembly took many
+  Undos, and one with more than 49 colours could not be undone at all. An
+  import undone while it was still building now gets its colours back on Redo.
+
 - **A hole takes the size or depth typed just before Enter.** An Enter pressed
   within a moment of the last key could make the hole at the size it started
   with, M3 where M6 was typed.
