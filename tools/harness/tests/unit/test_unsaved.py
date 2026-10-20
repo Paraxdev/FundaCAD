@@ -20,6 +20,7 @@ class App:
         self.clicked: list[str] = []
         self.errors: list[str] = []
         self.features = ["e1"]
+        self.modal = True
 
     def pick(self, name):
         if self.dirty:
@@ -38,7 +39,8 @@ class App:
         if method == "status":
             return {"mode": "model", "doc": self.doc, "dirty": self.dirty}
         if method == "screen":
-            return {"lines": self.rows if args.get("region") in (None, "dialog") else []}
+            head = [[0, "dialog", "region", "modal" if self.modal else "", []]] if self.rows else []
+            return {"lines": head + self.rows if args.get("region") in (None, "dialog") else []}
         if method == "locate":
             t = args["target"]
             self.clicked.append(t)
@@ -113,6 +115,15 @@ def test_a_canvas_pick_under_a_dialog_says_the_dialog_is_the_cause():
         s.pick_face("front")
     app.rows = []
     with pytest.raises(Occluded, match='try s.view\\("front"\\)'):
+        s.pick_face("front")
+    s.close()
+
+
+def test_a_canvas_pick_beside_the_console_keeps_its_own_reason():
+    app = App()
+    app.rows, app.modal = [[1, "action:clear", "button", "Clear", []]], False
+    s = session(app)
+    with pytest.raises(Occluded, match='try s.view\("front"\)'):
         s.pick_face("front")
     s.close()
 
