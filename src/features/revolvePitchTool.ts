@@ -53,6 +53,7 @@ import { snap } from "../ui/units";
 import {
   axisDragDistance,
   createDragHandle,
+  nameHandle,
   leanOutOfView,
   type DragHandle,
 } from "./manipulator";
@@ -507,7 +508,7 @@ export class RevolvePitchTool {
   // --- scene -----------------------------------------------------------------
 
   private buildGizmo() {
-    this.handle = createDragHandle();
+    this.handle = nameHandle(createDragHandle(), "pitch");
     this.gizmo = this.handle.group;
     this.viewport.addToScene(this.gizmo);
   }

@@ -23,6 +23,7 @@ import { fmtLength, snap } from "../ui/units";
 import {
   axisDragDistance,
   createDragHandle,
+  nameHandle,
   createRotationArc,
   fluentRelease,
   HANDLE_LENGTH,
@@ -880,7 +881,7 @@ export class PressPullTool {
   }
 
   private buildGizmo() {
-    this.handle = createDragHandle();
+    this.handle = nameHandle(createDragHandle(), "push");
     this.gizmo = this.handle.group;
     this.viewport.addToScene(this.gizmo);
   }
@@ -916,7 +917,7 @@ export class PressPullTool {
       return;
     }
     if (!this.taperArc) {
-      this.taperArc = createRotationArc();
+      this.taperArc = nameHandle(createRotationArc(), "taper");
       this.viewport.addToScene(this.taperArc.group);
     }
     // A stable in-plane axis of the face: world X projected onto the face plane,

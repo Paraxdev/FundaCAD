@@ -136,7 +136,10 @@ type MetaListener = () => void;
  *  stack in chronological order, so Ctrl+Z undoes whichever happened last
  *  instead of silently skipping display-only changes and eating a feature
  *  edit that came before them. */
-type UndoEntry = { kind: "doc"; doc: CadDocument } | { kind: "overlay"; undo: () => void; redo: () => void };
+type UndoEntry =
+  | { kind: "doc"; doc: CadDocument }
+  | { kind: "overlay"; undo: () => void; redo: () => void }
+  | { kind: "group"; entries: UndoEntry[] };
 
 // Safe for `"hiddenBodies" in f` checks: no mutator writes an explicit undefined.
 const clone = (d: CadDocument): CadDocument => structuredClone(d);
@@ -349,6 +352,7 @@ export class DocumentStore {
   private busy: BusyState = IDLE_BUSY;
   /** Every runBusy op still running, newest last; the chip shows the newest. */
   private busyOps: { state: BusyState; abort: AbortController | null }[] = [];
+  private historyHeld = 0;
 
   /** The last build of the document without a preview, and what it was built
    *  from. Leaving a tool, or undoing a commit the kernel refused, lands back on
@@ -443,6 +447,11 @@ export class DocumentStore {
     return this.busy;
   }
 
+  /** An edit is waiting out the rebuild debounce. */
+  get rebuildPending(): boolean {
+    return this.rebuildTimer != null;
+  }
+
   onBusy(fn: BusyListener): () => void {
     this.busyListeners.add(fn);
     fn(this.busy);
@@ -451,13 +460,17 @@ export class DocumentStore {
 
   /** Run a cancellable backend op with busy state. `onStarted` hands back the request
    *  id, since a rebuild started meanwhile would otherwise be "most recent". An op
-   *  that never reaches the engine passes `abort`, which Cancel then aborts. */
+   *  that never reaches the engine passes `abort`, which Cancel then aborts.
+   *  `holdHistory` turns undo and redo off until it ends: an import's feature lands
+   *  as a new step once the file is read, which would drop the redo of a step
+   *  undone meanwhile. */
   async runBusy<T>(
     label: string,
     fn: (onStarted: (id: string) => void) => Promise<T>,
-    opts: { rebuild?: boolean; abort?: AbortController } = {},
+    opts: { rebuild?: boolean; abort?: AbortController; holdHistory?: boolean } = {},
   ): Promise<T> {
     const op = { state: { ...IDLE_BUSY, active: true, label, rebuild: opts.rebuild === true }, abort: opts.abort ?? null };
+    if (opts.holdHistory) this.historyHeld++;
     this.busyOps.push(op);
     this.setBusy(op.state);
     try {
@@ -466,6 +479,7 @@ export class DocumentStore {
         if (this.busyOps.at(-1) === op) this.setBusy(op.state);
       });
     } finally {
+      if (opts.holdHistory) this.historyHeld--;
       this.busyOps.splice(this.busyOps.indexOf(op), 1);
       this.busy = this.busyOps.at(-1)?.state ?? IDLE_BUSY;
       this.emitBusy();
@@ -657,14 +671,20 @@ export class DocumentStore {
   // cheap closures and share the same cap for simplicity.
   private static readonly UNDO_CAP = 50;
 
+  /** Set while undoAsOne runs: the steps go here instead of onto the stack. */
+  private collecting: UndoEntry[] | null = null;
+
   private pushUndo() {
-    this.undoStack.push({ kind: "doc", doc: clone(this.doc) });
+    const entry: UndoEntry = { kind: "doc", doc: clone(this.doc) };
+    if (this.collecting) return void this.collecting.push(entry);
+    this.undoStack.push(entry);
     if (this.undoStack.length > DocumentStore.UNDO_CAP) this.undoStack.shift();
   }
 
   /** Push a reversible overlay-only change (visibility and the like) onto the
    *  same stack as feature edits, in its true chronological place. */
   private pushOverlayUndo(entry: { undo: () => void; redo: () => void }) {
+    if (this.collecting) return void this.collecting.push({ kind: "overlay", ...entry });
     this.undoStack.push({ kind: "overlay", ...entry });
     if (this.undoStack.length > DocumentStore.UNDO_CAP) this.undoStack.shift();
     this.redoStack = [];
@@ -1357,42 +1377,71 @@ export class DocumentStore {
 
   // --- undo / redo ---
   undo() {
+    if (!this.historyHeld) this.undoStep();
+  }
+  /** The store taking back its own last step, which an import's hold does not stop. */
+  private undoStep() {
     const prev = this.undoStack.pop();
     if (!prev) return;
     this.emitRewind();
-    if (prev.kind === "overlay") {
-      this.redoStack.push(prev);
-      prev.undo();
-      return;
-    }
-    this.redoStack.push({ kind: "doc", doc: clone(this.doc) });
-    this.doc = prev.doc;
-    this.rearmProjectionValve();
-    this.markDirty();
-    this.emitDoc();
-    this.scheduleRebuild(true);
+    this.redoStack.push(this.applyUndoEntry(prev, "undo"));
   }
   redo() {
+    if (this.historyHeld) return;
     const next = this.redoStack.pop();
     if (!next) return;
     this.emitRewind();
-    if (next.kind === "overlay") {
-      this.undoStack.push(next);
-      next.redo();
-      return;
+    this.undoStack.push(this.applyUndoEntry(next, "redo"));
+    if (this.undoStack.length > DocumentStore.UNDO_CAP) this.undoStack.shift();
+  }
+  /** Applies one entry and returns the entry that takes it back again. */
+  private applyUndoEntry(e: UndoEntry, way: "undo" | "redo"): UndoEntry {
+    if (e.kind === "overlay") {
+      e[way]();
+      return e;
     }
-    this.pushUndo();
-    this.doc = next.doc;
+    if (e.kind === "group") {
+      const order = way === "undo" ? [...e.entries].reverse() : e.entries;
+      const back = order.map((x) => this.applyUndoEntry(x, way));
+      return { kind: "group", entries: way === "undo" ? back.reverse() : back };
+    }
+    const was: UndoEntry = { kind: "doc", doc: clone(this.doc) };
+    this.doc = e.doc;
     this.rearmProjectionValve();
     this.markDirty();
     this.emitDoc();
     this.scheduleRebuild(true);
+    return was;
+  }
+  /** Runs `fn` and makes the undo steps it takes one step. When the step on top of
+   *  the stack is a document change and `onto` holds for the document before it,
+   *  they join that step instead. With `only: true` nothing runs unless they can. */
+  undoAsOne(fn: () => void, onto?: (before: CadDocument) => boolean, opts: { only?: boolean } = {}): boolean {
+    const top = this.undoStack.at(-1);
+    const join = top?.kind === "doc" && !!onto?.(top.doc);
+    if (opts.only && !join) return false;
+    const taken: UndoEntry[] = [];
+    this.collecting = taken;
+    try {
+      fn();
+    } finally {
+      this.collecting = null;
+    }
+    if (!taken.length) return join;
+    if (join) {
+      this.undoStack[this.undoStack.length - 1] = { kind: "group", entries: [top!, ...taken] };
+      return true;
+    }
+    this.undoStack.push(taken.length > 1 ? { kind: "group", entries: taken } : taken[0]!);
+    if (this.undoStack.length > DocumentStore.UNDO_CAP) this.undoStack.shift();
+    this.redoStack = [];
+    return false;
   }
   get canUndo() {
-    return this.undoStack.length > 0;
+    return !this.historyHeld && this.undoStack.length > 0;
   }
   get canRedo() {
-    return this.redoStack.length > 0;
+    return !this.historyHeld && this.redoStack.length > 0;
   }
 
   // --- ViewCube side redefinitions (don't affect geometry, so no rebuild) ---
@@ -2538,7 +2587,7 @@ export class DocumentStore {
     if (!err) return false;
     this.onWarning?.(`${p.what} was refused, nothing changed: ${err.message}`);
     this.restoreArmed = true;
-    this.undo();
+    this.undoStep();
     return true;
   }
 

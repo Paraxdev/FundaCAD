@@ -297,6 +297,17 @@ describe("BrowserPane", () => {
     expect(at("Plate")).toBeGreaterThan(at("Bracket"));
   });
 
+  it("marks each body row and element head with its id", async () => {
+    const fake = makeEngine({ parameters: {}, features: [] }, [{ id: "body1", name: "Bracket" }]);
+    const w = render(fake);
+    const rig = fake.store.addElement("Rig");
+    await nextTick();
+    expect(rowNamed(w, "Bracket").attributes("data-id")).toBe("body1");
+    expect(folderNamed(w, "Rig")!.attributes("data-id")).toBe(rig);
+    expect(folderNamed(w, "Rig")!.attributes("data-key")).toBe(`e:${rig}`);
+    expect(rowNamed(w, "Bracket").find(".tree-eye").attributes("data-visible")).toBe("true");
+  });
+
   it("keeps an element that holds nothing, so it can be filled afterwards", async () => {
     const fake = makeEngine({ parameters: {}, features: [] }, [{ id: "body1", name: "Bracket" }]);
     const w = render(fake);

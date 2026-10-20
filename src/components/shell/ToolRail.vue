@@ -338,7 +338,7 @@ function toggleIsolate() {
 </script>
 
 <template>
-  <nav id="toolrail" ref="railEl" class="tool-rail" :class="{ compact, scrolls }" :data-mode="mode" aria-label="Tools">
+  <nav id="toolrail" ref="railEl" class="tool-rail" :class="{ compact, scrolls }" :data-mode="mode" :data-sketch-tool="mode === 'sketch' ? ribbon.activeSketchTool : undefined" aria-label="Tools">
     <div ref="listEl" class="rail-list">
       <RailButton
         icon="search"

@@ -27,6 +27,7 @@ import { snap } from "../ui/units";
 import {
   axisDragDistance,
   createDragHandle,
+  nameHandle,
   createRotationArc,
   fluentRelease,
   HANDLE_UP,
@@ -809,7 +810,7 @@ export class ExtrudeTool {
     this.taperTop.copy(anchor).addScaledVector(dir, depth);
 
     if (!this.depthHandle) {
-      this.depthHandle = createDragHandle();
+      this.depthHandle = nameHandle(createDragHandle(), "depth");
       this.viewport.addToScene(this.depthHandle.group);
     }
     // Red while the push removes material (a cut), amber while it adds.
@@ -831,7 +832,7 @@ export class ExtrudeTool {
       return;
     }
     if (!this.taperHandle) {
-      this.taperHandle = createRotationArc();
+      this.taperHandle = nameHandle(createRotationArc(), "taper");
       this.viewport.addToScene(this.taperHandle.group);
     }
     // The sketch's local +X, in world space: a deterministic in-plane axis to run

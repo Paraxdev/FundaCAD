@@ -589,6 +589,7 @@ function commitField(
     <ValidatedRow
       v-for="r in sketchRows"
       :key="r.key"
+      :field="r.key"
       :label="r.label"
       :value="r.value"
       :unit="r.unit"
@@ -599,6 +600,7 @@ function commitField(
     <ValidatedRow
       v-for="r in featureRows"
       :key="r.key"
+      :field="r.key"
       :label="r.label"
       :value="r.value"
       :unit="r.unit"

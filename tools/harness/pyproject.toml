@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fundacad-harness"
+version = "0.1.0"
+description = "Drive the FundaCAD browser build the way a person does, for agent tests and walkthroughs"
+requires-python = ">=3.10"
+dependencies = ["playwright>=1.44,<2"]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+
+[project.scripts]
+fundacad-harness = "fundacad_harness.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+  "browser: needs an engine, node and Chrome",
+  "smoke: the small set CI runs",
+]
