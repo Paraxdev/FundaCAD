@@ -42,14 +42,16 @@
       "deb": {
         "desktopTemplate": "../packaging/fundacad.desktop.hbs",
         "files": {
-          "/usr/lib/udev/rules.d/99-fundacad-spacemouse.rules": "../packaging/99-spacemouse.rules"
+          "/usr/lib/udev/rules.d/99-fundacad-spacemouse.rules": "../packaging/99-spacemouse.rules",
+          "/usr/share/mime/packages/dev.fundacad.app.xml": "../packaging/dev.fundacad.app.mime.xml"
         },
         "postInstallScript": "scripts/postinstall.sh"
       },
       "rpm": {
         "desktopTemplate": "../packaging/fundacad.desktop.hbs",
         "files": {
-          "/usr/lib/udev/rules.d/99-fundacad-spacemouse.rules": "../packaging/99-spacemouse.rules"
+          "/usr/lib/udev/rules.d/99-fundacad-spacemouse.rules": "../packaging/99-spacemouse.rules",
+          "/usr/share/mime/packages/dev.fundacad.app.xml": "../packaging/dev.fundacad.app.mime.xml"
         },
         "postInstallScript": "scripts/postinstall.sh"
       }

@@ -49,7 +49,7 @@ pub struct ListResult {
     pub truncated: bool,
 }
 
-fn is_document(name: &str) -> bool {
+pub(crate) fn is_document(name: &str) -> bool {
     name.rsplit_once('.')
         .is_some_and(|(stem, ext)| !stem.is_empty() && DOC_EXTS.iter().any(|d| ext.eq_ignore_ascii_case(d)))
 }
