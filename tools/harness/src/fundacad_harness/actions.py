@@ -185,6 +185,8 @@ class Actions:
         self.page.keyboard.type(str(text))
         value = self.bridge.call("fieldValue", target=hit["ref"])
         if enter:
+            # A tool reads its value box once a frame, an Enter before that commits the old value.
+            self.page.evaluate("() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))")
             self.page.keyboard.press("Enter")
         problem = f', problem "{value["problem"]}"' if value.get("problem") else ""
         return f'typed "{text}" into {hit["ref"]} "{hit["label"]}"{problem}', {**value, "ref": hit["ref"], "label": hit["label"]}
