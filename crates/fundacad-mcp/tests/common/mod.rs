@@ -337,6 +337,16 @@ impl Mcp {
     pub fn log(&self) -> String {
         std::fs::read_to_string(&self.stderr).unwrap_or_default()
     }
+
+    pub fn pid(&self) -> u32 {
+        self.child.id()
+    }
+
+    /// TerminateProcess or SIGKILL, the way a host ends its servers.
+    pub fn kill_hard(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
 }
 
 impl Drop for Mcp {

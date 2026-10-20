@@ -421,3 +421,79 @@ pub fn export() -> JsonObject {
         &["path", "format"],
     )
 }
+
+// --- the ui tools, standalone only -------------------------------------------
+
+pub fn ui_open() -> JsonObject {
+    object(
+        json!({
+            "headed": {"type": "boolean",
+                       "description": "show the browser window, hidden by default"},
+            "record": {"type": "string",
+                       "description": "write every step to this Python file, which replays with `python <file>`"},
+            "viewport": {"type": "string", "description": "WIDTHxHEIGHT, 1400x900 by default"},
+            "gpu": {"type": "boolean",
+                    "description": "use the GPU, software rendering by default"}
+        }),
+        &[],
+    )
+}
+
+pub fn ui_do() -> JsonObject {
+    object(
+        json!({
+            "steps": {
+                "type": "array",
+                "description": "Run in order, stopping at the first that fails. Each step is \
+                    {\"do\": verb, ...its keys}. Targets are refs from ui_read screen \
+                    (#undo-btn, action:sketch, feature:e1, item:body1, field:angle, menu:File) \
+                    or visible labels. Verbs: \
+                    click {target, button?, double?, mods?} (target may be face:<sel> or edge:<sel>); \
+                    tool {label}; type {target, text, enter?}; press {keys} (\"Enter\", \"Ctrl+Z\", or a list); \
+                    menu {path} (\"File/Open...\"); context_menu {on, item}; panel {name, open?}; \
+                    command {name}; expand {target, open?}; \
+                    pick_face {sel, add?, exact?}; pick_edge {sel, add?, exact?, via?}; pick_plane {name} (XY, XZ, YZ); \
+                    click_at {sketch: [x, y] | world: [x, y, z] | screen: [x, y]}; \
+                    drag {from, to, space?}; drag_handle {name, by? px | mm?}; \
+                    view {name} (iso, top, front, right, fit); undo; redo; \
+                    open_file {path}; import_file {path}; save_as {path}; new_document {discard?}; \
+                    wait_for {text, timeout?}. \
+                    Face selectors: [body:]top|bottom|front|back|left|right|+x..-z|largest|smallest|near=x,y,z|index=n. \
+                    Edge selectors: near=x,y,z|between <face> <face>|longest|shortest. \
+                    Every step but wait_for waits for the app to settle unless settle is false",
+                "items": {"type": "object"}
+            }
+        }),
+        &["steps"],
+    )
+}
+
+pub fn ui_read() -> JsonObject {
+    object(
+        json!({
+            "what": {"description": "one readout or a list: screen, history, bodies, status, \
+                                     errors, selection, handles. status by default",
+                     "anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]},
+            "region": {"type": "string",
+                       "description": "only this part of screen: titlebar, menu, toolrail, \
+                                       history, props, items, valuebox, dialog, context, render, \
+                                       views, status, other"}
+        }),
+        &[],
+    )
+}
+
+pub fn ui_shot() -> JsonObject {
+    object(
+        json!({
+            "target": {"type": "string", "description": "a ref, to picture one control only"},
+            "max_px": {"type": "integer",
+                       "description": "the longer side in pixels, 1000 by default, at most 1600"}
+        }),
+        &[],
+    )
+}
+
+pub fn ui_close() -> JsonObject {
+    object(json!({}), &[])
+}

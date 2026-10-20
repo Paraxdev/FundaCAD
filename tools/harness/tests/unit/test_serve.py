@@ -157,9 +157,7 @@ def test_serve_writes_only_protocol_lines_to_stdout():
 
 
 def test_the_mcp_ui_do_description_lists_every_verb():
-    tools = REPO / "crates/fundacad-mcp/src/tools.rs"
-    text = tools.read_text(encoding="utf-8") if tools.exists() else ""
-    if "ui_do" not in text:
-        pytest.skip("the MCP ui tools are not in this checkout yet")
+    text = (REPO / "crates/fundacad-mcp/src/tools.rs").read_text(encoding="utf-8")
+    text = text.split("pub fn ui_do()", 1)[1].split("pub fn ", 1)[0]
     missing = [v for v in steps.VERBS if not re.search(rf"\b{v}\b", text)]
     assert not missing, f"tools.rs ui_do does not mention {missing}"
