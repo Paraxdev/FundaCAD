@@ -96,11 +96,24 @@
   border: 0;
   border-radius: var(--float-tile-radius);
   color: var(--text-mute);
+  transition:
+    background var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease),
+    transform var(--t-fast) var(--ease);
 }
-.float-card-close:hover,
-.float-card-more:hover {
+.float-card-close:hover:not(:disabled),
+.float-card-more:hover:not(:disabled) {
   background: var(--raised);
   color: var(--text);
+}
+.float-card-close:active:not(:disabled),
+.float-card-more:active:not(:disabled) {
+  transform: scale(0.94);
+}
+.float-card-close:disabled,
+.float-card-more:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 .float-card-body {
   flex: 1 1 auto;

@@ -860,7 +860,7 @@ onUnmounted(() => root.value?.removeEventListener("wheel", onWheel));
   <aside id="browser" class="float-card">
     <div class="float-card-head">
       <span class="float-card-title">Items</span>
-      <button class="float-card-close" :title="fmtKeys('Hide the items (Ctrl Alt S)')" @click="shell.setItems(false)"><Icon name="close" :size="14" /></button>
+      <button class="float-card-close" :title="fmtKeys('Hide the items (Ctrl+Alt+S)')" @click="shell.setItems(false)"><Icon name="close" :size="14" /></button>
     </div>
     <div class="browser-title">
       <select
