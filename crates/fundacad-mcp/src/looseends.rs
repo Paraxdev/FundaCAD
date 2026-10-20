@@ -244,36 +244,51 @@ fn ref_key(e: &Value, p: &Value) -> Option<(String, i64)> {
     Some((e.as_str()?.to_string(), p.as_i64()?))
 }
 
-fn tied_ends(f: &Value) -> BTreeSet<(String, i64)> {
-    let points: BTreeSet<&str> = f
-        .get("entities")
-        .and_then(Value::as_array)
-        .map_or(&[][..], Vec::as_slice)
-        .iter()
-        .filter(|e| e["type"] == json!("point"))
-        .filter_map(|e| e["id"].as_str())
-        .collect();
-    let mut tied = BTreeSet::new();
+/// The profile ends a constraint holds. Coincidents join into classes, so a chain
+/// through a construction end still ties the curve ends on it. An end is tied when
+/// its class holds another profile end, or is put on a profile curve by a
+/// pointOnCurve or midpoint. Construction geometry, points and arc centres alone
+/// hold nothing the profile can close through.
+fn tied_ends(f: &Value, ents: &[Ent]) -> BTreeSet<(String, i64)> {
+    let mut parent: BTreeMap<(String, i64), (String, i64)> = BTreeMap::new();
     for c in constraints(f) {
-        match c["type"].as_str() {
-            Some("coincident") => {
-                let (Some(a), Some(b)) = (ref_key(&c["e1"], &c["p1"]), ref_key(&c["e2"], &c["p2"])) else { continue };
-                if a == b {
-                    continue;
-                }
-                if !points.contains(b.0.as_str()) {
-                    tied.insert(a.clone());
-                }
-                if !points.contains(a.0.as_str()) {
-                    tied.insert(b);
-                }
+        if c["type"].as_str() != Some("coincident") {
+            continue;
+        }
+        let (Some(a), Some(b)) = (ref_key(&c["e1"], &c["p1"]), ref_key(&c["e2"], &c["p2"])) else { continue };
+        let (ra, rb) = (root(&mut parent, &a), root(&mut parent, &b));
+        if ra != rb {
+            parent.insert(ra, rb);
+        }
+    }
+    let by_id: BTreeMap<&str, &Ent> = ents.iter().map(|e| (e.id.as_str(), e)).collect();
+    let mut members: BTreeMap<(String, i64), Vec<(String, i64)>> = BTreeMap::new();
+    for x in ents.iter().flat_map(|e| e.ends.iter()) {
+        let k = (x.entity.clone(), x.p);
+        members.entry(root(&mut parent, &k)).or_default().push(k);
+    }
+    let mut on_curve: BTreeMap<(String, i64), BTreeSet<String>> = BTreeMap::new();
+    for c in constraints(f) {
+        let curve = match c["type"].as_str() {
+            Some("pointOnCurve") => &c["curve"],
+            Some("midpoint") => &c["line"],
+            _ => continue,
+        };
+        let (Some(k), Some(curve)) = (ref_key(&c["e"], &c["p"]), curve.as_str()) else { continue };
+        if by_id.contains_key(curve) {
+            on_curve.entry(root(&mut parent, &k)).or_default().insert(curve.to_string());
+        }
+    }
+    let mut tied = BTreeSet::new();
+    for e in ents {
+        for x in &e.ends {
+            let k = (x.entity.clone(), x.p);
+            let r = root(&mut parent, &k);
+            let mate = members.get(&r).is_some_and(|m| m.iter().any(|o| if o.0 == e.id { o.1 != x.p && e.self_closable } else { true }));
+            let on = on_curve.get(&r).is_some_and(|cs| cs.iter().any(|c| *c != e.id));
+            if mate || on {
+                tied.insert(k);
             }
-            Some("pointOnCurve") | Some("midpoint") => {
-                if let Some(k) = ref_key(&c["e"], &c["p"]) {
-                    tied.insert(k);
-                }
-            }
-            _ => {}
         }
     }
     tied
@@ -311,7 +326,7 @@ pub fn find(doc: &Doc, sketch: &str, tolerance: Option<f64>) -> Result<LooseEnds
     let f = sketch_of(doc, sketch)?;
     let ents = read_all(doc, f);
     let tol = tolerance.unwrap_or_else(|| default_reach(&ents));
-    let tied = tied_ends(f);
+    let tied = tied_ends(f, &ents);
     let by_id: BTreeMap<&str, &Ent> = ents.iter().map(|e| (e.id.as_str(), e)).collect();
     let targets: Vec<&End> = ents.iter().flat_map(|e| e.ends.iter()).collect();
     let mut out = LooseEnds { tolerance: tol, ..Default::default() };
@@ -597,5 +612,39 @@ mod tests {
         let ents = &model::find_feature(&d, "s1").unwrap().1["entities"];
         assert_eq!(ents[1]["x1"], json!("w"));
         assert_eq!((ents[0]["x2"].as_f64(), ents[0]["y2"].as_f64()), (Some(10.0), Some(0.05)));
+    }
+
+    #[test]
+    fn a_tie_onto_construction_geometry_or_an_arc_centre_leaves_the_end_open() {
+        let mut k = line("k", 5.0, 0.0, 5.0, 5.0);
+        k["construction"] = json!(true);
+        let arc = json!({"type": "arc", "id": "r", "x1": 25.0, "y1": 0.0, "x2": 15.0, "y2": 0.0, "mx": 20.0, "my": 5.0});
+        let d = doc(
+            json!([line("a", 0.0, 0.0, 5.0, 0.0), k, line("b", 30.0, 9.0, 20.0, 0.0), arc]),
+            json!([
+                {"type": "coincident", "e1": "a", "p1": 1, "e2": "k", "p2": 0},
+                {"type": "coincident", "e1": "b", "p1": 1, "e2": "r", "p2": 2}
+            ]),
+        );
+        let le = find(&d, "s1", Some(0.1)).unwrap();
+        let open: BTreeSet<(String, i64)> = le.open.iter().map(|(e, p, _)| (e.clone(), *p)).collect();
+        assert!(open.contains(&("a".into(), 1)), "{le:?}");
+        assert!(open.contains(&("b".into(), 1)), "{le:?}");
+    }
+
+    #[test]
+    fn two_ends_held_at_one_construction_end_are_tied_to_each_other() {
+        let mut k = line("k", 5.0, 0.0, 9.0, 9.0);
+        k["construction"] = json!(true);
+        let d = doc(
+            json!([line("a", 0.0, 0.0, 5.0, 0.0), line("b", 5.0, 0.0, 5.0, 5.0), k]),
+            json!([
+                {"type": "coincident", "e1": "a", "p1": 1, "e2": "k", "p2": 0},
+                {"type": "coincident", "e1": "k", "p1": 0, "e2": "b", "p2": 0}
+            ]),
+        );
+        let le = find(&d, "s1", Some(0.1)).unwrap();
+        assert!(le.untied.is_empty(), "{le:?}");
+        assert_eq!(le.open.len(), 2);
     }
 }

@@ -91,18 +91,40 @@ class Joins {
   }
 }
 
-/** Which ends are held by a constraint: a coincident to another curve's end, or a
- *  pointOnCurve or midpoint on the end itself. */
-function tiedEnds(entities: readonly ResolvedEntity[], constraints: readonly SketchConstraint[]): Set<string> {
-  const pointIds = new Set(entities.filter((e) => e.type === "point").map((e) => e.id));
-  const tied = new Set<string>();
+/** Which profile ends a constraint holds. Coincidents are joined into classes, so a
+ *  chain through a construction end still ties the curve ends on it. An end is tied
+ *  when its class holds another profile end, or is put on a profile curve by a
+ *  pointOnCurve or midpoint. Construction geometry, points and arc centres alone
+ *  hold nothing the profile can close through. */
+function tiedEnds(profile: readonly ResolvedEntity[], constraints: readonly SketchConstraint[]): Set<string> {
+  const joins = new Joins();
+  for (const c of constraints) if (c.type === "coincident") joins.union(key(c.e1, c.p1), key(c.e2, c.p2));
+  const byId = new Map(profile.map((e) => [e.id, e]));
+  const members = new Map<string, { entity: string; p: number }[]>();
+  for (const e of profile) {
+    for (const p of targetEnds(e)) {
+      const r = joins.find(key(e.id, p));
+      const list = members.get(r);
+      if (list) list.push({ entity: e.id, p }); else members.set(r, [{ entity: e.id, p }]);
+    }
+  }
+  const onCurve = new Map<string, Set<string>>();
   for (const c of constraints) {
-    if (c.type === "coincident") {
-      if (c.e1 === c.e2 && c.p1 === c.p2) continue;
-      if (!pointIds.has(c.e2)) tied.add(key(c.e1, c.p1));
-      if (!pointIds.has(c.e1)) tied.add(key(c.e2, c.p2));
-    } else if (c.type === "pointOnCurve" || c.type === "midpoint") {
-      tied.add(key(c.e, c.p));
+    if (c.type !== "pointOnCurve" && c.type !== "midpoint") continue;
+    const curve = c.type === "pointOnCurve" ? c.curve : c.line;
+    if (!byId.has(curve)) continue;
+    const r = joins.find(key(c.e, c.p));
+    const set = onCurve.get(r);
+    if (set) set.add(curve); else onCurve.set(r, new Set([curve]));
+  }
+  const tied = new Set<string>();
+  for (const e of profile) {
+    for (const p of movableEnds(e)) {
+      const r = joins.find(key(e.id, p));
+      const mates = members.get(r) ?? [];
+      const held = mates.some((m) => m.entity === e.id ? m.p !== p && selfClosable(e) : true)
+        || [...(onCurve.get(r) ?? [])].some((c) => c !== e.id);
+      if (held) tied.add(key(e.id, p));
     }
   }
   return tied;
@@ -130,7 +152,7 @@ export function looseEnds(
   }
   if (ends.length > LOOSE_ENDS_CAP) return { open: [], untied: [], capped: true };
 
-  const tied = tiedEnds(entities, constraints);
+  const tied = tiedEnds(profile, constraints);
   const byId = new Map(profile.map((e) => [e.id, e]));
   const cell = Math.max(tolMm, 1e-9);
   const cellKey = (x: number, y: number) => `${Math.floor(x / cell)},${Math.floor(y / cell)}`;

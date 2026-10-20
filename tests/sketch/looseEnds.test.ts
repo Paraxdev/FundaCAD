@@ -132,6 +132,28 @@ describe("looseEnds detection", () => {
     const ents: ResolvedEntity[] = [L("a", 0, 0, 5, 0), { type: "point", id: "pt", x: 5, y: 0 }];
     expect(refs(looseEnds(ents, [co("a", 1, "pt", 0)], 0.1).open)).toEqual(["a:0", "a:1"]);
   });
+
+  it("a coincident or pointOnCurve onto construction geometry leaves the end open", () => {
+    const ents = [L("a", 0, 0, 5, 0), L("k", 5, 0, 5, 5, true), L("m", 0, 3, 9, 3, true)];
+    const le = looseEnds(ents, [co("a", 1, "k", 0)], 0.1);
+    expect(refs(le.open)).toEqual(["a:0", "a:1"]);
+    const on = looseEnds([L("a", 0, 0, 5, 3), L("m", 0, 3, 9, 3, true)], [{ type: "pointOnCurve", e: "a", p: 1, curve: "m" }], 0.1);
+    expect(refs(on.open)).toEqual(["a:0", "a:1"]);
+  });
+
+  it("a coincident onto an arc centre leaves the end open", () => {
+    const ents: ResolvedEntity[] = [L("a", -9, 0, 0, 0), { type: "arc", id: "r", x1: 5, y1: 0, x2: -5, y2: 0, mx: 0, my: 5 }];
+    const le = looseEnds(ents, [co("a", 1, "r", 2)], 0.1);
+    expect(refs(le.open)).toEqual(["a:0", "a:1", "r:0"]);
+    expect(refs(le.untied)).toEqual(["r:1"]);
+  });
+
+  it("two ends held at one construction end are tied to each other", () => {
+    const ents = [L("a", 0, 0, 5, 0), L("b", 5, 0, 5, 5), L("k", 5, 0, 9, 9, true)];
+    const le = looseEnds(ents, [co("a", 1, "k", 0), co("k", 0, "b", 0)], 0.1);
+    expect(refs(le.open)).toEqual(["a:0", "b:1"]);
+    expect(le.untied).toEqual([]);
+  });
 });
 
 describe("tying loose ends closes the profile", () => {
