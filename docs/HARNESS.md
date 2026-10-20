@@ -152,7 +152,7 @@ with Session() as s:
 | `view(name)` | top, bottom, front, back, right, left, iso (the default view fitted to the model), default, fit, through the Views popover, a running tool keeps going |
 | `undo()`, `redo()` | the title bar buttons |
 | `expand(target, open=True)` | opens or closes an Items folder by its caret (a click on the row selects) |
-| `open_file(path)` | File > Open, answering the file chooser |
+| `open_file(path, discard=True)` | File > Open, answering the file chooser and the unsaved changes question, refused when the document did not change |
 | `import_file(path)` | drops the file on the canvas, the way a browser tab imports a model |
 | `save_as(path)` | File > Save As, the download lands at `path` |
 | `new_document(discard=True)` | Ctrl+N, answering the unsaved changes question |
