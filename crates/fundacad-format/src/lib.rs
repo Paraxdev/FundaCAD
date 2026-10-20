@@ -10,6 +10,7 @@ pub mod fnda;
 pub mod json_doc;
 pub mod summary;
 mod par;
+mod pread;
 mod segments;
 
 use std::path::Path;
