@@ -524,8 +524,9 @@ class Actions:
 
     def _dialog_first(self, why: str) -> str:
         """Every canvas point is under an open dialog's backdrop, which no view change fixes."""
-        rows = [r for r in self.bridge.call("screen", region="dialog", max=50)["lines"] if r[0] == 1 and r[1]]
-        if not rows:
+        lines = self.bridge.call("screen", region="dialog", max=50)["lines"]
+        rows = [r for r in lines if r[0] == 1 and r[1]]
+        if not rows or not any(r[0] == 0 and r[3] == "modal" for r in lines):
             return why
         return f'a dialog is open over the canvas ({", ".join(r[1] for r in rows[:6])}), answer or close it first'
 

@@ -81,10 +81,13 @@ export function matchName(label: string): string {
   return label.replace(/\s*\([^()]*\)\s*$/, "").replace(/\s+/g, " ").trim().toLowerCase();
 }
 
+/** Backdrops that cover the whole app, unlike the Console and selection panels, which are dialogs too. */
+const MODAL = ".home, .modal-overlay, .choice-backdrop, .cmdk-backdrop";
+
 export function regionOf(el: Element): string {
   if (el.closest(".context-menu")) return "context";
   if (el.closest(".menu-popup, #menubar")) return "menu";
-  if (el.closest(".home, .modal-overlay, .choice-backdrop, .cmdk-backdrop, [role=dialog]")) return "dialog";
+  if (el.closest(`${MODAL}, [role=dialog]`)) return "dialog";
   if (el.closest("#toolrail, .rail-flyout")) return "toolrail";
   if (el.closest("#titlebar")) return "titlebar";
   if (el.closest(".timeline-props")) return "props";
@@ -219,6 +222,7 @@ export function walkControls(doc: Document = document, opts: WalkOptions = {}): 
   const notes: Record<string, string> = {};
   const mode = doc.querySelector<HTMLElement>("#toolrail")?.dataset.mode;
   if (mode) notes.toolrail = `mode=${mode}`;
+  if (controls.some((c) => c.region === "dialog" && c.el.closest(MODAL))) notes.dialog = "modal";
   return { controls, more, notes };
 }
 

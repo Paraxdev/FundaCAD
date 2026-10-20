@@ -81,6 +81,14 @@ describe("screenLines", () => {
     expect(lines.find((l) => l[1] === "toolrail")![3]).toBe("mode=model");
   });
 
+  it("calls the dialog region modal only when a backdrop covers the app", () => {
+    const note = () => screenLines(walkControls(document, { rect }), { region: "dialog" }).lines.find((l) => l[0] === 0)?.[3];
+    document.body.insertAdjacentHTML("beforeend", '<div class="logcon" role="dialog" aria-label="Console"><button>Clear</button></div>');
+    expect(note()).toBe("");
+    document.body.insertAdjacentHTML("beforeend", '<div class="modal-overlay"><button>Discard</button></div>');
+    expect(note()).toBe("modal");
+  });
+
   it("caps the lines and says how many were left out", () => {
     const all = screenLines(walkControls(document, { rect })).lines.length;
     const { lines, truncated } = screenLines(walkControls(document, { rect }), { max: 5 });
