@@ -51,6 +51,10 @@ Linux that leaves the engine and vite running, `s.pids()` names them.
 One `Session` per process, and not inside a running asyncio loop (a notebook, an async host):
 start a second session in a process of its own. Sessions in separate processes run side by side.
 
+The session's vite shares the dependency cache in `node_modules/.vite` with any other vite on the
+same checkout. While `npm run tauri dev` runs there, drive a worktree instead, or pass
+`vite_url=` to use that server, so a dependency rebuild in one cannot hand the other stale files.
+
 Options:
 
 | option | default | what it does |
