@@ -12,6 +12,9 @@ from . import selectors
 
 REF_ARGS = {"click": 0, "type": 0, "expand": 0}
 PATH_ARGS = {"open_file", "import_file", "save_as"}
+# The leading parameters a recording writes by position, ui_do passes every one by name.
+LEADING = {"click": ("target",), "type": ("target", "text"), "expand": ("target",), "tool": ("label",),
+           "context_menu": ("on", "item"), **{v: ("path",) for v in PATH_ARGS}}
 
 
 def literal(v: Any) -> str:
@@ -49,6 +52,11 @@ class Recorder:
         data = done[1] if isinstance(done, tuple) and len(done) > 1 else None
         hit = data if isinstance(data, dict) else {}
         args = list(args)
+        kwargs = dict(kwargs)
+        for name in LEADING.get(verb, ())[len(args):]:
+            if name not in kwargs:
+                break
+            args.append(kwargs.pop(name))
         notes: list[str] = []
         if verb in REF_ARGS and len(args) > REF_ARGS[verb]:
             i = REF_ARGS[verb]
