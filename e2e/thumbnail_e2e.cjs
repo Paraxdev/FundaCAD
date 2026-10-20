@@ -44,7 +44,7 @@ function check(name, ok, detail = "") {
 
     const built = await page.evaluate(async () => {
       const s = window.store;
-      s.addFeature({ id: s.nextId(), type: "box", length: 40, width: 30, height: 20 });
+      s.addFeature({ id: s.nextId(), type: "box", length: 300, width: 30, height: 20 });
       await s.rebuildNow();
       for (let i = 0; i < 300; i++) {
         const b = s.buildState;
@@ -76,13 +76,22 @@ function check(name, ok, detail = "") {
       const px = g.getImageData(0, 0, c.width, c.height).data;
       const colours = new Set();
       for (let i = 0; i < px.length; i += 4 * 37) colours.add((px[i] >> 3) * 1024 + (px[i + 1] >> 3) * 32 + (px[i + 2] >> 3));
-      return { url, before, after, w: img.width, h: img.height, colours: colours.size };
+      // The model is framed whole: nothing but background along the picture's edge.
+      const off = (x, y) => {
+        const i = (y * c.width + x) * 4;
+        return Math.abs(px[i] - px[0]) + Math.abs(px[i + 1] - px[1]) + Math.abs(px[i + 2] - px[2]) > 40;
+      };
+      let edge = 0;
+      for (let x = 0; x < c.width; x++) edge += off(x, 1) + off(x, c.height - 2);
+      for (let y = 0; y < c.height; y++) edge += off(1, y) + off(c.width - 2, y);
+      return { url, before, after, w: img.width, h: img.height, colours: colours.size, edge, centre: off(c.width >> 1, c.height >> 1) };
     });
     if (process.argv[2]) fs.writeFileSync(process.argv[2], Buffer.from(shot.url.split(",")[1], "base64"));
     check("a JPEG", shot.url.startsWith("data:image/jpeg;base64,"), shot.url.slice(0, 30));
     check("480 x 300", shot.w === 480 && shot.h === 300, `${shot.w} x ${shot.h}`);
     check("not one flat colour", shot.colours > 4, `${shot.colours} colours`);
     check("small", shot.url.length < 200_000, `${shot.url.length}`);
+    check("the whole box is in the picture though the view is zoomed in", shot.edge === 0 && shot.centre, `${shot.edge} edge pixels`);
     check("the camera is where the user left it", shot.before.cam === shot.after.cam, `${shot.before.cam} vs ${shot.after.cam}`);
     check("the canvas keeps its size", shot.before.w === shot.after.w && shot.before.h === shot.after.h,
       `${shot.before.w}x${shot.before.h} vs ${shot.after.w}x${shot.after.h}`);

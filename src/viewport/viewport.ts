@@ -4032,11 +4032,18 @@ export class Viewport {
         return out.toDataURL("image/jpeg", 0.85);
       },
       {
+        // The rig only moves the camera on its next update, and resetView's fit is a
+        // flight, so the fit is repeated without one and committed here.
         enter: () => {
           this.rig.resize(width, height);
           this.rig.resetView(model.box);
+          this.rig.fit(model.box, { animate: false });
+          this.rig.update(0);
         },
-        leave: () => this.rig.setState(saved, false),
+        leave: () => {
+          this.rig.setState(saved, false);
+          this.rig.update(0);
+        },
       },
     );
   }
