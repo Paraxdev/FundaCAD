@@ -1,6 +1,6 @@
 // Home, the start screen, in a real browser against the real geometry engine.
 //
-//   1. Startup shows Home over the stage, with its close button.
+//   1. Startup shows Home over the stage, with its close button, and the keyboard stays on it.
 //   2. Blank closes it and leaves an empty document.
 //   3. File > Home and the title bar button bring it back, Escape closes it.
 //   4. With unsaved work, Blank asks before discarding it.
@@ -62,7 +62,18 @@ function check(name, ok, detail = "") {
     const label = await page.getAttribute(".home .modal-close", "aria-label");
     check("its close button is .modal-close", label === "Back to the document", label);
 
-    console.log("1b. Escape over Home");
+    console.log("1b. keyboard");
+    const focusIn = () => page.evaluate(() => {
+      const a = document.activeElement;
+      return a?.closest(".home") ? "home" : a?.closest("#float-layer, #stage") ? "behind" : a?.tagName ?? "none";
+    });
+    check("Home has the focus at startup", (await focusIn()) === "home", await focusIn());
+    const walk = [];
+    for (let i = 0; i < 40; i++) {
+      await page.keyboard.press("Tab");
+      walk.push(await focusIn());
+    }
+    check("Tab never lands on what Home covers", !walk.includes("behind"), walk.join(" "));
     await page.keyboard.press("Control+k");
     await page.waitForSelector(".cmdk-backdrop", { timeout: 2000 }).catch(() => null);
     await page.keyboard.press("Escape");
