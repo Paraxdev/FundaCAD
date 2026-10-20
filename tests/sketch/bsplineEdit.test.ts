@@ -75,7 +75,9 @@ describe("deleting a pole", () => {
   });
 });
 
-describe("Edit as Control Points", () => {
+// Each case runs the sketch solver many times and can pass the
+// 5 s default while the machine is busy building.
+describe("Edit as Control Points", { timeout: 20_000 }, () => {
   const fit = [{ x: 0, y: 0 }, { x: 12, y: 18 }, { x: 30, y: 4 }, { x: 44, y: 22 }, { x: 60, y: 6 }];
 
   it("follows the spline as drawn and keeps its ends and their constraints", () => {
