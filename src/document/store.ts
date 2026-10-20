@@ -1229,11 +1229,16 @@ export class DocumentStore {
   }
   /** skip/unskip a feature on rebuild without deleting it. */
   toggleSuppress(id: string) {
-    if (this.suppressed.has(id)) this.suppressed.delete(id);
-    else this.suppressed.add(id);
-    this.markDirty();
-    this.emitDoc();
-    this.scheduleRebuild(true);
+    const was = this.suppressed.has(id);
+    const set = (on: boolean) => {
+      if (on) this.suppressed.add(id);
+      else this.suppressed.delete(id);
+      this.markDirty();
+      this.emitDoc();
+      this.scheduleRebuild(true);
+    };
+    set(!was);
+    this.pushOverlayUndo({ undo: () => set(was), redo: () => set(!was) });
   }
 
   // --- live preview ---
