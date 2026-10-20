@@ -7,7 +7,7 @@ import { screenLines, walkControls, type WalkOptions } from "./screenTree";
 import * as read from "./readouts";
 import { settle, probe, describeQuiet, type SettleHost } from "./settle";
 import * as picks from "./picks";
-import { handleList, handlePoint, type HandleHost } from "./handles";
+import { handleList, handlePoint, overHandle, type HandleHost } from "./handles";
 
 export const HARNESS_API = 1;
 
@@ -53,6 +53,10 @@ export function createMethods(
 ): Record<string, Method> {
   const walk = () => walkControls(doc, walkOpts);
   const onCanvas = () => canvasCheck ?? picks.canvasTest(h.viewport.domElement, doc);
+  const clear = (): picks.CanvasTest => {
+    const base = onCanvas();
+    return (x, y) => base(x, y) && !overHandle(h, x, y);
+  };
   return {
     ready: () => {
       if (!doc.querySelector("#toolrail")) return { ready: false, why: "the tool rail is not mounted yet" };
@@ -93,9 +97,9 @@ export function createMethods(
       ...(typeof a.trace === "number" ? { trace: a.trace } : {}),
     }),
     quiet: () => describeQuiet(probe(h)),
-    facePoint: (a) => picks.facePoint(h, withBody(a), onCanvas()),
-    edgePoint: (a) => picks.edgePoint(h, withBody(a), a.via === "edge" ? "edge" : "select", onCanvas()),
-    planePoint: (a) => picks.planePoint(h, str(a, "name"), onCanvas()),
+    facePoint: (a) => picks.facePoint(h, withBody(a), clear()),
+    edgePoint: (a) => picks.edgePoint(h, withBody(a), a.via === "edge" ? "edge" : "select", clear()),
+    planePoint: (a) => picks.planePoint(h, str(a, "name"), clear()),
     worldPoint: (a) => picks.worldPoint(h, num(a, "x"), num(a, "y"), num(a, "z"), onCanvas()),
     sketchPoint: (a) => picks.sketchPoint(h, num(a, "x"), num(a, "y"), onCanvas()),
     handlePoint: (a) => handlePoint(h, str(a, "name"), onCanvas()),

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { handleList, handlePoint, type HandleHost } from "../../src/harness/handles";
+import { handleList, handlePoint, overHandle, type HandleHost } from "../../src/harness/handles";
 import { createDragHandle, createRotationArc, nameHandle } from "../../src/features/manipulator";
 import { HarnessError } from "../../src/harness/locate";
 
@@ -98,5 +98,13 @@ describe("named handles", () => {
     scene.add(nameHandle(createDragHandle(), "push").group);
     expect(err(() => handlePoint(h, "push", () => false)).kind).toBe("Occluded");
     expect(handleList(h, () => false)).toEqual(["push covered"]);
+  });
+
+  it("tells when a press would land on a handle instead of the model", () => {
+    const { h, scene } = rig();
+    expect(overHandle(h, 400, 280)).toBe(false);
+    scene.add(nameHandle(createDragHandle(), "origin").group);
+    expect(overHandle(h, 400, 280)).toBe(true);
+    expect(overHandle(h, 700, 100)).toBe(false);
   });
 });

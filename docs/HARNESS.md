@@ -100,6 +100,68 @@ render, views, status, other. Each line is a ref, a role, a label and flags such
 `on`, `selected` or `= "value"`. Refs are what actions take, for example `#undo-btn`,
 `action:sketch`, `family:cat:CREATE`, `feature:e1`, `item:body1`, `field:angle`, `menu:File`.
 
+## Actions
+
+Every action is real pointer or keyboard input, waits until the app has settled (rebuilds,
+previews, the camera and the picture all quiet), and returns a `Step`: one line saying what was
+done and what the app shows now, with the JSON behind it in `step.data`. Pass `settle=False` to
+look at the app mid flight.
+
+```python
+with Session() as s:
+    s.open_file("tools/harness/fixtures/plate.json")
+    s.view("iso")
+    s.pick_face("top")
+    s.tool("Press/Pull")
+    s.type("D", "7")
+    s.press("Enter")
+    print(s.history())
+    s.undo()
+```
+
+| verb | what a person does |
+|---|---|
+| `click(target, button="left", double=False, mods=())` | clicks a control by ref or label, or `face:<sel>` / `edge:<sel>` on the canvas |
+| `tool(label)` | starts a rail tool, opening its category or family first |
+| `type(target, text, enter=False)` | clicks a value box, selects all and types |
+| `press(*keys)` | `"Enter"`, `"Escape"`, `"Ctrl+Z"`, `"Shift+H"` |
+| `menu(path)` | `"File/Open..."`, three dots or the ellipsis both work |
+| `context_menu(on, item)` | right clicks a control or `face:<sel>`, then the row |
+| `panel(name, open=True)` | history, items, preferences and the other panel buttons, only if not already in that state |
+| `command(name)` | Ctrl+F, the name, Enter |
+| `pick_face(sel, add=False, exact=False)` | clicks a face; a click that took the body is followed by a second one, as a person does |
+| `pick_edge(sel, add=False, exact=False, via="select")` | clicks an edge, `via="edge"` for the edge tools |
+| `pick_plane(name)` | `XY`, `XZ`, `YZ` or a datum plane's id |
+| `click_at(sketch=(x, y) or world=(x, y, z))`, `drag(from_, to, space="sketch")` | pointer at a sketch or world point |
+| `drag_handle(name, by=px or mm=value)` | drags a named handle along its axis |
+| `view(name)` | iso, top, front, right, ..., fit, through the Views popover |
+| `undo()`, `redo()` | the title bar buttons |
+| `open_file(path)`, `import_file(path)` | File > Open or Import Mesh, answering the file chooser |
+| `new_document(discard=True)` | Ctrl+N, answering the unsaved changes question |
+| `settle(trace=None, timeout=None)`, `wait_for(text, timeout=10)` | explicit waits |
+
+Labels match the visible text without its key hint, case insensitive, exact before prefix,
+visible and enabled controls only. When a label matches several controls the error lists their
+refs; refs never change with wording. `#n` picks the n-th of several.
+
+### Selectors
+
+`[<body>:]<words>`, the body is an id or a name and can be left out when there is one body.
+
+- Faces: `top`, `bottom`, `front`, `back`, `left`, `right` (Z up, front faces -Y), `+x` to `-z`,
+  `normal=x,y,z`, `largest`, `smallest` (optionally `planar` or `curved`), `near=x,y,z`,
+  `index=n` (the MCP `inspect` numbering).
+- Edges: `near=x,y,z`, `between <face> <face>`, `longest`, `shortest`.
+- Handles: extrude `depth`, press pull `push`, fillet and chamfer `size`, offset face and offset
+  plane `offset`, draft `angle`, joint `offset` and `angle`, mechanism `offset` or `angle`, revolve
+  pitch `pitch`, section `section`, selection nudge `nudge`, taper arcs `taper`, datum `arrow`,
+  `tilt x`, `tilt y`, `spin`, Move `arrow x|y|z`, `plane xy|yz|xz`, `ring x|y|z`, `size x|y|z`,
+  `origin`. `s.call("handles")` lists the ones on screen.
+
+Every canvas point is checked with the app's own picker before the click, and points under a
+panel or a handle are skipped. When no point works the call fails with `Occluded` and suggests a
+view; the harness never turns the camera by itself.
+
 ## Troubleshooting
 
 - `no engine found`: build one with `cargo build -p fundacad-cli`, or set `FUNDACAD_ENGINE_CMD`.
