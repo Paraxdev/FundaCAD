@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-fundacad">
+    <comment>FundaCAD document</comment>
+    <icon name="fundacad"/>
+    <glob pattern="*.funda"/>
+  </mime-type>
+  <mime-type type="application/x-fundacad-bundle">
+    <comment>FundaCAD binary document</comment>
+    <icon name="fundacad"/>
+    <glob pattern="*.fundab"/>
+    <magic priority="50">
+      <match type="string" offset="0" value="FUNDACAD"/>
+    </magic>
+  </mime-type>
+</mime-info>
