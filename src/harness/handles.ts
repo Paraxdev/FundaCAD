@@ -122,3 +122,15 @@ export function handlePoint(h: HandleHost, name: string, onCanvas: CanvasTest = 
   if (!hit) throw new HarnessError(`handle "${name}" is off screen or covered, try another view`, "Occluded");
   return { name: obj.userData.handle as string, ...hit, ...axis(h, obj), what: `handle ${name}` };
 }
+
+/** A press here would land on a handle (the Move gizmo a body selection
+ *  carries, a tool's arrow) rather than on the model under it. */
+export function overHandle(h: HandleHost, x: number, y: number, pad = 8): boolean {
+  const all = namedHandles(h.viewport.scene.scene);
+  if (!all.length) return false;
+  for (const [dx, dy] of [[0, 0], [pad, 0], [-pad, 0], [0, pad], [0, -pad]] as const) {
+    const rc = h.viewport.rayFrom(x + dx, y + dy);
+    if (all.some((o) => rc.intersectObject(o, true).length)) return true;
+  }
+  return false;
+}

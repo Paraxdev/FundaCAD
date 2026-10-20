@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from . import text
+from .actions import Actions
 from .bridge import Bridge, check_api
 from .browser import chrome_args, find_chrome
 from .errors import HarnessError, LaunchError
@@ -22,7 +23,7 @@ def _flag(name: str) -> bool:
     return os.environ.get(name, "") not in ("", "0", "false", "no")
 
 
-class Session:
+class Session(Actions):
     def __init__(
         self,
         engine: str | os.PathLike | None = None,
