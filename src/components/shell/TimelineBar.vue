@@ -21,6 +21,7 @@ import { useSelectionOffers } from "../../composables/useSelectionOffers";
 import { relatedFeatureIds } from "../../ui/relatedFeatures";
 import { routeTreeClick, treePickWaiting } from "../../ui/treePick";
 import { featurePick } from "../../app/featurePick";
+import { closeOpenEdit } from "../../app/selection";
 import type { Feature } from "../../types";
 
 const engine = useEngine();
@@ -215,7 +216,8 @@ function chipTitle(f: { id: string; type: string; inactive?: boolean }, i: numbe
 //
 // Both are ignored while a tool already owns the screen (an edit in progress, a
 // sketch): a click that swapped the open feature out from under a running editor
-// is exactly the "clicking around bugs out" case. Finish or Escape first.
+// is exactly the "clicking around bugs out" case. A double-click is the one
+// gesture that switches: it closes another feature's open edit, then edits.
 function busyElsewhere(): boolean {
   return engine.toolBusy() || engine.sketch.active;
 }
@@ -230,7 +232,9 @@ function onChipClick(id: string) {
   timeline.select(id);
 }
 function onChipDblclick(id: string) {
-  if (busyElsewhere() || treePickWaiting()) return;
+  if (treePickWaiting()) return;
+  closeOpenEdit(engine, id);
+  if (busyElsewhere()) return;
   timeline.edit(id);
 }
 // --- renaming ------------------------------------------------------------

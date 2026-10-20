@@ -6,6 +6,7 @@ import type { Engine } from "./engine";
 import type { Feature } from "../types";
 import type { DatumPose } from "../document/datumPose";
 import { startDatumPoseEdit } from "../features/datumPlaneEdit";
+import { cancelActiveTools } from "./toolBusy";
 
 /** Said when a feature's value cannot be dragged and has to be typed. One
  *  constant because three feature types say it and they used to say three
@@ -13,6 +14,33 @@ import { startDatumPoseEdit } from "../features/datumPlaneEdit";
  *  exists, the values moved under the history entry that names the operation
  *  they belong to. */
 const VALUES_IN_HISTORY = "Not draggable, edit the value under this feature in the history";
+
+/** Why a feature cannot be edited right now, or null when it can. */
+function whyNotEditable(e: Engine, id: string): string | null {
+  if (e.store.isSuppressed(id)) return "Unsuppress the feature to edit it";
+  if (e.store.buildState.result?.skippedFeatures?.some((s) => s.feature_id === id)) {
+    return "This version of FundaCAD cannot edit this feature";
+  }
+  const idx = e.store.document.features.findIndex((x) => x.id === id);
+  if (idx >= e.store.rollbackIndex) return "Roll the timeline forward to edit this feature";
+  return null;
+}
+
+/** Close the edit another feature has open, the way switching to a new one does:
+ *  a re-edited sketch is committed, a feature tool is stood down. Nothing happens
+ *  while no edit is open, the open one is `except` itself, or `except` could not
+ *  be edited anyway. A value typed in the properties panel is not an edit in
+ *  this sense, its box ends its own preview when it loses focus. */
+export function closeOpenEdit(e: Engine, except: string): void {
+  if (whyNotEditable(e, except)) return;
+  if (e.sketch.active) {
+    const editing = e.sketch.editingSketchId;
+    if (editing && editing !== except) e.sketch.finish(true);
+    return;
+  }
+  const open = e.store.editPreviewId;
+  if (open && open !== except && !e.store.editPreviewInPlace) cancelActiveTools(e.tools);
+}
 
 export function createSelection(
   e: Engine,
@@ -78,17 +106,9 @@ export function createSelection(
     if (e.toolBusy()) return; // never open a second interactive tool on top of one
     const f = e.store.document.features.find((x) => x.id === id);
     if (!f) return;
-    if (e.store.isSuppressed(id)) {
-      e.setStatus("Unsuppress the feature to edit it", "");
-      return;
-    }
-    if (e.store.buildState.result?.skippedFeatures?.some((s) => s.feature_id === id)) {
-      e.setStatus("This version of FundaCAD cannot edit this feature", "");
-      return;
-    }
-    const idx = e.store.document.features.findIndex((x) => x.id === id);
-    if (idx >= e.store.rollbackIndex) {
-      e.setStatus("Roll the timeline forward to edit this feature", "");
+    const refusal = whyNotEditable(e, id);
+    if (refusal) {
+      e.setStatus(refusal, "");
       return;
     }
     const done = (cid: string | null) => {
