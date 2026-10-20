@@ -219,19 +219,27 @@ function onViewSelect(el: HTMLSelectElement): void {
 const showOnStartup = ref(welcomeOnStartup());
 watch(showOnStartup, setWelcomeOnStartup);
 
+const root = ref<HTMLElement | null>(null);
+let focusBefore: Element | null = null;
+
 onMounted(() => {
   ownDepth = modals.depth;
   window.addEventListener("keydown", onKey, true);
   void refreshStats();
+  focusBefore = document.activeElement;
+  const first = searchField.value ?? root.value?.querySelector<HTMLElement>(".home-main button");
+  first?.focus({ preventScroll: true });
 });
 onUnmounted(() => {
   window.removeEventListener("keydown", onKey, true);
   offTheme();
+  const lost = !document.activeElement || document.activeElement === document.body;
+  if (lost && focusBefore instanceof HTMLElement && focusBefore.isConnected) focusBefore.focus({ preventScroll: true });
 });
 </script>
 
 <template>
-  <div class="home" role="dialog" aria-label="Home">
+  <div ref="root" class="home" role="dialog" aria-label="Home">
     <aside class="home-side">
       <img :src="logoUrl" alt="FundaCAD" class="home-logo" />
       <HomeSidebar

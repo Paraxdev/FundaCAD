@@ -33,7 +33,7 @@ import TextToolPanel from "./components/overlays/TextToolPanel.vue";
 import FilletMembers from "./components/overlays/FilletMembers.vue";
 import ProjectFilterBar from "./components/overlays/ProjectFilterBar.vue";
 import MeasureReadout from "./components/overlays/MeasureReadout.vue";
-import { onMounted, onUnmounted, ref, shallowRef, useTemplateRef, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, shallowRef, useTemplateRef, watch } from "vue";
 import { useEngine } from "./app/engineKey";
 import { isNarrowStage } from "./ui/layoutBreakpoints";
 import { useDialogStore } from "./stores/dialogs";
@@ -79,6 +79,8 @@ onMounted(() => {
 });
 onUnmounted(() => offContrib?.());
 
+const homeUp = computed(() => home.visible && !!home.callbacks);
+
 const stage = useTemplateRef<HTMLElement>("stage");
 let stageRo: ResizeObserver | null = null;
 onMounted(() => {
@@ -104,8 +106,9 @@ watch(() => ui.sketchActive, () => shell.closeDrawer());
          float layer takes no pointer events itself, only its cards do, so the
          model can be picked through every gap between them. -->
     <div id="stage" ref="stage" :class="{ narrow: shell.narrow }">
-      <ViewportPane />
-      <div id="float-layer">
+      <!-- Inert under Home, so Tab and screen readers stay on what is on screen. -->
+      <ViewportPane :inert="homeUp" />
+      <div id="float-layer" :inert="homeUp">
         <div class="float-left">
           <!-- Items on top, the blend's edge list docked under it (shrinking
                Items while a fillet/chamfer is being edited), the rail beside. -->
@@ -123,7 +126,7 @@ watch(() => ui.sketchActive, () => shell.closeDrawer());
         </div>
       </div>
       <!-- Covers the canvas rather than hiding it, so the viewport keeps its size. -->
-      <HomeScreen v-if="home.visible && home.callbacks" />
+      <HomeScreen v-if="homeUp" />
     </div>
     <!-- Present only in the Render workspace; it mounts nothing in the other
          one, so the grid track collapses. -->

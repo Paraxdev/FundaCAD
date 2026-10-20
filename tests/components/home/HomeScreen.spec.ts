@@ -278,6 +278,26 @@ describe("HomeScreen", () => {
     expect(document.activeElement).toBe($(".home-search"));
   });
 
+  it("puts the focus in its search field", () => {
+    open([{ path: "C:/a.funda", openedAt: 1 }]);
+    expect(document.activeElement).toBe($(".home-search"));
+  });
+
+  it("gives the focus back to what had it when it closes", async () => {
+    const before = document.createElement("button");
+    document.body.append(before);
+    before.focus();
+    const { w } = open([{ path: "C:/a.funda", openedAt: 1 }]);
+    w.unmount();
+    expect(document.activeElement).toBe(before);
+  });
+
+  it("with nothing to search, puts the focus on the first New button", () => {
+    open([]);
+    expect(document.activeElement?.closest(".home-main")).toBeTruthy();
+    expect(document.activeElement?.tagName).toBe("BUTTON");
+  });
+
   it("clears the search on Escape before it closes", async () => {
     const { home } = open([{ path: "C:/a.funda", openedAt: 1 }, { path: "C:/b.funda", openedAt: 2 }]);
     const field = document.querySelector<HTMLInputElement>(".home-search")!;
