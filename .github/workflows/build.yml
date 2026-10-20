@@ -393,9 +393,21 @@ jobs:
             echo "No FUSE on this runner, the AppImage runs extracted"
             fuse=(--appimage-extract-and-run)
           fi
-          python3 scripts/bundle-smoke.py --work "$RUNNER_TEMP/smoke-appimage" -- "$img" "${fuse[@]}" --mcp
+          red=0
+          if ! python3 scripts/bundle-smoke.py --work "$RUNNER_TEMP/smoke-appimage" -- "$img" "${fuse[@]}" --mcp; then
+            # The runtime names FUSE when it cannot mount, which is this
+            # runner, not the package; anything else is the package.
+            if [ ${#fuse[@]} -eq 0 ] && grep -qi fuse "$RUNNER_TEMP/smoke-appimage/server.log"; then
+              echo "::warning::the AppImage could not mount here, it runs extracted"
+              python3 scripts/bundle-smoke.py --work "$RUNNER_TEMP/smoke-appimage-x" -- "$img" --appimage-extract-and-run --mcp || red=1
+            else
+              red=1
+            fi
+          fi
+          # The .deb as well when the AppImage was red, so one run names both.
           dpkg-deb -x "$deb" "$RUNNER_TEMP/deb-root"
-          python3 scripts/bundle-smoke.py --work "$RUNNER_TEMP/smoke-deb" -- "$RUNNER_TEMP/deb-root/usr/bin/fundacad" --mcp
+          python3 scripts/bundle-smoke.py --work "$RUNNER_TEMP/smoke-deb" -- "$RUNNER_TEMP/deb-root/usr/bin/fundacad" --mcp || red=1
+          exit "$red"
 
       # The window as well: the AppImage under Xvfb, and a box built through
       # the server attached to it. An attached edit only returns once the
