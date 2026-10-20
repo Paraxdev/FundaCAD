@@ -811,6 +811,20 @@ jobs:
           FUNDACAD_TRACER_ALLOW_CPU: "1"
         run: cargo test --manifest-path src-tauri/tracer/Cargo.toml -- --test-threads=4
 
+      # The traced bloom checks on lavapipe, through tracer_serve outside the
+      # app. A smaller page keeps 256 software samples well inside the wait.
+      - name: Native tracer bloom end-to-end
+        env:
+          SC_TOKEN: citoken
+          SC_CHROME: /usr/bin/google-chrome
+          SC_TRACER: native-dev
+          SC_VIEWPORT: 800x560
+          CARGO_TARGET_DIR: ${{ runner.temp }}/frames-target
+          FUNDACAD_TRACER_ALLOW_CPU: "1"
+        run: |
+          cargo build --release --example tracer_serve --manifest-path src-tauri/tracer/Cargo.toml
+          node e2e/pathtrace_bloom_e2e.cjs /tmp/pathtrace_bloom_shots
+
       - name: Engine log on failure
         if: failure()
         run: tail -50 /tmp/ci_engine.log /tmp/ci_vite.log || true
