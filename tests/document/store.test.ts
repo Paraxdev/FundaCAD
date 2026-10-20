@@ -442,6 +442,41 @@ describe("undo covers material, rename and colour too, not just visibility (FI-5
     expect(store.bodyColorSlot("body1")).toBe(1);
   });
 
+  it("joins a feature and the materials put on its bodies into one undo step", () => {
+    const before = store.document.features.length;
+    const mark = store.undoMark();
+    store.addFeature({ id: "nb8", type: "box", length: 1, width: 1, height: 1 } as Feature);
+    store.setBodiesMaterial(["body1"], "m-brass");
+    store.setBodyColorSlot("body1", 2);
+    store.joinUndoSince(mark);
+
+    store.undo();
+    expect(store.document.features.length).toBe(before);
+    expect(store.bodyMaterialId("body1")).toBeUndefined();
+    expect(store.bodyColorSlot("body1")).toBeUndefined();
+    expect(store.canUndo).toBe(false);
+
+    store.redo();
+    expect(store.document.features.length).toBe(before + 1);
+    expect(store.bodyMaterialId("body1")).toBe("m-brass");
+    expect(store.bodyColorSlot("body1")).toBe(2);
+    expect(store.canRedo).toBe(false);
+    store.undo();
+    expect(store.document.features.length).toBe(before);
+  });
+
+  it("leaves the steps before the mark alone", () => {
+    store.addFeature({ id: "nb9", type: "box", length: 1, width: 1, height: 1 } as Feature);
+    const mark = store.undoMark();
+    store.setBodiesMaterial(["body1"], "m-brass");
+    store.setBodyName("body1", "MyPart");
+    store.joinUndoSince(mark);
+    store.undo();
+    expect(store.bodyMaterialId("body1")).toBeUndefined();
+    expect(store.bodyName("body1")).toBeUndefined();
+    expect(store.document.features.some((f) => f.id === "nb9")).toBe(true);
+  });
+
   it("setFacesMaterial and clearFaceMaterials are undo steps too", () => {
     store.setFacesMaterial([{ body: "body1", face: 0 }], "m-brass");
     expect(store.faceMaterialId("body1", 0)).toBe("m-brass");
