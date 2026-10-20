@@ -712,17 +712,25 @@ jobs:
   # static kernel gets its own cache keyed on the crate that builds it. It gates
   # the beta build: red here means the engine is broken.
   rust-geom:
-    runs-on: ubuntu-22.04
-    timeout-minutes: 180
+    # The self hosted runner keeps its target dir between runs, so only what
+    # changed recompiles. Never for pull requests: this repo is public and a
+    # fork's code must not run on it. vars.FAST_RUNNER off falls back to GitHub.
+    runs-on: ${{ (github.event_name != 'pull_request' && vars.FAST_RUNNER == 'true') && fromJSON('["self-hosted","fundacad"]') || 'ubuntu-22.04' }}
+    timeout-minutes: 240
     # Every test binary links the static OpenCASCADE, so full debug info filled
     # the runner's disk once the import suites grew. Line tables keep file:line
     # in panics.
     env:
       CARGO_PROFILE_DEV_DEBUG: line-tables-only
+      SELF_HOSTED: ${{ github.event_name != 'pull_request' && vars.FAST_RUNNER == 'true' }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          # A clean checkout would delete the warm target dir.
+          clean: ${{ env.SELF_HOSTED != 'true' }}
 
       - name: Free disk space
+        if: env.SELF_HOSTED != 'true'
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
           df -h /
@@ -741,6 +749,7 @@ jobs:
           targets: wasm32-wasip2
 
       - name: Cache Cargo
+        if: env.SELF_HOSTED != 'true'
         uses: swatinem/rust-cache@v2
         with:
           workspaces: |
@@ -750,6 +759,7 @@ jobs:
       # The same kernel and key as build-beta's, so the two jobs share it. Keep
       # it after rust-cache, see build-beta.
       - name: Cache the static OpenCASCADE build
+        if: env.SELF_HOSTED != 'true'
         uses: actions/cache@v4
         with:
           path: |
@@ -855,3 +865,11 @@ jobs:
             [ $code -ne 0 ] && { echo "::error::$g fails on the release build"; tail -n 20 golden.err; fail=1; }
           done
           exit $fail
+
+      # The warm target dir gains a test binary per change; a week is kept.
+      - name: Prune the warm target dir
+        if: always() && env.SELF_HOSTED == 'true'
+        run: |
+          find target src-tauri/target -path '*/deps/*' -type f -mtime +7 -delete 2>/dev/null || true
+          find target src-tauri/target -path '*/incremental/*' -mtime +7 -delete 2>/dev/null || true
+          df -h . | tail -n 1
