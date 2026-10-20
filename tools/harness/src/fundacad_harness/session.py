@@ -16,6 +16,7 @@ from .actions import Actions
 from .bridge import Bridge, check_api
 from .browser import chrome_args, find_chrome
 from .errors import HarnessError, LaunchError
+from .recorder import Recorder
 from .launch import Proc, find_engine, find_repo, stale_warning, start_engine, start_vite
 
 
@@ -66,6 +67,16 @@ class Session(Actions):
         self._page_log = None
         self.warnings: list[str] = []
         self.start_screen = "none"
+        self.recorder = None
+        if record:
+            from . import __version__
+            from .bridge import DRIVER_API
+            opts: dict[str, Any] = {}
+            if tuple(viewport) != (1400, 900):
+                opts["viewport"] = tuple(viewport)
+            if gpu:
+                opts["gpu"] = True
+            self.recorder = Recorder(record, self.repo, __version__, DRIVER_API, opts)
         atexit.register(self.close)
         if open:
             self.open()
@@ -189,6 +200,7 @@ class Session(Actions):
             stopped.append(p.name)
         if self._page_log:
             self._page_log.close()
+        recorded = f", recorded {self.recorder.write()}" if self.recorder else ""
         kept = self.keep or self.failed
         if kept:
             print(f"fundacad-harness: logs kept in {self.work}", file=sys.stderr)
@@ -198,7 +210,8 @@ class Session(Actions):
             atexit.unregister(self.close)
         except Exception:
             pass
-        return "stopped " + (", ".join(stopped) or "nothing") + (f", logs in {self.work}" if kept else "")
+        return ("stopped " + (", ".join(stopped) or "nothing") + recorded
+                + (f", logs in {self.work}" if kept else ""))
 
     def __enter__(self) -> "Session":
         return self

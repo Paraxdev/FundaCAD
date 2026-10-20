@@ -34,6 +34,8 @@ def action(fn: Callable) -> Callable:
     @functools.wraps(fn)
     def run(self, *args, settle: bool = True, **kwargs):
         self._ensure_page()
+        outer = not getattr(self, "_in_action", False)
+        self._in_action = True
         try:
             done = fn(self, *args, **kwargs)
             if settle:
@@ -41,7 +43,11 @@ def action(fn: Callable) -> Callable:
         except HarnessError:
             self.failed = True
             raise
-        self._recorded(fn.__name__, args, kwargs, done)
+        finally:
+            if outer:
+                self._in_action = False
+        if outer:
+            self._recorded(fn.__name__, args, kwargs if settle else {**kwargs, "settle": False}, done)
         return self._step(done)
 
     run.is_action = True
@@ -118,7 +124,7 @@ class Actions:
         if enter:
             self.page.keyboard.press("Enter")
         problem = f', problem "{value["problem"]}"' if value.get("problem") else ""
-        return f'typed "{text}" into {hit["ref"]} "{hit["label"]}"{problem}', value
+        return f'typed "{text}" into {hit["ref"]} "{hit["label"]}"{problem}', {**value, "ref": hit["ref"], "label": hit["label"]}
 
     @action
     def press(self, *keys: str):
@@ -154,15 +160,18 @@ class Actions:
         if target:
             p = self._canvas_point(*target)
             self._mouse_click(p["x"], p["y"], button="right")
-            where = p["what"]
+            where, on_hit = p["what"], {}
         else:
-            where = self._click_control(on, "right")["ref"]
+            on_hit = self._click_control(on, "right")
+            where = on_hit["ref"]
         self.page.wait_for_timeout(50)
         ref = item if selectors.is_ref(item) else f"ctx:{item}"
         try:
             hit = self._click_control(ref)
         except NotFound:
             hit = self._click_control(item)
+        if on_hit:
+            hit = {**hit, "on_ref": on_hit["ref"], "on_label": on_hit["label"]}
         return f'chose {hit["ref"]} on {where}', hit
 
     @action
@@ -245,12 +254,12 @@ class Actions:
     @action
     def open_file(self, path: str | os.PathLike):
         full = self._choose_file("File/Open...", path)
-        return f"opened {Path(full).name}"
+        return f"opened {Path(full).name}", {"path": full}
 
     @action
     def import_file(self, path: str | os.PathLike):
         full = self._choose_file("File/Import Mesh...", path)
-        return f"imported {Path(full).name}"
+        return f"imported {Path(full).name}", {"path": full}
 
     @action
     def new_document(self, discard: bool = True):
@@ -375,20 +384,28 @@ class Actions:
 
     # --- waiting --------------------------------------------------------------
 
+    def _seen_text(self, want: str) -> str | None:
+        st = self.bridge.call("status")
+        if want in (st.get("prompt") or "").lower():
+            return f'prompt "{st["prompt"]}"'
+        for r in self.bridge.call("messages", since=0)["rows"][-20:]:
+            if want in r["text"].lower():
+                return f'message "{r["text"]}"'
+        for r in self._control_rows():
+            if want in r[3].lower():
+                return f'on screen "{r[3]}"'
+        return None
+
     def wait_for(self, text: str, timeout: float = 10) -> str:
         """Until the text shows in the prompt, a message or the screen."""
         self._ensure_page()
         end = time.monotonic() + timeout
         want = text.lower()
         while True:
-            st = self.bridge.call("status")
-            if want in (st.get("prompt") or "").lower():
-                return f'prompt "{st["prompt"]}"'
-            for r in self.bridge.call("messages", since=0)["rows"][-20:]:
-                if want in r["text"].lower():
-                    return f'message "{r["text"]}"'
-            if want in "\n".join(r[3] for r in self._control_rows()).lower():
-                return f'on screen "{text}"'
+            seen = self._seen_text(want)
+            if seen:
+                self._recorded("wait_for", (text,), {} if timeout == 10 else {"timeout": timeout}, seen)
+                return seen
             if time.monotonic() > end:
                 self.failed = True
                 raise HarnessError(f'"{text}" did not show in {timeout:g} s')
