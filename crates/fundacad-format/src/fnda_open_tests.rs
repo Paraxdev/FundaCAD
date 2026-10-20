@@ -278,6 +278,35 @@ fn redundant_segments_are_inflated_a_bounded_batch_at_a_time() {
 }
 
 #[test]
+fn temporary_files_a_crashed_open_left_are_swept() {
+    let dir = tmpdir("sweep");
+    let path = dir.join("doc.fundab");
+    let blobs = blobs();
+    write_doc(&path, &blobs, None, &wopts());
+    let store = dir.join("blobs");
+    std::fs::create_dir_all(&store).unwrap();
+    let day_and_more = std::time::SystemTime::now() - std::time::Duration::from_secs(25 * 60 * 60);
+    let put = |name: &str, old: bool| {
+        let p = store.join(name);
+        std::fs::write(&p, b"half").unwrap();
+        if old {
+            File::options().write(true).open(&p).unwrap().set_modified(day_and_more).unwrap();
+        }
+        p
+    };
+    let crashed = put(&format!("{}.bbrep.4242.7.tmp", hash_hex(&blobs[0])), true);
+    let running = put(&format!("{}.bbrep.4242.8.tmp", hash_hex(&blobs[1])), false);
+    let other = put("notes.tmp", true);
+    open(&path, &store, 2).unwrap();
+    assert!(!crashed.exists());
+    assert!(running.exists() && other.exists());
+    for p in [running, other] {
+        std::fs::remove_file(p).unwrap();
+    }
+    assert_blobs(&store, &blobs);
+}
+
+#[test]
 fn a_stored_blob_of_the_wrong_length_is_replaced_and_a_whole_one_kept() {
     let dir = tmpdir("existing");
     let path = dir.join("doc.fundab");
