@@ -34,10 +34,12 @@ export function mcpConfigBlock(launch: LaunchConfig): string {
   return JSON.stringify({ mcpServers: { fundacad: launch } }, null, 2);
 }
 
-/** Double quotes survive PowerShell, cmd and POSIX shells alike for a path, and
- *  a Windows install path has a space in it more often than not. */
+/** A Windows path goes in double quotes untouched, its backslashes are literal to
+ *  PowerShell and cmd and a Windows file name cannot hold a double quote. A POSIX
+ *  path goes in single quotes, where only the quote itself needs rewriting. */
 function quoted(path: string): string {
-  return `"${path.replace(/"/g, '\\"')}"`;
+  if (/^[A-Za-z]:|\\/.test(path)) return `"${path}"`;
+  return `'${path.replace(/'/g, `'\\''`)}'`;
 }
 
 /** What to paste for one host, and where it goes. */

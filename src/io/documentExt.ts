@@ -51,5 +51,5 @@ export function isDocumentExt(ext: string | undefined | null): boolean {
  */
 export function stripDocumentExt(name: string): string {
   const alts = [BINARY_DOC_EXT, DOC_EXT, ...LEGACY_DOC_EXTS].join("|");
-  return name.replace(new RegExp(`\.(${alts})$`, "i"), "");
+  return name.replace(new RegExp(`\\.(${alts})$`, "i"), "");
 }

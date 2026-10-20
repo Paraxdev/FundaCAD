@@ -24,6 +24,9 @@ on:
       - "manual/**"
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   # Gates the build matrix with the frontend checks, BEFORE any installer is
   # built. Runs once on Linux only. The engine's own tests are `rust-geom`,

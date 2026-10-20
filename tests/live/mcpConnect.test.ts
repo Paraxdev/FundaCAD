@@ -22,7 +22,22 @@ describe("the command line an MCP host is given", () => {
   it("gives Claude Code a command with the path quoted, spaces and all", () => {
     const { text } = mcpSetupFor("claude-code", WIN);
     expect(text).toBe(`claude mcp add --scope user fundacad -- "${WIN}" --mcp`);
-    expect(mcpSetupFor("claude-code", MAC).text).toBe(`claude mcp add --scope user fundacad -- "${MAC}" --mcp`);
+    expect(mcpSetupFor("claude-code", MAC).text).toBe(`claude mcp add --scope user fundacad -- '${MAC}' --mcp`);
+  });
+
+  it("keeps a Windows path as typed inside double quotes", () => {
+    const win = "C:\\Users\\Ann Lee\\AppData\\Local\\FundaCAD\\fundacad.exe";
+    expect(mcpSetupFor("claude-code", win).text).toBe(`claude mcp add --scope user fundacad -- "${win}" --mcp`);
+    expect(mcpSetupFor("other", win).text).toBe(`"${win}" --mcp`);
+  });
+
+  it("puts a POSIX path with a space in single quotes", () => {
+    const p = "/Users/ann lee/FundaCAD.app/Contents/MacOS/fundacad";
+    expect(mcpSetupFor("other", p).text).toBe(`'${p}' --mcp`);
+  });
+
+  it("writes a single quote in a POSIX path as '\\''", () => {
+    expect(mcpSetupFor("other", "/home/o'brien/fundacad").text).toBe("'/home/o'\\''brien/fundacad' --mcp");
   });
 
   it("gives Claude Desktop the block its config file takes", () => {
@@ -33,7 +48,7 @@ describe("the command line an MCP host is given", () => {
 
   it("gives any other host the program to start", () => {
     const { text, hint } = mcpSetupFor("other", MAC);
-    expect(text).toBe(`"${MAC}" --mcp`);
+    expect(text).toBe(`'${MAC}' --mcp`);
     expect(hint).toContain("stdio");
   });
 
