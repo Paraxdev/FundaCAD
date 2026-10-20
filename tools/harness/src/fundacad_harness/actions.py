@@ -167,7 +167,10 @@ class Actions:
             hit = self._click_control(s["ref"], s["button"])
             if i < len(steps) - 1:
                 self.page.wait_for_timeout(50)
-        return f'started {hit["ref"]} "{hit["label"]}"', hit
+        self.settle()
+        if self.bridge.call("status", since=self._mark).get("tool"):
+            return f'started {hit["ref"]} "{hit["label"]}"', hit
+        return f'clicked {hit["ref"]} "{hit["label"]}", no tool is running after it', hit
 
     @action
     def type(self, target: str, text: str, enter: bool = False):
@@ -270,8 +273,15 @@ class Actions:
         if self._palette():
             self.page.keyboard.press("Escape")
             shown = f', the list shows {", ".join(listed[:5])}' if listed else ", nothing matches"
-            raise NotFound(f'no command runs for "{name}"{shown}')
+            raise NotFound(f'no command runs for "{name}"{shown}{self._tool_hint(name)}')
         return f'ran command "{listed[0] if listed else name}"'
+
+    def _tool_hint(self, name: str) -> str:
+        try:
+            self.bridge.call("toolPath", label=name)
+        except HarnessError:
+            return ""
+        return f', it is a tool, start it with tool("{name}")'
 
     def _palette(self) -> list[list]:
         """The search box row first, then its matches, or nothing when the search is closed."""
