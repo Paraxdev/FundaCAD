@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from . import text
-from .actions import Actions
+from .actions import Actions, out_path
 from .bridge import Bridge, check_api
 from .browser import chrome_args, find_chrome
 from .errors import HarnessError, LaunchError
@@ -319,8 +319,7 @@ class Session(Actions):
             shots = self.work / "shots"
             shots.mkdir(exist_ok=True)
             path = shots / f"shot-{len(list(shots.iterdir())) + 1}.png"
-        path = Path(path)
-        path.parent.mkdir(parents=True, exist_ok=True)
+        path = out_path(path)
         if target:
             hit = self.call("locate", target=target, disabled=True)
             self.page.locator(f'[data-harness-target="{hit["marker"]}"]').screenshot(path=str(path))

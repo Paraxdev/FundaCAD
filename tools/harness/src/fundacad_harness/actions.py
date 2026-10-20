@@ -21,6 +21,14 @@ PANEL_KEYS = {"items": "Ctrl+Alt+s", "history": "Ctrl+Alt+h"}
 PANELS = ("history", "items", "views", "display", "versions", "snapping", "preferences")
 
 
+def out_path(path: str | os.PathLike) -> Path:
+    """Where a file the harness writes goes, refused when its folder is missing so a typo makes nothing."""
+    out = Path(path).resolve()
+    if not out.parent.is_dir():
+        raise BadArgs(f"no folder {out.parent}")
+    return out
+
+
 class Step:
     """What one action did, as one line (`str()`), with the JSON behind it in `data`."""
 
@@ -332,13 +340,14 @@ class Actions:
     @action
     def save_as(self, path: str | os.PathLike):
         """A browser tab saves by downloading the document, which lands at `path`."""
-        out = Path(path)
+        out = out_path(path)
         with self.page.expect_download(timeout=20_000) as dl:
             self._click_control("menu:File")
             self._click_control(self._menu_ref("File", "Save As..."))
-        out.parent.mkdir(parents=True, exist_ok=True)
         dl.value.save_as(str(out))
-        return f"saved {out.name}", {"path": str(out.resolve())}
+        named = dl.value.suggested_filename
+        also = f", the app named it {named}" if named and named != out.name else ""
+        return f"saved {out}{also}", {"path": str(out), "app_name": named}
 
     @action
     def new_document(self, discard: bool = True):
