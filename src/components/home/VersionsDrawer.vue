@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { fmtKeys } from "../../input/platform";
 import { computed, onMounted, ref } from "vue";
 import Icon from "../shell/Icon.vue";
 import type { DocSummary } from "../../io/library";
@@ -56,7 +57,7 @@ onMounted(async () => {
       </div>
 
       <div class="home-drawer-section">Versions on {{ shown }}</div>
-      <p class="home-drawer-hint">Restore brings a version back into the document, Ctrl+Z undoes it. Open copy starts a new document from it.</p>
+      <p class="home-drawer-hint">Restore brings a version back into the document, {{ fmtKeys("Ctrl+Z") }} undoes it. Open copy starts a new document from it.</p>
       <div v-for="v in rows" :key="v.id" class="home-version">
         <div class="home-version-text">
           <span class="home-version-msg">{{ v.message || "Untitled version" }}</span>
