@@ -13,7 +13,7 @@ import { featureMeta } from "../../ui/featureMeta";
 import Icon from "./Icon.vue";
 import { contextMenu } from "../../ui/menu";
 import { buildProgress, busyLine, CANCEL_DELAY_MS, historyShowsBusy, historyShowsEmpty } from "../../ui/buildProgress";
-import { featureFailures, featureNotes } from "../../ui/featureNotes";
+import { featureFailures, featureNotes, featurePlaceholders, placeholderNote } from "../../ui/featureNotes";
 import { gapIndexIn } from "../../ui/trackGaps";
 import { getUnit, onUnitChange } from "../../ui/units";
 import FeatureProperties from "./FeatureProperties.vue";
@@ -116,6 +116,8 @@ const notes = useBuildValue((b) =>
     diagnostics: b.result?.diagnostics,
   }),
 );
+/** Features the build left out because this version does not know their type. */
+const placeholders = useBuildValue((b) => featurePlaceholders({ skippedFeatures: b.result?.skippedFeatures }));
 const building = useBuildValue((b) => b.building);
 const progress = useBuildValue((b) => ({ progress: b.progress, meshed: b.meshed, meshTotal: b.meshTotal }));
 
@@ -184,9 +186,11 @@ function metaFor(f: { type: string; operation?: unknown }) {
 function chipTitle(f: { id: string; type: string; inactive?: boolean }, i: number) {
   const err = errors.value.get(f.id);
   const note = notes.value.get(f.id);
+  const placeholder = placeholders.value.get(f.id);
   return (
     `${i + 1} · ${metaFor(f).label}` +
     (f.inactive ? "\nSwitched off: its Active when condition is 0" : "") +
+    (placeholder !== undefined ? `\n${placeholderNote(placeholder)}` : "") +
     // A plain-text word, not a warning sign: this is a `title` attribute, and
     // the browser draws it in the OS tooltip font where a symbol lands as
     // whatever fallback glyph, or tofu, that font happens to carry.
@@ -195,7 +199,9 @@ function chipTitle(f: { id: string; type: string; inactive?: boolean }, i: numbe
     // that failed), so this reads as one line either way rather than as a
     // feature accused of two different things.
     (err ? `\nFailed: ${err}` : note ? `\nNote: ${note}` : "") +
-    "\nclick to select · double-click to edit, Esc to go back · right-click for more"
+    (placeholder !== undefined
+      ? "\nclick to select · right-click for more"
+      : "\nclick to select · double-click to edit, Esc to go back · right-click for more")
   );
 }
 
@@ -384,7 +390,7 @@ function openMenu(e: MouseEvent, id: string, i: number) {
     : [];
   contextMenu(e.clientX, e.clientY, [
     ...repick,
-    { label: "Edit", onClick: () => timeline.edit(id) },
+    ...(placeholders.value.has(id) ? [] : [{ label: "Edit", onClick: () => timeline.edit(id) }]),
     { label: "Rename", shortcut: "F2", onClick: () => startRename(id) },
     ...(linkedPath(id)
       ? [
@@ -479,6 +485,7 @@ function openMenu(e: MouseEvent, id: string, i: number) {
                   warn: !errors.has(f.id) && notes.has(f.id),
                   rolled: i >= rollback,
                   suppressed: suppressed.has(f.id) || f.inactive,
+                  placeholder: placeholders.has(f.id),
                   'drop-target': dropTarget === f.id,
                 }"
                 :title="chipTitle(f, i)"

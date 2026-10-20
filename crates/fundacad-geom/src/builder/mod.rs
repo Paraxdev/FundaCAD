@@ -663,7 +663,8 @@ fn note_unread(ctx: &mut Ctx, f: &Feature, fid: &str, kind: &str) {
     }
     let names = unread.iter().map(|k| format!("\"{k}\"")).collect::<Vec<_>>().join(", ");
     let (what, it) = if unread.len() == 1 { ("field", "it") } else { ("fields", "them") };
-    ctx.advise(fid, "unreadFields", format!("a {kind} has no {what} {names}, the build ignores {it}"));
+    let article = if kind.starts_with(['a', 'e', 'i', 'o', 'u']) { "an" } else { "a" };
+    ctx.advise(fid, "unreadFields", format!("{article} {kind} has no {what} {names}, the build ignores {it}"));
 }
 
 /// A body as the build leaves it, debris dropped.
@@ -692,6 +693,25 @@ pub struct Rebuild {
     pub body_ids: IndexMap<String, String>,
     /// `projectionUpdates`, only the entries a refresh found a real change for.
     pub projection_updates: Vec<Value>,
+    /// Features of a type no built in handler and no plugin on disk knows, left
+    /// out of the build and kept in the document.
+    pub skipped: Vec<Skipped>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Skipped {
+    pub feature_id: String,
+    pub type_name: String,
+}
+
+impl Skipped {
+    pub fn message(&self) -> String {
+        format!("unknown feature type: {}", self.type_name)
+    }
+
+    pub fn wire(&self) -> Value {
+        json!({ "feature_id": self.feature_id, "type": self.type_name, "message": self.message() })
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1197,6 +1217,7 @@ pub fn rebuild_from(
         }
     }
 
+    let mut skipped_here: HashSet<usize> = HashSet::new();
     let mut inactive: Vec<String> = Vec::new();
     for f in &features {
         if let Ok(true) = is_inactive(&ctx, f.active_when()) {
@@ -1261,9 +1282,12 @@ pub fn rebuild_from(
         }
         let label = label_of(rawf);
         let detail = || Some(failure_detail(&ctx, i, type_name, began.elapsed()));
-        let ran = !matches!(outcome, Ok(Ran::Inactive));
+        let ran = !matches!(outcome, Ok(Ran::Inactive | Ran::Skipped));
         match outcome {
             Ok(Ran::Inactive) => {}
+            Ok(Ran::Skipped) => {
+                skipped_here.insert(i);
+            }
             Ok(Ran::Built) => {
                 if let Some(name) = naming {
                     name_new_bodies(&mut ctx, &pre_ids, id_mark, name);
@@ -1358,6 +1382,11 @@ pub fn rebuild_from(
         }
     }
 
+    let skipped = skipped_features(&features, start, &skipped_here, &inactive);
+    if !skipped.is_empty() {
+        name_skipped_causes(&mut errors, &raw_features, &recorded, &skipped);
+    }
+
     forward_references(&mut errors, &raw_features, &ctx.timeline);
 
     let body_ids = ctx.ids.resulting_map();
@@ -1390,12 +1419,102 @@ pub fn rebuild_from(
         tracked_faces: ctx.tracked_faces,
         body_ids,
         projection_updates: ctx.projections,
+        skipped,
     })
+}
+
+/// The loop saw the skips from `start` on; the ones before it come from a cache
+/// resume, which restores no record of them, so they are looked up again.
+fn skipped_features(
+    features: &[Feature],
+    start: usize,
+    skipped_here: &HashSet<usize>,
+    inactive: &[String],
+) -> Vec<Skipped> {
+    // Each plugin lookup that misses rescans the plugin folders, so ask once per type.
+    let mut declared: HashMap<&str, bool> = HashMap::new();
+    features
+        .iter()
+        .enumerate()
+        .filter(|(i, f)| {
+            let Feature::Unknown(_) = f else { return false };
+            if *i >= start {
+                return skipped_here.contains(i);
+            }
+            if inactive.iter().any(|x| x == f.id()) {
+                return false;
+            }
+            let Some(t) = f.type_name() else { return true };
+            !*declared.entry(t).or_insert_with(|| plugin_declares(t))
+        })
+        .map(|(_, f)| Skipped {
+            feature_id: f.id().to_owned(),
+            type_name: f.type_name().unwrap_or("").to_owned(),
+        })
+        .collect()
+}
+
+#[cfg(feature = "plugins")]
+fn plugin_declares(type_name: &str) -> bool {
+    crate::plugins::declares_feature(type_name)
+}
+
+#[cfg(not(feature = "plugins"))]
+fn plugin_declares(_: &str) -> bool {
+    false
+}
+
+/// An error on a feature that names a skipped one, or a body only a skipped one
+/// would have made, says so.
+fn name_skipped_causes(
+    errors: &mut [FeatureError],
+    raw_features: &[Value],
+    recorded: &Option<IndexMap<String, String>>,
+    skipped: &[Skipped],
+) {
+    let ids: Vec<String> = skipped.iter().map(|s| s.feature_id.clone()).collect();
+    let owned: Vec<(String, String)> = recorded
+        .iter()
+        .flatten()
+        .filter(|(key, _)| ids.iter().any(|i| i == strip_key_suffix(key)))
+        .map(|(key, body)| (body.clone(), strip_key_suffix(key).to_owned()))
+        .collect();
+    let bodies: Vec<String> = owned.iter().map(|(b, _)| b.clone()).collect();
+    let owner_of = |body: &str| owned.iter().find(|(b, _)| b == body).map(|(_, f)| f.clone());
+    for e in errors.iter_mut() {
+        let node = raw_features
+            .iter()
+            .find(|r| r.get("id").and_then(Value::as_str) == e.feature_id.as_deref());
+        let cause = node
+            .and_then(|n| references_any(n, &ids).map(str::to_owned))
+            .or_else(|| node.and_then(|n| references_any(n, &bodies)).and_then(owner_of))
+            .or_else(|| recorded.as_ref().and_then(|r| switched_off_owner(&e.message, r, &ids)));
+        if let Some(cause) = cause {
+            let label = raw_features
+                .iter()
+                .find(|r| r.get("id").and_then(Value::as_str) == Some(cause.as_str()))
+                .and_then(|r| r.get("name").and_then(Value::as_str))
+                .filter(|n| !n.trim().is_empty())
+                .unwrap_or(&cause)
+                .to_owned();
+            // The usual advice cannot be followed when the cause is a feature this version cannot edit.
+            for (advice, with) in [(", fix that sketch first", ""), (" no longer exists", " was not built")] {
+                if let Some(at) = e.message.find(advice) {
+                    e.message.replace_range(at..at + advice.len(), with);
+                }
+            }
+            e.message.push_str(&format!(
+                " ({label} is from a newer version of FundaCAD and is not built here)"
+            ));
+        }
+    }
 }
 
 enum Ran {
     Built,
     Inactive,
+    /// A type nothing here knows: no error, the feature is listed as skipped.
+    Skipped,
 }
 
 fn run_feature(
@@ -1415,12 +1534,12 @@ fn run_feature(
         #[cfg(feature = "plugins")]
         Feature::Unknown(raw) => match crate::plugins::run_feature(ctx, t, raw, watch.cancel_token()) {
             Some(r) => r.map(|()| Ran::Built),
-            None => Err(Fail::msg(format!("unknown feature type: {t}"))),
+            None => Ok(Ran::Skipped),
         },
         #[cfg(not(feature = "plugins"))]
         Feature::Unknown(_) => {
-            let _ = watch;
-            Err(Fail::msg(format!("unknown feature type: {t}")))
+            let _ = (watch, t);
+            Ok(Ran::Skipped)
         }
         known => features::dispatch(ctx, known).map(|()| Ran::Built),
     }
@@ -1455,6 +1574,9 @@ pub fn result_fields(doc: &CadDocument, r: &Rebuild) -> Map<String, Value> {
     if !r.tracked_faces.is_empty() {
         m.insert("trackedFaces".into(), json!(r.tracked_faces));
     }
+    if !r.skipped.is_empty() {
+        m.insert("skippedFeatures".into(), Value::Array(r.skipped.iter().map(Skipped::wire).collect()));
+    }
     if !r.bodies.is_empty() {
         if !r.diagnostics.is_empty() {
             m.insert("diagnostics".into(), Value::Array(r.diagnostics.clone()));
@@ -1462,6 +1584,10 @@ pub fn result_fields(doc: &CadDocument, r: &Rebuild) -> Map<String, Value> {
         if !r.projection_updates.is_empty() {
             m.insert("projectionUpdates".into(), Value::Array(r.projection_updates.clone()));
         }
+    }
+    // With no bodies and nothing skipped, the caller answers the first error as
+    // the whole reply instead, which would drop the skipped list.
+    if !r.bodies.is_empty() || !r.skipped.is_empty() {
         if let Some(last) = r.errors.last() {
             m.insert("featureError".into(), last.wire());
             m.insert(

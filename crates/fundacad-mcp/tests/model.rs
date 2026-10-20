@@ -912,3 +912,11 @@ fn a_document_set_over_this_one_forgets_the_records_of_a_feature_that_became_a_j
     m::forget_stale_joins(&before, &mut after);
     assert_eq!(after["bodyIds"], json!({"bx:0": "body1", "keep:0": "body1", "old:0": "body4"}));
 }
+
+#[test]
+fn a_new_document_is_stamped_with_the_version_the_app_writes() {
+    assert_eq!(
+        m::new_document()["version"],
+        json!(fundacad_core::schema::DOCUMENT_VERSION)
+    );
+}

@@ -195,12 +195,12 @@ which a fresh engine could no longer start one and every build failed.
 | tool | what it is for |
 | --- | --- |
 | `schema` | every feature type, its fields, an example and its traps. Read first. |
-| `doc_new` / `doc_open` / `doc_save` / `doc_get` / `doc_set` | the document |
+| `doc_new` / `doc_open` / `doc_save` / `doc_get` / `doc_set` | the document. `doc_open` of a file from a newer FundaCAD adds a `note:` line naming the feature types this build does not know; they are kept and saved with the file. An older file holding an old feature type gets a note to open and save it in the app first, since MCP does not update old files |
 | `param_set` / `param_remove` | the parameter table (this is what makes it parametric) |
 | `feature_add` / `feature_update` / `feature_remove` / `feature_move` | the timeline |
 | `edit` | several of the above and `param_set` in one call, all or nothing, optionally building once at the end |
 | `sketch_merge` | replace overlapping closed shapes of a sketch with the lines, arcs and circles around their union, so an extrude picks it with one `regions` point; replies with that point |
-| `build` | rebuild, and say what came out and what failed. After the first build it lists only the bodies that changed; `full` lists them all |
+| `build` | rebuild, and say what came out and what failed. After the first build it lists only the bodies that changed; `full` lists them all. A feature of a type this build does not know (a file from a newer FundaCAD) reads `SKIPPED (id): unknown feature type: X, kept in the document but not built`, and like a failure it sets isError |
 | `interference` | which bodies overlap and by how much, and which come closer than a clearance, once or at every step of a parameter (`sweep`). A body that is not a closed solid is named as not checked, with why. Changes nothing |
 | `section` | cut the bodies with a plane: the outline as closed loops of points, and area, centroid, second moments, section modulus and polar moment for beam checks |
 | `stress` | a linear static stress analysis of one body: hold faces (`fixed`, or `supports` that are fixed, pinned or slider), load others with a force or a pressure, add its weight with `gravity`, pick a material, and get the peak von Mises stress and where, the largest deflection, the safety factor against yield, the load balance with the reaction at each support, warnings, and a PNG coloured by stress. Changes nothing |

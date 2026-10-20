@@ -25,7 +25,7 @@ use serde_json::{json, Map, Value};
 
 pub type Doc = Map<String, Value>;
 
-pub const FORMAT_VERSION: i64 = 9;
+pub const FORMAT_VERSION: i64 = fundacad_core::schema::DOCUMENT_VERSION as i64;
 
 /// An edit that would leave the document unbuildable. Returned BEFORE anything
 /// is written, so a refused edit changes nothing.
@@ -52,6 +52,69 @@ pub fn new_document() -> Doc {
     d.insert("features".into(), json!([]));
     d.insert("bodyIds".into(), json!({}));
     d
+}
+
+/// Feature types in `doc` neither the engine nor a shipped plugin knows, with how
+/// many features use each, most used first. A file from a newer FundaCAD holds them.
+pub fn unknown_feature_types(doc: &Doc) -> Vec<(String, usize)> {
+    let mut out: Vec<(String, usize)> = Vec::new();
+    for f in features(doc) {
+        let Some(t) = f.get("type").and_then(Value::as_str) else { continue };
+        if Feature::is_core_type(t) || crate::schema::features().contains_key(t) {
+            continue;
+        }
+        match out.iter_mut().find(|(n, _)| n == t) {
+            Some((_, c)) => *c += 1,
+            None => out.push((t.to_owned(), 1)),
+        }
+    }
+    out.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+    out
+}
+
+/// What `doc_open` adds about a file from another version, the same facts the
+/// app's open notice gives. `None` for a file this build reads whole.
+///
+/// Types are named by their ids, which is what `feature_add` and `schema` take.
+pub fn newer_file_note(doc: &Doc) -> Option<String> {
+    let stamp = doc.get("version").and_then(Value::as_i64).unwrap_or(1);
+    let newer = stamp > FORMAT_VERSION;
+    let unknown = unknown_feature_types(doc);
+    let total: usize = unknown.iter().map(|(_, c)| c).sum();
+    let names = unknown
+        .iter()
+        .map(|(t, c)| if *c > 1 { format!("{t} ({c})") } else { t.clone() })
+        .collect::<Vec<_>>()
+        .join(", ");
+    let one = total == 1;
+    let (it, subject, is) = if one { ("it", "It", "is") } else { ("them", "They", "are") };
+    let kept = format!("{subject} {is} kept and saved with the file. Bodies after {it} may differ.");
+    let count = if one { "1 feature".to_owned() } else { format!("{total} features") };
+    if newer {
+        let head = format!(
+            "this file is from a newer version of FundaCAD (document version {stamp}, this build reads up to {FORMAT_VERSION})."
+        );
+        if total == 0 {
+            return Some(format!("{head} Anything this version does not know is kept and saved with the file."));
+        }
+        let was = if one { "was" } else { "were" };
+        return Some(format!(
+            "{head} {count} {was} not included because this version does not know {it}: {names}. {kept} Update FundaCAD to build {it}."
+        ));
+    }
+    if total == 0 {
+        return None;
+    }
+    // The app updates an old file when it opens it (src/document/migrate.ts),
+    // MCP reads it as written, so an old feature type is not built here.
+    if stamp < FORMAT_VERSION {
+        return Some(format!(
+            "this file is from an older version of FundaCAD (document version {stamp}), which MCP reads as written, \
+             without the updates the app makes when it opens one. {count} {is} not built here: {names}. \
+             Open the file in the app and save it there to update it."
+        ));
+    }
+    Some(format!("{count} {} a plugin that is not running here: {names}. {kept}", if one { "needs" } else { "need" }))
 }
 
 /// `parameters` and `paramDefs`, added when a document arrived without them.

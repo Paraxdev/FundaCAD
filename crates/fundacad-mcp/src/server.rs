@@ -172,6 +172,24 @@ fn feature_failure_lines(errors: &[Value]) -> Vec<String> {
         .collect()
 }
 
+/// The engine's `skippedFeatures`: features of a type it does not know, which a
+/// file from a newer version can hold. Not built, and not lost either.
+fn skipped_lines(result: &Value) -> Vec<String> {
+    result
+        .get("skippedFeatures")
+        .and_then(Value::as_array)
+        .map_or(&[][..], Vec::as_slice)
+        .iter()
+        .filter_map(|s| {
+            let m = s.get("message").and_then(Value::as_str)?;
+            Some(format!(
+                "SKIPPED ({}): {m}, kept in the document but not built",
+                s.get("feature_id").and_then(Value::as_str).unwrap_or("None")
+            ))
+        })
+        .collect()
+}
+
 /// What `rebuild` gave back, plus what every caller of it needs to keep
 /// working with the engine.
 struct Rebuilt {
@@ -821,6 +839,7 @@ impl FundaCad {
         st.path = Some(path.clone());
         st.invalidate();
         st.reported = None;
+        let newer = model::newer_file_note(&st.doc).map_or(String::new(), |n| format!("\nnote: {n}"));
         let issues = model::recompute_parameters(&mut st.doc);
         let note = if issues.is_empty() {
             String::new()
@@ -835,7 +854,7 @@ impl FundaCad {
             )
         };
         Ok(text(format!(
-            "Opened {}: {} features, {} parameters.{note}{pushed_note}",
+            "Opened {}: {} features, {} parameters.{newer}{note}{pushed_note}",
             path.display(),
             model::features(&st.doc).len(),
             model::param_defs(&st.doc).len()
@@ -1775,8 +1794,11 @@ impl FundaCad {
         let failures = feature_failure_lines(
             result.get("featureErrors").and_then(Value::as_array).map_or(&[][..], Vec::as_slice),
         );
-        let any_feature_failed = !failures.is_empty();
+        let skips = skipped_lines(&result);
+        // A skip makes the model incomplete, so it counts as a failure for isError.
+        let any_feature_failed = !failures.is_empty() || !skips.is_empty();
         lines.extend(failures);
+        lines.extend(skips);
         for d in result
             .get("diagnostics")
             .and_then(Value::as_array)
@@ -1971,10 +1993,11 @@ impl FundaCad {
                 Ok(r) => r,
                 Err(e) => return e,
             };
-            build_failures = feature_failure_lines(
+            let mut lines = feature_failure_lines(
                 r.result.get("featureErrors").and_then(Value::as_array).map_or(&[][..], Vec::as_slice),
-            )
-            .join("\n");
+            );
+            lines.extend(skipped_lines(&r.result));
+            build_failures = lines.join("\n");
         }
         let mesh = {
             let st = self.state.lock().await;
@@ -2503,9 +2526,10 @@ impl FundaCad {
         if !missed.is_empty() && !wanted.is_empty() {
             out.push_str(&format!("\nThe plane misses {}.", missed.join(", ")));
         }
-        let failures = feature_failure_lines(
+        let mut failures = feature_failure_lines(
             result.get("featureErrors").and_then(Value::as_array).map_or(&[][..], Vec::as_slice),
         );
+        failures.extend(skipped_lines(&result));
         if !failures.is_empty() {
             out.push_str("\nSome features failed, so this cut what did build:\n");
             out.push_str(&failures.join("\n"));

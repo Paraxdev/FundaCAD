@@ -918,3 +918,70 @@ describe("opening a document starts a history of its own", () => {
     expect(store.document.features.map((f) => f.id)).toEqual(["a"]);
   });
 });
+
+describe("suppress and unsuppress are undo steps", () => {
+  let store: DocumentStore;
+  beforeEach(() => {
+    vi.useFakeTimers();
+    store = new DocumentStore(stubBackend([]), doc());
+  });
+  afterEach(() => void vi.useRealTimers());
+
+  it("undo restores a suppressed feature and redo suppresses it again", () => {
+    store.toggleSuppress("f1");
+    expect(store.isSuppressed("f1")).toBe(true);
+    store.undo();
+    expect(store.isSuppressed("f1")).toBe(false);
+    expect(store.document.features.length).toBe(4);
+    store.redo();
+    expect(store.isSuppressed("f1")).toBe(true);
+  });
+
+  it("undo reverses an unsuppress, and the dirty flag follows", () => {
+    store.toggleSuppress("f1");
+    store.markSaved("a.funda");
+    store.toggleSuppress("f1");
+    expect(store.isSuppressed("f1")).toBe(false);
+    expect(store.dirty).toBe(true);
+    store.markSaved("a.funda");
+    store.undo();
+    expect(store.isSuppressed("f1")).toBe(true);
+    expect(store.dirty).toBe(true);
+    store.redo();
+    expect(store.isSuppressed("f1")).toBe(false);
+  });
+
+  it("sits in its chronological place among feature edits", () => {
+    store.addFeature({ id: "nb3", type: "box", length: 1, width: 1, height: 1 } as Feature);
+    store.toggleSuppress("f1");
+    store.undo();
+    expect(store.isSuppressed("f1")).toBe(false);
+    expect(store.document.features.length).toBe(5);
+    store.undo();
+    expect(store.document.features.length).toBe(4);
+  });
+
+  it("undoing a suppress after the feature was removed and restored leaves it unsuppressed", () => {
+    store.toggleSuppress("f1");
+    store.removeFeature("f1");
+    store.undo();
+    expect(store.isSuppressed("f1")).toBe(false);
+    store.undo();
+    expect(store.isSuppressed("f1")).toBe(false);
+    expect(store.document.features.map((f) => f.id)).toContain("f1");
+    store.redo();
+    expect(store.isSuppressed("f1")).toBe(true);
+  });
+
+  it("undo rebuilds without the suppression", async () => {
+    const rebuilds: CadDocument[] = [];
+    const s = new DocumentStore(stubBackend(rebuilds), doc());
+    s.toggleSuppress("f1");
+    await vi.runAllTimersAsync();
+    const n = rebuilds.length;
+    s.undo();
+    await vi.runAllTimersAsync();
+    expect(rebuilds.length).toBeGreaterThan(n);
+    expect(rebuilds[rebuilds.length - 1]!.features.map((f) => f.id)).toContain("f1");
+  });
+});

@@ -2,6 +2,11 @@
 // document in place and returns user-facing warnings. Idempotent, so it can run on
 // every load.
 //
+// Every step must also be shape guarded: rewrite only what still has the old
+// shape. A file a newer build wrote and this one saved is stamped with this
+// build's version (docs/FUNDA-FORMAT.md, Files from a newer version), so a newer
+// build runs its newer steps on data that may already be new.
+//
 // v1 -> v2: polygon.angle was RADIANS (the lone outlier) and is now degrees;
 //   dimension constraints gain a stable `id`; bare parameter names stored in
 //   numeric fields become model parameters with the field rewritten to the cached
@@ -114,12 +119,9 @@ export const FORMAT_VERSION = 10;
 
 export function migrateDocument(parsed: CadDocument): string[] {
   const version = parsed.version ?? 1;
-  if (version > FORMAT_VERSION) {
-    // Best effort: load what we understand, but don't rewrite shapes we don't.
-    return [
-      "This file was made by a newer version of FundaCAD, unknown data (e.g. parameter expressions) may be lost if you save it here.",
-    ];
-  }
+  // Nothing to migrate in a newer file. What it holds that this version does not
+  // know is kept (store.ts) and the open notice says so (openNotice.ts).
+  if (version > FORMAT_VERSION) return [];
 
   const features = parsed.features ?? [];
   const params = parsed.parameters ?? {};

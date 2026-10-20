@@ -1,0 +1,22 @@
+{
+  "parameters": {},
+  "features": [
+    {
+      "id": "i1",
+      "type": "import",
+      "format": "step",
+      "name": "pin",
+      "geom": "5648909c8c0ccf6096c0e672255e68a0",
+      "solid": true
+    },
+    {
+      "id": "b1",
+      "type": "box",
+      "length": 10,
+      "width": 10,
+      "height": 10,
+      "operation": "new"
+    }
+  ],
+  "version": 10
+}
