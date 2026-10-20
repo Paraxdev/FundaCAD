@@ -179,9 +179,12 @@ function check(name, ok, detail = "") {
       const got = await page.evaluate(() => ({
         name: window.store.fileName, path: window.store.filePath, dirty: window.store.dirty,
         error: window.store.buildState.errorMessage, bodies: window.store.buildState.result?.bodies?.length ?? 0,
+        triangles: (window.store.buildState.result?.mesh?.indices?.length ?? 0) / 3,
       }));
       check(`${name} opens untitled and clean`, got.name === name && got.path === null && !got.dirty, JSON.stringify(got));
       check(`${name} builds`, !got.error && got.bodies === 1, JSON.stringify(got));
+      // A plain block is 12 triangles, each hole adds a wall.
+      if (name === "Plate") check("Plate has its holes", got.triangles > 100, `${got.triangles} triangles`);
       check(`${name} closes Home`, !(await homeUp()));
     }
 
