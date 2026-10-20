@@ -108,7 +108,9 @@ fn the_blobs_are_the_same_for_any_thread_count() {
     assert_eq!(rows.len(), 2);
     for t in [1, 2, 8] {
         let store = dir.join(format!("blobs{t}"));
+        test_hooks::take();
         let opened = open(&path, &store, t).unwrap();
+        assert_eq!(test_hooks::take().0, 2, "both big blobs by their rows at {t} threads");
         assert_eq!(opened.report, RepairReport::default());
         assert_blobs(&store, &blobs);
         for (raw, row) in blobs.iter().zip(&rows) {
@@ -148,7 +150,9 @@ fn a_stale_index_opens_on_the_serial_path_and_a_save_writes_a_fresh_one() {
     write_doc(&stale, &blobs, Some(&index), &one_stream);
     assert_eq!(rows_of(&stale), rows_of(&fresh));
     let store = dir.join("blobs");
+    test_hooks::take();
     let opened = read_file_with(&stale, &store, None, Some(&dir.join("carry")), &ReadOptions { threads: 4 }).unwrap();
+    assert_eq!(test_hooks::take().0, 0);
     assert!(opened.carried.is_empty());
     assert_blobs(&store, &blobs);
 
@@ -201,7 +205,9 @@ fn a_wrong_index_opens_correctly_every_way() {
         let path = dir.join(format!("v{i}.fundab"));
         let entries = write_doc(&path, &blobs, Some(index), &wopts());
         let store = dir.join(format!("blobs{i}"));
+        test_hooks::take();
         let opened = open(&path, &store, 4).unwrap_or_else(|e| panic!("{name}: {e}"));
+        assert_eq!(test_hooks::take().0, 0, "{name} read on the serial path");
         assert_eq!(opened.report, RepairReport::default(), "{name}");
         assert_blobs(&store, &blobs);
         if *name == "wrong length" {
@@ -251,6 +257,25 @@ fn damage_beyond_parity_in_a_segmented_blob_fails_and_publishes_nothing() {
     assert!(err.contains("damaged"), "{err}");
     assert!(!store.join(format!("{}.bbrep", hash_hex(&blobs[0]))).exists());
     assert!(std::fs::read_dir(&store).unwrap().all(|f| !f.unwrap().path().to_string_lossy().ends_with(".tmp")));
+}
+
+#[test]
+fn redundant_segments_are_inflated_a_bounded_batch_at_a_time() {
+    let dir = tmpdir("batches");
+    let path = dir.join("doc.fundab");
+    let zeros = vec![vec![0u8; 3 * INFLATE_RAW_PER_THREAD as usize + 5 * SEG]];
+    let entries = write_doc(&path, &zeros, None, &wopts());
+    let e = geometry(&entries, &zeros[0]);
+    assert!(e.groups() <= 2, "the whole section fits in one window at 1 thread");
+    for t in [1, 2] {
+        let store = dir.join(format!("blobs{t}"));
+        test_hooks::take();
+        open(&path, &store, t).unwrap();
+        let (fast, largest) = test_hooks::take();
+        assert_eq!(fast, 1);
+        assert!(largest <= INFLATE_RAW_PER_THREAD * t as u64 && largest > 0, "{largest} at {t} threads");
+        assert_blobs(&store, &zeros);
+    }
 }
 
 #[test]
@@ -311,4 +336,14 @@ fn two_opens_of_the_same_file_at_once_leave_one_good_blob() {
         }
     });
     assert_blobs(&store, &blobs);
+}
+
+#[test]
+fn a_segment_over_the_batch_budget_is_inflated_alone() {
+    let cap = INFLATE_RAW_PER_THREAD as usize;
+    let spans = [(0, 1, cap / 2), (1, 2, cap / 2), (2, 3, cap + 1), (3, 4, 1), (4, 5, 1)];
+    let lens: Vec<usize> = inflate_batches(&spans, 1).iter().map(|b| b.len()).collect();
+    assert_eq!(lens, [2, 1, 2]);
+    assert_eq!(inflate_batches(&spans, 3).len(), 1);
+    assert!(inflate_batches(&[], 4).is_empty());
 }
