@@ -454,8 +454,9 @@ A feature of a plugin with no `geometryWasm` fails by name. The retired
 sidecar build on `legacy` used its own manifest key instead, and the app
 offers its own bundle of the same plugin in its place.
 
-The app installs its plugins from the `beta` release (`RELEASE_TAG` in
-`src/plugins/index.ts`). `build-beta` packs those bundles with their
+The app installs its plugins from the release it was built for, `beta` or a
+stable release's tag (`RELEASE_TAG` in `src/plugins/index.ts`). `bundle`
+packs those bundles with their
 components, from the same commit as the host that runs them. The app tells its
 worker where installed plugins are with `FUNDACAD_PLUGIN_DIR`
 (`<app data>/plugins`), and MCP mode tells a private engine the same directory.
