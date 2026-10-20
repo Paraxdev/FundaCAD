@@ -170,3 +170,12 @@ def test_every_public_call_says_what_it_does():
     missing = [n for n in dir(Session) if not n.startswith("_") and callable(getattr(Session, n)) and not getattr(Session, n).__doc__]
     assert missing == []
     assert "docs/HARNESS.md" in Session.__doc__
+
+
+def test_a_tool_that_opens_a_choice_names_the_choices():
+    rows = [[1, "pick:primitive", "button", "Primitive", [], "toolrail"]]
+    s = session(rows)
+    s.bridge.tools["Primitive"] = "pick:primitive"
+    s.bridge.on_click = lambda: rows.extend([[1, "choice:Box", "button", "Box", [], "dialog"], [1, "choice:Cylinder", "button", "Cylinder", [], "dialog"]])
+    assert str(s.tool("Primitive")).startswith('clicked pick:primitive "Primitive", it asks for a choice: Box, Cylinder')
+    s.close()
