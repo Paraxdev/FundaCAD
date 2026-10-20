@@ -58,6 +58,7 @@ Options:
 | `gpu=` | `False` | real GPU flags instead of software rendering |
 | `viewport=` | `(1400, 900)` | page size in pixels |
 | `keep=` | `False` | keep the work folder (logs, screenshots) after a clean close |
+| `record=` | none | write the session's actions to a script that replays them, see Recording |
 | `repo=` | discovered | the checkout to serve |
 | `settle_timeout=` | `60` | seconds an action may take to settle |
 
@@ -161,6 +162,28 @@ refs; refs never change with wording. `#n` picks the n-th of several.
 Every canvas point is checked with the app's own picker before the click, and points under a
 panel or a handle are skipped. When no point works the call fails with `Occluded` and suggests a
 view; the harness never turns the camera by itself.
+
+## Recording
+
+`Session(record="walk.py")` writes every action to `walk.py` as it happens, and `python walk.py`
+plays it back in a new session:
+
+```python
+# Recorded by fundacad-harness 0.1.0, driver api 1, 2026-10-20.
+from fundacad_harness import Session
+
+with Session() as s:
+    s.open_file("tools/harness/fixtures/plate.json")
+    s.view("iso")
+    s.pick_face("top")
+    s.tool("Press/Pull")  # action:offer:presspull
+    s.type("field:distance", "4", enter=True)  # "D"
+```
+
+A control found by its label is written by its ref, with the label in a comment, so a relabelled
+button still replays. Face and edge selectors, tool labels and menu paths stay as written. A file
+inside the checkout is written relative to it. Readouts are not recorded, `wait_for` is. A failed
+action is left out, and an action called from inside another one is written once.
 
 ## Troubleshooting
 
