@@ -553,6 +553,7 @@ export function mountUi(e: Engine): void {
     startCutByPlane: (id) => e.starters.startCutByPlane(id),
     offsetPlaneFromFace: (...args) => e.starters.offsetPlaneFromFace(...args),
     axisFromRoundFace: (...args) => e.starters.axisFromRoundFace(...args),
+    exportFlat: (source, format) => void import("../io/files").then((m) => m.exportModel(e.store, e.geometry, [], source, format)),
   });
 
   e.ui.panels = createPanels({

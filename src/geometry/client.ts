@@ -2,7 +2,7 @@
 // One request/response per message, matched by `id`. Calls made before the
 // transport opens are queued and flushed on open; the transport reconnects.
 
-import type { CadDocument, EdgeFingerprint, ExportFormat, F32Wire, MeshExportOptions, Feature, ImportFormat, ImportReply, PlaneSpec, ProjectedCurve, ProjectedSource, RebuildReply, RebuildResult, Selector, SketchEntity, U32Wire, Vec3 } from "../types";
+import type { CadDocument, EdgeFingerprint, ExportFormat, F32Wire, MeshExportOptions, Feature, PlaneDef, ImportFormat, ImportReply, PlaneSpec, ProjectedCurve, ProjectedSource, RebuildReply, RebuildResult, Selector, SketchEntity, U32Wire, Vec3 } from "../types";
 import { RebuildAssembly, manifestFromBodies } from "./assembly";
 import { pipe, pipeFault } from "../diagnostics/pipelineLog";
 import { EngineTransport, type GeometryTransport } from "./transport";
@@ -320,6 +320,11 @@ export interface GeometryBackend {
       palette?: { name: string; color: string; material?: string }[];
       bodyColors?: Record<string, number>;
       mesh?: MeshExportOptions;
+      /** DXF and SVG draw one sketch, or one flat face in `plane`. */
+      sketch?: string;
+      face?: unknown;
+      plane?: PlaneDef;
+      tolerance?: number;
     },
     // Same contract as importGeometry's: hands back the request id so a Cancel
     // targets THIS export rather than whatever ran most recently. The document
@@ -1265,6 +1270,11 @@ export class Geometry implements GeometryBackend {
       palette?: { name: string; color: string; material?: string }[];
       bodyColors?: Record<string, number>;
       mesh?: MeshExportOptions;
+      /** DXF and SVG draw one sketch, or one flat face in `plane`. */
+      sketch?: string;
+      face?: unknown;
+      plane?: PlaneDef;
+      tolerance?: number;
     } = {},
     onStarted?: (id: string) => void,
   ): Promise<{ ok: boolean; path?: string; paths?: string[]; message?: string; cancelled?: boolean; warnings?: { message: string; feature_id?: string }[] }> {
@@ -1275,6 +1285,7 @@ export class Geometry implements GeometryBackend {
         // GLB writes one material per body from these; the engine defaults both
         // to empty, so other formats are unaffected by sending them.
         palette: opts.palette, bodyColors: opts.bodyColors, mesh: opts.mesh,
+        sketch: opts.sketch, face: opts.face, plane: opts.plane, tolerance: opts.tolerance,
       },
       onStarted,
     );

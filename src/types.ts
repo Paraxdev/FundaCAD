@@ -899,7 +899,7 @@ export type RebuildReply =
   | { ok: true; result: RebuildResult }
   | { ok: false; error: { feature_id?: string; message: string }; cancelled?: boolean };
 
-export type ExportFormat = "step" | "stl" | "3mf" | "glb";
+export type ExportFormat = "step" | "stl" | "3mf" | "glb" | "dxf" | "svg";
 
 /** Faceting and output options for a mesh export (STL, 3MF, GLB). */
 export interface MeshExportOptions {
