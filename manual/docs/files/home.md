@@ -14,7 +14,7 @@ Add folder puts a folder of your own under Folders, to keep the documents of one
 
 Versions on a card lists the document's branches and saved versions. Open on a branch opens the document on that branch. Restore opens the document at that version, and Ctrl+Z undoes it. Open copy does the same as a new untitled document, so the original file stays as it is.
 
-Press Esc or the close button to go back to your document. File > Home and the home button in the title bar bring Home back. Turn off Show Home on startup to start straight on an empty document.
+Press Esc or the close button to go back to your document. File > Home and the home button in the title bar bring Home back. While Home is open the rest of the title bar is dimmed and switched off, the home button stays lit and takes you back. Turn off Show Home on startup to start straight on an empty document.
 
 Home sits on a plain paper background. In Preferences > Appearance, Home background can show your workspace dimmed behind it instead, or a PNG or JPEG picture of your own.
 
