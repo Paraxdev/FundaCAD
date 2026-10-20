@@ -297,12 +297,12 @@ function eye(tag: VisTag, visible: boolean) {
   };
 }
 
-/** The Visibility submenu for `keys`, the same for every list: show or hide the
- *  lot when there are several, show only them, or bring the whole list back. */
 function exportSketch(id: string, format: "dxf" | "svg") {
   void exportModel(store, engine.geometry, [], sketchFlatSource(store, id), format);
 }
 
+/** The Visibility submenu for `keys`, the same for every list: show or hide the
+ *  lot when there are several, show only them, or bring the whole list back. */
 function visibilityMenu(category: VisCategory, keys: readonly string[], plural: string): CtxItem {
   const n = keys.length;
   const children: CtxItem[] = [];
