@@ -49,6 +49,7 @@ import { boundaryAnchors, footprintAnchors, loopCentroid } from "./anchors";
 import { setPrompt } from "../ui/prompt";
 import { tooEdgeOn } from "./planeGraze";
 import { toast } from "../ui/toast";
+import { looseEnds, tieConstraints, type LooseEnds } from "./looseEnds";
 import { contextMenu, dismissContextMenu, type CtxItem } from "../ui/menu";
 import { dropSeparatedJoins } from "./joins";
 import { sketchToolKey } from "./toolKeys";
@@ -730,6 +731,8 @@ export class SketchMode {
     this.tool = "select";
     this.overlay.setActiveSketch([]); // clear in-progress curves (else they orphan on screen)
     this.overlay.setActiveRegions([], this.plane); // drop active-sketch fills (committed ones re-render)
+    this.looseNow = null;
+    this.overlay.setLooseEnds(this.plane, null);
     if (this.store) this.overlay.update(this.store.document);
     this.onState?.();
   }
@@ -906,10 +909,68 @@ export class SketchMode {
       this.entities, this.constraints, this.conflictIdx, this.overIdx,
       this.lastDof, this.conflict,
     );
+    this.showLooseEnds();
     // On-demand renderer: a keyboard-driven repaint (e.g. async text glyphs landing
     // via redraw()) fires no pointer event, so force a frame or it won't draw until
     // the next mouse move.
     this.viewport.requestRender();
+  }
+
+  /** The snap's reach in sketch mm, so a loose end is amber exactly when a snap would have joined it. */
+  private snapTolMm(): number {
+    return hitPx(10) * this.planeMmPerPx();
+  }
+
+  private looseNow: LooseEnds | null = null;
+  private showLooseEnds() {
+    this.looseNow = this.active ? looseEnds(this.entities, this.constraints, this.snapTolMm()) : null;
+    this.overlay.setLooseEnds(this.plane, this.looseNow);
+  }
+
+  /** The open and untied ends the dots show. */
+  looseEndsNow(): LooseEnds | null {
+    return this.looseNow;
+  }
+
+  /** Tie every amber end to what it touches as one undo step. A tie the solver would
+   *  reject is left out, so a tie never turns the sketch red. */
+  async tieLooseEnds(): Promise<{ tied: number; open: number; untied: number }> {
+    const le = looseEnds(this.entities, this.constraints, this.snapTolMm());
+    let ties = tieConstraints(le, this.constraints);
+    const left = () => {
+      const now = looseEnds(this.entities, this.constraints, this.snapTolMm());
+      return { open: now.open.length, untied: now.untied.length };
+    };
+    if (!ties.length || this.solverDead) {
+      setPrompt(le.untied.length ? "These loose ends cannot be tied, draw a line to close them" : "No loose ends to tie");
+      return { tied: 0, ...left() };
+    }
+    const ver = this.entityVersion;
+    const trial = await compileAndSolve(this.entities, [...this.constraints, ...ties]);
+    if (trial.conflicts.length && ties.length <= 64) {
+      const kept: SketchConstraint[] = [];
+      for (const t of ties) {
+        const r = await compileAndSolve(this.entities, [...this.constraints, ...kept, t]);
+        if (!r.conflicts.length) kept.push(t);
+      }
+      ties = kept;
+    } else if (trial.conflicts.length) {
+      ties = [];
+    }
+    if (!this.active || this.entityVersion !== ver) return { tied: 0, ...left() };
+    if (ties.length) {
+      this.constraints.push(...ties);
+      this.refreshActive();
+      this.requestSolve();
+    }
+    const after = { tied: ties.length, ...left() };
+    const rest = after.open + after.untied;
+    setPrompt(
+      ties.length
+        ? `Tied ${ties.length} loose end${ties.length === 1 ? "" : "s"}${rest ? `, ${rest} left` : ""}`
+        : "Tying these ends would over constrain the sketch",
+    );
+    return after;
   }
 
   private allGlyphs() {
@@ -1017,6 +1078,7 @@ export class SketchMode {
     // none of which depend on the zoom. Only the annotation geometry does.
     this.overlay.setActiveSketch(this.activeCurves(this.derivedEntities()));
     if (this.dimsVisible) this.dims.show(this.entities, this.plane, this.constraintDimExtras(), drivenBadges(this.entities, this.constraints));
+    this.showLooseEnds();
     this.viewport.requestRender();
   }
 
