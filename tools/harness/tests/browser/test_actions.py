@@ -100,3 +100,13 @@ def test_open_file_reads_a_fixture_and_the_rebuild_is_settled(s):
     assert s.bodies(raw=True)[0]["faces"] == 6
     assert s.history().startswith("history 1 feature")
     assert s.last_error() == "none"
+
+
+def test_a_view_keeps_a_running_extrude_and_its_typed_depth(plate):
+    plate.pick_face("top")
+    plate.tool("Extrude")
+    plate.type("D", "5")
+    assert str(plate.view("front")).startswith("view Front, mode running")
+    plate.view("iso")
+    plate.press("Enter")
+    assert plate.history(raw=True)["count"] == 2

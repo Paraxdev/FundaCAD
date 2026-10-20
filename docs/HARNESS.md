@@ -149,7 +149,7 @@ with Session() as s:
 | `pick_plane(name)` | `XY`, `XZ`, `YZ` or a datum plane's id |
 | `click_at(sketch=(x, y) or world=(x, y, z) or screen=(x, y))`, `drag(from_, to, space="sketch")` | pointer at a sketch, world or screen point, `space` is `sketch`, `world` or `screen` |
 | `drag_handle(name, by=px or mm=value)` | drags a named handle along its axis; `mm=` lands near the value, the step says the value box values reached, type the exact value after |
-| `view(name)` | iso, top, front, right, ..., fit, through the Views popover |
+| `view(name)` | top, bottom, front, back, right, left, iso (the default view fitted to the model), default, fit, through the Views popover, a running tool keeps going |
 | `undo()`, `redo()` | the title bar buttons |
 | `expand(target, open=True)` | opens or closes an Items folder by its caret (a click on the row selects) |
 | `open_file(path)` | File > Open, answering the file chooser |

@@ -14,7 +14,10 @@ from .errors import BadArgs, HarnessError, NotFound, Occluded
 from .keys import key, modifiers
 
 
-VIEW_LABELS = {"iso": "Default View", "default": "Default View", "fit": "Fit to Model"}
+# The app's Default View can crop a model that fills the canvas, iso fits it after.
+VIEW_CLICKS = {"iso": ["Default View", "Fit to Model"], "default": ["Default View"], "fit": ["Fit to Model"]}
+VIEWS_POPOVER = ".float-popover.vc-pop"
+FOCUSED_FIELD = "() => { const a = document.activeElement; return a instanceof HTMLInputElement || a instanceof HTMLTextAreaElement ? a : null; }"
 SIDES = {"top", "bottom", "front", "back", "right", "left"}
 # A wide stage has no button that opens a closed Items or History, a person uses the keys.
 PANEL_KEYS = {"items": "Ctrl+Alt+s", "history": "Ctrl+Alt+h"}
@@ -288,16 +291,34 @@ class Actions:
     def view(self, name: str):
         """Turns the camera through the Views popover: iso, fit, top, front, right and the rest."""
         want = name.strip().lower()
-        label = VIEW_LABELS.get(want, name)
-        self._click_control("Views")
+        labels = VIEW_CLICKS.get(want) or ([f"opt:{want.capitalize()}"] if want in SIDES else [name])
+        field = self.page.evaluate_handle(FOCUSED_FIELD)
+        button = self._click_control("Views")["ref"]
         self.page.wait_for_timeout(50)
+        hits = []
         try:
-            hit = self._click_control(label if selectors.is_ref(label) else f"opt:{label}" if want in SIDES else label)
+            for i, label in enumerate(labels):
+                if i:
+                    self.settle()
+                    if not self._views_open():
+                        self._click_control(button)
+                hits.append(self._click_control(label))
         except NotFound:
-            self.page.keyboard.press("Escape")
-            raise NotFound(f'no view "{name}", the views are {", ".join([*VIEW_LABELS, *sorted(SIDES)])} or a label in the Views popover') from None
-        self.page.keyboard.press("Escape")
-        return f'view {hit["label"]}', hit
+            self._close_views(button, field)
+            raise NotFound(f'no view "{name}", the views are {", ".join([*VIEW_CLICKS, *sorted(SIDES)])} or a label in the Views popover') from None
+        self._close_views(button, field)
+        return f'view {" then ".join(h["label"] for h in hits)}', hits[-1]
+
+    def _views_open(self) -> bool:
+        return bool(self.page.locator(VIEWS_POPOVER).count())
+
+    def _close_views(self, button: str, field) -> None:
+        """By its button, not Escape: a running Extrude hears an Escape before the popover does and cancels.
+        The value box field gets its focus back, or the next Enter presses the Views button."""
+        if self._views_open():
+            self._click_control(button)
+        self.page.evaluate("(el) => el?.isConnected && el.focus()", field)
+        field.dispose()
 
     # --- files ----------------------------------------------------------------
 
