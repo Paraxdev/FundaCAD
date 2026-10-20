@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { fmtKeys } from "../../input/platform";
 // The floating column of view controls down the right edge: snapping, the grid
 // and units, standard views, display and analysis, a screenshot, and the
 // history panel toggle. Each opens a popover; only settings the app has are
@@ -215,10 +216,10 @@ async function screenshot() {
     <!-- On a narrow stage Items and History are drawers, and their switches
          go first, where a short column cannot scroll them out of sight. -->
     <div v-if="shell.narrow" class="float-group">
-      <IconButton icon="items" title="Items (Ctrl Alt S)" :active="shell.itemsShown" @click="shell.toggleItems()" />
+      <IconButton icon="items" :title="fmtKeys('Items (Ctrl Alt S)')" :active="shell.itemsShown" @click="shell.toggleItems()" />
       <IconButton
         icon="history"
-        :title="ui.sketchActive ? 'Sketch options (Ctrl Alt H)' : 'History (Ctrl Alt H)'"
+        :title="fmtKeys(ui.sketchActive ? 'Sketch options (Ctrl Alt H)' : 'History (Ctrl Alt H)')"
         :active="shell.historyShown"
         :badge="errorCount || null"
         @click="shell.toggleHistory()"
@@ -255,7 +256,7 @@ async function screenshot() {
       <IconButton
         v-if="!shell.narrow"
         icon="history"
-        title="History (Ctrl Alt H)"
+        :title="fmtKeys('History (Ctrl Alt H)')"
         :active="shell.historyOpen"
         :badge="errorCount || null"
         @click="shell.toggleHistory()"
