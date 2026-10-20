@@ -15,6 +15,7 @@ pub mod thumbs;
 mod spacemouse;
 mod drop_paths;
 pub mod frames;
+pub mod settings_files;
 // WebKitGTK only exists on Linux; macOS and Windows use WKWebView and WebView2.
 #[cfg(target_os = "linux")]
 mod webkit;
@@ -333,6 +334,11 @@ pub fn run() {
         // token for a file somebody forgot they had offered it.
         .manage(plugins::files::Handles::default())
         .setup(|app| {
+            if let (Ok(data), Ok(root)) = (app.path().app_data_dir(), plugins::plugins_root(app.handle())) {
+                for kept in settings_files::check_settings(&data, &root, plugins::RECORD) {
+                    println!("[settings] a settings file did not read and was kept as {}", kept.display());
+                }
+            }
             app.manage(engine::Engine::start(app.handle()));
             frames::denoiser::load_installed(app.handle());
             // The 3D-mouse reader is NOT started here any more. It is a
