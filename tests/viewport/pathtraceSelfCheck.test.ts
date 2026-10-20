@@ -11,7 +11,10 @@ function tracer(answer: unknown, calls: string[]) {
   return new NativeTracer({
     canvas,
     blit: () => ({ maxTextureSize: 4096, upload: () => {}, dispose: () => {} }),
-    connect: async () => ({ link: link as never, generation: 1, source: "test" }),
+    connect: async () => {
+      calls.push("connect");
+      return { link: link as never, generation: 1, source: "test" };
+    },
     call: async (cmd) => {
       calls.push(cmd);
       if (cmd === "pt_selfcheck") {
@@ -36,16 +39,28 @@ describe("the tracer self check", () => {
     expect(breadcrumbs().some((b) => /tracer self check FAILED on software: diff 9\.50, threshold 3\.40 of 255, 410 ms/.test(b))).toBe(true);
   });
 
-  it("logs an error the same way and asks once per session", async () => {
+  it("asks after the native tracer is open, which frames_open does", async () => {
+    const calls: string[] = [];
+    await tracer(failing, calls).init();
+    expect(calls.indexOf("pt_selfcheck")).toBeGreaterThan(calls.indexOf("connect"));
+    expect(calls.indexOf("connect")).toBeGreaterThanOrEqual(0);
+  });
+
+  it("logs an error the same way, without a fault", async () => {
     const calls: string[] = [];
     const faults: string[] = [];
-    for (let i = 0; i < 2; i++) {
-      const t = tracer(new Error("no adapter"), calls);
-      t.onFault((why) => faults.push(why));
-      await t.init();
-    }
-    expect(calls.filter((c) => c === "pt_selfcheck")).toHaveLength(1);
+    const t = tracer(new Error("no adapter"), calls);
+    t.onFault((why) => faults.push(why));
+    await t.init();
     expect(faults).toEqual([]);
     expect(breadcrumbs().some((b) => b.includes("tracer self check did not run: no adapter"))).toBe(true);
+  });
+
+  it("asks once per session once it has answered, and again after an error", async () => {
+    const calls: string[] = [];
+    await tracer(new Error("not open"), calls).init();
+    await tracer(failing, calls).init();
+    await tracer(failing, calls).init();
+    expect(calls.filter((c) => c === "pt_selfcheck")).toHaveLength(2);
   });
 });
