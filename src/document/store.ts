@@ -148,7 +148,7 @@ export const KNOWN_DOC_KEYS: ReadonlySet<string> = new Set([
   "version", "parameters", "paramDefs", "paramExtras", "features", "viewOverrides", "bodyIds",
   "suppressed", "rollback", "sketchVisibility", "bodyVisibility", "planeVisibility", "bodyNames",
   "bodyColors", "bodyElement", "bodyMaterial", "faceMaterials", "importColorSource", "elements",
-  "materials", "palette", "stress", "environment", "versions", "geometry",
+  "materials", "palette", "stress", "environment", "versions", "geometry", "referenceImages",
 ]);
 const ELEMENT_KEYS: ReadonlySet<string> = new Set(["id", "name", "parent"]);
 
@@ -159,11 +159,26 @@ function sharesAFeature(a: readonly Feature[], b: readonly Feature[]): boolean {
 
 /** The entries of `raw` outside `known`, deep copied, as normalizeMaterial keeps
  *  a material's unknown fields. */
-function carriedKeys(raw: Record<string, unknown>, known: ReadonlySet<string>): Record<string, unknown> {
+export function carriedKeys(raw: Record<string, unknown>, known: ReadonlySet<string>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(raw)) {
     if (known.has(k) || k === "__proto__" || v === undefined) continue;
     out[k] = structuredClone(v);
+  }
+  return out;
+}
+
+/** Plain object entries with an id each, deep copied, the first of a repeated id kept. */
+function readReferenceImages(raw: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const out: Record<string, unknown>[] = [];
+  for (const e of raw) {
+    if (!e || typeof e !== "object" || Array.isArray(e)) continue;
+    const id = (e as { id?: unknown }).id;
+    if (typeof id !== "string" || !id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(structuredClone(e as Record<string, unknown>));
   }
   return out;
 }
@@ -303,6 +318,12 @@ export class DocumentStore {
   /** Top level keys of the opened file this version does not know, written back
    *  as they came. Off `doc`, so they ride neither the undo stack nor a rebuild. */
   private unknownKeys: Record<string, unknown> = {};
+  /** Reference images (plugins/FundaCAD.ReferenceImages), opaque here and kept
+   *  whole, unknown fields too. Off `doc`: a picture builds nothing, so changing
+   *  one neither rebuilds nor clones the document onto the undo stack. */
+  private refImages: Record<string, unknown>[] = [];
+  private refImageListeners = new Set<(list: readonly Record<string, unknown>[]) => void>();
+  private refCoalesce: { key: string; top: unknown; after: { v: Record<string, unknown>[] } } | null = null;
   /** A section this version could not read (a newer study or repo shape), kept
    *  whole and written back while this document has none of its own. */
   private unreadSections: { stress?: unknown; environment?: unknown; versions?: unknown } = {};
@@ -620,6 +641,7 @@ export class DocumentStore {
     this.stress = null;
     this.environment = null;
     this.unknownKeys = {};
+    this.setRefImagesQuiet([]);
     this.unreadSections = {};
     this.openedVersion = FORMAT_VERSION;
     this.carriedSections = [];
@@ -1744,6 +1766,48 @@ export class DocumentStore {
     this.emitBuild();
   }
 
+  // --- reference images --------------------------------------------------------
+
+  referenceImages(): readonly Record<string, unknown>[] {
+    return this.refImages;
+  }
+
+  /** Called now and on every change, an open, an undo. */
+  onReferenceImagesChange(fn: (list: readonly Record<string, unknown>[]) => void): () => void {
+    this.refImageListeners.add(fn);
+    fn(this.refImages);
+    return () => this.refImageListeners.delete(fn);
+  }
+
+  /** Replace the list as one undo step. Calls passing the same `coalesce` key
+   *  one after another share a step, so a slider drag undoes in one go. */
+  setReferenceImages(next: readonly Record<string, unknown>[], opts: { coalesce?: string } = {}) {
+    const after = readReferenceImages(next);
+    if (JSON.stringify(after) === JSON.stringify(this.refImages)) return;
+    const c = this.refCoalesce;
+    if (opts.coalesce && c && c.key === opts.coalesce && this.undoStack[this.undoStack.length - 1] === c.top) {
+      c.after.v = after;
+      this.redoStack = [];
+    } else {
+      const before = this.refImages;
+      const box = { v: after };
+      this.pushOverlayUndo({
+        undo: () => { this.refCoalesce = null; this.setRefImagesQuiet(before); this.markDirty(); },
+        redo: () => { this.refCoalesce = null; this.setRefImagesQuiet(box.v); this.markDirty(); },
+      });
+      const top = this.undoStack[this.undoStack.length - 1];
+      this.refCoalesce = opts.coalesce ? { key: opts.coalesce, top, after: box } : null;
+    }
+    this.setRefImagesQuiet(after);
+    this.markDirty();
+  }
+
+  private setRefImagesQuiet(list: Record<string, unknown>[]) {
+    if (!list.length && !this.refImages.length) return;
+    this.refImages = list;
+    for (const fn of this.refImageListeners) fn(list);
+  }
+
   // --- materials (document/materials.ts) --------------------------------------
   // The library itself (add/edit/remove a MaterialDef below) is display-only and
   // off the undo stack; assigning one to a body or a face (setBodiesMaterial,
@@ -2071,6 +2135,7 @@ export class DocumentStore {
     if (this.bodyMaterial.size || this.faceMaterial.size || !this.materialsAreDefault()) {
       out.materials = this.materials.map((m) => ({ ...m }));
     }
+    if (this.refImages.length) out.referenceImages = structuredClone(this.refImages);
     // Persist the palette whenever it carries information: body assignments
     // reference it, and a synced/customized palette is project state in its own
     // right (the "design in loaded colors" premise) even with zero assignments.
@@ -2190,6 +2255,7 @@ export class DocumentStore {
     // after all, and sections it did not come with must not be saved into it.
     if (!opts.replace || !sharesAFeature(this.doc.features, parsed.features ?? [])) this.carriedSections = [];
     this.unknownKeys = carriedKeys(parsed as unknown as Record<string, unknown>, KNOWN_DOC_KEYS);
+    this.setRefImagesQuiet(readReferenceImages(parsed.referenceImages));
     this.unreadSections = {};
     if (parsed.versions != null && !this.repo) this.unreadSections.versions = structuredClone(parsed.versions);
     if (parsed.stress != null && !this.stress) this.unreadSections.stress = structuredClone(parsed.stress);

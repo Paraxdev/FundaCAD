@@ -750,6 +750,9 @@ export interface CadDocument {
   /** body id → element id. A body with no entry is an ORPHAN: it shows where it
    *  always did, at the top level or under its import's own assembly node. */
   bodyElement?: Record<string, string>;
+  /** Pictures placed on planes to draw over, read by plugins/FundaCAD.ReferenceImages.
+   *  The store keeps each entry whole, so a field it does not know survives. */
+  referenceImages?: Record<string, unknown>[];
   /** The material library, display only. Absent is the untouched starter set. Not the
    *  filament `palette`, which is what a part is made from. */
   materials?: {
