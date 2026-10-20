@@ -31,6 +31,7 @@ const LIBRARY: MaterialDef[] = [
   { id: "m-gold", name: "Gold", color: "#d4af37", metalness: 1, roughness: 0.3 },
   { id: "m-steel", name: "Steel", color: "#888888", metalness: 1, roughness: 0.4 },
   { id: "m-glass", name: "Glass", color: "#cfe4ee", metalness: 0, roughness: 0.05, opacity: 0.25 },
+  { id: "m-lamp", name: "Lamp", color: "#ffeeaa", emissive: 0.5, sheen: 0.4 },
 ];
 
 function makeEngine() {
@@ -186,6 +187,45 @@ describe("RenderMaterials glass controls", () => {
     expect(fake.store.updateMaterial).toHaveBeenLastCalledWith("m-glass", {
       attenuationColor: "#2a8f6a", attenuationDistance: 20,
     });
+  });
+});
+
+describe("RenderMaterials Advanced fields", () => {
+  it("keeps the filament fields under Advanced and writes each one", async () => {
+    await tile("m-lamp").trigger("click");
+    await poll();
+    const adv = w.get("[data-advanced]");
+    expect(adv.element.tagName).toBe("DETAILS");
+    expect((adv.get('[data-field="sheen"]').element as HTMLInputElement).value).toBe("0.4");
+    for (const [field, value, want] of [
+      ["sheen", "0.6", 0.6], ["anisotropy", "0.5", 0.5], ["flakes", "0.2", 0.2], ["flakeSize", "0.3", 0.3],
+    ] as const) {
+      const input = adv.get(`[data-field="${field}"]`);
+      (input.element as HTMLInputElement).value = value;
+      await input.trigger("input");
+      expect(fake.store.updateMaterial).toHaveBeenLastCalledWith("m-lamp", { [field]: want });
+    }
+    expect(w.find('[data-field="scatterDistance"]').exists()).toBe(false);
+    await tile("m-glass").trigger("click");
+    await poll();
+    const scatter = w.get('[data-field="scatterDistance"]');
+    (scatter.element as HTMLInputElement).value = "2";
+    await scatter.trigger("input");
+    expect(fake.store.updateMaterial).toHaveBeenLastCalledWith("m-glass", { scatterDistance: 2 });
+  });
+
+  it("offers Lights other parts only on a material that gives off light", async () => {
+    await tile("m-glass").trigger("click");
+    await poll();
+    expect(w.find('[data-field="castsLight"]').exists()).toBe(false);
+    await tile("m-lamp").trigger("click");
+    await poll();
+    const box = w.get('[data-field="castsLight"]');
+    expect((box.element as HTMLInputElement).checked).toBe(true);
+    await box.setValue(false);
+    expect(fake.store.updateMaterial).toHaveBeenLastCalledWith("m-lamp", { castsLight: false });
+    await box.setValue(true);
+    expect(fake.store.updateMaterial).toHaveBeenLastCalledWith("m-lamp", { castsLight: true });
   });
 });
 

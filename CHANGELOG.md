@@ -25,6 +25,15 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **Filament materials get sheen, anisotropy, flakes and scatter.** A material's
+  Advanced section in the Render workspace has Sheen for a soft velvet rim,
+  Anisotropy for highlights that streak along the layer lines, Flakes and Flake
+  size for glitter, and Scatter for a milky see-through finish. A glowing
+  material can turn Lights other parts off, it still glows and blooms but lights
+  nothing around it. Realtime draws sheen, anisotropy and scatter on capable
+  machines; flakes are stored and drawn by a later update. A build older than the
+  one that keeps unknown material fields drops these fields when it saves the file.
+
 - **Saving keeps the geometry a newer feature refers to.** A feature this version
   does not know can name stored geometry in any field, and the app and MCP
   `doc_save` now write that geometry into the file instead of leaving it out.
