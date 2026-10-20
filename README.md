@@ -8,8 +8,8 @@ Free, open source parametric CAD for 3D printing. Sketch a shape, give it exact 
 turn it into a solid and export a file for your slicer. Windows, macOS and Linux.
 
 <p align="center">
-  <a href="https://github.com/Paraxdev/fundacad/releases/latest"><img alt="Download the stable release" src="https://img.shields.io/badge/download-stable-2f6fed"></a>
-  <a href="https://github.com/Paraxdev/fundacad/releases/tag/beta"><img alt="Download the beta preview" src="https://img.shields.io/badge/preview-beta-8a8a8a"></a>
+  <a href="https://github.com/Paraxdev/fundacad/releases/tag/beta"><img alt="Download the beta" src="https://img.shields.io/badge/download-beta-2f6fed"></a>
+  <a href="https://github.com/Paraxdev/fundacad/releases/tag/development"><img alt="Download the development build" src="https://img.shields.io/badge/bleeding%20edge-development-8a8a8a"></a>
   <a href="https://paraxdev.github.io/FundaCAD/"><img alt="Read the manual" src="https://img.shields.io/badge/docs-manual-2f6fed"></a>
   <a href="LICENSE"><img alt="Licence AGPL-3.0" src="https://img.shields.io/badge/licence-AGPL--3.0-blue"></a>
   <img alt="Windows, macOS and Linux" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey">
@@ -21,9 +21,10 @@ turn it into a solid and export a file for your slicer. Windows, macOS and Linux
 
 ## Download
 
-Get the build for your system from the [stable release](https://github.com/Paraxdev/fundacad/releases/latest),
-the known good one. The [beta](https://github.com/Paraxdev/fundacad/releases/tag/beta) is the preview:
-it is rebuilt with every change, so it has the newest features and sometimes the newest bugs.
+Get the build for your system from the [beta](https://github.com/Paraxdev/fundacad/releases/tag/beta).
+It is the normal download, and somewhat stable. Testers who want every change
+the day it lands can take the [development build](https://github.com/Paraxdev/fundacad/releases/tag/development)
+instead. It is the bleeding edge and can be broken.
 An install only ever updates to a newer build of the same kind. There is no account and no cloud, and your files stay on your disk. The builds are not code
 signed, so Windows and macOS will warn you on the first start. The
 [install page](https://paraxdev.github.io/FundaCAD/start/install/) shows how to get past that.
@@ -52,7 +53,7 @@ Building from source, running the tests and fixing common build problems are in
 and takes about twenty minutes. The technical notes are in `docs/`.
 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md), how the processes fit together
-- [`docs/ENGINE.md`](docs/ENGINE.md), the Funda Engine, its tests and the beta and stable releases
+- [`docs/ENGINE.md`](docs/ENGINE.md), the Funda Engine, its tests and the release channels
 - [`docs/PROTOCOL.md`](docs/PROTOCOL.md), the messages the frontend and the engine exchange
 - [`docs/FUNDA-FORMAT.md`](docs/FUNDA-FORMAT.md), the `.funda` and `.fundab` file formats
 - [`docs/PACKAGING.md`](docs/PACKAGING.md), how a desktop bundle and the kernel are built
