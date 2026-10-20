@@ -4,6 +4,7 @@
 
 import type * as THREE from "three";
 import type { Denoise } from "../../ui/renderPrefs";
+import type { LightRig } from "../lightRig";
 import type { TraceLens } from "./camera";
 import type { TraceBloomSettings } from "./tracePost";
 
@@ -27,6 +28,9 @@ export interface TraceLook {
   brightness: number;
   toneMapping: THREE.ToneMapping;
   exposure: number;
+  /** The rig `lights` were placed from. The native tracer lights from it,
+   *  the WebGPU tracer from `lights`. */
+  rig?: LightRig;
 }
 
 export interface TraceScene extends TraceLook {

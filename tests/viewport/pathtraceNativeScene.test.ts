@@ -1,7 +1,10 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { BlasCache, mainThreadBuilder } from "../../src/viewport/pathtrace/blasCache";
-import { meshFrame, NativeScene, nativeCamera, pageMaterial } from "../../src/viewport/pathtrace/nativeScene";
+import { meshFrame, NativeScene, nativeCamera, nativeLook, pageMaterial } from "../../src/viewport/pathtrace/nativeScene";
+import { DEFAULT_RENDER } from "../../src/ui/renderPrefs";
+import { buildLightRig, FILL_INTENSITY, KEY_INTENSITY, SUN_ANGULAR_RADIUS, type RigLight } from "../../src/viewport/lightRig";
+import type { TraceLook } from "../../src/viewport/pathtrace/backend";
 
 function body(id: string, etag: string, color?: boolean) {
   const g = new THREE.BoxGeometry(1, 1, 1);
@@ -117,5 +120,62 @@ describe("native tracer scene feed", () => {
     const c = nativeCamera(o, null);
     const dist = c.eye[2]! - 0;
     expect(Math.tan(THREE.MathUtils.degToRad(c.fov / 2)) * dist).toBeCloseTo(1 + Math.tan(THREE.MathUtils.degToRad(c.fov / 2)) * 10, 3);
+  });
+});
+
+describe("native look", () => {
+  const look = (brightness: number, extra: RigLight[] = []): TraceLook => {
+    const rig = buildLightRig({ ...DEFAULT_RENDER, brightness }, () => false);
+    rig.lights.push(...extra);
+    return {
+      lights: [],
+      background: new THREE.Color(0.2, 0.3, 0.4),
+      environment: new THREE.Texture(),
+      brightness,
+      toneMapping: THREE.NeutralToneMapping,
+      exposure: 1,
+      rig,
+    };
+  };
+  const extra = (o: Partial<RigLight>): RigLight => ({
+    role: "sun",
+    direction: [0, 0, 1],
+    colour: 0xffffff,
+    intensity: 1,
+    angularRadius: 2,
+    realtimeOnly: false,
+    ...o,
+  });
+
+  it("sends the rig's key and fill with brightness applied once and the background", () => {
+    const l = nativeLook(look(1.5));
+    const rig = look(1.5).rig!;
+    expect(l.lights).toHaveLength(2);
+    expect(l.lights![0]!.direction).toEqual(rig.lights[0]!.direction);
+    expect(l.lights![0]!.color[0]).toBeCloseTo(KEY_INTENSITY * 1.5, 6);
+    expect(l.lights![1]!.color[1]).toBeCloseTo(FILL_INTENSITY * 1.5, 6);
+    expect(l.lights![0]!.angularRadius).toBe(SUN_ANGULAR_RADIUS);
+    expect(l.background).toEqual([0.2, 0.3, 0.4]);
+    // A native side without lights still traces from these.
+    expect(l.skyTop).toEqual([0.2, 0.3, 0.4]);
+    expect(l.envIntensity).toBe(1.5);
+  });
+
+  it("takes an sRGB colour to linear and skips a Realtime only light", () => {
+    const l = nativeLook(look(1, [extra({ colour: 0x808080, realtimeOnly: true }), extra({ colour: 0x808080, angularRadius: 3 })]));
+    expect(l.lights).toHaveLength(3);
+    const grey = l.lights![2]!;
+    expect(grey.color[0]).toBeCloseTo(0.2159, 4);
+    expect(grey.angularRadius).toBe(3);
+  });
+
+  it("sends at most four lights", () => {
+    const more = [1, 2, 3, 4].map((i) => extra({ intensity: i }));
+    expect(nativeLook(look(1, more)).lights).toHaveLength(4);
+  });
+
+  it("a look without a rig sends no lights", () => {
+    const { rig: _, ...bare } = look(1);
+    expect(nativeLook(bare).lights).toBeUndefined();
   });
 });

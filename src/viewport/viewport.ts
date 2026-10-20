@@ -1110,6 +1110,7 @@ export class Viewport {
       brightness: p.brightness,
       toneMapping: r.toneMapping,
       exposure: r.toneMappingExposure,
+      rig: this.lightRig(),
     };
   }
 

@@ -305,3 +305,20 @@ fn nee_bsdf_and_mis_agree() {
         assert!(mad < 1.0 && (m / runs[0].1 - 1.0).abs() < 0.005, "{e:?} differs from Mis by {mad:.3} of 255");
     }
 }
+
+#[test]
+fn the_page_look_carries_its_lights_and_background() {
+    let page = r#"{"skyTop":[0.2,0.2,0.2],"sunDir":[0,0,1],"sunColor":[3,3,3],"background":[0.1,0.2,0.3],
+        "lights":[{"direction":[-50,40,20],"color":[0.6,0.6,0.6],"angularRadius":1},{"direction":[0.4,-0.3,1],"color":[2,2,2],"angularRadius":1}]}"#;
+    let l: Look = serde_json::from_str(page).unwrap();
+    assert_eq!(l.background, Some([0.1, 0.2, 0.3]));
+    let lights = l.light_list();
+    let lights = lights.as_slice();
+    assert_eq!(lights.len(), 2);
+    assert_eq!(lights[0].color, [2.0; 3], "the strongest first");
+    assert_eq!(lights[1].angular_radius, 1.0);
+    let old: Look = serde_json::from_str(r#"{"sunDir":[0,0,1],"sunColor":[3,3,3]}"#).unwrap();
+    let sun = old.light_list();
+    assert_eq!(sun.as_slice(), &[LightDesc { direction: [0.0, 0.0, 1.0], color: [3.0; 3], angular_radius: 0.0 }]);
+    assert!(Look::default().light_list().as_slice().is_empty());
+}
