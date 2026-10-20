@@ -171,6 +171,14 @@ describe("edges", () => {
     expect(err(() => resolveEdge(h, "body1:between top bottom")).kind).toBe("NotFound");
   });
 
+  it("finds an edge between faces whose meshes stop just short of each other", () => {
+    const { h } = rig();
+    const short = boxFaces([0, 0, 0], [40, 20, 4.9995])[2]!;
+    const faces = h.viewport.faceTriangles;
+    h.viewport.faceTriangles = (fid: number) => (fid === 2 ? short : faces(fid));
+    expect(resolveEdge(h, "body1:between top front").id).toBe("e-top-front");
+  });
+
   it("measures only the edges inside both faces' bounds for between", () => {
     const { h } = rig();
     const edges = h.store.buildState.result!.edges as { id: string; body: string; points: V[] }[];
