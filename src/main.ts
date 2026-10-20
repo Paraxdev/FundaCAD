@@ -27,6 +27,7 @@ import { installGlobalErrorHandlers } from "./app/errors";
 import { createEngine, mountUi } from "./app/engine";
 import { ENGINE } from "./app/engineKey";
 import { installDevGlobals } from "./app/devGlobals";
+import { invoke } from "@tauri-apps/api/core";
 
 // Installed before anything is constructed, so a failure inside createEngine
 // still reaches the user rather than leaving a blank viewport.
@@ -64,5 +65,14 @@ app.mount("#app");
 // mount() is synchronous, so the shell, and the container elements the
 // not-yet-converted panels mount into, exist by the time this runs.
 mountUi(engine);
+
+// The start counts as finished (src-tauri/src/safe_mode.rs) once a frame has
+// been painted, not at mount: the WebKit crashes of issue #6 came with the
+// first composited frame, after every script had run.
+requestAnimationFrame(() =>
+  requestAnimationFrame(() => {
+    invoke("frontend_ready", { stage: "mounted" }).catch(() => {});
+  }),
+);
 
 installDevGlobals(engine);
