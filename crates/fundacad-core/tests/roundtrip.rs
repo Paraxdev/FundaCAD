@@ -45,6 +45,16 @@ fn documents() -> Vec<(String, Value)> {
     }
     let funda = "tests/fixtures/textured_box.funda";
     out.push((funda.to_owned(), read(&repo().join(funda))));
+    let versions = repo().join("tests/fixtures/versions");
+    let mut found = 0;
+    for entry in std::fs::read_dir(&versions).expect("the version fixtures") {
+        let path = entry.expect("an entry").path();
+        if path.extension().is_some_and(|e| e == "funda") {
+            out.push((path.display().to_string(), read(&path)));
+            found += 1;
+        }
+    }
+    assert_eq!(found, 10, "one fixture per document version");
     out
 }
 
