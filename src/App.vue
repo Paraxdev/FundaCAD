@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import TitleBar from "./components/shell/TitleBar.vue";
+import SafeModeBanner from "./components/shell/SafeModeBanner.vue";
 import ViewportPane from "./components/shell/ViewportPane.vue";
 import RenderDock from "./components/shell/RenderDock.vue";
 import ToastStack from "./components/overlays/ToastStack.vue";
@@ -99,6 +100,7 @@ watch(() => ui.sketchActive, () => shell.closeDrawer());
        rule in src/styles/_layout.scss is id-scoped to these, and the e2e suite
        selects on them. -->
   <TitleBar />
+  <SafeModeBanner />
   <div id="main">
     <!-- The viewport fills the stage and everything else floats over it. The
          float layer takes no pointer events itself, only its cards do, so the
