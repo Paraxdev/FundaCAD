@@ -84,6 +84,13 @@ jobs:
       - name: The app ships no plugin code
         run: node scripts/check-no-plugin-code.mjs
 
+      # The spacenavd socket tests run only on unix. The crate is std only, so
+      # this builds in seconds, without Tauri or the kernel.
+      - name: 3D mouse spacenavd tests
+        env:
+          CARGO_TARGET_DIR: ${{ runner.temp }}/spnav-target
+        run: cargo test --manifest-path src-tauri/spnav/Cargo.toml -- --test-threads=4
+
   # What this run builds and where it goes (docs/ENGINE.md section 7). `config`
   # is empty on a ref that builds no installers. `gated` is false on dev, whose
   # installers still start after `test` and `rust-geom` finish but do not need

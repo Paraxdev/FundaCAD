@@ -97,6 +97,15 @@ function clampCrossAxis(v: number | undefined): number {
   return Math.min(CROSS_AXIS_MAX, Math.max(0, v));
 }
 
+/** A device the native side found but could not read. `hint` is what the user
+ *  can do about it there, null where the native side has nothing better. */
+export interface DeviceBlocked { name: string; detail: string; hint?: string | null }
+
+export function blockedText(b: DeviceBlocked): string {
+  const fix = b.hint || "run spacenavd or install the udev rule";
+  return `Found "${b.name}" but can't read it, ${fix}, see the 3D mouse page of the manual`;
+}
+
 /** Condition one frame of raw axis counts: per-axis deadzone, then the
  *  cross-axis filter. The single source of truth, the viewport motion loop and
  *  the settings preview both call this, so they can never disagree.
