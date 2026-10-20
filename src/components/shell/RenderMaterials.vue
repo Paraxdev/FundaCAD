@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import RenderSections from "./RenderSections.vue";
 // The material half of the Render workspace: what this document can be made of,
 // what it IS made of, and the editor for one of them.
 //
@@ -775,5 +776,6 @@ async function doImport() {
         @close="editingGraph = false"
       />
     </Teleport>
+    <RenderSections tab="material" />
   </div>
 </template>

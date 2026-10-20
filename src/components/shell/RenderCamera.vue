@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import RenderSections from "./RenderSections.vue";
 // The lens, and the picture taken through it.
 //
 // Two things on one tab because they are the same job: everything above the
@@ -229,5 +230,6 @@ async function takePicture() {
         model. Everything else is exactly what you are looking at.
       </div>
     </section>
+    <RenderSections tab="camera" />
   </div>
 </template>

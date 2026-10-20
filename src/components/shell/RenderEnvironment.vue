@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import RenderSections from "./RenderSections.vue";
 import DenoiserRow from "./DenoiserRow.vue";
 // What the model is lit by and drawn against.
 //
@@ -429,5 +430,6 @@ const onBloom = (e: Event) =>
         Includes performance mode.
       </div>
     </section>
+    <RenderSections tab="environment" />
   </div>
 </template>

@@ -114,6 +114,18 @@ export interface BrowserSection {
   filter?: string;
 }
 
+/** The tabs of the Render dock. */
+export type RenderTab = "material" | "environment" | "camera";
+
+/** A block a plugin adds to the end of one Render dock tab, drawn as its own
+ *  component. `fundacad/ui` has the rows the dock itself is made of. */
+export interface RenderSection {
+  /** Stable within the contributing plugin; used as the render key. */
+  key: string;
+  component: Component;
+  tab: RenderTab;
+}
+
 /** Settings a plugin adds, drawn under its row in Preferences > Plugins.
  *
  *  Declared settings (./settings.ts) are drawn by the app from their schema;
@@ -259,6 +271,8 @@ export interface Contribution {
   /** Extra rows on a body's right-click menu, in the browser and the viewport. */
   bodyMenu?: (bodyId: string) => CtxItem[];
   browserSections?: BrowserSection[];
+  /** Blocks at the end of a Render dock tab. */
+  renderSections?: RenderSection[];
   /** Blocks in Preferences.
    *
    *  A settings block that outlives the thing it configures is worse than a
@@ -440,6 +454,16 @@ export function contributedBrowserSections(): { key: string; section: BrowserSec
   for (const e of entries) {
     for (const section of e.c.browserSections ?? []) {
       out.push({ key: `${e.plugin}:${section.key}`, section });
+    }
+  }
+  return out;
+}
+
+export function contributedRenderSections(tab: RenderTab): { key: string; section: RenderSection }[] {
+  const out: { key: string; section: RenderSection }[] = [];
+  for (const e of entries) {
+    for (const section of e.c.renderSections ?? []) {
+      if (section.tab === tab) out.push({ key: `${e.plugin}:${section.key}`, section });
     }
   }
   return out;

@@ -20,6 +20,7 @@ import {
   contributedOverlays,
   contributedPaint,
   contributedPalette,
+  contributedRenderSections,
   contributedRibbon,
   contributors,
   onContribChange,
@@ -68,11 +69,13 @@ describe("what a plugin adds, and what it takes away again", () => {
       overlays: [Fake],
       bodyMenu: () => [{ label: "x" }],
       browserSections: [{ key: "panel", component: Fake }],
+      renderSections: [{ key: "look", component: Fake, tab: "material" }],
       paint: () => ({ bodies: { b1: "#ff0000" }, faces: {} }),
       palette: () => [{ name: "Red", color: "#ff0000" }],
       provides: { thing: 1 },
     });
     off();
+    expect(contributedRenderSections("material")).toEqual([]);
 
     expect(contributedMenus()).toEqual([]);
     expect(contributedRibbon()).toEqual([]);
@@ -85,6 +88,21 @@ describe("what a plugin adds, and what it takes away again", () => {
     expect(contributedPalette()).toEqual([]);
     expect(service("thing")).toBeNull();
     expect(contributors()).toEqual([]);
+  });
+
+  it("hands a Render dock tab only the sections that named it", () => {
+    contribute("A.One", {
+      renderSections: [
+        { key: "a", component: Fake, tab: "material" },
+        { key: "b", component: Fake, tab: "camera" },
+      ],
+    });
+    const off = contribute("B.Two", { renderSections: [{ key: "a", component: Fake, tab: "material" }] });
+    expect(contributedRenderSections("material").map((s) => s.key)).toEqual(["A.One:a", "B.Two:a"]);
+    expect(contributedRenderSections("camera").map((s) => s.key)).toEqual(["A.One:b"]);
+    expect(contributedRenderSections("environment")).toEqual([]);
+    off();
+    expect(contributedRenderSections("material").map((s) => s.key)).toEqual(["A.One:a"]);
   });
 
   it("removes only the one that stopped", () => {
