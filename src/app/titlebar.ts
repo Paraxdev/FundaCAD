@@ -15,14 +15,16 @@ export function installTitlebar(e: Engine): void {
 
   // Note: the store emits before it moves the entry between its undo and redo stacks, so
   // they are read a moment later. A material, colour or body visibility change and its
-  // undo emit only a build. A plane or sketch eye emits neither, so the buttons catch up
-  // with the next change.
+  // undo emit only a build. An import holds both off while it reads, which only busy
+  // says. A plane or sketch eye emits none of these, so the buttons catch up with the
+  // next change.
   const syncUndo = () => queueMicrotask(() => {
     ui.canUndo = e.store.canUndo;
     ui.canRedo = e.store.canRedo;
   });
   e.store.onDocChange(syncUndo);
   e.store.onBuild(syncUndo);
+  e.store.onBusy(syncUndo);
   e.store.onMeta(() => {
     ui.docName = e.store.fileName;
     ui.dirty = e.store.dirty;

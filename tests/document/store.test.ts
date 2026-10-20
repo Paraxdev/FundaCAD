@@ -515,6 +515,35 @@ describe("undo covers material, rename and colour too, not just visibility (FI-5
     expect(store.document.features.some((f) => f.id === "nb11")).toBe(false);
   });
 
+  it("holds undo and redo while a busy run that holds the history goes on", async () => {
+    store.addFeature(box("h1"));
+    store.addFeature(box("h2"));
+    store.undo();
+    let finish!: () => void;
+    const seen: boolean[] = [];
+    const off = store.onBusy(() => seen.push(store.canUndo));
+    const reading = store.runBusy("Importing a.step", () => new Promise<void>((r) => (finish = r)), { holdHistory: true });
+    expect([store.canUndo, store.canRedo]).toEqual([false, false]);
+    store.undo();
+    store.redo();
+    expect(store.document.features.some((f) => f.id === "h1")).toBe(true);
+    expect(store.document.features.some((f) => f.id === "h2")).toBe(false);
+    finish();
+    await reading;
+    off();
+    expect(seen.at(-1)).toBe(true);
+    expect([store.canUndo, store.canRedo]).toEqual([true, true]);
+    store.redo();
+    expect(store.document.features.some((f) => f.id === "h2")).toBe(true);
+  });
+
+  it("leaves undo alone during a busy run that does not hold the history", () => {
+    store.addFeature(box("h3"));
+    void store.runBusy("Rebuilding", () => new Promise<void>(() => {}));
+    store.undo();
+    expect(store.document.features.some((f) => f.id === "h3")).toBe(false);
+  });
+
   it("makes sixty material writes one step, so the cap keeps the feature step under them", () => {
     store.addFeature(box("nb12"));
     store.undoAsOne(() => {

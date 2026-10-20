@@ -423,6 +423,11 @@ This file starts on 2026-08-03. For anything before that, see the
   Undos, and one with more than 49 colours could not be undone at all. An
   import undone while it was still building now gets its colours back on Redo.
 
+- **Undo waits while an import reads its file.** An Undo pressed then took
+  back the step before the import, and the import landing a moment later wiped
+  it from Redo, so that work was gone for good. Undo and Redo come back as soon
+  as the import is in the history.
+
 - **A hole takes the size or depth typed just before Enter.** An Enter pressed
   within a moment of the last key could make the hole at the size it started
   with, M3 where M6 was typed.
