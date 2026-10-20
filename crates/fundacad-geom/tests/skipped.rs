@@ -4,6 +4,7 @@
 
 use fundacad_core::CadDocument;
 use fundacad_geom::builder::{self, NoWatch, Rebuild};
+use fundacad_geom::cache::RebuildCache;
 use fundacad_geom::jobs::rebuild_result;
 use fundacad_protocol::JobResult;
 use serde_json::{json, Map, Value};
@@ -141,6 +142,26 @@ fn the_future_fixture_builds_all_but_what_it_does_not_know() {
     assert_eq!(m.len(), 1, "{m:?}");
     assert!(m[0].ends_with(" (w1 is from a newer version of FundaCAD and is not built here)"), "{m:?}");
     assert_eq!(r.bodies.len(), 2, "the extrude and the box after the skipped feature build");
+}
+
+#[test]
+fn a_cache_resume_past_a_skipped_feature_still_lists_it() {
+    let doc = json!({"parameters": {}, "features": [
+        {"id": "b1", "type": "box", "length": 10, "width": 10, "height": 10},
+        {"id": "w1", "type": "futureWidget"},
+        {"id": "b2", "type": "box", "length": 2, "width": 2, "height": 2}
+    ]});
+    let mut cache = RebuildCache::new(None);
+    let typed: CadDocument = serde_json::from_value(doc.clone()).unwrap();
+    let first = cache.rebuild(&typed, &doc, &NoWatch).expect("not cancelled");
+    assert_eq!(skipped(&first), vec![("w1", "futureWidget")]);
+
+    let mut edited = doc.clone();
+    edited["features"][2]["length"] = json!(3);
+    let typed: CadDocument = serde_json::from_value(edited.clone()).unwrap();
+    let again = cache.rebuild(&typed, &edited, &NoWatch).expect("not cancelled");
+    assert_eq!(cache.stats.resumed_at, 2, "the edit below the skipped feature resumes past it");
+    assert_eq!(skipped(&again), vec![("w1", "futureWidget")]);
 }
 
 #[test]

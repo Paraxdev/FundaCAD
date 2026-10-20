@@ -1430,6 +1430,8 @@ fn skipped_features(
     skipped_here: &HashSet<usize>,
     inactive: &[String],
 ) -> Vec<Skipped> {
+    // Each plugin lookup that misses rescans the plugin folders, so ask once per type.
+    let mut declared: HashMap<&str, bool> = HashMap::new();
     features
         .iter()
         .enumerate()
@@ -1438,7 +1440,11 @@ fn skipped_features(
             if *i >= start {
                 return skipped_here.contains(i);
             }
-            !inactive.iter().any(|x| x == f.id()) && !f.type_name().is_some_and(plugin_declares)
+            if inactive.iter().any(|x| x == f.id()) {
+                return false;
+            }
+            let Some(t) = f.type_name() else { return true };
+            !*declared.entry(t).or_insert_with(|| plugin_declares(t))
         })
         .map(|(_, f)| Skipped {
             feature_id: f.id().to_owned(),
