@@ -97,6 +97,7 @@ def test_open_do_read_shot_close(tmp_path):
     assert made[0].calls[2] == ("drag", (0, 0), (10, 5))
     assert replies[2]["text"] == "history 0 features, at end\n\nscreen items"
     assert base64.b64decode(replies[3]["png"]) == PNG and "1600 px" in replies[3]["text"]
+    assert "also at" not in replies[3]["text"] and not (tmp_path / "shot.png").exists(), "a clean close removes it"
     assert replies[4]["text"].startswith("stopped") and made[0].closed
 
 
