@@ -7,5 +7,6 @@ export function ago(time: number, now: number = Date.now()): string {
   if (h < 24) return `${h} h ago`;
   const d = Math.floor(h / 24);
   if (d < 7) return d === 1 ? "1 day ago" : `${d} days ago`;
-  return new Date(time).toLocaleDateString();
+  // A month name, as 11/10/2026 reads as two different days depending on the reader.
+  return new Date(time).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 }

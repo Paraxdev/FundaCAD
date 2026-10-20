@@ -168,7 +168,7 @@ async function openEntry(entry: HomeEntry): Promise<void> {
   if (entry.open) return close();
   if (entry.missing) {
     const pick = await choose(`${entry.name} was not found.`, [
-      { value: "remove", label: "Remove from list" },
+      { value: "remove", label: "Remove from list", hint: "nothing is deleted" },
       { value: "cancel", label: "Cancel" },
     ]);
     if (pick === "remove") forget(entry.path);
