@@ -26,23 +26,31 @@ describe("openNotices", () => {
     expect(n).toEqual({
       kind: "warning",
       message:
-        "Opened a file from a newer version of FundaCAD. 3 features were not included because this version does not know them: futureWidget, fooBar. They are kept and saved with the file. Bodies after them may differ.",
+        "Opened a file from a newer version of FundaCAD. 3 features were not included because this version does not know them: futureWidget, fooBar. They are kept and saved with the file. Bodies after them may differ. Update FundaCAD to build them.",
       detail: "futureWidget (2): w1, w2\nfooBar (1): x1",
     });
   });
 
-  it("says the same without the newer clause when the stamp is not newer", () => {
+  it("points at a plugin when the stamp is not newer", () => {
     const [n] = openNotices({ features: [f("w1", "futureWidget"), f("x1", "fooBar")] }, FORMAT_VERSION);
     expect(n!.message).toBe(
-      "2 features were not included because this version of FundaCAD does not know them: fooBar, futureWidget. They are kept and saved with the file. Bodies after them may differ.",
+      "2 features need a plugin that is not running here: futureWidget, fooBar. They are kept and saved with the file. Bodies after them may differ.",
     );
   });
 
   it("speaks of one feature as one", () => {
     const [n] = openNotices({ features: [f("w1", "futureWidget")] }, FORMAT_VERSION);
     expect(n!.message).toBe(
-      "1 feature was not included because this version of FundaCAD does not know it: futureWidget. It is kept and saved with the file. Bodies after it may differ.",
+      "1 feature needs a plugin that is not running here: futureWidget. It is kept and saved with the file. Bodies after it may differ.",
     );
+  });
+
+  it("names a feature by its own name, as History does", () => {
+    const named = { id: "g1", type: "gearTeeth", name: "Gear teeth" } as unknown as Feature;
+    const [n] = openNotices({ features: [box, named] }, NEWER);
+    expect(n!.message).toContain("does not know it: Gear teeth. ");
+    expect(n!.message).toContain("Update FundaCAD to build it.");
+    expect(n!.detail).toBe("gearTeeth (1): g1");
   });
 
   it("is a short info note for a newer file whose types are all known", () => {

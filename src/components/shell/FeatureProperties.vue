@@ -33,7 +33,7 @@
 import { onUnmounted, ref, watch } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useBuildValue, useDocValue } from "../../app/useDoc";
-import { PLACEHOLDER_NOTE, featureNotes, featurePlaceholders } from "../../ui/featureNotes";
+import { featureNotes, featurePlaceholders, placeholderNote } from "../../ui/featureNotes";
 import ValidatedRow from "./ValidatedRow.vue";
 import ChoiceRow from "./ChoiceRow.vue";
 import ToggleRow from "./ToggleRow.vue";
@@ -92,16 +92,14 @@ const targetRows = useDocValue((doc) => {
   return f ? targetsFor(f) : [];
 });
 
-// The features a pattern repeats, by name. Read only: which features is chosen
-// by pointing at them before Pattern starts.
 // A feature of a type this version does not know shows no fields, so it stays
 // exactly as the newer version wrote it.
-const placeholder = useBuildValue((b) => featurePlaceholders({ skippedFeatures: b?.result?.skippedFeatures }).has(props.featureId));
+const placeholder = useBuildValue((b) => featurePlaceholders({ skippedFeatures: b?.result?.skippedFeatures }).get(props.featureId) ?? null);
 // What the build had to say about this feature, the same note its history chip
 // carries, written out where the feature's values are read.
 const buildNote = useBuildValue((b) =>
-  placeholder.value
-    ? PLACEHOLDER_NOTE
+  placeholder.value !== null
+    ? placeholderNote(placeholder.value)
     : b
     ? featureNotes({
         featureErrors: b.result?.featureErrors,
@@ -111,6 +109,8 @@ const buildNote = useBuildValue((b) =>
     : null,
 );
 
+// The features a pattern repeats, by name. Read only: which features is chosen
+// by pointing at them before Pattern starts.
 const repeatedLabels = useDocValue((doc) => {
   const f = doc.features.find((x) => x.id === props.featureId);
   const ids = (f as { features?: string[] } | undefined)?.features ?? [];
@@ -550,7 +550,7 @@ function commitField(
 
 <template>
   <div v-if="buildNote" class="param-note" role="note">{{ buildNote }}</div>
-  <template v-if="!placeholder">
+  <template v-if="placeholder === null">
     <div v-if="repeatedLabels.length" class="param-row">
       <label>Features</label>
       <div class="param-value">{{ repeatedLabels.join(", ") }}</div>
