@@ -4015,7 +4015,7 @@ export class Viewport {
    *  Resizes the drawing buffer (updateStyle false) so the post chain is reused.
    *  Must stay synchronous: without preserveDrawingBuffer an await reads a blank
    *  image. `scale` is capped because an oversized buffer fails silently. */
-  renderStill(scale = 2, opts: { edges?: boolean; realtime?: boolean } = {}): string {
+  renderStill(scale = 2, opts: { edges?: boolean; realtime?: boolean; references?: boolean } = {}): string {
     const rect = this.canvas.getBoundingClientRect();
     const w = Math.max(1, Math.round(rect.width));
     const h = Math.max(1, Math.round(rect.height));
@@ -4071,7 +4071,7 @@ export class Viewport {
     w: number,
     h: number,
     k: number,
-    opts: { edges?: boolean; realtime?: boolean },
+    opts: { edges?: boolean; realtime?: boolean; references?: boolean },
     read: () => T,
     camera?: { enter(): void; leave(): void },
   ): T {
@@ -4089,7 +4089,7 @@ export class Viewport {
     w: number,
     h: number,
     k: number,
-    opts: { edges?: boolean; realtime?: boolean },
+    opts: { edges?: boolean; realtime?: boolean; references?: boolean },
     read: () => T,
   ): T {
     const lines = this.model ? edgeObjects(this.model) : [];
@@ -4106,7 +4106,7 @@ export class Viewport {
 
     // No selection, hover, grid, tool handle or any other overlay goes in the file.
     active.layers.mask = pictureMask(opts);
-    const showOverlays = hideForPicture(this.scene.scene, this.scene.modelGroup);
+    const showOverlays = hideForPicture(this.scene.scene, this.scene.modelGroup, { references: opts.references === true });
     const narrowLines = widenLines(lines.map((e) => e.material), k);
     try {
       this.scene.renderer.setPixelRatio(1);
