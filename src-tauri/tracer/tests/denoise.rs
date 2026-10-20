@@ -64,7 +64,7 @@ fn traced(cap: u32) -> Option<Tracer> {
     };
     t.resize(W, H);
     t.set_cap(cap);
-    t.set_camera(Camera { eye: [4.0, -6.0, 3.0], target: [0.0, 0.0, 0.8], up: [0.0, 0.0, 1.0], fov: 40.0 });
+    t.set_camera(Camera { eye: [4.0, -6.0, 3.0], target: [0.0, 0.0, 0.8], up: [0.0, 0.0, 1.0], fov: 40.0, ..Default::default() });
     t.set_look(Look { sun_dir: [0.4, -0.3, 1.0], sun_color: [2.0; 3], exposure: 1.3, ..Look::default() });
     for key in t.set_bodies(vec![body("ball", 1.0, [0.8, 0.3, 0.2]), body("floor", 0.0, [0.7, 0.7, 0.7])]) {
         t.add_mesh(&key, if key.starts_with("ball") { sphere(1.0, 48, 24) } else { floor(20.0) });
@@ -141,7 +141,7 @@ fn at_the_cap_the_denoised_frame_is_held_and_is_closer_to_the_reference() {
 
     t.set_denoise(Quality::High);
     assert!(!t.denoised(), "a new weight set drops the old result");
-    t.set_camera(Camera { eye: [5.0, -6.0, 3.0], target: [0.0, 0.0, 0.8], up: [0.0, 0.0, 1.0], fov: 40.0 });
+    t.set_camera(Camera { eye: [5.0, -6.0, 3.0], target: [0.0, 0.0, 0.8], up: [0.0, 0.0, 1.0], fov: 40.0, ..Default::default() });
     t.frame(W, H, Duration::from_millis(50));
     assert!(!t.denoised(), "a moved camera is not denoised");
 }

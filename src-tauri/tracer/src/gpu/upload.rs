@@ -16,14 +16,15 @@ pub(super) struct Emitters {
     pub(super) total: f32,
 }
 
+fn world(xf: &[f32; 12], p: [f32; 3]) -> [f32; 3] {
+    [0, 1, 2].map(|r| xf[r * 4] * p[0] + xf[r * 4 + 1] * p[1] + xf[r * 4 + 2] * p[2] + xf[r * 4 + 3])
+}
+
 /// The power of each triangle of `mesh` placed by `xf`, zero for the ones
 /// whose slot does not light.
 fn tri_powers(mesh: &Mesh, xf: &[f32; 12], mats: &[GpuMaterial]) -> Vec<f32> {
     let slots = tri_slots(&mesh.groups, mesh.tri_count());
-    let world = |i: u32| {
-        let p = mesh.positions.get(i as usize).copied().unwrap_or_default();
-        [0, 1, 2].map(|r| xf[r * 4] * p[0] + xf[r * 4 + 1] * p[1] + xf[r * 4 + 2] * p[2] + xf[r * 4 + 3])
-    };
+    let world = |i: u32| world(xf, mesh.positions.get(i as usize).copied().unwrap_or_default());
     mesh.indices
         .chunks_exact(3)
         .zip(slots)
@@ -143,7 +144,17 @@ impl Tracer {
         let mut mats: Vec<GpuMaterial> = vec![];
         let mut emitting: Vec<(u32, u32, f32)> = vec![];
         let insts = self.scene.instances();
+        let mut bounds: Option<[[f32; 3]; 2]> = None;
         for inst in &insts {
+            if let Some(mesh) = self.scene.mesh(&inst.body.key) {
+                for p in mesh.positions.iter().map(|p| world(&inst.xf, *p)) {
+                    let b = bounds.get_or_insert([p, p]);
+                    for k in 0..3 {
+                        b[0][k] = b[0][k].min(p[k]);
+                        b[1][k] = b[1][k].max(p[k]);
+                    }
+                }
+            }
             let off = self.shading.offsets.get(&inst.body.key).copied().unwrap_or_default();
             let base = mats.len() as u32;
             let mut body: Vec<GpuMaterial> = inst.body.materials.iter().map(pack_material).collect();
@@ -165,6 +176,7 @@ impl Tracer {
             rows.push(row);
             mats.extend(body);
         }
+        self.bounds = bounds;
         self.emitters = alias_table(&emitting);
         self.n_inst = insts.len() as u32;
         // A runtime array binding needs room for one element even when the

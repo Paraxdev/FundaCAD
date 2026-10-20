@@ -77,7 +77,7 @@ fn mesh_for(key: &str) -> Mesh {
 pub fn build(t: &mut Tracer, name: &str, size: Option<(u32, u32)>) {
     let (w, h) = size.unwrap_or_else(|| dims(name));
     t.resize(w, h);
-    let cam = |eye: [f32; 3], target: [f32; 3]| Camera { eye, target, up: [0.0, 0.0, 1.0], fov: 40.0 };
+    let cam = |eye: [f32; 3], target: [f32; 3]| Camera { eye, target, up: [0.0, 0.0, 1.0], fov: 40.0, ..Default::default() };
     let sun = [0.4, -0.3, 1.0];
     let ground = matte([0.7; 3]);
     let (look, camera, bodies) = match name {
@@ -252,7 +252,7 @@ pub const BALL_TARGET: [f32; 3] = [0.0, 0.0, 0.8];
 /// shading normals sit on the analytic sphere's.
 pub fn ball_alone(t: &mut Tracer, look: Look, mat: PageMaterial, (w, h): (u32, u32)) {
     t.resize(w, h);
-    t.set_camera(Camera { eye: BALL_EYE, target: BALL_TARGET, up: [0.0, 0.0, 1.0], fov: 40.0 });
+    t.set_camera(Camera { eye: BALL_EYE, target: BALL_TARGET, up: [0.0, 0.0, 1.0], fov: 40.0, ..Default::default() });
     t.set_look(look);
     for key in t.set_bodies(vec![place("ball", "ball.fine", 1.0, [0.0, 0.0, 1.0], mat)]) {
         t.add_mesh(&key, sphere(1.0, 192, 96));

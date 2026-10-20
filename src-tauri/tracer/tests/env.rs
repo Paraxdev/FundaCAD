@@ -116,7 +116,7 @@ fn nee_only_and_bsdf_only_agree_under_an_environment() {
     let disc = fundacad_tracer::LightDesc { direction: [-0.5, -0.4, 1.0], color: [0.8; 3], angular_radius: 10.0 };
     let look = Look { lights: Some(fundacad_tracer::Lights::new(&[disc])), ..dark() };
     t.resize(64, 48);
-    t.set_camera(Camera { eye: BALL_EYE, target: BALL_TARGET, up: [0.0, 0.0, 1.0], fov: 40.0 });
+    t.set_camera(Camera { eye: BALL_EYE, target: BALL_TARGET, up: [0.0, 0.0, 1.0], fov: 40.0, ..Default::default() });
     t.set_look(look);
     t.set_environment(Some(map));
     let bodies = vec![place("ball", "ball.1", 1.0, [0.0, 0.0, 1.0], m), place("floor", "floor.1", 1.0, [0.0; 3], matte([0.7; 3]))];

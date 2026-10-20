@@ -85,7 +85,7 @@ fn place(id: &str, at: [f32; 3], mat: PageMaterial) -> BodyDesc {
 /// The golden scene at 96x64, committed. The sample cap is the caller's.
 pub fn build_golden(t: &mut Tracer) {
     t.resize(W, H);
-    t.set_camera(Camera { eye: [4.0, -6.0, 3.0], target: [0.0, 0.0, 0.8], up: [0.0, 0.0, 1.0], fov: 40.0 });
+    t.set_camera(Camera { eye: [4.0, -6.0, 3.0], target: [0.0, 0.0, 0.8], up: [0.0, 0.0, 1.0], fov: 40.0, ..Default::default() });
     t.set_look(Look { sun_dir: [0.4, -0.3, 1.0], sun_color: [2.0; 3], ..Look::default() });
     let bodies = vec![place("ball", [0.0, 0.0, 1.0], matte([0.8, 0.3, 0.2])), place("floor", [0.0; 3], matte([0.7; 3]))];
     for key in t.set_bodies(bodies) {

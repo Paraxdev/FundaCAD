@@ -51,8 +51,35 @@ pub struct Camera {
     pub eye: [f32; 3],
     pub target: [f32; 3],
     pub up: [f32; 3],
-    /// Vertical field of view in degrees.
+    /// Vertical field of view in degrees, unused with `ortho`.
     pub fov: f32,
+    #[serde(default)]
+    pub ortho: Option<Ortho>,
+    /// Ignored with `ortho`.
+    #[serde(default)]
+    pub lens: Option<Lens>,
+}
+
+impl Default for Camera {
+    fn default() -> Self {
+        Camera { eye: [4.0, -6.0, 3.0], target: [0.0; 3], up: [0.0, 0.0, 1.0], fov: 50.0, ortho: None, lens: None }
+    }
+}
+
+/// Parallel rays, `half_height` world units from the view centre to the top.
+#[derive(Debug, Clone, Copy, PartialEq, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Ortho {
+    pub half_height: f32,
+}
+
+/// A thin lens: sharp at `focus_distance` along the view direction, rays from
+/// a disc of `aperture_radius`, both world units.
+#[derive(Debug, Clone, Copy, PartialEq, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Lens {
+    pub focus_distance: f32,
+    pub aperture_radius: f32,
 }
 
 /// A light at infinity, a disc of `angular_radius` degrees around `direction`.
@@ -207,6 +234,8 @@ pub struct Tracer {
     mats: wgpu::Buffer,
     env: EnvMap,
     emitters: upload::Emitters,
+    /// World box of the visible bodies, min and max.
+    bounds: Option<[[f32; 3]; 2]>,
     instance_uploads: u64,
     n_inst: u32,
     bind: Option<wgpu::BindGroup>,
@@ -369,6 +398,7 @@ impl Tracer {
             resolve_uniform,
             shading,
             emitters: Default::default(),
+            bounds: None,
             instance_uploads: 0,
             n_inst: 0,
             bind: None,
@@ -382,7 +412,7 @@ impl Tracer {
             row0: 0,
             rows: 0,
             cap: 256,
-            camera: Camera { eye: [4.0, -6.0, 3.0], target: [0.0; 3], up: [0.0, 0.0, 1.0], fov: 50.0 },
+            camera: Camera::default(),
             look: Look::default(),
             estimator: Estimator::Default,
             held: None,
@@ -676,7 +706,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        t.set_camera(Camera { eye: [0.0, 0.0, 12.0], target: [0.0; 3], up: [0.0, 1.0, 0.0], fov: 50.0 });
+        t.set_camera(Camera { eye: [0.0, 0.0, 12.0], target: [0.0; 3], up: [0.0, 1.0, 0.0], fov: 50.0, ..Default::default() });
         t.set_look(Look { exposure: 1.7, sky_top: [0.1; 3], sky_bottom: [0.05; 3], ..Look::default() });
         t.set_denoise(Quality::Off);
         t.set_cap(1);

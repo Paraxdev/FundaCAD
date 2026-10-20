@@ -183,22 +183,33 @@ export function envFrame(look: TraceLook): { key: string; bytes(): Uint8Array } 
   return { key, bytes: () => frame({ key, width, height, up: "y" }, [data]) };
 }
 
-/** A perspective camera as it is; an orthographic one as a far, narrow one
- *  that frames the same height, until the native lens has an orthographic mode. */
-export function nativeCamera(camera: THREE.Camera, _lens: TraceLens | null) {
+/** The camera as the native tracer takes it: an orthographic one keeps its
+ *  eye and sends the half height it frames, a perspective one its field of view
+ *  and the lens, which an orthographic one never gets, as in the Realtime bokeh. */
+export function nativeCamera(camera: THREE.Camera, lens: TraceLens | null) {
   camera.updateMatrixWorld();
   const eye = new THREE.Vector3().setFromMatrixPosition(camera.matrixWorld);
   const dir = camera.getWorldDirection(new THREE.Vector3());
-  const up = new THREE.Vector3(0, 1, 0).applyQuaternion(camera.getWorldQuaternion(new THREE.Quaternion()));
+  const q = camera.getWorldQuaternion(new THREE.Quaternion());
+  const up = new THREE.Vector3(0, 1, 0).applyQuaternion(q);
   let fov = 50;
+  let ortho: { halfHeight: number } | null = null;
   if ((camera as THREE.PerspectiveCamera).isPerspectiveCamera) fov = (camera as THREE.PerspectiveCamera).fov;
   else if ((camera as THREE.OrthographicCamera).isOrthographicCamera) {
     const o = camera as THREE.OrthographicCamera;
-    fov = 1;
-    const half = (o.top - o.bottom) / o.zoom / 2;
-    eye.addScaledVector(dir, -half / Math.tan(THREE.MathUtils.degToRad(fov / 2)));
+    ortho = { halfHeight: (o.top - o.bottom) / o.zoom / 2 };
+    // The tracer frames around the eye, an off centre frustum moves it.
+    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(q);
+    eye.addScaledVector(right, (o.left + o.right) / 2 / o.zoom).addScaledVector(up, (o.top + o.bottom) / 2 / o.zoom);
   }
-  return { eye: eye.toArray(), target: eye.clone().add(dir).toArray(), up: up.toArray(), fov };
+  return {
+    eye: eye.toArray(),
+    target: eye.clone().add(dir).toArray(),
+    up: up.toArray(),
+    fov,
+    ortho,
+    lens: ortho ? null : lens,
+  };
 }
 
 export class NativeScene {
