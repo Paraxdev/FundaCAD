@@ -263,14 +263,21 @@ Writer rules:
   what it saves is in its own shapes. A newer reader therefore runs its newer
   migrations on such a file again, so every migration must be shape guarded:
   it rewrites only what still has the old shape, and leaves alone what already
-  has the new one.
-- A new reference to geometry is a lowercase hex BLAKE2b-128 string, so an
-  older writer finds it and keeps the blob.
+  has the new one. The app saves a newer file this way. MCP `doc_save` is the
+  exception: it writes the JSON back as it was read, edits included, so the
+  higher stamp stays, and an edit made through MCP must already use the shapes
+  of that stamp.
+- A new reference to geometry is a lowercase hex BLAKE2b-128 string held as a
+  string value, never as an object key, so an older writer finds it and keeps
+  the blob. The older writer only scans values.
 - A new section kind uses codec `0` or `1`, so an older version carries it.
 - An older version copies such a section unchanged after the user edited the
   document, it cannot update it. So a new section kind must stay valid against
-  any edit, or check itself: for example, store the `raw_hash` of the document
-  section it describes and ignore itself when that no longer matches.
+  any edit. It cannot check itself against the document section's `raw_hash`:
+  an older writer always encodes the document again, with its own `version`
+  stamp and key order, so that hash changes on every older save, edited or not.
+  A section that describes the document should name what it depends on, such
+  as feature ids, and ignore entries whose targets are gone.
 
 ## What the error correction does not cover
 
