@@ -47,6 +47,9 @@ green-select.png
 *.3mf
 !tests/fixtures/textured_box.funda
 !examples/stress/*.funda
+!tests/fixtures/versions/*.funda
+!tests/fixtures/versions/*.fundab
+!tests/fixtures/future/*.funda
 !src/templates/*.funda
 !tests/fixtures/asm_*.step
 !third_party/opencascade-rs/crates/viewer/models/*.step

@@ -91,6 +91,12 @@ fn the_parity_script_answers_as_the_python_server_did() {
             .filter_map(|c| c["text"].as_str())
             .collect();
         let text = posix_paths(&text.join("\n"), &args, &cwd);
+        // The transcript was recorded when the document version was 9; a new
+        // document is stamped with the current one, which the app writes too.
+        let text = text.replace(
+            &format!("\"version\": {}", fundacad_core::schema::DOCUMENT_VERSION),
+            "\"version\": 9",
+        );
         let is_error = result["isError"].as_bool().unwrap_or(false);
         if text != want["text"].as_str().unwrap_or("")
             || Some(is_error) != want["isError"].as_bool()

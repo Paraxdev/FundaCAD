@@ -82,6 +82,10 @@ export function createSelection(
       e.setStatus("Unsuppress the feature to edit it", "");
       return;
     }
+    if (e.store.buildState.result?.skippedFeatures?.some((s) => s.feature_id === id)) {
+      e.setStatus("This version of FundaCAD cannot edit this feature", "");
+      return;
+    }
     const idx = e.store.document.features.findIndex((x) => x.id === id);
     if (idx >= e.store.rollbackIndex) {
       e.setStatus("Roll the timeline forward to edit this feature", "");

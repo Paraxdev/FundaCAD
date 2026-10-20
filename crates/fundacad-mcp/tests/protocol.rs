@@ -466,6 +466,34 @@ fn a_failed_feature_is_reported_and_not_passed_off_as_a_no_op() {
 }
 
 #[test]
+fn a_feature_of_a_type_this_version_does_not_know_is_reported_as_skipped() {
+    let tmp = tempfile::tempdir().expect("a temp dir");
+    let path = tmp.path().join("newer.funda");
+    std::fs::write(
+        &path,
+        json!({"version": 99, "parameters": {}, "features": [
+            {"id": "bx1", "type": "box", "length": 20, "width": 20, "height": 20},
+            {"id": "w1", "type": "futureWidget"}
+        ]})
+        .to_string(),
+    )
+    .unwrap();
+    let rs = drive(&[
+        ("doc_open", json!({"path": path.to_string_lossy().replace('\\', "/")})),
+        ("build", json!({})),
+    ]);
+    assert!(!rs[0].is_error, "{}", rs[0].text);
+    assert!(rs[1].is_error, "the model built is not the whole document: {}", rs[1].text);
+    assert!(
+        rs[1].text.contains("SKIPPED (w1): unknown feature type: futureWidget, kept in the document but not built"),
+        "{}",
+        rs[1].text
+    );
+    assert!(!rs[1].text.contains("FEATURE FAILED"), "{}", rs[1].text);
+    assert!(rs[1].text.contains("body1"), "{}", rs[1].text);
+}
+
+#[test]
 fn view_still_draws_a_partial_build() {
     // build's isError going true on a partial build (the test above) must not
     // make `view` refuse the whole picture: looking at what DID build is the

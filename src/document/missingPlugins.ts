@@ -60,6 +60,11 @@ function declaredOwners(): Map<string, { id: string; name: string }> {
   return out;
 }
 
+/** The shipped plugin that declares this feature type, if any. */
+export function featureTypeOwner(type: string): { id: string; name: string } | null {
+  return declaredOwners().get(type) ?? null;
+}
+
 /** Whether this build can build a feature of this type right now. */
 function buildable(type: string, live: ReadonlySet<string>): boolean {
   return isCoreFeatureType(type) || live.has(type);
@@ -111,18 +116,13 @@ export function missingPlugins(doc: Pick<CadDocument, "features">): MissingPlugi
  *  will happen to my file, and what do I do about it. The reassurance comes
  *  FIRST and is unconditional, because the fear this warning creates ("have I
  *  lost the part?") is worse than the problem it reports, and the answer is no.
+ *  A type no shipped plugin declares is document/openNotice.ts's to explain.
  */
-export function missingPluginMessage(m: MissingPlugin): string {
+export function missingPluginMessage(m: MissingPlugin & { id: string }): string {
   const what =
     m.count === 1 ? "One feature in this document is" : `${m.count} features in this document are`;
   const keep =
     "Their settings are kept and will build again once it is back; saving will not drop them.";
-  if (m.id === null) {
-    return (
-      `${what} of a kind this build does not know (${m.types.join(", ")}). ` +
-      `${keep} They were probably made by a plugin that is not installed here.`
-    );
-  }
   const fix = m.installable
     ? `Turn "${m.name}" back on in Plugins to build them.`
     : `Install "${m.name}" to build them.`;

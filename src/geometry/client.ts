@@ -1256,6 +1256,7 @@ export class Geometry implements GeometryBackend {
     if (r.datumMarks) out.datumMarks = r.datumMarks;
     if (r.trackedFaces) out.trackedFaces = r.trackedFaces;
     if (r.bodyIds) out.bodyIds = r.bodyIds;
+    if (r.skippedFeatures) out.skippedFeatures = r.skippedFeatures;
     return out;
   }
 
