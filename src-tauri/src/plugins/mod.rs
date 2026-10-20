@@ -103,7 +103,7 @@ pub struct Installed {
     pub component: bool,
 }
 
-const RECORD: &str = "installed.json";
+pub(crate) const RECORD: &str = "installed.json";
 const MANIFEST: &str = "manifest.json";
 /// The app-side module of a plugin that runs in the window. Named the same by
 /// scripts/build-plugin-code.mjs, which writes it, and by build-plugins.py,

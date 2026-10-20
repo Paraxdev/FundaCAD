@@ -61,6 +61,7 @@ import { scheduleStartupUpdateCheck } from "../ui/updates";
 
 import { installEngineDiedToast } from "./engineWatch";
 import { activatePlugins } from "../plugins/activate";
+import { safeMode } from "../ui/safeMode";
 import { createSelection } from "./selection";
 import { DraftTool } from "../features/draftTool";
 import { ThreadTool } from "../features/threadTool";
@@ -300,7 +301,8 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   e.bridge = createDocBridge(e.store);
   // crash-safety: periodic recovery snapshots + restore-on-launch prompt
   installAutosave(e.store);
-  void checkRecovery(e.store);
+  // Safe mode offers no snapshot: one that kills the app would kill every start.
+  if (!safeMode()) void checkRecovery(e.store);
 
   // Sharing this window's document with an assistant working through MCP. AFTER
   // the store exists and before anything can edit it, so the very first publish
@@ -594,7 +596,7 @@ export function mountUi(e: Engine): void {
   // Whatever capabilities are turned on, started here and restarted whenever
   // that set changes. The engine deliberately does not know which ones exist:
   // see plugins/activate.ts.
-  activatePlugins(e);
+  if (!safeMode()) activatePlugins(e);
 
   e.geometry.onStatus((connected) => {
     if (!connected) e.setStatus("connecting to the geometry engine…", "error");
