@@ -110,8 +110,14 @@ pub fn hex(bytes: &[u8]) -> String {
 }
 
 pub fn looks_like_fnda(path: &Path) -> bool {
-    let mut buf = [0u8; 8];
-    File::open(path).and_then(|mut f| f.read_exact(&mut buf)).map(|_| &buf == MAGIC).unwrap_or(false)
+    let Ok(mut f) = File::open(path) else { return false };
+    let mut magic = [0u8; 8];
+    if f.read_exact(&mut magic).is_ok() && &magic == MAGIC {
+        return true;
+    }
+    // Damaged first bytes leave the trailer, which `read_index` falls back to.
+    let mut tail = [0u8; HEADER_LEN as usize];
+    f.seek(SeekFrom::End(-(HEADER_LEN as i64))).is_ok() && f.read_exact(&mut tail).is_ok() && parse_header(&tail, TAIL_MAGIC).is_some()
 }
 
 // --- writing ------------------------------------------------------------------
@@ -1112,6 +1118,24 @@ mod tests {
         let opened = read_file(&path, &dir.join("blobs"), None, None).unwrap();
         assert!(same_json(&opened.document_json, &doc));
         assert!(opened.report.used_backup_index);
+        assert!(looks_like_fnda(&path), "known by its trailer");
+        let app = crate::container::open_document_full(&path, &dir.join("blobs_app"), None, None).unwrap();
+        assert!(same_json(&app.document, &doc) && app.report.used_backup_index);
+    }
+
+    #[test]
+    fn only_a_whole_header_or_trailer_makes_a_file_binary() {
+        let dir = tmpdir("magic");
+        let (path, _, _) = sample(&dir);
+        let mut bytes = std::fs::read(&path).unwrap();
+        bytes[0] ^= 1;
+        let n = bytes.len();
+        bytes[n - 10] ^= 1;
+        std::fs::write(&path, &bytes).unwrap();
+        assert!(!looks_like_fnda(&path));
+        let short = dir.join("short.funda");
+        std::fs::write(&short, b"FNDATAIL").unwrap();
+        assert!(!looks_like_fnda(&short));
     }
 
     #[test]
