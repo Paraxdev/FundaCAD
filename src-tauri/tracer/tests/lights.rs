@@ -321,4 +321,6 @@ fn the_page_look_carries_its_lights_and_background() {
     let sun = old.light_list();
     assert_eq!(sun.as_slice(), &[LightDesc { direction: [0.0, 0.0, 1.0], color: [3.0; 3], angular_radius: 0.0 }]);
     assert!(Look::default().light_list().as_slice().is_empty());
+    let dark = Lights::new(&[LightDesc { direction: [0.0, 0.0, 1.0], color: [0.0; 3], angular_radius: 1.0 }]);
+    assert!(dark.as_slice().is_empty(), "a light sample would divide by its zero chance");
 }

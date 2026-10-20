@@ -68,7 +68,8 @@ pub struct LightDesc {
 pub const MAX_LIGHTS: usize = 4;
 
 /// Up to MAX_LIGHTS lights, held inline so a Look stays Copy. A longer list
-/// keeps its strongest.
+/// keeps its strongest; a dark light or one with no direction is left out,
+/// since a light sample picks by power.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Lights {
     len: usize,
@@ -77,7 +78,8 @@ pub struct Lights {
 
 impl Lights {
     pub fn new(lights: &[LightDesc]) -> Lights {
-        let mut v: Vec<LightDesc> = lights.to_vec();
+        let lit = |l: &&LightDesc| crate::bloom::luma(l.color) > 0.0 && l.direction.iter().any(|x| *x != 0.0);
+        let mut v: Vec<LightDesc> = lights.iter().filter(lit).copied().collect();
         v.sort_by(|a, b| crate::bloom::luma(b.color).total_cmp(&crate::bloom::luma(a.color)));
         let mut out = Lights::default();
         for l in v.into_iter().take(MAX_LIGHTS) {
