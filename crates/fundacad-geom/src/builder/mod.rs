@@ -1483,8 +1483,22 @@ fn name_skipped_causes(
             .or_else(|| node.and_then(|n| references_any(n, &bodies)).and_then(owner_of))
             .or_else(|| recorded.as_ref().and_then(|r| switched_off_owner(&e.message, r, &ids)));
         if let Some(cause) = cause {
-            e.message
-                .push_str(&format!(" ({cause} was skipped, this version does not know its type)"));
+            let label = raw_features
+                .iter()
+                .find(|r| r.get("id").and_then(Value::as_str) == Some(cause.as_str()))
+                .and_then(|r| r.get("name").and_then(Value::as_str))
+                .filter(|n| !n.trim().is_empty())
+                .unwrap_or(&cause)
+                .to_owned();
+            // The usual advice cannot be followed when the cause is a feature this version cannot edit.
+            for (advice, with) in [(", fix that sketch first", ""), (" no longer exists", " was not built")] {
+                if let Some(at) = e.message.find(advice) {
+                    e.message.replace_range(at..at + advice.len(), with);
+                }
+            }
+            e.message.push_str(&format!(
+                " ({label} is from a newer version of FundaCAD and is not built here)"
+            ));
         }
     }
 }
@@ -1563,6 +1577,10 @@ pub fn result_fields(doc: &CadDocument, r: &Rebuild) -> Map<String, Value> {
         if !r.projection_updates.is_empty() {
             m.insert("projectionUpdates".into(), Value::Array(r.projection_updates.clone()));
         }
+    }
+    // With no bodies and nothing skipped, the caller answers the first error as
+    // the whole reply instead, which would drop the skipped list.
+    if !r.bodies.is_empty() || !r.skipped.is_empty() {
         if let Some(last) = r.errors.last() {
             m.insert("featureError".into(), last.wire());
             m.insert(

@@ -84,7 +84,7 @@ fn rebuild_with(
         return error_result("cancelled");
     };
     if r.bodies.is_empty() {
-        if let Some(first) = r.errors.first() {
+        if let Some(first) = r.errors.first().filter(|_| r.skipped.is_empty()) {
             let mut m = Map::new();
             m.insert("error".into(), first.wire());
             return JobResult::Json(m);
