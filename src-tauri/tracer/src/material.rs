@@ -31,8 +31,10 @@ pub struct PageMaterial {
 
 pub const FLAG_SOLID: u32 = 1;
 pub const FLAG_VERTEX_COLORS: u32 = 2;
+/// Reserved: an emitter left out of the light table, set by finish-fields.
+pub const FLAG_NO_LIGHT: u32 = 4;
 
-/// Seven vec4s, the layout the shader's `Mat` struct reads.
+/// Nine vec4s, 144 bytes, the layout the shader's `Mat` struct reads.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GpuMaterial {
@@ -50,6 +52,10 @@ pub struct GpuMaterial {
     pub specular: [f32; 4],
     /// sheen colour rgb, sheen roughness
     pub sheen: [f32; 4],
+    /// iridescence, iridescence ior, thickness min nm, thickness max nm
+    pub film: [f32; 4],
+    /// anisotropy, scatter distance mm, flakes, flake size mm
+    pub finish: [f32; 4],
 }
 
 impl GpuMaterial {
@@ -102,6 +108,8 @@ pub fn pack_material(m: &PageMaterial) -> GpuMaterial {
         ],
         specular: [spec[0], spec[1], spec[2], m.sheen.unwrap_or(0.0)],
         sheen: [sheen[0], sheen[1], sheen[2], m.sheen_roughness.unwrap_or(1.0)],
+        film: [0.0; 4],
+        finish: [0.0; 4],
     }
 }
 
@@ -133,6 +141,15 @@ mod tests {
 
     fn parse(j: &str) -> GpuMaterial {
         pack_material(&serde_json::from_str(j).unwrap())
+    }
+
+    #[test]
+    fn the_pack_is_nine_vec4_with_film_and_finish_zero() {
+        assert_eq!(std::mem::size_of::<GpuMaterial>(), 144);
+        let m = parse(r#"{"color":[0.2,0.3,0.4],"transmission":1,"sheen":0.5}"#);
+        assert_eq!(m.film, [0.0; 4]);
+        assert_eq!(m.finish, [0.0; 4]);
+        assert_eq!(m.flags() & FLAG_NO_LIGHT, 0);
     }
 
     #[test]

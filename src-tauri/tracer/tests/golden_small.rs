@@ -3,67 +3,22 @@
 //! the committed picture. Without an adapter (GitHub's Windows runners) the
 //! test says so and passes.
 
-use fundacad_tracer::{BodyDesc, Camera, Look, Mesh, PageMaterial, Path, Tracer, TracerOptions};
+mod common;
+
+use fundacad_tracer::{BodyDesc, PageMaterial, Path, Tracer, TracerOptions};
 
 const W: u32 = 96;
 const H: u32 = 64;
 const SPP: u32 = 64;
 const GOLDEN: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/golden/small.png");
 
-fn sphere(r: f32, su: u32, sv: u32) -> Mesh {
-    let mut m = Mesh::default();
-    for j in 0..=sv {
-        let th = std::f32::consts::PI * j as f32 / sv as f32;
-        for i in 0..=su {
-            let ph = std::f32::consts::TAU * i as f32 / su as f32;
-            let n = [th.sin() * ph.cos(), th.sin() * ph.sin(), th.cos()];
-            m.positions.push(n.map(|c| c * r));
-            m.normals.push(n);
-        }
-    }
-    for j in 0..sv {
-        for i in 0..su {
-            let a = j * (su + 1) + i;
-            let b = a + su + 1;
-            m.indices.extend([a, b, a + 1, a + 1, b, b + 1]);
-        }
-    }
-    m
-}
-
-fn floor(s: f32) -> Mesh {
-    Mesh {
-        positions: vec![[-s, -s, 0.0], [s, -s, 0.0], [s, s, 0.0], [-s, s, 0.0]],
-        normals: vec![[0.0, 0.0, 1.0]; 4],
-        indices: vec![0, 1, 2, 0, 2, 3],
-        ..Default::default()
-    }
-}
-
 fn body(id: &str, z: f32, color: [f32; 3]) -> BodyDesc {
-    let mut matrix = [0.0; 16];
-    for k in 0..4 {
-        matrix[k * 5] = 1.0;
-    }
-    matrix[14] = z;
-    BodyDesc {
-        id: id.into(),
-        key: format!("{id}.1"),
-        matrix,
-        visible: true,
-        materials: vec![PageMaterial { color: Some(color), roughness: Some(1.0), ..Default::default() }],
-    }
+    common::place(id, &format!("{id}.1"), 1.0, [0.0, 0.0, z], common::matte(color))
 }
 
 fn scene(t: &mut Tracer) {
-    t.resize(W, H);
     t.set_cap(SPP);
-    t.set_camera(Camera { eye: [4.0, -6.0, 3.0], target: [0.0, 0.0, 0.8], up: [0.0, 0.0, 1.0], fov: 40.0 });
-    t.set_look(Look { sun_dir: [0.4, -0.3, 1.0], sun_color: [2.0; 3], ..Look::default() });
-    for key in t.set_bodies(vec![body("ball", 1.0, [0.8, 0.3, 0.2]), body("floor", 0.0, [0.7, 0.7, 0.7])]) {
-        t.add_mesh(&key, if key.starts_with("ball") { sphere(1.0, 48, 24) } else { floor(20.0) });
-    }
-    t.apply();
+    common::build(t, "golden", Some((W, H)));
 }
 
 fn trace(software: bool) -> Option<(Path, Vec<u8>, Tracer)> {
