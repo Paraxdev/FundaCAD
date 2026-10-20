@@ -36,8 +36,9 @@ while [ $# -gt 0 ]; do
   shift
 done
 [ -n "$version" ] || usage
-[[ "$version" =~ ^1\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] \
-  || die "$version is not a stable version, those are 1.<minor>.<patch>"
+# Minor 0 is the betas' 1.0.<run number>, which a stable 1.0.x would be older than.
+[[ "$version" =~ ^1\.([1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] \
+  || die "$version is not a stable version, those are 1.<minor>.<patch> with a minor of 1 or more"
 tag="v$version"
 
 cd "$(git rev-parse --show-toplevel)"
@@ -45,7 +46,7 @@ git fetch --quiet --tags "$REMOTE" main dev
 
 git rev-parse -q --verify "refs/tags/$tag" >/dev/null && die "$tag already exists"
 
-newest=$(git tag -l 'v1.*' | grep -E '^v1\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$' | sort -V | tail -1 || true)
+newest=$(git tag -l 'v1.*' | grep -E '^v1\.([1-9][0-9]*)\.(0|[1-9][0-9]*)$' | sort -V | tail -1 || true)
 if [ -n "$newest" ] && [ "$(printf '%s\n%s\n' "$newest" "$tag" | sort -V | tail -1)" != "$tag" ]; then
   die "$tag is not newer than $newest"
 fi
