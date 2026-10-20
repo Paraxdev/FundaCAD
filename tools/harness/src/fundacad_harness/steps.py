@@ -33,6 +33,7 @@ VERBS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "wait_for": (("text",), ("timeout",)),
 }
 NO_SETTLE = {"wait_for"}
+MAX_WAIT = 60
 
 
 def check(step: Any) -> tuple[str, dict]:
@@ -50,6 +51,9 @@ def check(step: Any) -> tuple[str, dict]:
     missing = [k for k in need if k not in args]
     if missing:
         raise BadArgs(f'{verb} needs {", ".join(missing)}')
+    wait = args.get("timeout", 10)
+    if verb == "wait_for" and not (isinstance(wait, (int, float)) and 0 < wait <= MAX_WAIT):
+        raise BadArgs(f"wait_for takes a timeout up to {MAX_WAIT} s here, wait again in a new step for longer")
     return verb, args
 
 

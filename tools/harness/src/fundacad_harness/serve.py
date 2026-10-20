@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import json
 import sys
+import time
 from typing import Any, Callable, TextIO
 
 from . import steps
@@ -23,6 +24,10 @@ SHRINK = """async ([b64, max]) => {
     return c.toDataURL("image/png").split(",")[1];
 }"""
 MAX_PX = 1600
+# The MCP side stops the whole session after 180 s on one call (ui.rs RELAY_TIMEOUT).
+# A do starts no step after BUDGET, and a step's settle ends by SETTLE_BY.
+BUDGET = 120
+SETTLE_BY = 150
 
 
 def _viewport(v: Any) -> tuple[int, int]:
@@ -36,11 +41,12 @@ def _viewport(v: Any) -> tuple[int, int]:
 
 
 class Server:
-    def __init__(self, make_session: Callable[..., Any] | None = None):
+    def __init__(self, make_session: Callable[..., Any] | None = None, clock: Callable[[], float] = time.monotonic):
         if make_session is None:
             from .session import Session
             make_session = Session
         self.make_session = make_session
+        self.clock = clock
         self.s: Any = None
 
     def _status(self) -> str:
@@ -65,12 +71,24 @@ class Server:
         if not isinstance(steps_, list) or not steps_:
             raise BadArgs("do takes a non empty list of steps")
         done = []
-        for i, step in enumerate(steps_, 1):
-            try:
-                done.append(f"{i}. {steps.run(s, step)}")
-            except Exception as e:
-                done.append(f"{i}. failed: {e}")
-                return False, "\n".join(done + ["", self._status()])
+        start = self.clock()
+        base = getattr(s, "settle_timeout", None)
+        try:
+            for i, step in enumerate(steps_, 1):
+                ran = self.clock() - start
+                if ran > BUDGET:
+                    done.append(f"stopped before step {i} after {ran:.0f} s, send steps {i} to {len(steps_)} in a new ui_do")
+                    return False, "\n".join(done + ["", self._status()])
+                if base is not None:
+                    s.settle_timeout = max(5, min(base, SETTLE_BY - ran))
+                try:
+                    done.append(f"{i}. {steps.run(s, step)}")
+                except Exception as e:
+                    done.append(f"{i}. failed: {e}")
+                    return False, "\n".join(done + ["", self._status()])
+        finally:
+            if base is not None:
+                s.settle_timeout = base
         return True, "\n".join(done + ["", self._status()])
 
     def read(self, what: Any = None, region: str | None = None) -> str:

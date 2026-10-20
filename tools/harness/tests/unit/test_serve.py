@@ -161,3 +161,23 @@ def test_the_mcp_ui_do_description_lists_every_verb():
     text = text.split("pub fn ui_do()", 1)[1].split("pub fn ", 1)[0]
     missing = [v for v in steps.VERBS if not re.search(rf"\b{v}\b", text)]
     assert not missing, f"tools.rs ui_do does not mention {missing}"
+
+
+def test_a_long_do_stops_starting_steps_before_the_relay_gives_up(tmp_path):
+    ticks = iter(range(0, 1000, 50))
+    s = StubSession(tmp_path)
+    s.settle_timeout = 60
+    server = Server(lambda **kw: s, clock=lambda: next(ticks))
+    server.open()
+    ok, text = server.do([{"do": "press", "keys": "Enter"}] * 5)
+    assert ok is False
+    assert text.splitlines()[:3] == [
+        "1. pressed Enter", "2. pressed Enter",
+        "stopped before step 3 after 150 s, send steps 3 to 5 in a new ui_do",
+    ]
+    assert s.settle_timeout == 60, "the session's own settle time comes back after the call"
+
+
+def test_a_wait_in_a_do_is_capped():
+    with pytest.raises(Exception, match="up to 60 s"):
+        steps.check({"do": "wait_for", "text": "x", "timeout": 200})
