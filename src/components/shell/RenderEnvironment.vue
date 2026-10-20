@@ -16,9 +16,10 @@ import DenoiserRow from "./DenoiserRow.vue";
 import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 import {
   ENVIRONMENTS_LIST, MAX_BRIGHTNESS, MAX_EXPOSURE, MIN_BRIGHTNESS, MIN_EXPOSURE, hdrHashOf,
-  onRenderPrefsChange, performanceModeOn, renderPrefs, setRenderPref,
-  type Background, type Denoise, type Environment, type TracerPref,
+  groundKey, onRenderPrefsChange, performanceModeOn, renderPrefs, setRenderPref,
+  type Background, type Denoise, type Environment, type Ground, type TracerPref,
 } from "../../ui/renderPrefs";
+import { onWorkspaceChange, workspace } from "../../ui/workspace";
 import {
   activeSavedId, applySavedEnvironment, chooseBuiltInEnvironment, deleteSavedEnvironment, envLibrary, hdrName,
   importEnvironmentFile, onEnvLibraryChange, renameSavedEnvironment, saveEnvironmentAs,
@@ -31,6 +32,12 @@ import { useEngine } from "../../app/engineKey";
 
 const engine = useEngine();
 const prefs = ref({ ...renderPrefs() });
+const ws = ref(workspace());
+const ground = computed(() => prefs.value[groundKey(ws.value)]);
+const GROUND_CHOICES: readonly { id: Ground; label: string }[] = [
+  { id: "none", label: "None" },
+  { id: "shadow", label: "Shadow" },
+];
 const aiming = ref(false);
 const saved = ref<EnvEntry[]>([]);
 const activeSaved = ref<string | null>(activeSavedId());
@@ -48,6 +55,7 @@ const loadSaved = () => {
 const syncLabel = () => { hdrLabel.value = hdrHash.value ? hdrName(hdrHash.value) : null; };
 onMounted(() => {
   offs.push(onRenderPrefsChange(() => { prefs.value = { ...renderPrefs() }; syncLabel(); }));
+  offs.push(onWorkspaceChange((w) => { ws.value = w; }));
   offs.push(onEnvLibraryChange(loadSaved));
   offs.push(onHdrRegistered(syncLabel));
   loadSaved();
@@ -286,6 +294,18 @@ const onBloom = (e: Event) =>
           @click="setRenderPref('background', b.id)"
         >{{ b.label }}</button>
       </div>
+      <div class="rd-chips" role="group" aria-label="Ground shadow">
+        <button
+          v-for="g in GROUND_CHOICES"
+          :key="g.id"
+          class="rd-chip"
+          :class="{ active: ground === g.id }"
+          :data-ground="g.id"
+          :aria-pressed="ground === g.id"
+          @click="setRenderPref(groundKey(ws), g.id)"
+        >{{ g.label }}</button>
+      </div>
+      <div class="sm-hint">A soft shadow under the model. Off on the lightweight render.</div>
       <label class="prefs-row">
         <span class="prefs-label">Brightness</span>
         <input
