@@ -2,6 +2,7 @@ mod accel;
 mod adapter;
 mod bindings;
 mod frame;
+mod picture;
 mod pipelines;
 mod upload;
 
@@ -14,6 +15,7 @@ use crate::scene::{BodyDesc, Commit, Mesh, Scene};
 
 use accel::{make_tlas, GpuAccel};
 pub use adapter::{choose, Candidate, Refusal};
+pub use picture::{encode_png, picture_refusal, Picture};
 use pipelines::Pipelines;
 pub(crate) use pipelines::pipeline_at;
 use upload::Shading;
@@ -138,6 +140,7 @@ pub struct Tracer {
     job: Option<Job>,
     denoise_error: Option<String>,
     fault: Arc<Mutex<Fault>>,
+    buffer_limit: u64,
 }
 
 /// The first loss and the first uncaptured error. Not behind the frames
@@ -205,6 +208,8 @@ impl Tracer {
         }))
         .map_err(|e| Refusal::Device(e.to_string()))?;
         let path = if hw { Path::RayQuery } else { Path::Software };
+        let limits = device.limits();
+        let buffer_limit = limits.max_buffer_size.min(limits.max_storage_buffer_binding_size as u64);
         let fault = Arc::new(Mutex::new(Fault::default()));
         let f = fault.clone();
         device.set_device_lost_callback(move |reason, msg| {
@@ -290,6 +295,7 @@ impl Tracer {
             job: None,
             denoise_error: None,
             fault,
+            buffer_limit,
         };
         t.resize(64, 64);
         Ok(t)
@@ -459,12 +465,9 @@ impl Tracer {
         self.denoise_error.as_deref()
     }
 
-    fn start_denoise(&mut self) {
-        if self.quality == Quality::Off {
-            return;
-        }
+    fn denoise_input(&self) -> denoise::Input {
         let aov = self.read_aovs();
-        let input = denoise::Input {
+        denoise::Input {
             width: self.w as usize,
             height: self.h as usize,
             color: self.read_hdr().into_iter().flatten().collect(),
@@ -472,7 +475,14 @@ impl Tracer {
             normal: aov.iter().skip(1).step_by(2).flat_map(|n| [n[0], n[1], n[2]]).collect(),
             depth: aov.chunks_exact(2).map(|p| if p[1][3] > 0.0 { p[0][3] } else { 0.0 }).collect(),
             samples: self.sample,
-        };
+        }
+    }
+
+    fn start_denoise(&mut self) {
+        if self.quality == Quality::Off {
+            return;
+        }
+        let input = self.denoise_input();
         let (tx, rx) = mpsc::channel();
         let quality = self.quality;
         let e = if self.look.exposure > 0.0 { self.look.exposure } else { 1.0 };

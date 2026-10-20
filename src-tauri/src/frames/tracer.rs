@@ -8,16 +8,31 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
 use fundacad_frames::{FrameSource, Reopen};
-use fundacad_tracer::{decode_colors, decode_mesh, denoise, Bloom, BodyDesc, Camera, Denoiser, Look, Path, Quality, Refusal, Tracer, TracerOptions};
+use fundacad_tracer::{decode_colors, decode_mesh, denoise, encode_png, Bloom, BodyDesc, Camera, Denoiser, Look, Path, Picture, Quality, Refusal, Tracer, TracerOptions};
 use serde::Serialize;
 use tauri::ipc::{InvokeBody, Request};
 
 /// GPU time per frame; the resolve and readback come on top.
 const TRACE_BUDGET: Duration = Duration::from_millis(12);
 
+/// GPU time a picture holds the tracer for at once, so pt_status and the
+/// scene commands get in between.
+const PICTURE_SLICE: Duration = Duration::from_millis(50);
+
 struct State {
     tracer: Tracer,
     fault: Option<String>,
+    /// A traced picture is running; the viewport's frames wait for it.
+    picture: Option<PictureStatus>,
+    cancel: bool,
+}
+
+#[derive(Serialize, Clone, Copy)]
+#[serde(rename_all = "camelCase")]
+pub struct PictureStatus {
+    samples: u32,
+    total: u32,
+    denoising: bool,
 }
 
 impl State {
@@ -53,7 +68,7 @@ pub fn tracer() -> Result<Arc<TracerSource>, String> {
         }
         let opts = TracerOptions { software: mode == "software", ..Default::default() };
         Tracer::new(opts)
-            .map(|tracer| TracerSource(Mutex::new(State { tracer, fault: None })))
+            .map(|tracer| TracerSource(Mutex::new(State { tracer, fault: None, picture: None, cancel: false })))
             .map_err(|e| {
                 eprintln!("[frames] no native tracer: {e}");
                 let text = e.to_string();
@@ -104,6 +119,9 @@ impl FrameSource for TracerSource {
             out.fill(0);
             return;
         }
+        if s.picture.is_some() {
+            return;
+        }
         match catch_unwind(AssertUnwindSafe(|| s.tracer.frame(width, height, TRACE_BUDGET))) {
             Ok(px) if px.len() == out.len() => {
                 out.copy_from_slice(&px);
@@ -114,17 +132,20 @@ impl FrameSource for TracerSource {
                 out.fill(0);
             }
             Err(e) => {
-                let why = e
-                    .downcast_ref::<String>()
-                    .cloned()
-                    .or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string()))
-                    .unwrap_or_else(|| "the tracer panicked".into());
+                let why = panic_text(e);
                 eprintln!("[frames] tracer fault: {why}");
                 s.fault = Some(why);
                 out.fill(0);
             }
         }
     }
+}
+
+fn panic_text(e: Box<dyn std::any::Any + Send>) -> String {
+    e.downcast_ref::<String>()
+        .cloned()
+        .or_else(|| e.downcast_ref::<&str>().map(|s| s.to_string()))
+        .unwrap_or_else(|| "the tracer panicked".into())
 }
 
 fn with<T>(f: impl FnOnce(&mut Tracer) -> T) -> Result<T, String> {
@@ -220,6 +241,8 @@ pub struct Status {
     /// What cleaned the frames at the cap.
     denoiser: Option<Denoiser>,
     denoise_error: Option<String>,
+    /// A traced picture's progress while one runs.
+    picture: Option<PictureStatus>,
 }
 
 #[tauri::command]
@@ -239,9 +262,100 @@ pub fn pt_status() -> Result<Status, String> {
         denoising: s.tracer.denoising(),
         denoiser: s.tracer.denoised_by(),
         denoise_error: s.tracer.denoise_error().map(str::to_string),
+        picture: s.picture,
     })
 }
 
+/// A still of the current scene and camera at `width` x `height`, traced to
+/// `samples` beside the viewport's accumulation, denoised once at the end and
+/// bloomed like the viewport. Answers the PNG file's bytes.
+#[tauri::command]
+pub async fn pt_picture(width: u32, height: u32, samples: u32) -> Result<tauri::ipc::Response, String> {
+    tauri::async_runtime::spawn_blocking(move || picture(width, height, samples).map(tauri::ipc::Response::new))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Stops a running picture; its pt_picture answers an error.
+#[tauri::command]
+pub fn pt_picture_cancel() -> Result<(), String> {
+    let t = open()?;
+    let mut s = t.lock();
+    if s.picture.is_some() {
+        s.cancel = true;
+    }
+    Ok(())
+}
+
+pub const PICTURE_CANCELLED: &str = "the picture was cancelled";
+
+/// Clears the running picture however `picture` returns, panics included,
+/// so the viewport's frames resume.
+struct Running(Arc<TracerSource>);
+
+impl Drop for Running {
+    fn drop(&mut self) {
+        let mut s = self.0.lock();
+        s.picture = None;
+        s.cancel = false;
+    }
+}
+
+pub fn picture(width: u32, height: u32, samples: u32) -> Result<Vec<u8>, String> {
+    let t = open()?;
+    let mut p = {
+        let mut s = t.lock();
+        s.take_fault();
+        if let Some(f) = &s.fault {
+            return Err(format!("the native tracer stopped: {f}"));
+        }
+        if s.picture.is_some() {
+            return Err("a picture is already being traced".into());
+        }
+        let p = s.tracer.begin_picture(width, height, samples, Quality::High)?;
+        s.picture = Some(PictureStatus { samples: 0, total: p.total(), denoising: false });
+        s.cancel = false;
+        p
+    };
+    let _running = Running(t.clone());
+    let step = |p: &mut Picture, s: &mut State| -> Result<bool, String> {
+        if s.cancel {
+            return Err(PICTURE_CANCELLED.into());
+        }
+        let done = catch_unwind(AssertUnwindSafe(|| s.tracer.trace_picture(p, PICTURE_SLICE))).map_err(|e| {
+            // The picture's buffers may still be swapped in, so the viewport cannot trace on.
+            let why = panic_text(e);
+            s.fault = Some(why.clone());
+            why
+        })?;
+        s.take_fault();
+        if let Some(f) = &s.fault {
+            return Err(format!("the native tracer stopped: {f}"));
+        }
+        s.picture = Some(PictureStatus { samples: p.samples(), total: p.total(), denoising: done });
+        Ok(done)
+    };
+    while !step(&mut p, &mut t.lock())? {}
+    catch_unwind(AssertUnwindSafe(|| p.denoise())).map_err(panic_text)?;
+    let (w, h) = p.size();
+    let px = {
+        let mut s = t.lock();
+        if s.cancel {
+            return Err(PICTURE_CANCELLED.into());
+        }
+        let px = catch_unwind(AssertUnwindSafe(|| s.tracer.finish_picture(p))).map_err(|e| {
+            let why = panic_text(e);
+            s.fault = Some(why.clone());
+            why
+        })?;
+        s.take_fault();
+        if let Some(f) = &s.fault {
+            return Err(format!("the native tracer stopped: {f}"));
+        }
+        px
+    };
+    encode_png(w, h, &px)
+}
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -312,4 +426,42 @@ pub async fn pt_probe() -> Probe {
     })
     .await
     .unwrap_or_else(|e| Probe::refused(e.to_string(), None))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn frame(t: &TracerSource) -> u32 {
+        let mut out = vec![0; 32 * 24 * 4];
+        t.render(&mut out, 32, 24, 0);
+        with(|t| t.samples()).unwrap()
+    }
+
+    #[test]
+    fn a_cancelled_picture_leaves_the_viewport_tracing_and_the_next_one_saves() {
+        let Ok(t) = tracer() else {
+            eprintln!("skipped: no native tracer");
+            return;
+        };
+        with(|t| t.set_cap(4096)).unwrap();
+        let before = frame(&t);
+        let run = std::thread::spawn(|| picture(1024, 1024, 1_000_000));
+        while pt_status().unwrap().picture.is_none() {
+            assert!(!run.is_finished(), "{:?}", run.join().unwrap());
+            std::thread::yield_now();
+        }
+        assert_eq!(frame(&t), before, "the viewport traced while the picture held the tracer");
+        pt_picture_cancel().unwrap();
+        assert_eq!(run.join().unwrap(), Err(PICTURE_CANCELLED.to_string()));
+        assert!(pt_status().unwrap().picture.is_none());
+        assert!(frame(&t) > before, "the viewport stopped tracing after a cancelled picture");
+
+        let png = picture(64, 48, 4).expect("the picture after a cancel failed");
+        assert_eq!(&png[1..4], b"PNG");
+        assert!(frame(&t) > before);
+        assert_eq!(pt_status().unwrap().fault, None);
+        drop(t);
+        release();
+    }
 }
