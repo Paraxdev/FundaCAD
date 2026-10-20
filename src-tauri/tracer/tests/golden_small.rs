@@ -157,3 +157,24 @@ fn glass_metal_coat_and_emission_trace_alike_on_both_paths() {
         write_png(&p, &a);
     }
 }
+
+#[test]
+fn a_ray_query_sample_in_bands_equals_one_in_a_whole_frame() {
+    let banded = |paths: u32| {
+        let mut t = Tracer::new(TracerOptions::default()).ok().filter(|t| t.path() == Path::RayQuery)?;
+        t.set_cap(4);
+        common::build(&mut t, "golden", Some((W, H)));
+        t.set_frame_budget(paths);
+        let band = t.band();
+        t.render_samples(4);
+        Some((band, t.resolve()))
+    };
+    let Some((8, a)) = banded(W * 8) else {
+        println!("skipped, no ray query adapter");
+        return;
+    };
+    let (band, b) = banded(W * H).unwrap();
+    assert_eq!(band, H);
+    let worst = a.iter().zip(&b).map(|(x, y)| x.abs_diff(*y)).max().unwrap();
+    assert_eq!(worst, 0, "band seams in the ray query frame");
+}
