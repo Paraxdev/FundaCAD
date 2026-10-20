@@ -662,6 +662,7 @@ async function importWith(
   const res = await store.runBusy(
     `Importing ${path.split(/[\\/]/).pop() ?? "file"}`,
     (onStarted) => read(onStarted, unit),
+    { holdHistory: true },
   );
   if (!res.ok) {
     if (res.cancelled) {

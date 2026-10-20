@@ -352,6 +352,7 @@ export class DocumentStore {
   private busy: BusyState = IDLE_BUSY;
   /** Every runBusy op still running, newest last; the chip shows the newest. */
   private busyOps: { state: BusyState; abort: AbortController | null }[] = [];
+  private historyHeld = 0;
 
   /** The last build of the document without a preview, and what it was built
    *  from. Leaving a tool, or undoing a commit the kernel refused, lands back on
@@ -459,13 +460,17 @@ export class DocumentStore {
 
   /** Run a cancellable backend op with busy state. `onStarted` hands back the request
    *  id, since a rebuild started meanwhile would otherwise be "most recent". An op
-   *  that never reaches the engine passes `abort`, which Cancel then aborts. */
+   *  that never reaches the engine passes `abort`, which Cancel then aborts.
+   *  `holdHistory` turns undo and redo off until it ends: an import's feature lands
+   *  as a new step once the file is read, which would drop the redo of a step
+   *  undone meanwhile. */
   async runBusy<T>(
     label: string,
     fn: (onStarted: (id: string) => void) => Promise<T>,
-    opts: { rebuild?: boolean; abort?: AbortController } = {},
+    opts: { rebuild?: boolean; abort?: AbortController; holdHistory?: boolean } = {},
   ): Promise<T> {
     const op = { state: { ...IDLE_BUSY, active: true, label, rebuild: opts.rebuild === true }, abort: opts.abort ?? null };
+    if (opts.holdHistory) this.historyHeld++;
     this.busyOps.push(op);
     this.setBusy(op.state);
     try {
@@ -474,6 +479,7 @@ export class DocumentStore {
         if (this.busyOps.at(-1) === op) this.setBusy(op.state);
       });
     } finally {
+      if (opts.holdHistory) this.historyHeld--;
       this.busyOps.splice(this.busyOps.indexOf(op), 1);
       this.busy = this.busyOps.at(-1)?.state ?? IDLE_BUSY;
       this.emitBusy();
@@ -1371,12 +1377,14 @@ export class DocumentStore {
 
   // --- undo / redo ---
   undo() {
+    if (this.historyHeld) return;
     const prev = this.undoStack.pop();
     if (!prev) return;
     this.emitRewind();
     this.redoStack.push(this.applyUndoEntry(prev, "undo"));
   }
   redo() {
+    if (this.historyHeld) return;
     const next = this.redoStack.pop();
     if (!next) return;
     this.emitRewind();
@@ -1427,10 +1435,10 @@ export class DocumentStore {
     return false;
   }
   get canUndo() {
-    return this.undoStack.length > 0;
+    return !this.historyHeld && this.undoStack.length > 0;
   }
   get canRedo() {
-    return this.redoStack.length > 0;
+    return !this.historyHeld && this.redoStack.length > 0;
   }
 
   // --- ViewCube side redefinitions (don't affect geometry, so no rebuild) ---
