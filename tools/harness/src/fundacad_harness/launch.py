@@ -133,6 +133,40 @@ def _group_flags() -> dict:
     return {"start_new_session": True}
 
 
+_job: int | None = None
+
+
+def _kill_with_us(popen: subprocess.Popen) -> None:
+    """On Windows the children join a job that dies with this Python, even a TerminateProcess
+    of it, which is what a shell tool's timeout sends and no atexit hook outlives."""
+    global _job
+    if os.name != "nt":
+        return
+    import ctypes
+    from ctypes import wintypes
+
+    k32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    k32.CreateJobObjectW.restype = wintypes.HANDLE
+    if _job is None:
+
+        class Basic(ctypes.Structure):
+            _fields_ = [("user_time", ctypes.c_int64), ("job_time", ctypes.c_int64), ("flags", wintypes.DWORD),
+                        ("min_ws", ctypes.c_size_t), ("max_ws", ctypes.c_size_t), ("procs", wintypes.DWORD),
+                        ("affinity", ctypes.c_size_t), ("priority", wintypes.DWORD), ("scheduling", wintypes.DWORD)]
+
+        class Extended(ctypes.Structure):
+            _fields_ = [("basic", Basic), ("io", ctypes.c_uint64 * 6), ("proc_mem", ctypes.c_size_t),
+                        ("job_mem", ctypes.c_size_t), ("peak_proc_mem", ctypes.c_size_t), ("peak_job_mem", ctypes.c_size_t)]
+
+        job = k32.CreateJobObjectW(None, None)
+        info = Extended()
+        info.basic.flags = 0x2000  # JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+        if not job or not k32.SetInformationJobObject(job, 9, ctypes.byref(info), ctypes.sizeof(info)):
+            return
+        _job = job
+    k32.AssignProcessToJobObject(wintypes.HANDLE(_job), wintypes.HANDLE(int(popen._handle)))
+
+
 @dataclass
 class Proc:
     """A child this session started, and only that child is ever stopped."""
@@ -196,6 +230,7 @@ def spawn(name: str, cmd: list[str], cwd: Path, env: dict, log: Path, ready_pref
         errors="replace",
         **_group_flags(),
     )
+    _kill_with_us(popen)
     proc = Proc(name, popen, log)
 
     def pump() -> None:
