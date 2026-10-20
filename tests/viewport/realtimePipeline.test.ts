@@ -33,7 +33,7 @@ describe("stagesFor", () => {
     expect(stagesFor(state({ quality: "standard", passesReady: false }))).toEqual({ path: "loading" });
   });
 
-  it("keeps today's path on a low power tier, for a ghosted model and for a frame drawn outside the loop", () => {
+  it("keeps today's path on a low power tier, for a ghosted model and for a caller with no facts", () => {
     for (const over of [{ lowPower: true }, { facts: { moving: false, ghosted: true } }, { facts: null }]) {
       expect(stagesFor(state({ ...over, bloom: false, blur: false }))).toEqual({ path: "direct" });
       expect(stagesFor(state(over))).toEqual({ path: "composer" });
@@ -267,7 +267,7 @@ describe("PostChain at High", () => {
     }
   });
 
-  it("skips the prepass while moving and keeps today's path for a ghosted model or a picture", () => {
+  it("skips the prepass while moving and keeps today's path for a ghosted model or a caller with no facts", () => {
     const c = highChain();
     c.post.render(c.camera, true, false, { moving: true, ghosted: false });
     expect(c.post.highStages).toEqual(["model", "output", "compose"]);
@@ -279,6 +279,14 @@ describe("PostChain at High", () => {
       expect(g.composed).toEqual([]);
       expect(g.draws.map((d) => [d.mask, d.background])).toEqual([[g.full, g.scene.background]]);
     }
+  });
+
+  it("draws a picture or a screenshot, still and not ghosted, with every High stage", () => {
+    const c = highChain();
+    c.post.render(c.camera, false, false, { moving: false, ghosted: false });
+    expect(c.post.highStages?.[0]).toBe("prepass");
+    expect(c.post.highStages?.at(-1)).toBe("compose");
+    expect(c.post.prepassTarget).not.toBeNull();
   });
 
   it("goes back to the Standard frame once the quality is set back", () => {

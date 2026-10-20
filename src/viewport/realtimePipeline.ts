@@ -39,8 +39,9 @@ export function resolveRealtimeQuality(pref: RealtimeQualityPref, t: QualityTier
 
 export type Stage = "prepass" | "model" | "bokeh" | "bloom" | "output" | "compose";
 
-/** What the viewport knows about a frame and PostChain does not. Null for a frame
- *  drawn outside the loop (a picture, a screenshot), which keeps today's path. */
+/** What the viewport knows about a frame and PostChain does not. The loop, a
+ *  picture and a screenshot pass it; null is a caller that does not say, which
+ *  keeps today's path. */
 export interface FrameFacts {
   moving: boolean;
   /** X ray, wireframe, stale, peek or a dimmed model behind a sketch. */

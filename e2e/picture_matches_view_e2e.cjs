@@ -90,24 +90,31 @@ const check = (name, ok, detail) => {
     await page.evaluate(() => window.__fundacad.handleAction("fit"));
     await page.waitForTimeout(1500);
 
+    // The High stages each view and picture was drawn by, null for today's path.
+    const drawnBy = [];
     const save = (name, url) => fs.writeFileSync(path.join(OUT, `${name}.png`), Buffer.from(url.split(",")[1], "base64"));
     const still = async (name, k, edges) => {
-      const url = await page.evaluate(([k, edges]) => window.viewport.renderStill(k, { edges, realtime: true }), [k, edges]);
+      const { url, stages } = await page.evaluate(([k, edges]) => {
+        const url = window.viewport.renderStill(k, { edges, realtime: true });
+        return { url, stages: window.viewport.scene.post.highStages };
+      }, [k, edges]);
+      drawnBy.push([name, stages]);
       save(name, url);
       await page.waitForTimeout(300);
       return url;
     };
     // The view as drawn, with the furniture a picture never has switched off by hand.
     const bareView = async (name) => {
-      const url = await page.evaluate(() => {
+      const { url, stages } = await page.evaluate(() => {
         const sc = window.viewport.scene;
         const was = [sc.grid.group.visible, sc.triad.group.visible];
         sc.grid.group.visible = false;
         sc.triad.group.visible = false;
-        try { return window.viewport.screenshotPNG(); } finally {
+        try { return { url: window.viewport.screenshotPNG(), stages: sc.post.highStages }; } finally {
           [sc.grid.group.visible, sc.triad.group.visible] = was;
         }
       });
+      drawnBy.push([name, stages]);
       save(name, url);
       return url;
     };
@@ -205,16 +212,18 @@ const check = (name, ok, detail) => {
       sc.triad.group.visible = false;
       r.shadowMap.autoUpdate = redraw;
       try {
-        sc.post.render(v.rig.active, false, false);
-        return r.domElement.toDataURL("image/png");
+        sc.post.render(v.rig.active, false, false, { moving: false, ghosted: v.ghosted });
+        return { url: r.domElement.toDataURL("image/png"), stages: sc.post.highStages };
       } finally {
         [sc.grid.group.visible, sc.triad.group.visible, r.shadowMap.autoUpdate] = was;
         v.requestRender();
       }
     }, redraw);
-    const kept = await frame(false);
+    const { url: kept, stages: keptBy } = await frame(false);
+    drawnBy.push(["glass_view", keptBy]);
     save("glass_view", kept);
-    const redrawn = await frame(true);
+    const { url: redrawn, stages: redrawnBy } = await frame(true);
+    drawnBy.push(["glass_view_shadows_redrawn", redrawnBy]);
     save("glass_view_shadows_redrawn", redrawn);
     const dRedraw = await diff(kept, redrawn);
     check("glass looks the same on a frame that redraws the shadow maps", dRedraw < 1, dRedraw.toFixed(2));
@@ -225,8 +234,9 @@ const check = (name, ok, detail) => {
     const dGlass2 = await diff(kept, glass2);
     check("and so does a 2x one", dGlass2 < 3, dGlass2.toFixed(2));
     if (QUALITY === "high") {
-      const stages = await page.evaluate(() => window.viewport.scene.post.highStages);
-      check("the view was drawn by the High stages", !!stages, JSON.stringify(stages));
+      const today = drawnBy.filter(([, stages]) => !stages).map(([name]) => name);
+      check("every view and picture compared was drawn by the High stages", drawnBy.length > 0 && today.length === 0,
+        today.length ? `today's path: ${today.join(", ")}` : `${drawnBy.length} drawn`);
     }
   } finally {
     await browser.close();

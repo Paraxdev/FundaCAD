@@ -4021,7 +4021,7 @@ export class Viewport {
   }
 
   screenshotPNG(): string {
-    this.scene.post.render(this.rig.active);
+    this.scene.post.render(this.rig.active, false, false, { moving: false, ghosted: this.ghosted });
     const url = this.canvas.toDataURL("image/png");
     this.requestRender(); // repaint with the ViewCube overlay
     return url;
