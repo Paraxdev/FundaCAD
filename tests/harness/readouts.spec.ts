@@ -1,0 +1,108 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { createPinia, setActivePinia } from "pinia";
+import * as read from "../../src/harness/readouts";
+import { clearLog, logError } from "../../src/ui/logStore";
+import { toast } from "../../src/ui/toast";
+import { useToastStore } from "../../src/stores/toasts";
+import { mountApp } from "./fixture";
+
+function host(over: Partial<{ roll: number; suppressed: string[]; hidden: string[] }> = {}): read.ReadHost {
+  const features = [
+    { id: "s1", type: "sketch" },
+    { id: "e1", type: "extrude", name: "Plate" },
+    { id: "d1", type: "draft" },
+    { id: "f1", type: "fillet" },
+  ];
+  return {
+    store: {
+      document: { parameters: {}, features },
+      buildState: {
+        building: false, progress: null, meshed: null, meshTotal: null, streamed: null, streamTotal: null,
+        errorFeatureId: "d1", errorMessage: "the angle tips the face past vertical",
+        result: {
+          mesh: { positions: [], indices: [], faceIds: [] }, edges: [], bbox: { min: [0, 0, 0], max: [1, 1, 1] },
+          bodies: [
+            { id: "body1", name: "Plate", faceStart: 0, faceCount: 6 },
+            { id: "body2", name: "Boss", faceStart: 6, faceCount: 3, fault: "open shell" },
+          ],
+        },
+      },
+      rollbackIndex: over.roll ?? 4,
+      isSuppressed: (id: string) => (over.suppressed ?? []).includes(id),
+      isBodyVisible: (id: string) => !(over.hidden ?? []).includes(id),
+      previewError: null,
+      canUndo: true,
+      canRedo: false,
+      dirty: true,
+      fileName: "plate.funda",
+    },
+    viewport: {
+      getSelectedBodies: () => [],
+      getSelectedFaceIds: () => [7],
+      selectedEdgeLines: () => [],
+      faceIdToBodyId: (id: number) => (id >= 6 ? "body2" : "body1"),
+    },
+  } as unknown as read.ReadHost;
+}
+
+beforeEach(() => {
+  setActivePinia(createPinia());
+  clearLog();
+  mountApp();
+});
+afterEach(() => vi.useRealTimers());
+
+describe("history", () => {
+  it("names each feature and says which failed, are suppressed or rolled back", () => {
+    const h = read.history(host({ suppressed: ["e1"], roll: 3 }));
+    expect(h.at).toBe("rolled back to 3");
+    expect(h.rows.map((r) => [r.id, r.name, r.state])).toEqual([
+      ["s1", "Sketch", ""],
+      ["e1", "Plate", "suppressed"],
+      ["d1", "Draft", "error: the angle tips the face past vertical"],
+      ["f1", "Fillet", "rolled back"],
+    ]);
+  });
+});
+
+describe("bodies and selection", () => {
+  it("lists bodies with their face counts, visibility and faults", () => {
+    expect(read.bodies(host({ hidden: ["body2"] }))).toEqual([
+      { id: "body1", name: "Plate", faces: 6, visible: true, fault: null },
+      { id: "body2", name: "Boss", faces: 3, visible: false, fault: "open shell" },
+    ]);
+  });
+
+  it("numbers a selected face within its body", () => {
+    expect(read.selection(host()).faces).toEqual([["body2", 1]]);
+  });
+});
+
+describe("status", () => {
+  it("reads the mode, document and prompt", () => {
+    const s = read.status(host());
+    expect(s).toMatchObject({ mode: "model", doc: "Untitled", dirty: true, undo: true, redo: false, prompt: "Pick a face to draft" });
+    expect(s.error).toBe("the angle tips the face past vertical");
+  });
+});
+
+describe("messages", () => {
+  it("keeps an info toast after it has left the screen", () => {
+    vi.useFakeTimers();
+    const before = read.messages().seq;
+    toast("Saved");
+    vi.advanceTimersByTime(4000);
+    expect(useToastStore().items).toHaveLength(0);
+    const m = read.messages(before);
+    expect(m.rows.map((r) => [r.level, r.text])).toEqual([["info", "Saved"]]);
+    expect(read.messages(m.seq).rows).toEqual([]);
+  });
+
+  it("falls back to the newest logged error", () => {
+    const h = host();
+    (h.store.buildState as { errorMessage: string | null }).errorMessage = null;
+    expect(read.lastError(h)).toBeNull();
+    logError("the engine stopped");
+    expect(read.lastError(h)).toBe("the engine stopped");
+  });
+});

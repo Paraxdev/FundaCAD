@@ -446,6 +446,8 @@ export interface GeometryBackend {
    *  the caller's "no session" path and its "no backend" path are the same one. */
   session?(op: string, payload?: object): Promise<Record<string, unknown> | null>;
   readonly connected: boolean;
+  /** Requests not answered yet, where the backend counts them. */
+  readonly inFlight?: number;
 }
 
 /** Edge polylines packed into binary buffers (see server.py's _pack_edges):
@@ -664,6 +666,10 @@ function engineWait(v: unknown): EngineWait | null {
 export class Geometry implements GeometryBackend {
   private readonly transport: GeometryTransport;
   private pending = new Map<string, Pending>();
+  /** Requests sent and not yet answered, tool previews included. */
+  get inFlight(): number {
+    return this.pending.size;
+  }
   // The heavy op most recently sent, for cancel() to target. The engine
   // serializes heavy ops, so at most one is actually running; targeting by id
   // keeps a late Cancel click from killing the NEXT op instead.

@@ -13,6 +13,8 @@ import ValidatedInput from "./ValidatedInput.vue";
 
 const props = defineProps<{
   label: string;
+  /** The value's key, rendered as data-field so a row can be found by it. */
+  field?: string | undefined;
   /** Current committed value, in whatever spelling the panel wants shown. */
   value: string;
   /** Return an error message to show, or null on success. */
@@ -47,7 +49,7 @@ function onPickUnit(e: MouseEvent) {
 </script>
 
 <template>
-  <div class="param-row" :class="rowClass" :title="rowTitle">
+  <div class="param-row" :class="rowClass" :title="rowTitle" :data-field="field">
     <label>{{ label }}</label>
     <div class="param-value">
       <ValidatedInput

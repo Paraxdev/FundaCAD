@@ -1,0 +1,94 @@
+import { beforeEach, describe, expect, it } from "vitest";
+import { findControl, HarnessError, stamp, toolPath } from "../../src/harness/locate";
+import { walkControls } from "../../src/harness/screenTree";
+import type { RailEntry } from "../../src/ui/railDefs";
+import { mountApp, rect } from "./fixture";
+
+beforeEach(() => mountApp());
+
+const walk = () => walkControls(document, { rect });
+const fail = (target: string): HarnessError => {
+  try {
+    findControl(walk(), target);
+  } catch (e) {
+    return e as HarnessError;
+  }
+  throw new Error(`"${target}" was found`);
+};
+
+describe("findControl", () => {
+  it("takes a ref as is", () => {
+    expect(findControl(walk(), "family:cat:CREATE").label).toBe("Create");
+    expect(findControl(walk(), "#undo-btn").ref).toBe("#undo-btn");
+  });
+
+  it("matches a label exactly, then by prefix, ignoring the key hint", () => {
+    expect(findControl(walk(), "sketch").ref).toBe("action:sketch");
+    expect(findControl(walk(), "Extrude 1").ref).toBe("feature:e1");
+    expect(findControl(walk(), "Mod").ref).toBe("family:cat:MODIFY");
+  });
+
+  it("lists the refs when a label matches several", () => {
+    const e = fail("Cancel");
+    expect(e.kind).toBe("Ambiguous");
+    expect(e.message).toContain('text:"Cancel"#1');
+    expect(findControl(walk(), "Cancel#2").el).toBe(document.querySelectorAll("button.plain")[1]);
+  });
+
+  it("refuses a disabled control and says so", () => {
+    const e = fail("Measure");
+    expect(e.kind).toBe("Disabled");
+    expect(e.message).toBe('action:measure "Measure (I)" is disabled');
+  });
+
+  it("suggests near misses when nothing matches", () => {
+    const e = fail("Extrud 2");
+    expect(e.kind).toBe("NotFound");
+    expect(e.message).toMatch(/^no visible control "Extrud 2": did you mean feature:e1 "Extrude 1"/);
+    expect(fail("action:nope").kind).toBe("NotFound");
+  });
+});
+
+describe("stamp", () => {
+  it("moves the one mark to the newest element", () => {
+    const a = document.querySelector("#undo-btn")!;
+    const b = document.querySelector("#redo-btn")!;
+    stamp(a);
+    const id = stamp(b);
+    expect(a.hasAttribute("data-harness-target")).toBe(false);
+    expect(b.getAttribute("data-harness-target")).toBe(id);
+  });
+});
+
+describe("toolPath", () => {
+  const rail: RailEntry[] = [
+    { kind: "tool", action: "sketch", label: "Sketch", icon: "sketch" },
+    {
+      kind: "family", id: "cat:CREATE", label: "Create", icon: "extrude", style: "category",
+      items: [{ kind: "tool", action: "extrude", label: "Extrude", icon: "extrude" }],
+    },
+    {
+      kind: "family", id: "fam:circle", label: "Circle", icon: "circle", style: "variants",
+      items: [{ kind: "tool", action: "circle3", label: "3 point circle", icon: "circle" }],
+    },
+  ];
+
+  it("clicks a visible tool straight away", () => {
+    expect(toolPath(walk(), "Sketch", "model", rail)).toEqual([{ ref: "action:sketch", button: "left" }]);
+  });
+
+  it("opens a category flyout first", () => {
+    expect(toolPath(walk(), "Extrude", "model", rail)).toEqual([
+      { ref: "family:cat:CREATE", button: "left" },
+      { ref: "pick:extrude", button: "left" },
+    ]);
+  });
+
+  it("opens a variant family with a right click", () => {
+    expect(toolPath(walk(), "3 point", "sketch", rail)[0]).toEqual({ ref: "family:fam:circle", button: "right" });
+  });
+
+  it("keeps the not found error when no family has it", () => {
+    expect(() => toolPath(walk(), "Loft", "model", rail)).toThrow(/no visible control "Loft"/);
+  });
+});
