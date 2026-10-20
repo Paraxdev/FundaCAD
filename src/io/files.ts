@@ -5,7 +5,7 @@
 // writes the file directly (no fs round-trip through the webview).
 
 import { suggestedSavePath } from "./saveFolder";
-import type { DocumentStore } from "../document/store";
+import type { CarriedSection, DocumentStore } from "../document/store";
 import { asFeature } from "../types";
 import type { GeometryBackend } from "../geometry/client";
 import type { CadDocument, ExportFormat, Feature, ImportFormat } from "../types";
@@ -16,6 +16,7 @@ import {
 } from "./exportSettings";
 import { buildBodyTree, importTrees } from "../ui/browserTree";
 import { referencedGeometry } from "../document/versions";
+import { hashShapedStrings } from "../document/geometryRefs";
 import { UnreadableDocumentError } from "../document/documentShape";
 import { noteRecent } from "./recentFiles";
 import { closeHome } from "../ui/home";
@@ -28,7 +29,7 @@ import {
   asHex, materialsForColors, nodeColors, parseLibrary, serializeLibrary,
 } from "../document/materials";
 import { importedBodyColors } from "../document/faceColors";
-import { missingPluginMessage, missingPlugins } from "../document/missingPlugins";
+import { openNotices } from "../document/openNotice";
 import type { FaceColorRuns } from "../types";
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;
@@ -58,11 +59,16 @@ async function writeContainer(store: DocumentStore, path: string): Promise<strin
   const picture = captureThumbnail();
   const { invoke } = await import("@tauri-apps/api/core");
   try {
+    const doc = store.toObject();
+    const hashes = referencedHashes(store);
+    const optionalHashes = [...hashShapedStrings(doc)].filter((h) => !hashes.includes(h));
     await invoke("container_save", {
       path,
-      documentJson: store.toJSON(),
-      hashes: referencedHashes(store),
+      documentJson: JSON.stringify(doc, null, 2),
+      hashes,
+      optionalHashes,
       meshKeys: [],
+      carried: store.carriedSections,
     });
     void storeThumbnail(path, picture);
     return null;
@@ -175,7 +181,7 @@ export async function openDocumentText(store: DocumentStore, name: string, text:
   // No real path, but the name is enough for the title bar to show what is
   // open and drop the unsaved marker, same as a Tauri Open does.
   store.markSaved(name);
-  await warnAboutMissingPlugins(store);
+  await warnAboutOpen(store);
   return "ok";
 }
 
@@ -187,11 +193,13 @@ export async function openDocumentBytes(store: DocumentStore, file: File, geomet
   const { invoke } = await import("@tauri-apps/api/core");
   let opened: OpenedDocument;
   try {
-    const r = await invoke<{ document: string; repairedShards: number; usedBackupIndex: boolean; wasContainer: boolean }>(
-      "container_open_bytes",
-      new Uint8Array(await file.arrayBuffer()),
-    );
-    opened = { text: r.document, wasContainer: r.wasContainer, repaired: r.repairedShards > 0 || r.usedBackupIndex };
+    const r = await invoke<RustOpened & { wasContainer: boolean }>("container_open_bytes", new Uint8Array(await file.arrayBuffer()));
+    opened = {
+      text: r.document,
+      wasContainer: r.wasContainer,
+      repaired: r.repairedShards > 0 || r.usedBackupIndex,
+      carried: r.carried ?? [],
+    };
   } catch (e) {
     await reportError(`Couldn't open ${file.name}: ${errMsg(e)}`);
     return "unreadable";
@@ -268,7 +276,8 @@ async function migrateInlineGeometry(text: string, geometry: GeometryBackend): P
  *  PREVIOUS document's path. That is harmless here only because geometry is
  *  resolved by content hash out of the blob store, which needs no path at all.
  *  Do not add anything to the rebuild path that depends on `store.filePath`. */
-/** Tell the person, once, that this document uses a plugin they do not have.
+/** Tell the person, once, that this document uses a plugin they do not have, or
+ *  holds features this version does not know (document/openNotice.ts).
  *
  *  WHY A TOAST AND NOT A REFUSAL. The document is fine. Every value is in it,
  *  the save path writes them back untouched, and the features that do not need
@@ -276,18 +285,20 @@ async function migrateInlineGeometry(text: string, geometry: GeometryBackend): P
  *  turns one kind of feature into geometry, so the honest report is a heads-up
  *  with the plugin's name in it, not a dialog in the way of a file that opens.
  *
- *  Once per open, at the document level, rather than per feature. The build
- *  already turns each affected row red with the same explanation (see
- *  the Python engine's `plugin_geometry.py`), and thirty red rows do not tell you what to
- *  install any better than one sentence does.
+ *  Once per open, at the document level, rather than per feature. Thirty rows
+ *  in History do not tell you what to install any better than one sentence does.
  *
  *  Longer than the default timeout on purpose: this one has an instruction in
  *  it, and a notice you are meant to ACT on has to outlast the glance. */
-async function warnAboutMissingPlugins(store: DocumentStore) {
-  const missing = missingPlugins(store.document);
-  if (!missing.length) return;
-  const { toast } = await import("../ui/toast");
-  for (const m of missing) toast(missingPluginMessage(m), { kind: "info", timeout: 12000 });
+async function warnAboutOpen(store: DocumentStore) {
+  const notices = openNotices(store.document, store.openedVersion);
+  if (!notices.length) return;
+  const { dismissToast, toast } = await import("../ui/toast");
+  const ids = notices.map((n) => toast(n.message, { kind: n.kind, timeout: 12000, ...(n.detail ? { detail: n.detail } : {}) }));
+  const off = store.onOpen(() => {
+    off();
+    for (const id of ids) if (id !== null) dismissToast(id);
+  });
 }
 
 export async function openDocumentAtPath(
@@ -302,11 +313,8 @@ export async function openDocumentAtPath(
     const wasContainer = await invoke<boolean>("container_is_container", { path });
     // JSON goes through Rust too: it carries embedded geometry that has to reach
     // the blob store before the first rebuild asks for it.
-    const r = await invoke<{ document: string; repairedShards: number; usedBackupIndex: boolean }>(
-      "container_open_checked",
-      { path },
-    );
-    opened = { text: r.document, wasContainer, repaired: r.repairedShards > 0 || r.usedBackupIndex };
+    const r = await invoke<RustOpened>("container_open_checked", { path });
+    opened = { text: r.document, wasContainer, repaired: r.repairedShards > 0 || r.usedBackupIndex, carried: r.carried ?? [] };
   } catch (e) {
     // Rust's container errors are already user-facing sentences (a newer
     // container format, a damaged archive, geometry that does not match its
@@ -317,17 +325,25 @@ export async function openDocumentAtPath(
   return finishOpen(store, base, opened, geometry, path);
 }
 
+interface RustOpened {
+  document: string;
+  repairedShards: number;
+  usedBackupIndex: boolean;
+  carried?: CarriedSection[];
+}
+
 interface OpenedDocument {
   text: string;
   wasContainer: boolean;
   repaired: boolean;
+  carried: CarriedSection[];
 }
 
 /** Load a document Rust has read. `path` is null for one dropped as bytes. */
 async function finishOpen(
   store: DocumentStore,
   base: string,
-  { text, wasContainer, repaired }: OpenedDocument,
+  { text, wasContainer, repaired, carried }: OpenedDocument,
   geometry: GeometryBackend | undefined,
   path: string | null,
 ): Promise<OpenOutcome> {
@@ -353,6 +369,7 @@ async function finishOpen(
     await reportUnreadable(e);
     return "unreadable";
   }
+  store.carriedSections = carried;
   // freshly opened == clean
   if (path) {
     store.markSaved(path);
@@ -362,7 +379,7 @@ async function finishOpen(
   // notice is about what this build can do with the file, never about the file
   // having been changed, and a freshly-opened document marked dirty would offer
   // to save over the original on the way out.
-  await warnAboutMissingPlugins(store);
+  await warnAboutOpen(store);
   if (path) noteRecent(path);
   if (geometry) void import("./fundaLinks").then((m) => m.checkLinks(store, geometry));
   if (repaired) {

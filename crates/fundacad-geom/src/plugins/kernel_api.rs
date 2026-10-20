@@ -501,7 +501,7 @@ pub fn export_with(
     let doc = req.get("document").ok_or("exportWith: a request needs a document")?;
     super::exporter_declared(exporter)?;
     let typed: fundacad_core::CadDocument =
-        serde_json::from_value(doc.clone()).map_err(|e| format!("the document does not parse: {e}"))?;
+        fundacad_core::CadDocument::from_value_lenient(doc).map_err(|e| format!("the document does not parse: {e}"))?;
     let r = builder::rebuild(&typed, doc, watch).map_err(|_| "cancelled".to_string())?;
     if r.bodies.is_empty() {
         return Err(r

@@ -34,7 +34,7 @@ pub fn rebuild_request(req: &Map<String, Value>, watch: &dyn Watch) -> Result<(V
     let Some(doc) = req.get("document") else {
         return Err(error_result("'document'"));
     };
-    let typed: CadDocument = serde_json::from_value(doc.clone())
+    let typed: CadDocument = CadDocument::from_value_lenient(doc)
         .map_err(|e| error_result(&format!("the document does not parse: {e}")))?;
     // Through the rebuild's own cache: an inspect right after a build of the
     // same document replays nothing, where a cold rebuild of an import is

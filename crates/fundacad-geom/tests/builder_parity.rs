@@ -31,6 +31,13 @@ fn check_case(name: &str, case: &Value) -> Vec<String> {
     if &Value::Array(errors.clone()) != &expect["errors"] {
         bad.push(format!("{name}: errors {errors:?} != {}", expect["errors"]));
     }
+    // The Python engine had no skip, its unknown type was an error; the cases
+    // that had one name the skip here instead, with the same bodies.
+    let skipped: Vec<Value> = r.skipped.iter().map(|s| s.wire()).collect();
+    let want_skipped = expect.get("skipped").cloned().unwrap_or(Value::Array(Vec::new()));
+    if Value::Array(skipped.clone()) != want_skipped {
+        bad.push(format!("{name}: skipped {skipped:?} != {want_skipped}"));
+    }
 
     let want = expect["bodies"].as_array().cloned().unwrap_or_default();
     if want.len() != r.bodies.len() {

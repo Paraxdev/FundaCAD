@@ -1,0 +1,45 @@
+{
+  "parameters": {
+    "thickness": 5
+  },
+  "features": [
+    {
+      "id": "f1",
+      "type": "sketch",
+      "plane": "XY",
+      "entities": [
+        {
+          "type": "polygon",
+          "id": "e1",
+          "x": 0,
+          "y": 0,
+          "radius": 10,
+          "sides": 6,
+          "angle": 1.5707963267948966
+        },
+        {
+          "type": "line",
+          "id": "e2",
+          "x1": 20,
+          "y1": 0,
+          "x2": 30,
+          "y2": 0
+        }
+      ],
+      "constraints": [
+        {
+          "type": "distance",
+          "line": "e2",
+          "value": 10
+        }
+      ]
+    },
+    {
+      "id": "f2",
+      "type": "extrude",
+      "sketch": "f1",
+      "distance": "thickness",
+      "operation": "new"
+    }
+  ]
+}

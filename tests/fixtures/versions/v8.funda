@@ -1,0 +1,69 @@
+{
+  "version": 8,
+  "parameters": {},
+  "features": [
+    {
+      "id": "b1",
+      "type": "box",
+      "length": 10,
+      "width": 10,
+      "height": 10
+    },
+    {
+      "id": "b2",
+      "type": "box",
+      "length": 4,
+      "width": 4,
+      "height": 20
+    },
+    {
+      "id": "c1",
+      "type": "combine",
+      "operation": "cut",
+      "target": "body1",
+      "tools": [
+        "body2"
+      ],
+      "keepTools": true
+    },
+    {
+      "id": "f3",
+      "type": "sketch",
+      "plane": "XY",
+      "entities": [
+        {
+          "type": "rectangle",
+          "id": "r1",
+          "width": 10,
+          "height": 20,
+          "x": 45,
+          "y": 0
+        }
+      ]
+    },
+    {
+      "id": "f4",
+      "type": "revolve",
+      "sketch": "f3",
+      "axis": "Z",
+      "angle": 360,
+      "operation": "new",
+      "axisEdge": {
+        "kind": "edge",
+        "by": "nearest",
+        "point": [
+          5,
+          5,
+          10
+        ]
+      },
+      "regions": [
+        [
+          45,
+          0,
+          0
+        ]
+      ]
+    }
+  ]
+}

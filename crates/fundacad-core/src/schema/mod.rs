@@ -184,6 +184,10 @@ open_enum! {
     pub enum ImportColorSource { Bodies = "bodies", Faces = "faces" }
 }
 
+/// The document `version` this build writes, `FORMAT_VERSION` in
+/// src/document/migrate.ts (tests/registry.rs keeps the two equal).
+pub const DOCUMENT_VERSION: u32 = 10;
+
 type Side<T> = Option<IndexMap<String, T>>;
 
 plain_struct!(
@@ -228,6 +232,38 @@ impl CadDocument {
 
     pub fn to_json(&self) -> serde_json::Result<String> {
         serde_json::to_string(self)
+    }
+
+    /// The document as typed as it can be: each top level key that does not fit
+    /// (a newer `materials` row, a `versions` repo of another shape) is left out
+    /// with an stderr line rather than refusing the whole document, and a
+    /// `parameters` map keeps its numeric entries. A build reads `parameters`,
+    /// `features` and a few maps, none of which such a key changes.
+    pub fn from_value_lenient(v: &serde_json::Value) -> serde_json::Result<Self> {
+        let whole = serde_json::from_value::<Self>(v.clone());
+        let (Err(_), serde_json::Value::Object(m)) = (&whole, v) else {
+            return whole;
+        };
+        let fits = |key: &str, value: &serde_json::Value| {
+            let mut probe = serde_json::Map::new();
+            probe.insert("features".into(), serde_json::Value::Array(Vec::new()));
+            probe.insert(key.to_owned(), value.clone());
+            serde_json::from_value::<Self>(serde_json::Value::Object(probe)).is_ok()
+        };
+        let mut kept = serde_json::Map::new();
+        for (key, value) in m {
+            if fits(key, value) {
+                kept.insert(key.clone(), value.clone());
+            } else if let (true, serde_json::Value::Object(params)) = (key == "parameters", value) {
+                let numbers: serde_json::Map<_, _> =
+                    params.iter().filter(|(_, x)| x.is_number()).map(|(k, x)| (k.clone(), x.clone())).collect();
+                eprintln!("document: kept {} of {} parameters, the rest are not numbers", numbers.len(), params.len());
+                kept.insert(key.clone(), serde_json::Value::Object(numbers));
+            } else {
+                eprintln!("document: left out `{key}`, this build cannot read it");
+            }
+        }
+        serde_json::from_value::<Self>(serde_json::Value::Object(kept)).or(whole)
     }
 
     /// The parameter value a legacy bare name in a `Num` field resolves to.

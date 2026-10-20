@@ -45,6 +45,16 @@ fn documents() -> Vec<(String, Value)> {
     }
     let funda = "tests/fixtures/textured_box.funda";
     out.push((funda.to_owned(), read(&repo().join(funda))));
+    let versions = repo().join("tests/fixtures/versions");
+    let mut found = 0;
+    for entry in std::fs::read_dir(&versions).expect("the version fixtures") {
+        let path = entry.expect("an entry").path();
+        if path.extension().is_some_and(|e| e == "funda") {
+            out.push((path.display().to_string(), read(&path)));
+            found += 1;
+        }
+    }
+    assert_eq!(found, 10, "one fixture per document version");
     out
 }
 
@@ -568,4 +578,18 @@ fn horizontal_and_vertical_distances_land_typed_and_keep_their_fields() {
     };
     assert_eq!(v.value.get(), -4.0);
     assert_eq!(serde_json::to_value(&doc).expect("save"), doc_json);
+}
+
+#[test]
+fn a_file_from_a_newer_version_lands_what_it_knows_and_carries_the_rest() {
+    let v = read(&repo().join("tests/fixtures/future/v99.funda"));
+    let doc = CadDocument::from_json(&v.to_string()).expect("load");
+    assert!(matches!(doc.feature("w1"), Some(Feature::Unknown(_))));
+    let Some(Feature::Extrude(e)) = doc.feature("e1") else {
+        panic!("e1 is an extrude")
+    };
+    assert_eq!(e.extra.get("futureFlag"), Some(&Value::Bool(true)));
+    assert_eq!(doc.extra.get("futureKey"), Some(&v["futureKey"]));
+    let saved: Value = serde_json::from_str(&doc.to_json().expect("save")).expect("json");
+    assert_eq!(saved, v);
 }

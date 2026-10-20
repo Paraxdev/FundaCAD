@@ -303,3 +303,27 @@ fn a_local_blob_that_no_longer_matches_its_hash_is_not_embedded() {
     let fetched = std::collections::HashMap::from([(d.clone(), data)]);
     assert_eq!(docfile::write_with(&path, &doc(&d), Some(&store), &fetched).unwrap(), 1);
 }
+
+#[test]
+fn geometry_only_a_feature_this_version_does_not_know_names_is_kept() {
+    let tmp = tempfile::tempdir().unwrap();
+    let data = geometry();
+    let d = digest(&data);
+    let absent = "0123456789abcdef0123456789abcdef";
+    let store = tmp.path().join("blobs");
+    std::fs::create_dir_all(&store).unwrap();
+    std::fs::write(store.join(format!("{d}.bbrep")), &data).unwrap();
+    let future = json!({"version": 99, "features": [
+        {"id": "w1", "type": "futureWidget", "blob": d, "params": {"also": absent}}
+    ]})
+    .as_object()
+    .unwrap()
+    .clone();
+    let path = tmp.path().join("future.funda");
+    assert_eq!(docfile::write(&path, &future, Some(&store)).unwrap(), 1, "the absent one is skipped, not refused");
+
+    let fresh = tmp.path().join("fresh");
+    let (back, n) = docfile::read(&path, Some(&fresh)).unwrap();
+    assert_eq!((back, n), (future, 1));
+    assert_eq!(std::fs::read(fresh.join(format!("{d}.bbrep"))).unwrap(), data);
+}

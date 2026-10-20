@@ -52,6 +52,19 @@ fn one_unread_field_reads_in_the_singular() {
 }
 
 #[test]
+fn a_kind_that_starts_with_a_vowel_reads_an() {
+    let r = rebuild(&json!({"features": [
+        {"id": "s1", "type": "sketch", "plane": "XY",
+         "entities": [{"type": "rectangle", "width": 10, "height": 10, "x": 0, "y": 0}]},
+        {"id": "e1", "type": "extrude", "sketch": "s1", "distance": 5, "operation": "new", "futureFlag": true},
+    ]}));
+    assert_eq!(
+        unread(&r),
+        vec![("e1".to_owned(), "an extrude has no field \"futureFlag\", the build ignores it".to_owned())]
+    );
+}
+
+#[test]
 fn a_name_an_inactive_feature_and_a_plugin_feature_say_nothing() {
     let r = rebuild(&json!({"features": [
         {"id": "b1", "type": "box", "length": 10, "width": 10, "height": 10, "name": "Base"},

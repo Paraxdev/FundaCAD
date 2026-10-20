@@ -193,4 +193,12 @@ describe("RebuildAssembly, incremental", () => {
     const again = RebuildAssembly.begin(withDiag, manifestFromBodies(stubs), cache, prev, first.assembly.sig);
     expect(again.kind).toBe("stream"); // a fresh object, so setModel re-runs
   });
+
+  it("carries the features the build left out to the result", () => {
+    const skippedFeatures = [{ feature_id: "w1", type: "futureWidget", message: "unknown feature type: futureWidget" }];
+    const b = RebuildAssembly.begin({ ...HEAD, skippedFeatures }, manifestFromBodies([A]), new Map(), null, null);
+    if (b.kind !== "stream") throw new Error("expected stream");
+    expect(b.assembly.writeBody(A)).toBe(true);
+    expect(b.assembly.complete()!.skippedFeatures).toEqual(skippedFeatures);
+  });
 });
