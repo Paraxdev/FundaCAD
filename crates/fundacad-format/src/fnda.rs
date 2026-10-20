@@ -246,13 +246,14 @@ impl<'a> RawFeed<'a> {
 }
 
 /// A section of at least two segments is compressed in segments, on all
-/// threads, and described by a row of the segment index.
+/// threads, and described by a row of the segment index. The info and the
+/// document stay one stream: every reader decodes them in one pass.
 fn write_section<W: Write + Seek>(out: &mut W, spec: &SectionSpec, o: &WriteOptions) -> Result<(Entry, Option<segments::Row>), String> {
     let mut hasher = Blake2b128::new();
     let mut feed = RawFeed::open(&spec.source)?;
     let total = feed.len();
     let seg = o.segment_raw.max(1024);
-    let segmented = total >= 2 * seg as u64;
+    let segmented = spec.kind > KIND_DOCUMENT && total >= 2 * seg as u64;
     let mut segs: Vec<segments::Segment> = Vec::new();
     let mut raw_len = 0u64;
     let mut buf = Vec::new();
@@ -1305,6 +1306,20 @@ mod tests {
         read_file(&path, &blobs, None, None).unwrap();
         assert_eq!(std::fs::read(blobs.join(format!("{hash}.bbrep"))).unwrap(), geometry);
         assert_eq!(verify(&path).unwrap(), RepairReport::default());
+    }
+
+    #[test]
+    fn the_info_and_the_document_stay_one_stream_however_big() {
+        let dir = tmpdir("bigdoc");
+        let long = String::from_utf8(big_blob(3 * SEG)).unwrap();
+        let info = json_to_cbor(&format!(r#"{{"note":"{long}"}}"#)).unwrap();
+        let cbor = json_to_cbor(&format!(r#"{{"features":[],"note":"{long}"}}"#)).unwrap();
+        let path = dir.join("doc.fundab");
+        let none = BTreeMap::new();
+        write_with(&mut File::create(&path).unwrap(), &document_sections(&info, &cbor, &none, &none, &[]), &opts(4)).unwrap();
+        assert!(index_of(&path).iter().all(|e| e.kind != KIND_SEGMENTS));
+        let opened = read_file(&path, &dir.join("blobs"), None, None).unwrap();
+        assert!(opened.document_json.contains(&long));
     }
 
     #[test]

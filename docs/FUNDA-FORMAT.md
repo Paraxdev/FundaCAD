@@ -174,8 +174,9 @@ A section occupies `groups * (k + m) * shard_size + 4 * groups * (k + m)` bytes.
 
 ## Segmented sections
 
-A deflate section of at least two segments (FundaCAD: 2 MiB raw) is compressed in
-segments, so a writer and a reader can work on all cores. Nothing in its entry,
+A geometry, mesh or carried deflate section of at least two segments (FundaCAD:
+2 MiB raw) is compressed in segments, so a writer and a reader can work on all
+cores. The info and the document stay one stream, however big. Nothing in its entry,
 shards, parity or CRC table changes; only the stored bytes are produced
 differently:
 
