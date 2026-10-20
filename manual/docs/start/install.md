@@ -1,6 +1,6 @@
 # Install
 
-Pick the file for your system on the [stable release page](https://github.com/Paraxdev/fundacad/releases/latest). There is no account, and the builds are not code signed, so each system warns you once.
+Pick the file for your system on the [beta page](https://github.com/Paraxdev/fundacad/releases/tag/beta). There is no account, and the builds are not code signed, so each system warns you once.
 
 <!-- shot: install-warning | Windows protect screen with Run anyway -->
 
@@ -21,8 +21,10 @@ flatpak run dev.fundacad.app
 
 On Ubuntu 22.04 or Debian 12 and newer you can use `sudo apt install ./FundaCAD-linux-x86_64.deb` instead.
 
-## Stable or beta
+## Beta or development build
 
-The stable release is the one to use for real work. The [beta](https://github.com/Paraxdev/fundacad/releases/tag/beta) is the preview: it is rebuilt every time something changes, so you get new features first, and sometimes a bug that the stable release does not have. The file names are the same on both pages.
+The beta is the one for most people. It is somewhat stable, because a change only reaches it once it has passed every test.
 
-When a stable install updates itself, it moves to the next stable release, and a beta install to the next beta. To switch, install the file from the other page. Going from stable back to the beta can need an uninstall first, because the beta's version number is lower.
+The [development build](https://github.com/Paraxdev/fundacad/releases/tag/development) has every change the day it lands. Take it if you want the newest features and can live with a build that is sometimes broken. The file names are the same on both pages.
+
+A beta install updates itself to the next beta, and a development install to the next development build. To switch, install the file from the other page. If the other build has a lower version number, you may need to uninstall first.

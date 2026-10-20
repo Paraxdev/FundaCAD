@@ -14,8 +14,8 @@ engine compiled in:
 
 CI: [`.github/workflows/build.yml`](../.github/workflows/build.yml) builds
 Linux x86_64, macOS arm64 and Windows x64, publishes the rolling `beta`
-release from `dev` and a stable release from a `v1.<minor>.<patch>` tag on
-`main` (docs/ENGINE.md section 7). The sidecar build on the `legacy`
+release from `main` and the rolling `development` build from `dev`
+(docs/ENGINE.md section 7). The sidecar build on the `legacy`
 branch is retired and publishes nothing.
 
 ## Building a bundle
