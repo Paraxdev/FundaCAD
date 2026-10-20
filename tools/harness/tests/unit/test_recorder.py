@@ -145,3 +145,19 @@ def test_session_options_that_matter_are_kept_and_literals_read_back():
     assert "    pass" in r.source()
     for v in ["a \"quoted\" …", (1.5, -2), [1, "Ctrl"], None, True, 3]:
         assert eval(literal(v)) == v
+
+
+def test_a_walk_called_by_keywords_records_the_same_as_by_position(tmp_path):
+    out = tmp_path / "walk.py"
+    s = stub_session(out)
+    s.tool(label="Extrude")
+    s.type(target="D", text="7", enter=True)
+    s.context_menu(on="Extrude 1", item="Delete")
+    s.open_file(path=str(REPO / "tools/harness/fixtures/plate.json"))
+    s.close()
+    assert out.read_text(encoding="utf-8").splitlines()[4:] == [
+        '    s.tool("Extrude")  # pick:extrude',
+        '    s.type("field:distance", "7", enter=True)  # "Distance"',
+        '    s.context_menu("feature:e1", "ctx:Delete")  # "Extrude 1", "Delete"',
+        '    s.open_file("tools/harness/fixtures/plate.json")',
+    ]
