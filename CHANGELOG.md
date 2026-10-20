@@ -25,6 +25,12 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **A feature this version does not know no longer fails the build.** A file
+  from a newer FundaCAD can hold a feature type this build has never heard of.
+  It is now left out of the build and listed as skipped instead of raised as a
+  failure, and the features after it build on what exists. MCP `build` names it
+  as `SKIPPED`.
+
 - **Mechanisms.** A `mechanism` feature joins bodies with revolute, slider and
   rigid joints, closed loops included, and poses them all at once: the ground
   stays put, one joint is driven to an `angle` or `offset`, and every other

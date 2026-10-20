@@ -113,7 +113,8 @@ Reply `result` is one of:
     "datumMarks": { "<datum id>": { "origin": [..], /* ... */ } },   // optional, see below
     "projectionUpdates": [ /* the lenient sibling of projectGeometry; see below */ ],  // optional
     "featureError": { "message": "...", "feature_id": "...", "code": "..." },   // optional
-    "featureErrors": [ { "message": "...", "feature_id": "...", "code": "..." }, ... ]  // optional
+    "featureErrors": [ { "message": "...", "feature_id": "...", "code": "..." }, ... ],  // optional
+    "skippedFeatures": [ { "feature_id": "...", "type": "...", "message": "unknown feature type: ..." } ]  // optional
   }
   ```
 
@@ -143,6 +144,15 @@ Reply `result` is one of:
   were recorded as no-ops; the geometry that *did* build is still returned (a failing
   feature never blanks the whole model). `featureError` is the most-downstream failure,
   for a single-line banner; `featureErrors` carries all of them.
+
+  `skippedFeatures` lists the features whose type neither the engine nor a plugin on
+  disk knows, typically from a file a newer FundaCAD wrote. They are left out of the
+  build without being an error: the reply is a successful one, with or without bodies,
+  and the features after them build on what exists. It is present whenever the list is
+  not empty. A feature of a type a plugin declares but cannot run is an error instead,
+  since the user can fix that. An error on a feature that names a skipped one, or a body
+  only a skipped one made, ends with `(<id> was skipped, this version does not know its
+  type)`.
 
   `diagnostics` is omitted when empty, but when present it is **complete for the whole
   document**, an incrementally-resumed rebuild replays the diagnostics of its cached

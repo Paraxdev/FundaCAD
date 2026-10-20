@@ -692,6 +692,25 @@ pub struct Rebuild {
     pub body_ids: IndexMap<String, String>,
     /// `projectionUpdates`, only the entries a refresh found a real change for.
     pub projection_updates: Vec<Value>,
+    /// Features of a type no built in handler and no plugin on disk knows, left
+    /// out of the build and kept in the document.
+    pub skipped: Vec<Skipped>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Skipped {
+    pub feature_id: String,
+    pub type_name: String,
+}
+
+impl Skipped {
+    pub fn message(&self) -> String {
+        format!("unknown feature type: {}", self.type_name)
+    }
+
+    pub fn wire(&self) -> Value {
+        json!({ "feature_id": self.feature_id, "type": self.type_name, "message": self.message() })
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1197,6 +1216,7 @@ pub fn rebuild_from(
         }
     }
 
+    let mut skipped_here: HashSet<usize> = HashSet::new();
     let mut inactive: Vec<String> = Vec::new();
     for f in &features {
         if let Ok(true) = is_inactive(&ctx, f.active_when()) {
@@ -1261,9 +1281,12 @@ pub fn rebuild_from(
         }
         let label = label_of(rawf);
         let detail = || Some(failure_detail(&ctx, i, type_name, began.elapsed()));
-        let ran = !matches!(outcome, Ok(Ran::Inactive));
+        let ran = !matches!(outcome, Ok(Ran::Inactive | Ran::Skipped));
         match outcome {
             Ok(Ran::Inactive) => {}
+            Ok(Ran::Skipped) => {
+                skipped_here.insert(i);
+            }
             Ok(Ran::Built) => {
                 if let Some(name) = naming {
                     name_new_bodies(&mut ctx, &pre_ids, id_mark, name);
@@ -1358,6 +1381,11 @@ pub fn rebuild_from(
         }
     }
 
+    let skipped = skipped_features(&features, start, &skipped_here, &inactive);
+    if !skipped.is_empty() {
+        name_skipped_causes(&mut errors, &raw_features, &recorded, &skipped);
+    }
+
     forward_references(&mut errors, &raw_features, &ctx.timeline);
 
     let body_ids = ctx.ids.resulting_map();
@@ -1390,12 +1418,82 @@ pub fn rebuild_from(
         tracked_faces: ctx.tracked_faces,
         body_ids,
         projection_updates: ctx.projections,
+        skipped,
     })
+}
+
+/// The loop saw the skips from `start` on; the ones before it come from a cache
+/// resume, which restores no record of them, so they are looked up again.
+fn skipped_features(
+    features: &[Feature],
+    start: usize,
+    skipped_here: &HashSet<usize>,
+    inactive: &[String],
+) -> Vec<Skipped> {
+    features
+        .iter()
+        .enumerate()
+        .filter(|(i, f)| {
+            let Feature::Unknown(_) = f else { return false };
+            if *i >= start {
+                return skipped_here.contains(i);
+            }
+            !inactive.iter().any(|x| x == f.id()) && !f.type_name().is_some_and(plugin_declares)
+        })
+        .map(|(_, f)| Skipped {
+            feature_id: f.id().to_owned(),
+            type_name: f.type_name().unwrap_or("").to_owned(),
+        })
+        .collect()
+}
+
+#[cfg(feature = "plugins")]
+fn plugin_declares(type_name: &str) -> bool {
+    crate::plugins::declares_feature(type_name)
+}
+
+#[cfg(not(feature = "plugins"))]
+fn plugin_declares(_: &str) -> bool {
+    false
+}
+
+/// An error on a feature that names a skipped one, or a body only a skipped one
+/// would have made, says so.
+fn name_skipped_causes(
+    errors: &mut [FeatureError],
+    raw_features: &[Value],
+    recorded: &Option<IndexMap<String, String>>,
+    skipped: &[Skipped],
+) {
+    let ids: Vec<String> = skipped.iter().map(|s| s.feature_id.clone()).collect();
+    let owned: Vec<(String, String)> = recorded
+        .iter()
+        .flatten()
+        .filter(|(key, _)| ids.iter().any(|i| i == strip_key_suffix(key)))
+        .map(|(key, body)| (body.clone(), strip_key_suffix(key).to_owned()))
+        .collect();
+    let bodies: Vec<String> = owned.iter().map(|(b, _)| b.clone()).collect();
+    let owner_of = |body: &str| owned.iter().find(|(b, _)| b == body).map(|(_, f)| f.clone());
+    for e in errors.iter_mut() {
+        let node = raw_features
+            .iter()
+            .find(|r| r.get("id").and_then(Value::as_str) == e.feature_id.as_deref());
+        let cause = node
+            .and_then(|n| references_any(n, &ids).map(str::to_owned))
+            .or_else(|| node.and_then(|n| references_any(n, &bodies)).and_then(owner_of))
+            .or_else(|| recorded.as_ref().and_then(|r| switched_off_owner(&e.message, r, &ids)));
+        if let Some(cause) = cause {
+            e.message
+                .push_str(&format!(" ({cause} was skipped, this version does not know its type)"));
+        }
+    }
 }
 
 enum Ran {
     Built,
     Inactive,
+    /// A type nothing here knows: no error, the feature is listed as skipped.
+    Skipped,
 }
 
 fn run_feature(
@@ -1415,12 +1513,12 @@ fn run_feature(
         #[cfg(feature = "plugins")]
         Feature::Unknown(raw) => match crate::plugins::run_feature(ctx, t, raw, watch.cancel_token()) {
             Some(r) => r.map(|()| Ran::Built),
-            None => Err(Fail::msg(format!("unknown feature type: {t}"))),
+            None => Ok(Ran::Skipped),
         },
         #[cfg(not(feature = "plugins"))]
         Feature::Unknown(_) => {
-            let _ = watch;
-            Err(Fail::msg(format!("unknown feature type: {t}")))
+            let _ = (watch, t);
+            Ok(Ran::Skipped)
         }
         known => features::dispatch(ctx, known).map(|()| Ran::Built),
     }
@@ -1454,6 +1552,9 @@ pub fn result_fields(doc: &CadDocument, r: &Rebuild) -> Map<String, Value> {
     }
     if !r.tracked_faces.is_empty() {
         m.insert("trackedFaces".into(), json!(r.tracked_faces));
+    }
+    if !r.skipped.is_empty() {
+        m.insert("skippedFeatures".into(), Value::Array(r.skipped.iter().map(Skipped::wire).collect()));
     }
     if !r.bodies.is_empty() {
         if !r.diagnostics.is_empty() {
