@@ -174,6 +174,7 @@ class Actions:
         """Starts a rail tool by its label, opening its family first when it is folded inside one."""
         steps = self.bridge.call("toolPath", label=label)["steps"]
         before = self.bridge.call("status", since=self._mark)
+        dialog = len(self.bridge.call("screen", region="dialog")["lines"])
         hit = None
         for i, s in enumerate(steps):
             hit = self._click_control(s["ref"], s["button"])
@@ -186,6 +187,10 @@ class Actions:
         asks = after.get("prompt") and after["prompt"] != before.get("prompt")
         if after.get("tool") or after["mode"] != before["mode"] or asks:
             return f'started {hit["ref"]} "{hit["label"]}"', hit
+        shown = self.bridge.call("screen", region="dialog")["lines"]
+        if len(shown) > dialog:
+            names = ", ".join(r[3] for r in shown if r[1].startswith("choice:")) or ", ".join(r[3] for r in shown[:8])
+            return f'clicked {hit["ref"]} "{hit["label"]}", it asks for a choice: {names}', hit
         return f'clicked {hit["ref"]} "{hit["label"]}", no tool, mode or prompt changed after it', hit
 
     @action
