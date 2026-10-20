@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use crate::bloom::{self, Bloom, Chain};
 
-use super::{bytes, FrameKey, Held, Tracer};
+use super::{bytes, Estimator, FrameKey, Held, Tracer, MAX_LIGHTS};
 
 /// What one dispatch aims for, short enough that the compositor and
 /// the WebGPU viewport keep their frames, long enough to amortise a submit.
@@ -23,6 +23,15 @@ pub fn adapt_rows(rows: u32, width: u32, height: u32, took: Duration, target: Du
 
 pub const MIN_BAND_PATHS: u32 = 65_536;
 
+/// U in trace.wgsl: 8 words, 7 vec4s, 4 lights of 2 vec4s, the light count
+/// and the background.
+pub(super) const UNIFORM_SIZE: u64 = 32 + 7 * 16 + 8 * 16 + 2 * 16;
+
+/// What a light is picked by, its share of the lights' luminance.
+fn power(c: [f32; 3]) -> f32 {
+    bloom::luma(c).max(0.0)
+}
+
 impl Tracer {
     fn write_uniform(&self, rows: u32) {
         let c = &self.camera;
@@ -38,8 +47,14 @@ impl Tracer {
         let th = (c.fov.to_radians() * 0.5).tan();
         let aspect = self.w as f32 / self.h as f32;
         let l = &self.look;
-        let sun_on = (l.sun_dir.iter().any(|x| *x != 0.0) && l.sun_color.iter().any(|x| *x > 0.0)) as u32 as f32;
-        let ints = [self.w, self.h, self.sample, self.row0, rows, self.n_inst, l.bounces.max(1), (self.sample == 0) as u32];
+        let est = match self.estimator {
+            Estimator::Default => 0,
+            Estimator::Nee => 1,
+            Estimator::Bsdf => 2,
+            Estimator::Mis => 3,
+        };
+        let flags = (self.sample == 0) as u32 | est << 1;
+        let ints = [self.w, self.h, self.sample, self.row0, rows, self.n_inst, l.bounces.max(1), flags];
         let mut data: Vec<f32> = ints.map(f32::from_bits).to_vec();
         let v4 = |v: [f32; 3], w: f32| [v[0], v[1], v[2], w];
         for v in [
@@ -49,12 +64,29 @@ impl Tracer {
             v4(up.map(|x| x * th), 0.0),
             v4(l.sky_top, l.env_intensity),
             v4(l.sky_bottom, 0.0),
-            v4(norm(l.sun_dir), sun_on),
-            v4(l.sun_color, 0.0),
             [l.exposure, 0.0, 0.0, 0.0],
         ] {
             data.extend(v);
         }
+        let lights = l.light_list();
+        let lights = lights.as_slice();
+        let total: f32 = lights.iter().map(|x| power(x.color)).sum();
+        for k in 0..MAX_LIGHTS {
+            let Some(x) = lights.get(k) else {
+                data.extend([0.0; 8]);
+                continue;
+            };
+            // 1 - cos r from f64: cos of a 1 degree radius is 1 - 1.5e-4 and
+            // the cone's solid angle is 2 pi times that difference.
+            let r = (x.angular_radius.clamp(0.0, 90.0) as f64).to_radians();
+            let one_minus_cos = (2.0 * (r / 2.0).sin().powi(2)) as f32;
+            data.extend(v4(norm(x.direction), one_minus_cos));
+            data.extend(v4(x.color, power(x.color) / total.max(1e-20)));
+        }
+        let bg = l.background.unwrap_or([0.0; 3]);
+        data.extend([f32::from_bits(lights.len() as u32), 0.0, 0.0, 0.0]);
+        data.extend(v4(bg, l.background.is_some() as u32 as f32));
+        debug_assert_eq!(data.len() * 4, UNIFORM_SIZE as usize);
         self.queue.write_buffer(&self.uniform, 0, bytes(&data));
     }
 
@@ -171,12 +203,14 @@ impl Tracer {
         self.resolve_from(false)
     }
 
-    /// The threshold kept above the sky as the trace draws it, the background
-    /// times the brightness: the page raised it above the background alone,
-    /// so a brightness above 1 could bloom the whole sky.
+    /// The threshold kept above what camera misses draw: the background, or
+    /// else the sky times its intensity, so a bright sky never blooms whole.
     fn bloom_threshold(&self, b: &Bloom) -> f32 {
         let l = &self.look;
-        let sky = bloom::luma(l.sky_top).max(bloom::luma(l.sky_bottom)) * l.env_intensity;
+        let sky = match l.background {
+            Some(bg) => bloom::luma(bg),
+            None => bloom::luma(l.sky_top).max(bloom::luma(l.sky_bottom)) * l.env_intensity,
+        };
         b.threshold.max(sky + 0.05)
     }
 

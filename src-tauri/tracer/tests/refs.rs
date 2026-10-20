@@ -70,7 +70,7 @@ fn a_short_render_sits_near_each_reference_on_every_path() {
     }
 }
 
-/// Measured at 64 spp: 2.6 to 3.8 on the lit scenes, 34.4 on the emitter, which
+/// Measured at 64 spp: 1.5 to 2.9 on the lit scenes, 34.6 on the emitter, which
 /// only BSDF hits find until tracer-emissive-nee.
 fn limit(name: &str) -> f64 {
     if name == "emitter" {
