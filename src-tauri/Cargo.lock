@@ -1930,6 +1930,7 @@ dependencies = [
  "fundacad-geom",
  "fundacad-mcp",
  "fundacad-protocol",
+ "fundacad-spnav",
  "fundacad-tracer",
  "futures-executor",
  "getrandom 0.2.17",
@@ -2068,6 +2069,10 @@ dependencies = [
  "serde",
  "serde_json",
 ]
+
+[[package]]
+name = "fundacad-spnav"
+version = "0.1.0"
 
 [[package]]
 name = "fundacad-tracer"
