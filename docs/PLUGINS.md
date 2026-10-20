@@ -277,6 +277,8 @@ and a slot), `RenderSlider` (`label`, `value`, `min`, `max`, `step`, emits
 `update`), `RenderSwitch` (`label`, `value`, emits `update`) and `RenderChoices`
 (`label`, `value`, `options` of `{ id, label }`, emits `update`).
 
+Anything a plugin draws follows [DESIGN.md](DESIGN.md): use these components and the app's classes and tokens, never a background, blur or shadow of its own.
+
 A `materialPresets` entry is a `MaterialDef`. Picking one adds a plain copy to
 the document under a fresh id and name, as one undo step, so the file opens
 without the plugin. Each entry is normalised like a material read from a file,
