@@ -13,7 +13,7 @@ pub mod wire;
 
 pub use bloom::Bloom;
 pub use denoise::{Denoiser, Quality};
-pub use gpu::{Camera, Look, Path, Tracer, TracerOptions};
+pub use gpu::{choose, Camera, Candidate, Look, Path, Refusal, Tracer, TracerOptions};
 pub use material::{pack_material, tri_slots, GpuMaterial, Group, PageMaterial};
 pub use scene::{pack_inst, Accel, BodyDesc, Commit, GpuInst, Instance, Mesh, Scene};
 pub use wire::{decode_colors, decode_mesh};

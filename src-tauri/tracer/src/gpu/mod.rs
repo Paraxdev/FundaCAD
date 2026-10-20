@@ -1,4 +1,5 @@
 mod accel;
+mod adapter;
 mod bindings;
 mod frame;
 mod pipelines;
@@ -12,6 +13,7 @@ use crate::denoise::{self, Denoiser, Quality};
 use crate::scene::{BodyDesc, Commit, Mesh, Scene};
 
 use accel::{make_tlas, GpuAccel};
+pub use adapter::{choose, Candidate, Refusal};
 use pipelines::Pipelines;
 pub(crate) use pipelines::pipeline_at;
 use upload::Shading;
@@ -177,29 +179,14 @@ struct Job {
 
 
 impl Tracer {
-    pub fn new(opts: TracerOptions) -> Result<Tracer, String> {
+    pub fn new(opts: TracerOptions) -> Result<Tracer, Refusal> {
         let mut desc = wgpu::InstanceDescriptor::new_without_display_handle();
         desc.backends = opts.backends;
         let instance = wgpu::Instance::new(desc);
-        let adapters = futures_executor::block_on(instance.enumerate_adapters(opts.backends));
-        let rank = |b: wgpu::Backend| match b {
-            wgpu::Backend::Vulkan => 0u8,
-            wgpu::Backend::Dx12 => 1,
-            wgpu::Backend::Metal => 2,
-            _ => 3,
-        };
-        let adapter = adapters
-            .into_iter()
-            .min_by_key(|a| {
-                let i = a.get_info();
-                (rank(i.backend), u8::from(i.device_type != wgpu::DeviceType::DiscreteGpu))
-            })
-            .ok_or("no adapter")?;
-        // CI sets this for lavapipe; the refusal of CPU adapters lands in tracer-robustness.
-        let _allow_cpu = std::env::var_os("FUNDACAD_TRACER_ALLOW_CPU").is_some();
-        if adapter.limits().max_storage_buffers_per_shader_stage < bindings::STORAGE_FLOOR {
-            return Err(format!("{} binds too few storage buffers", adapter.get_info().name));
-        }
+        let mut adapters = futures_executor::block_on(instance.enumerate_adapters(opts.backends));
+        let allow_cpu = std::env::var_os("FUNDACAD_TRACER_ALLOW_CPU").is_some();
+        let found: Vec<Candidate> = adapters.iter().map(Candidate::of).collect();
+        let adapter = adapters.swap_remove(choose(&found, allow_cpu)?);
         let hw = !opts.software && adapter.features().contains(wgpu::Features::EXPERIMENTAL_RAY_QUERY);
         let info = adapter.get_info();
         // Default limits leave every acceleration structure limit at 0 and
@@ -216,7 +203,7 @@ impl Tracer {
             },
             ..Default::default()
         }))
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| Refusal::Device(e.to_string()))?;
         let path = if hw { Path::RayQuery } else { Path::Software };
         let fault = Arc::new(Mutex::new(Fault::default()));
         let f = fault.clone();

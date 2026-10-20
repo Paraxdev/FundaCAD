@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
 use fundacad_frames::{FrameSource, Reopen};
-use fundacad_tracer::{decode_colors, decode_mesh, denoise, Bloom, BodyDesc, Camera, Denoiser, Look, Path, Quality, Tracer, TracerOptions};
+use fundacad_tracer::{decode_colors, decode_mesh, denoise, Bloom, BodyDesc, Camera, Denoiser, Look, Path, Quality, Refusal, Tracer, TracerOptions};
 use serde::Serialize;
 use tauri::ipc::{InvokeBody, Request};
 
@@ -37,12 +37,17 @@ pub struct TracerSource(Mutex<State>);
 
 static TRACER: Reopen<TracerSource> = Reopen::new();
 
+/// Why the last attempt made no tracer, for pt_probe's class. Reopen keeps
+/// only the text.
+static REFUSED: Mutex<Option<Refusal>> = Mutex::new(None);
+
 /// FUNDACAD_TRACER=software keeps the BVH path on a ray query adapter, off
 /// leaves the test pattern, both for measuring. A fresh tracer starts with no
 /// fault, so a released one comes back clean.
 pub fn tracer() -> Result<Arc<TracerSource>, String> {
     TRACER.get(|| {
         let mode = std::env::var("FUNDACAD_TRACER").unwrap_or_default();
+        *REFUSED.lock().unwrap_or_else(|p| p.into_inner()) = None;
         if mode == "off" {
             return Err("the native tracer is off (FUNDACAD_TRACER=off)".into());
         }
@@ -51,7 +56,9 @@ pub fn tracer() -> Result<Arc<TracerSource>, String> {
             .map(|tracer| TracerSource(Mutex::new(State { tracer, fault: None })))
             .map_err(|e| {
                 eprintln!("[frames] no native tracer: {e}");
-                e.to_string()
+                let text = e.to_string();
+                *REFUSED.lock().unwrap_or_else(|p| p.into_inner()) = Some(e);
+                text
             })
     })
 }
@@ -247,6 +254,25 @@ pub struct Probe {
     /// Which one: Open Image Denoise when installed, else the filter.
     denoiser: Option<Denoiser>,
     reason: Option<String>,
+    /// noadapter, cpu, limits or selfcheck: which greying reason the page shows.
+    class: Option<&'static str>,
+    /// What the refused adapter binds, for the limits class.
+    storage_buffers: Option<u32>,
+}
+
+impl Probe {
+    fn refused(reason: String, why: Option<&Refusal>) -> Probe {
+        Probe {
+            available: false,
+            path: None,
+            adapter: None,
+            denoise: false,
+            denoiser: None,
+            reason: Some(reason),
+            class: why.and_then(Refusal::class),
+            storage_buffers: why.and_then(Refusal::storage_buffers),
+        }
+    }
 }
 
 fn path_id(p: Path) -> &'static str {
@@ -266,9 +292,18 @@ pub async fn pt_probe() -> Probe {
         let probe = match tracer() {
             Ok(t) => {
                 let s = t.lock();
-                Probe { available: true, path: Some(path_id(s.tracer.path())), adapter: Some(s.tracer.adapter().to_string()), denoise: true, denoiser: Some(denoise::active()), reason: None }
+                Probe {
+                    available: true,
+                    path: Some(path_id(s.tracer.path())),
+                    adapter: Some(s.tracer.adapter().to_string()),
+                    denoise: true,
+                    denoiser: Some(denoise::active()),
+                    reason: None,
+                    class: None,
+                    storage_buffers: None,
+                }
             }
-            Err(e) => Probe { available: false, path: None, adapter: None, denoise: false, denoiser: None, reason: Some(e) },
+            Err(e) => Probe::refused(e, REFUSED.lock().unwrap_or_else(|p| p.into_inner()).as_ref()),
         };
         if !was_open {
             TRACER.release();
@@ -276,5 +311,5 @@ pub async fn pt_probe() -> Probe {
         probe
     })
     .await
-    .unwrap_or_else(|e| Probe { available: false, path: None, adapter: None, denoise: false, denoiser: None, reason: Some(e.to_string()) })
+    .unwrap_or_else(|e| Probe::refused(e.to_string(), None))
 }
