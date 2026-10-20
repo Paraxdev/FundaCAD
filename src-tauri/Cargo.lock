@@ -2076,6 +2076,7 @@ dependencies = [
  "flate2",
  "futures-executor",
  "libloading 0.8.9",
+ "naga",
  "png 0.17.16",
  "serde",
  "serde_json",

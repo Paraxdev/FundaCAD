@@ -1,0 +1,565 @@
+mod accel;
+mod bindings;
+mod frame;
+mod pipelines;
+mod upload;
+
+use std::collections::HashMap;
+use std::sync::mpsc;
+
+use crate::bloom::{Bloom, Chain};
+use crate::denoise::{self, Denoiser, Quality};
+use crate::scene::{BodyDesc, Commit, Mesh, Scene};
+
+use accel::{make_tlas, GpuAccel};
+use pipelines::Pipelines;
+pub(crate) use pipelines::pipeline_at;
+use upload::Shading;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Path {
+    RayQuery,
+    Software,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct TracerOptions {
+    pub backends: wgpu::Backends,
+    /// Never take ray queries even when the adapter has them.
+    pub software: bool,
+}
+
+impl Default for TracerOptions {
+    fn default() -> Self {
+        TracerOptions {
+            backends: wgpu::Backends::VULKAN | wgpu::Backends::DX12 | wgpu::Backends::METAL | wgpu::Backends::GL,
+            software: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Camera {
+    pub eye: [f32; 3],
+    pub target: [f32; 3],
+    pub up: [f32; 3],
+    /// Vertical field of view in degrees.
+    pub fov: f32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, serde::Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Look {
+    pub sky_top: [f32; 3],
+    pub sky_bottom: [f32; 3],
+    pub env_intensity: f32,
+    /// Towards the light; a zero vector turns the sun off.
+    pub sun_dir: [f32; 3],
+    pub sun_color: [f32; 3],
+    pub exposure: f32,
+    pub bounces: u32,
+}
+
+impl Default for Look {
+    fn default() -> Self {
+        Look {
+            sky_top: [0.5, 0.7, 1.0],
+            sky_bottom: [1.0, 1.0, 1.0],
+            env_intensity: 1.0,
+            sun_dir: [0.0; 3],
+            sun_color: [0.0; 3],
+            exposure: 1.0,
+            bounces: 6,
+        }
+    }
+}
+
+pub(crate) fn bytes<T: Copy>(v: &[T]) -> &[u8] {
+    // Only ever f32, u32 and arrays of them, which have no padding.
+    unsafe { std::slice::from_raw_parts(v.as_ptr() as *const u8, std::mem::size_of_val(v)) }
+}
+
+fn buffer(device: &wgpu::Device, queue: &wgpu::Queue, data: &[u8], usage: wgpu::BufferUsages) -> wgpu::Buffer {
+    let b = device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: (data.len() as u64).max(16).next_multiple_of(16),
+        usage,
+        mapped_at_creation: false,
+    });
+    queue.write_buffer(&b, 0, data);
+    b
+}
+
+pub(crate) fn storage(device: &wgpu::Device, size: u64, extra: wgpu::BufferUsages) -> wgpu::Buffer {
+    device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
+        size: size.max(16),
+        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST | extra,
+        mapped_at_creation: false,
+    })
+}
+
+pub struct Tracer {
+    device: wgpu::Device,
+    queue: wgpu::Queue,
+    path: Path,
+    adapter: String,
+    scene: Scene<GpuAccel>,
+    pipes: Pipelines,
+    uniform: wgpu::Buffer,
+    resolve_uniform: wgpu::Buffer,
+    accum: wgpu::Buffer,
+    aov: wgpu::Buffer,
+    out: wgpu::Buffer,
+    shading: Shading,
+    insts: wgpu::Buffer,
+    mats: wgpu::Buffer,
+    n_inst: u32,
+    bind: Option<wgpu::BindGroup>,
+    resolve_bind: Option<wgpu::BindGroup>,
+    glow_uniform: wgpu::Buffer,
+    chain: Option<Chain>,
+    bloom: Option<Bloom>,
+    /// The denoised colour over the exposure, as accum's layout, for a bloom.
+    hdr: wgpu::Buffer,
+    w: u32,
+    h: u32,
+    sample: u32,
+    row0: u32,
+    rows: u32,
+    cap: u32,
+    camera: Camera,
+    look: Look,
+    held: Option<Held>,
+    quality: Quality,
+    job: Option<Job>,
+    denoise_error: Option<String>,
+}
+
+/// The last frame handed out, shown again while nothing can change it.
+struct Held {
+    key: FrameKey,
+    pixels: Vec<u8>,
+    denoised: bool,
+    /// What `pixels` were resolved with.
+    bloom: Option<Bloom>,
+    denoise: Option<Denoised>,
+}
+
+/// The denoise result tone mapped as it is, and in linear for a bloom.
+struct Denoised {
+    plain: Vec<u8>,
+    hdr: Vec<[f32; 4]>,
+    by: Denoiser,
+    /// Why Open Image Denoise gave way to the filter.
+    note: Option<String>,
+}
+
+/// Generation, samples and size: what a frame was traced for.
+type FrameKey = (u64, u32, (u32, u32));
+
+/// A denoise running on its own thread; a result for an older key is dropped.
+struct Job {
+    key: FrameKey,
+    rx: mpsc::Receiver<Result<Denoised, String>>,
+}
+
+
+impl Tracer {
+    pub fn new(opts: TracerOptions) -> Result<Tracer, String> {
+        let mut desc = wgpu::InstanceDescriptor::new_without_display_handle();
+        desc.backends = opts.backends;
+        let instance = wgpu::Instance::new(desc);
+        let adapters = futures_executor::block_on(instance.enumerate_adapters(opts.backends));
+        let rank = |b: wgpu::Backend| match b {
+            wgpu::Backend::Vulkan => 0u8,
+            wgpu::Backend::Dx12 => 1,
+            wgpu::Backend::Metal => 2,
+            _ => 3,
+        };
+        let adapter = adapters
+            .into_iter()
+            .min_by_key(|a| {
+                let i = a.get_info();
+                (rank(i.backend), u8::from(i.device_type != wgpu::DeviceType::DiscreteGpu))
+            })
+            .ok_or("no adapter")?;
+        // CI sets this for lavapipe; the refusal of CPU adapters lands in tracer-robustness.
+        let _allow_cpu = std::env::var_os("FUNDACAD_TRACER_ALLOW_CPU").is_some();
+        if adapter.limits().max_storage_buffers_per_shader_stage < bindings::STORAGE_FLOOR {
+            return Err(format!("{} binds too few storage buffers", adapter.get_info().name));
+        }
+        let hw = !opts.software && adapter.features().contains(wgpu::Features::EXPERIMENTAL_RAY_QUERY);
+        let info = adapter.get_info();
+        // Default limits leave every acceleration structure limit at 0 and
+        // allow 8 storage buffers where the software path binds 11, so the
+        // device takes the adapter's own.
+        let (device, queue) = futures_executor::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+            label: Some("fundacad-tracer"),
+            required_features: if hw { wgpu::Features::EXPERIMENTAL_RAY_QUERY } else { wgpu::Features::empty() },
+            required_limits: adapter.limits(),
+            experimental_features: if hw {
+                unsafe { wgpu::ExperimentalFeatures::enabled() }
+            } else {
+                wgpu::ExperimentalFeatures::disabled()
+            },
+            ..Default::default()
+        }))
+        .map_err(|e| e.to_string())?;
+        let path = if hw { Path::RayQuery } else { Path::Software };
+
+        let pipes = Pipelines::new(&device, path);
+
+        let glow_uniform = device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: 16,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let uniform = device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: 176,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let resolve_uniform = device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: 16,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        // Room for one element of the largest bound struct (Inst, 128 bytes):
+        // frames run before the first scene lands.
+        let empty = |d: &wgpu::Device| storage(d, 256, wgpu::BufferUsages::empty());
+        let shading = Shading {
+            pos: empty(&device),
+            nrm: empty(&device),
+            idx: empty(&device),
+            slots: empty(&device),
+            cols: empty(&device),
+            nodes: empty(&device),
+            order: empty(&device),
+            offsets: HashMap::new(),
+        };
+        let mut accel = GpuAccel { device: device.clone(), queue: queue.clone(), hw, tlas: None };
+        if hw {
+            accel.tlas = Some(make_tlas(&device, &queue, &[]));
+        }
+        let mut t = Tracer {
+            insts: empty(&device),
+            mats: empty(&device),
+            accum: empty(&device),
+            aov: empty(&device),
+            out: empty(&device),
+            hdr: empty(&device),
+            device,
+            queue,
+            path,
+            adapter: format!("{} ({:?})", info.name, info.backend),
+            scene: Scene::new(accel),
+            pipes,
+            uniform,
+            resolve_uniform,
+            shading,
+            n_inst: 0,
+            bind: None,
+            resolve_bind: None,
+            glow_uniform,
+            chain: None,
+            bloom: None,
+            w: 0,
+            h: 0,
+            sample: 0,
+            row0: 0,
+            rows: 0,
+            cap: 256,
+            camera: Camera { eye: [4.0, -6.0, 3.0], target: [0.0; 3], up: [0.0, 0.0, 1.0], fov: 50.0 },
+            look: Look::default(),
+            held: None,
+            quality: Quality::default(),
+            job: None,
+            denoise_error: None,
+        };
+        t.resize(64, 64);
+        Ok(t)
+    }
+
+    pub fn path(&self) -> Path {
+        self.path
+    }
+    pub fn adapter(&self) -> &str {
+        &self.adapter
+    }
+    pub fn samples(&self) -> u32 {
+        self.sample
+    }
+    pub fn generation(&self) -> u64 {
+        self.scene.generation()
+    }
+    /// The sample cap is reached; the picture will not change until the scene,
+    /// camera, look or cap does.
+    pub fn done(&self) -> bool {
+        self.sample >= self.cap
+    }
+    pub fn size(&self) -> (u32, u32) {
+        (self.w, self.h)
+    }
+
+    pub fn resize(&mut self, w: u32, h: u32) {
+        let (w, h) = (w.max(1), h.max(1));
+        if (w, h) == (self.w, self.h) {
+            return;
+        }
+        (self.w, self.h) = (w, h);
+        let px = w as u64 * h as u64;
+        self.accum = storage(&self.device, px * 16, wgpu::BufferUsages::COPY_SRC);
+        self.aov = storage(&self.device, px * 32, wgpu::BufferUsages::COPY_SRC);
+        self.out = storage(&self.device, px * 4, wgpu::BufferUsages::COPY_SRC);
+        self.hdr = storage(&self.device, px * 16, wgpu::BufferUsages::empty());
+        if self.path == Path::RayQuery || self.rows == 0 {
+            self.rows = h;
+        }
+        self.resolve_bind = None;
+        self.reset();
+    }
+
+    /// The software path traces about this many paths per dispatch, so one
+    /// dispatch never holds the GPU long enough to stall the UI.
+    pub fn set_frame_budget(&mut self, paths: u32) {
+        if self.path == Path::Software {
+            self.rows = (paths / self.w).clamp(8, self.h.next_multiple_of(8)).next_multiple_of(8);
+            self.reset();
+        }
+    }
+
+    pub fn set_cap(&mut self, cap: u32) {
+        self.cap = cap.max(1);
+    }
+
+    pub fn set_camera(&mut self, c: Camera) {
+        if c != self.camera {
+            self.camera = c;
+            self.reset();
+        }
+    }
+
+    pub fn set_look(&mut self, l: Look) {
+        if l != self.look {
+            self.look = l;
+            self.reset();
+        }
+    }
+
+    pub fn set_bodies(&mut self, bodies: Vec<BodyDesc>) -> Vec<String> {
+        self.scene.set_bodies(bodies)
+    }
+
+    pub fn add_mesh(&mut self, key: &str, mesh: Mesh) {
+        self.scene.add_mesh(key, mesh);
+    }
+
+    pub fn set_colors(&mut self, key: &str, colors: Option<Vec<[f32; 3]>>) -> bool {
+        self.scene.set_colors(key, colors)
+    }
+
+    /// Builds what the changes since the last apply need and restarts the
+    /// accumulation when anything changed.
+    pub fn apply(&mut self) -> Commit {
+        let c = self.scene.commit();
+        if c.geometry || c.blas_built > 0 {
+            self.upload_geometry();
+        }
+        if c.instances || c.geometry || c.blas_built > 0 || c.tlas_built {
+            self.upload_instances();
+        }
+        if c.reset {
+            self.reset();
+        }
+        c
+    }
+
+    fn reset(&mut self) {
+        self.sample = 0;
+        self.row0 = 0;
+        let mut enc = self.device.create_command_encoder(&Default::default());
+        enc.clear_buffer(&self.accum, 0, None);
+        self.queue.submit([enc.finish()]);
+        self.bind = None;
+    }
+
+    /// Bloom on the linear frame before tone mapping. Never restarts the
+    /// samples: the held frame is resolved again on the next frame.
+    pub fn set_bloom(&mut self, b: Option<Bloom>) {
+        self.bloom = b;
+    }
+
+    /// Brings the held frame to the current bloom, from the accumulation or
+    /// the denoised colour, only when the bloom changed since it was resolved.
+    fn rebloom_held(&mut self) {
+        let Some(h) = self.held.take() else { return };
+        let mut h = h;
+        if h.bloom != self.bloom {
+            h.pixels = match (&h.denoise, self.bloom) {
+                (Some(d), None) => d.plain.clone(),
+                (Some(d), Some(_)) => {
+                    self.queue.write_buffer(&self.hdr, 0, bytes(&d.hdr));
+                    self.resolve_from(true)
+                }
+                (None, _) => self.resolve(),
+            };
+            h.bloom = self.bloom;
+        }
+        self.held = Some(h);
+    }
+
+    /// The weights the cap is denoised with; a change drops a held result and
+    /// denoises again, keeping the samples.
+    pub fn set_denoise(&mut self, q: Quality) {
+        if q == self.quality {
+            return;
+        }
+        self.quality = q;
+        self.job = None;
+        if self.held.as_ref().is_some_and(|h| h.denoised) {
+            self.held = None;
+        }
+    }
+
+    /// The frame handed out is the denoised one for the current scene.
+    pub fn denoised(&self) -> bool {
+        self.done() && self.held.as_ref().is_some_and(|h| h.denoised && h.key == self.key())
+    }
+
+    /// What cleaned the held frame at the cap.
+    pub fn denoised_by(&self) -> Option<Denoiser> {
+        self.held.as_ref().filter(|h| h.denoised && h.key == self.key()).and_then(|h| h.denoise.as_ref()).map(|d| d.by)
+    }
+
+    /// Why the last denoise gave no frame, or fell back to the filter.
+    pub fn denoise_error(&self) -> Option<&str> {
+        self.denoise_error.as_deref()
+    }
+
+    fn start_denoise(&mut self) {
+        if self.quality == Quality::Off {
+            return;
+        }
+        let aov = self.read_aovs();
+        let input = denoise::Input {
+            width: self.w as usize,
+            height: self.h as usize,
+            color: self.read_hdr().into_iter().flatten().collect(),
+            albedo: aov.iter().step_by(2).flat_map(|a| [a[0], a[1], a[2]]).collect(),
+            normal: aov.iter().skip(1).step_by(2).flat_map(|n| [n[0], n[1], n[2]]).collect(),
+            depth: aov.chunks_exact(2).map(|p| if p[1][3] > 0.0 { p[0][3] } else { 0.0 }).collect(),
+            samples: self.sample,
+        };
+        let (tx, rx) = mpsc::channel();
+        let quality = self.quality;
+        let e = if self.look.exposure > 0.0 { self.look.exposure } else { 1.0 };
+        let spawned = std::thread::Builder::new().name("denoise".into()).spawn(move || {
+            let (c, by, note) = denoise::run(&input, quality);
+            let rgb: Vec<[f32; 3]> = c.chunks_exact(3).map(|p| [p[0], p[1], p[2]]).collect();
+            let d = Denoised { plain: denoise::tone_map(&rgb), hdr: rgb.iter().map(|p| [p[0] / e, p[1] / e, p[2] / e, 1.0]).collect(), by, note };
+            let _ = tx.send(Ok(d));
+        });
+        match spawned {
+            Ok(_) => self.job = Some(Job { key: self.key(), rx }),
+            Err(e) => self.denoise_error = Some(e.to_string()),
+        }
+    }
+
+    /// Takes a finished denoise into the held frame without tracing, for a
+    /// page that stopped asking for frames at the cap.
+    pub fn poll_denoise(&mut self) {
+        if self.done() && self.held.as_ref().is_some_and(|h| h.key == self.key()) {
+            self.collect_denoise();
+            self.rebloom_held();
+        }
+    }
+
+    pub fn denoising(&self) -> bool {
+        self.job.as_ref().is_some_and(|j| j.key == self.key())
+    }
+
+    fn collect_denoise(&mut self) {
+        let Some(job) = &self.job else { return };
+        if job.key != self.key() {
+            self.job = None;
+            return;
+        }
+        let got = match job.rx.try_recv() {
+            Err(mpsc::TryRecvError::Empty) => return,
+            Err(mpsc::TryRecvError::Disconnected) => Err("the denoise thread ended".to_string()),
+            Ok(r) => r,
+        };
+        self.job = None;
+        match got {
+            Ok(d) if d.plain.len() == (self.w * self.h * 4) as usize => {
+                self.denoise_error = d.note.clone();
+                if let Some(h) = &mut self.held {
+                    h.pixels = d.plain.clone();
+                    h.bloom = None;
+                    h.denoise = Some(d);
+                    h.denoised = true;
+                }
+            }
+            Ok(d) => {
+                self.denoise_error = Some(format!("a {} byte denoise for a {}x{} frame", d.plain.len(), self.w, self.h))
+            }
+            Err(e) => self.denoise_error = Some(e),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    #[test]
+    fn a_denoised_frame_blooms_as_the_accumulation_it_came_from() {
+        let Ok(mut t) = Tracer::new(TracerOptions { software: true, ..Default::default() }) else {
+            eprintln!("skipped: no adapter");
+            return;
+        };
+        let lamp: Vec<BodyDesc> = serde_json::from_str(
+            r#"[{"id":"body1","key":"lamp","matrix":[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],
+                 "materials":[{"color":[0,0,0],"emissive":[1,0.6,0.2],"emissiveIntensity":5}]}]"#,
+        )
+        .unwrap();
+        t.set_bodies(lamp);
+        t.add_mesh(
+            "lamp",
+            Mesh {
+                positions: vec![[-1.0, -1.0, 0.0], [1.0, -1.0, 0.0], [1.0, 1.0, 0.0], [-1.0, 1.0, 0.0]],
+                normals: vec![[0.0, 0.0, 1.0]; 4],
+                indices: vec![0, 1, 2, 0, 2, 3],
+                ..Default::default()
+            },
+        );
+        t.set_camera(Camera { eye: [0.0, 0.0, 12.0], target: [0.0; 3], up: [0.0, 1.0, 0.0], fov: 50.0 });
+        t.set_look(Look { exposure: 1.7, sky_top: [0.1; 3], sky_bottom: [0.05; 3], ..Look::default() });
+        t.set_denoise(Quality::Off);
+        t.set_cap(1);
+        let plain = t.frame(48, 32, Duration::from_millis(50));
+        assert!(t.done());
+        // A denoise that changed nothing: its colour is the exposed accumulation.
+        let e = t.look.exposure;
+        let hdr = t.read_hdr().iter().map(|c| [c[0] / e, c[1] / e, c[2] / e, 1.0]).collect();
+        let h = t.held.as_mut().unwrap();
+        h.denoise = Some(Denoised { plain: plain.clone(), hdr, by: Denoiser::Filter, note: None });
+        h.denoised = true;
+        let b = Bloom { strength: 0.8, radius: 0.5, threshold: 0.8, side: 0 };
+        t.set_bloom(Some(b));
+        let from_hdr = t.frame(48, 32, Duration::ZERO);
+        let from_accum = t.resolve();
+        assert_ne!(from_hdr, plain);
+        let worst = from_hdr.iter().zip(&from_accum).map(|(a, b)| a.abs_diff(*b)).max().unwrap();
+        assert!(worst <= 1, "the denoised bloom is {worst} codes off the accumulation's");
+        t.set_bloom(None);
+        assert_eq!(t.frame(48, 32, Duration::ZERO), plain);
+    }
+}
