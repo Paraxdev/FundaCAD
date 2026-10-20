@@ -255,6 +255,8 @@ with everything it adds, and gets back the removal:
 | `actions` | action ids, reached from the ribbon, the palette, the keymap and every context menu |
 | `overlays` | components mounted for the life of the capability |
 | `browserSections` | a panel in the browser, drawn as its own component |
+| `renderSections` | a block at the end of one Render dock tab (`material`, `environment` or `camera`), drawn as its own component |
+| `materialPresets` | `() => { group, materials }[]`, starting points under the Render dock's New material menu, one submenu per group |
 | `bodyMenu` | rows on a body's right-click menu |
 | `paint` | colours for bodies and faces, asked for fresh at every rebuild |
 | `palette` | the colours a tool may offer |
@@ -267,6 +269,19 @@ with everything it adds, and gets back the removal:
 | `onPointerGesture` | called when a binding's gesture drag starts, with the press point and pointer id |
 | `keymap` | keys moved to other actions, contributed ones included (needs `input.remap`) |
 | `settings` | the plugin's own settings, declared or drawn by its own component, shown under its row in Preferences ▸ Plugins (see [Settings](#settings)) |
+
+A `renderSections` block is `{ key, component, tab }` and is mounted after the
+core sections of that tab, re-read whenever a contribution changes. To look like
+the dock, draw it with the rows from `fundacad/ui`: `RenderSection` (title, hint
+and a slot), `RenderSlider` (`label`, `value`, `min`, `max`, `step`, emits
+`update`), `RenderSwitch` (`label`, `value`, emits `update`) and `RenderChoices`
+(`label`, `value`, `options` of `{ id, label }`, emits `update`).
+
+A `materialPresets` entry is a `MaterialDef`. Picking one adds a plain copy to
+the document under a fresh id and name, as one undo step, so the file opens
+without the plugin. Each entry is normalised like a material read from a file,
+and one that is not a material is skipped. `MaterialDef`, `BodyFinish`,
+`SurfaceGraph` and `SurfaceNode` are exported as types from `fundacad`.
 
 Four things this deliberately is not. There is no generic "run this on event X".
 There is no way to replace a core behaviour: `app/actions.ts` reaches its own
@@ -1162,7 +1177,7 @@ and the `process` sentence on the install screen says so.
 | `src/plugins/settings.ts` | settings a plugin declares: the schema check, one stored key per plugin, versions and old keys |
 | `src/components/overlays/PluginSettingsForm.vue` | draws a plugin's declared settings under its row |
 | `src/plugins/host.ts` | `fundacad`: the whole of what a plugin may import |
-| `src/plugins/hostUi.ts` | `fundacad/ui`: the four components, kept apart so `fundacad` needs no DOM |
+| `src/plugins/hostUi.ts` | `fundacad/ui`: the four components and the four Render dock rows, kept apart so `fundacad` needs no DOM |
 | `src/plugins/loader.ts` | evaluates a downloaded plugin's module against the app's own modules |
 | `src/plugins/devPlugins.ts` | the plugin directories, in a DEV build only |
 | `scripts/build-plugin-code.mjs` | builds one plugin directory into the module its bundle carries |

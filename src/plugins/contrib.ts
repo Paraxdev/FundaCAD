@@ -42,6 +42,7 @@ import type { FeatureMeta } from "../ui/featureMeta";
 import type { FieldKind } from "../document/numFields";
 import type { TargetField } from "../features/selectionTargets";
 import type { PluginSettings } from "./settings";
+import type { MaterialDef } from "../document/materials";
 import { setPointerBindings, type PointerBinding, type PointerGesture } from "../viewport/navigator/bindings";
 import { setShortcutOverrides, type ShortcutOverride } from "../input/shortcuts";
 
@@ -112,6 +113,23 @@ export interface BrowserSection {
   /** Which of the browser's own filter sections it is hidden with, if any. A
    *  section naming one the core does not have is always shown. */
   filter?: string;
+}
+
+export interface MaterialPresetGroup {
+  group: string;
+  materials: MaterialDef[];
+}
+
+/** The tabs of the Render dock. */
+export type RenderTab = "material" | "environment" | "camera";
+
+/** A block a plugin adds to the end of one Render dock tab, drawn as its own
+ *  component. `fundacad/ui` has the rows the dock itself is made of. */
+export interface RenderSection {
+  /** Stable within the contributing plugin; used as the render key. */
+  key: string;
+  component: Component;
+  tab: RenderTab;
 }
 
 /** Settings a plugin adds, drawn under its row in Preferences > Plugins.
@@ -259,6 +277,13 @@ export interface Contribution {
   /** Extra rows on a body's right-click menu, in the browser and the viewport. */
   bodyMenu?: (bodyId: string) => CtxItem[];
   browserSections?: BrowserSection[];
+  /** Blocks at the end of a Render dock tab. */
+  renderSections?: RenderSection[];
+  /** Starting points for the Render dock's New material menu, one submenu per
+   *  group. Picking one adds a plain copy to the document, so the file does not
+   *  need the plugin to open. Each entry goes through the same normalising as a
+   *  material read from a file, and one that is not a material is skipped. */
+  materialPresets?: () => MaterialPresetGroup[];
   /** Blocks in Preferences.
    *
    *  A settings block that outlives the thing it configures is worse than a
@@ -440,6 +465,34 @@ export function contributedBrowserSections(): { key: string; section: BrowserSec
   for (const e of entries) {
     for (const section of e.c.browserSections ?? []) {
       out.push({ key: `${e.plugin}:${section.key}`, section });
+    }
+  }
+  return out;
+}
+
+export function contributedRenderSections(tab: RenderTab): { key: string; section: RenderSection }[] {
+  const out: { key: string; section: RenderSection }[] = [];
+  for (const e of entries) {
+    for (const section of e.c.renderSections ?? []) {
+      if (section.tab === tab) out.push({ key: `${e.plugin}:${section.key}`, section });
+    }
+  }
+  return out;
+}
+
+export function contributedMaterialPresets(): MaterialPresetGroup[] {
+  const out: MaterialPresetGroup[] = [];
+  for (const e of entries) {
+    let groups: MaterialPresetGroup[] = [];
+    try {
+      groups = e.c.materialPresets?.() ?? [];
+    } catch {
+      continue;
+    }
+    for (const g of groups) {
+      if (!g || typeof g.group !== "string" || !Array.isArray(g.materials)) continue;
+      const materials = g.materials.filter((m) => m && typeof m.name === "string" && typeof m.color === "string");
+      if (materials.length) out.push({ group: g.group, materials });
     }
   }
   return out;

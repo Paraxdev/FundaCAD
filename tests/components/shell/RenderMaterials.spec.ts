@@ -12,6 +12,14 @@ import { useBrowserStore } from "../../../src/stores/browser";
 import type { MaterialDef } from "../../../src/document/materials";
 import type { Engine } from "../../../src/app/engine";
 import { setEmissionProgress } from "../../../src/ui/emissionProgress";
+import { contribute, resetContributions } from "../../../src/plugins/contrib";
+import type { CtxItem } from "../../../src/ui/menu";
+
+const menus: CtxItem[][] = [];
+vi.mock("../../../src/ui/menu", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../src/ui/menu")>()),
+  contextMenu: (_x: number, _y: number, items: CtxItem[]) => { menus.push(items); },
+}));
 
 vi.mock("../../../src/viewport/materialPreview", () => ({
   materialPreview: () => null,
@@ -50,6 +58,8 @@ function makeEngine() {
       buildVersion.value++;
     },
     updateMaterial: vi.fn(),
+    addMaterial: vi.fn(() => "m-new"),
+    addMaterialPreset: vi.fn((raw: { name: string }) => (raw ? "m-" + raw.name : null)),
     buildState: { building: false, result: { bodies: [{ id: "body1", name: "Body1" }] } },
   };
   return {
@@ -90,6 +100,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  resetContributions();
+  menus.length = 0;
   w.unmount();
   vi.useRealTimers();
 });
@@ -218,5 +230,35 @@ describe("RenderMaterials Emission control", () => {
     setEmissionProgress(null);
     await nextTick();
     expect(w.find(".rd-emitting").exists()).toBe(false);
+  });
+});
+
+describe("RenderMaterials New menu", () => {
+  const newButton = () => w.get('button[title="New material"]');
+
+  it("adds a blank material straight away when no plugin offers presets", async () => {
+    await newButton().trigger("click");
+    expect(menus).toEqual([]);
+    expect(fake.store.addMaterial).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers Blank and a submenu per group, and a pick adds that preset", async () => {
+    const red = { id: "r", name: "Red", color: "#ff0000" };
+    contribute("A.One", { materialPresets: () => [{ group: "Paints", materials: [red] }] });
+    await newButton().trigger("click");
+    expect(menus).toHaveLength(1);
+    expect(menus[0]!.map((i) => i.label)).toEqual(["Blank", "Paints"]);
+    expect(fake.store.addMaterial).not.toHaveBeenCalled();
+    menus[0]![1]!.children![0]!.onClick!();
+    expect(fake.store.addMaterialPreset).toHaveBeenCalledWith(red);
+    menus[0]![0]!.onClick!();
+    expect(fake.store.addMaterial).toHaveBeenCalledTimes(1);
+  });
+
+  it("still opens, with Blank, when a plugin lists a null or nameless entry", async () => {
+    const ok = { id: "r", name: "Red", color: "#ff0000" };
+    contribute("A.One", { materialPresets: () => [{ group: "Paints", materials: [null as never, {} as never, ok] }] });
+    await newButton().trigger("click");
+    expect(menus[0]![1]!.children!.map((i) => i.label)).toEqual(["Red"]);
   });
 });
