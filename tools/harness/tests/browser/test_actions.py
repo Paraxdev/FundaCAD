@@ -34,8 +34,9 @@ def test_a_tool_by_its_label_runs_and_escape_leaves(plate):
 
 @pytest.mark.smoke
 def test_a_tool_inside_a_category_opens_its_flyout_first(s):
-    step = s.tool("Revolve")
-    assert str(step).startswith('started pick:revolve "Revolve"')
+    step = str(s.tool("Revolve"))
+    assert step.startswith('clicked pick:revolve "Revolve", no tool is running after it'), "nothing to revolve yet"
+    assert "Revolve needs a closed sketch profile" in step
 
 
 @pytest.mark.smoke
