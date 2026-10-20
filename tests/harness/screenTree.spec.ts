@@ -45,6 +45,13 @@ describe("walkControls", () => {
     expect(by("eye:body1").flags).toEqual(["visible"]);
   });
 
+  it("names a choice by its label, without the hint under it", () => {
+    document.body.insertAdjacentHTML("beforeend",
+      '<div class="choice-backdrop"><button class="choice-btn"><span>Box</span><small>l×w×h</small></button></div>');
+    const box = walkControls(document, { rect }).controls.find((c) => c.ref.startsWith("choice:"))!;
+    expect([box.ref, box.label]).toEqual(["choice:Box", "Box"]);
+  });
+
   it("counts rows scrolled out of their list", () => {
     const w = walkControls(document, { rect });
     expect(w.controls.map((c) => c.ref)).not.toContain("item:body2");
