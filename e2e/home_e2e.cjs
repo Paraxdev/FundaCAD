@@ -10,6 +10,8 @@
 //   8. Each template opens as an untitled document that builds.
 //   9. With 300 documents, the cards in view show their pictures and only those are fetched.
 //  10. A folder added to Home lists its documents, narrow windows pick it from a Select, Remove takes it off.
+//  11. The Versions drawer: the open document's branches and versions, Restore (and Ctrl+Z), branch Open,
+//      Open copy, and a closed file's history read from the library.
 //
 //   engine --ws, vite, then
 //   SC_TOKEN=<engine token> node e2e/home_e2e.cjs
@@ -259,6 +261,84 @@ function check(name, ok, detail = "") {
     check("Remove from Home takes the folder off", (await page.$$(".home-folder-row")).length === 0);
     const stored = await page.evaluate(() => localStorage.getItem("fundacad.home.folders"));
     check("and forgets it", stored === "[]", stored);
+    await page.keyboard.press("Escape");
+
+    console.log("11. versions");
+    const P = "D:/proj/part.funda";
+    await page.evaluate((path) => {
+      const s = window.store;
+      s.newDocument();
+      s.addFeature({ id: "b1", type: "box", length: 30, width: 20, height: 10 });
+      s.saveVersion("Base block");
+      s.addFeature({ id: "c1", type: "cylinder", radius: 4, height: 30 });
+      s.saveVersion("Add a peg");
+      s.branchFromVersion(s.versionRepo.versions[0].id, "wide");
+      s.updateFeature("b1", { width: 60 });
+      s.saveVersion("Wider");
+      s.markSaved(path);
+      const now = Date.now();
+      localStorage.setItem("fundacad.recentFiles", JSON.stringify([
+        { path, openedAt: now }, { path: "D:/proj/old.funda", openedAt: now - 1000 },
+      ]));
+      const row = (id, parent, branch, message, time) => ({ id, parent, branch, message, time });
+      window.__fundacad.home.useFakeLibrary([
+        { path, mtimeMs: now },
+        { path: "D:/proj/old.funda", mtimeMs: now - 5000, summary: {
+          format: "fundab",
+          versions: [row("o1", null, "main", "Old start", now - 9e6), row("o2", "o1", "main", "Old end", now - 8e6)],
+          branches: { main: "o2" }, current: "main",
+        } },
+      ]);
+    }, P);
+    await settle();
+    const state = () => page.evaluate(() => ({
+      features: window.store.document.features.map((f) => f.id).join(","),
+      width: window.store.document.features.find((f) => f.id === "b1")?.width,
+      dirty: window.store.dirty, current: window.store.versionRepo?.current,
+      path: window.store.filePath, name: window.store.fileName,
+    }));
+    const drawerOf = async (name) => {
+      if (!(await homeUp())) await menu("File", "Home");
+      await page.hover(`.home-cell:has(.home-card-name:text-is("${name}"))`);
+      await page.click(`.home-cell:has(.home-card-name:text-is("${name}")) .home-card-versions`);
+      await page.waitForSelector(".home-drawer .home-branch, .home-drawer-note", { timeout: 3000 });
+    };
+    await drawerOf("part");
+    const branchRows = await page.$$eval(".home-branch-name", (els) => els.map((e) => e.textContent.trim()).join(","));
+    check("the drawer lists the branches, current first", branchRows === "widecurrent,main", branchRows);
+    await page.click('.home-branch-name:has-text("main")');
+    const mainRows = await page.$$eval(".home-version-msg", (els) => els.map((e) => e.textContent).join(","));
+    check("and the versions of the branch picked, newest first", mainRows === "Add a peg,Base block", mainRows);
+    await page.click('.home-version:has-text("Base block") .home-version-restore');
+    await settle();
+    let st = await state();
+    check("Restore brings the old features back", st.features === "b1" && st.width === 20, JSON.stringify(st));
+    check("and leaves the document unsaved, same file", st.dirty && st.path === P, JSON.stringify(st));
+    check("Restore closes Home", !(await homeUp()));
+    await page.evaluate(() => document.activeElement?.blur());
+    await page.keyboard.press("Control+z");
+    await settle();
+    st = await state();
+    check("Ctrl+Z goes back to what was there", st.features === "b1" && st.width === 60, JSON.stringify(st));
+    await drawerOf("part");
+    await page.click('.home-branch:has(.home-branch-name:has-text("main")) .home-branch-open');
+    await settle();
+    st = await state();
+    check("branch Open switches the branch", st.current === "main" && st.features === "b1,c1", JSON.stringify(st));
+    await drawerOf("part");
+    await page.click('.home-version:has-text("Add a peg") .home-version-copy');
+    const askCopy = await page.waitForSelector("button:has-text('Discard')", { timeout: 1500 }).catch(() => null);
+    check("Open copy asks before replacing unsaved work", !!askCopy);
+    if (askCopy) await askCopy.click();
+    await settle();
+    st = await state();
+    check("Open copy starts an untitled copy at that version", st.path === null && st.name === "part (Add a peg)"
+      && st.features === "b1,c1", JSON.stringify(st));
+    await drawerOf("old");
+    const oldRows = await page.$$eval(".home-version-msg", (els) => els.map((e) => e.textContent).join(","));
+    check("a closed file's versions come from the library", oldRows === "Old end,Old start", oldRows);
+    await page.keyboard.press("Escape");
+    check("Escape closes the drawer first", (await homeUp()) && !(await page.$(".home-drawer")));
     await page.keyboard.press("Escape");
   } finally {
     await browser.close();

@@ -48,6 +48,12 @@ This file starts on 2026-08-03. For anything before that, see the
   levels deep, sorted by last edited or name. Blank or a template started from
   a folder view saves into that folder by default. Remove from Home, on the
   folder's right click menu, takes it off Home and leaves it on disk.
+- **Versions on Home.** Versions on a card lists the document's branches and
+  saved versions without opening it. Open on a branch opens the document on
+  that branch, Restore opens it at a version as one step Ctrl+Z undoes, and
+  Open copy does the same as a new untitled document, so the file stays as it
+  is. For the open document the list includes versions not saved to the file
+  yet.
 - **Mechanisms.** A `mechanism` feature joins bodies with revolute, slider and
   rigid joints, closed loops included, and poses them all at once: the ground
   stays put, one joint is driven to an `angle` or `offset`, and every other

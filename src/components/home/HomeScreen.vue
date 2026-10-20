@@ -19,6 +19,8 @@ import { getTheme, onThemeChange, themeMode } from "../../ui/theme";
 import Icon from "../shell/Icon.vue";
 import DocCard from "./DocCard.vue";
 import HomeSidebar from "./HomeSidebar.vue";
+import VersionsDrawer from "./VersionsDrawer.vue";
+import { liveSummary } from "../../ui/homeVersions";
 import NewStrip from "./NewStrip.vue";
 import logoDarkUrl from "../../../assets/brand/fundacad-lockup-app.svg";
 import logoLightUrl from "../../../assets/brand/fundacad-lockup-app-light.svg";
@@ -44,7 +46,8 @@ function onKey(e: KeyboardEvent): void {
     if (ctx.open || escapeClaimed()) return;
     e.preventDefault();
     e.stopImmediatePropagation();
-    close();
+    if (drawer.value) drawer.value = null;
+    else close();
     return;
   }
   const mod = e.ctrlKey || e.metaKey;
@@ -175,9 +178,27 @@ async function openEntry(entry: HomeEntry): Promise<void> {
   else if (outcome === "unreadable") unreadable.value = new Set(unreadable.value).add(entry.path);
 }
 
+const drawer = ref<HomeEntry | null>(null);
+
+/** The open document's history is read live, it may hold versions the file does not have yet. */
+function loadVersions(entry: HomeEntry) {
+  return async () => {
+    if (entry.path === cb.currentPath()) return liveSummary(cb.currentVersions());
+    return lib ? lib.summary(entry.path) : null;
+  };
+}
+
+async function versionAction(act: Promise<boolean>): Promise<void> {
+  if (await act) {
+    drawer.value = null;
+    close();
+  }
+}
+
 function entryMenu(entry: HomeEntry, ev: MouseEvent): void {
   contextMenu(ev.clientX, ev.clientY, [
     { label: "Open", onClick: () => void openEntry(entry) },
+    ...(entry.missing ? [] : [{ label: "Versions", onClick: () => { drawer.value = entry; } }]),
     ...(inFolder.value ? [] : [{ label: "Remove from list", onClick: () => forget(entry.path) }]),
     { separator: true, label: "" },
     { label: "Copy path", onClick: () => void navigator.clipboard?.writeText(entry.path).catch(() => {}) },
@@ -270,6 +291,7 @@ onUnmounted(() => {
           :thumbs="thumbs"
           @open="openEntry(e)"
           @menu="entryMenu(e, $event)"
+          @versions="drawer = e"
         />
       </div>
       <p v-else-if="lib && all.length" class="home-empty">No documents match</p>
@@ -278,6 +300,17 @@ onUnmounted(() => {
       <p v-else-if="inFolder" class="home-empty">Looking for documents…</p>
       <p v-else-if="lib" class="home-empty">Documents you open or save appear here.</p>
       <p v-else class="home-empty">Recent documents appear here in the desktop app.</p>
+
+      <VersionsDrawer
+        v-if="drawer"
+        :key="drawer.path"
+        :name="drawer.name"
+        :load="loadVersions(drawer)"
+        @close="drawer = null"
+        @restore="(id) => versionAction(cb.openVersion(drawer!.path, id, false))"
+        @copy="(id) => versionAction(cb.openVersion(drawer!.path, id, true))"
+        @branch="(name) => versionAction(cb.openBranch(drawer!.path, name))"
+      />
 
       <div class="home-foot">
         <label class="home-startup">

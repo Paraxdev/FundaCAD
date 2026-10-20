@@ -2,6 +2,7 @@ import { openDocument, openDocumentAtPath, type OpenOutcome } from "../io/files"
 import { choose } from "../ui/choice";
 import type { Engine } from "./engine";
 import { TEMPLATES, templateText } from "../templates";
+import { copyName } from "../ui/homeVersions";
 
 /** An open sketch's edits reach the store only when the sketch is finished, so
  *  `store.dirty` alone misses them. */
@@ -35,6 +36,38 @@ export async function newFromTemplate(e: Pick<Engine, "store" | "sketch">, id: s
   if (!(await mayDiscard(e, "Discard unsaved changes and start a new document?"))) return;
   e.store.load(await templateText(id));
   e.store.markOpenedWithoutPath(info.name);
+}
+
+type VersionEngine = Pick<Engine, "store" | "sketch" | "geometry">;
+
+/** The document at `path` on screen: the open one as it is, unsaved versions and
+ *  all, or opened from disk after the usual question. */
+async function reach(e: VersionEngine, path: string): Promise<boolean> {
+  if (e.store.filePath === path) return true;
+  return (await openPathGuarded(e, path)) === "ok";
+}
+
+/** Brings a version back as one undo step, the file is unchanged until Save. A copy
+ *  also drops the path, so Save asks where and the original stays as it is. */
+export async function openAtVersion(e: VersionEngine, path: string, id: string, copy: boolean): Promise<boolean> {
+  if (copy && e.store.filePath === path && !(await mayDiscard(e, "Discard unsaved changes and open a copy?"))) {
+    return false;
+  }
+  if (!(await reach(e, path))) return false;
+  const v = e.store.versionRepo?.versions.find((x) => x.id === id);
+  if (!v) return false;
+  e.store.restoreVersion(id);
+  if (copy) e.store.markOpenedWithoutPath(copyName(path, v.message));
+  return true;
+}
+
+/** Opening on the branch the file is already on keeps its saved state, which may be newer than the branch's last version. */
+export async function openOnBranch(e: VersionEngine, path: string, name: string): Promise<boolean> {
+  if (!(await reach(e, path))) return false;
+  const repo = e.store.versionRepo;
+  if (!repo?.branches[name]) return false;
+  if (repo.current !== name) e.store.switchVersionBranch(name);
+  return true;
 }
 
 export function createDocumentActions(
