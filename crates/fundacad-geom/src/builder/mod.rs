@@ -654,6 +654,43 @@ fn note_unsound(ctx: &mut Ctx, fid: &str, kind: Option<&str>, pre: &[(u64, u64, 
 const NOT_SOLID: &str =
     "came out as a surface, not a solid, so it has no inside and a cut, a join or a measurement of it can come out wrong";
 
+/// One note per way a boolean of the feature only came right on a retry, as
+/// the shape there may not be what the first try would have made.
+fn note_fallbacks(ctx: &mut Ctx, fid: &str, fallbacks: &[kernel::Fallback]) {
+    let mut said = Vec::new();
+    for fb in fallbacks {
+        let verb = match fb.kind {
+            kernel::BoolKind::Fuse => "joined",
+            kernel::BoolKind::Cut => "cut",
+            kernel::BoolKind::Common => "intersected",
+        };
+        let reason = match fb.rung {
+            kernel::Rung::CoarseFuzz(f) => format!(
+                "{verb} with a {} mm tolerance because the faces almost touched, check where they meet",
+                tolerance_mm(f)
+            ),
+            kernel::Rung::SwappedBop => format!(
+                "{verb} on a second try with the shapes the other way round, because the first try came out the wrong size, check the result"
+            ),
+            kernel::Rung::Slices(n) => format!(
+                "{verb} with the tool split into {n} pieces, because the shapes run along each other's surface and would not combine in one go, check the seams"
+            ),
+            _ => continue,
+        };
+        if !said.contains(&reason) {
+            ctx.advise(fid, "booleanFallback", reason.clone());
+            said.push(reason);
+        }
+    }
+}
+
+/// Two significant digits, so a fuzz of 1e-4 reads 0.0001 and not 0.
+fn tolerance_mm(f: f64) -> String {
+    let places = (1 - f.log10().floor() as i32).max(0) as usize;
+    let s = format!("{f:.places$}");
+    if s.contains('.') { s.trim_end_matches('0').trim_end_matches('.').to_string() } else { s }
+}
+
 /// Says which fields a built-in feature carries without reading them, so a
 /// misspelt `bodies` is not silently the active body.
 fn note_unread(ctx: &mut Ctx, f: &Feature, fid: &str, kind: &str) {
@@ -1274,7 +1311,7 @@ pub fn rebuild_from(
         let id_mark = ctx.ids.mark();
 
         ctx.rigid_moves.clear();
-        let outcome = run_feature(&mut ctx, f, type_name, watch);
+        let (outcome, fallbacks) = kernel::noting_fallbacks(|| run_feature(&mut ctx, f, type_name, watch));
         // A feature a cancel cut short failed for no reason of its own, and
         // must not reach the cache as though it had.
         if watch.cancelled() {
@@ -1289,6 +1326,7 @@ pub fn rebuild_from(
                 skipped_here.insert(i);
             }
             Ok(Ran::Built) => {
+                note_fallbacks(&mut ctx, fid.unwrap_or(""), &fallbacks);
                 if let Some(name) = naming {
                     name_new_bodies(&mut ctx, &pre_ids, id_mark, name);
                 }
