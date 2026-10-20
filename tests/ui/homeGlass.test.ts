@@ -1,11 +1,33 @@
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
 import postcss, { type Rule } from "postcss";
 import * as sass from "sass";
 import { describe, expect, it } from "vitest";
 
-const styles = resolve(__dirname, "../../src/styles");
-const css = postcss.parse(sass.compile(resolve(styles, "main.scss")).css);
+// Raw text through Vite, so the test needs no node types. Vitest would hand back
+// processed css for a plain .scss import, which is why the query is spelled out.
+const sources = import.meta.glob("../../src/styles/*.scss", {
+  query: "?raw",
+  import: "default",
+  eager: true,
+}) as Record<string, string>;
+
+const scss = new Map(
+  Object.entries(sources).map(([path, text]) => [path.split("/").pop()!.replace(/^_/, "").replace(/\.scss$/, ""), text]),
+);
+const homeSrc = scss.get("home") ?? "";
+
+const compiled = sass.compileString(scss.get("main") ?? "", {
+  url: new URL("file:///styles/main.scss"),
+  importers: [
+    {
+      canonicalize: (url) => new URL(url, "file:///styles/"),
+      load: (canonical) => {
+        const contents = scss.get(canonical.pathname.split("/").pop()!);
+        return contents === undefined ? null : { contents, syntax: "scss" };
+      },
+    },
+  ],
+}).css;
+const css = postcss.parse(compiled);
 
 // The declarations a selector gets from the rules naming it exactly, later rules
 // preferred over earlier ones, as the cascade does between equal selectors.
@@ -56,8 +78,8 @@ describe("Home wears the app's glass", () => {
   });
 
   it("takes every colour on Home from the theme", () => {
-    const src = readFileSync(resolve(styles, "_home.scss"), "utf8");
-    expect(src.match(/#[0-9a-f]{3,8}\b|rgba?\(/gi) ?? []).toEqual([]);
-    expect(src).not.toMatch(/var\(--raised/);
+    expect(homeSrc).not.toBe("");
+    expect(homeSrc.match(/#[0-9a-f]{3,8}\b|rgba?\(/gi) ?? []).toEqual([]);
+    expect(homeSrc).not.toMatch(/var\(--raised/);
   });
 });
