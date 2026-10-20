@@ -243,6 +243,22 @@
 #stage.narrow .home-side {
   display: none;
 }
+/* A narrow window wraps the New cards rather than hiding some of them off to the side. */
+#stage.narrow .home-new {
+  flex-wrap: wrap;
+  overflow-x: visible;
+}
+#stage.narrow .home-new-card {
+  width: 96px;
+}
+#stage.narrow .home-tools {
+  flex-wrap: wrap;
+}
+#stage.narrow .home-search {
+  order: -1;
+  flex: 1 1 100%;
+  max-width: none;
+}
 .home-nav-label {
   min-width: 0;
   overflow: hidden;
