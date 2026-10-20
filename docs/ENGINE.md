@@ -410,6 +410,20 @@ exactly as it did before `dev` existed, and only when `test`, `rust-geom`
 and every bundle leg are green. Changes reach `main` by promotion (7.1) or as
 a hotfix (7.2).
 
+**Each installer is started before it ships.** After a bundle leg has
+packaged, `scripts/bundle-smoke.py` starts the AppImage, the binary of the
+`.deb`, the Windows portable exe and the macOS app's binary with `--mcp`,
+and `build-flatpak` starts the installed Flatpak the same way. Over stdio
+each one opens a document, adds a 30 x 20 x 10 mm box, builds it through the
+engine inside the package and checks the volume is 6000 mm3. On `dev` a red
+smoke is an annotation and the build still ships. On `main` it fails the leg,
+which holds the beta, or for the Flatpak leaves the Flatpak out of it. The
+bundle runner has every library `linux-deps` installs, so a `.deb` or
+AppImage with a wrong dependency still starts there; only the Flatpak's clean
+runtime catches that today. A second Linux step opens the AppImage window
+under Xvfb and builds the box through a server attached to it, which proves
+the page loaded; it does not gate anything yet.
+
 The two never touch each other's release. Each has its own tag, its own
 concurrency group (`release-development`, `release-beta`) and its own feed,
 baked into the binary. They are the same app with the same identifier, so
