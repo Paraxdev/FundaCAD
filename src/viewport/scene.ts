@@ -456,7 +456,7 @@ export class PostChain {
   private composer: import("three/examples/jsm/postprocessing/EffectComposer.js").EffectComposer | null = null;
   private bloom: import("three/examples/jsm/postprocessing/UnrealBloomPass.js").UnrealBloomPass | null = null;
   private bokeh: import("three/examples/jsm/postprocessing/BokehPass.js").BokehPass | null = null;
-  private loading = false;
+  private passesLoading: Promise<void> | null = null;
   private passes: {
     EffectComposer: typeof import("three/examples/jsm/postprocessing/EffectComposer.js").EffectComposer;
     RenderPass: typeof import("three/examples/jsm/postprocessing/RenderPass.js").RenderPass;
@@ -507,6 +507,34 @@ export class PostChain {
     this.prepass = null;
     this.overlayCompose?.dispose();
     this.overlayCompose = null;
+  }
+
+  private switching: RealtimeQuality | null = null;
+
+  /** Moves to `q` once it can be drawn without a hitch: High first loads the passes
+   *  and links the programs of its prepass and overlay twins, and until that has
+   *  finished the frames keep the stages they had. A later call supersedes an
+   *  earlier one still waiting. */
+  async switchRealtimeQuality(q: RealtimeQuality, camera: THREE.Camera): Promise<void> {
+    if (q === this.switching || (this.switching === null && q === this.quality)) return;
+    this.switching = q;
+    if (q === "standard") {
+      this.realtimeQuality = q;
+      this.switching = null;
+      return;
+    }
+    try {
+      await Promise.all([
+        this.loadPasses(),
+        (this.prepass ??= new ModelPrepass()).warm(this.renderer, this.scene, camera),
+        (this.overlayCompose ??= new OverlayCompose()).warm(this.renderer, this.scene, camera),
+      ]);
+    } catch (e) {
+      console.warn("[viewport] the High realtime programs could not be linked ahead:", e);
+    }
+    if (this.switching !== q) return;
+    this.switching = null;
+    this.realtimeQuality = q;
   }
 
   /** The stages of the last frame drawn at High, or null when it was not, for reading back. */
@@ -822,9 +850,11 @@ export class PostChain {
     }
   }
 
-  private async loadPasses() {
-    if (this.loading) return;
-    this.loading = true;
+  private loadPasses(): Promise<void> {
+    return (this.passesLoading ??= this.fetchPasses());
+  }
+
+  private async fetchPasses() {
     const [
       { EffectComposer }, { RenderPass }, { UnrealBloomPass }, { BokehPass }, { OutputPass },
     ] = await Promise.all([

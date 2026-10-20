@@ -5,7 +5,10 @@
 //
 // Usage (from the repo root, vite + engine `fundacad-engine --ws` running):
 //   SC_TOKEN=<engine token> SC_CHROME=<chrome exe> [SC_URL=http://localhost:5173/] \
-//     [SC_ENGINE_PORT=8765] [SC_ANGLE=d3d11] node e2e/picture_matches_view_e2e.cjs [outDir]
+//     [SC_ENGINE_PORT=8765] [SC_ANGLE=d3d11] [SC_QUALITY=standard|high] node e2e/picture_matches_view_e2e.cjs [outDir]
+// SC_QUALITY picks the realtime quality through the Realtime quality row of the
+// Render dock (a dev build shows it), so the pictures are compared with the view
+// drawn by that tier.
 const { chromium } = require("playwright-core");
 const fs = require("fs");
 const path = require("path");
@@ -15,6 +18,7 @@ const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const URL = process.env.SC_URL || "http://localhost:5173/";
 const PORT = process.env.SC_ENGINE_PORT || "8765";
 const ANGLE = process.env.SC_ANGLE || "d3d11";
+const QUALITY = process.env.SC_QUALITY || "";
 const OUT = path.resolve(process.argv[2] || "picture_shots");
 if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
 let failures = 0;
@@ -47,6 +51,16 @@ const check = (name, ok, detail) => {
     await page.waitForTimeout(1500);
     const modal = await page.$(".modal-close");
     if (modal) { await modal.click(); await page.waitForTimeout(300); }
+
+    if (QUALITY) {
+      await page.click('#workspace-toggle [data-workspace="render"]');
+      await page.waitForTimeout(500);
+      await page.click('.rd-tab[data-tab="environment"]');
+      await page.click(`[data-realtime-quality="${QUALITY}"]`);
+      await page.waitForTimeout(2500);
+      const now = await page.evaluate(() => window.viewport.scene.post.realtimeQuality);
+      check(`the row put the view at ${QUALITY}`, now === QUALITY, now);
+    }
 
     const bodies = await page.evaluate(async () => {
       const s = window.store;
@@ -210,6 +224,10 @@ const check = (name, ok, detail) => {
     const glass2 = await still("glass_2", 2, true);
     const dGlass2 = await diff(kept, glass2);
     check("and so does a 2x one", dGlass2 < 3, dGlass2.toFixed(2));
+    if (QUALITY === "high") {
+      const stages = await page.evaluate(() => window.viewport.scene.post.highStages);
+      check("the view was drawn by the High stages", !!stages, JSON.stringify(stages));
+    }
   } finally {
     await browser.close();
   }
