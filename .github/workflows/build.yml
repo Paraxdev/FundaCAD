@@ -190,7 +190,8 @@ jobs:
         with:
           targets: wasm32-wasip2
 
-      # The root workspace too: fundacad-mcp is built there.
+      # The root workspace too: fundacad-mcp is built there. A cache saved on
+      # a tag is only ever read by that tag's re-runs, and the quota is shared.
       - name: Cache Cargo
         uses: swatinem/rust-cache@v2
         with:
@@ -198,6 +199,7 @@ jobs:
             src-tauri -> target
             . -> target
           key: alpha
+          save-if: ${{ github.ref_type != 'tag' }}
 
       # The kernel is installed into target/OCCT at the repo root (the root
       # .cargo/config.toml sets FUNDACAD_OCCT_ROOT, src-tauri reads it too),
@@ -862,6 +864,7 @@ jobs:
           workspaces: |
             . -> target
             src-tauri -> target
+          save-if: ${{ github.ref_type != 'tag' }}
 
       # The same kernel and key as bundle's, so the two jobs share it. Keep
       # it after rust-cache, see bundle.
