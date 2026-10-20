@@ -825,6 +825,35 @@ jobs:
           cargo build --release --example tracer_serve --manifest-path src-tauri/tracer/Cargo.toml
           node e2e/pathtrace_bloom_e2e.cjs /tmp/pathtrace_bloom_shots
 
+      # The agent harness starts its own engine, vite and Chrome on free ports,
+      # so the engine and vite above are left alone.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Agent harness unit tests
+        run: |
+          pip install -e "tools/harness[test]"
+          python -m pytest tools/harness/tests/unit -q
+
+      - name: Agent harness smoke set
+        env:
+          FUNDACAD_ENGINE_CMD: ${{ github.workspace }}/engine-bin/fundacad-engine
+          FUNDACAD_CHROME: /usr/bin/google-chrome
+          FUNDACAD_HARNESS_KEEP: "1"
+          TMPDIR: ${{ runner.temp }}/harness
+        run: |
+          mkdir -p "$TMPDIR"
+          python -m pytest tools/harness/tests -m smoke -q
+
+      - name: Agent harness logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: harness-logs
+          path: ${{ runner.temp }}/harness
+          if-no-files-found: ignore
+
       - name: Engine log on failure
         if: failure()
         run: tail -50 /tmp/ci_engine.log /tmp/ci_vite.log || true
