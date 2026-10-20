@@ -2,7 +2,7 @@
 //
 //   1. Startup shows Home over the stage, with its close button.
 //   2. Blank closes it and leaves an empty document.
-//   3. Help > Home brings it back, Escape closes it.
+//   3. File > Home and the title bar button bring it back, Escape closes it.
 //   4. With unsaved work, Blank asks before discarding it.
 //   5. A .funda dropped over Home opens and Home closes.
 //
@@ -62,10 +62,16 @@ function check(name, ok, detail = "") {
     const blank = await page.evaluate(() => window.store.document.features.length);
     check("the document is empty", blank === 0, String(blank));
 
-    console.log("3. Help > Home");
-    await menu("Help", "Home");
+    console.log("3. File > Home and the title bar button");
+    await page.click('#titlebar [title="Home"]');
     await page.waitForTimeout(200);
-    check("Help > Home opens it", await homeUp());
+    check("the title bar button opens it", await homeUp());
+    await page.click('#titlebar [title="Home"]');
+    await page.waitForTimeout(200);
+    check("the button again goes back to the document", !(await homeUp()));
+    await menu("File", "Home");
+    await page.waitForTimeout(200);
+    check("File > Home opens it", await homeUp());
     await page.keyboard.press("Escape");
     await page.waitForTimeout(200);
     check("Escape closes it", !(await homeUp()));
@@ -73,7 +79,7 @@ function check(name, ok, detail = "") {
     console.log("4. unsaved work");
     await page.evaluate(() => window.store.addFeature({ id: "b1", type: "box", length: 10, width: 10, height: 10 }));
     await settle();
-    await menu("Help", "Home");
+    await menu("File", "Home");
     await page.click(".home-new-blank");
     await page.waitForSelector("button:has-text('Discard')", { timeout: 5000 });
     check("Blank asks before discarding", true);

@@ -27,8 +27,8 @@ This file starts on 2026-08-03. For anything before that, see the
 
 - **Home.** The app starts on Home, a screen over the viewport with your recent
   documents as cards, Blank to start a new document and Open… to find one on
-  disk. Escape or the close button goes back to the document, Help > Home brings
-  it back, and Show Home on startup turns it off. A recent document that could
+  disk. Escape or the close button goes back to the document, File > Home and the
+  home button in the title bar bring it back, and Show Home on startup turns it off. A recent document that could
   not be read stays on the list, marked as such, instead of disappearing.
 - **Mechanisms.** A `mechanism` feature joins bodies with revolute, slider and
   rigid joints, closed loops included, and poses them all at once: the ground

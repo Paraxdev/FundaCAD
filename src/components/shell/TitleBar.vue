@@ -53,6 +53,7 @@ onUnmounted(() => { offPlugins?.(); offTheme?.(); });
 <template>
   <header id="titlebar">
     <span class="brand"><img :src="brandLockup" alt="FundaCAD" /></span>
+    <button id="home-btn" class="tb-btn" title="Home" aria-label="Home" @click="engine.ui.home.toggle()"><Icon name="home" :size="15" /></button>
     <MenuBar :menus="menus" />
     <button
       id="undo-btn"
