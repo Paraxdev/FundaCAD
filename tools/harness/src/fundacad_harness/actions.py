@@ -162,15 +162,18 @@ class Actions:
     def tool(self, label: str):
         """Starts a rail tool by its label, opening its family first when it is folded inside one."""
         steps = self.bridge.call("toolPath", label=label)["steps"]
+        before = self.bridge.call("status", since=self._mark)
         hit = None
         for i, s in enumerate(steps):
             hit = self._click_control(s["ref"], s["button"])
             if i < len(steps) - 1:
                 self.page.wait_for_timeout(50)
         self.settle()
-        if self.bridge.call("status", since=self._mark).get("tool"):
+        after = self.bridge.call("status", since=self._mark)
+        asks = after.get("prompt") and after["prompt"] != before.get("prompt")
+        if after.get("tool") or after["mode"] != before["mode"] or asks:
             return f'started {hit["ref"]} "{hit["label"]}"', hit
-        return f'clicked {hit["ref"]} "{hit["label"]}", no tool is running after it', hit
+        return f'clicked {hit["ref"]} "{hit["label"]}", no tool, mode or prompt changed after it', hit
 
     @action
     def type(self, target: str, text: str, enter: bool = False):

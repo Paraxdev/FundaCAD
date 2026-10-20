@@ -86,6 +86,17 @@ describe("status", () => {
     expect(s.warnings).toEqual([]);
   });
 
+  it("names the sketch tool the rail has lit, a sketch shows no running tool button", () => {
+    const rail = document.getElementById("toolrail")!;
+    rail.dataset.mode = "sketch";
+    rail.dataset.sketchTool = "line";
+    expect(read.status(host()).tool).toBe("Line");
+    rail.dataset.sketchTool = "select";
+    expect(read.status(host()).tool).toBeNull();
+    rail.dataset.mode = "model";
+    delete rail.dataset.sketchTool;
+  });
+
   it("names a warning the view raised, such as Low performance", () => {
     document.body.insertAdjacentHTML("beforeend", `<div id="viewcontrols"><button class="perf-warn" title="Low performance"></button></div>`);
     expect(read.status(host()).warnings).toEqual(["Low performance"]);

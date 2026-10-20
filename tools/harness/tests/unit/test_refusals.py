@@ -35,6 +35,9 @@ class Screen:
         self.clicked: list[str] = []
         self.tools: dict[str, str] = {}
         self.running: str | None = None
+        self.mode = "model"
+        self.prompt = ""
+        self.on_click = lambda: None
 
     def call(self, method, **args):
         if method == "seq":
@@ -42,7 +45,7 @@ class Screen:
         if method == "messages":
             return {"seq": 0, "rows": []}
         if method == "status":
-            return {"mode": "model", "tool": self.running}
+            return {"mode": self.mode, "tool": self.running, "prompt": self.prompt}
         if method == "toolPath":
             if args["label"] not in self.tools:
                 raise NotFound(f'no tool "{args["label"]}"')
@@ -52,6 +55,7 @@ class Screen:
         if method == "locate":
             row = next(r for r in self.rows if r[1] == args["target"])
             self.clicked.append(row[1])
+            self.on_click()
             return {"marker": "m", "ref": row[1], "label": row[3]}
         raise AssertionError(method)
 
@@ -89,9 +93,22 @@ def test_a_tool_that_does_not_start_is_not_called_started():
     rows = [[1, "pick:extrude", "button", "Extrude", [], "toolrail"]]
     s = session(rows)
     s.bridge.tools["Extrude"] = "pick:extrude"
-    assert str(s.tool("Extrude")).startswith('clicked pick:extrude "Extrude", no tool is running after it, mode model')
+    assert str(s.tool("Extrude")).startswith('clicked pick:extrude "Extrude", no tool, mode or prompt changed after it, mode model')
     s.bridge.running = "Extrude"
     assert str(s.tool("Extrude")).startswith('started pick:extrude "Extrude", mode model, tool Extrude')
+    s.close()
+
+
+def test_a_tool_that_shows_no_running_button_is_started_by_its_mode_or_prompt():
+    rows = [[1, "action:sketch", "button", "Sketch", [], "toolrail"], [2, "action:line", "button", "Line", [], "toolrail"]]
+    s = session(rows)
+    s.bridge.tools.update({"Sketch": "action:sketch", "Line": "action:line"})
+    s.bridge.on_click = lambda: setattr(s.bridge, "prompt", "Select a plane or a face to sketch on")
+    assert str(s.tool("Sketch")).startswith('started action:sketch "Sketch"')
+    s.bridge.on_click = lambda: setattr(s.bridge, "mode", "sketch")
+    assert str(s.tool("Line")).startswith('started action:line "Line"')
+    s.bridge.on_click = lambda: None
+    assert "no tool, mode or prompt changed" in str(s.tool("Line"))
     s.close()
 
 
