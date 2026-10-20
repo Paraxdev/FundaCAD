@@ -24,6 +24,17 @@ RELOAD_WINDOW = 30
 RELOADED = "the page reloaded before this step, a browser tab keeps no document over a reload, so this one is new"
 
 
+def remove_dir(path: Path, tries: int = 3, wait: float = 0.5, sleep=time.sleep) -> bool:
+    # Note: a just stopped engine or log pump can hold a file in the folder for a moment on Windows.
+    for n in range(tries):
+        shutil.rmtree(path, ignore_errors=True)
+        if not path.exists():
+            return True
+        if n < tries - 1:
+            sleep(wait)
+    return False
+
+
 def _flag(name: str) -> bool:
     return os.environ.get(name, "") not in ("", "0", "false", "no")
 
@@ -235,8 +246,9 @@ class Session(Actions):
                 for heavy in ("blobs", "cache"):
                     shutil.rmtree(self.work / heavy, ignore_errors=True)
             print(f"fundacad-harness: logs kept in {self.work}", file=sys.stderr)
-        else:
-            shutil.rmtree(self.work, ignore_errors=True)
+        elif not remove_dir(self.work):
+            kept = True
+            print(f"fundacad-harness: could not remove {self.work}, delete it by hand", file=sys.stderr)
         try:
             atexit.unregister(self.close)
         except Exception:
