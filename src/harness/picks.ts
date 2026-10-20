@@ -150,6 +150,9 @@ export function resolveFace(h: PickHost, sel: string): FaceInfo {
   if (words.startsWith("index=")) {
     const i = Number(words.slice(6));
     const f = faces.find((x) => x.index === i);
+    if (!f && Number.isInteger(i) && i >= 0 && i < body.faceCount) {
+      throw new HarnessError(`face ${i} of ${body.id} has nothing drawn, so there is no point on it to pick`, "NotFound");
+    }
     if (!f) throw new HarnessError(`${body.id} has faces 0 to ${body.faceCount - 1}, not ${words.slice(6)}`, "NotFound");
     return f;
   }
