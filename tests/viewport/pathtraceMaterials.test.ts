@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { type BodyFinish, FINISH } from "../../src/document/materials";
 import { MAX_EMISSIVE_INTENSITY } from "../../src/ui/renderPrefs";
 import { materialSignature, mirrorBody } from "../../src/viewport/pathtrace/mirror";
+import { traceMaterialFrom, traceMaterialKey } from "../../src/viewport/pathtrace/materials";
 import { applySurface } from "../../src/viewport/proceduralSurface";
 import { applyClearcoat, applyGlassLook, applyThinFilm, CLEARCOAT_ROUGHNESS } from "../../src/viewport/render";
 
@@ -122,5 +123,19 @@ describe("material signature", () => {
     const before = materialSignature([b]);
     applySurface(mat, { kind: "noise", scale: 2, amount: 0.3, color: "#ff0000", colorAmount: 0.9 });
     expect(materialSignature([b])).not.toBe(before);
+  });
+});
+
+describe("a glow that lights nothing else, traced", () => {
+  it("carries noLight to the traced material and into its key", () => {
+    const src = new THREE.MeshPhysicalMaterial({ emissive: 0xffffff, emissiveIntensity: 2 });
+    const plainKey = traceMaterialKey(src);
+    src.userData.noLight = true;
+    expect(traceMaterialKey(src)).not.toBe(plainKey);
+    const t = traceMaterialFrom(src, true);
+    expect(t.userData.noLight).toBe(true);
+    delete src.userData.noLight;
+    traceMaterialFrom(src, true, t);
+    expect(t.userData.noLight).toBeUndefined();
   });
 });
