@@ -245,6 +245,7 @@ function addPreset(raw: unknown) {
 function set(
   field: "name" | "color" | "metalness" | "roughness" | "opacity" | "emissive" | "clearcoat"
     | "ior" | "thickness" | "attenuationDistance" | "dispersion" | "iridescence"
+    | "sheen" | "anisotropy" | "flakes" | "flakeSize" | "scatterDistance"
     | "attenuationColor" | "specularColor",
   raw: string,
 ) {
@@ -320,6 +321,12 @@ const TINT_DEPTH = 20;
 type MaterialPatch = Partial<Omit<MaterialDef, "id">>;
 
 /** Glass controls only where the viewport draws glass: see-through and not metal. */
+const ADVANCED_SLIDERS = [
+  { field: "sheen", label: "Sheen" },
+  { field: "anisotropy", label: "Anisotropy" },
+  { field: "flakes", label: "Flakes" },
+] as const;
+
 function isGlass(m: MaterialDef): boolean {
   const f = finishOf(m);
   return f.opacity < 1 && f.metalness < 0.5;
@@ -598,6 +605,15 @@ async function doImport() {
         Emission is on for this material. Turn Bloom on under Environment to see it
         spill light.
       </div>
+      <label v-if="finishOf(selected).emissive > 0" class="prefs-row">
+        <span class="prefs-label">Lights other parts</span>
+        <input
+          type="checkbox"
+          data-field="castsLight"
+          :checked="finishOf(selected).castsLight"
+          @change="store.updateMaterial(selected.id, { castsLight: ($event.target as HTMLInputElement).checked })"
+        />
+      </label>
       <label class="prefs-row">
         <span class="prefs-label">Clearcoat</span>
         <input
@@ -628,6 +644,39 @@ async function doImport() {
         />
         <button v-if="selected.specularColor" class="rd-chip" @click="set('specularColor', '')">Clear</button>
       </div>
+      <details class="rd-advanced" data-advanced>
+        <summary class="prefs-label">Advanced</summary>
+        <label v-for="s in ADVANCED_SLIDERS" :key="s.field" class="prefs-row">
+          <span class="prefs-label">{{ s.label }}</span>
+          <input
+            class="sm-slider"
+            type="range" min="0" max="1" step="0.01"
+            :data-field="s.field"
+            :value="finishOf(selected)[s.field]"
+            @input="set(s.field, ($event.target as HTMLInputElement).value)"
+          />
+        </label>
+        <label class="prefs-row">
+          <span class="prefs-label">Flake size (mm)</span>
+          <input
+            class="sm-slider"
+            type="range" min="0.02" max="2" step="0.01"
+            data-field="flakeSize"
+            :value="finishOf(selected).flakeSize"
+            @input="set('flakeSize', ($event.target as HTMLInputElement).value)"
+          />
+        </label>
+        <label v-if="isGlass(selected)" class="prefs-row">
+          <span class="prefs-label">Scatter (mm)</span>
+          <input
+            class="sm-slider"
+            type="range" min="0" max="20" step="0.1"
+            data-field="scatterDistance"
+            :value="finishOf(selected).scatterDistance"
+            @input="set('scatterDistance', ($event.target as HTMLInputElement).value)"
+          />
+        </label>
+      </details>
 
       <!-- Glass: how light bends and colours on its way through. -->
       <div v-if="isGlass(selected)" class="rd-surface" data-glass>
