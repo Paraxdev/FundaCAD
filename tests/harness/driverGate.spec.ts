@@ -57,6 +57,16 @@ describe("startScreen", () => {
   });
 });
 
+describe("opens", () => {
+  it("counts the documents the store opened", () => {
+    let open = () => {};
+    const m = createMethods({ store: { onOpen: (fn: () => void) => ((open = fn), () => {}) } } as unknown as HarnessHost, document);
+    expect(m.opens!({})).toBe(0);
+    open();
+    expect(m.opens!({})).toBe(1);
+  });
+});
+
 describe("screen", () => {
   it("names the regions when asked for one that does not exist", () => {
     const m = createMethods(host, document);

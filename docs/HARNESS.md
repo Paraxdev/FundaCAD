@@ -155,7 +155,7 @@ with Session() as s:
 | `view(name)` | top, bottom, front, back, right, left, iso (the default view fitted to the model), default, fit, through the Views popover, a running tool keeps going |
 | `undo()`, `redo()` | the title bar buttons; once the document holds an import they wait as long as `import_file`, and while an import reads its file both are off |
 | `expand(target, open=True)` | opens or closes an Items folder by its caret (a click on the row selects) |
-| `open_file(path, discard=True)` | File > Open, answering the file chooser and the unsaved changes question, refused when the document did not change |
+| `open_file(path, discard=True)` | File > Open, answering the file chooser and the unsaved changes question, returns once the app has loaded the file and is refused with the error it logged when it loaded none |
 | `import_file(path)` | drops the file on the canvas, the way a browser tab imports a model; waits up to 300 s or `settle_timeout`, whichever is longer, and with `settle=False` returns once the file is dropped |
 | `save_as(path)` | File > Save As, the download lands at `path` |
 | `new_document(discard=True)` | Ctrl+N, answering the unsaved changes question |

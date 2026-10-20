@@ -435,30 +435,27 @@ class Actions:
     @action
     def open_file(self, path: str | os.PathLike, discard: bool = True):
         """File > Open, answering the file chooser with `path`, dropping unsaved changes unless `discard=False`."""
-        was = self.bridge.call("history")
+        was = self.bridge.call("opens")
         full = self._choose_file("File/Open...", path)
         name = Path(full).name
         end = time.monotonic() + OPEN_WAIT_S
+        refused: list[str] = []
         while True:
-            if self._answer_discard(discard):
+            self._answer_discard(discard)
+            if self.bridge.call("opens") != was:
                 break
-            st = self.bridge.call("status")
-            if st.get("doc") == name and not st.get("dirty"):
-                break
-            if time.monotonic() > end:
+            refused = [r["text"] for r in self.bridge.call("messages", since=self._mark)["rows"] if r["level"] == "error"]
+            if refused or time.monotonic() > end:
                 break
             self.page.wait_for_timeout(50)
+        if self.bridge.call("opens") == was:
+            st = self.bridge.call("status")
+            why = refused[-1] if refused else st.get("error")
+            raise HarnessError(f'File > Open did not open {name}, the document is still "{st.get("doc")}"'
+                               + (f", error: {why}" if why else ""))
         settling = getattr(self, "_settling", True)
         if settling:
             self.settle()
-        st = self.bridge.call("status")
-        # A refused file of the open document's own name leaves the name as it was, and the history too.
-        refused = [r["text"] for r in self.bridge.call("messages", since=self._mark)["rows"] if r["level"] == "error"]
-        if refused and self.bridge.call("history") != was:
-            refused = []
-        if st.get("doc") != name or refused:
-            why = f", error: {refused[-1] if refused else st['error']}" if refused or st.get("error") else ""
-            raise HarnessError(f'File > Open did not open {name}, the document is still "{st.get("doc")}"{why}')
         builds = "" if settling else ", the model builds on, settle() to see it"
         return f"opened {name}{builds}", {"path": full}
 
