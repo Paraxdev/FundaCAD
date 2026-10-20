@@ -130,6 +130,15 @@ cargo test --workspace --features fundacad-engine/ws   # the engine, from the to
 cd src-tauri && cargo test --tests                     # the app shell, needs the dist/ that npm run build makes
 ```
 
+Tests that use the app the way a person does go through the agent harness in `tools/harness`
+([docs/HARNESS.md](docs/HARNESS.md)), not a new page script. It starts its own engine, vite and
+Chrome, so it needs a built `fundacad-engine` and an installed Chrome. The smoke set CI runs:
+
+```bash
+pip install -e "tools/harness[test]"
+python -m pytest tools/harness/tests -m smoke
+```
+
 ### Frontend only
 
 To iterate on the interface in a browser, run the engine and Vite in two terminals:

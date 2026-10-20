@@ -171,6 +171,19 @@ Every canvas point is checked with the app's own picker before the click, and po
 panel or a handle are skipped. When no point works the call fails with `Occluded` and suggests a
 view; the harness never turns the camera by itself.
 
+## Settling
+
+After each action the driver waits until the app is quiet: the engine socket open, no rebuild
+pending or running, no long operation, no geometry request in flight (tool previews are requests
+too), and the viewport neither drawing nor moving the camera. All of that has to hold on 3 frames
+in a row with nothing new in the document, the build or the log for 150 ms, which also covers a
+tool that makes its edit a moment after the click. `s.settle(trace=N)` waits for the path traced
+view to reach N samples as well. After 60 s (`settle_timeout=`) it fails with `SettleTimeout` and
+one line on what is still busy, for example `building, 2 requests in flight, socket open`.
+
+If vite reloads the page once while it optimises dependencies on a cold start, the session waits
+for the app again and closes the start screen again. A second reload is an error.
+
 ## Recording
 
 `Session(record="walk.py")` writes every action to `walk.py` as it happens, and `python walk.py`
@@ -227,6 +240,25 @@ tools, `ui_open`, `ui_do`, `ui_read`, `ui_shot` and `ui_close`, relayed to `serv
 named by `FUNDACAD_HARNESS_PYTHON`. A `ui_do` step is a `do` step as above. Install the package
 into that Python, then see [MCP.md](MCP.md#driving-the-app-standalone-only) for the `.mcp.json`
 entry. Auto and attach never offer these tools.
+
+## Porting an e2e script
+
+The scripts in `e2e/*.cjs` reach into `window.store`, `window.tree` and the tools' own fields, so
+they break silently when a field moves. A port says what a person does and reads what a person
+sees:
+
+| the script does | the harness does |
+|---|---|
+| `store.addFeature(...)` or a tool's `commit()` | `s.tool("Extrude")`, `s.type("D", "20")`, `s.press("Enter")` |
+| `page.mouse.click(x, y)` at a computed point | `s.pick_face("top")`, `s.click_at(sketch=(10, 5))`, `s.drag_handle("depth", mm=5)` |
+| `waitForFunction(() => !store.buildState.building)` | nothing, every action settles |
+| `store.doc.features.map(...)` | `s.history()` |
+| reading `tree` or the Items DOM | `s.bodies()`, `s.screen(region="items")` |
+| `page.screenshot()` on every step | `s.screenshot()` only when the look matters |
+
+Open a fixture document with `s.open_file(...)` rather than building one in page code, keep the
+asserts on readout text, and put the port in `tools/harness/examples/` with a test in
+`tests/browser/`. The old script stays until the port has been green in CI for a while.
 
 ## Troubleshooting
 
