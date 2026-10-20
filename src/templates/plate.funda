@@ -173,6 +173,13 @@
       "sketch": "outline",
       "distance": 6,
       "operation": "new",
+      "regions": [
+        [
+          0,
+          0,
+          0
+        ]
+      ],
       "hiddenBodies": []
     }
   ],
