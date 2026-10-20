@@ -48,6 +48,9 @@ process it did not start. Leaving the `with` block, `s.close()`, an exception or
 stops all of it. On Windows so does a hard kill of the Python, such as a shell tool's timeout; on
 Linux that leaves the engine and vite running, `s.pids()` names them.
 
+One `Session` per process, and not inside a running asyncio loop (a notebook, an async host):
+start a second session in a process of its own. Sessions in separate processes run side by side.
+
 Options:
 
 | option | default | what it does |

@@ -121,7 +121,15 @@ class Session(Actions):
             from playwright.sync_api import sync_playwright
         except ImportError as e:
             raise LaunchError("playwright is not installed, pip install -e tools/harness") from e
-        self._pw = sync_playwright().start()
+        try:
+            self._pw = sync_playwright().start()
+        except Exception as e:
+            if "asyncio loop" not in str(e):
+                raise
+            raise LaunchError(
+                "a Session needs a process of its own with no asyncio loop running: close the other"
+                " Session first, or run this one in its own process (not in a notebook or an async host)"
+            ) from None
         self._browser = self._pw.chromium.launch(
             executable_path=self.chrome, headless=not self.headed, args=chrome_args(self.gpu)
         )
