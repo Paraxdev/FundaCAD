@@ -171,3 +171,42 @@ fn geometry_a_hash_shaped_string_names_is_embedded_when_stored_and_skipped_when_
     assert!(err.contains("could not be found"), "{err}");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A big import is saved in segments with their index beside it, and every way
+/// the app opens a file publishes the same bytes on a machine that never saw it.
+#[test]
+fn a_big_import_saved_in_segments_opens_the_same_every_way() {
+    use fundacad_lib::container::{hash_bytes, open_document_bytes, open_document_checked, open_document_full, save_document, Stores};
+    use fundacad_lib::fnda;
+    let dir = tmpdir("segmented");
+    let stores = Stores { blobs: dir.join("blobs"), meshes: dir.join("meshes"), sections: dir.join("sections") };
+    std::fs::create_dir_all(&stores.blobs).unwrap();
+    let data: Vec<u8> = (0..3u32 << 20).map(|i| b"0123456789 ,.-e"[((i.wrapping_mul(2654435761) >> 15) % 15) as usize]).collect();
+    let hash = hash_bytes(&data);
+    std::fs::write(stores.blobs.join(format!("{hash}.bbrep")), &data).unwrap();
+    let doc = format!(r#"{{"version":10,"parameters":{{}},"features":[{{"id":"f1","type":"import","name":"Big","format":"step","geom":"{hash}"}}]}}"#);
+    let dest = dir.join("big.fundab");
+    save_document(&stores, &dest, &doc, vec![hash.clone()], vec![], vec![], vec![], "seam-test").unwrap();
+    let index = fnda::read_section_of_kind(&dest, fnda::KIND_SEGMENTS).unwrap();
+    assert!(index.is_some(), "a 3 MiB blob is saved in segments");
+
+    let full = dir.join("blobs_full");
+    let opened = open_document_full(&dest, &full, Some(&dir.join("meshes_b")), Some(&dir.join("sections_b"))).unwrap();
+    assert!(opened.carried.is_empty(), "the index is never carried");
+    assert_eq!(opened.report, fnda::RepairReport::default());
+    let checked = dir.join("blobs_checked");
+    let (got, _) = open_document_checked(&dest, &checked, None).unwrap();
+    let dropped = dir.join("blobs_dropped");
+    let from_bytes = open_document_bytes(&std::fs::read(&dest).unwrap(), &dropped, None, Some(&dir.join("sections_c"))).unwrap();
+    assert!(from_bytes.was_container && from_bytes.carried.is_empty());
+    for (store, text) in [(&full, &opened.document), (&checked, &got), (&dropped, &from_bytes.document)] {
+        assert_eq!(serde_json::from_str::<serde_json::Value>(text).unwrap(), serde_json::from_str::<serde_json::Value>(&doc).unwrap());
+        assert_eq!(std::fs::read(store.join(format!("{hash}.bbrep"))).unwrap(), data);
+    }
+
+    let fixture_store = dir.join("blobs_fixture");
+    let fixture = open_document_full(Path::new(&fixture("versions/segmented.fundab")), &fixture_store, None, None).unwrap();
+    assert_eq!(serde_json::from_str::<serde_json::Value>(&fixture.document).unwrap()["version"], 10);
+    assert_eq!(std::fs::read_dir(&fixture_store).unwrap().count(), 1);
+    let _ = std::fs::remove_dir_all(&dir);
+}
