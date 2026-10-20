@@ -77,6 +77,16 @@ def test_open_file_over_unsaved_changes_discards_them_and_opens():
     s.close()
 
 
+def test_open_file_with_settle_false_does_not_wait_for_the_build():
+    app = App()
+    s = session(app)
+    settled = []
+    s.settle = lambda *a, **k: settled.append(1) or "settled"
+    assert "the model builds on" in str(s.open_file(BLOCK, settle=False))
+    assert app.doc == "block.json" and not settled
+    s.close()
+
+
 def test_open_file_keeping_unsaved_changes_cancels_and_says_so():
     app = App()
     s = session(app)
