@@ -70,12 +70,13 @@ fn a_short_render_sits_near_each_reference_on_every_path() {
     }
 }
 
-/// Measured at 64 spp: 1.5 to 2.9 on the lit scenes, 34.6 on the emitter, which
+/// Measured at 64 spp: 1.5 to 4.0 on the lit scenes, 5.5 on the studio room
+/// (halving with every 4x the samples, so noise), 34.6 on the emitter, which
 /// only BSDF hits find until tracer-emissive-nee.
 fn limit(name: &str) -> f64 {
-    if name == "emitter" {
-        45.0
-    } else {
-        5.0
+    match name {
+        "emitter" => 45.0,
+        "studio" => 8.0,
+        _ => 5.0,
     }
 }

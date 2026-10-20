@@ -26,7 +26,7 @@ use std::time::Duration;
 use fundacad_engine::ws::{appenv, mint_token, Gate};
 use fundacad_frames::{frame_size, Current, FrameSource, Notes, Reopen, Transport, WebSocketTransport};
 use fundacad_tracer::{
-    decode_colors, decode_mesh, denoise, oidn, Bloom, BodyDesc, Camera, Denoiser, Look, Path, Quality, Tracer,
+    decode_colors, decode_env, decode_mesh, denoise, oidn, Bloom, BodyDesc, Camera, Denoiser, Look, Path, Quality, Tracer,
     TracerOptions,
 };
 use serde::de::DeserializeOwned;
@@ -193,6 +193,10 @@ impl Dev {
                 let (key, mesh) = decode_mesh(raw()?)?;
                 self.with(|t| t.add_mesh(&key, mesh)).map(|_| Value::Null)
             }
+            "pt_env" => {
+                let e = decode_env(raw()?)?;
+                self.with(|t| t.set_environment(e)).map(|_| Value::Null)
+            }
             "pt_colors" => {
                 let (key, colors) = decode_colors(raw()?)?;
                 to_value(self.with(|t| t.set_colors(&key, colors))?)
@@ -203,7 +207,10 @@ impl Dev {
             }
             "pt_look" => {
                 let l: Look = arg(args, "look")?;
-                self.with(|t| t.set_look(l)).map(|_| Value::Null)
+                to_value(self.with(|t| {
+                    t.set_look(l);
+                    t.environment_key().map(String::from)
+                })?)
             }
             "pt_cap" => {
                 let cap: u32 = arg(args, "cap")?;

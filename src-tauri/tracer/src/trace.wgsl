@@ -13,6 +13,8 @@ struct U {
   eye: vec4f, fwd: vec4f, right: vec4f, up: vec4f,
   sky_top: vec4f, sky_bottom: vec4f, tone: vec4f,
   lights: array<Light, 4>,
+  // discs, environment layout (0 none, 1 Y up, 2 Z up), the chance a light
+  // sample picks the environment as f32 bits, 1 when camera misses show it
   n_lights: vec4u,
   // rgb, w 1 when camera misses show it instead of the sky
   background: vec4f,
@@ -48,6 +50,9 @@ struct Hit { ok: bool, t: f32, inst: u32, prim: u32, bary: vec2f }
 @group(0) @binding(7) var<storage, read> cols: array<u32>;
 @group(0) @binding(8) var<storage, read> insts: array<Inst>;
 @group(0) @binding(9) var<storage, read> mats: array<Mat>;
+@group(0) @binding(12) var env_map: texture_2d<f32>;
+// The environment's tables as env.rs lays them out.
+@group(0) @binding(13) var<storage, read> lights: array<vec4f>;
 
 const PI = 3.14159265;
 const SOLID = 1u;
@@ -107,6 +112,79 @@ fn fresnel(ci: f32, eta: f32) -> f32 {
 }
 fn env(d: vec3f) -> vec3f {
   return mix(u.sky_bottom.rgb, u.sky_top.rgb, d.z * 0.5 + 0.5) * u.sky_top.w;
+}
+
+fn lf(i: u32) -> f32 { return lights[i >> 2u][i & 3u]; }
+fn env_on() -> bool { return u.n_lights.y != 0u; }
+fn env_chance() -> f32 { return bitcast<f32>(u.n_lights.z); }
+// (u, v) of d, v in image rows from row 0 (env.rs uv).
+fn env_uv(d: vec3f) -> vec2f {
+  if (u.n_lights.y == 1u) {
+    return vec2f(fract(atan2(d.z, d.x) / (2.0 * PI) + 0.5), 1.0 - acos(clamp(d.y, -1.0, 1.0)) / PI);
+  }
+  return vec2f(fract(atan2(-d.y, d.x) / (2.0 * PI)), acos(clamp(d.z, -1.0, 1.0)) / PI);
+}
+fn env_dir(uv: vec2f) -> vec3f {
+  if (u.n_lights.y == 1u) {
+    let p = (1.0 - uv.y) * PI;
+    let t = (uv.x - 0.5) * 2.0 * PI;
+    return vec3f(sin(p) * cos(t), cos(p), sin(p) * sin(t));
+  }
+  let th = uv.y * PI;
+  let az = -2.0 * PI * uv.x;
+  return vec3f(sin(th) * cos(az), sin(th) * sin(az), cos(th));
+}
+fn env_texel(uv: vec2f) -> vec2u {
+  let wh = vec2u(u32(lf(0u)), u32(lf(1u)));
+  return min(vec2u(uv * vec2f(wh)), wh - 1u);
+}
+// Nearest, the same piecewise constant radiance the pdf follows.
+fn env_light(d: vec3f) -> vec3f {
+  return max(textureLoad(env_map, env_texel(env_uv(d)), 0).rgb, vec3f(0.0)) * u.sky_top.w;
+}
+// Bilinear, for camera misses.
+fn env_view(d: vec3f) -> vec3f {
+  let wh = vec2i(textureDimensions(env_map));
+  let p = env_uv(d) * vec2f(wh) - 0.5;
+  let f = fract(p);
+  let i = vec2i(floor(p));
+  let x0 = (i.x % wh.x + wh.x) % wh.x;
+  let x1 = (x0 + 1) % wh.x;
+  let y0 = clamp(i.y, 0, wh.y - 1);
+  let y1 = clamp(i.y + 1, 0, wh.y - 1);
+  let a = mix(textureLoad(env_map, vec2i(x0, y0), 0).rgb, textureLoad(env_map, vec2i(x1, y0), 0).rgb, f.x);
+  let b = mix(textureLoad(env_map, vec2i(x0, y1), 0).rgb, textureLoad(env_map, vec2i(x1, y1), 0).rgb, f.x);
+  return max(mix(a, b, f.y), vec3f(0.0)) * u.sky_top.w;
+}
+fn cdf_step(base: u32, i: u32) -> f32 {
+  return lf(base + i) - select(0.0, lf(base + i - 1u), i > 0u);
+}
+fn cdf_search(base: u32, n: u32, r: f32) -> u32 {
+  var lo = 0u;
+  var hi = n - 1u;
+  while (lo < hi) {
+    let mid = (lo + hi) / 2u;
+    if (lf(base + mid) > r) { hi = mid; } else { lo = mid + 1u; }
+  }
+  return lo;
+}
+// The solid angle pdf a light sample picks d with, given it picked the map.
+fn env_pdf(d: vec3f) -> f32 {
+  let w = u32(lf(0u));
+  let h = u32(lf(1u));
+  let uv = env_uv(d);
+  let t = env_texel(uv);
+  let s = sin(uv.y * PI);
+  if (s <= 0.0) { return 0.0; }
+  let p = cdf_step(u32(lf(2u)), t.y) * cdf_step(u32(lf(3u)) + t.y * w, t.x) * f32(w * h);
+  return p / (2.0 * PI * PI * s);
+}
+fn sample_env() -> vec3f {
+  let w = u32(lf(0u));
+  let h = u32(lf(1u));
+  let row = cdf_search(u32(lf(2u)), h, rnd());
+  let col = cdf_search(u32(lf(3u)) + row * w, w, rnd());
+  return env_dir(vec2f((f32(col) + rnd()) / f32(w), (f32(row) + rnd()) / f32(h)));
 }
 fn vcol(i: u32) -> vec3f { return unpack4x8unorm(cols[i]).rgb; }
 fn mis(a: f32, b: f32) -> f32 { return a * a / (a * a + b * b); }
@@ -177,6 +255,28 @@ fn sample_light() -> LightSample {
   if (c.w <= 0.0) { return LightSample(l, 0.0, vec3f(0.0)); }
   return LightSample(l, c.w, c.rgb / c.w);
 }
+// rgb the radiance of the discs and the map along d, w the pdf a light sample
+// picks d with, the map picked with env_chance.
+fn light_along(d: vec3f) -> vec4f {
+  let lc = discs(d);
+  if (!env_on()) { return lc; }
+  let pe = env_chance();
+  return vec4f(env_light(d) + lc.rgb, pe * env_pdf(d) + (1.0 - pe) * lc.w);
+}
+fn sample_lights() -> LightSample {
+  let pe = select(0.0, env_chance(), env_on());
+  var l: vec3f;
+  if (rnd() < pe) {
+    l = sample_env();
+  } else {
+    let s = sample_light();
+    if (s.pdf <= 0.0) { return LightSample(s.l, 0.0, s.e / (1.0 - pe)); }
+    l = s.l;
+  }
+  let c = light_along(l);
+  if (c.w <= 0.0) { return LightSample(l, 0.0, vec3f(0.0)); }
+  return LightSample(l, c.w, c.rgb / c.w);
+}
 
 @compute @workgroup_size(8, 8)
 fn main(@builtin(global_invocation_id) id: vec3u) {
@@ -201,7 +301,8 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
     let h = trace(o, d, 1e30, false);
     if (!h.ok) {
       if (last_pdf == 0.0) {
-        let bg = select(env(d), u.background.rgb, u.background.w > 0.0);
+        let sky = select(env(d), env_view(d), env_on());
+        let bg = select(sky, u.background.rgb, u.background.w > 0.0 && u.n_lights.w == 0u);
         col += thr * bg;
         if (b == 0u && (u.flags & 1u) != 0u) {
           aov[pix * 2u] = vec4f(bg, 1e30);
@@ -209,16 +310,15 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
         }
         break;
       }
-      var c = env(d);
-      if (last_pdf != 0.0) {
-        let lc = discs(d);
-        if (lc.w > 0.0) {
-          var w = 1.0;
-          if (last_pdf > 0.0) {
-            if (est == EST_NEE) { w = 0.0; } else if (est != EST_BSDF) { w = mis(last_pdf, lc.w); }
-          }
-          c += lc.rgb * w;
+      // The gradient has no light sample; a map is weighted like the discs.
+      var c = select(env(d), vec3f(0.0), env_on());
+      let lc = light_along(d);
+      if (lc.w > 0.0) {
+        var w = 1.0;
+        if (last_pdf > 0.0) {
+          if (est == EST_NEE) { w = 0.0; } else if (est != EST_BSDF) { w = mis(last_pdf, lc.w); }
         }
+        c += lc.rgb * w;
       }
       col += add(thr * c, b >= 2u && clamp_on);
       break;
@@ -310,8 +410,8 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
       s.ca = max(m.coat.y * m.coat.y, 1e-4);
       s.pc = m.coat.x * schlick(vec3f(0.04), 1.0, nv).x;
       s.base = 1.0 - s.pc;
-      if (u.n_lights.x > 0u && est != EST_BSDF) {
-        let ls = sample_light();
+      if ((u.n_lights.x > 0u || (env_on() && env_chance() > 0.0)) && est != EST_BSDF) {
+        let ls = sample_lights();
         if (dot(ls.l, ng) > 0.0) {
           let f = bsdf_eval(s, ns, v, ls.l, nv);
           if (any(f.rgb > vec3f(0.0)) && !trace(p + ng * eps, ls.l, 1e30, true).ok) {

@@ -1,7 +1,11 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { BlasCache, mainThreadBuilder } from "../../src/viewport/pathtrace/blasCache";
-import { meshFrame, NativeScene, nativeCamera, nativeLook, pageMaterial } from "../../src/viewport/pathtrace/nativeScene";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { envFrame, meshFrame, NativeScene, nativeCamera, nativeLook, pageMaterial } from "../../src/viewport/pathtrace/nativeScene";
+import { equirectDirection, halfEquirect, hdrEnvironment, hemiAt } from "../../src/viewport/pathtrace/environment";
+import { registerHdr } from "../../src/viewport/hdrRegistry";
 import { DEFAULT_RENDER } from "../../src/ui/renderPrefs";
 import { buildLightRig, FILL_INTENSITY, KEY_INTENSITY, SUN_ANGULAR_RADIUS, type RigLight } from "../../src/viewport/lightRig";
 import type { TraceLook } from "../../src/viewport/pathtrace/backend";
@@ -177,5 +181,93 @@ describe("native look", () => {
   it("a look without a rig sends no lights", () => {
     const { rig: _, ...bare } = look(1);
     expect(nativeLook(bare).lights).toBeUndefined();
+  });
+});
+
+describe("native environment", () => {
+  const header = (b: Uint8Array) => {
+    const len = new DataView(b.buffer, b.byteOffset).getUint32(0, true);
+    return { head: JSON.parse(new TextDecoder().decode(b.subarray(4, 4 + len))), body: b.subarray((4 + len + 3) & ~3) };
+  };
+  const roomLook = (key: string): TraceLook => {
+    const tex = halfEquirect(new Uint16Array(4 * 2 * 4), 4, 2);
+    tex.userData.envKey = key;
+    return { lights: [], background: new THREE.Color(), environment: tex, brightness: 1, toneMapping: THREE.NeutralToneMapping, exposure: 1 };
+  };
+  const native = () => {
+    let held: string | null = null;
+    const sent: string[] = [];
+    const call = async (cmd: string, args?: unknown) => {
+      if (cmd === "pt_look") return held;
+      if (cmd === "pt_env") {
+        held = header(args as Uint8Array).head.key;
+        sent.push(held!);
+      }
+      return null;
+    };
+    return { scene: new NativeScene(call, (e) => { throw e; }), sent, lose: () => { held = null; } };
+  };
+
+  it("sends a room once per key and again to a tracer that lost it", async () => {
+    const n = native();
+    await n.scene.look(roomLook("studio|h1"));
+    await n.scene.look(roomLook("studio|h1"));
+    expect(n.sent).toEqual(["studio|h1"]);
+    await n.scene.look(roomLook("neutral|h1"));
+    expect(n.sent).toEqual(["studio|h1", "neutral|h1"]);
+    n.lose();
+    await n.scene.look(roomLook("neutral|h1"));
+    expect(n.sent).toEqual(["studio|h1", "neutral|h1", "neutral|h1"]);
+  });
+
+  it("a room goes as traceEnvironment read it back, in the y layout", () => {
+    const f = envFrame(roomLook("k"))!;
+    const { head, body } = header(f.bytes());
+    expect(head).toEqual({ key: "k", width: 4, height: 2, up: "y" });
+    expect(body.byteLength).toBe(4 * 2 * 4 * 2);
+  });
+
+  it("maps texels to directions as the fixture the tracer reads", () => {
+    const doc = JSON.parse(readFileSync(resolve(__dirname, "../fixtures/env_directions.json"), "utf8"));
+    expect(doc.pairs.length).toBeGreaterThanOrEqual(8);
+    for (const p of doc.pairs) {
+      const d = equirectDirection(p.layout, p.u, p.v);
+      for (let k = 0; k < 3; k++) expect(d[k]).toBeCloseTo(p.dir[k], 6);
+    }
+  });
+
+  it("an HDR goes as its pixels, turned by columns, with the exposure and the hemisphere", () => {
+    const w = 4, h = 2;
+    const data = new Float32Array(w * h * 4);
+    for (let i = 0; i < w * h; i++) data.set([i, 0, 0, 1], i * 4);
+    const hemi = { sky: new THREE.Color(1, 1, 1), ground: new THREE.Color(0, 0, 0), intensity: Math.PI, up: new THREE.Vector3(0, 0, 1) };
+    const out = hdrEnvironment({ width: w, height: h, data }, 90, 1, hemi);
+    const at = (c: number, r: number, k: number) => THREE.DataUtils.fromHalfFloat(out[(r * w + c) * 4 + k]!);
+    for (let r = 0; r < h; r++) {
+      for (let c = 0; c < w; c++) {
+        // 90 degrees is one column of four: texel c shows what column c + 1 held.
+        const hm = hemiAt(equirectDirection("z", (c + 0.5) / w, (r + 0.5) / h), hemi);
+        expect(at(c, r, 0)).toBeCloseTo((r * w + ((c + 1) % w)) * 2 + hm[0], 1);
+        expect(at(c, r, 1)).toBeCloseTo(hm[1], 3);
+      }
+    }
+    // Row 0 is the upper half, so it gets more of the sky: mix(ground, sky, up / 2 + 1/2).
+    expect(at(0, 0, 1)).toBeCloseTo(0.5 + 0.5 * Math.cos(Math.PI / 4), 3);
+    expect(at(0, 1, 1)).toBeCloseTo(0.5 - 0.5 * Math.cos(Math.PI / 4), 3);
+  });
+
+  it("the hemisphere term is FRAGMENT's: sky above, ground below, the horizon halfway", () => {
+    const hemi = { sky: new THREE.Color(0.654, 0.654, 0.654), ground: new THREE.Color(0.0172, 0.0172, 0.0172), intensity: 0.6, up: new THREE.Vector3(0, 0, 2) };
+    expect(hemiAt([0, 0, 1], hemi)[0]).toBeCloseTo((0.654 * 0.6) / Math.PI, 6);
+    expect(hemiAt([0, 0, -1], hemi)[0]).toBeCloseTo((0.0172 * 0.6) / Math.PI, 6);
+    expect(hemiAt([1, 0, 0], hemi)[0]).toBeCloseTo(((0.654 + 0.0172) / 2) * 0.6 / Math.PI, 6);
+  });
+
+  it("an HDR look sends the panorama's key with its pixels", async () => {
+    registerHdr("abc", "sky.hdr", { width: 8, height: 4, data: new Float32Array(8 * 4 * 4).fill(1) });
+    const look = { ...roomLook("room"), hdr: { hash: "abc", rotation: 0, exposure: 0, hemi: null, key: "hdr:abc|0.0|0.00|" } };
+    const { head } = header(envFrame(look)!.bytes());
+    expect(head.up).toBe("z");
+    expect(head.key).toBe("hdr:abc|0.0|0.00|");
   });
 });

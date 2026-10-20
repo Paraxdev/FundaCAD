@@ -1,6 +1,7 @@
 mod accel;
 mod adapter;
 mod bindings;
+mod envmap;
 mod frame;
 mod picture;
 mod pipelines;
@@ -14,6 +15,7 @@ use crate::denoise::{self, Denoiser, Quality};
 use crate::scene::{BodyDesc, Commit, Mesh, Scene};
 
 use accel::{make_tlas, GpuAccel};
+use envmap::EnvMap;
 pub use adapter::{choose, Candidate, Refusal};
 pub use picture::{encode_png, picture_refusal, Picture};
 use pipelines::Pipelines;
@@ -115,6 +117,8 @@ pub struct Look {
     pub lights: Option<Lights>,
     /// What camera rays that miss show, linear. Absent, they show the sky.
     pub background: Option<[f32; 3]>,
+    /// Camera misses show the environment map over the background.
+    pub environment_behind: bool,
 }
 
 impl Look {
@@ -156,6 +160,7 @@ impl Default for Look {
             bounces: 6,
             lights: None,
             background: None,
+            environment_behind: false,
         }
     }
 }
@@ -200,6 +205,7 @@ pub struct Tracer {
     shading: Shading,
     insts: wgpu::Buffer,
     mats: wgpu::Buffer,
+    env: EnvMap,
     n_inst: u32,
     bind: Option<wgpu::BindGroup>,
     resolve_bind: Option<wgpu::BindGroup>,
@@ -342,7 +348,9 @@ impl Tracer {
         if hw {
             accel.tlas = Some(make_tlas(&device, &queue, &[]));
         }
+        let env = EnvMap::new(&device, &queue, None);
         let mut t = Tracer {
+            env,
             insts: empty(&device),
             mats: empty(&device),
             accum: empty(&device),

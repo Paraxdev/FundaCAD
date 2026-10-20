@@ -84,7 +84,13 @@ impl Tracer {
             data.extend(v4(x.color, power(x.color) / total.max(1e-20)));
         }
         let bg = l.background.unwrap_or([0.0; 3]);
-        data.extend([f32::from_bits(lights.len() as u32), 0.0, 0.0, 0.0]);
+        // The chance a light sample picks the environment, by its irradiance
+        // on a face against the discs' sum.
+        let env = self.env.held.as_ref().map_or(0, |e| e.up.code());
+        let env_power = std::f32::consts::PI * self.env.mean * l.env_intensity;
+        let p_env = if env == 0 || env_power <= 0.0 { 0.0 } else { env_power / (env_power + total) };
+        let behind = (env != 0 && l.environment_behind) as u32;
+        data.extend([lights.len() as u32, env, p_env.to_bits(), behind].map(f32::from_bits));
         data.extend(v4(bg, l.background.is_some() as u32 as f32));
         debug_assert_eq!(data.len() * 4, UNIFORM_SIZE as usize);
         self.queue.write_buffer(&self.uniform, 0, bytes(&data));
@@ -204,11 +210,15 @@ impl Tracer {
     }
 
     /// The threshold kept above what camera misses draw: the background, or
-    /// else the sky times its intensity, so a bright sky never blooms whole.
+    /// else the sky or the map's mean times its intensity, so a bright sky
+    /// never blooms whole.
     fn bloom_threshold(&self, b: &Bloom) -> f32 {
         let l = &self.look;
+        let map = self.env.held.is_some();
         let sky = match l.background {
+            Some(_) if map && l.environment_behind => self.env.mean * l.env_intensity,
             Some(bg) => bloom::luma(bg),
+            None if map => self.env.mean * l.env_intensity,
             None => bloom::luma(l.sky_top).max(bloom::luma(l.sky_bottom)) * l.env_intensity,
         };
         b.threshold.max(sky + 0.05)

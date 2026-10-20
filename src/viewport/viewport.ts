@@ -68,7 +68,7 @@ import { bootViewMode, chooseViewMode, effectiveViewMode, resetPathTracedOverrid
 import { drawMask, markOverlay, overlayBit, overlayShown, pickLayers, pickMask, pictureMask, setPickLayers, syncOverlayLayers, type ActiveWork, type OverlayKind } from "./overlayKinds";
 import type { TraceLight, TraceLook } from "./pathtrace/backend";
 import { lensFor, type TraceLens } from "./pathtrace/camera";
-import { traceEnvironment, type TraceHemi } from "./pathtrace/environment";
+import { hemiKey, traceEnvironment, type TraceHemi } from "./pathtrace/environment";
 import { composerClearColor } from "./composerColor";
 import { clearGuard, guardSet } from "./pathtrace/guard";
 import { PathTraceHost, type PictureRequest } from "./pathtrace/host";
@@ -1102,7 +1102,9 @@ export class Viewport {
     });
     const envKey = environmentKey(p);
     const environment = traceEnvironment(r, envKey ?? "none", envKey ? () => environmentRoomFor(p)! : null, hemi);
+    const hash = envKey ? hdrHashOf(p.environment) : null;
     return {
+      ...(hash ? { hdr: { hash, rotation: p.envRotation, exposure: p.envExposure, hemi, key: `${envKey}|${hemiKey(hemi)}` } } : {}),
       lights,
       background: composerClearColor(r.getClearColor(new THREE.Color()), r.toneMapping, r.toneMappingExposure),
       environment,
