@@ -206,6 +206,8 @@ pub struct Tracer {
     insts: wgpu::Buffer,
     mats: wgpu::Buffer,
     env: EnvMap,
+    emitters: upload::Emitters,
+    instance_uploads: u64,
     n_inst: u32,
     bind: Option<wgpu::BindGroup>,
     resolve_bind: Option<wgpu::BindGroup>,
@@ -366,6 +368,8 @@ impl Tracer {
             uniform,
             resolve_uniform,
             shading,
+            emitters: Default::default(),
+            instance_uploads: 0,
             n_inst: 0,
             bind: None,
             resolve_bind: None,
@@ -401,6 +405,12 @@ impl Tracer {
         let f = self.fault.lock().unwrap_or_else(|p| p.into_inner());
         f.lost.clone().or_else(|| f.error.clone())
     }
+    /// How many times the instance rows and the emitter table were uploaded.
+    #[doc(hidden)]
+    pub fn instance_uploads(&self) -> u64 {
+        self.instance_uploads
+    }
+
     #[doc(hidden)]
     pub fn lose_device_for_test(&self) {
         self.device.destroy();

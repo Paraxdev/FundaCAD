@@ -18,6 +18,9 @@ struct U {
   n_lights: vec4u,
   // rgb, w 1 when camera misses show it instead of the sky
   background: vec4f,
+  // emitter table start in lights (vec4s), its entries, the chance a light
+  // sample picks an emitter and the table's total power, both as f32 bits
+  emit: vec4u,
 }
 struct Inst {
   o2w0: vec4f, o2w1: vec4f, o2w2: vec4f,
@@ -51,7 +54,8 @@ struct Hit { ok: bool, t: f32, inst: u32, prim: u32, bary: vec2f }
 @group(0) @binding(8) var<storage, read> insts: array<Inst>;
 @group(0) @binding(9) var<storage, read> mats: array<Mat>;
 @group(0) @binding(12) var env_map: texture_2d<f32>;
-// The environment's tables as env.rs lays them out.
+// The environment's tables as env.rs lays them out, then the emitter alias
+// table, one (chance, alias, instance, triangle) per emitting triangle.
 @group(0) @binding(13) var<storage, read> lights: array<vec4f>;
 
 const PI = 3.14159265;
@@ -234,7 +238,8 @@ fn discs(d: vec3f) -> vec4f {
   }
   return r;
 }
-struct LightSample { l: vec3f, pdf: f32, e: vec3f }
+// t is how far the shadow ray goes.
+struct LightSample { l: vec3f, pdf: f32, e: vec3f, t: f32 }
 // One light picked by power and a direction inside its disc. e is radiance
 // over pdf; pdf is 0 for a delta light, which no bounce can find.
 fn sample_light() -> LightSample {
@@ -246,14 +251,14 @@ fn sample_light() -> LightSample {
     k++;
   }
   let li = u.lights[k];
-  if (li.dir.w <= 0.0) { return LightSample(li.dir.xyz, 0.0, li.color.rgb / li.color.w); }
+  if (li.dir.w <= 0.0) { return LightSample(li.dir.xyz, 0.0, li.color.rgb / li.color.w, 1e30); }
   let q = rnd() * li.dir.w;
   let st = sqrt(max(q * (2.0 - q), 0.0));
   let phi = 2.0 * PI * rnd();
   let l = onb(li.dir.xyz, vec3f(st * cos(phi), st * sin(phi), 1.0 - q));
   let c = discs(l);
-  if (c.w <= 0.0) { return LightSample(l, 0.0, vec3f(0.0)); }
-  return LightSample(l, c.w, c.rgb / c.w);
+  if (c.w <= 0.0) { return LightSample(l, 0.0, vec3f(0.0), 1e30); }
+  return LightSample(l, c.w, c.rgb / c.w, 1e30);
 }
 // rgb the radiance of the discs and the map along d, w the pdf a light sample
 // picks d with, the map picked with env_chance.
@@ -263,19 +268,63 @@ fn light_along(d: vec3f) -> vec4f {
   let pe = env_chance();
   return vec4f(env_light(d) + lc.rgb, pe * env_pdf(d) + (1.0 - pe) * lc.w);
 }
-fn sample_lights() -> LightSample {
+fn em_chance() -> f32 { return bitcast<f32>(u.emit.z); }
+// Light samples per bounce: two with emitters, where half of a closed
+// emitter's area faces away and its samples are lost to its own shadow.
+fn n_samples() -> f32 { return select(1.0, 2.0, u.emit.y > 0u); }
+fn o2w(it: Inst, p: vec3f) -> vec3f {
+  return vec3f(dot(it.o2w0, vec4f(p, 1.0)), dot(it.o2w1, vec4f(p, 1.0)), dot(it.o2w2, vec4f(p, 1.0)));
+}
+fn tri_mat(it: Inst, tri: u32) -> Mat {
+  var slot = slots[it.base.w + tri];
+  if (slot >= it.extra.y) { slot = 0u; }
+  return mats[it.base.z + slot];
+}
+// The solid angle pdf a light sample picks an emitter point t away with,
+// seen at cosine c to its face: its area pdf is its luminance over the
+// table's power, the triangle picked by area times luminance.
+fn em_pdf(m: Mat, t: f32, c: f32) -> f32 {
+  return em_chance() * lum(m.emission.rgb) / bitcast<f32>(u.emit.w) * t * t / max(c, 1e-8);
+}
+// A point on an emitting triangle picked by power, seen from p.
+fn sample_emitter(p: vec3f) -> LightSample {
+  let r = rnd() * f32(u.emit.y);
+  let k = min(u32(r), u.emit.y - 1u);
+  var e = lights[u.emit.x + k];
+  if (fract(r) >= e.x) { e = lights[u.emit.x + bitcast<u32>(e.y)]; }
+  let it = insts[bitcast<u32>(e.z)];
+  let tri = bitcast<u32>(e.w);
+  let ib = it.base.y + tri * 3u;
+  let a = o2w(it, pos[it.base.x + idx[ib]].xyz);
+  let e1 = o2w(it, pos[it.base.x + idx[ib + 1u]].xyz) - a;
+  let e2 = o2w(it, pos[it.base.x + idx[ib + 2u]].xyz) - a;
+  let su = sqrt(rnd());
+  let v = rnd() * su;
+  let q = a + e1 * (1.0 - su) + e2 * v;
+  let dv = q - p;
+  let t = length(dv);
+  let l = dv / max(t, 1e-20);
+  let n = cross(e1, e2);
+  let pdf = em_pdf(tri_mat(it, tri), t, abs(dot(n, l)) / max(length(n), 1e-20));
+  if (t <= 0.0 || !(pdf > 0.0) || pdf > 1e30) { return LightSample(l, 1.0, vec3f(0.0), 0.0); }
+  return LightSample(l, pdf, tri_mat(it, tri).emission.rgb / pdf, t * (1.0 - 1e-3));
+}
+fn sample_lights(p: vec3f) -> LightSample {
+  let pm = em_chance();
+  if (pm > 0.0 && rnd() < pm) { return sample_emitter(p); }
   let pe = select(0.0, env_chance(), env_on());
   var l: vec3f;
   if (rnd() < pe) {
     l = sample_env();
   } else {
     let s = sample_light();
-    if (s.pdf <= 0.0) { return LightSample(s.l, 0.0, s.e / (1.0 - pe)); }
+    if (s.pdf <= 0.0) { return LightSample(s.l, 0.0, s.e / ((1.0 - pe) * (1.0 - pm)), 1e30); }
     l = s.l;
   }
   let c = light_along(l);
-  if (c.w <= 0.0) { return LightSample(l, 0.0, vec3f(0.0)); }
-  return LightSample(l, c.w, c.rgb / c.w);
+  if (c.w <= 0.0) { return LightSample(l, 0.0, vec3f(0.0), 1e30); }
+  let pdf = c.w * (1.0 - pm);
+  return LightSample(l, pdf, c.rgb / pdf, 1e30);
 }
 
 @compute @workgroup_size(8, 8)
@@ -316,7 +365,7 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
       if (lc.w > 0.0) {
         var w = 1.0;
         if (last_pdf > 0.0) {
-          if (est == EST_NEE) { w = 0.0; } else if (est != EST_BSDF) { w = mis(last_pdf, lc.w); }
+          if (est == EST_NEE) { w = 0.0; } else if (est != EST_BSDF) { w = mis(last_pdf, n_samples() * lc.w * (1.0 - em_chance())); }
         }
         c += lc.rgb * w;
       }
@@ -339,9 +388,7 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
     if (dot(ns, ng) < 0.0) { ns = ng; }
     let p = o + d * h.t;
     let eps = 1e-4 * max(1.0, max(abs(p.x), max(abs(p.y), abs(p.z))));
-    var slot = slots[it.base.w + tri];
-    if (slot >= it.extra.y) { slot = 0u; }
-    let m = mats[it.base.z + slot];
+    let m = tri_mat(it, tri);
     let flags = bitcast<u32>(m.emission.w);
     var albedo = m.base.rgb;
     if ((flags & VERTEX_COLORS) != 0u) {
@@ -355,7 +402,11 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
     if (!front && (flags & SOLID) != 0u) {
       thr *= pow(max(m.attenuation.rgb, vec3f(1e-4)), vec3f(h.t / m.attenuation.w));
     }
-    col += add(thr * m.emission.rgb, b >= 2u && clamp_on);
+    var we = 1.0;
+    if (last_pdf > 0.0 && (it.extra.z & 2u) != 0u && lum(m.emission.rgb) > 0.0) {
+      if (est == EST_NEE) { we = 0.0; } else if (est != EST_BSDF) { we = mis(last_pdf, n_samples() * em_pdf(m, h.t, abs(dot(ng, d)))); }
+    }
+    col += add(thr * m.emission.rgb * we, b >= 2u && clamp_on);
     if (rnd() > m.base.a) {
       o = p + d * eps;
       continue;
@@ -410,14 +461,17 @@ fn main(@builtin(global_invocation_id) id: vec3u) {
       s.ca = max(m.coat.y * m.coat.y, 1e-4);
       s.pc = m.coat.x * schlick(vec3f(0.04), 1.0, nv).x;
       s.base = 1.0 - s.pc;
-      if ((u.n_lights.x > 0u || (env_on() && env_chance() > 0.0)) && est != EST_BSDF) {
-        let ls = sample_lights();
-        if (dot(ls.l, ng) > 0.0) {
-          let f = bsdf_eval(s, ns, v, ls.l, nv);
-          if (any(f.rgb > vec3f(0.0)) && !trace(p + ng * eps, ls.l, 1e30, true).ok) {
-            var w = 1.0;
-            if (ls.pdf > 0.0 && est != EST_NEE) { w = mis(ls.pdf, f.w); }
-            col += add(thr * f.rgb * ls.e * w, b >= 1u && clamp_on);
+      if ((u.n_lights.x > 0u || (env_on() && env_chance() > 0.0) || u.emit.y > 0u) && est != EST_BSDF) {
+        let n = n_samples();
+        for (var k = 0.0; k < n; k += 1.0) {
+          let ls = sample_lights(p);
+          if (dot(ls.l, ng) > 0.0 && ls.t > 0.0) {
+            let f = bsdf_eval(s, ns, v, ls.l, nv);
+            if (any(f.rgb > vec3f(0.0)) && !trace(p + ng * eps, ls.l, ls.t, true).ok) {
+              var w = 1.0;
+              if (ls.pdf > 0.0 && est != EST_NEE) { w = mis(n * ls.pdf, f.w); }
+              col += add(thr * f.rgb * ls.e * (w / n), b >= 1u && clamp_on);
+            }
           }
         }
       }

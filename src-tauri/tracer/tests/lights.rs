@@ -324,3 +324,74 @@ fn the_page_look_carries_its_lights_and_background() {
     let dark = Lights::new(&[LightDesc { direction: [0.0, 0.0, 1.0], color: [0.0; 3], angular_radius: 1.0 }]);
     assert!(dark.as_slice().is_empty(), "a light sample would divide by its zero chance");
 }
+
+const LAMP_AT: [f32; 3] = [0.0, 0.0, 1.2];
+
+fn glowing(color: [f32; 3]) -> PageMaterial {
+    PageMaterial { color: Some([0.0; 3]), emissive: Some(color), emissive_intensity: Some(12.0), ..Default::default() }
+}
+
+/// A lamp ball over a plate, stretched by `stretch` along x so its world
+/// area is not its mesh's, lit by nothing else.
+fn lamp_bodies(lamp: PageMaterial, at: [f32; 3], stretch: f32) -> Vec<fundacad_tracer::BodyDesc> {
+    let mut l = place("lamp", "lamp.1", 1.0, at, lamp);
+    l.matrix[0] = stretch;
+    vec![l, place("floor", "floor.1", 1.0, [0.0; 3], matte([0.7; 3]))]
+}
+
+const LAMP_EYE: [f32; 3] = [3.0, -4.0, 2.5];
+const LAMP_TARGET: [f32; 3] = [0.0, 0.0, 0.5];
+
+fn lamp_scene(t: &mut Tracer, bodies: Vec<fundacad_tracer::BodyDesc>, spp: u32) -> Vec<[f32; 3]> {
+    t.resize(64, 48);
+    t.set_camera(fundacad_tracer::Camera { eye: LAMP_EYE, target: LAMP_TARGET, up: [0.0, 0.0, 1.0], fov: 40.0 });
+    t.set_look(Look { sky_top: [0.02; 3], sky_bottom: [0.02; 3], ..Look::default() });
+    for key in t.set_bodies(bodies) {
+        t.add_mesh(&key, if key.starts_with("floor") { floor(20.0) } else { sphere(0.4, 24, 12) });
+    }
+    t.apply();
+    t.set_cap(spp);
+    t.render_samples(spp);
+    t.read_hdr()
+}
+
+/// The lamp found by light samples only, by bounce rays only and both
+/// weighted comes out the same picture.
+#[test]
+fn emitter_nee_bsdf_and_mis_agree() {
+    let Some(mut t) = tracer() else { return };
+    let mut runs = vec![];
+    for e in [Estimator::Mis, Estimator::Nee, Estimator::Bsdf] {
+        t.set_estimator(e);
+        let hdr = lamp_scene(&mut t, lamp_bodies(glowing([1.0, 0.9, 0.7]), LAMP_AT, 1.5), 4096);
+        runs.push((e, mean(&hdr), display_blocks(&t.resolve(), 64)));
+    }
+    t.set_estimator(Estimator::Default);
+    for (e, m, d) in &runs[1..] {
+        let mad = d.iter().zip(&runs[0].2).map(|(a, b)| (a - b).abs()).sum::<f64>() / d.len() as f64;
+        println!("{e:?} against Mis: mean luminance {m:.4} and {:.4}, 8x8 blocks differ by {mad:.3} of 255 on average", runs[0].1);
+        assert!(mad < 1.0 && (m / runs[0].1 - 1.0).abs() < 0.005, "{e:?} differs from Mis by {mad:.3} of 255, means {m:.4} and {:.4}", runs[0].1);
+    }
+}
+
+/// The emitter table is built with the instance rows: a camera move uploads
+/// neither, a moved lamp brings its table along.
+#[test]
+fn a_camera_move_uploads_nothing() {
+    let Some(mut t) = tracer() else { return };
+    lamp_scene(&mut t, lamp_bodies(glowing([1.0, 0.9, 0.7]), LAMP_AT, 1.0), 4);
+    let n = t.instance_uploads();
+    t.set_camera(fundacad_tracer::Camera { eye: [3.5, -4.0, 2.5], target: [0.0, 0.0, 0.5], up: [0.0, 0.0, 1.0], fov: 40.0 });
+    t.apply();
+    assert_eq!(t.instance_uploads(), n, "a camera move uploaded the instances");
+    let moved = [1.2, 0.6, 0.9];
+    let mut means = vec![];
+    for e in [Estimator::Nee, Estimator::Bsdf] {
+        t.set_estimator(e);
+        means.push(mean(&lamp_scene(&mut t, lamp_bodies(glowing([1.0, 0.9, 0.7]), moved, 1.0), 1024)));
+    }
+    t.set_estimator(Estimator::Default);
+    assert_eq!(t.instance_uploads(), n + 1, "one upload for the moved lamp");
+    println!("moved lamp: light samples only {:.4}, bounce rays only {:.4}", means[0], means[1]);
+    assert!((means[0] / means[1] - 1.0).abs() < 0.02, "the light samples miss the moved lamp: {means:?}");
+}
