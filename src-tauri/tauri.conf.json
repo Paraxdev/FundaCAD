@@ -55,7 +55,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDUwMkY3MDMzN0E1RUREMUYKUldRZjNWNTZNM0F2VU81ZU9YLzBPdDV6UVdkVklPOWg1S01zdU1lWitDMGR6aFg1cmJoZnYrMWIK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDU3RDk0MjJCM0RFNEEwNTYKUldSV29PUTlLMExaVjM3c0FYekkwZlhkckhrdkFlOTczbzV6N0s2VzJOcU5PZjlkdytQbEZpaHAK",
       "endpoints": [
         "https://github.com/Paraxdev/fundacad/releases/download/beta/latest.json"
       ]
