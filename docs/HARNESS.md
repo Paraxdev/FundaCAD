@@ -219,8 +219,11 @@ with Session() as s:
 
 A control found by its label is written by its ref, with the label in a comment, so a relabelled
 button still replays. Face and edge selectors, tool labels and menu paths stay as written. A file
-inside the checkout is written relative to it. Readouts are not recorded, `wait_for` is. A failed
-action is left out, and an action called from inside another one is written once.
+inside the checkout is written relative to it. Readouts are not recorded, `wait_for` and
+`settle()` are, so a loop that polls `status()` replays only if a `settle()` or `wait_for` ends it.
+A failed action is left out, and an action called from inside another one is written once. An
+action whose wait ran out did take place, so it is written with `settle=False`, and the `settle()`
+that waited it out is written with a timeout long enough for the whole wait.
 
 ## Examples
 
