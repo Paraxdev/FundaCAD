@@ -205,8 +205,20 @@ class Actions:
         self.page.wait_for_timeout(50)
         self.page.keyboard.type(name)
         self.page.wait_for_timeout(50)
+        listed = [r[3] for r in self._palette()[1:]]
         self.page.keyboard.press("Enter")
-        return f'ran command "{name}"'
+        self.page.wait_for_timeout(100)
+        if self._palette():
+            self.page.keyboard.press("Escape")
+            shown = f', the list shows {", ".join(listed[:5])}' if listed else ", nothing matches"
+            raise NotFound(f'no command runs for "{name}"{shown}')
+        return f'ran command "{listed[0] if listed else name}"'
+
+    def _palette(self) -> list[list]:
+        """The search box row first, then its matches, or nothing when the search is closed."""
+        rows = [r for r in self.bridge.call("screen", region="dialog", max=200)["lines"] if r[0] == 1]
+        box = [r for r in rows if r[3].startswith("Search commands")]
+        return box + [r for r in rows if r not in box] if box else []
 
     def _control_rows(self) -> list[list]:
         return self.bridge.call("screen", max=1000)["lines"]
