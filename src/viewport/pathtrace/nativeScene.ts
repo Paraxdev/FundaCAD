@@ -8,6 +8,7 @@ import * as THREE from "three";
 import { blasKey, type TracedBody } from "./blasCache";
 import type { TraceLens } from "./camera";
 import type { TraceLook } from "./backend";
+import { scaled, type LightRig } from "../lightRig";
 import type { TraceBloomSettings } from "./tracePost";
 
 export type Call = (cmd: string, args?: unknown) => Promise<unknown>;
@@ -115,8 +116,30 @@ export function meshFrame(key: string, m: THREE.Mesh): Uint8Array {
   return frame(header, [pos, normals, index, colors].filter((p): p is Float32Array => !!p));
 }
 
-/** Look in tracer/src/gpu.rs. The native sky is a gradient for now, so the
- *  background stands in for the environment; the strongest light is the sun. */
+/** The most lights the native tracer takes, MAX_LIGHTS in tracer/src/gpu/mod.rs. */
+export const NATIVE_LIGHTS = 4;
+
+export interface NativeLight {
+  direction: [number, number, number];
+  /** Linear, times the light's intensity at the rig's brightness. */
+  color: [number, number, number];
+  angularRadius: number;
+}
+
+export function nativeLights(rig: LightRig): NativeLight[] {
+  return rig.lights
+    .filter((l) => !l.realtimeOnly)
+    .slice(0, NATIVE_LIGHTS)
+    .map((l) => ({
+      direction: [l.direction[0], l.direction[1], l.direction[2]],
+      color: rgb(new THREE.Color(l.colour).multiplyScalar(scaled(rig, l.intensity))),
+      angularRadius: l.angularRadius,
+    }));
+}
+
+/** Look in tracer/src/gpu/mod.rs. The native sky is a gradient for now, so the
+ *  background stands in for the environment. Lights come from the rig; the
+ *  strongest scene light as the sun stays for a native side without `lights`. */
 export function nativeLook(look: TraceLook) {
   const bg = rgb(look.background);
   const sun = [...look.lights].sort((a, b) => b.intensity - a.intensity)[0];
@@ -128,6 +151,8 @@ export function nativeLook(look: TraceLook) {
     sunDir: dir.toArray(),
     sunColor: sun ? rgb(sun.color.clone().multiplyScalar(sun.intensity)) : [0, 0, 0],
     exposure: look.exposure,
+    background: bg,
+    ...(look.rig ? { lights: nativeLights(look.rig) } : {}),
   };
 }
 
