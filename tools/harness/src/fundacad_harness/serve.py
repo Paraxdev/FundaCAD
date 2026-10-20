@@ -82,6 +82,8 @@ class Server:
                     return False, "\n".join(done + ["", self._status()])
                 if base is not None:
                     s.settle_timeout = max(5, min(base, SETTLE_BY - ran))
+                if isinstance(step, dict) and step.get("do") == "wait_for" and isinstance(step.get("timeout", 10), (int, float)):
+                    step = {**step, "timeout": max(1, min(step.get("timeout", 10), SETTLE_BY - ran))}
                 try:
                     done.append(f"{i}. {steps.run(s, step)}")
                 except Exception as e:
