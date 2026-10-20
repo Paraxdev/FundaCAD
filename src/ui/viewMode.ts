@@ -6,7 +6,7 @@
 // No Vue and no Three here, same as workspace.ts: the low power tier comes in
 // as an argument so the headless suite can drive every case.
 
-import { asViewMode, renderPrefs, setRenderPref, type ViewMode } from "./renderPrefs";
+import { asViewMode, groundKey, renderPrefs, setRenderPref, type Ground, type ViewMode } from "./renderPrefs";
 import { workspace, type Workspace } from "./workspace";
 import type { OverlayKind, OverlayState } from "../viewport/overlayKinds";
 
@@ -135,6 +135,14 @@ export function nextViewMode(cur: ViewMode, dir: 1 | -1, tier: RenderTier): View
     if (id !== "pathtraced" || !pathTracedBlock(tier)) return id;
   }
   return cur;
+}
+
+export function savedGround(w: Workspace = workspace()): Ground {
+  return renderPrefs()[groundKey(w)];
+}
+
+export function setGround(g: Ground, w: Workspace = workspace()): void {
+  setRenderPref(groundKey(w), g);
 }
 
 function overlayKey(w: Workspace): "overlaysModel" | "overlaysRender" {
