@@ -398,8 +398,9 @@ The `channel` job in `build.yml` decides which row a run is.
 
 **`dev` is the bleeding edge.** Daily work lands there, and every push
 publishes the `development` build, so testers get a change with the next
-build. A red `test` or `rust-geom` does not hold the build back. The run still
-shows red, so the breakage is visible. A bundle leg that fails to build only
+build. A red `test` or `rust-geom` does not hold the build back, though the
+build still starts only once both have finished. The run still shows red, so
+the breakage is visible. A bundle leg that fails to build only
 leaves its own files out: the release keeps the earlier build's copies, the
 notes name what was not rebuilt, and `latest.json` leaves that platform out
 until the next build.

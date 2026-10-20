@@ -82,8 +82,8 @@ jobs:
 
   # What this run builds and where it goes (docs/ENGINE.md section 7). `config`
   # is empty on a ref that builds no installers. `gated` is false on dev, whose
-  # installers and release do not wait for `test` and `rust-geom`, and where a
-  # failed bundle leg only leaves its own files out.
+  # installers still start after `test` and `rust-geom` finish but do not need
+  # them green, and where a failed bundle leg only leaves its own files out.
   channel:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-22.04
