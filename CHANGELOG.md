@@ -38,6 +38,11 @@ This file starts on 2026-08-03. For anything before that, see the
   plate with four holes sized by parameters, and the wall bracket and pinned
   lever with their stress studies ready to run. The document starts untitled,
   so Save asks where to keep it.
+- **Previews on Home.** A card shows a picture of the model, taken from the
+  front right corner when you save, or the first time you open a document that
+  has none. The pictures are kept on this computer and load as the cards scroll
+  into view, so a list of hundreds of documents stays quick. A document changed
+  by another program shows a plain card until you open it again.
 - **Mechanisms.** A `mechanism` feature joins bodies with revolute, slider and
   rigid joints, closed loops included, and poses them all at once: the ground
   stays put, one joint is driven to an `angle` or `offset`, and every other

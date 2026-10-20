@@ -7,7 +7,7 @@ import { useBrowserStore } from "../stores/browser";
 import { renderPrefs, setRenderPref } from "../ui/renderPrefs";
 import type { Engine } from "./engine";
 import { setLibrary } from "../io/library";
-import { fakeLibrary, type FakeFile } from "../io/fakeLibrary";
+import { fakeLibrary, type FakeFile, type FakeLibrary } from "../io/fakeLibrary";
 
 /** Debug handles for console + headless frontend-logic tests. Gated to DEV so
  *  they're absent from production bundles, a post-XSS attacker shouldn't be
@@ -20,6 +20,7 @@ import { fakeLibrary, type FakeFile } from "../io/fakeLibrary";
 export function installDevGlobals(e: Engine): void {
   if (!import.meta.env.DEV) return;
   const w = window as any;
+  let fake: FakeLibrary | null = null;
   w.viewport = e.viewport;
   w.store = e.store;
   w.geometry = e.geometry;
@@ -48,7 +49,10 @@ export function installDevGlobals(e: Engine): void {
     sketch: e.sketch,
     handleAction: (a: string) => e.handleAction(a),
     // Home reads the library when it opens, so reopen it after this.
-    home: { useFakeLibrary: (files: FakeFile[]) => setLibrary(fakeLibrary(files)) },
+    home: {
+      useFakeLibrary: (files: FakeFile[]) => { fake = fakeLibrary(files); setLibrary(fake); },
+      thumbRequests: () => [...(fake?.thumbRequests ?? [])],
+    },
     // The app's own module instance: a harness importing /src/ui/renderPrefs.ts
     // after an HMR update gets a second copy whose listeners reach nothing.
     renderPrefs,

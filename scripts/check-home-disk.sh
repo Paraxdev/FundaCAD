@@ -1,5 +1,5 @@
 #!/usr/bin/env sh
-# Runs the tests of Home's disk code (src-tauri/src/library.rs) in a
+# Runs the tests of Home's disk code (src-tauri/src/library.rs, thumbs.rs) in a
 # crate with no Tauri in it: on Windows the app's own test binary cannot start.
 # HOME_DISK_OUT picks where the crate is built.
 set -eu
@@ -23,7 +23,7 @@ fundacad-format = { path = "$REPO/crates/fundacad-format" }
 [workspace]
 TOML
 : > "$OUT/src/lib.rs"
-for m in library; do
+for m in library thumbs; do
   printf '#[path = "%s"]
 pub mod %s;
 ' "$REPO/src-tauri/src/$m.rs" "$m" >> "$OUT/src/lib.rs"

@@ -12,6 +12,7 @@ import { contextMenu } from "../../ui/menu";
 import { escapeClaimed } from "../../ui/escapeClaim";
 import { buildEntries, filterEntries, sortEntries, type HomeEntry, type SortMode } from "../../ui/homeList";
 import { readSetting } from "../../ui/storedSetting";
+import { thumbQueueFor } from "../../ui/thumbQueue";
 import { getTheme, onThemeChange, themeMode } from "../../ui/theme";
 import Icon from "../shell/Icon.vue";
 import DocCard from "./DocCard.vue";
@@ -24,6 +25,7 @@ const modals = useModalStore();
 const cb = home.callbacks!;
 const ctx = useContextMenuStore();
 const lib = library();
+const thumbs = lib ? thumbQueueFor(lib) : null;
 
 const close = () => { home.visible = false; };
 
@@ -172,6 +174,7 @@ onUnmounted(() => {
           :key="e.path"
           :entry="e"
           :unreadable="unreadable.has(e.path)"
+          :thumbs="thumbs"
           @open="openEntry(e)"
           @menu="entryMenu(e, $event)"
         />

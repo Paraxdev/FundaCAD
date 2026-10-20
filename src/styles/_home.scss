@@ -136,6 +136,9 @@
   overflow-y: auto;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  // Auto rows in a fixed height grid share its height out once there are more
+  // cards than fit, which squashes every card to a strip.
+  grid-auto-rows: max-content;
   align-content: start;
   gap: var(--s-4);
   padding: var(--s-3) var(--s-5) var(--s-5);
@@ -156,7 +159,7 @@
   cursor: pointer;
   overflow: hidden;
   content-visibility: auto;
-  contain-intrinsic-size: auto 220px;
+  contain-intrinsic-size: auto 200px;
 }
 .home-card:focus-visible {
   outline: 2px solid var(--accent, #4bf9bc);
