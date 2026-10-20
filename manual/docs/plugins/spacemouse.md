@@ -10,6 +10,6 @@ View, 3D Mouse Settings opens its row in Preferences, Plugins, where you set the
 
 ## Linux
 
-If `spacenavd` is running, FundaCAD reads the mouse through its socket (`/run/spnav.sock`) and needs nothing else. That is the way to use a 3D mouse that other programs use too, and what you set in `spnavcfg` (swapped or inverted axes, dead zones) applies here as well. If `spacenavd` is restarted, FundaCAD reconnects within a few seconds. If `spacenavd` runs but sends nothing in the first few seconds, for example because it does not support your mouse, FundaCAD reads the device directly as well.
+If `spacenavd` is running, FundaCAD reads the mouse through its socket (`/run/spnav.sock`) and needs nothing else. That is the way to use a 3D mouse that other programs use too, and what you set in `spnavcfg` (swapped or inverted axes, dead zones) applies here as well. If `spacenavd` is restarted, FundaCAD reconnects within a few seconds. FundaCAD stays connected to `spacenavd` while the puck is idle. If `spacenavd` might not support your mouse and FundaCAD can read the device directly too, it listens to both and uses whichever sends first.
 
 Without `spacenavd`, FundaCAD reads the device directly and needs permission for it. If it finds the mouse but cannot read it, it says so, and the fix is to install the udev rule `packaging/99-spacemouse.rules` (`sudo sh packaging/setup-spacemouse.sh` from the source folder, then replug the mouse) or to start `spacenavd`. The deb and rpm packages install the rule for you.
