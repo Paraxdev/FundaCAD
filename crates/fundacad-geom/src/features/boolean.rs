@@ -127,18 +127,23 @@ fn retried_in_slices(
     accept: Option<&dyn Fn(&Shape) -> bool>,
 ) -> KResult<Option<Shape>> {
     let changed = |s: &Shape| (vol(s) - vol(shape)).abs() > noop_eps(vol(shape));
-    sliced(shape, [2usize, 4].into_iter().map(|n| in_slices(tool, n)), accept.unwrap_or(&changed), &|a, b| {
+    let got = sliced(shape, [2usize, 4].into_iter().map(|n| in_slices(tool, n)), accept.unwrap_or(&changed), &|a, b| {
         kernel::serial_bool(a, &[b], kind)
-    })
+    })?;
+    Ok(got.map(|(out, pieces)| {
+        kernel::note_fallback(kind, kernel::Rung::Slices(pieces));
+        out
+    }))
 }
 
-/// `retried_in_slices` with the slicing and the boolean handed in.
+/// `retried_in_slices` with the slicing and the boolean handed in, and the
+/// number of pieces the taken result was made from.
 fn sliced(
     shape: &Shape,
     attempts: impl IntoIterator<Item = Vec<Shape>>,
     accept: &dyn Fn(&Shape) -> bool,
     boolean: &dyn Fn(&Shape, &Shape) -> KResult<Shape>,
-) -> KResult<Option<Shape>> {
+) -> KResult<Option<(Shape, usize)>> {
     let mut refused = None;
     let mut ran = false;
     for pieces in attempts {
@@ -146,7 +151,7 @@ fn sliced(
             break;
         }
         match pieces.iter().try_fold(shape.clone(), |out, piece| boolean(&out, piece)) {
-            Ok(out) if accept(&out) => return Ok(Some(out)),
+            Ok(out) if accept(&out) => return Ok(Some((out, pieces.len()))),
             Ok(_) => ran = true,
             Err(e) => refused = Some(e),
         }
