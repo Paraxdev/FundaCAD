@@ -10,7 +10,7 @@ export const THIN_DEFAULTS = { distance: 10, thickness: 2 } as const;
 export function thinExtrudeOf(features: readonly Feature[], sketchId: string, id: string): Feature | null {
   const sk = features.find((f) => f.id === sketchId);
   if (sk?.type !== "sketch") return null;
-  const entities = (sk as { entities: SketchEntity[] }).entities;
+  const entities = (sk as { entities?: SketchEntity[] }).entities ?? [];
   const curves = entities
     .filter((e) => WALL_CURVES.has(e.type) && e.construction !== true && typeof e.id === "string" && e.id !== "")
     .map((e) => e.id as string);

@@ -57,7 +57,7 @@ describe("Create > Extrude with a consumed sketch chosen in the tree", () => {
   it("says so when the chosen sketch has no closed profile", () => {
     const r = rig({ selected: "f1", startOk: false });
     r.starters.startExtrude();
-    expect(r.setStatus).toHaveBeenCalledWith("That sketch has no closed profile to extrude", "");
+    expect(r.setStatus).toHaveBeenCalledWith("That sketch has no closed profile or curve to extrude", "");
   });
 
   it("a sketch that is showing keeps the plain pick", () => {

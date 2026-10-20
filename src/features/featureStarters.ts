@@ -1871,11 +1871,12 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     if (chosen) {
       if (extrude.start(committed, { sketch: chosen })) return;
       // An open sketch, lines and arcs with no closed area, extrudes as a wall along them.
-      const thin = thinExtrudeOf(store.document.features, chosen, store.nextId());
-      if (!thin) {
+      const wall = thinExtrudeOf(store.document.features, chosen, "");
+      if (!wall) {
         setStatus("That sketch has no closed profile or curve to extrude", "");
         return;
       }
+      const thin = { ...wall, id: store.nextId() } as Feature;
       store.addFeature(thin);
       committed(thin.id);
       setStatus("Thin extrude: a 2 mm wall along the sketch's curves, set Thickness and Wall side in its rows", "");
