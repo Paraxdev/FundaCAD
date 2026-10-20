@@ -677,56 +677,60 @@ async function importWith(
   }
   lastCancelledImport = null;
   const features = importFeatures(res, { format: fmt, source: opts.source ?? path, taken: store.document.features.map((f) => f.id) });
-  // The materials the file's colours become are overlay writes, each its own undo step,
-  // joined here so one Undo takes back the whole import.
-  const mark = store.undoMark();
   store.addFeatures(features);
-  try {
-    const imported = features.find((f) => f.type === "import");
-    if (!imported) {
-      if (res.notes?.length) {
-        const { toast } = await import("../ui/toast");
-        toast(res.notes.join(". "), { kind: "info" });
-      }
-      return;
-    }
-    const id = imported.id;
-
-    // Say what the document will be like while the user is still deciding what to
-    // do with it, rather than letting them discover it as a freeze and conclude
-    // the app is broken. Non-blocking on purpose: this is a heads-up about a
-    // measured limit, not a refusal, and everything except orbiting is unaffected.
-    const capability = describeImportCapability(importedBodyCount(res));
-    if (capability) {
+  const imported = features.find((f) => f.type === "import");
+  if (!imported) {
+    if (res.notes?.length) {
       const { toast } = await import("../ui/toast");
-      toast(capability, { kind: "info" });
+      toast(res.notes.join(". "), { kind: "info" });
     }
-
-    // The file's own colours become materials, and the bodies it produced wear
-    // them. This is the half of an import that used to be thrown away: a STEP
-    // assembly's product colours were read by the engine, carried in the
-    // manifest, and then never looked at, so a file that arrived fully coloured
-    // opened as three thousand identical grey bodies.
-    await adoptImportedColors(store, id, res);
-
-    // The file carried ONE dominant colour. Say so, and let whoever has a use for
-    // it decide.
-    //
-    // This used to be the decision itself: match the colour to the nearest slot of
-    // the document's palette and assign the imported bodies to it, unless the
-    // capability that owns palettes was switched off, in which case do nothing.
-    // Three things this file has no business knowing were in those six lines. What
-    // is left is the fact, an import landed, it was this feature, it looked like
-    // this, which is true whether or not anybody is listening.
-    //
-    // Awaited rather than fired off, because a listener has to rebuild before it
-    // can find the bodies the feature produced, and an import that returned while
-    // that was still running would report itself finished too early.
-    if (res.color === undefined) return;
-    await announceImportedBody(id, res.color);
-  } finally {
-    store.joinUndoSince(mark);
+    return;
   }
+  const id = imported.id;
+
+  // Say what the document will be like while the user is still deciding what to
+  // do with it, rather than letting them discover it as a freeze and conclude
+  // the app is broken. Non-blocking on purpose: this is a heads-up about a
+  // measured limit, not a refusal, and everything except orbiting is unaffected.
+  const capability = describeImportCapability(importedBodyCount(res));
+  if (capability) {
+    const { toast } = await import("../ui/toast");
+    toast(capability, { kind: "info" });
+  }
+
+  // The file's own colours become materials, and the bodies it produced wear
+  // them. This is the half of an import that used to be thrown away: a STEP
+  // assembly's product colours were read by the engine, carried in the
+  // manifest, and then never looked at, so a file that arrived fully coloured
+  // opened as three thousand identical grey bodies.
+  if (!(await adoptImportedColors(store, id, res, { joinImport: true }))) recolorOnRedo(store, id, res);
+
+  // The file carried ONE dominant colour. Say so, and let whoever has a use for
+  // it decide.
+  //
+  // This used to be the decision itself: match the colour to the nearest slot of
+  // the document's palette and assign the imported bodies to it, unless the
+  // capability that owns palettes was switched off, in which case do nothing.
+  // Three things this file has no business knowing were in those six lines. What
+  // is left is the fact, an import landed, it was this feature, it looked like
+  // this, which is true whether or not anybody is listening.
+  //
+  // Awaited rather than fired off, because a listener has to rebuild before it
+  // can find the bodies the feature produced, and an import that returned while
+  // that was still running would report itself finished too early.
+  if (res.color === undefined) return;
+  await announceImportedBody(id, res.color);
+}
+
+/** An import undone while its rebuild ran put its colours on nothing. Its redo
+ *  puts them on then, as part of that same step, or never. */
+export function recolorOnRedo(store: DocumentStore, featureId: string, res: Parameters<typeof adoptImportedColors>[2]) {
+  const off = store.onDocChange(() => {
+    if (store.document.features.some((f) => f.id === featureId)) {
+      off();
+      queueMicrotask(() => void adoptImportedColors(store, featureId, res, { joinImport: true, only: true }));
+    } else if (!store.canRedo) off();
+  });
 }
 
 /** Make materials out of the colours an import carried, and put them on the
@@ -743,7 +747,9 @@ async function importWith(
  *  binds it to a per-part colour. A single-body import has no tree, so its one
  *  colour goes on whatever bodies the feature owns, which `faceOwners` answers.
  *
- *  Assignments are overlay undo steps, an import joins them into its own. */
+ *  The assignments are one undo step. With `joinImport` they join the step that
+ *  added the feature while that step is still the newest, and with `only` they go
+ *  on only then. False when the feature was not in the document after the build. */
 export async function adoptImportedColors(
   store: DocumentStore,
   featureId: string,
@@ -752,7 +758,8 @@ export async function adoptImportedColors(
     nodes?: { name: string; parent: number | null; color?: string }[] | undefined;
     parts?: { node: number; faces: number; faceColors?: FaceColorRuns; color?: string }[] | undefined;
   },
-) {
+  opts: { joinImport?: boolean; only?: boolean } = {},
+): Promise<boolean> {
   const perNode = res.nodes ? nodeColors(res.nodes) : null;
   // Normalised once, here, because it is the KEY into the map materialsForColors
   // hands back and that map is keyed by the normalised form. nodeColors already
@@ -778,7 +785,7 @@ export async function adoptImportedColors(
       if (c) wanted.push({ color: c });
     }
   }
-  if (!wanted.length) return;
+  if (!wanted.length) return true;
 
   const { add, byColor } = materialsForColors(wanted, store.materialLibrary);
   if (add.length) store.importMaterials(add);
@@ -786,7 +793,8 @@ export async function adoptImportedColors(
   await store.rebuildNow();
   const bodies = store.buildState.result?.bodies ?? [];
   const feature = store.document.features.find((f) => f.id === featureId);
-  const picks = importedBodyColors(bodies, feature ? [feature] : [], (id) => store.importColorSource(id));
+  if (!feature) return false;
+  const picks = importedBodyColors(bodies, [feature], (id) => store.importColorSource(id));
   // One batched write per material, not one per body: an assembly is thousands
   // of bodies and every write re-emits the build.
   const byMaterial = new Map<string, string[]>();
@@ -808,7 +816,13 @@ export async function adoptImportedColors(
       claim(b.id, single ?? undefined);
     }
   }
-  for (const [material, ids] of byMaterial) store.setBodiesMaterial(ids, material);
+  const has = (d: { features: { id: string }[] }) => d.features.some((f) => f.id === featureId);
+  store.undoAsOne(
+    () => { for (const [material, ids] of byMaterial) store.setBodiesMaterial(ids, material); },
+    opts.joinImport ? (before) => !has(before) && has(store.document) : undefined,
+    { only: !!opts.only },
+  );
+  return true;
 }
 
 /** Surface an error to the user, a native dialog in the app, console otherwise.

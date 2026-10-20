@@ -665,14 +665,20 @@ export class DocumentStore {
   // cheap closures and share the same cap for simplicity.
   private static readonly UNDO_CAP = 50;
 
+  /** Set while undoAsOne runs: the steps go here instead of onto the stack. */
+  private collecting: UndoEntry[] | null = null;
+
   private pushUndo() {
-    this.undoStack.push({ kind: "doc", doc: clone(this.doc) });
+    const entry: UndoEntry = { kind: "doc", doc: clone(this.doc) };
+    if (this.collecting) return void this.collecting.push(entry);
+    this.undoStack.push(entry);
     if (this.undoStack.length > DocumentStore.UNDO_CAP) this.undoStack.shift();
   }
 
   /** Push a reversible overlay-only change (visibility and the like) onto the
    *  same stack as feature edits, in its true chronological place. */
   private pushOverlayUndo(entry: { undo: () => void; redo: () => void }) {
+    if (this.collecting) return void this.collecting.push({ kind: "overlay", ...entry });
     this.undoStack.push({ kind: "overlay", ...entry });
     if (this.undoStack.length > DocumentStore.UNDO_CAP) this.undoStack.shift();
     this.redoStack = [];
@@ -1396,16 +1402,29 @@ export class DocumentStore {
     this.scheduleRebuild(true);
     return was;
   }
-  /** A mark for joinUndoSince, taken before a change that makes several undo steps. */
-  undoMark(): object | undefined {
-    return this.undoStack.at(-1);
-  }
-  /** Every undo step made since `mark` becomes one. */
-  joinUndoSince(mark: object | undefined) {
-    const from = mark === undefined ? 0 : this.undoStack.lastIndexOf(mark as UndoEntry) + 1;
-    const entries = this.undoStack.splice(from);
-    if (entries.length > 1) this.undoStack.push({ kind: "group", entries });
-    else this.undoStack.push(...entries);
+  /** Runs `fn` and makes the undo steps it takes one step. When the step on top of
+   *  the stack is a document change and `onto` holds for the document before it,
+   *  they join that step instead. With `only: true` nothing runs unless they can. */
+  undoAsOne(fn: () => void, onto?: (before: CadDocument) => boolean, opts: { only?: boolean } = {}): boolean {
+    const top = this.undoStack.at(-1);
+    const join = top?.kind === "doc" && !!onto?.(top.doc);
+    if (opts.only && !join) return false;
+    const taken: UndoEntry[] = [];
+    this.collecting = taken;
+    try {
+      fn();
+    } finally {
+      this.collecting = null;
+    }
+    if (!taken.length) return join;
+    if (join) {
+      this.undoStack[this.undoStack.length - 1] = { kind: "group", entries: [top!, ...taken] };
+      return true;
+    }
+    this.undoStack.push(taken.length > 1 ? { kind: "group", entries: taken } : taken[0]!);
+    if (this.undoStack.length > DocumentStore.UNDO_CAP) this.undoStack.shift();
+    this.redoStack = [];
+    return false;
   }
   get canUndo() {
     return this.undoStack.length > 0;
