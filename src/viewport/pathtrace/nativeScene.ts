@@ -9,6 +9,8 @@ import { blasKey, type TracedBody } from "./blasCache";
 import type { TraceLens } from "./camera";
 import type { TraceLook } from "./backend";
 import { scaled, type LightRig } from "../lightRig";
+import { heldHdr } from "../hdrRegistry";
+import { hdrEnvironment } from "./environment";
 import type { TraceBloomSettings } from "./tracePost";
 
 export type Call = (cmd: string, args?: unknown) => Promise<unknown>;
@@ -137,9 +139,10 @@ export function nativeLights(rig: LightRig): NativeLight[] {
     }));
 }
 
-/** Look in tracer/src/gpu/mod.rs. The native sky is a gradient for now, so the
- *  background stands in for the environment. Lights come from the rig; the
- *  strongest scene light as the sun stays for a native side without `lights`. */
+/** Look in tracer/src/gpu/mod.rs. The environment goes separately (envFrame);
+ *  the sky gradient only lights a native side that has none. Lights come from
+ *  the rig; the strongest scene light as the sun stays for a native side
+ *  without `lights`. */
 export function nativeLook(look: TraceLook) {
   const bg = rgb(look.background);
   const sun = [...look.lights].sort((a, b) => b.intensity - a.intensity)[0];
@@ -152,8 +155,30 @@ export function nativeLook(look: TraceLook) {
     sunColor: sun ? rgb(sun.color.clone().multiplyScalar(sun.intensity)) : [0, 0, 0],
     exposure: look.exposure,
     background: bg,
+    environmentBehind: !!look.environmentBehind,
     ...(look.rig ? { lights: nativeLights(look.rig) } : {}),
   };
+}
+
+/** The pt_env body for `look`'s environment: an imported panorama's own pixels
+ *  ("z" layout) when it is held, else the room equirect traceEnvironment read
+ *  back ("y" layout, rows as read, bottom first). Built only when sent. */
+export function envFrame(look: TraceLook): { key: string; bytes(): Uint8Array } | null {
+  const hdr = look.hdr;
+  const held = hdr ? heldHdr(hdr.hash) : null;
+  if (hdr && held) {
+    const { width, height } = held.light;
+    return {
+      key: hdr.key,
+      bytes: () => frame({ key: hdr.key, width, height, up: "z" }, [hdrEnvironment(held.light, hdr.rotation, hdr.exposure, hdr.hemi)]),
+    };
+  }
+  const tex = look.environment as THREE.DataTexture;
+  const data = tex.image?.data;
+  if (!(data instanceof Uint16Array)) return null;
+  const { width, height } = tex.image;
+  const key = String(tex.userData?.envKey ?? tex.uuid);
+  return { key, bytes: () => frame({ key, width, height, up: "y" }, [data]) };
 }
 
 /** A perspective camera as it is; an orthographic one as a far, narrow one
@@ -222,9 +247,15 @@ export class NativeScene {
     return this.queue(() => this.call("pt_scene", { bodies }));
   }
 
+  /** pt_look answers the environment the native side holds, which a fresh
+   *  tracer has lost, so pt_env goes only when that is not this one. */
   look(look: TraceLook) {
     const l = nativeLook(look);
-    return this.queue(() => this.call("pt_look", { look: l }));
+    const env = envFrame(look);
+    return this.queue(async () => {
+      const held = await this.call("pt_look", { look: l });
+      if (env && held !== env.key) await this.call("pt_env", env.bytes());
+    });
   }
 
   camera(camera: THREE.Camera, lens: TraceLens | null) {

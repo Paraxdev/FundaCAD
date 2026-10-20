@@ -7,6 +7,7 @@ import type { Denoise } from "../../ui/renderPrefs";
 import type { LightRig } from "../lightRig";
 import type { TraceLens } from "./camera";
 import type { TraceBloomSettings } from "./tracePost";
+import type { TraceHemi } from "./environment";
 
 export interface TraceLight {
   color: THREE.Color;
@@ -25,6 +26,9 @@ export interface TraceLook {
   environment: THREE.Texture;
   /** Draw `environment` behind the model instead of `background`. */
   environmentBehind?: boolean;
+  /** An imported panorama `environment` was captured from: the native tracer
+   *  takes its pixels instead, `key` naming panorama, turn, exposure and hemisphere. */
+  hdr?: { hash: string; rotation: number; exposure: number; hemi: TraceHemi | null; key: string };
   brightness: number;
   toneMapping: THREE.ToneMapping;
   exposure: number;
