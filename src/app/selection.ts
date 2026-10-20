@@ -6,6 +6,7 @@ import type { Engine } from "./engine";
 import type { Feature } from "../types";
 import type { DatumPose } from "../document/datumPose";
 import { startDatumPoseEdit } from "../features/datumPlaneEdit";
+import { cancelActiveTools } from "./toolBusy";
 
 /** Said when a feature's value cannot be dragged and has to be typed. One
  *  constant because three feature types say it and they used to say three
@@ -13,6 +14,19 @@ import { startDatumPoseEdit } from "../features/datumPlaneEdit";
  *  exists, the values moved under the history entry that names the operation
  *  they belong to. */
 const VALUES_IN_HISTORY = "Not draggable, edit the value under this feature in the history";
+
+/** Close the edit another feature has open, the way switching to a new one does:
+ *  a re-edited sketch is committed, a feature tool is stood down. Nothing happens
+ *  while no edit is open or the open one is `except` itself. */
+export function closeOpenEdit(e: Engine, except: string): void {
+  if (e.sketch.active) {
+    const editing = e.sketch.editingSketchId;
+    if (editing && editing !== except) e.sketch.finish(true);
+    return;
+  }
+  const open = e.store.editPreviewId;
+  if (open && open !== except) cancelActiveTools(e.tools);
+}
 
 export function createSelection(
   e: Engine,
@@ -73,6 +87,7 @@ export function createSelection(
   };
 
   const editFeature = (id: string) => {
+    closeOpenEdit(e, id);
     selectFeature(id);
     e.dropBodyGizmo(); // a body selection raises it by itself, see Engine.dropBodyGizmo
     if (e.toolBusy()) return; // never open a second interactive tool on top of one
