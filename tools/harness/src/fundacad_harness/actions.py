@@ -16,6 +16,9 @@ from .keys import key, modifiers
 
 VIEW_LABELS = {"iso": "Default View", "default": "Default View", "fit": "Fit to Model"}
 SIDES = {"top", "bottom", "front", "back", "right", "left"}
+# A wide stage has no button that opens a closed Items or History, a person uses the keys.
+PANEL_KEYS = {"items": "Ctrl+Alt+s", "history": "Ctrl+Alt+h"}
+PANELS = ("history", "items", "views", "display", "versions", "snapping", "preferences")
 
 
 class Step:
@@ -236,16 +239,30 @@ class Actions:
             if close:
                 return "preferences already open"
             self._click_control("menu:Edit")
-            hit = self._click_control("menu:Edit/Preferences...")
+            hit = self._click_control(self._menu_ref("Edit", "Preferences..."))
             return f'opened {hit["ref"]}', hit
-        rows = [r for r in self._control_rows() if r[0] == 1 and r[1] and r[3].lower().startswith(want)]
-        rows.sort(key=lambda r: r[3].lower() != want)
+        rows = []
+        for r in self._control_rows():
+            if r[0] != 1 or not r[1]:
+                continue
+            label = r[3].lower()
+            hides = label.startswith("hide the ")
+            bare = label.removeprefix("hide the ").removeprefix("show the ")
+            if bare.startswith(want):
+                rows.append((bare.split(" (")[0] != want, r, hides or "on" in r[4]))
+        rows.sort(key=lambda x: x[0])
         if not rows:
-            raise NotFound(f'no panel button "{name}" on screen')
-        ref, label, flags = rows[0][1], rows[0][3], rows[0][4]
-        is_on = "on" in flags
+            keys = PANEL_KEYS.get(want)
+            if keys is None:
+                raise NotFound(f'no panel button "{name}" on screen, the panels are {", ".join(PANELS)}')
+            if not open:
+                return f"{want} already closed"
+            self.page.keyboard.press(key(keys))
+            return f"opened {want} with {keys[:-1] + keys[-1].upper()}"
+        _, r, is_on = rows[0]
+        ref, label = r[1], r[3]
         if is_on == open:
-            return f'{label} already {"open" if open else "closed"}'
+            return f'{want} already {"open" if open else "closed"}'
         self._click_control(ref)
         return f'{"opened" if open else "closed"} {ref} "{label}"'
 

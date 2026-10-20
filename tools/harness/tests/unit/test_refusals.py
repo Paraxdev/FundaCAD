@@ -76,3 +76,25 @@ def test_a_command_names_the_match_it_ran():
     assert str(s.command("fit")).startswith('ran command "Fit to Model"')
     s.close()
 
+
+def test_the_items_panel_is_found_by_its_hide_button_and_closed():
+    rows = [[1, 'text:"Hide the items (Ctrl Alt S)"', "button", "Hide the items (Ctrl Alt S)", [], "items"]]
+    s = session(rows)
+    assert str(s.panel("items")).startswith("items already open")
+    assert str(s.panel("Items", open=False)).startswith('closed text:"Hide the items')
+    s.close()
+
+
+def test_a_closed_panel_with_no_button_opens_by_its_keys():
+    s = session([])
+    assert str(s.panel("items")).startswith("opened items with Ctrl+Alt+S")
+    assert s.page.keys == ["Control+Alt+s"]
+    s.close()
+
+
+def test_preferences_opens_from_the_menu_item_with_an_ellipsis():
+    rows = [[1, "menu:Edit", "button", "Edit", [], "menu"], [1, "menu:Edit/Preferences…", "button", "Preferences…", [], "menu"]]
+    s = session(rows)
+    s.panel("preferences")
+    assert s.bridge.clicked == ["menu:Edit", "menu:Edit/Preferences…"]
+    s.close()
