@@ -28,6 +28,7 @@ fn write_the_v10_binary_fixture() {
         &text,
         &BTreeMap::new(),
         &BTreeMap::new(),
+        &[],
         "FundaCAD fixture",
     )
     .unwrap();

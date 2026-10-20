@@ -506,15 +506,32 @@ fn read_section<S: Write>(file: &mut File, entry: &Entry, sink: &mut S, report: 
     Ok(())
 }
 
+/// A section of a kind this version does not read, copied out on open so a save
+/// can write it back unchanged (docs/FUNDA-FORMAT.md, "Files from a newer version").
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct Carried {
+    pub kind: u8,
+    pub name: String,
+    /// `raw_hash` in hex, also the file name in the carry folder
+    pub hash: String,
+}
+
+/// Only a codec this version can decode can be verified and written back.
+pub fn carries(e: &Entry) -> bool {
+    e.kind > KIND_MESH && matches!(e.codec, CODEC_RAW | CODEC_DEFLATE)
+}
+
 pub struct Opened {
     pub document_json: String,
     pub entries: Vec<Entry>,
     pub report: RepairReport,
+    pub carried: Vec<Carried>,
 }
 
 /// Open a file: the document as JSON, with every geometry blob and cached mesh
 /// extracted into its store, each verified before it is published under its hash.
-pub fn read_file(path: &Path, blob_dir: &Path, mesh_dir: Option<&Path>) -> Result<Opened, String> {
+/// With `carry_dir`, sections of a kind this version does not read land there too.
+pub fn read_file(path: &Path, blob_dir: &Path, mesh_dir: Option<&Path>, carry_dir: Option<&Path>) -> Result<Opened, String> {
     let mut f = File::open(path).map_err(io)?;
     let mut report = RepairReport::default();
     let entries = read_index(&mut f, &mut report)?;
@@ -546,7 +563,19 @@ pub fn read_file(path: &Path, blob_dir: &Path, mesh_dir: Option<&Path>) -> Resul
             let _ = extract(&mut f, e, &dest, &mut report);
         }
     }
-    Ok(Opened { document_json, entries, report })
+    let mut carried = Vec::new();
+    if let Some(dir) = carry_dir {
+        std::fs::create_dir_all(dir).map_err(io)?;
+        for e in entries.iter().filter(|e| carries(e)) {
+            let hash = hex(&e.raw_hash);
+            let dest = dir.join(format!("{hash}.bin"));
+            // A section this version does not read never blocks the open.
+            if dest.exists() || extract(&mut f, e, &dest, &mut report).is_ok() {
+                carried.push(Carried { kind: e.kind, name: e.name.clone(), hash });
+            }
+        }
+    }
+    Ok(Opened { document_json, entries, report, carried })
 }
 
 fn safe_key(key: &str) -> bool {
@@ -575,7 +604,7 @@ pub fn verify(path: &Path) -> Result<RepairReport, String> {
     let mut f = File::open(path).map_err(io)?;
     let mut report = RepairReport::default();
     let entries = read_index(&mut f, &mut report)?;
-    for e in &entries {
+    for e in entries.iter().filter(|e| e.kind <= KIND_MESH || carries(e)) {
         read_section(&mut f, e, &mut std::io::sink(), &mut report)?;
     }
     Ok(report)
@@ -587,6 +616,7 @@ pub fn document_sections<'a>(
     document_cbor: &'a [u8],
     blobs: &'a BTreeMap<String, PathBuf>,
     meshes: &'a BTreeMap<String, PathBuf>,
+    carried: &'a [(Carried, PathBuf)],
 ) -> Vec<SectionSpec<'a>> {
     let mut out = vec![
         SectionSpec { kind: KIND_INFO, name: "info".into(), source: Source::Bytes(info_cbor), layout: SMALL_LAYOUT },
@@ -597,6 +627,9 @@ pub fn document_sections<'a>(
     }
     for (key, path) in meshes {
         out.push(SectionSpec { kind: KIND_MESH, name: key.clone(), source: Source::File(path), layout: LARGE_LAYOUT });
+    }
+    for (c, path) in carried.iter().filter(|(c, _)| c.kind > KIND_MESH) {
+        out.push(SectionSpec { kind: c.kind, name: c.name.clone(), source: Source::File(path), layout: LARGE_LAYOUT });
     }
     out
 }
@@ -630,7 +663,7 @@ mod tests {
         let cbor = json_to_cbor(doc).unwrap();
         let path = dir.join("part.funda");
         let mut file = File::create(&path).unwrap();
-        write(&mut file, &document_sections(&info, &cbor, &blobs, &meshes)).unwrap();
+        write(&mut file, &document_sections(&info, &cbor, &blobs, &meshes, &[])).unwrap();
         (path, doc.to_string(), geometry)
     }
 
@@ -644,7 +677,7 @@ mod tests {
         let (path, doc, geometry) = sample(&dir);
         assert!(looks_like_fnda(&path));
         let blobs = dir.join("blobs");
-        let opened = read_file(&path, &blobs, None).unwrap();
+        let opened = read_file(&path, &blobs, None, None).unwrap();
         assert!(same_json(&opened.document_json, &doc));
         assert_eq!(opened.report, RepairReport::default());
         let blob = std::fs::read_dir(&blobs).unwrap().next().unwrap().unwrap().path();
@@ -680,7 +713,7 @@ mod tests {
         }
         std::fs::write(&path, &bytes).unwrap();
         let blobs = dir.join("blobs");
-        let opened = read_file(&path, &blobs, None).unwrap();
+        let opened = read_file(&path, &blobs, None, None).unwrap();
         assert!(same_json(&opened.document_json, &doc));
         assert!(opened.report.repaired_shards >= 3, "{:?}", opened.report);
         let blob = std::fs::read_dir(&blobs).unwrap().next().unwrap().unwrap().path();
@@ -696,7 +729,7 @@ mod tests {
             *b = 0;
         }
         std::fs::write(&path, &bytes).unwrap();
-        let opened = read_file(&path, &dir.join("blobs"), None).unwrap();
+        let opened = read_file(&path, &dir.join("blobs"), None, None).unwrap();
         assert!(same_json(&opened.document_json, &doc));
         assert!(opened.report.used_backup_index);
     }
@@ -714,7 +747,7 @@ mod tests {
             bytes[at] ^= 0xFF;
         }
         std::fs::write(&path, &bytes).unwrap();
-        let err = read_file(&path, &dir.join("blobs"), None).err().unwrap();
+        let err = read_file(&path, &dir.join("blobs"), None, None).err().unwrap();
         assert!(err.contains("damaged"), "{err}");
     }
 
@@ -749,8 +782,86 @@ mod tests {
         let cbor = json_to_cbor(r#"{"features":[]}"#).unwrap();
         let (b, m) = (BTreeMap::new(), BTreeMap::new());
         let mut out = Cursor::new(Vec::new());
-        let entries = write(&mut out, &document_sections(&info, &cbor, &b, &m)).unwrap();
+        let entries = write(&mut out, &document_sections(&info, &cbor, &b, &m, &[])).unwrap();
         assert_eq!(entries.len(), 2);
         assert_eq!(&out.get_ref()[0..8], MAGIC);
+    }
+
+    fn future_file(dir: &Path) -> (PathBuf, Vec<u8>) {
+        let payload: Vec<u8> = (0..5000u32).map(|i| (i * 7 % 251) as u8).collect();
+        let info = json_to_cbor("{}").unwrap();
+        let cbor = json_to_cbor(r#"{"version":11,"features":[]}"#).unwrap();
+        let (b, m) = (BTreeMap::new(), BTreeMap::new());
+        let mut sections = document_sections(&info, &cbor, &b, &m, &[]);
+        sections.push(SectionSpec { kind: 9, name: "futureIndex".into(), source: Source::Bytes(&payload), layout: SMALL_LAYOUT });
+        let path = dir.join("future.fundab");
+        write(&mut File::create(&path).unwrap(), &sections).unwrap();
+        (path, payload)
+    }
+
+    fn index_of(path: &Path) -> Vec<Entry> {
+        read_index(&mut File::open(path).unwrap(), &mut RepairReport::default()).unwrap()
+    }
+
+    fn set_codec(path: &Path, kind: u8, codec: u8) {
+        let mut bytes = std::fs::read(path).unwrap();
+        let table_a = parse_header(&bytes[0..HEADER_LEN as usize], MAGIC).unwrap().table_a;
+        let mut entries = index_of(path);
+        for e in entries.iter_mut().filter(|e| e.kind == kind) {
+            e.codec = codec;
+        }
+        bytes.truncate(table_a as usize);
+        let table = encode_table(&entries);
+        let crc = crc32fast::hash(&table);
+        let table_b = table_a + table.len() as u64;
+        bytes.extend_from_slice(&table);
+        bytes.extend_from_slice(&table);
+        bytes.extend_from_slice(&encode_header(TAIL_MAGIC, table_a, table_b, table.len() as u64, crc));
+        bytes[0..HEADER_LEN as usize].copy_from_slice(&encode_header(MAGIC, table_a, table_b, table.len() as u64, crc));
+        std::fs::write(path, bytes).unwrap();
+    }
+
+    #[test]
+    fn a_section_of_an_unknown_kind_is_carried_and_written_back() {
+        let dir = tmpdir("carry");
+        let (path, payload) = future_file(&dir);
+        let carry = dir.join("sections");
+        let opened = read_file(&path, &dir.join("blobs"), None, Some(&carry)).unwrap();
+        let original = index_of(&path).into_iter().find(|e| e.kind == 9).unwrap();
+        assert_eq!(opened.carried, vec![Carried { kind: 9, name: "futureIndex".into(), hash: hex(&original.raw_hash) }]);
+        let kept = carry.join(format!("{}.bin", opened.carried[0].hash));
+        assert_eq!(std::fs::read(&kept).unwrap(), payload);
+
+        let info = json_to_cbor("{}").unwrap();
+        let cbor = json_to_cbor(&opened.document_json).unwrap();
+        let (b, m) = (BTreeMap::new(), BTreeMap::new());
+        let carried = vec![(opened.carried[0].clone(), kept)];
+        let again = dir.join("again.fundab");
+        write(&mut File::create(&again).unwrap(), &document_sections(&info, &cbor, &b, &m, &carried)).unwrap();
+        let written = index_of(&again).into_iter().find(|e| e.kind == 9).unwrap();
+        assert_eq!((written.name, written.raw_len, written.raw_hash), (original.name, original.raw_len, original.raw_hash));
+        assert_eq!(verify(&again).unwrap(), RepairReport::default());
+    }
+
+    #[test]
+    fn a_section_in_an_unknown_codec_is_skipped() {
+        let dir = tmpdir("codec");
+        let (path, _) = future_file(&dir);
+        set_codec(&path, 9, 7);
+        let carry = dir.join("sections");
+        let opened = read_file(&path, &dir.join("blobs"), None, Some(&carry)).unwrap();
+        assert!(same_json(&opened.document_json, r#"{"version":11,"features":[]}"#));
+        assert!(opened.carried.is_empty());
+        assert_eq!(std::fs::read_dir(&carry).unwrap().count(), 0);
+        assert!(verify(&path).is_ok());
+    }
+
+    #[test]
+    fn nothing_is_carried_without_a_carry_folder() {
+        let dir = tmpdir("nocarry");
+        let (path, _) = future_file(&dir);
+        let opened = read_file(&path, &dir.join("blobs"), None, None).unwrap();
+        assert!(opened.carried.is_empty());
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 2);
     }
 }

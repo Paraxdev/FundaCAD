@@ -25,6 +25,10 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **A .fundab keeps the parts a newer version added.** Sections of a kind this
+  version does not read are kept on open and written back when the file is saved
+  as .fundab again.
+
 - **MCP `doc_open` says when a file is from a newer version**, with a `note:`
   line naming the feature types this build does not know, the same facts the
   app's open notice gives.

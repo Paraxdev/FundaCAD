@@ -117,8 +117,8 @@ Each entry:
 
 | Size | Field | Meaning |
 |---|---|---|
-| 1 | kind | `0` info, `1` document, `2` geometry, `3` mesh |
-| 1 | codec | `0` raw, `1` deflate |
+| 1 | kind | `0` info, `1` document, `2` geometry, `3` mesh, higher ones are carried (below) |
+| 1 | codec | `0` raw, `1` deflate, a section in any other codec is skipped |
 | 2 | name_len | length of `name` in bytes |
 | name_len | name | UTF-8; see below |
 | 8 | offset | where the section starts |
@@ -247,6 +247,11 @@ Reader rules:
   is reserved for the JSON file's embedded blobs (above), never a document key.
 - A `stress`, `environment` or `versions` value the reader cannot read is kept
   whole and written back for as long as the document has none of its own.
+- A `.fundab` section of a kind above `3` in codec `0` or `1` is verified against
+  its `raw_hash`, kept, and written again with the same name, kind and raw bytes
+  when the document is saved as `.fundab`. A JSON `.funda` has no sections, so
+  saving as `.funda` drops it. A section in another codec cannot be verified or
+  written back, so it is skipped, and a damaged one never stops the open.
 
 Writer rules:
 
@@ -255,6 +260,11 @@ Writer rules:
   migrations on such a file again, so every migration must be shape guarded:
   it rewrites only what still has the old shape, and leaves alone what already
   has the new one.
+- A new section kind uses codec `0` or `1`, so an older version carries it.
+- An older version copies such a section unchanged after the user edited the
+  document, it cannot update it. So a new section kind must stay valid against
+  any edit, or check itself: for example, store the `raw_hash` of the document
+  section it describes and ignore itself when that no longer matches.
 
 ## What the error correction does not cover
 

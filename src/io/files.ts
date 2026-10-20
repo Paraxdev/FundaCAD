@@ -4,7 +4,7 @@
 // get a path from the native save dialog and hand it to the engine, which
 // writes the file directly (no fs round-trip through the webview).
 
-import type { DocumentStore } from "../document/store";
+import type { CarriedSection, DocumentStore } from "../document/store";
 import { asFeature } from "../types";
 import type { GeometryBackend } from "../geometry/client";
 import type { CadDocument, ExportFormat, Feature, ImportFormat } from "../types";
@@ -59,6 +59,7 @@ async function writeContainer(store: DocumentStore, path: string): Promise<strin
       documentJson: store.toJSON(),
       hashes: referencedHashes(store),
       meshKeys: [],
+      carried: store.carriedSections,
     });
     return null;
   } catch (e) {
@@ -178,11 +179,13 @@ export async function openDocumentBytes(store: DocumentStore, file: File, geomet
   const { invoke } = await import("@tauri-apps/api/core");
   let opened: OpenedDocument;
   try {
-    const r = await invoke<{ document: string; repairedShards: number; usedBackupIndex: boolean; wasContainer: boolean }>(
-      "container_open_bytes",
-      new Uint8Array(await file.arrayBuffer()),
-    );
-    opened = { text: r.document, wasContainer: r.wasContainer, repaired: r.repairedShards > 0 || r.usedBackupIndex };
+    const r = await invoke<RustOpened & { wasContainer: boolean }>("container_open_bytes", new Uint8Array(await file.arrayBuffer()));
+    opened = {
+      text: r.document,
+      wasContainer: r.wasContainer,
+      repaired: r.repairedShards > 0 || r.usedBackupIndex,
+      carried: r.carried ?? [],
+    };
   } catch (e) {
     await reportError(`Couldn't open ${file.name}: ${errMsg(e)}`);
     return "unreadable";
@@ -292,11 +295,8 @@ export async function openDocumentAtPath(
     const wasContainer = await invoke<boolean>("container_is_container", { path });
     // JSON goes through Rust too: it carries embedded geometry that has to reach
     // the blob store before the first rebuild asks for it.
-    const r = await invoke<{ document: string; repairedShards: number; usedBackupIndex: boolean }>(
-      "container_open_checked",
-      { path },
-    );
-    opened = { text: r.document, wasContainer, repaired: r.repairedShards > 0 || r.usedBackupIndex };
+    const r = await invoke<RustOpened>("container_open_checked", { path });
+    opened = { text: r.document, wasContainer, repaired: r.repairedShards > 0 || r.usedBackupIndex, carried: r.carried ?? [] };
   } catch (e) {
     // Rust's container errors are already user-facing sentences (a newer
     // container format, a damaged archive, geometry that does not match its
@@ -307,17 +307,25 @@ export async function openDocumentAtPath(
   return finishOpen(store, base, opened, geometry, path);
 }
 
+interface RustOpened {
+  document: string;
+  repairedShards: number;
+  usedBackupIndex: boolean;
+  carried?: CarriedSection[];
+}
+
 interface OpenedDocument {
   text: string;
   wasContainer: boolean;
   repaired: boolean;
+  carried: CarriedSection[];
 }
 
 /** Load a document Rust has read. `path` is null for one dropped as bytes. */
 async function finishOpen(
   store: DocumentStore,
   base: string,
-  { text, wasContainer, repaired }: OpenedDocument,
+  { text, wasContainer, repaired, carried }: OpenedDocument,
   geometry: GeometryBackend | undefined,
   path: string | null,
 ): Promise<OpenOutcome> {
@@ -343,6 +351,7 @@ async function finishOpen(
     await reportUnreadable(e);
     return "unreadable";
   }
+  store.carriedSections = carried;
   // freshly opened == clean
   if (path) store.markSaved(path);
   else store.markOpenedWithoutPath(base);

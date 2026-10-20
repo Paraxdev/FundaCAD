@@ -45,6 +45,13 @@ import { featureMeta } from "../ui/featureMeta";
 /** An expression typed on a sketch dimension while the sketch was OPEN, the
  *  dim isn't in the document until the sketch commits, so the binding travels
  *  with the commit (addFeature/replaceFeature) and lands in the same mutate. */
+/** A section of a `.fundab` this version does not read (docs/FUNDA-FORMAT.md). */
+export interface CarriedSection {
+  kind: number;
+  name: string;
+  hash: string;
+}
+
 export interface SketchBinding {
   target: ParamTarget;
   expr: string;
@@ -296,6 +303,9 @@ export class DocumentStore {
   private unreadSections: { stress?: unknown; environment?: unknown; versions?: unknown } = {};
   /** The `version` the open document was stamped with, 1 when it had none. */
   openedVersion = FORMAT_VERSION;
+  /** Sections of the opened `.fundab` this version does not read, as the app
+   *  copied them out. Saving to a `.fundab` writes them back. */
+  carriedSections: CarriedSection[] = [];
   // static descriptor list driving toJSON/load below, in the exact on-disk key
   // order (palette piggybacks on bodyColors' condition, so isn't listed here).
   private readonly overlays: { overlay: Overlay<any>; mapValue?: (v: unknown) => any }[] = [
@@ -607,6 +617,7 @@ export class DocumentStore {
     this.unknownKeys = {};
     this.unreadSections = {};
     this.openedVersion = FORMAT_VERSION;
+    this.carriedSections = [];
     this.path = null;
     this.pathlessName = null;
     this.isDirty = false;
@@ -2157,6 +2168,7 @@ export class DocumentStore {
     this.stress = normalizeStressStudy(parsed.stress);
     this.environment = normalizeDocEnvironment(parsed.environment);
     this.openedVersion = typeof parsed.version === "number" ? parsed.version : 1;
+    if (!opts.replace) this.carriedSections = [];
     this.unknownKeys = carriedKeys(parsed as unknown as Record<string, unknown>, KNOWN_DOC_KEYS);
     this.unreadSections = {};
     if (parsed.versions != null && !this.repo) this.unreadSections.versions = structuredClone(parsed.versions);

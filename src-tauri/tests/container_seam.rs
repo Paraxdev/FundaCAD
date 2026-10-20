@@ -56,7 +56,7 @@ fn an_engine_blob_survives_the_container_and_rebuilds() {
     let mut map = BTreeMap::new();
     map.insert(hash.clone(), blob);
     let dest = dir.join("part.funda");
-    fundacad_lib::container::write_container(&dest, &doc, &map, &BTreeMap::new(), "seam-test")
+    fundacad_lib::container::write_container(&dest, &doc, &map, &BTreeMap::new(), &[], "seam-test")
         .expect("write_container failed");
 
     // 3. The app opens it somewhere that has never seen this geometry.
@@ -108,4 +108,43 @@ fn the_engine_worker_is_told_the_containers_blob_store() {
         !bare.get_envs().any(|(k, _)| k == "FUNDACAD_BLOB_DIR" || k == "FUNDACAD_PLUGIN_DIR"),
         "an unresolved directory leaves the engine's own default"
     );
+}
+
+fn future_fundab(dir: &Path, payload: &[u8]) -> PathBuf {
+    use fundacad_lib::fnda;
+    let info = fnda::json_to_cbor("{}").unwrap();
+    let cbor = fnda::json_to_cbor(r#"{"version":11,"features":[]}"#).unwrap();
+    let (b, m) = (BTreeMap::new(), BTreeMap::new());
+    let mut sections = fnda::document_sections(&info, &cbor, &b, &m, &[]);
+    sections.push(fnda::SectionSpec { kind: 9, name: "futureIndex".into(), source: fnda::Source::Bytes(payload), layout: fnda::SMALL_LAYOUT });
+    let path = dir.join("future.fundab");
+    fnda::write(&mut std::fs::File::create(&path).unwrap(), &sections).unwrap();
+    path
+}
+
+#[test]
+fn a_section_this_version_does_not_read_is_saved_back_into_a_fundab_only() {
+    use fundacad_lib::container::{open_document_full, save_document, Stores};
+    let dir = tmpdir("carried");
+    let stores = Stores { blobs: dir.join("blobs"), meshes: dir.join("meshes"), sections: dir.join("sections") };
+    let payload: Vec<u8> = (0..4000u32).map(|i| (i % 249) as u8).collect();
+    let opened = open_document_full(&future_fundab(&dir, &payload), &stores.blobs, Some(&stores.meshes), Some(&stores.sections)).unwrap();
+    assert_eq!(opened.carried.len(), 1);
+
+    let bin = dir.join("saved.fundab");
+    let json = dir.join("saved.funda");
+    for dest in [&bin, &json] {
+        save_document(&stores, dest, &opened.document, vec![], vec![], opened.carried.clone(), "seam-test").unwrap();
+    }
+    let elsewhere = dir.join("sections_b");
+    let again = open_document_full(&bin, &dir.join("blobs_b"), None, Some(&elsewhere)).unwrap();
+    assert_eq!(again.carried, opened.carried);
+    assert_eq!(std::fs::read(elsewhere.join(format!("{}.bin", again.carried[0].hash))).unwrap(), payload);
+    assert!(open_document_full(&json, &dir.join("blobs_b"), None, Some(&elsewhere)).unwrap().carried.is_empty());
+
+    let mut forged = opened.carried[0].clone();
+    forged.hash = "../../escape".into();
+    save_document(&stores, &bin, &opened.document, vec![], vec![], vec![forged], "seam-test").unwrap();
+    assert!(open_document_full(&bin, &dir.join("blobs_b"), None, Some(&elsewhere)).unwrap().carried.is_empty());
+    let _ = std::fs::remove_dir_all(&dir);
 }

@@ -13,3 +13,5 @@ While you have unsaved changes, FundaCAD keeps a recovery copy. If the app close
 A file saved by a newer version of FundaCAD still opens. Features this version does not know show greyed in the history, named by their type, and a notice lists them. They are kept, and saving writes them back unchanged, so the newer version still has them.
 
 Bodies made after such a feature may differ, because this version builds without it. Open the file in the newer version to see it as it was made.
+
+A .fundab file can also hold parts this version does not read. Saving it as .fundab keeps them, saving it as .funda does not.
