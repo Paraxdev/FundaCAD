@@ -115,12 +115,12 @@ export interface BrowserSection {
   filter?: string;
 }
 
-/** The tabs of the Render dock. */
 export interface MaterialPresetGroup {
   group: string;
   materials: MaterialDef[];
 }
 
+/** The tabs of the Render dock. */
 export type RenderTab = "material" | "environment" | "camera";
 
 /** A block a plugin adds to the end of one Render dock tab, drawn as its own
@@ -490,7 +490,9 @@ export function contributedMaterialPresets(): MaterialPresetGroup[] {
       continue;
     }
     for (const g of groups) {
-      if (g && typeof g.group === "string" && Array.isArray(g.materials) && g.materials.length) out.push(g);
+      if (!g || typeof g.group !== "string" || !Array.isArray(g.materials)) continue;
+      const materials = g.materials.filter((m) => m && typeof m.name === "string" && typeof m.color === "string");
+      if (materials.length) out.push({ group: g.group, materials });
     }
   }
   return out;

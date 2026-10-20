@@ -519,6 +519,20 @@ describe("materials (what a body is made of, on screen)", () => {
     expect(store.materialLibrary.some((m) => m.id === id)).toBe(true);
   });
 
+  it("undoing a preset add removes only that preset and keeps later library work", () => {
+    const id = store.addMaterialPreset({ name: "Bronze glaze", color: "#B5A642" })!;
+    const later = store.addMaterial({ name: "Later" });
+    const starter = store.materialLibrary.find((m) => m.id !== id && m.id !== later)!;
+    store.updateMaterial(starter.id, { color: "#123456" });
+    store.undo();
+    expect(store.materialLibrary.some((m) => m.id === id)).toBe(false);
+    expect(store.materialLibrary.some((m) => m.id === later)).toBe(true);
+    expect(store.materialLibrary.find((m) => m.id === starter.id)!.color).toBe("#123456");
+    store.redo();
+    expect(store.materialLibrary.some((m) => m.id === id)).toBe(true);
+    expect(store.materialLibrary.some((m) => m.id === later)).toBe(true);
+  });
+
   it("drops a preset that is not a material and tidies one that half is", () => {
     const before = store.materialLibrary.length;
     expect(store.addMaterialPreset({ name: "No colour" })).toBeNull();
