@@ -35,6 +35,7 @@ import { snap } from "../ui/units";
 import {
   axisDragDistance,
   createDragHandle,
+  nameHandle,
   createRotationArc,
   leanOutOfView,
   type DragHandle,
@@ -134,7 +135,7 @@ export class MechanismTool {
 
     this.viewport.suspendPicking = true;
     this.gesture.attach();
-    this.handle = field === "offset" ? createDragHandle() : createRotationArc();
+    this.handle = field === "offset" ? nameHandle(createDragHandle(), "offset") : nameHandle(createRotationArc(), "angle");
     this.gizmo = this.handle.group;
     this.viewport.addToScene(this.gizmo);
     this.dim.show(

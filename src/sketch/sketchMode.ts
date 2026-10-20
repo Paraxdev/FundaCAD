@@ -182,6 +182,9 @@ export class SketchMode {
   } | null = null;
 
   private plane = new SketchPlane("XY");
+  get activePlane(): SketchPlane {
+    return this.plane;
+  }
 
   /** The model's outline on this sketch's plane, in sketch 2D, for aiming the
    *  view and snapping to the face. Areas split along the engine's cut lines
