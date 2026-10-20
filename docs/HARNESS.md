@@ -137,8 +137,8 @@ with Session() as s:
 | verb | what a person does |
 |---|---|
 | `click(target, button="left", double=False, mods=())` | clicks a control by ref or label, or `face:<sel>` / `edge:<sel>` on the canvas; a label click says the region it landed in, and when only the start of a name matched |
-| `tool(label)` | starts a rail tool, opening its category or family first |
-| `type(target, text, enter=False)` | clicks a value box, selects all and types |
+| `tool(label)` | starts a rail tool, opening its category or family first; the step says when no tool is running after the click |
+| `type(target, text, enter=False)` | clicks a value box, selects all and types; refused before any click when the target is no value field |
 | `press(*keys)` | `"Enter"`, `"Escape"`, `"Ctrl+Z"`, `"Shift+H"` |
 | `menu(path)` | `"File/Open..."`, three dots or the ellipsis both work |
 | `context_menu(on, item)` | right clicks a control or `face:<sel>`, then the row |

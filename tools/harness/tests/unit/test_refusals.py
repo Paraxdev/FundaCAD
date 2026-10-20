@@ -33,6 +33,8 @@ class Screen:
     def __init__(self, rows):
         self.rows = rows
         self.clicked: list[str] = []
+        self.tools: dict[str, str] = {}
+        self.running: str | None = None
 
     def call(self, method, **args):
         if method == "seq":
@@ -40,7 +42,11 @@ class Screen:
         if method == "messages":
             return {"seq": 0, "rows": []}
         if method == "status":
-            return {"mode": "model"}
+            return {"mode": "model", "tool": self.running}
+        if method == "toolPath":
+            if args["label"] not in self.tools:
+                raise NotFound(f'no tool "{args["label"]}"')
+            return {"steps": [{"ref": self.tools[args["label"]], "button": "left"}]}
         if method == "screen":
             return {"lines": [r for r in self.rows if not args.get("region") or r[5] == args["region"]]}
         if method == "locate":
@@ -67,6 +73,25 @@ def test_a_command_nothing_matches_is_refused_and_the_search_closed():
     with pytest.raises(NotFound, match='no command runs for "Sphere"'):
         s.command("Sphere")
     assert s.page.keys[-1] == "Escape"
+    s.close()
+
+
+def test_a_command_that_is_a_tool_says_to_use_tool():
+    rows = [PALETTE]
+    s = session(rows, on_key=lambda k: rows.clear() if k == "Escape" else None)
+    s.bridge.tools["Sphere"] = "pick:sphere"
+    with pytest.raises(NotFound, match=r'nothing matches, it is a tool, start it with tool\("Sphere"\)'):
+        s.command("Sphere")
+    s.close()
+
+
+def test_a_tool_that_does_not_start_is_not_called_started():
+    rows = [[1, "pick:extrude", "button", "Extrude", [], "toolrail"]]
+    s = session(rows)
+    s.bridge.tools["Extrude"] = "pick:extrude"
+    assert str(s.tool("Extrude")).startswith('clicked pick:extrude "Extrude", no tool is running after it, mode model')
+    s.bridge.running = "Extrude"
+    assert str(s.tool("Extrude")).startswith('started pick:extrude "Extrude", mode model, tool Extrude')
     s.close()
 
 
