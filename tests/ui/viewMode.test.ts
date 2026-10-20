@@ -4,7 +4,8 @@ import { setWorkspace } from "../../src/ui/workspace";
 import {
   PATH_TRACING_AUTO, PATH_TRACING_CPU, PATH_TRACING_NO_ADAPTER, PATH_TRACING_NO_GPU, PATH_TRACING_OFF,
   PATH_TRACING_SELF_CHECK, asViewMode, pathTracingLimits, bootViewMode, chooseViewMode,
-  effectiveViewMode, nextViewMode, pathTracedBlock, requestPathTraced, resetPathTracedOverride, savedViewMode,
+  effectiveViewMode, nextViewMode, pathTracedBlock, requestPathTraced, resetPathTracedOverride, savedGround, savedViewMode,
+  setGround,
 } from "../../src/ui/viewMode";
 
 const fast = { lowPower: false, auto: false, webgpu: true };
@@ -216,5 +217,25 @@ describe("the session override of the performance block", () => {
     vi.resetModules();
     const fresh = await import("../../src/ui/viewMode");
     expect(fresh.pathTracedBlock(perf)?.reason).toBe("perf");
+  });
+});
+
+describe("ground per workspace", () => {
+  afterEach(() => {
+    setRenderPref("groundModel", DEFAULT_RENDER.groundModel);
+    setRenderPref("groundRender", DEFAULT_RENDER.groundRender);
+  });
+
+  it("reads and writes only the current workspace's choice", () => {
+    setWorkspace("render");
+    setGround("shadow");
+    expect(renderPrefs().groundRender).toBe("shadow");
+    expect(renderPrefs().groundModel).toBe("none");
+    expect(savedGround()).toBe("shadow");
+    expect(savedGround("model")).toBe("none");
+    setGround("shadow", "model");
+    setGround("none", "render");
+    expect(savedGround("model")).toBe("shadow");
+    expect(savedGround("render")).toBe("none");
   });
 });

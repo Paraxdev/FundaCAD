@@ -3,7 +3,7 @@
 // pathtrace/environment.ts, in Realtime only in its own PMREM source when an
 // environment map is bound, and the HemisphereLight stays when none is bound.
 
-import { hdrHashOf, type Background, type RenderPrefs } from "../ui/renderPrefs";
+import { groundKey, hdrHashOf, type Background, type Ground, type RenderPrefs } from "../ui/renderPrefs";
 import { keyDirection, type Vec3 } from "./keyLight";
 
 export type LightRole = "key" | "fill" | "sun";
@@ -30,11 +30,23 @@ export interface RigHemisphere {
   up: Vec3;
 }
 
+/** A square catcher plane, the one contactShadow.ts draws. */
 export interface RigGround {
-  mode: "none" | "shadow";
+  mode: Ground;
   z: number;
+  /** World XY of the square's middle. */
+  centre: [number, number];
+  /** Side length of the square. */
   extent: number;
   albedo: number;
+}
+
+/** Where the catcher sits in a workspace, from the viewport's model floor. */
+export interface GroundFloor {
+  workspace: "model" | "render";
+  z: number;
+  centre: [number, number];
+  extent: number;
 }
 
 export interface RigEnvironment {
@@ -64,6 +76,9 @@ export const HEMI_GROUND = 0x202428;
 export const SUN_ANGULAR_RADIUS = 1;
 export const FILL_DIRECTION: Vec3 = unit([-50, 40, 20]);
 export const HEMI_UP: Vec3 = [0, 1, 0];
+/** A shadow catcher: it shows only the light it does not get, so its own
+ *  colour never reaches the picture, a mid grey keeps its bounce light neutral. */
+export const GROUND_ALBEDO = 0.5;
 
 function unit(v: Vec3): Vec3 {
   const n = Math.hypot(v[0], v[1], v[2]) || 1;
@@ -89,7 +104,11 @@ export function scaled(rig: Pick<LightRig, "brightness">, intensity: number): nu
   return intensity * rig.brightness;
 }
 
-export function buildLightRig(p: Readonly<RenderPrefs>, loaded: (hash: string) => boolean): LightRig {
+export function buildLightRig(
+  p: Readonly<RenderPrefs>,
+  loaded: (hash: string) => boolean,
+  floor?: Readonly<GroundFloor> | null,
+): LightRig {
   const hemisphere: RigHemisphere = { sky: HEMI_SKY, ground: HEMI_GROUND, intensity: HEMI_INTENSITY, up: HEMI_UP };
   const key = environmentKeyOf(p, loaded);
   return {
@@ -120,7 +139,9 @@ export function buildLightRig(p: Readonly<RenderPrefs>, loaded: (hash: string) =
     ],
     brightness: p.brightness,
     background: p.background,
-    ground: { mode: "none", z: 0, extent: 0, albedo: 0.5 },
+    ground: floor
+      ? { mode: p[groundKey(floor.workspace)], z: floor.z, centre: [floor.centre[0], floor.centre[1]], extent: floor.extent, albedo: GROUND_ALBEDO }
+      : { mode: "none", z: 0, centre: [0, 0], extent: 0, albedo: GROUND_ALBEDO },
   };
 }
 
