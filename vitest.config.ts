@@ -29,6 +29,8 @@ export default defineConfig({
           include: ["tests/**/*.test.ts"],
           environment: "node",
           globals: false,
+          // Without this vitest answers a ?raw import of a .scss file with an empty string.
+          css: { include: [/\.scss\?raw/] },
         },
       },
       {
