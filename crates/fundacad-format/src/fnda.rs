@@ -21,17 +21,21 @@ use flate2::write::DeflateEncoder;
 use flate2::Compression;
 use reed_solomon_erasure::galois_8::ReedSolomon;
 
+use crate::{par, segments};
+
 pub const MAGIC: &[u8; 8] = b"FUNDACAD";
 pub const TAIL_MAGIC: &[u8; 8] = b"FNDATAIL";
 pub const TABLE_MAGIC: &[u8; 4] = b"FTBL";
 pub const MAJOR: u16 = 2;
-pub const MINOR: u16 = 0;
+pub const MINOR: u16 = 1;
 pub const HEADER_LEN: u64 = 64;
 
 pub const KIND_INFO: u8 = 0;
 pub const KIND_DOCUMENT: u8 = 1;
 pub const KIND_GEOMETRY: u8 = 2;
 pub const KIND_MESH: u8 = 3;
+/// Where the segments of the big sections start, see `segments`.
+pub const KIND_SEGMENTS: u8 = 4;
 
 pub const CODEC_RAW: u8 = 0;
 pub const CODEC_DEFLATE: u8 = 1;
@@ -138,13 +142,40 @@ pub fn cbor_to_json(cbor: &[u8]) -> Result<String, String> {
 
 const DAMAGED: &str = "This document is damaged beyond what its error correction can repair.";
 
-/// Write a complete file to `out`. Sections are written in order; the header is
-/// filled in last.
+/// How a file is written. Only the speed depends on `threads`, never the bytes.
+#[derive(Clone, Copy, Debug)]
+pub struct WriteOptions {
+    /// raw bytes per segment of a big section
+    pub segment_raw: usize,
+    pub threads: usize,
+}
+
+impl Default for WriteOptions {
+    fn default() -> Self {
+        WriteOptions { segment_raw: segments::DEFAULT_SEGMENT_RAW, threads: par::threads() }
+    }
+}
+
+/// Write a complete file to `out`. Sections are written in order, then the
+/// segment index of the big ones; the header is filled in last.
 pub fn write<W: Write + Seek>(out: &mut W, sections: &[SectionSpec]) -> Result<Vec<Entry>, String> {
+    write_with(out, sections, &WriteOptions::default())
+}
+
+pub fn write_with<W: Write + Seek>(out: &mut W, sections: &[SectionSpec], o: &WriteOptions) -> Result<Vec<Entry>, String> {
     out.write_all(&[0u8; HEADER_LEN as usize]).map_err(io)?;
-    let mut entries = Vec::with_capacity(sections.len());
-    for s in sections {
-        entries.push(write_section(out, s)?);
+    let mut entries = Vec::with_capacity(sections.len() + 1);
+    let mut rows = Vec::new();
+    // An index is never carried: it would describe the sections of another write.
+    for s in sections.iter().filter(|s| s.kind != KIND_SEGMENTS) {
+        let (entry, row) = write_section(out, s, o)?;
+        entries.push(entry);
+        rows.extend(row);
+    }
+    if !rows.is_empty() {
+        let index = segments::encode(&rows);
+        let spec = SectionSpec { kind: KIND_SEGMENTS, name: "segments".into(), source: Source::Bytes(&index), layout: SMALL_LAYOUT };
+        entries.push(write_section(out, &spec, o)?.0);
     }
     let table = encode_table(&entries);
     let table_crc = crc32fast::hash(&table);
@@ -164,31 +195,97 @@ fn io(e: std::io::Error) -> String {
     e.to_string()
 }
 
-fn write_section<W: Write + Seek>(out: &mut W, spec: &SectionSpec) -> Result<Entry, String> {
-    // Compress into memory for small sources and into a temp file for large
-    // ones, hashing the raw bytes on the way.
-    let mut hasher = Blake2b128::new();
-    let mut raw_len = 0u64;
-    let stored: Vec<u8> = {
-        let mut enc = DeflateEncoder::new(Vec::new(), Compression::default());
-        let mut feed = |chunk: &[u8]| -> Result<(), String> {
-            hasher.update(chunk);
-            raw_len += chunk.len() as u64;
-            enc.write_all(chunk).map_err(io)
-        };
-        match &spec.source {
-            Source::Bytes(b) => feed(b)?,
+/// A section's raw bytes, from memory or read from its file a window at a time.
+enum RawFeed<'a> {
+    Bytes(&'a [u8]),
+    File(BufReader<File>, u64),
+}
+
+impl<'a> RawFeed<'a> {
+    fn open(source: &Source<'a>) -> Result<Self, String> {
+        Ok(match source {
+            Source::Bytes(b) => RawFeed::Bytes(b),
             Source::File(p) => {
-                let mut f = BufReader::new(File::open(p).map_err(|e| format!("{}: {e}", p.display()))?);
-                let mut buf = vec![0u8; 1 << 20];
-                loop {
-                    let n = f.read(&mut buf).map_err(io)?;
-                    if n == 0 {
-                        break;
-                    }
-                    feed(&buf[..n])?;
-                }
+                let f = File::open(p).map_err(|e| format!("{}: {e}", p.display()))?;
+                let len = f.metadata().map_err(io)?.len();
+                RawFeed::File(BufReader::with_capacity(1 << 20, f), len)
             }
+        })
+    }
+
+    fn len(&self) -> u64 {
+        match self {
+            RawFeed::Bytes(b) => b.len() as u64,
+            RawFeed::File(_, len) => *len,
+        }
+    }
+
+    /// Up to `n` bytes at `at`, `at` being where the previous call stopped.
+    fn next<'b>(&'b mut self, at: u64, n: usize, buf: &'b mut Vec<u8>) -> Result<&'b [u8], String> {
+        match self {
+            RawFeed::Bytes(b) => {
+                let from = (at as usize).min(b.len());
+                Ok(&b[from..(from + n).min(b.len())])
+            }
+            RawFeed::File(f, _) => {
+                buf.resize(n, 0);
+                let mut got = 0;
+                while got < n {
+                    match f.read(&mut buf[got..]).map_err(io)? {
+                        0 => break,
+                        k => got += k,
+                    }
+                }
+                buf.truncate(got);
+                Ok(&buf[..])
+            }
+        }
+    }
+}
+
+/// A section of at least two segments is compressed in segments, on all
+/// threads, and described by a row of the segment index.
+fn write_section<W: Write + Seek>(out: &mut W, spec: &SectionSpec, o: &WriteOptions) -> Result<(Entry, Option<segments::Row>), String> {
+    let mut hasher = Blake2b128::new();
+    let mut feed = RawFeed::open(&spec.source)?;
+    let total = feed.len();
+    let seg = o.segment_raw.max(1024);
+    let segmented = total >= 2 * seg as u64;
+    let mut segs: Vec<segments::Segment> = Vec::new();
+    let mut raw_len = 0u64;
+    let mut buf = Vec::new();
+    let stored: Vec<u8> = if segmented {
+        let window = seg * 4 * o.threads.max(1);
+        let mut stored = Vec::with_capacity((total / 2) as usize);
+        while raw_len < total {
+            let want = window.min((total - raw_len) as usize);
+            let chunk = feed.next(raw_len, want, &mut buf)?;
+            if chunk.len() != want {
+                return Err(format!("{} changed while it was being saved", spec.name));
+            }
+            hasher.update(chunk);
+            let ends = raw_len + want as u64 == total;
+            let pieces: Vec<&[u8]> = chunk.chunks(seg).collect();
+            let last = pieces.len() - 1;
+            let packed = par::map_indexed(pieces.len(), o.threads, |i| segments::compress(pieces[i], ends && i == last));
+            for (piece, s) in pieces.iter().zip(packed) {
+                let s = s.map_err(io)?;
+                segs.push(segments::Segment { stored: s.len() as u32, raw: piece.len() as u32 });
+                stored.extend_from_slice(&s);
+            }
+            raw_len += want as u64;
+        }
+        stored
+    } else {
+        let mut enc = DeflateEncoder::new(Vec::new(), Compression::default());
+        loop {
+            let chunk = feed.next(raw_len, 1 << 20, &mut buf)?;
+            if chunk.is_empty() {
+                break;
+            }
+            hasher.update(chunk);
+            enc.write_all(chunk).map_err(io)?;
+            raw_len += chunk.len() as u64;
         }
         enc.finish().map_err(io)?
     };
@@ -210,7 +307,7 @@ fn write_section<W: Write + Seek>(out: &mut W, spec: &SectionSpec) -> Result<Ent
     let rs = ReedSolomon::new(layout.data_shards as usize, layout.parity_shards as usize).map_err(|e| format!("{e:?}"))?;
     let size = layout.shard_size as usize;
     let per_group = size * layout.data_shards as usize;
-    let mut crcs: Vec<u32> = Vec::new();
+    let mut crc_table: Vec<u8> = Vec::new();
     for g in 0..entry.groups() as usize {
         let start = g * per_group;
         let mut shards: Vec<Vec<u8>> = (0..layout.data_shards as usize + layout.parity_shards as usize)
@@ -226,14 +323,20 @@ fn write_section<W: Write + Seek>(out: &mut W, spec: &SectionSpec) -> Result<Ent
             .collect();
         rs.encode(&mut shards).map_err(|e| format!("{e:?}"))?;
         for shard in &shards {
-            crcs.push(crc32fast::hash(shard));
+            crc_table.extend_from_slice(&crc32fast::hash(shard).to_le_bytes());
             out.write_all(shard).map_err(io)?;
         }
     }
-    for c in crcs {
-        out.write_all(&c.to_le_bytes()).map_err(io)?;
-    }
-    Ok(entry)
+    out.write_all(&crc_table).map_err(io)?;
+    let row = segmented.then(|| segments::Row {
+        kind: entry.kind,
+        codec: entry.codec,
+        raw_hash,
+        stored_len: entry.stored_len,
+        crc_table_crc: crc32fast::hash(&crc_table),
+        segments: segs,
+    });
+    Ok((entry, row))
 }
 
 fn encode_header(magic: &[u8; 8], table_a: u64, table_b: u64, table_len: u64, table_crc: u32) -> [u8; HEADER_LEN as usize] {
@@ -518,7 +621,7 @@ pub struct Carried {
 
 /// Only a codec this version can decode can be verified and written back.
 pub fn carries(e: &Entry) -> bool {
-    e.kind > KIND_MESH && matches!(e.codec, CODEC_RAW | CODEC_DEFLATE)
+    e.kind > KIND_SEGMENTS && matches!(e.codec, CODEC_RAW | CODEC_DEFLATE)
 }
 
 pub struct Opened {
@@ -616,7 +719,7 @@ pub fn verify(path: &Path) -> Result<RepairReport, String> {
     let mut f = File::open(path).map_err(io)?;
     let mut report = RepairReport::default();
     let entries = read_index(&mut f, &mut report)?;
-    for e in entries.iter().filter(|e| e.kind <= KIND_MESH || carries(e)) {
+    for e in entries.iter().filter(|e| e.kind <= KIND_SEGMENTS || carries(e)) {
         read_section(&mut f, e, &mut std::io::sink(), &mut report)?;
     }
     Ok(report)
@@ -640,7 +743,7 @@ pub fn document_sections<'a>(
     for (key, path) in meshes {
         out.push(SectionSpec { kind: KIND_MESH, name: key.clone(), source: Source::File(path), layout: LARGE_LAYOUT });
     }
-    for (c, path) in carried.iter().filter(|(c, _)| c.kind > KIND_MESH) {
+    for (c, path) in carried.iter().filter(|(c, _)| c.kind > KIND_SEGMENTS) {
         out.push(SectionSpec { kind: c.kind, name: c.name.clone(), source: Source::File(path), layout: LARGE_LAYOUT });
     }
     out
@@ -875,5 +978,147 @@ mod tests {
         let opened = read_file(&path, &dir.join("blobs"), None, None).unwrap();
         assert!(opened.carried.is_empty());
         assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 2);
+    }
+
+    const SEG: usize = 64 << 10;
+
+    fn opts(threads: usize) -> WriteOptions {
+        WriteOptions { segment_raw: SEG, threads }
+    }
+
+    /// Text-like bytes that deflate about as well as a BinTools blob.
+    fn big_blob(len: usize) -> Vec<u8> {
+        let mut x = 0x9E37_79B9u32;
+        (0..len)
+            .map(|i| {
+                x ^= x << 13;
+                x ^= x >> 17;
+                x ^= x << 5;
+                if i % 7 == 0 { b' ' } else { b'0' + (x % 10) as u8 }
+            })
+            .collect()
+    }
+
+    fn write_blob(dir: &Path, name: &str, geometry: &[u8], o: &WriteOptions) -> (PathBuf, String) {
+        let hash = {
+            let mut h = Blake2b128::new();
+            h.update(geometry);
+            hex(&h.finalize())
+        };
+        let blob = dir.join(format!("{name}.bin"));
+        std::fs::write(&blob, geometry).unwrap();
+        let blobs = BTreeMap::from([(hash.clone(), blob)]);
+        let info = json_to_cbor("{}").unwrap();
+        let cbor = json_to_cbor(r#"{"features":[]}"#).unwrap();
+        let path = dir.join(format!("{name}.fundab"));
+        write_with(&mut File::create(&path).unwrap(), &document_sections(&info, &cbor, &blobs, &BTreeMap::new(), &[]), o).unwrap();
+        (path, hash)
+    }
+
+    fn stored_bytes(path: &Path, e: &Entry) -> Vec<u8> {
+        let mut f = File::open(path).unwrap();
+        let mut out = Vec::new();
+        SectionReader::new(&mut f, e).unwrap().read_to_end(&mut out).unwrap();
+        out
+    }
+
+    fn crc_table_crc(path: &Path, e: &Entry) -> u32 {
+        let bytes = std::fs::read(path).unwrap();
+        let at = e.crc_table_offset() as usize;
+        crc32fast::hash(&bytes[at..at + (e.groups() * e.shards_per_group() * 4) as usize])
+    }
+
+    fn index_rows(path: &Path) -> Vec<segments::Row> {
+        read_section_of_kind(path, KIND_SEGMENTS).unwrap().map(|b| segments::decode(&b)).unwrap_or_default()
+    }
+
+    #[test]
+    fn a_big_section_round_trips_in_segments() {
+        let dir = tmpdir("segrt");
+        let geometry = big_blob(3 << 20);
+        let (path, hash) = write_blob(&dir, "seg", &geometry, &opts(4));
+        let blobs = dir.join("blobs");
+        read_file(&path, &blobs, None, None).unwrap();
+        assert_eq!(std::fs::read(blobs.join(format!("{hash}.bbrep"))).unwrap(), geometry);
+        assert_eq!(verify(&path).unwrap(), RepairReport::default());
+    }
+
+    #[test]
+    fn the_segmented_stream_is_one_deflate_stream_and_each_segment_stands_alone() {
+        let dir = tmpdir("segstream");
+        let geometry = big_blob(3 << 20);
+        let (path, _) = write_blob(&dir, "seg", &geometry, &opts(4));
+        let geom = index_of(&path).into_iter().find(|e| e.kind == KIND_GEOMETRY).unwrap();
+        let stored = stored_bytes(&path, &geom);
+        let mut whole = Vec::new();
+        DeflateDecoder::new(&stored[..]).read_to_end(&mut whole).unwrap();
+        assert_eq!(whole, geometry);
+
+        let rows = index_rows(&path);
+        assert_eq!(rows.len(), 1);
+        let row = &rows[0];
+        assert!(segments::matches(row, geom.kind, geom.codec, &geom.raw_hash, geom.stored_len, geom.raw_len, crc_table_crc(&path, &geom)));
+        assert_eq!(row.segments.len(), (3 << 20) / SEG);
+        let (mut s_at, mut r_at) = (0usize, 0usize);
+        for s in &row.segments {
+            let part = &stored[s_at..s_at + s.stored as usize];
+            assert_eq!(segments::inflate(part, s.raw as usize).as_deref(), Some(&geometry[r_at..r_at + s.raw as usize]));
+            s_at += s.stored as usize;
+            r_at += s.raw as usize;
+        }
+    }
+
+    #[test]
+    fn the_bytes_written_do_not_depend_on_the_thread_count() {
+        let dir = tmpdir("segthreads");
+        let geometry = big_blob(1 << 20);
+        let files: Vec<Vec<u8>> = [1, 2, 8]
+            .iter()
+            .map(|&t| std::fs::read(write_blob(&dir, &format!("t{t}"), &geometry, &opts(t)).0).unwrap())
+            .collect();
+        assert!(files.windows(2).all(|w| w[0] == w[1]));
+    }
+
+    #[test]
+    fn segments_cost_almost_nothing_in_size() {
+        let dir = tmpdir("segsize");
+        let geometry = big_blob(4 << 20);
+        let (seg, _) = write_blob(&dir, "seg", &geometry, &WriteOptions::default());
+        let (one, _) = write_blob(&dir, "one", &geometry, &WriteOptions { segment_raw: 8 << 20, threads: 1 });
+        let stored = |p: &Path| index_of(p).into_iter().find(|e| e.kind == KIND_GEOMETRY).unwrap().stored_len as f64;
+        assert!(index_rows(&one).is_empty());
+        assert!(stored(&seg) / stored(&one) < 1.005, "{} vs {}", stored(&seg), stored(&one));
+    }
+
+    #[test]
+    fn a_section_below_two_segments_is_one_stream_without_an_index() {
+        let dir = tmpdir("segsmall");
+        let geometry = big_blob(2 * SEG - 1);
+        let (path, _) = write_blob(&dir, "small", &geometry, &opts(4));
+        assert!(index_of(&path).iter().all(|e| e.kind != KIND_SEGMENTS));
+        let (path, _) = write_blob(&dir, "two", &big_blob(2 * SEG), &opts(4));
+        assert_eq!(index_rows(&path)[0].segments.len(), 2);
+    }
+
+    #[test]
+    fn a_carried_index_is_never_written_twice() {
+        let dir = tmpdir("segcarry");
+        let geometry = big_blob(4 * SEG);
+        let (path, hash) = write_blob(&dir, "seg", &geometry, &opts(2));
+        let old = read_section_of_kind(&path, KIND_SEGMENTS).unwrap().unwrap();
+        let stale = dir.join("stale.bin");
+        std::fs::write(&stale, &old).unwrap();
+        let carried = vec![(Carried { kind: KIND_SEGMENTS, name: "segments".into(), hash: "00".into() }, stale)];
+        let blobs = BTreeMap::from([(hash, dir.join("seg.bin"))]);
+        let info = json_to_cbor("{}").unwrap();
+        let cbor = json_to_cbor(r#"{"features":[]}"#).unwrap();
+        let meshes = BTreeMap::new();
+        let mut sections = document_sections(&info, &cbor, &blobs, &meshes, &carried);
+        sections.push(SectionSpec { kind: KIND_SEGMENTS, name: "segments".into(), source: Source::Bytes(&old), layout: SMALL_LAYOUT });
+        let again = dir.join("again.fundab");
+        write_with(&mut File::create(&again).unwrap(), &sections, &opts(2)).unwrap();
+        assert_eq!(index_of(&again).iter().filter(|e| e.kind == KIND_SEGMENTS).count(), 1);
+        let opened = read_file(&again, &dir.join("blobs"), None, Some(&dir.join("carry"))).unwrap();
+        assert!(opened.carried.is_empty());
     }
 }

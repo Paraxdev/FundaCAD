@@ -95,7 +95,7 @@ Both are 64 bytes and have the same layout; only the magic differs.
 |---|---|---|---|
 | 0 | 8 | magic | `FUNDACAD` in the header, `FNDATAIL` in the trailer |
 | 8 | 2 | major | `2` |
-| 10 | 2 | minor | `0` |
+| 10 | 2 | minor | `1` (`0` before the segment index, kind `4`) |
 | 12 | 4 | flags | `0`, reserved |
 | 16 | 8 | table_a | offset of section table copy A |
 | 24 | 8 | table_b | offset of section table copy B |
@@ -121,8 +121,8 @@ Each entry:
 
 | Size | Field | Meaning |
 |---|---|---|
-| 1 | kind | `0` info, `1` document, `2` geometry, `3` mesh, higher ones are carried (below) |
-| 1 | codec | `0` raw, `1` deflate, a section in any other codec is skipped |
+| 1 | kind | `0` info, `1` document, `2` geometry, `3` mesh, `4` segment index, higher ones are carried (below) |
+| 1 | codec | `0` raw, `1` deflate; see "Files from a newer version" for any other |
 | 2 | name_len | length of `name` in bytes |
 | name_len | name | UTF-8; see below |
 | 8 | offset | where the section starts |
@@ -143,6 +143,8 @@ Names:
   `raw_hash`. A reader refuses an entry where they differ.
 - **mesh**: a cache key of ASCII letters, digits, `-`, `_` and `.`, with no `..`.
   Meshes are a reopen-speed cache; a damaged or unsafe one is skipped, never fatal.
+- **segment index**: `segments`. Where the segments of the big sections start,
+  see "Segmented sections". At most one, written last.
 
 A name is never used as a path. Extracted geometry is published under the hash
 the reader computed and verified.
@@ -170,14 +172,72 @@ CRC table: crc(group 0 D0), crc(group 0 D1), ... crc(last group P(m-1))
 
 A section occupies `groups * (k + m) * shard_size + 4 * groups * (k + m)` bytes.
 
+## Segmented sections
+
+A deflate section of at least two segments (FundaCAD: 2 MiB raw) is compressed in
+segments, so a writer and a reader can work on all cores. Nothing in its entry,
+shards, parity or CRC table changes; only the stored bytes are produced
+differently:
+
+```text
+stored = S0 || S1 || ... || S(n-1)
+Si (i < n-1) = raw deflate of raw[i*seg .. (i+1)*seg] by a fresh compressor, ended by a sync flush
+S(n-1)       = raw deflate of the rest by a fresh compressor, ended by a final block
+```
+
+A sync flush ends on an empty stored block (`00 00 FF FF`), byte aligned and not
+final, so the concatenation is one valid raw deflate stream: a reader that knows
+nothing of segments decodes it in one pass to the same bytes. A fresh inflater
+fed exactly `Si` gives exactly that segment's raw bytes. Segments carry no
+dictionary from the one before, which costs well under 0.5 percent in size.
+
+Where the segments start is in the segment index, a section of kind `4` named
+`segments`, written after the sections it describes. All integers little-endian:
+
+| Size | Field |
+|---|---|
+| 4 | magic `FSEG` |
+| 2 | version, `1` |
+| 2 | reserved, `0` |
+| 4 | `rows` |
+| ... | `rows` rows |
+
+Each row:
+
+| Size | Field | Meaning |
+|---|---|---|
+| 1 | kind | kind of the described section |
+| 1 | codec | its codec, `1` |
+| 2 | reserved | `0` |
+| 4 | n | number of segments, at least 2 |
+| 16 | raw_hash | the described section's `raw_hash` |
+| 8 | stored_len | the described section's `stored_len` |
+| 4 | crc_table_crc | CRC-32 of the described section's CRC table |
+| 4 | reserved | `0` |
+| 8 n | segments | per segment, `stored_len` u32 then `raw_len` u32 |
+
+The index is advisory. A reader uses a row for a section only when kind,
+`raw_hash`, codec `1`, `stored_len` and `crc_table_crc` all match it, `n` is at
+most `raw_len / 1024 + 1`, every segment has a `stored_len` of at least 1 and a
+`raw_len` from 1 byte to 64 MiB, and the segment lengths add up exactly to the
+section's `stored_len` and `raw_len`. Anything else, an index of another version,
+a row for a section that is not in the table, or a segment that does not inflate
+to exactly its `raw_len`, means the section is decoded as one stream. The whole
+section is still proven by `raw_hash`, so a wrong index can cost speed, never
+correctness. Several rows for one section: the first that matches wins.
+
+The index is never carried. A writer builds it again from the sections it
+actually writes, and drops any kind `4` section it was handed.
+
 ## Writing
 
 1. Write 64 zero bytes as a placeholder header.
 2. For each section: encode the raw bytes with its codec, hashing the raw bytes
    with BLAKE2b-128 as they pass; cut, compute parity, write the groups and then
    the CRC table.
-3. Write the table twice, then the trailer.
-4. Seek to 0 and write the header.
+3. When any section was segmented, write the segment index as one more section.
+4. Write the table twice, then the trailer.
+5. Seek to 0 and write the header.
 
 The writer builds the file at a temporary path beside the target, flushes it to
 stable storage, and renames it over the target, so a crash leaves the old file
@@ -223,6 +283,24 @@ user and suggests saving, which writes a clean copy.
 A reader that does not repair may skip step 3's reconstruction: concatenate the
 data shards directly and rely on step 4's hash to reject damage.
 
+## Speed
+
+Measured with `bench_open` (docs/ENGINE.md 8.1), release build, a 32 thread
+Windows machine with NVMe, warm file cache. SV08 is a 154 MB STEP assembly of
+1097 bodies, stored as one 68.9 MB blob; the scan is a generated 2,000,000
+triangle STL, one 48.0 MB blob.
+
+Saving a `.fundab` is almost all deflate (level 6, one core: 37 MiB/s on SV08,
+21 MiB/s on the scan), so segments made it parallel:
+
+| Save | one stream | segments, 4 threads | segments, 16 threads | size change |
+|---|---|---|---|---|
+| SV08 | 1814 ms | 586 ms | 304 ms | +0.003% |
+| scan | 2291 ms | 692 ms | 276 ms | +0.003% |
+
+Deflate level 1 would be faster still, but makes SV08 17 percent bigger
+(ratio 0.414 against 0.355), so the level stays 6.
+
 ## Older formats
 
 FundaCAD still reads every format it has written:
@@ -251,11 +329,15 @@ Reader rules:
   is reserved for the JSON file's embedded blobs (above), never a document key.
 - A `stress`, `environment` or `versions` value the reader cannot read is kept
   whole and written back for as long as the document has none of its own.
-- A `.fundab` section of a kind above `3` in codec `0` or `1` is verified against
+- A `.fundab` section of a kind above `4` in codec `0` or `1` is verified against
   its `raw_hash`, kept, and written again with the same name, kind and raw bytes
   when the document is saved as `.fundab`. A JSON `.funda` has no sections, so
-  saving as `.funda` drops it. A section in another codec cannot be verified or
-  written back, so it is skipped, and a damaged one never stops the open.
+  saving as `.funda` drops it. A section of such a kind in another codec cannot
+  be verified or written back, so it is skipped, and a damaged one never stops
+  the open. A document or geometry section in another codec is damage: the open
+  fails. So a new codec can never be used for kinds `0` to `3` while released
+  readers do not know it. Readers from before minor `1` carry the segment index
+  as an unknown kind, which the index's match rule makes harmless.
 
 Writer rules:
 
