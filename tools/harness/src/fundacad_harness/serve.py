@@ -31,6 +31,12 @@ BUDGET = 120
 SETTLE_BY = 150
 
 
+def _seconds(v: Any) -> float:
+    if isinstance(v, bool) or not isinstance(v, (int, float)) or v <= 0:
+        raise BadArgs(f"settle_timeout is a number of seconds above 0, not {v!r}")
+    return float(v)
+
+
 def _viewport(v: Any) -> tuple[int, int]:
     if v is None:
         return (1400, 900)
@@ -56,10 +62,12 @@ class Server:
         except Exception as e:
             return f"status unavailable: {e}"
 
-    def open(self, headed: bool = False, record: str | None = None, viewport: Any = None, gpu: bool = False) -> str:
+    def open(self, headed: bool = False, record: str | None = None, viewport: Any = None, gpu: bool = False,
+             settle_timeout: Any = None) -> str:
         if self.s is not None and not self.s.closed:
             return "already open, a private copy of the app, not your window\n" + self._status()
-        self.s = self.make_session(headed=headed, record=record, viewport=_viewport(viewport), gpu=gpu)
+        more = {} if settle_timeout is None else {"settle_timeout": _seconds(settle_timeout)}
+        self.s = self.make_session(headed=headed, record=record, viewport=_viewport(viewport), gpu=gpu, **more)
         return f"opened a private copy of the app, not your window, start screen {self.s.start_screen}\n" + self._status()
 
     def _need(self) -> Any:
@@ -73,15 +81,13 @@ class Server:
             raise BadArgs("do takes a non empty list of steps")
         done = []
         start = self.clock()
-        base = getattr(s, "settle_timeout", None)
         try:
             for i, step in enumerate(steps_, 1):
                 ran = self.clock() - start
                 if ran > BUDGET:
                     done.append(f"stopped before step {i} after {ran:.0f} s, send steps {i} to {len(steps_)} in a new ui_do")
                     return False, "\n".join(done + ["", self._status()])
-                if base is not None:
-                    s.settle_timeout = max(5, min(base, SETTLE_BY - ran))
+                s.settle_limit = max(5, SETTLE_BY - ran)
                 if isinstance(step, dict) and step.get("do") == "wait_for" and isinstance(step.get("timeout", 10), (int, float)):
                     step = {**step, "timeout": max(1, min(step.get("timeout", 10), SETTLE_BY - ran))}
                 try:
@@ -90,8 +96,7 @@ class Server:
                     done.append(f"{i}. failed: {e}")
                     return False, "\n".join(done + ["", self._status()])
         finally:
-            if base is not None:
-                s.settle_timeout = base
+            s.settle_limit = None
         return True, "\n".join(done + ["", self._status()])
 
     def read(self, what: Any = None, region: str | None = None) -> str:

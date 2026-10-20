@@ -433,7 +433,9 @@ pub fn ui_open() -> JsonObject {
                        "description": "write every step to this Python file, which replays with `python <file>`"},
             "viewport": {"type": "string", "description": "WIDTHxHEIGHT, 1400x900 by default"},
             "gpu": {"type": "boolean",
-                    "description": "use the GPU, software rendering by default"}
+                    "description": "use the GPU, software rendering by default"},
+            "settle_timeout": {"type": "number",
+                               "description": "seconds a step may take to settle, 60 by default; a ui_do step never waits past 150 s"}
         }),
         &[],
     )

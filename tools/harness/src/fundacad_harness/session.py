@@ -15,7 +15,7 @@ from . import text
 from .actions import Actions, out_path
 from .bridge import Bridge, check_api
 from .browser import chrome_args, find_chrome
-from .errors import HarnessError, LaunchError
+from .errors import HarnessError, LaunchError, SettleTimeout
 from .recorder import Recorder
 from .launch import Proc, find_engine, find_repo, stale_warning, start_engine, start_vite
 
@@ -69,6 +69,8 @@ class Session(Actions):
         self.record_path = record
         self.keep = _flag("FUNDACAD_HARNESS_KEEP") if keep is None else keep
         self.settle_timeout = settle_timeout
+        # serve.py caps every wait here so one MCP call ends before its relay gives up.
+        self.settle_limit: float | None = None
         self.work = Path(tempfile.mkdtemp(prefix="fundacad-harness-"))
         self.procs: list[Proc] = []
         self.failed = False
@@ -98,6 +100,8 @@ class Session(Actions):
                 opts["viewport"] = tuple(viewport)
             if gpu:
                 opts["gpu"] = True
+            if settle_timeout != 60:
+                opts["settle_timeout"] = settle_timeout
             self.recorder = Recorder(record, self.repo, __version__, DRIVER_API, opts)
         atexit.register(self.close)
         if open:
@@ -273,10 +277,19 @@ class Session(Actions):
 
     def settle(self, trace: int | None = None, timeout: float | None = None) -> str:
         """Waits until rebuilds, previews, the camera and the picture are quiet; every action already does."""
-        args: dict[str, Any] = {"timeoutMs": int((timeout or self.settle_timeout) * 1000)}
+        wait = timeout or self.settle_timeout
+        if self.settle_limit is not None:
+            wait = min(wait, self.settle_limit)
+        args: dict[str, Any] = {"timeoutMs": int(wait * 1000)}
         if trace is not None:
             args["trace"] = trace
-        r = self.call("settle", **args)
+        try:
+            r = self.call("settle", **args)
+        except SettleTimeout as e:
+            raise SettleTimeout(
+                f"{e}. The app may still be working on it: wait_for a label or settle() again,"
+                f" or open the session with a longer settle_timeout (now {self.settle_timeout:g} s)"
+            ) from None
         return f"settled in {r['ms']} ms"
 
     def dismiss_start(self) -> str:
