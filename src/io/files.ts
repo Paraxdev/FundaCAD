@@ -677,49 +677,56 @@ async function importWith(
   }
   lastCancelledImport = null;
   const features = importFeatures(res, { format: fmt, source: opts.source ?? path, taken: store.document.features.map((f) => f.id) });
+  // The materials the file's colours become are overlay writes, each its own undo step,
+  // joined here so one Undo takes back the whole import.
+  const mark = store.undoMark();
   store.addFeatures(features);
-  const imported = features.find((f) => f.type === "import");
-  if (!imported) {
-    if (res.notes?.length) {
-      const { toast } = await import("../ui/toast");
-      toast(res.notes.join(". "), { kind: "info" });
+  try {
+    const imported = features.find((f) => f.type === "import");
+    if (!imported) {
+      if (res.notes?.length) {
+        const { toast } = await import("../ui/toast");
+        toast(res.notes.join(". "), { kind: "info" });
+      }
+      return;
     }
-    return;
+    const id = imported.id;
+
+    // Say what the document will be like while the user is still deciding what to
+    // do with it, rather than letting them discover it as a freeze and conclude
+    // the app is broken. Non-blocking on purpose: this is a heads-up about a
+    // measured limit, not a refusal, and everything except orbiting is unaffected.
+    const capability = describeImportCapability(importedBodyCount(res));
+    if (capability) {
+      const { toast } = await import("../ui/toast");
+      toast(capability, { kind: "info" });
+    }
+
+    // The file's own colours become materials, and the bodies it produced wear
+    // them. This is the half of an import that used to be thrown away: a STEP
+    // assembly's product colours were read by the engine, carried in the
+    // manifest, and then never looked at, so a file that arrived fully coloured
+    // opened as three thousand identical grey bodies.
+    await adoptImportedColors(store, id, res);
+
+    // The file carried ONE dominant colour. Say so, and let whoever has a use for
+    // it decide.
+    //
+    // This used to be the decision itself: match the colour to the nearest slot of
+    // the document's palette and assign the imported bodies to it, unless the
+    // capability that owns palettes was switched off, in which case do nothing.
+    // Three things this file has no business knowing were in those six lines. What
+    // is left is the fact, an import landed, it was this feature, it looked like
+    // this, which is true whether or not anybody is listening.
+    //
+    // Awaited rather than fired off, because a listener has to rebuild before it
+    // can find the bodies the feature produced, and an import that returned while
+    // that was still running would report itself finished too early.
+    if (res.color === undefined) return;
+    await announceImportedBody(id, res.color);
+  } finally {
+    store.joinUndoSince(mark);
   }
-  const id = imported.id;
-
-  // Say what the document will be like while the user is still deciding what to
-  // do with it, rather than letting them discover it as a freeze and conclude
-  // the app is broken. Non-blocking on purpose: this is a heads-up about a
-  // measured limit, not a refusal, and everything except orbiting is unaffected.
-  const capability = describeImportCapability(importedBodyCount(res));
-  if (capability) {
-    const { toast } = await import("../ui/toast");
-    toast(capability, { kind: "info" });
-  }
-
-  // The file's own colours become materials, and the bodies it produced wear
-  // them. This is the half of an import that used to be thrown away: a STEP
-  // assembly's product colours were read by the engine, carried in the
-  // manifest, and then never looked at, so a file that arrived fully coloured
-  // opened as three thousand identical grey bodies.
-  await adoptImportedColors(store, id, res);
-
-  // The file carried ONE dominant colour. Say so, and let whoever has a use for
-  // it decide.
-  //
-  // This used to be the decision itself: match the colour to the nearest slot of
-  // the document's palette and assign the imported bodies to it, unless the
-  // capability that owns palettes was switched off, in which case do nothing.
-  // Three things this file has no business knowing were in those six lines. What
-  // is left is the fact, an import landed, it was this feature, it looked like
-  // this, which is true whether or not anybody is listening.
-  //
-  // Awaited rather than fired off, because a listener has to rebuild before it
-  // can find the bodies the feature produced, and an import that returned while
-  // that was still running would report itself finished too early.
-  if (res.color === undefined) return;
-  await announceImportedBody(id, res.color);
 }
 
 /** Make materials out of the colours an import carried, and put them on the
@@ -736,8 +743,7 @@ async function importWith(
  *  binds it to a per-part colour. A single-body import has no tree, so its one
  *  colour goes on whatever bodies the feature owns, which `faceOwners` answers.
  *
- *  Assignments are display-only overlays, so this adds no second undo step on
- *  top of the import itself. */
+ *  Assignments are overlay undo steps, an import joins them into its own. */
 export async function adoptImportedColors(
   store: DocumentStore,
   featureId: string,

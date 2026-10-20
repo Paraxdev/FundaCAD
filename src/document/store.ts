@@ -136,7 +136,10 @@ type MetaListener = () => void;
  *  stack in chronological order, so Ctrl+Z undoes whichever happened last
  *  instead of silently skipping display-only changes and eating a feature
  *  edit that came before them. */
-type UndoEntry = { kind: "doc"; doc: CadDocument } | { kind: "overlay"; undo: () => void; redo: () => void };
+type UndoEntry =
+  | { kind: "doc"; doc: CadDocument }
+  | { kind: "overlay"; undo: () => void; redo: () => void }
+  | { kind: "group"; entries: UndoEntry[] };
 
 // Safe for `"hiddenBodies" in f` checks: no mutator writes an explicit undefined.
 const clone = (d: CadDocument): CadDocument => structuredClone(d);
@@ -1365,33 +1368,44 @@ export class DocumentStore {
     const prev = this.undoStack.pop();
     if (!prev) return;
     this.emitRewind();
-    if (prev.kind === "overlay") {
-      this.redoStack.push(prev);
-      prev.undo();
-      return;
-    }
-    this.redoStack.push({ kind: "doc", doc: clone(this.doc) });
-    this.doc = prev.doc;
-    this.rearmProjectionValve();
-    this.markDirty();
-    this.emitDoc();
-    this.scheduleRebuild(true);
+    this.redoStack.push(this.applyUndoEntry(prev, "undo"));
   }
   redo() {
     const next = this.redoStack.pop();
     if (!next) return;
     this.emitRewind();
-    if (next.kind === "overlay") {
-      this.undoStack.push(next);
-      next.redo();
-      return;
+    this.undoStack.push(this.applyUndoEntry(next, "redo"));
+    if (this.undoStack.length > DocumentStore.UNDO_CAP) this.undoStack.shift();
+  }
+  /** Applies one entry and returns the entry that takes it back again. */
+  private applyUndoEntry(e: UndoEntry, way: "undo" | "redo"): UndoEntry {
+    if (e.kind === "overlay") {
+      e[way]();
+      return e;
     }
-    this.pushUndo();
-    this.doc = next.doc;
+    if (e.kind === "group") {
+      const order = way === "undo" ? [...e.entries].reverse() : e.entries;
+      const back = order.map((x) => this.applyUndoEntry(x, way));
+      return { kind: "group", entries: way === "undo" ? back.reverse() : back };
+    }
+    const was: UndoEntry = { kind: "doc", doc: clone(this.doc) };
+    this.doc = e.doc;
     this.rearmProjectionValve();
     this.markDirty();
     this.emitDoc();
     this.scheduleRebuild(true);
+    return was;
+  }
+  /** A mark for joinUndoSince, taken before a change that makes several undo steps. */
+  undoMark(): object | undefined {
+    return this.undoStack.at(-1);
+  }
+  /** Every undo step made since `mark` becomes one. */
+  joinUndoSince(mark: object | undefined) {
+    const from = mark === undefined ? 0 : this.undoStack.lastIndexOf(mark as UndoEntry) + 1;
+    const entries = this.undoStack.splice(from);
+    if (entries.length > 1) this.undoStack.push({ kind: "group", entries });
+    else this.undoStack.push(...entries);
   }
   get canUndo() {
     return this.undoStack.length > 0;
