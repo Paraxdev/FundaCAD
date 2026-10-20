@@ -490,6 +490,20 @@ describe("materials (what a body is made of, on screen)", () => {
     expect(again.toJSON()).toBe(reloaded.toJSON());
   });
 
+  it("keeps a material's fields this build does not know through add, update, save and load", () => {
+    const extra = { sheen: 0.4, anisotropy: { amount: 0.2, angle: 90 }, flakes: [1, 2], castsLight: true };
+    const id = store.addMaterial({ name: "Pearl", color: "#eeeeff", ...extra } as never);
+    store.updateMaterial(id, { roughness: 0.2 });
+    const reloaded = new DocumentStore(stubBackend([]), doc());
+    reloaded.load(store.toJSON());
+    expect(reloaded.materialLibrary.find((m) => m.id === id)).toEqual({
+      id, name: "Pearl", color: "#eeeeff", roughness: 0.2, ...extra,
+    });
+    const again = new DocumentStore(stubBackend([]), doc());
+    again.load(reloaded.toJSON());
+    expect(again.toJSON()).toBe(reloaded.toJSON());
+  });
+
   it("a reopened untouched document still writes no materials block", () => {
     // The trap this is for: the library is normalised on load, so an entry that
     // was not already in normal form would come back different and the

@@ -86,6 +86,28 @@ describe("normalizeMaterial", () => {
     });
   });
 
+  it("carries a field it does not know through untouched, and still repairs the ones it does", () => {
+    const flakes = { density: 0.3, tint: ["#fff", "#ccf"] };
+    const out = normalizeMaterial({
+      id: "m-x", name: "X", color: "#112233", roughness: 5, sheen: 0.4, anisotropy: { amount: 0.2, angle: 90 },
+      flakes, scatter: "#aa0000", castsLight: true, metalness: "junk",
+    });
+    expect(out).toEqual({
+      id: "m-x", name: "X", color: "#112233", roughness: 1,
+      sheen: 0.4, anisotropy: { amount: 0.2, angle: 90 }, flakes, scatter: "#aa0000", castsLight: true,
+    });
+    expect(out).not.toHaveProperty("metalness");
+  });
+
+  it("does not let an unknown key reach the prototype or alias the input", () => {
+    const raw = JSON.parse('{"id":"m-x","name":"X","color":"#112233","__proto__":{"polluted":1},"deep":{"a":[1]}}');
+    const out = normalizeMaterial(raw) as unknown as Record<string, unknown>;
+    expect(Object.getPrototypeOf(out)).toBe(Object.prototype);
+    expect(out["polluted"]).toBeUndefined();
+    expect(out["deep"]).toEqual({ a: [1] });
+    expect(out["deep"]).not.toBe(raw.deep);
+  });
+
   it("drops a row with no usable colour, which is a row that would do nothing", () => {
     expect(normalizeMaterial({ name: "Nameless", metalness: 1 })).toBeNull();
     expect(normalizeMaterial({ name: "Bad", color: "not a colour" })).toBeNull();

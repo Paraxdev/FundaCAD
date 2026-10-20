@@ -299,6 +299,19 @@ fn unknown_data_is_carried_and_typed_data_is_reachable() {
 }
 
 #[test]
+fn a_material_field_this_build_does_not_know_survives_a_load_and_save() {
+    let text = r##"{"features":[],"materials":[{"id":"m-x","name":"X","color":"#112233","roughness":0.4,
+        "clearcoat":0.5,"sheen":0.4,"anisotropy":{"amount":0.2,"angle":90},"flakes":[1,2],"castsLight":true}]}"##;
+    let doc = CadDocument::from_json(text).expect("load");
+    let m = &doc.materials.as_ref().expect("materials")[0];
+    assert_eq!(m.extra.get("sheen"), Some(&Value::from(0.4)));
+    assert_eq!(m.extra.get("castsLight"), Some(&Value::from(true)));
+    let saved: Value = serde_json::from_str(&doc.to_json().expect("save")).expect("json");
+    let before: Value = serde_json::from_str(text).expect("json");
+    assert_eq!(saved["materials"], before["materials"]);
+}
+
+#[test]
 fn a_known_type_that_does_not_fit_loads_as_invalid_and_saves_unchanged() {
     let bad = serde_json::json!({"parameters": {}, "features": [{"id": "x", "type": "extrude", "sketch": "s"}]});
     let doc: CadDocument = serde_json::from_value(bad.clone()).expect("loads");
