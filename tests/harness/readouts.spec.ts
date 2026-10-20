@@ -105,4 +105,24 @@ describe("messages", () => {
     logError("the engine stopped");
     expect(read.lastError(h)).toBe("the engine stopped");
   });
+
+  it("counts only what was logged after a step began", () => {
+    const h = host();
+    (h.store.buildState as { errorMessage: string | null }).errorMessage = null;
+    logError("an old failure");
+    toast("Saved");
+    const mark = read.seq();
+    expect(read.lastError(h, mark)).toBeNull();
+    expect(read.status(h, document, mark)).toMatchObject({ recent: null, error: null });
+    logError("a new failure");
+    expect(read.lastError(h, mark)).toBe("a new failure");
+    expect(read.status(h, document, mark).recent).toMatchObject({ level: "error", text: "a new failure" });
+  });
+
+  it("numbers an empty log from 0", () => {
+    clearLog();
+    expect(read.seq()).toBe(0);
+    logError("x");
+    expect(read.seq()).toBeGreaterThan(0);
+  });
 });

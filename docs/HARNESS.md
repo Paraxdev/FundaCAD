@@ -90,10 +90,10 @@ Every readout is a few lines of text. Pass `raw=True` for the JSON it was made f
 | `s.screen(region=None)` | the visible controls as a short tree, one ref per control |
 | `s.history()` | the features, their type and any error, suppressed or rolled back state |
 | `s.bodies()` | bodies with face count and visibility |
-| `s.status()` | mode, running tool, workspace, document, undo and redo, prompt, selection, last message, last error |
+| `s.status()` | mode, running tool, workspace, document, undo and redo, prompt, selection, the newest message and error since the last action began |
 | `s.selection()` | selected bodies, faces and edges |
 | `s.handles()` | the named handles a tool has up, with their screen point or `covered` |
-| `s.last_error()` | `none` or one line |
+| `s.last_error()` | a failed build or refused preview, else an error logged since the last action began, or `none` |
 | `s.messages(since=seq)` | log and toast lines after a sequence number |
 | `s.page_errors()` | uncaught page errors seen so far |
 | `s.screenshot(path=None, target=None)` | a PNG of the page or of one control, returns its path |
@@ -110,8 +110,9 @@ a `visible` or `hidden` flag. Eyes are never matched by label, only by ref.
 
 Every action is real pointer or keyboard input, waits until the app has settled (rebuilds,
 previews, the camera and the picture all quiet), and returns a `Step`: one line saying what was
-done and what the app shows now, with the JSON behind it in `step.data`. Pass `settle=False` to
-look at the app mid flight.
+done and what the app shows now, including what it said while the action ran (`said info "Create
+or import a body first"`) and any error, with the JSON behind it in `step.data`. Pass
+`settle=False` to look at the app mid flight.
 
 ```python
 with Session() as s:
@@ -147,7 +148,7 @@ with Session() as s:
 | `import_file(path)` | drops the file on the canvas, the way a browser tab imports a model |
 | `save_as(path)` | File > Save As, the download lands at `path` |
 | `new_document(discard=True)` | Ctrl+N, answering the unsaved changes question |
-| `settle(trace=None, timeout=None)`, `wait_for(text, timeout=10)` | explicit waits |
+| `settle(trace=None, timeout=None)`, `wait_for(text, timeout=10)` | explicit waits, `wait_for` looks at the prompt, the screen and the messages logged since the last action began |
 
 Labels match the visible text without its key hint, case insensitive, exact before prefix,
 visible and enabled controls only. When a label matches several controls the error lists their

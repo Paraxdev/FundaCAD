@@ -40,6 +40,8 @@ class StubBridge:
             return {"x": 1, "y": 2, "what": "body1 face 5 (+z)", "covered": False}
         if method == "settle":
             return {"ms": 1}
+        if method == "seq":
+            return 0
         raise AssertionError(method)
 
 

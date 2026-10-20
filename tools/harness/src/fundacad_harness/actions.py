@@ -36,6 +36,8 @@ def action(fn: Callable) -> Callable:
     def run(self, *args, settle: bool = True, **kwargs):
         self._ensure_page()
         outer = not getattr(self, "_in_action", False)
+        if outer:
+            self._mark = self.bridge.call("seq")
         self._in_action = True
         try:
             done = fn(self, *args, **kwargs)
@@ -65,12 +67,15 @@ class Actions:
 
     def _step(self, done: Any) -> Step:
         what, data = (done if isinstance(done, tuple) else (done, None))
-        st = self.bridge.call("status")
+        st = self.bridge.call("status", since=self._mark)
         tail = f"mode {st['mode']}"
         if st.get("tool"):
             tail += f", tool {st['tool']}"
         if st.get("prompt"):
             tail += f', prompt "{st["prompt"]}"'
+        said = [r for r in self.bridge.call("messages", since=self._mark)["rows"] if r["level"] != "error"]
+        for r in said[-2:]:
+            tail += f', said {r["level"]} "{r["text"]}"'
         if st.get("error"):
             tail += f", error: {st['error']}"
         return Step(f"{what}, {tail}", data)
@@ -432,7 +437,7 @@ class Actions:
         st = self.bridge.call("status")
         if want in (st.get("prompt") or "").lower():
             return f'prompt "{st["prompt"]}"'
-        for r in self.bridge.call("messages", since=0)["rows"][-20:]:
+        for r in self.bridge.call("messages", since=self._mark)["rows"]:
             if want in r["text"].lower():
                 return f'message "{r["text"]}"'
         for r in self._control_rows():
@@ -441,7 +446,7 @@ class Actions:
         return None
 
     def wait_for(self, text: str, timeout: float = 10) -> str:
-        """Until the text shows in the prompt, a message or the screen."""
+        """Until the text shows in the prompt, the screen, or a message logged since the last action began."""
         self._ensure_page()
         end = time.monotonic() + timeout
         want = text.lower()

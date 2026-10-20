@@ -52,6 +52,7 @@ class Session(Actions):
         self.work = Path(tempfile.mkdtemp(prefix="fundacad-harness-"))
         self.procs: list[Proc] = []
         self.failed = False
+        self._mark = 0
         self.closed = False
         self.engine_port = 0
         self.token = ""
@@ -104,6 +105,7 @@ class Session(Actions):
             self._wait_driver()
             self._seen_navs = self._navs
             kind = self.start_screen = self.dismiss_start()
+            self._mark = self.bridge.call("seq")
             return f"opened {base} with engine port {self.engine_port}, start screen {kind}"
         except BaseException:
             self.failed = True
@@ -285,7 +287,8 @@ class Session(Actions):
         return v if raw else text.bodies(v)
 
     def status(self, raw: bool = False):
-        v = self.call("status")
+        """Mode, tool, document, prompt, and the newest message and error since the last action began."""
+        v = self.call("status", since=self._mark)
         return v if raw else text.status(v)
 
     def selection(self, raw: bool = False):
@@ -298,7 +301,8 @@ class Session(Actions):
         return v if raw else "\n  ".join([f"handles {len(v)}", *v])
 
     def last_error(self) -> str:
-        return text.one_line(self.call("lastError"))
+        """A failed build or refused preview, else an error logged since the last action began."""
+        return text.one_line(self.call("lastError", since=self._mark))
 
     def messages(self, since: int | None = None, raw: bool = False):
         v = self.call("messages", since=since or 0)

@@ -37,6 +37,8 @@ const num = (a: Args, k: string): number => {
   return v;
 };
 
+const since = (a: Args): number => (typeof a.since === "number" ? a.since : 0);
+
 const withBody = (a: Args): string => (typeof a.body === "string" && a.body ? `${a.body}:${str(a, "select")}` : str(a, "select"));
 
 export function startScreen(doc: Document = document): "home" | "welcome" | "none" {
@@ -94,9 +96,10 @@ export function createMethods(
     selection: () => read.selection(h, doc),
     history: () => read.history(h),
     bodies: () => read.bodies(h),
-    status: () => read.status(h, doc),
-    messages: (a) => read.messages(typeof a.since === "number" ? a.since : 0),
-    lastError: () => read.lastError(h),
+    status: (a) => read.status(h, doc, since(a)),
+    messages: (a) => read.messages(since(a)),
+    seq: () => read.seq(),
+    lastError: (a) => read.lastError(h, since(a)),
     settle: (a) => settle(h, {
       ...(typeof a.timeoutMs === "number" ? { timeoutMs: a.timeoutMs } : {}),
       ...(typeof a.trace === "number" ? { trace: a.trace } : {}),
