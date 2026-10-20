@@ -253,6 +253,9 @@ fn in_disc(li: Light) -> vec3f {
   let phi = 2.0 * PI * rnd();
   return onb(li.dir.xyz, vec3f(st * cos(phi), st * sin(phi), 1.0 - q));
 }
+// Draws before the last upward one is kept: a map whose light grazes the
+// plane rarely passes the cosine coin.
+const GROUND_TRIES = 256u;
 // 0 when the light a sample picks by its share of the irradiance on the
 // ground is blocked from q, else 1: an open ground is exactly the background
 // and the mean is the share of the light the scene takes from it. Emitters
@@ -280,7 +283,7 @@ fn ground_lit(q: vec3f) -> f32 {
     let top = max(lum(env(vec3f(0.0, 0.0, 1.0))), lum(env(vec3f(1.0, 0.0, 0.0))));
     // By the map's pdf kept with chance l.z, or by the cosine kept by the
     // gradient's radiance: either way by radiance times the cosine.
-    for (var i = 0u; i < 64u; i++) {
+    for (var i = 0u; i < GROUND_TRIES; i++) {
       var e: vec3f;
       var keep: f32;
       if (by_map) {
@@ -293,11 +296,11 @@ fn ground_lit(q: vec3f) -> f32 {
         e = vec3f(sr * cos(phi), sr * sin(phi), sqrt(1.0 - s2));
         keep = lum(env(e)) / top;
       }
-      if (rnd() < keep) {
+      if (e.z > 0.0) {
         l = e;
         picked = true;
-        break;
       }
+      if (rnd() < keep) { break; }
     }
   }
   if (!picked || l.z <= 0.0) { return 1.0; }

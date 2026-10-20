@@ -189,3 +189,24 @@ fn the_sky_gradient_lights_the_plane_too() {
         assert!(sky < 0.8, "{:?}: the sky alone casts no shadow at the box's foot, {sky}", t.path());
     }
 }
+
+#[test]
+fn a_grazing_sun_is_not_lit_by_giving_up() {
+    // A sun 1 degree up: about 1 in 50 map draws passes the cosine coin.
+    let sun = [1.0f32.to_radians().cos(), 0.0, 1.0f32.to_radians().sin()];
+    let cos_r = 0.6f32.to_radians().cos();
+    let radiance = 20.0 / (2.0 * std::f32::consts::PI * (1.0 - cos_r));
+    let hdr = common::env_of("grazing", (512, 256), fundacad_tracer::Up::Z, |d| {
+        let c = d[0] * sun[0] + d[1] * sun[1] + d[2] * sun[2];
+        [if c > cos_r { radiance } else if d[2] > 0.0 { 0.02 } else { 0.0 }; 3]
+    });
+    for mut t in tracers() {
+        t.set_environment(Some(hdr.clone()));
+        // A wall between the sun and the origin.
+        let img = render(&mut t, sky_look(0.0, ""), [3.0, 0.0, 1.0], 256);
+        let shadow = around(&img, [0.0, 0.0, 0.0]);
+        eprintln!("{:?}: grazing sun shadow {shadow}", t.path());
+        // The sky's share of the light on an up face is about 0.15 and the wall takes some of it.
+        assert!(shadow < 0.22, "{:?}: the sun shadow reads {shadow}, given up draws count as lit", t.path());
+    }
+}
