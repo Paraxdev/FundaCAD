@@ -69,3 +69,18 @@ export function featureFailures(src: FailureSources): Map<string, string> {
   if (id && !failed.has(id) && src.heldRefusal?.featureId !== id) failed.set(id, src.errorMessage ?? "failed");
   return failed;
 }
+
+/** The subset of a build result the placeholders are read from. */
+export interface PlaceholderSources {
+  skippedFeatures?: { feature_id: string; type: string }[] | undefined;
+}
+
+/** feature id -> type, for the features the last build left out because this
+ *  version does not know their type. They are greyed in History, never red. */
+export function featurePlaceholders(src: PlaceholderSources): Map<string, string> {
+  return new Map((src.skippedFeatures ?? []).map((s) => [s.feature_id, s.type]));
+}
+
+/** What a placeholder chip and its properties say. */
+export const PLACEHOLDER_NOTE =
+  "Not included: this version of FundaCAD does not know this feature type. It is kept and saved with the file.";

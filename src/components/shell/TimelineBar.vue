@@ -13,7 +13,7 @@ import { featureMeta } from "../../ui/featureMeta";
 import Icon from "./Icon.vue";
 import { contextMenu } from "../../ui/menu";
 import { buildProgress, busyLine, CANCEL_DELAY_MS, historyShowsBusy, historyShowsEmpty } from "../../ui/buildProgress";
-import { featureFailures, featureNotes } from "../../ui/featureNotes";
+import { PLACEHOLDER_NOTE, featureFailures, featureNotes, featurePlaceholders } from "../../ui/featureNotes";
 import { gapIndexIn } from "../../ui/trackGaps";
 import { getUnit, onUnitChange } from "../../ui/units";
 import FeatureProperties from "./FeatureProperties.vue";
@@ -116,6 +116,8 @@ const notes = useBuildValue((b) =>
     diagnostics: b.result?.diagnostics,
   }),
 );
+/** Features the build left out because this version does not know their type. */
+const placeholders = useBuildValue((b) => featurePlaceholders({ skippedFeatures: b.result?.skippedFeatures }));
 const building = useBuildValue((b) => b.building);
 const progress = useBuildValue((b) => ({ progress: b.progress, meshed: b.meshed, meshTotal: b.meshTotal }));
 
@@ -187,6 +189,7 @@ function chipTitle(f: { id: string; type: string; inactive?: boolean }, i: numbe
   return (
     `${i + 1} · ${metaFor(f).label}` +
     (f.inactive ? "\nSwitched off: its Active when condition is 0" : "") +
+    (placeholders.value.has(f.id) ? `\n${PLACEHOLDER_NOTE}` : "") +
     // A plain-text word, not a warning sign: this is a `title` attribute, and
     // the browser draws it in the OS tooltip font where a symbol lands as
     // whatever fallback glyph, or tofu, that font happens to carry.
@@ -479,6 +482,7 @@ function openMenu(e: MouseEvent, id: string, i: number) {
                   warn: !errors.has(f.id) && notes.has(f.id),
                   rolled: i >= rollback,
                   suppressed: suppressed.has(f.id) || f.inactive,
+                  placeholder: placeholders.has(f.id),
                   'drop-target': dropTarget === f.id,
                 }"
                 :title="chipTitle(f, i)"

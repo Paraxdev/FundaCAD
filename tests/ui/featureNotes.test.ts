@@ -11,7 +11,7 @@
 // sentence. Getting that backwards paints a failed feature as a successful one.
 
 import { describe, it, expect } from "vitest";
-import { featureFailures, featureNotes } from "../../src/ui/featureNotes";
+import { featureFailures, featureNotes, featurePlaceholders } from "../../src/ui/featureNotes";
 
 describe("featureNotes", () => {
   it("is empty when a build reported nothing", () => {
@@ -86,5 +86,21 @@ describe("featureFailures", () => {
 
   it("counts a preview that failed without asking to be held", () => {
     expect([...featureFailures({ errorFeatureId: "p1", errorMessage: "no" }).keys()]).toEqual(["p1"]);
+  });
+});
+
+describe("featurePlaceholders", () => {
+  it("names each feature the build left out by its type", () => {
+    const p = featurePlaceholders({
+      skippedFeatures: [
+        { feature_id: "w1", type: "futureWidget" },
+        { feature_id: "w2", type: "fooBar" },
+      ],
+    });
+    expect([...p]).toEqual([["w1", "futureWidget"], ["w2", "fooBar"]]);
+  });
+
+  it("is empty for a build that skipped nothing", () => {
+    expect(featurePlaceholders({}).size).toBe(0);
   });
 });

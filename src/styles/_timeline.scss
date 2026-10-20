@@ -281,7 +281,8 @@
 .timeline-node.rolled {
   opacity: 0.38;
 } /* past the rollback marker = not built */
-.timeline-node.suppressed {
+.timeline-node.suppressed,
+.timeline-node.placeholder {
   opacity: 0.5;
   filter: grayscale(1);
 }
