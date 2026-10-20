@@ -388,6 +388,11 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Changed
 
+- **Saving a document with a big import is several times faster.** A .fundab
+  compresses its big geometry in pieces on all cores: a 69 MB imported STEP
+  assembly saves in a fraction of a second instead of about 2 seconds. The file
+  is the same size, and every FundaCAD that reads .fundab opens it as before.
+
 - **The Rust engine is the rolling beta now, and the Python engine is
   retired.** Builds of `main` publish to the
   [beta release](https://github.com/Paraxdev/fundacad/releases/tag/beta),
