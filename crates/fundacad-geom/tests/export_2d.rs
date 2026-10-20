@@ -187,8 +187,7 @@ fn a_sketch_exports_to_dxf_and_imports_back_the_same() {
     assert_eq!(arcs.len(), 3, "the arc and the slot's two ends: {arcs:?}");
     let has_arc = arcs.iter().any(|a| {
         let ends = [(f(a, "x1"), f(a, "y1")), (f(a, "x2"), f(a, "y2"))];
-        ends.contains(&(50.0, 30.0)) || ends.iter().any(|e| (e.0 - 50.0).abs() < 1e-6 && (e.1 - 30.0).abs() < 1e-6)
-            && (f(a, "my") - 35.0).abs() < 1e-6
+        ends.iter().any(|e| (e.0 - 50.0).abs() < 1e-6 && (e.1 - 30.0).abs() < 1e-6) && (f(a, "my") - 35.0).abs() < 1e-6
     });
     assert!(has_arc, "{arcs:?}");
     let lines = kinds(&r, "line");
