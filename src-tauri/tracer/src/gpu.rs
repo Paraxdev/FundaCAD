@@ -317,6 +317,8 @@ impl Tracer {
                 (rank(i.backend), u8::from(i.device_type != wgpu::DeviceType::DiscreteGpu))
             })
             .ok_or("no adapter")?;
+        // CI sets this for lavapipe; the refusal of CPU adapters lands in tracer-robustness.
+        let _allow_cpu = std::env::var_os("FUNDACAD_TRACER_ALLOW_CPU").is_some();
         if adapter.limits().max_storage_buffers_per_shader_stage < 12 {
             return Err(format!("{} binds too few storage buffers", adapter.get_info().name));
         }
