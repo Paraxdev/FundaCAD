@@ -441,6 +441,26 @@ away. Until then the next promotion can conflict, and `promote-stable.sh`
 stops and says so. The `dev` push publishes the beta again, with the fix in
 it.
 
+### 7.3 Rolling the split out
+
+The first time, in this order. Once the split is on `main`, `main` stops
+publishing the beta, and the README and the manual (deployed from `main`)
+send new users to `releases/latest`, which is a 404 until a stable release
+exists.
+
+1. Create `dev` from `main`, merge the split into it and push `dev` alone.
+   That run publishes the beta, and existing beta installs keep updating from
+   the same feed.
+2. Move the `beta` tag onto `dev` by hand, with a token that has the
+   `workflow` scope. `GITHUB_TOKEN` may not move a tag across a commit that
+   changes a workflow file, so until then every `dev` run only warns and
+   leaves the tag, its source archives and the notes' range on the old
+   commit.
+3. Once that run is green, `scripts/promote-stable.sh 1.1.0 --push` merges
+   `dev` into `main` and pushes the tag with it, so `main` never has the new
+   links without a stable build on its way. `releases/latest` still 404s
+   until the tag's run has published, about an hour.
+
 ## 8. Performance
 
 The sidecar ran one job per process with OCCT's own thread pool inside
