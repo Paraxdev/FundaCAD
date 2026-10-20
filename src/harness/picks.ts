@@ -331,7 +331,12 @@ function planeObject(h: PickHost, name: string): { obj: THREE.Object3D; base: bo
 
 export function planePoint(h: PickHost, name: string, onCanvas: CanvasTest = canvasTest(h.viewport.domElement)) {
   const { obj, base } = planeObject(h, name);
-  if (!shown(obj)) throw new HarnessError(`plane ${name} is hidden`, "Occluded");
+  if (!shown(obj)) {
+    throw new HarnessError(
+      `plane ${name} is hidden, a plane shows while a tool asks for one, or with Origin and planes in the Display panel`,
+      "Occluded",
+    );
+  }
   obj.updateWorldMatrix(true, false);
   const g = (obj as THREE.Mesh).geometry;
   if (!g.boundingBox) g.computeBoundingBox();
