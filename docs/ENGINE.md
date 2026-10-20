@@ -159,9 +159,11 @@ use for them).
   survives a call and a crashed plugin costs one feature.
 - **Discovery** reads the manifests under `FUNDACAD_PLUGIN_DIR` (a checkout's
   own `plugins/` in a debug build), explicitly, from the engine's startup path
-  only: a bare `builder::rebuild` has no plugins and an unknown type reads
-  "unknown feature type", exactly as a document with no plugins installed
-  always has. A component is compiled the first time one of its declared
+  only: a bare `builder::rebuild` has no plugins and an unknown type is
+  skipped as "unknown feature type", exactly as in a document with no plugins
+  installed. A skip is not an error: the rebuild lists it in `skippedFeatures`
+  (docs/PROTOCOL.md) and builds the rest. A type a plugin declares but cannot
+  run is still an error. A component is compiled the first time one of its declared
   names is used, and the three sentences of `unregistered()` (absent,
   installed but broken, unknown) are kept.
 - **Proof:** every in-repo plugin's geometry ships a component, each crate in

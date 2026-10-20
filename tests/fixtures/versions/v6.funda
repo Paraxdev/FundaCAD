@@ -1,0 +1,29 @@
+{
+  "version": 6,
+  "parameters": {},
+  "features": [
+    {
+      "id": "f1",
+      "type": "sketch",
+      "plane": "XY",
+      "entities": [
+        {
+          "type": "rectangle",
+          "id": "r1",
+          "width": 10,
+          "height": 4,
+          "x": 0,
+          "y": 0,
+          "angle": 37.5
+        }
+      ]
+    },
+    {
+      "id": "f2",
+      "type": "extrude",
+      "sketch": "f1",
+      "distance": 3,
+      "operation": "new"
+    }
+  ]
+}

@@ -83,6 +83,73 @@ describe("a document dropped as bytes in the desktop app", () => {
     expect(store.fileName).toBe("Untitled");
   });
 
+  it("says once what a newer file holds that this version leaves out, stays clean, and takes it down on the next open", async () => {
+    const toasts: { message: string; kind: string | undefined }[] = [];
+    const dismissed: number[] = [];
+    vi.doMock("../../src/ui/toast", () => ({
+      toast: (message: string, opts: { kind?: string } = {}) => toasts.push({ message, kind: opts.kind }),
+      dismissToast: (id: number) => void dismissed.push(id),
+    }));
+    reply = () => ({
+      document: JSON.stringify({ version: 99, parameters: {}, features: [{ id: "w1", type: "futureWidget" }] }),
+      repairedShards: 0, usedBackupIndex: false, wasContainer: true,
+    });
+    const { takeDroppedFiles } = await import("../../src/io/desktopDrop");
+    const { store, engine } = setup();
+    await takeDroppedFiles(engine, [{ name: "newer.funda", path: null, file: new File(["{}"], "newer.funda") }]);
+    vi.doUnmock("../../src/ui/toast");
+
+    expect(toasts).toEqual([{
+      message: "Opened a file from a newer version of FundaCAD. 1 feature was not included because this version does not know it: futureWidget. It is kept and saved with the file. Bodies after it may differ. Update FundaCAD to build it.",
+      kind: "warning",
+    }]);
+    expect(store.dirty).toBe(false);
+
+    store.newDocument();
+    expect(dismissed).toEqual([1]);
+    store.newDocument();
+    expect(dismissed).toEqual([1]);
+  });
+
+  it("hands the sections of a .fundab this version does not read back to the save", async () => {
+    const carried = [{ kind: 9, name: "futureIndex", hash: "0123456789abcdef0123456789abcdef" }];
+    reply = () => ({ document: DROPPED, repairedShards: 0, usedBackupIndex: false, wasContainer: true, carried });
+    vi.doMock("../../src/io/recentFiles", () => ({ noteRecent() {}, forgetRecent() {}, getRecentFiles: () => [] }));
+    vi.doMock("../../src/io/recovery", () => ({ clearRecovery: async () => {} }));
+    const { openDocumentAtPath, saveDocument } = await import("../../src/io/files");
+    const { store } = setup();
+    await openDocumentAtPath(store, "D:/work/newer.fundab");
+    expect(store.carriedSections).toEqual(carried);
+
+    await saveDocument(store);
+    const save = invoked.find((c) => c.cmd === "container_save");
+    expect((save?.args as { carried: unknown }).carried).toEqual(carried);
+
+    store.newDocument();
+    expect(store.carriedSections).toEqual([]);
+    vi.doUnmock("../../src/io/recentFiles");
+    vi.doUnmock("../../src/io/recovery");
+  });
+
+  it("offers the save every hash shaped string a feature this version does not know names", async () => {
+    const blob = "0123456789abcdef0123456789abcdef";
+    vi.doMock("../../src/ui/toast", () => ({ toast: () => null, dismissToast() {} }));
+    vi.doMock("../../src/io/recentFiles", () => ({ noteRecent() {}, forgetRecent() {}, getRecentFiles: () => [] }));
+    vi.doMock("../../src/io/recovery", () => ({ clearRecovery: async () => {} }));
+    reply = () => ({
+      document: JSON.stringify({ version: 99, parameters: {}, features: [{ id: "w1", type: "futureWidget", blob }] }),
+      repairedShards: 0, usedBackupIndex: false,
+    });
+    const { openDocumentAtPath, saveDocument } = await import("../../src/io/files");
+    const { store } = setup();
+    await openDocumentAtPath(store, "D:/work/newer.funda");
+    await saveDocument(store);
+    const save = invoked.find((c) => c.cmd === "container_save")?.args as { hashes: string[]; optionalHashes: string[] };
+    expect(save.hashes).toEqual([]);
+    expect(save.optionalHashes).toEqual([blob]);
+    for (const m of ["../../src/ui/toast", "../../src/io/recentFiles", "../../src/io/recovery"]) vi.doUnmock(m);
+  });
+
   it("keeps the open document and imports nothing when Rust refuses it", async () => {
     reply = () => { throw "This document is damaged and cannot be opened."; };
     const { takeDroppedFiles } = await import("../../src/io/desktopDrop");

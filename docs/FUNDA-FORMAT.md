@@ -19,7 +19,7 @@ document has imported bodies, one more top-level key comes last:
 
 ```json
 {
-  "version": 9,
+  "version": 10,
   "features": [ { "id": "f1", "type": "import", "geom": "5648909c8c0ccf6096c0e672255e68a0" } ],
   "geometry": {
     "5648909c8c0ccf6096c0e672255e68a0": "<base64 of the binary BREP>"
@@ -33,6 +33,10 @@ document has imported bodies, one more top-level key comes last:
 - A reader removes `geometry` from the document after publishing the blobs; the
   rest of the app never sees it.
 - A document without imports has no `geometry` key and is plain JSON.
+- A writer must embed the geometry of every import, and refuses to save when a
+  blob is missing. It also embeds the blob of any other hash shaped string in
+  the document when it has that blob, and skips it otherwise, so geometry a
+  feature of a type it does not know refers to survives a save.
 
 The reference writer and reader is `crates/fundacad-format/src/json_doc.rs`.
 
@@ -117,8 +121,8 @@ Each entry:
 
 | Size | Field | Meaning |
 |---|---|---|
-| 1 | kind | `0` info, `1` document, `2` geometry, `3` mesh |
-| 1 | codec | `0` raw, `1` deflate |
+| 1 | kind | `0` info, `1` document, `2` geometry, `3` mesh, higher ones are carried (below) |
+| 1 | codec | `0` raw, `1` deflate, a section in any other codec is skipped |
 | 2 | name_len | length of `name` in bytes |
 | name_len | name | UTF-8; see below |
 | 8 | offset | where the section starts |
@@ -230,6 +234,50 @@ FundaCAD still reads every format it has written:
   open.
 
 Only JSON and format 2 are written.
+
+## Files from a newer version
+
+A file a newer FundaCAD wrote still opens, and saving it again loses nothing this
+version merely does not understand. The document `version` (`FORMAT_VERSION` in
+`src/document/migrate.ts`, `DOCUMENT_VERSION` in `crates/fundacad-core`) is not a
+gate: a reader never refuses a file for a higher number.
+
+Reader rules:
+
+- A feature of a type the reader does not know stays in the history where it is,
+  is not built, and is written back unchanged. So is a field it does not know on
+  a feature it does know.
+- A top level key the reader does not know is written back unchanged. `geometry`
+  is reserved for the JSON file's embedded blobs (above), never a document key.
+- A `stress`, `environment` or `versions` value the reader cannot read is kept
+  whole and written back for as long as the document has none of its own.
+- A `.fundab` section of a kind above `3` in codec `0` or `1` is verified against
+  its `raw_hash`, kept, and written again with the same name, kind and raw bytes
+  when the document is saved as `.fundab`. A JSON `.funda` has no sections, so
+  saving as `.funda` drops it. A section in another codec cannot be verified or
+  written back, so it is skipped, and a damaged one never stops the open.
+
+Writer rules:
+
+- A writer stamps its own `version`, never the higher number it read, because
+  what it saves is in its own shapes. A newer reader therefore runs its newer
+  migrations on such a file again, so every migration must be shape guarded:
+  it rewrites only what still has the old shape, and leaves alone what already
+  has the new one. The app saves a newer file this way. MCP `doc_save` is the
+  exception: it writes the JSON back as it was read, edits included, so the
+  higher stamp stays, and an edit made through MCP must already use the shapes
+  of that stamp.
+- A new reference to geometry is a lowercase hex BLAKE2b-128 string held as a
+  string value, never as an object key, so an older writer finds it and keeps
+  the blob. The older writer only scans values.
+- A new section kind uses codec `0` or `1`, so an older version carries it.
+- An older version copies such a section unchanged after the user edited the
+  document, it cannot update it. So a new section kind must stay valid against
+  any edit. It cannot check itself against the document section's `raw_hash`:
+  an older writer always encodes the document again, with its own `version`
+  stamp and key order, so that hash changes on every older save, edited or not.
+  A section that describes the document should name what it depends on, such
+  as feature ids, and ignore entries whose targets are gone.
 
 ## What the error correction does not cover
 

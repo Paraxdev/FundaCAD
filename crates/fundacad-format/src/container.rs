@@ -165,6 +165,7 @@ pub fn write_container(
     document_json: &str,
     blob_paths: &BTreeMap<String, PathBuf>,
     mesh_paths: &BTreeMap<String, PathBuf>,
+    carried: &[(crate::fnda::Carried, PathBuf)],
     app: &str,
 ) -> Result<Manifest, String> {
     let info = crate::fnda::json_to_cbor(&serde_json::json!({ "app": app, "hashAlg": HASH_ALG }).to_string())?;
@@ -174,6 +175,7 @@ pub fn write_container(
         .filter(|(k, p)| is_safe_key(k) && p.exists())
         .map(|(k, p)| (k.clone(), p.clone()))
         .collect();
+    let carried: Vec<(crate::fnda::Carried, PathBuf)> = carried.iter().filter(|(_, p)| p.exists()).cloned().collect();
     for src in blob_paths.values() {
         std::fs::metadata(src).map_err(|e| format!("could not read geometry {}: {e}", src.display()))?;
     }
@@ -185,7 +187,7 @@ pub fn write_container(
     let tmp = temp_sibling(dest);
     let build = || -> Result<Vec<crate::fnda::Entry>, String> {
         let mut file = std::io::BufWriter::new(File::create(&tmp).map_err(|e| e.to_string())?);
-        let entries = crate::fnda::write(&mut file, &crate::fnda::document_sections(&info, &document, blob_paths, &meshes))?;
+        let entries = crate::fnda::write(&mut file, &crate::fnda::document_sections(&info, &document, blob_paths, &meshes, &carried))?;
         let file = file.into_inner().map_err(|e| e.to_string())?;
         file.sync_all().map_err(|e| e.to_string())?;
         Ok(entries)
@@ -333,16 +335,18 @@ pub fn write_zip_container(
     Ok(manifest)
 }
 
-/// Write a document in the format its extension names.
+/// Write a document in the format its extension names. A JSON file has no
+/// sections, so `carried` is written to a binary one only.
 pub fn write_document(
     dest: &Path,
     document_json: &str,
     blob_paths: &BTreeMap<String, PathBuf>,
     mesh_paths: &BTreeMap<String, PathBuf>,
+    carried: &[(crate::fnda::Carried, PathBuf)],
     app: &str,
 ) -> Result<(), String> {
     if crate::json_doc::is_binary_doc_path(dest) {
-        write_container(dest, document_json, blob_paths, mesh_paths, app).map(|_| ())
+        write_container(dest, document_json, blob_paths, mesh_paths, carried, app).map(|_| ())
     } else {
         crate::json_doc::write_json_document(dest, document_json, blob_paths)
     }
@@ -361,23 +365,52 @@ pub fn open_document_checked(
     crate::json_doc::read_json_document(path, blob_dir).map(|doc| (doc, crate::fnda::RepairReport::default()))
 }
 
+/// What `open_document_full` read.
+pub struct OpenedFile {
+    pub document: String,
+    pub report: crate::fnda::RepairReport,
+    pub carried: Vec<crate::fnda::Carried>,
+}
+
+/// `open_document_checked`, also copying the sections of a kind this version
+/// does not read into `carry_dir`, so a save can write them back.
+pub fn open_document_full(
+    path: &Path,
+    blob_dir: &Path,
+    mesh_dir: Option<&Path>,
+    carry_dir: Option<&Path>,
+) -> Result<OpenedFile, String> {
+    if crate::fnda::looks_like_fnda(path) {
+        let o = crate::fnda::read_file(path, blob_dir, mesh_dir, carry_dir)?;
+        return Ok(OpenedFile { document: o.document_json, report: o.report, carried: o.carried });
+    }
+    let (document, report) = open_document_checked(path, blob_dir, mesh_dir)?;
+    Ok(OpenedFile { document, report, carried: Vec::new() })
+}
+
 /// What `open_document_bytes` read.
 pub struct OpenedBytes {
     pub document: String,
     pub report: crate::fnda::RepairReport,
+    pub carried: Vec<crate::fnda::Carried>,
     pub was_container: bool,
 }
 
 /// `open_document_checked` for a document the caller holds as bytes with no
 /// path, like a file dropped on a webview that does not name its paths. The
 /// readers need a seekable file, so the bytes are staged in a temp file first.
-pub fn open_document_bytes(bytes: &[u8], blob_dir: &Path, mesh_dir: Option<&Path>) -> Result<OpenedBytes, String> {
+pub fn open_document_bytes(
+    bytes: &[u8],
+    blob_dir: &Path,
+    mesh_dir: Option<&Path>,
+    carry_dir: Option<&Path>,
+) -> Result<OpenedBytes, String> {
     let staged = std::env::temp_dir().join(format!("fundacad-open-{}.tmp", uuid_hex()));
     std::fs::write(&staged, bytes).map_err(|e| format!("could not stage the document for opening ({e})"))?;
     let was_container = looks_like_container(&staged);
-    let opened = open_document_checked(&staged, blob_dir, mesh_dir);
+    let opened = open_document_full(&staged, blob_dir, mesh_dir, carry_dir);
     let _ = std::fs::remove_file(&staged);
-    opened.map(|(document, report)| OpenedBytes { document, report, was_container })
+    opened.map(|o| OpenedBytes { document: o.document, report: o.report, carried: o.carried, was_container })
 }
 
 fn copy_into<W: Write + Seek>(z: &mut zip::ZipWriter<W>, src: &Path) -> Result<(), String> {
@@ -459,7 +492,7 @@ pub fn read_container_checked(
     mesh_dir: Option<&Path>,
 ) -> Result<(String, Manifest, crate::fnda::RepairReport), String> {
     if crate::fnda::looks_like_fnda(path) {
-        let opened = crate::fnda::read_file(path, blob_dir, mesh_dir)?;
+        let opened = crate::fnda::read_file(path, blob_dir, mesh_dir, None)?;
         let manifest = manifest_of(&opened.entries, "");
         return Ok((opened.document_json, manifest, opened.report));
     }
@@ -812,8 +845,8 @@ mod tests {
 
         let json = dir.join("part.funda");
         let bin = dir.join("part.FundaB");
-        write_document(&json, &doc, &blobs, &BTreeMap::new(), "t").unwrap();
-        write_document(&bin, &doc, &blobs, &BTreeMap::new(), "t").unwrap();
+        write_document(&json, &doc, &blobs, &BTreeMap::new(), &[], "t").unwrap();
+        write_document(&bin, &doc, &blobs, &BTreeMap::new(), &[], "t").unwrap();
 
         assert!(!looks_like_container(&json));
         assert!(crate::fnda::looks_like_fnda(&bin));
@@ -844,15 +877,49 @@ mod tests {
 
         for (name, binary) in [("part.funda", false), ("part.fundab", true)] {
             let dest = dir.join(name);
-            write_document(&dest, &doc, &blobs, &BTreeMap::new(), "test").unwrap();
+            write_document(&dest, &doc, &blobs, &BTreeMap::new(), &[], "test").unwrap();
             let store = dir.join(format!("store-{name}"));
-            let opened = open_document_bytes(&std::fs::read(&dest).unwrap(), &store, None).unwrap();
+            let opened = open_document_bytes(&std::fs::read(&dest).unwrap(), &store, None, None).unwrap();
             let got: serde_json::Value = serde_json::from_str(&opened.document).unwrap();
             let want: serde_json::Value = serde_json::from_str(&doc).unwrap();
             assert_eq!(got, want, "{name}: the document without its geometry map");
             assert_eq!(opened.was_container, binary, "{name}");
             assert_eq!(std::fs::read(store.join(format!("{h}.bbrep"))).unwrap(), data, "{name}: geometry published");
         }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_section_this_version_does_not_read_survives_a_save_as_fundab_only() {
+        let dir = tmpdir("carried");
+        let payload: Vec<u8> = (0..3000u32).map(|i| (i % 253) as u8).collect();
+        let doc = r#"{"version":11,"features":[]}"#;
+        let info = crate::fnda::json_to_cbor("{}").unwrap();
+        let cbor = crate::fnda::json_to_cbor(doc).unwrap();
+        let (b, m) = (BTreeMap::new(), BTreeMap::new());
+        let mut sections = crate::fnda::document_sections(&info, &cbor, &b, &m, &[]);
+        sections.push(crate::fnda::SectionSpec {
+            kind: 9,
+            name: "futureIndex".into(),
+            source: crate::fnda::Source::Bytes(&payload),
+            layout: crate::fnda::SMALL_LAYOUT,
+        });
+        let src = dir.join("future.fundab");
+        crate::fnda::write(&mut File::create(&src).unwrap(), &sections).unwrap();
+
+        let carry = dir.join("sections");
+        let opened = open_document_full(&src, &dir.join("blobs"), None, Some(&carry)).unwrap();
+        assert_eq!(opened.carried.len(), 1);
+        let carried: Vec<_> = opened.carried.iter().map(|c| (c.clone(), carry.join(format!("{}.bin", c.hash)))).collect();
+
+        let bin = dir.join("again.fundab");
+        let json = dir.join("again.funda");
+        write_document(&bin, &opened.document, &b, &m, &carried, "t").unwrap();
+        write_document(&json, &opened.document, &b, &m, &carried, "t").unwrap();
+        let again = open_document_full(&bin, &dir.join("blobs"), None, Some(&dir.join("sections2"))).unwrap();
+        assert_eq!(again.carried, opened.carried);
+        assert_eq!(std::fs::read(dir.join("sections2").join(format!("{}.bin", again.carried[0].hash))).unwrap(), payload);
+        assert!(open_document_full(&json, &dir.join("blobs"), None, Some(&carry)).unwrap().carried.is_empty());
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

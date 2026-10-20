@@ -22,6 +22,7 @@ const docTick = useDocValue(() => ({}));
 const branch = computed(() => { tick.value; docTick.value; return store.versionRepo?.current ?? "main"; });
 const branches = computed(() => { tick.value; docTick.value; return Object.keys(store.versionRepo?.branches ?? {}); });
 const history = computed(() => { tick.value; docTick.value; return store.versionRepo ? log(store.versionRepo) : []; });
+const unreadVersions = computed(() => { tick.value; docTick.value; return store.hasUnreadVersions(); });
 const pending = computed<VersionDiff | null>(() => { docTick.value; tick.value; return store.changesSinceVersion(); });
 const changeCount = computed(() => {
   const d = pending.value;
@@ -121,7 +122,8 @@ function changedNames(v: Version): { kind: string; name: string }[] {
     </div>
 
     <p class="pop-note">
-      <template v-if="!history.length">No versions yet. Save one to be able to come back to this point.</template>
+      <template v-if="unreadVersions">This file has versions from a newer FundaCAD that this version cannot show. Saving the file keeps them, saving a version here replaces them.</template>
+      <template v-else-if="!history.length">No versions yet. Save one to be able to come back to this point.</template>
       <template v-else-if="changeCount">{{ changeCount }} change{{ changeCount === 1 ? "" : "s" }} since "{{ history[0]!.message }}"</template>
       <template v-else>Nothing changed since "{{ history[0]!.message }}"</template>
     </p>

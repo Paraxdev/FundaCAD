@@ -25,6 +25,40 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **Saving keeps the geometry a newer feature refers to.** A feature this version
+  does not know can name stored geometry in any field, and the app and MCP
+  `doc_save` now write that geometry into the file instead of leaving it out.
+
+- **A .fundab keeps the parts a newer version added.** Sections of a kind this
+  version does not read are kept on open and written back when the file is saved
+  as .fundab again.
+
+- **MCP `doc_open` says when a file is from a newer version**, with a `note:`
+  line naming the feature types this build does not know, the same facts the
+  app's open notice gives. An older file with a feature type the app renames on
+  open is told apart, with a note to open and save it in the app first.
+
+- **Opening a file from a newer version says what it leaves out.** One notice
+  names the features this version does not know, says they are kept and saved
+  with the file, and that bodies after them may differ. It replaces the old
+  warning that unknown data may be lost, which is no longer true.
+
+- **Saving keeps what a newer version wrote.** Top level data, element fields
+  and a stress study, environment or saved versions this version cannot read
+  are written back unchanged, so opening a newer file here and saving it does
+  not take anything away from the newer version.
+
+- **History greys a feature this version does not know.** It keeps its place,
+  shows its type name, and says it is not included but kept and saved with the
+  file. Its values cannot be edited here, so it stays as the newer version wrote
+  it.
+
+- **A feature this version does not know no longer fails the build.** A file
+  from a newer FundaCAD can hold a feature type this build has never heard of.
+  It is now left out of the build and listed as skipped instead of raised as a
+  failure, and the features after it build on what exists. MCP `build` names it
+  as `SKIPPED`.
+
 - **Home.** The app starts on Home, a screen over the viewport with your recent
   documents as cards, Blank to start a new document and Open… to find one on
   disk. Escape or the close button goes back to the document, File > Home and
@@ -383,6 +417,11 @@ This file starts on 2026-08-03. For anything before that, see the
 - Each drag of the move gizmo is its own row in the timeline, so an undo takes back the last nudge instead of the whole sitting, and the next drag starts from the pose the last one produced.
 
 ### Fixed
+
+- **A document with a section this build cannot read still builds.** The
+  engine refused the whole job when, say, a newer `materials` row or `versions`
+  repo did not fit, which an MCP session could send. It now leaves that section
+  out and builds the features.
 
 - **A body is measured as large as it is after a slanted cut through a spline
   face.** A lofted or organic face that is cut off at a slant has surface left

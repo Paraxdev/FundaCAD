@@ -463,7 +463,7 @@ pub fn export_result(req: &Map<String, Value>, watch: &dyn Watch) -> JobResult {
     ) else {
         return error_result("export: a request needs a format and a path");
     };
-    let typed: CadDocument = match serde_json::from_value(doc.clone()) {
+    let typed: CadDocument = match CadDocument::from_value_lenient(doc) {
         Ok(d) => d,
         Err(e) => return error_result(&format!("the document does not parse: {e}")),
     };

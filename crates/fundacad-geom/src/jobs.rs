@@ -72,7 +72,7 @@ fn rebuild_with(
 ) -> JobResult {
     let _beat = crate::heartbeat::install(watch.heartbeat());
     let _cancel = crate::cancel::install(watch.cancel_token());
-    let typed: CadDocument = match serde_json::from_value(doc.clone()) {
+    let typed: CadDocument = match CadDocument::from_value_lenient(doc) {
         Ok(d) => d,
         Err(e) => return error_result(&format!("the document does not parse: {e}")),
     };
@@ -84,7 +84,7 @@ fn rebuild_with(
         return error_result("cancelled");
     };
     if r.bodies.is_empty() {
-        if let Some(first) = r.errors.first() {
+        if let Some(first) = r.errors.first().filter(|_| r.skipped.is_empty()) {
             let mut m = Map::new();
             m.insert("error".into(), first.wire());
             return JobResult::Json(m);

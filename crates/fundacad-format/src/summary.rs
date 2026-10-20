@@ -267,7 +267,7 @@ mod tests {
         let cbor = json_to_cbor(DOC).unwrap();
         let bin = dir.join("part.fundab");
         let mut file = std::fs::File::create(&bin).unwrap();
-        write(&mut file, &document_sections(&info, &cbor, &blobs, &BTreeMap::new())).unwrap();
+        write(&mut file, &document_sections(&info, &cbor, &blobs, &BTreeMap::new(), &[])).unwrap();
         drop(file);
         assert_eq!(read_summary(&bin).unwrap(), Some(want("fundab")));
         let _ = std::fs::remove_dir_all(&dir);

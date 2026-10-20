@@ -377,6 +377,17 @@ fn missing(claim: Claim, name: &str, m: Missing) -> String {
     )
 }
 
+/// Whether a plugin on disk declares the feature type, running or not: exactly
+/// when `run_feature` would answer `Some`.
+pub fn declares_feature(type_name: &str) -> bool {
+    let mut reg = current();
+    match lookup(&mut reg, Claim::Feature, type_name) {
+        Ok(i) => matches!(reg.entries[i].loaded, Loaded::Ready(_)),
+        Err(Missing::Unknown) => false,
+        Err(_) => true,
+    }
+}
+
 /// The feature type's plugin handler, run against `ctx`. `None` when no
 /// plugin on disk declares the type.
 pub fn run_feature(
