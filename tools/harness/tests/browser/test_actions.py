@@ -126,3 +126,14 @@ def test_open_file_over_unsaved_changes_opens_the_new_file(plate):
     assert str(plate.open_file(BLOCK)).startswith("opened block.json")
     assert plate.status(raw=True)["doc"] == "block.json"
     assert plate.history(raw=True)["count"] == 1
+
+
+def test_import_file_drops_a_mesh_and_counts_the_bodies(s, tmp_path):
+    import struct
+    a, b, c, d = (0, 0, 0), (10, 0, 0), (0, 10, 0), (0, 0, 10)
+    tris = [(a, c, b), (a, b, d), (a, d, c), (b, c, d)]
+    stl = tmp_path / "tetra.stl"
+    stl.write_bytes(b"\0" * 80 + struct.pack("<I", len(tris)) + b"".join(struct.pack("<12fH", 0, 0, 0, *p, *q, *r, 0) for p, q, r in tris))
+    step = s.import_file(stl)
+    assert str(step).startswith("dropped tetra.stl, 1 body now")
+    assert s.page.locator("input[data-harness-drop]").count() == 0

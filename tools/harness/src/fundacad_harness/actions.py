@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import base64
 import functools
 import os
 import time
@@ -367,18 +366,30 @@ class Actions:
         """A browser tab imports a model by a file dropped on the canvas, as from the desktop."""
         full = self._repo_path(path)
         self._drop_on_canvas(full)
-        return f"dropped {Path(full).name}", {"path": full}
+        self.settle()
+        n = len(self.bridge.call("bodies"))
+        return f"dropped {Path(full).name}, {n} bod{'y' if n == 1 else 'ies'} now", {"path": full, "bodies": n}
 
     def _drop_on_canvas(self, full: str) -> None:
-        data = base64.b64encode(Path(full).read_bytes()).decode("ascii")
+        """The file goes in through a file input, which Chrome reads from disk, so a big one never crosses the bridge."""
+        self.page.evaluate(
+            """() => {
+                const i = document.createElement("input");
+                i.type = "file";
+                i.hidden = true;
+                i.dataset.harnessDrop = "";
+                document.body.append(i);
+            }"""
+        )
+        self.page.locator("input[data-harness-drop]").set_input_files(full)
         dt = self.page.evaluate_handle(
-            """([name, b64]) => {
-                const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+            """() => {
+                const i = document.querySelector("input[data-harness-drop]");
                 const dt = new DataTransfer();
-                dt.items.add(new File([bytes], name));
+                dt.items.add(i.files[0]);
+                i.remove();
                 return dt;
-            }""",
-            [Path(full).name, data],
+            }"""
         )
         canvas = self.page.locator("#canvas")
         box = canvas.bounding_box()
