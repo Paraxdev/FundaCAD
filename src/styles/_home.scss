@@ -110,6 +110,26 @@
 .home-new-name {
   font-size: 12px;
 }
+.home-tools {
+  display: flex;
+  gap: var(--s-3);
+  padding: var(--s-2) var(--s-5);
+}
+.home-search {
+  flex: 1;
+  min-width: 0;
+  max-width: 360px;
+}
+.home-search,
+.home-sort {
+  height: 28px;
+  padding: 0 var(--s-3);
+  background: var(--raised, #22262e);
+  border: 1px solid var(--line, #262a31);
+  border-radius: var(--r-sm, 6px);
+  color: var(--text, #e6e8ec);
+  font-size: 12px;
+}
 .home-grid {
   flex: 1;
   min-height: 0;

@@ -6,6 +6,7 @@
 //   4. With unsaved work, Blank asks before discarding it.
 //   5. A .funda dropped over Home opens and Home closes.
 //   6. Over the fake library: edit times, a missing file shows Not found and Remove takes it off.
+//   7. Search filters the cards, the sort changes their order, Ctrl+F finds the field.
 //
 //   engine --ws, vite, then
 //   SC_TOKEN=<engine token> node e2e/home_e2e.cjs
@@ -129,6 +130,39 @@ function check(name, ok, detail = "") {
     await page.waitForTimeout(200);
     const left = await page.$$eval(".home-card-name", (els) => els.map((el) => el.textContent));
     check("Remove takes it off", JSON.stringify(left) === '["bracket"]', JSON.stringify(left));
+
+    console.log("7. search and sort");
+    await page.keyboard.press("Escape");
+    await page.evaluate(() => {
+      const now = Date.now();
+      localStorage.setItem("fundacad.recentFiles", JSON.stringify([
+        { path: "C:/work/acme/bracket.funda", openedAt: now - 1000 },
+        { path: "C:/work/misc/gear.funda", openedAt: now - 2000 },
+        { path: "C:/work/misc/axle.funda", openedAt: now - 3000 },
+      ]));
+      window.__fundacad.home.useFakeLibrary([
+        { path: "C:/work/acme/bracket.funda", mtimeMs: now - 50000 },
+        { path: "C:/work/misc/gear.funda", mtimeMs: now - 1000 },
+        { path: "C:/work/misc/axle.funda", mtimeMs: now - 9000 },
+      ]);
+    });
+    await menu("File", "Home");
+    await page.waitForTimeout(300);
+    const names = () => page.$$eval(".home-card-name", (els) => els.map((el) => el.textContent).join(","));
+    await page.keyboard.press("Control+f");
+    const focused = await page.evaluate(() => document.activeElement?.classList.contains("home-search"));
+    check("Ctrl+F focuses the search field", focused);
+    const palette = await page.evaluate(() => !!document.querySelector(".cmdk-card"));
+    check("and does not open the palette", !palette);
+    await page.keyboard.type("misc");
+    await page.waitForTimeout(100);
+    check("search filters by folder", (await names()) === "gear,axle", await names());
+    await page.fill(".home-search", "");
+    await page.selectOption(".home-sort", "name");
+    check("Name sorts by name", (await names()) === "axle,bracket,gear", await names());
+    await page.selectOption(".home-sort", "edited");
+    check("Last edited sorts by the file time", (await names()) === "gear,axle,bracket", await names());
+    await page.selectOption(".home-sort", "opened");
   } finally {
     await browser.close();
   }

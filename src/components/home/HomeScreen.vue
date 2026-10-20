@@ -10,7 +10,8 @@ import { useContextMenuStore } from "../../stores/contextMenu";
 import { choose } from "../../ui/choice";
 import { contextMenu } from "../../ui/menu";
 import { escapeClaimed } from "../../ui/escapeClaim";
-import { buildEntries, type HomeEntry } from "../../ui/homeList";
+import { buildEntries, filterEntries, sortEntries, type HomeEntry, type SortMode } from "../../ui/homeList";
+import { readSetting } from "../../ui/storedSetting";
 import { getTheme, onThemeChange, themeMode } from "../../ui/theme";
 import Icon from "../shell/Icon.vue";
 import DocCard from "./DocCard.vue";
@@ -42,6 +43,13 @@ function onKey(e: KeyboardEvent): void {
     return;
   }
   const mod = e.ctrlKey || e.metaKey;
+  if (mod && !e.shiftKey && e.key.toLowerCase() === "f") {
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    searchField.value?.focus();
+    searchField.value?.select();
+    return;
+  }
   const inField = e.target instanceof HTMLInputElement && e.target.type !== "checkbox";
   if (mod && UNDO_KEYS.has(e.key.toLowerCase()) && !inField) {
     e.preventDefault();
@@ -56,7 +64,21 @@ const offTheme = onThemeChange(() => {
 
 const recents = ref(getRecentFiles());
 const stats = ref(new Map<string, FileStat>());
-const entries = computed(() => buildEntries(recents.value, cb.currentPath(), stats.value));
+const query = ref("");
+const SORT_KEY = "fundacad.home.sort";
+const SORTS: { value: SortMode; label: string }[] = [
+  { value: "opened", label: "Last opened" },
+  { value: "edited", label: "Last edited" },
+  { value: "name", label: "Name" },
+];
+const stored = readSetting(SORT_KEY);
+const sort = ref<SortMode>(SORTS.some((s) => s.value === stored) ? (stored as SortMode) : "opened");
+watch(sort, (v) => {
+  try { localStorage.setItem(SORT_KEY, v); } catch { /* blocked storage keeps the default */ }
+});
+const searchField = ref<HTMLInputElement | null>(null);
+const all = computed(() => buildEntries(recents.value, cb.currentPath(), stats.value));
+const entries = computed(() => sortEntries(filterEntries(all.value, query.value), sort.value));
 const unreadable = ref(new Set<string>());
 
 async function refreshStats(): Promise<void> {
@@ -129,6 +151,21 @@ onUnmounted(() => {
         </button>
       </div>
 
+      <div v-if="lib && all.length" class="home-tools">
+        <input
+          ref="searchField"
+          v-model="query"
+          class="home-search"
+          type="search"
+          placeholder="Search documents"
+          aria-label="Search documents"
+          spellcheck="false"
+        />
+        <select v-model="sort" class="home-sort" aria-label="Sort by">
+          <option v-for="s in SORTS" :key="s.value" :value="s.value">{{ s.label }}</option>
+        </select>
+      </div>
+
       <div v-if="lib && entries.length" class="home-grid">
         <DocCard
           v-for="e in entries"
@@ -139,6 +176,7 @@ onUnmounted(() => {
           @menu="entryMenu(e, $event)"
         />
       </div>
+      <p v-else-if="lib && all.length" class="home-empty">No documents match</p>
       <p v-else-if="lib" class="home-empty">Documents you open or save appear here.</p>
       <p v-else class="home-empty">Recent documents appear here in the desktop app.</p>
 

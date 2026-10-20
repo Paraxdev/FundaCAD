@@ -218,4 +218,50 @@ describe("HomeScreen", () => {
     await flushPromises();
     expect($$(".home-card-name").map((n) => n.textContent)).toEqual(["b"]);
   });
+
+  it("filters the cards as you type and says when nothing matches", async () => {
+    open([{ path: "C:/work/bracket.funda", openedAt: 2 }, { path: "C:/work/gear.funda", openedAt: 1 }]);
+    await flushPromises();
+    const field = document.querySelector<HTMLInputElement>(".home-search")!;
+    field.value = "gea";
+    field.dispatchEvent(new Event("input"));
+    await nextTick();
+    expect($$(".home-card-name").map((n) => n.textContent)).toEqual(["gear"]);
+    field.value = "nothing";
+    field.dispatchEvent(new Event("input"));
+    await nextTick();
+    expect($(".home-empty")!.textContent).toBe("No documents match");
+  });
+
+  it("sorts and remembers the order", async () => {
+    open([{ path: "C:/b.funda", openedAt: 2 }, { path: "C:/a.funda", openedAt: 1 }]);
+    await flushPromises();
+    const sort = document.querySelector<HTMLSelectElement>(".home-sort")!;
+    sort.value = "name";
+    sort.dispatchEvent(new Event("change"));
+    await nextTick();
+    expect($$(".home-card-name").map((n) => n.textContent)).toEqual(["a", "b"]);
+    expect(localStorage.getItem("fundacad.home.sort")).toBe("name");
+  });
+
+  it("takes Ctrl+F for its search field instead of passing it on", () => {
+    open([{ path: "C:/a.funda", openedAt: 1 }]);
+    const seen = vi.fn();
+    window.addEventListener("keydown", seen);
+    key("f", { ctrlKey: true });
+    window.removeEventListener("keydown", seen);
+    expect(seen).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe($(".home-search"));
+  });
+
+  it("lets undo work inside the search field", () => {
+    open([{ path: "C:/a.funda", openedAt: 1 }]);
+    const field = $(".home-search")!;
+    field.focus();
+    const seen = vi.fn();
+    window.addEventListener("keydown", seen);
+    field.dispatchEvent(new KeyboardEvent("keydown", { key: "z", ctrlKey: true, bubbles: true }));
+    window.removeEventListener("keydown", seen);
+    expect(seen).toHaveBeenCalledOnce();
+  });
 });
