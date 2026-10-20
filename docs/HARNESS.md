@@ -233,6 +233,8 @@ Each reply is `{"id", "ok", "text"}`, plus `"png"` (base64) for `shot`. A `do` r
 order and stops at the first that fails, with one line per step and the status. A step names its
 verb in `do` and the verb's arguments by their Python names (`from` for `drag`); unknown keys are
 refused by name. `read` takes screen, history, bodies, status, errors, selection and handles.
+The MCP server gives up on a call after 180 s and loses the session, so a `do` starts no step
+after 120 s and says which steps to send again, and a `wait_for` step waits at most 60 s.
 
 ## MCP
 
