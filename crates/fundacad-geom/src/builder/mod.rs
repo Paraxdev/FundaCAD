@@ -254,6 +254,8 @@ pub struct SketchEntry {
     pub edges: Vec<Shape>,
     /// The face selector the sketch follows, which names the body a Divide splits.
     pub face: Option<fundacad_core::schema::Selector>,
+    /// Every sketch curve in the sketch's own 2D, for a thin extrude's wall.
+    pub curves: Vec<crate::features::thin::Curve>,
 }
 
 /// What a handler reads and edits, the Python engine's `builder.py` `_RebuildCtx`.
