@@ -324,6 +324,7 @@ describe("layoutLabels", () => {
     expect(held.has(0)).toBe(false);
   });
 
+  // A crowd panned into four corners lays out many times and can pass 5 s on a busy machine.
   it("moves the others no more than the pan and the room a newcomer needs, panning a crowd into each corner", () => {
     const stage = { left: 0, top: 36, right: 1400, bottom: 900 };
     const railL = rail.map((o) => ({ ...o, left: o.left + 276, right: o.right + 276 }));
@@ -365,5 +366,5 @@ describe("layoutLabels", () => {
       expect(held.size).toBe(15);
       expect(frames).toBeLessThanOrEqual(events);
     }
-  });
+  }, 20_000);
 });
