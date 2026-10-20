@@ -54,6 +54,7 @@ export const OPS = [
   "feature_move",
   "edit",
   "sketch_merge",
+  "sketch_tie",
   "build",
   "interference",
   "section",
@@ -161,6 +162,11 @@ export const OP_TABLE: Record<Op, OpSpec> = {
   sketch_merge: {
     needs: ["document.write", "geometry.build"],
     why: "has the engine unite overlapping shapes of a sketch and writes the outline back into it",
+    writes: true,
+  },
+  sketch_tie: {
+    needs: ["document.write"],
+    why: "adds constraints to a sketch and moves its loose ends onto what they touch",
     writes: true,
   },
 
