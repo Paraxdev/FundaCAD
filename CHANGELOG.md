@@ -25,6 +25,10 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **Saving keeps the geometry a newer feature refers to.** A feature this version
+  does not know can name stored geometry in any field, and the app and MCP
+  `doc_save` now write that geometry into the file instead of leaving it out.
+
 - **A .fundab keeps the parts a newer version added.** Sections of a kind this
   version does not read are kept on open and written back when the file is saved
   as .fundab again.

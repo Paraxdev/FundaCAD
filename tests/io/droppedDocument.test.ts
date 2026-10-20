@@ -124,6 +124,25 @@ describe("a document dropped as bytes in the desktop app", () => {
     vi.doUnmock("../../src/io/recovery");
   });
 
+  it("offers the save every hash shaped string a feature this version does not know names", async () => {
+    const blob = "0123456789abcdef0123456789abcdef";
+    vi.doMock("../../src/ui/toast", () => ({ toast() {} }));
+    vi.doMock("../../src/io/recentFiles", () => ({ noteRecent() {}, forgetRecent() {}, getRecentFiles: () => [] }));
+    vi.doMock("../../src/io/recovery", () => ({ clearRecovery: async () => {} }));
+    reply = () => ({
+      document: JSON.stringify({ version: 99, parameters: {}, features: [{ id: "w1", type: "futureWidget", blob }] }),
+      repairedShards: 0, usedBackupIndex: false,
+    });
+    const { openDocumentAtPath, saveDocument } = await import("../../src/io/files");
+    const { store } = setup();
+    await openDocumentAtPath(store, "D:/work/newer.funda");
+    await saveDocument(store);
+    const save = invoked.find((c) => c.cmd === "container_save")?.args as { hashes: string[]; optionalHashes: string[] };
+    expect(save.hashes).toEqual([]);
+    expect(save.optionalHashes).toEqual([blob]);
+    for (const m of ["../../src/ui/toast", "../../src/io/recentFiles", "../../src/io/recovery"]) vi.doUnmock(m);
+  });
+
   it("keeps the open document and imports nothing when Rust refuses it", async () => {
     reply = () => { throw "This document is damaged and cannot be opened."; };
     const { takeDroppedFiles } = await import("../../src/io/desktopDrop");

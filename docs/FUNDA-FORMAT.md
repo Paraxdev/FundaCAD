@@ -33,6 +33,10 @@ document has imported bodies, one more top-level key comes last:
 - A reader removes `geometry` from the document after publishing the blobs; the
   rest of the app never sees it.
 - A document without imports has no `geometry` key and is plain JSON.
+- A writer must embed the geometry of every import, and refuses to save when a
+  blob is missing. It also embeds the blob of any other hash shaped string in
+  the document when it has that blob, and skips it otherwise, so geometry a
+  feature of a type it does not know refers to survives a save.
 
 The reference writer and reader is `crates/fundacad-format/src/json_doc.rs`.
 
@@ -260,6 +264,8 @@ Writer rules:
   migrations on such a file again, so every migration must be shape guarded:
   it rewrites only what still has the old shape, and leaves alone what already
   has the new one.
+- A new reference to geometry is a lowercase hex BLAKE2b-128 string, so an
+  older writer finds it and keeps the blob.
 - A new section kind uses codec `0` or `1`, so an older version carries it.
 - An older version copies such a section unchanged after the user edited the
   document, it cannot update it. So a new section kind must stay valid against
