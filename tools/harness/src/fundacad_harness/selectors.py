@@ -11,7 +11,7 @@ import re
 from .errors import BadArgs
 
 SIDES = {"top", "bottom", "front", "back", "left", "right", "+x", "-x", "+y", "-y", "+z", "-z"}
-REF = re.compile(r"^(#|(action|family|pick|group|feature|item|eye|field|prop|testid|tab|workspace|view-mode|"
+REF = re.compile(r"^(#|(action|family|pick|group|feature|item|folder|eye|field|prop|testid|tab|workspace|view-mode|"
                  r"category|menu|ctx|choice|opt|text):)")
 _VEC = r"-?\d+(\.\d+)?,-?\d+(\.\d+)?,-?\d+(\.\d+)?"
 

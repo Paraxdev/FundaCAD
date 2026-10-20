@@ -28,6 +28,12 @@ describe("findControl", () => {
     expect(findControl(walk(), "Mod").ref).toBe("family:cat:MODIFY");
   });
 
+  it("leaves eyes out of a label, they share their row's name and go by eye:<id>", () => {
+    expect(findControl(walk(), "Robot").ref).toBe("folder:n:f1/0");
+    expect(findControl(walk(), "Plate").ref).toBe("item:body1");
+    expect(findControl(walk(), "eye:body1").role).toBe("eye");
+  });
+
   it("lists the refs when a label matches several", () => {
     const e = fail("Cancel");
     expect(e.kind).toBe("Ambiguous");

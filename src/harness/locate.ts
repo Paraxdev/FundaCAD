@@ -14,7 +14,7 @@ export class HarnessError extends Error {
   }
 }
 
-const REF = /^(#|(action|family|pick|group|feature|item|eye|field|prop|testid|tab|workspace|view-mode|category|menu|ctx|choice|opt|text):)/;
+const REF = /^(#|(action|family|pick|group|feature|item|folder|eye|field|prop|testid|tab|workspace|view-mode|category|menu|ctx|choice|opt|text):)/;
 
 export const isRef = (target: string) => REF.test(target);
 
@@ -77,9 +77,10 @@ export function findControl(walk: Walk, target: string): Control {
   }
   const want = matchName(base);
   if (!want) throw new HarnessError("an empty label names nothing", "BadArgs");
-  const exact = walk.controls.filter((c) => matchName(c.label) === want);
+  const named = walk.controls.filter((c) => c.role !== "eye");
+  const exact = named.filter((c) => matchName(c.label) === want);
   if (exact.length) return pickOne(exact, base, walk, index);
-  const prefix = walk.controls.filter((c) => matchName(c.label).startsWith(want));
+  const prefix = named.filter((c) => matchName(c.label).startsWith(want));
   return pickOne(prefix, base, walk, index);
 }
 

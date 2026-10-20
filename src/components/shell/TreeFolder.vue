@@ -196,6 +196,7 @@ function onDrop(e: DragEvent) {
     <span
       v-if="toggleVis || eyeDown"
       class="tree-eye"
+      :data-visible="visible !== false"
       title="Show/hide · drag across eyes to show or hide many · Alt+click to show only this"
       @pointerdown.stop="onEyeDown"
       @click.stop="onEyeClick"
