@@ -191,6 +191,19 @@ fn the_sky_gradient_lights_the_plane_too() {
 }
 
 #[test]
+fn a_low_light_shadow_fades_before_the_catcher_edge() {
+    for mut t in tracers() {
+        let img = render(&mut t, sky_look(0.0, r#"{"direction":[0,-1,0.3],"color":[2,2,2],"angularRadius":1}"#), [0.0, 0.0, 1.0], 64);
+        let at = |p: [f32; 3]| img[pixel(p)][1] / BG;
+        let (shadow, rim, outside) = (at([0.0, 1.2, 0.0]), at([0.0, 1.58, 0.0]), at([0.0, 1.65, 0.0]));
+        eprintln!("{:?}: low light shadow {shadow} at the rim {rim} past it {outside}", t.path());
+        assert!(shadow < 0.8, "{:?}: no long shadow, {shadow}", t.path());
+        assert!(rim > 0.95, "{:?}: the shadow ends in a seam at the edge, {rim} inside it", t.path());
+        assert_eq!(outside, 1.0, "{:?}: past the square the plane still shows", t.path());
+    }
+}
+
+#[test]
 fn a_grazing_sun_is_not_lit_by_giving_up() {
     // A sun 1 degree up: about 1 in 50 map draws passes the cosine coin.
     let sun = [1.0f32.to_radians().cos(), 0.0, 1.0f32.to_radians().sin()];
