@@ -35,6 +35,7 @@ import { upgradeFace } from "./holeFace";
 import { findSelectorAt, repickedExtent, repickedSelector, replaceSelectorAt } from "./repickReference";
 import { awaitTreePick, treePickRefusal } from "../ui/treePick";
 import { deferPick } from "./deferPick";
+import { thinExtrudeOf } from "./thinExtrude";
 
 export interface FeatureStartersDeps {
   store: DocumentStore;
@@ -1868,11 +1869,20 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     }
     const chosen = hiddenChosenSketch();
     if (chosen) {
-      if (!extrude.start(committed, { sketch: chosen })) setStatus("That sketch has no closed profile to extrude", "");
+      if (extrude.start(committed, { sketch: chosen })) return;
+      // An open sketch, lines and arcs with no closed area, extrudes as a wall along them.
+      const thin = thinExtrudeOf(store.document.features, chosen, store.nextId());
+      if (!thin) {
+        setStatus("That sketch has no closed profile or curve to extrude", "");
+        return;
+      }
+      store.addFeature(thin);
+      committed(thin.id);
+      setStatus("Thin extrude: a 2 mm wall along the sketch's curves, set Thickness and Wall side in its rows", "");
       return;
     }
     if (overlay.regions.length === 0) {
-      setStatus("Extrude needs a face or a closed sketch profile", "");
+      setStatus("Extrude needs a face or a closed sketch profile, or an open sketch picked in the tree for a thin wall", "");
       return;
     }
     extrude.start(committed);
