@@ -40,6 +40,23 @@ describe("ThumbQueue", () => {
     expect(f.calls.length).toBe(1);
   });
 
+  it("asks again for a card that had no picture, as an open can store one without changing the file", async () => {
+    const calls: string[][] = [];
+    let stored = false;
+    const q = new ThumbQueue(async (paths) => {
+      calls.push(paths);
+      return paths.map(() => (stored ? "url:a" : null));
+    });
+    const got: (string | null)[] = [];
+    q.request("a", 5, (u) => got.push(u));
+    await flush();
+    stored = true;
+    q.request("a", 5, (u) => got.push(u));
+    await flush();
+    expect(got).toEqual([null, "url:a"]);
+    expect(calls.length).toBe(2);
+  });
+
   it("drops a card scrolled away before its call went out", async () => {
     const f = deferredFetch();
     const q = new ThumbQueue(f.fetch);

@@ -13,7 +13,7 @@ export class ThumbQueue {
   private readonly batch: number;
   private readonly inFlight: number;
   private readonly cacheSize: number;
-  private cache = new Map<string, { stamp: ThumbStamp; url: string | null }>();
+  private cache = new Map<string, { stamp: ThumbStamp; url: string }>();
   private wanted = new Map<string, Wanted>();
   private queued = new Set<string>();
   private sent = new Map<string, ThumbStamp>();
@@ -84,7 +84,8 @@ export class ThumbQueue {
     const stamp = this.sent.get(path) ?? null;
     this.sent.delete(path);
     this.cache.delete(path);
-    this.cache.set(path, { stamp, url });
+    // No picture is not cached: opening the document stores one without changing its stamp.
+    if (url) this.cache.set(path, { stamp, url });
     while (this.cache.size > this.cacheSize) this.cache.delete(this.cache.keys().next().value!);
     const want = this.wanted.get(path);
     if (!want) return;
