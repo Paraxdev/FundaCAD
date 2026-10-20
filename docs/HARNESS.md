@@ -191,8 +191,9 @@ view to reach N samples as well. After 60 s (`settle_timeout=`) it fails with `S
 one line on what is still busy, for example `building, 2 requests in flight, socket open`.
 
 If vite reloads the page, while it optimises dependencies on a cold start or after an edit it
-cannot hot swap, the session waits for the app again and closes the start screen again. A second
-reload within 30 s is an error.
+cannot hot swap, the session waits for the app again and closes the start screen again. The next
+step line says so, since a browser tab keeps no document over a reload. A second reload within
+30 s is an error.
 
 ## Recording
 

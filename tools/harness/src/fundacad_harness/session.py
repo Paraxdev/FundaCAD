@@ -21,6 +21,7 @@ from .launch import Proc, find_engine, find_repo, stale_warning, start_engine, s
 
 
 RELOAD_WINDOW = 30
+RELOADED = "the page reloaded before this step, a browser tab keeps no document over a reload, so this one is new"
 
 
 def _flag(name: str) -> bool:
@@ -190,6 +191,8 @@ class Session(Actions):
             time.sleep(0.2)
         raise LaunchError(f"the app did not get ready in {int(timeout)} s: {why}")
 
+    _reload_note: str | None = None
+
     def _ensure_page(self) -> None:
         """Vite reloads the page while it optimises dependencies, or after an edit it cannot hot swap."""
         if self.closed:
@@ -204,6 +207,8 @@ class Session(Actions):
         self._seen_navs = self._navs
         self.dismiss_start()
         self._mark = self.bridge.call("seq")
+        self._reload_note = RELOADED
+        self.warnings.append(RELOADED)
 
     def close(self) -> str:
         """Stops everything this session started; its logs stay after a launch failure or an exception out of a `with` block, everything with `keep`."""

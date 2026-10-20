@@ -53,10 +53,15 @@ def action(fn: Callable) -> Callable:
         if outer:
             self._mark = self.bridge.call("seq")
         self._in_action = True
+        navs = self._navs
         try:
             done = fn(self, *args, **kwargs)
             if settle:
                 self.settle()
+        except Exception as e:
+            if self._navs == navs or isinstance(e, HarnessError):
+                raise
+            raise HarnessError(f"{fn.__name__} stopped, the page reloaded while it ran and the document is new") from e
         finally:
             if outer:
                 self._in_action = False
@@ -80,6 +85,9 @@ class Actions:
         what, data = (done if isinstance(done, tuple) else (done, None))
         st = self.bridge.call("status", since=self._mark)
         tail = f"mode {st['mode']}"
+        if self._reload_note:
+            tail = f"{self._reload_note}, {tail}"
+            self._reload_note = None
         if st.get("tool"):
             tail += f", tool {st['tool']}"
         if st.get("prompt"):
