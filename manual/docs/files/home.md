@@ -8,7 +8,7 @@ Click a card to open the document. Each card shows a picture of the model from i
 
 Blank starts an empty document. A template starts one that already has parameters and a few steps, and Save then asks where to keep it. Open… finds a file on disk.
 
-Type in the search field, or press Ctrl+F, to find a document by name or folder, and pick the order next to it.
+Type in the search field, or press Ctrl+F, to find a document by name or folder, and pick the order next to it. Esc in the search field clears it.
 
 Add folder puts a folder of your own under Folders, to keep the documents of one project together. Home lists the documents in it and in its subfolders, and a document you start there is saved into it. Right click the folder and choose Remove from Home to take it off, the folder stays on disk.
 
