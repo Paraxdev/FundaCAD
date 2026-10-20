@@ -12,6 +12,7 @@ import { BACKGROUND_COLOR, bloomSettings, bloomWanted, renderPrefs } from "../ui
 import { GlassBackPass, glassBodyCount } from "./glassThickness";
 import { POTATO_PIXEL_RATIO, PotatoDraw } from "./potato";
 import { MatcapDraw } from "./matcap";
+import { GpuTimer } from "./gpuTimer";
 import { OverlayDraw } from "./pathtrace/overlayDraw";
 import type { ViewMode } from "../ui/renderPrefs";
 import { isSoftwareRendererName, setSoftwareRenderer } from "../ui/glassBlur";
@@ -495,6 +496,35 @@ export class PostChain {
     private lowPower: () => boolean = isRenderLowPower,
   ) {}
 
+  private timerRef: GpuTimer | null = null;
+  /** GPU time per pass of the realtime frame. Made on first use because the
+   *  extension lookup needs a live context. */
+  get timer(): GpuTimer {
+    if (this.timerRef) return this.timerRef;
+    const r = this.renderer;
+    const timer = (this.timerRef = new GpuTimer(typeof r.getContext === "function" ? (r.getContext() as WebGL2RenderingContext) : null));
+    return timer;
+  }
+
+  /** Times the shadow maps for the length of one frame, and returns the undo. */
+  private timeShadows(timer: GpuTimer): () => void {
+    const r = this.renderer;
+    const shadows = r.shadowMap as THREE.WebGLShadowMap | undefined;
+    const draw = shadows?.render;
+    if (!shadows || typeof draw !== "function") return () => {};
+    shadows.render = (lights, scene, camera) => {
+      const calls = r.info?.render?.calls ?? 0;
+      timer.begin("shadow");
+      try {
+        draw.call(shadows, lights, scene, camera);
+      } finally {
+        // Three skips the maps on a frame where nothing changed, which would read as 0 ms.
+        timer.end("shadow", (r.info?.render?.calls ?? 0) !== calls);
+      }
+    };
+    return () => { shadows.render = draw; };
+  }
+
   /** Whether this frame draws shadow maps at all. While it does not, the
    *  viewport stops recording caster changes, so the maps are redrawn on return. */
   get drawsShadows(): boolean {
@@ -585,9 +615,18 @@ export class PostChain {
       (this.motionDraw ??= new PotatoDraw(true)).render(this.renderer, this.scene, camera);
       return;
     }
+    const timer = this.timer;
+    timer.frame();
+    const untimeShadows = this.timeShadows(timer);
     let glass = false;
-    if (glassBodyCount() > 0) glass = (this.glassPass ??= new GlassBackPass()).begin(this.renderer, camera);
-    else if (this.glassPass) {
+    if (glassBodyCount() > 0) {
+      timer.begin("glassBack");
+      try {
+        glass = (this.glassPass ??= new GlassBackPass()).begin(this.renderer, camera);
+      } finally {
+        timer.end("glassBack");
+      }
+    } else if (this.glassPass) {
       this.glassPass.dispose();
       this.glassPass = null;
     }
@@ -595,13 +634,15 @@ export class PostChain {
       this.renderFull(camera);
     } finally {
       if (glass) this.glassPass!.end();
+      untimeShadows();
+      timer.endFrame();
     }
   }
 
   private renderFull(camera: THREE.Camera) {
     const want = this.wanted();
     if (!want.bloom && !want.blur) {
-      this.renderer.render(this.scene, camera);
+      this.timed("main", () => this.renderer.render(this.scene, camera));
       return;
     }
     let composer = this.composer;
@@ -682,7 +723,7 @@ export class PostChain {
       };
     }
     try {
-      composer.render();
+      this.timed("composer", () => composer.render());
     } finally {
       // Note: BokehPass clears its depth override without a finally, so a throw mid
       // pass left every later frame, and the overlay over a trace, drawn as packed depth.
@@ -691,6 +732,16 @@ export class PostChain {
       setComposing(false);
       r.setRenderTarget(null);
       r.setClearColor(this.clearWas, alpha);
+    }
+  }
+
+  private timed(name: string, draw: () => void): void {
+    const timer = this.timer;
+    timer.begin(name);
+    try {
+      draw();
+    } finally {
+      timer.end(name);
     }
   }
 
@@ -729,6 +780,8 @@ export class PostChain {
     const camera = this.camera ?? new THREE.PerspectiveCamera();
     const render = new RenderPass(this.scene, camera);
     render.clear = false;
+    const drawModel = render.render.bind(render);
+    render.render = (...args) => this.timed("main", () => drawModel(...args));
     const b = bloomSettings(renderPrefs().bloom);
     const bloom = new UnrealBloomPass(this.size.clone(), b.strength, b.radius, b.threshold);
     // BEFORE the bloom, deliberately. Blur first and bloom second is a light
