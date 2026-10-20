@@ -292,6 +292,11 @@ class Session(Actions):
         v = self.call("selection")
         return v if raw else text.selection(v)
 
+    def handles(self, raw: bool = False):
+        """The named handles a tool has up, `push at 700,412` or `taper covered`."""
+        v = self.call("handles")
+        return v if raw else "\n  ".join([f"handles {len(v)}", *v])
+
     def last_error(self) -> str:
         return text.one_line(self.call("lastError"))
 

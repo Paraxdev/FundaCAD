@@ -91,6 +91,7 @@ Every readout is a few lines of text. Pass `raw=True` for the JSON it was made f
 | `s.bodies()` | bodies with face count and visibility |
 | `s.status()` | mode, running tool, workspace, document, undo and redo, prompt, selection, last message, last error |
 | `s.selection()` | selected bodies, faces and edges |
+| `s.handles()` | the named handles a tool has up, with their screen point or `covered` |
 | `s.last_error()` | `none` or one line |
 | `s.messages(since=seq)` | log and toast lines after a sequence number |
 | `s.page_errors()` | uncaught page errors seen so far |
@@ -100,6 +101,9 @@ Every readout is a few lines of text. Pass `raw=True` for the JSON it was made f
 render, views, status, other. Each line is a ref, a role, a label and flags such as `disabled`,
 `on`, `selected` or `= "value"`. Refs are what actions take, for example `#undo-btn`,
 `action:sketch`, `family:cat:CREATE`, `feature:e1`, `item:body1`, `field:angle`, `menu:File`.
+An Items folder that is no element, such as a node of an imported assembly, is
+`folder:<tree key>`, and the eye on a row or folder is `eye:<id or key>` with the row's label and
+a `visible` or `hidden` flag. Eyes are never matched by label, only by ref.
 
 ## Actions
 
@@ -137,7 +141,10 @@ with Session() as s:
 | `drag_handle(name, by=px or mm=value)` | drags a named handle along its axis |
 | `view(name)` | iso, top, front, right, ..., fit, through the Views popover |
 | `undo()`, `redo()` | the title bar buttons |
-| `open_file(path)`, `import_file(path)` | File > Open or Import Mesh, answering the file chooser |
+| `expand(target, open=True)` | opens or closes an Items folder by its caret (a click on the row selects) |
+| `open_file(path)` | File > Open, answering the file chooser |
+| `import_file(path)` | drops the file on the canvas, the way a browser tab imports a model |
+| `save_as(path)` | File > Save As, the download lands at `path` |
 | `new_document(discard=True)` | Ctrl+N, answering the unsaved changes question |
 | `settle(trace=None, timeout=None)`, `wait_for(text, timeout=10)` | explicit waits |
 
@@ -157,7 +164,7 @@ refs; refs never change with wording. `#n` picks the n-th of several.
   plane `offset`, draft `angle`, joint `offset` and `angle`, mechanism `offset` or `angle`, revolve
   pitch `pitch`, section `section`, selection nudge `nudge`, taper arcs `taper`, datum `arrow`,
   `tilt x`, `tilt y`, `spin`, Move `arrow x|y|z`, `plane xy|yz|xz`, `ring x|y|z`, `size x|y|z`,
-  `origin`. `s.call("handles")` lists the ones on screen.
+  `origin`. `s.handles()` lists the ones on screen.
 
 Every canvas point is checked with the app's own picker before the click, and points under a
 panel or a handle are skipped. When no point works the call fails with `Occluded` and suggests a

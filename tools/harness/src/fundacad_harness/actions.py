@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import functools
 import os
 import time
@@ -103,6 +104,18 @@ class Actions:
         hit = self._click_control(target, button, double, mods)
         verb = "double clicked" if double else "right clicked" if button == "right" else "clicked"
         return f'{verb} {hit["ref"]} "{hit["label"]}"', hit
+
+    @action
+    def expand(self, target: str, open: bool = True):
+        """Opens or closes a tree folder by its caret, a click on the row itself selects."""
+        hit, loc = self._locator(target)
+        state = loc.get_attribute("aria-expanded")
+        if state is None:
+            raise BadArgs(f'{hit["ref"]} "{hit["label"]}" is not a folder')
+        if (state == "true") == open:
+            return f'{hit["ref"]} "{hit["label"]}" already {"open" if open else "closed"}', hit
+        loc.locator(".tree-caret").click(timeout=5000)
+        return f'{"opened" if open else "closed"} {hit["ref"]} "{hit["label"]}"', hit
 
     @action
     def tool(self, label: str):
@@ -258,8 +271,39 @@ class Actions:
 
     @action
     def import_file(self, path: str | os.PathLike):
-        full = self._choose_file("File/Import Mesh...", path)
-        return f"imported {Path(full).name}", {"path": full}
+        """A browser tab imports a model by a file dropped on the canvas, as from the desktop."""
+        full = self._repo_path(path)
+        self._drop_on_canvas(full)
+        return f"dropped {Path(full).name}", {"path": full}
+
+    def _drop_on_canvas(self, full: str) -> None:
+        data = base64.b64encode(Path(full).read_bytes()).decode("ascii")
+        dt = self.page.evaluate_handle(
+            """([name, b64]) => {
+                const bytes = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+                const dt = new DataTransfer();
+                dt.items.add(new File([bytes], name));
+                return dt;
+            }""",
+            [Path(full).name, data],
+        )
+        canvas = self.page.locator("#canvas")
+        box = canvas.bounding_box()
+        at = {"clientX": box["x"] + box["width"] / 2, "clientY": box["y"] + box["height"] / 2} if box else {}
+        for kind in ("dragenter", "dragover", "drop"):
+            canvas.dispatch_event(kind, {"dataTransfer": dt, **at})
+        dt.dispose()
+
+    @action
+    def save_as(self, path: str | os.PathLike):
+        """A browser tab saves by downloading the document, which lands at `path`."""
+        out = Path(path)
+        with self.page.expect_download(timeout=20_000) as dl:
+            self._click_control("menu:File")
+            self._click_control(self._menu_ref("File", "Save As..."))
+        out.parent.mkdir(parents=True, exist_ok=True)
+        dl.value.save_as(str(out))
+        return f"saved {out.name}", {"path": str(out.resolve())}
 
     @action
     def new_document(self, discard: bool = True):

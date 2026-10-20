@@ -3,7 +3,7 @@ class HarnessError(Exception):
 
     def __init__(self, message: str, candidates: list[str] | None = None):
         self.candidates = list(candidates or [])
-        if self.candidates:
+        if self.candidates and self.candidates[0] not in message:
             message = f"{message}: did you mean {', '.join(self.candidates[:8])}"
         super().__init__(message)
 
