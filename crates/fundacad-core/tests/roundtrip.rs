@@ -579,3 +579,17 @@ fn horizontal_and_vertical_distances_land_typed_and_keep_their_fields() {
     assert_eq!(v.value.get(), -4.0);
     assert_eq!(serde_json::to_value(&doc).expect("save"), doc_json);
 }
+
+#[test]
+fn a_file_from_a_newer_version_lands_what_it_knows_and_carries_the_rest() {
+    let v = read(&repo().join("tests/fixtures/future/v99.funda"));
+    let doc = CadDocument::from_json(&v.to_string()).expect("load");
+    assert!(matches!(doc.feature("w1"), Some(Feature::Unknown(_))));
+    let Some(Feature::Extrude(e)) = doc.feature("e1") else {
+        panic!("e1 is an extrude")
+    };
+    assert_eq!(e.extra.get("futureFlag"), Some(&Value::Bool(true)));
+    assert_eq!(doc.extra.get("futureKey"), Some(&v["futureKey"]));
+    let saved: Value = serde_json::from_str(&doc.to_json().expect("save")).expect("json");
+    assert_eq!(saved, v);
+}

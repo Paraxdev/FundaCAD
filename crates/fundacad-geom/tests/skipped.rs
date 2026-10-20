@@ -128,3 +128,17 @@ fn a_declared_plugin_that_will_not_load_still_fails_its_features() {
     fundacad_geom::plugins::reset_for_tests();
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn the_future_fixture_builds_all_but_what_it_does_not_know() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/fixtures/future/v99.funda");
+    let mut doc: Value = serde_json::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    doc.as_object_mut().unwrap().remove("geometry");
+    let typed = CadDocument::from_value_lenient(&doc).expect("document parses");
+    let r = builder::rebuild(&typed, &doc, &NoWatch).expect("not cancelled");
+    assert_eq!(skipped(&r), vec![("w1", "futureWidget")]);
+    let m = messages(&r);
+    assert_eq!(m.len(), 1, "{m:?}");
+    assert!(m[0].ends_with(" (w1 was skipped, this version does not know its type)"), "{m:?}");
+    assert_eq!(r.bodies.len(), 2, "the extrude and the box after the skipped feature build");
+}
