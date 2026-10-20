@@ -61,10 +61,26 @@ if git merge-base --is-ancestor "$sha" "$REMOTE/main"; then
   die "${sha:0:7} is already on main, there is nothing to promote. To release main as it is, tag it by hand (docs/ENGINE.md section 7)."
 fi
 
+# The gating jobs only: e2e is deliberately non-gating, and a flake there
+# fails the run as a whole.
 echo "checking for a green build of ${sha:0:7} on dev..."
-run=$(gh run list -R "$REPO" --branch dev --workflow build.yml --commit "$sha" \
-  --status success --limit 1 --json url --jq '.[0].url // empty')
-[ -n "$run" ] || die "no successful build run on dev for ${sha:0:7} yet, see: gh run list -R $REPO --branch dev"
+runs=$(gh run list -R "$REPO" --branch dev --workflow build.yml --event push --commit "$sha" \
+  --limit 5 --json databaseId --jq '.[].databaseId')
+[ -n "$runs" ] || die "no build run on dev for ${sha:0:7}. A push that only touches manual/ starts none, so pass --sha with an older dev commit that has one, see: gh run list -R $REPO --branch dev"
+run='' why=''
+for id in $runs; do
+  # shellcheck disable=SC2016
+  why=$(gh run view "$id" -R "$REPO" --json jobs --jq '
+    [.jobs[] | {n: (.name | sub(" [(].*"; "")), c: .conclusion}] as $j
+    | [("test", "rust-geom", "bundle") as $k
+       | [$j[] | select(.n == $k) | .c] as $cs
+       | if ($cs | length) == 0 then "\($k) did not run"
+         elif all($cs[]; . == "success") then empty
+         else "\($k) is not green" end]
+    | join(", ")')
+  if [ -z "$why" ]; then run="https://github.com/$REPO/actions/runs/$id"; break; fi
+done
+[ -n "$run" ] || die "no green build of ${sha:0:7} on dev yet ($why), see: gh run list -R $REPO --branch dev"
 echo "green: $run"
 
 tmp=$(mktemp -d)
