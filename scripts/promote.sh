@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
-# Promote a green dev build to a stable release (docs/ENGINE.md section 7).
+# Promote a green dev build to main, which publishes it as the beta
+# (docs/ENGINE.md section 7).
 #
-#   scripts/promote-stable.sh 1.2.0 [--sha <commit on dev>] [--push]
+#   scripts/promote.sh [--sha <commit on dev>] [--stable <1.minor.patch>] [--push]
 #
-# Merges the dev head (or the given commit) into main with --no-ff, tags the
-# merge v1.2.0, and prints the push. With --push it pushes main and the tag in
-# one atomic push, and the tag's build publishes the release.
+# Checks that the dev head (or the given commit) has a dev build whose gating
+# jobs are all green, merges it into main with --no-ff, and prints the push.
+# dev itself may be red, a promotion may not. With --push it pushes main, and
+# the main build publishes the beta once its own gating jobs are green.
+# --stable also tags the merge v1.<minor>.<patch>, pushed atomically with main,
+# and the tag's build publishes a stable release.
 #
 # The merge is made in a throwaway worktree on origin/main, so it works while
 # main is checked out somewhere else, and your local main is left as it was.
@@ -15,12 +19,12 @@ REPO=Paraxdev/FundaCAD
 REMOTE=origin
 
 usage() {
-  echo "usage: $0 <1.minor.patch> [--sha <commit on dev>] [--push]" >&2
+  echo "usage: $0 [--sha <commit on dev>] [--stable <1.minor.patch>] [--push]" >&2
   exit 2
 }
 
 die() {
-  echo "promote-stable: $*" >&2
+  echo "promote: $*" >&2
   exit 1
 }
 
@@ -29,28 +33,31 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --push) push=yes ;;
     --sha) [ $# -ge 2 ] || usage; sha=$2; shift ;;
-    -h|--help) usage ;;
-    -*) usage ;;
-    *) [ -z "$version" ] || usage; version=${1#v} ;;
+    --stable) [ $# -ge 2 ] || usage; version=${2#v}; shift ;;
+    *) usage ;;
   esac
   shift
 done
-[ -n "$version" ] || usage
-# Minor 0 is the betas' 1.0.<run number>, which a stable 1.0.x would be older than.
-[[ "$version" =~ ^1\.([1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] \
-  || die "$version is not a stable version, those are 1.<minor>.<patch> with a minor of 1 or more"
-tag="v$version"
+
+tag=''
+if [ -n "$version" ]; then
+  # Minor 0 is the betas' 1.0.<run number>, which a stable 1.0.x would be older than.
+  [[ "$version" =~ ^1\.([1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] \
+    || die "$version is not a stable version, those are 1.<minor>.<patch> with a minor of 1 or more"
+  tag="v$version"
+fi
 
 cd "$(git rev-parse --show-toplevel)"
 git fetch --quiet --tags "$REMOTE" main
 git fetch --quiet "$REMOTE" dev \
   || die "could not fetch dev from $REMOTE. If it does not exist yet, create it from main first (docs/ENGINE.md section 7)."
 
-git rev-parse -q --verify "refs/tags/$tag" >/dev/null && die "$tag already exists"
-
-newest=$(git tag -l 'v1.*' | grep -E '^v1\.([1-9][0-9]*)\.(0|[1-9][0-9]*)$' | sort -V | tail -1 || true)
-if [ -n "$newest" ] && [ "$(printf '%s\n%s\n' "$newest" "$tag" | sort -V | tail -1)" != "$tag" ]; then
-  die "$tag is not newer than $newest"
+if [ -n "$tag" ]; then
+  git rev-parse -q --verify "refs/tags/$tag" >/dev/null && die "$tag already exists"
+  newest=$(git tag -l 'v1.*' | grep -E '^v1\.([1-9][0-9]*)\.(0|[1-9][0-9]*)$' | sort -V | tail -1 || true)
+  if [ -n "$newest" ] && [ "$(printf '%s\n%s\n' "$newest" "$tag" | sort -V | tail -1)" != "$tag" ]; then
+    die "$tag is not newer than $newest"
+  fi
 fi
 
 if [ -z "$sha" ]; then
@@ -82,28 +89,41 @@ for id in $runs; do
     | join(", ")')
   if [ -z "$why" ]; then run="https://github.com/$REPO/actions/runs/$id"; break; fi
 done
-[ -n "$run" ] || die "no green build of ${sha:0:7} on dev yet ($why), see: gh run list -R $REPO --branch dev"
+[ -n "$run" ] || die "no green build of ${sha:0:7} on dev yet ($why). dev may publish a red build, main may not. See: gh run list -R $REPO --branch dev"
 echo "green: $run"
 
 tmp=$(mktemp -d)
 cleanup() { git worktree remove --force "$tmp" 2>/dev/null || { rm -rf "$tmp"; git worktree prune; }; }
 trap cleanup EXIT
 git worktree add --quiet --detach "$tmp" "$REMOTE/main"
-git -C "$tmp" merge --no-ff --quiet -m "merge: dev into main for $tag" "$sha" \
+git -C "$tmp" merge --no-ff --quiet -m "merge: dev into main${tag:+ for $tag}" "$sha" \
   || die "the merge into main failed, see git above. A conflict usually means a hotfix on main was never merged back: merge main into dev first, then try again."
 merge=$(git -C "$tmp" rev-parse HEAD)
+echo "merged ${sha:0:7} into main as ${merge:0:7}"
 
-git tag -a "$tag" -m "FundaCAD $tag" "$merge"
-echo "tagged $tag on ${merge:0:7}, the merge of ${sha:0:7} into main"
+if [ -n "$tag" ]; then
+  git tag -a "$tag" -m "FundaCAD $tag" "$merge"
+  echo "tagged $tag on ${merge:0:7}"
+  pushcmd=(git push --atomic "$REMOTE" "$merge:refs/heads/main" "refs/tags/$tag")
+  undo="git tag -d $tag"
+  published="the main build publishes the beta and the $tag build the stable release: gh run list -R $REPO --branch main"
+else
+  # Note: nothing references the merge once the worktree is gone. git keeps an
+  # unreachable commit for two weeks (gc.pruneExpire), so the printed push works.
+  pushcmd=(git push "$REMOTE" "$merge:refs/heads/main")
+  undo=''
+  published="the main build publishes the beta once it is green: gh run list -R $REPO --branch main"
+fi
 
-pushcmd=(git push --atomic "$REMOTE" "$merge:refs/heads/main" "refs/tags/$tag")
 if [ "$push" = yes ]; then
-  "${pushcmd[@]}" || die "the push failed and nothing is published. Drop the local tag before trying again: git tag -d $tag"
-  echo "pushed, the $tag build publishes the release: gh run list -R $REPO --branch $tag"
+  "${pushcmd[@]}" || die "the push failed and nothing is published.${undo:+ Undo before trying again: $undo}"
+  echo "pushed, $published"
 else
   echo "nothing is pushed yet. To publish:"
   echo "  ${pushcmd[*]}"
-  echo "To undo instead:"
-  echo "  git tag -d $tag"
+  if [ -n "$undo" ]; then
+    echo "To undo instead:"
+    echo "  $undo"
+  fi
 fi
 echo "your local main is unchanged, update it with: git fetch $REMOTE && git checkout main && git merge --ff-only $REMOTE/main"
