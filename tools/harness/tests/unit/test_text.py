@@ -56,6 +56,8 @@ def test_status_text():
         'recent: info "Saved" 2 s ago',
         "error: none",
     ]
+    v["warnings"] = ["Low performance"]
+    assert text.status(v, now=1002).splitlines()[-1] == "warning: Low performance (the view's own warning button)"
 
 
 def test_selection_text():

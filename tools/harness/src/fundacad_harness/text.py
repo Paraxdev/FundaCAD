@@ -83,6 +83,8 @@ def status(v: dict, now: float | None = None) -> str:
     if r:
         lines.append(f"recent: {r['level']} {_q(r['text'])} {ago(r['at'], now)}")
     lines.append(f"error: {v.get('error') or 'none'}")
+    if v.get("warnings"):
+        lines.append("warning: " + ", ".join(v["warnings"]) + " (the view's own warning button)")
     return "\n".join(lines)
 
 

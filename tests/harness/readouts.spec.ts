@@ -83,6 +83,13 @@ describe("status", () => {
     const s = read.status(host());
     expect(s).toMatchObject({ mode: "model", doc: "Untitled", dirty: true, undo: true, redo: false, prompt: "Pick a face to draft" });
     expect(s.error).toBe("the angle tips the face past vertical");
+    expect(s.warnings).toEqual([]);
+  });
+
+  it("names a warning the view raised, such as Low performance", () => {
+    document.body.insertAdjacentHTML("beforeend", `<div id="viewcontrols"><button class="perf-warn" title="Low performance"></button></div>`);
+    expect(read.status(host()).warnings).toEqual(["Low performance"]);
+    document.getElementById("viewcontrols")!.remove();
   });
 });
 
