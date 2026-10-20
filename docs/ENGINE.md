@@ -383,21 +383,27 @@ worker reached over Tauri IPC, so the webview never opens a socket.
 | Branch or tag | Tests and installers | Publishes | Version | Update feed |
 | --- | --- | --- | --- | --- |
 | `dev` | yes | the rolling `beta` pre-release | `1.0.<run number>` | `releases/download/beta/latest.json` |
-| `main` | yes | nothing | `1.0.<run number>` | the stable one, as a tag would build it |
+| `main` | yes, a dry run whose output is thrown away | nothing | `1.0.<run number>` | the stable one, as a tag would build it |
 | tag `v1.<minor>.<patch>` on `main` | yes | a release named after the tag | `1.<minor>.<patch>` | `releases/latest/download/latest.json` |
 | pull request | tests, no installers | nothing | | |
 
 The `channel` job in `build.yml` decides which row a run is. A tag that is not
-`v1.<minor>.<patch>`, or whose commit is not on `main`, fails it before
-anything is built.
+`v1.<minor>.<patch>` with a minor of 1 or more, or whose commit is not on
+`main`, fails it before anything is built.
+
+A push to `main` builds the stable installers on all three platforms and
+publishes none of them, so a promotion runs the full build twice: once for the
+`main` push and once for the tag, which is the one that publishes.
 
 A beta install only ever updates to the next beta and a stable install only to
 the next stable release. GitHub's latest release is never a pre-release, so
-the rolling beta cannot become what a stable install finds there. A stable
-release is only marked latest while no higher stable tag is on `main`, so a
-fix to an older line cannot pull newer installs back to it. Pick a stable
-minor of 1 or more: the betas are `1.0.<run number>`, and a stable `1.0.x`
-would be older than the beta it replaces.
+the rolling beta cannot become what a stable install finds there. A new
+stable release is a draft until its installers and `latest.json` are up, and
+is then marked latest only while no higher stable release is published, so a
+fix to an older line cannot pull newer installs back to it. The minor is 1 or
+more, and both the `channel` job and `promote-stable.sh` refuse 0: the betas
+are `1.0.<run number>`, and a stable `1.0.x` would be older than the beta it
+replaces.
 
 ### 7.1 Promoting dev to stable
 
@@ -405,27 +411,35 @@ would be older than the beta it replaces.
 scripts/promote-stable.sh 1.2.0          # or --sha <commit on dev>
 ```
 
-It checks that the dev head (or the given commit) has a green `build` run on
-GitHub, merges it into `main` with `--no-ff` in a throwaway worktree, tags the
-merge `v1.2.0` and prints the push. `--push` pushes `main` and the tag in one
-atomic push, and the tag's run publishes the release. Your local `main` is not
-touched, fast forward it afterwards.
+It checks that a `build` run from a push of the dev head (or the given commit)
+has `test`, `rust-geom` and every `bundle` leg green, merges it into `main`
+with `--no-ff` in a throwaway worktree, tags the merge `v1.2.0` and prints the
+push. `e2e` is not gating, so a flake there does not block a promotion. A dev
+commit that only touches `manual/` starts no build at all, so promote an older
+one with `--sha`. `--push` pushes `main` and the tag in one atomic push, and
+the tag's run publishes the release. Your local `main` is not touched, fast
+forward it afterwards.
 
 ### 7.2 Hotfixes
 
 A fix that cannot wait for the next promotion:
 
 ```sh
+git fetch origin
 git switch -c fix/thing origin/main      # branch from main
 # commit the fix
-git switch main && git merge --no-ff fix/thing
+git switch main && git merge --ff-only origin/main && git merge --no-ff fix/thing
 git tag -a v1.2.1 -m "FundaCAD v1.2.1"
 git push --atomic origin main refs/tags/v1.2.1
-git switch dev && git merge main && git push origin dev
+git switch dev && git merge --ff-only origin/dev && git merge main && git push origin dev
 ```
 
-Merge `main` back into `dev` straight away. Until then the next promotion can
-conflict, and `promote-stable.sh` stops and says so.
+`promote-stable.sh` leaves local `main` behind `origin/main`, which is why
+both branches are fast forwarded first: a stale `main` gets the push refused,
+and a stale `dev` merges an old `main`. Merge `main` back into `dev` straight
+away. Until then the next promotion can conflict, and `promote-stable.sh`
+stops and says so. The `dev` push publishes the beta again, with the fix in
+it.
 
 ## 8. Performance
 
