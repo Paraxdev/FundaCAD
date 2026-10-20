@@ -19,7 +19,7 @@ import { buildRoom, disposeRoom } from "./environments";
 import { hdrHashOf, type Environment, type RenderPrefs } from "../ui/renderPrefs";
 import { hdrRoom, heldHdr } from "./hdrRegistry";
 import { themeColor } from "./themeColors";
-import { keyDirection } from "./keyLight";
+import { buildLightRig, environmentKeyOf, lightOf, scaled } from "./lightRig";
 import { AXIS_COLOR, OriginTriad } from "./originTriad";
 import { markOverlay } from "./overlayKinds";
 
@@ -237,13 +237,6 @@ function recordGpu(renderer: THREE.WebGLRenderer) {
   stickyFact(`[gpu] ${desc}${note}`);
 }
 
-/** The lighting rig at brightness 1, i.e. the light level this app has always
- *  had. The brightness setting scales all three together, so these stay the one
- *  definition of the look rather than three numbers a slider replaced. */
-const KEY_INTENSITY = 2.0;
-const FILL_INTENSITY = 0.6;
-const HEMI_INTENSITY = 0.6;
-
 function unmaskedRendererName(renderer: THREE.WebGLRenderer): string {
   try {
     const gl = renderer.getContext();
@@ -324,8 +317,11 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
   const scene = new THREE.Scene();
 
   // --- lighting rig (key + fill + ambient) for a clean product look ---
-  const key = new THREE.DirectionalLight(0xffffff, KEY_INTENSITY);
-  key.position.set(40, -60, 80);
+  const rig = buildLightRig(renderPrefs(), isHdrHeld);
+  const keyLight = lightOf(rig, "key")!;
+  const fillLight = lightOf(rig, "fill")!;
+  const key = new THREE.DirectionalLight(keyLight.colour, scaled(rig, keyLight.intensity));
+  key.position.set(...keyLight.direction).multiplyScalar(KEY_DISTANCE);
   scene.add(key);
   // The key light can OPTIONALLY cast a grounded shadow (renderPrefs.shadows). Set
   // up its shadow map once; the ortho frustum is framed to the model by
@@ -336,10 +332,14 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
   key.shadow.bias = -0.0006;
   key.shadow.normalBias = 0.6; // CAD faces are flat and large; a world-space nudge avoids acne
   key.shadow.radius = 3;
-  const fill = new THREE.DirectionalLight(0xffffff, FILL_INTENSITY);
-  fill.position.set(-50, 40, 20);
+  const fill = new THREE.DirectionalLight(fillLight.colour, scaled(rig, fillLight.intensity));
+  fill.position.set(...fillLight.direction);
   scene.add(fill);
-  const hemi = new THREE.HemisphereLight(0xbfd4ff, 0x202428, HEMI_INTENSITY);
+  const hemi = new THREE.HemisphereLight(
+    rig.hemisphere.sky,
+    rig.hemisphere.ground,
+    scaled(rig, rig.hemisphere.intensity),
+  );
   scene.add(hemi);
 
   // --- Z-up adaptive ground grid in the XY plane (rescales with zoom) ---
@@ -773,11 +773,11 @@ const KEEP_CUSTOM = 2;
 /** What `p` lights with as a cache key, or null for none, which includes an
  *  imported panorama whose pixels have not loaded yet. */
 export function environmentKey(p: Readonly<RenderPrefs>): string | null {
-  if (p.environment === "none") return null;
-  const hash = hdrHashOf(p.environment);
-  if (!hash) return p.environment;
-  if (!heldHdr(hash)) return null;
-  return `${p.environment}|${p.envRotation.toFixed(1)}|${p.envExposure.toFixed(2)}`;
+  return environmentKeyOf(p, isHdrHeld);
+}
+
+function isHdrHeld(hash: string): boolean {
+  return heldHdr(hash) !== null;
 }
 
 /** The room for `p`, built now if it is not cached yet. A still taken in potato
@@ -849,11 +849,14 @@ function applyRenderPrefs(
   lights: { key: THREE.DirectionalLight; fill: THREE.DirectionalLight; hemi: THREE.HemisphereLight },
 ) {
   const p = renderPrefs();
-  _shadowDir.set(...keyDirection(p.keyAzimuth, p.keyElevation));
+  const rig = buildLightRig(p, isHdrHeld);
+  const keyLight = lightOf(rig, "key")!;
+  const fillLight = lightOf(rig, "fill")!;
+  _shadowDir.set(...keyLight.direction);
   lights.key.position.copy(lights.key.target.position).addScaledVector(_shadowDir, KEY_DISTANCE);
-  lights.key.intensity = KEY_INTENSITY * p.brightness;
-  lights.fill.intensity = FILL_INTENSITY * p.brightness;
-  lights.hemi.intensity = HEMI_INTENSITY * p.brightness;
+  lights.key.intensity = scaled(rig, keyLight.intensity);
+  lights.fill.intensity = scaled(rig, fillLight.intensity);
+  lights.hemi.intensity = scaled(rig, rig.hemisphere.intensity);
   // The ground follows the app's palette by default, reading a token off the
   // document root exactly as the stylesheet does (see themeColors.ts), so a
   // theme that wants its own 3D ground gets one. The fixed grounds below are
