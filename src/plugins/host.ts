@@ -57,6 +57,8 @@ export type {
   MenuContribution,
   Paint,
   PaletteEntry,
+  Relief,
+  ReliefMap,
   RenderSection,
   RenderTab,
   RibbonContribution,
