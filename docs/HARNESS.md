@@ -192,6 +192,14 @@ button still replays. Face and edge selectors, tool labels and menu paths stay a
 inside the checkout is written relative to it. Readouts are not recorded, `wait_for` is. A failed
 action is left out, and an action called from inside another one is written once.
 
+## Examples
+
+`tools/harness/examples/` holds ports of e2e scripts, each a `run(s)` function plus a `__main__`
+that opens its own session: `assembly_tree.py` (a dropped STEP assembly in Items, a subassembly
+eye, save and reopen), `refused_commit.py` (a refused draft keeps the tool open), and
+`extrude_reedit.py` (reopening a whole sketch extrude). `tests/browser/test_examples.py` runs them
+in the smoke set. The fixtures they open are described in `tools/harness/fixtures/README.md`.
+
 ## Troubleshooting
 
 - `no engine found`: build one with `cargo build -p fundacad-cli`, or set `FUNDACAD_ENGINE_CMD`.
