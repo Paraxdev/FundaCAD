@@ -109,6 +109,7 @@ class Actions:
 
     @action
     def click(self, target: str, button: str = "left", double: bool = False, mods=()):
+        """Clicks a control by ref or label, or the model at `face:<sel>` or `edge:<sel>`."""
         on = selectors.canvas_target(target)
         if on:
             p = self._canvas_point(*on)
@@ -132,6 +133,7 @@ class Actions:
 
     @action
     def tool(self, label: str):
+        """Starts a rail tool by its label, opening its family first when it is folded inside one."""
         steps = self.bridge.call("toolPath", label=label)["steps"]
         hit = None
         for i, s in enumerate(steps):
@@ -142,6 +144,7 @@ class Actions:
 
     @action
     def type(self, target: str, text: str, enter: bool = False):
+        """Types into a value box field or a properties row, `enter=True` presses Enter after."""
         hit, loc = self._locator(target)
         loc.click(timeout=5000)
         self.page.keyboard.press("Control+A")
@@ -154,6 +157,7 @@ class Actions:
 
     @action
     def press(self, *keys: str):
+        """Presses keys in turn, `press("Ctrl+Z")`, `press("Escape")`."""
         if not keys:
             raise BadArgs("press needs a key, for example press(\"Enter\")")
         for k in keys:
@@ -165,6 +169,7 @@ class Actions:
 
     @action
     def menu(self, path: str):
+        """Chooses a menu item, `menu("File/Save As...")`."""
         top, _, item = path.partition("/")
         if not item:
             raise BadArgs('menu takes a path like "File/Save As..."')
@@ -182,6 +187,7 @@ class Actions:
 
     @action
     def context_menu(self, on: str, item: str):
+        """Right clicks a control or `face:<sel>` and chooses an item of the menu that opens."""
         target = selectors.canvas_target(on)
         if target:
             p = self._canvas_point(*target)
@@ -202,16 +208,19 @@ class Actions:
 
     @action
     def undo(self):
+        """The title bar Undo button."""
         self._click_control("#undo-btn")
         return "clicked #undo-btn"
 
     @action
     def redo(self):
+        """The title bar Redo button."""
         self._click_control("#redo-btn")
         return "clicked #redo-btn"
 
     @action
     def command(self, name: str):
+        """Runs the best match of the command search (Ctrl+F), refused when nothing matches."""
         self.page.keyboard.press("Control+F")
         self.page.wait_for_timeout(50)
         self.page.keyboard.type(name)
@@ -236,6 +245,7 @@ class Actions:
 
     @action
     def panel(self, name: str, open: bool = True):
+        """Opens or closes a panel: history, items, views, display, versions, snapping, preferences."""
         want = name.strip().lower()
         if want in ("preferences", "settings"):
             close = [r for r in self.bridge.call("screen", region="dialog", max=200)["lines"] if r[0] == 1 and r[3] == "Close"]
@@ -276,6 +286,7 @@ class Actions:
 
     @action
     def view(self, name: str):
+        """Turns the camera through the Views popover: iso, fit, top, front, right and the rest."""
         want = name.strip().lower()
         label = VIEW_LABELS.get(want, name)
         self._click_control("Views")
@@ -309,6 +320,7 @@ class Actions:
 
     @action
     def open_file(self, path: str | os.PathLike):
+        """File > Open, answering the file chooser with `path`."""
         full = self._choose_file("File/Open...", path)
         return f"opened {Path(full).name}", {"path": full}
 
@@ -351,6 +363,7 @@ class Actions:
 
     @action
     def new_document(self, discard: bool = True):
+        """Ctrl+N, dropping unsaved changes unless `discard=False`."""
         self.page.keyboard.press("Control+N")
         self.page.wait_for_timeout(100)
         rows = [r for r in self._control_rows() if r[0] == 1 and r[1]]
@@ -410,14 +423,17 @@ class Actions:
 
     @action
     def pick_face(self, sel: str, add: bool = False, exact: bool = False):
+        """Selects a face by selector (`top`, `body1:largest`), `add` holds Ctrl, `exact` holds Shift."""
         return self._pick("face", selectors.face(sel), add, exact)
 
     @action
     def pick_edge(self, sel: str, add: bool = False, exact: bool = False, via: str = "select"):
+        """Selects an edge by selector (`between top front`, `near=x,y,z`, `longest`)."""
         return self._pick("edge", selectors.edge(sel), add, exact, via)
 
     @action
     def pick_plane(self, name: str):
+        """Clicks a base plane (XY, XZ, YZ) or a datum plane by id."""
         p = self._canvas_point("plane", name)
         self._mouse_click(p["x"], p["y"])
         return f"picked {p['what']}", p
@@ -437,12 +453,14 @@ class Actions:
 
     @action
     def click_at(self, sketch=None, world=None, screen=None, button: str = "left", double: bool = False):
+        """Clicks at one of `sketch=(x, y)`, `world=(x, y, z)` or `screen=(x, y)`."""
         p = self._space_point(sketch, world, screen)
         self._mouse_click(p["x"], p["y"], button=button, double=double)
         return f"clicked at {sketch or world or screen}", p
 
     @action
     def drag(self, from_, to, space: str = "sketch", button: str = "left", steps: int = 12):
+        """Drags between two points of `space`: sketch, world or screen."""
         a = self._space_point(**{space: from_})
         b = self._space_point(**{space: to})
         m = self.page.mouse
@@ -454,6 +472,7 @@ class Actions:
 
     @action
     def drag_handle(self, name: str, by: float | None = None, mm: float | None = None):
+        """Drags a named handle along its axis by `by` pixels or about `mm` millimetres."""
         if (by is None) == (mm is None):
             raise BadArgs("drag_handle takes by=<pixels> or mm=<distance>")
         h = self.bridge.call("handlePoint", name=name)

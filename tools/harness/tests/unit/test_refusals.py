@@ -122,3 +122,9 @@ def test_a_second_session_in_one_process_is_told_why(monkeypatch):
     with pytest.raises(LaunchError, match="process of its own"):
         s._launch_browser()
     s.close()
+
+
+def test_every_public_call_says_what_it_does():
+    missing = [n for n in dir(Session) if not n.startswith("_") and callable(getattr(Session, n)) and not getattr(Session, n).__doc__]
+    assert missing == []
+    assert "docs/HARNESS.md" in Session.__doc__
