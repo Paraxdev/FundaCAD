@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildEntries, displayName, folderLabel, folderPath } from "../../src/ui/homeList";
+import { buildEntries, displayName, filterEntries, folderLabel, folderPath, sortEntries, type HomeEntry } from "../../src/ui/homeList";
 
 describe("displayName", () => {
   it("drops the folder and the extension", () => {
@@ -44,5 +44,51 @@ describe("buildEntries", () => {
     ]);
     const list = buildEntries(recents, null, stats);
     expect(list.map((e) => [e.editedAt, e.missing])).toEqual([[999, false], [null, true]]);
+  });
+});
+
+const entry = (name: string, folder: string, openedAt: number | null, editedAt: number | null): HomeEntry =>
+  ({ path: `${folder}/${name}.funda`, name, folder, openedAt, editedAt, missing: false, open: false });
+
+describe("sortEntries", () => {
+  const list = [entry("b", "x", 3, 10), entry("a", "x", 3, 30), entry("c", "x", 1, null), entry("Ä", "x", 2, 20)];
+  const names = (mode: "opened" | "edited" | "name") => sortEntries(list, mode).map((e) => e.name);
+
+  it("puts the last opened first, ties by name", () => {
+    expect(names("opened")).toEqual(["a", "b", "Ä", "c"]);
+  });
+
+  it("puts the last edited first, falling back to the open time", () => {
+    expect(names("edited")).toEqual(["a", "Ä", "b", "c"]);
+  });
+
+  it("orders by name, accents and case aside", () => {
+    expect(names("name")).toEqual(["a", "Ä", "b", "c"]);
+  });
+
+  it("leaves the input alone", () => {
+    sortEntries(list, "name");
+    expect(list.map((e) => e.name)).toEqual(["b", "a", "c", "Ä"]);
+  });
+});
+
+describe("filterEntries", () => {
+  const list = [entry("Bracket", "clients/acme", 1, 1), entry("Gear", "parts/Zürich", 1, 1), entry("Lever", "parts/misc", 1, 1)];
+  const names = (q: string) => filterEntries(list, q).map((e) => e.name);
+
+  it("keeps everything for an empty query", () => {
+    expect(names("  ")).toHaveLength(3);
+  });
+
+  it("matches the name and the folder, case and accents aside", () => {
+    expect(names("brack")).toEqual(["Bracket"]);
+    expect(names("ACME")).toEqual(["Bracket"]);
+    expect(names("zurich")).toEqual(["Gear"]);
+    expect(names("parts")).toEqual(["Gear", "Lever"]);
+  });
+
+  it("needs every word to match", () => {
+    expect(names("parts lev")).toEqual(["Lever"]);
+    expect(names("parts nope")).toEqual([]);
   });
 });

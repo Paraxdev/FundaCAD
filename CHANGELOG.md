@@ -32,6 +32,8 @@ This file starts on 2026-08-03. For anything before that, see the
   turns it off. A card says when the document was last edited. A document that
   was moved or deleted stays on the list marked Not found until you remove it,
   from its card or its right click menu, and the list keeps 50 documents.
+  Search by name or folder (Ctrl+F) and sort by last opened, last edited or
+  name.
 - **Mechanisms.** A `mechanism` feature joins bodies with revolute, slider and
   rigid joints, closed loops included, and poses them all at once: the ground
   stays put, one joint is driven to an `angle` or `offset`, and every other

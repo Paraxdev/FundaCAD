@@ -46,3 +46,22 @@ export function buildEntries(
     };
   });
 }
+
+export type SortMode = "opened" | "edited" | "name";
+
+const fold = (s: string) => s.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+const byName = (a: HomeEntry, b: HomeEntry) => fold(a.name).localeCompare(fold(b.name));
+
+export function sortEntries(entries: readonly HomeEntry[], mode: SortMode): HomeEntry[] {
+  const time = (e: HomeEntry) => (mode === "opened" ? e.openedAt : e.editedAt ?? e.openedAt) ?? 0;
+  return [...entries].sort((a, b) => (mode === "name" ? 0 : time(b) - time(a)) || byName(a, b));
+}
+
+export function filterEntries(entries: readonly HomeEntry[], query: string): HomeEntry[] {
+  const words = fold(query).split(/\s+/).filter(Boolean);
+  if (!words.length) return [...entries];
+  return entries.filter((e) => {
+    const hay = fold(`${e.name} ${e.folder}`);
+    return words.every((w) => hay.includes(w));
+  });
+}
