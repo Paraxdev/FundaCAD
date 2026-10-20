@@ -6,12 +6,13 @@
 # the 7.8.1 sources and builds them statically into the binary. So this
 # workflow has no brew, vcpkg or apt OCCT step.
 #
-# `bundle` + `release` publish the rolling `development` pre-release and its
-# own update feed from `dev`, where daily work lands. `main` holds the known
-# good state and runs the same tests and builds, but publishes nothing. A
-# `v1.<minor>.<patch>` tag on a commit of `main` publishes a stable release
-# with its own feed (scripts/promote-stable.sh cuts one). The retired Python
-# engine is frozen on the `legacy` branch, which publishes nothing either.
+# `bundle` + `release` publish two rolling pre-releases, each with its own
+# update feed (docs/ENGINE.md section 7). A push to `main` publishes the
+# `beta`, once every gating job is green. A push to `dev`, where daily work
+# lands, publishes the bleeding edge `development` build. A
+# `v1.<minor>.<patch>` tag on a commit of `main` still publishes a stable
+# release, though nothing sends people there. The retired Python engine is
+# frozen on the `legacy` branch, which publishes nothing.
 #
 # Scope: x86_64 Linux, Apple Silicon macOS, x86_64 Windows. (No Intel-mac / linux-arm64.)
 
@@ -79,8 +80,7 @@ jobs:
         run: node scripts/check-no-plugin-code.mjs
 
   # What this run builds and where it goes (docs/ENGINE.md section 7). `config`
-  # is empty on a ref that builds no installers, `release` on one that builds
-  # them and publishes nothing.
+  # is empty on a ref that builds no installers.
   channel:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-22.04
@@ -115,8 +115,10 @@ jobs:
           stable='^v1\.([1-9][0-9]*)\.(0|[1-9][0-9]*)$'
           case "$REF" in
             refs/heads/dev)  config=dev release=development tag=development ;;
-            refs/heads/main) config=stable ;;
+            refs/heads/main) config=beta release=beta tag=beta ;;
             refs/tags/*)
+              # Optional now, nothing sends people to a stable release, but
+              # the path still works for a tag pushed by hand.
               [[ "$REF_NAME" =~ $stable ]] \
                 || { echo "::error::$REF_NAME is not a stable tag, those are v1.<minor>.<patch> with a minor of 1 or more"; exit 1; }
               sha=$(git rev-parse HEAD)
@@ -427,8 +429,8 @@ jobs:
           if-no-files-found: error
           path: FundaCAD_*.flatpak
 
-  # The rolling "development" pre-release from dev, or a stable release from
-  # a tag.
+  # The rolling "beta" pre-release from main, the rolling "development"
+  # pre-release from dev, or a stable release from a tag.
   #
   # Each rolling release has its own concurrency group and its own tag, moved
   # in place, never deleted, so a development run never touches the beta's
@@ -592,12 +594,9 @@ jobs:
           WARN
 
           if [ "$RELEASE" = beta ]; then
-            printf 'Rolling FundaCAD 1.0 beta (%s), Rust engine, the preview rebuilt from `dev` at [`%s`](https://github.com/%s/commit/%s).\n' \
+            printf 'Rolling FundaCAD 1.0 beta (%s), Rust engine, rebuilt from `main` at [`%s`](https://github.com/%s/commit/%s).\n' \
               "$VERSION" "${SHA:0:7}" "$R" "$SHA" >> notes.md
-            if gh api "repos/$R/releases/latest" >/dev/null 2>&1; then
-              printf '\nThe stable release, the known good one, is [here](https://github.com/%s/releases/latest).\n' "$R" >> notes.md
-            fi
-            branch=dev
+            branch=main
           elif [ "$RELEASE" = development ]; then
             printf 'FundaCAD development build (%s), bleeding edge, rebuilt from `dev` at [`%s`](https://github.com/%s/commit/%s).\n' \
               "$VERSION" "${SHA:0:7}" "$R" "$SHA" >> notes.md
