@@ -13,12 +13,32 @@ fn close_rel(a: f64, b: f64) -> bool {
     (a - b).abs() <= VOLUME_REL * a.abs().max(b.abs()) + 1e-9
 }
 
+/// Python built these on a 20 x 20 x 10 box with rounds or chamfers whose
+/// setbacks pass each other on a shared face, carving the faces away: r = 12
+/// on the Z edges left a lens of bbox +-9.832 = sqrt(12^2 - 2^2) - 2, chamfer 6
+/// on all edges of the 10 mm high sides a bbox of +-9, and 3 x 12 on the Z
+/// edges one of y +-9.5, the two 12 setbacks crossing on the 20 wide faces.
+/// They are refused now, the box left whole.
+const PYTHON_OVERLAP: [&str; 4] =
+    ["chamfer_section_huge_all", "chamfer_section_two_distance", "fillet_section_draft", "fillet_section_huge"];
+
 fn check_case(name: &str, case: &Value) -> Vec<String> {
     let mut bad = Vec::new();
     let doc = &case["doc"];
     let expect = &case["expect"];
     let typed: CadDocument = serde_json::from_value(doc.clone()).expect("fixture document parses");
     let r = builder::rebuild(&typed, doc, &NoWatch).expect("not cancelled");
+    if PYTHON_OVERLAP.contains(&name) {
+        let refused = r.errors.len() == 1
+            && r.errors[0].code.as_deref() == Some("blendTooLarge")
+            && r.errors[0].message.contains("neighbouring edge");
+        let whole = r.bodies.len() == 1 && (kernel::volume(&r.bodies[0].shape) - 4000.0).abs() < 1e-6;
+        if !refused || !whole {
+            let said: Vec<&String> = r.errors.iter().map(|e| &e.message).collect();
+            bad.push(format!("{name}: not refused with the box left whole: {said:?}"));
+        }
+        return bad;
+    }
     if std::env::var("PARITY_VERBOSE").is_ok() {
         let vols: Vec<f64> = r.bodies.iter().map(|b| kernel::volume(&b.shape)).collect();
         eprintln!(

@@ -80,6 +80,9 @@ pub enum Misfit {
     IntoBody,
     Mixed,
     Split,
+    /// It would carve away the face line the blend on a neighbouring edge
+    /// rests on.
+    Overlap,
 }
 
 impl Misfit {
@@ -87,6 +90,7 @@ impl Misfit {
         match code {
             4 => Misfit::Mixed,
             5 => Misfit::Split,
+            6 => Misfit::Overlap,
             _ => Misfit::IntoBody,
         }
     }
@@ -105,10 +109,12 @@ pub enum Fits {
 /// size that fits rounded down so that it still does.
 fn misfit_error(label: &str, body: &str, size: f64, why: Misfit, fits: Fits, at: [f64; 3]) -> Fail {
     let [x, y, z] = at.map(|c| py_g(py_round(c, 3)));
+    let neighbour = format!("it would run into the {} on the neighbouring edge", label.to_lowercase());
     let past = match why {
         Misfit::IntoBody => "it would cut on past a face into the body beyond it",
         Misfit::Mixed => "it would run off a face on part of the edge only",
         Misfit::Split => "it would cut the body in pieces",
+        Misfit::Overlap => &neighbour,
     };
     let head = format!(
         "{label} failed on {body}: at {}mm the {} does not fit the edge through ({x}, {y}, {z}), {past}.",
@@ -117,9 +123,9 @@ fn misfit_error(label: &str, body: &str, size: f64, why: Misfit, fits: Fits, at:
     );
     // Right at the limit the ball ends exactly on a face's edge and the kernel
     // leaves a sliver face there, so the size offered stays a hair below it. A
-    // split's limit is a size that built, already on this grid.
+    // split's or an overlap's limit is a size that built, already on this grid.
     let shown = |v: f64| {
-        let v = if why == Misfit::Split { v + 1e-6 } else { v - 1e-4 };
+        let v = if matches!(why, Misfit::Split | Misfit::Overlap) { v + 1e-6 } else { v - 1e-4 };
         let step = if v >= 1.0 { 100.0 } else { 1000.0 };
         (v * step).floor() / step
     };
