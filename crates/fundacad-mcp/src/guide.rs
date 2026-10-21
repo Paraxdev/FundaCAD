@@ -23,6 +23,8 @@ const ACK_POLL: Duration = Duration::from_millis(150);
 /// Also the guest's heartbeat while it waits, well inside the engine's 45 s lease.
 const WAIT_POLL: Duration = Duration::from_millis(200);
 pub const WAIT_DEFAULT_S: u64 = 60;
+/// `guide_stops` before this server first read the window's guide.
+pub const UNSEEN: i64 = -1;
 pub const WAIT_MAX_S: u64 = 120;
 
 pub const STANDALONE: &str = "guide mode shows steps in the open FundaCAD window, and \
@@ -136,15 +138,15 @@ impl FundaCad {
 
     /// A Stop the assistant has not been told about yet, as its sentence.
     fn unreported_stop(&self, guide: &Value) -> Option<String> {
-        let stopped = guide.get("stopped").filter(|s| s.is_object())?;
-        let n = stopped["n"].as_i64().unwrap_or(0);
-        let seen = self.guide_stops.load(Ordering::SeqCst);
-        // A smaller count is a new window, whose stops start again from one.
-        if n == seen {
+        let stopped = guide.get("stopped").filter(|s| s.is_object());
+        let n = stopped.and_then(|s| s["n"].as_i64()).unwrap_or(0);
+        let seen = self.guide_stops.swap(n, Ordering::SeqCst);
+        // Unknown until the first look: a Stop from before this server started was
+        // someone else's guide. A smaller count is a new window, whose stops start again.
+        if seen == UNSEEN || n <= seen {
             return None;
         }
-        self.guide_stops.store(n, Ordering::SeqCst);
-        (n > seen).then(|| stopped_text(stopped))
+        stopped.map(stopped_text)
     }
 
     /// Send a command and wait for the window to take it.
