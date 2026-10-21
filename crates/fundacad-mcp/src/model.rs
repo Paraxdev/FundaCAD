@@ -117,6 +117,15 @@ pub fn newer_file_note(doc: &Doc) -> Option<String> {
     Some(format!("{count} {} a plugin that is not running here: {names}. {kept}", if one { "needs" } else { "need" }))
 }
 
+/// A saved document never claims a version above this build's, as the app
+/// writes its own stamp. An older stamp stays: MCP does not run the app's
+/// migrations, so a higher one would make the app skip them.
+pub fn stamp_for_save(doc: &mut Doc) {
+    if doc.get("version").and_then(Value::as_i64).is_some_and(|v| v > FORMAT_VERSION) {
+        doc.insert("version".into(), json!(FORMAT_VERSION));
+    }
+}
+
 /// `parameters` and `paramDefs`, added when a document arrived without them.
 pub fn fill_defaults(doc: &mut Doc) {
     doc.entry("parameters").or_insert_with(|| json!({}));
