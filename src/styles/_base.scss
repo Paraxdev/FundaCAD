@@ -7,6 +7,7 @@ body {
   margin: 0;
   height: 100%;
   overflow: hidden;
+  overflow: clip;
   font-family: var(--ui, "Inter", system-ui, sans-serif);
   font-size: 13px;
   font-feature-settings: "cv11", "ss01", "tnum";
@@ -31,6 +32,10 @@ body {
   height: 100vh;
   width: 100%;
   overflow: hidden;
+  /* clip, not just hidden: a hidden box is still a scroll container, and the rail
+     foot's shadow bleed pokes 20px below the window, so any scrollIntoView that
+     wanted its target lower scrolled the shell up. A clip box cannot scroll. */
+  overflow: clip;
 }
 #titlebar { grid-area: title; }
 #main { grid-area: main; }

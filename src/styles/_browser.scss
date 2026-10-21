@@ -178,42 +178,31 @@
 .sketch-dim {
   position: absolute;
   transform: translate(-50%, -50%);
-  background: rgba(18, 20, 25, 0.92);
-  -webkit-backdrop-filter: blur(6px);
-          backdrop-filter: blur(6px);
-  border: 1px solid var(--accent);
   color: var(--text);
   font-size: 11px;
   font-weight: 550;
   font-variant-numeric: tabular-nums;
   padding: 2px 7px;
-  border-radius: var(--r-sm);
   white-space: nowrap;
   cursor: pointer;
   pointer-events: auto;
-  box-shadow: var(--shadow-1);
   transition: background var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease);
 }
-.sketch-dim:hover {
-  background: var(--accent-tint);
+.sketch-dim:not(.sketch-dim-driven):hover {
+  background: linear-gradient(var(--accent-tint), var(--accent-tint)), var(--float-bg);
   border-color: var(--accent-hot);
   color: var(--accent-hot);
 }
 /* driven (reference) dimension: measured-only, shown bracketed + muted, read-only */
-.sketch-dim-driven {
+.sketch-dim.sketch-dim-driven {
   border-style: dashed;
   border-color: var(--text-dim, #8a90a0);
   color: var(--text-dim, #8a90a0);
   cursor: default;
 }
-.sketch-dim-driven:hover {
-  background: rgba(18, 20, 25, 0.92);
-  border-color: var(--text-dim, #8a90a0);
-  color: var(--text-dim, #8a90a0);
-}
 /* solver-flagged dimensions: red = conflicting, amber = redundant/over-defined */
-.sketch-dim.conflict { border-color: #ff4444; color: #ff4444; }
-.sketch-dim.over { border-color: #e0a020; color: #e0a020; }
+.sketch-dim.conflict { border-color: var(--error); color: color-mix(in srgb, var(--error) 60%, var(--text)); }
+.sketch-dim.over { border-color: var(--warn); color: color-mix(in srgb, var(--warn) 60%, var(--text)); }
 /* the dimension the Delete key will remove (set by a click or a right-click) */
 .sketch-dim.is-selected { outline: 2px solid var(--accent, #4a9eff); outline-offset: 1px; }
 /* non-select tools: labels visible but click-through (a label floating over a
@@ -233,20 +222,16 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(18, 20, 25, 0.9);
-  border: 1px solid var(--accent);
-  color: var(--accent);
+  color: var(--accent-hot);
   font-size: 10px;
   font-weight: 600;
   line-height: 1;
-  border-radius: 3px;
   cursor: pointer;
   pointer-events: auto;
-  box-shadow: var(--shadow-1);
 }
 .sketch-glyph:hover { border-color: var(--accent-hot); color: var(--accent-hot); }
-.sketch-glyph.conflict { border-color: #ff4444; color: #ff4444; }
-.sketch-glyph.over { border-color: #e0a020; color: #e0a020; }
+.sketch-glyph.conflict { border-color: var(--error); color: color-mix(in srgb, var(--error) 60%, var(--text)); }
+.sketch-glyph.over { border-color: var(--warn); color: color-mix(in srgb, var(--warn) 60%, var(--text)); }
 .sketch-glyphs.glyphs-passive .sketch-glyph { pointer-events: none; cursor: default; }
 .sketch-dim input {
   width: 52px;

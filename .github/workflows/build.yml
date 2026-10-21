@@ -958,6 +958,11 @@ jobs:
           SC_ENGINE: engine-bin/fundacad-engine
           SC_CHROME: /usr/bin/google-chrome
         run: node e2e/browser_save_geometry_e2e.cjs /tmp/browser_save_geometry_shots
+      - name: Shell never scrolls end-to-end
+        env:
+          SC_TOKEN: citoken
+          SC_CHROME: /usr/bin/google-chrome
+        run: node e2e/shell_no_shift_e2e.cjs
 
       # Builds only the small frames crate and tungstenite, no Tauri, no kernel.
       - name: Native frames over WebSocket end-to-end

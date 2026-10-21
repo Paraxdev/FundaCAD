@@ -166,6 +166,7 @@ There is no info, success tint, warn tint, disabled or hover token. Derive them:
 | Accent border on hover | `color-mix(in srgb, var(--accent) 45%, transparent)` (buttons) or `55%` (cards, choice buttons) |
 | Field focus ring | `0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent)` |
 | Warn or error surface | `color-mix(in srgb, var(--warn) 9%, var(--float-bg-solid))` (`.perf-pop`), `color-mix(in srgb, var(--error) 22%, var(--float-bg-solid))` (`.toast-error`) |
+| Warn or error small text on glass or a panel | `color-mix(in srgb, var(--warn) 60%, var(--text))` or the same with `--error` (`.sketch-dim.conflict`, `.rel-row.over .rel-sym`); the bare `--warn` and `--error` fall under AA in Solarized Light, keep them for the border |
 
 ### 2.2 Shape and motion tokens
 
@@ -935,8 +936,13 @@ What this means for you:
   which is intended. Do not add more white or black overlays of your own;
   reach for these tokens and lists.
 - A hard coded dark fill stays dark on a light theme. The viewport readouts
-  (`rebuild 68ms`, `render idle`) use `rgba(22, 24, 29, 0.55)` and show it in
-  the shot above. Do not copy that.
+  (`rebuild 68ms`, `render idle`) once used `rgba(22, 24, 29, 0.55)` and show it
+  in the shot above, unreadable at 1.45:1. They are glass chips now (group A in
+  `_glass.scss`), and `tests/ui/themeContrast.test.ts` rejects that fill anywhere.
+- A light theme's `--accent-hot` is darker than its `--accent`, not lighter: it
+  is text on an accent tint, and a lighter blue on a pale tint read at 1.75:1.
+  The same test holds chip text of every shipped theme to WCAG AA (4.5:1) on the
+  fill it sits on.
 - Check every screen in FundaCAD Noir **and** Solarized Light (Preferences,
   Appearance, Theme).
 
@@ -1060,14 +1066,14 @@ Run all of it. Paste the screenshots into the review.
   the anti reference caption in [1](#1-principles) and the Home bullet of
   [4.4](#44-what-glass-floats-over-and-what-breaks-it) change in the same commit.
 - Flat leftovers: `.timeline-props.floating`, the bare `.palette` (only
-  `.float-right .palette` is glass), `.dropchip`, `.profile-panel`, `.fps`.
+  `.float-right .palette` is glass), `.dropchip`, `.profile-panel`.
 - Flat base rules under glassed surfaces (`_modals.scss`, `_utilities.scss`,
   `_console.scss`, `_targetedit.scss`), including hand written blurs and a
   stale comment about a "flat, zero-blur elevation". `_glass.scss` overrides
   them; read the final result, not the base.
 - Off palette literals: `#3d4452` hovers, `#e24a3b` and `#ff7a66` danger,
   `#d2a83b` warning (`.toast-warning`), `#ff6b6b`, `#e0a020`, `#7fe08a`,
-  `rgba(74, 208, 125, …)` (`button.finish`), `rgba(22, 24, 29, …)`.
+  `rgba(74, 208, 125, …)` (`button.finish`).
 - Undefined tokens listed in [2](#2-tokens), and `--grid-minor` and
   `--grid-major`, read by `viewport/scene.ts` but never defined.
 - `--z-menu`, `--z-toast` and `--shadow-pill` are defined and unused.

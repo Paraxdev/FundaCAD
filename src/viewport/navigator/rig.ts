@@ -234,11 +234,15 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
     },
     fit(box, opts) {
       const o = fitOpts(opts);
+      if (o.padding === undefined) {
+        nav.fitBox(box, { animate: animate(o.animate) });
+        return;
+      }
       const empty = box.isEmpty();
       const sphere = box.getBoundingSphere(new THREE.Sphere());
       nav.fitSphere(empty ? new THREE.Vector3() : sphere.center, empty ? -1 : sphere.radius, {
         animate: animate(o.animate),
-        ...(o.padding !== undefined ? { padding: o.padding } : {}),
+        padding: o.padding,
       });
     },
     fitSphere(sphere, opts) {
@@ -252,7 +256,7 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
       if (!box || box.isEmpty()) nav.resetView(null, 0, cameraFlightsOn());
       else {
         const s = box.getBoundingSphere(new THREE.Sphere());
-        nav.resetView(s.center, s.radius, cameraFlightsOn());
+        nav.resetView(s.center, s.radius, cameraFlightsOn(), box);
       }
     },
     setStandardView(view) {

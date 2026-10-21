@@ -25,7 +25,14 @@
 .home-card-versions,
 .home-badge,
 .home-section,
-.home-foot {
+.home-foot,
+.fps,
+.roundtrip,
+.sel-readout,
+.normal-to-sketch,
+.snap-tag,
+.sketch-dim,
+.sketch-glyph {
   corner-shape: squircle;
   background: var(--glass-sheen), var(--float-bg);
   -webkit-backdrop-filter: var(--float-blur);
@@ -64,8 +71,20 @@
 .home-card-versions,
 .home-badge,
 .home-section,
-.home-foot {
+.home-foot,
+.fps,
+.roundtrip,
+.sel-readout,
+.normal-to-sketch,
+.snap-tag,
+.sketch-dim,
+.sketch-glyph {
   border-radius: var(--float-chip-radius);
+}
+/* A sketch label keeps its state in its border: accent, dashed when driven, red or amber when flagged. */
+.sketch-dim,
+.sketch-glyph {
+  border-color: var(--accent);
 }
 
 .float-card,
@@ -246,7 +265,7 @@
 .dim-btn.dim-direction.on {
   /* Mixed into an opaque dark, not transparency: over a pale model a see-through
      tint washed the label out. */
-  background: color-mix(in srgb, var(--accent) 20%, rgb(22, 24, 29));
+  background: color-mix(in srgb, var(--accent) 20%, var(--panel));
 }
 
 .pop-wide,
