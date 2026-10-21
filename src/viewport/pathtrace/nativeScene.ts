@@ -222,6 +222,8 @@ export class NativeScene {
   private meshes: THREE.Mesh[] = [];
   private colorVersions = new Map<string, number>();
   private chain: Promise<unknown> = Promise.resolve();
+  private pendingLook: { look: ReturnType<typeof nativeLook>; env: ReturnType<typeof envFrame> } | null = null;
+  private lookJob: Promise<unknown> = Promise.resolve();
 
   constructor(private call: Call, private onError: (e: unknown) => void) {}
 
@@ -267,14 +269,20 @@ export class NativeScene {
   }
 
   /** pt_look answers the environment the native side holds, which a fresh
-   *  tracer has lost, so pt_env goes only when that is not this one. */
+   *  tracer has lost, so pt_env goes only when that is not this one. A look
+   *  made while an earlier one still waits in the queue replaces it, so a run
+   *  of HDR rotations sends one 4 MB pt_env per round trip, not one per step. */
   look(look: TraceLook) {
-    const l = nativeLook(look);
-    const env = envFrame(look);
-    return this.queue(async () => {
+    const waiting = this.pendingLook !== null;
+    this.pendingLook = { look: nativeLook(look), env: envFrame(look) };
+    if (waiting) return this.lookJob;
+    this.lookJob = this.queue(async () => {
+      const { look: l, env } = this.pendingLook!;
+      this.pendingLook = null;
       const held = await this.call("pt_look", { look: l });
       if (env && held !== env.key) await this.call("pt_env", env.bytes());
     });
+    return this.lookJob;
   }
 
   camera(camera: THREE.Camera, lens: TraceLens | null) {

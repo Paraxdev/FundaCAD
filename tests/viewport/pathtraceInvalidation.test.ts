@@ -7,6 +7,7 @@ import { STILL_MS } from "../../src/viewport/pathtrace/state";
 import { PathTraceHost, type TraceFrame } from "../../src/viewport/pathtrace/host";
 
 const ENV = new THREE.Texture();
+const CAMERA = new THREE.PerspectiveCamera();
 
 class FakeTracer implements TracerBackend {
   readonly name = "fake";
@@ -72,7 +73,7 @@ function frame(root: THREE.Object3D, over: Partial<TraceFrame["inputs"]> = {}, c
   return {
     now,
     inputs: { mode: "pathtraced", visible: true, stillMs: 1000, sectioned: false, xray: false, wireframe: false, sketchOpen: false, ...over },
-    camera: new THREE.PerspectiveCamera(),
+    camera: CAMERA,
     cameraChanged: false,
     sceneMaybeChanged: changed,
     root,
