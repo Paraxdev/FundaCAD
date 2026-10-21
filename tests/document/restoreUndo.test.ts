@@ -55,14 +55,34 @@ describe("undo after a restore", () => {
     expect(s.changesSinceVersion()).toEqual({ added: ["f2", "f3"], removed: [], changed: [], settings: true });
   });
 
-  it("takes back a branch switch whole", () => {
+  it("takes back a branch switch whole, the branch the next version goes on included", () => {
     const { s, v1 } = workedOn();
-    s.saveVersion("two");
+    const v2 = s.saveVersion("two")!;
     const before = s.workingSnapshot();
     s.branchFromVersion(v1.id, "lean");
-    expect(s.workingSnapshot().features).toEqual([box("f1", 10.5)]);
+    expect([s.versionRepo!.current, s.workingSnapshot().features]).toEqual(["lean", [box("f1", 10.5)]]);
     s.undo();
     expect(s.workingSnapshot()).toEqual(before);
+    expect(s.versionRepo!.current).toBe("main");
+    expect(s.changesSinceVersion()).toEqual({ added: [], removed: [], changed: [], settings: false });
+    s.redo();
+    expect([s.versionRepo!.current, s.workingSnapshot().features]).toEqual(["lean", [box("f1", 10.5)]]);
+    s.undo();
+    s.addFeature(box("f4", 3.5, 2.25));
+    const v3 = s.saveVersion("three")!;
+    expect([v3.branch, v3.parent, s.versionRepo!.branches]).toEqual(["main", v2.id, { main: v3.id, lean: v1.id }]);
+  });
+
+  it("takes back a switch between two branches that already exist", () => {
+    const { s, v1 } = workedOn();
+    s.branchFromVersion(v1.id, "lean");
+    s.addFeature(box("f5", 6.75, 1.25));
+    const lean = s.saveVersion("lean two")!;
+    s.switchVersionBranch("main");
+    expect([s.versionRepo!.current, s.workingSnapshot().features]).toEqual(["main", [box("f1", 10.5)]]);
+    s.undo();
+    expect([s.versionRepo!.current, s.workingSnapshot().features]).toEqual(["lean", [box("f1", 10.5), box("f5", 6.75, 1.25)]]);
+    expect(s.versionRepo!.branches).toEqual({ main: v1.id, lean: lean.id });
   });
 
   it("takes back an assistant's or a plugin's replacement of the document whole", () => {

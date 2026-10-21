@@ -2269,9 +2269,19 @@ export class DocumentStore {
 
   /** Move onto a branch, bringing back its newest version. */
   switchVersionBranch(name: string) {
-    if (!this.repo) return;
-    const head = switchVersionBranch(this.repo, name);
-    this.restoreVersion(head.id);
+    const repo = this.repo;
+    if (!repo) return;
+    const was = repo.current;
+    const head = switchVersionBranch(repo, name);
+    const onto = (branch: string) => {
+      if (this.repo !== repo) return;
+      repo.current = branch;
+      this.emitMeta();
+    };
+    this.undoAsOne(() => {
+      this.restoreVersion(head.id);
+      this.pushOverlayUndo({ undo: () => onto(was), redo: () => onto(name) });
+    });
   }
   toJSON(): string {
     return JSON.stringify(this.toObject(), null, 2);
