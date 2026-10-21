@@ -952,6 +952,13 @@ jobs:
           SC_CHROME: /usr/bin/google-chrome
         run: node e2e/history_side_e2e.cjs
 
+      # Starts two engines of its own, so the one above is left alone.
+      - name: Browser save keeps imported geometry end-to-end
+        env:
+          SC_ENGINE: engine-bin/fundacad-engine
+          SC_CHROME: /usr/bin/google-chrome
+        run: node e2e/browser_save_geometry_e2e.cjs /tmp/browser_save_geometry_shots
+
       # Builds only the small frames crate and tungstenite, no Tauri, no kernel.
       - name: Native frames over WebSocket end-to-end
         env:
