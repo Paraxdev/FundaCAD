@@ -10,7 +10,7 @@ use fundacad_tracer::{Tracer, TracerOptions};
 const SPP: u32 = 64;
 
 fn tracer(software: bool) -> Option<Tracer> {
-    match Tracer::new(TracerOptions { software, ..Default::default() }) {
+    match common::tracer(TracerOptions { software, ..Default::default() }) {
         Ok(t) => Some(t),
         Err(e) => {
             println!("skipped, no GPU adapter: {e}");

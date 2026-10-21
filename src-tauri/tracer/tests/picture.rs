@@ -15,7 +15,7 @@ const SPP: u32 = 8;
 fn tracers() -> Vec<Tracer> {
     let mut out = Vec::new();
     for software in [true, false] {
-        match Tracer::new(TracerOptions { software, ..Default::default() }) {
+        match common::tracer(TracerOptions { software, ..Default::default() }) {
             Ok(t) if software || t.path() == fundacad_tracer::Path::RayQuery => out.push(t),
             Ok(_) => {}
             Err(e) => eprintln!("skipped, no GPU adapter: {e}"),

@@ -12,7 +12,7 @@ const H: u32 = 96;
 const PI: f32 = std::f32::consts::PI;
 
 fn tracer() -> Option<Tracer> {
-    match Tracer::new(TracerOptions::default()) {
+    match common::tracer(TracerOptions::default()) {
         Ok(t) => Some(t),
         Err(e) => {
             println!("skipped, no GPU adapter: {e}");

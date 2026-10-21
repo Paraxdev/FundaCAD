@@ -2,6 +2,8 @@
 //! tone mapped on the CPU exactly as resolve.wgsl does, and the CPU denoiser's
 //! frame held once it lands.
 
+mod common;
+
 use std::time::{Duration, Instant};
 
 use fundacad_tracer::{denoise, BodyDesc, Denoiser, Camera, Look, Mesh, PageMaterial, Quality, Tracer, TracerOptions};
@@ -55,7 +57,7 @@ fn body(id: &str, z: f32, color: [f32; 3]) -> BodyDesc {
 }
 
 fn traced(cap: u32) -> Option<Tracer> {
-    let mut t = match Tracer::new(TracerOptions { software: true, ..Default::default() }) {
+    let mut t = match common::tracer(TracerOptions { software: true, ..Default::default() }) {
         Ok(t) => t,
         Err(e) => {
             println!("skipped, no GPU adapter: {e}");
