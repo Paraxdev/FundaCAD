@@ -80,3 +80,31 @@ fn chamfers_that_cross_on_a_side_face_are_refused() {
     assert_eq!(said.len(), 1, "built volume {} without a word", volume(&r));
     assert!(said[0].contains("chamfer on the neighbouring edge"), "{said:?}");
 }
+
+fn cube_fillet(side: f64, radius: f64) -> Rebuild {
+    build(&json!({"parameters": {}, "features": [
+        {"id": "bx", "type": "box", "length": side, "width": side, "height": side},
+        {"id": "f", "type": "fillet", "radius": radius, "edges": {"kind": "edge", "by": "all", "body": "body1"}},
+    ]}))
+}
+
+/// Rounds on opposite edges of a face meet tangent to it, so one that reaches
+/// a hair past the other's contact sat inside its tool by only d^2 / 2r and
+/// built: a 30 cube at r = 15.005 came out 15787 mm^3 with open seams, where
+/// r = 15 is the 14137 mm^3 ball, and r = 16 was offered 15.01, inside that window.
+#[test]
+fn rounds_a_hair_past_meeting_are_refused_and_the_offered_size_builds_the_ball() {
+    for (side, radius) in [(30.0, 15.005), (30.0, 15.02), (20.0, 10.01)] {
+        let r = cube_fillet(side, radius);
+        let said = messages(&r);
+        assert_eq!(said.len(), 1, "cube {side} r {radius}: built volume {} without a word", volume(&r));
+        assert!(said[0].contains("neighbouring edge"), "cube {side} r {radius}: {said:?}");
+        let fits = offered(said[0]).unwrap_or_else(|| panic!("cube {side} r {radius}: no size offered: {said:?}"));
+        let half = side / 2.0;
+        assert!(fits <= half && fits > half - 0.1, "cube {side} r {radius}: offers {fits}");
+        let at = cube_fillet(side, fits);
+        assert!(at.errors.is_empty(), "the offered {fits} does not build: {:?}", messages(&at));
+        let ball = 4.0 / 3.0 * PI * half.powi(3);
+        assert!(volume(&at) >= ball - 1.0, "the offered {fits} built {} below the ball {ball}", volume(&at));
+    }
+}
