@@ -15,15 +15,12 @@ fn close_rel(a: f64, b: f64) -> bool {
 
 /// Python built these on a 20 x 20 x 10 box with rounds or chamfers whose
 /// setbacks pass each other on a shared face, carving the faces away: r = 12
-/// on the Z edges left a lens of bbox +-9.832 = sqrt(12^2 - 2^2) - 2, and
-/// chamfer 6 on all edges of the 10 mm high sides a bbox of +-9. They are
-/// refused now, the box left whole.
-const PYTHON_OVERLAP: [&str; 3] = ["chamfer_section_huge_all", "fillet_section_draft", "fillet_section_huge"];
-
-/// 3 x 12 on the Z edges: Python put both 12 setbacks on the same 20 wide
-/// faces, which crossed and left y +-9.5 at 3300. With the 12 on one corner of
-/// each face and the 3 on the other every face stays, at 4000 - 4 x 180 = 3280.
-const PYTHON_CROSSED: (&str, f64) = ("chamfer_section_two_distance", 3280.0);
+/// on the Z edges left a lens of bbox +-9.832 = sqrt(12^2 - 2^2) - 2, chamfer 6
+/// on all edges of the 10 mm high sides a bbox of +-9, and 3 x 12 on the Z
+/// edges one of y +-9.5, the two 12 setbacks crossing on the 20 wide faces.
+/// They are refused now, the box left whole.
+const PYTHON_OVERLAP: [&str; 4] =
+    ["chamfer_section_huge_all", "chamfer_section_two_distance", "fillet_section_draft", "fillet_section_huge"];
 
 fn check_case(name: &str, case: &Value) -> Vec<String> {
     let mut bad = Vec::new();
@@ -39,19 +36,6 @@ fn check_case(name: &str, case: &Value) -> Vec<String> {
         if !refused || !whole {
             let said: Vec<&String> = r.errors.iter().map(|e| &e.message).collect();
             bad.push(format!("{name}: not refused with the box left whole: {said:?}"));
-        }
-        return bad;
-    }
-    if name == PYTHON_CROSSED.0 {
-        let built = r.errors.is_empty() && r.bodies.len() == 1;
-        let volume = built.then(|| kernel::volume(&r.bodies[0].shape)).unwrap_or(f64::NAN);
-        let bbox = built.then(|| kernel::bbox(&r.bodies[0].shape)).flatten();
-        let box_size = [10.0, 10.0, 5.0, 10.0, 10.0, 5.0];
-        let whole = bbox.is_some_and(|b| b.iter().zip(box_size).all(|(v, w)| (v.abs() - w).abs() < BBOX_ABS));
-        if !close_rel(volume, PYTHON_CROSSED.1) || !whole {
-            let said: Vec<&String> = r.errors.iter().map(|e| &e.message).collect();
-            let want = PYTHON_CROSSED.1;
-            bad.push(format!("{name}: volume {volume} bbox {bbox:?} {said:?}, want {want} with every face kept"));
         }
         return bad;
     }

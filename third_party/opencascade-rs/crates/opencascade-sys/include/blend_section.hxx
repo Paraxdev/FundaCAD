@@ -6,7 +6,6 @@
 #pragma once
 #include "rust/cxx.h"
 #include <bindings_common.hxx>
-#include "blend_ops.hxx"
 
 #include <BRepAdaptor_Curve.hxx>
 #include <BRepAdaptor_Curve2d.hxx>
@@ -1318,26 +1317,12 @@ struct Overrun {
   gp_Pnt at;
 };
 
-// The `bl_d1_on_second` mode a two distance chamfer's tools take.
-inline int &d1_mode() {
-  static thread_local int mode = 0;
-  return mode;
-}
-
-inline bool uneven_chamfer(bool chamfer, double size2, const std::vector<double> &sizes) {
-  bool uneven = false;
-  for (double x : sizes) uneven = uneven || (chamfer && !std::isnan(size2) && x != size2);
-  return uneven;
-}
-
 inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &shape, const TopoDS_Edge &edge,
                                                            bool chamfer, double size, double size2, bool g2,
                                                            double tol, bool draft, double profile, double margin,
                                                            std::vector<Rest> *rests = nullptr,
                                                            Overrun *over = nullptr) {
   std::vector<TopoDS_Face> faces = faces_of(shape, edge);
-  if (chamfer && !std::isnan(size2) && size2 != size && bl_d1_on_second(edge, faces[0], faces[1], d1_mode()))
-    std::swap(faces[0], faces[1]);
   Sides sides;
   for (const TopoDS_Face &f : faces) sides.emplace_back(new Side(f, edge));
   BRepAdaptor_Curve crv(edge);
@@ -2090,37 +2075,6 @@ inline Overrun &last_overrun() {
   return o;
 }
 
-// Runs `f` in each d1 mode until one fits without running past a face, the
-// map's face order first so a chamfer that fit with it is unchanged. Else the
-// first that overran, else the misfit offering the most.
-template <typename F> auto each_d1_mode(bool uneven, F f) -> decltype(f()) {
-  if (!uneven) return f();
-  struct Keep {
-    int was = d1_mode();
-    ~Keep() { d1_mode() = was; }
-  } keep;
-  using Out = decltype(f());
-  std::unique_ptr<std::pair<Out, Overrun>> overran;
-  std::unique_ptr<TooLarge> best;
-  for (int mode = 0; mode < BL_D1_MODES; ++mode) {
-    d1_mode() = mode;
-    try {
-      Out out = f();
-      if (!last_overrun().any) return out;
-      if (!overran) overran.reset(new std::pair<Out, Overrun>(std::move(out), last_overrun()));
-    } catch (const TooLarge &e) {
-      if (!best || e.fits > best->fits) best.reset(new TooLarge(e));
-    } catch (const Cancelled &) {
-      throw;
-    } catch (...) {
-      if (mode == 0) throw;
-    }
-  }
-  if (!overran) throw *best;
-  last_overrun() = overran->second;
-  return std::move(overran->first);
-}
-
 struct RoundTools {
   std::vector<TopoDS_Shape> cut, fuse;
   std::vector<std::pair<TopoDS_Shape, double>> convex;
@@ -2191,20 +2145,18 @@ inline TopoDS_Shape section_blend_once(const TopoDS_Shape &shape, const std::vec
 inline TopoDS_Shape blend_scaled(const TopoDS_Shape &shape, const std::vector<TopoDS_Shape> &es, bool chamfer,
                                  double size2, bool g2, const std::vector<double> &sz, bool draft, double profile,
                                  bool one_shot) {
-  return each_d1_mode(uneven_chamfer(chamfer, size2, sz), [&]() {
-    one_shot_memo() = {};
-    one_shot_memo().never = !one_shot;
-    if (draft && one_shot) {
-      try {
-        return section_blend_once(shape, es, chamfer, size2, g2, sz, true, profile);
-      } catch (const DraftGaveUp &) {
-        OneShotMemo &memo = one_shot_memo();
-        memo.replay = !memo.thinned;
-        memo.calls = 0;
-      }
+  one_shot_memo() = {};
+  one_shot_memo().never = !one_shot;
+  if (draft && one_shot) {
+    try {
+      return section_blend_once(shape, es, chamfer, size2, g2, sz, true, profile);
+    } catch (const DraftGaveUp &) {
+      OneShotMemo &memo = one_shot_memo();
+      memo.replay = !memo.thinned;
+      memo.calls = 0;
     }
-    return section_blend_once(shape, es, chamfer, size2, g2, sz, false, profile);
-  });
+  }
+  return section_blend_once(shape, es, chamfer, size2, g2, sz, false, profile);
 }
 
 // The sizes a refusal offers, by rank: thousandths of a mm below 1 mm and
@@ -2309,9 +2261,8 @@ inline double split_limit(const TopoDS_Shape &shape, const std::vector<TopoDS_Sh
       std::vector<double> sk;
       for (double x : sz) sk.push_back(x / unit * v);
       try {
-        double s2 = std::isnan(size2) ? size2 : size2 / unit * v;
-        each_d1_mode(uneven_chamfer(chamfer, s2, sk),
-                     [&]() { return round_tools(cp.Shape(), ec, chamfer, s2, g2, sk, draft, profile, edges_tol(ec)); });
+        round_tools(cp.Shape(), ec, chamfer, std::isnan(size2) ? size2 : size2 / unit * v, g2, sk, draft, profile,
+                    edges_tol(ec));
       } catch (const Cancelled &) {
         throw;
       } catch (const SectionError &) {
