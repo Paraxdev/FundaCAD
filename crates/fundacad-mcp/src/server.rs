@@ -422,7 +422,7 @@ impl FundaCad {
             turn: Arc::new(Mutex::new(())),
             router: Arc::new(Self::base_router()),
             ui: Arc::new(Mutex::new(None)),
-            guide_stops: Arc::default(),
+            guide_stops: Arc::new(std::sync::atomic::AtomicI64::new(crate::guide::UNSEEN)),
         }
     }
 

@@ -182,3 +182,12 @@ async fn a_window_older_than_guide_mode_is_named_after_three_seconds() {
     assert_eq!(out.text, OLD_WINDOW);
     assert!(started.elapsed().as_secs_f64() < 6.0);
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_stop_from_before_this_server_is_not_reported() {
+    let (_engine, mut window, mcp) = attached(User::Watches).await;
+    window.state["stopped"] = json!({"n": 1, "step": 1, "of": 2});
+    window.tick().await;
+    let (_mcp, out) = call(mcp, &mut window, "guide_highlight", json!({"ui": "#browser", "caption": "Items"})).await;
+    assert_eq!((out.is_error, out.text.as_str()), (false, "the step is up on #browser"));
+}
