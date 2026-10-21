@@ -1934,6 +1934,7 @@ dependencies = [
  "fundacad-tracer",
  "futures-executor",
  "getrandom 0.2.17",
+ "gtk",
  "hidapi",
  "keyring",
  "reqwest 0.12.28",

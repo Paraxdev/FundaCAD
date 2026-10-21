@@ -356,6 +356,7 @@ pub fn run() {
         frontend_ready,
         safe_mode_exit,
         launch::take_launch_paths,
+        drop_paths::drop_paths_take,
         recovery_write,
         recovery_read,
         recovery_list,
@@ -424,6 +425,7 @@ pub fn run() {
     let app = builder
         .manage(spacemouse::Inventory::default())
         .manage(launch::LaunchPaths::default())
+        .manage(drop_paths::Held::default())
         // The files a person has handed to a plugin this session. Session-lived
         // and nowhere on disk: a plugin cannot come back tomorrow holding a
         // token for a file somebody forgot they had offered it.

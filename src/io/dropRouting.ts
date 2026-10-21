@@ -65,34 +65,3 @@ export function describeDropLeftovers<T>(plan: DropPlan<T>, nameOf: (item: T) =>
   }
   return parts.length ? parts.join(" ") : null;
 }
-
-/** The local paths in a text/uri-list, in order. Other schemes, remote hosts,
- *  comments and undecodable lines are skipped. */
-export function parseUriList(text: string): string[] {
-  const paths: string[] = [];
-  for (const raw of text.split(/\r?\n/)) {
-    const line = raw.trim();
-    if (!line || line.startsWith("#")) continue;
-    let url: URL;
-    try { url = new URL(line); } catch { continue; }
-    if (url.protocol !== "file:" || (url.hostname && url.hostname !== "localhost")) continue;
-    let path: string;
-    try { path = decodeURIComponent(url.pathname); } catch { continue; }
-    paths.push(/^\/[A-Za-z]:\//.test(path) ? path.slice(1) : path);
-  }
-  return paths;
-}
-
-/** The path of each dropped file from a text/uri-list, matched by file name so
- *  a list that is shorter, longer or reordered cannot hand a file the wrong
- *  path. WebKitGTK gives the page the file bytes but not where they came from;
- *  the uri-list is the only place the path survives. */
-export function pathsFromUriList(names: readonly string[], uriList: string): (string | null)[] {
-  const free = parseUriList(uriList);
-  return names.map((name) => {
-    const at = free.findIndex((p) => baseName(p) === name);
-    if (at < 0) return null;
-    const [path] = free.splice(at, 1);
-    return path ?? null;
-  });
-}

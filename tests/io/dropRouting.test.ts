@@ -30,7 +30,7 @@ vi.mock("../../src/ui/environmentImport", () => ({
 
 import { IMPORT_EXTS } from "../../src/io/files";
 import { DOC_EXTS } from "../../src/io/documentExt";
-import { parseUriList, pathsFromUriList, planDrop, routeDroppedName } from "../../src/io/dropRouting";
+import { planDrop, routeDroppedName } from "../../src/io/dropRouting";
 import { takeDroppedFiles, type DroppedFile } from "../../src/io/desktopDrop";
 
 const confText = Object.values(import.meta.glob("../../src-tauri/tauri.conf.json", {
@@ -88,40 +88,6 @@ describe("planDrop", () => {
 });
 
 const named = (...names: string[]): DroppedFile[] => names.map((name) => ({ name, path: `D:/in/${name}` }));
-
-describe("parseUriList", () => {
-  it("decodes file URIs into paths and skips comments and blank lines", () => {
-    const list = "# from the file manager\r\nfile:///home/me/My%20Parts/a%26b.funda\r\n\r\n";
-    expect(parseUriList(list)).toEqual(["/home/me/My Parts/a&b.funda"]);
-  });
-
-  it("takes localhost as local and refuses remote hosts and other schemes", () => {
-    expect(parseUriList("file://localhost/tmp/a.funda\nfile://nas/share/b.funda\nhttps://x.test/c.funda")).toEqual(["/tmp/a.funda"]);
-  });
-
-  it("drops the slash before a Windows drive letter", () => {
-    expect(parseUriList("file:///C:/in/a.funda")).toEqual(["C:/in/a.funda"]);
-  });
-
-  it("skips a line that does not decode", () => {
-    expect(parseUriList("file:///tmp/%E0%A4%A.funda\nfile:///tmp/ok.funda")).toEqual(["/tmp/ok.funda"]);
-  });
-});
-
-describe("pathsFromUriList", () => {
-  it("pairs paths to dropped files by name, whatever the order", () => {
-    const list = "file:///d/two.stl\nfile:///d/one.funda";
-    expect(pathsFromUriList(["one.funda", "two.stl"], list)).toEqual(["/d/one.funda", "/d/two.stl"]);
-  });
-
-  it("gives null to a file the list does not name, and never reuses a path", () => {
-    expect(pathsFromUriList(["a.funda", "a.funda", "b.stl"], "file:///d/a.funda")).toEqual(["/d/a.funda", null, null]);
-  });
-
-  it("gives null to every file when there is no list", () => {
-    expect(pathsFromUriList(["a.funda"], "")).toEqual([null]);
-  });
-});
 
 describe("takeDroppedFiles", () => {
   it("opens the document first, then imports into it", async () => {

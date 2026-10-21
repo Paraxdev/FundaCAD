@@ -1,7 +1,7 @@
 import type { Engine } from "../app/engine";
 import { mayDiscard } from "../app/documentActions";
 import { importFileBytes, importPath, openDocumentAtPath, openDocumentBytes, reportError, type OpenOutcome } from "./files";
-import { describeDropLeftovers, pathsFromUriList, planDrop } from "./dropRouting";
+import { describeDropLeftovers, planDrop } from "./dropRouting";
 import { closeHome } from "../ui/home";
 
 /** A file dropped on the window: a real path when the desktop app could find
@@ -48,6 +48,15 @@ function carriesFileType(ev: DragEvent): boolean {
   return !!ev.dataTransfer && Array.from(ev.dataTransfer.types).includes("Files");
 }
 
+/** WebKitGTK shows the page neither the files of a desktop drop nor its
+ *  uri-list (webkit.org/b/271957), only the type names, so in the Linux app a
+ *  uri-list with no Files is taken as a file drag and its paths come from GTK. */
+function gtkFileDrag(ev: DragEvent): boolean {
+  if (!ev.dataTransfer || !("__TAURI_INTERNALS__" in window) || !/linux/i.test(navigator.platform)) return false;
+  const types = Array.from(ev.dataTransfer.types);
+  return types.includes("text/uri-list") && !types.includes("Files");
+}
+
 interface PathBridge {
   postMessageWithAdditionalObjects(message: string, objects: ArrayLike<File>): void;
 }
@@ -64,8 +73,8 @@ const PATH_REPLY_MS = 1500;
 let nextRequest = 0;
 
 /** The real paths of dropped files, from src-tauri/src/drop_paths.rs, or null
- *  when nothing answered. */
-async function askPaths(bridge: PathBridge, files: File[]): Promise<(string | null)[] | null> {
+ *  when nothing answered. `send` puts the request to it. */
+async function askPaths(send: (id: string) => unknown): Promise<(string | null)[] | null> {
   const { listen } = await import("@tauri-apps/api/event");
   const id = String(++nextRequest);
   let settle: (paths: (string | null)[] | null) => void = () => {};
@@ -75,7 +84,7 @@ async function askPaths(bridge: PathBridge, files: File[]): Promise<(string | nu
   });
   const timer = setTimeout(() => settle(null), PATH_REPLY_MS);
   try {
-    bridge.postMessageWithAdditionalObjects(`fundacad-drop:${id}`, files);
+    await send(id);
     return await reply;
   } catch {
     return null;
@@ -85,12 +94,18 @@ async function askPaths(bridge: PathBridge, files: File[]): Promise<(string | nu
   }
 }
 
-async function collect(files: File[], uriList: string): Promise<DroppedFile[]> {
+async function collect(files: File[]): Promise<DroppedFile[]> {
   const bridge = pathBridge();
-  const asked = bridge ? await askPaths(bridge, files) : null;
-  // A browser tab has no way to open a path, so a uri-list it fills is ignored.
-  const listed = "__TAURI_INTERNALS__" in window ? pathsFromUriList(files.map((f) => f.name), uriList) : [];
-  return files.map((file, i) => ({ name: file.name, path: asked?.[i] ?? listed[i] ?? null, file }));
+  const paths = bridge ? await askPaths((id) => bridge.postMessageWithAdditionalObjects(`fundacad-drop:${id}`, files)) : null;
+  return files.map((file, i) => ({ name: file.name, path: paths?.[i] ?? null, file }));
+}
+
+/** The files of a WebKitGTK drop, by the paths GTK held for it. There are no
+ *  bytes to fall back on. */
+async function collectFromGtk(): Promise<DroppedFile[]> {
+  const { invoke } = await import("@tauri-apps/api/core");
+  const paths = await askPaths((id) => invoke("drop_paths_take", { id }));
+  return (paths ?? []).flatMap((path) => (path ? [{ name: path.split("/").pop() || path, path }] : []));
 }
 
 /** Listen for files dragged onto the window from the desktop. `hint` is told
@@ -103,7 +118,7 @@ export function installDesktopDrop(e: DropEngine, hint: (shown: boolean) => void
   // them, so the types alone cannot tell it from a desktop file. A drag from
   // outside never fires dragstart in this window.
   let inPage = false;
-  const carriesFiles = (ev: DragEvent) => !inPage && carriesFileType(ev);
+  const carriesFiles = (ev: DragEvent) => !inPage && (carriesFileType(ev) || gtkFileDrag(ev));
   const hide = () => { depth = 0; hint(false); };
   const onStart = () => { inPage = true; };
   const onEnd = () => { inPage = false; hide(); };
@@ -134,11 +149,9 @@ export function installDesktopDrop(e: DropEngine, hint: (shown: boolean) => void
     ev.preventDefault();
     hide();
     const files = Array.from(ev.dataTransfer?.files ?? []);
-    if (!files.length) return;
-    // Only readable during the event itself.
-    let uriList = "";
-    try { uriList = ev.dataTransfer?.getData("text/uri-list") ?? ""; } catch { /* no uri-list */ }
-    queue = queue.then(async () => takeDroppedFiles(e, await collect(files, uriList))).catch((err) => {
+    const fromGtk = !files.length && gtkFileDrag(ev);
+    if (!files.length && !fromGtk) return;
+    queue = queue.then(async () => takeDroppedFiles(e, await (fromGtk ? collectFromGtk() : collect(files)))).catch((err) => {
       void reportError(`Couldn't take the dropped files: ${err instanceof Error ? err.message : String(err)}`);
     });
   };
