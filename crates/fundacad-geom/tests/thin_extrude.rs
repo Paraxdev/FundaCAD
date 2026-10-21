@@ -262,3 +262,71 @@ fn a_construction_line_is_no_wall() {
     let r = build(json!({}), vec![sk, thin(json!({"curves": ["c"]}))]);
     err_with(&r, "construction");
 }
+
+fn square_of_lines() -> Vec<Value> {
+    vec![
+        line("s1", [0., 0.], [40., 0.]),
+        line("s2", [40., 0.], [40., 40.]),
+        line("s3", [40., 40.], [0., 40.]),
+        line("s4", [0., 40.], [0., 0.]),
+    ]
+}
+
+fn one_solid(r: &Rebuild) {
+    ok(r);
+    assert_eq!(r.bodies.len(), 1);
+    assert_eq!(kernel::count(&r.bodies[0].shape, kernel::Kind::Solid), 1);
+}
+
+#[test]
+fn a_loop_with_a_stub_at_a_corner_is_a_ring_and_a_stub() {
+    let mut ents = square_of_lines();
+    ents.push(line("stub", [40., 40.], [40., 70.]));
+    let r = build(json!({}), vec![sketch(ents), thin(json!({}))]);
+    one_solid(&r);
+    // ring 42*42 - 38*38 = 320, stub 2*30 less the 2*1 it shares with the ring
+    near(vol(&r, 0), (320.0 + 58.0) * 10.0, "square and stub");
+    near_box(&r, [-1.0, -1.0, 0.0, 41.0, 70.0, 10.0]);
+
+    let mut ents = square_of_lines();
+    ents.push(line("stub", [0., 0.], [0., -30.]));
+    let r = build(json!({}), vec![sketch(ents), thin(json!({}))]);
+    one_solid(&r);
+    near(vol(&r, 0), (320.0 + 58.0) * 10.0, "stub at the first corner");
+}
+
+#[test]
+fn a_rectangle_with_a_line_from_its_corner() {
+    let rect = json!({"type": "rectangle", "id": "r", "width": 40, "height": 30, "x": 0, "y": 0});
+    let sk = sketch(vec![rect, line("stub", [20., 15.], [20., 50.])]);
+    // ring 2800 or 2960, stub 2*35 less the 2*2 square it shares with the ring
+    for (side, v) in [("center", 2800.0 + 680.0), ("outside", 2960.0 + 660.0)] {
+        let r = build(json!({}), vec![sk.clone(), thin(json!({"side": side}))]);
+        one_solid(&r);
+        near(vol(&r, 0), v, side);
+    }
+}
+
+#[test]
+fn a_diagonal_between_two_corners_keeps_the_corners_mitred() {
+    let mut ents = square_of_lines();
+    ents.push(line("diag", [0., 0.], [40., 40.]));
+    let r = build(json!({}), vec![sketch(ents), thin(json!({}))]);
+    one_solid(&r);
+    // the diagonal's 2 by 40 sqrt 2 strip shares 2 sqrt 2 + 1 with the ring at each corner
+    let diag = 2.0 * 40.0 * 2f64.sqrt() - 2.0 * (2.0 * 2f64.sqrt() + 1.0);
+    near(vol(&r, 0), (320.0 + diag) * 10.0, "square and diagonal");
+}
+
+#[test]
+fn a_y_of_three_lines_is_one_wall() {
+    let arm = |id: &str, deg: f64| {
+        let (s, c) = deg.to_radians().sin_cos();
+        line(id, [0., 0.], [20.0 * c, 20.0 * s])
+    };
+    let sk = sketch(vec![arm("a", 90.0), arm("b", 210.0), arm("c", 330.0)]);
+    let r = build(json!({}), vec![sk, thin(json!({}))]);
+    one_solid(&r);
+    // each arm owns 2 by 20 less the 1 / sqrt 3 it leaves at the meeting point to the next one
+    near(vol(&r, 0), (120.0 - 3f64.sqrt()) * 10.0, "Y");
+}

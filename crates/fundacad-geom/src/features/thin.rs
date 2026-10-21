@@ -172,7 +172,9 @@ struct Chain<'a> {
     closed: bool,
 }
 
-/// The links joined end to end, a chain stopping where curves end or branch.
+/// The links joined end to end, a chain stopping where curves end or branch. A
+/// branch whose curves all leave into one half plane passes the two that bound
+/// the empty side straight through, so that outer corner is mitred, not notched.
 fn chains<'a>(links: Vec<Link<'a>>, tol: f64) -> Vec<Chain<'a>> {
     let mut nodes: Vec<P> = Vec::new();
     let mut node = |p: P| -> usize {
@@ -182,11 +184,40 @@ fn chains<'a>(links: Vec<Link<'a>>, tol: f64) -> Vec<Chain<'a>> {
         nodes.push(p);
         nodes.len() - 1
     };
-    let ends: Vec<[usize; 2]> = links.iter().map(|l| [node(l.el.a()), node(l.el.b())]).collect();
+    let mut ends: Vec<[usize; 2]> = links.iter().map(|l| [node(l.el.a()), node(l.el.b())]).collect();
     let mut degree = vec![0usize; nodes.len()];
     for e in &ends {
         degree[e[0]] += 1;
         degree[e[1]] += 1;
+    }
+    for n in 0..degree.len() {
+        if degree[n] < 3 {
+            continue;
+        }
+        let mut out: Vec<(f64, usize, usize)> = Vec::new();
+        for (i, e) in ends.iter().enumerate() {
+            for side in 0..2 {
+                if e[side] == n {
+                    let el = links[i].el;
+                    let t = if side == 0 { el.tangent_at(el.a()) } else { mul(el.tangent_at(el.b()), -1.0) };
+                    out.push((t[1].atan2(t[0]), i, side));
+                }
+            }
+        }
+        out.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let k = out.len();
+        let gap = |j: usize| {
+            let g = out[(j + 1) % k].0 - out[j].0;
+            if j + 1 == k { g + std::f64::consts::TAU } else { g }
+        };
+        if let Some(j) = (0..k).find(|&j| gap(j) > std::f64::consts::PI + 1e-9) {
+            let pass = degree.len();
+            degree.push(2);
+            degree[n] -= 2;
+            for (_, i, side) in [out[j], out[(j + 1) % k]] {
+                ends[i][side] = pass;
+            }
+        }
     }
     let mut used = vec![false; links.len()];
     let mut out = Vec::new();
@@ -204,7 +235,7 @@ fn chains<'a>(links: Vec<Link<'a>>, tol: f64) -> Vec<Chain<'a>> {
                 ends[i][0]
             };
             chain.push(l);
-            if far == from && degree[far] == 2 {
+            if far == from {
                 return Chain { links: chain, closed: true };
             }
             if degree[far] != 2 {
