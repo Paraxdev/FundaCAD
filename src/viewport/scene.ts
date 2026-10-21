@@ -11,6 +11,7 @@ import { composerClearColor, DISPLAY_COLOR_GLSL, displayColorUniforms, followCom
 import { BACKGROUND_COLOR, bloomSettings, bloomWanted, renderPrefs } from "../ui/renderPrefs";
 import { GlassBackPass, glassBodyCount } from "./glassThickness";
 import { POTATO_PIXEL_RATIO, PotatoDraw } from "./potato";
+import { EdgeBatches, type EdgeFrame } from "./edgeBatches";
 import { MatcapDraw } from "./matcap";
 import { GpuTimer } from "./gpuTimer";
 import { OverlayDraw } from "./pathtrace/overlayDraw";
@@ -472,6 +473,12 @@ export class PostChain {
   private overlay: OverlayDraw | null = null;
   /** Written by the viewport. Potato mode is preferred over it. */
   viewMode: ViewMode = "realtime";
+  /** Set by the viewport around its loop's draw: the idle edges drawn cheaper
+   *  while the camera moves (edgeMotion.ts), null for the full set. */
+  edgeFrame: EdgeFrame | null = null;
+  private edgeBatches: EdgeBatches | null = null;
+  /** What the last frame drew the idle edges as, for diagnostics and the harness. */
+  edgesDrawn: { merged: number; segments: number; thin: boolean; weight: number; builtMs: number } | null = null;
   /** Written by the viewport: the traced canvas under this one has an image to
    *  show, so this frame draws only what sits on top of it. */
   traceShown = false;
@@ -651,6 +658,32 @@ export class PostChain {
     }
     const plan = stagesFor(this.frameState(camera, motion, forceRealtime, facts));
     this.lastStages = plan.path === "high" ? plan.stages : null;
+    // Potato mode and the low power motion path draw every line thin already.
+    const edges = this.edgeFrame && plan.path !== "potato" && plan.path !== "motion" ? this.edgeFrame : null;
+    this.edgesDrawn = null;
+    if (edges) {
+      const b = (this.edgeBatches ??= new EdgeBatches());
+      b.begin(edges);
+      this.edgesDrawn = { merged: b.drawn.members, segments: b.drawn.segments, thin: edges.thin, weight: edges.weight, builtMs: b.builtMs };
+    }
+    try {
+      this.renderPlan(plan, camera);
+    } finally {
+      if (edges) this.edgeBatches!.end();
+    }
+  }
+
+  /** Drop the merged copy of the edges, an old model's included. */
+  releaseEdges() {
+    this.edgeBatches?.dispose();
+    this.edgeBatches = null;
+  }
+
+  get edgesHeld(): boolean {
+    return this.edgeBatches?.held === true;
+  }
+
+  private renderPlan(plan: ReturnType<typeof stagesFor>, camera: THREE.Camera) {
     if (plan.path === "potato") {
       (this.potato ??= new PotatoDraw()).render(this.renderer, this.scene, camera, renderPrefs().brightness);
       // Only the modules, so a still taken in potato mode can build its passes at once.

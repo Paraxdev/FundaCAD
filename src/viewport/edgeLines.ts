@@ -261,6 +261,11 @@ export class BodyEdges {
     this.object.visible = this.bodyVisible && this.liveSegments > 0;
   }
 
+  /** Segments in the drawn geometry. */
+  get segments(): number {
+    return this.liveSegments;
+  }
+
   /** Any edge currently drawn and pickable? (`object.visible` folds in both the
    *  body's visibility and "this body has edges left after hiding".) */
   get pickable(): boolean {

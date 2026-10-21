@@ -337,6 +337,21 @@ export class Highlighter {
     return [...this.selectedBodies];
   }
 
+  /** Bodies with anything selected, hovered or failing on them, into `out`. */
+  markedBodies(out: Set<string>): Set<string> {
+    for (const b of this.selectedBodies) out.add(b);
+    if (this.hoveredBody) out.add(this.hoveredBody);
+    for (const set of [this.selectedEdges, this.errorEdges]) for (const e of set) if (e.body) out.add(e.body);
+    if (this.hoveredEdge?.body) out.add(this.hoveredEdge.body);
+    for (const set of [this.selectedFaces, this.hoveredFaces]) {
+      for (const f of set) {
+        const b = bodyOfFace(this.view, f);
+        if (b) out.add(b.id);
+      }
+    }
+    return out;
+  }
+
   clearBodySelection() {
     for (const id of this.selectedBodies) {
       // Keep the hovered body's glow, but drop it to the fainter hover intensity.
