@@ -5,7 +5,7 @@ use fundacad_tracer::{Camera, Ground, GroundMode, Lights, Look, Path, Tracer, Tr
 fn tracers() -> Vec<Tracer> {
     let mut out = Vec::new();
     for software in [true, false] {
-        match Tracer::new(TracerOptions { software, ..Default::default() }) {
+        match common::tracer(TracerOptions { software, ..Default::default() }) {
             Ok(t) if software || t.path() == Path::RayQuery => out.push(t),
             Ok(_) => {}
             Err(e) => eprintln!("skipped, no GPU adapter: {e}"),
