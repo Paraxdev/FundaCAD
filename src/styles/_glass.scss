@@ -303,6 +303,7 @@
 .ne-overlay,
 .areachip,
 .home-drawer,
+.guide-bubble,
 #safe-mode-banner {
   corner-shape: squircle;
   background: var(--glass-sheen), var(--float-bg-solid);
@@ -321,6 +322,7 @@
 .ne-overlay,
 .areachip,
 .home-drawer,
+.guide-bubble,
 #safe-mode-banner {
   box-shadow: var(--glass-inset), var(--float-shadow);
 }
@@ -341,7 +343,8 @@
 .shortcut-hud-card,
 #renderdock,
 .ne-overlay,
-.home-drawer {
+.home-drawer,
+.guide-bubble {
   border-radius: var(--float-radius);
 }
 .menu-popup,
@@ -374,6 +377,7 @@
 #renderdock::after,
 .ne-overlay::after,
 .home-drawer::after,
+.guide-bubble::after,
 #safe-mode-banner::after {
   content: "";
   position: absolute;

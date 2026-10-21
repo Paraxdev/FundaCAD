@@ -29,6 +29,7 @@
 import type { CadDocument } from "../types";
 import type { DocumentStore } from "../document/store";
 import type { GeometryBackend } from "../geometry/client";
+import type { GuideSession } from "../ui/guide/guideSession";
 
 /** How often to publish while nobody is attached. Slow enough to be free, quick
  *  enough that an assistant that has just connected does not sit through a long
@@ -48,6 +49,14 @@ export const ACTIVE_LINGER_MS = 20000;
  *  own within seconds; more than a handful is memory kept for a client that has
  *  already timed out. */
 export const APPLIED_MEMORY = 16;
+
+/** Guide mode's own poll while a step or a wait is up. It carries no document,
+ *  so it can be quick enough that Next feels answered. */
+export const GUIDE_INTERVAL_MS = 200;
+
+/** How long the guide poll keeps going after the guide went quiet, so the
+ *  assistant's next step after a Next press shows without waiting for a document tick. */
+export const GUIDE_LINGER_MS = 10000;
 
 export interface LiveState {
   /** Is this window publishing at all? */
@@ -88,6 +97,11 @@ export class LiveSessionHost {
   private applied: string[] = [];
   private state: LiveState = { sharing: false, guests: [], lastEdit: null };
   private listeners = new Set<Listener>();
+  private guide: GuideSession | null = null;
+  private guideTimer: ReturnType<typeof setTimeout> | null = null;
+  private guideInFlight: Promise<void> | null = null;
+  private guideBusyAt = -Infinity;
+  private unsubscribeGuide: (() => void) | null = null;
 
   constructor(
     private readonly store: DocumentStore,
@@ -111,6 +125,54 @@ export class LiveSessionHost {
 
   get snapshot(): LiveState {
     return this.state;
+  }
+
+  /** Guide mode rides this loop: its commands come back from `session_guide`
+   *  and its state goes out in the next one, never in the document publish. */
+  attachGuide(guide: GuideSession): void {
+    this.unsubscribeGuide?.();
+    this.guide = guide;
+    let seen = guide.state;
+    this.unsubscribeGuide = guide.subscribe((st) => {
+      if (st === seen) return;
+      seen = st;
+      if (this.running) this.scheduleGuide(0);
+    });
+  }
+
+  /** One guide round trip. Public so a test can step it by hand. */
+  guideTick(): Promise<void> {
+    if (!this.running || !this.guide) return Promise.resolve();
+    if (this.guideInFlight) return this.guideInFlight;
+    this.guideInFlight = this.runGuideTick();
+    return this.guideInFlight;
+  }
+
+  private async runGuideTick(): Promise<void> {
+    const guide = this.guide!;
+    try {
+      const res = await this.geometry.session?.("session_guide", { state: guide.state });
+      const commands = res && Array.isArray(res["commands"]) ? (res["commands"] as unknown[]) : [];
+      guide.apply(commands);
+    } catch {
+      // As for the document tick, a missed round trip is caught up by the next one.
+    } finally {
+      this.guideInFlight = null;
+      if (guide.active) this.guideBusyAt = this.now();
+      if (this.now() - this.guideBusyAt < GUIDE_LINGER_MS) this.scheduleGuide(GUIDE_INTERVAL_MS);
+    }
+  }
+
+  private scheduleGuide(ms: number): void {
+    if (!this.running) return;
+    if (this.guideTimer !== null) {
+      if (ms > 0) return;
+      clearTimeout(this.guideTimer);
+    }
+    this.guideTimer = setTimeout(() => {
+      this.guideTimer = null;
+      void this.guideTick();
+    }, ms);
   }
 
   start(): void {
@@ -144,6 +206,11 @@ export class LiveSessionHost {
     }
     this.unsubscribeDoc?.();
     this.unsubscribeDoc = null;
+    if (this.guideTimer !== null) {
+      clearTimeout(this.guideTimer);
+      this.guideTimer = null;
+    }
+    this.guide?.reset();
     this.emit({ sharing: false, guests: [] });
     await this.geometry.session?.("session_release").catch(() => null);
   }
@@ -171,6 +238,8 @@ export class LiveSessionHost {
         status: this.buildStatus(),
       });
       if (res) await this.collect(res);
+      // Not awaited: an engine older than guide mode queues the op behind a build.
+      void this.guideTick();
     } catch {
       // A dropped socket, an engine mid-restart. The reconnect is the geometry
       // client's job; here it is one missed tick, and the next one re-publishes

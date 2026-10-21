@@ -11,7 +11,9 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DocumentStore, EMPTY_DOCUMENT } from "../../src/document/store";
-import { LiveSessionHost } from "../../src/live/liveSession";
+import { GUIDE_LINGER_MS, LiveSessionHost } from "../../src/live/liveSession";
+import { GuideSession } from "../../src/ui/guide/guideSession";
+import { emptySnapshot } from "../../src/ui/guide/wait";
 import type { CadDocument } from "../../src/types";
 import type { GeometryBackend } from "../../src/geometry/client";
 
@@ -215,5 +217,87 @@ describe("the window's half of a live session", () => {
     expect(seen.at(-1)).toEqual(["an assistant"]);
     await host.stop();
     expect(host.snapshot.guests, "a stopped session still showed a guest").toEqual([]);
+  });
+});
+
+describe("guide mode over the live session", () => {
+  class GuideBackend extends StubBackend {
+    commands: unknown[] = [];
+    override async session(op: string, payload: object = {}): Promise<Record<string, unknown> | null> {
+      this.sent.push({ op, payload: payload as Record<string, unknown> });
+      if (op !== "session_guide") return { ok: true, guests: ["an assistant"], proposals: [] };
+      const commands = this.commands;
+      this.commands = [];
+      return { ok: true, commands };
+    }
+  }
+
+  const rig = () => {
+    const geo = new GuideBackend() as unknown as GeometryBackend & GuideBackend;
+    const store = new DocumentStore(geo, EMPTY_DOCUMENT);
+    const guide = new GuideSession(() => ({ found: true }), emptySnapshot);
+    const host = new LiveSessionHost(store, geo, () => true);
+    host.attachGuide(guide);
+    return { geo, guide, host };
+  };
+
+  it("hands the commands of a session_guide reply to the guide", async () => {
+    const { geo, guide, host } = rig();
+    geo.commands = [{ kind: "highlight", seq: 4, target: { ui: "pick:fillet" }, caption: "Open Fillet", step: 1, of: 3 }];
+    host.start();
+    await host.tick();
+    await host.guideTick();
+    expect(guide.state.step?.caption).toBe("Open Fillet");
+    await host.stop();
+  });
+
+  it("sends the guide state in session_guide, never in session_host", async () => {
+    const { geo, guide, host } = rig();
+    geo.commands = [{ kind: "highlight", seq: 4, target: { ui: "x" } }];
+    host.start();
+    await host.tick();
+    await host.guideTick();
+    const hosts = geo.sent.filter((m) => m.op === "session_host");
+    const guides = geo.sent.filter((m) => m.op === "session_guide");
+    expect(hosts.every((m) => !("guide" in m.payload) && !("state" in m.payload))).toBe(true);
+    expect(guides.at(-1)!.payload["state"]).toMatchObject({ ack: 4 });
+    expect(guides.every((m) => !("document" in m.payload))).toBe(true);
+    expect(guide.state.ack).toBe(4);
+    await host.stop();
+  });
+
+  it("polls every 200 ms while a step is up and slows down after Stop", async () => {
+    vi.useFakeTimers();
+    try {
+      const { geo, guide, host } = rig();
+      geo.commands = [{ kind: "highlight", seq: 1, target: { ui: "x" }, step: 1, of: 2 }];
+      host.start();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(guide.active).toBe(true);
+      const count = () => geo.sent.filter((m) => m.op === "session_guide").length;
+      const before = count();
+      await vi.advanceTimersByTimeAsync(650);
+      expect(count() - before).toBeGreaterThanOrEqual(3);
+      guide.stop();
+      await vi.advanceTimersByTimeAsync(GUIDE_LINGER_MS + 1000);
+      const after = count();
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(count() - after).toBeLessThanOrEqual(3);
+      expect(geo.sent.filter((m) => m.op === "session_guide").some((m) => (m.payload["state"] as { stopped: unknown }).stopped)).toBe(true);
+      await host.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("drops the guide when the window stops sharing", async () => {
+    const { geo, guide, host } = rig();
+    geo.commands = [{ kind: "highlight", seq: 1, target: { ui: "x" } }];
+    host.start();
+    await host.tick();
+    await host.guideTick();
+    expect(guide.state.step).not.toBeNull();
+    await host.stop();
+    expect(guide.state.step).toBeNull();
   });
 });

@@ -1,0 +1,175 @@
+<script setup lang="ts">
+// Guide mode on screen: a pulsing ring on the control or model area an assistant
+// points at, and a glass caption bubble with Next and Stop (docs/GUIDE.md).
+// Model outlines are SVG, not three.js, so Clean view and the pick mask never see them.
+import { computed, nextTick, onUnmounted, ref, shallowRef } from "vue";
+import { useEngine } from "../../app/engineKey";
+import { labelOf } from "../../ui/controlRefs";
+import { resolveControl } from "../../ui/guide/controls";
+import type { GuideState, StepState } from "../../ui/guide/guideSession";
+import { placeBubble, ringRect, type Placed } from "../../ui/guide/placement";
+import { modelShape } from "../../ui/guide/probe";
+import type { Box } from "../../ui/controlRefs";
+
+const engine = useEngine();
+const guide = engine.guide;
+
+const state = shallowRef<GuideState>(guide.state);
+const ring = ref<Box | null>(null);
+const bubbleAt = ref<Placed | null>(null);
+const paths = ref<string[]>([]);
+const ref_ = ref("");
+const hint = ref("");
+const bubble = ref<HTMLElement | null>(null);
+
+const step = computed<StepState | null>(() => {
+  const s = state.value.step;
+  return s && !s.next ? s : null;
+});
+
+let raf = 0;
+let frame = 0;
+let target: HTMLElement | null = null;
+let scrolledFor = -1;
+
+const AVOID = ".modal-panel, .choice-card, .cmdk-card";
+
+function sameBox(a: Box | null, b: Box | null): boolean {
+  return !!a && !!b && a.left === b.left && a.top === b.top && a.width === b.width && a.height === b.height;
+}
+
+function locateUi(s: StepState): void {
+  const r = resolveControl(s.target.ui ?? "", document);
+  target = r.el ?? null;
+  ref_.value = r.el ? (r.via ?? r.ref) : "";
+  hint.value = r.el && r.via ? `Open ${labelOf(r.el) || r.via} first` : r.el ? "" : (r.missing ?? "");
+  guide.updateResolution(r.el ? { found: true, via: r.via } : { found: false, missing: r.missing, near: r.near });
+  if (target && !r.via && scrolledFor !== s.seq) {
+    scrolledFor = s.seq;
+    target.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+  }
+}
+
+function modelBox(s: StepState): Box | null {
+  const canvas = engine.viewport.domElement.getBoundingClientRect();
+  if (s.target.region) {
+    const g = s.target.region;
+    paths.value = [];
+    return { left: canvas.left + g.x * canvas.width, top: canvas.top + g.y * canvas.height, width: g.w * canvas.width, height: g.h * canvas.height };
+  }
+  let shape;
+  try {
+    shape = modelShape(engine, s.target.model ?? "");
+  } catch (err) {
+    paths.value = [];
+    hint.value = s.missing ?? (err instanceof Error ? err.message : "");
+    return null;
+  }
+  ref_.value = shape.name;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  const out: string[] = [];
+  for (const line of shape.lines) {
+    const pts = line.map((v) => engine.viewport.projectToScreen(v)).filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
+    if (pts.length < 2) continue;
+    for (const p of pts) {
+      minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+      minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+    }
+    out.push(pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" "));
+  }
+  paths.value = out;
+  return out.length ? { left: minX, top: minY, width: maxX - minX, height: maxY - minY } : null;
+}
+
+function follow(): void {
+  raf = 0;
+  const s = step.value;
+  if (!s) return;
+  if (s.target.ui !== undefined) {
+    if (frame % 15 === 0 || !target?.isConnected) locateUi(s);
+  }
+  frame++;
+  const box = s.target.ui !== undefined ? (target?.isConnected ? target.getBoundingClientRect() : null) : modelBox(s);
+  const r = box ? ringRect({ left: box.left, top: box.top, width: box.width, height: box.height }) : null;
+  if (!sameBox(r, ring.value)) ring.value = r;
+  const el = bubble.value;
+  if (el) {
+    const size = { width: el.offsetWidth || 280, height: el.offsetHeight || 120 };
+    const view = { width: window.innerWidth, height: window.innerHeight };
+    const avoid = [...document.querySelectorAll(AVOID)].map((d) => d.getBoundingClientRect());
+    const at = box
+      ? placeBubble(box, view, size, avoid)
+      : { side: "below" as const, left: view.width / 2 - size.width / 2, top: 72, ...size };
+    if (!sameBox(at, bubbleAt.value)) bubbleAt.value = at;
+  }
+  guide.observe();
+  raf = requestAnimationFrame(follow);
+}
+
+function restart(): void {
+  if (raf) cancelAnimationFrame(raf);
+  raf = 0;
+  frame = 0;
+  target = null;
+  ring.value = null;
+  paths.value = [];
+  hint.value = "";
+  ref_.value = "";
+  if (step.value) void nextTick(() => { raf = requestAnimationFrame(follow); });
+}
+
+const stopWatching = guide.subscribe((s) => {
+  const before = state.value.step;
+  state.value = s;
+  if (s.step?.seq !== before?.seq || !!s.step?.next !== !!before?.next) restart();
+  // A wait with no step on screen still has to see the window change.
+  else if (!raf && s.wait && !s.wait.done) raf = requestAnimationFrame(function watchWait() {
+    raf = 0;
+    guide.observe();
+    const w = guide.state.wait;
+    if (!step.value && w && !w.done) raf = requestAnimationFrame(watchWait);
+  });
+});
+onUnmounted(() => {
+  stopWatching();
+  if (raf) cancelAnimationFrame(raf);
+});
+
+const ringStyle = computed(() => {
+  const r = ring.value;
+  return r ? { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` } : {};
+});
+const bubbleStyle = computed(() => {
+  const b = bubbleAt.value;
+  return b ? { left: `${b.left}px`, top: `${b.top}px` } : { visibility: "hidden" as const };
+});
+const counter = computed(() => (step.value && step.value.of > 1 ? `Step ${step.value.step} of ${step.value.of}` : "Guide"));
+</script>
+
+<template>
+  <Teleport to="body">
+    <div v-if="step" class="guide-layer" data-testid="guide-layer">
+      <svg v-if="paths.length" class="guide-model" aria-hidden="true">
+        <polyline v-for="(p, i) in paths" :key="i" :points="p" />
+      </svg>
+      <div v-if="ring" class="guide-ring" :class="{ 'guide-region': !!step.target.region }" :data-ref="ref_" :style="ringStyle" aria-hidden="true"></div>
+      <div
+        ref="bubble"
+        class="guide-bubble"
+        role="dialog"
+        aria-live="polite"
+        :aria-label="counter"
+        :data-side="bubbleAt?.side"
+        :style="bubbleStyle"
+      >
+        <div class="guide-count">{{ counter }}</div>
+        <p class="guide-caption">{{ step.caption }}</p>
+        <p v-if="hint" class="guide-hint">{{ hint }}</p>
+        <div class="guide-actions">
+          <button id="guide-stop" type="button" class="btn" @click="guide.stop()">Stop</button>
+          <button id="guide-next" type="button" class="btn btn-primary" @click="guide.next()">Next</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+</template>
