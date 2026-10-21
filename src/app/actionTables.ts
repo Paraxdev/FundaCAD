@@ -50,6 +50,10 @@ export const NON_REPEATABLE = new Set([
   "hide-selected", "show-all-bodies", "clean-view",
 ]);
 
+/** Entity patterns word their own prompt as curves are picked and the pattern
+ *  is placed, so a state change must not reset it to a line of this table. */
+export const SELF_PROMPTING = new Set<SketchTool>(["patternRect", "patternCircular"]);
+
 /** Per-tool instruction line shown in the viewport prompt while sketching. */
 export const SKETCH_PROMPTS: Record<string, string> = {
   select: "Line (L) · Rectangle (R) · Circle (C) · Arc (A) · Trim (T)",
@@ -60,6 +64,8 @@ export const SKETCH_PROMPTS: Record<string, string> = {
   spline: "Click fit points · Enter to finish · Esc",
   bspline: "Click control points · click the first to close · Enter to finish · Esc",
   point: "Click to place a point · Esc",
+  text: "Click where the text goes, or drag a box for it · Esc",
+  project: "Click an edge or face of the model to project it into the sketch · Esc",
   polygon: "Click the centre, then a vertex · Esc",
   slot: "Click the two arc centres, then the width · Esc",
   circle2: "Click two points on the diameter · Esc",

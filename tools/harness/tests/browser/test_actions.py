@@ -150,6 +150,16 @@ def test_import_file_drops_a_mesh_and_counts_the_bodies(s, tmp_path):
     assert s.page.locator("input[data-harness-drop]").count() == 0
 
 
+@pytest.mark.parametrize("label", ["Text", "Project", "Rect Pattern", "Circular Pat."])
+def test_a_sketch_tool_starts_with_a_prompt(s, label):
+    s.tool("Sketch")
+    s.pick_plane("XY")
+    s.tool(label)
+    assert s.status(raw=True)["prompt"], label
+    s.press("Escape")
+    s.press("Escape")
+
+
 def test_type_with_enter_says_when_the_hole_size_was_refused(plate):
     plate.pick_face("top")
     plate.tool("Hole")
