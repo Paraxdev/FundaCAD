@@ -49,7 +49,9 @@ if [ -n "$version" ]; then
 fi
 
 cd "$(git rev-parse --show-toplevel)"
-git fetch --quiet --tags "$REMOTE" main
+# --force because the rolling beta and development tags move on every release,
+# and a plain --tags fetch refuses to update a moved tag and fails the script.
+git fetch --quiet --force --tags "$REMOTE" main
 git fetch --quiet "$REMOTE" dev \
   || die "could not fetch dev from $REMOTE. If it does not exist yet, create it from main first (docs/ENGINE.md section 7)."
 
