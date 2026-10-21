@@ -818,7 +818,10 @@ second padded head doubles it. A minimal readout:
 `opts: { kind?: "info" | "warning" | "error"; action?: { label, onClick }; timeout?: number; detail?: unknown; source?: string }`.
 It returns the toast's id for `dismissToast`, or null for an error.
 
-- `info` (the default) and `warning` show a `.toast` (3.5s, a warning 6s).
+- `info` (the default) and `warning` show a `.toast` (3.5s, a warning 6s,
+  one with an action 9s so it can be read and its button reached).
+- The same message, kind and action label again restarts the toast already
+  showing, with the newer action, rather than stacking a copy.
 - `error` does not show a toast. It goes to the title bar notice
   (`showErrorNotice`) and the console log, with `detail` kept for the report.
 - Every toast is also a console entry and a bug report breadcrumb, so do not

@@ -12,7 +12,7 @@
 export interface ToastOptions {
   kind?: "error" | "warning" | "info";
   action?: { label: string; onClick: () => void };
-  timeout?: number; // ms; errors default longer
+  timeout?: number; // ms; errors and toasts with an action default longer
   /** Kept with the console entry, for an error the full report. */
   detail?: unknown;
   source?: string;
@@ -42,7 +42,7 @@ export function toast(message: string, opts: ToastOptions = {}): number | null {
     message,
     kind,
     opts.action,
-    opts.timeout ?? (kind === "warning" ? 6000 : 3500),
+    opts.timeout ?? (opts.action ? 9000 : kind === "warning" ? 6000 : 3500),
   );
 }
 
