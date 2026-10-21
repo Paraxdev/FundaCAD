@@ -11,6 +11,8 @@
 // Driven by measurement only: a sample is the tick to tick period after a drawn
 // camera frame. A GPU that keeps up never leaves full quality.
 
+import type { ViewMode } from "../ui/renderPrefs";
+
 /** Pixel ratio multipliers, level 0 first. */
 export const MOTION_LEVELS = [1, 0.75, 0.5] as const;
 /** A median camera frame period above this, under 25 fps, steps a level down.
@@ -39,6 +41,25 @@ const PROBE_MS = 3000;
 const PROBE_SHARE = 0.9;
 /** A longer gap is a stall or a suspended window, not a frame. */
 const MAX_SAMPLE_MS = 2000;
+
+/** What a camera frame is drawn as. Potato mode draws its own way in every view mode. */
+export interface DrawnView {
+  viewMode: ViewMode;
+  tracing: boolean;
+  potato: boolean;
+}
+
+/** Whether the frame drawn costs mostly pixels. Matcap and a shown trace do not:
+ *  a 12 M triangle assembly measured 10.2 ms a Matcap frame at full size and
+ *  9.8 ms at half, so a smaller canvas there only blurs the model. */
+export function pixelBoundView(v: DrawnView): boolean {
+  return v.potato || (v.viewMode !== "matcap" && !v.tracing);
+}
+
+/** The pixel ratio multiplier a camera frame draws at, for a level's `scale`. */
+export function motionPixelScale(v: DrawnView, scale: number): number {
+  return pixelBoundView(v) ? scale : 1;
+}
 
 function median(xs: readonly number[]): number {
   const s = [...xs].sort((a, b) => a - b);

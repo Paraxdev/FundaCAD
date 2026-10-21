@@ -35,7 +35,7 @@ import { SectionCaps } from "./sectionCaps";
 import { pickFacePlaneAt } from "../features/facePlanePick";
 import { FpsMeter } from "./fpsMeter";
 import { StutterWatch } from "./stutterWatch";
-import { MotionQuality } from "./motionQuality";
+import { MotionQuality, motionPixelScale, pixelBoundView, type DrawnView } from "./motionQuality";
 import { GpuFence } from "./gpuFence";
 import { sceneStats } from "../diagnostics/sceneStats";
 import { crumb } from "../diagnostics/breadcrumbs";
@@ -4252,7 +4252,7 @@ export class Viewport {
     // Only a frame drawn at the size the level asked for says anything about the
     // level: a gesture's first frames from a canvas that has grown back are full
     // size, and judged as the reduced level they read as slow.
-    if (this.motionScale === this.motion.scale) this.motion.sample(period, now);
+    if (this.pixelBound && this.motionScale === this.motion.scale) this.motion.sample(period, now);
     // Still watched in performance mode, where a stutter offers potato mode instead.
     if (this.potato) return;
     // Judged on what a full quality frame costs, or a machine that only keeps up
@@ -4265,6 +4265,14 @@ export class Viewport {
 
   private motion = new MotionQuality();
   private motionScale = 1;
+  private get drawnView(): DrawnView {
+    const viewMode = this.scene.post.viewMode;
+    return { viewMode, tracing: viewMode === "pathtraced" && this.scene.post.traceShown, potato: renderPrefs().potatoMode };
+  }
+  /** Matcap and a shown trace never shrink the canvas, so their frames say nothing about a level. */
+  private get pixelBound(): boolean {
+    return pixelBoundView(this.drawnView);
+  }
   private motionActive = false;
   private lastMovedAt = -Infinity;
   private fenceRef: GpuFence | null = null;
@@ -4298,7 +4306,9 @@ export class Viewport {
     this.motionActive = moving;
     let want = this.motionScale;
     if (moving) {
-      if (this.motionScale < 1 || now - this.gestureStart >= MOTION_MIN_GESTURE_MS) want = this.motion.scale;
+      if (this.motionScale < 1 || now - this.gestureStart >= MOTION_MIN_GESTURE_MS) {
+        want = motionPixelScale(this.drawnView, this.motion.scale);
+      }
     } else if (
       now - Math.max(this.lastMovedAt, this.lastPointerAt) >= MOTION_RESTORE_MS
       || now - this.lastMovedAt >= MOTION_RESTORE_MAX_MS
