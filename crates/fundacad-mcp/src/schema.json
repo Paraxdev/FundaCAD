@@ -402,7 +402,7 @@
     "points": "list of [x,y,z] hole centres in world mm, projected onto the face. On a `tracked` face they are where the holes were when its `extent` was written, and each keeps its distance from the face edges it was nearest then (or stays centred) as the face moves or grows",
     "sketch": "optional sketch id whose points (else circle centres) add positions; with no `face` the sketch plane gives the direction",
     "holeType": "\"simple\" (default), \"counterbore\", \"countersink\" or \"insert\"",
-    "size": "\"M2\", \"M2.5\", \"M3\", \"M4\", \"M5\", \"M6\", \"M8\" or \"M10\". Fills in the diameter, the counterbore, the countersink and the insert bore when left out, but not `depth`",
+    "size": "\"M2\", \"M2.5\", \"M3\", \"M4\", \"M5\", \"M6\", \"M8\", \"M10\", \"M12\", \"M16\" or \"M20\". Fills in the diameter, the counterbore, the countersink and the insert bore when left out, but not `depth`",
     "standard": "\"clearance\" (ISO 273, default), \"tap\" (tap drill) or \"custom\"",
     "fit": "\"close\", \"normal\" (default) or \"loose\", for a clearance hole",
     "diameter": "Num, overrides the size",
@@ -447,7 +447,7 @@
      ]
     ]
    },
-   "notes": "Sizes are M2 to M10; a heat-set insert preset exists for M2 to M5 and is always blind. A through hole reaches past the far side of the body."
+   "notes": "Sizes are M2 to M20 (M2.5 between M2 and M3, then M12, M16, M20); a heat-set insert preset exists for M2 to M5 and is always blind. A through hole reaches past the far side of the body."
   },
   "thread": {
     "summary": "A helical thread groove (cut) or ridge (join) along a round face, a shaft or a bore. The face is found again at every build, so the thread follows the hole or shaft when its diameter changes.",

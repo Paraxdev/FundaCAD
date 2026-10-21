@@ -204,7 +204,7 @@ export class PatternFlow {
   click(p: THREE.Vector2) {
     if (!this.patternCenter) {
       if (ENTITY_PATTERNS.has(this.host.tool()) && this.host.selected().size === 0) {
-        setPrompt("Click the curves or profile to pattern");
+        setPrompt("Click the curves or profile to pattern · Esc");
         return;
       }
       this.patternCenter = p.clone();

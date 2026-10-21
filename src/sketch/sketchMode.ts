@@ -49,7 +49,7 @@ import { boundaryAnchors, footprintAnchors, loopCentroid } from "./anchors";
 import { setPrompt } from "../ui/prompt";
 import { tooEdgeOn } from "./planeGraze";
 import { toast } from "../ui/toast";
-import { looseEnds, tieConstraints, type LooseEnds } from "./looseEnds";
+import { gapReport, looseEnds, nothingToTiePrompt, tieConstraints, type LooseEnds } from "./looseEnds";
 import { contextMenu, dismissContextMenu, type CtxItem } from "../ui/menu";
 import { dropSeparatedJoins } from "./joins";
 import { sketchToolKey } from "./toolKeys";
@@ -791,8 +791,8 @@ export class SketchMode {
     if (t === "patternCircular" && this.active && this.selected.size) {
       for (const id of this.modifyFlow.warnSelectedProjected()) this.selected.delete(id);
       this.patternFlow.begin();
-    } else if (ENTITY_PATTERNS.has(t) && this.active && !this.selected.size) {
-      setPrompt("Click the curves or profile to pattern");
+    } else if (ENTITY_PATTERNS.has(t) && this.active) {
+      setPrompt(this.patternPickPrompt());
     }
     // Live in `dimension` too: that tool re-arms after each commit, so users stayed in
     // it and could not edit what they had just dimensioned.
@@ -936,16 +936,24 @@ export class SketchMode {
   }
 
   /** Tie every amber end to what it touches as one undo step. A tie the solver would
-   *  reject is left out, so a tie never turns the sketch red. */
-  async tieLooseEnds(): Promise<{ tied: number; open: number; untied: number }> {
-    const le = looseEnds(this.entities, this.constraints, this.snapTolMm());
+   *  reject is left out, so a tie never turns the sketch red.
+   *  `reachMm` is a reach the person confirmed, wider than the snap's, to close a gap. */
+  async tieLooseEnds(reachMm?: number): Promise<{ tied: number; open: number; untied: number }> {
+    const snap = this.snapTolMm();
+    const le = looseEnds(this.entities, this.constraints, Math.max(snap, reachMm ?? 0));
     let ties = tieConstraints(le, this.constraints);
     const left = () => {
-      const now = looseEnds(this.entities, this.constraints, this.snapTolMm());
+      const now = looseEnds(this.entities, this.constraints, snap);
       return { open: now.open.length, untied: now.untied.length };
     };
     if (!ties.length || this.solverDead) {
-      setPrompt(le.untied.length ? "These loose ends cannot be tied, draw a line to close them" : "No loose ends to tie");
+      const gap = gapReport(this.entities, this.constraints, snap);
+      setPrompt(nothingToTiePrompt(le, gap));
+      if (gap.kind === "gap" && !this.solverDead) {
+        toast(`Tie the ${gap.open} open ends across the ${Number(gap.gapMm.toPrecision(2))} mm gap?`, {
+          action: { label: "Close gap", onClick: () => { if (this.active) void this.tieLooseEnds(gap.reach); } },
+        });
+      }
       return { tied: 0, ...left() };
     }
     const ver = this.entityVersion;
@@ -971,7 +979,7 @@ export class SketchMode {
     setPrompt(
       ties.length
         ? `Tied ${ties.length} loose end${ties.length === 1 ? "" : "s"}${rest ? `, ${rest} left` : ""}`
-        : "Tying these ends would over constrain the sketch",
+        : `Tying these ends would over constrain the sketch${reachMm ? ", draw a line to close the gap" : ""}`,
     );
     return after;
   }
@@ -2327,13 +2335,16 @@ export class SketchMode {
       else this.selected.add(id);
     }
     for (const id of this.modifyFlow.warnSelectedProjected()) this.selected.delete(id);
-    const n = this.selected.size;
-    setPrompt(n
-      ? `${n} picked · click more to add · ${this.tool === "patternCircular" ? "click the centre" : "click where the pattern starts"}`
-      : "Click the curves or profile to pattern");
+    setPrompt(this.patternPickPrompt());
     this.refreshActive();
     this.onState?.();
     return true;
+  }
+
+  private patternPickPrompt(): string {
+    const n = this.selected.size;
+    if (!n) return "Click the curves or profile to pattern · Esc";
+    return `${n} picked · click more to add · ${this.tool === "patternCircular" ? "click the centre" : "click where the pattern starts"} · Esc`;
   }
 
   private entitiesAlongLoop(loop: readonly THREE.Vector2[]): string[] {

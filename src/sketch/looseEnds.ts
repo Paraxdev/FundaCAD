@@ -309,10 +309,7 @@ export function tieConstraints(le: LooseEnds, constraints: readonly SketchConstr
   return out;
 }
 
-/** The reach used where there is no view to measure a snap in (a closed sketch,
- *  the MCP server): 1% of the profile's size, about 10 px when the sketch fills
- *  the view, never under a micron. */
-export function defaultReach(entities: readonly ResolvedEntity[]): number {
+function profileDiag(entities: readonly ResolvedEntity[]): number {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const e of entities) {
     if (!isProfile(e)) continue;
@@ -321,6 +318,52 @@ export function defaultReach(entities: readonly ResolvedEntity[]): number {
       maxX = Math.max(maxX, v.x); maxY = Math.max(maxY, v.y);
     }
   }
-  const diag = Number.isFinite(minX) ? Math.hypot(maxX - minX, maxY - minY) : 0;
-  return Math.max(1e-3, 0.01 * diag);
+  return Number.isFinite(minX) ? Math.hypot(maxX - minX, maxY - minY) : 0;
+}
+
+/** The reach used where there is no view to measure a snap in (a closed sketch,
+ *  the MCP server): 1% of the profile's size, about 10 px when the sketch fills
+ *  the view, never under a micron. */
+export function defaultReach(entities: readonly ResolvedEntity[]): number {
+  return Math.max(1e-3, 0.01 * profileDiag(entities));
+}
+
+/** Open ends this close, relative to the profile and at most 10 mm, are a profile
+ *  drawn with a gap rather than a sketch meant to stay open. An L or a U has its
+ *  ends a whole side apart. */
+const GAP_FRACTION = 0.1;
+const GAP_MAX_MM = 10;
+
+/** none: nothing loose. tieable: the ties in `reach` are what keeps it open.
+ *  gap: every open end has a mate within the gap reach, so tying at `reach`
+ *  (larger than the snap's) closes it. open: ends too far apart to be a gap. */
+export interface GapReport { kind: "none" | "tieable" | "gap" | "open"; open: number; tieable: number; gapMm: number; reach: number }
+
+export function gapReport(entities: readonly ResolvedEntity[], constraints: readonly SketchConstraint[], reach: number): GapReport {
+  const le = looseEnds(entities, constraints, reach);
+  const tieable = le.untied.filter((u) => u.tieable).length;
+  const open = le.open.length;
+  if (open) {
+    const far = Math.max(reach, Math.min(GAP_FRACTION * profileDiag(entities), GAP_MAX_MM));
+    const wide = far > reach ? looseEnds(entities, constraints, far) : null;
+    const was = new Set(le.open.map((e) => key(e.entity, e.p)));
+    const across = wide?.untied.filter((u) => was.has(key(u.entity, u.p))) ?? [];
+    if (wide && !wide.open.length && across.length === open && across.every((u) => u.tieable)) {
+      return { kind: "gap", open, tieable: wide.untied.filter((u) => u.tieable).length, gapMm: Math.max(...across.map((u) => u.gap)), reach: far };
+    }
+  }
+  const kind = tieable ? "tieable" : open ? "open" : "none";
+  return { kind, open, tieable, gapMm: 0, reach };
+}
+
+const mm = (v: number) => `${Number(v.toPrecision(2))} mm`;
+
+/** What Tie Loose Ends says when nothing is in its reach, never "no loose ends"
+ *  while red ends show. */
+export function nothingToTiePrompt(le: LooseEnds, gap: GapReport): string {
+  if (le.untied.length) return "These loose ends cannot be tied, draw a line to close them";
+  const n = le.open.length;
+  if (!n) return "No loose ends to tie";
+  const apart = gap.kind === "gap" ? ` ${mm(gap.gapMm)} apart` : "";
+  return `${n} open end${n === 1 ? "" : "s"}${apart}, too far apart to tie, draw a line to close ${n === 1 ? "it" : "them"}`;
 }

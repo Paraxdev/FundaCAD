@@ -29,9 +29,9 @@ import { pointInRegion } from "../sketch/region";
 import { setPrompt } from "../ui/prompt";
 import type { Axis3, AxisSpec, Feature, JointMode, MechanismJoint, PlaneDef, PlaneOf, PlaneSpec, PointAt, Selector, Vec3 } from "../types";
 import { asFeature } from "../types";
-import { toast } from "../ui/toast";
+import { dismissToast, toast } from "../ui/toast";
 import { resolveRealEntities } from "../sketch/resolve";
-import { defaultReach, looseEnds } from "../sketch/looseEnds";
+import { defaultReach, gapReport, type GapReport } from "../sketch/looseEnds";
 import { edgeMatchSelectorFrom } from "../viewport/edgeMatch";
 import type { Hit } from "../viewport/picking";
 import { isDrivable, nextJointId, NO_DRIVE } from "../document/mechanism";
@@ -1874,8 +1874,18 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     const chosen = hiddenChosenSketch();
     if (chosen) {
       if (extrude.start(committed, { sketch: chosen })) return;
+      const gap = gapOf(chosen);
+      // A gap a few mm wide is a profile drawn short, so it is named and offered a fix; Extrude
+      // pressed again on it, as the toast says, is the person picking the wall.
+      if (gap?.kind === "gap" && !(gapAsked?.sketch === chosen && Date.now() < gapAsked.until)) {
+        const n = gap.open;
+        setStatus(`That sketch has a ${gapMm(gap.gapMm)} gap between ${n} open end${n === 1 ? "" : "s"}, Close gap ties them into a profile, or press Extrude again for a thin wall`, "");
+        const message = `That sketch has a ${gapMm(gap.gapMm)} gap, close it for a profile or press Extrude again for a thin wall`;
+        gapAsked = { sketch: chosen, until: Date.now() + GAP_ASK_MS, toast: toastTie(chosen, message, "Close gap", gap.reach, GAP_ASK_MS) };
+        return;
+      }
       // Gaps that Tie Loose Ends can close mean a profile was meant, so the tie is offered instead of a wall.
-      if (tieableEnds(chosen) > 0) {
+      if (gap?.kind === "tieable") {
         setStatus(`That sketch has no closed profile to extrude${offerTie(chosen)}`, "");
         return;
       }
@@ -1885,6 +1895,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
         setStatus(`That sketch has no closed profile or curve to extrude${offerTie(chosen)}`, "");
         return;
       }
+      if (gapAsked?.toast != null) dismissToast(gapAsked.toast);
+      gapAsked = null;
       const thin = { ...wall, id: store.nextId() } as Feature;
       store.addFeature(thin);
       committed(thin.id);
@@ -1898,31 +1910,45 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     extrude.start(committed);
   }
 
-  /** Why a sketch shows no profile, when loose ends are why, with a toast that ties them. */
-  function tieableEnds(sketchId: string): number {
+  /** The sketch Extrude last named a gap in: pressing it again there while the toast shows makes the wall. */
+  let gapAsked: { sketch: string; until: number; toast: number | null } | null = null;
+  const GAP_ASK_MS = 9000;
+
+  function gapOf(sketchId: string): GapReport | null {
     const sk = asFeature(store.document.features.find((f) => f.id === sketchId), "sketch");
-    if (!sk?.entities) return 0;
+    if (!sk?.entities) return null;
     const ents = resolveRealEntities(sk, store.document.parameters);
-    return looseEnds(ents, sk.constraints ?? [], defaultReach(ents)).untied.filter((u) => u.tieable).length;
+    return gapReport(ents, sk.constraints ?? [], defaultReach(ents));
   }
 
-  function offerTie(sketchId: string): string {
+  const gapMm = (v: number) => `${Number(v.toPrecision(2))} mm`;
+
+  function toastTie(sketchId: string, message: string, label: string, reach?: number, timeout?: number): number | null {
     const sk = asFeature(store.document.features.find((f) => f.id === sketchId), "sketch");
-    if (!sk?.entities) return "";
-    const ents = resolveRealEntities(sk, store.document.parameters);
-    const le = looseEnds(ents, sk.constraints ?? [], defaultReach(ents));
-    const n = le.untied.filter((u) => u.tieable).length;
-    if (!n) return le.open.length ? `, ${le.open.length} open end${le.open.length === 1 ? "" : "s"}` : "";
-    toast(`${n} loose end${n === 1 ? "" : "s"} keep that sketch open`, {
+    return toast(message, {
+      ...(timeout ? { timeout } : {}),
       action: {
-        label: "Tie Loose Ends",
+        label,
         onClick: () => {
-          if (sketch.active) return;
+          if (sketch.active || !sk) return;
           sketch.enter(store.buildState.result?.sketchPlanes?.[sketchId] ?? sk.plane, store, sketchId);
-          void sketch.tieLooseEnds();
+          void sketch.tieLooseEnds(reach);
         },
       },
     });
+  }
+
+  /** Why a sketch shows no profile, when loose ends are why, with a toast that ties them. */
+  function offerTie(sketchId: string): string {
+    const gap = gapOf(sketchId);
+    if (!gap) return "";
+    const n = gap.tieable;
+    if (gap.kind === "gap") {
+      toastTie(sketchId, `That sketch has a ${gapMm(gap.gapMm)} gap`, "Close gap", gap.reach);
+      return `, a ${gapMm(gap.gapMm)} gap`;
+    }
+    if (!n) return gap.open ? `, ${gap.open} open end${gap.open === 1 ? "" : "s"}` : "";
+    toastTie(sketchId, `${n} loose end${n === 1 ? "" : "s"} keep that sketch open`, "Tie Loose Ends");
     return `, ${n} loose end${n === 1 ? "" : "s"}`;
   }
 
