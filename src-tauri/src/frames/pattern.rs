@@ -64,7 +64,7 @@ fn rank(b: wgpu::Backend) -> u8 {
 
 impl Gpu {
     fn new() -> Result<(Gpu, String), String> {
-        let backends = wgpu::Backends::VULKAN | wgpu::Backends::DX12 | wgpu::Backends::METAL | wgpu::Backends::GL;
+        let backends = fundacad_tracer::TracerOptions::default().backends;
         let mut desc = wgpu::InstanceDescriptor::new_without_display_handle();
         desc.backends = backends;
         let instance = wgpu::Instance::new(desc);
