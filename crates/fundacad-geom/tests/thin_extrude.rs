@@ -330,3 +330,60 @@ fn a_y_of_three_lines_is_one_wall() {
     // each arm owns 2 by 20 less the 1 / sqrt 3 it leaves at the meeting point to the next one
     near(vol(&r, 0), (120.0 - 3f64.sqrt()) * 10.0, "Y");
 }
+
+fn fan(degs: &[f64]) -> Value {
+    let ents = degs
+        .iter()
+        .enumerate()
+        .map(|(i, d)| {
+            let (s, c) = d.to_radians().sin_cos();
+            line(&format!("l{i}"), [0., 0.], [20.0 * c, 20.0 * s])
+        })
+        .collect();
+    sketch(ents)
+}
+
+fn cot(deg: f64) -> f64 {
+    1.0 / deg.to_radians().tan()
+}
+
+// A fan of 20 mm spokes from the origin, all in a half plane: every pair of
+// neighbours leaves a kite of legs 1 and cot(gap / 2) unfilled at the node, and
+// only the two spokes bounding the empty side are mitred, adding cot(their angle / 2).
+fn fan_area(n: f64, gap: f64, bound: f64) -> f64 {
+    n * 40.0 - (n - 1.0) * cot(gap / 2.0) + cot(bound / 2.0)
+}
+
+#[test]
+fn a_fan_of_four_lines_mitres_only_the_two_that_bound_the_empty_side() {
+    let r = build(json!({}), vec![fan(&[0., 30., 60., 90.]), thin(json!({}))]);
+    one_solid(&r);
+    near(vol(&r, 0), fan_area(4.0, 30.0, 90.0) * 10.0, "fan of four");
+    near_box(&r, [-1.0, -1.0, 0.0, 20.0, 20.0, 10.0]);
+}
+
+#[test]
+fn fans_of_five_and_six_lines() {
+    let r = build(json!({}), vec![fan(&[0., 20., 40., 60., 80.]), thin(json!({}))]);
+    one_solid(&r);
+    near(vol(&r, 0), fan_area(5.0, 20.0, 80.0) * 10.0, "fan of five");
+    let (s80, c80) = 80f64.to_radians().sin_cos();
+    near_box(&r, [-cot(40.0), -1.0, 0.0, 20.0, 20.0 * s80 + c80, 10.0]);
+
+    let r = build(json!({}), vec![fan(&[0., 18., 36., 54., 72., 90.]), thin(json!({}))]);
+    one_solid(&r);
+    near(vol(&r, 0), fan_area(6.0, 18.0, 90.0) * 10.0, "fan of six");
+    near_box(&r, [-1.0, -1.0, 0.0, 20.0, 20.0, 10.0]);
+}
+
+#[test]
+fn a_fan_too_narrow_to_mitre_keeps_flat_ends_at_its_node() {
+    let r = build(json!({}), vec![fan(&[0., 5., 10.]), thin(json!({}))]);
+    one_solid(&r);
+    // the spokes overlap past their kites here, so the area is the shoelace of the
+    // union's 15 vertex outline, each vertex a crossing of two strip sides or caps
+    near(vol(&r, 0), 749.315668, "fan of three at 5 degrees");
+    let (s5, c5) = 5f64.to_radians().sin_cos();
+    let (s10, c10) = 10f64.to_radians().sin_cos();
+    near_box(&r, [-s10, -1.0, 0.0, 20.0 * c5 + s5, 20.0 * s10 + c10, 10.0]);
+}
