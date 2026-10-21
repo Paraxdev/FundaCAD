@@ -67,3 +67,25 @@ describe("a rotated rectangle keeps its fields exactly through solves", () => {
     expect(r.entities[1]).not.toEqual(rect);
   });
 });
+
+describe("collinear on lines that share a point adds one equation", () => {
+  const a = line("a", 1.5, -2, 11.5, 0.5);
+  const col: SketchConstraint[] = [{ type: "collinear", l1: "a", l2: "b" }];
+  const cases = [
+    ["sharing b's start", line("b", 11.5, 0.5, 21, 3.8), 5],
+    ["sharing b's end", line("b", 21, 3.8, 11.5, 0.5), 5],
+    ["sharing no point", line("b", 13, 1, 21, 3.8), 6],
+  ] as const;
+  for (const [label, b, dof] of cases) {
+    it(`${label}: dof ${dof}, nothing over-defined, also when solved again`, async () => {
+      const first = await compileAndSolve([a, b], col);
+      const again = await compileAndSolve(first.entities, col);
+      for (const r of [first, again]) {
+        expect({ dof: r.dof, ok: r.ok, conflicts: r.conflicts, overDefined: r.overDefined }).toEqual({ dof, ok: true, conflicts: [], overDefined: [] });
+        const [sa, sb] = r.entities as { x1: number; y1: number; x2: number; y2: number }[];
+        const off = (x: number, y: number) => ((x - sa!.x1) * (sa!.y2 - sa!.y1) - (y - sa!.y1) * (sa!.x2 - sa!.x1)) / Math.hypot(sa!.x2 - sa!.x1, sa!.y2 - sa!.y1);
+        expect([off(sb!.x1, sb!.y1), off(sb!.x2, sb!.y2)].map((v) => +v.toFixed(9) + 0)).toEqual([0, 0]);
+      }
+    });
+  }
+});
