@@ -1044,13 +1044,22 @@ jobs:
           save-if: ${{ github.ref_type != 'tag' }}
 
       - name: Native tracer tests on Metal
+        shell: bash
         run: |
-          cargo test --locked --manifest-path src-tauri/tracer/Cargo.toml -- --test-threads=4 --nocapture 2>&1 | tee "$RUNNER_TEMP/tracer.log"
+          set -uo pipefail
+          status=0
+          cargo test --locked --manifest-path src-tauri/tracer/Cargo.toml -- --test-threads=4 --nocapture 2>&1 | tee "$RUNNER_TEMP/tracer.log" || status=$?
           grep -E "^[A-Za-z]+ on .*\(" "$RUNNER_TEMP/tracer.log" | sort -u >> "$GITHUB_STEP_SUMMARY" || true
-          if grep -E "skipped(,|:) no (GPU )?adapter" "$RUNNER_TEMP/tracer.log"; then
+          # Ray queries and the OIDN archive may be missing on this runner, so
+          # those skips are listed but do not fail the job.
+          if grep -E "skipped[,:] no ray quer|skipped, FUNDACAD_OIDN_ARCHIVE" "$RUNNER_TEMP/tracer.log" | sort -u | tee -a "$GITHUB_STEP_SUMMARY"; then
+            echo "::warning::some tracer tests skipped on this runner, see the job summary"
+          fi
+          if grep -E "skipped[,:] no (GPU )?adapter" "$RUNNER_TEMP/tracer.log"; then
             echo "::error::the tracer tests found no Metal adapter and skipped"
             exit 1
           fi
+          exit "$status"
 
       - name: Tracer log
         if: always()
