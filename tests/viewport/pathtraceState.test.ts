@@ -38,16 +38,18 @@ describe("when the tracer runs", () => {
 });
 
 describe("realtime while moving", () => {
-  it("draws Realtime while the view moves or a gizmo drags, by default", () => {
+  it("draws Realtime while the view moves, a gizmo drags or an edit lands, by default", () => {
     expect(traceState({ ...base, stillMs: 10 })).toBe("moving");
     expect(traceState({ ...base, dragging: true })).toBe("moving");
-    expect(traceState({ ...base, stillMs: 10, realtimeWhileMoving: true })).toBe("moving");
+    expect(traceState({ ...base, editing: true })).toBe("moving");
+    expect(traceState({ ...base, editing: true, realtimeWhileMoving: true })).toBe("moving");
   });
 
   it("keeps tracing through every move when turned off", () => {
     const off = { ...base, realtimeWhileMoving: false };
     expect(traceState({ ...off, stillMs: 10 })).toBe("trace");
     expect(traceState({ ...off, dragging: true })).toBe("trace");
+    expect(traceState({ ...off, editing: true })).toBe("trace");
     expect(traceState({ ...off, stillMs: 10, samples: 256 })).toBe("done");
   });
 
