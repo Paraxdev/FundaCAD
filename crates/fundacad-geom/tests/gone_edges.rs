@@ -97,3 +97,57 @@ fn a_rim_picked_on_the_circle_it_resolves_to_is_kept() {
     assert!(volume(&r) < plain - 1.0, "the post's top rim was not chamfered: {}", volume(&r));
     assert!(!reasons(&r).iter().any(|s| s.contains("gone")), "{:?}", r.diagnostics);
 }
+
+/// The box's front right Z edge, where a 60 x 40 x 20 box has it.
+fn right_z_edge() -> Value {
+    json!({"kind": "edge", "by": "match", "body": "body1",
+           "fp": {"mid": [30, 20, 0], "dir": [0, 0, 1], "length": 20, "curve": "line"}})
+}
+
+fn stale(r: &Rebuild, feature: &str) -> Option<Value> {
+    r.diagnostics.iter().find(|d| d["feature_id"] == json!(feature) && d["stale"] == json!(true)).cloned()
+}
+
+#[test]
+fn a_match_left_tied_between_edges_away_from_its_pick_says_where_it_now_lands() {
+    // A chamfer upstream took the fillet's edge, its two border lines tie 5 mm off.
+    let doc = json!({"parameters": {}, "features": [
+        {"id": "bx", "type": "box", "length": 60, "width": 40, "height": 20},
+        {"id": "ch", "type": "chamfer", "distance": 5, "edges": right_z_edge()},
+        {"id": "f", "type": "fillet", "radius": 3, "edges": right_z_edge()},
+    ]});
+    let r = build(&doc);
+    let d = stale(&r, "f").unwrap_or_else(|| panic!("no stale note for f: {:?}", r.diagnostics));
+    let now: Vec<f64> = d["now"]["mid"].as_array().unwrap().iter().map(|v| v.as_f64().unwrap()).collect();
+    let near = |x: f64, y: f64| (now[0] - x).abs() < 0.01 && (now[1] - y).abs() < 0.01 && now[2].abs() < 0.01;
+    assert!(near(25.0, 20.0) || near(30.0, 15.0), "{d}");
+    assert!((d["off"].as_f64().unwrap() - 5.0).abs() < 0.01, "{d}");
+    assert_eq!(d["now"]["curve"], json!("line"), "{d}");
+}
+
+#[test]
+fn a_match_picked_where_no_edge_is_says_which_edge_it_took() {
+    let doc = json!({"parameters": {}, "features": [
+        {"id": "bx", "type": "box", "length": 60, "width": 40, "height": 20},
+        {"id": "f", "type": "fillet", "radius": 2, "edges":
+            {"kind": "edge", "by": "match", "body": "body1", "fp": {"mid": [1, 2, 3], "dir": [0, 0, 1]}}},
+    ]});
+    let r = build(&doc);
+    let d = stale(&r, "f").unwrap_or_else(|| panic!("no stale note for f: {:?}", r.diagnostics));
+    assert!(d["off"].as_f64().unwrap() > 30.0, "{d}");
+}
+
+#[test]
+fn a_match_whose_edge_only_drifted_with_a_parameter_stays_quiet() {
+    for length in [59.0, 61.0] {
+        let doc = json!({"parameters": {}, "features": [
+            {"id": "bx", "type": "box", "length": length, "width": 40, "height": 20},
+            {"id": "f", "type": "fillet", "radius": 3, "edges": right_z_edge()},
+        ]});
+        let r = build(&doc);
+        assert!(r.errors.is_empty(), "{:?}", r.errors.iter().map(|e| &e.message).collect::<Vec<_>>());
+        assert!(stale(&r, "f").is_none(), "length {length}: {:?}", r.diagnostics);
+        let want = length * 40.0 * 20.0 - 20.0 * 9.0 * (1.0 - PI / 4.0);
+        assert!((volume(&r) - want).abs() < 0.05, "length {length}: volume {} is not one filleted edge", volume(&r));
+    }
+}

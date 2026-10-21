@@ -316,6 +316,11 @@ impl<'a> Resolver<'a> {
                     None,
                     None,
                 );
+                if let Some(note) = best.filter(|_| lossy).and_then(|i| self.stale_match(part, &edges[i], sel, fp, reason)) {
+                    if let Some(Value::Object(last)) = self.diag.as_deref_mut().and_then(|d| d.last_mut()) {
+                        last.extend(note);
+                    }
+                }
                 Ok(best.map(|i| take(edges, &[i])).unwrap_or_default())
             }
             Some("ofFace") => {
@@ -443,6 +448,38 @@ impl<'a> Resolver<'a> {
             .collect::<FResult<Vec<f64>>>()?;
         let keys: Vec<Key> = edges.iter().map(EdgeEnt::canonical_key).collect();
         Ok(resolve_one(self.tuning, &costs, &keys, nth))
+    }
+
+    /// Where a lossy `match` landed, when that is no longer where it was
+    /// picked: a tie off its pick, or an edge further off than it could have
+    /// drifted. The pick is kept, so saved files build as before, and the note
+    /// says which edge it took.
+    fn stale_match(
+        &self,
+        part: &Shape,
+        e: &EdgeEnt,
+        sel: &Value,
+        fp: &Map<String, Value>,
+        reason: Option<&str>,
+    ) -> Option<Map<String, Value>> {
+        let picked = matched_mid(sel)?;
+        let off = sa::distance_to_point(&e.shape, picked.to_array())?.0;
+        let tol = self.tuning.pos_tol(crate::kernel::bbox_diagonal(part));
+        let tie = reason.is_some_and(|r| r.starts_with("tie"));
+        let picked_len = fp.get("length").and_then(Value::as_f64);
+        if !((tie && off > tol) || far_from(e, picked, picked_len)) {
+            return None;
+        }
+        let at = |p: DVec3| [p.x, p.y, p.z].map(|x| py_round(x, 3));
+        let mut note = Map::new();
+        note.insert("stale".into(), json!(true));
+        note.insert("picked".into(), json!(at(picked)));
+        note.insert(
+            "now".into(),
+            json!({"mid": at(e.mid), "curve": e.curve_name(), "length": py_round(e.length, 3)}),
+        );
+        note.insert("off".into(), json!(py_round(off, 3)));
+        Some(note)
     }
 
     /// `_faces_matching`: one face by fingerprint, never a refusal.

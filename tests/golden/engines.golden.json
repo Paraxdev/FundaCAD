@@ -144,21 +144,26 @@
   "chamfer_large_all_fallback": {
    "bbox": {
     "max": [
-     9.0,
-     9.0,
+     10.0,
+     10.0,
      5.0
     ],
     "min": [
-     -9.0,
-     -9.0,
+     -10.0,
+     -10.0,
      -5.0
     ]
    },
    "bodies": 1,
-   "errors": [],
+   "errors": [
+    [
+     "c",
+     "Chamfer failed on Box: at #mm the chamfer does not fit the edge through (#, #, #), it would run into the chamfer on the neighbouring edge. It fits up to #mm, so try that or a smaller value."
+    ]
+   ],
    "fatal": false,
    "volumes": {
-    "body1": 1730.666667
+    "body1": 4000.0
    }
   },
   "chamfer_plain": {
@@ -205,20 +210,25 @@
    "bbox": {
     "max": [
      10.0,
-     9.5,
+     10.0,
      5.0
     ],
     "min": [
      -10.0,
-     -9.5,
+     -10.0,
      -5.0
     ]
    },
    "bodies": 1,
-   "errors": [],
+   "errors": [
+    [
+     "c",
+     "Chamfer failed on Box: at #mm the chamfer does not fit the edge through (#, #, #), it would run into the chamfer on the neighbouring edge. It fits up to #mm, so try that or a smaller value."
+    ]
+   ],
    "fatal": false,
    "volumes": {
-    "body1": 3300.0
+    "body1": 4000.0
    }
   },
   "clean_up_every_body": {
@@ -562,21 +572,26 @@
   "fillet_large_radius_fallback": {
    "bbox": {
     "max": [
-     9.832159566,
-     9.832159566,
+     10.0,
+     10.0,
      5.0
     ],
     "min": [
-     -9.832159566,
-     -9.832159566,
+     -10.0,
+     -10.0,
      -5.0
     ]
    },
    "bodies": 1,
-   "errors": [],
+   "errors": [
+    [
+     "f",
+     "Fillet failed on Box: at #mm the fillet does not fit the edge through (#, #, #), it would run into the fillet on the neighbouring edge. It fits up to #mm, so try that or a smaller value."
+    ]
+   ],
    "fatal": false,
    "volumes": {
-    "body1": 2769.281198
+    "body1": 4000.0
    }
   },
   "fillet_plain": {
@@ -2674,6 +2689,9 @@
   "rules": "body count and body ids exact; each body's mesh volume (signed tetra sum) within max(volumeRel * |python|, volumeFloor); every bbox corner within max(bboxAbs, bboxRelOfDiagonal * python bbox diagonal); the ordered (feature id, error class) list exact, an error class being the message with every number masked as # and whitespace collapsed, after the repository root is replaced by $REPO. An import fixture is imported through the engine's own import op first; the reply's fields other than geom must equal python's.",
   "rustRecorded": [
    "chamfer_corner_three_edges",
+   "chamfer_large_all_fallback",
+   "chamfer_two_distance_large_fallback",
+   "fillet_large_radius_fallback",
    "fillet_tangent_edges_off",
    "offset_face_chamfered_rim",
    "thin_extrude_l"

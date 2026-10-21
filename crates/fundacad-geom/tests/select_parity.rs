@@ -110,6 +110,15 @@ fn run_case(case: &Value, part: &Shape) -> Value {
             out.insert("error".into(), error_json(&e));
         }
     }
+    // The Python engine never said where a stale `match` landed, that note is
+    // this engine's own, so it is compared by the tests of it instead.
+    for d in &mut diag {
+        if let Some(m) = d.as_object_mut() {
+            for k in ["stale", "picked", "now", "off"] {
+                m.remove(k);
+            }
+        }
+    }
     out.insert("diag".into(), Value::Array(diag));
     Value::Object(out)
 }

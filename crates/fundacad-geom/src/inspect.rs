@@ -602,6 +602,19 @@ pub fn inspect_result(req: &Map<String, Value>, watch: &dyn Watch) -> JobResult 
     let mut m = Map::new();
     m.insert("bodies".into(), Value::Array(bodies));
     m.insert("errors".into(), Value::Array(r.errors.iter().map(FeatureError::wire).collect()));
+    let mut unknown: Vec<&String> = want
+        .iter()
+        .flatten()
+        .filter(|w| !r.bodies.iter().any(|b| &b.id == *w || &b.name == *w))
+        .collect();
+    if !unknown.is_empty() {
+        unknown.sort();
+        m.insert("unknown".into(), json!(unknown));
+        m.insert(
+            "have".into(),
+            Value::Array(r.bodies.iter().map(|b| json!({"id": b.id, "name": b.name})).collect()),
+        );
+    }
     JobResult::Json(m)
 }
 

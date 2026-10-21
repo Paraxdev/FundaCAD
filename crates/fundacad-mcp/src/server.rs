@@ -171,11 +171,56 @@ fn feature_failure_lines(errors: &[Value]) -> Vec<String> {
         .filter_map(|e| {
             let m = e.get("message").and_then(Value::as_str)?;
             Some(format!(
-                "FEATURE FAILED ({}): {m}",
-                e.get("feature_id").and_then(Value::as_str).unwrap_or("None")
+                "FEATURE FAILED ({}): {m}{}",
+                e.get("feature_id").and_then(Value::as_str).unwrap_or("None"),
+                open_profile_hint(m)
             ))
         })
         .collect()
+}
+
+/// The engine's "no closed profile" is also what the app shows, and the app
+/// has no `sketch_tie`, so the way out is added here.
+fn open_profile_hint(message: &str) -> &'static str {
+    if message.contains("no closed profile") {
+        ". `inspect` with `sketch` lists the sketch's loose ends, and `sketch_tie` ties the ones that only touch."
+    } else {
+        ""
+    }
+}
+
+/// A `match` selector the engine found no longer matching where it was
+/// picked. It still took an edge, so the build never goes silent about which.
+fn stale_match_line(d: &Value) -> Option<String> {
+    if d.get("stale") != Some(&json!(true)) {
+        return None;
+    }
+    let mm = |x: f64| {
+        let r = (x * 1000.0).round() / 1000.0;
+        format!("{}", if r == 0.0 { 0.0 } else { r })
+    };
+    let pt = |v: &Value| {
+        let c: Vec<String> = v.as_array()?.iter().map(|x| x.as_f64().map(mm)).collect::<Option<_>>()?;
+        Some(format!("({})", c.join(", ")))
+    };
+    let picked = pt(d.get("picked")?)?;
+    let now = d.get("now")?;
+    let through = pt(now.get("mid")?)?;
+    let curve = now.get("curve").and_then(Value::as_str).unwrap_or("edge");
+    let off = d.get("off").and_then(Value::as_f64).map_or(String::new(), |o| format!(", {} mm from its pick", mm(o)));
+    if d.get("reason").and_then(Value::as_str).is_some_and(|r| r.starts_with("tie")) {
+        return Some(format!(
+            "its edge selector picked at {picked} no longer matches an edge there, it now resolves to the {curve} \
+             through {through}{off}, tied with another edge. Check it with inspect and re-pick it if that is the \
+             wrong edge."
+        ));
+    }
+    // One best match far from the pick is what a parameter moving the edge
+    // leaves, and also what the edge being gone leaves, so it is said either way.
+    Some(format!(
+        "its edge selector picked at {picked} now resolves to the {curve} through {through}{off}. That is right \
+         when a parameter moved the edge, otherwise check it with inspect and re-pick it."
+    ))
 }
 
 /// The engine's `skippedFeatures`: features of a type it does not know, which a
@@ -788,7 +833,7 @@ fn truthy(v: Option<&Value>) -> bool {
 fn require<'a>(args: &'a JsonObject, key: &str) -> Result<&'a Value, CallToolResult> {
     args.get(key)
         .filter(|v| !v.is_null())
-        .ok_or_else(|| failure(format!("KeyError: '{key}'")))
+        .ok_or_else(|| failure(format!("this call needs `{key}`, and it was not given")))
 }
 
 fn require_str(args: &JsonObject, key: &str) -> Result<String, CallToolResult> {
@@ -1804,7 +1849,7 @@ impl FundaCad {
                 .and_then(|e| e.get("message"))
                 .and_then(Value::as_str)
                 .unwrap_or("unknown error");
-            return Err(failure(format!("Build failed{where_}: {err}")));
+            return Err(failure(format!("Build failed{where_}: {err}{}", open_profile_hint(err))));
         }
         let result = reply.get("result").cloned().unwrap_or_else(|| json!({}));
         let mesh = Arc::new(if framed.is_empty() {
@@ -1932,7 +1977,9 @@ impl FundaCad {
             let note = d
                 .get("message")
                 .or_else(|| d.get("reason").filter(|_| advisory))
-                .and_then(Value::as_str);
+                .and_then(Value::as_str)
+                .map(str::to_string)
+                .or_else(|| stale_match_line(d));
             if let Some(m) = note {
                 let at = d.get("feature_id").and_then(Value::as_str).map_or(String::new(), |id| format!(" ({id})"));
                 lines.push(format!("warning{at}: {m}"));
@@ -2047,6 +2094,14 @@ impl FundaCad {
             return failure(format!("Inspect failed: {}", error_message(&reply)));
         }
         let mut report = reply.get("result").cloned().unwrap_or_else(|| json!({}));
+        if let Some(wanted) = report.get("unknown").and_then(Value::as_array).and_then(|u| u.first()).and_then(Value::as_str) {
+            let have = report.get("have").and_then(Value::as_array).map_or(&[][..], Vec::as_slice);
+            return failure(if have.is_empty() {
+                format!("no body '{wanted}', this build made no bodies")
+            } else {
+                no_such_body(wanted, have)
+            });
+        }
         // `errors`, inspect's own name for the same thing `rebuild` calls
         // `featureErrors`: a feature that failed mid-build, reported beside
         // the bodies that did build rather than refusing the inspection.
@@ -2212,7 +2267,7 @@ impl FundaCad {
         };
         let canvas = match render::render(&mesh[..], &request) {
             Ok(c) => c,
-            Err(e) => return failure(format!("ValueError: {e}")),
+            Err(e) => return failure(e),
         };
         let png = match crate::png::encode(&canvas) {
             Ok(p) => p,
@@ -2800,7 +2855,6 @@ impl FundaCad {
             ..ViewRequest::default()
         };
         let png = match render::render(std::slice::from_ref(&surface), &view)
-            .map_err(|e| format!("ValueError: {e}"))
             .and_then(|c| crate::png::encode(&c))
         {
             Ok(p) => p,
