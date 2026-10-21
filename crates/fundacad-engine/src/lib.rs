@@ -41,6 +41,11 @@ pub fn set_build(json: &str) {
     }
 }
 
+/// What `set_build` stored, `None` until a host calls it.
+pub fn build() -> Option<&'static Value> {
+    BUILD.get()
+}
+
 fn pong() -> Value {
     let mut pong = json!({ "pong": true });
     if let Some(build) = BUILD.get() {

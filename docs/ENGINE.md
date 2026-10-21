@@ -258,6 +258,16 @@ in the `rust-geom` job.
   message. There is no sidecar left to ask: re-record the named case
   with `golden-check <golden> --record <case>` (or edit the value by hand),
   and review the diff, which touches only that case.
+- **The disk cache follows the shapes, not the binary.** Checkpoints are keyed
+  on `GEOMETRY_VERSION`, `CACHE_FORMAT` and the OCCT version in
+  `crates/fundacad-geom/src/cache/keys.rs`, so an app update reopens a long
+  document from disk. A change that can move the shape a document builds to,
+  an OCCT patch at the same version included, bumps `GEOMETRY_VERSION` in the
+  same commit; a change to what a checkpoint holds bumps `CACHE_FORMAT`.
+  Re-recording an engine golden fails `geometry_version_tracks_the_golden_answers`
+  until `GOLDEN_DIGEST` is pinned again, as the reminder. Plugins are keyed on
+  their manifest and component bytes, and a build with uncommitted engine
+  edits on those edits.
 - **A new corpus document** has no frozen answer. Add it to the corpus, look
   at what the engine does with it (in the app, or measured by hand), and only
   then run `golden-check <golden> --record <name>`, which writes this engine's
