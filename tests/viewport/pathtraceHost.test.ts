@@ -356,6 +356,35 @@ describe("path trace host", () => {
     expect(host.samples).toBe(2);
   });
 
+  it("restarts on a camera that moved without a cameraChanged flag, an arrow key step", async () => {
+    const { host, t } = await started();
+    host.tick(frame());
+    t.answer(256);
+    await flush();
+    expect(host.samples).toBe(256);
+    const stepped = new THREE.PerspectiveCamera();
+    stepped.position.x = 5;
+    stepped.updateMatrixWorld();
+    t.calls.length = 0;
+    host.tick(frame({}, 1010, { camera: stepped }));
+    expect(t.calls).toContain("camera");
+    expect(host.samples).toBe(0);
+    t.calls.length = 0;
+    host.tick(frame({}, 1020, { camera: stepped }));
+    host.tick(frame({}, 1030, { camera: stepped }));
+    expect(t.calls).not.toContain("camera");
+  });
+
+  it("restarts once on a projection switch, and not again on the same camera", async () => {
+    const { host, t } = await started();
+    host.tick(frame());
+    const ortho = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 1000);
+    t.calls.length = 0;
+    host.tick(frame({}, 1010, { camera: ortho }));
+    host.tick(frame({}, 1020, { camera: ortho }));
+    expect(t.calls.filter((c) => c === "camera")).toHaveLength(1);
+  });
+
   it("does not touch the scene on a hover, and refits it when a body moves", async () => {
     const root = scene();
     const { host, t } = await started();
