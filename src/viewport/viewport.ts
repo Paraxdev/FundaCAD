@@ -1909,6 +1909,17 @@ export class Viewport {
     return out;
   }
 
+  private bodyBoxes(): THREE.Box3[] {
+    const out: THREE.Box3[] = [];
+    for (const b of this.model?.bodies ?? []) {
+      const g = b.mesh.geometry;
+      if (!g.boundingBox) g.computeBoundingBox();
+      b.mesh.updateWorldMatrix(true, false);
+      if (g.boundingBox) out.push(g.boundingBox.clone().applyMatrix4(b.mesh.matrixWorld));
+    }
+    return out;
+  }
+
   /** The world bounding box of the given bodies, or null when none of them are
    *  in the current model. How big the thing being patterned IS, the natural
    *  first spacing for a repeat is one span, where the copies just touch. */
@@ -2725,7 +2736,7 @@ export class Viewport {
     // tangent edges faint, and leaves a restored selection's colour alone.
     this.highlighter.setEdgeBase(this.edgeBaseColor());
     this.targetGridZ = this.model.box.min.z; // drop the grid to the model's floor
-    this.rig.setContentBox(this.model.box);
+    this.rig.setContentBox(this.model.box, this.bodyBoxes());
     this.applyAnalysis(); // paints the analysis overlay, or assigned body colors when "none"
     if (this.zebra) this.applyZebra();
     if (this.combs) this.applyCombs();
