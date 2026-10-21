@@ -152,10 +152,18 @@ export class Picker {
     // finger simply gets the same shape of band at fingertip size.
     const faceBand = edgeBandPx(face ? faceScreenExtentPx(view, face.faceId, camera, rect) : null) * hitScale();
     const scale = modelScale(view);
+    // Over a face only candidates within a few px of the pointer get a sight
+    // ray, so the bodies near the ray are gathered for the radius asked so far.
+    let near: THREE.Mesh[] = [];
+    let nearPx = 0;
+    const occluders = (px: number) => {
+      if (px > nearPx) near = this.occludersNear((nearPx = Math.max(px, 2 * nearPx, 4)), camera, rect, view);
+      return near;
+    };
     const i = preferredEdge(cands.map((c) => ({
       screenDist: c.screenDist,
-      occluded: !this.pointVisible(c.point, camera, view, scale),
-      bandPx: edgeBandForPx(
+      occluded: () => !this.pointVisible(c.point, camera, occluders(c.screenDist + 1), scale),
+      bandPx: () => edgeBandForPx(
         faceBand,
         c.edge.smooth ? 0 : shortEdgeBoostPx(edgeScreenLengthPx(c.edge, camera, rect)) * hitScale(),
         c.edge.smooth,
@@ -182,13 +190,23 @@ export class Picker {
     if (!cands.length) return null;
     if (!opts?.visibleOnly) return cands[0] ?? null;
     const scale = modelScale(view);
-    return cands.find((c) => this.pointVisible(c.point, camera, view, scale)) ?? null;
+    const near = this.occludersNear(farthestPx(cands), camera, rect, view);
+    return cands.find((c) => this.pointVisible(c.point, camera, near, scale)) ?? null;
   }
 
   /** The candidates whose nearest point is in plain view. */
-  visibleCandidates(cands: EdgeCandidate[], camera: THREE.Camera, view: ModelView): EdgeCandidate[] {
+  visibleCandidates(cands: EdgeCandidate[], camera: THREE.Camera, view: ModelView, rect: DOMRect): EdgeCandidate[] {
     const scale = modelScale(view);
-    return cands.filter((c) => this.pointVisible(c.point, camera, view, scale));
+    const near = this.occludersNear(farthestPx(cands), camera, rect, view);
+    return cands.filter((c) => this.pointVisible(c.point, camera, near, scale));
+  }
+
+  /** The visible bodies a sight ray to a point drawn within `radiusPx` of the
+   *  pointer can pass through. Each sight ray otherwise walks every body,
+   *  0.29 ms on a 1310 body assembly against 0.05 ms through the 78 within 5 px,
+   *  and a pick over a dense one asks over a thousand of them. */
+  private occludersNear(radiusPx: number, camera: THREE.Camera, rect: DOMRect, view: ModelView): THREE.Mesh[] {
+    return meshesNearRay(visibleBodyMeshes(view), this.raycaster.ray, camera, rect.height, radiusPx);
   }
 
   private sightRay = Object.assign(new THREE.Raycaster(), { firstHitOnly: true });
@@ -198,10 +216,10 @@ export class Picker {
    *  edge's own point rather than under the cursor: across a wide grab radius
    *  the face under the cursor can sit well in front of an edge on it, as
    *  beside a silhouette, and would hide an edge that is in plain view. */
-  private pointVisible(point: THREE.Vector3, camera: THREE.Camera, view: ModelView, scale: number): boolean {
+  private pointVisible(point: THREE.Vector3, camera: THREE.Camera, meshes: THREE.Mesh[], scale: number): boolean {
     const p = this.scratch.copy(point).project(camera);
     this.sightRay.setFromCamera(this.sightNdc.set(p.x, p.y), camera);
-    const hit = this.sightRay.intersectObjects(visibleBodyMeshes(view), false)[0];
+    const hit = this.sightRay.intersectObjects(meshes, false)[0];
     return !occludedEdge(this.sightRay.ray.origin.distanceTo(point), hit?.distance ?? null, scale);
   }
 
@@ -268,6 +286,52 @@ export class Picker {
     }
     return [...byEdge.values()].sort((a, b) => a.rankPx - b.rankPx);
   }
+}
+
+/** A screen radius that holds every candidate, a px of slack for rounding. */
+function farthestPx(cands: readonly EdgeCandidate[]): number {
+  let px = 0;
+  for (const c of cands) px = Math.max(px, c.screenDist);
+  return px + 1;
+}
+
+const _sphere = new THREE.Sphere();
+const _onRay = new THREE.Vector3();
+
+/** The meshes whose bounding sphere comes within `radiusPx` on screen of `ray`,
+ *  the pointer ray. Conservative: any point drawn that close to the pointer lies
+ *  within that screen distance per unit of depth of the ray (perspective), or
+ *  within a fixed world distance of it (orthographic), and depth is never more
+ *  than the distance from the camera. */
+export function meshesNearRay(
+  meshes: readonly THREE.Mesh[],
+  ray: THREE.Ray,
+  camera: THREE.Camera,
+  viewHeightPx: number,
+  radiusPx: number,
+): THREE.Mesh[] {
+  const persp = camera as THREE.PerspectiveCamera;
+  const ortho = camera as THREE.OrthographicCamera;
+  let fixed = 0;
+  let perDepth = 0;
+  if (persp.isPerspectiveCamera) {
+    perDepth = (radiusPx * 2 * Math.tan(THREE.MathUtils.degToRad(persp.fov) / 2)) / (persp.zoom * viewHeightPx);
+  } else if (ortho.isOrthographicCamera) {
+    fixed = (radiusPx * (ortho.top - ortho.bottom)) / (ortho.zoom * viewHeightPx);
+  } else {
+    return [...meshes];
+  }
+  const out: THREE.Mesh[] = [];
+  for (const m of meshes) {
+    const g = m.geometry;
+    if (!g.boundingSphere) g.computeBoundingSphere();
+    _sphere.copy(g.boundingSphere!).applyMatrix4(m.matrixWorld);
+    const r = _sphere.radius;
+    const away = ray.closestPointToPoint(_sphere.center, _onRay).distanceTo(_sphere.center);
+    const reach = fixed + perDepth * (ray.origin.distanceTo(_sphere.center) + r);
+    if (away <= r + reach) out.push(m);
+  }
+  return out;
 }
 
 /** How far behind the visible surface an edge may sit and still count as being ON
