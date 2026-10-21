@@ -9,6 +9,31 @@ use super::{BlendErr, Fits, Misfit, SectionErr};
 use crate::kernel;
 use crate::select::entity::EdgeEnt;
 
+/// A round of the last section build on this thread that runs past one of its
+/// faces: the largest size at which it rests on both, and a point on its edge.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Overrun {
+    pub fits: Option<f64>,
+    pub at: [f64; 3],
+}
+
+thread_local! {
+    static OVERRUN: std::cell::Cell<Option<Overrun>> = const { std::cell::Cell::new(None) };
+}
+
+pub fn take_overrun() -> Option<Overrun> {
+    OVERRUN.with(std::cell::Cell::take)
+}
+
+fn overrun_of(message: &str) -> Option<Overrun> {
+    let rest = message.strip_prefix("overrun ")?;
+    let n: Vec<f64> = rest.split(' ').filter_map(|w| w.parse().ok()).collect();
+    match n.as_slice() {
+        [fits, x, y, z] => Some(Overrun { fits: Some(*fits).filter(|k| *k > 0.0), at: [*x, *y, *z] }),
+        _ => None,
+    }
+}
+
 /// What a Python caller of an OCP exception reads: the detail, else the class.
 fn exception_text(e: &cxx::Exception) -> String {
     let what = e.what();
@@ -215,6 +240,7 @@ fn section_with(
                     "the blend produced no usable solid".into(),
                 ))
             } else {
+                OVERRUN.with(|c| c.set(overrun_of(&message)));
                 Ok(shape)
             }
         }

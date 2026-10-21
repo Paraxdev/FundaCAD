@@ -878,3 +878,132 @@ fn the_schema_is_also_a_resource() {
     let missing = mcp.rpc("resources/read", json!({"uri": "fundacad://nope"}));
     assert!(missing.get("error").is_some(), "{missing}");
 }
+
+// --- never silently wrong ----------------------------------------------------
+
+fn box_60_40_20() -> (&'static str, Value) {
+    ("feature_add", json!({"feature": {"id": "bx", "type": "box", "length": 60, "width": 40, "height": 20}}))
+}
+
+fn right_z_edge() -> Value {
+    json!({"kind": "edge", "by": "match", "body": "body1",
+           "fp": {"mid": [30, 20, 0], "dir": [0, 0, 1], "length": 20, "curve": "line"}})
+}
+
+#[test]
+fn a_match_whose_edge_a_chamfer_took_warns_which_edge_it_now_fillets() {
+    let rs = drive(&[
+        box_60_40_20(),
+        ("feature_add", json!({"feature": {"id": "ch", "type": "chamfer", "distance": 5, "edges": right_z_edge()}})),
+        ("feature_add", json!({"feature": {"id": "f", "type": "fillet", "radius": 3, "edges": right_z_edge()}})),
+        ("build", json!({})),
+    ]);
+    let t = &rs[3].text;
+    assert!(t.contains("warning (f):"), "{t}");
+    assert!(t.contains("(30, 20, 0)"), "{t}");
+    assert!(t.contains("(25, 20, 0)") || t.contains("(30, 15, 0)"), "{t}");
+    assert!(t.contains("inspect"), "{t}");
+}
+
+#[test]
+fn a_match_picked_where_no_edge_is_warns_instead_of_taking_one_quietly() {
+    let rs = drive(&[
+        box_60_40_20(),
+        ("feature_add", json!({"feature": {"id": "f", "type": "fillet", "radius": 2, "edges":
+            {"kind": "edge", "by": "match", "body": "body1", "fp": {"mid": [1, 2, 3], "dir": [0, 0, 1]}}}})),
+        ("build", json!({})),
+    ]);
+    assert!(rs[2].text.contains("warning (f):") && rs[2].text.contains("(1, 2, 3)"), "{}", rs[2].text);
+}
+
+#[test]
+fn a_match_whose_edge_drifted_with_the_box_stays_quiet() {
+    let rs = drive(&[
+        ("feature_add", json!({"feature": {"id": "bx", "type": "box", "length": 59, "width": 40, "height": 20}})),
+        ("feature_add", json!({"feature": {"id": "f", "type": "fillet", "radius": 3, "edges": right_z_edge()}})),
+        ("build", json!({})),
+    ]);
+    assert!(!rs[2].is_error && !rs[2].text.contains("warning"), "{}", rs[2].text);
+}
+
+#[test]
+fn inspect_of_a_body_that_does_not_exist_names_the_ones_that_do() {
+    let rs = drive(&[box_60_40_20(), ("inspect", json!({"body": "body9"}))]);
+    let t = &rs[1].text;
+    assert!(rs[1].is_error, "{t}");
+    assert!(t.contains("body9") && t.contains("body1"), "{t}");
+    assert!(!t.contains("No bodies"), "{t}");
+}
+
+#[test]
+fn a_missing_argument_is_named_in_plain_words() {
+    let r = one("feature_remove", json!({}));
+    assert!(r.is_error, "{}", r.text);
+    assert!(!r.text.contains("KeyError") && r.text.contains("`id`"), "{}", r.text);
+}
+
+#[test]
+fn an_extrude_of_an_open_sketch_points_at_sketch_tie() {
+    let line = |id: &str, x1: f64, y1: f64, x2: f64, y2: f64| {
+        json!({"id": id, "type": "line", "x1": x1, "y1": y1, "x2": x2, "y2": y2})
+    };
+    let ents = [
+        line("o1", 0.0, 0.0, 30.0, 0.0),
+        line("o2", 30.001, 0.0, 30.0, 20.0),
+        line("o3", 30.0, 20.0, 0.0, 20.0),
+        line("o4", 0.0, 20.0, 0.0, 0.0),
+    ];
+    let rs = drive(&[
+        ("feature_add", json!({"feature": {"id": "sk", "type": "sketch", "plane": "XY", "entities": ents}})),
+        ("feature_add", json!({"feature": {"id": "ex", "type": "extrude", "sketch": "sk", "distance": 10,
+                                           "operation": "new"}})),
+        ("build", json!({})),
+    ]);
+    let t = &rs[2].text;
+    assert!(rs[2].is_error && t.contains("no closed profile"), "{t}");
+    assert!(t.contains("sketch_tie") && t.contains("inspect"), "{t}");
+}
+
+#[test]
+fn a_fillet_too_large_for_its_neighbours_is_refused_with_the_size_that_fits() {
+    let rs = drive(&[
+        box_60_40_20(),
+        ("feature_add", json!({"feature": {"id": "f", "type": "fillet", "radius": 21,
+                                           "edges": {"kind": "edge", "by": "axis", "axis": "Z", "body": "body1"}}})),
+        ("build", json!({})),
+    ]);
+    let t = &rs[2].text;
+    assert!(rs[2].is_error, "{t}");
+    assert!(t.contains("neighbouring edge") && t.contains("fits up to 20"), "{t}");
+}
+
+#[test]
+fn a_lone_fillet_larger_than_its_face_warns_in_the_build_reply() {
+    let rs = drive(&[
+        box_60_40_20(),
+        ("feature_add", json!({"feature": {"id": "f", "type": "fillet", "radius": 45, "edges":
+            {"kind": "edge", "by": "nearest", "point": [30, 20, 0], "body": "body1"}}})),
+        ("build", json!({})),
+    ]);
+    let t = &rs[2].text;
+    assert!(t.contains("warning (f):") && t.contains("runs past") && t.contains("fits up to 39.99mm"), "{t}");
+}
+
+#[test]
+fn a_match_whose_edge_a_parameter_moved_far_says_that_can_be_right() {
+    let rs = drive(&[
+        ("feature_add", json!({"feature": {"id": "bx", "type": "box", "length": 100, "width": 40, "height": 20}})),
+        ("feature_add", json!({"feature": {"id": "f", "type": "fillet", "radius": 3, "edges": right_z_edge()}})),
+        ("build", json!({})),
+    ]);
+    let t = &rs[2].text;
+    assert!(t.contains("warning (f):") && t.contains("(50, 20, 0)"), "{t}");
+    assert!(t.contains("a parameter moved") && !t.contains("no longer matches"), "{t}");
+}
+
+#[test]
+fn a_view_with_a_wrong_section_side_answers_without_python_words() {
+    let rs = drive(&[box_60_40_20(), ("view", json!({"section": {"axis": "Y", "keep": "middle"}}))]);
+    assert!(rs[1].is_error && rs[1].text.contains("keep='middle'"), "{}", rs[1].text);
+    assert!(!rs[1].text.contains("ValueError"), "{}", rs[1].text);
+}
