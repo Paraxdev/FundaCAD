@@ -920,6 +920,7 @@ struct Parts {
     edges: Vec<Shape>,
     all_edges: Vec<Shape>,
     text_local: Vec<Shape>,
+    curves: Vec<Curve>,
 }
 
 /// The sketch's resolved curves in its own XY, patterns expanded and construction left out.
@@ -1020,7 +1021,7 @@ fn parts(ctx: &Ctx, f: &SketchFeature) -> FResult<Parts> {
         }
     }
 
-    Ok(Parts { items, faces, edges, all_edges, text_local })
+    Ok(Parts { items, faces, edges, all_edges, text_local, curves })
 }
 
 /// The curves a sketch draws, and its text as faces, in the sketch's own XY.
@@ -1037,7 +1038,7 @@ pub fn build(ctx: &Ctx, f: &SketchFeature, followed: Option<Placement>) -> FResu
     };
     let plane = plane_of(plane_ref, &ctx.datums)?;
 
-    let Parts { items, mut faces, edges, all_edges, text_local } = parts(ctx, f)?;
+    let Parts { items, mut faces, edges, all_edges, text_local, curves } = parts(ctx, f)?;
 
     if !edges.is_empty() {
         faces.extend(faces_from_edges(&edges));
