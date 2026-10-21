@@ -267,7 +267,9 @@ impl FundaCad {
                 return Ok(text(stop));
             }
             if Instant::now() >= deadline {
-                return Ok(text(format!("nothing happened in {timeout} s, the step is still up")));
+                let up = guide["step"].is_object() && guide["step"]["next"] != json!(true);
+                let what = if up { "the step is still up" } else { "and no step is on screen" };
+                return Ok(text(format!("nothing happened in {timeout} s, {what}")));
             }
             tokio::time::sleep(WAIT_POLL).await;
             guide = match self.guide_call(&link, &name, None).await {
