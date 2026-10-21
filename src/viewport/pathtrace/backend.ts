@@ -75,6 +75,9 @@ export interface TracerBackend {
   setRenderScale(scale: number): void;
   /** Samples per pixel where tracing stops. */
   setCap(samples: number): void;
+  /** The trace is on screen through every restart, so each frame before its
+   *  first whole sample needs a picture of its own. */
+  setMotionPreview?(on: boolean): void;
   readonly maxTextureSize: number;
   /** Traces the current scene and camera at `width` x `height` until
    *  `samples`, denoises it with the large weights and returns a PNG data URL.

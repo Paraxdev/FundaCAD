@@ -1007,11 +1007,14 @@ export class Viewport {
     return () => this.tierListeners.delete(fn);
   }
 
-  get traceStatus(): { state: TraceState; samples: number; shown: boolean; denoised: boolean; backend: string; gpu: string; note: string; picturing: boolean } {
+  get traceStatus(): {
+    state: TraceState; samples: number; shown: boolean; denoised: boolean; backend: string; gpu: string; note: string; picturing: boolean;
+    realtimeFrames: number;
+  } {
     const t = this.trace;
     return {
       state: t.state, samples: t.samples, shown: t.shown, denoised: t.denoised, backend: t.backendName, gpu: `${describeProbe(this.gpu)}; ${describeNative(this.native)}`,
-      note: t.note, picturing: t.picturing,
+      note: t.note, picturing: t.picturing, realtimeFrames: this.scene.post.realtimeFrames,
     };
   }
 
@@ -4300,6 +4303,7 @@ export class Viewport {
           visible: document.visibilityState === "visible" && !this.power.minimised,
           stillMs: now - this.lastMovedAt,
           dragging: this.gizmoDragging,
+          realtimeWhileMoving: renderPrefs().realtimeWhileMoving,
           sectioned: this.sectioned,
           xray: this.xray,
           wireframe: this.wireframe,

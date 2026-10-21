@@ -130,6 +130,7 @@ export class PathTraceHost {
   private inFlight = false;
   private measured: number | null = null;
   private budgetSent = false;
+  private preview = false;
 
   constructor(
     private webglCanvas: HTMLCanvasElement,
@@ -157,6 +158,9 @@ export class PathTraceHost {
     if (f.cameraChanged) this.cameraDirty = true;
     if (f.sceneMaybeChanged) this.sceneDirty = true;
     const s = this.disabled ? "off" : traceState({ ...f.inputs, samples: this.samples, cap: this.cap });
+    // Realtime while moving off: the last traced picture stays up through a
+    // restart, the tracer's canvas keeps it until the first new sample lands.
+    const hold = f.inputs.realtimeWhileMoving === false;
     if (s !== this.state) {
       this.state = s;
       this.onStateChange?.(s);
@@ -181,8 +185,12 @@ export class PathTraceHost {
       return this.show(false);
     }
     if (s === "trace" && !this.sawSample) this.arm();
+    if (hold !== this.preview) {
+      this.preview = hold;
+      b.setMotionPreview?.(hold);
+    }
     this.syncCanvas(b);
-    if (this.sceneDirty && !this.syncScene(b, f)) return this.show(false);
+    if (this.sceneDirty && !this.syncScene(b, f)) return this.show(hold && this.shown && this.hasScene);
     this.watchdog(f.now, s);
     const lens = f.lens();
     const lensKey = lensSignature(lens);
@@ -208,7 +216,7 @@ export class PathTraceHost {
       if (!this.inFlight) this.traceFrame(b);
       this.poll(b);
     } else if (!this.settled && this.samples >= this.cap) this.settled = !b.present(f.now);
-    this.show(this.samples > 0);
+    this.show(this.samples > 0 || (hold && this.shown));
   }
 
   private syncBloom(b: TracerBackend, f: TraceFrame) {
@@ -352,6 +360,7 @@ export class PathTraceHost {
         this.renderScale = 0;
         this.budget = new FrameBudget(Infinity);
         this.budgetSent = false;
+        this.preview = false;
         this.denoiseLevel = "";
         this.bloom = "";
         this.sceneDirty = this.cameraDirty = true;
@@ -374,6 +383,8 @@ export class PathTraceHost {
     st.left = `${c.offsetLeft}px`;
     st.top = `${c.offsetTop}px`;
     if (w === this.size.w && h === this.size.h && ratio === this.size.ratio) return;
+    // A resized canvas is blank, nothing traced is left to hold up.
+    this.show(false);
     this.size = { w, h, ratio };
     b.setSize(Math.max(1, w), Math.max(1, h), ratio);
     const scale = renderScaleFor({ cssHeight: h, dpr: globalThis.devicePixelRatio || 1, discharging: this.power.discharging });

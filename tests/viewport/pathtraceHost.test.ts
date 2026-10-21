@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { TracerBackend } from "../../src/viewport/pathtrace/backend";
 import { FIRST_SAMPLE_TIMEOUT_MS, IDLE_DISPOSE_MS, PathTraceHost, type TraceFrame } from "../../src/viewport/pathtrace/host";
 import { TRIANGLE_BUDGET } from "../../src/viewport/pathtrace/mirror";
+import { STILL_MS } from "../../src/viewport/pathtrace/state";
 
 const ENV = new THREE.Texture();
 
@@ -37,6 +38,7 @@ class FakeTracer implements TracerBackend {
   setFrameBudget(n: number) { this.calls.push(`budget:${n}`); }
   setRenderScale(n: number) { this.calls.push(`scale:${n}`); }
   setCap(n: number) { this.calls.push(`cap:${n}`); }
+  setMotionPreview(on: boolean) { this.calls.push(`preview:${on}`); }
   pictureDone: ((url: string) => void) | null = null;
   pictureSize = { width: 0, height: 0, samples: 0 };
   picture(o: { width: number; height: number; samples: number }) {
@@ -215,7 +217,7 @@ describe("path trace host", () => {
     expect(t.calls).toContain("present");
   });
 
-  it("shows Realtime and spends nothing while moving or paused", async () => {
+  it("shows Realtime and spends nothing while moving or paused, by default", async () => {
     const { host, t } = await started();
     for (const over of [{ stillMs: 10 }, { sectioned: true }, { xray: true }, { wireframe: true }, { sketchOpen: true }, { visible: false }]) {
       t.calls.length = 0;
@@ -223,6 +225,98 @@ describe("path trace host", () => {
       expect(t.calls).not.toContain("sample");
       expect(host.shown).toBe(false);
     }
+  });
+
+  it("keeps the traced picture up and traces every frame of an orbit with Realtime while moving off", async () => {
+    const { host, t } = await started();
+    const off = { realtimeWhileMoving: false };
+    host.tick(frame(off));
+    t.answer(8);
+    await flush();
+    host.tick(frame(off, 1010));
+    expect(host.shown).toBe(true);
+    t.calls.length = 0;
+    const shown: boolean[] = [];
+    for (let i = 0; i < 10; i++) {
+      host.tick(frame({ ...off, stillMs: 5 }, 1100 + i * 16, { cameraChanged: true }));
+      shown.push(host.shown);
+      t.answer(1);
+      await flush();
+    }
+    expect(host.state).toBe("trace");
+    expect(shown).toEqual(Array(10).fill(true));
+    expect(t.calls.filter((c) => c === "reset")).toHaveLength(10);
+    expect(t.calls.filter((c) => c === "sample").length).toBeGreaterThanOrEqual(9);
+  });
+
+  it("asks the tracer for its own preview of each restart only with Realtime while moving off", async () => {
+    const { host, t } = await started();
+    const previews = () => t.calls.filter((c) => c.startsWith("preview:"));
+    host.tick(frame());
+    expect(previews()).toEqual([]);
+    host.tick(frame({ realtimeWhileMoving: false }, 1010));
+    host.tick(frame({ realtimeWhileMoving: false }, 1020));
+    expect(previews()).toEqual(["preview:true"]);
+    host.tick(frame({}, 1030));
+    expect(previews()).toEqual(["preview:true", "preview:false"]);
+  });
+
+  it("drops to Realtime on a resize with Realtime while moving off, the resized canvas is blank", async () => {
+    const { host, t } = await started();
+    const off = { realtimeWhileMoving: false };
+    host.tick(frame(off));
+    t.answer(8);
+    await flush();
+    host.tick(frame(off, 1010));
+    expect(host.shown).toBe(true);
+    const wide = { ...glCanvas, clientWidth: 1000 } as unknown as HTMLCanvasElement;
+    (host as unknown as { webglCanvas: HTMLCanvasElement }).webglCanvas = wide;
+    host.tick(frame(off, 1020, { cameraChanged: true }));
+    expect(host.shown).toBe(false);
+  });
+
+  it("goes back to the trace once the view rests after an orbit", async () => {
+    const { host, t } = await started();
+    host.tick(frame());
+    t.answer(8);
+    await flush();
+    host.tick(frame({}, 1010));
+    expect(host.shown).toBe(true);
+    t.answer(8);
+    await flush();
+    for (let i = 0; i < 5; i++) host.tick(frame({ stillMs: 5 }, 1100 + i * 16, { cameraChanged: true }));
+    expect(host.state).toBe("moving");
+    expect(host.shown).toBe(false);
+    await flush();
+    t.calls.length = 0;
+    host.tick(frame({ stillMs: STILL_MS }, 1300));
+    expect(host.state).toBe("trace");
+    expect(t.calls).toContain("reset");
+    expect(t.calls).toContain("sample");
+    expect(host.shown).toBe(false);
+    t.answer(1);
+    await flush();
+    host.tick(frame({}, 1320));
+    expect(host.shown).toBe(true);
+  });
+
+  it("keeps the traced picture up through an edit with Realtime while moving off", async () => {
+    const root = scene();
+    const { host, t } = await started();
+    const off = { realtimeWhileMoving: false };
+    host.tick(frame(off, 1000, { root }));
+    t.answer(8);
+    await flush();
+    host.tick(frame(off, 1010, { root }));
+    await flush();
+    root.children[0]!.position.x = 3;
+    root.children[0]!.updateMatrixWorld();
+    t.calls.length = 0;
+    host.tick(frame(off, 1020, { root, sceneMaybeChanged: true }));
+    expect(host.state).toBe("trace");
+    expect(host.shown).toBe(true);
+    expect(t.calls).toContain("transforms");
+    expect(t.calls).toContain("sample");
   });
 
   it("drops a sample count from before a camera move", async () => {

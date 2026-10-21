@@ -7,6 +7,7 @@ declare module "three-gpu-pathtracer/webgpu" {
     renderDelay: number;
     minSamples: number;
     fadeDuration: number;
+    lowResScale: number;
     renderScale: number;
     frameBudget: number;
     synchronizeRenderSize: boolean;
