@@ -856,6 +856,7 @@ async function importWith(
   // assembly's product colours were read by the engine, carried in the
   // manifest, and then never looked at, so a file that arrived fully coloured
   // opened as three thousand identical grey bodies.
+  if (await cancelledImport(store, imported, res)) return;
   const source = importSource(imported);
   if (!(await adoptImportedColors(store, id, res, { joinImport: true, source }))) recolorOnRedo(store, imported, res);
 
@@ -879,6 +880,31 @@ async function importWith(
 const importSource = (f: Feature) =>
   f.type === "import" ? (f as Extract<Feature, { type: "import" }>).source : undefined;
 
+/** Waits for the build that brings `imported` in. A Cancel pressed during it
+ *  takes the import back as one undo step, which Redo builds again, and says so.
+ *  True when nothing is left for the import to do: it was cancelled, or a
+ *  document open replaced the one it went into. */
+async function cancelledImport(store: DocumentStore, imported: Feature, res: Parameters<typeof adoptImportedColors>[2]) {
+  let opened = false;
+  const offOpen = store.onOpen(() => (opened = true));
+  await store.whenBuilt().finally(offOpen);
+  if (opened) return true;
+  const still = store.document.features.find((f) => f.id === imported.id);
+  if (!store.buildState.cancelled || !still || importSource(still) !== importSource(imported)) return false;
+  const has = (d: { features: { id: string }[] }) => d.features.some((f) => f.id === imported.id);
+  const undone = store.undoIfTop((before) => !has(before) && has(store.document));
+  if (undone) recolorOnRedo(store, imported, res);
+  const name = importSource(imported)?.split(/[\\/]/).pop() || "the file";
+  const { toast } = await import("../ui/toast");
+  toast(
+    undone
+      ? `Import of ${name} cancelled, nothing was added. Redo brings it back.`
+      : "Rebuild cancelled, the model is not built. Compute All builds it.",
+    { kind: "info" },
+  );
+  return true;
+}
+
 /** An import undone while its rebuild ran put its colours on nothing. Its redo
  *  puts them on then, as part of that same step, or never. */
 export function recolorOnRedo(store: DocumentStore, feature: Feature, res: Parameters<typeof adoptImportedColors>[2]) {
@@ -900,9 +926,10 @@ export function recolorOnRedo(store: DocumentStore, feature: Feature, res: Param
     if (rewound && back) {
       const source = importSource(feature);
       queueMicrotask(() => {
-        adoptImportedColors(store, feature.id, res, { joinImport: true, only: true, source }).catch((e) =>
-          console.warn("import colours not put back", e),
-        );
+        void (async () => {
+          if (await cancelledImport(store, feature, res)) return;
+          await adoptImportedColors(store, feature.id, res, { joinImport: true, only: true, source });
+        })().catch((e) => console.warn("import colours not put back", e));
       });
     }
   });
@@ -968,7 +995,7 @@ export async function adoptImportedColors(
 
   let opened = false;
   const offOpen = store.onOpen(() => (opened = true));
-  await store.rebuildNow().finally(offOpen);
+  await store.whenBuilt().finally(offOpen);
   if (opened) return true;
   const bodies = store.buildState.result?.bodies ?? [];
   // Note: after an undo nextId() hands this id to the next feature drawn, so the
