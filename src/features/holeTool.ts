@@ -20,7 +20,7 @@ import { previewVerdict } from "./previewVerdict";
 import { featureNumFields } from "../document/numFields";
 import { planeXDir } from "./planeMath";
 import {
-  CLEARANCE, HOLE_TYPES, INSERT, isHoleSize, newHoleFields, parseHoleSize, type HoleSize,
+  CLEARANCE, HOLE_TYPES, INSERT, badHoleSizeText, isHoleSize, newHoleFields, parseHoleSize, type HoleSize,
 } from "./holeStandards";
 import { rebaseHole, trackedFace, upgradeFace, withExtent } from "./holeFace";
 
@@ -350,7 +350,7 @@ export class HoleTool {
    *  what it could not read instead of building the last value it could. */
   private typedProblem(): string | null {
     if (this.dim.isUserDriven("size") && !parseHoleSize(this.dim.getRaw("size"))) {
-      return `Size: "${this.dim.getRaw("size").trim()}" is not a size, type M5 or a diameter`;
+      return badHoleSizeText(this.dim.getRaw("size"));
     }
     const depthText = this.dim.getRaw("depth");
     if (this.dim.isUserDriven("depth") && !(THROUGH.test(depthText) && this.holeType !== "insert")) {

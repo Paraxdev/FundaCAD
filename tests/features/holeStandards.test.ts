@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   CLEARANCE, COUNTERBORE, COUNTERSINK, HOLE_SIZES, INSERT, TAP_DRILL,
-  holeChoicePatch, holeFieldApplies, newHoleFields, parseHoleSize, standardDims,
+  badHoleSizeText, holeChoicePatch, holeFieldApplies, newHoleFields, parseHoleSize, standardDims,
 } from "../../src/features/holeStandards";
 import type { Feature } from "../../src/types";
 import vectors from "../vectors/hole_standards.json";
@@ -22,6 +22,21 @@ describe("hole standard tables", () => {
     expect(COUNTERBORE.M4).toEqual([8.0, 4.4]);
     expect(COUNTERSINK.M6).toBe(13.7);
     expect(INSERT.M3).toEqual([4.0, 6.0]);
+  });
+
+  it("run through the coarse metric sizes M2 to M20, M12 among them", () => {
+    expect([...HOLE_SIZES]).toEqual(["M2", "M2.5", "M3", "M4", "M5", "M6", "M8", "M10", "M12", "M16", "M20"]);
+    expect(CLEARANCE.M12).toEqual([13, 13.5, 14.5]);
+    expect(TAP_DRILL.M12).toBe(10.2);
+    expect(COUNTERBORE.M12).toEqual([20, 12.6]);
+    expect(COUNTERSINK.M12).toBe(27.2);
+    expect(standardDims("simple", "clearance", "M12", "normal")).toEqual({ diameter: 13.5 });
+    expect(parseHoleSize("m12")).toEqual({ size: "M12" });
+    expect(parseHoleSize("M13")).toBeNull();
+  });
+
+  it("say what the size box takes in plain words when it is refused", () => {
+    expect(badHoleSizeText(" M13 ")).toBe('Size: "M13" is not a size, use M2 to M20 or a diameter in mm');
   });
 
   it("match tests/vectors/hole_standards.json row for row, as the Rust tables do", () => {

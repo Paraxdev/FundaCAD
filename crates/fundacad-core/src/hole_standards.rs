@@ -1,7 +1,7 @@
 //! Standard hole sizes, the Rust twin of src/features/holeStandards.ts, both
 //! checked against tests/vectors/hole_standards.json.
 
-pub const SIZES: [&str; 8] = ["M2", "M2.5", "M3", "M4", "M5", "M6", "M8", "M10"];
+pub const SIZES: [&str; 11] = ["M2", "M2.5", "M3", "M4", "M5", "M6", "M8", "M10", "M12", "M16", "M20"];
 
 pub const FITS: [&str; 3] = ["close", "normal", "loose"];
 
@@ -22,6 +22,9 @@ pub fn clearance(size: &str) -> Option<[f64; 3]> {
         "M6" => [6.4, 6.6, 7.0],
         "M8" => [8.4, 9.0, 10.0],
         "M10" => [10.5, 11.0, 12.0],
+        "M12" => [13.0, 13.5, 14.5],
+        "M16" => [17.0, 17.5, 18.5],
+        "M20" => [21.0, 22.0, 24.0],
         _ => return None,
     })
 }
@@ -37,6 +40,9 @@ pub fn tap_drill(size: &str) -> Option<f64> {
         "M6" => 5.0,
         "M8" => 6.8,
         "M10" => 8.5,
+        "M12" => 10.2,
+        "M16" => 14.0,
+        "M20" => 17.5,
         _ => return None,
     })
 }
@@ -52,6 +58,9 @@ pub fn counterbore(size: &str) -> Option<[f64; 2]> {
         "M6" => [11.0, 6.4],
         "M8" => [15.0, 8.6],
         "M10" => [18.0, 10.6],
+        "M12" => [20.0, 12.6],
+        "M16" => [26.0, 16.6],
+        "M20" => [33.0, 20.6],
         _ => return None,
     })
 }
@@ -67,6 +76,9 @@ pub fn countersink(size: &str) -> Option<f64> {
         "M6" => 13.7,
         "M8" => 18.3,
         "M10" => 22.7,
+        "M12" => 27.2,
+        "M16" => 33.9,
+        "M20" => 40.6,
         _ => return None,
     })
 }
@@ -154,5 +166,14 @@ mod tests {
         assert_eq!((ins.diameter, ins.lead_in), (None, Some(INSERT_LEAD_IN)));
         let cs = standard_dims("countersink", None, Some("M4"), Some("close"));
         assert_eq!((cs.diameter, cs.cs_diameter, cs.cs_angle), (Some(4.3), Some(9.2), Some(90.0)));
+    }
+
+    #[test]
+    fn the_coarse_sizes_run_to_m20_and_m12_is_one_of_them() {
+        assert_eq!(SIZES, ["M2", "M2.5", "M3", "M4", "M5", "M6", "M8", "M10", "M12", "M16", "M20"]);
+        let m12 = standard_dims("counterbore", None, Some("M12"), None);
+        assert_eq!((m12.diameter, m12.cb_diameter, m12.cb_depth), (Some(13.5), Some(20.0), Some(12.6)));
+        assert_eq!(standard_dims("simple", Some("tap"), Some("M12"), None).diameter, Some(10.2));
+        assert_eq!(standard_dims("countersink", None, Some("M12"), None).cs_diameter, Some(27.2));
     }
 }
