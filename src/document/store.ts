@@ -139,8 +139,8 @@ type MetaListener = () => void;
  *  instead of silently skipping display-only changes and eating a feature
  *  edit that came before them. */
 type UndoEntry =
-  // `state` is set on a replacing load: what it replaced besides the geometry, as projectState writes it.
-  | { kind: "doc"; doc: CadDocument; state?: string }
+  // `state` and `isolate` are set on a replacing load: what it replaced besides the geometry, as replacedState takes it.
+  | { kind: "doc"; doc: CadDocument; state?: string; isolate?: boolean }
   | { kind: "overlay"; undo: () => void; redo: () => void }
   | { kind: "group"; entries: UndoEntry[] };
 
@@ -706,8 +706,8 @@ export class DocumentStore {
   /** Set while undoAsOne runs: the steps go here instead of onto the stack. */
   private collecting: UndoEntry[] | null = null;
 
-  private pushUndo(state?: string) {
-    const entry: UndoEntry = { kind: "doc", doc: clone(this.doc), ...(state === undefined ? {} : { state }) };
+  private pushUndo(replaced?: { state: string; isolate: boolean }) {
+    const entry: UndoEntry = { kind: "doc", doc: clone(this.doc), ...replaced };
     if (this.collecting) return void this.collecting.push(entry);
     this.undoStack.push(entry);
     if (this.undoStack.length > DocumentStore.UNDO_CAP) this.undoStack.shift();
@@ -1437,9 +1437,12 @@ export class DocumentStore {
       const back = order.map((x) => this.applyUndoEntry(x, way));
       return { kind: "group", entries: way === "undo" ? back.reverse() : back };
     }
-    const was: UndoEntry = { kind: "doc", doc: clone(this.doc), ...(e.state === undefined ? {} : { state: this.projectState() }) };
+    const was: UndoEntry = { kind: "doc", doc: clone(this.doc), ...(e.state === undefined ? {} : this.replacedState()) };
     this.doc = e.doc;
-    if (e.state !== undefined) this.readProjectState(JSON.parse(e.state) as CadDocument);
+    if (e.state !== undefined) {
+      this.readProjectState(JSON.parse(e.state) as CadDocument);
+      this.isolate = !!e.isolate;
+    }
     this.rearmProjectionValve();
     this.markDirty();
     this.emitDoc();
@@ -2305,7 +2308,7 @@ export class DocumentStore {
     for (const w of migrateDocument(parsed)) this.onWarning?.(w);
     if (!opts.replace) this.emitOpen();
     this.emitRewind();
-    if (opts.replace) this.pushUndo(this.projectState());
+    if (opts.replace) this.pushUndo(this.replacedState());
     else this.undoStack = [];
     this.redoStack = [];
     this.rearmProjectionValve(); // valve state must never cross documents
@@ -2375,6 +2378,10 @@ export class DocumentStore {
     const out = this.toObject(false) as unknown as Record<string, unknown>;
     for (const k of GEOMETRY_KEYS) delete out[k];
     return JSON.stringify(out);
+  }
+  /** Isolate is not saved with a file, so the undo entry keeps it beside the hidden set it explains. */
+  private replacedState() {
+    return { state: this.projectState(), isolate: this.isolate };
   }
   loadDocument(doc: CadDocument, opts: { replace?: boolean } = {}) {
     this.load(JSON.stringify(doc), opts);

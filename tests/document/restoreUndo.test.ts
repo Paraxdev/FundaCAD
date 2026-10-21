@@ -111,6 +111,23 @@ describe("undo after a restore", () => {
     expect(saved(s)[key]).toEqual(Object.values(unreadable)[0]);
   });
 
+  it.each([
+    ["an isolate", true],
+    ["a plain hide", false],
+  ])("brings back %s with the bodies it hid, and redo the restored version's view", (_, isolate) => {
+    const s = opened({ features: [box("f1", 10.5), box("f2", 4.25, 2)] });
+    const v1 = s.saveVersion("one")!;
+    (s as unknown as { build: { result: unknown } }).build.result = { bodies: [{ id: "body1" }, { id: "body2" }] };
+    if (isolate) s.isolateBodies(["body1"]);
+    else s.setBodyVisibility("body2", false);
+    s.restoreVersion(v1.id);
+    expect([s.isolateActive, s.isBodyVisible("body1"), s.isBodyVisible("body2")]).toEqual([false, true, true]);
+    s.undo();
+    expect([s.isolateActive, s.isBodyVisible("body1"), s.isBodyVisible("body2")]).toEqual([isolate, true, false]);
+    s.redo();
+    expect([s.isolateActive, s.isBodyVisible("body1"), s.isBodyVisible("body2")]).toEqual([false, true, true]);
+  });
+
   it("leaves the next document's undo stack alone", () => {
     const { s, v1 } = workedOn();
     s.restoreVersion(v1.id);
