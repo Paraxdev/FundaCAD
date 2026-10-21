@@ -23,9 +23,6 @@ const palette = useSketchPaletteStore();
   padding: var(--s-1) var(--s-3);
   font: 600 12px/1.4 var(--ui);
   color: var(--text);
-  background: rgba(22, 24, 29, 0.8);
-  border: 1px solid var(--line);
-  border-radius: var(--r-pill);
   cursor: pointer;
   z-index: 16;
 }
