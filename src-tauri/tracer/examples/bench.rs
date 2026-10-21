@@ -93,7 +93,7 @@ fn main() {
             }
         };
         let tris: usize = mesh.tri_count() * (bodies.len() - 1) + 2;
-        t.set_camera(Camera { eye, target: [0.0; 3], up: [0.0, 0.0, 1.0], fov: 40.0 });
+        t.set_camera(Camera { eye, target: [0.0; 3], up: [0.0, 0.0, 1.0], fov: 40.0, ..Default::default() });
         t.set_look(Look { sun_dir: [0.4, -0.3, 1.0], sun_color: [2.0; 3], ..Look::default() });
         for k in t.set_bodies(bodies) {
             if k == "floor" {

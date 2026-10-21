@@ -2,7 +2,8 @@
 //! examples/bench.rs. Included with `mod common;` or `#[path]`.
 #![allow(dead_code)]
 
-use fundacad_tracer::{BodyDesc, Camera, Look, Mesh, PageMaterial, Tracer};
+use fundacad_tracer::env::direction;
+use fundacad_tracer::{BodyDesc, Camera, Environment, Look, Mesh, PageMaterial, Tracer, Up};
 
 pub const REF_SCENES: [&str; 6] = ["golden", "studio", "hdr-sun", "emitter", "glass", "metal"];
 pub const REF_SPP: u32 = 16384;
@@ -76,7 +77,7 @@ fn mesh_for(key: &str) -> Mesh {
 pub fn build(t: &mut Tracer, name: &str, size: Option<(u32, u32)>) {
     let (w, h) = size.unwrap_or_else(|| dims(name));
     t.resize(w, h);
-    let cam = |eye: [f32; 3], target: [f32; 3]| Camera { eye, target, up: [0.0, 0.0, 1.0], fov: 40.0 };
+    let cam = |eye: [f32; 3], target: [f32; 3]| Camera { eye, target, up: [0.0, 0.0, 1.0], fov: 40.0, ..Default::default() };
     let sun = [0.4, -0.3, 1.0];
     let ground = matte([0.7; 3]);
     let (look, camera, bodies) = match name {
@@ -90,8 +91,6 @@ pub fn build(t: &mut Tracer, name: &str, size: Option<(u32, u32)>) {
         ),
         "studio" => (
             Look {
-                sky_top: [0.75, 0.8, 0.85],
-                sky_bottom: [0.95; 3],
                 sun_dir: [0.5, -0.4, 1.0],
                 sun_color: [1.2; 3],
                 ..Look::default()
@@ -102,17 +101,8 @@ pub fn build(t: &mut Tracer, name: &str, size: Option<(u32, u32)>) {
                 place("floor", "floor.1", 1.0, [0.0; 3], matte([0.8; 3])),
             ],
         ),
-        // The tracer has no environment map yet, so the sun is the Look's own
-        // delta sun on a dim sky. tracer-env-map rewrites this reference with a
-        // synthetic equirect that carries a small bright disc.
         "hdr-sun" => (
-            Look {
-                sky_top: [0.04, 0.05, 0.08],
-                sky_bottom: [0.03; 3],
-                sun_dir: [-0.5, -0.6, 0.45],
-                sun_color: [6.0, 5.6, 5.0],
-                ..Look::default()
-            },
+            Look::default(),
             cam([4.0, -6.0, 3.0], [0.0, 0.0, 0.8]),
             vec![
                 place("ball", "ball.1", 1.0, [0.0, 0.0, 1.0], matte([0.8; 3])),
@@ -195,6 +185,11 @@ pub fn build(t: &mut Tracer, name: &str, size: Option<(u32, u32)>) {
     };
     t.set_camera(camera);
     t.set_look(look);
+    t.set_environment(match name {
+        "studio" => Some(studio_room()),
+        "hdr-sun" => Some(sun_sky()),
+        _ => None,
+    });
     for key in t.set_bodies(bodies) {
         t.add_mesh(&key, mesh_for(&key));
     }
@@ -248,4 +243,74 @@ pub fn rmse_to_ref(rgba: &[u8], name: &str) -> f64 {
 pub fn ref_write_wanted_for() -> Option<Option<String>> {
     std::env::var_os("TRACER_REF_WRITE")?;
     Some(std::env::var("TRACER_REF_ONLY").ok())
+}
+
+pub const BALL_EYE: [f32; 3] = [4.0, -6.0, 3.0];
+pub const BALL_TARGET: [f32; 3] = [0.0, 0.0, 0.8];
+
+/// A unit ball at (0, 0, 1) and nothing else, finely tessellated so its
+/// shading normals sit on the analytic sphere's.
+pub fn ball_alone(t: &mut Tracer, look: Look, mat: PageMaterial, (w, h): (u32, u32)) {
+    t.resize(w, h);
+    t.set_camera(Camera { eye: BALL_EYE, target: BALL_TARGET, up: [0.0, 0.0, 1.0], fov: 40.0, ..Default::default() });
+    t.set_look(look);
+    for key in t.set_bodies(vec![place("ball", "ball.fine", 1.0, [0.0, 0.0, 1.0], mat)]) {
+        t.add_mesh(&key, sphere(1.0, 192, 96));
+    }
+    t.apply();
+}
+
+/// The white furnace: the lone ball in a uniform sky of 1 with no lights.
+pub fn furnace(t: &mut Tracer, mat: PageMaterial, size: (u32, u32)) {
+    let look = Look { sky_top: [1.0; 3], sky_bottom: [1.0; 3], bounces: 64, ..Look::default() };
+    ball_alone(t, look, mat, size);
+}
+
+fn dot(a: [f32; 3], b: [f32; 3]) -> f32 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+
+fn unit(a: [f32; 3]) -> [f32; 3] {
+    let l = dot(a, a).sqrt();
+    a.map(|x| x / l)
+}
+
+/// An equirect `up` laid out, radiance from the direction of each texel's centre.
+pub fn env_of(key: &str, (w, h): (u32, u32), up: Up, f: impl Fn([f32; 3]) -> [f32; 3]) -> Environment {
+    Environment::from_rgb(key, w, h, up, |c, r| f(direction(up, (c as f32 + 0.5) / w as f32, (r as f32 + 0.5) / h as f32)))
+}
+
+/// A room as traceEnvironment reads one back (Y up rows): soft grey walls, a
+/// darker floor and two bright panels, one above the model, one to its side.
+pub fn studio_room() -> Environment {
+    let top = unit([0.2, -0.3, 1.0]);
+    let side = unit([-1.0, -0.4, 0.3]);
+    env_of("studio", (512, 256), Up::Y, |d| {
+        if dot(d, top) > 0.97 {
+            [6.0; 3]
+        } else if dot(d, side) > 0.985 {
+            [4.0, 3.8, 3.5]
+        } else if d[2] < 0.0 {
+            [0.25; 3]
+        } else {
+            [0.55, 0.58, 0.62]
+        }
+    })
+}
+
+/// The sun of an outdoor HDR (Z up rows): a dim sky and a 1.5 degree disc of
+/// irradiance about 6.
+pub fn sun_sky() -> Environment {
+    let sun = unit([-0.5, -0.6, 0.45]);
+    let cos_r = 1.5f32.to_radians().cos();
+    let radiance = 6.0 / (2.0 * std::f32::consts::PI * (1.0 - cos_r));
+    env_of("hdr-sun", (512, 256), Up::Z, |d| {
+        if dot(d, sun) > cos_r {
+            [radiance, radiance * 0.93, radiance * 0.83]
+        } else if d[2] > 0.0 {
+            [0.04, 0.05, 0.08]
+        } else {
+            [0.03; 3]
+        }
+    })
 }

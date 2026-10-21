@@ -27,11 +27,13 @@ pub struct PageMaterial {
     pub clearcoat_roughness: Option<f32>,
     pub opacity: Option<f32>,
     pub vertex_colors: bool,
+    /// Glows to the camera and is left out of the light table.
+    pub no_light: bool,
 }
 
 pub const FLAG_SOLID: u32 = 1;
 pub const FLAG_VERTEX_COLORS: u32 = 2;
-/// Reserved: an emitter left out of the light table, set by finish-fields.
+/// An emitter left out of the light table, the page's userData.noLight.
 pub const FLAG_NO_LIGHT: u32 = 4;
 
 /// Nine vec4s, 144 bytes, the layout the shader's `Mat` struct reads.
@@ -65,6 +67,13 @@ impl GpuMaterial {
     pub fn emits(&self) -> bool {
         self.emission[..3].iter().any(|c| *c > 0.0)
     }
+    /// The luminance its triangles enter the light table with, 0 for none.
+    pub fn light_power(&self) -> f32 {
+        if self.flags() & FLAG_NO_LIGHT != 0 {
+            return 0.0;
+        }
+        (0.2126 * self.emission[0] + 0.7152 * self.emission[1] + 0.0722 * self.emission[2]).max(0.0)
+    }
     /// The shader's albedo: the base colour times the interpolated vertex
     /// colour when the body carries paint or a bake.
     pub fn albedo(&self, vertex: Option<[f32; 3]>) -> [f32; 3] {
@@ -87,6 +96,9 @@ pub fn pack_material(m: &PageMaterial) -> GpuMaterial {
     }
     if m.vertex_colors {
         flags |= FLAG_VERTEX_COLORS;
+    }
+    if m.no_light {
+        flags |= FLAG_NO_LIGHT;
     }
     let dist = match m.attenuation_distance {
         Some(d) if d > 0.0 => d,
@@ -179,6 +191,15 @@ mod tests {
         assert_eq!(&m.emission[..3], &[3.0, 1.5, 0.0]);
         assert!(m.emits());
         assert!(!parse(r#"{"emissive":[0,0,0],"emissiveIntensity":5}"#).emits());
+    }
+
+    #[test]
+    fn no_light_keeps_the_glow_out_of_the_light_table() {
+        let m = parse(r#"{"emissive":[1,1,1],"emissiveIntensity":2,"noLight":true}"#);
+        assert_eq!(m.flags() & FLAG_NO_LIGHT, FLAG_NO_LIGHT);
+        assert!(m.emits());
+        assert_eq!(m.light_power(), 0.0);
+        assert!((parse(r#"{"emissive":[1,1,1],"emissiveIntensity":2}"#).light_power() - 2.0).abs() < 1e-5);
     }
 
     #[test]
