@@ -1,6 +1,6 @@
 import { installKeymap } from "../input/keymap";
 import { isEditableTarget, isPageSelectAll } from "../ui/focus";
-import { saveDocument, saveDocumentAs, exportModel } from "../io/files";
+import { saveDocument, saveDocumentAs, exportSelection } from "../io/files";
 import { SKETCH_TOOLS } from "./actionTables";
 import { logError, toggleConsole } from "../ui/logStore";
 import { useDialogStore } from "../stores/dialogs";
@@ -110,7 +110,7 @@ export function installKeyboard(e: Engine): void {
     else if (k === "o") { ev.preventDefault(); void e.openDoc(); }
     else if (k === "s" && ev.shiftKey) { ev.preventDefault(); void saveDocumentAs(e.store); }
     else if (k === "s") { ev.preventDefault(); void saveDocument(e.store); }
-    else if (k === "e") { ev.preventDefault(); void exportModel(e.store, e.geometry, e.viewport.selectionBodyIds()); }
+    else if (k === "e") { ev.preventDefault(); void exportSelection(e.store, e.geometry, e.viewport); }
     // Ctrl+, is the conventional Preferences key and belongs with the file
     // shortcuts rather than the keymap: like them it has to work mid-sketch,
     // and unlike them it is punctuation, which the keymap's tool bindings are
