@@ -197,7 +197,7 @@ fn reads_visibility(f: &Value) -> bool {
 /// from disk until an edit upstream of them; `FUNDACAD_DISK_CACHE=0` or
 /// `FUNDACAD_ENV_SIG` gets past that. A false bump costs one cold reopen, a
 /// missed one stale geometry, so bump when unsure.
-pub const GEOMETRY_VERSION: u32 = 1;
+pub const GEOMETRY_VERSION: u32 = 2;
 
 /// Bump when what a checkpoint holds, or how `checkpoint.rs` reads one back,
 /// changes: a field it lacks comes back empty without an error.
@@ -509,7 +509,7 @@ mod tests {
     /// moves the goldens were re-recorded, which usually means some document
     /// builds to a new shape: bump `GEOMETRY_VERSION` too, then pin the new
     /// digest here. The MCP transcript holds tool text, not shapes.
-    const GOLDEN_DIGEST: &str = "74269bcbe84820d4693f680ddbf76ecc";
+    const GOLDEN_DIGEST: &str = "f6512ae1dbbc6e485eb4cd4252d480a1";
 
     #[test]
     fn geometry_version_tracks_the_golden_answers() {
