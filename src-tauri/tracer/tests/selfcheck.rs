@@ -1,10 +1,12 @@
 //! Tracer::self_check on every path the machine has: it passes against the
 //! committed reference, and flags a reference that is not the scene's.
 
+mod common;
+
 use fundacad_tracer::{Path, Reference, Tracer, TracerOptions};
 
 fn tracer(software: bool) -> Option<Tracer> {
-    match Tracer::new(TracerOptions { software, ..Default::default() }) {
+    match common::tracer(TracerOptions { software, ..Default::default() }) {
         Ok(t) => Some(t),
         Err(e) => {
             println!("skipped, no GPU adapter: {e}");
