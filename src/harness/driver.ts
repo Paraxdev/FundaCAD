@@ -107,6 +107,7 @@ export function createMethods(
       return { ref: c.ref, text: c.el.value, typed: !!c.el.closest(".dim-field.typed"), problem: problem.trim() };
     },
     selection: () => read.selection(h, doc),
+    guide: () => read.guide(doc),
     history: () => read.history(h),
     opens: () => opens,
     bodies: () => read.bodies(h),
