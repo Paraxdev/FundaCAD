@@ -359,6 +359,31 @@ describe("path trace host", () => {
     expect(t.calls).toContain("sample");
   });
 
+  it("keeps adding samples while the view rests, at a fractional pixel ratio with Realtime while moving on and off", async () => {
+    const was = globalThis.devicePixelRatio;
+    globalThis.devicePixelRatio = 1.25;
+    try {
+      for (const realtimeWhileMoving of [true, false]) {
+        const { host, t } = await started();
+        const rest = { realtimeWhileMoving };
+        host.tick(frame(rest));
+        t.calls.length = 0;
+        let n = 0;
+        for (let i = 1; i <= 40; i++) {
+          t.answer(++n);
+          await flush();
+          host.tick(frame(rest, 1000 + i * 16));
+        }
+        expect(t.calls).not.toContain("reset");
+        expect(t.calls.filter((c) => c === "sample").length).toBeGreaterThanOrEqual(39);
+        expect(host.samples).toBeGreaterThan(16);
+        expect(host.shown).toBe(true);
+      }
+    } finally {
+      globalThis.devicePixelRatio = was;
+    }
+  });
+
   it("drops a sample count from before a camera move", async () => {
     const { host, t } = await started();
     host.tick(frame());
