@@ -409,10 +409,12 @@ export async function compileAndSolve(
       if (p) fixedPts.add(p);
     }
     else if (c.type === "collinear") {
-      if (isLine(c.l1) && isLine(c.l2)) {
-        cons.push({ id: `${id}p`, type: "parallel", l1: c.l1, l2: c.l2 });
-        const e2 = ends.get(c.l2);
-        if (e2) cons.push({ id: `${id}o`, type: "pointOnLine", p: e2[0], line: c.l1 });
+      const e1 = ends.get(c.l1), e2 = ends.get(c.l2);
+      if (isLine(c.l1) && isLine(c.l2) && e1 && e2) {
+        // Lines sharing a point need only their far end on l1, a parallel on top of it is redundant.
+        const far = e2.filter((p) => !e1.includes(p));
+        if (far.length === 2) cons.push({ id: `${id}p`, type: "parallel", l1: c.l1, l2: c.l2 });
+        if (far[0] !== undefined) cons.push({ id: `${id}o`, type: "pointOnLine", p: far[0], line: c.l1 });
       }
     }
     else if (c.type === "equalRadius") {
