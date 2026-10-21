@@ -437,6 +437,9 @@ export class DocumentStore {
   get document(): CadDocument {
     return this.doc;
   }
+  get backend(): GeometryBackend {
+    return this.geometry;
+  }
   get buildState(): RebuildState {
     return this.build;
   }

@@ -45,6 +45,9 @@ document has imported bodies, one more top-level key comes last:
   the key carries it as an unknown top level key, image included.
 
 The reference writer and reader is `crates/fundacad-format/src/json_doc.rs`.
+The browser build has no Rust to call, so `src/io/files.ts` writes and reads the
+same map itself through the engine's blob store, and refuses a download that
+would lose an import's geometry.
 
 ### Materials
 
