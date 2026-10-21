@@ -46,6 +46,9 @@ const MAX_MESSAGE: usize = 512 << 20;
 struct State {
     tracer: Tracer,
     fault: Option<String>,
+    /// The seq of the last frame drawn, which pt_camera answers so the page
+    /// can tell which camera a frame was traced with.
+    drawn: u32,
 }
 
 struct TracerSource(Mutex<State>);
@@ -66,8 +69,9 @@ impl TracerSource {
 }
 
 impl FrameSource for TracerSource {
-    fn render(&self, out: &mut [u8], width: u32, height: u32, _seq: u32) {
+    fn render(&self, out: &mut [u8], width: u32, height: u32, seq: u32) {
         let mut s = self.lock();
+        s.drawn = seq;
         if s.fault.is_some() {
             out.fill(0);
             return;
@@ -154,17 +158,21 @@ impl Dev {
                 return Err("the native tracer is off (FUNDACAD_TRACER=off)".into());
             }
             let opts = TracerOptions { software: mode == "software", ..Default::default() };
-            Tracer::new(opts).map(|tracer| TracerSource(Mutex::new(State { tracer, fault: None }))).map_err(|e| e.to_string())
+            Tracer::new(opts).map(|tracer| TracerSource(Mutex::new(State { tracer, fault: None, drawn: 0 }))).map_err(|e| e.to_string())
         })
     }
 
     fn with<T>(&self, f: impl FnOnce(&mut Tracer) -> T) -> Result<T, String> {
+        self.with_state(|s| f(&mut s.tracer))
+    }
+
+    fn with_state<T>(&self, f: impl FnOnce(&mut State) -> T) -> Result<T, String> {
         let t = self.tracer.current().ok_or("the native tracer is not open")?;
         let mut s = t.lock();
         if let Some(f) = &s.fault {
             return Err(format!("the native tracer stopped: {f}"));
         }
-        Ok(f(&mut s.tracer))
+        Ok(f(&mut *s))
     }
 
     fn dispatch(&self, cmd: &str, args: &Value, body: Option<&[u8]>) -> Result<Value, String> {
@@ -203,7 +211,11 @@ impl Dev {
             }
             "pt_camera" => {
                 let c: Camera = arg(args, "camera")?;
-                self.with(|t| t.set_camera(c)).map(|_| Value::Null)
+                self.with_state(|s| {
+                    s.tracer.set_camera(c);
+                    s.drawn
+                })
+                .map(Value::from)
             }
             "pt_look" => {
                 let l: Look = arg(args, "look")?;
@@ -245,6 +257,8 @@ impl Dev {
         let _life = self.life();
         drop(self.open.take());
         let src = self.tracer()?;
+        // A new transport counts its frames from 1.
+        src.lock().drawn = 0;
         let source = src.name();
         let token = mint_token().map_err(|e| e.to_string())?;
         let gate = Gate::new(token.clone(), &appenv("EXTRA_ORIGINS").unwrap_or_default());
@@ -534,6 +548,28 @@ mod tests {
                 return fundacad_frames::read_header(&b).unwrap();
             }
         }
+    }
+
+    #[test]
+    fn pt_camera_answers_the_seq_of_the_last_frame_drawn_before_it() {
+        let port = start();
+        let mut ws = connect(port, "tok", None).unwrap();
+        let p = call(&mut ws, 1, "pt_probe", json!({}));
+        if p["value"]["available"] != json!(true) {
+            eprintln!("skipped: no adapter ({})", p["value"]["reason"]);
+            return;
+        }
+        let o = call(&mut ws, 2, "frames_open", json!({ "width": 8, "height": 8, "prefer": "websocket" }));
+        let o = &o["value"];
+        let (fport, ftoken) = (o["port"].as_u64().unwrap(), o["token"].as_str().unwrap().to_string());
+        let cam = |x: f32| json!({ "camera": { "eye": [x, -6.0, 3.0], "target": [0.0, 0.0, 0.0], "up": [0.0, 0.0, 1.0], "fov": 50.0 } });
+        assert_eq!(call(&mut ws, 3, "pt_camera", cam(4.0))["value"], json!(0));
+        let [seq, ..] = frame_header(fport, &ftoken);
+        assert_eq!(call(&mut ws, 4, "pt_camera", cam(5.0))["value"], json!(seq));
+        let [seq2, ..] = frame_header(fport, &ftoken);
+        assert_eq!(seq2, seq + 1);
+        assert_eq!(call(&mut ws, 5, "pt_camera", cam(6.0))["value"], json!(seq2));
+        call(&mut ws, 6, "frames_close", json!({ "id": o["id"] }));
     }
 
     #[test]

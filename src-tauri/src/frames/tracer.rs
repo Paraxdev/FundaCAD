@@ -30,6 +30,9 @@ struct State {
     /// A traced picture is running; the viewport's frames wait for it.
     picture: Option<PictureStatus>,
     cancel: bool,
+    /// The seq of the last frame drawn, which pt_camera answers so the page
+    /// can tell which camera a frame was traced with.
+    drawn: u32,
 }
 
 #[derive(Serialize, Clone, Copy)]
@@ -74,7 +77,7 @@ pub fn tracer() -> Result<Arc<TracerSource>, String> {
         let opts = TracerOptions { software: mode == "software", ..Default::default() };
         within(CREATE_LIMIT, move || Tracer::new(opts))
             .unwrap_or_else(Err)
-            .map(|tracer| TracerSource(Mutex::new(State { tracer, fault: None, picture: None, cancel: false })))
+            .map(|tracer| TracerSource(Mutex::new(State { tracer, fault: None, picture: None, cancel: false, drawn: 0 })))
             .map_err(|e| {
                 eprintln!("[frames] no native tracer: {e}");
                 let text = e.to_string();
@@ -127,6 +130,11 @@ impl TracerSource {
         format!("tracer, {path}, {}", s.tracer.adapter())
     }
 
+    /// A new transport counts its frames from 1.
+    pub fn opened(&self) {
+        self.lock().drawn = 0;
+    }
+
     /// A panic in wgpu poisons nothing for the next caller; the fault is
     /// reported through pt_status instead.
     fn lock(&self) -> MutexGuard<'_, State> {
@@ -135,8 +143,9 @@ impl TracerSource {
 }
 
 impl FrameSource for TracerSource {
-    fn render(&self, out: &mut [u8], width: u32, height: u32, _seq: u32) {
+    fn render(&self, out: &mut [u8], width: u32, height: u32, seq: u32) {
         let mut s = self.lock();
+        s.drawn = seq;
         s.take_fault();
         if s.fault.is_some() {
             out.fill(0);
@@ -172,13 +181,17 @@ fn panic_text(e: Box<dyn std::any::Any + Send>) -> String {
 }
 
 fn with<T>(f: impl FnOnce(&mut Tracer) -> T) -> Result<T, String> {
+    with_state(|s| f(&mut s.tracer))
+}
+
+fn with_state<T>(f: impl FnOnce(&mut State) -> T) -> Result<T, String> {
     let t = open()?;
     let mut s = t.lock();
     s.take_fault();
     if let Some(f) = &s.fault {
         return Err(format!("the native tracer stopped: {f}"));
     }
-    let r = f(&mut s.tracer);
+    let r = f(&mut *s);
     s.take_fault();
     Ok(r)
 }
@@ -216,9 +229,13 @@ pub fn pt_colors(request: Request<'_>) -> Result<bool, String> {
     with(|t| t.set_colors(&key, colors))
 }
 
+/// Answers the seq of the last frame drawn before the camera was taken.
 #[tauri::command]
-pub fn pt_camera(camera: Camera) -> Result<(), String> {
-    with(|t| t.set_camera(camera))
+pub fn pt_camera(camera: Camera) -> Result<u32, String> {
+    with_state(|s| {
+        s.tracer.set_camera(camera);
+        s.drawn
+    })
 }
 
 /// Answers the environment key held, so the page sends pt_env when it is not its own.
