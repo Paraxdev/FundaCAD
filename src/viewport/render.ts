@@ -10,6 +10,7 @@ import { scheduleRaycastIndex } from "./raycastIndex";
 import { BodyEdges, EDGE_IDLE_COLOR, EDGE_IDLE_WIDTH, type EdgeRef } from "./edgeLines";
 import { type BodyFinish, FINISH } from "../document/materials";
 import { meanThickness, setGlassAuto } from "./glassThickness";
+import { removePatch, setPatch, type ShaderPatch } from "./shaderPatches";
 import { removeSelectionGlows } from "./selectionGlow";
 import { weldByFace } from "./weld";
 
@@ -645,6 +646,81 @@ export function applyThinFilm(mat: THREE.MeshStandardMaterial, f: BodyFinish, gh
   if (!(phys as { isMeshPhysicalMaterial?: boolean }).isMeshPhysicalMaterial) return;
   phys.iridescence = ghost || renderLowPower ? 0 : f.iridescence;
   phys.specularColor.set(!ghost && f.specularColor ? f.specularColor : 0xffffff);
+}
+
+export const ANISOTROPY_PATCH = "anisotropy";
+export const SCATTER_PATCH = "scatter";
+
+// Bodies have no uv attribute, so three's derivative tangent frame is all zeros
+// and the anisotropic environment term turns NaN. The frame is rebuilt from the
+// axis projected on the surface, after any patch that bends the normal; where
+// the axis meets the surface head on it has no direction, so the stretch fades.
+const ANISOTROPY: Omit<ShaderPatch, "uniforms"> = {
+  name: ANISOTROPY_PATCH,
+  key: "aniso1",
+  after: {
+    common: "uniform vec3 uAnisoAxis;",
+    normal_fragment_begin: /* glsl */`
+#ifdef USE_ANISOTROPY
+vec3 aAxis = normalize((viewMatrix * vec4(uAnisoAxis, 0.0)).xyz);
+vec3 aT = aAxis - dot(aAxis, normal) * normal;
+float aLen = length(aT);
+float aFade = smoothstep(0.05, 0.3, aLen);
+aT = aLen > 1e-4 ? aT / aLen
+  : normalize(cross(normal, abs(normal.x) < 0.9 ? vec3(1.0, 0.0, 0.0) : vec3(0.0, 1.0, 0.0)));
+tbn = mat3(aT, cross(normal, aT), normal);
+#endif`,
+    lights_physical_fragment: /* glsl */`
+#ifdef USE_ANISOTROPY
+material.anisotropy *= aFade;
+material.alphaT = mix(pow2(material.roughness), 1.0, pow2(material.anisotropy));
+#endif`,
+  },
+};
+
+// Raises only the roughness the refraction reads. The lights are summed before
+// aomap_fragment, so the surface highlight stays sharp while what is seen
+// through blurs. Not a replace: glassAuto already replaces transmission_fragment.
+const SCATTER: Omit<ShaderPatch, "uniforms"> = {
+  name: SCATTER_PATCH,
+  key: "scatter1",
+  after: {
+    common: "uniform float uScatter;",
+    aomap_fragment: /* glsl */`
+#ifdef USE_TRANSMISSION
+float scKeep = material.roughness;
+material.roughness = max(material.roughness, 1.0 - exp(-thickness / max(uScatter, 1e-3)));
+#endif`,
+    transmission_fragment: /* glsl */`
+#ifdef USE_TRANSMISSION
+material.roughness = scKeep;
+#endif`,
+  },
+};
+
+const WHITE = new THREE.Color(1, 1, 1);
+
+/** Sheen, anisotropy and scatter. Physical-PBR only, dropped on a weak machine
+ *  and on a ghost. `tint` is the body colour the sheen is lifted from, `axis`
+ *  the world direction highlights stretch along. Call after applyGlassLook,
+ *  scatter only takes on a finish that turned out see-through. Flakes are drawn
+ *  by their own patch. */
+export function applyFinishFields(
+  mat: THREE.MeshStandardMaterial, f: BodyFinish, ghost: boolean, tint: THREE.ColorRepresentation, axis: THREE.Vector3,
+): void {
+  const phys = mat as THREE.MeshPhysicalMaterial;
+  if (!(phys as { isMeshPhysicalMaterial?: boolean }).isMeshPhysicalMaterial) return;
+  const off = ghost || renderLowPower;
+  phys.sheen = off ? 0 : f.sheen;
+  phys.sheenColor.set(tint).lerp(WHITE, 0.5);
+  phys.sheenRoughness = 0.8;
+  phys.anisotropy = off ? 0 : f.anisotropy;
+  phys.anisotropyRotation = 0;
+  if (phys.anisotropy > 0) setPatch(phys, { ...ANISOTROPY, uniforms: { uAnisoAxis: { value: axis.clone() } } });
+  else removePatch(phys, ANISOTROPY_PATCH);
+  if (!off && f.scatterDistance > 0 && phys.transmission > 0) {
+    setPatch(phys, { ...SCATTER, uniforms: { uScatter: { value: f.scatterDistance } } });
+  } else removePatch(phys, SCATTER_PATCH);
 }
 
 function disposeBody(body: BodyMesh) {

@@ -109,6 +109,23 @@ export interface MaterialDef {
   iridescence?: number;
   /** "#rrggbb" tint of the highlight a non-metal reflects. Absent is white. */
   specularColor?: string;
+  /** 0..1. A soft rim of light at grazing angles, the velvet of a matte, slightly
+   *  fibrous surface. */
+  sheen?: number;
+  /** 0..1. Highlights stretched in one direction, along the layer lines of a
+   *  print or the grain of brushed metal. */
+  anisotropy?: number;
+  /** 0..1. How many tiny mirror facets are in the surface: glitter, metal flake
+   *  paint. */
+  flakes?: number;
+  /** mm, the size of one flake. */
+  flakeSize?: number;
+  /** mm after which light inside a see-through finish has scattered, the milk of
+   *  a translucent part. 0 is clear. */
+  scatterDistance?: number;
+  /** False when a part that gives off light should not light the parts around
+   *  it, it still glows. Only written when false. */
+  castsLight?: boolean;
   /** Procedural surface detail (noise / scratches / brushed / wear). Absent for
    *  a plain material. The single-generator form the picker writes. */
   surface?: SurfaceSpec;
@@ -124,6 +141,7 @@ export interface MaterialDef {
 export const FINISH = {
   metalness: 0.1, roughness: 0.55, opacity: 1, emissive: 0, clearcoat: 0,
   ior: 1.5, thickness: "auto", attenuationDistance: 0, dispersion: 0, iridescence: 0,
+  sheen: 0, anisotropy: 0, flakes: 0, flakeSize: 0.1, scatterDistance: 0, castsLight: true,
 } as const;
 
 /** The four numbers the renderer wants, never undefined, so the render path has
@@ -140,6 +158,12 @@ export interface BodyFinish {
   attenuationDistance: number;
   dispersion: number;
   iridescence: number;
+  sheen: number;
+  anisotropy: number;
+  flakes: number;
+  flakeSize: number;
+  scatterDistance: number;
+  castsLight: boolean;
   attenuationColor?: string;
   specularColor?: string;
   /** Carried straight through when a material has one, so the viewport can build
@@ -152,7 +176,7 @@ export interface BodyFinish {
  *  counted as shiny because it can drive emission. */
 export function isShiny(f: BodyFinish): boolean {
   return f.emissive > 0 || f.metalness >= 0.5 || f.roughness < 0.3 || f.clearcoat > 0 || f.iridescence > 0 || f.opacity < 1
-    || !!f.surfaceGraph;
+    || f.anisotropy > 0 || f.flakes > 0 || !!f.surfaceGraph;
 }
 
 /** A finish that draws exactly like a body with no material at all, so the
@@ -165,6 +189,9 @@ export function isDefaultFinish(f: BodyFinish): boolean {
     && f.clearcoat === FINISH.clearcoat && f.ior === FINISH.ior
     && f.thickness === FINISH.thickness && f.attenuationDistance === FINISH.attenuationDistance
     && f.dispersion === FINISH.dispersion && f.iridescence === FINISH.iridescence
+    && f.sheen === FINISH.sheen && f.anisotropy === FINISH.anisotropy && f.flakes === FINISH.flakes
+    && f.flakeSize === FINISH.flakeSize && f.scatterDistance === FINISH.scatterDistance
+    && f.castsLight === FINISH.castsLight
     && !f.attenuationColor && !f.specularColor && !f.surface && !f.surfaceGraph;
 }
 
@@ -180,6 +207,12 @@ export function finishOf(m: MaterialDef | undefined): BodyFinish {
     attenuationDistance: m?.attenuationDistance ?? FINISH.attenuationDistance,
     dispersion: m?.dispersion ?? FINISH.dispersion,
     iridescence: m?.iridescence ?? FINISH.iridescence,
+    sheen: m?.sheen ?? FINISH.sheen,
+    anisotropy: m?.anisotropy ?? FINISH.anisotropy,
+    flakes: m?.flakes ?? FINISH.flakes,
+    flakeSize: m?.flakeSize ?? FINISH.flakeSize,
+    scatterDistance: m?.scatterDistance ?? FINISH.scatterDistance,
+    castsLight: m?.castsLight ?? FINISH.castsLight,
     ...(m?.attenuationColor ? { attenuationColor: m.attenuationColor } : {}),
     ...(m?.specularColor ? { specularColor: m.specularColor } : {}),
     ...(m?.surface ? { surface: m.surface } : {}),
@@ -206,7 +239,10 @@ export function finishLabel(m: MaterialDef | undefined): string {
   const kind = f.emissive > 0 ? "lit"
     : f.opacity < 1 ? "transparent"
       : f.metalness >= 0.5 ? "metallic"
-        : "";
+        : f.flakes > 0 ? "glitter"
+          : f.anisotropy >= 0.3 ? "brushed"
+            : f.sheen >= 0.3 ? "velvet"
+              : "";
   return kind ? `${gloss}, ${kind}` : gloss;
 }
 
@@ -332,6 +368,17 @@ export function normalizeMaterial(raw: unknown, index = 0): MaterialDef | null {
   if (iridescence !== undefined && iridescence !== FINISH.iridescence) out.iridescence = iridescence;
   const specularColor = asHex(r["specularColor"]);
   if (specularColor) out.specularColor = specularColor;
+  const fields = {
+    sheen: clamp01(r["sheen"]),
+    anisotropy: clamp01(r["anisotropy"]),
+    flakes: clamp01(r["flakes"]),
+    flakeSize: clampRange(r["flakeSize"], 0.01, 5),
+    scatterDistance: clampRange(r["scatterDistance"], 0, 100),
+  };
+  for (const [key, v] of Object.entries(fields) as [keyof typeof fields, number | undefined][]) {
+    if (v !== undefined && v !== FINISH[key]) out[key] = v;
+  }
+  if (r["castsLight"] === false) out.castsLight = false;
   const surface = normalizeSurface(r["surface"]);
   if (surface) out.surface = surface;
   const graph = normalizeGraph(r["surfaceGraph"]);
@@ -350,6 +397,7 @@ const KNOWN_MATERIAL_KEYS: ReadonlySet<string> = new Set([
   "id", "name", "color", "colour", "hex", "metalness", "roughness", "opacity", "emissive", "clearcoat",
   "ior", "thickness", "attenuationColor", "attenuationDistance", "dispersion", "iridescence",
   "specularColor", "surface", "surfaceGraph",
+  "sheen", "anisotropy", "flakes", "flakeSize", "scatterDistance", "castsLight",
 ]);
 
 const NODE_TYPES: readonly SurfaceNode["type"][] = [

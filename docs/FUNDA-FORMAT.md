@@ -40,6 +40,25 @@ document has imported bodies, one more top-level key comes last:
 
 The reference writer and reader is `crates/fundacad-format/src/json_doc.rs`.
 
+### Materials
+
+Each entry of the document's material library needs `id`, `name` and `color`
+(`"#rrggbb"`). Every other field is optional and left out when it holds its
+default. A reader clamps a number that is out of range and drops a field of the
+wrong type. These finish fields came with the filament materials:
+
+| Field | Range | Default | What it is |
+|---|---|---|---|
+| `sheen` | 0..1 | 0 | soft velvet rim at grazing angles |
+| `anisotropy` | 0..1 | 0 | highlights stretched along the layer lines, or world Z |
+| `flakes` | 0..1 | 0 | how many tiny mirror facets the surface has |
+| `flakeSize` | 0.01..5 mm | 0.1 | the size of one flake |
+| `scatterDistance` | 0..100 mm | 0 | light scattering inside a see-through finish |
+| `castsLight` | boolean | true | false keeps a glow off the other parts, written only when false |
+
+A field a reader does not know is kept as it is and written back on save, so a
+file from a newer version keeps its materials.
+
 ## Binary (.fundab), format 2
 
 A `.fundab` file holds one FundaCAD document and the geometry it references. It is

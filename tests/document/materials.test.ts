@@ -27,6 +27,7 @@ import {
   uniqueId,
   finishLabel,
   isDefaultFinish,
+  isShiny,
 } from "../../src/document/materials";
 
 describe("asHex", () => {
@@ -61,6 +62,59 @@ describe("finishOf", () => {
   });
 });
 
+describe("the filament finish fields", () => {
+  const plain = { id: "a", name: "A", color: "#808080" };
+  const cases: [string, unknown, unknown, unknown][] = [
+    // field, a kept value, an out of range value and what it clamps to
+    ["sheen", 0.4, 7, 1],
+    ["anisotropy", 0.6, -3, 0],
+    ["flakes", 0.25, 2, 1],
+    ["flakeSize", 0.15, 50, 5],
+    ["scatterDistance", 1.5, 500, 100],
+  ];
+
+  it.each(cases)("%s round trips, clamps and is omitted at its default", (key, kept, wild, clamped) => {
+    const k = key as keyof typeof FINISH;
+    expect(normalizeMaterial({ ...plain, [key]: kept })).toEqual({ ...plain, [key]: kept });
+    expect(normalizeMaterial({ ...plain, [key]: wild })?.[k as keyof MaterialDef] ?? FINISH[k]).toBe(clamped);
+    expect(normalizeMaterial({ ...plain, [key]: FINISH[k] })).toEqual(plain);
+    expect(normalizeMaterial({ ...plain, [key]: "x" })).toEqual(plain);
+    expect(finishOf({ ...plain, [key]: kept })[k as keyof ReturnType<typeof finishOf>]).toBe(kept);
+    expect(finishOf(plain)[k as keyof ReturnType<typeof finishOf>]).toBe(FINISH[k]);
+  });
+
+  it("writes castsLight only when it is false", () => {
+    expect(normalizeMaterial({ ...plain, castsLight: false })).toEqual({ ...plain, castsLight: false });
+    expect(normalizeMaterial({ ...plain, castsLight: true })).toEqual(plain);
+    expect(finishOf(plain).castsLight).toBe(true);
+    expect(finishOf({ ...plain, castsLight: false }).castsLight).toBe(false);
+  });
+
+  it("reads a library with every field back byte identically", () => {
+    const lib: MaterialDef[] = [{
+      ...plain, emissive: 0.5, sheen: 0.4, anisotropy: 0.6, flakes: 0.25, flakeSize: 0.15, scatterDistance: 1.5,
+      castsLight: false,
+    }];
+    const json = serializeLibrary(lib);
+    const { materials } = parseLibrary(json);
+    expect(materials).toEqual(lib);
+    expect(serializeLibrary(materials)).toBe(json);
+  });
+
+  it("counts anisotropy and flakes as shiny, sheen alone as not", () => {
+    expect(isShiny(finishOf({ ...plain, anisotropy: 0.5 }))).toBe(true);
+    expect(isShiny(finishOf({ ...plain, flakes: 0.2 }))).toBe(true);
+    expect(isShiny(finishOf({ ...plain, sheen: 0.8 }))).toBe(false);
+  });
+
+  it("names the look the field gives", () => {
+    expect(finishLabel({ ...plain, roughness: 0.9, sheen: 0.6 })).toBe("Matte, velvet");
+    expect(finishLabel({ ...plain, roughness: 0.3, anisotropy: 0.6 })).toBe("Satin, brushed");
+    expect(finishLabel({ ...plain, roughness: 0.3, flakes: 0.2 })).toBe("Satin, glitter");
+    expect(finishLabel({ ...plain, roughness: 0.3, metalness: 0.9, flakes: 0.2 })).toBe("Satin, metallic");
+  });
+});
+
 describe("isDefaultFinish", () => {
   it("is true only when nothing about the finish differs from no material", () => {
     expect(isDefaultFinish(finishOf(undefined))).toBe(true);
@@ -68,6 +122,8 @@ describe("isDefaultFinish", () => {
     for (const extra of [
       { clearcoat: 1 }, { ior: 1.33 }, { thickness: 9 }, { attenuationColor: "#00ff00" }, { attenuationDistance: 5 },
       { dispersion: 1 }, { iridescence: 0.5 }, { specularColor: "#ff0000" },
+      { sheen: 0.4 }, { anisotropy: 0.6 }, { flakes: 0.2 }, { flakeSize: 0.3 }, { scatterDistance: 2 },
+      { castsLight: false },
       { surface: { kind: "noise" as const, scale: 4, amount: 0.5 } },
       { surfaceGraph: { nodes: [{ id: "o", type: "output" as const }], output: "o" } },
     ]) {
@@ -87,16 +143,19 @@ describe("normalizeMaterial", () => {
   });
 
   it("carries a field it does not know through untouched, and still repairs the ones it does", () => {
-    const flakes = { density: 0.3, tint: ["#fff", "#ccf"] };
+    const glint = { density: 0.3, tint: ["#fff", "#ccf"] };
     const out = normalizeMaterial({
-      id: "m-x", name: "X", color: "#112233", roughness: 5, sheen: 0.4, anisotropy: { amount: 0.2, angle: 90 },
-      flakes, scatter: "#aa0000", castsLight: true, metalness: "junk",
+      id: "m-x", name: "X", color: "#112233", roughness: 5, glint, scatter: "#aa0000", metalness: "junk",
     });
-    expect(out).toEqual({
-      id: "m-x", name: "X", color: "#112233", roughness: 1,
-      sheen: 0.4, anisotropy: { amount: 0.2, angle: 90 }, flakes, scatter: "#aa0000", castsLight: true,
-    });
+    expect(out).toEqual({ id: "m-x", name: "X", color: "#112233", roughness: 1, glint, scatter: "#aa0000" });
     expect(out).not.toHaveProperty("metalness");
+  });
+
+  it("drops a known finish field of the wrong type instead of carrying it", () => {
+    const out = normalizeMaterial({
+      id: "m-x", name: "X", color: "#112233", anisotropy: { amount: 0.2 }, flakes: {}, castsLight: "no",
+    });
+    expect(out).toEqual({ id: "m-x", name: "X", color: "#112233" });
   });
 
   it("does not let an unknown key reach the prototype or alias the input", () => {
