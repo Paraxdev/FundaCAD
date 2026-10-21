@@ -634,6 +634,9 @@ export async function compileAndSolve(
         // box below cannot do it: for a 10x4 turned 37.5 degrees that box is
         // 10.4 x 9.3, so every solve would inflate the shape while leaving the
         // angle field saying 37.5.
+        // Its corners are pinned, re-deriving unmoved ones only adds float noise (200 degrees became -160.00000000000003).
+        const was = rectCorners(e.x, e.y, e.width, e.height, e.angle);
+        if (pts.every((p, k) => p!.x === was[k]?.x && p!.y === was[k]?.y)) return e;
         const rec = rectFromThreePoints(pts[0]!, pts[1]!, pts[2]!);
         return rec ? { ...e, ...rec } : e; // degenerate solve: keep what we had
       }
