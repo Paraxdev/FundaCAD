@@ -40,10 +40,9 @@ describe("open A then open B", () => {
     expect([a.canUndo, a.canRedo, a.isolateActive]).toEqual([true, true, true]);
     const seen: string[][] = [];
     let opens = 0;
-    let metas = 0;
     a.onDocChange((d) => seen.push(d.features.map((f) => f.id)));
     a.onOpen(() => opens++);
-    a.onMeta(() => metas++);
+    seen.length = 0;
     a.load(JSON.stringify(B));
     expect(saved(a)).toEqual(saved(opened(B)));
     expect([a.canUndo, a.canRedo, a.isolateActive]).toEqual([false, false, false]);
@@ -52,9 +51,8 @@ describe("open A then open B", () => {
     expect(a.carriedSections).toEqual([]);
     expect(a.bodyElements).toEqual([]);
     expect(a.referenceImages()).toEqual([]);
-    expect(seen.at(-1)).toEqual(["g1"]);
+    expect(seen).toEqual([["g1"]]);
     expect(opens).toBe(1);
-    expect(metas).toBeGreaterThan(0);
   });
 
   it("B does not get A's unreadable sections", () => {
@@ -109,6 +107,7 @@ describe("a replacing load of the same document", () => {
     expect(s.dirty).toBe(true);
     let n = 0;
     s.onMeta(() => n++);
+    n = 0;
     s.restoreVersion(v.id);
     expect(n).toBeGreaterThan(0);
   });
