@@ -62,6 +62,16 @@ pub fn opened_paths<'a>(urls: impl IntoIterator<Item = &'a Url>) -> Vec<String> 
         .collect()
 }
 
+/// The local paths a drag's text/uri-list names, in order. Other schemes,
+/// remote hosts and paths that are not UTF-8 are left out.
+pub fn uri_list_paths<S: AsRef<str>>(uris: &[S]) -> Vec<String> {
+    uris.iter()
+        .filter_map(|u| Url::parse(u.as_ref().trim()).ok())
+        .filter(|u| u.scheme() == "file")
+        .filter_map(|u| u.to_file_path().ok()?.into_os_string().into_string().ok())
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -168,6 +178,24 @@ mod tests {
             "fundacad://open?x.funda",
         ]));
         assert_eq!(got, vec!["/Users/Zoë/My Parts/Würfel.FUNDA", "/Users/z/b.fundab"]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn uri_list_paths_decodes_the_local_files_a_file_manager_drags() {
+        let got = uri_list_paths(&[
+            "file:///tmp/my%20dir/p%C3%A4rt%20%C3%BC%20%231.funda",
+            "file://localhost/tmp/a.funda",
+            "file://otherhost/z.funda",
+            "http://x/y.funda",
+            "file:///home/Zo%C3%AB/%E2%9C%93%20%E9%83%A8%E5%93%81.step
+",
+            "file:///tmp/plain%20space.funda",
+        ]);
+        assert_eq!(
+            got,
+            vec!["/tmp/my dir/pärt ü #1.funda", "/tmp/a.funda", "/home/Zoë/✓ 部品.step", "/tmp/plain space.funda"]
+        );
     }
 
     #[cfg(windows)]
