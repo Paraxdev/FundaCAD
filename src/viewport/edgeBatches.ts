@@ -113,7 +113,7 @@ export class EdgeBatches {
   }
 
   begin(f: EdgeFrame) {
-    this.hidden.length = 0;
+    this.end();
     this.drawn = { segments: 0, members: 0, batches: 0 };
     const t0 = performance.now();
     if (this.changedSource(f.members)) this.regroup(f.members);

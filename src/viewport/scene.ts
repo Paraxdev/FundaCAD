@@ -661,12 +661,12 @@ export class PostChain {
     // Potato mode and the low power motion path draw every line thin already.
     const edges = this.edgeFrame && plan.path !== "potato" && plan.path !== "motion" ? this.edgeFrame : null;
     this.edgesDrawn = null;
-    if (edges) {
-      const b = (this.edgeBatches ??= new EdgeBatches());
-      b.begin(edges);
-      this.edgesDrawn = { merged: b.drawn.members, segments: b.drawn.segments, thin: edges.thin, weight: edges.weight, builtMs: b.builtMs };
-    }
     try {
+      if (edges) {
+        const b = (this.edgeBatches ??= new EdgeBatches());
+        b.begin(edges);
+        this.edgesDrawn = { merged: b.drawn.members, segments: b.drawn.segments, thin: edges.thin, weight: edges.weight, builtMs: b.builtMs };
+      }
       this.renderPlan(plan, camera);
     } finally {
       if (edges) this.edgeBatches!.end();

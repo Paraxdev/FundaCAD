@@ -263,6 +263,21 @@ describe("the merged edge batches", () => {
     expect(drawn(scene).filter((o) => o.name.startsWith("edge-batch"))).toEqual([]);
   });
 
+  it("puts back the bodies a begin that threw had hidden", () => {
+    const { members, keep, frame, batches } = setup();
+    const fat = Reflect.get(batches, "fatObject");
+    Reflect.set(batches, "fatObject", () => {
+      throw new Error("out of memory");
+    });
+    expect(() => batches.begin(frame)).toThrow();
+    expect(members.some((m) => !m.object.visible)).toBe(true);
+    Reflect.set(batches, "fatObject", fat);
+    for (const m of members) keep.add(m.refs[0]!.body!);
+    batches.begin(frame);
+    batches.end();
+    expect(members.every((m) => m.object.visible)).toBe(true);
+  });
+
   it("leaves a selected, hovered or moved body to draw its own full edges", () => {
     const { scene, members, keep, frame, batches } = setup();
     keep.add("b3");
