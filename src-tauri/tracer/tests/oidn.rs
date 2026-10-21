@@ -102,7 +102,9 @@ fn the_official_release_installs_loads_and_denoises() {
     let rel = oidn::release().unwrap();
     let dest = scratch("real").join(oidn::VERSION);
     oidn::install(&std::fs::read(path).unwrap(), rel, &dest).unwrap();
+    let t = std::time::Instant::now();
     let api = Api::open(&dest, rel.files).unwrap();
+    println!("loaded in {} ms", t.elapsed().as_millis());
     let (w, h) = (32, 24);
     let mut seed = 12345u32;
     let color: Vec<f32> = (0..w * h)
@@ -120,7 +122,9 @@ fn the_official_release_installs_loads_and_denoises() {
         depth: vec![5.0; w * h],
         samples: 4,
     };
+    let t = std::time::Instant::now();
     let out = api.denoise(&input, fundacad_tracer::Quality::Standard).unwrap();
+    println!("denoised {w}x{h} in {} ms", t.elapsed().as_millis());
     let rms = |v: &[f32]| (v.iter().map(|x| (x - 0.5) * (x - 0.5)).sum::<f32>() / v.len() as f32).sqrt();
     println!("rms off the mean {:.3} denoised to {:.3}", rms(&input.color), rms(&out));
     assert!(rms(&out) < rms(&input.color) * 0.5);
