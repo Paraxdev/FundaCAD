@@ -57,6 +57,8 @@ export class Highlighter {
   private hoveredBody: string | null = null;
   private selectedEdges = new Set<EdgeRef>();
   private selectedFaces = new Set<number>();
+  /** The bodies of the selected and hovered faces, null once either changed. */
+  private faceBodies: Set<string> | null = null;
   private selectedBodies = new Set<string>();
   private errorEdges = new Set<EdgeRef>();
   // idle (un-hovered, un-selected) edge color. Raised to a visible "selectable"
@@ -157,6 +159,7 @@ export class Highlighter {
     }
     const before = new Set(was);
     this.hoveredFaces = faceIds;
+    this.faceBodies = null;
     for (const f of faceIds) {
       if (!before.has(f) && !this.selectedFaces.has(f)) this.paintFace(f, HOVER);
     }
@@ -253,6 +256,7 @@ export class Highlighter {
   }
 
   toggleSelectFace(faceId: number) {
+    this.faceBodies = null;
     if (this.selectedFaces.has(faceId)) {
       this.selectedFaces.delete(faceId);
       this.restoreFace(faceId);
@@ -296,6 +300,7 @@ export class Highlighter {
     for (const f of this.selectedFaces) this.restoreFace(f);
     this.selectedEdges.clear();
     this.selectedFaces.clear();
+    this.faceBodies = null;
     this.syncHoverOverlay();
   }
 
@@ -343,12 +348,16 @@ export class Highlighter {
     if (this.hoveredBody) out.add(this.hoveredBody);
     for (const set of [this.selectedEdges, this.errorEdges]) for (const e of set) if (e.body) out.add(e.body);
     if (this.hoveredEdge?.body) out.add(this.hoveredEdge.body);
-    for (const set of [this.selectedFaces, this.hoveredFaces]) {
-      for (const f of set) {
-        const b = bodyOfFace(this.view, f);
-        if (b) out.add(b.id);
+    if (!this.faceBodies) {
+      this.faceBodies = new Set();
+      for (const set of [this.selectedFaces, this.hoveredFaces]) {
+        for (const f of set) {
+          const b = bodyOfFace(this.view, f);
+          if (b) this.faceBodies.add(b.id);
+        }
       }
     }
+    for (const b of this.faceBodies) out.add(b);
     return out;
   }
 
