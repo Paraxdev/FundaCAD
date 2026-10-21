@@ -172,9 +172,13 @@ struct Chain<'a> {
     closed: bool,
 }
 
+/// The sharpest angle between two curves that a wall still mitres.
+const SHARPEST_MITRE_DEG: f64 = 20.0;
+
 /// The links joined end to end, a chain stopping where curves end or branch. A
 /// branch whose curves all leave into one half plane passes the two that bound
-/// the empty side straight through, so that outer corner is mitred, not notched.
+/// the empty side straight through, so that outer corner is mitred, not notched,
+/// when they are not too sharp to mitre. Its other curves still end at the branch.
 fn chains<'a>(links: Vec<Link<'a>>, tol: f64) -> Vec<Chain<'a>> {
     let mut nodes: Vec<P> = Vec::new();
     let mut node = |p: P| -> usize {
@@ -210,10 +214,14 @@ fn chains<'a>(links: Vec<Link<'a>>, tol: f64) -> Vec<Chain<'a>> {
             let g = out[(j + 1) % k].0 - out[j].0;
             if j + 1 == k { g + std::f64::consts::TAU } else { g }
         };
-        if let Some(j) = (0..k).find(|&j| gap(j) > std::f64::consts::PI + 1e-9) {
+        let mitred = |j: usize| {
+            let between = std::f64::consts::TAU - gap(j);
+            gap(j) > std::f64::consts::PI + 1e-9 && between > SHARPEST_MITRE_DEG.to_radians() + 1e-9
+        };
+        if let Some(j) = (0..k).find(|&j| mitred(j)) {
             let pass = degree.len();
             degree.push(2);
-            degree[n] -= 2;
+            // n keeps its full degree, so a walk never chains two of the curves left there
             for (_, i, side) in [out[j], out[(j + 1) % k]] {
                 ends[i][side] = pass;
             }
@@ -351,7 +359,7 @@ fn side_path(chain: &Chain, d: f64) -> FResult<Vec<El>> {
             offs[k].set_a(x);
             continue;
         }
-        if dot(t1, t2) < -(160f64.to_radians().cos().abs()) {
+        if dot(t1, t2) < -SHARPEST_MITRE_DEG.to_radians().cos() {
             return Err(Fail::msg(format!(
                 "curves {} and {} meet at too sharp an angle for a wall, open the angle past 20 degrees",
                 chain.links[i].curve, chain.links[k].curve
