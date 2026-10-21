@@ -49,6 +49,7 @@ export function installDevGlobals(e: Engine): void {
   w.__fundacad = {
     store: e.store,
     viewport: e.viewport,
+    setRealtimeQuality: (q: "standard" | "high") => setRenderPref("realtimeQuality", q),
     sketch: e.sketch,
     handleAction: (a: string) => e.handleAction(a),
     // Home reads the library when it opens, so reopen it after this.

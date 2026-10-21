@@ -66,6 +66,8 @@ import { BodyFinishLayer, sameFinishMap, sameStringMap } from "./bodyFinish";
 import { sameRelief } from "./relief";
 import type { ReliefMap } from "../plugins/contrib";
 import { hdrHashOf, onRenderPrefsChange, renderPrefs, setRenderPref } from "../ui/renderPrefs";
+import { isSoftwareRenderer } from "../ui/glassBlur";
+import { resolveRealtimeQuality, type QualityTier } from "./realtimePipeline";
 import { bootViewMode, chooseViewMode, effectiveViewMode, resetPathTracedOverride, savedGround, savedOverlays, type RenderTier, type ViewMode } from "../ui/viewMode";
 import { drawMask, markOverlay, overlayBit, overlayShown, pickLayers, pickMask, pictureMask, setPickLayers, syncOverlayLayers, type ActiveWork, type OverlayKind } from "./overlayKinds";
 import type { TraceLight, TraceLook } from "./pathtrace/backend";
@@ -392,6 +394,7 @@ export class Viewport {
       this.overlays = savedOverlays();
       this.requestRender(); // each workspace keeps its own ground
     });
+    this.applyRealtimeQuality();
     onRenderPrefsChange(() => {
       if (renderPrefs().tracer !== this.tracerPref) {
         this.tracerPref = renderPrefs().tracer;
@@ -401,6 +404,7 @@ export class Viewport {
       const wasPotato = this.potato;
       this.potato = renderPrefs().potatoMode;
       this.scene.applyRenderPrefs(); // re-applies the power tier (performance mode)
+      this.applyRealtimeQuality();
       this.rig.setFov(renderPrefs().fov);
       // Only when the tier actually flipped: the finishes decide glass vs alpha
       // and how many emitter lights to draw off it, and re-running them on every
@@ -4023,8 +4027,20 @@ export class Viewport {
     this.requestRender();
   }
 
+  /** The quality the saved choice resolves to on this machine, moved to once the
+   *  High programs are linked, so a switch never stalls the view. */
+  private applyRealtimeQuality(): void {
+    const { quality } = resolveRealtimeQuality(renderPrefs().realtimeQuality, this.qualityTier());
+    void this.scene.post.switchRealtimeQuality(quality, this.rig.active).then(() => this.requestRender());
+  }
+
+  qualityTier(): QualityTier {
+    return { lowPower: isRenderLowPower(), auto: this.scene.lowPower, software: isSoftwareRenderer() };
+  }
+
   /** Rolling median GPU ms per pass of the realtime frame (shadow, glassBack,
-   *  main, composer), or just `frame` where the browser has no timer queries. */
+   *  main, composer, and at High prepass and compose), or just `frame` where the
+   *  browser has no timer queries. */
   passTimes(): Record<string, number> {
     return this.scene.post.timer.medians();
   }
@@ -4043,7 +4059,7 @@ export class Viewport {
   }
 
   screenshotPNG(): string {
-    this.scene.post.render(this.rig.active);
+    this.scene.post.render(this.rig.active, false, false, { moving: false, ghosted: this.ghosted });
     const url = this.canvas.toDataURL("image/png");
     this.requestRender(); // repaint with the ViewCube overlay
     return url;
@@ -4105,6 +4121,10 @@ export class Viewport {
     );
   }
 
+  private get ghosted(): boolean {
+    return this.xray || this.wireframe || this.stale || this.peek.size > 0 || this.sketchDimmed;
+  }
+
   private drawPicture<T>(
     w: number,
     h: number,
@@ -4152,7 +4172,7 @@ export class Viewport {
       this.scene.post.setSize(w * k, h * k, k);
       this.scene.post.focusDistance = this.rig.active.position.distanceTo(this.cameraTarget());
       const draw = () => {
-        this.scene.post.render(this.rig.active, false, opts.realtime);
+        this.scene.post.render(this.rig.active, false, opts.realtime, { moving: false, ghosted: this.ghosted });
         return read();
       };
       return this.highlighter ? this.highlighter.withoutSelectionPaint(draw) : draw();
@@ -4391,7 +4411,10 @@ export class Viewport {
         // Shadows depend on the casters and the lights, never on the camera.
         this.shadowWatch.gate(this.needsRender, this.scene.scene, shadows, this.scene.post.drawsShadows);
         try {
-          this.scene.post.render(this.rig.active, this.motionActive && this.motionScale < 1);
+          this.scene.post.render(this.rig.active, this.motionActive && this.motionScale < 1, false, {
+            moving: this.motionActive,
+            ghosted: this.ghosted,
+          });
         } finally {
           shadows.autoUpdate = true;
         }
