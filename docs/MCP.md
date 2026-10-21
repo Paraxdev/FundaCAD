@@ -268,8 +268,32 @@ which a fresh engine could no longer start one and every build failed.
 | `view` | a PNG: orthographic, flat-shaded, with sections, body filtering and zoom |
 | `doc_import` | read a STEP, STL, 3MF, OBJ, BREP or GLB file in as a body to model against, by `path` or as inline `content`, compressed and in pieces if it is large |
 | `export` | STEP, STL, 3MF, OBJ, BREP. `separate` writes a file per body named after it, `body` one body, `layFlat` turns each part onto a flat face for printing |
+| `guide_highlight` / `guide_wait` / `guide_clear` | guide mode, below: show the user a step in their own window and wait for them |
 
 `schema` is also served as an MCP resource at `fundacad://schema`.
+
+### Guide mode
+
+`guide_highlight` puts a pulsing ring and a caption with Next and Stop in the
+user's open window, on a control (`ui`, the refs the harness uses: `pick:fillet`,
+`family:cat:MODIFY`, `field:radius`, `#timeline`, `menu:File/Open...`), a model area
+(`model`, harness selectors such as `body1:top` or `between top front`, not
+`inspect`'s fingerprints) or a part of the view (`region`, fractions of it). A
+control folded away is ringed through what opens it, and the reply says so, as it
+names near misses for a ref that is not on screen. `guide_wait` then waits until
+the user presses Next, starts a tool, adds a feature, selects something or types a
+value, and says which in one line; it holds the conversation's tool calls for up
+to `timeout_s` (60 s by default, 120 at most). `guide_clear` ends the guide. When
+the user presses Stop, the window clears everything and the next guide call says
+`the user stopped the guide at step n of m, everything is cleared`, once.
+
+It rides the live session (`session_guide`, [PROTOCOL.md](PROTOCOL.md)), so it
+works with the window set to Share, read only as well as Share, and allow edits,
+and never changes the document. It refuses by name rather than showing nothing:
+in `standalone` (which never attaches to a window), when no window shares its
+document, with an engine older than guide mode, and with a window that does not
+take the step within 3 s. The user's side is in the manual,
+`manual/docs/ai/guide.md`.
 
 ### Supports and gravity in `stress`
 

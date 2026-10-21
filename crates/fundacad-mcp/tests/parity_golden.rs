@@ -97,9 +97,9 @@ fn the_parity_script_answers_as_the_python_server_did() {
             &format!("\"version\": {}", fundacad_core::schema::DOCUMENT_VERSION),
             "\"version\": 9",
         );
-        // The Python server had no ui or measure tools, so its list of tools lacks them.
+        // The Python server had no ui, guide or measure tools, so its list of tools lacks them.
         let text = if text.starts_with("No tool '") {
-            ["measure", "ui_close", "ui_do", "ui_open", "ui_read", "ui_shot"]
+            ["guide_clear", "guide_highlight", "guide_wait", "measure", "ui_close", "ui_do", "ui_open", "ui_read", "ui_shot"]
                 .iter()
                 .fold(text, |t, n| t.replace(&format!(", {n}"), ""))
         } else {

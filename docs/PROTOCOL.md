@@ -911,7 +911,7 @@ section 2.3).
 
 ### `session_*`, the live session
 
-Five ops that share one document between the app window and an outside client
+Six ops that share one document between the app window and an outside client
 (the MCP server, `crates/fundacad-mcp`). They are answered on the **read path**, never behind
 the heavy-op lock: the window publishes on a loop, and a publish that queued
 behind a rebuild would make the window invisible to an agent for exactly as long
@@ -949,7 +949,31 @@ losing the socket gives it up.
 //      "revision": 14, "message": "..." }
 
 { "op": "session_leave", "id": "..." }            // -> { "ok": true }
+
+// guide mode, a guest: its heartbeat, an optional command, and what the guide shows now.
+// Never carries the document, so a guest may poll it several times a second.
+{ "op": "session_guide", "id": "...", "name": "an assistant",
+  "command": { "kind": "highlight", "target": { "ui": "pick:fillet" },
+               "caption": "Open Fillet", "step": 1, "of": 3 } }
+// -> { "ok": true, "attached": true, "seq": 5, "guide": { /* the window's state */ } | null }
+// -> { "ok": false, "reason": "no-host", "message": "..." }
+
+// guide mode, the host: what its guide shows, and the commands waiting for it
+{ "op": "session_guide", "id": "...", "state": { "ack": 5, "step": { ... }, "wait": null,
+  "stopped": null } }
+// -> { "ok": true, "commands": [ { "kind": "highlight", "seq": 5, "guest": "c1f", ... } ] }
 ```
+
+Commands are `highlight` (`target` is one of `ui`, a control id; `model`, a selector;
+`region`, viewport fractions `{x, y, w, h}`), `clear`, and `wait` (`until`, a list of
+`next`, `tool`, `feature`, `selection`, `value`, with optional `tool` and `field`).
+The engine keeps the newest step (a highlight or a clear) and the newest wait, never a
+backlog: a window too old to take them shows up as no `ack` rather than as a full queue.
+A guest that leaves or expires takes its commands with it, and a new host starts with no
+guide. The `state` is opaque to the engine; the window fills `ack` (the newest `seq` it
+acted on), `step`, `wait` (with `done` once it is decided) and `stopped` (`n` counts the
+user's Stop presses, so a guest reports each one once). A guest sending `state` is
+refused with `not the host`.
 
 A proposal is refused if `baseRevision` is not the current revision. That is the
 rule that stops an agent's edit landing on a model the user has since changed,

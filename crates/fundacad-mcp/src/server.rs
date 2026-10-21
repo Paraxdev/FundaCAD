@@ -83,7 +83,9 @@ pub const MUTATORS: &[&str] = &[
 
 /// Tools that need no document at all, so they must not be made to wait for
 /// one. `schema` in particular is what an agent reads BEFORE anything exists.
-pub const NO_DOCUMENT: &[&str] = &["schema", "ui_open", "ui_do", "ui_read", "ui_shot", "ui_close"];
+pub const NO_DOCUMENT: &[&str] = &[
+    "schema", "ui_open", "ui_do", "ui_read", "ui_shot", "ui_close", "guide_highlight", "guide_wait", "guide_clear",
+];
 
 /// What the host puts in front of the model before its first call.
 ///
@@ -380,6 +382,8 @@ pub struct FundaCad {
     /// pull, the tool and the push one atomic edit.
     turn: Arc<Mutex<()>>,
     pub(crate) ui: Arc<Mutex<Option<crate::ui::UiBridge>>>,
+    /// The user's guide Stop presses already reported, so each is said once.
+    pub(crate) guide_stops: Arc<std::sync::atomic::AtomicI64>,
     scope: Arc<PathScope>,
 }
 
@@ -401,10 +405,25 @@ impl FundaCad {
                 app_build: None,
             })),
             turn: Arc::new(Mutex::new(())),
-            router: Arc::new(Self::tool_router()),
+            router: Arc::new(Self::base_router()),
             ui: Arc::new(Mutex::new(None)),
+            guide_stops: Arc::new(std::sync::atomic::AtomicI64::new(crate::guide::UNSEEN)),
             scope: Arc::new(PathScope::for_server(std::env::args_os()).0),
         }
+    }
+
+    /// Every mode's tools. Guide mode is listed everywhere and says why where it cannot work.
+    fn base_router() -> rmcp::handler::server::router::tool::ToolRouter<FundaCad> {
+        let mut router = Self::tool_router();
+        router.merge(Self::guide_router());
+        router
+    }
+
+    /// The engine link, the live guest's name when this server shares the app's
+    /// document, and whether it has edited a private copy instead.
+    pub(crate) async fn guide_parts(&self) -> (Arc<EngineLink>, Option<String>, bool) {
+        let st = self.state.lock().await;
+        (st.link.clone(), st.live.as_ref().map(|l| l.name.clone()), st.private_edits)
     }
 
     /// `raw` absolute if the tools may touch it, else the refusal to answer with.
@@ -419,7 +438,7 @@ impl FundaCad {
 
     /// The ui tools as well, which standalone gets and nothing else does.
     pub fn with_ui(mut self) -> FundaCad {
-        let mut router = Self::tool_router();
+        let mut router = Self::base_router();
         router.merge(Self::ui_router());
         self.router = Arc::new(router);
         self
@@ -624,7 +643,7 @@ impl FundaCad {
     /// link, so without this every later call fails the same way until the host
     /// restarts this server. Fall back to a private engine, keeping the last
     /// document pulled, and let the re-probe find the app again.
-    async fn drop_lost_app(&self, why: &str) {
+    pub(crate) async fn drop_lost_app(&self, why: &str) {
         log(&format!(
             "[mcp] lost FundaCAD's engine ({why}), working on a private copy until it is back"
         ));

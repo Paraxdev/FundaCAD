@@ -4,6 +4,7 @@ import SafeModeBanner from "./components/shell/SafeModeBanner.vue";
 import ViewportPane from "./components/shell/ViewportPane.vue";
 import RenderDock from "./components/shell/RenderDock.vue";
 import ToastStack from "./components/overlays/ToastStack.vue";
+import GuideLayer from "./components/overlays/GuideLayer.vue";
 import ModalHost from "./components/overlays/ModalHost.vue";
 import ShortcutHud from "./components/overlays/ShortcutHud.vue";
 import ContextMenuHost from "./components/overlays/ContextMenuHost.vue";
@@ -138,6 +139,7 @@ watch(() => ui.sketchActive, () => shell.closeDrawer());
        from #app's grid. -->
   <ToastStack />
   <ModalHost />
+  <GuideLayer />
   <ShortcutHud />
   <ContextMenuHost />
   <RadialMenuHost />

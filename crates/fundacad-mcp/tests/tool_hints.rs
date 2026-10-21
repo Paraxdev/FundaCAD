@@ -36,6 +36,10 @@ const TABLE: &[(&str, (bool, bool, bool, bool))] = &[
     ("ui_do", (false, true, false, false)),
     ("ui_open", (false, false, true, false)),
     ("ui_close", (false, true, true, false)),
+    // A step and a wait change what the user sees, never the document.
+    ("guide_highlight", (false, false, true, false)),
+    ("guide_wait", (true, false, false, false)),
+    ("guide_clear", (false, false, true, false)),
 ];
 
 #[test]
