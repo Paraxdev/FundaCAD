@@ -29,14 +29,19 @@ export class OverlayDraw {
     renderer.getClearColor(this.clear);
     const alpha = renderer.getClearAlpha();
     const override = scene.overrideMaterial;
+    // A panorama shown behind the model is the background, which in
+    // perspective three paints opaque over the trace; the trace has its own.
+    const background = scene.background;
     try {
       scene.traverseVisible((o) => this.visit(o));
       shadows.autoUpdate = false;
       scene.overrideMaterial = null;
+      scene.background = null;
       renderer.setClearColor(this.clear, 0);
       renderer.render(scene, camera);
     } finally {
       scene.overrideMaterial = override;
+      scene.background = background;
       renderer.setClearColor(this.clear, alpha);
       shadows.autoUpdate = autoUpdate;
       for (const { mesh, was } of this.swapped) mesh.material = was;

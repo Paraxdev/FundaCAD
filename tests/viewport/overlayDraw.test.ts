@@ -28,4 +28,23 @@ describe("OverlayDraw", () => {
     expect(seen[0]!.body).toBe(draw.depthOnly);
     expect(scene.overrideMaterial).toBe(stale);
   });
+
+  // An HDR shown behind the model is the scene's background; in perspective
+  // three draws it opaque over the whole canvas, hiding the trace under it.
+  it("draws no background over the trace, and gives it back", () => {
+    const scene = new THREE.Scene();
+    const panorama = new THREE.CubeTexture();
+    scene.background = panorama;
+    const seen: unknown[] = [];
+    const renderer = {
+      shadowMap: { autoUpdate: true },
+      getClearColor: (c: THREE.Color) => c.set(0x000000),
+      getClearAlpha: () => 1,
+      setClearColor: () => {},
+      render: (s: THREE.Scene) => seen.push(s.background),
+    } as unknown as THREE.WebGLRenderer;
+    new OverlayDraw().render(renderer, scene, new THREE.PerspectiveCamera());
+    expect(seen).toEqual([null]);
+    expect(scene.background).toBe(panorama);
+  });
 });
