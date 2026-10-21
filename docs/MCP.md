@@ -49,31 +49,47 @@ per launch token to `session.json`.
 ### Which files the server can reach
 
 `doc_open`, `doc_save`, `doc_import`, `export`, and the `record` of `ui_open`
-and the `open_file`, `import_file` and `save_as` steps of `ui_do`, take a path
-only inside these folders (`crates/fundacad-mcp/src/scope.rs`):
+and the `open_file`, `import_file` and `save_as` steps of `ui_do`, check their
+path first (`crates/fundacad-mcp/src/scope.rs`). The path is made absolute
+(a relative one against the working folder), `..` folded and every part that
+exists resolved through links, so neither `..` nor a link leads around a rule.
+
+By default, started with no folders as the Preferences Copy text does, any
+path is reached except:
+
+- a file directly in home itself, in a drive or filesystem root, or in a
+  folder that holds home (`C:\Users`, `/home`); their subfolders are fine;
+- anything with a hidden name (a leading dot) in its path, so `.git`, `.ssh`
+  and `.config` stay out of reach;
+- UNC paths, `\\.\` and `\\?\` device and verbatim paths, `C:name`, a colon
+  in a name (an NTFS alternate data stream) and device names such as `NUL` or
+  `COM1`, refused on every platform.
+
+The app's own folders (the system temp folder, `<app data>/recovery` and the
+blob dir, `FUNDACAD_BLOB_DIR`) are reached in full, as tempfile names its
+folders `.tmpXXXX`.
+
+Strict mode keeps the server to a folder list. It is on when a folder is
+given with `--allow-path <folder>` (repeatable, after `--mcp` for
+`fundacad`, which checks that `--mcp` is its first argument), listed in
+`FUNDACAD_MCP_ALLOW_PATHS` (separated the way `PATH` is), or when
+`FUNDACAD_MCP_STRICT=1`. Then a path is reached only inside:
 
 - the open document's folder: the file opened or saved here, or in a live
   session the file the window has open;
-- the app's own: the system temp folder, `<app data>/recovery` and the blob
-  dir (`FUNDACAD_BLOB_DIR`);
-- every folder given with `--allow-path <folder>` (repeatable, after `--mcp`
-  for `fundacad`) or listed in `FUNDACAD_MCP_ALLOW_PATHS`, separated the way
-  `PATH` is.
+- the app's own folders;
+- every given folder.
 
-Home and drive roots themselves are never one of them, nor a folder that holds
-home, so `--allow-path ~` is ignored with a line in the log. Hidden names (a
-leading dot) below the document's folder or an allowed one are refused, so
-`.git` and `.ssh` stay out of reach unless such a folder is allowed itself; the
-app's own folders are reached in full, as tempfile names its folders `.tmpXXXX`.
-UNC paths, `\\.\` and `\\?\` device and verbatim paths, `C:name`, a colon in a
-name (an NTFS alternate data stream) and device names such as `NUL` or `COM1`
-are refused on every platform. The path is made absolute, `..` folded and every
-part that exists resolved through links before it is compared, so neither `..`
-nor a link inside an allowed folder leads out of it. The refusal names the
-folder that would let it through and how to allow it. The check is made when the
-tool is called, so a folder swapped for a link after that, or a hard link, is not
-caught. The working folder is not one of them: a host started in home could
-otherwise write dotfiles there.
+Home and drive roots themselves are never a given folder, nor a folder that
+holds home, so `--allow-path ~` is ignored; the log and every refusal say so,
+and the server still keeps to its list. Hidden names below the document's
+folder or a given one are refused unless such a folder is given itself. A
+strict refusal names the folder that would let it through and how to give it.
+
+The check is made when the tool is called, so a folder swapped for a link
+after that, or a hard link, is not caught. In the default mode a write goes
+wherever the person's account can write, as it did before the check, so the
+host's approval of `doc_save` and `export` (`destructiveHint`) is the guard.
 
 ```json
 { "mcpServers": { "fundacad": {
