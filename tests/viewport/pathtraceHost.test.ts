@@ -262,6 +262,22 @@ describe("path trace host", () => {
     expect(previews()).toEqual(["preview:true", "preview:false"]);
   });
 
+  it("gives the overlay the traced frame's camera only with Realtime while moving off", async () => {
+    const { host, t } = await started();
+    const view = { matrices: new Float64Array(32), ortho: false };
+    (t as unknown as { shownView: () => typeof view }).shownView = () => view;
+    const off = { realtimeWhileMoving: false };
+    host.tick(frame(off));
+    t.answer(8);
+    await flush();
+    host.tick(frame(off, 1010));
+    expect(host.shown).toBe(true);
+    expect(host.frameView).toBe(view);
+    host.tick(frame({}, 1020));
+    expect(host.shown).toBe(true);
+    expect(host.frameView).toBeNull();
+  });
+
   it("drops to Realtime on a resize with Realtime while moving off, the resized canvas is blank", async () => {
     const { host, t } = await started();
     const off = { realtimeWhileMoving: false };

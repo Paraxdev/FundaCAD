@@ -5,8 +5,9 @@
 // Per state the WebGL frame is grabbed in the task that drew it: Realtime with
 // overlays (A), Realtime in Clean view (B) and the overlay frame of Path traced
 // (P). P over B must equal A to within a few pixels. Then three arrow key view
-// steps must restart the trace on the new view, and an HDR shown behind must
-// not paint the overlay frame opaque over the trace.
+// steps must restart the trace on the new view, an orbit with Realtime while
+// moving off must keep the edges on the trace mid drag, and an HDR shown behind
+// must not paint the overlay frame opaque over the trace.
 //
 // Usage (from the repo root, vite + engine `fundacad-engine --ws` running):
 //   SC_TOKEN=<engine token> [SC_CHROME=<chrome exe>] [SC_URL=http://localhost:5173/] \
@@ -288,6 +289,29 @@ let serve = null;
       check(`arrow key steps, Realtime while moving ${rtm ? "on" : "off"}: the trace follows the new view`,
         rest !== null && after !== null && after <= 4, `edges to traced bodies ${rest} px at rest, ${after} px after`);
     }
+    // An orbit with Realtime while moving off: the trace on screen is a frame or
+    // two behind the mouse, so the edges over it must be drawn from its camera.
+    await home();
+    await mode("pathtraced");
+    await waitShown();
+    await settle(1500);
+    const still = await offset("drag-rest");
+    const cx = box.x + box.width * 0.75, cy = box.y + box.height * 0.8;
+    await page.mouse.move(cx, cy);
+    await page.mouse.down({ button: "right" });
+    const during = [];
+    for (let k = 0, x = cx; k < 6; k++) {
+      for (let q = 0; q < 6; q++) {
+        x -= 6;
+        await page.mouse.move(x, cy);
+        await page.waitForTimeout(16);
+      }
+      during.push(await offset(`drag-${k}`));
+    }
+    await page.mouse.up({ button: "right" });
+    const worst = during.includes(null) ? null : Math.max(...during);
+    check("an orbit with Realtime while moving off: the edges stay on the traced bodies mid drag",
+      still !== null && worst !== null && worst - still < 2, `${still} px at rest, ${during.join(", ")} px mid drag`);
     await hide.evaluate((e) => e.remove());
     await setPref("realtimeWhileMoving", true);
     await viewMode("setOverlay", "grid", true);

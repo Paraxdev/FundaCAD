@@ -14,6 +14,7 @@ import { POTATO_PIXEL_RATIO, PotatoDraw } from "./potato";
 import { MatcapDraw } from "./matcap";
 import { GpuTimer } from "./gpuTimer";
 import { OverlayDraw } from "./pathtrace/overlayDraw";
+import { viewCamera, type FrameView } from "./pathtrace/frameCamera";
 import { ModelPrepass, OverlayCompose, highAsked, stagesFor, type FrameFacts, type FrameState, type RealtimeQuality, type Stage } from "./realtimePipeline";
 import type { ViewMode } from "../ui/renderPrefs";
 import { isSoftwareRendererName, setSoftwareRenderer } from "../ui/glassBlur";
@@ -474,6 +475,9 @@ export class PostChain {
   /** Written by the viewport: the traced canvas under this one has an image to
    *  show, so this frame draws only what sits on top of it. */
   traceShown = false;
+  /** Written by the viewport: where the trace on screen was traced from, when
+   *  that is not the live camera. */
+  traceView: FrameView | null = null;
   /** Frames drawn with the Realtime look in Realtime or Path traced, for the e2e. */
   realtimeFrames = 0;
   private size = new THREE.Vector2(1, 1);
@@ -670,7 +674,8 @@ export class PostChain {
       this.overlay = null;
     }
     if (plan.path === "overlay") {
-      (this.overlay ??= new OverlayDraw()).render(this.renderer, this.scene, camera);
+      const view = this.traceView ? viewCamera(camera, this.traceView) : camera;
+      (this.overlay ??= new OverlayDraw()).render(this.renderer, this.scene, view);
       return;
     }
     this.realtimeFrames++;

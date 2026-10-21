@@ -58,6 +58,7 @@ static OPEN: Current<Open> = Current::new();
 fn source() -> Result<(Arc<dyn FrameSource>, String), String> {
     match tracer::tracer() {
         Ok(t) => {
+            t.opened();
             let name = t.name();
             Ok((t as Arc<dyn FrameSource>, name))
         }

@@ -7,6 +7,7 @@ import type { Denoise } from "../../ui/renderPrefs";
 import { SAMPLE_CAP, type TraceLook, type TracerBackend } from "./backend";
 import { costProfile, FrameBudget, renderScaleFor, tracedPictureScale } from "./budget";
 import type { TraceLens } from "./camera";
+import type { FrameView } from "./frameCamera";
 import { armGuard, clearGuard } from "./guard";
 import { BlasCache, type BlasBuilder } from "./blasCache";
 import { createBlasBuilder } from "./blasPool";
@@ -154,6 +155,12 @@ export class PathTraceHost {
 
   get backendName(): string {
     return this.backend?.name ?? "";
+  }
+
+  /** With Realtime while moving off the trace on screen can be from an older
+   *  camera than the live one; the overlay is drawn from where it was traced. */
+  get frameView(): FrameView | null {
+    return this.shown && this.preview ? (this.backend?.shownView?.() ?? null) : null;
   }
 
   get denoised(): boolean {
