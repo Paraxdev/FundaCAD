@@ -54,7 +54,8 @@ export class DraftTool {
   private downPos = { x: 0, y: 0 };
   private downOnGizmo = false;
   private refusalShown: string | null = null;
-  private checking = false;
+  /** An Enter is waiting for the kernel's answer on the value it was pressed for. */
+  private commitPending = false;
 
   private dim = new DimInput();
   private onDone: ((id: string | null) => void) | null = null;
@@ -238,14 +239,15 @@ export class DraftTool {
         tone: sign < 0 ? "cut" : "idle",
         refused: refusal !== null,
       });
-      if (refusal !== this.refusalShown) {
+      if (this.commitPending && !this.store.buildState.building) {
+        this.commitPending = false;
+        this.refusalShown = refusal;
+        if (!refusal) { this.commit(); return; }
+        setPrompt(`Draft refused: ${refusal} · drag back or Esc`);
+      } else if (refusal !== this.refusalShown) {
         this.refusalShown = refusal;
         if (refusal) setPrompt(`Draft refused: ${refusal} · drag back or Esc`);
-        else this.prompt();
-        this.checking = false;
-      } else if (this.checking && !this.store.buildState.building) {
-        this.checking = false;
-        this.prompt();
+        else if (!this.commitPending) this.prompt();
       }
       const s = this.viewport.projectToScreen(this.anchor);
       this.dim.position(s.x, s.y);
@@ -261,6 +263,11 @@ export class DraftTool {
   }
 
   private pushPreview() {
+    if (this.commitPending) {
+      // the waiting Enter was for the value before this one
+      this.commitPending = false;
+      this.prompt();
+    }
     this.store.setPreview(Math.abs(this.angle) < 1e-6 ? null : this.buildFeature());
   }
 
@@ -285,7 +292,8 @@ export class DraftTool {
   }
 
   /** `typed`: Enter or the tick button. A typed value is judged by the kernel
-   *  before it is committed, so the tool stays open until the answer is in. */
+   *  before it is committed, so the tool stays open until the answer is in and
+   *  tick() then commits it, or says why it was refused. */
   private commit(typed = false) {
     if (this.phase !== "drag") return this.cancel();
     const v = this.dim.getValue("angle");
@@ -309,8 +317,8 @@ export class DraftTool {
       return;
     }
     if (typed && (sentNow || verdict.kind === "wait")) {
-      this.checking = true;
-      setPrompt("Checking the draft · Enter again to commit · Esc");
+      this.commitPending = true;
+      setPrompt("Checking the draft · it commits when the kernel answers · Esc");
       return;
     }
     const feature = this.buildFeature();
@@ -340,7 +348,7 @@ export class DraftTool {
     this.hovering = false;
     this.angle = 0;
     this.refusalShown = null;
-    this.checking = false;
+    this.commitPending = false;
     setPrompt(null);
   }
 
