@@ -45,47 +45,87 @@ describe("the edge level rule", () => {
     expect(new Set(gesture(r, ASSEMBLY, Array(20).fill(10), 0).slice(1))).toEqual(new Set(["merged"]));
   });
 
-  it("draws a slow renderer's edges thin after one window, and remembers it for the next gesture", () => {
+  it("draws a slow renderer's edges thin after two slow windows, and remembers it once the next gesture's fat lines are slow too", () => {
     const r = new EdgeMotionRule();
-    const modes = gesture(r, PLATES, [...Array(4).fill(470), ...Array(8).fill(92)], 0);
-    expect(modes.slice(0, 4)).toEqual(["full", "full", "full", "full"]);
-    expect(new Set(modes.slice(4))).toEqual(new Set(["thin"]));
-    expect(r.gestureStart(PLATES, 5000)).toBe("thin");
+    const modes = gesture(r, PLATES, [...Array(8).fill(470), ...Array(8).fill(92)], 0);
+    expect(new Set(modes.slice(0, 8))).toEqual(new Set(["full"]));
+    expect(new Set(modes.slice(8))).toEqual(new Set(["thin"]));
+    const next = gesture(r, PLATES, [...Array(4).fill(470), ...Array(8).fill(92)], 5000);
+    expect(new Set(next.slice(0, 4))).toEqual(new Set(["full"]));
+    expect(new Set(next.slice(4))).toEqual(new Set(["thin"]));
+    expect(r.gestureStart(PLATES, 9000)).toBe("thin");
   });
 
   it("brings the fat lines back for good when thin ones did not make the frames faster", () => {
     const r = new EdgeMotionRule();
-    const modes = gesture(r, PLATES, [...Array(4).fill(470), ...Array(6).fill(400)], 0);
-    expect(modes[4]).toBe("thin");
+    const modes = gesture(r, PLATES, [...Array(8).fill(470), ...Array(6).fill(400)], 0);
+    expect(modes[8]).toBe("thin");
     expect(modes.at(-1)).toBe("full");
-    expect(gesture(r, PLATES, Array(8).fill(470), 6000).includes("thin")).toBe(false);
-    expect(gesture(r, { ...PLATES, segments: 10_000 }, Array(4).fill(470), 12_000).at(-1)).toBe("thin");
+    expect(gesture(r, PLATES, Array(16).fill(470), 9000).includes("thin")).toBe(false);
+    expect(gesture(r, { ...PLATES, segments: 10_000 }, Array(8).fill(470), 18_000).at(-1)).toBe("thin");
   });
 
   it("goes back to full when the model's segments change by more than half", () => {
     const r = new EdgeMotionRule();
-    gesture(r, PLATES, Array(4).fill(470), 0);
-    expect(r.gestureStart({ ...PLATES, segments: PLATES.segments * 0.7 }, 3000)).toBe("thin");
-    expect(r.gestureStart({ ...PLATES, segments: PLATES.segments * 0.4 }, 3000)).toBe("full");
+    gesture(r, PLATES, Array(8).fill(470), 0);
+    gesture(r, PLATES, Array(4).fill(470), 4000);
+    expect(r.gestureStart({ ...PLATES, segments: PLATES.segments * 0.7 }, 6000)).toBe("thin");
+    expect(r.gestureStart({ ...PLATES, segments: PLATES.segments * 0.4 }, 6000)).toBe("full");
   });
 
   it("goes back to full on reset, and probes the fat lines again once the verdict is old", () => {
     const r = new EdgeMotionRule();
-    gesture(r, PLATES, Array(4).fill(470), 0);
+    gesture(r, PLATES, Array(8).fill(470), 0);
     r.reset();
     expect(r.gestureStart(PLATES, 2000)).toBe("full");
-    gesture(r, PLATES, Array(4).fill(470), 2000);
-    expect(r.gestureStart(PLATES, 2000 + 25_000)).toBe("thin");
-    expect(r.gestureStart(PLATES, 2000 + 40_000)).toBe("full");
+    gesture(r, PLATES, Array(8).fill(470), 2000);
+    // Confirmed by the next gesture, the verdict starts at that window's end.
+    gesture(r, PLATES, Array(4).fill(470), 6000);
+    const t = 6000 + 4 * 470;
+    expect(r.gestureStart(PLATES, t + 25_000)).toBe("thin");
+    expect(r.gestureStart(PLATES, t + 40_000)).toBe("full");
     // Found slow again: thin, and kept twice as long this time.
-    expect(gesture(r, PLATES, Array(4).fill(470), 42_000).at(-1)).toBe("thin");
-    expect(r.gestureStart(PLATES, 42_000 + 50_000)).toBe("thin");
-    expect(r.gestureStart(PLATES, 42_000 + 70_000)).toBe("full");
+    expect(gesture(r, PLATES, Array(4).fill(470), t + 40_000).at(-1)).toBe("thin");
+    const t2 = t + 40_000 + 4 * 470;
+    expect(r.gestureStart(PLATES, t2 + 50_000)).toBe("thin");
+    expect(r.gestureStart(PLATES, t2 + 70_000)).toBe("full");
   });
 
   it("is not turned on by one stall among fast frames", () => {
     const r = new EdgeMotionRule();
     expect(gesture(r, PLATES, [10, 600, 10, 10, 10, 10, 10, 10], 0).at(-1)).toBe("full");
+  });
+
+  it("is not turned on by a stall of a few frames on a fast GPU", () => {
+    const r = new EdgeMotionRule();
+    const modes = gesture(r, ASSEMBLY, [45, 45, 45, 10, ...Array(40).fill(10)], 0);
+    expect(modes.includes("thin")).toBe(false);
+    expect(modes.at(-1)).toBe("merged");
+  });
+
+  it("keeps a long stall's thin lines to that gesture, the next one finds the merged lines fast", () => {
+    const r = new EdgeMotionRule();
+    const modes = gesture(r, ASSEMBLY, [...Array(8).fill(45), ...Array(40).fill(10)], 0);
+    expect(modes[8]).toBe("thin");
+    expect(modes.at(-1)).toBe("thin");
+    expect(new Set(gesture(r, ASSEMBLY, Array(40).fill(10), 3000))).toEqual(new Set(["merged"]));
+    expect(new Set(gesture(r, ASSEMBLY, Array(40).fill(10), 40_000))).toEqual(new Set(["merged"]));
+  });
+
+  it("does not judge thin frames drawn on a canvas the motion level shrank since", () => {
+    const r = new EdgeMotionRule();
+    r.gestureStart(PLATES, 0);
+    let now = 0;
+    const run = (ms: number, n: number, scale: number) => {
+      for (let i = 0; i < n; i++) r.sample(ms, (now += ms), scale);
+      return r.mode;
+    };
+    expect(run(470, 8, 1)).toBe("thin");
+    expect(run(60, 8, 0.7)).toBe("thin");
+    // Not judged, so the next gesture measures the fat lines on the smaller canvas.
+    expect(r.gestureStart(PLATES, now)).toBe("full");
+    expect(run(250, 4, 0.7)).toBe("thin");
+    expect(run(240, 8, 0.7)).toBe("full");
   });
 
   it("keeps a GPU that keeps up at 18 ms frames full", () => {

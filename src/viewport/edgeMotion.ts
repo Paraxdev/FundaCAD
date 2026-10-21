@@ -37,9 +37,11 @@ const MAX_SAMPLE_MS = 2000;
 /** The model changed this share of its edge segments, so a thin verdict on the old one says nothing. */
 const SEGMENT_CHANGE = 0.5;
 /** The thin lines have to take this share off the median that turned them on,
- *  or the frames were slow for another reason (a main thread busy after an
- *  import, a render in another app) and the fat lines come back for this model. */
+ *  or the frames were slow for another reason and the fat lines come back for this model. */
 const MIN_GAIN = 0.3;
+/** Slow windows in a row before the edges draw thin, so a stall of a few frames
+ *  on a fast GPU is not taken for the edges. */
+const SLOW_WINDOWS = 2;
 /** Thin frames left out of the check, the fade from the fat lines still drawing them. */
 const VERIFY_SKIP = 2;
 
@@ -80,6 +82,12 @@ export class EdgeMotionRule {
   private skip = 0;
   /** The median that turned thin on, until thin frames have shown they pay. */
   private verify = 0;
+  private slowRun = 0;
+  /** A first thin verdict: a long stall makes thin look like a gain, so the next
+   *  gesture measures one window of fat lines before thin is remembered. */
+  private provisional = false;
+  /** The canvas scale the window and the medians were measured at. */
+  private scale = 1;
   /** Segments of a model whose frames thin lines did not speed up. */
   private notEdgeBound = 0;
   private load: EdgeLoad = { draws: 0, segments: 0, triangles: 0 };
@@ -107,8 +115,18 @@ export class EdgeMotionRule {
     return this.mode;
   }
 
-  /** A moving frame's tick to tick period. */
-  sample(ms: number, now: number): EdgeMode {
+  /** A moving frame's tick to tick period, drawn at canvas `scale`. */
+  sample(ms: number, now: number, scale = 1): EdgeMode {
+    if (scale !== this.scale) {
+      this.scale = scale;
+      this.window.length = 0;
+      this.slowRun = this.skip = 0;
+      if (this.thin && this.verify > 0) {
+        this.verify = 0;
+        this.provisional = true;
+        this.thinUntil = 0;
+      }
+    }
     if ((this.thin && this.verify === 0) || ms > MAX_SAMPLE_MS) return this.mode;
     if (this.skip > 0) {
       this.skip--;
@@ -127,16 +145,22 @@ export class EdgeMotionRule {
       this.verify = 0;
       return this.mode;
     }
-    if (m > THIN_BUDGET_MS && edgeShare(this.load) >= THIN_MIN_SHARE && this.notEdgeBound === 0) {
-      if (this.probing) this.fails = Math.min(this.fails + 1, MAX_BACKOFF);
-      else this.verify = m;
+    const slow = m > THIN_BUDGET_MS && edgeShare(this.load) >= THIN_MIN_SHARE && this.notEdgeBound === 0;
+    this.slowRun = slow ? this.slowRun + 1 : 0;
+    if (slow && !this.probing && this.slowRun < SLOW_WINDOWS) return this.mode;
+    if (slow) {
+      this.slowRun = 0;
+      if (this.probing && !this.provisional) this.fails = Math.min(this.fails + 1, MAX_BACKOFF);
+      this.provisional = !this.probing;
+      this.verify = m;
       this.thin = true;
       this.thinSegments = this.load.segments;
-      this.thinUntil = now + REMEMBER_SLOW_MS * 2 ** this.fails;
+      this.thinUntil = this.provisional ? 0 : now + REMEMBER_SLOW_MS * 2 ** this.fails;
       this.skip = VERIFY_SKIP;
     } else if (this.probing) {
       this.fails = 0;
       this.thinSegments = 0;
+      this.provisional = false;
     }
     this.probing = false;
     return this.mode;
@@ -157,6 +181,8 @@ export class EdgeMotionRule {
     this.window.length = 0;
     this.skip = 0;
     this.verify = 0;
+    this.slowRun = 0;
+    this.provisional = false;
     this.notEdgeBound = 0;
   }
 }

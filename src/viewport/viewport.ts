@@ -4271,7 +4271,8 @@ export class Viewport {
     // size, and judged as the reduced level they read as slow.
     if (this.pixelBound && this.motionScale === this.motion.scale) this.motion.sample(period, now);
     if ((this.scene.post.edgesDrawn?.builtMs ?? 0) > EDGE_BUILD_STALL_MS) this.edgeRule.skipNext();
-    this.edgeRule.sample(period, now);
+    // Matcap keeps full size at any motion level, so it is judged at 1.
+    if (this.motionScale === motionPixelScale(this.drawnView, this.motion.scale)) this.edgeRule.sample(period, now, this.motionScale);
     // Still watched in performance mode, where a stutter offers potato mode instead.
     if (this.potato) return;
     // Judged on what a full quality frame costs, or a machine that only keeps up
