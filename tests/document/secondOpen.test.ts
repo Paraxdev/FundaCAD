@@ -78,6 +78,19 @@ describe("open A then open B", () => {
   });
 });
 
+describe("File New after a busy document", () => {
+  it("starts clean, with Isolate off", () => {
+    const a = busyA();
+    a.newDocument();
+    const fresh = opened({});
+    fresh.newDocument();
+    expect(saved(a)).toEqual(saved(fresh));
+    expect([a.canUndo, a.canRedo, a.isolateActive]).toEqual([false, false, false]);
+    expect([a.versionRepo, a.stressStudy, a.documentEnvironment]).toEqual([null, null, null]);
+    expect(a.carriedSections).toEqual([]);
+  });
+});
+
 describe("a replacing load of the same document", () => {
   it("keeps the carried sections when it shares a feature, and drops them when it shares none", () => {
     const s = opened({ features: [box("a", 1.5)] });
