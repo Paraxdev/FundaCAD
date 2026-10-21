@@ -180,6 +180,33 @@ export function pastTip(
   };
 }
 
+/** Where a box of `size` goes beside a model that fills `model` on screen,
+ *  anchored at `anchor`: past its right side, else its left, else above, else
+ *  below, whichever first fits in `bounds`; clamped into them when none does.
+ *  The face under the box is where the next click goes, so over the model is
+ *  the last place for it. */
+export function placeBeside(
+  model: ScreenRect,
+  anchor: ScreenPoint,
+  size: { w: number; h: number },
+  bounds: ScreenRect,
+  gap = PAST_GAP,
+): { left: number; top: number } {
+  const { w, h } = size;
+  const clampX = (x: number) => Math.max(bounds.left, Math.min(x, bounds.right - w));
+  const clampY = (y: number) => Math.max(bounds.top, Math.min(y, bounds.bottom - h));
+  const row = clampY(anchor.y - h / 2);
+  const tries = [
+    { left: model.right + gap, top: row },
+    { left: model.left - gap - w, top: row },
+    { left: clampX(anchor.x - w / 2), top: model.top - gap - h },
+    { left: clampX(anchor.x - w / 2), top: model.bottom + gap },
+  ];
+  const fits = (p: { left: number; top: number }) =>
+    p.left >= bounds.left && p.top >= bounds.top && p.left + w <= bounds.right && p.top + h <= bounds.bottom;
+  return tries.find(fits) ?? { left: clampX(tries[0]!.left), top: row };
+}
+
 export class DimInput {
   private root: HTMLDivElement;
   private fields: Field[] = [];
@@ -843,6 +870,20 @@ export class DimInput {
       h: Math.max(this.root.offsetHeight, p ? p.offsetTop + p.offsetHeight : 0),
     };
     const at = pastTip(tip, dir, size, bounds);
+    this.root.style.left = `${Math.round(at.left)}px`;
+    this.root.style.top = `${Math.round(at.top)}px`;
+  }
+
+  /** The box's size at its natural width, which is what it has wherever there
+   *  is room for it. */
+  naturalSize(): { w: number; h: number } {
+    this.root.style.left = "0px";
+    return { w: this.root.offsetWidth, h: this.root.offsetHeight };
+  }
+
+  /** Stand the box beside a model on screen, see `placeBeside`. */
+  positionBeside(model: ScreenRect, anchor: ScreenPoint, bounds: ScreenRect) {
+    const at = placeBeside(model, anchor, this.naturalSize(), bounds);
     this.root.style.left = `${Math.round(at.left)}px`;
     this.root.style.top = `${Math.round(at.top)}px`;
   }

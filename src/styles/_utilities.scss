@@ -80,6 +80,10 @@ button.finish:hover {
   gap: var(--s-1);
   z-index: 200;
   pointer-events: auto;
+  /* A window narrower than the Hole box (about 560px) wraps its fields to a
+     second row instead of cutting the last of them off. */
+  flex-wrap: wrap;
+  max-width: calc(100vw - 2 * var(--s-3));
 }
 /* The engine's own sentence about why the value on screen cannot be built,
    under the boxes that hold it.
