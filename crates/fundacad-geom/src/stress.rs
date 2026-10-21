@@ -454,7 +454,7 @@ fn fail_text(f: &Fail) -> String {
 /// The error reply. A feature that failed may be why the body or a face is not there, so the
 /// first failure is named in the message and its feature id goes with it, as the wire carries
 /// an error's message and feature id only.
-fn refuse(message: &str, errors: &[FeatureError]) -> JobResult {
+pub(crate) fn refuse(message: &str, errors: &[FeatureError]) -> JobResult {
     match errors.first() {
         None => error_result(message),
         Some(first) => {

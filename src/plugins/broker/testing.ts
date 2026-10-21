@@ -371,6 +371,7 @@ export function testHost(opts: TestHostOptions = {}): TestHost {
         case "view":
         case "export":
         case "interference":
+        case "measure":
         case "section":
         case "stress":
         case "printability":

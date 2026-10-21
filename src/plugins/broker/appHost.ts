@@ -81,6 +81,7 @@ export const UNSERVED: Partial<Record<Op, string>> = {
   inspect: "the geometry engine is not reachable from a plugin yet",
   view: "the geometry engine is not reachable from a plugin yet",
   interference: "the geometry engine is not reachable from a plugin yet",
+  measure: "the geometry engine is not reachable from a plugin yet",
   section: "the geometry engine is not reachable from a plugin yet",
   stress: "the geometry engine is not reachable from a plugin yet",
   printability: "the geometry engine is not reachable from a plugin yet",
@@ -315,6 +316,7 @@ export function appHost(opts: AppHostOptions): BrokerHost {
         case "view":
         case "export":
         case "interference":
+        case "measure":
         case "section":
         case "stress":
         case "printability":

@@ -261,6 +261,23 @@ pub fn interference() -> JsonObject {
     )
 }
 
+pub fn measure() -> JsonObject {
+    let thing = |which: &str| {
+        json!({"anyOf": [{"type": "object"}, {"type": "string"}],
+               "description": format!(
+                   "{which}: a face or edge selector copied from `inspect` (detail:true,                     selectors:true), body included; or {{body, face: n}} / {{body, edge: n}}                     with the F or E number inspect prints, valid for the current build only;                     or a body id or name for the whole body; or {{point: [x, y, z]}} in mm")})
+    };
+    object(
+        json!({
+            "a": thing("the thing to measure"),
+            "b": thing("a second thing, to measure between the two"),
+            "want": {"type": "string", "enum": ["distance", "angle", "centres"],
+                     "description": "only this measure between a and b, and an error when it                                      does not apply; every one that applies if omitted"}
+        }),
+        &["a"],
+    )
+}
+
 pub fn stress() -> JsonObject {
     let faces = |what: &str| {
         json!({"anyOf": [{"type": "array", "items": {"type": "object"}}, {"type": "object"}],
