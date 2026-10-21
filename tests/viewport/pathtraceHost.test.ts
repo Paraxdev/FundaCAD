@@ -408,8 +408,10 @@ describe("path trace host", () => {
     host.tick(frame());
     await flush();
     await flush();
+    expect(host.lastFault).toBeNull();
     t.faultCb!("GPU device lost");
     expect(faults).toEqual([["GPU device lost", false]]);
+    expect(host.lastFault).toBe("GPU device lost");
     expect(t.calls).toContain("dispose");
     host.tick(frame());
     await flush();

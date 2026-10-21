@@ -17,7 +17,7 @@ use crate::scene::{BodyDesc, Commit, Mesh, Scene};
 
 use accel::{make_tlas, GpuAccel};
 use envmap::EnvMap;
-pub use adapter::{choose, Candidate, Refusal};
+pub use adapter::{adapter_label, choose, Candidate, Refusal};
 pub use picture::{encode_png, picture_refusal, Picture};
 use pipelines::Pipelines;
 pub(crate) use pipelines::pipeline_at;
@@ -426,7 +426,7 @@ impl Tracer {
             device,
             queue,
             path,
-            adapter: format!("{} ({:?})", info.name, info.backend),
+            adapter: adapter_label(&info.name, info.backend, info.device_type),
             scene: Scene::new(accel),
             pipes,
             uniform,
