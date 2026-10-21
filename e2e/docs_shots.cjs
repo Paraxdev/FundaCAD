@@ -487,6 +487,20 @@ const STILLS = {
     await page.keyboard.press("Escape");
   },
 
+  async "extrude-thin"(ctx) {
+    await ctx.features([
+      { type: "sketch", plane: "XY", entities: [
+        { type: "line", id: "a", x1: -20, y1: -15, x2: 20, y2: -15 },
+        { type: "line", id: "b", x1: 20, y1: -15, x2: 20, y2: 15 },
+      ] },
+      { type: "extrude", sketch: 0, distance: 20, operation: "new", thin: true, curves: ["a", "b"], thickness: 2, side: "inside" },
+    ]);
+    await ctx.view("iso", 1);
+    await ctx.centre();
+    await sleep(800);
+    await ctx.still("extrude-thin", { x: 400, y: 200, width: 760, height: 600 });
+  },
+
   async "presspull-face"(ctx) {
     const { page } = ctx;
     await ctx.features(block());

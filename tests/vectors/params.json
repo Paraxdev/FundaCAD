@@ -267,7 +267,7 @@
     }
   ],
   "featureNumFields": {
-    "extrude": [["distance", "length"], ["taper", "angle"], ["startOffset", "length"], ["endOffset", "length"], ["distance2", "length"], ["taper2", "angle"], ["endOffset2", "length"]],
+    "extrude": [["distance", "length"], ["taper", "angle"], ["startOffset", "length"], ["endOffset", "length"], ["distance2", "length"], ["taper2", "angle"], ["endOffset2", "length"], ["thickness", "length"], ["thickness2", "length"]],
     "fillet": [["radius", "length"], ["profile", "count"]],
     "chamfer": [["distance", "length"], ["distance2", "length"]],
     "press-pull": [["distance", "length"], ["taper", "angle"], ["upToOffset", "length"]],

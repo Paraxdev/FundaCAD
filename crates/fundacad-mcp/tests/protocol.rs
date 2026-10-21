@@ -338,6 +338,30 @@ fn a_circular_pattern_about_a_placed_axis_cuts_every_copy() {
     assert!(placed.text.contains(&format!("vol {want:.0}")), "{}", placed.text);
 }
 
+/// A join that only merged once its tool was sliced says so in the build reply.
+#[test]
+fn a_join_that_needed_a_fallback_warns_in_the_build_reply() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/golden/corpus/corpus_engines.json");
+    let corpus: Value = serde_json::from_str(&std::fs::read_to_string(path).expect("the corpus")).expect("json");
+    let mut doc = corpus["documents"]
+        .as_array()
+        .expect("documents")
+        .iter()
+        .find(|d| d["name"] == "sweep_join_tangent_tubes")
+        .map(|d| d["document"].clone())
+        .expect("the tangent tubes");
+    // The corpus holds the evaluated parameters, the server takes them as expressions.
+    doc["parameters"] = json!({});
+    let steps = [
+        ("doc_set", json!({"document": doc})),
+        ("param_set", json!({"name": "tube_r", "expr": 26})),
+        ("build", json!({})),
+    ];
+    let built = drive(&steps).pop().expect("the build");
+    assert!(!built.is_error, "{}", built.text);
+    assert!(built.text.contains("warning (sw_down): joined with the tool split into 2 pieces"), "{}", built.text);
+}
+
 #[test]
 fn a_hole_patterned_by_feature_builds_six_holes() {
     let rs = drive(&[

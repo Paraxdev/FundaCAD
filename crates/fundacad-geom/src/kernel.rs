@@ -2,6 +2,7 @@
 //! `builder_ops`), over the `Shape` the rest of the crate uses.
 
 use cxx::UniquePtr;
+use std::cell::RefCell;
 use opencascade::primitives::Shape;
 use opencascade_sys::builder_ops as ffi;
 use opencascade_sys::feature_ops as fo;
@@ -489,17 +490,91 @@ impl BoolKind {
     }
 }
 
+/// The step of the boolean ladder whose result was taken.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum Rung {
+    First,
+    /// The first result, let through by a check loosened for freeform faces.
+    LooseAccept,
+    CloseAccept,
+    /// Redone with the tools as the arguments and the base as the tool.
+    SwappedBop,
+    /// Redone with this coarser fuzz, in mm.
+    CoarseFuzz(f64),
+    /// The tool cut into this many slabs, each one a boolean of its own.
+    Slices(usize),
+}
+
+impl Rung {
+    fn from_ffi(code: i32, fuzz: f64) -> Rung {
+        match code {
+            1 => Rung::LooseAccept,
+            2 => Rung::CloseAccept,
+            3 => Rung::SwappedBop,
+            4 => Rung::CoarseFuzz(fuzz),
+            _ => Rung::First,
+        }
+    }
+
+    /// Only a result the first attempt did not give changes the shape.
+    pub fn is_fallback(self) -> bool {
+        matches!(self, Rung::SwappedBop | Rung::CoarseFuzz(_) | Rung::Slices(_))
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Fallback {
+    pub kind: BoolKind,
+    pub rung: Rung,
+}
+
+thread_local! {
+    static FALLBACKS: RefCell<Option<Vec<Fallback>>> = const { RefCell::new(None) };
+}
+
+/// `f`, and every boolean in it whose result came from a fallback, in order.
+/// Booleans outside such a call are not kept.
+pub fn noting_fallbacks<R>(f: impl FnOnce() -> R) -> (R, Vec<Fallback>) {
+    struct Restore(Option<Vec<Fallback>>);
+    impl Drop for Restore {
+        fn drop(&mut self) {
+            let outer = self.0.take();
+            FALLBACKS.with(|c| *c.borrow_mut() = outer);
+        }
+    }
+    let outer = FALLBACKS.with(|c| c.borrow_mut().replace(Vec::new()));
+    let restore = Restore(outer);
+    let out = f();
+    let noted = FALLBACKS.with(|c| c.borrow_mut().take()).unwrap_or_default();
+    drop(restore);
+    FALLBACKS.with(|c| {
+        if let Some(outer) = c.borrow_mut().as_mut() {
+            outer.extend(noted.iter().copied());
+        }
+    });
+    (out, noted)
+}
+
+pub fn note_fallback(kind: BoolKind, rung: Rung) {
+    if !rung.is_fallback() {
+        return;
+    }
+    FALLBACKS.with(|c| {
+        if let Some(v) = c.borrow_mut().as_mut() {
+            v.push(Fallback { kind, rung });
+        }
+    });
+}
+
 /// build123d's operator: parallel, no fuzz, cleaned, a lone child unwrapped.
 pub fn boolean_op(base: &Shape, tools: &[&Shape], kind: BoolKind) -> KResult<Shape> {
     let t = compound(tools.iter().copied());
-    run(kind.occt(), || bool_args(base, tools, 0.0), || ffi::bo_boolean(
-        base.raw(),
-        t.raw(),
-        kind as i32,
-        true,
-        0.0,
-        true,
-    ))
+    let (mut code, mut fuzz) = (0, 0.0);
+    let out = run(kind.occt(), || bool_args(base, tools, 0.0), || {
+        ffi::bo_boolean_rung(base.raw(), t.raw(), kind as i32, true, 0.0, true, &mut code, &mut fuzz)
+    })?;
+    note_fallback(kind, Rung::from_ffi(code, fuzz));
+    Ok(out)
 }
 
 /// booleans.py `_serial_bool`: with the pick fuzz, cleaned. Python forced it
@@ -525,15 +600,17 @@ pub fn serial_bool_known(
     let k = kind as i32;
     let mut checked_vol = f64::NAN;
     let mut unchanged = false;
+    let (mut code, mut used) = (0, fuzz);
     let out = run(kind.occt(), || bool_args(base, tools, fuzz), || {
         let raw = crate::bench::phase("bool_build", || ffi::bo_bool_build(base.raw(), t.raw(), k, true, fuzz))?;
         let checked = crate::bench::phase("bool_check", || {
-            ffi::bo_bool_check(&raw, base.raw(), t.raw(), k, true, fuzz, vols, &mut checked_vol)
+            ffi::bo_bool_check(&raw, base.raw(), t.raw(), k, true, fuzz, vols, &mut checked_vol, &mut code, &mut used)
         })?;
         let out = crate::bench::phase("bool_unify", || ffi::bo_clean(&checked))?;
         unchanged = ffi::bo_is_equal(&checked, &out);
         Ok(out)
     })?;
+    note_fallback(kind, Rung::from_ffi(code, used));
     Ok((out, unchanged.then_some(checked_vol)))
 }
 
@@ -542,13 +619,15 @@ pub fn serial_bool_known(
 /// what `kind` gives from these operands, the boolean done again when not, an
 /// error when that is no better.
 #[doc(hidden)]
-pub fn bool_checked(result: &Shape, base: &Shape, tools: &[&Shape], kind: BoolKind) -> KResult<Shape> {
+pub fn bool_checked(result: &Shape, base: &Shape, tools: &[&Shape], kind: BoolKind) -> KResult<(Shape, Rung)> {
     let t = compound(tools.iter().copied());
     let fuzz = operand_fuzz(base, tools);
     let mut vol = f64::NAN;
-    run(kind.occt(), || bool_args(base, tools, fuzz), || {
-        ffi::bo_bool_check(result.raw(), base.raw(), t.raw(), kind as i32, true, fuzz, &[], &mut vol)
-    })
+    let (mut code, mut used) = (0, fuzz);
+    let out = run(kind.occt(), || bool_args(base, tools, fuzz), || {
+        ffi::bo_bool_check(result.raw(), base.raw(), t.raw(), kind as i32, true, fuzz, &[], &mut vol, &mut code, &mut used)
+    })?;
+    Ok((out, Rung::from_ffi(code, used)))
 }
 
 fn operand_fuzz(base: &Shape, tools: &[&Shape]) -> f64 {

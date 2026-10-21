@@ -21,10 +21,11 @@ pub(super) fn boolean(a: &Shape, b: &Shape, k: BoolKind, vols: &[f64]) -> Result
     let t = kernel::compound([b]);
     let ki = k as i32;
     let mut vol = f64::NAN;
+    let (mut code, mut fuzz) = (0, 0.0);
     let args = || format!("base={}, tool={}", kernel::describe(a), kernel::describe(b));
     let out = crate::trace::call(k.occt(), args, || {
         let raw = ffi::bo_bool_build(a.raw(), t.raw(), ki, true, 0.0)?;
-        let checked = ffi::bo_bool_check(&raw, a.raw(), t.raw(), ki, true, 0.0, vols, &mut vol)?;
+        let checked = ffi::bo_bool_check(&raw, a.raw(), t.raw(), ki, true, 0.0, vols, &mut vol, &mut code, &mut fuzz)?;
         ffi::bo_clean(&checked)
     })
     .map_err(|_| Bad::Failed)?;
