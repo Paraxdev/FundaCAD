@@ -8,7 +8,7 @@ import { labelOf } from "../../ui/controlRefs";
 import { resolveControl } from "../../ui/guide/controls";
 import type { GuideState, StepState } from "../../ui/guide/guideSession";
 import { placeBubble, ringRect, type Placed } from "../../ui/guide/placement";
-import { modelShape } from "../../ui/guide/probe";
+import { modelShape, type ModelShape } from "../../ui/guide/probe";
 import type { Box } from "../../ui/controlRefs";
 
 const engine = useEngine();
@@ -33,6 +33,9 @@ let raf = 0;
 let frame = 0;
 let target: HTMLElement | null = null;
 let scrolledFor = -1;
+/** A model step's world space outline, read once per build: reading it walks every face of the body. */
+let shapeFor: { seq: number; build: unknown; shape: ModelShape | Error } | null = null;
+const RETRY_FRAMES = 30;
 
 const AVOID = ".modal-panel, .choice-card, .cmdk-card";
 
@@ -61,12 +64,23 @@ function modelBox(s: StepState): Box | null {
     paths.value = [];
     return { left: canvas.left + g.x * canvas.width, top: canvas.top + g.y * canvas.height, width: g.w * canvas.width, height: g.h * canvas.height };
   }
-  let shape;
-  try {
-    shape = modelShape(engine, s.target.model ?? "");
-  } catch (err) {
+  const build = engine.store.buildState;
+  // A miss is read again now and then, the mesh can land after the build it belongs to.
+  const stale = !shapeFor || shapeFor.seq !== s.seq || shapeFor.build !== build
+    || (shapeFor.shape instanceof Error && frame % RETRY_FRAMES === 0);
+  if (stale) {
+    let shape: ModelShape | Error;
+    try {
+      shape = modelShape(engine, s.target.model ?? "");
+    } catch (err) {
+      shape = err instanceof Error ? err : new Error(String(err));
+    }
+    shapeFor = { seq: s.seq, build, shape };
+  }
+  const shape = shapeFor!.shape;
+  if (shape instanceof Error) {
     paths.value = [];
-    hint.value = s.missing ?? (err instanceof Error ? err.message : "");
+    hint.value = s.missing ?? shape.message;
     return null;
   }
   ref_.value = shape.name;
@@ -129,6 +143,7 @@ function restart(): void {
   hint.value = "";
   ref_.value = "";
   radius.value = null;
+  shapeFor = null;
   void nextTick(schedule);
 }
 
