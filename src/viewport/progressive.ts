@@ -14,6 +14,7 @@
 // Nothing here can produce a model the commit would not have produced anyway.
 
 import * as THREE from "three";
+import { pushAll } from "../lib/pushAll";
 import { buildBodyMesh, partitionMesh, resetBodyAppearance } from "./render";
 import type { BodyMesh, MeshPartition, ModelView } from "./render";
 import type { EdgeRef } from "./edgeLines";
@@ -104,7 +105,7 @@ export class ProgressiveModel {
         p.mesh.visible = !hidden.has(m.id);
         p.edges.setBodyVisible(p.mesh.visible);
         this.slots[this.byId.get(m.id)!] = p;
-        this.edges.push(...p.edges.refs);
+        pushAll(this.edges, p.edges.refs);
       } else {
         this.stale.set(m.id, p); // hold it on screen until its chunk lands
       }
@@ -149,7 +150,7 @@ export class ProgressiveModel {
       body.edges.setBodyVisible(body.mesh.visible);
       body.edges.flush();
       this.slots[this.byId.get(m.id)!] = body;
-      this.edges.push(...body.edges.refs);
+      pushAll(this.edges, body.edges.refs);
     }
     return this.snapshot();
   }

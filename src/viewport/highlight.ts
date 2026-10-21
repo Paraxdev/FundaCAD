@@ -7,6 +7,7 @@
 // life of its body, so Set membership works exactly as it did with Line2.
 
 import * as THREE from "three";
+import { pushAll } from "../lib/pushAll";
 import { bodyOfFace, edgeObjects, type BodyMesh, type ModelView } from "./render";
 import type { EdgeRef } from "./edgeLines";
 import { disposeFaceHoverOverlay, makeFaceHoverOverlay, makeSelectionGlow, removeSelectionGlows, type GlowKind } from "./selectionGlow";
@@ -187,7 +188,7 @@ export class Highlighter {
       const tris = body.faceTriangles.get(f);
       if (!tris) continue;
       const list = byBody.get(body) ?? [];
-      list.push(...tris);
+      pushAll(list, tris);
       byBody.set(body, list);
     }
     for (const [body, tris] of byBody) {

@@ -24,6 +24,7 @@
 // for the frame or two the round trip takes.
 
 import * as THREE from "three";
+import { pushAll } from "../lib/pushAll";
 import { radialAt } from "../features/planeMath";
 import type { RoundFace } from "../features/radialDrag";
 import { TRIM_BUDGET, sectionOutline, sweepBlendGhost, type BlendKind, type EdgeSample, type Pt3 } from "../features/blendGhost";
@@ -206,7 +207,7 @@ export class GhostLayer {
       if (!found) continue; // can't tell the two faces apart here, skip THIS edge
       const geo = sweepBlendGhost(found.samples, size, kind, found.closed, budget);
       if (!geo) continue;
-      positions.push(...geo.positions);
+      pushAll(positions, geo.positions);
       unsure ||= geo.unsure;
     }
     if (!positions.length) return;
