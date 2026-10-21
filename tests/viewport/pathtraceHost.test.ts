@@ -300,6 +300,29 @@ describe("path trace host", () => {
     expect(host.shown).toBe(true);
   });
 
+  it("draws Realtime while a body is being moved by an edit, and traces once edits stop", async () => {
+    const root = scene();
+    const { host, t } = await started();
+    host.tick(frame({}, 1000, { root }));
+    t.answer(8);
+    await flush();
+    host.tick(frame({}, 1010, { root }));
+    expect(host.shown).toBe(true);
+    root.children[0]!.position.x = 3;
+    root.children[0]!.updateMatrixWorld();
+    t.calls.length = 0;
+    host.tick(frame({}, 1020, { root, sceneMaybeChanged: true }));
+    expect(host.shown).toBe(false);
+    expect(t.calls).not.toContain("sample");
+    host.tick(frame({}, 1020 + STILL_MS - 10, { root }));
+    expect(host.state).toBe("moving");
+    expect(t.calls).not.toContain("sample");
+    await flush();
+    host.tick(frame({}, 1020 + STILL_MS + 10, { root }));
+    expect(host.state).toBe("trace");
+    expect(t.calls).toContain("sample");
+  });
+
   it("keeps the traced picture up through an edit with Realtime while moving off", async () => {
     const root = scene();
     const { host, t } = await started();

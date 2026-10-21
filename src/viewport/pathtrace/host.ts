@@ -14,7 +14,7 @@ import {
   colorSignature, collectAllBodies, collectBodies, countTriangles, countVertices, materialSignature, sceneSignature,
   storageBytes, transformSignature, TRIANGLE_BUDGET, type SurfaceBaker,
 } from "./mirror";
-import { TraceGeneration, traceState, type TraceInputs, type TraceState } from "./state";
+import { STILL_MS, TraceGeneration, traceState, type TraceInputs, type TraceState } from "./state";
 import { bloomKey, traceBloom } from "./tracePost";
 
 /** No sample this long after the tracer started reads as a hung GPU. */
@@ -30,7 +30,7 @@ export interface CrashGuard {
 
 export interface TraceFrame {
   now: number;
-  inputs: Omit<TraceInputs, "samples" | "cap">;
+  inputs: Omit<TraceInputs, "samples" | "cap" | "editing">;
   camera: THREE.Camera;
   /** The camera moved or the canvas was resized since the last tick. */
   cameraChanged: boolean;
@@ -130,6 +130,8 @@ export class PathTraceHost {
   private inFlight = false;
   private measured: number | null = null;
   private budgetSent = false;
+  /** When the traced scene last changed under an edit, a rebuild or a tool drag. */
+  private editedAt = -Infinity;
   private preview = false;
 
   constructor(
@@ -157,7 +159,8 @@ export class PathTraceHost {
   tick(f: TraceFrame) {
     if (f.cameraChanged) this.cameraDirty = true;
     if (f.sceneMaybeChanged) this.sceneDirty = true;
-    const s = this.disabled ? "off" : traceState({ ...f.inputs, samples: this.samples, cap: this.cap });
+    const editing = f.now - this.editedAt < STILL_MS;
+    const s = this.disabled ? "off" : traceState({ ...f.inputs, editing, samples: this.samples, cap: this.cap });
     // Realtime while moving off: the last traced picture stays up through a
     // restart, the tracer's canvas keeps it until the first new sample lands.
     const hold = f.inputs.realtimeWhileMoving === false;
@@ -191,6 +194,10 @@ export class PathTraceHost {
     }
     this.syncCanvas(b);
     if (this.sceneDirty && !this.syncScene(b, f)) return this.show(hold && this.shown && this.hasScene);
+    if (!hold && f.now - this.editedAt < STILL_MS) {
+      this.traceSince = 0;
+      return this.show(false);
+    }
     this.watchdog(f.now, s);
     const lens = f.lens();
     const lensKey = lensSignature(lens);
@@ -422,6 +429,7 @@ export class PathTraceHost {
     const lookKey = lookSignature(look);
     const relit = lookKey !== this.look;
     if (!geometry && !moved && !restyled && !painted && !relit) return true;
+    if (this.hasScene) this.editedAt = f.now;
     if (geometry || moved) this.cache.syncTransforms();
     if (geometry || restyled) this.cache.syncMaterials();
     if (geometry || painted) this.cache.syncColors(f.bake);
