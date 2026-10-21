@@ -2,7 +2,7 @@
 # Promote a green dev build to main, which publishes it as the beta
 # (docs/ENGINE.md section 7).
 #
-#   scripts/promote.sh [--sha <commit on dev>] [--stable <1.minor.patch>] [--push]
+#   scripts/promote.sh [--sha <commit on dev>] [--stable <1.minor.patch>] [--message <subject>] [--push]
 #
 # Checks that the dev head (or the given commit) has a dev build whose gating
 # jobs are all green, merges it into main with --no-ff, and prints the push.
@@ -19,7 +19,7 @@ REPO=Paraxdev/FundaCAD
 REMOTE=origin
 
 usage() {
-  echo "usage: $0 [--sha <commit on dev>] [--stable <1.minor.patch>] [--push]" >&2
+  echo "usage: $0 [--sha <commit on dev>] [--stable <1.minor.patch>] [--message <subject>] [--push]" >&2
   exit 2
 }
 
@@ -28,12 +28,13 @@ die() {
   exit 1
 }
 
-version='' sha='' push=no
+version='' sha='' push=no message=''
 while [ $# -gt 0 ]; do
   case "$1" in
     --push) push=yes ;;
     --sha) [ $# -ge 2 ] || usage; sha=$2; shift ;;
     --stable) [ $# -ge 2 ] || usage; version=${2#v}; shift ;;
+    --message) [ $# -ge 2 ] || usage; message=$2; shift ;;
     *) usage ;;
   esac
   shift
@@ -96,7 +97,8 @@ tmp=$(mktemp -d)
 cleanup() { git worktree remove --force "$tmp" 2>/dev/null || { rm -rf "$tmp"; git worktree prune; }; }
 trap cleanup EXIT
 git worktree add --quiet --detach "$tmp" "$REMOTE/main"
-git -C "$tmp" merge --no-ff --quiet -m "merge: dev into main${tag:+ for $tag}" "$sha" \
+[ -n "$message" ] || message="merge: dev is promoted to main and ships as the ${tag:-beta}"
+git -C "$tmp" merge --no-ff --quiet -m "$message" "$sha" \
   || die "the merge into main failed, see git above. A conflict usually means a hotfix on main was never merged back: merge main into dev first, then try again."
 merge=$(git -C "$tmp" rev-parse HEAD)
 echo "merged ${sha:0:7} into main as ${merge:0:7}"
