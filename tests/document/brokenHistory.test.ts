@@ -1,7 +1,7 @@
 // A file whose saved versions are damaged still opens: what can be trusted is
 // kept, the rest is dropped, and the document itself is never lost to it.
 import { describe, expect, it, vi } from "vitest";
-import { commit, emptyRepo, normalizeRepo, snapshotOf, type VersionRepo } from "../../src/document/versions";
+import { commit, emptyRepo, normalizeRepo, referencedGeometry, snapshotOf, type VersionRepo } from "../../src/document/versions";
 import { box, opened, saved } from "./storeKit";
 
 vi.stubGlobal("window", globalThis);
@@ -78,6 +78,21 @@ describe("a file with a damaged history", () => {
     const s = opened({ features: [box("f1", 11)], versions: raw });
     expect(() => s.restoreVersion(a.id)).toThrow(/missing a feature/);
     expect(s.document.features).toEqual([box("f1", 11)]);
+  });
+
+  it("drops object entries that are not text, so the geometry a save keeps is still listed", () => {
+    const repo = emptyRepo();
+    const imp = { id: "i1", type: "import", geom: "h-import" } as never;
+    const a = commit(repo, { parameters: {}, features: [box("f1", 10.5), imp] }, "a", 1)!;
+    const raw = structuredClone(repo) as Raw;
+    raw.objects.junk = 5;
+    raw.objects.odd = { geom: "h-odd" };
+    raw.objects[a.tree.features[0]!] = null;
+    const s = opened({ features: [box("f1", 11)], versions: raw });
+    const { [a.tree.features[0]!]: _dropped, ...kept } = repo.objects;
+    expect(s.versionRepo!.objects).toEqual(kept);
+    expect(referencedGeometry(s.versionRepo!)).toEqual(["h-import"]);
+    expect(() => s.restoreVersion(a.id)).toThrow(/missing a feature/);
   });
 
   it("carries a history with no readable row whole, until the first version saved here", () => {
