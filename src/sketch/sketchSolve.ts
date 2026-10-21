@@ -19,7 +19,7 @@ import type { ResolvedEntity } from "./snap";
 import { solveSketch, type SConstraint, type SPoint, type SLine, type SCircle, type SArc } from "./solver";
 import { circumcenter } from "./arc";
 import { rectCorners, rectFromThreePoints } from "./region";
-import { asRound, lineOperand, refPoint, rimNesting, type Round } from "./entityDims";
+import { asRound, lineOperand, refPoint, rimNesting, RIM_EPS, type Round } from "./entityDims";
 import type { SketchConstraint } from "../types";
 import { isDriven, projEndSamples } from "../types";
 import { poleOfRef } from "./bspline";
@@ -714,7 +714,7 @@ export async function compileAndSolve(
     constraints.forEach((c, i) => {
       if (isDriven(c) || !isRimDim(c)) return;
       const cls = rimBranch(c, beforeById);
-      if (cls !== null && cls !== rimBranch(c, afterById)) guardIds.add(constraintKey(i));
+      if (cls !== null && !sameBranch(cls, rimBranch(c, afterById))) guardIds.add(constraintKey(i));
     });
   }
   if (guardIds.size || badGeom.size) {
@@ -784,9 +784,9 @@ function rimBranch(c: SketchConstraint, byId: Map<string, ResolvedEntity>): stri
     const seg = lineOperand(byId, c.line);
     if (!cc || !seg) return null;
     const dx = seg.x2 - seg.x1, dy = seg.y2 - seg.y1;
-    const cross = (cc.x - seg.x1) * dy - (cc.y - seg.y1) * dx; // which side of the line
-    const len = Math.hypot(dx, dy) || 1;
-    return `side:${cross >= 0 ? "+" : "-"}:${Math.abs(cross) / len >= cc.r ? "out" : "in"}`;
+    const dist = ((cc.x - seg.x1) * dy - (cc.y - seg.y1) * dx) / (Math.hypot(dx, dy) || 1);
+    const side = Math.abs(dist) < RIM_EPS ? "on" : dist > 0 ? "+" : "-";
+    return `side:${side}:${Math.abs(dist) >= cc.r ? "out" : "in"}`;
   }
   if (c.type === "offset") {
     // Which side of each SOURCE line its copy sits on. Only line pairs can flip:
@@ -804,4 +804,10 @@ function rimBranch(c: SketchConstraint, byId: Map<string, ResolvedEntity>): stri
     return sides.length ? `off:${sides.join("")}` : null;
   }
   return null;
+}
+
+// A centre on the line is on neither side, so it may leave it for either and still be the same configuration.
+function sameBranch(before: string, after: string | null): boolean {
+  const a = before.split(":"), b = after?.split(":") ?? [];
+  return a.length === b.length && a.every((s, k) => s === b[k] || s === "on" || b[k] === "on");
 }
