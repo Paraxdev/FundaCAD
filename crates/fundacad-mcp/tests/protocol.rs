@@ -934,3 +934,10 @@ fn inspect_of_a_body_that_does_not_exist_names_the_ones_that_do() {
     assert!(t.contains("body9") && t.contains("body1"), "{t}");
     assert!(!t.contains("No bodies"), "{t}");
 }
+
+#[test]
+fn a_missing_argument_is_named_in_plain_words() {
+    let r = one("feature_remove", json!({}));
+    assert!(r.is_error, "{}", r.text);
+    assert!(!r.text.contains("KeyError") && r.text.contains("`id`"), "{}", r.text);
+}
