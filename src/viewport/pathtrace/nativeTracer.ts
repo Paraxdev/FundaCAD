@@ -11,6 +11,7 @@ import type * as THREE from "three";
 import type { Denoise } from "../../ui/renderPrefs";
 import type { PictureOptions, TraceLook, TraceScene, TracerBackend } from "./backend";
 import type { TraceLens } from "./camera";
+import { FrameCameras, type FrameView } from "./frameCamera";
 import { NativeScene, type Call } from "./nativeScene";
 import { runSelfCheck } from "./selfCheck";
 import { bloomKey, bloomSide, type TraceBloomSettings } from "./tracePost";
@@ -386,6 +387,8 @@ export class NativeTracer implements TracerBackend {
   /** The bloom the native side holds, null until this page told it. */
   private bloomShared: string | null = null;
   private bloomSent: Promise<unknown> = Promise.resolve();
+  private cameras = new FrameCameras();
+  private shownSeq: number | null = null;
   readonly scene: NativeScene;
 
   constructor(private o: NativeTracerOptions = {}) {
@@ -458,7 +461,7 @@ export class NativeTracer implements TracerBackend {
 
   setScene(scene: TraceScene, camera: THREE.Camera) {
     void this.scene.look(scene);
-    void this.scene.camera(camera, scene.lens);
+    this.sendCamera(camera, scene.lens);
     void this.scene.setMeshes(scene.meshes);
     this.reset();
   }
@@ -479,8 +482,17 @@ export class NativeTracer implements TracerBackend {
     this.reset();
   }
   updateCamera(camera: THREE.Camera, lens: TraceLens | null) {
-    void this.scene.camera(camera, lens);
+    this.sendCamera(camera, lens);
     this.reset();
+  }
+  private sendCamera(camera: THREE.Camera, lens: TraceLens | null) {
+    const sent = this.scene.camera(camera, lens);
+    void sent.then(this.cameras.send(camera));
+  }
+
+  /** The camera the frame on the canvas was traced with, null when not known. */
+  shownView(): FrameView | null {
+    return this.shownSeq === null ? null : this.cameras.of(this.shownSeq);
   }
   reset() {
     this.count = 0;
@@ -560,6 +572,7 @@ export class NativeTracer implements TracerBackend {
       const whole = frame.pixels.byteLength >= frame.width * frame.height * 4 && frame.width > 0;
       if (frame.generation >= this.generation && whole && !this.disposed) {
         this.blit.upload(frame);
+        this.shownSeq = frame.seq;
         this.count++;
         if (!this.resizeTimer && !this.resizing) this.sized = true;
       }

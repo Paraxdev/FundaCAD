@@ -371,3 +371,30 @@ describe("a traced picture on the native tracer", () => {
     await expect(t.picture({ width: 7680, height: 4320, samples: 8 })).rejects.toThrow("needs a 1013 MiB buffer");
   });
 });
+
+describe("the camera a native frame was traced with", () => {
+  it("is the one the tracer took before it drew the frame on screen", async () => {
+    const link = new FakeLink();
+    // The fake draws a frame as it is asked for, so a camera is taken after every frame asked so far.
+    const { t } = setup(link, 1, async (cmd) => (cmd === "pt_camera" ? link.seq : undefined));
+    await t.init();
+    const at = (x: number) => {
+      const c = new THREE.PerspectiveCamera();
+      c.position.set(x, 0, 0);
+      c.updateMatrixWorld();
+      return c;
+    };
+    expect(t.shownView()).toBeNull();
+    t.updateCamera(at(1), null);
+    await t.scene.idle();
+    await t.renderSample(0);
+    expect(t.shownView()?.matrices[12]).toBe(1);
+    // Frame 2 was asked for while frame 1 uploaded, before the camera moved.
+    t.updateCamera(at(2), null);
+    await t.scene.idle();
+    await t.renderSample(0);
+    expect(t.shownView()?.matrices[12]).toBe(1);
+    await t.renderSample(0);
+    expect(t.shownView()?.matrices[12]).toBe(2);
+  });
+});
