@@ -28,6 +28,26 @@ fn put_manifest(root: &Path, id: &str, man: Value) {
     std::fs::write(dir.join("manifest.json"), man.to_string()).unwrap();
 }
 
+/// The cache keys a plugin feature on this, so a new version or a new
+/// component misses the checkpoints the old one wrote.
+#[test]
+fn a_bundle_identity_moves_with_its_version_and_its_component() {
+    let id_of = |tag: &str, version: &str, wasm: &[u8]| {
+        let root = temp_root(tag);
+        put_manifest(&root, "P", json!({"id": "P", "version": version, MANIFEST_WASM: "p.wasm", "featureTypes": ["t"]}));
+        std::fs::write(root.join("P").join("p.wasm"), wasm).unwrap();
+        let mut reg = Registry::default();
+        reg.replace(discover_in(std::slice::from_ref(&root)));
+        let id = identity(&mut reg.entries[0]);
+        let _ = std::fs::remove_dir_all(&root);
+        id
+    };
+    let base = id_of("ida", "1.0.0", b"one");
+    assert_eq!(base, id_of("idb", "1.0.0", b"one"));
+    assert_ne!(base, id_of("idc", "1.0.1", b"one"));
+    assert_ne!(base, id_of("idd", "1.0.0", b"two"));
+}
+
 /// A bundle built for the retired Python engine: it declares
 /// what it owns and names no component. It owns those names all the same, so
 /// every sentence names the plugin and says an update fixes it.
