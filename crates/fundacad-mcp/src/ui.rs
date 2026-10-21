@@ -262,7 +262,13 @@ impl FundaCad {
         input_schema = crate::tools::ui_open(),
         annotations(read_only_hint = false, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
-    pub async fn t_ui_open(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
+    pub async fn t_ui_open(&self, mut args: JsonObject) -> Result<CallToolResult, McpError> {
+        if let Some(raw) = args.get("record").and_then(Value::as_str).filter(|r| !r.is_empty()) {
+            match self.scoped(raw).await {
+                Ok(p) => args.insert("record".into(), json!(p.to_string_lossy())),
+                Err(e) => return Ok(e),
+            };
+        }
         Ok(self.relay("open", args).await)
     }
 
@@ -272,7 +278,22 @@ impl FundaCad {
         input_schema = crate::tools::ui_do(),
         annotations(read_only_hint = false, destructive_hint = true, idempotent_hint = false, open_world_hint = false)
     )]
-    pub async fn t_ui_do(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
+    pub async fn t_ui_do(&self, mut args: JsonObject) -> Result<CallToolResult, McpError> {
+        if let Some(steps) = args.get_mut("steps").and_then(Value::as_array_mut) {
+            for step in steps.iter_mut().filter_map(Value::as_object_mut) {
+                let files = matches!(
+                    step.get("do").and_then(Value::as_str),
+                    Some("open_file" | "import_file" | "save_as")
+                );
+                let Some(raw) = step.get("path").and_then(Value::as_str).filter(|_| files) else {
+                    continue;
+                };
+                match self.scoped(raw).await {
+                    Ok(p) => step.insert("path".into(), json!(p.to_string_lossy())),
+                    Err(e) => return Ok(e),
+                };
+            }
+        }
         Ok(self.relay("do", args).await)
     }
 

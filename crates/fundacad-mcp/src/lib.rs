@@ -13,6 +13,7 @@
 //!   `render`       the z-buffered flat rasteriser `view` draws with
 //!   `describe`     an inspect report, as something worth reading
 //!   `schema`       the feature reference the agent reads first
+//!   `scope`        which files the tools may read and write
 //!   `shadow`       running from a copy, so a build can replace the original
 //!   `ui`           the private app in a browser, standalone only
 //!
@@ -35,6 +36,7 @@ pub mod model;
 pub mod png;
 pub mod render;
 pub mod schema;
+pub mod scope;
 pub mod section;
 pub mod server;
 pub mod shadow;
