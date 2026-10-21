@@ -2,7 +2,8 @@
 // so it brings back everything the restore replaced, not only the features.
 import { describe, expect, it, vi } from "vitest";
 import type { CadDocument } from "../../src/types";
-import { box, env, opened, study } from "./storeKit";
+import type { DocumentStore } from "../../src/document/store";
+import { box, env, opened, saved, study } from "./storeKit";
 
 vi.stubGlobal("window", globalThis);
 
@@ -93,6 +94,21 @@ describe("undo after a restore", () => {
     expect(s.stressStudy).toBeNull();
     s.undo();
     expect(s.workingSnapshot()).toEqual(before);
+  });
+
+  it.each([
+    ["stress", { stress: study }, { stress: { future: true, nodes: [1.5, 2] } }, (s: DocumentStore) => s.setStressStudy(null)],
+    ["environment", { environment: env(1.75) }, { environment: { name: "future", sky: 3 } }, (s: DocumentStore) => s.setDocumentEnvironment(null)],
+  ])("drops the unreadable %s section a replacing load brought once undo brings the readable one back", (key, own, unreadable, clear) => {
+    const s = opened({ features: [box("f1", 10.5)], ...own });
+    s.loadDocument({ parameters: {}, features: [box("f1", 10.5)], ...unreadable } as CadDocument, { replace: true });
+    expect(saved(s)[key]).toEqual(Object.values(unreadable)[0]);
+    s.undo();
+    expect(saved(s)[key]).toEqual(Object.values(own)[0]);
+    clear(s);
+    expect(key in saved(s)).toBe(false);
+    s.redo();
+    expect(saved(s)[key]).toEqual(Object.values(unreadable)[0]);
   });
 
   it("leaves the next document's undo stack alone", () => {
