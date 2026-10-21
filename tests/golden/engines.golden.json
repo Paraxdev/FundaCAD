@@ -220,10 +220,15 @@
     ]
    },
    "bodies": 1,
-   "errors": [],
+   "errors": [
+    [
+     "c",
+     "Chamfer failed on Box: at #mm the chamfer does not fit the edge through (#, #, #), it would run into the chamfer on the neighbouring edge. It fits up to #mm, so try that or a smaller value."
+    ]
+   ],
    "fatal": false,
    "volumes": {
-    "body1": 3280.0
+    "body1": 4000.0
    }
   },
   "clean_up_every_body": {

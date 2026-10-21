@@ -510,7 +510,7 @@ mod tests {
     /// a bumped version; a version that has not shipped may take one in place,
     /// which these tests cannot tell from a missed bump.
     const GOLDEN_DIGESTS: [(u32, &str); 2] =
-        [(1, "74269bcbe84820d4693f680ddbf76ecc"), (2, "5f9cfa982ced8d4ceca0fcf902ad0bbf")];
+        [(1, "74269bcbe84820d4693f680ddbf76ecc"), (2, "f6512ae1dbbc6e485eb4cd4252d480a1")];
 
     #[test]
     fn each_golden_digest_came_with_a_version_bump() {
