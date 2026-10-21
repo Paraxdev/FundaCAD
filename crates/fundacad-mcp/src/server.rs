@@ -632,7 +632,7 @@ impl FundaCad {
     /// link, so without this every later call fails the same way until the host
     /// restarts this server. Fall back to a private engine, keeping the last
     /// document pulled, and let the re-probe find the app again.
-    async fn drop_lost_app(&self, why: &str) {
+    pub(crate) async fn drop_lost_app(&self, why: &str) {
         log(&format!(
             "[mcp] lost FundaCAD's engine ({why}), working on a private copy until it is back"
         ));

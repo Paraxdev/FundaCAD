@@ -118,10 +118,15 @@ impl FundaCad {
         if let Some(c) = command {
             payload["command"] = c;
         }
-        let reply = link
-            .call("session_guide", payload)
-            .await
-            .map_err(|e| failure(format!("FundaCAD's engine went away: {e}")))?;
+        let reply = match link.call("session_guide", payload).await {
+            Ok(r) => r,
+            Err(e) => {
+                let why = format!("FundaCAD's engine went away: {e}");
+                // As call_tool does for document tools, or every later guide call keeps the dead link.
+                self.drop_lost_app(&why).await;
+                return Err(failure(why));
+            }
+        };
         if reply.get("ok") != Some(&json!(true)) {
             let why = reply["error"]["message"].as_str().unwrap_or("").to_owned();
             if why.contains("session_guide") && why.contains("unknown") {
