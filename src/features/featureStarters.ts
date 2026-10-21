@@ -1937,6 +1937,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   };
 
   return {
+    pickPlane: pickPlaneInteractive,
     startFillet,
     startChamfer,
     grabEdgeHandle,

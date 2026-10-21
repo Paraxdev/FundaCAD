@@ -94,6 +94,7 @@ const CAPABILITIES: Record<string, (path: string) => boolean> = {
   "node bodies": (p) => p.includes("/plugins/FundaCAD.Organic/"),
   "the printed layer lines": (p) => p.includes("/plugins/FundaCAD.PrintLook/"),
   "the mouse and key presets": (p) => p.includes("/plugins/FundaCAD.Navigation/"),
+  "reference images": (p) => p.includes("/plugins/FundaCAD.ReferenceImages/"),
 };
 
 /** Static import specifiers in a file, skipping `import type` (erased) and
