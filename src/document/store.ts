@@ -139,7 +139,8 @@ type MetaListener = () => void;
  *  instead of silently skipping display-only changes and eating a feature
  *  edit that came before them. */
 type UndoEntry =
-  | { kind: "doc"; doc: CadDocument }
+  // `state` is set on a replacing load: what it replaced besides the geometry, as projectState writes it.
+  | { kind: "doc"; doc: CadDocument; state?: string }
   | { kind: "overlay"; undo: () => void; redo: () => void }
   | { kind: "group"; entries: UndoEntry[] };
 
@@ -156,6 +157,7 @@ export const KNOWN_DOC_KEYS: ReadonlySet<string> = new Set([
   "materials", "palette", "stress", "environment", "versions", "geometry", "referenceImages",
 ]);
 const ELEMENT_KEYS: ReadonlySet<string> = new Set(["id", "name", "parent"]);
+const GEOMETRY_KEYS = ["parameters", "paramDefs", "paramExtras", "features", "viewOverrides", "bodyIds"] as const;
 
 function sharesAFeature(a: readonly Feature[], b: readonly Feature[]): boolean {
   const ids = new Set(a.map((f) => f.id));
@@ -704,8 +706,8 @@ export class DocumentStore {
   /** Set while undoAsOne runs: the steps go here instead of onto the stack. */
   private collecting: UndoEntry[] | null = null;
 
-  private pushUndo() {
-    const entry: UndoEntry = { kind: "doc", doc: clone(this.doc) };
+  private pushUndo(state?: string) {
+    const entry: UndoEntry = { kind: "doc", doc: clone(this.doc), ...(state === undefined ? {} : { state }) };
     if (this.collecting) return void this.collecting.push(entry);
     this.undoStack.push(entry);
     if (this.undoStack.length > DocumentStore.UNDO_CAP) this.undoStack.shift();
@@ -1435,8 +1437,9 @@ export class DocumentStore {
       const back = order.map((x) => this.applyUndoEntry(x, way));
       return { kind: "group", entries: way === "undo" ? back.reverse() : back };
     }
-    const was: UndoEntry = { kind: "doc", doc: clone(this.doc) };
+    const was: UndoEntry = { kind: "doc", doc: clone(this.doc), ...(e.state === undefined ? {} : { state: this.projectState() }) };
     this.doc = e.doc;
+    if (e.state !== undefined) this.readProjectState(JSON.parse(e.state) as CadDocument);
     this.rearmProjectionValve();
     this.markDirty();
     this.emitDoc();
@@ -2292,44 +2295,17 @@ export class DocumentStore {
     for (const w of migrateDocument(parsed)) this.onWarning?.(w);
     if (!opts.replace) this.emitOpen();
     this.emitRewind();
-    if (opts.replace) this.pushUndo();
+    if (opts.replace) this.pushUndo(this.projectState());
     else this.undoStack = [];
     this.redoStack = [];
     this.rearmProjectionValve(); // valve state must never cross documents
-    // split persisted project state back out of the document; keep `this.doc`
-    // pure geometry (+ viewOverrides) so undo/rebuild stay unaffected by it.
-    this.suppressed = new Set(parsed.suppressed ?? []);
-    this.rollback = parsed.rollback ?? null;
-    for (const { overlay, mapValue } of this.overlays) overlay.loadFrom(parsed as unknown as Record<string, unknown>, mapValue);
-    this.isolate = false; // the hidden set just came from the file, it is not an isolate
-    this.palette = parsed.palette?.length ? parsed.palette.map((s) => ({ ...s })) : DEFAULT_PALETTE.map((s) => ({ ...s }));
-    // Elements without an id and materials without a colour are dropped here, not at every reader.
     this.repo = normalizeRepo(parsed.versions);
-    this.stress = normalizeStressStudy(parsed.stress);
-    this.environment = normalizeDocEnvironment(parsed.environment);
+    this.unreadSections = parsed.versions != null && !this.repo ? { versions: structuredClone(parsed.versions) } : {};
     this.openedVersion = typeof parsed.version === "number" ? parsed.version : 1;
     // A replacing load sharing no feature with this one is a different document
     // after all, and sections it did not come with must not be saved into it.
     if (!opts.replace || !sharesAFeature(this.doc.features, parsed.features ?? [])) this.carriedSections = [];
-    this.unknownKeys = carriedKeys(parsed as unknown as Record<string, unknown>, KNOWN_DOC_KEYS);
-    this.setRefImagesQuiet(readReferenceImages(parsed.referenceImages));
-    this.unreadSections = {};
-    if (parsed.versions != null && !this.repo) this.unreadSections.versions = structuredClone(parsed.versions);
-    if (parsed.stress != null && !this.stress) this.unreadSections.stress = structuredClone(parsed.stress);
-    if (parsed.environment != null && !this.environment) this.unreadSections.environment = structuredClone(parsed.environment);
-    this.materials = parsed.materials?.length
-      ? parsed.materials
-          .map((m, i) => normalizeMaterial(m, i))
-          .filter((m): m is MaterialDef => m !== null)
-      : STARTER_LIBRARY.map((m) => ({ ...m }));
-    this.elements = (parsed.elements ?? [])
-      .filter((e) => e && typeof e.id === "string" && e.id)
-      .map((e) => ({
-        ...carriedKeys(e as unknown as Record<string, unknown>, ELEMENT_KEYS),
-        id: e.id,
-        name: typeof e.name === "string" && e.name.trim() ? e.name : e.id,
-        ...(typeof e.parent === "string" && e.parent ? { parent: e.parent } : {}),
-      }));
+    this.readProjectState(parsed);
     this.doc = {
       parameters: parsed.parameters ?? {},
       ...(parsed.paramDefs ? { paramDefs: parsed.paramDefs } : {}),
@@ -2351,6 +2327,44 @@ export class DocumentStore {
     this.discardModelForReplacement();
     this.emitDoc();
     this.scheduleRebuild(true);
+  }
+  /** The project state a file holds beside the geometry and the versions. It is
+   *  kept out of `this.doc` so undo and rebuild stay unaffected by it. */
+  private readProjectState(parsed: CadDocument) {
+    this.suppressed = new Set(parsed.suppressed ?? []);
+    this.rollback = parsed.rollback ?? null;
+    for (const { overlay, mapValue } of this.overlays) overlay.loadFrom(parsed as unknown as Record<string, unknown>, mapValue);
+    this.isolate = false; // the hidden set just came from the file, it is not an isolate
+    this.palette = parsed.palette?.length ? parsed.palette.map((s) => ({ ...s })) : DEFAULT_PALETTE.map((s) => ({ ...s }));
+    this.stress = normalizeStressStudy(parsed.stress);
+    this.environment = normalizeDocEnvironment(parsed.environment);
+    this.unknownKeys = carriedKeys(parsed as unknown as Record<string, unknown>, KNOWN_DOC_KEYS);
+    this.setRefImagesQuiet(readReferenceImages(parsed.referenceImages));
+    delete this.unreadSections.stress;
+    delete this.unreadSections.environment;
+    if (parsed.stress != null && !this.stress) this.unreadSections.stress = structuredClone(parsed.stress);
+    if (parsed.environment != null && !this.environment) this.unreadSections.environment = structuredClone(parsed.environment);
+    // Elements without an id and materials without a colour are dropped here, not at every reader.
+    this.materials = parsed.materials?.length
+      ? parsed.materials
+          .map((m, i) => normalizeMaterial(m, i))
+          .filter((m): m is MaterialDef => m !== null)
+      : STARTER_LIBRARY.map((m) => ({ ...m }));
+    this.elements = (parsed.elements ?? [])
+      .filter((e) => e && typeof e.id === "string" && e.id)
+      .map((e) => ({
+        ...carriedKeys(e as unknown as Record<string, unknown>, ELEMENT_KEYS),
+        id: e.id,
+        name: typeof e.name === "string" && e.name.trim() ? e.name : e.id,
+        ...(typeof e.parent === "string" && e.parent ? { parent: e.parent } : {}),
+      }));
+  }
+  /** What readProjectState reads, as a save writes it. The geometry keys are
+   *  left out, the undo entry holds `this.doc` already. */
+  private projectState(): string {
+    const out = this.toObject(false) as unknown as Record<string, unknown>;
+    for (const k of GEOMETRY_KEYS) delete out[k];
+    return JSON.stringify(out);
   }
   loadDocument(doc: CadDocument, opts: { replace?: boolean } = {}) {
     this.load(JSON.stringify(doc), opts);
