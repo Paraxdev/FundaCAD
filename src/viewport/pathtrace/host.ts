@@ -14,7 +14,7 @@ import {
   colorSignature, collectAllBodies, collectBodies, countTriangles, countVertices, materialSignature, sceneSignature,
   storageBytes, transformSignature, TRIANGLE_BUDGET, type SurfaceBaker,
 } from "./mirror";
-import { TraceGeneration, traceState, type TraceInputs, type TraceState } from "./state";
+import { STILL_MS, TraceGeneration, traceState, type TraceInputs, type TraceState } from "./state";
 import { bloomKey, traceBloom } from "./tracePost";
 
 /** No sample this long after the tracer started reads as a hung GPU. */
@@ -30,7 +30,7 @@ export interface CrashGuard {
 
 export interface TraceFrame {
   now: number;
-  inputs: Omit<TraceInputs, "samples" | "cap">;
+  inputs: Omit<TraceInputs, "samples" | "cap" | "editing">;
   camera: THREE.Camera;
   /** The camera moved or the canvas was resized since the last tick. */
   cameraChanged: boolean;
@@ -108,6 +108,9 @@ export class PathTraceHost {
   private lens = "";
   private sceneDirty = true;
   private cameraDirty = true;
+  /** The camera last sent, so a move made outside the rig's damped update
+   *  (arrow key steps, reduced motion flights, a projection switch) restarts too. */
+  private cameraSig = new Float64Array(33);
   private polling = false;
   private traceSince = 0;
   private sawSample = false;
@@ -130,6 +133,9 @@ export class PathTraceHost {
   private inFlight = false;
   private measured: number | null = null;
   private budgetSent = false;
+  /** When the traced scene last changed under an edit, a rebuild or a tool drag. */
+  private editedAt = -Infinity;
+  private preview = false;
 
   constructor(
     private webglCanvas: HTMLCanvasElement,
@@ -154,9 +160,13 @@ export class PathTraceHost {
   }
 
   tick(f: TraceFrame) {
-    if (f.cameraChanged) this.cameraDirty = true;
+    if (this.cameraMoved(f.camera) || f.cameraChanged) this.cameraDirty = true;
     if (f.sceneMaybeChanged) this.sceneDirty = true;
-    const s = this.disabled ? "off" : traceState({ ...f.inputs, samples: this.samples, cap: this.cap });
+    const editing = f.now - this.editedAt < STILL_MS;
+    const s = this.disabled ? "off" : traceState({ ...f.inputs, editing, samples: this.samples, cap: this.cap });
+    // Realtime while moving off: the last traced picture stays up through a
+    // restart, the tracer's canvas keeps it until the first new sample lands.
+    const hold = f.inputs.realtimeWhileMoving === false;
     if (s !== this.state) {
       this.state = s;
       this.onStateChange?.(s);
@@ -181,8 +191,16 @@ export class PathTraceHost {
       return this.show(false);
     }
     if (s === "trace" && !this.sawSample) this.arm();
+    if (hold !== this.preview) {
+      this.preview = hold;
+      b.setMotionPreview?.(hold);
+    }
     this.syncCanvas(b);
-    if (this.sceneDirty && !this.syncScene(b, f)) return this.show(false);
+    if (this.sceneDirty && !this.syncScene(b, f)) return this.show(hold && this.shown && this.hasScene);
+    if (!hold && f.now - this.editedAt < STILL_MS) {
+      this.traceSince = 0;
+      return this.show(false);
+    }
     this.watchdog(f.now, s);
     const lens = f.lens();
     const lensKey = lensSignature(lens);
@@ -208,7 +226,22 @@ export class PathTraceHost {
       if (!this.inFlight) this.traceFrame(b);
       this.poll(b);
     } else if (!this.settled && this.samples >= this.cap) this.settled = !b.present(f.now);
-    this.show(this.samples > 0);
+    this.show(this.samples > 0 || (hold && this.shown));
+  }
+
+  private cameraMoved(c: THREE.Camera): boolean {
+    const sig = this.cameraSig;
+    const w = c.matrixWorld.elements;
+    const p = c.projectionMatrix.elements;
+    const ortho = (c as THREE.OrthographicCamera).isOrthographicCamera ? 1 : 0;
+    let moved = sig[32] !== ortho;
+    for (let i = 0; i < 16; i++) {
+      if (sig[i] !== w[i] || sig[16 + i] !== p[i]) moved = true;
+      sig[i] = w[i]!;
+      sig[16 + i] = p[i]!;
+    }
+    sig[32] = ortho;
+    return moved;
   }
 
   private syncBloom(b: TracerBackend, f: TraceFrame) {
@@ -352,6 +385,7 @@ export class PathTraceHost {
         this.renderScale = 0;
         this.budget = new FrameBudget(Infinity);
         this.budgetSent = false;
+        this.preview = false;
         this.denoiseLevel = "";
         this.bloom = "";
         this.sceneDirty = this.cameraDirty = true;
@@ -374,6 +408,8 @@ export class PathTraceHost {
     st.left = `${c.offsetLeft}px`;
     st.top = `${c.offsetTop}px`;
     if (w === this.size.w && h === this.size.h && ratio === this.size.ratio) return;
+    // A resized canvas is blank, nothing traced is left to hold up.
+    this.show(false);
     this.size = { w, h, ratio };
     b.setSize(Math.max(1, w), Math.max(1, h), ratio);
     const scale = renderScaleFor({ cssHeight: h, dpr: globalThis.devicePixelRatio || 1, discharging: this.power.discharging });
@@ -411,6 +447,7 @@ export class PathTraceHost {
     const lookKey = lookSignature(look);
     const relit = lookKey !== this.look;
     if (!geometry && !moved && !restyled && !painted && !relit) return true;
+    if (this.hasScene) this.editedAt = f.now;
     if (geometry || moved) this.cache.syncTransforms();
     if (geometry || restyled) this.cache.syncMaterials();
     if (geometry || painted) this.cache.syncColors(f.bake);
