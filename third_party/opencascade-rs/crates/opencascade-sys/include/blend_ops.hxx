@@ -25,7 +25,9 @@
 #include <TopExp.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopLoc_Location.hxx>
+#include <TopTools_DataMapOfShapeInteger.hxx>
 #include <TopTools_IndexedDataMapOfShapeListOfShape.hxx>
+#include <TopTools_IndexedMapOfShape.hxx>
 #include <TopTools_ListOfShape.hxx>
 #include <TopTools_MapOfShape.hxx>
 #include <TopoDS.hxx>
@@ -182,6 +184,47 @@ inline bool bl_d1_on_second(const TopoDS_Edge &e, const TopoDS_Face &f0, const T
   return tan.Dot(normal(f0).Crossed(normal(f1))) < 0;
 }
 
+// A chamfer face bordering an old face off its edge and the edge's ends ran past a face, which
+// BRepCheck passes: a 40 x 20 box's Z edges at 3/30 one at a time built 6002.65 so.
+inline bool bl_chamfer_overran(BRepFilletAPI_MakeChamfer &mk, const TopoDS_Shape &shape,
+                               const std::vector<TopoDS_Shape> &es, size_t n,
+                               const TopTools_IndexedDataMapOfShapeListOfShape &edge_faces) {
+  TopTools_IndexedMapOfShape faces;
+  TopExp::MapShapes(shape, TopAbs_FACE, faces);
+  TopTools_DataMapOfShapeInteger origin;
+  for (int i = 1; i <= faces.Extent(); ++i) {
+    if (mk.IsDeleted(faces(i))) continue;
+    TopTools_ListOfShape images = mk.Modified(faces(i));
+    if (images.IsEmpty()) origin.Bind(faces(i), i);
+    for (TopTools_ListIteratorOfListOfShape it(images); it.More(); it.Next()) origin.Bind(it.Value(), i);
+  }
+  TopTools_IndexedDataMapOfShapeListOfShape vertex_faces, after;
+  TopExp::MapShapesAndAncestors(shape, TopAbs_VERTEX, TopAbs_FACE, vertex_faces);
+  TopExp::MapShapesAndAncestors(mk.Shape(), TopAbs_EDGE, TopAbs_FACE, after);
+  for (size_t i = 0; i < n; ++i) {
+    const TopoDS_Edge &e = TopoDS::Edge(es[i]);
+    TopTools_MapOfShape beside;
+    for (TopTools_ListIteratorOfListOfShape it(edge_faces.FindFromKey(e)); it.More(); it.Next()) beside.Add(it.Value());
+    TopoDS_Vertex ends[2];
+    TopExp::Vertices(e, ends[0], ends[1]);
+    for (const TopoDS_Vertex &v : ends) {
+      if (v.IsNull() || !vertex_faces.Contains(v)) continue;
+      for (TopTools_ListIteratorOfListOfShape it(vertex_faces.FindFromKey(v)); it.More(); it.Next()) beside.Add(it.Value());
+    }
+    TopTools_ListOfShape made = mk.Generated(e);
+    for (TopTools_ListIteratorOfListOfShape g(made); g.More(); g.Next()) {
+      for (TopExp_Explorer x(g.Value(), TopAbs_EDGE); x.More(); x.Next()) {
+        if (!after.Contains(x.Current())) continue;
+        for (TopTools_ListIteratorOfListOfShape it(after.FindFromKey(x.Current())); it.More(); it.Next()) {
+          const TopoDS_Shape &f = it.Value();
+          if (!f.IsSame(g.Value()) && origin.IsBound(f) && !beside.Contains(faces(origin.Find(f)))) return true;
+        }
+      }
+    }
+  }
+  return false;
+}
+
 // d1 on the face the ancestor map lists first, and when that does not build an
 // uneven chamfer the other modes: 3 x 12 fits a 20 x 20 box only with mode 2.
 inline BlShape blend_chamfer(const TopoDS_Shape &shape, const TopoDS_Shape &edges,
@@ -207,6 +250,10 @@ inline BlShape blend_chamfer(const TopoDS_Shape &shape, const TopoDS_Shape &edge
     if (!mk.IsDone()) {
       st = 1;
       return TopoDS_Shape();
+    }
+    if (bl_chamfer_overran(mk, shape, es, n, map)) {
+      st = 2;
+      return mk.Shape();
     }
     TopoDS_Shape out = bl_split_false_degenerate(mk.Shape());
     st = BRepCheck_Analyzer(out).IsValid() ? 0 : 2;
