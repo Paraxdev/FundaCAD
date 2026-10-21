@@ -791,8 +791,13 @@ export class Navigator {
   fitBox(box: THREE.Box3, opts: { animate?: boolean } = {}) {
     const p = this.destination();
     if (!frameBox(p, this.frame, box)) {
-      this.fitSphere(new THREE.Vector3(), -1, opts);
-      return;
+      const c = box.isEmpty() ? null : box.getCenter(new THREE.Vector3());
+      if (!c || !Number.isFinite(c.x + c.y + c.z)) {
+        this.fitSphere(new THREE.Vector3(), -1, opts);
+        return;
+      }
+      p.target.copy(c);
+      p.scale = frameScale(p, this.frame, EMPTY_VIEW_MM);
     }
     this.flyTo(p, { animate: opts.animate });
   }

@@ -92,6 +92,17 @@ describe("Fit leaves a margin round the model", () => {
     }
   });
 
+  it("a box of one point centres on that point, not on the origin", () => {
+    const at = new THREE.Vector3(30, -10, 5);
+    const rig = createNavigatorRig(stubCanvas(), W / H);
+    rig.resize(W, H);
+    rig.navigator.opts.smoothTime = 0;
+    rig.fit(new THREE.Box3(at.clone(), at.clone()), false);
+    for (let i = 0; i < 600 && (rig.update(1 / 60) || rig.navigator.isBusy()); i++);
+    expect(rig.navigator.pose.target.distanceTo(at)).toBeLessThan(1e-9);
+    expect(Number.isFinite(rig.navigator.pose.scale) && rig.navigator.pose.scale > 0).toBe(true);
+  });
+
   it("an empty box still frames the origin at a finite scale", () => {
     const rig = createNavigatorRig(stubCanvas(), W / H);
     rig.resize(W, H);
