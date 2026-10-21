@@ -190,14 +190,72 @@ fn reads_visibility(f: &Value) -> bool {
         || f.get("operation").and_then(Value::as_str).is_some_and(|op| op != "new")
 }
 
-/// `_env_sig`: everything outside the document that shapes geometry. The
-/// engine binary stands in for the Python engine's source files, so any rebuild of
-/// it starts every document cold. `FUNDACAD_ENV_SIG` overrides it.
+/// Bump when a feature, a kernel patch or a default can change the shape a
+/// document builds to: every checkpoint written before then misses. Re-recording
+/// tests/golden is the usual sign, and `GOLDEN_DIGEST` in this file's tests
+/// fails until both move. A change shipped without a bump serves the old shapes
+/// from disk until an edit upstream of them; `FUNDACAD_DISK_CACHE=0` or
+/// `FUNDACAD_ENV_SIG` gets past that. A false bump costs one cold reopen, a
+/// missed one stale geometry, so bump when unsure.
+pub const GEOMETRY_VERSION: u32 = 1;
+
+/// Bump when what a checkpoint holds, or how `checkpoint.rs` reads one back,
+/// changes: a field it lacks comes back empty without an error.
+pub const CACHE_FORMAT: u32 = 1;
+
+/// `_env_sig`: everything outside the document that shapes geometry, so an app
+/// update or a second copy of the same engine finds the checkpoints the last
+/// one wrote. Plugins are keyed per feature in `chain_keys`, meshes on
+/// `mesh::CODE_VERSION`. `FUNDACAD_ENV_SIG` overrides it.
 pub fn env_sig() -> String {
     if let Some(forced) = std::env::var("FUNDACAD_ENV_SIG").ok().filter(|s| !s.is_empty()) {
         return forced;
     }
-    let exe = std::env::current_exe()
+    env_sig_of(GEOMETRY_VERSION, CACHE_FORMAT, crate::OCCT_VERSION, unvouched_build().as_deref())
+}
+
+/// `unvouched` is set for a build the two versions cannot speak for.
+pub fn env_sig_of(geometry: u32, format: u32, occt: &str, unvouched: Option<&str>) -> String {
+    let (tag, own): (&[u8], &str) = match unvouched {
+        Some(own) => (b"dev", own),
+        None => (b"release", ""),
+    };
+    hash_hex(&[
+        b"engine-cache\0",
+        &geometry.to_le_bytes(),
+        &format.to_le_bytes(),
+        occt.as_bytes(),
+        b"\0",
+        tag,
+        b"\0",
+        own.as_bytes(),
+    ])
+}
+
+/// A build of committed source is vouched for by `GEOMETRY_VERSION`. One with
+/// uncommitted edits keys on them, and one with no git identity, or from a host
+/// that never called `set_build`, on its binary's size and mtime.
+fn unvouched_build() -> Option<String> {
+    unvouched(fundacad_engine::build()).map(|own| own.unwrap_or_else(exe_stamp))
+}
+
+/// `None` vouched, `Some(None)` nothing to key on but the binary.
+fn unvouched(build: Option<&Value>) -> Option<Option<String>> {
+    let commit = build
+        .and_then(|b| b.get("commit"))
+        .and_then(Value::as_str)
+        .filter(|c| !c.is_empty());
+    let Some(commit) = commit else {
+        return Some(None);
+    };
+    build
+        .and_then(|b| b.get("changes"))
+        .and_then(Value::as_str)
+        .map(|changes| Some(format!("{commit}:{changes}")))
+}
+
+fn exe_stamp() -> String {
+    std::env::current_exe()
         .ok()
         .and_then(|p| std::fs::metadata(p).ok())
         .map(|m| {
@@ -208,12 +266,7 @@ pub fn env_sig() -> String {
                 .map_or(0, |d| d.as_nanos());
             format!("{}:{mtime}", m.len())
         })
-        .unwrap_or_default();
-    hash_hex(&[
-        env!("CARGO_PKG_VERSION").as_bytes(),
-        crate::OCCT_VERSION.as_bytes(),
-        exe.as_bytes(),
-    ])
+        .unwrap_or_default()
 }
 
 /// The blob an import reads its geometry from, by content hash.
@@ -427,6 +480,64 @@ mod tests {
         assert_ne!(
             chain_keys(&doc(json!({"body1": false})), "env", &plugins, &BTreeSet::new(), &mut memo),
             chain_keys(&doc(json!({})), "env", &plugins, &BTreeSet::new(), &mut memo)
+        );
+    }
+
+    #[test]
+    fn the_signature_moves_only_with_what_shapes_geometry() {
+        let base = env_sig_of(1, 1, "7.8.1", None);
+        assert_eq!(base, env_sig_of(1, 1, "7.8.1", None));
+        assert_ne!(base, env_sig_of(2, 1, "7.8.1", None), "a geometry version bump misses");
+        assert_ne!(base, env_sig_of(1, 2, "7.8.1", None), "a cache format bump misses");
+        assert_ne!(base, env_sig_of(1, 1, "7.9.0", None), "a kernel version change misses");
+        assert_ne!(base, env_sig_of(1, 1, "7.8.1", Some("")), "a dev build never shares a release's");
+        assert_ne!(env_sig_of(1, 1, "7.8.1", Some("a")), env_sig_of(1, 1, "7.8.1", Some("b")));
+    }
+
+    #[test]
+    fn only_a_build_of_committed_source_is_vouched_for() {
+        assert_eq!(unvouched(Some(&json!({"commit": "abc", "commitDate": "2026-10-21"}))), None);
+        assert_eq!(
+            unvouched(Some(&json!({"commit": "abc", "changes": "0f"}))),
+            Some(Some("abc:0f".into()))
+        );
+        assert_eq!(unvouched(Some(&json!({}))), Some(None));
+        assert_eq!(unvouched(None), Some(None));
+    }
+
+    /// The hash of every tests/golden engine answer, CRLF read as LF. When it
+    /// moves the goldens were re-recorded, which usually means some document
+    /// builds to a new shape: bump `GEOMETRY_VERSION` too, then pin the new
+    /// digest here. The MCP transcript holds tool text, not shapes.
+    const GOLDEN_DIGEST: &str = "74269bcbe84820d4693f680ddbf76ecc";
+
+    #[test]
+    fn geometry_version_tracks_the_golden_answers() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../tests/golden");
+        let mut names: Vec<_> = std::fs::read_dir(&dir)
+            .expect("tests/golden")
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .filter(|n| n.ends_with(".golden.json") && n != "mcp_parity.golden.json")
+            .collect();
+        names.sort();
+        let mut parts: Vec<Vec<u8>> = Vec::new();
+        for n in &names {
+            let bytes = std::fs::read(dir.join(n)).unwrap();
+            let mut lf = Vec::with_capacity(bytes.len());
+            for (i, &b) in bytes.iter().enumerate() {
+                if !(b == b'\r' && bytes.get(i + 1) == Some(&b'\n')) {
+                    lf.push(b);
+                }
+            }
+            parts.push(n.clone().into_bytes());
+            parts.push(lf);
+        }
+        let refs: Vec<&[u8]> = parts.iter().map(Vec::as_slice).collect();
+        let digest = hash_hex(&refs);
+        assert_eq!(
+            digest, GOLDEN_DIGEST,
+            "tests/golden changed: bump GEOMETRY_VERSION (now {GEOMETRY_VERSION}) when any document builds to a new shape, then pin GOLDEN_DIGEST to {digest}"
         );
     }
 
