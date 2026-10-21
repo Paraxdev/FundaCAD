@@ -4,7 +4,7 @@
 
 import type * as THREE from "three";
 import type { Denoise } from "../../ui/renderPrefs";
-import { SAMPLE_CAP, type TraceLook, type TracerBackend } from "./backend";
+import { SAMPLE_CAP, TracerRefused, type TraceLook, type TracerBackend } from "./backend";
 import { costProfile, FrameBudget, renderScaleFor, tracedPictureScale } from "./budget";
 import type { TraceLens } from "./camera";
 import { armGuard, clearGuard } from "./guard";
@@ -401,7 +401,7 @@ export class PathTraceHost {
         this.hasScene = false;
         this.size = { w: 0, h: 0, ratio: 0 };
       } catch (e) {
-        this.fault(`Path tracing could not start: ${e instanceof Error ? e.message : String(e)}`);
+        this.fault(`Path tracing could not start: ${e instanceof Error ? e.message : String(e)}`, !(e instanceof TracerRefused));
       } finally {
         this.starting = false;
       }
@@ -515,9 +515,9 @@ export class PathTraceHost {
     else if (now - this.traceSince > FIRST_SAMPLE_TIMEOUT_MS) this.fault("Path tracing gathered no sample in 10 seconds");
   }
 
-  private fault(why: string) {
+  private fault(why: string, counts = true) {
     this.faultText = why;
-    this.faults++;
+    if (counts) this.faults++;
     this.disabled = this.faults >= 2;
     const b = this.backend;
     this.backend = null;

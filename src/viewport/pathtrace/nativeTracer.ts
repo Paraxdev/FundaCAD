@@ -9,7 +9,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type * as THREE from "three";
 import type { Denoise } from "../../ui/renderPrefs";
-import type { PictureOptions, TraceLook, TraceScene, TracerBackend } from "./backend";
+import { TracerRefused, type PictureOptions, type TraceLook, type TraceScene, type TracerBackend } from "./backend";
 import type { TraceLens } from "./camera";
 import { NativeScene, type Call } from "./nativeScene";
 import { runSelfCheck, selfCheckReason } from "./selfCheck";
@@ -417,7 +417,7 @@ export class NativeTracer implements TracerBackend {
     this.syncBloom();
     // After the connect, which is what opens the native tracer the check borrows its path from.
     const check = await runSelfCheck((cmd, args) => this.call(cmd, args as Record<string, unknown>));
-    if (check && !check.passed) throw new Error(selfCheckReason(check));
+    if (check && !check.passed) throw new TracerRefused(selfCheckReason(check));
   }
 
   setSize(cssWidth: number, cssHeight: number, pixelRatio: number) {
