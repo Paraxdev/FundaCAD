@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { breadcrumbs } from "../../src/diagnostics/breadcrumbs";
+import { TracerRefused } from "../../src/viewport/pathtrace/backend";
 import { NativeTracer } from "../../src/viewport/pathtrace/nativeTracer";
 import { chooseTracer } from "../../src/viewport/pathtrace/choose";
 import { failedSelfCheck, refusedBySelfCheck, resetSelfCheckForTest } from "../../src/viewport/pathtrace/selfCheck";
@@ -36,6 +37,7 @@ describe("the tracer self check", () => {
     const calls: string[] = [];
     const t = tracer(failing, calls);
     await expect(t.init()).rejects.toThrow("the native tracer drew its test scene wrong on software (diff 9.50 over 3.40 of 255)");
+    await expect(tracer(failing, calls).init()).rejects.toBeInstanceOf(TracerRefused);
     expect(failedSelfCheck()).toEqual(failing);
     expect(breadcrumbs().some((b) => /tracer self check FAILED on software: diff 9\.50, threshold 3\.40 of 255, 410 ms/.test(b))).toBe(true);
   });
