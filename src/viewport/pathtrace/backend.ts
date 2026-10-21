@@ -6,6 +6,7 @@ import type * as THREE from "three";
 import type { Denoise } from "../../ui/renderPrefs";
 import type { LightRig } from "../lightRig";
 import type { TraceLens } from "./camera";
+import type { FrameView } from "./frameCamera";
 import type { TraceBloomSettings } from "./tracePost";
 import type { TraceHemi } from "./environment";
 
@@ -78,6 +79,9 @@ export interface TracerBackend {
   /** The trace is on screen through every restart, so each frame before its
    *  first whole sample needs a picture of its own. */
   setMotionPreview?(on: boolean): void;
+  /** The camera the image on the canvas was traced with, when it can be told
+   *  and may be older than the last updateCamera. */
+  shownView?(): FrameView | null;
   readonly maxTextureSize: number;
   /** Traces the current scene and camera at `width` x `height` until
    *  `samples`, denoises it with the large weights and returns a PNG data URL.

@@ -4396,6 +4396,12 @@ export class Viewport {
         bloom: renderPrefs().bloom,
         bloomable: this.scene.post.bloomable,
       });
+      const view = this.trace.frameView;
+      if (view !== this.scene.post.traceView) {
+        this.scene.post.traceView = view;
+        // Not requestRender: that marks the scene changed, which the trace host re-reads.
+        this.lingerFrames = Math.max(this.lingerFrames, 1);
+      }
       this.freeze.step(now);
       // Render-on-demand: skip the (relatively expensive) grid rebuild + GPU
       // draw entirely when nothing changed, camera didn't move, no mutation
