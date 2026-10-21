@@ -8,6 +8,18 @@ use super::{bytes, Estimator, FrameKey, GroundMode, Held, Tracer, MAX_LIGHTS};
 /// the WebGPU viewport keep their frames, long enough to amortise a submit.
 pub const BAND_TARGET: Duration = Duration::from_millis(10);
 
+/// What a bounded poll means for the frame: a timeout names the limit, so the
+/// greyed Path traced says why.
+pub(super) fn settle(polled: Result<wgpu::PollStatus, wgpu::PollError>, limit: Duration) -> Result<(), String> {
+    match polled {
+        Ok(_) => Ok(()),
+        Err(wgpu::PollError::Timeout) => {
+            Err(format!("the GPU did not finish a frame within {} s, it is busy or stuck", limit.as_secs_f32()))
+        }
+        Err(e) => Err(format!("the GPU stopped answering ({e})")),
+    }
+}
+
 /// The next band after one of `rows` took `took`: scaled towards `target`,
 /// at most doubling per step so one fast band over the sky cannot jump to a
 /// full frame over the model, in multiples of the workgroup's 8 rows. Never
@@ -168,7 +180,9 @@ impl Tracer {
             if start.elapsed() >= budget || self.fault().is_some() || !self.step() {
                 break;
             }
-            self.wait();
+            if self.wait().is_err() {
+                break;
+            }
             self.rows = adapt_rows(self.rows, self.w, self.h, t.elapsed(), BAND_TARGET);
         }
         self.sample - before
@@ -207,14 +221,23 @@ impl Tracer {
         self.rows
     }
 
+    /// Stops early on a fault, which `fault()` then names.
     pub fn render_samples(&mut self, n: u32) {
-        while self.sample < n.min(self.cap) && self.step() {
-            self.wait();
+        while self.sample < n.min(self.cap) && self.fault().is_none() && self.step() {
+            if self.wait().is_err() {
+                break;
+            }
         }
     }
 
-    pub fn wait(&self) {
-        let _ = self.device.poll(wgpu::PollType::Wait { submission_index: None, timeout: None });
+    /// Waits for the submitted work, at most the wait limit. A timeout or a
+    /// lost device becomes the tracer's fault, so the frames after it are black.
+    pub fn wait(&self) -> Result<(), String> {
+        let polled = self.device.poll(wgpu::PollType::Wait { submission_index: None, timeout: Some(self.wait_limit) });
+        settle(polled, self.wait_limit).inspect_err(|e| {
+            let mut f = self.fault.lock().unwrap_or_else(|p| p.into_inner());
+            f.lost.get_or_insert_with(|| e.clone());
+        })
     }
 
     fn read(&self, src: &wgpu::Buffer, size: u64) -> Vec<u8> {
@@ -231,8 +254,7 @@ impl Tracer {
         staging.slice(..).map_async(wgpu::MapMode::Read, move |r| {
             let _ = tx.send(r.is_ok());
         });
-        self.wait();
-        if !rx.try_recv().unwrap_or(false) || self.fault().is_some() {
+        if self.wait().is_err() || !rx.try_recv().unwrap_or(false) || self.fault().is_some() {
             return vec![0; size as usize];
         }
         let Ok(v) = staging.slice(..).get_mapped_range().map(|r| r.to_vec()) else {

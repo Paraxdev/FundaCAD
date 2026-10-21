@@ -148,7 +148,7 @@ impl Gpu {
         let slice = t.staging.slice(..out.len() as u64);
         slice.map_async(wgpu::MapMode::Read, |_| {});
         self.device
-            .poll(wgpu::PollType::Wait { submission_index: None, timeout: None })
+            .poll(wgpu::PollType::Wait { submission_index: None, timeout: Some(fundacad_tracer::WAIT_LIMIT) })
             .map_err(|e| e.to_string())?;
         out.copy_from_slice(&slice.get_mapped_range().map_err(|e| e.to_string())?);
         t.staging.unmap();
