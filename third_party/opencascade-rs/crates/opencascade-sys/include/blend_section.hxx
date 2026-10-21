@@ -1309,10 +1309,19 @@ struct Rest {
   gp_Vec out;
 };
 
+// A convex round built though a contact runs past its face: `fits` is the
+// share of the size up to which both contacts still rest on their faces.
+struct Overrun {
+  bool any = false;
+  double fits = FITS_NONE;
+  gp_Pnt at;
+};
+
 inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &shape, const TopoDS_Edge &edge,
                                                            bool chamfer, double size, double size2, bool g2,
                                                            double tol, bool draft, double profile, double margin,
-                                                           std::vector<Rest> *rests = nullptr) {
+                                                           std::vector<Rest> *rests = nullptr,
+                                                           Overrun *over = nullptr) {
   std::vector<TopoDS_Face> faces = faces_of(shape, edge);
   Sides sides;
   for (const TopoDS_Face &f : faces) sides.emplace_back(new Side(f, edge));
@@ -1440,6 +1449,30 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
       why = misfit(hi);
     }
     throw TooLarge(why, lo > 0 ? lo : FITS_NONE, fm.P);
+  }
+  if (over && s > 0) {
+    auto rests_both = [&](double k) {
+      double sz2 = std::isnan(size2) ? size2 : size2 * k;
+      for (const Frame &f : probes) {
+        set_frame(f);
+        Contacts c = contacts(f.P, f.T, sides, s, chamfer, size * k, sz2, g2);
+        if (!sides[0]->contains(c.Q[0], fuzz) || !sides[1]->contains(c.Q[1], fuzz)) return false;
+      }
+      return true;
+    };
+    if (!rests_both(1.0)) {
+      double lo = 0.0, hi = 1.0;
+      if (rests_both(1e-3)) {
+        lo = 1e-3;
+        for (int i = 0; i < 30; ++i) {
+          double mid = 0.5 * (lo + hi);
+          (rests_both(mid) ? lo : hi) = mid;
+        }
+      }
+      over->any = true;
+      over->fits = lo > 0 ? lo : FITS_NONE;
+      over->at = fm.P;
+    }
   }
   set_frame(fm);
   if (rests && s > 0) {
@@ -2036,6 +2069,12 @@ inline void rounds_keep_their_rests(const std::vector<Round> &rounds, double tol
   }
 }
 
+// The first round of the last build on this thread that runs past a face.
+inline Overrun &last_overrun() {
+  thread_local Overrun o;
+  return o;
+}
+
 struct RoundTools {
   std::vector<TopoDS_Shape> cut, fuse;
   std::vector<std::pair<TopoDS_Shape, double>> convex;
@@ -2046,13 +2085,16 @@ inline RoundTools round_tools(const TopoDS_Shape &shape, const std::vector<TopoD
                               double tol) {
   RoundTools out;
   std::vector<Round> rounds;
+  Overrun first;
   for (size_t k = 0; k < edges.size(); ++k) {
     check_cancel();
     Round r;
     r.edge = TopoDS::Edge(edges[k]);
     r.size = sizes[k];
+    Overrun over;
     auto got = edge_tool(shape, r.edge, chamfer, sizes[k], size2, g2, tol, draft, profile,
-                         1.0 + 0.11 * static_cast<double>(k), &r.rests);
+                         1.0 + 0.11 * static_cast<double>(k), &r.rests, &over);
+    if (over.any && !first.any) first = over;
     auto &dst = got.first > 0 ? out.cut : out.fuse;
     dst.insert(dst.end(), got.second.begin(), got.second.end());
     if (got.first > 0) {
@@ -2064,6 +2106,7 @@ inline RoundTools round_tools(const TopoDS_Shape &shape, const std::vector<TopoD
     }
   }
   rounds_keep_their_rests(rounds, tol);
+  last_overrun() = first;
   return out;
 }
 
@@ -2077,6 +2120,7 @@ inline TopoDS_Shape section_blend_once(const TopoDS_Shape &shape, const std::vec
                                       double size2, bool g2, const std::vector<double> &sizes, bool draft,
                                       double profile) {
   double tol = edges_tol(edges);
+  last_overrun() = Overrun();
   RoundTools rt = round_tools(shape, edges, chamfer, size2, g2, sizes, draft, profile, tol);
   std::vector<TopoDS_Shape> &cut = rt.cut, &fuse = rt.fuse;
   std::vector<std::pair<TopoDS_Shape, double>> &convex = rt.convex;
@@ -2280,6 +2324,8 @@ inline double split_limit(const TopoDS_Shape &shape, const std::vector<TopoDS_Sh
 // 3 cancelled through `progress`, 4 the blend does not fit an edge (message is
 // "why fits x y z": fits the largest size in mm of `unit` that does, -1 when
 // none does, -2 when the search ran out of time, x y z a point on the edge).
+// Built, the message may be "overrun fits x y z": a round there runs past one
+// of its faces, and fits is the largest size at which it rests on both.
 // `unit` is the size asked for, which `sizes` and `size2` scale with.
 inline std::unique_ptr<TopoDS_Shape> blend_section(const TopoDS_Shape &shape, const TopoDS_Shape &edges, bool chamfer,
                                                    rust::Slice<const double> sizes, double size2, double unit, bool g2,
@@ -2303,6 +2349,13 @@ inline std::unique_ptr<TopoDS_Shape> blend_section(const TopoDS_Shape &shape, co
     try {
       TopoDS_Shape out = secblend::blend_scaled(shape, es, chamfer, size2, g2, sz, draft, profile, one_shot);
       status = 0;
+      const secblend::Overrun &over = secblend::last_overrun();
+      if (over.any) {
+        char buf[160];
+        std::snprintf(buf, sizeof buf, "overrun %.17g %.17g %.17g %.17g", over.fits > 0 ? over.fits * unit : over.fits,
+                      over.at.X(), over.at.Y(), over.at.Z());
+        message = buf;
+      }
       return std::unique_ptr<TopoDS_Shape>(new TopoDS_Shape(out));
     } catch (secblend::TooLarge &e) {
       if (e.why != secblend::Misfit::Split && e.why != secblend::Misfit::Overlap) throw;

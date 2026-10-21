@@ -108,3 +108,29 @@ fn rounds_a_hair_past_meeting_are_refused_and_the_offered_size_builds_the_ball()
         assert!(volume(&at) >= ball - 1.0, "the offered {fits} built {} below the ball {ball}", volume(&at));
     }
 }
+
+fn warnings<'a>(r: &'a Rebuild, feature: &str) -> Vec<&'a str> {
+    r.diagnostics
+        .iter()
+        .filter(|d| d["feature_id"] == json!(feature))
+        .filter_map(|d| d["message"].as_str())
+        .collect()
+}
+
+/// A lone round past the 40 mm face is no fillet: r = 100 on one Z edge left
+/// 14904 of the 48000 mm^3 box, the edge's 40 mm face gone, without a word.
+#[test]
+fn a_lone_round_larger_than_its_face_builds_with_a_warning_and_the_size_that_rounds() {
+    let one = json!({"kind": "edge", "by": "nearest", "point": [30, 20, 0], "body": "body1"});
+    for radius in [45.0, 100.0] {
+        let r = box_fillet(radius, one.clone());
+        assert!(r.errors.is_empty(), "r {radius}: {:?}", messages(&r));
+        let said = warnings(&r, "f");
+        assert_eq!(said.len(), 1, "r {radius}: volume {} and no warning: {:?}", volume(&r), r.diagnostics);
+        assert!(said[0].contains("runs past"), "r {radius}: {said:?}");
+        let fits = offered(said[0]).unwrap_or_else(|| panic!("r {radius}: no size offered: {said:?}"));
+        assert!((39.9..=40.0).contains(&fits), "r {radius}: offers {fits}");
+    }
+    let r = box_fillet(25.0, one);
+    assert!(warnings(&r, "f").is_empty(), "a round that fits warned: {:?}", r.diagnostics);
+}
