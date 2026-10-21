@@ -208,14 +208,18 @@ fn stale_match_line(d: &Value) -> Option<String> {
     let through = pt(now.get("mid")?)?;
     let curve = now.get("curve").and_then(Value::as_str).unwrap_or("edge");
     let off = d.get("off").and_then(Value::as_f64).map_or(String::new(), |o| format!(", {} mm from its pick", mm(o)));
-    let tie = if d.get("reason").and_then(Value::as_str).is_some_and(|r| r.starts_with("tie")) {
-        ", tied with another edge"
-    } else {
-        ""
-    };
+    if d.get("reason").and_then(Value::as_str).is_some_and(|r| r.starts_with("tie")) {
+        return Some(format!(
+            "its edge selector picked at {picked} no longer matches an edge there, it now resolves to the {curve} \
+             through {through}{off}, tied with another edge. Check it with inspect and re-pick it if that is the \
+             wrong edge."
+        ));
+    }
+    // One best match far from the pick is what a parameter moving the edge
+    // leaves, and also what the edge being gone leaves, so it is said either way.
     Some(format!(
-        "its edge selector picked at {picked} no longer matches an edge there, it now resolves to the {curve} \
-         through {through}{off}{tie}. Check it with inspect and re-pick it if that is the wrong edge."
+        "its edge selector picked at {picked} now resolves to the {curve} through {through}{off}. That is right \
+         when a parameter moved the edge, otherwise check it with inspect and re-pick it."
     ))
 }
 

@@ -988,3 +988,15 @@ fn a_lone_fillet_larger_than_its_face_warns_in_the_build_reply() {
     let t = &rs[2].text;
     assert!(t.contains("warning (f):") && t.contains("runs past") && t.contains("fits up to 39.99mm"), "{t}");
 }
+
+#[test]
+fn a_match_whose_edge_a_parameter_moved_far_says_that_can_be_right() {
+    let rs = drive(&[
+        ("feature_add", json!({"feature": {"id": "bx", "type": "box", "length": 100, "width": 40, "height": 20}})),
+        ("feature_add", json!({"feature": {"id": "f", "type": "fillet", "radius": 3, "edges": right_z_edge()}})),
+        ("build", json!({})),
+    ]);
+    let t = &rs[2].text;
+    assert!(t.contains("warning (f):") && t.contains("(50, 20, 0)"), "{t}");
+    assert!(t.contains("a parameter moved") && !t.contains("no longer matches"), "{t}");
+}
