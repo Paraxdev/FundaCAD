@@ -447,14 +447,30 @@ impl Jobs for Deaf {
 }
 
 fn respawning(opts: EngineOptions) -> (Engine, Receiver<Message>) {
+    respawning_after(opts, Duration::ZERO)
+}
+
+/// `lag` holds the job thread after it sends a reply, as a busy machine does
+/// between the reply and the slot clearing behind it.
+fn respawning_after(opts: EngineOptions, lag: Duration) -> (Engine, Receiver<Message>) {
     let (tx, rx) = channel();
     let e = Engine::start_with(
         Deaf,
         Some(Arc::new(Deaf::default)),
         opts,
-        Arc::new(Collect(Mutex::new(tx))),
+        Arc::new(Lagging(Collect(Mutex::new(tx)), lag)),
     );
     (e, rx)
+}
+
+struct Lagging(Collect, Duration);
+
+impl Outbox for Lagging {
+    fn send(&self, msgs: &mut dyn Iterator<Item = Message>) -> io::Result<()> {
+        let sent = self.0.send(msgs);
+        std::thread::sleep(self.1);
+        sent
+    }
 }
 
 fn reply_to(rx: &Receiver<Message>, id: &str) -> Value {
@@ -472,10 +488,13 @@ fn a_silent_job_is_reaped_and_the_queue_behind_it_still_runs() {
         stall: Duration::from_millis(400),
         job: Duration::from_secs(25),
     };
-    let (e, rx) = respawning(EngineOptions {
-        clocks,
-        ..EngineOptions::default()
-    });
+    let (e, rx) = respawning_after(
+        EngineOptions {
+            clocks,
+            ..EngineOptions::default()
+        },
+        Duration::from_millis(300),
+    );
     let t0 = Instant::now();
     send(&e, json!({"id": "wedged", "op": "rebuild", "document": {"sleep": 30}}));
     send(&e, json!({"id": "next", "op": "rebuild", "document": {"sleep": 0}}));
@@ -486,7 +505,11 @@ fn a_silent_job_is_reaped_and_the_queue_behind_it_still_runs() {
     let next = reply_to(&rx, "next");
     assert_eq!(next["ok"], true, "{next}");
     assert!(t0.elapsed() < Duration::from_secs(5), "{:?}", t0.elapsed());
-    assert!(e.running.lock().unwrap().is_none());
+    let cleared = Instant::now();
+    while e.running.lock().unwrap().is_some() {
+        assert!(cleared.elapsed() < Duration::from_secs(5), "the reaped slot never cleared");
+        std::thread::sleep(Duration::from_millis(5));
+    }
 }
 
 #[test]
