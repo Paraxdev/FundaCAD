@@ -166,6 +166,7 @@ There is no info, success tint, warn tint, disabled or hover token. Derive them:
 | Accent border on hover | `color-mix(in srgb, var(--accent) 45%, transparent)` (buttons) or `55%` (cards, choice buttons) |
 | Field focus ring | `0 0 0 3px color-mix(in srgb, var(--accent) 14%, transparent)` |
 | Warn or error surface | `color-mix(in srgb, var(--warn) 9%, var(--float-bg-solid))` (`.perf-pop`), `color-mix(in srgb, var(--error) 22%, var(--float-bg-solid))` (`.toast-error`) |
+| Warn or error small text on glass or a panel | `color-mix(in srgb, var(--warn) 60%, var(--text))` or the same with `--error` (`.sketch-dim.conflict`, `.rel-row.over .rel-sym`); the bare `--warn` and `--error` fall under AA in Solarized Light, keep them for the border |
 
 ### 2.2 Shape and motion tokens
 

@@ -201,8 +201,8 @@
   cursor: default;
 }
 /* solver-flagged dimensions: red = conflicting, amber = redundant/over-defined */
-.sketch-dim.conflict { border-color: #ff4444; color: #ff4444; }
-.sketch-dim.over { border-color: #e0a020; color: #e0a020; }
+.sketch-dim.conflict { border-color: var(--error); color: color-mix(in srgb, var(--error) 60%, var(--text)); }
+.sketch-dim.over { border-color: var(--warn); color: color-mix(in srgb, var(--warn) 60%, var(--text)); }
 /* the dimension the Delete key will remove (set by a click or a right-click) */
 .sketch-dim.is-selected { outline: 2px solid var(--accent, #4a9eff); outline-offset: 1px; }
 /* non-select tools: labels visible but click-through (a label floating over a
@@ -230,8 +230,8 @@
   pointer-events: auto;
 }
 .sketch-glyph:hover { border-color: var(--accent-hot); color: var(--accent-hot); }
-.sketch-glyph.conflict { border-color: #ff4444; color: #ff4444; }
-.sketch-glyph.over { border-color: #e0a020; color: #e0a020; }
+.sketch-glyph.conflict { border-color: var(--error); color: color-mix(in srgb, var(--error) 60%, var(--text)); }
+.sketch-glyph.over { border-color: var(--warn); color: color-mix(in srgb, var(--warn) 60%, var(--text)); }
 .sketch-glyphs.glyphs-passive .sketch-glyph { pointer-events: none; cursor: default; }
 .sketch-dim input {
   width: 52px;
