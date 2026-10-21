@@ -791,8 +791,8 @@ export class SketchMode {
     if (t === "patternCircular" && this.active && this.selected.size) {
       for (const id of this.modifyFlow.warnSelectedProjected()) this.selected.delete(id);
       this.patternFlow.begin();
-    } else if (ENTITY_PATTERNS.has(t) && this.active && !this.selected.size) {
-      setPrompt("Click the curves or profile to pattern");
+    } else if (ENTITY_PATTERNS.has(t) && this.active) {
+      setPrompt(this.patternPickPrompt());
     }
     // Live in `dimension` too: that tool re-arms after each commit, so users stayed in
     // it and could not edit what they had just dimensioned.
@@ -2335,13 +2335,16 @@ export class SketchMode {
       else this.selected.add(id);
     }
     for (const id of this.modifyFlow.warnSelectedProjected()) this.selected.delete(id);
-    const n = this.selected.size;
-    setPrompt(n
-      ? `${n} picked · click more to add · ${this.tool === "patternCircular" ? "click the centre" : "click where the pattern starts"}`
-      : "Click the curves or profile to pattern");
+    setPrompt(this.patternPickPrompt());
     this.refreshActive();
     this.onState?.();
     return true;
+  }
+
+  private patternPickPrompt(): string {
+    const n = this.selected.size;
+    if (!n) return "Click the curves or profile to pattern · Esc";
+    return `${n} picked · click more to add · ${this.tool === "patternCircular" ? "click the centre" : "click where the pattern starts"} · Esc`;
   }
 
   private entitiesAlongLoop(loop: readonly THREE.Vector2[]): string[] {
