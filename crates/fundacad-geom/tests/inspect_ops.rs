@@ -339,3 +339,17 @@ fn the_volume_of_a_lofted_spline_body_is_the_precise_one() {
     let got = rep[0]["volume"].as_f64().unwrap().abs();
     assert!((got - precise).abs() < 1e-3, "inspect says {got}, the body holds {precise} (quick {quick})");
 }
+
+#[test]
+fn inspect_naming_a_body_that_does_not_exist_says_so_and_lists_the_ones_that_do() {
+    let req = json!({"document": {"parameters": {}, "features": [
+        {"id": "bx", "type": "box", "length": 10, "width": 10, "height": 10}]},
+        "bodies": ["body9"], "summary": true, "detail": false});
+    let r = json_of(inspect::inspect_result(req.as_object().unwrap(), &NoWatch));
+    assert_eq!(r["bodies"], json!([]), "{r}");
+    assert_eq!(r["unknown"], json!(["body9"]), "{r}");
+    assert_eq!(r["have"][0]["id"], json!("body1"), "{r}");
+    let named = json!({"document": req["document"], "bodies": ["body1"], "summary": true, "detail": false});
+    let r = json_of(inspect::inspect_result(named.as_object().unwrap(), &NoWatch));
+    assert!(r.get("unknown").is_none(), "{r}");
+}

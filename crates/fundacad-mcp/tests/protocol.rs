@@ -925,3 +925,12 @@ fn a_match_whose_edge_drifted_with_the_box_stays_quiet() {
     ]);
     assert!(!rs[2].is_error && !rs[2].text.contains("warning"), "{}", rs[2].text);
 }
+
+#[test]
+fn inspect_of_a_body_that_does_not_exist_names_the_ones_that_do() {
+    let rs = drive(&[box_60_40_20(), ("inspect", json!({"body": "body9"}))]);
+    let t = &rs[1].text;
+    assert!(rs[1].is_error, "{t}");
+    assert!(t.contains("body9") && t.contains("body1"), "{t}");
+    assert!(!t.contains("No bodies"), "{t}");
+}
