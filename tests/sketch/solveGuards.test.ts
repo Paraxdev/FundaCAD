@@ -45,3 +45,25 @@ describe("a circle centred on a line may leave it for either side", () => {
     expect(await compileAndSolve([l, q, c], hop)).toEqual({ entities: [l, q, c], dof: 0, ok: false, conflicts: ["k2"], overDefined: [] });
   });
 });
+
+describe("a rotated rectangle keeps its fields exactly through solves", () => {
+  const rect = { type: "rectangle", id: "r", x: 5.3, y: -2.7, width: 10, height: 4, angle: 200 } as ResolvedEntity;
+
+  it("comes back unchanged from one solve and from many", async () => {
+    let ents = [rect];
+    for (let k = 0; k < 4; k++) {
+      const r = await compileAndSolve(ents, []);
+      expect(r).toEqual({ entities: [rect], dof: 0, ok: true, conflicts: [], overDefined: [] });
+      ents = r.entities;
+    }
+  });
+
+  it("is read back from its corners when one merged onto a line end", async () => {
+    const [c0, c1, c2] = rectCorners(5.3, -2.7, 10, 4, 200);
+    const p = { x: Math.round(c0!.x * 1000) / 1000, y: Math.round(c0!.y * 1000) / 1000 };
+    const ln = line("ln", p.x, p.y, 20.5, 9.1);
+    const r = await compileAndSolve([ln, rect], []);
+    expect(r.entities).toEqual([ln, { ...rect, ...rectFromThreePoints(p, c1!, c2!) }]);
+    expect(r.entities[1]).not.toEqual(rect);
+  });
+});
