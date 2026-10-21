@@ -963,3 +963,16 @@ fn an_extrude_of_an_open_sketch_points_at_sketch_tie() {
     assert!(rs[2].is_error && t.contains("no closed profile"), "{t}");
     assert!(t.contains("sketch_tie") && t.contains("inspect"), "{t}");
 }
+
+#[test]
+fn a_fillet_too_large_for_its_neighbours_is_refused_with_the_size_that_fits() {
+    let rs = drive(&[
+        box_60_40_20(),
+        ("feature_add", json!({"feature": {"id": "f", "type": "fillet", "radius": 21,
+                                           "edges": {"kind": "edge", "by": "axis", "axis": "Z", "body": "body1"}}})),
+        ("build", json!({})),
+    ]);
+    let t = &rs[2].text;
+    assert!(rs[2].is_error, "{t}");
+    assert!(t.contains("neighbouring edge") && t.contains("fits up to 20"), "{t}");
+}

@@ -103,7 +103,7 @@ struct DraftGaveUp : SectionError {
   explicit DraftGaveUp(const std::string &m) { msg = m; }
 };
 
-enum class Misfit { None, IntoBody = 3, Mixed, Split };
+enum class Misfit { None, IntoBody = 3, Mixed, Split, Overlap };
 
 const double FITS_NONE = -1.0, FITS_UNKNOWN = -2.0;
 
@@ -1305,7 +1305,8 @@ inline Opt<gp_Ax1> common_axis(const BRepAdaptor_Curve &crv, const std::vector<T
 
 inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &shape, const TopoDS_Edge &edge,
                                                            bool chamfer, double size, double size2, bool g2,
-                                                           double tol, bool draft, double profile, double margin) {
+                                                           double tol, bool draft, double profile, double margin,
+                                                           std::vector<gp_Pnt> *rests = nullptr) {
   std::vector<TopoDS_Face> faces = faces_of(shape, edge);
   Sides sides;
   for (const TopoDS_Face &f : faces) sides.emplace_back(new Side(f, edge));
@@ -1435,6 +1436,11 @@ inline std::pair<int, std::vector<TopoDS_Shape>> edge_tool(const TopoDS_Shape &s
     throw TooLarge(why, lo > 0 ? lo : FITS_NONE, fm.P);
   }
   set_frame(fm);
+  if (rests && s > 0) {
+    Contacts c = contacts(fm.P, fm.T, sides, s, chamfer, size, size2, g2);
+    for (int j = 0; j < 2; ++j)
+      if (sides[j]->contains(c.Q[j], fuzz)) rests->push_back(c.Q[j]);
+  }
 
   if (axis) {
     Frame f0 = frame(t0);
@@ -1967,6 +1973,49 @@ inline TopoDS_Shape combine(const TopoDS_Shape &shape, const std::vector<TopoDS_
   return out;
 }
 
+// Each round's tool only asks whether its own contacts stay on its two faces.
+// Two rounds on one face that reach past each other's contact lines each fit
+// alone, and cut together they carve that face away into a shape nobody asked
+// for (a box's end faces into pointed arches). Rounds whose edges meet at a
+// vertex are left out: their tools cross at the corner by design, the corner
+// blend fills it.
+struct Round {
+  TopoDS_Edge edge;
+  gp_Pnt mid;
+  std::vector<gp_Pnt> rests;
+  std::vector<TopoDS_Shape> tools;
+};
+
+inline bool share_vertex(const TopoDS_Edge &a, const TopoDS_Edge &b) {
+  TopTools_IndexedMapOfShape va, vb;
+  TopExp::MapShapes(a, TopAbs_VERTEX, va);
+  TopExp::MapShapes(b, TopAbs_VERTEX, vb);
+  for (int i = 1; i <= va.Extent(); ++i)
+    for (int j = 1; j <= vb.Extent(); ++j)
+      if (va(i).IsSame(vb(j))) return true;
+  return false;
+}
+
+inline void rounds_keep_their_rests(const std::vector<Round> &rounds, double tol) {
+  double slack = 10 * std::max(tol * 10, 1e-5);
+  for (const Round &cutter : rounds) {
+    for (const TopoDS_Shape &t : cutter.tools) {
+      Bnd_Box box;
+      BRepBndLib::Add(t, box);
+      std::unique_ptr<BRepClass3d_SolidClassifier> inside;
+      for (const Round &r : rounds) {
+        if (&r == &cutter || share_vertex(r.edge, cutter.edge)) continue;
+        for (const gp_Pnt &p : r.rests) {
+          if (box.IsOut(p)) continue;
+          if (!inside) inside.reset(new BRepClass3d_SolidClassifier(t));
+          inside->Perform(p, slack);
+          if (inside->State() == TopAbs_IN) throw TooLarge(Misfit::Overlap, FITS_UNKNOWN, r.mid);
+        }
+      }
+    }
+  }
+}
+
 inline TopoDS_Shape section_blend_once(const TopoDS_Shape &shape, const std::vector<TopoDS_Shape> &edges, bool chamfer,
                                       double size2, bool g2, const std::vector<double> &sizes, bool draft,
                                       double profile) {
@@ -1974,28 +2023,40 @@ inline TopoDS_Shape section_blend_once(const TopoDS_Shape &shape, const std::vec
   for (const TopoDS_Shape &e : edges) tol = std::max(tol, BRep_Tool::Tolerance(TopoDS::Edge(e)));
   std::vector<TopoDS_Shape> cut, fuse;
   std::vector<std::pair<TopoDS_Shape, double>> convex;
+  std::vector<Round> rounds;
   for (size_t k = 0; k < edges.size(); ++k) {
     check_cancel();
-    auto got = edge_tool(shape, TopoDS::Edge(edges[k]), chamfer, sizes[k], size2, g2, tol, draft, profile,
-                         1.0 + 0.11 * static_cast<double>(k));
+    Round r;
+    r.edge = TopoDS::Edge(edges[k]);
+    auto got = edge_tool(shape, r.edge, chamfer, sizes[k], size2, g2, tol, draft, profile,
+                         1.0 + 0.11 * static_cast<double>(k), &r.rests);
     auto &dst = got.first > 0 ? cut : fuse;
     dst.insert(dst.end(), got.second.begin(), got.second.end());
-    if (got.first > 0) convex.push_back({edges[k], sizes[k]});
+    if (got.first > 0) {
+      convex.push_back({edges[k], sizes[k]});
+      BRepAdaptor_Curve crv(r.edge);
+      r.mid = crv.Value(0.5 * (crv.FirstParameter() + crv.LastParameter()));
+      r.tools = got.second;
+      rounds.push_back(std::move(r));
+    }
   }
+  rounds_keep_their_rests(rounds, tol);
   std::vector<TopoDS_Shape> corners = chamfer ? std::vector<TopoDS_Shape>() : ball_corners(shape, convex, g2, profile);
+  TopoDS_Shape out;
   if (!corners.empty()) {
     try {
       std::vector<TopoDS_Shape> cut2, fuse2;
       for (const TopoDS_Shape &t : cut) cut2.push_back(copy(t));
       cut2.insert(cut2.end(), corners.begin(), corners.end());
       for (const TopoDS_Shape &t : fuse) fuse2.push_back(copy(t));
-      return combine(copy(shape), cut2, fuse2, tol, draft);
+      out = combine(copy(shape), cut2, fuse2, tol, draft);
     } catch (const DraftGaveUp &) {
       throw;
     } catch (const SectionError &) {
     }
   }
-  return combine(draft ? copy(shape) : shape, cut, fuse, tol, draft);
+  if (out.IsNull()) out = combine(draft ? copy(shape) : shape, cut, fuse, tol, draft);
+  return out;
 }
 
 inline TopoDS_Shape blend_scaled(const TopoDS_Shape &shape, const std::vector<TopoDS_Shape> &es, bool chamfer,
@@ -2174,10 +2235,12 @@ inline std::unique_ptr<TopoDS_Shape> blend_section(const TopoDS_Shape &shape, co
       status = 0;
       return std::unique_ptr<TopoDS_Shape>(new TopoDS_Shape(out));
     } catch (secblend::TooLarge &e) {
-      if (e.why != secblend::Misfit::Split) throw;
+      if (e.why != secblend::Misfit::Split && e.why != secblend::Misfit::Overlap) throw;
       double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
-      BRepAdaptor_Curve crv(TopoDS::Edge(es.front()));
-      e.at = crv.Value(0.5 * (crv.FirstParameter() + crv.LastParameter()));
+      if (e.why == secblend::Misfit::Split) {
+        BRepAdaptor_Curve crv(TopoDS::Edge(es.front()));
+        e.at = crv.Value(0.5 * (crv.FirstParameter() + crv.LastParameter()));
+      }
       e.fits = secblend::split_limit(pristine.Shape(), pristine_es, chamfer, size2, g2, sz, unit, draft, profile,
                                      one_shot, secs);
       throw;
