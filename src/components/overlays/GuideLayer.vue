@@ -2,6 +2,7 @@
 // Guide mode on screen: a pulsing ring on the control or model area an assistant
 // points at, and a glass caption bubble with Next and Stop (manual/docs/ai/guide.md).
 // Model outlines are SVG, not three.js, so Clean view and the pick mask never see them.
+import * as THREE from "three";
 import { computed, nextTick, onUnmounted, ref, shallowRef } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { labelOf } from "../../ui/controlRefs";
@@ -33,7 +34,8 @@ let raf = 0;
 let frame = 0;
 let target: HTMLElement | null = null;
 let scrolledFor = -1;
-/** A model step's world space outline, read once per build: reading it walks every face of the body. */
+/** A model step's outline in its body's rest frame, read once per build: reading it walks every face of the body.
+ *  The body's pose is applied each frame, so the outline follows a Move drag. */
 let shapeFor: { seq: number; build: unknown; shape: ModelShape | Error } | null = null;
 const RETRY_FRAMES = 30;
 
@@ -86,8 +88,10 @@ function modelBox(s: StepState): Box | null {
   ref_.value = shape.name;
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   const out: string[] = [];
+  const pose = shape.body ? engine.viewport.bodyPose(shape.body) : null;
+  const at = new THREE.Vector3();
   for (const line of shape.lines) {
-    const pts = line.map((v) => engine.viewport.projectToScreen(v)).filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
+    const pts = line.map((v) => engine.viewport.projectToScreen(pose ? at.copy(v).applyMatrix4(pose) : v)).filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y));
     if (pts.length < 2) continue;
     for (const p of pts) {
       minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);

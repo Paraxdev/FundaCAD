@@ -2963,6 +2963,12 @@ export class Viewport {
     };
   }
 
+  /** A body's live pose, identity at rest. The Move tool's ghost sets it on the
+   *  mesh without a rebuild, so build edge points stay in the rest frame. */
+  bodyPose(bodyId: string): THREE.Matrix4 | null {
+    return this.model?.bodies.find((b) => b.id === bodyId)?.mesh.matrixWorld ?? null;
+  }
+
   /** All world-space triangles of a B-rep face, the Measure tool's raw
    *  material for true shortest-distance computation. */
   faceTriangles(faceId: number): THREE.Triangle[] {
