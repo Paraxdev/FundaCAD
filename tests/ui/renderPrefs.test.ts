@@ -81,6 +81,7 @@ describe("asRenderPrefs", () => {
       matcapTint: DEFAULT_RENDER.matcapTint,
       denoise: DEFAULT_RENDER.denoise,
       tracer: DEFAULT_RENDER.tracer,
+      realtimeWhileMoving: DEFAULT_RENDER.realtimeWhileMoving,
     });
   });
 
@@ -240,6 +241,24 @@ describe("path traced denoise", () => {
     setRenderPref("denoise", "max" as never);
     expect(renderPrefs().denoise).toBe("off");
     setRenderPref("denoise", DEFAULT_RENDER.denoise);
+  });
+});
+
+describe("path traced realtime while moving", () => {
+  it("defaults to on and keeps only a real boolean", () => {
+    expect(DEFAULT_RENDER.realtimeWhileMoving).toBe(true);
+    expect(asRenderPrefs({ realtimeWhileMoving: false }).realtimeWhileMoving).toBe(false);
+    expect(asRenderPrefs({ realtimeWhileMoving: "off" }).realtimeWhileMoving).toBe(true);
+    expect(asRenderPrefs({}).realtimeWhileMoving).toBe(true);
+  });
+
+  it("is remembered in the stored settings", () => {
+    setRenderPref("realtimeWhileMoving", false);
+    expect(renderPrefs().realtimeWhileMoving).toBe(false);
+    expect(asRenderPrefs(JSON.parse(JSON.stringify(renderPrefs()))).realtimeWhileMoving).toBe(false);
+    setRenderPref("realtimeWhileMoving", "no" as never);
+    expect(renderPrefs().realtimeWhileMoving).toBe(false);
+    setRenderPref("realtimeWhileMoving", DEFAULT_RENDER.realtimeWhileMoving);
   });
 });
 

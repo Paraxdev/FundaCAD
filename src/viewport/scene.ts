@@ -473,6 +473,8 @@ export class PostChain {
   /** Written by the viewport: the traced canvas under this one has an image to
    *  show, so this frame draws only what sits on top of it. */
   traceShown = false;
+  /** Frames drawn with the Realtime look in Realtime or Path traced, for the e2e. */
+  realtimeFrames = 0;
   private size = new THREE.Vector2(1, 1);
   private glowSize = new THREE.Vector2(1, 1);
   private composerRatio = 0;
@@ -611,6 +613,7 @@ export class PostChain {
       (this.overlay ??= new OverlayDraw()).render(this.renderer, this.scene, camera);
       return;
     }
+    this.realtimeFrames++;
     if (motion && this.lowPower()) {
       (this.motionDraw ??= new PotatoDraw(true)).render(this.renderer, this.scene, camera);
       return;
