@@ -814,7 +814,7 @@ fn truthy(v: Option<&Value>) -> bool {
 fn require<'a>(args: &'a JsonObject, key: &str) -> Result<&'a Value, CallToolResult> {
     args.get(key)
         .filter(|v| !v.is_null())
-        .ok_or_else(|| failure(format!("KeyError: '{key}'")))
+        .ok_or_else(|| failure(format!("this call needs `{key}`, and it was not given")))
 }
 
 fn require_str(args: &JsonObject, key: &str) -> Result<String, CallToolResult> {
