@@ -61,7 +61,8 @@ describe("applyGlassLook thickness", () => {
     applyGlassLook(block.mat, glass({ thickness: 3 }), false, block.mesh);
     expect(block.mat.thickness).toBe(3);
     expect(isGlassAuto(block.mat)).toBe(false);
-    expect(Object.prototype.hasOwnProperty.call(block.mat, "onBeforeCompile")).toBe(false);
+    expect(block.mat.customProgramCacheKey()).toBe(new THREE.MeshPhysicalMaterial().customProgramCacheKey());
+    expect(compiled(block.mat).fragmentShader).toBe(THREE.ShaderLib.physical.fragmentShader);
     expect(finishKey(glass())).not.toBe(finishKey(glass({ thickness: 3 })));
   });
 
@@ -73,7 +74,6 @@ describe("applyGlassLook thickness", () => {
     expect(s.fragmentShader).toContain("sPickHeight");
     expect(s.fragmentShader).toContain("fcVolumeRefraction");
     expect(mat.customProgramCacheKey()).toBe("surf-pick|glass-auto");
-    // A new surface replaces the wrapper, the glass call after it wraps again.
     applySurface(mat, { kind: "scratches", scale: 8, amount: 0.6 });
     applyGlassLook(mat, glass(), false, mesh);
     s = compiled(mat);

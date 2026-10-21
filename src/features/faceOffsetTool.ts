@@ -22,7 +22,7 @@ import type { Feature, Selector, Vec3 } from "../types";
 import { DimInput, type DimToggleDef } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
 import { fmtLength, snap } from "../ui/units";
-import { axisDragDistance, createDragHandle, HANDLE_LENGTH, handleScale, type DragHandle } from "./manipulator";
+import { axisDragDistance, createDragHandle, nameHandle, HANDLE_LENGTH, handleScale, type DragHandle } from "./manipulator";
 import { CanvasGesture } from "./canvasGesture";
 import { commitDecision } from "./edgeDragMath";
 import { deltaForDiameter, deltaForRadius, radialDrag, type RoundFace } from "./radialDrag";
@@ -597,7 +597,7 @@ export class FaceOffsetTool {
 
   /** The shared drag handle; tick() scales it to a constant screen size. */
   private buildGizmo() {
-    this.handle = createDragHandle();
+    this.handle = nameHandle(createDragHandle(), "offset");
     const g = this.handle.group;
     this.gizmo = g;
     this.viewport.addToScene(g);

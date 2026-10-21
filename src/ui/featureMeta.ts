@@ -98,11 +98,12 @@ export const FEATURE_META: Partial<Record<FeatureType, FeatureMeta>> = {
  *  a feature whose plugin is missing correctly looks like: the document still
  *  opens, the history still has a row for it, and it reads as something the
  *  build does not understand, which is exactly what it is. */
-export function featureMeta(f: { type: string; operation?: unknown }): FeatureMeta {
+export function featureMeta(f: { type: string; operation?: unknown; thin?: unknown }): FeatureMeta {
   if (f.type === "boolean") {
     const cmd = BOOLEAN_COMMANDS.find((c) => c.op === f.operation);
     if (cmd) return { icon: cmd.iconName, label: cmd.label };
   }
+  if (f.type === "extrude" && f.thin === true) return { icon: "extrude", label: "Thin extrude" };
   return (
     FEATURE_META[f.type as FeatureType] ??
     contributedFeature(f.type)?.meta ??
@@ -112,5 +113,5 @@ export function featureMeta(f: { type: string; operation?: unknown }): FeatureMe
 
 /** The same answer for a whole feature, when the caller has one. */
 export function labelOf(f: Feature): string {
-  return featureMeta(f as { type: string; operation?: unknown }).label;
+  return featureMeta(f as { type: string; operation?: unknown; thin?: unknown }).label;
 }

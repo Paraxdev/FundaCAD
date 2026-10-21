@@ -487,6 +487,20 @@ const STILLS = {
     await page.keyboard.press("Escape");
   },
 
+  async "extrude-thin"(ctx) {
+    await ctx.features([
+      { type: "sketch", plane: "XY", entities: [
+        { type: "line", id: "a", x1: -20, y1: -15, x2: 20, y2: -15 },
+        { type: "line", id: "b", x1: 20, y1: -15, x2: 20, y2: 15 },
+      ] },
+      { type: "extrude", sketch: 0, distance: 20, operation: "new", thin: true, curves: ["a", "b"], thickness: 2, side: "inside" },
+    ]);
+    await ctx.view("iso", 1);
+    await ctx.centre();
+    await sleep(800);
+    await ctx.still("extrude-thin", { x: 400, y: 200, width: 760, height: 600 });
+  },
+
   async "presspull-face"(ctx) {
     const { page } = ctx;
     await ctx.features(block());
@@ -955,6 +969,32 @@ Object.assign(STILLS, {
     await ctx.still("sketch-constraints", { x: 560, y: 70, width: 860, height: 600 });
   },
 
+  // An outline drawn with Ctrl held (no snap) that stops 4 px short of its
+  // start, beside a lone line: amber at the gap, red at the lone ends.
+  async "sketch-loose-ends"(ctx) {
+    const { page } = ctx;
+    await startSketch(ctx);
+    await page.keyboard.press("l");
+    await page.keyboard.down("Control");
+    for (const [x, y] of [[640, 400], [880, 400], [880, 520], [640, 520], [640, 404]]) {
+      await ctx.move(x, y, 6);
+      await page.mouse.click(x, y);
+      await sleep(150);
+    }
+    await page.keyboard.press("Escape");
+    await ctx.move(940, 420, 6);
+    await page.mouse.click(940, 420);
+    await ctx.move(1000, 500, 6);
+    await page.mouse.click(1000, 500);
+    await page.keyboard.up("Control");
+    await page.keyboard.press("Escape");
+    await sleep(300);
+    await page.keyboard.press("Escape");
+    await ctx.park();
+    await sleep(500);
+    await ctx.still("sketch-loose-ends", { x: 560, y: 300, width: 520, height: 300 });
+  },
+
   async "sketch-trim"(ctx) {
     const { page } = ctx;
     await startSketch(ctx);
@@ -1283,6 +1323,39 @@ Object.assign(STILLS, {
     await sleep(1500);
     await ctx.park();
     await ctx.still("versions-panel", { x: 1000, y: 290, width: 420, height: 280 });
+  },
+  // Three cards with real pictures: each template is built and drawn as a save would,
+  // then Home reads them from the dev fake library.
+  async home(ctx) {
+    const { page } = ctx;
+    const pics = [];
+    for (const id of ["plate", "wall-bracket", "pinned-lever"]) {
+      await page.evaluate(async (t) => {
+        const { templateText } = await import("/src/templates/index.ts");
+        window.store.load(await templateText(t));
+      }, id);
+      await sleep(400);
+      await ctx.settle(800);
+      pics.push(await page.evaluate(() => window.viewport.renderThumbnail(480, 300)));
+    }
+    await page.evaluate((thumbs) => {
+      window.store.newDocument();
+      const now = Date.now();
+      const files = [
+        { path: "D:/Projects/shelf/mounting plate.funda", mtimeMs: now - 40 * 60_000, thumb: thumbs[0] },
+        { path: "D:/Projects/shelf/wall bracket.funda", mtimeMs: now - 26 * 3600_000, thumb: thumbs[1] },
+        { path: "D:/Projects/press/lever arm.fundab", mtimeMs: now - 4 * 86400_000, thumb: thumbs[2] },
+      ];
+      localStorage.setItem("fundacad.recentFiles", JSON.stringify(files.map((f, i) => ({ path: f.path, openedAt: now - i * 1000 }))));
+      localStorage.setItem("fundacad.home.folders", JSON.stringify([{ path: "D:/Projects/shelf", addedAt: now }]));
+      localStorage.setItem("fundacad.welcomeOnStartup", "true");
+      window.__fundacad.home.useFakeLibrary(files);
+      window.__fundacad.handleAction("welcome");
+    }, pics);
+    await sleep(1500);
+    await page.mouse.move(W - 40, H - 40);
+    await sleep(300);
+    await ctx.still("home", { x: 0, y: 0, width: W, height: H });
   },
   async "fasteners-window"(ctx) {
     await ctx.features(plate());

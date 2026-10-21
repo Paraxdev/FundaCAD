@@ -10,6 +10,7 @@ const emit = defineEmits<{ "update:modelValue": [T] }>();
       :key="t.value"
       type="button"
       role="tab"
+      :data-tab="t.value"
       class="float-tab"
       :class="{ active: t.value === modelValue }"
       :aria-selected="t.value === modelValue"

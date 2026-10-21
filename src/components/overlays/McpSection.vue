@@ -95,6 +95,10 @@ async function copy(text: string) {
       <pre id="prefs-mcp-config" class="mcp-config">{{ setup.text }}</pre>
       <button id="prefs-mcp-copy" type="button" class="btn" @click="copy(setup.text)">Copy</button>
     </div>
+    <div id="prefs-mcp-scope" class="sm-hint">
+      It reads and writes files in your folders, never in hidden folders, in your home folder itself or at a
+      drive root. To keep it to some folders only, add --allow-path and a folder after --mcp, once per folder.
+    </div>
   </template>
   <div v-else class="sm-hint">Looking for the MCP server…</div>
 </template>

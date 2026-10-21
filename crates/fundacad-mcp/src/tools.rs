@@ -202,6 +202,18 @@ pub fn sketch_merge() -> JsonObject {
     )
 }
 
+pub fn sketch_tie() -> JsonObject {
+    object(
+        json!({
+            "sketch": {"type": "string", "description": "the sketch's feature id"},
+            "tolerance": {"type": "number",
+                          "description": "how far apart, in mm, an end and what it touches may be (default 1% of the sketch's size)"},
+            "build": {"type": "boolean", "description": "build after tying (default false)"}
+        }),
+        &["sketch"],
+    )
+}
+
 pub fn printability() -> JsonObject {
     object(
         json!({
@@ -246,6 +258,23 @@ pub fn interference() -> JsonObject {
                                       {param, values:[...]}. The document is not changed"}
         }),
         &[],
+    )
+}
+
+pub fn measure() -> JsonObject {
+    let thing = |which: &str| {
+        json!({"anyOf": [{"type": "object"}, {"type": "string"}],
+               "description": format!(
+                   "{which}: a face or edge selector copied from `inspect` (detail:true,                     selectors:true), body included; or {{body, face: n}} / {{body, edge: n}}                     with the F or E number inspect prints, valid for the current build only;                     or a body id or name for the whole body; or {{point: [x, y, z]}} in mm")})
+    };
+    object(
+        json!({
+            "a": thing("the thing to measure"),
+            "b": thing("a second thing, to measure between the two"),
+            "want": {"type": "string", "enum": ["distance", "angle", "centres"],
+                     "description": "only this measure between a and b, and an error when it                                      does not apply; every one that applies if omitted"}
+        }),
+        &["a"],
     )
 }
 
@@ -351,6 +380,10 @@ pub fn inspect() -> JsonObject {
     object(
         json!({
             "body": {"type": "string", "description": "one body id; all of them if omitted"},
+            "sketch": {"type": "string",
+                       "description": "a sketch's feature id: report its loose ends instead of the bodies"},
+            "tolerance": {"type": "number",
+                          "description": "with `sketch`: the reach, in mm, of an end to another curve (default 1% of the sketch's size)"},
             "detail": {"type": "boolean",
                        "description": "list every face and edge (default: summary only)"},
             "selectors": {"type": "boolean",
@@ -401,7 +434,16 @@ pub fn export() -> JsonObject {
     object(
         json!({
             "path": {"type": "string"},
-            "format": {"type": "string", "enum": ["step", "stl", "3mf"]},
+            "format": {"type": "string", "enum": ["step", "stl", "3mf", "dxf", "svg"],
+                       "description": "dxf (R12) and svg draw one sketch or one flat face at true                                        size in mm, give `sketch` or `face`"},
+            "sketch": {"type": "string",
+                       "description": "dxf or svg: the sketch to draw, by id or name"},
+            "face": {"type": "object",
+                     "description": "dxf or svg: one flat face to draw with its holes, a face                                      selector from inspect, set its body"},
+            "tolerance": {"type": "number",
+                          "description": "dxf or svg: how far in mm a curve that is not a line,                                           arc or circle may stray when drawn as a polyline                                           (default 0.01)"},
+            "svg": {"type": "object",
+                    "description": "svg: {fill: true} fills the closed outlines (default strokes                                     only, as a laser cutter reads them)"},
             "separate": {"type": "boolean",
                          "description": "one file per body, named after the body, in a folder \
                                          named after `path` (parts.stl writes parts/<name>.stl)"},
@@ -420,4 +462,83 @@ pub fn export() -> JsonObject {
         }),
         &["path", "format"],
     )
+}
+
+// --- the ui tools, standalone only -------------------------------------------
+
+pub fn ui_open() -> JsonObject {
+    object(
+        json!({
+            "headed": {"type": "boolean",
+                       "description": "show the browser window, hidden by default"},
+            "record": {"type": "string",
+                       "description": "write every step to this Python file, which replays with `python <file>`"},
+            "viewport": {"type": "string", "description": "WIDTHxHEIGHT, 1400x900 by default"},
+            "gpu": {"type": "boolean",
+                    "description": "use the GPU, software rendering by default"},
+            "settle_timeout": {"type": "number",
+                               "description": "seconds a step may take to settle, 60 by default; a ui_do step never waits past 150 s"}
+        }),
+        &[],
+    )
+}
+
+pub fn ui_do() -> JsonObject {
+    object(
+        json!({
+            "steps": {
+                "type": "array",
+                "description": "Run in order, stopping at the first that fails. Each step is \
+                    {\"do\": verb, ...its keys}. Targets are refs from ui_read screen \
+                    (#undo-btn, action:sketch, feature:e1, item:body1, field:angle, menu:File) \
+                    or visible labels. Verbs: \
+                    click {target, button?, double?, mods?} (target may be face:<sel> or edge:<sel>); \
+                    tool {label}; type {target, text, enter?}; press {keys} (\"Enter\", \"Ctrl+Z\", or a list); \
+                    menu {path} (\"File/Open...\"); context_menu {on, item}; panel {name, open?}; \
+                    command {name}; expand {target, open?}; \
+                    pick_face {sel, add?, exact?}; pick_edge {sel, add?, exact?, via?}; pick_plane {name} (XY, XZ, YZ); \
+                    click_at {sketch: [x, y] | world: [x, y, z] | screen: [x, y]}; \
+                    drag {from, to, space?}; drag_handle {name, by? px | mm?}; \
+                    view {name} (iso, top, front, right, fit); undo; redo; \
+                    open_file {path, discard?}; import_file {path}; save_as {path}; new_document {discard?}; \
+                    wait_for {text, timeout? up to 60 s}. \
+                    Face selectors: [body:]top|bottom|front|back|left|right|+x..-z|largest|smallest|near=x,y,z|index=n. \
+                    Edge selectors: near=x,y,z|between <face> <face>|longest|shortest. \
+                    Every step but wait_for waits for the app to settle unless settle is false. \
+                    A call starts no step after 120 s and says which steps to send again",
+                "items": {"type": "object"}
+            }
+        }),
+        &["steps"],
+    )
+}
+
+pub fn ui_read() -> JsonObject {
+    object(
+        json!({
+            "what": {"description": "one readout or a list: screen, history, bodies, status, \
+                                     errors, selection, handles. status by default",
+                     "anyOf": [{"type": "string"}, {"type": "array", "items": {"type": "string"}}]},
+            "region": {"type": "string",
+                       "description": "only this part of screen: titlebar, menu, toolrail, \
+                                       history, props, items, valuebox, dialog, context, render, \
+                                       views, status, other"}
+        }),
+        &[],
+    )
+}
+
+pub fn ui_shot() -> JsonObject {
+    object(
+        json!({
+            "target": {"type": "string", "description": "a ref, to picture one control only"},
+            "max_px": {"type": "integer",
+                       "description": "the longer side in pixels, 1000 by default, at most 1600"}
+        }),
+        &[],
+    )
+}
+
+pub fn ui_close() -> JsonObject {
+    object(json!({}), &[])
 }

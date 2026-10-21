@@ -3,7 +3,7 @@
 // of the app uses: setModel(), fit(), pick callbacks, projection/view toggles.
 
 import * as THREE from "three";
-import { createScene, environmentKey, environmentRoomFor, type SceneBundle } from "./scene";
+import { createScene, environmentKey, environmentRoomFor, isHdrHeld, type SceneBundle } from "./scene";
 import {
   createCameraRig,
   type CameraRig,
@@ -63,23 +63,31 @@ import { awaitTreePick, treePickRefusal } from "../ui/treePick";
 import type { DocumentStore } from "../document/store";
 import type { BodyFinish } from "../document/materials";
 import { BodyFinishLayer, sameFinishMap, sameStringMap } from "./bodyFinish";
+import { sameRelief } from "./relief";
+import type { ReliefMap } from "../plugins/contrib";
 import { hdrHashOf, onRenderPrefsChange, renderPrefs, setRenderPref } from "../ui/renderPrefs";
-import { bootViewMode, chooseViewMode, effectiveViewMode, resetPathTracedOverride, savedOverlays, type RenderTier, type ViewMode } from "../ui/viewMode";
+import { isSoftwareRenderer } from "../ui/glassBlur";
+import { resolveRealtimeQuality, type QualityTier } from "./realtimePipeline";
+import { bootViewMode, chooseViewMode, effectiveViewMode, resetPathTracedOverride, savedGround, savedOverlays, type RenderTier, type ViewMode } from "../ui/viewMode";
 import { drawMask, markOverlay, overlayBit, overlayShown, pickLayers, pickMask, pictureMask, setPickLayers, syncOverlayLayers, type ActiveWork, type OverlayKind } from "./overlayKinds";
 import type { TraceLight, TraceLook } from "./pathtrace/backend";
 import { lensFor, type TraceLens } from "./pathtrace/camera";
-import { traceEnvironment, type TraceHemi } from "./pathtrace/environment";
+import { hemiKey, traceEnvironment, type TraceHemi } from "./pathtrace/environment";
 import { composerClearColor } from "./composerColor";
 import { clearGuard, guardSet } from "./pathtrace/guard";
 import { PathTraceHost, type PictureRequest } from "./pathtrace/host";
+import { RealtimeFreeze } from "./pathtrace/settleFade";
+import { motionOn } from "../ui/motion";
 import { watchPower, type PowerState } from "./pathtrace/power";
 import type { SurfaceBaker } from "./pathtrace/mirror";
 import { createSurfaceBaker, webglSurfaceShade } from "./pathtrace/surfaceBake";
 import { describeNative, describeProbe, probeNative, probeWebGpu, type GpuProbe } from "./pathtrace/probe";
 import { chooseTracer, createTracerOf, type NativeProbe, type TracerKind } from "./pathtrace/choose";
+import { wsCall, type DevCall } from "./pathtrace/devCall";
+import type { Call } from "./pathtrace/nativeScene";
 import type { TracerBackend } from "./pathtrace/backend";
 import type { TraceState } from "./pathtrace/state";
-import { onWorkspaceChange } from "../ui/workspace";
+import { onWorkspaceChange, workspace } from "../ui/workspace";
 import { invalidateThemeColors } from "./themeColors";
 import { onThemeChange } from "../ui/theme";
 import type { ViewCubeSide } from "../types";
@@ -144,6 +152,8 @@ import { hitScale } from "../input/pointerKind";
 import { setEmissionProgress } from "../ui/emissionProgress";
 import { DisposeQueue, detachModel } from "./disposeQueue";
 import { ShadowWatch } from "./shadowWatch";
+import { ContactShadow, catcherPlane, type CatcherPlane } from "./contactShadow";
+import { buildLightRig, type LightRig } from "./lightRig";
 import { hideForPicture, markInPicture, markNotInPicture, widenLines } from "./pictureScene";
 
 /** One box drag. The box previews by selecting every frame, so each frame starts
@@ -161,13 +171,23 @@ export interface AreaDrag {
  *  Vector3 per frame for a constant is litter in the hot path. Never written. */
 const WORLD_ORIGIN = new THREE.Vector3(0, 0, 0);
 
+let devServer: DevCall | null = null;
+
 /** ?tracer=native or ?tracer=webgpu overrides the preference for measuring,
- *  ?tracer=native-ws also forces the WebSocket path. */
-function devTracerSwitch(): { kind: TracerKind; prefer?: string } | null {
-  const pick = new URLSearchParams(globalThis.location?.search ?? "").get("tracer");
+ *  ?tracer=native-ws also forces the WebSocket path. In a dev build
+ *  ?tracer=native-dev&port=P runs the native tracer of tracer_serve outside
+ *  the app, with `ptoken`, else the engine's `token`. */
+function devTracerSwitch(): { kind: TracerKind; prefer?: string; call?: Call } | null {
+  const q = new URLSearchParams(globalThis.location?.search ?? "");
+  const pick = q.get("tracer");
   if (pick === "webgpu") return { kind: "webgpu" };
   if (pick === "native") return { kind: "native" };
   if (pick === "native-ws") return { kind: "native", prefer: "websocket" };
+  if (pick === "native-dev" && import.meta.env.DEV) {
+    const token = encodeURIComponent(q.get("ptoken") ?? q.get("token") ?? "");
+    devServer ??= wsCall(`ws://127.0.0.1:${Number(q.get("port"))}/?token=${token}`);
+    return { kind: "native", prefer: "websocket", call: devServer };
+  }
   return null;
 }
 
@@ -187,6 +207,11 @@ const MOTION_RESTORE_MAX_MS = 2500;
 const MAX_RESIZE_WAIT_MS = 250;
 
 export class Viewport {
+  /** Nothing is left to draw and the camera did not move on the last frame. */
+  get renderIdle(): boolean {
+    return !this.needsRender && this.lingerFrames === 0 && !this.frameMoved;
+  }
+
   readonly scene: SceneBundle;
   readonly rig: CameraRig;
   private cube: ViewCube;
@@ -291,12 +316,16 @@ export class Viewport {
   // linger frames remain for effects that settle a frame late.
   private needsRender = true;
   private lingerFrames = 3;
+  private frameMoved = false;
   private shadowWatch = new ShadowWatch();
+  /** Public for the browser checks, which read its bake counter. */
+  readonly contactShadow = new ContactShadow();
 
   constructor(private canvas: HTMLCanvasElement) {
     this.scene = createScene(canvas);
     this.progressive = new ProgressiveModel(this.scene.modelGroup, disposeBody);
     this.scene.scene.add(markOverlay(this.datumGroup, "origin"));
+    this.scene.scene.add(this.contactShadow.group);
     const rect = canvas.getBoundingClientRect();
     this.rig = createCameraRig(canvas, rect.width / rect.height);
 
@@ -342,7 +371,10 @@ export class Viewport {
     // Re-applied on theme changes too: the default ground is a theme token.
     this.scene.applyRenderPrefs();
     this.trace = new PathTraceHost(canvas, () => this.createTracer());
+    this.freeze = new RealtimeFreeze(canvas);
     this.trace.onShownChange = (on) => {
+      if (on) this.freezeRealtime();
+      else this.freeze.stop();
       this.scene.post.traceShown = on;
       this.requestRender();
     };
@@ -365,7 +397,9 @@ export class Viewport {
     onWorkspaceChange(() => {
       this.syncViewMode();
       this.overlays = savedOverlays();
+      this.requestRender(); // each workspace keeps its own ground
     });
+    this.applyRealtimeQuality();
     onRenderPrefsChange(() => {
       if (renderPrefs().tracer !== this.tracerPref) {
         this.tracerPref = renderPrefs().tracer;
@@ -375,6 +409,7 @@ export class Viewport {
       const wasPotato = this.potato;
       this.potato = renderPrefs().potatoMode;
       this.scene.applyRenderPrefs(); // re-applies the power tier (performance mode)
+      this.applyRealtimeQuality();
       this.rig.setFov(renderPrefs().fov);
       // Only when the tier actually flipped: the finishes decide glass vs alpha
       // and how many emitter lights to draw off it, and re-running them on every
@@ -969,6 +1004,15 @@ export class Viewport {
   }
 
   private trace!: PathTraceHost;
+  private freeze!: RealtimeFreeze;
+
+  /** The Realtime frame the trace replaces, drawn once more and copied so it
+   *  can fade out over the first traced samples. */
+  private freezeRealtime() {
+    if (!motionOn() || this.scene.renderer.getContext().isContextLost()) return;
+    this.scene.post.render(this.rig.active);
+    this.freeze.capture(performance.now());
+  }
   private power: PowerState = { discharging: false, minimised: false };
   private traceBaker: SurfaceBaker | null = null;
   private gpu: GpuProbe | null = null;
@@ -989,11 +1033,14 @@ export class Viewport {
     return () => this.tierListeners.delete(fn);
   }
 
-  get traceStatus(): { state: TraceState; samples: number; shown: boolean; denoised: boolean; backend: string; gpu: string; note: string; picturing: boolean } {
+  get traceStatus(): {
+    state: TraceState; samples: number; shown: boolean; denoised: boolean; backend: string; gpu: string; note: string; picturing: boolean;
+    realtimeFrames: number;
+  } {
     const t = this.trace;
     return {
       state: t.state, samples: t.samples, shown: t.shown, denoised: t.denoised, backend: t.backendName, gpu: `${describeProbe(this.gpu)}; ${describeNative(this.native)}`,
-      note: t.note, picturing: t.picturing,
+      note: t.note, picturing: t.picturing, realtimeFrames: this.scene.post.realtimeFrames,
     };
   }
 
@@ -1016,7 +1063,7 @@ export class Viewport {
   }
 
   private async bootPathTrace() {
-    const native = probeNative().then((p) => {
+    const native = probeNative(devTracerSwitch()?.call).then((p) => {
       this.native = p;
       crumb(describeNative(p));
       this.tierChanged();
@@ -1048,7 +1095,7 @@ export class Viewport {
     });
     if (!kind) throw new Error("both tracers faulted this session");
     this.tracerKind = kind;
-    return createTracerOf(kind, dev?.prefer);
+    return createTracerOf(kind, dev?.prefer, dev?.call);
   }
 
   private dropTrace(why: string, off: boolean) {
@@ -1084,7 +1131,9 @@ export class Viewport {
     });
     const envKey = environmentKey(p);
     const environment = traceEnvironment(r, envKey ?? "none", envKey ? () => environmentRoomFor(p)! : null, hemi);
+    const hash = envKey ? hdrHashOf(p.environment) : null;
     return {
+      ...(hash ? { hdr: { hash, rotation: p.envRotation, exposure: p.envExposure, hemi, key: `${envKey}|${hemiKey(hemi)}` } } : {}),
       lights,
       background: composerClearColor(r.getClearColor(new THREE.Color()), r.toneMapping, r.toneMappingExposure),
       environment,
@@ -1092,6 +1141,7 @@ export class Viewport {
       brightness: p.brightness,
       toneMapping: r.toneMapping,
       exposure: r.toneMappingExposure,
+      rig: this.lightRig(),
     };
   }
 
@@ -1186,6 +1236,7 @@ export class Viewport {
     savedMats: () => this.savedMats,
     later: (fn) => requestAnimationFrame(() => fn()),
     prepareLights: (show, hide) => this.prepareLights(show, hide),
+    prepareMaterials: (obj) => this.prepareMaterials(obj),
     onEmitterProgress: (p) => setEmissionProgress(p),
   });
 
@@ -1199,27 +1250,39 @@ export class Viewport {
    *  compileAsync checks each material's current program, which the next frame
    *  switches back to the ready one in use. */
   private prepareLights(show: THREE.Object3D, hide: THREE.Object3D | null): Promise<void> {
-    const r = this.scene.renderer;
-    const props = (r as unknown as { properties: { get(m: THREE.Material): { currentProgram?: { isReady(): boolean } } } }).properties;
-    const programs: { isReady(): boolean }[] = [];
-    const before = r.getRenderTarget();
     const hideWas = hide?.visible ?? false;
     show.visible = true;
     if (hide) hide.visible = false;
     try {
+      return this.linkPrograms(this.scene.scene, "emitter light");
+    } finally {
+      show.visible = false;
+      if (hide) hide.visible = hideWas;
+    }
+  }
+
+  /** prepareLights for objects outside the scene, drawn in its lights. */
+  private prepareMaterials(obj: THREE.Object3D): Promise<void> {
+    return this.linkPrograms(obj, "material");
+  }
+
+  private linkPrograms(obj: THREE.Object3D, what: string): Promise<void> {
+    const r = this.scene.renderer;
+    const props = (r as unknown as { properties: { get(m: THREE.Material): { currentProgram?: { isReady(): boolean } } } }).properties;
+    const programs: { isReady(): boolean }[] = [];
+    const before = r.getRenderTarget();
+    try {
       for (const target of [null, (this.lightTarget ??= new THREE.WebGLRenderTarget(1, 1))]) {
         r.setRenderTarget(target);
-        for (const m of r.compile(this.scene.scene, this.rig.active)) {
+        for (const m of r.compile(obj, this.rig.active, this.scene.scene)) {
           const p = props.get(m).currentProgram;
           if (p) programs.push(p);
         }
       }
     } catch (e) {
-      console.warn("[viewport] emitter light programs could not be linked ahead:", e);
+      console.warn(`[viewport] ${what} programs could not be linked ahead:`, e);
     } finally {
       r.setRenderTarget(before);
-      show.visible = false;
-      if (hide) hide.visible = hideWas;
     }
     return new Promise((resolve) => {
       const poll = () => (programs.every((p) => p.isReady()) ? resolve() : setTimeout(poll, 16));
@@ -1598,6 +1661,16 @@ export class Viewport {
     this.applyBodyFinish();
     this.requestRender();
   }
+
+  /** Ridges drawn across bodies, see BodyFinishLayer.setRelief. */
+  setRelief(map: ReliefMap) {
+    if (sameRelief(this.reliefMap, map)) return;
+    this.reliefMap = map;
+    this.finish.setRelief(map);
+    this.applyBodyFinish();
+    this.requestRender();
+  }
+  private reliefMap: ReliefMap = {};
 
   /** global face id → hex. Sparse: a face wearing its body's colour is absent. */
   setFacePaint(map: Record<number, string>) {
@@ -3776,6 +3849,10 @@ export class Viewport {
   }
   endBodyMoveGhost(restore: boolean) {
     this.ghosts.endBodyMoveGhost(restore);
+    if (this.finish.refreshReliefOrigins()) {
+      this.applyBodyFinish();
+      this.requestRender();
+    }
   }
   setPatternGhost(bodyIds: readonly string[], matrices: readonly THREE.Matrix4[]) {
     this.ghosts.setPatternGhost(bodyIds, matrices);
@@ -3967,6 +4044,24 @@ export class Viewport {
     this.requestRender();
   }
 
+  /** The quality the saved choice resolves to on this machine, moved to once the
+   *  High programs are linked, so a switch never stalls the view. */
+  private applyRealtimeQuality(): void {
+    const { quality } = resolveRealtimeQuality(renderPrefs().realtimeQuality, this.qualityTier());
+    void this.scene.post.switchRealtimeQuality(quality, this.rig.active).then(() => this.requestRender());
+  }
+
+  qualityTier(): QualityTier {
+    return { lowPower: isRenderLowPower(), auto: this.scene.lowPower, software: isSoftwareRenderer() };
+  }
+
+  /** Rolling median GPU ms per pass of the realtime frame (shadow, glassBack,
+   *  main, composer, and at High prepass and compose), or just `frame` where the
+   *  browser has no timer queries. */
+  passTimes(): Record<string, number> {
+    return this.scene.post.timer.medians();
+  }
+
   /** Counters for a bug report (diagnostics/sceneStats). */
   sceneStats(): string[] {
     return sceneStats({
@@ -3975,12 +4070,13 @@ export class Viewport {
       pixelRatio: this.scene.renderer.getPixelRatio(),
       frameMs: this.fps.lastFrameMs(),
       render: this.scene.renderer.info.render,
+      passes: { ms: this.passTimes(), kind: this.scene.post.timer.kind },
       seam: { ms: this.seamMs, skipped: this.seamSkipped },
     });
   }
 
   screenshotPNG(): string {
-    this.scene.post.render(this.rig.active);
+    this.scene.post.render(this.rig.active, false, false, { moving: false, ghosted: this.ghosted });
     const url = this.canvas.toDataURL("image/png");
     this.requestRender(); // repaint with the ViewCube overlay
     return url;
@@ -3990,17 +4086,91 @@ export class Viewport {
    *  Resizes the drawing buffer (updateStyle false) so the post chain is reused.
    *  Must stay synchronous: without preserveDrawingBuffer an await reads a blank
    *  image. `scale` is capped because an oversized buffer fails silently. */
-  renderStill(scale = 2, opts: { edges?: boolean; realtime?: boolean } = {}): string {
+  renderStill(scale = 2, opts: { edges?: boolean; realtime?: boolean; references?: boolean } = {}): string {
     const rect = this.canvas.getBoundingClientRect();
     const w = Math.max(1, Math.round(rect.width));
     const h = Math.max(1, Math.round(rect.height));
     const cap = this.scene.renderer.capabilities.maxTextureSize || 4096;
     const k = Math.max(1, Math.min(scale, cap / Math.max(w, h)));
+    return this.drawPicture(w, h, k, opts, () => this.canvas.toDataURL("image/png"));
+  }
 
+  /** A card picture for Home: the whole model from the front right corner at
+   *  `width` x `height`, as a JPEG over the viewport background, null for an
+   *  empty model. The camera is moved and put back within this call, so the
+   *  moved view is never painted. */
+  renderThumbnail(width: number, height: number): string | null {
+    const model = this.model;
+    if (!model || model.box.isEmpty()) return null;
+    const saved = this.rig.getState();
+    const bg = this.scene.renderer.getClearColor(new THREE.Color()).getStyle();
+    return this.drawPicture(
+      width,
+      height,
+      1,
+      // realtime: the traced view paints on its own surface, which this canvas never holds.
+      { edges: true, realtime: true },
+      () => {
+        const out = document.createElement("canvas");
+        out.width = width;
+        out.height = height;
+        const g = out.getContext("2d");
+        if (!g) return null;
+        g.fillStyle = bg;
+        g.fillRect(0, 0, width, height);
+        g.drawImage(this.canvas, 0, 0, width, height);
+        return out.toDataURL("image/jpeg", 0.85);
+      },
+      {
+        // The rig only moves the camera on its next update, and resetView's fit is a
+        // flight, so the fit is repeated without one and committed here.
+        enter: () => {
+          this.rig.resize(width, height);
+          this.rig.resetView(model.box);
+          this.rig.fit(model.box, { animate: false });
+          this.rig.update(0);
+        },
+        leave: () => {
+          this.rig.setState(saved, false);
+          this.rig.update(0);
+        },
+      },
+    );
+  }
+
+  private get ghosted(): boolean {
+    return this.xray || this.wireframe || this.stale || this.peek.size > 0 || this.sketchDimmed;
+  }
+
+  private drawPicture<T>(
+    w: number,
+    h: number,
+    k: number,
+    opts: { edges?: boolean; realtime?: boolean; references?: boolean },
+    read: () => T,
+    camera?: { enter(): void; leave(): void },
+  ): T {
+    if (!camera) return this.drawPictureNow(w, h, k, opts, read);
+    camera.enter();
+    try {
+      return this.drawPictureNow(w, h, k, opts, read);
+    } finally {
+      camera.leave();
+      this.requestRender();
+    }
+  }
+
+  private drawPictureNow<T>(
+    w: number,
+    h: number,
+    k: number,
+    opts: { edges?: boolean; realtime?: boolean; references?: boolean },
+    read: () => T,
+  ): T {
     const lines = this.model ? edgeObjects(this.model) : [];
     const dpr = this.scene.renderer.getPixelRatio();
-    const camera = this.rig.active;
-    const viewLayers = camera.layers.mask;
+    const active = this.rig.active;
+    const viewLayers = active.layers.mask;
 
     // A still is full quality even in potato mode: the tier, passes and environment
     // come back for this one render, and glass and emitters with the tier.
@@ -4010,23 +4180,22 @@ export class Viewport {
     if (stillLow !== wasLow) this.applyBodyFinish();
 
     // No selection, hover, grid, tool handle or any other overlay goes in the file.
-    camera.layers.mask = pictureMask(opts);
-    const showOverlays = hideForPicture(this.scene.scene, this.scene.modelGroup);
+    active.layers.mask = pictureMask(opts);
+    const showOverlays = hideForPicture(this.scene.scene, this.scene.modelGroup, { references: opts.references === true });
     const narrowLines = widenLines(lines.map((e) => e.material), k);
-    let url = "";
     try {
       this.scene.renderer.setPixelRatio(1);
       this.scene.renderer.setSize(w * k, h * k, false);
       this.scene.post.setSize(w * k, h * k, k);
       this.scene.post.focusDistance = this.rig.active.position.distanceTo(this.cameraTarget());
       const draw = () => {
-        this.scene.post.render(this.rig.active, false, opts.realtime);
-        return this.canvas.toDataURL("image/png");
+        this.scene.post.render(this.rig.active, false, opts.realtime, { moving: false, ghosted: this.ghosted });
+        return read();
       };
-      url = this.highlighter ? this.highlighter.withoutSelectionPaint(draw) : draw();
+      return this.highlighter ? this.highlighter.withoutSelectionPaint(draw) : draw();
     } finally {
       showOverlays();
-      camera.layers.mask = viewLayers;
+      active.layers.mask = viewLayers;
       narrowLines();
       // Whatever happened, the viewport goes back to being the viewport. A throw
       // between the resize and the restore would otherwise leave the canvas
@@ -4039,7 +4208,6 @@ export class Viewport {
       this.resize();
       this.requestRender();
     }
-    return url;
   }
 
   // Counts frames the loop ACTUALLY draws. Render-on-demand means most rAF
@@ -4173,6 +4341,16 @@ export class Viewport {
   }
 
   private scratchTarget = new THREE.Vector3();
+  private contactPlane(): CatcherPlane | null {
+    return this.model ? catcherPlane(this.model.box, this.targetGridZ) : null;
+  }
+
+  /** The light rig with this view's ground, the catcher the tracer should draw too. */
+  lightRig(): LightRig {
+    const p = this.contactPlane();
+    return buildLightRig(renderPrefs(), isHdrHeld, p && { workspace: workspace(), z: p.z, centre: p.centre, extent: p.extent });
+  }
+
   private loop = () => {
     // Never let a single bad frame kill the loop: if any step throws, log and
     // keep scheduling, so a transient camera/geometry glitch can't freeze the
@@ -4183,6 +4361,7 @@ export class Viewport {
       const dt = this.timer.update().getDelta();
       // Always advanced so damping and transitions progress; returns whether it moved.
       const moved = this.rig.update(dt);
+      this.frameMoved = moved;
       const resized = this.applyMotionScale(moved, now);
       if (resized === "changed" || (resized === "wait" && moved)) this.requestRender();
       this.syncOverlayMask();
@@ -4194,6 +4373,7 @@ export class Viewport {
           visible: document.visibilityState === "visible" && !this.power.minimised,
           stillMs: now - this.lastMovedAt,
           dragging: this.gizmoDragging,
+          realtimeWhileMoving: renderPrefs().realtimeWhileMoving,
           sectioned: this.sectioned,
           xray: this.xray,
           wireframe: this.wireframe,
@@ -4210,6 +4390,7 @@ export class Viewport {
         bloom: renderPrefs().bloom,
         bloomable: this.scene.post.bloomable,
       });
+      this.freeze.step(now);
       // Render-on-demand: skip the (relatively expensive) grid rebuild + GPU
       // draw entirely when nothing changed, camera didn't move, no mutation
       // flagged requestRender(), and we've drained the post-mutation linger.
@@ -4230,11 +4411,29 @@ export class Viewport {
         // on. Written every frame because the orbit distance changes every frame
         // a wheel is turned, and it costs one subtraction.
         this.scene.post.focusDistance = this.rig.active.position.distanceTo(t);
+        this.contactShadow.sync({
+          renderer: this.scene.renderer,
+          model: this.scene.modelGroup,
+          plane: this.contactPlane(),
+          state: {
+            ground: savedGround(),
+            lowPower: isRenderLowPower(),
+            potato: renderPrefs().potatoMode,
+            viewMode: this.scene.post.viewMode,
+            tracing: this.scene.post.viewMode === "pathtraced" && this.scene.post.traceShown,
+            xray: this.xray,
+          },
+          traceState: this.trace.state,
+          shadows: renderPrefs().shadows,
+        });
         const shadows = this.scene.renderer.shadowMap;
         // Shadows depend on the casters and the lights, never on the camera.
         this.shadowWatch.gate(this.needsRender, this.scene.scene, shadows, this.scene.post.drawsShadows);
         try {
-          this.scene.post.render(this.rig.active, this.motionActive && this.motionScale < 1);
+          this.scene.post.render(this.rig.active, this.motionActive && this.motionScale < 1, false, {
+            moving: this.motionActive,
+            ghosted: this.ghosted,
+          });
         } finally {
           shadows.autoUpdate = true;
         }

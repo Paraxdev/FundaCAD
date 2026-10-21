@@ -1,0 +1,94 @@
+<!doctype html><meta charset="utf-8"><title>native picture probe</title>
+<body style="margin:0;background:#222"><div id="host" style="position:relative;width:640px;height:400px"></div></body>
+<script type="module">
+// Page side of src-tauri/examples/frames_probe.rs with
+// PROBE_PAGE=e2e/native_picture_page.html: Path traced on the native tracer,
+// a 2x traced picture through the host as the Camera tab takes it, a second
+// one cancelled, then the viewport's trace again. The picture rides in the
+// report as its data URL.
+import * as THREE from "three";
+import { PathTraceHost } from "/src/viewport/pathtrace/host.ts";
+import { createNativeTracer } from "/src/viewport/pathtrace/nativeTracer.ts";
+import { halfEquirect } from "/src/viewport/pathtrace/environment.ts";
+import { invoke } from "@tauri-apps/api/core";
+
+const holder = document.getElementById("host");
+const gl = document.createElement("canvas");
+gl.style.width = "640px";
+gl.style.height = "400px";
+holder.append(gl);
+
+const scene = new THREE.Scene();
+const floor = new THREE.Mesh(new THREE.BoxGeometry(80, 80, 2), new THREE.MeshStandardMaterial({ color: 0xb0b0b0 }));
+floor.position.set(0, 0, -1);
+const ball = new THREE.Mesh(new THREE.SphereGeometry(8, 48, 24), new THREE.MeshStandardMaterial({ color: 0xc04030 }));
+ball.position.set(0, 0, 8);
+floor.userData.owner = "body1";
+ball.userData.owner = "body2";
+scene.add(floor, ball);
+scene.updateMatrixWorld(true);
+const camera = new THREE.PerspectiveCamera(40, 640 / 400, 1, 1000);
+camera.up.set(0, 0, 1);
+camera.position.set(40, -60, 30);
+camera.lookAt(0, 0, 6);
+camera.updateMatrixWorld();
+const sun = { color: new THREE.Color(1, 1, 1), intensity: 2, position: new THREE.Vector3(40, -30, 100), target: new THREE.Vector3(0, 0, 0) };
+const env = halfEquirect(new Uint16Array(64 * 32 * 4).fill(THREE.DataUtils.toHalfFloat(0.5)), 64, 32);
+const look = () => ({
+  lights: [sun], background: new THREE.Color(0.55, 0.6, 0.7), environment: env, brightness: 1,
+  toneMapping: THREE.NeutralToneMapping, exposure: 1,
+});
+const frame = () => ({
+  now: performance.now(),
+  inputs: { mode: "pathtraced", visible: true, stillMs: 10_000, dragging: false, sectioned: false, xray: false, wireframe: false, sketchOpen: false },
+  camera, cameraChanged: false, sceneMaybeChanged: false, root: scene, look, lens: () => null, denoise: "off",
+  bloom: 0, bloomable: true,
+});
+const nextFrame = () => new Promise((r) => requestAnimationFrame(r));
+async function run(ms, until) {
+  const t0 = performance.now();
+  while (performance.now() - t0 < ms && !until()) {
+    host.tick(frame());
+    await nextFrame();
+  }
+}
+
+const faults = [];
+const host = new PathTraceHost(gl, () => createNativeTracer(), { arm: async () => {}, clear() {} });
+host.onFault = (why) => faults.push(why);
+const out = {};
+try {
+  const start = performance.now();
+  await run(60_000, () => host.samples >= 16);
+  out.firstMs = Math.round(performance.now() - start);
+  out.backend = host.backendName;
+  out.viewportSamples = host.samples;
+  out.size = host.pictureSize(2);
+  const seen = [];
+  const t0 = performance.now();
+  const url = await host.picture({ scale: 2, samples: 64, onProgress: (n) => seen.push(n) });
+  out.pictureMs = Math.round(performance.now() - t0);
+  out.progress = seen;
+  out.png = url;
+
+  const ac = new AbortController();
+  const cancelled = host.picture({ scale: 2, samples: 100_000, signal: ac.signal, onProgress: (n) => n > 0 && ac.abort() });
+  out.cancel = await cancelled.then(() => "resolved", (e) => e.name);
+  await run(20_000, () => host.samples >= 8);
+  out.samplesAfterCancel = host.samples;
+  const s = await invoke("pt_status");
+  out.checks = {
+    "a 2x picture as a PNG data URL": typeof url === "string" && url.startsWith("data:image/png;base64,"),
+    "progress came from pt_status": seen.length > 0 && seen.at(-1) === 64,
+    "the cancelled picture rejected as an AbortError": out.cancel === "AbortError",
+    "the viewport traced again after the cancel": out.samplesAfterCancel >= 8,
+    "no picture is left running": !s.picture,
+    "no fault": !s.fault && faults.length === 0,
+  };
+} catch (e) {
+  out.error = String((e && e.stack) || e);
+}
+out.faults = faults;
+host.dispose();
+await invoke("probe_report", { json: JSON.stringify(out) });
+</script>

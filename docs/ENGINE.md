@@ -2,9 +2,9 @@
 
 The Funda Engine is FundaCAD's geometry engine: Rust, OpenCASCADE 7.8.1
 statically linked, built into the same executable as the app. It ships as
-`main`'s rolling 1.0 beta. The sidecar, the previous engine, is retired and
-frozen on the `legacy` branch, which publishes nothing; the beta is the only
-release.
+`main`'s rolling 1.0 beta, and as `dev`'s development build ahead of it
+(section 7). The sidecar, the previous engine, is retired and frozen on the
+`legacy` branch, which publishes nothing.
 
 Related: [ARCHITECTURE.md](ARCHITECTURE.md) (what exists today),
 [PROTOCOL.md](PROTOCOL.md) (the wire contract the engine honours),
@@ -159,9 +159,11 @@ use for them).
   survives a call and a crashed plugin costs one feature.
 - **Discovery** reads the manifests under `FUNDACAD_PLUGIN_DIR` (a checkout's
   own `plugins/` in a debug build), explicitly, from the engine's startup path
-  only: a bare `builder::rebuild` has no plugins and an unknown type reads
-  "unknown feature type", exactly as a document with no plugins installed
-  always has. A component is compiled the first time one of its declared
+  only: a bare `builder::rebuild` has no plugins and an unknown type is
+  skipped as "unknown feature type", exactly as in a document with no plugins
+  installed. A skip is not an error: the rebuild lists it in `skippedFeatures`
+  (docs/PROTOCOL.md) and builds the rest. A type a plugin declares but cannot
+  run is still an error. A component is compiled the first time one of its declared
   names is used, and the three sentences of `unregistered()` (absent,
   installed but broken, unknown) are kept.
 - **Proof:** every in-repo plugin's geometry ships a component, each crate in
@@ -280,28 +282,29 @@ in the `rust-geom` job.
 
 ## 6. The `beta` rolling release
 
-The Funda Engine is `main`, which publishes the rolling `beta` release and
-`beta/latest.json`. It was published as `alpha` while the sidecar still
-published the beta from the `legacy` branch. The sidecar is retired now and
-`legacy` publishes nothing: `beta` is the only release.
+A push to `main` publishes the rolling `beta` release and `beta/latest.json`.
+It was published as `alpha` while the sidecar still published the beta from
+the `legacy` branch. The sidecar is retired now and `legacy` publishes
+nothing. Daily work lands on `dev`, which publishes the `development` build
+ahead of the beta, see section 7.
 
-Two jobs in `.github/workflows/build.yml`, `build-beta` and `release-beta`,
-with their own `concurrency.group` (`release-beta`), a rolling tag moved in
+Two jobs in `.github/workflows/build.yml`, `bundle` and `release`, with the
+beta in its own `concurrency.group` (`release-beta`), a rolling tag moved in
 place rather than deleted, a `latest.json` and an old-asset sweep. What makes
 the bundle:
 
 - The engine is a worker process of the same executable, reached over Tauri
   IPC (`src/geometry/transport.ts`).
-- `src-tauri/tauri.beta.conf.json` on top of `tauri.conf.json` for the
-  release bundle settings and the MCP server beside the app. Neither declares
+- `src-tauri/tauri.beta.conf.json` (or `tauri.dev.conf.json` and
+  `tauri.stable.conf.json`, the same file with their own feed) on top of
+  `tauri.conf.json` for the release bundle settings and the MCP server beside the app. Neither declares
   a resource, so no sidecar runtime can be bundled, and the job checks the
   finished binary for the `engine_attach` command and the bundles for any
   sidecar runtime, so what shipped is a fact about the bytes rather than
   about the arguments.
 - Title: `FundaCAD 1.0 beta, Rust engine (rolling)`.
 - Release notes open with the warning, which is not optional: this is the
-  Funda Engine and the sidecar is retired, this is the only release,
-  anything that builds differently from the sidecar is worth a report, plugin
+  Funda Engine and the sidecar is retired, anything that builds differently from the sidecar is worth a report, plugin
   geometry runs as WebAssembly components, and the sidecar's documents open
   here.
 
@@ -311,12 +314,17 @@ the bundle:
 build that cannot update itself is one people install once and never update
 again, so there is no world where the beta ships with no manifest at all.
 
-The endpoint is compiled into the binary (`tauri.conf.json` on `main`), so
-which feed a copy reads is settled when it is built and can never change
+The endpoint is compiled into the binary (`tauri.conf.json`, or
+`tauri.dev.conf.json` and `tauri.stable.conf.json` for the other channels),
+so which feed a copy reads is settled when it is built and can never change
 afterwards:
 
-- a build of `main` reads `releases/download/beta/latest.json`, which only
-  `release-beta` writes;
+- a beta build from `main` reads `releases/download/beta/latest.json`, which
+  only the beta `release` run writes;
+- a development build from `dev` reads
+  `releases/download/development/latest.json`, which only the development
+  `release` run writes;
+- a stable build reads `releases/latest/download/latest.json`, see section 7;
 - a sidecar build from `legacy` reads the same `beta/latest.json`. It is
   `0.2.x` and the Funda Engine is `1.0.x`, so those installs move to the
   Funda Engine, which is intended;
@@ -324,8 +332,8 @@ afterwards:
   The `alpha` release is gone, so those installs no longer update and take a
   new installer from the beta release.
 
-`tests/security/updater.test.ts` pins the endpoint to the beta feed and keeps
-the alpha one out of every config.
+`tests/security/updater.test.ts` pins every endpoint and keeps the alpha one
+out of every config.
 
 ### 6.2 The version
 
@@ -343,6 +351,7 @@ the notes and the feed say beta instead.
 
 `tauri.beta.conf.json` must not declare a `version`: CI stamps the one in
 `tauri.conf.json`, and a version in the merged config would override the stamp.
+A stable build is stamped with its tag's version instead.
 
 ### 6.3 The CSP
 
@@ -354,18 +363,20 @@ worker reached over Tauri IPC, so the webview never opens a socket.
 
 ### 6.4 Notes on the release
 
-- The `build-beta` job compiles OpenCASCADE from source on all three
+- The `bundle` job compiles OpenCASCADE from source on all three
   runners, about twenty minutes cold, cached at `target/OCCT` (the install
   only, not the build tree beside it) under the same key as `rust-geom`'s; the
   Linux leg installs `cmake`, which `.github/actions/linux-deps` deliberately
   leaves out.
 - The updater is still off everywhere. `tauri.conf.json` carries upstream's
-  minisign pubkey, so `release-beta` withholds `latest.json` and says so in
-  the notes. Generating a keypair turns the feed
+  minisign pubkey, so `release` withholds `latest.json` and says so in
+  the notes, on every channel. Generating a keypair turns the feed
   on.
-- Plugin bundles ARE published to this release, packed by `build-beta` with
+- Plugin bundles ARE published to this release, packed by `bundle` with
   their geometry components and nothing else, and the app installs from it
-  (`RELEASE_TAG` in `src/plugins/index.ts`). Every plugin in the repository
+  (`RELEASE_TAG` in `src/plugins/index.ts`). A development or stable build
+  installs from its own release, which carries bundles from the same commit
+  (`VITE_FUNDACAD_RELEASE`). Every plugin in the repository
   ships a component. A sidecar build shares one plugin directory with this
   one on a machine that has both, and a bundle the Funda Engine installed has
   no sidecar half, so the sidecar build cannot build that plugin's features.
@@ -373,6 +384,131 @@ worker reached over Tauri IPC, so the webview never opens a socket.
   private engine is the app started with `--engine --ws`, and the app's worker
   serves a loopback WebSocket beside its stdio pipe for live sessions
   (docs/MCP.md).
+
+## 7. Release channels
+
+| Branch or tag | Tests | Installers | Publishes | Version | Update feed |
+| --- | --- | --- | --- | --- | --- |
+| `dev` | yes, may be red | built even when the tests are red | the rolling `development` pre-release, bleeding edge | `1.0.<run number>` | `releases/download/development/latest.json` |
+| `main` | yes | only once the tests are green | the rolling `beta` pre-release, somewhat stable | `1.0.<run number>` | `releases/download/beta/latest.json` |
+| tag `v1.<minor>.<patch>` on `main`, optional | yes | only once the tests are green | a release named after the tag | `1.<minor>.<patch>` | `releases/latest/download/latest.json` |
+| pull request | yes | none | nothing | | |
+
+The `channel` job in `build.yml` decides which row a run is.
+
+**`dev` is the bleeding edge.** Daily work lands there, and every push
+publishes the `development` build, so testers get a change with the next
+build. A red `test` or `rust-geom` does not hold the build back, though the
+build still starts only once both have finished. The run still shows red, so
+the breakage is visible. A bundle leg that fails to build only
+leaves its own files out: the release keeps the earlier build's copies, the
+notes name what was not rebuilt, and `latest.json` leaves that platform out
+until the next build.
+
+**`main` is the beta, somewhat stable.** A push to `main` publishes the beta
+exactly as it did before `dev` existed, and only when `test`, `rust-geom`
+and every bundle leg are green. Changes reach `main` by promotion (7.1) or as
+a hotfix (7.2).
+
+**Each installer is started before it ships.** After a bundle leg has
+packaged, `scripts/bundle-smoke.py` starts the AppImage, the binary of the
+`.deb`, the Windows portable exe and the macOS app's binary with `--mcp`,
+and `build-flatpak` starts the installed Flatpak the same way. Over stdio
+each one opens a document, adds a 30 x 20 x 10 mm box, builds it through the
+engine inside the package and checks the volume is 6000 mm3. On `dev` a red
+smoke is an annotation and the build still ships. On `main` it fails the leg,
+which holds the beta, or for the Flatpak leaves the Flatpak out of it. The
+bundle runner has every library `linux-deps` installs, so a `.deb` or
+AppImage with a wrong dependency still starts there; only the Flatpak's clean
+runtime catches that today. A second Linux step opens the AppImage window
+under Xvfb and builds the box through a server attached to it, which proves
+the page loaded; it does not gate anything yet.
+
+The two never touch each other's release. Each has its own tag, its own
+concurrency group (`release-development`, `release-beta`) and its own feed,
+baked into the binary. They are the same app with the same identifier, so
+switching channel is installing the other channel's installer. A
+development install only updates to the next development build and a beta
+install to the next beta. Both count up the same run number, so moving to a
+build with a lower version can need an uninstall first.
+
+The tag is `development` rather than `dev`: a tag and a branch with the same
+name make `git push origin dev` fail as ambiguous for anyone who fetched
+tags.
+
+**Stable tags are optional.** A `v1.<minor>.<patch>` tag on a commit of
+`main` still publishes a stable release with its own feed, but nothing sends
+people there. A tag that is not `v1.<minor>.<patch>` with a minor of 1 or
+more, or whose commit is not on `main`, fails `channel` before anything is
+built. The betas are `1.0.<run number>`, and a stable `1.0.x` would be older
+than the beta it replaces. A new stable release is a draft until its
+installers and `latest.json` are up, and is then marked latest only while no
+higher stable release is published. GitHub's latest release is never a
+pre-release, so neither rolling build can become what a stable install finds
+there.
+
+### 7.1 Promoting dev to main
+
+```sh
+scripts/promote.sh                   # the dev head, or --sha <commit on dev>
+scripts/promote.sh --push            # the same, and push main
+scripts/promote.sh --stable 1.2.0    # also tag the merge, optional
+```
+
+It checks that a `build` run from a push of that commit to `dev` has `test`,
+`rust-geom` and every `bundle` leg green. `dev` may be red, a promotion may
+not. It then merges the commit into `main` with `--no-ff` in a throwaway
+worktree and prints the push. `--push` pushes `main`, with the tag in the
+same atomic push when there is one. The `main` run tests again and publishes
+the beta.
+
+`e2e` is not gating, so a flake there does not block a promotion. A dev
+commit that only touches `manual/` starts no build at all, so promote an older
+one with `--sha`. Your local `main` is not touched, fast forward it
+afterwards.
+
+### 7.2 Hotfixes
+
+A fix that cannot wait for the next promotion branches from `main`, merges
+into `main`, and `main` is merged back into `dev` straight away:
+
+```sh
+git fetch origin
+git switch -c fix/thing origin/main      # branch from main
+# commit the fix
+git switch main && git merge --ff-only origin/main && git merge --no-ff fix/thing
+git push origin main                     # the beta, once the run is green
+git switch dev && git merge --ff-only origin/dev && git merge main && git push origin dev
+```
+
+`promote.sh` leaves local `main` behind `origin/main`, which is why both
+branches are fast forwarded first: a stale `main` gets the push refused, and
+a stale `dev` merges an old `main`. Until `main` is merged back, the next
+promotion can conflict, and `promote.sh` stops and says so. For a stable
+release of the fix too, tag the merge and push it with `main`:
+`git tag -a v1.2.1 -m "FundaCAD v1.2.1"` and
+`git push --atomic origin main refs/tags/v1.2.1`.
+
+### 7.3 Rolling the channels out
+
+The first time, in this order. Until now `main` published the beta with the
+old workflow and the `development` release does not exist yet.
+
+1. Create the `development` tag by hand on the current `dev`, with your own
+   credentials: `git push origin refs/remotes/origin/dev:refs/tags/development`.
+   `GITHUB_TOKEN` may not create or move a tag onto a commit that changes a
+   workflow file, so without this the first run cannot create it and its
+   release job fails, saying so.
+2. Merge the channels change into `dev` and push `dev`. That run publishes
+   the `development` release. The tag move is refused for the same reason,
+   so the run warns and the release's source archives and the notes' range
+   stay on the old commit until the tag is moved by hand.
+3. Once that run's gating jobs are green, `scripts/promote.sh --push`. The
+   `main` run publishes the beta as before, from the same feed, so existing
+   beta installs keep updating. If it warns that the `beta` tag could not
+   move, move it by hand the same way. The README and the manual go live
+   from `main` with links to the beta and the development build, and both
+   exist by then.
 
 ## 8. Performance
 
@@ -409,6 +545,18 @@ line out (`cargo run --release -p fundacad-geom --example bench_suite -- ...`):
 
 `FUNDACAD_BENCH_PHASES=1` adds a phase table (`crate::bench`).
 `FUNDACAD_THREADS` caps both the engine's rayon pool and OCCT's.
+
+`crates/fundacad-cli/examples/bench_open.rs` times the document file itself, for
+documents with big imports (`cargo run --release -p fundacad-cli --example bench_open -- ...`):
+
+| Stage | What it measures |
+|---|---|
+| `scan <out.stl> [--triangles N]` | writes a deterministic binary STL shaped like a reference scan, 2,000,000 triangles by default |
+| `pack <file> <out_stem>` | imports a file, saves it as `.fundab` and `.funda`, and times deflate level 1 and 6 and BLAKE2b on its biggest blob |
+| `open <file>` | reads the document into an empty blob store, stage by stage, then the engine side: blob read, `blob_to_shape`, a cold rebuild and the mesh |
+| `reopen <file>` | the same with the blob store already filled, the common case |
+
+`--repeat N` reports the median, `--threads N` sets `FUNDACAD_THREADS` for the file layer.
 
 The gates double as benchmarks: `fundacad-engine fillet-eval` over the 500 case
 corpus and `select-eval` over the 220 case one.

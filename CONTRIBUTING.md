@@ -23,6 +23,9 @@ right to grant this, meaning the work is yours or your employer has authorised i
 
 ## Before you open a pull request
 
+- Branch from `dev` and open the pull request against `dev`. `dev` publishes the
+  development build on every push, and `main`, the beta, only moves when a green `dev` is
+  promoted or a hotfix lands (docs/ENGINE.md section 7).
 - `npm run build` (TypeScript and Vite) must pass.
 - `npx vitest run` and `cargo test --workspace --features fundacad-engine/ws` must pass,
   and so must every golden check,
@@ -128,6 +131,15 @@ cargo test --workspace --features fundacad-engine/ws   # the engine, from the to
 cd src-tauri && cargo test --tests                     # the app shell, needs the dist/ that npm run build makes
 ```
 
+Tests that use the app the way a person does go through the agent harness in `tools/harness`
+([docs/HARNESS.md](docs/HARNESS.md)), not a new page script. It starts its own engine, vite and
+Chrome, so it needs a built `fundacad-engine` and an installed Chrome. The smoke set CI runs:
+
+```bash
+pip install -e "tools/harness[test]"
+python -m pytest tools/harness/tests -m smoke
+```
+
 ### Frontend only
 
 To iterate on the interface in a browser, run the engine and Vite in two terminals:
@@ -145,8 +157,9 @@ token and the port instead.
 ### The user manual
 
 The manual lives in `manual/` and is built with [Zensical](https://zensical.org). To preview
-it, run `pip install zensical` and then `zensical serve` inside `manual/`. A push to `main`
-that touches `manual/` publishes it to GitHub Pages.
+it, run `pip install zensical` and then `zensical serve` inside `manual/`. It is published to
+GitHub Pages from `main`, so a manual change goes live with the next beta, when `dev` is
+promoted to `main`.
 
 The pages are in `manual/docs/` and the navigation is in `manual/zensical.toml`. Write for
 someone who wants to print a part: short paragraphs of whole sentences, and only tool names,

@@ -23,6 +23,7 @@ import { setTextBackend } from "../sketch/textCache";
 import { solveSketchFeature } from "../sketch/headlessSolve";
 import { initSolver } from "../sketch/solver";
 import { installAutosave, checkRecovery } from "../io/recovery";
+import { installLaunchPaths } from "../io/launchPaths";
 import { toast } from "../ui/toast";
 import { logWarning } from "../ui/logStore";
 import { crumb } from "../diagnostics/breadcrumbs";
@@ -53,19 +54,22 @@ import { createBugReporter } from "../ui/bugReporter";
 
 import { useRibbonStore } from "../stores/ribbon";
 import { useCommandPaletteStore } from "../stores/commandPalette";
-import { WelcomeScreen, welcomeOnStartup } from "../ui/welcome";
+import { welcomeOnStartup } from "../ui/welcome";
+import { Home } from "../ui/home";
+import { wireHomeOnOpen } from "./homeWiring";
+import { setThumbnailSource } from "../io/thumbnails";
 import { scheduleStartupUpdateCheck } from "../ui/updates";
-import { openDocumentAtPath } from "../io/files";
 
 import { installEngineDiedToast } from "./engineWatch";
 import { activatePlugins } from "../plugins/activate";
+import { safeMode } from "../ui/safeMode";
 import { createSelection } from "./selection";
 import { DraftTool } from "../features/draftTool";
 import { ThreadTool } from "../features/threadTool";
 import { TextOnFaceTool } from "../features/textOnFaceTool";
 import { HoleTool } from "../features/holeTool";
 import { cancelActiveTools, createToolBusy } from "./toolBusy";
-import { createDocumentActions } from "./documentActions";
+import { createDocumentActions, newFromTemplate, openAtVersion, openOnBranch, openPathGuarded } from "./documentActions";
 import { endPickSession } from "../ui/treePick";
 import { createDatumPlanes } from "./datumPlanes";
 import { createSketchVisibility } from "./sketchVisibility";
@@ -114,7 +118,7 @@ export interface EngineTools {
 }
 
 export interface EngineUi {
-  welcome: WelcomeScreen;
+  home: Home;
   panels: ReturnType<typeof createPanels>;
 }
 
@@ -169,6 +173,9 @@ export interface Engine {
    *  Every other entry still counts, including a Move started deliberately over
    *  a selection that is not a body's, which is a mode. */
   toolOwnsScreen(): boolean;
+  /** toolOwnsScreen(), minus a modal open over the app (Home counts as one), so
+   *  true only while a sketch or tool is at work on the document itself. */
+  toolAtWork(): boolean;
   /** Stand the ambient Move gizmo down, so a body verb can run.
    *
    *  The other half of toolOwnsScreen. Showing an offer over a body is not
@@ -223,6 +230,9 @@ export interface Engine {
   lastAction: string | null;
   setStatus(text: string, cls: "" | "connected" | "error"): void;
 }
+
+/** Settled once the restore-on-launch question is answered or was never asked. */
+let recoveryAsked: Promise<void> = Promise.resolve();
 
 export function createEngine(canvas: HTMLCanvasElement): Engine {
   // Filled top-to-bottom in exactly the order main.ts's statements ran. Members
@@ -295,7 +305,8 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   e.bridge = createDocBridge(e.store);
   // crash-safety: periodic recovery snapshots + restore-on-launch prompt
   installAutosave(e.store);
-  void checkRecovery(e.store);
+  // Safe mode offers no snapshot: one that kills the app would kill every start.
+  recoveryAsked = safeMode() ? Promise.resolve() : checkRecovery(e.store);
 
   // Sharing this window's document with an assistant working through MCP. AFTER
   // the store exists and before anything can edit it, so the very first publish
@@ -484,11 +495,18 @@ export function mountUi(e: Engine): void {
     }
   });
 
-  e.ui.welcome = new WelcomeScreen({
-    onNew: () => void e.newDocument(),
-    onOpen: () => void e.openDoc(),
-    onOpenPath: (path) => openDocumentAtPath(e.store, path, e.geometry),
+  e.ui.home = new Home({
+    newDocument: () => e.newDocument(),
+    openDoc: () => e.openDoc(),
+    newFromTemplate: (id) => newFromTemplate(e, id),
+    openPath: (path) => openPathGuarded(e, path),
+    currentPath: () => e.store.filePath,
+    currentVersions: () => e.store.versionRepo,
+    openVersion: (path, id, copy) => openAtVersion(e, path, id, copy),
+    openBranch: (path, name) => openOnBranch(e, path, name),
   });
+  wireHomeOnOpen(e.store, e.ui.home);
+  setThumbnailSource(() => e.viewport.renderThumbnail(480, 300));
 
   e.starters = createFeatureStarters({
     store: e.store,
@@ -541,6 +559,7 @@ export function mountUi(e: Engine): void {
     startCutByPlane: (id) => e.starters.startCutByPlane(id),
     offsetPlaneFromFace: (...args) => e.starters.offsetPlaneFromFace(...args),
     axisFromRoundFace: (...args) => e.starters.axisFromRoundFace(...args),
+    exportFlat: (source, format) => void import("../io/files").then((m) => m.exportModel(e.store, e.geometry, [], source, format)),
   });
 
   e.ui.panels = createPanels({
@@ -559,8 +578,8 @@ export function mountUi(e: Engine): void {
   // (The menubar is components/shell/MenuBar.vue now, TitleBar.vue calls
   // buildMenubar(engine) itself, so there is nothing to construct here.)
 
-  // show the welcome screen unless the user turned it off (its footer checkbox)
-  if (welcomeOnStartup()) e.ui.welcome.open();
+  if (welcomeOnStartup()) e.ui.home.open();
+  installLaunchPaths(e, recoveryAsked);
   scheduleStartupUpdateCheck();
 
   installTitlebar(e);
@@ -583,7 +602,7 @@ export function mountUi(e: Engine): void {
   // Whatever capabilities are turned on, started here and restarted whenever
   // that set changes. The engine deliberately does not know which ones exist:
   // see plugins/activate.ts.
-  activatePlugins(e);
+  if (!safeMode()) activatePlugins(e);
 
   e.geometry.onStatus((connected) => {
     if (!connected) e.setStatus("connecting to the geometry engine…", "error");

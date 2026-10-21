@@ -1,0 +1,137 @@
+{
+ "about": "Environment texel (u, v) and the world direction it is lit from. v counts image rows from row 0. Layout y: the room equirect as traceEnvironment's FRAGMENT writes it, row 0 at -Y. Layout z: an HDR as hdrRoom places it, row 0 at +Z, azimuth -2 pi u before the rotation.",
+ "pairs": [
+  {
+   "layout": "y",
+   "u": 0.5,
+   "v": 0.5,
+   "dir": [
+    1.0,
+    0.0,
+    0.0
+   ],
+   "note": "+X on the horizon"
+  },
+  {
+   "layout": "y",
+   "u": 0.75,
+   "v": 0.5,
+   "dir": [
+    0.0,
+    0.0,
+    1.0
+   ],
+   "note": "+Z on the horizon"
+  },
+  {
+   "layout": "y",
+   "u": 0.25,
+   "v": 0.75,
+   "dir": [
+    0.0,
+    0.707106781,
+    -0.707106781
+   ],
+   "note": "between +Y and -Z"
+  },
+  {
+   "layout": "y",
+   "u": 0.6,
+   "v": 0.9,
+   "dir": [
+    0.25,
+    0.951056516,
+    0.181635632
+   ],
+   "note": "near the zenith, +Y"
+  },
+  {
+   "layout": "y",
+   "u": 0.1,
+   "v": 0.2,
+   "dir": [
+    -0.475528258,
+    -0.809016994,
+    -0.345491503
+   ],
+   "note": "below the horizon"
+  },
+  {
+   "layout": "y",
+   "u": 0.9,
+   "v": 0.35,
+   "dir": [
+    -0.72083942,
+    -0.4539905,
+    0.523720495
+   ],
+   "note": "asymmetric"
+  },
+  {
+   "layout": "z",
+   "u": 0.05,
+   "v": 0.5,
+   "dir": [
+    0.951056516,
+    -0.309016994,
+    0.0
+   ],
+   "note": "near +X on the horizon"
+  },
+  {
+   "layout": "z",
+   "u": 0.25,
+   "v": 0.5,
+   "dir": [
+    0.0,
+    -1.0,
+    0.0
+   ],
+   "note": "-Y on the horizon"
+  },
+  {
+   "layout": "z",
+   "u": 0.75,
+   "v": 0.5,
+   "dir": [
+    -0.0,
+    1.0,
+    0.0
+   ],
+   "note": "+Y on the horizon, rotation 90 lands here"
+  },
+  {
+   "layout": "z",
+   "u": 0.5,
+   "v": 0.02,
+   "dir": [
+    -0.06279052,
+    -0.0,
+    0.998026728
+   ],
+   "note": "near the zenith, +Z"
+  },
+  {
+   "layout": "z",
+   "u": 0.1,
+   "v": 0.8,
+   "dir": [
+    0.475528258,
+    -0.345491503,
+    -0.809016994
+   ],
+   "note": "below the horizon"
+  },
+  {
+   "layout": "z",
+   "u": 0.6,
+   "v": 0.3,
+   "dir": [
+    -0.654508497,
+    0.475528258,
+    0.587785252
+   ],
+   "note": "asymmetric"
+  }
+ ]
+}

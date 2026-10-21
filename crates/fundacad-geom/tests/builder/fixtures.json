@@ -24662,10 +24662,12 @@
    },
    "datumPlanes": {},
    "diagnostics": [],
-   "errors": [
+   "errors": [],
+   "skipped": [
     {
      "feature_id": "t",
-     "message": "unknown feature type: texture"
+     "message": "unknown feature type: texture",
+     "type": "texture"
     }
    ]
   }

@@ -299,10 +299,15 @@ fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     let token = random_token();
+    let safe = crate::safe_mode_active(&inner.app);
+    if safe {
+        // Empty rather than unset: one inherited from the shell would load them.
+        cmd.env("FUNDACAD_PLUGIN_DIR", "");
+    }
     configure_env(
         &mut cmd,
         crate::container::blob_dir(&inner.app).ok().as_deref(),
-        crate::plugins::plugins_root(&inner.app).ok().as_deref(),
+        if safe { None } else { crate::plugins::plugins_root(&inner.app).ok() }.as_deref(),
         &token,
     );
     #[cfg(windows)]

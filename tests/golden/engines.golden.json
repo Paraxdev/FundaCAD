@@ -2616,6 +2616,26 @@
     "body1": 8000.0
    }
   },
+  "thin_extrude_l": {
+   "bbox": {
+    "max": [
+     41.0,
+     30.0,
+     10.0
+    ],
+    "min": [
+     0.0,
+     -1.0,
+     0.0
+    ]
+   },
+   "bodies": 1,
+   "errors": [],
+   "fatal": false,
+   "volumes": {
+    "body1": 1400.0
+   }
+  },
   "torus_move": {
    "bbox": {
     "max": [
@@ -2639,7 +2659,7 @@
  },
  "golden": {
   "corpus": "tests/golden/corpus/corpus_engines.json",
-  "corpusSha256": "436aed7f7295603057f45ec1f0504e2acc73941f60be76d7c915c55a63387901",
+  "corpusSha256": "259094efe1598c0ff5400196f128726799c0728d14f0e630ed68ce9d17418178",
   "frozen": true,
   "kind": "rebuild",
   "rebuildTolerance": 0.1,
@@ -2655,7 +2675,8 @@
   "rustRecorded": [
    "chamfer_corner_three_edges",
    "fillet_tangent_edges_off",
-   "offset_face_chamfered_rim"
+   "offset_face_chamfered_rim",
+   "thin_extrude_l"
   ],
   "tolerances": {
    "bboxAbs": 0.0001,

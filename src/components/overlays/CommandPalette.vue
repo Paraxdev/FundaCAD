@@ -1,10 +1,12 @@
 <script setup lang="ts">
+import { fmtKeys } from "../../input/platform";
 // Cmd/Ctrl-K command palette: fuzzy-search every command and run it. The
 // discoverability safety net (mainstream MCAD's "S" key equivalent), so nothing
 // is lost when the ribbon collapses tools into overflow, and shortcut-less /
 // right-click-only commands become findable by name.
 
-import { computed, nextTick, ref, useTemplateRef, watch } from "vue";
+import { computed, nextTick, onUnmounted, ref, useTemplateRef, watch } from "vue";
+import { claimEscape } from "../../ui/escapeClaim";
 import { useCommandPaletteStore } from "../../stores/commandPalette";
 import { allCommands } from "../../ui/commands";
 import { score } from "../../ui/commandScore";
@@ -44,10 +46,18 @@ watch(results, () => {
 // Reset and focus on open. The input is created in the same flush, so focus has
 // to wait for it; on close the query is cleared so the next Ctrl+K starts fresh
 // (the old implementation got this by destroying the DOM).
+// Claimed so a screen under the palette, such as Home, leaves its Escape to it.
+let releaseEscape: (() => void) | null = null;
+onUnmounted(() => releaseEscape?.());
 watch(
   () => cmdk.open,
   async (isOpen) => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      releaseEscape?.();
+      releaseEscape = null;
+      return;
+    }
+    releaseEscape ??= claimEscape();
     query.value = "";
     active.value = 0;
     await nextTick();
@@ -92,12 +102,13 @@ function onKey(e: KeyboardEvent) {
     <!-- .self: only a click on the backdrop itself dismisses, never one that
          bubbled up out of the card. -->
     <div v-if="cmdk.open" class="cmdk-backdrop" @pointerdown.self="cmdk.close()">
-      <div class="cmdk-card">
+      <div class="cmdk-card" role="dialog" aria-modal="true" aria-label="Command palette">
         <input
           ref="input"
           v-model="query"
           class="cmdk-input"
           placeholder="Search commands…"
+          aria-label="Search commands"
           spellcheck="false"
           @keydown="onKey"
         />
@@ -113,7 +124,7 @@ function onKey(e: KeyboardEvent) {
           >
             <span class="cmdk-label">{{ c.label }}</span>
             <span class="cmdk-group">{{ c.group }}</span>
-            <span v-if="c.key" class="cmdk-key">{{ c.key }}</span>
+            <span v-if="c.key" class="cmdk-key">{{ fmtKeys(c.key) }}</span>
           </div>
           <div v-if="!results.length" class="cmdk-empty">No matching command</div>
         </div>

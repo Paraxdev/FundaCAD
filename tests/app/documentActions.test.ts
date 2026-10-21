@@ -7,6 +7,8 @@ const choose = vi.fn();
 vi.mock("../../src/ui/choice", () => ({ choose: (...a: unknown[]) => choose(...a) }));
 const openDocument = vi.fn();
 vi.mock("../../src/io/files", () => ({ openDocument: (...a: unknown[]) => openDocument(...a) }));
+const closeHome = vi.fn();
+vi.mock("../../src/ui/home", () => ({ closeHome: () => closeHome() }));
 
 import { createDocumentActions, hasUnsavedWork } from "../../src/app/documentActions";
 import type { Engine } from "../../src/app/engine";
@@ -81,5 +83,22 @@ describe("Open", () => {
     expect(await ask()).toBe(false);
     choose.mockResolvedValue("discard");
     expect(await ask()).toBe(true);
+  });
+});
+
+describe("Undo and Redo", () => {
+  it("close Home first, so the change shows on the document it is made to", () => {
+    const calls: string[] = [];
+    closeHome.mockReset();
+    closeHome.mockImplementation(() => calls.push("close"));
+    const e = {
+      tools: { move: { cancel: () => {} } },
+      sketch: { undoEdit: () => false, redoEdit: () => false },
+      store: { undo: () => calls.push("undo"), redo: () => calls.push("redo") },
+    } as unknown as Engine;
+    const a = createDocumentActions(e);
+    a.doUndo();
+    a.doRedo();
+    expect(calls).toEqual(["close", "undo", "close", "redo"]);
   });
 });

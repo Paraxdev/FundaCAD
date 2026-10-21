@@ -49,8 +49,10 @@ describe("the plugins this build offers", () => {
       "FundaCAD.Navigation",
       "FundaCAD.Onshape",
       "FundaCAD.Organic",
+      "FundaCAD.PrintLook",
       "FundaCAD.PrintToolbox",
       "FundaCAD.Printing",
+      "FundaCAD.ReferenceImages",
       "FundaCAD.Screws",
       "FundaCAD.SpaceMouse",
       "FundaCAD.Texture",
@@ -78,9 +80,10 @@ describe("the plugins this build offers", () => {
     }
   });
 
-  it("installs from the rolling beta release", () => {
-    // The engine runs plugin geometry as components, which the beta release
-    // carries from the same commit as its host.
+  it("installs from the rolling beta release unless built for another one", () => {
+    // The engine runs plugin geometry as components, which the release carries
+    // from the same commit as its host. The development and stable release
+    // builds name their own tag.
     expect(RELEASE_TAG).toBe("beta");
     for (const p of officialPlugins()) {
       expect(p.url).toBe(`${RELEASES}beta/${p.asset}`);

@@ -317,6 +317,11 @@ fn extents(
 
 pub fn handle(ctx: &mut Ctx, f: &Extrude) -> FResult {
     let entry = require(ctx, &f.sketch, "extrude")?;
+    if f.thin == Some(true) {
+        let target = super::thin::wall_faces(ctx, f, entry)?;
+        let plane = entry.plane;
+        return push(ctx, f, target, &plane);
+    }
     let Some(sk) = entry.sketch.clone() else {
         return Err(Fail::msg("sketch has no closed profile to extrude"));
     };
@@ -333,7 +338,11 @@ pub fn handle(ctx: &mut Ctx, f: &Extrude) -> FResult {
     }
     let target = region_target(ctx, &pts, entry)?.unwrap_or(sk);
     let plane = entry.plane;
-    let (target, sides) = extents(ctx, f, target, &plane)?;
+    push(ctx, f, target, &plane)
+}
+
+fn push(ctx: &mut Ctx, f: &Extrude, target: Shape, plane: &kernel::Frame) -> FResult {
+    let (target, sides) = extents(ctx, f, target, plane)?;
     let solid = crate::bench::phase("prisms", || prisms_sided(&target, &sides))?;
     let hidden: Option<HashSet<String>> = f
         .hidden_bodies

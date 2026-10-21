@@ -105,9 +105,11 @@ hurts.
 | `FundaCAD.SpaceMouse` | navigating and moving with a 3D mouse | `device.input`, `document.read`, `document.write` | `builtin` |
 | `FundaCAD.Gamepad` | flying the view and running commands from a game controller or a Steam Deck | `device.input`, `document.read`, `document.write` | `builtin` |
 | `FundaCAD.MultiColor` | filament slots, per body and per texture colour | `document.read`, `document.write` | `builtin` |
+| `FundaCAD.PrintLook` | layer lines drawn across bodies in the Realtime view | `document.read` | `builtin` |
 | `FundaCAD.Organic` | node bodies: rounded solids from sized nodes linked into smooth limbs | `document.read`, `document.write` | `builtin` |
 | `FundaCAD.Texture` | a printed surface texture on picked faces or a whole body | `document.read`, `document.write`, `files.read` | `builtin` |
 | `FundaCAD.Navigation` | mouse button presets, an opt-in radial menu and a shortcut rebinding panel | `input.remap`, `document.read` | `builtin` |
+| `FundaCAD.ReferenceImages` | a photo or a drawing on a plane or a flat face, calibrated from two points, to sketch over | `document.read`, `document.write` | `builtin` |
 
 **THE APP SHIPS NONE OF THEM.** Every one is a zip on a release, installed like
 anybody else's, and a fresh install runs nothing but the app. Three of them used
@@ -255,8 +257,11 @@ with everything it adds, and gets back the removal:
 | `actions` | action ids, reached from the ribbon, the palette, the keymap and every context menu |
 | `overlays` | components mounted for the life of the capability |
 | `browserSections` | a panel in the browser, drawn as its own component |
+| `renderSections` | a block at the end of one Render dock tab (`material`, `environment` or `camera`), drawn as its own component |
+| `materialPresets` | `() => { group, materials }[]`, starting points under the Render dock's New material menu, one submenu per group |
 | `bodyMenu` | rows on a body's right-click menu |
 | `paint` | colours for bodies and faces, asked for fresh at every rebuild |
+| `relief` | `() => { all?, bodies? }`, fine parallel ridges drawn through a body's shading (`axis`, `pitch` in mm, `depth` as a fraction of the pitch, optional `tintJitter` and `cavity`); a body's entry is preferred over `all` and a null takes `all` off it; asked for fresh at every rebuild |
 | `palette` | the colours a tool may offer |
 | `importedBody` | an imported mesh carried a colour of its own |
 | `provides` | a value offered to OTHER plugins, by name |
@@ -267,6 +272,21 @@ with everything it adds, and gets back the removal:
 | `onPointerGesture` | called when a binding's gesture drag starts, with the press point and pointer id |
 | `keymap` | keys moved to other actions, contributed ones included (needs `input.remap`) |
 | `settings` | the plugin's own settings, declared or drawn by its own component, shown under its row in Preferences ▸ Plugins (see [Settings](#settings)) |
+
+A `renderSections` block is `{ key, component, tab }` and is mounted after the
+core sections of that tab, re-read whenever a contribution changes. To look like
+the dock, draw it with the rows from `fundacad/ui`: `RenderSection` (title, hint
+and a slot), `RenderSlider` (`label`, `value`, `min`, `max`, `step`, emits
+`update`), `RenderSwitch` (`label`, `value`, emits `update`) and `RenderChoices`
+(`label`, `value`, `options` of `{ id, label }`, emits `update`).
+
+Anything a plugin draws follows [DESIGN.md](DESIGN.md): use these components and the app's classes and tokens, never a background, blur or shadow of its own.
+
+A `materialPresets` entry is a `MaterialDef`. Picking one adds a plain copy to
+the document under a fresh id and name, as one undo step, so the file opens
+without the plugin. Each entry is normalised like a material read from a file,
+and one that is not a material is skipped. `MaterialDef`, `BodyFinish`,
+`SurfaceGraph` and `SurfaceNode` are exported as types from `fundacad`.
 
 Four things this deliberately is not. There is no generic "run this on event X".
 There is no way to replace a core behaviour: `app/actions.ts` reaches its own
@@ -454,8 +474,10 @@ A feature of a plugin with no `geometryWasm` fails by name. The retired
 sidecar build on `legacy` used its own manifest key instead, and the app
 offers its own bundle of the same plugin in its place.
 
-The app installs its plugins from the `beta` release (`RELEASE_TAG` in
-`src/plugins/index.ts`). `build-beta` packs those bundles with their
+The app installs its plugins from the release it was built for, `beta`,
+`development` or a stable release's tag (`RELEASE_TAG` in
+`src/plugins/index.ts`). `bundle`
+packs those bundles with their
 components, from the same commit as the host that runs them. The app tells its
 worker where installed plugins are with `FUNDACAD_PLUGIN_DIR`
 (`<app data>/plugins`), and MCP mode tells a private engine the same directory.
@@ -517,6 +539,8 @@ plugins/
                            panel.ts, NodePanel.vue, geometry-rs/
   FundaCAD.MultiColor/     manifest.json, README.md, main.ts, palette.ts,
                            PaletteSection.vue
+  FundaCAD.PrintLook/      manifest.json, README.md, main.ts, look.ts, settings.ts,
+                           LayerLinesSection.vue
   FundaCAD.PrintToolbox/   manifest.json, README.md, main.ts, printForm.ts,
                            faceTool.ts, geometry-rs/
   FundaCAD.Printing/       manifest.json, README.md, main.ts, printerClient.ts,
@@ -1161,7 +1185,7 @@ and the `process` sentence on the install screen says so.
 | `src/plugins/settings.ts` | settings a plugin declares: the schema check, one stored key per plugin, versions and old keys |
 | `src/components/overlays/PluginSettingsForm.vue` | draws a plugin's declared settings under its row |
 | `src/plugins/host.ts` | `fundacad`: the whole of what a plugin may import |
-| `src/plugins/hostUi.ts` | `fundacad/ui`: the four components, kept apart so `fundacad` needs no DOM |
+| `src/plugins/hostUi.ts` | `fundacad/ui`: the four components and the four Render dock rows, kept apart so `fundacad` needs no DOM |
 | `src/plugins/loader.ts` | evaluates a downloaded plugin's module against the app's own modules |
 | `src/plugins/devPlugins.ts` | the plugin directories, in a DEV build only |
 | `scripts/build-plugin-code.mjs` | builds one plugin directory into the module its bundle carries |

@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch, useTemplateRef } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch, useId, useTemplateRef } from "vue";
 import { useModalStore } from "../../stores/modals";
 
 const modals = useModalStore();
 const req = computed(() => modals.current);
 
 const card = useTemplateRef<HTMLDivElement>("card");
+const titleId = useId();
 /** chooseMulti: which options are ticked, by index. */
 const checked = ref<boolean[]>([]);
 
@@ -105,8 +106,8 @@ onUnmounted(() => window.removeEventListener("keydown", onKeydown, true));
       class="choice-backdrop"
       @pointerdown.self="cancel()"
     >
-      <div class="choice-card" ref="card">
-        <div class="choice-title">{{ req.title }}</div>
+      <div class="choice-card" ref="card" role="dialog" aria-modal="true" :aria-labelledby="titleId">
+        <div :id="titleId" class="choice-title">{{ req.title }}</div>
 
         <!-- choose(): a row of option buttons -->
         <div v-if="req.kind === 'choose'" class="choice-row">

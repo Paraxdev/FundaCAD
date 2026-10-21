@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { fmtKeys } from "../../input/platform";
+import RenderSections from "./RenderSections.vue";
 // The material half of the Render workspace: what this document can be made of,
 // what it IS made of, and the editor for one of them.
 //
@@ -31,6 +33,7 @@ import { emissionProgress, onEmissionProgress } from "../../ui/emissionProgress"
 import SurfaceNodeEditor from "./SurfaceNodeEditor.vue";
 import { contextMenu, type CtxItem } from "../../ui/menu";
 import { choose } from "../../ui/choice";
+import { contributedMaterialPresets } from "../../plugins/contrib";
 import { modsOf, selectRow } from "../../ui/rowSelection";
 
 const engine = useEngine();
@@ -219,11 +222,31 @@ function addMaterial() {
   selectOnly(id);
 }
 
+function newMaterialMenu(e: MouseEvent) {
+  const groups = contributedMaterialPresets();
+  if (!groups.length) return addMaterial();
+  const at = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  const items: CtxItem[] = [{ label: "Blank", onClick: () => addMaterial() }];
+  for (const g of groups) {
+    items.push({
+      label: g.group,
+      children: g.materials.map((m) => ({ label: m.name, swatch: m.color, onClick: () => addPreset(m) })),
+    });
+  }
+  contextMenu(at.left, at.bottom, items);
+}
+
+function addPreset(raw: unknown) {
+  const id = store.addMaterialPreset(raw);
+  if (id) selectOnly(id);
+}
+
 /** Push one edited field. Every control calls this, so there is one place where
  *  a value becomes a document change. */
 function set(
   field: "name" | "color" | "metalness" | "roughness" | "opacity" | "emissive" | "clearcoat"
     | "ior" | "thickness" | "attenuationDistance" | "dispersion" | "iridescence"
+    | "sheen" | "anisotropy" | "flakes" | "flakeSize" | "scatterDistance"
     | "attenuationColor" | "specularColor",
   raw: string,
 ) {
@@ -299,6 +322,12 @@ const TINT_DEPTH = 20;
 type MaterialPatch = Partial<Omit<MaterialDef, "id">>;
 
 /** Glass controls only where the viewport draws glass: see-through and not metal. */
+const ADVANCED_SLIDERS = [
+  { field: "sheen", label: "Sheen" },
+  { field: "anisotropy", label: "Anisotropy" },
+  { field: "flakes", label: "Flakes" },
+] as const;
+
 function isGlass(m: MaterialDef): boolean {
   const f = finishOf(m);
   return f.opacity < 1 && f.metalness < 0.5;
@@ -422,7 +451,7 @@ async function doImport() {
         class="rd-used"
         :class="{ 'is-selected': selectedSet.has(m.id) }"
         draggable="true"
-        :title="`${m.name}, ${finishLabel(m)}. Drag onto a face. Ctrl or Shift click picks several, right-click for Delete.`"
+        :title="fmtKeys(`${m.name}, ${finishLabel(m)}. Drag onto a face. Ctrl or Shift click picks several, right-click for Delete.`)"
         @click="pick(m.id, $event, used)"
         @contextmenu="openMenu($event, m)"
         @dragstart="onDragStart($event, m)"
@@ -448,7 +477,7 @@ async function doImport() {
     <section class="rd-section">
       <h3 class="rd-head">
         Library <span class="tree-count">{{ all.length }}</span>
-        <button class="rd-mini" title="New material" @click="addMaterial()">
+        <button class="rd-mini" title="New material" @click="newMaterialMenu($event)">
           <Icon name="plus" :size="13" />New
         </button>
       </h3>
@@ -577,6 +606,15 @@ async function doImport() {
         Emission is on for this material. Turn Bloom on under Environment to see it
         spill light.
       </div>
+      <label v-if="finishOf(selected).emissive > 0" class="prefs-row">
+        <span class="prefs-label">Lights other parts</span>
+        <input
+          type="checkbox"
+          data-field="castsLight"
+          :checked="finishOf(selected).castsLight"
+          @change="store.updateMaterial(selected.id, { castsLight: ($event.target as HTMLInputElement).checked })"
+        />
+      </label>
       <label class="prefs-row">
         <span class="prefs-label">Clearcoat</span>
         <input
@@ -607,6 +645,39 @@ async function doImport() {
         />
         <button v-if="selected.specularColor" class="rd-chip" @click="set('specularColor', '')">Clear</button>
       </div>
+      <details class="rd-advanced" data-advanced>
+        <summary class="prefs-label">Advanced</summary>
+        <label v-for="s in ADVANCED_SLIDERS" :key="s.field" class="prefs-row">
+          <span class="prefs-label">{{ s.label }}</span>
+          <input
+            class="sm-slider"
+            type="range" min="0" max="1" step="0.01"
+            :data-field="s.field"
+            :value="finishOf(selected)[s.field]"
+            @input="set(s.field, ($event.target as HTMLInputElement).value)"
+          />
+        </label>
+        <label class="prefs-row">
+          <span class="prefs-label">Flake size (mm)</span>
+          <input
+            class="sm-slider"
+            type="range" min="0.02" max="2" step="0.01"
+            data-field="flakeSize"
+            :value="finishOf(selected).flakeSize"
+            @input="set('flakeSize', ($event.target as HTMLInputElement).value)"
+          />
+        </label>
+        <label v-if="isGlass(selected)" class="prefs-row">
+          <span class="prefs-label">Scatter (mm)</span>
+          <input
+            class="sm-slider"
+            type="range" min="0" max="20" step="0.1"
+            data-field="scatterDistance"
+            :value="finishOf(selected).scatterDistance"
+            @input="set('scatterDistance', ($event.target as HTMLInputElement).value)"
+          />
+        </label>
+      </details>
 
       <!-- Glass: how light bends and colours on its way through. -->
       <div v-if="isGlass(selected)" class="rd-surface" data-glass>
@@ -775,5 +846,6 @@ async function doImport() {
         @close="editingGraph = false"
       />
     </Teleport>
+    <RenderSections tab="material" />
   </div>
 </template>

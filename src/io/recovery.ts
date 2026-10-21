@@ -7,14 +7,20 @@
 
 import type { DocumentStore } from "../document/store";
 import { toast } from "../ui/toast";
+import { safeMode } from "../ui/safeMode";
 
 const IDLE_MS = 30_000; // quiet period after the last edit
 const MAX_MS = 120_000; // never lag a busy session by more than this
 
 const isTauri = () => "__TAURI_INTERNALS__" in window;
 
-/** slot name for a document path (sanitized server-side too) */
+/** slot name for a document path (sanitized server-side too). Safe mode
+ *  writes its own, so the snapshots it did not offer are still there after it. */
 export function slotFor(path: string | null): string {
+  return (safeMode() ? "safe-" : "") + baseSlot(path);
+}
+
+function baseSlot(path: string | null): string {
   if (!path) return "untitled";
   const base = (path.split(/[\\/]/).pop() ?? "doc").replace(/\.[^.]+$/, "");
   // tiny stable hash so same-named files in different dirs get distinct slots
@@ -94,7 +100,7 @@ export async function clearRecovery(path: string | null) {
   try {
     const { invoke } = await import("@tauri-apps/api/core");
     await invoke("recovery_clear", { slot: slotFor(path) });
-    await invoke("recovery_clear", { slot: "untitled" });
+    await invoke("recovery_clear", { slot: slotFor(null) });
   } catch {
     /* best-effort */
   }

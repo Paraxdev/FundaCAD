@@ -7,7 +7,8 @@ import { useModalGate } from "../../composables/useModalGate";
 import { escapeClaimed } from "../../ui/escapeClaim";
 import { useExportDialogStore } from "../../stores/exportDialog";
 import {
-  clampFaceting, FORMATS, isMeshFormat, loadExportSettings, REFINEMENTS, refinementOf, takesUnit, UNITS,
+  clampFaceting, clampTolerance, DEFAULT_SETTINGS, FORMATS, isFlatFormat, isMeshFormat, loadExportSettings, REFINEMENTS,
+  refinementOf, takesUnit, UNITS,
   type BodyScope, type Faceting, type Refinement,
 } from "../../io/exportSettings";
 import ModalFrame from "./ModalFrame.vue";
@@ -20,10 +21,15 @@ const picked = dialog.request?.selected?.length ?? 0;
 
 useModalGate();
 
+const flat = dialog.request?.flat ?? null;
+const formatOptions = flat ? FORMATS : FORMATS.filter((f) => !isFlatFormat(f.value));
 const settings = ref(loadExportSettings());
+if (dialog.request?.format) settings.value.format = dialog.request.format;
+if (!formatOptions.some((f) => f.value === settings.value.format)) settings.value.format = DEFAULT_SETTINGS.format;
 const scope = ref<BodyScope>(dialog.request?.scope ?? "all");
 
 const mesh = computed(() => isMeshFormat(settings.value.format));
+const flatShown = computed(() => isFlatFormat(settings.value.format));
 const unitShown = computed(() => takesUnit(settings.value.format));
 
 const REFINEMENT_OPTIONS: { value: Refinement; label: string }[] = [
@@ -63,6 +69,7 @@ function setFacet(key: keyof Faceting, v: number | null) {
 
 function confirm() {
   settings.value.faceting = clampFaceting(settings.value.faceting);
+  settings.value.tolerance = clampTolerance(settings.value.tolerance);
   const s = settings.value;
   dialog.finish({ settings: { ...s, faceting: { ...s.faceting } }, scope: scope.value });
 }
@@ -92,9 +99,28 @@ onUnmounted(() => window.removeEventListener("keydown", onKey, true));
     <div class="modal-body prefs export-body">
       <label class="prefs-row">
         <span class="prefs-label">Type</span>
-        <Select v-model="settings.format" :options="FORMATS" testid="export-format" />
+        <Select v-model="settings.format" :options="formatOptions" testid="export-format" />
       </label>
-      <label v-if="bodies.length > 1" class="prefs-row">
+      <template v-if="flatShown && flat">
+        <div class="prefs-row">
+          <span class="prefs-label">Draws</span>
+          <span data-testid="export-flat-source">{{ flat.label }}</span>
+        </div>
+        <label class="prefs-row">
+          <span class="prefs-label">Tolerance</span>
+          <span class="export-num">
+            <NumberBox
+              class="sm-input"
+              data-testid="export-tolerance"
+              :model-value="settings.tolerance"
+              @update:model-value="(v: number | null) => { if (v != null && Number.isFinite(v)) settings.tolerance = v; }"
+            />
+            <span class="export-unit">mm</span>
+          </span>
+        </label>
+        <div class="sm-hint">Drawn at true size in millimetres. Lines, arcs and circles stay exact, other curves become polylines this close to the curve.</div>
+      </template>
+      <label v-if="bodies.length > 1 && !flatShown" class="prefs-row">
         <span class="prefs-label">Bodies</span>
         <Select v-model="scope" :options="scopeOptions" testid="export-scope" />
       </label>

@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import { markRaw, shallowRef } from "vue";
 import type { BodyScope, ExportSettings } from "../io/exportSettings";
+import type { ExportFormat } from "../types";
 
 export interface ExportChoice {
   settings: ExportSettings;
@@ -13,6 +14,10 @@ interface ExportOpen {
   scope?: BodyScope;
   /** The bodies "selected" exports, more than one to offer it. */
   selected?: readonly string[];
+  /** What a DXF or SVG export would draw; without one those formats are not offered. */
+  flat?: { label: string };
+  /** The format the dialog starts on instead of the remembered one. */
+  format?: ExportFormat;
 }
 
 interface ExportRequest extends ExportOpen {

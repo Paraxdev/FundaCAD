@@ -19,7 +19,7 @@ document has imported bodies, one more top-level key comes last:
 
 ```json
 {
-  "version": 9,
+  "version": 10,
   "features": [ { "id": "f1", "type": "import", "geom": "5648909c8c0ccf6096c0e672255e68a0" } ],
   "geometry": {
     "5648909c8c0ccf6096c0e672255e68a0": "<base64 of the binary BREP>"
@@ -33,8 +33,37 @@ document has imported bodies, one more top-level key comes last:
 - A reader removes `geometry` from the document after publishing the blobs; the
   rest of the app never sees it.
 - A document without imports has no `geometry` key and is plain JSON.
+- A writer must embed the geometry of every import, and refuses to save when a
+  blob is missing. It also embeds the blob of any other hash shaped string in
+  the document when it has that blob, and skips it otherwise, so geometry a
+  feature of a type it does not know refers to survives a save.
+- `referenceImages` is a list the Reference images plugin owns, one entry per
+  picture on a plane (`id`, `name`, `image`, `mime`, `px`, `plane`, `at`,
+  `width`, `angle`, `flipX`, `flipY`, `opacity`, `locked`, `hidden`). `image`
+  is the hash of the PNG or JPEG bytes, embedded in `geometry` like any other
+  hash string value, so those bytes are an image, not a BREP. A version without
+  the key carries it as an unknown top level key, image included.
 
 The reference writer and reader is `crates/fundacad-format/src/json_doc.rs`.
+
+### Materials
+
+Each entry of the document's material library needs `id`, `name` and `color`
+(`"#rrggbb"`). Every other field is optional and left out when it holds its
+default. A reader clamps a number that is out of range and drops a field of the
+wrong type. These finish fields came with the filament materials:
+
+| Field | Range | Default | What it is |
+|---|---|---|---|
+| `sheen` | 0..1 | 0 | soft velvet rim at grazing angles |
+| `anisotropy` | 0..1 | 0 | highlights stretched along the layer lines, or world Z |
+| `flakes` | 0..1 | 0 | how many tiny mirror facets the surface has |
+| `flakeSize` | 0.01..5 mm | 0.1 | the size of one flake |
+| `scatterDistance` | 0..100 mm | 0 | light scattering inside a see-through finish |
+| `castsLight` | boolean | true | false keeps a glow off the other parts, written only when false |
+
+A field a reader does not know is kept as it is and written back on save, so a
+file from a newer version keeps its materials.
 
 ## Binary (.fundab), format 2
 
@@ -91,7 +120,7 @@ Both are 64 bytes and have the same layout; only the magic differs.
 |---|---|---|---|
 | 0 | 8 | magic | `FUNDACAD` in the header, `FNDATAIL` in the trailer |
 | 8 | 2 | major | `2` |
-| 10 | 2 | minor | `0` |
+| 10 | 2 | minor | `1` (`0` before the segment index, kind `4`) |
 | 12 | 4 | flags | `0`, reserved |
 | 16 | 8 | table_a | offset of section table copy A |
 | 24 | 8 | table_b | offset of section table copy B |
@@ -117,8 +146,8 @@ Each entry:
 
 | Size | Field | Meaning |
 |---|---|---|
-| 1 | kind | `0` info, `1` document, `2` geometry, `3` mesh |
-| 1 | codec | `0` raw, `1` deflate |
+| 1 | kind | `0` info, `1` document, `2` geometry, `3` mesh, `4` segment index, higher ones are carried (below) |
+| 1 | codec | `0` raw, `1` deflate; see "Files from a newer version" for any other |
 | 2 | name_len | length of `name` in bytes |
 | name_len | name | UTF-8; see below |
 | 8 | offset | where the section starts |
@@ -139,6 +168,8 @@ Names:
   `raw_hash`. A reader refuses an entry where they differ.
 - **mesh**: a cache key of ASCII letters, digits, `-`, `_` and `.`, with no `..`.
   Meshes are a reopen-speed cache; a damaged or unsafe one is skipped, never fatal.
+- **segment index**: `segments`. Where the segments of the big sections start,
+  see "Segmented sections". At most one, written last.
 
 A name is never used as a path. Extracted geometry is published under the hash
 the reader computed and verified.
@@ -166,14 +197,74 @@ CRC table: crc(group 0 D0), crc(group 0 D1), ... crc(last group P(m-1))
 
 A section occupies `groups * (k + m) * shard_size + 4 * groups * (k + m)` bytes.
 
+## Segmented sections
+
+A geometry, mesh or carried deflate section of at least two segments (FundaCAD:
+2 MiB raw) is compressed in segments, so a writer and a reader can work on all
+cores. The info and the document stay one stream, however big. Nothing in its entry,
+shards, parity or CRC table changes; only the stored bytes are produced
+differently:
+
+```text
+stored = S0 || S1 || ... || S(n-1)
+Si (i < n-1) = raw deflate of raw[i*seg .. (i+1)*seg] by a fresh compressor, ended by a sync flush
+S(n-1)       = raw deflate of the rest by a fresh compressor, ended by a final block
+```
+
+A sync flush ends on an empty stored block (`00 00 FF FF`), byte aligned and not
+final, so the concatenation is one valid raw deflate stream: a reader that knows
+nothing of segments decodes it in one pass to the same bytes. A fresh inflater
+fed exactly `Si` gives exactly that segment's raw bytes. Segments carry no
+dictionary from the one before, which costs well under 0.5 percent in size.
+
+Where the segments start is in the segment index, a section of kind `4` named
+`segments`, codec `1` (deflate) like the others, written after the sections it
+describes. All integers little-endian:
+
+| Size | Field |
+|---|---|
+| 4 | magic `FSEG` |
+| 2 | version, `1` |
+| 2 | reserved, `0` |
+| 4 | `rows` |
+| ... | `rows` rows |
+
+Each row:
+
+| Size | Field | Meaning |
+|---|---|---|
+| 1 | kind | kind of the described section |
+| 1 | codec | its codec, `1` |
+| 2 | reserved | `0` |
+| 4 | n | number of segments, at least 2 |
+| 16 | raw_hash | the described section's `raw_hash` |
+| 8 | stored_len | the described section's `stored_len` |
+| 4 | crc_table_crc | CRC-32 of the described section's CRC table |
+| 4 | reserved | `0` |
+| 8 n | segments | per segment, `stored_len` u32 then `raw_len` u32 |
+
+The index is advisory. A reader uses a row for a section only when kind,
+`raw_hash`, codec `1`, `stored_len` and `crc_table_crc` all match it, `n` is at
+most `raw_len / 1024 + 1`, every segment has a `stored_len` of at least 1 and a
+`raw_len` from 1 byte to 64 MiB, and the segment lengths add up exactly to the
+section's `stored_len` and `raw_len`. Anything else, an index of another version,
+a row for a section that is not in the table, or a segment that does not inflate
+to exactly its `raw_len`, means the section is decoded as one stream. The whole
+section is still proven by `raw_hash`, so a wrong index can cost speed, never
+correctness. Several rows for one section: the first that matches wins.
+
+The index is never carried. A writer builds it again from the sections it
+actually writes, and drops any kind `4` section it was handed.
+
 ## Writing
 
 1. Write 64 zero bytes as a placeholder header.
 2. For each section: encode the raw bytes with its codec, hashing the raw bytes
    with BLAKE2b-128 as they pass; cut, compute parity, write the groups and then
    the CRC table.
-3. Write the table twice, then the trailer.
-4. Seek to 0 and write the header.
+3. When any section was segmented, write the segment index as one more section.
+4. Write the table twice, then the trailer.
+5. Seek to 0 and write the header.
 
 The writer builds the file at a temporary path beside the target, flushes it to
 stable storage, and renames it over the target, so a crash leaves the old file
@@ -219,6 +310,51 @@ user and suggests saving, which writes a clean copy.
 A reader that does not repair may skip step 3's reconstruction: concatenate the
 data shards directly and rely on step 4's hash to reject damage.
 
+The parity shards are only needed for a group with a damaged data shard, so
+FundaCAD reads a group's `k` data shards in one read and its `m` parity shards
+only then. It also refuses a section whose `stored_len` or group size is larger
+than the file, before sizing any buffer from them.
+
+## Speed
+
+Measured with `bench_open` (docs/ENGINE.md 8.1), release build, a 32 thread
+Windows machine with NVMe, warm file cache. SV08 is a 154 MB STEP assembly of
+1097 bodies, stored as one 68.9 MB blob; the scan is a generated 2,000,000
+triangle STL, one 48.0 MB blob.
+
+Saving a `.fundab` is almost all deflate (level 6, one core: 37 MiB/s on SV08,
+21 MiB/s on the scan), so segments made it parallel:
+
+| Save | one stream | segments, 4 threads | segments, 16 threads | size change |
+|---|---|---|---|---|
+| SV08 | 1814 ms | 586 ms | 304 ms | +0.003% |
+| scan | 2291 ms | 692 ms | 276 ms | +0.003% |
+
+Deflate level 1 would be faster still, but makes SV08 17 percent bigger
+(ratio 0.414 against 0.355), so the level stays 6.
+
+A first open, with nothing of the document in the blob store yet, reads every
+segmented section by its index row: the groups of a window are read and
+repaired on all threads, the segments inside them are inflated on all threads,
+at most 4 MiB raw per thread at a time so very redundant data costs no more
+memory than plain data, and the result is hashed and written in order. Sections without a row are
+extracted side by side, one per thread. A blob already in the store is skipped
+only when its length is right, so a torn one is extracted again. Times for the
+whole file layer of a first open (`open_file_empty_store`, the median of three
+runs of seven, each writing and syncing the blob):
+
+| First open | one stream | segments, 1 thread | 4 threads | 8 threads | 16 threads |
+|---|---|---|---|---|---|
+| SV08 | 282 ms | 222 ms | 213 ms | 190 ms | 132 ms |
+| scan | 251 ms | 210 ms | 108 ms | 97 ms | 89 ms |
+
+The rest is the BLAKE2b of the whole blob, which stays serial (about 1 GB/s,
+66 ms for SV08), and writing and syncing it. Runs on this machine vary by up to
+a factor of two with the file system, so only the ordering is firm. The file
+layer is a small part of a first open of SV08, whose engine side (shapes, the
+rebuild and the mesh) takes over ten seconds; for the scan it was about a
+fifth. A reopen finds every blob in the store and takes a few milliseconds.
+
 ## Older formats
 
 FundaCAD still reads every format it has written:
@@ -230,6 +366,55 @@ FundaCAD still reads every format it has written:
   open.
 
 Only JSON and format 2 are written.
+
+## Files from a newer version
+
+A file a newer FundaCAD wrote still opens, and saving it again loses nothing this
+version merely does not understand. The document `version` (`FORMAT_VERSION` in
+`src/document/migrate.ts`, `DOCUMENT_VERSION` in `crates/fundacad-core`) is not a
+gate: a reader never refuses a file for a higher number.
+
+Reader rules:
+
+- A feature of a type the reader does not know stays in the history where it is,
+  is not built, and is written back unchanged. So is a field it does not know on
+  a feature it does know.
+- A top level key the reader does not know is written back unchanged. `geometry`
+  is reserved for the JSON file's embedded blobs (above), never a document key.
+- A `stress`, `environment` or `versions` value the reader cannot read is kept
+  whole and written back for as long as the document has none of its own.
+- A `.fundab` section of a kind above `4` in codec `0` or `1` is verified against
+  its `raw_hash`, kept, and written again with the same name, kind and raw bytes
+  when the document is saved as `.fundab`. A JSON `.funda` has no sections, so
+  saving as `.funda` drops it. A section of such a kind in another codec cannot
+  be verified or written back, so it is skipped, and a damaged one never stops
+  the open. A document or geometry section in another codec is damage: the open
+  fails. So a new codec can never be used for kinds `0` to `3` while released
+  readers do not know it. Readers from before minor `1` skip the segment index,
+  or carry it as an unknown kind; the index's match rule makes either harmless,
+  and an index dropped on save costs only speed.
+
+Writer rules:
+
+- A writer stamps its own `version`, never the higher number it read, because
+  what it saves is in its own shapes. A newer reader therefore runs its newer
+  migrations on such a file again, so every migration must be shape guarded:
+  it rewrites only what still has the old shape, and leaves alone what already
+  has the new one. The app saves a newer file this way. MCP `doc_save` is the
+  exception: it writes the JSON back as it was read, edits included, so the
+  higher stamp stays, and an edit made through MCP must already use the shapes
+  of that stamp.
+- A new reference to geometry is a lowercase hex BLAKE2b-128 string held as a
+  string value, never as an object key, so an older writer finds it and keeps
+  the blob. The older writer only scans values.
+- A new section kind uses codec `0` or `1`, so an older version carries it.
+- An older version copies such a section unchanged after the user edited the
+  document, it cannot update it. So a new section kind must stay valid against
+  any edit. It cannot check itself against the document section's `raw_hash`:
+  an older writer always encodes the document again, with its own `version`
+  stamp and key order, so that hash changes on every older save, edited or not.
+  A section that describes the document should name what it depends on, such
+  as feature ids, and ignore entries whose targets are gone.
 
 ## What the error correction does not cover
 

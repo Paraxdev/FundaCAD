@@ -42,6 +42,13 @@ import { writeTarget } from "./numFields";
 import { markReceived, markSent } from "../diagnostics/rebuildTiming";
 import { featureMeta } from "../ui/featureMeta";
 
+/** A section of a `.fundab` this version does not read (docs/FUNDA-FORMAT.md). */
+export interface CarriedSection {
+  kind: number;
+  name: string;
+  hash: string;
+}
+
 /** An expression typed on a sketch dimension while the sketch was OPEN, the
  *  dim isn't in the document until the sketch commits, so the binding travels
  *  with the commit (addFeature/replaceFeature) and lands in the same mutate. */
@@ -129,10 +136,55 @@ type MetaListener = () => void;
  *  stack in chronological order, so Ctrl+Z undoes whichever happened last
  *  instead of silently skipping display-only changes and eating a feature
  *  edit that came before them. */
-type UndoEntry = { kind: "doc"; doc: CadDocument } | { kind: "overlay"; undo: () => void; redo: () => void };
+type UndoEntry =
+  | { kind: "doc"; doc: CadDocument }
+  | { kind: "overlay"; undo: () => void; redo: () => void }
+  | { kind: "group"; entries: UndoEntry[] };
 
 // Safe for `"hiddenBodies" in f` checks: no mutator writes an explicit undefined.
 const clone = (d: CadDocument): CadDocument => structuredClone(d);
+
+/** Every top level key the store reads or writes. Anything else in a file is
+ *  from a newer version and is carried. `geometry` is the JSON file's embedded
+ *  blob map, which the Rust reader takes out and the writer puts back. */
+export const KNOWN_DOC_KEYS: ReadonlySet<string> = new Set([
+  "version", "parameters", "paramDefs", "paramExtras", "features", "viewOverrides", "bodyIds",
+  "suppressed", "rollback", "sketchVisibility", "bodyVisibility", "planeVisibility", "bodyNames",
+  "bodyColors", "bodyElement", "bodyMaterial", "faceMaterials", "importColorSource", "elements",
+  "materials", "palette", "stress", "environment", "versions", "geometry", "referenceImages",
+]);
+const ELEMENT_KEYS: ReadonlySet<string> = new Set(["id", "name", "parent"]);
+
+function sharesAFeature(a: readonly Feature[], b: readonly Feature[]): boolean {
+  const ids = new Set(a.map((f) => f.id));
+  return b.some((f) => ids.has(f.id));
+}
+
+/** The entries of `raw` outside `known`, deep copied, as normalizeMaterial keeps
+ *  a material's unknown fields. */
+export function carriedKeys(raw: Record<string, unknown>, known: ReadonlySet<string>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(raw)) {
+    if (known.has(k) || k === "__proto__" || v === undefined) continue;
+    out[k] = structuredClone(v);
+  }
+  return out;
+}
+
+/** Plain object entries with an id each, deep copied, the first of a repeated id kept. */
+function readReferenceImages(raw: unknown): Record<string, unknown>[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const out: Record<string, unknown>[] = [];
+  for (const e of raw) {
+    if (!e || typeof e !== "object" || Array.isArray(e)) continue;
+    const id = (e as { id?: unknown }).id;
+    if (typeof id !== "string" || !id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(structuredClone(e as Record<string, unknown>));
+  }
+  return out;
+}
 
 const isIdMap = (v: unknown): v is Record<string, string> =>
   !!v && typeof v === "object" && !Array.isArray(v) && Object.values(v).every((x) => typeof x === "string");
@@ -266,6 +318,23 @@ export class DocumentStore {
   private stress: StressStudy | null = null;
   /** Off `doc` like the study, so an embedded panorama is never cloned onto the undo stack. */
   private environment: DocEnvironment | null = null;
+  /** Top level keys of the opened file this version does not know, written back
+   *  as they came. Off `doc`, so they ride neither the undo stack nor a rebuild. */
+  private unknownKeys: Record<string, unknown> = {};
+  /** Reference images (plugins/FundaCAD.ReferenceImages), opaque here and kept
+   *  whole, unknown fields too. Off `doc`: a picture builds nothing, so changing
+   *  one neither rebuilds nor clones the document onto the undo stack. */
+  private refImages: Record<string, unknown>[] = [];
+  private refImageListeners = new Set<(list: readonly Record<string, unknown>[]) => void>();
+  private refCoalesce: { key: string; top: unknown; after: { v: Record<string, unknown>[] } } | null = null;
+  /** A section this version could not read (a newer study or repo shape), kept
+   *  whole and written back while this document has none of its own. */
+  private unreadSections: { stress?: unknown; environment?: unknown; versions?: unknown } = {};
+  /** The `version` the open document was stamped with, 1 when it had none. */
+  openedVersion = FORMAT_VERSION;
+  /** Sections of the opened `.fundab` this version does not read, as the app
+   *  copied them out. Saving to a `.fundab` writes them back. */
+  carriedSections: CarriedSection[] = [];
   // static descriptor list driving toJSON/load below, in the exact on-disk key
   // order (palette piggybacks on bodyColors' condition, so isn't listed here).
   private readonly overlays: { overlay: Overlay<any>; mapValue?: (v: unknown) => any }[] = [
@@ -304,6 +373,7 @@ export class DocumentStore {
   private busy: BusyState = IDLE_BUSY;
   /** Every runBusy op still running, newest last; the chip shows the newest. */
   private busyOps: { state: BusyState; abort: AbortController | null }[] = [];
+  private historyHeld = 0;
 
   /** The last build of the document without a preview, and what it was built
    *  from. Leaving a tool, or undoing a commit the kernel refused, lands back on
@@ -398,6 +468,11 @@ export class DocumentStore {
     return this.busy;
   }
 
+  /** An edit is waiting out the rebuild debounce. */
+  get rebuildPending(): boolean {
+    return this.rebuildTimer != null;
+  }
+
   onBusy(fn: BusyListener): () => void {
     this.busyListeners.add(fn);
     fn(this.busy);
@@ -406,13 +481,17 @@ export class DocumentStore {
 
   /** Run a cancellable backend op with busy state. `onStarted` hands back the request
    *  id, since a rebuild started meanwhile would otherwise be "most recent". An op
-   *  that never reaches the engine passes `abort`, which Cancel then aborts. */
+   *  that never reaches the engine passes `abort`, which Cancel then aborts.
+   *  `holdHistory` turns undo and redo off until it ends: an import's feature lands
+   *  as a new step once the file is read, which would drop the redo of a step
+   *  undone meanwhile. */
   async runBusy<T>(
     label: string,
     fn: (onStarted: (id: string) => void) => Promise<T>,
-    opts: { rebuild?: boolean; abort?: AbortController } = {},
+    opts: { rebuild?: boolean; abort?: AbortController; holdHistory?: boolean } = {},
   ): Promise<T> {
     const op = { state: { ...IDLE_BUSY, active: true, label, rebuild: opts.rebuild === true }, abort: opts.abort ?? null };
+    if (opts.holdHistory) this.historyHeld++;
     this.busyOps.push(op);
     this.setBusy(op.state);
     try {
@@ -421,6 +500,7 @@ export class DocumentStore {
         if (this.busyOps.at(-1) === op) this.setBusy(op.state);
       });
     } finally {
+      if (opts.holdHistory) this.historyHeld--;
       this.busyOps.splice(this.busyOps.indexOf(op), 1);
       this.busy = this.busyOps.at(-1)?.state ?? IDLE_BUSY;
       this.emitBusy();
@@ -574,6 +654,11 @@ export class DocumentStore {
     this.repo = null;
     this.stress = null;
     this.environment = null;
+    this.unknownKeys = {};
+    this.setRefImagesQuiet([]);
+    this.unreadSections = {};
+    this.openedVersion = FORMAT_VERSION;
+    this.carriedSections = [];
     this.path = null;
     this.pathlessName = null;
     this.isDirty = false;
@@ -608,14 +693,20 @@ export class DocumentStore {
   // cheap closures and share the same cap for simplicity.
   private static readonly UNDO_CAP = 50;
 
+  /** Set while undoAsOne runs: the steps go here instead of onto the stack. */
+  private collecting: UndoEntry[] | null = null;
+
   private pushUndo() {
-    this.undoStack.push({ kind: "doc", doc: clone(this.doc) });
+    const entry: UndoEntry = { kind: "doc", doc: clone(this.doc) };
+    if (this.collecting) return void this.collecting.push(entry);
+    this.undoStack.push(entry);
     if (this.undoStack.length > DocumentStore.UNDO_CAP) this.undoStack.shift();
   }
 
   /** Push a reversible overlay-only change (visibility and the like) onto the
    *  same stack as feature edits, in its true chronological place. */
   private pushOverlayUndo(entry: { undo: () => void; redo: () => void }) {
+    if (this.collecting) return void this.collecting.push({ kind: "overlay", ...entry });
     this.undoStack.push({ kind: "overlay", ...entry });
     if (this.undoStack.length > DocumentStore.UNDO_CAP) this.undoStack.shift();
     this.redoStack = [];
@@ -1180,11 +1271,16 @@ export class DocumentStore {
   }
   /** skip/unskip a feature on rebuild without deleting it. */
   toggleSuppress(id: string) {
-    if (this.suppressed.has(id)) this.suppressed.delete(id);
-    else this.suppressed.add(id);
-    this.markDirty();
-    this.emitDoc();
-    this.scheduleRebuild(true);
+    const was = this.suppressed.has(id);
+    const set = (on: boolean) => {
+      if (on) this.suppressed.add(id);
+      else this.suppressed.delete(id);
+      this.markDirty();
+      this.emitDoc();
+      this.scheduleRebuild(true);
+    };
+    set(!was);
+    this.pushOverlayUndo({ undo: () => set(was), redo: () => set(!was) });
   }
 
   // --- live preview ---
@@ -1303,42 +1399,71 @@ export class DocumentStore {
 
   // --- undo / redo ---
   undo() {
+    if (!this.historyHeld) this.undoStep();
+  }
+  /** The store taking back its own last step, which an import's hold does not stop. */
+  private undoStep() {
     const prev = this.undoStack.pop();
     if (!prev) return;
     this.emitRewind();
-    if (prev.kind === "overlay") {
-      this.redoStack.push(prev);
-      prev.undo();
-      return;
-    }
-    this.redoStack.push({ kind: "doc", doc: clone(this.doc) });
-    this.doc = prev.doc;
-    this.rearmProjectionValve();
-    this.markDirty();
-    this.emitDoc();
-    this.scheduleRebuild(true);
+    this.redoStack.push(this.applyUndoEntry(prev, "undo"));
   }
   redo() {
+    if (this.historyHeld) return;
     const next = this.redoStack.pop();
     if (!next) return;
     this.emitRewind();
-    if (next.kind === "overlay") {
-      this.undoStack.push(next);
-      next.redo();
-      return;
+    this.undoStack.push(this.applyUndoEntry(next, "redo"));
+    if (this.undoStack.length > DocumentStore.UNDO_CAP) this.undoStack.shift();
+  }
+  /** Applies one entry and returns the entry that takes it back again. */
+  private applyUndoEntry(e: UndoEntry, way: "undo" | "redo"): UndoEntry {
+    if (e.kind === "overlay") {
+      e[way]();
+      return e;
     }
-    this.pushUndo();
-    this.doc = next.doc;
+    if (e.kind === "group") {
+      const order = way === "undo" ? [...e.entries].reverse() : e.entries;
+      const back = order.map((x) => this.applyUndoEntry(x, way));
+      return { kind: "group", entries: way === "undo" ? back.reverse() : back };
+    }
+    const was: UndoEntry = { kind: "doc", doc: clone(this.doc) };
+    this.doc = e.doc;
     this.rearmProjectionValve();
     this.markDirty();
     this.emitDoc();
     this.scheduleRebuild(true);
+    return was;
+  }
+  /** Runs `fn` and makes the undo steps it takes one step. When the step on top of
+   *  the stack is a document change and `onto` holds for the document before it,
+   *  they join that step instead. With `only: true` nothing runs unless they can. */
+  undoAsOne(fn: () => void, onto?: (before: CadDocument) => boolean, opts: { only?: boolean } = {}): boolean {
+    const top = this.undoStack.at(-1);
+    const join = top?.kind === "doc" && !!onto?.(top.doc);
+    if (opts.only && !join) return false;
+    const taken: UndoEntry[] = [];
+    this.collecting = taken;
+    try {
+      fn();
+    } finally {
+      this.collecting = null;
+    }
+    if (!taken.length) return join;
+    if (join) {
+      this.undoStack[this.undoStack.length - 1] = { kind: "group", entries: [top!, ...taken] };
+      return true;
+    }
+    this.undoStack.push(taken.length > 1 ? { kind: "group", entries: taken } : taken[0]!);
+    if (this.undoStack.length > DocumentStore.UNDO_CAP) this.undoStack.shift();
+    this.redoStack = [];
+    return false;
   }
   get canUndo() {
-    return this.undoStack.length > 0;
+    return !this.historyHeld && this.undoStack.length > 0;
   }
   get canRedo() {
-    return this.redoStack.length > 0;
+    return !this.historyHeld && this.redoStack.length > 0;
   }
 
   // --- ViewCube side redefinitions (don't affect geometry, so no rebuild) ---
@@ -1690,6 +1815,48 @@ export class DocumentStore {
     this.emitBuild();
   }
 
+  // --- reference images --------------------------------------------------------
+
+  referenceImages(): readonly Record<string, unknown>[] {
+    return this.refImages;
+  }
+
+  /** Called now and on every change, an open, an undo. */
+  onReferenceImagesChange(fn: (list: readonly Record<string, unknown>[]) => void): () => void {
+    this.refImageListeners.add(fn);
+    fn(this.refImages);
+    return () => this.refImageListeners.delete(fn);
+  }
+
+  /** Replace the list as one undo step. Calls passing the same `coalesce` key
+   *  one after another share a step, so a slider drag undoes in one go. */
+  setReferenceImages(next: readonly Record<string, unknown>[], opts: { coalesce?: string } = {}) {
+    const after = readReferenceImages(next);
+    if (JSON.stringify(after) === JSON.stringify(this.refImages)) return;
+    const c = this.refCoalesce;
+    if (opts.coalesce && c && c.key === opts.coalesce && this.undoStack[this.undoStack.length - 1] === c.top) {
+      c.after.v = after;
+      this.redoStack = [];
+    } else {
+      const before = this.refImages;
+      const box = { v: after };
+      this.pushOverlayUndo({
+        undo: () => { this.refCoalesce = null; this.setRefImagesQuiet(before); this.markDirty(); },
+        redo: () => { this.refCoalesce = null; this.setRefImagesQuiet(box.v); this.markDirty(); },
+      });
+      const top = this.undoStack[this.undoStack.length - 1];
+      this.refCoalesce = opts.coalesce ? { key: opts.coalesce, top, after: box } : null;
+    }
+    this.setRefImagesQuiet(after);
+    this.markDirty();
+  }
+
+  private setRefImagesQuiet(list: Record<string, unknown>[]) {
+    if (!list.length && !this.refImages.length) return;
+    this.refImages = list;
+    for (const fn of this.refImageListeners) fn(list);
+  }
+
   // --- materials (document/materials.ts) --------------------------------------
   // The library itself (add/edit/remove a MaterialDef below) is display-only and
   // off the undo stack; assigning one to a body or a face (setBodiesMaterial,
@@ -1789,6 +1956,36 @@ export class DocumentStore {
     this.markDirty();
     this.emitBuild();
     return next.id;
+  }
+
+  /** Add a plugin's preset as a plain copy under a fresh id and name, as one
+   *  undo step. Null when it is not a material once normalised. */
+  addMaterialPreset(raw: unknown): string | null {
+    const m = normalizeMaterial(raw);
+    if (!m) return null;
+    const taken = new Set(this.materials.map((x) => x.id));
+    const base = m.name.trim() ? m.name : "Material";
+    m.name = freshMaterialName(this.materials, base);
+    m.id = uniqueId(slugId(m.name), taken);
+    const entry = m;
+    const emit = () => {
+      this.markDirty();
+      this.emitBuild();
+    };
+    this.materials = [...this.materials, entry];
+    emit();
+    this.pushOverlayUndo({
+      undo: () => {
+        this.materials = this.materials.filter((x) => x.id !== entry.id);
+        this.dropMaterialUses(new Set([entry.id]));
+        emit();
+      },
+      redo: () => {
+        if (!this.materials.some((x) => x.id === entry.id)) this.materials = [...this.materials, entry];
+        emit();
+      },
+    });
+    return m.id;
   }
 
   /** Change a material in place. Every body wearing it repaints, which is the
@@ -1973,7 +2170,8 @@ export class DocumentStore {
     // Persist the geometry doc PLUS the non-geometry project state that lives in
     // the store (suppress set, rollback marker, sketch visibility) so reopening
     // restores the full session. Empty state is omitted to keep files clean.
-    const out: CadDocument = { ...this.doc, version: FORMAT_VERSION };
+    // A known key always wins over a carried one of the same name.
+    const out: CadDocument = { ...structuredClone(this.unknownKeys), ...this.doc, version: FORMAT_VERSION };
     if (this.suppressed.size) out.suppressed = [...this.suppressed];
     if (this.rollback !== null) out.rollback = this.rollback;
     for (const { overlay } of this.overlays) overlay.writeJSON(out as unknown as Record<string, unknown>);
@@ -1986,13 +2184,19 @@ export class DocumentStore {
     if (this.bodyMaterial.size || this.faceMaterial.size || !this.materialsAreDefault()) {
       out.materials = this.materials.map((m) => ({ ...m }));
     }
+    if (this.refImages.length) out.referenceImages = structuredClone(this.refImages);
     // Persist the palette whenever it carries information: body assignments
     // reference it, and a synced/customized palette is project state in its own
     // right (the "design in loaded colors" premise) even with zero assignments.
     if (this.bodyColors.size || !this.paletteIsDefault()) out.palette = this.palette;
+    const unread = this.unreadSections;
+    const raw = out as unknown as Record<string, unknown>;
     if (this.stress) out.stress = structuredClone(this.stress);
+    else if (unread.stress !== undefined) raw["stress"] = structuredClone(unread.stress);
     if (this.environment) out.environment = { ...this.environment, settings: { ...this.environment.settings } };
+    else if (unread.environment !== undefined) raw["environment"] = structuredClone(unread.environment);
     if (withVersions && this.repo) out.versions = this.repo;
+    else if (withVersions && unread.versions !== undefined) raw["versions"] = structuredClone(unread.versions);
     return out;
   }
 
@@ -2005,6 +2209,12 @@ export class DocumentStore {
   /** The document as a version records it. */
   workingSnapshot(): Snapshot {
     return JSON.parse(JSON.stringify(this.toObject(false))) as Snapshot;
+  }
+
+  /** Whether the file came with versions this version cannot read, which the
+   *  first version saved here replaces. */
+  hasUnreadVersions(): boolean {
+    return this.unreadSections.versions != null && !this.repo;
   }
 
   /** Save the document as it is now as a version on the current branch. Null
@@ -2031,7 +2241,9 @@ export class DocumentStore {
     const repo = this.repo;
     if (!repo) return;
     const snapshot = snapshotOf(repo, id);
+    const carried = this.carriedSections;
     this.load(JSON.stringify(snapshot), { replace: true });
+    this.carriedSections = carried;
     this.repo = repo;
     this.emitMeta();
   }
@@ -2087,6 +2299,16 @@ export class DocumentStore {
     this.repo = normalizeRepo(parsed.versions);
     this.stress = normalizeStressStudy(parsed.stress);
     this.environment = normalizeDocEnvironment(parsed.environment);
+    this.openedVersion = typeof parsed.version === "number" ? parsed.version : 1;
+    // A replacing load sharing no feature with this one is a different document
+    // after all, and sections it did not come with must not be saved into it.
+    if (!opts.replace || !sharesAFeature(this.doc.features, parsed.features ?? [])) this.carriedSections = [];
+    this.unknownKeys = carriedKeys(parsed as unknown as Record<string, unknown>, KNOWN_DOC_KEYS);
+    this.setRefImagesQuiet(readReferenceImages(parsed.referenceImages));
+    this.unreadSections = {};
+    if (parsed.versions != null && !this.repo) this.unreadSections.versions = structuredClone(parsed.versions);
+    if (parsed.stress != null && !this.stress) this.unreadSections.stress = structuredClone(parsed.stress);
+    if (parsed.environment != null && !this.environment) this.unreadSections.environment = structuredClone(parsed.environment);
     this.materials = parsed.materials?.length
       ? parsed.materials
           .map((m, i) => normalizeMaterial(m, i))
@@ -2095,6 +2317,7 @@ export class DocumentStore {
     this.elements = (parsed.elements ?? [])
       .filter((e) => e && typeof e.id === "string" && e.id)
       .map((e) => ({
+        ...carriedKeys(e as unknown as Record<string, unknown>, ELEMENT_KEYS),
         id: e.id,
         name: typeof e.name === "string" && e.name.trim() ? e.name : e.id,
         ...(typeof e.parent === "string" && e.parent ? { parent: e.parent } : {}),
@@ -2430,7 +2653,7 @@ export class DocumentStore {
     if (!err) return false;
     this.onWarning?.(`${p.what} was refused, nothing changed: ${err.message}`);
     this.restoreArmed = true;
-    this.undo();
+    this.undoStep();
     return true;
   }
 

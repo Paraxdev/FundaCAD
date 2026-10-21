@@ -6,6 +6,9 @@ import { contextMenu, dismissContextMenu } from "../ui/menu";
 import { useBrowserStore } from "../stores/browser";
 import { renderPrefs, setRenderPref } from "../ui/renderPrefs";
 import type { Engine } from "./engine";
+import { setLibrary } from "../io/library";
+import { fakeLibrary, type FakeFile, type FakeLibrary } from "../io/fakeLibrary";
+import { contribute } from "../plugins/contrib";
 
 /** Debug handles for console + headless frontend-logic tests. Gated to DEV so
  *  they're absent from production bundles, a post-XSS attacker shouldn't be
@@ -14,10 +17,13 @@ import type { Engine } from "./engine";
  *
  *  The e2e scripts in e2e/*.cjs drive the app entirely through these, so the
  *  names here are a contract: `store`, `tree`, `viewport` and `geometry` are all
- *  waited on by `page.waitForFunction` before any test step runs. */
+ *  waited on by `page.waitForFunction` before any test step runs. New scripts
+ *  use the agent harness instead (src/harness, docs/HARNESS.md), these stay
+ *  for the old ones until they are ported. */
 export function installDevGlobals(e: Engine): void {
   if (!import.meta.env.DEV) return;
   const w = window as any;
+  let fake: FakeLibrary | null = null;
   w.viewport = e.viewport;
   w.store = e.store;
   w.geometry = e.geometry;
@@ -43,12 +49,20 @@ export function installDevGlobals(e: Engine): void {
   w.__fundacad = {
     store: e.store,
     viewport: e.viewport,
+    setRealtimeQuality: (q: "standard" | "high") => setRenderPref("realtimeQuality", q),
     sketch: e.sketch,
     handleAction: (a: string) => e.handleAction(a),
+    // Home reads the library when it opens, so reopen it after this.
+    home: {
+      useFakeLibrary: (files: FakeFile[], picks?: string[]) => { fake = fakeLibrary(files, picks); setLibrary(fake); },
+      thumbRequests: () => [...(fake?.thumbRequests ?? [])],
+    },
     // The app's own module instance: a harness importing /src/ui/renderPrefs.ts
     // after an HMR update gets a second copy whose listeners reach nothing.
     renderPrefs,
     setRenderPref,
+    // Contribute as a plugin would, for a capability no plugin offers yet.
+    contribute,
     // Which feature the panels are showing. A harness that wants to open a
     // feature's Properties has to say WHICH, and the timeline chip that normally
     // does it is a click on a scrolling strip.

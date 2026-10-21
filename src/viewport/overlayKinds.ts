@@ -10,6 +10,7 @@ import { markNotInPicture } from "./pictureScene";
 
 export const OVERLAY_KINDS = [
   "edges", "highlight", "grid", "origin", "sketches", "sketchLabels", "handles", "stress", "section",
+  "references",
 ] as const;
 export type OverlayKind = (typeof OVERLAY_KINDS)[number];
 export type OverlayKinds = Record<OverlayKind, boolean>;
@@ -24,6 +25,7 @@ export const OVERLAY_LABELS: Record<OverlayKind, string> = {
   handles: "Gizmos and handles",
   stress: "Stress glyphs",
   section: "Section plane",
+  references: "Reference images",
 };
 
 export interface OverlayState {
@@ -129,10 +131,10 @@ export function pickMask(draw: number): number {
   return draw | overlayBit("edges") | overlayBit("highlight");
 }
 
-/** The layers a saved picture draws: the model, and the edges only when the
- *  export asks for them. */
-export function pictureMask(opts: { edges?: boolean } = {}): number {
-  return MODEL_BIT | (opts.edges ? overlayBit("edges") : 0);
+/** The layers a saved picture draws: the model, and the edges and the
+ *  reference images only when the export asks for them. */
+export function pictureMask(opts: { edges?: boolean; references?: boolean } = {}): number {
+  return MODEL_BIT | (opts.edges ? overlayBit("edges") : 0) | (opts.references ? overlayBit("references") : 0);
 }
 
 let currentPick = pickMask(drawMask(DEFAULT_OVERLAYS));

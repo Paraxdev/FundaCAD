@@ -8,7 +8,7 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 import { contribute, resetContributions } from "../../src/plugins/contrib";
-import { missingPluginMessage, missingPlugins } from "../../src/document/missingPlugins";
+import { missingPluginMessage, missingPlugins, type MissingPlugin } from "../../src/document/missingPlugins";
 import type { Feature } from "../../src/types";
 
 const f = (id: string, type: string, extra: Record<string, unknown> = {}) =>
@@ -20,6 +20,8 @@ const box = [
 ];
 
 beforeEach(() => resetContributions());
+
+const owned = (m: MissingPlugin | undefined) => ({ ...m!, id: m!.id! });
 
 describe("a document whose plugin is missing", () => {
   it("says nothing at all about a document the app can build on its own", () => {
@@ -57,7 +59,6 @@ describe("a document whose plugin is missing", () => {
     expect(m?.id).toBeNull();
     expect(m?.name).toBe("somebodyElsesThing");
     expect(m?.installable).toBe(false);
-    expect(missingPluginMessage(m!)).toContain("somebodyElsesThing");
   });
 
   it("puts the most-used plugin first, so the summary reads as the real problem", () => {
@@ -79,7 +80,7 @@ describe("a document whose plugin is missing", () => {
   describe("the sentence it shows", () => {
     it("promises the values are kept, before it asks for anything", () => {
       const [m] = missingPlugins({ features: [...box, f("t1", "texture")] });
-      const msg = missingPluginMessage(m!);
+      const msg = missingPluginMessage(owned(m));
       // The fear this warning creates is "have I lost the part?", and the answer
       // is no. If that reassurance ever stops being in the message, the warning
       // is doing more harm than the problem it reports.
@@ -94,14 +95,14 @@ describe("a document whose plugin is missing", () => {
       // absent, and "Install Surface Texture" would send someone looking for
       // something already on their disk.
       expect(m?.installable).toBe(true);
-      expect(missingPluginMessage(m!)).toContain("Turn");
+      expect(missingPluginMessage(owned(m))).toContain("Turn");
     });
 
     it("counts in words that survive being the only one", () => {
       const one = missingPlugins({ features: [...box, f("t1", "texture")] })[0]!;
       const two = missingPlugins({ features: [...box, f("t1", "texture"), f("t2", "texture")] })[0]!;
-      expect(missingPluginMessage(one)).toContain("One feature");
-      expect(missingPluginMessage(two)).toContain("2 features");
+      expect(missingPluginMessage(owned(one))).toContain("One feature");
+      expect(missingPluginMessage(owned(two))).toContain("2 features");
     });
   });
 });

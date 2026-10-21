@@ -83,7 +83,19 @@ interface Field {
   choice: string | null;
   // false = follows the cursor; true = holds the user's typed/locked value
   userDriven: boolean;
+  /** Set only by a keystroke. userDriven is not enough, an edit tool seeds and
+   *  locks every field before the user has touched any of them. */
+  typed?: boolean;
   hidden?: boolean;
+}
+
+const shownBoxes = new Set<DimInput>();
+
+/** The heads-up box holding a value the user typed and has not entered yet, or
+ *  null. `confirm` enters it as Enter would, false when the box refused it. */
+export function typedDimBox(): { confirm(): boolean } | null {
+  for (const box of shownBoxes) if (box.hasTyped()) return { confirm: () => box.confirmTyped() };
+  return null;
 }
 
 /** The unit a field opens in. */
@@ -298,10 +310,12 @@ export class DimInput {
     this.onCommit = onCommit;
     this.onCancel = onCancel ?? null;
     this.active = true;
+    shownBoxes.add(this);
     this.root.style.display = "flex";
     this.fields = defs.map((def) => {
       const wrap = document.createElement("label");
       wrap.className = "dim-field";
+      wrap.dataset.field = def.name;
       const tag = document.createElement(def.choices ? "button" : "span");
       tag.className = def.choices ? "dim-name dim-unit dim-choice" : "dim-name";
       if (tag instanceof HTMLButtonElement) tag.type = "button";
@@ -348,6 +362,7 @@ export class DimInput {
       input.addEventListener("keydown", (e) => this.onKey(e, field));
       input.addEventListener("input", () => {
         field.userDriven = true; // typing freezes the field from cursor tracking
+        field.typed = true;
         if (this.typedProblem) this.setTypedProblem(null);
         wrap.classList.add("typed");
         this.sizeToContent(field);
@@ -384,6 +399,7 @@ export class DimInput {
     const ok = document.createElement("button");
     ok.className = "dim-btn dim-ok";
     ok.title = "Confirm (Enter)";
+    ok.setAttribute("aria-label", "Confirm");
     ok.appendChild(iconElement("check", 13));
     ok.addEventListener("pointerdown", (e) => {
       e.preventDefault();
@@ -396,6 +412,7 @@ export class DimInput {
       const no = document.createElement("button");
       no.className = "dim-btn dim-no";
       no.title = "Cancel (Esc)";
+      no.setAttribute("aria-label", "Cancel");
       no.appendChild(iconElement("close", 13));
       no.addEventListener("pointerdown", (e) => {
         e.preventDefault();
@@ -536,6 +553,7 @@ export class DimInput {
       tag.removeAttribute("title");
     }
     if (f.def.choices) tag.appendChild(iconElement("caretDown", 10));
+    f.input.setAttribute("aria-label", f.def.label);
   }
 
   private choose(f: Field, id: string, typed: boolean) {
@@ -835,21 +853,31 @@ export class DimInput {
     this.root.style.top = `${Math.round(screenY - this.root.offsetHeight / 2)}px`;
   }
 
-  private commit() {
+  hasTyped(): boolean {
+    return this.active && this.fields.some((f) => f.typed && !f.hidden);
+  }
+
+  confirmTyped(): boolean {
+    return this.commit();
+  }
+
+  private commit(): boolean {
     for (const f of this.fields) {
       const problem = this.fieldProblem(f);
       if (!problem) continue;
       this.setTypedProblem(problem);
       f.input.focus();
       f.input.select();
-      return;
+      return false;
     }
     const out: Record<string, number> = {};
     for (const f of this.fields) {
       const v = this.getValue(f.def.name); // already mm-converted
       if (v != null) out[f.def.name] = v;
+      f.typed = false;
     }
     this.onCommit?.(out);
+    return true;
   }
 
   hide() {
@@ -859,6 +887,7 @@ export class DimInput {
     this.toggleBtn = null;
     this.toggleOn = false;
     this.active = false;
+    shownBoxes.delete(this);
     this.closeMenu();
     this.unsubscribeError?.();
     this.unsubscribeError = null;

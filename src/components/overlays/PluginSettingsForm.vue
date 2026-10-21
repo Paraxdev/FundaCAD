@@ -5,6 +5,7 @@
 
 import { computed, onUnmounted, ref, shallowRef, watch, type Component } from "vue";
 import { settingMatches, type NumberSetting, type PluginSettings, type SettingProp } from "../../plugins/settings";
+import { fmtKeys } from "../../input/platform";
 import { keyCombo, numberText, parseNumberField, stepNumber, unitLabel } from "../../plugins/settingsInput";
 import { getUnit, onUnitChange } from "../../ui/units";
 import Icon from "../shell/Icon.vue";
@@ -216,7 +217,7 @@ const isDefault = (p: SettingProp) => {
               @blur="capturing = ''"
               @keydown="onKey(p, $event)"
             >
-              {{ capturing === p.key ? "Press a key…" : (values[p.key] as string) || "None" }}
+              {{ capturing === p.key ? "Press a key…" : fmtKeys((values[p.key] as string) || "None") }}
             </button>
 
             <template v-else-if="p.type === 'file'">

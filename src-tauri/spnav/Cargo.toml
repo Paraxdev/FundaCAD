@@ -1,0 +1,12 @@
+[package]
+name = "fundacad-spnav"
+version = "0.1.0"
+description = "Reads a 3D mouse through the spacenavd socket, and races it against the device read"
+edition = "2021"
+rust-version = "1.89"
+license = "AGPL-3.0-only"
+publish = false
+
+# Only std, so CI runs its socket tests on Linux in seconds, without Tauri or
+# the kernel.
+[dependencies]

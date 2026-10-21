@@ -46,6 +46,64 @@ window: its worker serves a loopback WebSocket beside its stdio pipe, sharing
 the one engine and so the one live session, and the app writes that port and a
 per launch token to `session.json`.
 
+### Which files the server can reach
+
+`doc_open`, `doc_save`, `doc_import`, `export`, and the `record` of `ui_open`
+and the `open_file`, `import_file` and `save_as` steps of `ui_do`, check their
+path first (`crates/fundacad-mcp/src/scope.rs`). The path is made absolute
+(a relative one against the working folder), `..` folded and every part that
+exists resolved through links, so neither `..` nor a link leads around a rule.
+
+By default, started with no folders as the Preferences Copy text does, any
+path is reached except:
+
+- a file directly in home itself, in a drive or filesystem root, or in a
+  folder that holds home (`C:\Users`, `/home`); their subfolders are fine;
+- anything with a hidden name (a leading dot) in its path, so `.git`, `.ssh`
+  and `.config` stay out of reach;
+- UNC paths, `\\.\` and `\\?\` device and verbatim paths, `C:name`, a colon
+  in a name (an NTFS alternate data stream) and device names such as `NUL` or
+  `COM1`, refused on every platform.
+
+The app's own folders (the system temp folder, `<app data>/recovery` and the
+blob dir, `FUNDACAD_BLOB_DIR`) are reached in full, as tempfile names its
+folders `.tmpXXXX`.
+
+Strict mode keeps the server to a folder list. It is on when a folder is
+given with `--allow-path <folder>` (repeatable, after `--mcp` for
+`fundacad`, which checks that `--mcp` is its first argument), listed in
+`FUNDACAD_MCP_ALLOW_PATHS` (separated the way `PATH` is), or when
+`FUNDACAD_MCP_STRICT=1`. Then a path is reached only inside:
+
+- the open document's folder: the file opened or saved here, or in a live
+  session the file the window has open;
+- the app's own folders;
+- every given folder.
+
+Home and drive roots themselves are never a given folder, nor a folder that
+holds home, so `--allow-path ~` is ignored; the log and every refusal say so,
+and the server still keeps to its list. Hidden names below the document's
+folder or a given one are refused unless such a folder is given itself. A
+strict refusal names the folder that would let it through and how to give it.
+
+The check is made when the tool is called, so a folder swapped for a link
+after that, or a hard link, is not caught. In the default mode a write goes
+wherever the person's account can write, as it did before the check, so the
+host's approval of `doc_save` and `export` (`destructiveHint`) is the guard.
+
+```json
+{ "mcpServers": { "fundacad": {
+    "command": "<install dir>/fundacad.exe",
+    "args": ["--mcp", "--allow-path", "D:/parts"],
+    "env": {} } } }
+```
+
+Each tool also carries MCP's `readOnlyHint`, `destructiveHint`,
+`idempotentHint` and `openWorldHint`, so a host can run `inspect`, `measure`,
+`view` and the other checks without asking and ask before `doc_save` or
+`export` writes a file. None opens the network. `tests/tool_hints.rs` holds the
+table, and a new tool fails it until it is classified.
+
 ### An install that had the old MCP plugin
 
 Before 1.0 the MCP server was the `FundaCAD.MCP` plugin: the server
@@ -195,17 +253,18 @@ which a fresh engine could no longer start one and every build failed.
 | tool | what it is for |
 | --- | --- |
 | `schema` | every feature type, its fields, an example and its traps. Read first. |
-| `doc_new` / `doc_open` / `doc_save` / `doc_get` / `doc_set` | the document |
+| `doc_new` / `doc_open` / `doc_save` / `doc_get` / `doc_set` | the document. `doc_open` of a file from a newer FundaCAD adds a `note:` line naming the feature types this build does not know; they are kept and saved with the file. An older file holding an old feature type gets a note to open and save it in the app first, since MCP does not update old files |
 | `param_set` / `param_remove` | the parameter table (this is what makes it parametric) |
 | `feature_add` / `feature_update` / `feature_remove` / `feature_move` | the timeline |
 | `edit` | several of the above and `param_set` in one call, all or nothing, optionally building once at the end |
 | `sketch_merge` | replace overlapping closed shapes of a sketch with the lines, arcs and circles around their union, so an extrude picks it with one `regions` point; replies with that point |
-| `build` | rebuild, and say what came out and what failed. After the first build it lists only the bodies that changed; `full` lists them all |
+| `build` | rebuild, and say what came out and what failed. After the first build it lists only the bodies that changed; `full` lists them all. A feature of a type this build does not know (a file from a newer FundaCAD) reads `SKIPPED (id): unknown feature type: X, kept in the document but not built`, and like a failure it sets isError |
 | `interference` | which bodies overlap and by how much, and which come closer than a clearance, once or at every step of a parameter (`sweep`). A body that is not a closed solid is named as not checked, with why. Changes nothing |
 | `section` | cut the bodies with a plane: the outline as closed loops of points, and area, centroid, second moments, section modulus and polar moment for beam checks |
 | `stress` | a linear static stress analysis of one body: hold faces (`fixed`, or `supports` that are fixed, pinned or slider), load others with a force or a pressure, add its weight with `gravity`, pick a material, and get the peak von Mises stress and where, the largest deflection, the safety factor against yield, the load balance with the reaction at each support, warnings, and a PNG coloured by stress. Changes nothing |
 | `printability` | what would go wrong printing the parts on an FDM printer: overhangs past 45 deg, walls under two nozzle widths, floors under two layers, gaps that would fuse, long bridges and open shells, each with its face and a `view` focus. As modelled or laid flat as `export` would. Changes nothing |
 | `inspect` | exact volume, area, bbox, and every face and edge with a ready-made selector |
+| `measure` | exact measurements on the B-rep. One thing (`a`): a face's surface, area, outward normal, radius and axis; an edge's length, direction, circle and arc; a body's volume, area and size. Two (`a`, `b`): the minimum distance with both closest points, the gap between parallel planar faces (a wall), centre to centre or axis to axis distance (a hole pitch), and the angle between planes, straight edges and axes. A thing is a face or edge selector from `inspect` with its `body`, `{body, face: n}` or `{body, edge: n}` (inspect's F and E numbers, for the current build only), a body id or name, or `{point: [x, y, z]}`; `want` narrows it to `distance`, `angle` or `centres`. Text in mm and degrees to 3 places, then a `raw:` line with the unrounded reply. Changes nothing |
 | `view` | a PNG: orthographic, flat-shaded, with sections, body filtering and zoom |
 | `doc_import` | read a STEP, STL, 3MF, OBJ, BREP or GLB file in as a body to model against, by `path` or as inline `content`, compressed and in pieces if it is large |
 | `export` | STEP, STL, 3MF, OBJ, BREP. `separate` writes a file per body named after it, `body` one body, `layFlat` turns each part onto a flat face for printing |
@@ -358,6 +417,47 @@ the PNG from `png.rs`): arrays in and an image out, no browser and no GPU. It is
 deliberately plain. The app's own renderer stays the authority for what a person
 sees; this answers "did that do what I meant".
 
+## Driving the app (standalone only)
+
+With `FUNDACAD_MCP_MODE=standalone` the server offers five more tools that use a
+private copy of the app the way a person does, in a browser against its own
+engine, through the agent harness (`tools/harness`, [HARNESS.md](HARNESS.md)).
+They are never offered in `auto` or `attach`, so they can never touch the
+window someone is working in.
+
+| tool | what it is for |
+| --- | --- |
+| `ui_open` | start the private app (`headed`, `record`, `viewport`, `gpu`, `settle_timeout`), about 10 s; a second call says what is open |
+| `ui_do` | steps in order, `[{"do": "tool", "label": "Extrude"}, {"do": "type", "target": "D", "text": "20"}]`, stopping at the first that fails |
+| `ui_read` | screen, history, bodies, status, errors, selection or handles, as short text |
+| `ui_shot` | a PNG of the page or one control, `max_px` at most 1600 |
+| `ui_close` | stop the app, its browser and its engine |
+
+The tools relay to `python -m fundacad_harness serve`, started on the first
+`ui_open` with `FUNDACAD_HARNESS_PYTHON` (else `python`, or `python3` off
+Windows) and handed this server's engine command. That Python needs the
+package: `pip install -e tools/harness`. Without it `ui_open` says so and the
+other tools work as before. The child dies with the server, inside the same
+kind of job object as the engine on Windows. A call with no answer in 180 s
+stops it, and the next `ui_open` starts fresh; a `ui_do` starts no step after
+120 s and says which steps to send again, so a long list does not get there. No
+step waits past 150 s into a call, so an import that takes longer answers
+`not settled`, and `ui_read` later shows it landed.
+
+The private app's document is its own: `doc_get` and `inspect` do not see it.
+To measure what the steps built, `save_as` a `.funda` file in a `ui_do`, then
+`doc_open` it and `inspect`.
+
+`.mcp.json` stays the live server. A second entry for the private app:
+
+```json
+{ "mcpServers": { "fundacad-ui": {
+    "command": "node",
+    "args": ["scripts/mcp-rust.mjs"],
+    "env": { "FUNDACAD_MCP_MODE": "standalone",
+             "FUNDACAD_HARNESS_PYTHON": "<full path to the venv python>" } } } }
+```
+
 ## Driving it without an MCP host
 
 `crates/fundacad-mcp/tools/client.py` is a small generic MCP client. It speaks
@@ -415,12 +515,14 @@ one-shot calls is not a session, use `--script`, which is either a JSON array of
 | --- | --- |
 | `src/server.rs` | the protocol and the tools |
 | `src/tools.rs` | the tools' input schemas and descriptions |
+| `src/ui.rs` | the ui tools and the harness child they relay to |
 | `src/upload.rs` | inline `doc_import` content: decoding, pieces, archives |
 | `src/link.rs` | finding and spawning the engine, its lifetime, the Windows job object |
 | `src/app_session.rs`, `src/live.rs` | finding a running window and the live session |
 | `src/model.rs` | the document: ids, the timeline, the parameter table, validation |
 | `src/render.rs`, `src/png.rs` | the rasteriser and its PNG |
 | `src/describe.rs` | turning an `inspect` report into something worth reading |
+| `src/measure.rs` | the `measure` tool's request and its text |
 | `src/docfile.rs` | reading and writing `.funda` and `.fundab` |
 | `src/schema.rs`, `src/schema.json` | the feature reference the agent reads |
 | `tests/` | one suite per module, driving the built binaries over real stdio and a real socket |

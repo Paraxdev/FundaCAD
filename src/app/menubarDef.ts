@@ -1,4 +1,4 @@
-import { saveDocument, saveDocumentAs, exportModel, importModel } from "../io/files";
+import { saveDocument, saveDocumentAs, exportSelection, importModel } from "../io/files";
 import { contributedMenus } from "../plugins/contrib";
 import { toggleShortcutHUD } from "../input/shortcuts";
 import { checkForUpdates, showAbout } from "../ui/updates";
@@ -57,6 +57,8 @@ export function buildMenubar(e: Engine): MenuDef[] {
     {
       label: "File",
       items: [
+        { label: "Home", onClick: () => e.ui.home.open() },
+        { separator: true, label: "" },
         { label: "New", shortcut: "Ctrl+N", onClick: () => void e.newDocument() },
         { label: "Open…", shortcut: "Ctrl+O", onClick: () => void e.openDoc() },
         { separator: true, label: "" },
@@ -65,7 +67,7 @@ export function buildMenubar(e: Engine): MenuDef[] {
         { label: "Save", shortcut: "Ctrl+S", onClick: () => void saveDocument(e.store) },
         { label: "Save As…", shortcut: "Ctrl+Shift+S", onClick: () => void saveDocumentAs(e.store) },
         { separator: true, label: "" },
-        { label: "Export…", shortcut: "Ctrl+E", onClick: () => void exportModel(e.store, e.geometry, e.viewport.selectionBodyIds()) },
+        { label: "Export…", shortcut: "Ctrl+E", onClick: () => void exportSelection(e.store, e.geometry, e.viewport) },
       ],
     },
     {
@@ -107,7 +109,6 @@ export function buildMenubar(e: Engine): MenuDef[] {
       label: "Help",
       items: [
         { label: "Keyboard Shortcuts", shortcut: "?", onClick: () => toggleShortcutHUD() },
-        { label: "Welcome Screen", onClick: () => e.ui.welcome.open() },
         { label: "Issue Tracker", onClick: () => void openExternal(ISSUES_URL) },
         { separator: true, label: "" },
         { label: "Check for Updates…", onClick: () => void checkForUpdates(true) },

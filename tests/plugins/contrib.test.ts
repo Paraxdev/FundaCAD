@@ -20,11 +20,14 @@ import {
   contributedOverlays,
   contributedPaint,
   contributedPalette,
+  contributedRelief,
+  contributedRenderSections,
   contributedRibbon,
   contributors,
   onContribChange,
   resetContributions,
   service,
+  contributedMaterialPresets,
 } from "../../src/plugins/contrib";
 
 afterEach(() => resetContributions());
@@ -68,11 +71,13 @@ describe("what a plugin adds, and what it takes away again", () => {
       overlays: [Fake],
       bodyMenu: () => [{ label: "x" }],
       browserSections: [{ key: "panel", component: Fake }],
+      renderSections: [{ key: "look", component: Fake, tab: "material" }],
       paint: () => ({ bodies: { b1: "#ff0000" }, faces: {} }),
       palette: () => [{ name: "Red", color: "#ff0000" }],
       provides: { thing: 1 },
     });
     off();
+    expect(contributedRenderSections("material")).toEqual([]);
 
     expect(contributedMenus()).toEqual([]);
     expect(contributedRibbon()).toEqual([]);
@@ -85,6 +90,31 @@ describe("what a plugin adds, and what it takes away again", () => {
     expect(contributedPalette()).toEqual([]);
     expect(service("thing")).toBeNull();
     expect(contributors()).toEqual([]);
+  });
+
+  it("hands a Render dock tab only the sections that named it", () => {
+    contribute("A.One", {
+      renderSections: [
+        { key: "a", component: Fake, tab: "material" },
+        { key: "b", component: Fake, tab: "camera" },
+      ],
+    });
+    const off = contribute("B.Two", { renderSections: [{ key: "a", component: Fake, tab: "material" }] });
+    expect(contributedRenderSections("material").map((s) => s.key)).toEqual(["A.One:a", "B.Two:a"]);
+    expect(contributedRenderSections("camera").map((s) => s.key)).toEqual(["A.One:b"]);
+    expect(contributedRenderSections("environment")).toEqual([]);
+    off();
+    expect(contributedRenderSections("material").map((s) => s.key)).toEqual(["A.One:a"]);
+  });
+
+  it("lists material presets by group, skips malformed groups and a plugin that throws", () => {
+    const red = { id: "r", name: "Red", color: "#ff0000" };
+    contribute("A.One", { materialPresets: () => [{ group: "Metals", materials: [red] }, { group: "Empty", materials: [] }] });
+    contribute("B.Bad", { materialPresets: () => { throw new Error("boom"); } });
+    const off = contribute("C.Three", { materialPresets: () => [{ group: "Paints", materials: [red] }] });
+    expect(contributedMaterialPresets().map((g) => g.group)).toEqual(["Metals", "Paints"]);
+    off();
+    expect(contributedMaterialPresets().map((g) => g.group)).toEqual(["Metals"]);
   });
 
   it("removes only the one that stopped", () => {
@@ -161,6 +191,38 @@ describe("paint", () => {
     expect(contributedPaint().bodies.b1).toBe("#ff0000");
     colour = "#00ff00";
     expect(contributedPaint().bodies.b1).toBe("#00ff00");
+  });
+});
+
+describe("relief", () => {
+  const ridges = (pitch: number) => ({ axis: [0, 0, 1] as [number, number, number], pitch, depth: 0.35 });
+
+  it("is nothing until somebody contributes it", () => {
+    expect(contributedRelief()).toEqual({});
+  });
+
+  it("prefers the later all, merges bodies, and a body's null clears all for it", () => {
+    contribute("A.One", { relief: () => ({ all: ridges(0.2), bodies: { b1: ridges(0.1) } }) });
+    const off = contribute("B.Two", { relief: () => ({ all: ridges(0.3), bodies: { b2: null } }) });
+    expect(contributedRelief()).toEqual({ all: ridges(0.3), bodies: { b1: ridges(0.1), b2: null } });
+    off();
+    expect(contributedRelief()).toEqual({ all: ridges(0.2), bodies: { b1: ridges(0.1) } });
+  });
+
+  it("keeps an earlier all when a later contributor names only bodies", () => {
+    contribute("A.One", { relief: () => ({ all: ridges(0.2) }) });
+    contribute("B.Two", { relief: () => ({ bodies: { b1: ridges(0.1) } }) });
+    expect(contributedRelief()).toEqual({ all: ridges(0.2), bodies: { b1: ridges(0.1) } });
+  });
+
+  it("asks again every time and leaves with its plugin", () => {
+    let pitch = 0.2;
+    const off = contribute("A.One", { relief: () => ({ all: ridges(pitch) }) });
+    expect(contributedRelief().all?.pitch).toBe(0.2);
+    pitch = 0.1;
+    expect(contributedRelief().all?.pitch).toBe(0.1);
+    off();
+    expect(contributedRelief()).toEqual({});
   });
 });
 

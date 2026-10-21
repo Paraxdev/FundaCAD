@@ -1,0 +1,7 @@
+{
+  "version": 10,
+  "parameters": {},
+  "features": [
+    { "id": "bx", "type": "box", "length": 40, "width": 20, "height": 5 }
+  ]
+}

@@ -8,6 +8,7 @@ import { useDocValue, useMetaValue } from "../../app/useDoc";
 import { diffTrees, log, snapshotOf, versionById, type Version, type VersionDiff } from "../../document/versions";
 import { featureMeta } from "../../ui/featureMeta";
 import { toast } from "../../ui/toast";
+import { ago } from "../../ui/timeAgo";
 import Icon from "./Icon.vue";
 
 const engine = useEngine();
@@ -21,6 +22,7 @@ const docTick = useDocValue(() => ({}));
 const branch = computed(() => { tick.value; docTick.value; return store.versionRepo?.current ?? "main"; });
 const branches = computed(() => { tick.value; docTick.value; return Object.keys(store.versionRepo?.branches ?? {}); });
 const history = computed(() => { tick.value; docTick.value; return store.versionRepo ? log(store.versionRepo) : []; });
+const unreadVersions = computed(() => { tick.value; docTick.value; return store.hasUnreadVersions(); });
 const pending = computed<VersionDiff | null>(() => { docTick.value; tick.value; return store.changesSinceVersion(); });
 const changeCount = computed(() => {
   const d = pending.value;
@@ -101,16 +103,6 @@ function changedNames(v: Version): { kind: string; name: string }[] {
     ...d.removed.map((id) => ({ kind: "removed", name: label(id, before) })),
   ];
 }
-
-function ago(time: number): string {
-  const s = Math.max(0, Math.round((Date.now() - time) / 1000));
-  if (s < 60) return "just now";
-  const m = Math.round(s / 60);
-  if (m < 60) return `${m} min ago`;
-  const h = Math.round(m / 60);
-  if (h < 24) return `${h} h ago`;
-  return new Date(time).toLocaleDateString();
-}
 </script>
 
 <template>
@@ -130,7 +122,8 @@ function ago(time: number): string {
     </div>
 
     <p class="pop-note">
-      <template v-if="!history.length">No versions yet. Save one to be able to come back to this point.</template>
+      <template v-if="unreadVersions">This file has versions from a newer FundaCAD that this version cannot show. Saving the file keeps them, saving a version here replaces them.</template>
+      <template v-else-if="!history.length">No versions yet. Save one to be able to come back to this point.</template>
       <template v-else-if="changeCount">{{ changeCount }} change{{ changeCount === 1 ? "" : "s" }} since "{{ history[0]!.message }}"</template>
       <template v-else>Nothing changed since "{{ history[0]!.message }}"</template>
     </p>

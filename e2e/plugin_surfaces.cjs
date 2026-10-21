@@ -37,10 +37,15 @@ const CASES = [
     owns: "the print rows and the PRINT group",
     present: (m) => m.menus.includes("Send to Printer…") && m.ribbon.includes("Print"),
   },
+  {
+    id: "FundaCAD.PrintLook",
+    owns: "the Printed look section of the Render dock",
+    present: (m) => m.dock.includes("Printed look"),
+  },
 ];
 
 async function surfaces(page) {
-  return page.evaluate(() => {
+  const base = await page.evaluate(() => {
     const text = (el) => (el.textContent || "").trim().split("\n")[0].trim();
     const menus = [...document.querySelectorAll("#menubar button, .menubar button, [class*=menu] button")]
       .map(text)
@@ -51,6 +56,15 @@ async function surfaces(page) {
     const ribbon = [...document.querySelectorAll("#toolrail [data-family] .rail-label")].map(text);
     return { menus, ribbon: [...new Set(ribbon)] };
   });
+  // The Render dock only exists in the Render workspace, and its Environment
+  // tab is where a plugin's section is drawn.
+  const home = await page.$(".modal-close");
+  if (home) await home.click();
+  await page.click('#workspace-toggle [data-workspace="render"]', { timeout: 5000 });
+  await page.click('.rd-tab[data-tab="environment"]');
+  const dock = await page.$$eval("#renderdock .rd-head", (els) => els.map((el) => (el.textContent || "").trim()));
+  await page.click('#workspace-toggle [data-workspace="model"]');
+  return { ...base, dock };
 }
 
 /** Flip a capability through the real registry and let its activate() settle. */

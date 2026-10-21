@@ -209,3 +209,47 @@ fn attach_mode_refuses_to_start_rather_than_working_on_a_copy() {
     let said = String::from_utf8_lossy(&out.stderr);
     assert!(said.contains("no FundaCAD window is running"), "{said}");
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn the_folder_of_the_file_the_app_has_open_is_one_the_agent_may_write() {
+    let engine = RealEngine::start();
+    let mut host = Host::new(engine.socket().await);
+    let own = tempfile::Builder::new().prefix("live-own-").tempdir().unwrap();
+    let work = tempfile::Builder::new().prefix("live-work-").tempdir().unwrap();
+    let parts = work.path().join("parts");
+    let elsewhere = work.path().join("elsewhere");
+    std::fs::create_dir_all(&parts).unwrap();
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    host.title = parts.join("part.funda").to_string_lossy().into_owned();
+    host.tick().await;
+
+    let mut env = engine.mcp_env("auto", true);
+    let tmp = own.path().to_string_lossy().into_owned();
+    for k in ["TMP", "TEMP", "TMPDIR"] {
+        env.insert(k.into(), tmp.clone());
+    }
+    // By default every plain folder is reached; strict is where the open
+    // document's folder matters.
+    env.insert("FUNDACAD_MCP_STRICT".into(), "1".into());
+    let mcp = Mcp::start(&env, own.path());
+    let beside = parts.join("from-the-agent.funda");
+    let (mcp, out) = while_pumping(
+        mcp,
+        &mut host,
+        "doc_save",
+        json!({"path": beside.to_string_lossy()}),
+        5.0,
+    )
+    .await;
+    assert!(!out.is_error, "{}", out.text);
+    assert!(beside.exists());
+    let (_mcp, out) = while_pumping(
+        mcp,
+        &mut host,
+        "doc_save",
+        json!({"path": elsewhere.join("a.funda").to_string_lossy()}),
+        5.0,
+    )
+    .await;
+    assert!(out.is_error && out.text.contains("outside the folders"), "{}", out.text);
+}

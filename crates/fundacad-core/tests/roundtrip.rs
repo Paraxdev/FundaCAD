@@ -45,6 +45,16 @@ fn documents() -> Vec<(String, Value)> {
     }
     let funda = "tests/fixtures/textured_box.funda";
     out.push((funda.to_owned(), read(&repo().join(funda))));
+    let versions = repo().join("tests/fixtures/versions");
+    let mut found = 0;
+    for entry in std::fs::read_dir(&versions).expect("the version fixtures") {
+        let path = entry.expect("an entry").path();
+        if path.extension().is_some_and(|e| e == "funda") {
+            out.push((path.display().to_string(), read(&path)));
+            found += 1;
+        }
+    }
+    assert_eq!(found, 10, "one fixture per document version");
     out
 }
 
@@ -296,6 +306,19 @@ fn unknown_data_is_carried_and_typed_data_is_reachable() {
     };
     assert_eq!(e.operation.as_str(), "emboss");
     assert_eq!(odd.rollback.clone().flatten().map(|r| r.get()), Some(3.0));
+}
+
+#[test]
+fn a_material_field_this_build_does_not_know_survives_a_load_and_save() {
+    let text = r##"{"features":[],"materials":[{"id":"m-x","name":"X","color":"#112233","roughness":0.4,
+        "clearcoat":0.5,"sheen":0.4,"anisotropy":{"amount":0.2,"angle":90},"flakes":[1,2],"castsLight":true}]}"##;
+    let doc = CadDocument::from_json(text).expect("load");
+    let m = &doc.materials.as_ref().expect("materials")[0];
+    assert_eq!(m.extra.get("sheen"), Some(&Value::from(0.4)));
+    assert_eq!(m.extra.get("castsLight"), Some(&Value::from(true)));
+    let saved: Value = serde_json::from_str(&doc.to_json().expect("save")).expect("json");
+    let before: Value = serde_json::from_str(text).expect("json");
+    assert_eq!(saved["materials"], before["materials"]);
 }
 
 #[test]
@@ -555,4 +578,18 @@ fn horizontal_and_vertical_distances_land_typed_and_keep_their_fields() {
     };
     assert_eq!(v.value.get(), -4.0);
     assert_eq!(serde_json::to_value(&doc).expect("save"), doc_json);
+}
+
+#[test]
+fn a_file_from_a_newer_version_lands_what_it_knows_and_carries_the_rest() {
+    let v = read(&repo().join("tests/fixtures/future/v99.funda"));
+    let doc = CadDocument::from_json(&v.to_string()).expect("load");
+    assert!(matches!(doc.feature("w1"), Some(Feature::Unknown(_))));
+    let Some(Feature::Extrude(e)) = doc.feature("e1") else {
+        panic!("e1 is an extrude")
+    };
+    assert_eq!(e.extra.get("futureFlag"), Some(&Value::Bool(true)));
+    assert_eq!(doc.extra.get("futureKey"), Some(&v["futureKey"]));
+    let saved: Value = serde_json::from_str(&doc.to_json().expect("save")).expect("json");
+    assert_eq!(saved, v);
 }

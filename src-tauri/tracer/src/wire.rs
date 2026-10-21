@@ -1,9 +1,10 @@
-//! The raw invoke bodies the page sends a mesh or its colours in:
+//! The raw invoke bodies the page sends a mesh, its colours or an environment in:
 //! [u32 header length][JSON header][zero pad to 4][buffers], little endian,
 //! the framing src/geometry/client.ts reads engine meshes with.
 
 use serde::Deserialize;
 
+use crate::env::{Environment, Up};
 use crate::material::Group;
 use crate::scene::Mesh;
 
@@ -22,11 +23,20 @@ struct Header {
     groups: Vec<Group>,
 }
 
-fn split(bytes: &[u8]) -> Result<(Header, &[u8]), String> {
+#[derive(Debug, Deserialize)]
+struct EnvHeader {
+    key: String,
+    width: u32,
+    height: u32,
+    #[serde(default)]
+    up: Up,
+}
+
+fn split<H: serde::de::DeserializeOwned>(bytes: &[u8]) -> Result<(H, &[u8]), String> {
     let len = bytes.get(..4).ok_or("the body is shorter than its header length")?;
     let len = u32::from_le_bytes(len.try_into().unwrap()) as usize;
     let json = bytes.get(4..4 + len).ok_or("the header runs past the body")?;
-    let head: Header = serde_json::from_slice(json).map_err(|e| format!("bad header: {e}"))?;
+    let head: H = serde_json::from_slice(json).map_err(|e| format!("bad header: {e}"))?;
     let start = (4 + len).next_multiple_of(4);
     Ok((head, bytes.get(start..).unwrap_or(&[])))
 }
@@ -56,7 +66,7 @@ impl Reader<'_> {
 /// Positions, then normals and indices when the header has them, then
 /// colours. A mesh without indices is a triangle soup.
 pub fn decode_mesh(bytes: &[u8]) -> Result<(String, Mesh), String> {
-    let (h, body) = split(bytes)?;
+    let (h, body) = split::<Header>(bytes)?;
     let mut r = Reader(body);
     let positions = r.vec3(h.vertices, "positions")?;
     let normals = if h.normals { r.vec3(h.vertices, "normals")? } else { Vec::new() };
@@ -74,9 +84,26 @@ pub fn decode_mesh(bytes: &[u8]) -> Result<(String, Mesh), String> {
 
 /// A body's vertex colours, or none to clear them.
 pub fn decode_colors(bytes: &[u8]) -> Result<(String, Option<Vec<[f32; 3]>>), String> {
-    let (h, body) = split(bytes)?;
+    let (h, body) = split::<Header>(bytes)?;
     let colors = if h.colors { Some(Reader(body).vec3(h.vertices, "colors")?) } else { None };
     Ok((h.key, colors))
+}
+
+/// An equirect, half float RGBA, row 0 first; 0 x 0 goes back to the sky.
+pub fn decode_env(bytes: &[u8]) -> Result<Option<Environment>, String> {
+    let (h, body) = split::<EnvHeader>(bytes)?;
+    if h.width == 0 && h.height == 0 {
+        return Ok(None);
+    }
+    if h.width == 0 || h.height == 0 || h.width > 8192 || h.height > 4096 {
+        return Err(format!("an environment of {} x {} texels", h.width, h.height));
+    }
+    let n = h.width as usize * h.height as usize * 4;
+    if body.len() < n * 2 {
+        return Err(format!("environment: {} bytes left, {} needed", body.len(), n * 2));
+    }
+    let rgba = body[..n * 2].chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
+    Ok(Some(Environment { key: h.key, width: h.width, height: h.height, up: h.up, rgba }))
 }
 
 #[cfg(test)]
@@ -119,6 +146,23 @@ mod tests {
         let past = encode(r#"{"key":"k","vertices":3,"indices":3}"#, &TRI[..9], &[0, 1, 3], &[]);
         assert!(decode_mesh(&past).unwrap_err().contains("past"));
         assert!(decode_mesh(&[9, 0, 0, 0, b'{']).is_err());
+    }
+
+    #[test]
+    fn an_environment_arrives_with_its_layout_and_a_short_one_is_refused() {
+        let half = |v: &[u16]| v.iter().flat_map(|x| x.to_le_bytes()).collect::<Vec<u8>>();
+        let mut b = encode(r#"{"key":"room|h","width":2,"height":1,"up":"z"}"#, &[], &[], &[]);
+        let one = crate::env::f32_to_f16(1.0);
+        b.extend(half(&[one, 0, 0, one, 0, one, 0, one]));
+        let e = decode_env(&b).unwrap().unwrap();
+        assert_eq!((e.key.as_str(), e.width, e.height, e.up), ("room|h", 2, 1, Up::Z));
+        assert_eq!(e.texel(1, 0), [0.0, 1.0, 0.0]);
+        let mut y = encode(r#"{"key":"k","width":2,"height":1}"#, &[], &[], &[]);
+        y.extend(half(&[0; 8]));
+        assert_eq!(decode_env(&y).unwrap().unwrap().up, Up::Y);
+        assert_eq!(decode_env(&encode(r#"{"key":"","width":0,"height":0}"#, &[], &[], &[])).unwrap(), None);
+        b.truncate(b.len() - 2);
+        assert!(decode_env(&b).unwrap_err().contains("needed"));
     }
 
     #[test]

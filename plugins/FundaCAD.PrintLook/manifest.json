@@ -1,0 +1,11 @@
+{
+  "id": "FundaCAD.PrintLook",
+  "name": "Printed look",
+  "version": "1.0.0",
+  "kind": "builtin",
+  "summary": "Draws the fine layer lines a printed part has across its surface in the Realtime view.",
+  "enabledByDefault": true,
+  "grants": [
+    "document.read"
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "version": 9,
+  "parameters": {},
+  "features": [
+    { "id": "s", "type": "sketch", "plane": "XY",
+      "entities": [{ "type": "rectangle", "id": "r1", "width": 30, "height": 30, "x": 0, "y": 0 }] },
+    { "id": "e", "type": "extrude", "sketch": "s", "distance": 20, "operation": "new" },
+    { "id": "s2", "type": "sketch", "plane": "XY",
+      "entities": [{ "type": "rectangle", "id": "r2", "width": 20, "height": 20, "x": 80, "y": 0 }] },
+    { "id": "e2", "type": "extrude", "sketch": "s2", "distance": 10, "operation": "new", "regions": [[999, 999, 0]] }
+  ]
+}

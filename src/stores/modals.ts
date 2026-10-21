@@ -34,7 +34,7 @@ export type ModalReq = (ChooseReq | MultiReq | ListReq) & { id: number };
  *
  *  `depth` is what toolBusy() reads (via isChoiceOpen) so a global shortcut,
  *  "e" for Extrude, say, can't fire underneath an awaiting modal. It counts
- *  modals built OUTSIDE this module too (welcome screen, sign-in, publish),
+ *  modals built OUTSIDE this module too (Home, sign-in, publish),
  *  which is why pushModal/popModal are public. */
 export const useModalStore = defineStore("modals", () => {
   const current = ref<ModalReq | null>(null);

@@ -1,4 +1,4 @@
-import { saveDocument, saveDocumentAs, exportModel, importModel } from "../io/files";
+import { saveDocument, saveDocumentAs, exportSelection, importModel } from "../io/files";
 import { setWorkspace } from "../ui/workspace";
 import { chooseViewMode, nextViewMode, requestPathTraced, toggleCleanView, type ViewMode } from "../ui/viewMode";
 import { contributedAction } from "../plugins/contrib";
@@ -91,6 +91,11 @@ export function createActions(e: Engine): (action: string) => void {
       return;
     }
     if (action === "finish") return void e.sketch.finish(true);
+    if (action === "tie-loose-ends") {
+      if (e.sketch.active) void e.sketch.tieLooseEnds();
+      else e.setStatus("Enter a sketch to tie its loose ends", "");
+      return;
+    }
     if (action === "palette") return void (palette.visible = true);
     // The arrow keys turn the view and nothing else: they leave a sketch open,
     // and a tool that reads the arrows itself (the pattern count) keeps them.
@@ -196,10 +201,10 @@ export function createActions(e: Engine): (action: string) => void {
         void e.openDoc();
         break;
       case "export":
-        void exportModel(e.store, e.geometry, e.viewport.selectionBodyIds());
+        void exportSelection(e.store, e.geometry, e.viewport);
         break;
       case "welcome":
-        e.ui.welcome.open();
+        e.ui.home.open();
         break;
       case "materials":
         // Not a dialog any more. Materials are edited in the Render workspace,

@@ -1,0 +1,48 @@
+{
+  "version": 7,
+  "parameters": {},
+  "features": [
+    {
+      "id": "b1",
+      "type": "box",
+      "length": 40,
+      "width": 20,
+      "height": 10
+    },
+    {
+      "id": "d1",
+      "type": "datumPlane",
+      "plane": {
+        "origin": [
+          20,
+          0,
+          0
+        ],
+        "normal": [
+          1,
+          0,
+          0
+        ],
+        "xdir": [
+          0,
+          0,
+          1
+        ]
+      },
+      "face": {
+        "kind": "face",
+        "by": "nearest",
+        "point": [
+          20,
+          0,
+          0
+        ]
+      },
+      "at": [
+        20,
+        0,
+        0
+      ]
+    }
+  ]
+}

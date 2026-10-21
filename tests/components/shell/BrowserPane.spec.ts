@@ -297,6 +297,17 @@ describe("BrowserPane", () => {
     expect(at("Plate")).toBeGreaterThan(at("Bracket"));
   });
 
+  it("marks each body row and element head with its id", async () => {
+    const fake = makeEngine({ parameters: {}, features: [] }, [{ id: "body1", name: "Bracket" }]);
+    const w = render(fake);
+    const rig = fake.store.addElement("Rig");
+    await nextTick();
+    expect(rowNamed(w, "Bracket").attributes("data-id")).toBe("body1");
+    expect(folderNamed(w, "Rig")!.attributes("data-id")).toBe(rig);
+    expect(folderNamed(w, "Rig")!.attributes("data-key")).toBe(`e:${rig}`);
+    expect(rowNamed(w, "Bracket").find(".tree-eye").attributes("data-visible")).toBe("true");
+  });
+
   it("keeps an element that holds nothing, so it can be filled afterwards", async () => {
     const fake = makeEngine({ parameters: {}, features: [] }, [{ id: "body1", name: "Bracket" }]);
     const w = render(fake);
@@ -846,5 +857,40 @@ describe("a row click while a tool waits for a pick", () => {
     awaitTreePick(() => "no", () => {});
     await rowNamed(w, "Sketch1").trigger("dblclick");
     expect(edit).not.toHaveBeenCalled();
+  });
+});
+
+describe("a row double click while another edit is open", () => {
+  beforeEach(() => { setActivePinia(createPinia()); });
+
+  function withOpenEdit(fake: ReturnType<typeof makeEngine>) {
+    const log: string[] = [];
+    const tools: Record<string, unknown> = {};
+    for (const n of [
+      "edgeFeature", "targetEdit", "pressPull", "faceOffset", "draft", "thread", "textOnFace", "hole", "loft",
+      "pattern", "planeOffset", "datumPose", "lightAim", "extrude", "joint", "mechanism", "move",
+    ]) tools[n] = { active: false, cancel: () => {} };
+    const revolve = { active: true, cancel: () => { revolve.active = false; log.push("cancel:revolvePitch"); } };
+    tools.revolvePitch = revolve;
+    tools.measure = { active: false, stop: () => {} };
+    tools.section = { active: false, picking: false, stop: () => {} };
+    Object.assign(fake.store, { isSuppressed: () => false, rollbackIndex: 9, editPreviewId: null });
+    Object.assign(fake.engine, {
+      tools,
+      selectedFeature: "rv",
+      toolOwnsScreen: () => revolve.active,
+      toolAtWork: () => revolve.active,
+      editFeature: (id: string) => { log.push(`edit:${id}`); },
+    });
+    return log;
+  }
+
+  it("closes an untouched revolve edit and edits the row's feature", async () => {
+    const fake = makeEngine({ parameters: {}, features: [sketch("s1"), { id: "rv", type: "revolve", sketch: "s1" } as Feature] });
+    const log = withOpenEdit(fake);
+    const w = render(fake);
+    await nextTick();
+    await rowNamed(w, "Sketch1").trigger("dblclick");
+    expect(log).toEqual(["cancel:revolvePitch", "edit:s1"]);
   });
 });

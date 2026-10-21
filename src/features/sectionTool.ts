@@ -20,7 +20,7 @@ import { DimInput } from "../sketch/dimInput";
 import { setPrompt } from "../ui/prompt";
 import { isEditableTarget } from "../ui/focus";
 import { snap } from "../ui/units";
-import { axisDragDistance, createDragHandle, HANDLE_UP, type DragHandle } from "./manipulator";
+import { axisDragDistance, createDragHandle, nameHandle, HANDLE_UP, type DragHandle } from "./manipulator";
 import { pickPlaneTarget } from "./facePlanePick";
 import { awaitTreePick, treePickRefusal } from "../ui/treePick";
 import { SketchPlane } from "../sketch/plane";
@@ -241,7 +241,7 @@ export class SectionTool {
     this.side = 1;
     this.pushPlane();
     this.gesture.attach();
-    this.handle = createDragHandle();
+    this.handle = nameHandle(createDragHandle(), "section");
     this.gizmo = this.handle.group;
     this.viewport.addToScene(this.gizmo, "section");
     this.showChrome();

@@ -19,6 +19,8 @@
 
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { useDialogStore } from "../../stores/dialogs";
+import { useModalStore } from "../../stores/modals";
+import { escapeClaimed } from "../../ui/escapeClaim";
 import { pluginFocus } from "../../plugins/settingsFocus";
 import { useModalGate } from "../../composables/useModalGate";
 import ModalFrame from "./ModalFrame.vue";
@@ -39,6 +41,10 @@ import {
 import { asIconPackId, getIconPack, iconPacks, onIconPackChange, setIconPack } from "../../ui/icons";
 import { asUnit, getUnit, onUnitChange, setUnit } from "../../ui/units";
 import { motionOn, onMotionChange, setMotion } from "../../ui/motion";
+import {
+  getHomeBackground, HOME_BACKGROUNDS, HOME_IMAGE_TYPES, loadHomeImage, onHomeBackgroundChange, setHomeBackground,
+  storeHomeImage, type HomeBackground,
+} from "../../ui/homeBackground";
 import {
   asOrbitPivot,
   asTouchpadScroll,
@@ -78,6 +84,16 @@ const close = () => { dialogs.preferences = false; };
 // text-sized targets and single-letter tool keys would fire underneath it.
 useModalGate();
 
+const modals = useModalStore();
+let ownDepth = 0;
+// A choice raised over this dialog, or a popover inside it, takes its own Escape.
+function onKey(e: KeyboardEvent) {
+  if (e.key !== "Escape" || modals.current !== null || modals.depth !== ownDepth || escapeClaimed()) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  close();
+}
+
 const theme = ref(getTheme());
 // The roster is no longer a constant, uploading and removing a palette grows and
 // shrinks it, so it is mirrored in a ref and re-read whenever the library moves.
@@ -86,6 +102,9 @@ const themeList = ref(themes());
 // last upload was fine or there has not been one.
 const themeError = ref("");
 const fileInput = ref<HTMLInputElement | null>(null);
+const homeBg = ref(getHomeBackground());
+const homeImageInput = ref<HTMLInputElement | null>(null);
+const homeImageError = ref("");
 // Only an uploaded palette is removable; the built-in theme and the shipped
 // ones (Dracula, Solarized Light) sit in the picker the same way but stay put.
 const activeIsCustom = computed(() => customThemes().some((t) => t.id === theme.value));
@@ -100,6 +119,8 @@ const classicCamera = ref(navigatorChoice() === "legacy");
 
 const stops: (() => void)[] = [];
 onMounted(() => {
+  ownDepth = modals.depth;
+  window.addEventListener("keydown", onKey, true);
   stops.push(
     onThemeChange(() => { theme.value = getTheme(); themeList.value = themes(); }),
     onIconPackChange(() => { pack.value = getIconPack(); }),
@@ -109,9 +130,13 @@ onMounted(() => {
     onMotionChange(() => { motion.value = motionOn(); }),
     onNavPrefsChange(() => { nav.value = getNavPrefs(); }),
     onDetectedWheelChange(() => { detectedWheel.value = getDetectedWheel(); }),
+    onHomeBackgroundChange(() => { homeBg.value = getHomeBackground(); }),
   );
 });
-onUnmounted(() => { for (const stop of stops) stop(); });
+onUnmounted(() => {
+  window.removeEventListener("keydown", onKey, true);
+  for (const stop of stops) stop();
+});
 
 // A plugin's settings are under its own row in Plugins, not a category here.
 const categories = computed(() => [
@@ -214,6 +239,29 @@ function onRemoveTheme() {
 }
 function onPack(id: string) { const v = asIconPackId(id); if (v) setIconPack(v); }
 function pickUnit(id: string) { const v = asUnit(id); if (v) setUnit(v); }
+
+async function pickHomeBackground(id: HomeBackground) {
+  homeImageError.value = "";
+  if (id === "image" && !(await loadHomeImage())) {
+    homeImageInput.value?.click();
+    return;
+  }
+  setHomeBackground(id);
+}
+
+async function onHomeImage(ev: Event) {
+  const input = ev.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = "";
+  if (!file) return;
+  const res = await storeHomeImage(file);
+  if (!res.ok) {
+    homeImageError.value = res.error;
+    return;
+  }
+  homeImageError.value = "";
+  setHomeBackground("image");
+}
 function onEnvironment(id: string) { const v = asEnvironment(id); if (v) setRenderPref("environment", v); }
 function pickBackground(id: string) { const v = asBackground(id); if (v) setRenderPref("background", v); }
 function onBrightness(ev: Event) { setRenderPref("brightness", Number.parseFloat(value(ev))); }
@@ -305,6 +353,35 @@ function onClassicCamera(ev: Event) {
                 </div>
               </div>
               <p class="pref-hint">Geometry is always stored in millimetres, this is display only.</p>
+            </div>
+            <div class="pref-card wide">
+              <div class="pref-head">
+                <span class="pref-title">Home background</span>
+                <div id="prefs-home-background" class="pref-seg" role="radiogroup" aria-label="Home background">
+                  <button
+                    v-for="b in HOME_BACKGROUNDS"
+                    :key="b.id"
+                    type="button"
+                    role="radio"
+                    :aria-checked="homeBg === b.id"
+                    :class="{ on: homeBg === b.id }"
+                    @click="pickHomeBackground(b.id)"
+                  >{{ b.label }}</button>
+                </div>
+              </div>
+              <p class="pref-hint">What Home sits on. Workspace shows your model dimmed behind it.</p>
+              <div v-if="homeBg === 'image'" class="prefs-actions">
+                <button type="button" class="btn" @click="homeImageInput?.click()">Choose image…</button>
+              </div>
+              <input
+                ref="homeImageInput"
+                id="prefs-home-image"
+                class="hidden"
+                type="file"
+                :accept="HOME_IMAGE_TYPES.join(',')"
+                @change="onHomeImage"
+              />
+              <p v-if="homeImageError" class="pref-hint prefs-theme-error">{{ homeImageError }}</p>
             </div>
           </div>
         </section>
