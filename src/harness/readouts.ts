@@ -190,3 +190,51 @@ export function status(h: ReadHost, doc: Document = document, since = 0): Status
     busy: busyText(h),
   };
 }
+
+export interface GuideReadout {
+  caption: string;
+  count: string;
+  hint: string;
+  /** The ref or model area the ring is on. */
+  on: string;
+  ring: Box | null;
+  bubble: Box | null;
+  /** The model outline's screen bounds, when the step points at the model. */
+  outline: Box | null;
+}
+
+type Box = { left: number; top: number; width: number; height: number };
+
+const boxOf = (el: Element | null): Box | null => {
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  return { left: Math.round(r.left), top: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) };
+};
+
+/** The guide step on screen, or null. */
+export function guide(doc: Document = document): GuideReadout | null {
+  const layer = doc.querySelector(".guide-layer");
+  if (!layer) return null;
+  const lines = [...layer.querySelectorAll(".guide-model polyline")];
+  let outline: Box | null = null;
+  for (const l of lines) {
+    const b = boxOf(l);
+    if (!b) continue;
+    if (!outline) outline = b;
+    else {
+      const right = Math.max(outline.left + outline.width, b.left + b.width), bottom = Math.max(outline.top + outline.height, b.top + b.height);
+      outline = { left: Math.min(outline.left, b.left), top: Math.min(outline.top, b.top), width: 0, height: 0 };
+      outline.width = right - outline.left;
+      outline.height = bottom - outline.top;
+    }
+  }
+  return {
+    caption: text(doc, ".guide-caption"),
+    count: text(doc, ".guide-count"),
+    hint: text(doc, ".guide-hint"),
+    on: layer.querySelector<HTMLElement>(".guide-ring")?.dataset.ref ?? "",
+    ring: boxOf(layer.querySelector(".guide-ring")),
+    bubble: boxOf(layer.querySelector(".guide-bubble")),
+    outline,
+  };
+}

@@ -102,6 +102,7 @@ Every readout is a few lines of text. Pass `raw=True` for the JSON it was made f
 | `s.bodies()` | bodies with face count and visibility, the first 40 with counts when there are more |
 | `s.status()` | mode, running tool, workspace, document, undo and redo, what the app is busy with (an import and how far it got), prompt, selection, the newest message and error since the last action began, and a warning the view raised itself (Low performance in a headless browser) |
 | `s.selection()` | selected bodies, faces and edges |
+| `s.guide()` | the guide mode step on screen: its caption, the ref or model area the ring is on, and where the ring, the bubble and a model outline are; `None` when no step is up. Next and Stop are `#guide-next` and `#guide-stop` |
 | `s.handles()` | the named handles a tool has up, with their screen point or `covered` |
 | `s.last_error()` | a failed build or refused preview, else an error logged since the last action began, or `none` |
 | `s.messages(since=seq)` | log and toast lines after a sequence number |
