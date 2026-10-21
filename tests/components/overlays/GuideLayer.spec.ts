@@ -115,4 +115,18 @@ describe("GuideLayer frame loop", () => {
     frame();
     expect(frame()).toBe(0);
   });
+
+  it("reads a model step's faces once per build, not every frame", async () => {
+    const g = setup();
+    g.guide.apply([{ kind: "highlight", seq: 1, target: { model: "body1:index=0" }, caption: "This face" }]);
+    await tick();
+    frame();
+    const once = g.faceCalls();
+    expect(once).toBeGreaterThan(0);
+    for (let i = 0; i < 30; i++) frame();
+    expect(g.faceCalls()).toBe(once);
+    g.store.buildState = { ...(g.store.buildState as object) };
+    frame();
+    expect(g.faceCalls()).toBe(once * 2);
+  });
 });
