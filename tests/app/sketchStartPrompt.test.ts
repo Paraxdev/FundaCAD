@@ -20,7 +20,7 @@ function bridge() {
 describe("the prompt a sketch tool starts with", () => {
   beforeEach(() => setActivePinia(createPinia()));
 
-  it.each(["text", "project"])("is set for %s", (tool) => {
+  it.each(["text", "project", "boltCircle", "hexHoles", "honeycomb", "gridHoles"])("is set for %s", (tool) => {
     const { to } = bridge();
     to(tool);
     expect(usePromptStore().text).toBe(SKETCH_PROMPTS[tool]);
