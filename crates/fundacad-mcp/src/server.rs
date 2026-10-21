@@ -336,6 +336,9 @@ struct State {
     /// The `build` FundaCAD's engine answered the last probe with, kept after
     /// the app goes so work moved to a private engine can be compared with it.
     app_build: Option<Value>,
+    /// Sections of the opened `.fundab` this build cannot read, which a JSON
+    /// save leaves out.
+    unread_sections: Vec<String>,
 }
 
 impl State {
@@ -403,6 +406,7 @@ impl FundaCad {
                 built_for: None,
                 reported: None,
                 app_build: None,
+                unread_sections: Vec::new(),
             })),
             turn: Arc::new(Mutex::new(())),
             router: Arc::new(Self::base_router()),
@@ -826,6 +830,7 @@ impl FundaCad {
         let mut st = self.state.lock().await;
         st.doc = model::new_document();
         st.path = None;
+        st.unread_sections.clear();
         st.invalidate();
         st.reported = None;
         Ok(text("New empty document."))
@@ -849,7 +854,7 @@ impl FundaCad {
             },
             Err(e) => return Ok(e),
         };
-        let (doc, blobs) = match docfile::read_document(&path) {
+        let (doc, blobs, unread) = match docfile::read_document_full(&path) {
             Ok(v) => v,
             Err(e) => return Ok(failure(e.to_string())),
         };
@@ -871,6 +876,7 @@ impl FundaCad {
         }
         let mut st = self.state.lock().await;
         st.doc = doc;
+        st.unread_sections = unread;
         model::fill_defaults(&mut st.doc);
         st.path = Some(path.clone());
         st.invalidate();
@@ -957,7 +963,9 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
                 }
             }
         }
-        let embedded = match docfile::write_with(&path, &st.doc, Some(&root), &fetched) {
+        let mut stamped = st.doc.clone();
+        model::stamp_for_save(&mut stamped);
+        let embedded = match docfile::write_with(&path, &stamped, Some(&root), &fetched) {
             Ok(n) => n,
             Err(e) => {
                 let why = asking_failed
@@ -966,13 +974,22 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
             }
         };
         st.path = Some(path.clone());
+        let left_out = if st.unread_sections.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "
+note: left out of the file, because this build cannot read them and a .funda has no place for them: {}. Open the original .fundab in FundaCAD and save as .fundab to keep them.",
+                std::mem::take(&mut st.unread_sections).join(", ")
+            )
+        };
         let geometry = if embedded > 0 {
             format!(", with {embedded} imported bodies' geometry")
         } else {
             String::new()
         };
         Ok(text(format!(
-            "Saved {} features to {}{geometry}.",
+            "Saved {} features to {}{geometry}.{left_out}",
             model::features(&st.doc).len(),
             path.display()
         )))

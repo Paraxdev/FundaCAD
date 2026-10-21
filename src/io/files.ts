@@ -17,11 +17,12 @@ import {
 import { buildBodyTree, importTrees } from "../ui/browserTree";
 import { referencedGeometry } from "../document/versions";
 import { hashShapedStrings } from "../document/geometryRefs";
+import { blake2b128Hex } from "../document/blake2b";
 import { UnreadableDocumentError } from "../document/documentShape";
 import { noteRecent } from "./recentFiles";
 import { closeHome } from "../ui/home";
 import { captureAfterOpen, captureThumbnail, storeThumbnail } from "./thumbnails";
-import { BINARY_DOC_EXT, DOC_EXT, LEGACY_DOC_EXTS, isDocumentExt } from "./documentExt";
+import { BINARY_DOC_EXT, DOC_EXT, LEGACY_DOC_EXTS, isDocumentExt, leftOutSectionsNotice } from "./documentExt";
 import { announceImportedBody } from "../plugins/contrib";
 import { askImportUnit, asksForUnit, type ImportUnit } from "./importUnit";
 import { importFeatures } from "./importSketches";
@@ -71,6 +72,8 @@ async function writeContainer(store: DocumentStore, path: string): Promise<strin
       carried: store.carriedSections,
     });
     void storeThumbnail(path, picture);
+    const left = leftOutSectionsNotice(path, store.carriedSections);
+    if (left) void import("../ui/toast").then(({ toast }) => toast(left, { kind: "info", timeout: 12000 }));
     return null;
   } catch (e) {
     return errMsg(e);
@@ -118,21 +121,116 @@ export async function saveDocumentAs(store: DocumentStore) {
       void clearRecovery(path);
     }
   } else {
-    // Plain dev browser: no Tauri, so no container. Geometry lives in the
-    // engine's blob store either way, so this download is the document only,
-    // useful for inspecting a feature tree, NOT a portable file.
-    //
     // Reuse the name already settled on (mirrors the Tauri defaultPath logic
     // above), so a SECOND Save As in the same session downloads "Untitled.funda"
     // again rather than "Untitled.funda.funda": markSaved below makes fileName
     // return the downloaded name from here on.
     const name = store.filePath ? store.fileName : `${store.fileName}.${DOC_EXT}`;
-    downloadText(name, store.toJSON());
+    const built = await browserDocumentText(store);
+    if ("refused" in built) {
+      await reportError(built.refused);
+      return;
+    }
+    downloadText(name, built.text);
     // No real path to save to, but the title bar reads store.fileName the same
     // way for both builds, and "Untitled*" forever after a successful download
     // read as the save having silently failed.
     store.markSaved(name);
   }
+}
+
+/** A browser save holds this much geometry at most: the file is built as one
+ *  string, base64 adds a third, and V8 refuses a string past about 512 MiB. */
+const MAX_BROWSER_GEOMETRY_BYTES = 256 * 1024 * 1024;
+
+/** The .funda text the desktop app would write, built here because a browser
+ *  has no Rust to embed the imports' geometry: it is read back from the engine's
+ *  blob store. `refused` says why no file that opens whole could be built. */
+async function browserDocumentText(store: DocumentStore): Promise<{ text: string } | { refused: string }> {
+  const doc = store.toObject();
+  const hashes = referencedHashes(store);
+  const optionalHashes = [...hashShapedStrings(doc)].filter((h) => !hashes.includes(h));
+  if (!hashes.length && !optionalHashes.length) return { text: JSON.stringify(doc, null, 2) };
+  const backend = store.backend;
+  const read = async (h: string) => (backend.blobGet ? backend.blobGet(h).catch(() => null) : null);
+  const blobs = new Map<string, Uint8Array>();
+  const missing: string[] = [];
+  let total = 0;
+  for (const h of hashes) {
+    const bytes = await read(h);
+    if (bytes) blobs.set(h, bytes);
+    else missing.push(h);
+    total += bytes?.length ?? 0;
+  }
+  if (missing.length) {
+    const names = new Set<string>();
+    for (const f of doc.features ?? []) {
+      const imp = asFeature(f, "import");
+      if (imp?.geom && missing.includes(imp.geom)) names.add(imp.name || imp.source || imp.id);
+    }
+    if (names.size < missing.length) names.add("an import in an earlier version");
+    return {
+      refused: `Couldn't save: the geometry of ${[...names].join(", ")} is not in the engine, so the file would open without it. Import it again, then save.`,
+    };
+  }
+  for (const h of optionalHashes) {
+    const bytes = await read(h);
+    if (bytes) blobs.set(h, bytes);
+    total += bytes?.length ?? 0;
+  }
+  if (total > MAX_BROWSER_GEOMETRY_BYTES) {
+    return { refused: `Couldn't save: its imported geometry is ${Math.round(total / 1048576)} MB, more than the browser can put in one file. Save it in the desktop app.` };
+  }
+  const geometry: Record<string, string> = {};
+  for (const h of [...blobs.keys()].sort()) geometry[h] = bytesToBase64(blobs.get(h)!);
+  return { text: JSON.stringify(blobs.size ? { ...doc, geometry } : doc, null, 2) };
+}
+
+/** What Rust does on a desktop open: every embedded blob is checked against its
+ *  hash, all of them before any is published, then handed to the engine. The
+ *  text is returned unchanged, load() drops the `geometry` key itself. */
+async function publishEmbeddedGeometry(store: DocumentStore, text: string): Promise<string | null> {
+  if (!text.includes('"geometry"')) return null;
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  const embedded = raw && typeof raw === "object" ? (raw as { geometry?: unknown }).geometry : undefined;
+  if (embedded === undefined) return null;
+  const damaged = (detail: string) => new UnreadableDocumentError("its embedded geometry is damaged", detail);
+  if (!embedded || typeof embedded !== "object" || Array.isArray(embedded)) throw damaged("geometry is not an object");
+  const blobs: Uint8Array[] = [];
+  for (const [hash, data] of Object.entries(embedded)) {
+    if (typeof data !== "string" || !/^[0-9a-f]{32}$/.test(hash)) throw damaged(`bad geometry entry ${hash}`);
+    let bytes: Uint8Array;
+    try {
+      bytes = base64ToBytes(data);
+    } catch {
+      throw damaged(`geometry ${hash} is not base64`);
+    }
+    if (blake2b128Hex(bytes) !== hash) {
+      throw new UnreadableDocumentError("its geometry does not match its hash, so it was changed or damaged", `geometry ${hash} does not match its bytes`);
+    }
+    blobs.push(bytes);
+  }
+  if (!blobs.length) return null;
+  const backend = store.backend;
+  if (!backend.blobPut) return "this engine has no blob store";
+  try {
+    for (const b of blobs) await backend.blobPut(b);
+  } catch (e) {
+    return errMsg(e);
+  }
+  return null;
+}
+
+function base64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
 }
 
 /** `mayReplace` is asked before a picked document takes the open one's place,
@@ -172,7 +270,9 @@ export async function openDocument(
 /** Open a document the app has as text with no path, picked in a browser or
  *  dropped on the window. */
 export async function openDocumentText(store: DocumentStore, name: string, text: string): Promise<OpenOutcome> {
+  let unpublished: string | null;
   try {
+    unpublished = await publishEmbeddedGeometry(store, text);
     store.load(text);
   } catch (e) {
     await reportUnreadable(e);
@@ -182,6 +282,7 @@ export async function openDocumentText(store: DocumentStore, name: string, text:
   // open and drop the unsaved marker, same as a Tauri Open does.
   store.markSaved(name);
   await warnAboutOpen(store);
+  if (unpublished) await reportError(`Opened ${name}, but its embedded geometry could not be handed to the engine, so its imports will not build: ${unpublished}.`);
   return "ok";
 }
 
@@ -757,6 +858,7 @@ async function importWith(
   // assembly's product colours were read by the engine, carried in the
   // manifest, and then never looked at, so a file that arrived fully coloured
   // opened as three thousand identical grey bodies.
+  if (await cancelledImport(store, imported, res)) return;
   const source = importSource(imported);
   if (!(await adoptImportedColors(store, id, res, { joinImport: true, source }))) recolorOnRedo(store, imported, res);
 
@@ -780,6 +882,31 @@ async function importWith(
 const importSource = (f: Feature) =>
   f.type === "import" ? (f as Extract<Feature, { type: "import" }>).source : undefined;
 
+/** Waits for the build that brings `imported` in. A Cancel pressed during it
+ *  takes the import back as one undo step, which Redo builds again, and says so.
+ *  True when nothing is left for the import to do: it was cancelled, or a
+ *  document open replaced the one it went into. */
+async function cancelledImport(store: DocumentStore, imported: Feature, res: Parameters<typeof adoptImportedColors>[2]) {
+  let opened = false;
+  const offOpen = store.onOpen(() => (opened = true));
+  await store.whenBuilt().finally(offOpen);
+  if (opened) return true;
+  const still = store.document.features.find((f) => f.id === imported.id);
+  if (!store.buildState.cancelled || !still || importSource(still) !== importSource(imported)) return false;
+  const has = (d: { features: { id: string }[] }) => d.features.some((f) => f.id === imported.id);
+  const undone = store.undoIfTop((before) => !has(before) && has(store.document));
+  if (undone) recolorOnRedo(store, imported, res);
+  const name = importSource(imported)?.split(/[\\/]/).pop() || "the file";
+  const { toast } = await import("../ui/toast");
+  toast(
+    undone
+      ? `Import of ${name} cancelled, nothing was added. Redo brings it back.`
+      : "Rebuild cancelled, the model is not built. Compute All builds it.",
+    { kind: "info" },
+  );
+  return true;
+}
+
 /** An import undone while its rebuild ran put its colours on nothing. Its redo
  *  puts them on then, as part of that same step, or never. */
 export function recolorOnRedo(store: DocumentStore, feature: Feature, res: Parameters<typeof adoptImportedColors>[2]) {
@@ -801,9 +928,10 @@ export function recolorOnRedo(store: DocumentStore, feature: Feature, res: Param
     if (rewound && back) {
       const source = importSource(feature);
       queueMicrotask(() => {
-        adoptImportedColors(store, feature.id, res, { joinImport: true, only: true, source }).catch((e) =>
-          console.warn("import colours not put back", e),
-        );
+        void (async () => {
+          if (await cancelledImport(store, feature, res)) return;
+          await adoptImportedColors(store, feature.id, res, { joinImport: true, only: true, source });
+        })().catch((e) => console.warn("import colours not put back", e));
       });
     }
   });
@@ -869,7 +997,7 @@ export async function adoptImportedColors(
 
   let opened = false;
   const offOpen = store.onOpen(() => (opened = true));
-  await store.rebuildNow().finally(offOpen);
+  await store.whenBuilt().finally(offOpen);
   if (opened) return true;
   const bodies = store.buildState.result?.bodies ?? [];
   // Note: after an undo nextId() hands this id to the next feature drawn, so the

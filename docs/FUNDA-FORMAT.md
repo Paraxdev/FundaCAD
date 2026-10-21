@@ -45,6 +45,9 @@ document has imported bodies, one more top-level key comes last:
   the key carries it as an unknown top level key, image included.
 
 The reference writer and reader is `crates/fundacad-format/src/json_doc.rs`.
+The browser build has no Rust to call, so `src/io/files.ts` writes and reads the
+same map itself through the engine's blob store, and refuses a download that
+would lose an import's geometry.
 
 ### Materials
 
@@ -400,10 +403,18 @@ Writer rules:
   what it saves is in its own shapes. A newer reader therefore runs its newer
   migrations on such a file again, so every migration must be shape guarded:
   it rewrites only what still has the old shape, and leaves alone what already
-  has the new one. The app saves a newer file this way. MCP `doc_save` is the
-  exception: it writes the JSON back as it was read, edits included, so the
-  higher stamp stays, and an edit made through MCP must already use the shapes
-  of that stamp.
+  has the new one. The app saves a newer file this way, and so does MCP
+  `doc_save`: a stamp above its own is lowered to its own, the rest of the
+  file is written as it was. A stamp below its own stays, because MCP does not
+  run the app's migrations and a higher stamp would make the app skip them.
+  MCP cannot write a `.fundab`, and a JSON file has no sections, so a section
+  carried in a `.fundab` is dropped by an MCP save, as the app drops it when
+  it saves as `.funda`. Only the app keeps it, by saving as `.fundab`. Neither
+  save is silent about it: MCP `doc_save` names the sections in a `note:` line
+  of its reply and says to save as `.fundab` in the app, and the app shows the
+  same as a notice after a `.funda` save. MCP says it once, on the save that
+  left them out. A failed `doc_save` stamps nothing, because the stamp goes on
+  a copy of the document that is written.
 - A new reference to geometry is a lowercase hex BLAKE2b-128 string held as a
   string value, never as an object key, so an older writer finds it and keeps
   the blob. The older writer only scans values.
