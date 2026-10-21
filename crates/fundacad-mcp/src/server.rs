@@ -13,6 +13,7 @@
 //!   build         make it, and say what broke
 //!   inspect       exact measurements, and the SELECTORS that address each face
 //!                 and edge, which is what makes the next feature writable
+//!   measure       exact distances, walls, radii and angles between two of them
 //!   view          a picture, because "is the hole in the right place" is not a
 //!                 question numbers answer
 //!   doc_save      a .funda file the app opens
@@ -1229,6 +1230,15 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
     )]
     pub async fn t_inspect(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         Ok(self.inspect(&args).await)
+    }
+
+    #[tool(
+        name = "measure",
+        description = "Exact measurements on the B-rep, without changing the document. With one thing (`a`): a face's surface, area, normal or radius and axis, an edge's length, direction or circle, a body's volume and size. With two (`a` and `b`): the minimum distance and both closest points, the gap between parallel planar faces (a wall), centre to centre or axis to axis distance (a hole pitch), and the angle between planes, lines and axes. Things are face or edge selectors from `inspect` (detail:true, selectors:true) with their body, {body, face: n} or {body, edge: n}, a body id, or {point: [x, y, z]}. Units mm and degrees, rounded to 3 places, the raw values follow on the `raw:` line.",
+        input_schema = crate::tools::measure()
+    )]
+    pub async fn t_measure(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
+        Ok(self.measure(&args).await)
     }
 
     #[tool(
@@ -2541,6 +2551,28 @@ impl FundaCad {
 // --- stress ------------------------------------------------------------------
 
 impl FundaCad {
+    async fn measure(&self, args: &JsonObject) -> CallToolResult {
+        let mut payload = match crate::measure::request_of(args) {
+            Ok(p) => p,
+            Err(e) => return failure(e),
+        };
+        let (link, doc) = {
+            let mut st = self.state.lock().await;
+            model::recompute_parameters(&mut st.doc);
+            (st.link.clone(), st.doc.clone())
+        };
+        payload.insert("document".into(), Value::Object(doc));
+        let reply = match link.call("measure", Value::Object(payload)).await {
+            Ok(r) => r,
+            Err(e) => return engine_gone(&e),
+        };
+        if reply.get("ok") != Some(&json!(true)) {
+            return failure(format!("Could not measure: {}", error_message(&reply)));
+        }
+        let r = reply.get("result").cloned().unwrap_or_else(|| json!({}));
+        text(crate::measure::report(&r))
+    }
+
     async fn stress(&self, args: &JsonObject) -> CallToolResult {
         let request = match crate::stress::request_of(args) {
             Ok(r) => r,

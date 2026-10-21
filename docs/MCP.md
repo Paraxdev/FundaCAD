@@ -206,6 +206,7 @@ which a fresh engine could no longer start one and every build failed.
 | `stress` | a linear static stress analysis of one body: hold faces (`fixed`, or `supports` that are fixed, pinned or slider), load others with a force or a pressure, add its weight with `gravity`, pick a material, and get the peak von Mises stress and where, the largest deflection, the safety factor against yield, the load balance with the reaction at each support, warnings, and a PNG coloured by stress. Changes nothing |
 | `printability` | what would go wrong printing the parts on an FDM printer: overhangs past 45 deg, walls under two nozzle widths, floors under two layers, gaps that would fuse, long bridges and open shells, each with its face and a `view` focus. As modelled or laid flat as `export` would. Changes nothing |
 | `inspect` | exact volume, area, bbox, and every face and edge with a ready-made selector |
+| `measure` | exact measurements on the B-rep. One thing (`a`): a face's surface, area, outward normal, radius and axis; an edge's length, direction, circle and arc; a body's volume, area and size. Two (`a`, `b`): the minimum distance with both closest points, the gap between parallel planar faces (a wall), centre to centre or axis to axis distance (a hole pitch), and the angle between planes, straight edges and axes. A thing is a face or edge selector from `inspect` with its `body`, `{body, face: n}` or `{body, edge: n}` (inspect's F and E numbers, for the current build only), a body id or name, or `{point: [x, y, z]}`; `want` narrows it to `distance`, `angle` or `centres`. Text in mm and degrees to 3 places, then a `raw:` line with the unrounded reply. Changes nothing |
 | `view` | a PNG: orthographic, flat-shaded, with sections, body filtering and zoom |
 | `doc_import` | read a STEP, STL, 3MF, OBJ, BREP or GLB file in as a body to model against, by `path` or as inline `content`, compressed and in pieces if it is large |
 | `export` | STEP, STL, 3MF, OBJ, BREP. `separate` writes a file per body named after it, `body` one body, `layFlat` turns each part onto a flat face for printing |
@@ -463,6 +464,7 @@ one-shot calls is not a session, use `--script`, which is either a JSON array of
 | `src/model.rs` | the document: ids, the timeline, the parameter table, validation |
 | `src/render.rs`, `src/png.rs` | the rasteriser and its PNG |
 | `src/describe.rs` | turning an `inspect` report into something worth reading |
+| `src/measure.rs` | the `measure` tool's request and its text |
 | `src/docfile.rs` | reading and writing `.funda` and `.fundab` |
 | `src/schema.rs`, `src/schema.json` | the feature reference the agent reads |
 | `tests/` | one suite per module, driving the built binaries over real stdio and a real socket |

@@ -29,6 +29,7 @@ pub mod edits;
 pub mod layflat;
 pub mod link;
 pub mod live;
+pub mod measure;
 pub mod mesh;
 pub mod model;
 pub mod png;
