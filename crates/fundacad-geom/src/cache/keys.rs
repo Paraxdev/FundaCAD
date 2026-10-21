@@ -507,7 +507,8 @@ mod tests {
 
     /// Each tests/golden digest (CRLF read as LF, the MCP transcript left out)
     /// with the `GEOMETRY_VERSION` it was pinned at. A re-record adds a pair at
-    /// a bumped version; a version that has not shipped may take one in place.
+    /// a bumped version; a version that has not shipped may take one in place,
+    /// which these tests cannot tell from a missed bump.
     const GOLDEN_DIGESTS: [(u32, &str); 2] =
         [(1, "74269bcbe84820d4693f680ddbf76ecc"), (2, "5f9cfa982ced8d4ceca0fcf902ad0bbf")];
 
