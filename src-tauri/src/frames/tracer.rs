@@ -463,8 +463,37 @@ mod tests {
         with(|t| t.samples()).unwrap()
     }
 
+    /// The tracer is one per process, so its tests take turns.
+    fn one_at_a_time() -> MutexGuard<'static, ()> {
+        static TURN: Mutex<()> = Mutex::new(());
+        TURN.lock().unwrap_or_else(|p| p.into_inner())
+    }
+
+    #[test]
+    fn a_frame_the_gpu_does_not_finish_in_time_greys_path_traced_with_the_reason() {
+        let _turn = one_at_a_time();
+        let Ok(t) = tracer() else {
+            eprintln!("skipped: no native tracer");
+            return;
+        };
+        t.lock().tracer.set_wait_limit_for_test(Duration::ZERO);
+        let mut out = vec![1; 256 * 192 * 4];
+        t.render(&mut out, 256, 192, 0);
+        let fault = pt_status().unwrap().fault.expect("a frame past the wait limit left no fault");
+        assert!(fault.contains("did not finish a frame within 0 s"), "{fault}");
+        t.render(&mut out, 256, 192, 1);
+        assert!(out.iter().all(|&b| b == 0), "a faulted tracer drew a frame");
+        drop(t);
+        release();
+        let t = tracer().expect("the tracer did not come back after a release");
+        assert_eq!(pt_status().unwrap().fault, None, "a reopened tracer kept the old fault");
+        drop(t);
+        release();
+    }
+
     #[test]
     fn a_cancelled_picture_leaves_the_viewport_tracing_and_the_next_one_saves() {
+        let _turn = one_at_a_time();
         let Ok(t) = tracer() else {
             eprintln!("skipped: no native tracer");
             return;

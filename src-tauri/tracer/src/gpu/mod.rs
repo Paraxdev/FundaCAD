@@ -9,6 +9,7 @@ mod upload;
 
 use std::collections::HashMap;
 use std::sync::{mpsc, Arc, Mutex};
+use std::time::Duration;
 
 use crate::bloom::{Bloom, Chain};
 use crate::denoise::{self, Denoiser, Quality};
@@ -97,6 +98,10 @@ pub struct LightDesc {
 }
 
 pub const MAX_LIGHTS: usize = 4;
+
+/// Windows resets a GPU that runs one dispatch past about 2 s, so a band that
+/// has not finished by this is stuck behind another process or a lost device.
+pub const WAIT_LIMIT: Duration = Duration::from_secs(10);
 
 /// Up to MAX_LIGHTS lights, held inline so a Look stays Copy. A longer list
 /// keeps its strongest; a dark light or one with no direction is left out,
@@ -289,6 +294,7 @@ pub struct Tracer {
     denoise_error: Option<String>,
     fault: Arc<Mutex<Fault>>,
     buffer_limit: u64,
+    wait_limit: Duration,
 }
 
 /// The first loss and the first uncaptured error. Not behind the frames
@@ -450,6 +456,7 @@ impl Tracer {
             denoise_error: None,
             fault,
             buffer_limit,
+            wait_limit: WAIT_LIMIT,
         };
         t.resize(64, 64);
         Ok(t)
@@ -468,6 +475,11 @@ impl Tracer {
     #[doc(hidden)]
     pub fn instance_uploads(&self) -> u64 {
         self.instance_uploads
+    }
+
+    #[doc(hidden)]
+    pub fn set_wait_limit_for_test(&mut self, limit: Duration) {
+        self.wait_limit = limit;
     }
 
     #[doc(hidden)]
@@ -712,11 +724,54 @@ impl Tracer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
 
     #[test]
     fn the_tracer_never_asks_for_the_opengl_backend() {
         assert!(!TracerOptions::default().backends.contains(wgpu::Backends::GL));
+    }
+
+    #[test]
+    fn a_poll_that_times_out_names_the_limit() {
+        let e = super::frame::settle(Err(wgpu::PollError::Timeout), WAIT_LIMIT).unwrap_err();
+        assert!(e.contains("did not finish a frame within 10 s"), "{e}");
+        assert!(super::frame::settle(Ok(wgpu::PollStatus::QueueEmpty), WAIT_LIMIT).is_ok());
+    }
+
+    fn impatient(w: u32, h: u32) -> Option<Tracer> {
+        let Ok(mut t) = Tracer::new(TracerOptions { software: true, ..Default::default() }) else {
+            eprintln!("skipped: no adapter");
+            return None;
+        };
+        t.resize(w, h);
+        t.set_cap(64);
+        t.set_wait_limit_for_test(Duration::ZERO);
+        Some(t)
+    }
+
+    #[test]
+    fn a_readback_the_gpu_never_finishes_returns_a_timeout_fault() {
+        let Some(mut t) = impatient(512, 512) else { return };
+        let start = Instant::now();
+        let px = t.resolve();
+        assert!(start.elapsed() < Duration::from_secs(1), "the readback waited {:?}", start.elapsed());
+        assert!(px.iter().all(|&b| b == 0));
+        let f = t.fault().expect("a readback past the limit is a fault");
+        assert!(f.contains("did not finish a frame within 0 s"), "{f}");
+        t.render_samples(64);
+        assert_eq!(t.samples(), 0, "a faulted tracer traced on");
+    }
+
+    #[test]
+    fn a_trace_the_gpu_does_not_finish_in_time_stops_with_the_reason() {
+        let Some(mut t) = impatient(512, 512) else { return };
+        let start = Instant::now();
+        t.render_samples(64);
+        assert!(start.elapsed() < Duration::from_secs(1), "the trace waited {:?}", start.elapsed());
+        assert!(t.samples() < 64, "the trace ran to the cap past its limit");
+        let f = t.fault().expect("a band past the limit is a fault");
+        assert!(f.contains("did not finish a frame"), "{f}");
+        assert_eq!(t.frame(512, 512, Duration::from_millis(50)), vec![0; 512 * 512 * 4]);
     }
 
     #[test]

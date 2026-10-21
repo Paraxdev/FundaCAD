@@ -110,12 +110,12 @@ fn main() {
         t.apply();
         tris
     };
-    t.wait();
+    t.wait().expect("the GPU finished");
     let accel_ms = ta.elapsed().as_secs_f64() * 1e3;
     // The first dispatch carries the pipeline's first use; time it apart.
     let tf = Instant::now();
     t.step();
-    t.wait();
+    t.wait().expect("the GPU finished");
     let first_ms = tf.elapsed().as_secs_f64() * 1e3;
     // BENCH_LOOP=frame times what the app's transport asks for per frame:
     // tracing for 12 ms, the resolve and the readback.
@@ -136,7 +136,7 @@ fn main() {
             if !t.step() {
                 break;
             }
-            t.wait();
+            t.wait().expect("the GPU finished");
         }
         dispatch.push(td.elapsed().as_secs_f64() * 1e3);
         if let (Some(goal), false) = (target, frames) {
