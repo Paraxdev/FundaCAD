@@ -86,6 +86,44 @@ describe("theme contrast", () => {
     });
   }
 
+  // The flagged sketch labels and relation symbols carry their state in the text colour, so
+  // that colour is read from the stylesheet itself and resolved per theme.
+  const FLAGGED: [string, string, string][] = [
+    ["src/styles/_browser.scss", ".sketch-dim.conflict", "glass"],
+    ["src/styles/_browser.scss", ".sketch-dim.over", "glass"],
+    ["src/styles/_browser.scss", ".sketch-glyph.conflict", "glass"],
+    ["src/styles/_browser.scss", ".sketch-glyph.over", "glass"],
+    ["src/styles/_palette.scss", ".rel-row.conflict .rel-sym", "--panel"],
+    ["src/styles/_palette.scss", ".rel-row.over .rel-sym", "--panel"],
+  ];
+
+  function ruleColour(path: string, selector: string): string {
+    const text = sources[path] ?? "";
+    const at = text.indexOf(`${selector} {`);
+    const body = at < 0 ? "" : text.slice(at, text.indexOf("}", at));
+    return /(?:^|[\s;{])color:\s*([^;]+);/.exec(body)?.[1]?.trim() ?? `no color in ${selector}`;
+  }
+
+  function resolve(value: string, p: Record<string, string>): Rgba {
+    const token = /^var\((--[\w-]+)\)$/.exec(value);
+    if (token) return parse(p[token[1] ?? ""] ?? `missing ${token[1]}`);
+    const cm = /^color-mix\(in srgb,\s*(var\(--[\w-]+\)|#[0-9a-f]{6})\s+(\d+)%,\s*(var\(--[\w-]+\)|#[0-9a-f]{6})\)$/i.exec(value);
+    if (cm) return mix(resolve(cm[1] ?? "", p), Number(cm[2]) / 100, resolve(cm[3] ?? "", p));
+    return parse(value);
+  }
+
+  for (const theme of shipped) {
+    it(`${theme.label} flagged sketch labels and relation symbols reach WCAG AA`, () => {
+      const p = theme.palette;
+      const glass = mix(parse(p["--panel"] ?? ""), 0.72, parse(p["--viewport-bg"] ?? ""));
+      const failing = FLAGGED.map(([path, selector, under]) => {
+        const bg = under === "glass" ? glass : parse(p[under] ?? "");
+        return { selector, ratio: Math.round(contrast(resolve(ruleColour(path, selector), p), bg) * 100) / 100 };
+      }).filter((r) => r.ratio < 4.5);
+      expect(failing).toEqual([]);
+    });
+  }
+
   it("no chip keeps a hard coded dark fill that stays dark on a light theme", () => {
     const dark = /rgba?\(\s*(?:22,\s*24,\s*29|18,\s*20,\s*25)\b/;
     const offenders = Object.entries(sources)
