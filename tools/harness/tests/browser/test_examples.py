@@ -32,3 +32,7 @@ def test_refused_commit(s):
 
 def test_extrude_reedit(s):
     example("extrude_reedit").run(s)
+
+
+def test_big_model_orbit(s, tmp_path):
+    example("big_model_orbit").run(s, tmp_path)

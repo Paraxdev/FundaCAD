@@ -175,10 +175,11 @@ export function edgeBandForPx(faceBandPx: number, shortBoostPx: number, smooth: 
 export interface BandCandidate {
   /** distance from the pointer, in screen px */
   screenDist: number;
-  /** round the back of the body (picking.occludedEdge) */
-  occluded: boolean;
-  /** edgeBandForPx for this edge */
-  bandPx: number;
+  /** round the back of the body (picking.occludedEdge). A sight ray through
+   *  every body, so asked last and only of a candidate that could win. */
+  occluded: () => boolean;
+  /** edgeBandForPx for this edge, asked only over a face */
+  bandPx: () => number;
 }
 
 /** Which edge, if any, the pointer means rather than the face under it: the
@@ -188,8 +189,8 @@ export interface BandCandidate {
 export function preferredEdge(cands: readonly BandCandidate[], overFace: boolean): number | null {
   for (let i = 0; i < cands.length; i++) {
     const c = cands[i]!;
-    if (c.occluded) continue;
-    if (!overFace || c.screenDist <= c.bandPx) return i;
+    if (overFace && c.screenDist > c.bandPx()) continue;
+    if (!c.occluded()) return i;
   }
   return null;
 }

@@ -9,7 +9,7 @@
 import * as THREE from "three";
 import type { NavScene } from "../cameras";
 import {
-  distanceOf, forwardOf, project, rayAt, rayDepth, rayPointAtDepth,
+  distanceOf, forwardOf, halfTan, project, rayAt, rayDepth, rayPointAtDepth, rightOf, upOf,
   type Frame, type Pose, type Ray,
 } from "./pose";
 
@@ -62,6 +62,78 @@ export function boxDepthRange(p: Pose, box: THREE.Box3 | null): [number, number]
     hi = Math.max(hi, z);
   }
   return [lo, hi];
+}
+
+const eyeV = new THREE.Vector3();
+const fwdV = new THREE.Vector3();
+const rightV = new THREE.Vector3();
+const upV = new THREE.Vector3();
+
+/** Least depth at which any of `boxes` is inside the perspective frustum, NaN
+ *  when none is. A box wholly in front of the eye counts from its nearest
+ *  corner, which may lie off screen, so the answer never passes a part. */
+export function visibleNearDepth(p: Pose, aspect: number, boxes: readonly THREE.Box3[]): number {
+  forwardOf(p, fwdV);
+  rightOf(p, rightV);
+  upOf(p, upV);
+  eyeV.copy(p.target).addScaledVector(fwdV, -distanceOf(p));
+  const ty = halfTan(p.fov) * 1.02;
+  const tx = ty * (aspect > 0 && Number.isFinite(aspect) ? aspect : 1);
+  let best = Infinity;
+  for (const box of boxes) {
+    if (box.isEmpty()) continue;
+    let out = 31;
+    let lo = Infinity;
+    for (let i = 0; i < 8; i++) {
+      const dx = (i & 1 ? box.max.x : box.min.x) - eyeV.x;
+      const dy = (i & 2 ? box.max.y : box.min.y) - eyeV.y;
+      const dz = (i & 4 ? box.max.z : box.min.z) - eyeV.z;
+      const z = dx * fwdV.x + dy * fwdV.y + dz * fwdV.z;
+      const x = dx * rightV.x + dy * rightV.y + dz * rightV.z;
+      const y = dx * upV.x + dy * upV.y + dz * upV.z;
+      out &= (z <= 0 ? 1 : 0) | (x > z * tx ? 2 : 0) | (-x > z * tx ? 4 : 0)
+        | (y > z * ty ? 8 : 0) | (-y > z * ty ? 16 : 0);
+      lo = Math.min(lo, z);
+    }
+    if (out) continue;
+    const z = lo > 0 ? lo : nearestInFrustum(box, tx, ty);
+    if (z < best) best = z;
+    if (best === 0) break;
+  }
+  return best === Infinity ? NaN : best;
+}
+
+// Half-spaces n.v <= c in view coordinates (x right, y up, z depth): the box's
+// six faces and the frustum's four sides and eye plane.
+type Half = [number, number, number, number];
+
+/** Least depth of the part of `box` inside the frustum, Infinity if none: a
+ *  three variable LP, solved at the vertices of the eleven half-spaces. Only
+ *  boxes reaching behind the eye get here, a tall part beside the camera. */
+function nearestInFrustum(box: THREE.Box3, tx: number, ty: number): number {
+  const hs: Half[] = [
+    [1, 0, -tx, 0], [-1, 0, -tx, 0], [0, 1, -ty, 0], [0, -1, -ty, 0], [0, 0, -1, 0],
+  ];
+  for (const k of ["x", "y", "z"] as const) {
+    const n: [number, number, number] = [rightV[k], upV[k], fwdV[k]];
+    hs.push([n[0], n[1], n[2], box.max[k] - eyeV[k]], [-n[0], -n[1], -n[2], eyeV[k] - box.min[k]]);
+  }
+  const eps = 1e-9 * Math.max(1, box.max.distanceTo(box.min), eyeV.length());
+  let best = Infinity;
+  const m = hs.length;
+  for (let i = 0; i < m; i++) for (let j = i + 1; j < m; j++) for (let k = j + 1; k < m; k++) {
+    const [a1, b1, c1, d1] = hs[i]!;
+    const [a2, b2, c2, d2] = hs[j]!;
+    const [a3, b3, c3, d3] = hs[k]!;
+    const det = a1 * (b2 * c3 - b3 * c2) - b1 * (a2 * c3 - a3 * c2) + c1 * (a2 * b3 - a3 * b2);
+    if (Math.abs(det) < 1e-12) continue;
+    const z = (a1 * (b2 * d3 - b3 * d2) - b1 * (a2 * d3 - a3 * d2) + d1 * (a2 * b3 - a3 * b2)) / det;
+    if (!(z < best)) continue;
+    const x = (d1 * (b2 * c3 - b3 * c2) - b1 * (d2 * c3 - d3 * c2) + c1 * (d2 * b3 - d3 * b2)) / det;
+    const y = (a1 * (d2 * c3 - d3 * c2) - d1 * (a2 * c3 - a3 * c2) + c1 * (a2 * d3 - a3 * d2)) / det;
+    if (hs.every(([a, b, c, d]) => a * x + b * y + c * z <= d + eps)) best = z;
+  }
+  return Math.max(0, best);
 }
 
 const eyeS = new THREE.Vector3();

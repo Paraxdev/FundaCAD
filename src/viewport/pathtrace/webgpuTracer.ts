@@ -5,7 +5,7 @@
 import * as THREE from "three";
 import type { Denoise } from "../../ui/renderPrefs";
 import { SAMPLE_CAP, type PictureOptions, type TraceLook, type TraceScene, type TracerBackend } from "./backend";
-import { FrameBudget } from "./budget";
+import { fitPreview, FrameBudget, type PreviewTracer } from "./budget";
 import { repackInPlace, type SwappableBvhData } from "./bvhSwap";
 import { traceCameraFor, type TraceLens } from "./camera";
 import { backgroundTexture } from "./environment";
@@ -386,8 +386,15 @@ export class WebGpuTracer implements TracerBackend {
     return this.gpuTime(t0);
   }
 
+  /** Before every renderSample: the preview's size follows the frame budget. */
+  private fitPreview() {
+    if (!this.tracer || !this.renderer) return;
+    fitPreview(this.tracer as unknown as PreviewTracer, this.renderer.getDrawingBufferSize(new THREE.Vector2()), PREVIEW_SCALE);
+  }
+
   private trace(samples: number) {
     if (!this.tracer) return;
+    this.fitPreview();
     this.tracer.renderSample();
     this.showsDenoise = false;
     const raw = this.internals._pathTracer.outputTarget;
@@ -436,6 +443,7 @@ export class WebGpuTracer implements TracerBackend {
         if (this.disposed) throw new Error("Path tracing stopped");
         t.frameBudget = budget.budget;
         const t0 = performance.now();
+        this.fitPreview();
         t.renderSample();
         const ms = await this.gpuTime(t0);
         // The first frames at the picture's size compile and allocate.

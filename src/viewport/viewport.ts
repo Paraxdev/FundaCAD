@@ -35,7 +35,10 @@ import { SectionCaps } from "./sectionCaps";
 import { pickFacePlaneAt } from "../features/facePlanePick";
 import { FpsMeter } from "./fpsMeter";
 import { StutterWatch } from "./stutterWatch";
-import { MotionQuality } from "./motionQuality";
+import { MotionQuality, motionPixelScale, pixelBoundView, type DrawnView } from "./motionQuality";
+import { EdgeBlend, EdgeMotionRule, type EdgeLoad, type EdgeMode } from "./edgeMotion";
+import type { BodyEdges } from "./edgeLines";
+import type { EdgeFrame } from "./edgeBatches";
 import { GpuFence } from "./gpuFence";
 import { sceneStats } from "../diagnostics/sceneStats";
 import { crumb } from "../diagnostics/breadcrumbs";
@@ -82,7 +85,7 @@ import { watchPower, type PowerState } from "./pathtrace/power";
 import type { SurfaceBaker } from "./pathtrace/mirror";
 import { createSurfaceBaker, webglSurfaceShade } from "./pathtrace/surfaceBake";
 import { describeNative, describeProbe, probeNative, probeWebGpu, type GpuProbe } from "./pathtrace/probe";
-import { chooseTracer, createTracerOf, type NativeProbe, type TracerKind } from "./pathtrace/choose";
+import { chooseTracer, createTracerOf, waitsForNative, type NativeProbe, type TracerKind } from "./pathtrace/choose";
 import { failedSelfCheck, refusedBySelfCheck } from "./pathtrace/selfCheck";
 import { wsCall, type DevCall } from "./pathtrace/devCall";
 import type { Call } from "./pathtrace/nativeScene";
@@ -196,6 +199,8 @@ function devTracerSwitch(): { kind: TracerKind; prefer?: string; call?: Call } |
 const PROBE_RINGS_PX = [8, 16];
 /** How long the camera has to stay still for a gesture to count as over. */
 const MOTION_SETTLE_MS = 300;
+/** A frame that spent this long merging edges is a build, not a frame of the edge level. */
+const EDGE_BUILD_STALL_MS = 4;
 /** How long a gesture from a full size canvas runs before the canvas may shrink. */
 const MOTION_MIN_GESTURE_MS = 300;
 /** How long the camera and the pointer stay still before a reduced canvas grows back. */
@@ -210,7 +215,7 @@ const MAX_RESIZE_WAIT_MS = 250;
 export class Viewport {
   /** Nothing is left to draw and the camera did not move on the last frame. */
   get renderIdle(): boolean {
-    return !this.needsRender && this.lingerFrames === 0 && !this.frameMoved;
+    return !this.needsRender && this.lingerFrames === 0 && !this.frameMoved && !this.edgeBlend.pending;
   }
 
   readonly scene: SceneBundle;
@@ -423,6 +428,7 @@ export class Viewport {
         this.stutter.reset();
         this.setStuttering(false);
         this.motion.reset();
+        this.edgeRule.reset();
       }
       if (renderPrefs().tangentEdges !== this.tangentEdges) this.applyTangentEdges();
       this.syncViewMode();
@@ -1020,6 +1026,7 @@ export class Viewport {
   private traceBaker: SurfaceBaker | null = null;
   private gpu: GpuProbe | null = null;
   private native: NativeProbe | null = null;
+  private nativeProbe: Promise<void> | null = null;
   private tracerKind: TracerKind | null = null;
   private tracerFaults = new Set<TracerKind>();
   private tracerPref = renderPrefs().tracer;
@@ -1066,7 +1073,7 @@ export class Viewport {
   }
 
   private async bootPathTrace() {
-    const native = probeNative(devTracerSwitch()?.call).then((p) => {
+    const native = this.nativeProbe = probeNative(devTracerSwitch()?.call).then((p) => {
       this.native = p;
       crumb(describeNative(p));
       this.tierChanged();
@@ -1091,6 +1098,7 @@ export class Viewport {
   /** Read at every start, so a preference change or a fault picks again. */
   private async createTracer(): Promise<TracerBackend> {
     const dev = devTracerSwitch();
+    if (!dev && waitsForNative(renderPrefs().tracer, this.gpu?.webgpu ?? false, this.native)) await this.nativeProbe;
     const kind = dev?.kind ?? chooseTracer(renderPrefs().tracer, {
       webgpu: this.gpu?.webgpu ?? false,
       native: this.native ?? { available: false },
@@ -1906,6 +1914,17 @@ export class Viewport {
       }
     }
     if (n) out.divideScalar(n);
+    return out;
+  }
+
+  private bodyBoxes(): THREE.Box3[] {
+    const out: THREE.Box3[] = [];
+    for (const b of this.model?.bodies ?? []) {
+      const g = b.mesh.geometry;
+      if (!g.boundingBox) g.computeBoundingBox();
+      b.mesh.updateWorldMatrix(true, false);
+      if (g.boundingBox) out.push(g.boundingBox.clone().applyMatrix4(b.mesh.matrixWorld));
+    }
     return out;
   }
 
@@ -2725,7 +2744,7 @@ export class Viewport {
     // tangent edges faint, and leaves a restored selection's colour alone.
     this.highlighter.setEdgeBase(this.edgeBaseColor());
     this.targetGridZ = this.model.box.min.z; // drop the grid to the model's floor
-    this.rig.setContentBox(this.model.box);
+    this.rig.setContentBox(this.model.box, this.bodyBoxes());
     this.applyAnalysis(); // paints the analysis overlay, or assigned body colors when "none"
     if (this.zebra) this.applyZebra();
     if (this.combs) this.applyCombs();
@@ -3482,7 +3501,7 @@ export class Viewport {
   pickableEdgeCandidates(clientX: number, clientY: number, rect: DOMRect): EdgeCandidate[] {
     if (!this.model) return [];
     const cands = this.picker.pickEdgeCandidates(clientX, clientY, rect, this.rig.active, this.model);
-    return this.picker.visibleCandidates(cands, this.rig.active, this.model);
+    return this.picker.visibleCandidates(cands, this.rig.active, this.model, rect);
   }
 
   /** Emphasise the edge a menu row names, over everything; null clears it. */
@@ -4252,7 +4271,10 @@ export class Viewport {
     // Only a frame drawn at the size the level asked for says anything about the
     // level: a gesture's first frames from a canvas that has grown back are full
     // size, and judged as the reduced level they read as slow.
-    if (this.motionScale === this.motion.scale) this.motion.sample(period, now);
+    if (this.pixelBound && this.motionScale === this.motion.scale) this.motion.sample(period, now);
+    if ((this.scene.post.edgesDrawn?.builtMs ?? 0) > EDGE_BUILD_STALL_MS) this.edgeRule.skipNext();
+    // Matcap keeps full size at any motion level, so it is judged at 1.
+    if (this.motionScale === motionPixelScale(this.drawnView, this.motion.scale)) this.edgeRule.sample(period, now, this.motionScale);
     // Still watched in performance mode, where a stutter offers potato mode instead.
     if (this.potato) return;
     // Judged on what a full quality frame costs, or a machine that only keeps up
@@ -4264,7 +4286,90 @@ export class Viewport {
   }
 
   private motion = new MotionQuality();
+  private edgeRule = new EdgeMotionRule();
+  private edgeBlend = new EdgeBlend();
+  private edgeGesture = false;
+  private edgeWeightDrawn = 1;
+  private edgeBatchesOf: ModelView | null = null;
+  private edgeKeep = new Set<string>();
+  /** A visible body blends over the edges (a ghost, x ray, glass), so each body's
+   *  edges have to sort with their own mesh and cannot be merged or thinned. */
+  private edgeBlended = false;
+  /** Handed to the loop's own draw only, a still or a picture always gets the full edges. */
+  private edgeFrameNow: EdgeFrame | null = null;
+  private edgeFrame: EdgeFrame = {
+    members: [],
+    thin: false,
+    weight: 1,
+    keep: (e: BodyEdges) => {
+      const id = e.refs[0]?.body;
+      return id !== undefined && this.edgeKeep.has(id);
+    },
+  };
+
+  /** What the idle edges were last drawn as (edgeMotion.ts), for diagnostics and the harness. */
+  get edgeMotionMode(): EdgeMode {
+    const d = this.scene.post.edgesDrawn;
+    return !d || d.merged === 0 ? "full" : d.thin ? "thin" : "merged";
+  }
+
+  private edgeLoad(model: ModelView): EdgeLoad {
+    const load = { draws: 0, segments: 0, triangles: 0 };
+    this.edgeBlended = false;
+    for (const b of model.bodies) {
+      if (b.mesh.visible) {
+        const g = b.mesh.geometry;
+        load.triangles += (g.index ? g.index.count : g.getAttribute("position")?.count ?? 0) / 3;
+        const m = b.mesh.material;
+        if (Array.isArray(m) ? m.some((x) => x.transparent) : m.transparent) this.edgeBlended = true;
+      }
+      if (!b.edges.object.visible) continue;
+      load.draws++;
+      load.segments += b.edges.segments;
+    }
+    return load;
+  }
+
+  /** Before each tick's draw: whether the idle edges draw merged or thin, and the
+   *  fade back to the full set at rest. */
+  private edgeMotionTick(moved: boolean, now: number) {
+    const post = this.scene.post;
+    const model = this.model;
+    if (model && this.motionActive && !this.edgeGesture) this.edgeRule.gestureStart(this.edgeLoad(model), now);
+    this.edgeGesture = this.motionActive;
+    const mode = this.ghosted || this.edgeBlended ? "full" : this.edgeRule.mode;
+    const w = this.edgeBlend.update(moved && mode === "thin", now, motionOn());
+    if (w !== this.edgeWeightDrawn) {
+      this.edgeWeightDrawn = w;
+      this.lingerFrames = Math.max(this.lingerFrames, 1);
+    }
+    if (!model || ((mode === "full" || !this.motionActive) && w >= 1)) {
+      // The last moving frame drew batches, the picture at rest is the full set.
+      if (this.edgeFrameNow) this.lingerFrames = Math.max(this.lingerFrames, 1);
+      this.edgeFrameNow = null;
+      if (post.edgesHeld && this.edgeBatchesOf !== model) post.releaseEdges();
+      return;
+    }
+    const f = this.edgeFrame;
+    const members = f.members as BodyEdges[];
+    members.length = 0;
+    for (const b of model.bodies) members.push(b.edges);
+    this.edgeKeep.clear();
+    this.highlighter?.markedBodies(this.edgeKeep);
+    f.thin = w < 1;
+    f.weight = w;
+    this.edgeBatchesOf = model;
+    this.edgeFrameNow = f;
+  }
   private motionScale = 1;
+  private get drawnView(): DrawnView {
+    const viewMode = this.scene.post.viewMode;
+    return { viewMode, tracing: viewMode === "pathtraced" && this.scene.post.traceShown, potato: renderPrefs().potatoMode };
+  }
+  /** Matcap and a shown trace never shrink the canvas, so their frames say nothing about a level. */
+  private get pixelBound(): boolean {
+    return pixelBoundView(this.drawnView);
+  }
   private motionActive = false;
   private lastMovedAt = -Infinity;
   private fenceRef: GpuFence | null = null;
@@ -4298,7 +4403,9 @@ export class Viewport {
     this.motionActive = moving;
     let want = this.motionScale;
     if (moving) {
-      if (this.motionScale < 1 || now - this.gestureStart >= MOTION_MIN_GESTURE_MS) want = this.motion.scale;
+      if (this.motionScale < 1 || now - this.gestureStart >= MOTION_MIN_GESTURE_MS) {
+        want = motionPixelScale(this.drawnView, this.motion.scale);
+      }
     } else if (
       now - Math.max(this.lastMovedAt, this.lastPointerAt) >= MOTION_RESTORE_MS
       || now - this.lastMovedAt >= MOTION_RESTORE_MAX_MS
@@ -4376,6 +4483,7 @@ export class Viewport {
       const moved = this.rig.update(dt);
       this.frameMoved = moved;
       const resized = this.applyMotionScale(moved, now);
+      this.edgeMotionTick(moved, now);
       if (resized === "changed" || (resized === "wait" && moved)) this.requestRender();
       this.syncOverlayMask();
       if (this.needsRender) syncOverlayLayers(this.scene.scene);
@@ -4449,11 +4557,13 @@ export class Viewport {
         // Shadows depend on the casters and the lights, never on the camera.
         this.shadowWatch.gate(this.needsRender, this.scene.scene, shadows, this.scene.post.drawsShadows);
         try {
+          this.scene.post.edgeFrame = this.edgeFrameNow;
           this.scene.post.render(this.rig.active, this.motionActive && this.motionScale < 1, false, {
             moving: this.motionActive,
             ghosted: this.ghosted,
           });
         } finally {
+          this.scene.post.edgeFrame = null;
           shadows.autoUpdate = true;
         }
         this.cube.render(this.rig.active); // draw the ViewCube overlay in the corner
