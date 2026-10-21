@@ -18,6 +18,7 @@ import {
   bloomSettings,
   asBrightness,
   asEnvironment,
+  asRealtimeQuality,
   asRenderPrefs,
   asTangentEdges,
   onRenderPrefsChange,
@@ -81,6 +82,7 @@ describe("asRenderPrefs", () => {
       matcapTint: DEFAULT_RENDER.matcapTint,
       denoise: DEFAULT_RENDER.denoise,
       tracer: DEFAULT_RENDER.tracer,
+      realtimeQuality: DEFAULT_RENDER.realtimeQuality,
     });
   });
 
@@ -253,6 +255,32 @@ describe("path traced backend", () => {
     setRenderPref("tracer", "metal" as never);
     expect(renderPrefs().tracer).toBe("webgpu");
     setRenderPref("tracer", DEFAULT_RENDER.tracer);
+  });
+});
+
+describe("realtime quality", () => {
+  it("defaults to Auto and keeps only Auto, Standard or High", () => {
+    expect(DEFAULT_RENDER.realtimeQuality).toBe("auto");
+    expect(asRealtimeQuality("high")).toBe("high");
+    expect(asRealtimeQuality("standard")).toBe("standard");
+    expect(asRealtimeQuality("auto")).toBe("auto");
+    for (const v of ["ultra", "High", "", 1, true, null, undefined, {}, ["high"]]) expect(asRealtimeQuality(v)).toBeNull();
+  });
+
+  it("falls back to Auto for a saved object without it or with a wrong type", () => {
+    expect(asRenderPrefs({ bloom: 0.5 }).realtimeQuality).toBe("auto");
+    expect(asRenderPrefs({ realtimeQuality: 2 }).realtimeQuality).toBe("auto");
+    expect(asRenderPrefs({ realtimeQuality: "max" }).realtimeQuality).toBe("auto");
+    expect(asRenderPrefs({ realtimeQuality: "high" }).realtimeQuality).toBe("high");
+  });
+
+  it("is written through setRenderPref and refuses an unknown value", () => {
+    setRenderPref("realtimeQuality", "high");
+    expect(renderPrefs().realtimeQuality).toBe("high");
+    setRenderPref("realtimeQuality", "ultra" as never);
+    expect(renderPrefs().realtimeQuality).toBe("high");
+    setRenderPref("realtimeQuality", DEFAULT_RENDER.realtimeQuality);
+    expect(renderPrefs().realtimeQuality).toBe("auto");
   });
 });
 

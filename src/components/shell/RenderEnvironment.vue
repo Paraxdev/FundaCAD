@@ -15,9 +15,9 @@ import DenoiserRow from "./DenoiserRow.vue";
 
 import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 import {
-  ENVIRONMENTS_LIST, MAX_BRIGHTNESS, MAX_EXPOSURE, MIN_BRIGHTNESS, MIN_EXPOSURE, hdrHashOf,
+  ENVIRONMENTS_LIST, REALTIME_QUALITY_PREFS, MAX_BRIGHTNESS, MAX_EXPOSURE, MIN_BRIGHTNESS, MIN_EXPOSURE, hdrHashOf,
   groundKey, onRenderPrefsChange, performanceModeOn, renderPrefs, setRenderPref,
-  type Background, type Denoise, type Environment, type Ground, type TracerPref,
+  type Background, type Denoise, type Environment, type Ground, type RealtimeQualityPref, type TracerPref,
 } from "../../ui/renderPrefs";
 import { onWorkspaceChange, workspace } from "../../ui/workspace";
 import {
@@ -29,6 +29,7 @@ import { onHdrRegistered } from "../../viewport/hdrRegistry";
 import { DEFAULT_KEY } from "../../viewport/keyLight";
 import { formatTurn } from "../../viewport/rotateDial";
 import { useEngine } from "../../app/engineKey";
+import { highRefusal } from "../../viewport/realtimePipeline";
 
 const engine = useEngine();
 const prefs = ref({ ...renderPrefs() });
@@ -38,6 +39,10 @@ const GROUND_CHOICES: readonly { id: Ground; label: string }[] = [
   { id: "none", label: "None" },
   { id: "shadow", label: "Shadow" },
 ];
+const QUALITY_LABELS: Record<RealtimeQualityPref, string> = { auto: "Auto", standard: "Standard", high: "High" };
+// Dev builds only until High looks different from Standard.
+const showQuality = import.meta.env.DEV;
+const highReason = ref<string | null>(highRefusal(engine.viewport.qualityTier()));
 const aiming = ref(false);
 const saved = ref<EnvEntry[]>([]);
 const activeSaved = ref<string | null>(activeSavedId());
@@ -54,7 +59,12 @@ const loadSaved = () => {
 };
 const syncLabel = () => { hdrLabel.value = hdrHash.value ? hdrName(hdrHash.value) : null; };
 onMounted(() => {
-  offs.push(onRenderPrefsChange(() => { prefs.value = { ...renderPrefs() }; syncLabel(); }));
+  offs.push(onRenderPrefsChange(() => {
+    prefs.value = { ...renderPrefs() };
+    highReason.value = highRefusal(engine.viewport.qualityTier());
+    syncLabel();
+  }));
+  offs.push(engine.viewport.onRenderTierChange(() => { highReason.value = highRefusal(engine.viewport.qualityTier()); }));
   offs.push(onWorkspaceChange((w) => { ws.value = w; }));
   offs.push(onEnvLibraryChange(loadSaved));
   offs.push(onHdrRegistered(syncLabel));
@@ -318,6 +328,23 @@ const onBloom = (e: Event) =>
         />
       </label>
       <div class="sm-hint">Lights and reflections together, so the two stay in step.</div>
+    </section>
+
+    <section v-if="showQuality" class="rd-section">
+      <h3 class="rd-head">Realtime quality</h3>
+      <div class="rd-chips" role="group" aria-label="Realtime quality">
+        <button
+          v-for="q in REALTIME_QUALITY_PREFS"
+          :key="q"
+          class="rd-chip"
+          :class="{ active: prefs.realtimeQuality === q }"
+          :data-realtime-quality="q"
+          :aria-pressed="prefs.realtimeQuality === q"
+          :disabled="q === 'high' && highReason !== null"
+          :title="q === 'high' && highReason !== null ? highReason : undefined"
+          @click="setRenderPref('realtimeQuality', q)"
+        >{{ QUALITY_LABELS[q] }}</button>
+      </div>
     </section>
 
     <section class="rd-section">
