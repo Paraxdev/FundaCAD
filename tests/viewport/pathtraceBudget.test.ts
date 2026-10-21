@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  BUDGET_STEPS, BUDGET_START, costProfile, FrameBudget, MAX_SLOTS, renderScaleFor, STEP_UP_MS, TARGET_MS, tracedPictureScale,
+  BUDGET_STEPS, BUDGET_START, costProfile, fitPreview, FrameBudget, MAX_SLOTS, MIN_SLOTS, previewScale, renderScaleFor, STEP_UP_MS,
+  TARGET_MS, tracedPictureScale,
 } from "../../src/viewport/pathtrace/budget";
 
 /** A GPU whose frame time grows with the work handed to it. */
@@ -111,5 +112,45 @@ describe("path trace cost profile", () => {
     const k = tracedPictureScale(1400, 864, 4, 8192);
     expect(1400 * k * 864 * k).toBeLessThanOrEqual(8_294_400);
     expect(tracedPictureScale(3000, 500, 4, 8192) * 3000).toBeLessThanOrEqual(8192);
+  });
+});
+
+describe("path trace preview size", () => {
+  const pixels = (s: number, w: number, h: number) => Math.ceil(s * w) * Math.ceil(s * h);
+
+  it("keeps the preview within the frame's path slots, the user's 1285 by 900 trace at the floor budget", () => {
+    const s = previewScale(MIN_SLOTS, 1285, 900, 0.25);
+    // The 0.25 preview there was 322 by 225, 72 k pixels on 16 k slots: a band.
+    expect(pixels(0.25, 1285, 900)).toBeGreaterThan(4 * MIN_SLOTS);
+    expect(pixels(s, 1285, 900)).toBeLessThanOrEqual(MIN_SLOTS);
+    expect(pixels(s, 1285, 900)).toBeGreaterThan(0.9 * MIN_SLOTS);
+  });
+
+  it("fits every budget step on wide, tall and odd traces", () => {
+    for (const slots of BUDGET_STEPS) {
+      for (const [w, h] of [[1191, 948], [2880, 600], [500, 1900], [1921, 1081], [3840, 2160], [1, 1], [7, 3]] as const) {
+        const s = previewScale(slots, w, h, 0.25);
+        expect(Number.isFinite(s) && s > 0 && s <= 0.25).toBe(true);
+        expect(pixels(s, w, h)).toBeLessThanOrEqual(Math.max(slots, 1));
+      }
+    }
+  });
+
+  it("is the full 0.25 preview while the budget covers it", () => {
+    expect(previewScale(BUDGET_START, 1191, 948, 0.25)).toBe(0.25);
+  });
+
+  it("sizes the preview at the trace the library will draw, on a restart's first frame only", () => {
+    const t = { _resetTime: -1, frameBudget: MIN_SLOTS, renderScale: 0.75, lowResScale: 0.25 };
+    fitPreview(t, { x: 1714, y: 1200 }, 0.25);
+    expect(pixels(t.lowResScale, 1285, 900)).toBeLessThanOrEqual(MIN_SLOTS);
+    const first = t.lowResScale;
+    t._resetTime = 16;
+    t.frameBudget = BUDGET_START;
+    fitPreview(t, { x: 1714, y: 1200 }, 0.25);
+    expect(t.lowResScale).toBe(first);
+    t._resetTime = -1;
+    fitPreview(t, { x: 1714, y: 1200 }, 0.25);
+    expect(t.lowResScale).toBe(0.25);
   });
 });
