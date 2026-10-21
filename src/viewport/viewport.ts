@@ -4290,6 +4290,9 @@ export class Viewport {
   private edgeWeightDrawn = 1;
   private edgeBatchesOf: ModelView | null = null;
   private edgeKeep = new Set<string>();
+  /** A visible body blends over the edges (a ghost, x ray, glass), so each body's
+   *  edges have to sort with their own mesh and cannot be merged or thinned. */
+  private edgeBlended = false;
   /** Handed to the loop's own draw only, a still or a picture always gets the full edges. */
   private edgeFrameNow: EdgeFrame | null = null;
   private edgeFrame: EdgeFrame = {
@@ -4310,10 +4313,13 @@ export class Viewport {
 
   private edgeLoad(model: ModelView): EdgeLoad {
     const load = { draws: 0, segments: 0, triangles: 0 };
+    this.edgeBlended = false;
     for (const b of model.bodies) {
       if (b.mesh.visible) {
         const g = b.mesh.geometry;
         load.triangles += (g.index ? g.index.count : g.getAttribute("position")?.count ?? 0) / 3;
+        const m = b.mesh.material;
+        if (Array.isArray(m) ? m.some((x) => x.transparent) : m.transparent) this.edgeBlended = true;
       }
       if (!b.edges.object.visible) continue;
       load.draws++;
@@ -4329,7 +4335,7 @@ export class Viewport {
     const model = this.model;
     if (model && this.motionActive && !this.edgeGesture) this.edgeRule.gestureStart(this.edgeLoad(model), now);
     this.edgeGesture = this.motionActive;
-    const mode = this.edgeRule.mode;
+    const mode = this.ghosted || this.edgeBlended ? "full" : this.edgeRule.mode;
     const w = this.edgeBlend.update(moved && mode === "thin", now, motionOn());
     if (w !== this.edgeWeightDrawn) {
       this.edgeWeightDrawn = w;
