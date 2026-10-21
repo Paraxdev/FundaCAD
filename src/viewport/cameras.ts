@@ -77,8 +77,9 @@ export interface CameraRig {
 
   // --- the scene -------------------------------------------------------------
   setScene(scene: NavScene | null): void;
-  /** The model's bounds, which set the zoom-out limit and the clip planes. */
-  setContentBox(box: THREE.Box3): void;
+  /** The model's bounds, which set the zoom-out limit and the clip planes, and
+   *  each body's, which the perspective near plane may be pushed out to. */
+  setContentBox(box: THREE.Box3, parts?: readonly THREE.Box3[]): void;
   /** A plane the zoom may anchor on over empty space (the open sketch's). */
   setAnchorPlane(plane: THREE.Plane | null): void;
   setLimits(limits: Partial<NavLimits>): void;

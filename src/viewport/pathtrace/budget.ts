@@ -108,3 +108,31 @@ export function tracedPictureScale(w: number, h: number, scale: number, maxDimen
   const k = Math.min(scale, Math.sqrt(MAX_PICTURE_PIXELS / (w * h)), maxDimension / Math.max(w, h));
   return Math.floor(k * 1000) / 1000;
 }
+
+/** The library's preview of a restart is one frame of a few wavefront steps,
+ *  and a pixel past the frame's path slots waits in a queue those steps never
+ *  reach, so a preview with more pixels than slots is a band on black. This
+ *  scale keeps its ceil(scale * w) by ceil(scale * h) pixels within `slots`. */
+export function previewScale(slots: number, w: number, h: number, most: number): number {
+  const px = (s: number) => Math.ceil(s * w) * Math.ceil(s * h);
+  let s = Math.min(most, Math.sqrt(slots / Math.max(1, w * h)));
+  for (let i = 0; i < 16 && px(s) > slots; i++) s *= 0.99 * Math.sqrt(slots / px(s));
+  return s;
+}
+
+export interface PreviewTracer {
+  _resetTime: number;
+  frameBudget: number;
+  renderScale: number;
+  lowResScale: number;
+}
+
+/** Sizes the preview of the frame the tracer is about to draw, only on a
+ *  restart's first frame: the switch to full resolution sizes its copy of the
+ *  preview from lowResScale, so a change after the first frame cuts it. */
+export function fitPreview(t: PreviewTracer, buffer: { x: number; y: number }, most: number) {
+  if (t._resetTime !== -1) return;
+  const w = Math.max(1, Math.floor(t.renderScale * buffer.x));
+  const h = Math.max(1, Math.floor(t.renderScale * buffer.y));
+  t.lowResScale = previewScale(t.frameBudget, w, h, most);
+}
