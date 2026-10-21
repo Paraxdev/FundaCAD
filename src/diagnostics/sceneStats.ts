@@ -31,7 +31,13 @@ export interface SceneStatsSource {
   /** Rolling median GPU time per pass in ms, and how it was measured. Empty
    *  until the first results come back a few frames after drawing starts. */
   passes?: { ms: Record<string, number>; kind: string };
+  /** Path traced: which backend drew the last picture, how far it got and the
+   *  last fault, then the adapters both tracers found. A Path traced picture
+   *  is otherwise indistinguishable by backend in a report. */
+  trace?: { state: string; backend: string; samples: number; denoised: boolean; fault: string | null; gpu: string };
 }
+
+const FAULT_CHARS = 160;
 
 /** One line per fact, short enough to survive the 300-char breadcrumb cap. */
 export function sceneStats(s: SceneStatsSource): string[] {
@@ -75,6 +81,12 @@ export function sceneStats(s: SceneStatsSource): string[] {
     out.push(s.seam.skipped
       ? "[seams] flush-seam hiding SKIPPED (model too large), seams left visible"
       : `[seams] ${s.seam.ms.toFixed(1)}ms`);
+  }
+  if (s.trace) {
+    const t = s.trace;
+    const fault = t.fault ? (t.fault.length > FAULT_CHARS ? `${t.fault.slice(0, FAULT_CHARS)}...` : t.fault) : "none";
+    out.push(`[trace] ${t.state} on ${t.backend || "no tracer"} · ${t.samples} samples${t.denoised ? " · denoised" : ""} · last fault ${fault}`);
+    out.push(`[trace] ${t.gpu}`);
   }
   return out;
 }

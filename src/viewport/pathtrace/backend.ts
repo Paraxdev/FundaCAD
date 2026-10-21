@@ -114,3 +114,7 @@ export interface PictureOptions {
 }
 
 export const SAMPLE_CAP = 256;
+
+/** A start refused because the device cannot trace properly. It is not one of
+ *  the two faults that turn Path traced off, the other backend may stand in. */
+export class TracerRefused extends Error {}
