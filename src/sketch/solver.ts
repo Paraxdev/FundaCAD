@@ -1,7 +1,6 @@
 // 2D constraint solver bridge over planegcs (FreeCAD's PlaneGCS, WASM).
 // Translates our point/line/circle + constraint model into planegcs primitives,
-// solves, and reads the solved point positions back. One wrapper is kept for the
-// app lifetime; clear_data() resets it between solves.
+// solves, and reads the solved point positions back.
 
 import { init_planegcs_module, GcsWrapper, SolveStatus } from "@salusoft89/planegcs";
 import wasmUrl from "@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url";
@@ -85,18 +84,33 @@ export interface SolveResult {
   partiallyRedundant: string[]; // constraints that partially duplicate others
 }
 
-let wrapperPromise: Promise<GcsWrapper> | null = null;
-function getWrapper(): Promise<GcsWrapper> {
+interface Solver {
+  w: GcsWrapper;
+  heap: Uint8Array;
+  pristine: Uint8Array;
+}
+
+// planegcs orders unknowns by heap address and DogLeg's answer on an under-constrained sketch follows that
+// order, so every solve restores the heap `new GcsSystem` left (a fixed 16 MB that never grows, 0.4 ms).
+function resetHeap(s: Solver): void {
+  s.heap.set(s.pristine);
+  s.heap.fill(0, s.pristine.length);
+}
+
+let wrapperPromise: Promise<Solver> | null = null;
+function getWrapper(): Promise<Solver> {
   if (!wrapperPromise) {
     wrapperPromise = (async () => {
       const mod = await init_planegcs_module({ locateFile: () => wasmUrl });
-      return new GcsWrapper(new mod.GcsSystem());
+      const w = new GcsWrapper(new mod.GcsSystem());
+      const heap: Uint8Array = mod.HEAPU8;
+      const words = new Uint32Array(heap.buffer, heap.byteOffset, heap.length >> 2);
+      let top = words.length;
+      while (top > 0 && words[top - 1] === 0) top--;
+      return { w, heap, pristine: heap.slice(0, top * 4) };
     })().catch((err) => {
-      // Do NOT keep a rejected promise in the cache. It would poison every
-      // later solve with the same stale failure and never retry, and a failure
-      // here can be transient (a fetch that did not land, an instantiate that
-      // raced startup), so a retry can legitimately succeed without restarting
-      // the app.
+      // A cached rejection would fail every later solve, and a failed fetch or instantiate at startup
+      // can be transient, so the next solve retries.
       wrapperPromise = null;
       throw new SolverUnavailable(err);
     });
@@ -156,7 +170,9 @@ export async function initSolver(): Promise<boolean> {
 }
 
 export async function solveSketch(input: SolveInput): Promise<SolveResult> {
-  const w = await getWrapper();
+  const solver = await getWrapper();
+  resetHeap(solver);
+  const w = solver.w;
   w.clear_data();
 
   const prims: any[] = [];
