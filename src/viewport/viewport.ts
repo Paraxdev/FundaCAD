@@ -72,6 +72,8 @@ import { hemiKey, traceEnvironment, type TraceHemi } from "./pathtrace/environme
 import { composerClearColor } from "./composerColor";
 import { clearGuard, guardSet } from "./pathtrace/guard";
 import { PathTraceHost, type PictureRequest } from "./pathtrace/host";
+import { RealtimeFreeze } from "./pathtrace/settleFade";
+import { motionOn } from "../ui/motion";
 import { watchPower, type PowerState } from "./pathtrace/power";
 import type { SurfaceBaker } from "./pathtrace/mirror";
 import { createSurfaceBaker, webglSurfaceShade } from "./pathtrace/surfaceBake";
@@ -359,7 +361,10 @@ export class Viewport {
     // Re-applied on theme changes too: the default ground is a theme token.
     this.scene.applyRenderPrefs();
     this.trace = new PathTraceHost(canvas, () => this.createTracer());
+    this.freeze = new RealtimeFreeze(canvas);
     this.trace.onShownChange = (on) => {
+      if (on) this.freezeRealtime();
+      else this.freeze.stop();
       this.scene.post.traceShown = on;
       this.requestRender();
     };
@@ -987,6 +992,15 @@ export class Viewport {
   }
 
   private trace!: PathTraceHost;
+  private freeze!: RealtimeFreeze;
+
+  /** The Realtime frame the trace replaces, drawn once more and copied so it
+   *  can fade out over the first traced samples. */
+  private freezeRealtime() {
+    if (!motionOn() || this.scene.renderer.getContext().isContextLost()) return;
+    this.scene.post.render(this.rig.active);
+    this.freeze.capture(performance.now());
+  }
   private power: PowerState = { discharging: false, minimised: false };
   private traceBaker: SurfaceBaker | null = null;
   private gpu: GpuProbe | null = null;
@@ -4320,6 +4334,7 @@ export class Viewport {
         bloom: renderPrefs().bloom,
         bloomable: this.scene.post.bloomable,
       });
+      this.freeze.step(now);
       // Render-on-demand: skip the (relatively expensive) grid rebuild + GPU
       // draw entirely when nothing changed, camera didn't move, no mutation
       // flagged requestRender(), and we've drained the post-mutation linger.
