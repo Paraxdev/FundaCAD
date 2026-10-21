@@ -13,6 +13,7 @@ import {
   DOC_EXTS,
   LEGACY_DOC_EXTS,
   isDocumentExt,
+  leftOutSectionsNotice,
   stripDocumentExt,
 } from "../../src/io/documentExt";
 
@@ -76,5 +77,21 @@ describe("documentExt", () => {
     expect(stripDocumentExt("funda.stl")).toBe("funda.stl");
     expect(stripDocumentExt("bracketXneocad")).toBe("bracketXneocad");
     expect(stripDocumentExt("bracket-funda")).toBe("bracket-funda");
+  });
+});
+
+describe("leftOutSectionsNotice", () => {
+  const carried = [{ name: "futureIndex" }];
+
+  it("names the sections a JSON save leaves out and the way to keep them", () => {
+    const note = leftOutSectionsNotice("C:/a/part.funda", carried);
+    expect(note).toContain("futureIndex");
+    expect(note).toContain(".fundab");
+    expect(leftOutSectionsNotice("part.neocad", carried)).not.toBeNull();
+  });
+
+  it("says nothing for a .fundab save or a document that carried none", () => {
+    expect(leftOutSectionsNotice("part.FUNDAB", carried)).toBeNull();
+    expect(leftOutSectionsNotice("part.funda", [])).toBeNull();
   });
 });

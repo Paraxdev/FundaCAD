@@ -22,7 +22,7 @@ import { UnreadableDocumentError } from "../document/documentShape";
 import { noteRecent } from "./recentFiles";
 import { closeHome } from "../ui/home";
 import { captureAfterOpen, captureThumbnail, storeThumbnail } from "./thumbnails";
-import { BINARY_DOC_EXT, DOC_EXT, LEGACY_DOC_EXTS, isDocumentExt } from "./documentExt";
+import { BINARY_DOC_EXT, DOC_EXT, LEGACY_DOC_EXTS, isDocumentExt, leftOutSectionsNotice } from "./documentExt";
 import { announceImportedBody } from "../plugins/contrib";
 import { askImportUnit, asksForUnit, type ImportUnit } from "./importUnit";
 import { importFeatures } from "./importSketches";
@@ -72,6 +72,8 @@ async function writeContainer(store: DocumentStore, path: string): Promise<strin
       carried: store.carriedSections,
     });
     void storeThumbnail(path, picture);
+    const left = leftOutSectionsNotice(path, store.carriedSections);
+    if (left) void import("../ui/toast").then(({ toast }) => toast(left, { kind: "info", timeout: 12000 }));
     return null;
   } catch (e) {
     return errMsg(e);

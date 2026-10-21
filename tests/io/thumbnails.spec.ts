@@ -34,6 +34,7 @@ function fakeStore(path = "D:/parts/a.funda") {
     versionRepo: null,
     toJSON: () => "{}",
     toObject: () => ({}),
+    carriedSections: [] as { kind: number; name: string; hash: string }[],
     markSaved: vi.fn(),
   };
 }
