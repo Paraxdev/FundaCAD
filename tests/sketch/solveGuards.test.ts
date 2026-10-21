@@ -89,3 +89,16 @@ describe("collinear on lines that share a point adds one equation", () => {
     });
   }
 });
+
+describe("a radial gap that leaves the inner circle no radius is refused", () => {
+  for (const [ro, ri, gap, ok] of [[0.7, 0.3, 0.7, false], [12.345, 6, 12.345, false], [5, 3, 5, false], [0.7, 0.3, 0.7 - 1e-6, true]] as const) {
+    it(`outer ${ro}, gap ${gap}: ${ok ? "solves" : "refused"}`, async () => {
+      const o = circle("o", 3.1, -1.7, ro), i = circle("i", 3.1, -1.7, ri);
+      const cons: SketchConstraint[] = [{ type: "concentric", c1: "o", c2: "i" }, { type: "radius", e: "o", value: ro }, { type: "radialGap", inner: "i", outer: "o", value: gap }];
+      const r = await compileAndSolve([o, i], cons);
+      expect(r).toEqual(ok
+        ? { entities: [o, { ...i, x: expect.closeTo(3.1, 9), y: expect.closeTo(-1.7, 9), radius: expect.closeTo(1e-6, 12) }], dof: 2, ok: true, conflicts: [], overDefined: [] }
+        : { entities: [o, i], dof: 2, ok: false, conflicts: ["k2"], overDefined: [] });
+    });
+  }
+});
