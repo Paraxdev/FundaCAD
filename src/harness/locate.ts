@@ -2,7 +2,7 @@
 // reads, and marking it so the Python side clicks it through Playwright.
 
 import { modelRail, sketchRail, type RailEntry } from "../ui/railDefs";
-import { matchName, type Control, type Walk } from "./screenTree";
+import { familyOf, matchName, type Control, type Walk } from "./screenTree";
 
 export class HarnessError extends Error {
   constructor(
@@ -149,20 +149,8 @@ export function toolPath(walk: Walk, label: string, mode: string, defs?: RailEnt
   } catch (err) {
     if (!(err instanceof HarnessError) || err.kind !== "NotFound") throw err;
     const entries = defs ?? (mode === "sketch" ? sketchRail() : modelRail());
-    const want = matchName(label.replace(/^pick:/, ""));
-    for (const pass of ["exact", "prefix"] as const) {
-      for (const e of entries) {
-        if (e.kind !== "family") continue;
-        const hit = e.items.find((t) => {
-          const name = matchName(t.label);
-          return t.action === want || (pass === "exact" ? name === want : name.startsWith(want));
-        });
-        if (hit) return [
-          { ref: `family:${e.id}`, button: e.style === "variants" ? "right" : "left" },
-          { ref: `pick:${hit.action}`, button: "left" },
-        ];
-      }
-    }
+    const hit = familyOf(label, entries);
+    if (hit) return [hit.family, { ref: hit.pick, button: "left" }];
     const families = rail.controls.filter((c) => c.ref.startsWith("family:"));
     throw new HarnessError(
       `no tool "${label}" in the rail: click a family to list its tools (${families.map(describe).join(", ")}),`
