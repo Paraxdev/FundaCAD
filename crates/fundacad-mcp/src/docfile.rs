@@ -25,6 +25,8 @@ const MAGIC: &[u8; 8] = b"FUNDACAD";
 const TAIL_MAGIC: &[u8; 8] = b"FNDATAIL";
 const KIND_DOCUMENT: u8 = 1;
 const KIND_GEOMETRY: u8 = 2;
+/// The last kind this build knows, the app carries every section above it.
+const KIND_SEGMENTS: u8 = 4;
 const MAX_TOTAL: u64 = 8 << 30;
 
 #[derive(Debug, Clone)]
@@ -103,16 +105,26 @@ pub fn read(path: &Path, root: Option<&Path>) -> Result<(Map<String, Value>, usi
 /// The document object and its embedded geometry, each blob checked against
 /// its hash, and nothing written anywhere.
 pub fn read_document(path: &Path) -> Result<(Map<String, Value>, Vec<(String, Vec<u8>)>), DocumentFileError> {
+    read_document_full(path).map(|(doc, blobs, _)| (doc, blobs))
+}
+
+/// `read_document`, and the names of the sections of a `.fundab` that this
+/// build cannot read, which a JSON file has no place for.
+pub fn read_document_full(
+    path: &Path,
+) -> Result<(Map<String, Value>, Vec<(String, Vec<u8>)>, Vec<String>), DocumentFileError> {
     let Ok(raw) = std::fs::read(path) else {
         return fail(format!("No such file: {}", path.display()));
     };
     let tail_is_magic = raw.len() >= 64 && &raw[raw.len() - 64..raw.len() - 56] == TAIL_MAGIC;
-    let (doc, blobs) = if raw.starts_with(MAGIC) || tail_is_magic {
+    let (doc, blobs, unread) = if raw.starts_with(MAGIC) || tail_is_magic {
         read_fnda(&raw)?
     } else if raw.starts_with(b"PK") {
-        read_zip(path)?
+        let (doc, blobs) = read_zip(path)?;
+        (doc, blobs, Vec::new())
     } else {
-        read_json(path, &raw)?
+        let (doc, blobs) = read_json(path, &raw)?;
+        (doc, blobs, Vec::new())
     };
     let Value::Object(doc) = doc else {
         return fail(format!(
@@ -131,7 +143,7 @@ pub fn read_document(path: &Path) -> Result<(Map<String, Value>, Vec<(String, Ve
             "this document's geometry does not match its hash, the file is damaged or was modified",
         );
     }
-    Ok((doc, blobs))
+    Ok((doc, blobs, unread))
 }
 
 /// Best effort: a store this process cannot write is no reason to refuse a
@@ -379,7 +391,7 @@ fn damaged<T>() -> Result<T, DocumentFileError> {
     fail("this .fundab file is damaged, open it in FundaCAD to repair it")
 }
 
-fn read_fnda(raw: &[u8]) -> Result<(Value, Vec<(String, Vec<u8>)>), DocumentFileError> {
+fn read_fnda(raw: &[u8]) -> Result<(Value, Vec<(String, Vec<u8>)>, Vec<String>), DocumentFileError> {
     let mut table: Option<&[u8]> = None;
     let heads = [0usize, raw.len().saturating_sub(64)];
     for at in heads {
@@ -422,6 +434,7 @@ fn read_fnda(raw: &[u8]) -> Result<(Value, Vec<(String, Vec<u8>)>), DocumentFile
 
     let mut doc: Option<Value> = None;
     let mut blobs = Vec::new();
+    let mut unread = Vec::new();
     let count = u32_at(table, 4) as usize;
     let mut p = 8usize;
     for _ in 0..count {
@@ -447,6 +460,9 @@ fn read_fnda(raw: &[u8]) -> Result<(Value, Vec<(String, Vec<u8>)>), DocumentFile
         let k = u16_at(table, p + 4) as usize;
         let m = u16_at(table, p + 6) as usize;
         p += 8;
+        if kind > KIND_SEGMENTS {
+            unread.push(if name.is_empty() { format!("kind {kind}") } else { name.clone() });
+        }
         if kind != KIND_DOCUMENT && kind != KIND_GEOMETRY {
             continue;
         }
@@ -482,7 +498,7 @@ fn read_fnda(raw: &[u8]) -> Result<(Value, Vec<(String, Vec<u8>)>), DocumentFile
         }
     }
     match doc {
-        Some(doc) => Ok((doc, blobs)),
+        Some(doc) => Ok((doc, blobs, unread)),
         None => fail("this .fundab file has no document in it"),
     }
 }
