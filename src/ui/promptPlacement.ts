@@ -44,3 +44,16 @@ export function promptInsets(
   }
   return { left: Math.round(left), right: Math.round(right) };
 }
+
+// The rail's buttons rather than the rail: its box runs the full height at the
+// width of its widest label, which sits at the top.
+export const LEFT_CARDS = "#float-layer .float-left-stack > *, #float-layer .tool-rail .rail-btn, #float-layer .tool-rail .rail-group";
+export const RIGHT_CARDS = "#float-layer .float-right > *";
+
+const rects = (sel: string): Box[] => [...document.querySelectorAll(sel)].map((o) => o.getBoundingClientRect());
+
+/** The part of `area` a row spanning `band` can use without sliding under a card. */
+export function clearOfCards(area: Box, band: { top: number; bottom: number }, gap: number, minWidth: number): Box {
+  const { left, right } = promptInsets(area, band, { left: rects(LEFT_CARDS), right: rects(RIGHT_CARDS) }, gap, minWidth);
+  return { left: area.left + left, right: area.right - right, top: area.top, bottom: area.bottom };
+}

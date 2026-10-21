@@ -81,6 +81,13 @@ button.finish:hover {
   z-index: 200;
   pointer-events: auto;
 }
+/* A box that places itself in the free space (the Hole box, about 560px wide)
+   wraps its fields to a second row in a window narrower than it, instead of
+   cutting the last of them off. */
+.dim-input.fits-window {
+  flex-wrap: wrap;
+  max-width: calc(100vw - 2 * var(--s-3));
+}
 /* The engine's own sentence about why the value on screen cannot be built,
    under the boxes that hold it.
    
