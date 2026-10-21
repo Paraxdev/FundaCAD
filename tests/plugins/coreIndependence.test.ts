@@ -92,6 +92,7 @@ const CAPABILITIES: Record<string, (path: string) => boolean> = {
   "the 3D printing toolbox": (p) => p.includes("/plugins/FundaCAD.PrintToolbox/"),
   "the fastener library": (p) => p.includes("/plugins/FundaCAD.Screws/"),
   "node bodies": (p) => p.includes("/plugins/FundaCAD.Organic/"),
+  "the printed layer lines": (p) => p.includes("/plugins/FundaCAD.PrintLook/"),
   "the mouse and key presets": (p) => p.includes("/plugins/FundaCAD.Navigation/"),
 };
 
@@ -260,6 +261,11 @@ describe("the core does not depend on the capabilities it can turn off", () => {
         import: "default",
         eager: true,
       }) as Record<string, string>),
+      ...(import.meta.glob(["../../src-tauri/tracer/**/*.{rs,wgsl}", "!../../src-tauri/tracer/target/**"], {
+        query: "?raw",
+        import: "default",
+        eager: true,
+      }) as Record<string, string>),
     };
     const WORDS = /printer|slicer|\borca|bambu|moonraker|octoprint|prusa|klipper|snapmaker|\bqidi\b|toolhead|\bb?g-?code\b/i;
 
@@ -267,6 +273,7 @@ describe("the core does not depend on the capabilities it can turn off", () => {
     expect(files.some((f) => f.endsWith(".rs")), "no Rust source found").toBe(true);
     expect(files.some((f) => f.includes("/crates/fundacad-geom/src/")), "no engine source found").toBe(true);
     expect(files.some((f) => f.includes("/src/") && f.endsWith(".ts")), "no window source found").toBe(true);
+    expect(files.some((f) => f.includes("/src-tauri/tracer/") && f.endsWith(".wgsl")), "no tracer source found").toBe(true);
 
     const offenders: string[] = [];
     for (const [file, src] of Object.entries(core)) {

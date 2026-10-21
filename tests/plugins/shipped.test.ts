@@ -90,6 +90,7 @@ describe("the plugins in this repository", () => {
       "FundaCAD.Navigation",
       "FundaCAD.Onshape",
       "FundaCAD.Organic",
+      "FundaCAD.PrintLook",
       "FundaCAD.PrintToolbox",
       "FundaCAD.Printing",
       "FundaCAD.Screws",

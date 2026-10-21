@@ -5,7 +5,7 @@
 
 import * as THREE from "three";
 import { isGlassAuto, registerGlass } from "./glassThickness";
-import { applyClearcoat, applyGlassLook, applyThinFilm, isRenderLowPower, SCAN_MATTE, type BodyMesh, type ModelView } from "./render";
+import { applyClearcoat, applyFinishFields, applyGlassLook, applyThinFilm, isRenderLowPower, SCAN_MATTE, type BodyMesh, type ModelView } from "./render";
 import type { SceneBundle } from "./scene";
 import { type BodyFinish, FINISH, isShiny } from "../document/materials";
 import { applySurface, applySurfaceGraph, cloneWithoutSurface, graphKey, surfaceKey } from "./proceduralSurface";
@@ -13,6 +13,9 @@ import { MAX_EMISSIVE_INTENSITY } from "../ui/renderPrefs";
 import { type AreaEmitter, areaEmitters, emitterLuminance, emitterPower, emitterPowerBound, emitterShadowNear, emitterStandoff } from "./emitters";
 import { installAreaLights } from "./areaLightShadows";
 import { markInPicture } from "./pictureScene";
+import { copyPatches, getPatch, removePatch, setPatch } from "./shaderPatches";
+import { RELIEF_PATCH, reliefAxis, reliefOrigin, reliefPatch, reliefUniforms, writeRelief, type ReliefUniforms } from "./relief";
+import type { ReliefMap } from "../plugins/contrib";
 
 /** Every rectangle light is evaluated for every lit pixel, so this is the budget. */
 const MAX_AREA_LIGHTS = 12;
@@ -30,6 +33,7 @@ const STALE_OPACITY = 0.16;
  *  reads, solid enough that the body's own faces still do. */
 const PEEK_OPACITY = 0.4;
 const DEFAULT_FINISH: BodyFinish = { ...FINISH };
+const WORLD_UP = new THREE.Vector3(0, 0, 1);
 
 interface EmitterPatch { e: AreaEmitter; glow: number; color: THREE.Color; power: number }
 
@@ -38,6 +42,12 @@ interface GlowingBody { b: BodyMesh; glow: number; fids: number[] | undefined; b
 /** A fixed set of lights in the scene: real emitters first in rank order, the
  *  rest at intensity zero, so a glow change only ever touches uniforms. */
 interface EmitterRig { group: THREE.Group; area: THREE.RectAreaLight[]; shadow: THREE.PointLight[] }
+
+/** Read by the tracer, which leaves such a surface out of its light sampling. */
+function markNoLight(m: THREE.Material, on: boolean): void {
+  if (on) m.userData.noLight = true;
+  else delete m.userData.noLight;
+}
 
 export function sameStringMap(
   a: Record<string, string> | Record<number, string>,
@@ -58,7 +68,8 @@ export function finishKey(f: BodyFinish): string {
   return [
     f.metalness, f.roughness, f.opacity, f.emissive, f.clearcoat,
     f.ior, f.thickness, f.attenuationColor ?? "", f.attenuationDistance, f.dispersion,
-    f.iridescence, f.specularColor ?? "", surfaceKey(f.surface), graphKey(f.surfaceGraph),
+    f.iridescence, f.specularColor ?? "", f.sheen, f.anisotropy, f.flakes, f.flakeSize, f.scatterDistance,
+    f.castsLight, surfaceKey(f.surface), graphKey(f.surfaceGraph),
   ].join("|");
 }
 
@@ -95,6 +106,19 @@ export interface FinishHost {
   prepareLights?(show: THREE.Object3D, hide: THREE.Object3D | null): Promise<void>;
   /** How far the glowing bodies' lights have filled in, null when nothing is pending. */
   onEmitterProgress?(p: number | null): void;
+  /** Link the programs `obj` draws with in the scene's lights, resolving when they
+   *  are ready. Without it, a patch goes on the live materials at once. */
+  prepareMaterials?(obj: THREE.Object3D): Promise<void>;
+}
+
+interface ReliefBody {
+  /** Bound by every program of the body's materials, so only its values change. */
+  u: ReliefUniforms;
+  geo: THREE.BufferGeometry | null;
+  axis: string;
+  origin: number;
+  /** Drawn with ridges before, so a rebuild's fresh materials find the programs linked. */
+  shown: boolean;
 }
 
 export interface FinishOverlays {
@@ -139,6 +163,14 @@ export class BodyFinishLayer {
   /** Time a frame may spend fitting cold bodies before the rest waits a frame. */
   fitBudgetMs = 6;
 
+  private relief: ReliefMap = {};
+  private reliefBodies = new Map<string, ReliefBody>();
+  /** Materials whose relief programs are linked, and those being linked. */
+  private reliefWarm = new WeakSet<THREE.Material>();
+  private reliefLinking = new WeakSet<THREE.Material>();
+  private warmClones: THREE.Material[] = [];
+  private last: FinishOverlays | null = null;
+
   constructor(private host: FinishHost) {}
 
   /** Opacity takes the faintest of what applies, and stale is preferred over x-ray
@@ -147,6 +179,8 @@ export class BodyFinishLayer {
   apply(o: FinishOverlays) {
     const model = this.host.model();
     if (!model) return;
+    this.last = o;
+    const cold: { b: BodyMesh; u: ReliefUniforms }[] = [];
     const anyGhost = o.xray || o.stale;
     const baseOpacity = o.stale ? STALE_OPACITY : XRAY_OPACITY;
     const byBody = new Map<string, number[]>();
@@ -177,9 +211,14 @@ export class BodyFinishLayer {
       // White for an unpainted body: emissive black would make the glow do nothing.
       // A ghost never glows, or x-ray would light the model up instead of fading it.
       const glow = ghost ? 0 : (f?.emissive ?? FINISH.emissive);
-      mat.emissive.set(glow > 0 ? (this.bodyPaint[b.id] ?? 0xffffff) : 0x000000);
+      const paint = this.bodyPaint[b.id] ?? 0xffffff;
+      mat.emissive.set(glow > 0 ? paint : 0x000000);
       mat.emissiveIntensity = glow * MAX_EMISSIVE_INTENSITY;
       const bf = f ?? DEFAULT_FINISH;
+      const light = bf.castsLight ? glow : 0;
+      markNoLight(mat, glow > 0 && !bf.castsLight);
+      const rb = this.reliefFor(b);
+      const axis = rb ? rb.u.uReliefAxis.value : WORLD_UP;
       applyClearcoat(mat, ghost ? 0 : bf.clearcoat);
       applyThinFilm(mat, bf, ghost);
       if (!ghost && f?.surfaceGraph) applySurfaceGraph(mat, f.surfaceGraph);
@@ -190,6 +229,7 @@ export class BodyFinishLayer {
         mat.opacity = opacity;
         mat.depthWrite = opacity >= 1;
       }
+      applyFinishFields(mat, bf, ghost, paint, axis);
 
       const extra = this.faceMatState.get(b.id);
       let faceGlow = false;
@@ -201,7 +241,8 @@ export class BodyFinishLayer {
           fm.roughness = ff.roughness;
           if (!ghost && isShiny(ff)) shiny = true;
           const fglow = ghost ? 0 : ff.emissive;
-          if (fglow > 0) faceGlow = true;
+          if (fglow > 0 && ff.castsLight) faceGlow = true;
+          markNoLight(fm, fglow > 0 && !ff.castsLight);
           fm.emissive.set(fglow > 0 ? (extra.colors[i] ?? 0xffffff) : 0x000000);
           fm.emissiveIntensity = fglow * MAX_EMISSIVE_INTENSITY;
           applyClearcoat(fm, ghost ? 0 : ff.clearcoat);
@@ -214,21 +255,122 @@ export class BodyFinishLayer {
             fm.opacity = fo;
             fm.depthWrite = fo >= 1;
           }
+          applyFinishFields(fm, ff, ghost, extra.colors[i] ?? 0xffffff, axis);
           fm.clippingPlanes = mat.clippingPlanes;
           applyWireframe(fm, o.wireframe);
         }
       }
       applyWireframe(mat, o.wireframe);
+      const slots = extra ? extra.mats : [mat];
+      if (rb && !ghost) {
+        if (this.putRelief(slots, rb)) rb.shown = true;
+        else cold.push({ b, u: rb.u });
+      } else for (const m of slots) removePatch(m, RELIEF_PATCH);
       registerGlass(b.mesh, extra ? extra.mats.map(isGlassAuto) : [isGlassAuto(mat)]);
-      if (glow > 0 || faceGlow) glowing.push({ b, glow, fids: byBody.get(b.id), bound: 0 });
+      if (light > 0 || faceGlow) glowing.push({ b, glow: light, fids: byBody.get(b.id), bound: 0 });
     }
     this.startEmitters(model, glowing);
     this.bloomable = shiny || glowing.length > 0;
+    if (cold.length) this.warmRelief(cold);
+  }
+
+  /** Ridges per body. A body's entry is preferred over `all`, a null clears it. */
+  setRelief(map: ReliefMap) {
+    this.relief = map;
+    for (const s of this.reliefBodies.values()) s.geo = null;
+  }
+
+  /** A body moved for good, so its ridges restart from its new lowest point.
+   *  Not called while a drag moves it, the ridges slide with it until then. */
+  refreshReliefOrigins(): boolean {
+    for (const s of this.reliefBodies.values()) s.geo = null;
+    return this.relief.all !== undefined || Object.values(this.relief.bodies ?? {}).some((r) => r);
+  }
+
+  private reliefFor(b: BodyMesh): ReliefBody | null {
+    const bodies = this.relief.bodies;
+    const r = bodies && b.id in bodies ? bodies[b.id] : this.relief.all;
+    const axis = r ? reliefAxis(r) : null;
+    let s = this.reliefBodies.get(b.id);
+    if (!r || !axis) {
+      if (s) s.shown = false;
+      return null;
+    }
+    if (!s) {
+      s = { u: reliefUniforms(), geo: null, axis: "", origin: 0, shown: false };
+      this.reliefBodies.set(b.id, s);
+    }
+    const key = axis.toArray().join(",");
+    if (s.geo !== b.mesh.geometry || s.axis !== key) {
+      s.origin = reliefOrigin(b.mesh, axis);
+      s.geo = b.mesh.geometry;
+      s.axis = key;
+    }
+    writeRelief(s.u, r, axis, s.origin);
+    return s;
+  }
+
+  /** False when the materials' relief programs still have to be linked. */
+  private putRelief(mats: THREE.Material[], rb: ReliefBody): boolean {
+    const warm = !this.host.prepareMaterials || rb.shown
+      || mats.every((m) => getPatch(m, RELIEF_PATCH) || this.reliefWarm.has(m));
+    if (!warm) return false;
+    for (const m of mats) {
+      setPatch(m, reliefPatch(rb.u));
+      this.reliefWarm.add(m);
+    }
+    return true;
+  }
+
+  /** Links the programs on stand ins first, so the picture keeps its old look
+   *  until the new one can be drawn without a stall. */
+  private warmRelief(cold: { b: BodyMesh; u: ReliefUniforms }[]) {
+    const group = new THREE.Group();
+    const clones: THREE.Material[] = [];
+    const live: THREE.Material[] = [];
+    for (const { b, u } of cold) {
+      const own = this.host.savedMats().get(b.id) ?? b.mesh.material;
+      const list = Array.isArray(own) ? own : [own];
+      if (list.every((m) => this.reliefWarm.has(m) || this.reliefLinking.has(m))) continue;
+      const cl = list.map((m) => {
+        const c = m.clone();
+        copyPatches(m, c, () => true);
+        setPatch(c, reliefPatch(u));
+        clones.push(c);
+        live.push(m);
+        this.reliefLinking.add(m);
+        return c;
+      });
+      const mesh = new THREE.Mesh(b.mesh.geometry, Array.isArray(own) ? cl : cl[0]);
+      mesh.matrixAutoUpdate = false;
+      mesh.matrix.copy(b.mesh.matrixWorld);
+      mesh.matrixWorld.copy(b.mesh.matrixWorld);
+      group.add(mesh);
+    }
+    if (!group.children.length) return;
+    const done = () => {
+      // A stand in let go before the live material has drawn would free the program.
+      for (const c of this.warmClones) c.dispose();
+      this.warmClones = clones;
+      for (const m of live) {
+        this.reliefLinking.delete(m);
+        this.reliefWarm.add(m);
+      }
+      if (this.last) this.apply(this.last);
+      this.host.requestRender();
+    };
+    this.host.prepareMaterials!(group).then(done, (e) => {
+      console.warn("[viewport] relief programs could not be linked ahead:", e);
+      done();
+    });
   }
 
   /** Model gone: its lights go with it, or they light the next document's first preview. */
   clear() {
     this.dropFaceMaterials(() => true);
+    for (const c of this.warmClones) c.dispose();
+    this.warmClones = [];
+    this.reliefBodies.clear();
     this.job = null;
     this.fitProgress = null;
     this.syncEmitterLights([]);
@@ -321,7 +463,7 @@ export class BodyFinishLayer {
 
   private glowOf(g: GlowingBody, fid: number): number {
     const ff = this.faceFinish[fid];
-    return ff ? ff.emissive : g.glow;
+    return ff ? (ff.castsLight ? ff.emissive : 0) : g.glow;
   }
 
   private boundOf(g: GlowingBody): number {

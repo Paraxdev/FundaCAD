@@ -38,6 +38,8 @@ export function traceMaterialFrom(
   m.opacity = src.opacity;
   m.transparent = src.transparent;
   m.side = src.side;
+  if (src.userData.noLight === true) m.userData.noLight = true;
+  else delete m.userData.noLight;
   return m;
 }
 
@@ -52,6 +54,6 @@ export function traceMaterialKey(m: THREE.Material): string {
     s.transmission, s.ior, s.attenuationColor?.getHex(), s.attenuationDistance, s.dispersion,
     s.iridescence, s.iridescenceIOR, s.iridescenceThicknessRange?.join("/"), s.specularColor?.getHex(),
     s.specularIntensity, s.sheen, s.sheenColor?.getHex(), s.sheenRoughness, s.clearcoat, s.clearcoatRoughness,
-    m.opacity, m.transparent, m.side, m.userData.surfKey ?? "",
+    m.opacity, m.transparent, m.side, m.userData.surfKey ?? "", m.userData.noLight === true,
   ].join(".");
 }

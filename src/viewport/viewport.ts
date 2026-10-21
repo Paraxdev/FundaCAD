@@ -63,6 +63,8 @@ import { awaitTreePick, treePickRefusal } from "../ui/treePick";
 import type { DocumentStore } from "../document/store";
 import type { BodyFinish } from "../document/materials";
 import { BodyFinishLayer, sameFinishMap, sameStringMap } from "./bodyFinish";
+import { sameRelief } from "./relief";
+import type { ReliefMap } from "../plugins/contrib";
 import { hdrHashOf, onRenderPrefsChange, renderPrefs, setRenderPref } from "../ui/renderPrefs";
 import { bootViewMode, chooseViewMode, effectiveViewMode, resetPathTracedOverride, savedGround, savedOverlays, type RenderTier, type ViewMode } from "../ui/viewMode";
 import { drawMask, markOverlay, overlayBit, overlayShown, pickLayers, pickMask, pictureMask, setPickLayers, syncOverlayLayers, type ActiveWork, type OverlayKind } from "./overlayKinds";
@@ -1213,6 +1215,7 @@ export class Viewport {
     savedMats: () => this.savedMats,
     later: (fn) => requestAnimationFrame(() => fn()),
     prepareLights: (show, hide) => this.prepareLights(show, hide),
+    prepareMaterials: (obj) => this.prepareMaterials(obj),
     onEmitterProgress: (p) => setEmissionProgress(p),
   });
 
@@ -1226,27 +1229,39 @@ export class Viewport {
    *  compileAsync checks each material's current program, which the next frame
    *  switches back to the ready one in use. */
   private prepareLights(show: THREE.Object3D, hide: THREE.Object3D | null): Promise<void> {
-    const r = this.scene.renderer;
-    const props = (r as unknown as { properties: { get(m: THREE.Material): { currentProgram?: { isReady(): boolean } } } }).properties;
-    const programs: { isReady(): boolean }[] = [];
-    const before = r.getRenderTarget();
     const hideWas = hide?.visible ?? false;
     show.visible = true;
     if (hide) hide.visible = false;
     try {
+      return this.linkPrograms(this.scene.scene, "emitter light");
+    } finally {
+      show.visible = false;
+      if (hide) hide.visible = hideWas;
+    }
+  }
+
+  /** prepareLights for objects outside the scene, drawn in its lights. */
+  private prepareMaterials(obj: THREE.Object3D): Promise<void> {
+    return this.linkPrograms(obj, "material");
+  }
+
+  private linkPrograms(obj: THREE.Object3D, what: string): Promise<void> {
+    const r = this.scene.renderer;
+    const props = (r as unknown as { properties: { get(m: THREE.Material): { currentProgram?: { isReady(): boolean } } } }).properties;
+    const programs: { isReady(): boolean }[] = [];
+    const before = r.getRenderTarget();
+    try {
       for (const target of [null, (this.lightTarget ??= new THREE.WebGLRenderTarget(1, 1))]) {
         r.setRenderTarget(target);
-        for (const m of r.compile(this.scene.scene, this.rig.active)) {
+        for (const m of r.compile(obj, this.rig.active, this.scene.scene)) {
           const p = props.get(m).currentProgram;
           if (p) programs.push(p);
         }
       }
     } catch (e) {
-      console.warn("[viewport] emitter light programs could not be linked ahead:", e);
+      console.warn(`[viewport] ${what} programs could not be linked ahead:`, e);
     } finally {
       r.setRenderTarget(before);
-      show.visible = false;
-      if (hide) hide.visible = hideWas;
     }
     return new Promise((resolve) => {
       const poll = () => (programs.every((p) => p.isReady()) ? resolve() : setTimeout(poll, 16));
@@ -1625,6 +1640,16 @@ export class Viewport {
     this.applyBodyFinish();
     this.requestRender();
   }
+
+  /** Ridges drawn across bodies, see BodyFinishLayer.setRelief. */
+  setRelief(map: ReliefMap) {
+    if (sameRelief(this.reliefMap, map)) return;
+    this.reliefMap = map;
+    this.finish.setRelief(map);
+    this.applyBodyFinish();
+    this.requestRender();
+  }
+  private reliefMap: ReliefMap = {};
 
   /** global face id → hex. Sparse: a face wearing its body's colour is absent. */
   setFacePaint(map: Record<number, string>) {
@@ -3803,6 +3828,10 @@ export class Viewport {
   }
   endBodyMoveGhost(restore: boolean) {
     this.ghosts.endBodyMoveGhost(restore);
+    if (this.finish.refreshReliefOrigins()) {
+      this.applyBodyFinish();
+      this.requestRender();
+    }
   }
   setPatternGhost(bodyIds: readonly string[], matrices: readonly THREE.Matrix4[]) {
     this.ghosts.setPatternGhost(bodyIds, matrices);

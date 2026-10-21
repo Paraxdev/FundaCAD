@@ -35,6 +35,7 @@ const MARKERS = [
   ["FundaCAD.Gamepad", "Cursor on / off"],
   ["FundaCAD.Printing", "Send to printer, filament mapping"],
   ["FundaCAD.Printing", "print-status-pill"],
+  ["FundaCAD.PrintLook", "Draws layer lines in the Realtime view only"],
   ["FundaCAD.MultiColor", "nearestPaletteSlot"],
   ["FundaCAD.MultiColor", "pal-swatch"],
   // Two STRING LITERALS rather than two identifiers, for the plugin whose code
