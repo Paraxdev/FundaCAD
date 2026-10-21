@@ -228,6 +228,9 @@ async fn the_folder_of_the_file_the_app_has_open_is_one_the_agent_may_write() {
     for k in ["TMP", "TEMP", "TMPDIR"] {
         env.insert(k.into(), tmp.clone());
     }
+    // By default every plain folder is reached; strict is where the open
+    // document's folder matters.
+    env.insert("FUNDACAD_MCP_STRICT".into(), "1".into());
     let mcp = Mcp::start(&env, own.path());
     let beside = parts.join("from-the-agent.funda");
     let (mcp, out) = while_pumping(

@@ -1,12 +1,14 @@
 //! Which files the tools may read and write.
 //!
 //! A path is judged after it is made absolute, `..` folded and every existing
-//! part resolved through symlinks, against folders of two kinds. The app's own
-//! (temp, recovery, the blob dir) are reached in full, since tempfile names
-//! its folders `.tmpXXXX`. Folders a person or a document picked (the open
-//! document's, `--allow-path`, `FUNDACAD_MCP_ALLOW_PATHS`) are reached except
-//! for hidden names below them, so `.git` or `.ssh` stay out of reach.
-//! Home and drive roots are never a folder of either kind.
+//! part resolved through symlinks. The app's own folders (temp, recovery, the
+//! blob dir) are reached in full, since tempfile names its folders `.tmpXXXX`.
+//! Past those, by default any path is reached unless its folder is home
+//! itself, a drive root or a folder holding home, or a part of it is hidden
+//! (a dot name such as `.git` or `.ssh`). In strict mode, chosen by
+//! `--allow-path`, `FUNDACAD_MCP_ALLOW_PATHS` or `FUNDACAD_MCP_STRICT=1`, only
+//! the given folders and the open document's are reached, hidden names below
+//! them excepted. Home and drive roots are never a given folder.
 //!
 //! The check happens at the tool's entry, so a folder swapped for a symlink
 //! between the check and the write, or a hard link inside an allowed folder,
@@ -31,6 +33,9 @@ struct Root {
 pub struct PathScope {
     roots: Vec<Root>,
     home: Option<PathBuf>,
+    strict: bool,
+    /// Folders that were given but not used, said again in every refusal.
+    dropped: Vec<String>,
 }
 
 pub const ALLOW_ENV: &str = "FUNDACAD_MCP_ALLOW_PATHS";
@@ -49,26 +54,51 @@ impl PathScope {
             .or_else(|| std::env::var_os("HOME"))
             .filter(|h| !h.is_empty())
             .map(PathBuf::from);
-        PathScope::new(app, allowed_paths(args, env), home)
+        let allowed = allowed_paths(args, env);
+        // Decided before any folder is dropped, so `--allow-path ~` alone
+        // still keeps to the app's folders and the refusal says why.
+        if strict(&allowed, crate::link::appenv("MCP_STRICT")) {
+            PathScope::new(app, allowed, home)
+        } else {
+            PathScope::open(app, home)
+        }
     }
 
+    /// Strict: the app's folders, `allowed` and the open document's folder.
     pub fn new(app: Vec<PathBuf>, allowed: Vec<PathBuf>, home: Option<PathBuf>) -> (PathScope, Vec<String>) {
-        let mut scope = PathScope { roots: Vec::new(), home };
+        PathScope::build(app, allowed, home, true)
+    }
+
+    /// The default: any path that is not refused for where it is.
+    pub fn open(app: Vec<PathBuf>, home: Option<PathBuf>) -> (PathScope, Vec<String>) {
+        PathScope::build(app, Vec::new(), home, false)
+    }
+
+    pub fn is_strict(&self) -> bool {
+        self.strict
+    }
+
+    fn build(app: Vec<PathBuf>, allowed: Vec<PathBuf>, home: Option<PathBuf>, strict: bool) -> (PathScope, Vec<String>) {
+        let mut scope = PathScope { roots: Vec::new(), home, strict, dropped: Vec::new() };
         let mut refused = Vec::new();
         let picked = app.into_iter().map(|p| (p, Reach::Full)).chain(allowed.into_iter().map(|p| (p, Reach::Visible)));
         for (path, reach) in picked {
             let spelled = path.to_string_lossy().into_owned();
             if let Some(why) = spelling_refusal(&spelled) {
-                refused.push(format!("{spelled} is not used as an allowed folder: it is {why}"));
+                refused.push(format!("{spelled} was ignored as an allowed folder: it is {why}"));
                 continue;
             }
             let path = abspath(&spelled);
             if let Some(why) = scope.root_refusal(&canonical(&path).unwrap_or_else(|| path.clone())) {
-                refused.push(format!("{} is not used as an allowed folder: it is {why}", path.display()));
+                refused.push(format!(
+                    "{} was ignored as an allowed folder: it is {why}, give a folder inside it",
+                    path.display()
+                ));
                 continue;
             }
             scope.roots.push(Root { path, reach });
         }
+        scope.dropped.clone_from(&refused);
         (scope, refused)
     }
 
@@ -90,6 +120,9 @@ impl PathScope {
                 lexical.display()
             ));
         };
+        if !self.strict {
+            return self.check_open(lexical, &target);
+        }
         let doc_root = doc.and_then(|d| self.document_folder(d));
         let roots = self
             .roots
@@ -107,13 +140,48 @@ impl PathScope {
         if let Some((root, name)) = hidden {
             return Err(format!(
                 "{} is refused: {name} below {} is a hidden folder or file, which this server does not reach. \
-                 If it is meant, allow that folder itself: start the server with --allow-path <folder> \
-                 (repeatable) or list it in {ALLOW_ENV}.",
+                 If it is meant, allow that folder itself: start the server with --mcp --allow-path <folder> \
+                 (repeatable) or list it in {ALLOW_ENV}.{}",
                 lexical.display(),
-                root.display()
+                root.display(),
+                self.dropped_note()
             ));
         }
         Err(self.outside(&lexical, &target, doc))
+    }
+
+    fn check_open(&self, lexical: PathBuf, target: &Path) -> Result<PathBuf, String> {
+        let in_app = self
+            .roots
+            .iter()
+            .filter(|r| r.reach == Reach::Full)
+            .any(|r| canonical(&r.path).is_some_and(|root| target.starts_with(root)));
+        if in_app {
+            return Ok(lexical);
+        }
+        let folder = target.parent().unwrap_or(target);
+        if let Some(why) = self.root_refusal(folder) {
+            return Err(format!(
+                "{} is refused: its folder {} is {why}, which this server does not use. \
+                 Use a folder inside it.{}",
+                lexical.display(),
+                folder.display(),
+                self.dropped_note()
+            ));
+        }
+        if let Some(name) = target.components().chain(lexical.components()).find_map(dot_name) {
+            return Err(format!(
+                "{} is refused: {name} is a hidden folder or file (its name starts with a dot), which this \
+                 server does not reach. Use a folder whose name does not start with a dot.{}",
+                lexical.display(),
+                self.dropped_note()
+            ));
+        }
+        Ok(lexical)
+    }
+
+    fn dropped_note(&self) -> String {
+        self.dropped.iter().map(|d| format!(" Note: {d}.")).collect()
     }
 
     fn outside(&self, lexical: &Path, target: &Path, doc: Option<&Path>) -> String {
@@ -134,13 +202,14 @@ impl PathScope {
             ),
         };
         format!(
-            "{} is outside the folders this server may use: {}. {would} To allow more, start the server \
-             with --allow-path <folder> (repeatable), or list folders in {ALLOW_ENV}, separated the way \
-             PATH is. The folder of the document the app has open is usable too. An assistant \
-             cannot change this itself: ask the person to allow the folder, or to copy the file into \
-             one of these.",
+            "{} is outside the folders this server may use: {}. It was started with a folder list, so it \
+             keeps to those. {would} To allow more, start the server with --mcp --allow-path <folder> \
+             (repeatable), or list folders in {ALLOW_ENV}, separated the way PATH is. The folder of the \
+             document the app has open is usable too. An assistant cannot change this itself: ask the \
+             person to add the folder.{}",
             lexical.display(),
-            known.join(", ")
+            known.join(", "),
+            self.dropped_note()
         )
     }
 
@@ -166,6 +235,13 @@ impl PathScope {
             None
         }
     }
+}
+
+/// Whether the server keeps to a folder list: one was given, or
+/// `FUNDACAD_MCP_STRICT` is on.
+pub fn strict(allowed: &[PathBuf], env: Option<String>) -> bool {
+    !allowed.is_empty()
+        || env.is_some_and(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
 }
 
 /// `--allow-path X` and `--allow-path=X`, after `--mcp` when that is given,
@@ -522,8 +598,129 @@ mod tests {
         let err = scope.check(&s(&other.join("a.funda")), None).unwrap_err();
         let other_c = canonical(&other).unwrap();
         assert!(err.contains(&format!("Allowing {} would", other_c.display())), "{err}");
-        assert!(err.contains("--allow-path") && err.contains(ALLOW_ENV), "{err}");
+        assert!(err.contains("--mcp --allow-path") && err.contains(ALLOW_ENV), "{err}");
         assert!(err.contains(&root.display().to_string()), "{err}");
+        assert!(!err.contains("copy the file"), "{err}");
+    }
+
+    fn open(app: &[&Path], home: &Path) -> PathScope {
+        let (scope, refused) = PathScope::open(app.iter().map(|p| p.to_path_buf()).collect(), Some(home.to_path_buf()));
+        assert!(refused.is_empty(), "{refused:?}");
+        scope
+    }
+
+    #[test]
+    fn by_default_a_folder_a_person_uses_is_reached() {
+        let base = dir();
+        let me = base.path().join("me");
+        for sub in ["Documents", "Downloads", "work/deep"] {
+            std::fs::create_dir_all(me.join(sub)).unwrap();
+        }
+        std::fs::create_dir_all(base.path().join("proj")).unwrap();
+        let scope = open(&[], &me);
+        for p in [
+            base.path().join("proj").join("a.funda"),
+            me.join("Documents").join("a.funda"),
+            me.join("Downloads").join("a.step"),
+            me.join("work").join("deep").join("a.stl"),
+            me.join("new").join("x.funda"),
+        ] {
+            assert_eq!(scope.check(&s(&p), None), Ok(p.clone()), "{}", p.display());
+        }
+    }
+
+    #[test]
+    fn by_default_a_relative_path_resolves_in_the_working_folder_and_is_reached() {
+        let cwd = std::env::current_dir().unwrap();
+        let (scope, _) = PathScope::open(vec![], None);
+        assert_eq!(scope.check("x.funda", None).unwrap(), cwd.join("x.funda"));
+    }
+
+    #[test]
+    fn by_default_home_a_root_dot_folders_and_odd_spellings_are_refused() {
+        let base = dir();
+        let me = base.path().join("me");
+        let proj = base.path().join("proj");
+        std::fs::create_dir_all(me.join(".ssh")).unwrap();
+        std::fs::create_dir_all(proj.join(".git")).unwrap();
+        let scope = open(&[], &me);
+        let root = if cfg!(windows) { "C:/a.funda" } else { "/a.funda" };
+        for (raw, why) in [
+            (s(&me.join("a.funda")), "home folder itself"),
+            (root.to_string(), "root"),
+            (s(&base.path().join("x.funda")), "holds the home folder"),
+            (s(&me.join(".ssh").join("a.funda")), "hidden"),
+            (s(&proj.join(".git").join("x")), "hidden"),
+            (s(&proj.join(".bashrc")), "hidden"),
+            (s(&me.join(".config").join("new").join("a.funda")), "hidden"),
+            ("//srv/share/a.funda".to_string(), "network"),
+            (s(&proj.join("NUL")), "device"),
+            (format!("{}:ads", s(&proj.join("a.funda"))), "alternate data stream"),
+        ] {
+            let err = scope.check(&raw, None).unwrap_err();
+            assert!(err.contains(why), "{raw}: {err}");
+        }
+    }
+
+    #[test]
+    fn by_default_dot_dot_and_links_cannot_reach_a_refused_place() {
+        let base = dir();
+        let me = base.path().join("me");
+        let proj = base.path().join("proj");
+        std::fs::create_dir_all(me.join(".ssh")).unwrap();
+        std::fs::create_dir_all(&proj).unwrap();
+        let scope = open(&[], &me);
+        let climb = format!("{}/../me/.ssh/k", s(&proj));
+        assert!(scope.check(&climb, None).unwrap_err().contains("hidden"), "{climb}");
+        let climb = format!("{}/sub/../../me/a.funda", s(&proj));
+        assert!(scope.check(&climb, None).unwrap_err().contains("home folder itself"), "{climb}");
+        if !link_dir(&me.join(".ssh"), &proj.join("innocent")) {
+            eprintln!("symlinks need developer mode here, skipped");
+            return;
+        }
+        let err = scope.check(&s(&proj.join("innocent").join("a.funda")), None).unwrap_err();
+        assert!(err.contains("hidden"), "{err}");
+        if link_dir(&me, &proj.join("h")) {
+            let err = scope.check(&s(&proj.join("h").join("a.funda")), None).unwrap_err();
+            assert!(err.contains("home folder itself"), "{err}");
+        }
+    }
+
+    #[test]
+    fn by_default_the_apps_own_dot_folders_are_reached() {
+        let temp = tempfile::tempdir().unwrap();
+        assert!(temp.path().file_name().unwrap().to_string_lossy().starts_with(".tmp"));
+        let inner = temp.path().join(".tmpinner").join("a.funda");
+        std::fs::create_dir_all(inner.parent().unwrap()).unwrap();
+        let scope = open(&[temp.path()], Path::new("/nonexistent-home"));
+        assert_eq!(scope.check(&s(&inner), None).unwrap(), inner);
+    }
+
+    #[test]
+    fn strict_mode_is_a_given_folder_or_the_strict_env() {
+        let one = [PathBuf::from("D:/parts")];
+        assert!(strict(&one, None));
+        assert!(strict(&[], Some("1".into())));
+        assert!(strict(&[], Some(" true ".into())));
+        assert!(!strict(&[], None));
+        assert!(!strict(&[], Some("0".into())));
+        assert!(!strict(&[], Some(String::new())));
+    }
+
+    #[test]
+    fn a_dropped_allow_path_is_named_in_the_refusal() {
+        let base = dir();
+        let home = base.path().join("me");
+        let other = base.path().join("other");
+        std::fs::create_dir_all(&home).unwrap();
+        std::fs::create_dir_all(&other).unwrap();
+        let (scope, refused) = PathScope::new(vec![], vec![home.clone()], Some(home.clone()));
+        assert_eq!(refused.len(), 1, "{refused:?}");
+        let err = scope.check(&s(&other.join("a.funda")), None).unwrap_err();
+        assert!(err.contains(&home.display().to_string()) && err.contains("ignored"), "{err}");
+        assert!(err.contains("home folder itself"), "{err}");
+        assert!(err.contains("--mcp --allow-path"), "{err}");
+        assert!(!err.contains("copy the file"), "{err}");
     }
 
     #[test]
