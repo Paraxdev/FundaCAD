@@ -655,6 +655,7 @@ export class DocumentStore {
     this.rearmProjectionValve(); // valve state must never cross documents
     this.suppressed.clear();
     for (const { overlay } of this.overlays) overlay.clear();
+    this.isolate = false;
     this.palette = DEFAULT_PALETTE.map((s) => ({ ...s }));
     this.elements = [];
     this.materials = STARTER_LIBRARY.map((m) => ({ ...m }));
