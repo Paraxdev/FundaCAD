@@ -80,7 +80,9 @@ pub const MUTATORS: &[&str] = &[
 
 /// Tools that need no document at all, so they must not be made to wait for
 /// one. `schema` in particular is what an agent reads BEFORE anything exists.
-pub const NO_DOCUMENT: &[&str] = &["schema", "ui_open", "ui_do", "ui_read", "ui_shot", "ui_close"];
+pub const NO_DOCUMENT: &[&str] = &[
+    "schema", "ui_open", "ui_do", "ui_read", "ui_shot", "ui_close", "guide_highlight", "guide_wait", "guide_clear",
+];
 
 /// What the host puts in front of the model before its first call.
 ///
@@ -396,6 +398,8 @@ pub struct FundaCad {
     /// pull, the tool and the push one atomic edit.
     turn: Arc<Mutex<()>>,
     pub(crate) ui: Arc<Mutex<Option<crate::ui::UiBridge>>>,
+    /// The user's guide Stop presses already reported, so each is said once.
+    pub(crate) guide_stops: Arc<std::sync::atomic::AtomicI64>,
 }
 
 impl FundaCad {
@@ -416,14 +420,29 @@ impl FundaCad {
                 app_build: None,
             })),
             turn: Arc::new(Mutex::new(())),
-            router: Arc::new(Self::tool_router()),
+            router: Arc::new(Self::base_router()),
             ui: Arc::new(Mutex::new(None)),
+            guide_stops: Arc::default(),
         }
+    }
+
+    /// Every mode's tools. Guide mode is listed everywhere and says why where it cannot work.
+    fn base_router() -> rmcp::handler::server::router::tool::ToolRouter<FundaCad> {
+        let mut router = Self::tool_router();
+        router.merge(Self::guide_router());
+        router
+    }
+
+    /// The engine link, the live guest's name when this server shares the app's
+    /// document, and whether it has edited a private copy instead.
+    pub(crate) async fn guide_parts(&self) -> (Arc<EngineLink>, Option<String>, bool) {
+        let st = self.state.lock().await;
+        (st.link.clone(), st.live.as_ref().map(|l| l.name.clone()), st.private_edits)
     }
 
     /// The ui tools as well, which standalone gets and nothing else does.
     pub fn with_ui(mut self) -> FundaCad {
-        let mut router = Self::tool_router();
+        let mut router = Self::base_router();
         router.merge(Self::ui_router());
         self.router = Arc::new(router);
         self
