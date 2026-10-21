@@ -53,7 +53,7 @@ nav = [
     "plugins/gamepad.md",
     "plugins/spacemouse.md",
   ] },
-  { "AI assistants" = ["ai/connect.md", "ai/sharing.md"] },
+  { "AI assistants" = ["ai/connect.md", "ai/sharing.md", "ai/guide.md"] },
   { "Reference" = ["reference/shortcuts.md", "reference/preferences.md", "reference/glossary.md"] },
 ]
 

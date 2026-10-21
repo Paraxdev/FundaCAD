@@ -15,6 +15,8 @@ pub const GUEST_TTL: f64 = 45.0;
 pub const MAX_PENDING: usize = 8;
 /// Characters of a guest's note kept; it is shown to the user.
 pub const MAX_NOTE: usize = 400;
+/// Characters of a guide caption kept.
+pub const MAX_CAPTION: usize = 600;
 
 pub type Clock = Box<dyn Fn() -> f64 + Send>;
 
@@ -29,6 +31,12 @@ pub struct LiveSession {
     guests: HashMap<String, (Value, f64)>,
     pending: Vec<Map<String, Value>>,
     next_proposal: u64,
+    /// What the host's guide shows, stored as the host sent it.
+    guide_state: Value,
+    /// At most one step (highlight or clear) and one wait, the newest of each.
+    guide_step: Option<Map<String, Value>>,
+    guide_wait: Option<Map<String, Value>>,
+    next_guide_seq: i64,
 }
 
 fn truthy(v: Option<&Value>) -> bool {
@@ -64,6 +72,10 @@ impl LiveSession {
             guests: HashMap::new(),
             pending: Vec::new(),
             next_proposal: 0,
+            guide_state: Value::Null,
+            guide_step: None,
+            guide_wait: None,
+            next_guide_seq: 0,
         }
     }
 
@@ -82,6 +94,23 @@ impl LiveSession {
         self.guests.clear();
         self.pending.clear();
         self.next_proposal = 0;
+        self.reset_guide();
+    }
+
+    fn reset_guide(&mut self) {
+        self.guide_state = Value::Null;
+        self.guide_step = None;
+        self.guide_wait = None;
+    }
+
+    fn drop_guide_of(&mut self, guest_id: &str) {
+        let mine = |c: &Option<Map<String, Value>>| c.as_ref().and_then(|c| c.get("guest")).and_then(Value::as_str) == Some(guest_id);
+        if mine(&self.guide_step) {
+            self.guide_step = None;
+        }
+        if mine(&self.guide_wait) {
+            self.guide_wait = None;
+        }
     }
 
     /// `publish`: the host says what it has and collects what guests asked for.
@@ -89,6 +118,7 @@ impl LiveSession {
         if self.host_id.as_deref() != Some(host_id) {
             self.host_id = Some(host_id.to_owned());
             self.pending.clear();
+            self.reset_guide();
         }
         self.document = document;
         self.revision = revision;
@@ -171,7 +201,47 @@ impl LiveSession {
     pub fn leave(&mut self, guest_id: &str) -> Value {
         self.guests.remove(guest_id);
         self.pending.retain(|p| p.get("guest").and_then(Value::as_str) != Some(guest_id));
+        self.drop_guide_of(guest_id);
         json!({"ok": true})
+    }
+
+    /// `guide` from the host: store what its guide shows and hand over the commands, oldest first.
+    pub fn guide_host(&mut self, host_id: &str, state: Value) -> Value {
+        if self.host_id.as_deref() != Some(host_id) {
+            return json!({"ok": false, "reason": "not the host"});
+        }
+        self.guest_names();
+        self.guide_state = state;
+        let mut commands: Vec<Map<String, Value>> = self.guide_step.take().into_iter().chain(self.guide_wait.take()).collect();
+        commands.sort_by_key(|c| c.get("seq").and_then(Value::as_i64).unwrap_or(0));
+        json!({"ok": true, "commands": commands})
+    }
+
+    /// `guide` from a guest: its heartbeat, an optional command, and what the host's guide shows.
+    pub fn guide_guest(&mut self, guest_id: &str, command: Option<&Value>, name: Option<&Value>) -> Value {
+        self.touch(guest_id, name);
+        if self.host_id.is_none() {
+            return json!({"ok": false, "reason": "no-host",
+                "message": "no FundaCAD window is sharing a document"});
+        }
+        let Some(Value::Object(cmd)) = command else {
+            return json!({"ok": true, "attached": true, "seq": null, "guide": self.guide_state});
+        };
+        let mut cmd = cmd.clone();
+        if let Some(Value::String(c)) = cmd.get("caption") {
+            let capped: String = c.chars().take(MAX_CAPTION).collect();
+            cmd.insert("caption".into(), json!(capped));
+        }
+        self.next_guide_seq += 1;
+        let seq = self.next_guide_seq;
+        cmd.insert("seq".into(), json!(seq));
+        cmd.insert("guest".into(), json!(guest_id));
+        if cmd.get("kind").and_then(Value::as_str) == Some("wait") {
+            self.guide_wait = Some(cmd);
+        } else {
+            self.guide_step = Some(cmd);
+        }
+        json!({"ok": true, "attached": true, "seq": seq, "guide": self.guide_state})
     }
 
     /// Who is attached right now, expired guests dropped with their proposals.
@@ -186,6 +256,7 @@ impl LiveSession {
         for g in expired {
             self.guests.remove(&g);
             self.pending.retain(|p| p.get("guest").and_then(Value::as_str) != Some(g.as_str()));
+            self.drop_guide_of(&g);
         }
         let mut names: Vec<String> = self.guests.values().map(|(n, _)| name_text(n)).collect();
         names.sort();
@@ -214,7 +285,7 @@ impl LiveSession {
     }
 }
 
-/// The five `session_*` ops, server.py `_session_reply`, answered for the
+/// The six `session_*` ops, server.py `_session_reply`, answered for the
 /// connection `who`. `Err` is the error message for the reply envelope.
 pub fn session_reply(live: &mut LiveSession, who: &str, op: &str, req: &Map<String, Value>) -> Result<Value, String> {
     let get = |k: &str| req.get(k).cloned().unwrap_or(Value::Null);
@@ -233,12 +304,21 @@ pub fn session_reply(live: &mut LiveSession, who: &str, op: &str, req: &Map<Stri
             live.propose(who, get("document"), base, req.get("note"), req.get("name"))
         }
         "session_leave" => live.leave(who),
+        "session_guide" => {
+            if live.host_id.as_deref() == Some(who) {
+                live.guide_host(who, get("state"))
+            } else if req.contains_key("state") {
+                json!({"ok": false, "reason": "not the host"})
+            } else {
+                live.guide_guest(who, req.get("command"), req.get("name"))
+            }
+        }
         other => return Err(format!("unknown session op: {other}")),
     })
 }
 
 pub fn is_session_op(op: &str) -> bool {
-    matches!(op, "session_host" | "session_release" | "session_state" | "session_propose" | "session_leave")
+    matches!(op, "session_host" | "session_release" | "session_state" | "session_propose" | "session_leave" | "session_guide")
 }
 
 #[cfg(test)]
@@ -425,5 +505,97 @@ mod tests {
         let st = session_reply(&mut s, "c2", "session_state", &req(json!({}))).unwrap();
         assert_eq!(st["guests"], json!(["c2"]));
         assert!(session_reply(&mut s, "c2", "session_nope", &req(json!({}))).is_err());
+    }
+
+    fn wire(s: &mut LiveSession, who: &str, op: &str, v: Value) -> Value {
+        session_reply(s, who, op, v.as_object().unwrap()).unwrap()
+    }
+
+    fn highlight(ui: &str) -> Value {
+        json!({"command": {"kind": "highlight", "target": {"ui": ui}, "caption": "here", "step": 1, "of": 3}})
+    }
+
+    #[test]
+    fn a_guide_command_reaches_the_host_once_and_never_carries_the_document() {
+        let (mut s, _) = session();
+        publish(&mut s, APP, doc(3), 1);
+        let r = wire(&mut s, AGENT, "session_guide", highlight("pick:fillet"));
+        assert_eq!(r["ok"], true);
+        assert!(r.get("document").is_none());
+        let seq = r["seq"].as_i64().unwrap();
+        let h = wire(&mut s, APP, "session_guide", json!({"state": {"ack": seq}}));
+        let cmds = h["commands"].as_array().unwrap();
+        assert_eq!(cmds.len(), 1);
+        assert_eq!((cmds[0]["seq"].clone(), cmds[0]["target"]["ui"].clone()), (json!(seq), json!("pick:fillet")));
+        let h = wire(&mut s, APP, "session_guide", json!({"state": {"ack": seq}}));
+        assert_eq!(h["commands"], json!([]));
+        let g = wire(&mut s, AGENT, "session_guide", json!({}));
+        assert_eq!(g["guide"]["ack"], seq);
+        assert!(g["seq"].is_null());
+        assert!(g.get("document").is_none());
+        assert_eq!(s.guest_names(), [AGENT]);
+    }
+
+    #[test]
+    fn a_guide_needs_a_window_sharing_its_document() {
+        let (mut s, _) = session();
+        let r = wire(&mut s, AGENT, "session_guide", highlight("pick:fillet"));
+        assert_eq!((r["ok"].clone(), r["reason"].clone()), (json!(false), json!("no-host")));
+    }
+
+    #[test]
+    fn only_the_newest_step_and_the_newest_wait_are_kept() {
+        let (mut s, _) = session();
+        publish(&mut s, APP, doc(1), 1);
+        wire(&mut s, AGENT, "session_guide", highlight("a"));
+        wire(&mut s, AGENT, "session_guide", json!({"command": {"kind": "wait", "until": "next"}}));
+        wire(&mut s, AGENT, "session_guide", highlight("b"));
+        let w = wire(&mut s, AGENT, "session_guide", json!({"command": {"kind": "wait", "until": "tool"}}))["seq"].clone();
+        let cmds = wire(&mut s, APP, "session_guide", json!({"state": {}}))["commands"].clone();
+        let got: Vec<(Value, Value)> = cmds.as_array().unwrap().iter().map(|c| (c["kind"].clone(), c["seq"].clone())).collect();
+        assert_eq!(got, [(json!("highlight"), json!(3)), (json!("wait"), w)]);
+        assert_eq!(cmds[0]["target"]["ui"], "b");
+    }
+
+    #[test]
+    fn a_leaving_or_expired_guest_takes_its_guide_commands_with_it() {
+        let (mut s, t) = session();
+        publish(&mut s, APP, doc(1), 1);
+        wire(&mut s, AGENT, "session_guide", highlight("a"));
+        s.leave(AGENT);
+        assert_eq!(wire(&mut s, APP, "session_guide", json!({"state": {}}))["commands"], json!([]));
+        wire(&mut s, AGENT, "session_guide", highlight("a"));
+        advance(&t, GUEST_TTL + 1.0);
+        assert_eq!(wire(&mut s, APP, "session_guide", json!({"state": {}}))["commands"], json!([]));
+    }
+
+    #[test]
+    fn a_new_host_inherits_no_guide() {
+        let (mut s, _) = session();
+        publish(&mut s, APP, doc(1), 1);
+        wire(&mut s, APP, "session_guide", json!({"state": {"ack": 4}}));
+        wire(&mut s, AGENT, "session_guide", highlight("a"));
+        publish(&mut s, "app2", doc(1), 1);
+        assert!(wire(&mut s, AGENT, "session_guide", json!({}))["guide"].is_null());
+        assert_eq!(wire(&mut s, "app2", "session_guide", json!({"state": null}))["commands"], json!([]));
+    }
+
+    #[test]
+    fn only_the_host_reports_what_the_guide_shows() {
+        let (mut s, _) = session();
+        publish(&mut s, APP, doc(1), 1);
+        let r = wire(&mut s, AGENT, "session_guide", json!({"state": {"ack": 9}}));
+        assert_eq!((r["ok"].clone(), r["reason"].clone()), (json!(false), json!("not the host")));
+        assert!(wire(&mut s, OTHER, "session_guide", json!({}))["guide"].is_null());
+        assert!(is_session_op("session_guide"));
+    }
+
+    #[test]
+    fn a_guide_caption_is_capped() {
+        let (mut s, _) = session();
+        publish(&mut s, APP, doc(1), 1);
+        wire(&mut s, AGENT, "session_guide", json!({"command": {"kind": "highlight", "caption": "x".repeat(5000)}}));
+        let c = wire(&mut s, APP, "session_guide", json!({"state": {}}))["commands"][0]["caption"].as_str().unwrap().len();
+        assert_eq!(c, MAX_CAPTION);
     }
 }

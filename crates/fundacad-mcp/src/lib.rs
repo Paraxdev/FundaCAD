@@ -27,6 +27,7 @@ pub mod clash;
 pub mod describe;
 pub mod docfile;
 pub mod edits;
+pub mod guide;
 pub mod layflat;
 pub mod link;
 pub mod live;
