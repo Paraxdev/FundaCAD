@@ -99,6 +99,8 @@ export type {
   PrintabilityUp,
 } from "../geometry/client";
 export type { Viewport } from "../viewport/viewport";
+// A sketch plane's frame, for a plugin that places things in plane coordinates.
+export { SketchPlane } from "../sketch/plane";
 export type { CtxItem, MenuDef, MenuItem } from "../ui/menu";
 
 // --- what the buttons and keys do (contributions need the input.remap grant) ---

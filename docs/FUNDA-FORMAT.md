@@ -37,6 +37,12 @@ document has imported bodies, one more top-level key comes last:
   blob is missing. It also embeds the blob of any other hash shaped string in
   the document when it has that blob, and skips it otherwise, so geometry a
   feature of a type it does not know refers to survives a save.
+- `referenceImages` is a list the Reference images plugin owns, one entry per
+  picture on a plane (`id`, `name`, `image`, `mime`, `px`, `plane`, `at`,
+  `width`, `angle`, `flipX`, `flipY`, `opacity`, `locked`, `hidden`). `image`
+  is the hash of the PNG or JPEG bytes, embedded in `geometry` like any other
+  hash string value, so those bytes are an image, not a BREP. A version without
+  the key carries it as an unknown top level key, image included.
 
 The reference writer and reader is `crates/fundacad-format/src/json_doc.rs`.
 

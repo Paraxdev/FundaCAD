@@ -24,6 +24,7 @@ const engine = {
     faceMaterialId: () => undefined,
     faceMaterialEntries: () => [],
     buildState: { building: false, result: { bodies: [] } },
+    onReferenceImagesChange: () => () => {},
   },
   bridge: { buildVersion: ref(0) },
   viewport: {

@@ -52,6 +52,7 @@ describe("the plugins this build offers", () => {
       "FundaCAD.PrintLook",
       "FundaCAD.PrintToolbox",
       "FundaCAD.Printing",
+      "FundaCAD.ReferenceImages",
       "FundaCAD.Screws",
       "FundaCAD.SpaceMouse",
       "FundaCAD.Texture",

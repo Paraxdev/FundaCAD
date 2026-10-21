@@ -109,6 +109,7 @@ hurts.
 | `FundaCAD.Organic` | node bodies: rounded solids from sized nodes linked into smooth limbs | `document.read`, `document.write` | `builtin` |
 | `FundaCAD.Texture` | a printed surface texture on picked faces or a whole body | `document.read`, `document.write`, `files.read` | `builtin` |
 | `FundaCAD.Navigation` | mouse button presets, an opt-in radial menu and a shortcut rebinding panel | `input.remap`, `document.read` | `builtin` |
+| `FundaCAD.ReferenceImages` | a photo or a drawing on a plane or a flat face, calibrated from two points, to sketch over | `document.read`, `document.write` | `builtin` |
 
 **THE APP SHIPS NONE OF THEM.** Every one is a zip on a release, installed like
 anybody else's, and a fresh install runs nothing but the app. Three of them used
