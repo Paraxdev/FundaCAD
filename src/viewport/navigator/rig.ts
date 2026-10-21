@@ -8,7 +8,7 @@ import type {
 } from "../cameras";
 import { cameraFlightsOn } from "../../ui/motion";
 import { orthoClip, perspClip, NEAR_AT_REST } from "../clipPlanes";
-import { boxDepthRange } from "./anchor";
+import { boxDepthRange, visibleNearDepth } from "./anchor";
 import { bindInput } from "./input";
 import { Navigator, lookQuatUp } from "./navigator";
 import { clonePose, distanceOf, eyeOf, forwardOf, setOrientation } from "./pose";
@@ -47,6 +47,7 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
   const eye = new THREE.Vector3();
   const upV = new THREE.Vector3();
   let written = -1;
+  let parts: readonly THREE.Box3[] = [];
   function write() {
     const p = nav.pose;
     if (written === nav.poseVersion()) return;
@@ -61,7 +62,12 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
       cam.quaternion.copy(p.q);
       cam.up.copy(upV);
     }
-    const pc = perspClip(distanceOf(p), zmin, zmax);
+    // The union box of a big assembly reaches the eye plane long before any part
+    // does (the SV08 seen from above at 600mm: union corner 39mm behind the eye,
+    // nearest part on screen 19mm in front), which held near at 0.1mm and made
+    // sheets 0.4mm apart z-fight. Near goes by the parts that can be on screen.
+    const seen = parts.length ? visibleNearDepth(p, a, parts) : NaN;
+    const pc = perspClip(distanceOf(p), Number.isFinite(seen) ? seen : zmin, zmax);
     persp.fov = p.fov;
     persp.aspect = a;
     persp.near = pc.near;
@@ -158,7 +164,8 @@ export function createNavigatorRig(dom: HTMLElement, aspect: number): CameraRig 
     setScene(s) {
       nav.setScene(s);
     },
-    setContentBox(box) {
+    setContentBox(box, partBoxes) {
+      parts = partBoxes ?? [];
       nav.setContentBox(box);
       nav.touch();
     },
