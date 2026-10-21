@@ -28,6 +28,9 @@ hidapi = "2"
 getrandom = "0.2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# file:// URLs from a launch or from macOS's Opened event (launch_args.rs), the
+# same crate Tauri re-exports as tauri::Url.
+url = "2"
 # HTTP client for two callers. plugins/mod.rs fetches plugin bundles from any
 # HTTPS host, and the transport is where the authenticity of a download comes
 # from. plugins/localnet.rs sends a plugin's requests to devices on the local
@@ -86,6 +89,8 @@ flate2 = "1"
 # The 3D mouse through spacenavd (spnav/, spacemouse/spnav.rs).
 [target.'cfg(target_os = "linux")'.dependencies]
 fundacad-spnav = { path = "spnav" }
+# The uri list of a file drag (drop_paths.rs), the version wry already links.
+gtk = "0.18"
 
 # The paths of files dropped on the window (drop_paths.rs). The versions wry
 # already links, so these add nothing to the build.

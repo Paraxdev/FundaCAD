@@ -15,6 +15,7 @@ pub mod thumbs;
 mod spacemouse;
 mod drop_paths;
 mod launch;
+pub mod launch_args;
 pub mod frames;
 pub mod safe_mode;
 pub mod settings_files;
@@ -357,6 +358,7 @@ pub fn run() {
         frontend_ready,
         safe_mode_exit,
         launch::take_launch_paths,
+        drop_paths::drop_paths_take,
         recovery_write,
         recovery_read,
         recovery_list,
@@ -425,6 +427,7 @@ pub fn run() {
     let app = builder
         .manage(spacemouse::Inventory::default())
         .manage(launch::LaunchPaths::default())
+        .manage(drop_paths::Held::default())
         // The files a person has handed to a plugin this session. Session-lived
         // and nowhere on disk: a plugin cannot come back tomorrow holding a
         // token for a file somebody forgot they had offered it.
@@ -485,6 +488,10 @@ pub fn run() {
         .expect("error while building FundaCAD");
 
     app.run(|app_handle, event| {
+        #[cfg(any(target_os = "macos", target_os = "ios"))]
+        if let RunEvent::Opened { urls } = &event {
+            launch::queue_opened(app_handle, urls);
+        }
         if let RunEvent::ExitRequested { .. } | RunEvent::Exit = event {
             if let Some(e) = app_handle.try_state::<engine::Engine>() {
                 e.stop();
