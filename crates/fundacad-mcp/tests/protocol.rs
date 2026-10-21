@@ -878,3 +878,50 @@ fn the_schema_is_also_a_resource() {
     let missing = mcp.rpc("resources/read", json!({"uri": "fundacad://nope"}));
     assert!(missing.get("error").is_some(), "{missing}");
 }
+
+// --- never silently wrong ----------------------------------------------------
+
+fn box_60_40_20() -> (&'static str, Value) {
+    ("feature_add", json!({"feature": {"id": "bx", "type": "box", "length": 60, "width": 40, "height": 20}}))
+}
+
+fn right_z_edge() -> Value {
+    json!({"kind": "edge", "by": "match", "body": "body1",
+           "fp": {"mid": [30, 20, 0], "dir": [0, 0, 1], "length": 20, "curve": "line"}})
+}
+
+#[test]
+fn a_match_whose_edge_a_chamfer_took_warns_which_edge_it_now_fillets() {
+    let rs = drive(&[
+        box_60_40_20(),
+        ("feature_add", json!({"feature": {"id": "ch", "type": "chamfer", "distance": 5, "edges": right_z_edge()}})),
+        ("feature_add", json!({"feature": {"id": "f", "type": "fillet", "radius": 3, "edges": right_z_edge()}})),
+        ("build", json!({})),
+    ]);
+    let t = &rs[3].text;
+    assert!(t.contains("warning (f):"), "{t}");
+    assert!(t.contains("(30, 20, 0)"), "{t}");
+    assert!(t.contains("(25, 20, 0)") || t.contains("(30, 15, 0)"), "{t}");
+    assert!(t.contains("inspect"), "{t}");
+}
+
+#[test]
+fn a_match_picked_where_no_edge_is_warns_instead_of_taking_one_quietly() {
+    let rs = drive(&[
+        box_60_40_20(),
+        ("feature_add", json!({"feature": {"id": "f", "type": "fillet", "radius": 2, "edges":
+            {"kind": "edge", "by": "match", "body": "body1", "fp": {"mid": [1, 2, 3], "dir": [0, 0, 1]}}}})),
+        ("build", json!({})),
+    ]);
+    assert!(rs[2].text.contains("warning (f):") && rs[2].text.contains("(1, 2, 3)"), "{}", rs[2].text);
+}
+
+#[test]
+fn a_match_whose_edge_drifted_with_the_box_stays_quiet() {
+    let rs = drive(&[
+        ("feature_add", json!({"feature": {"id": "bx", "type": "box", "length": 59, "width": 40, "height": 20}})),
+        ("feature_add", json!({"feature": {"id": "f", "type": "fillet", "radius": 3, "edges": right_z_edge()}})),
+        ("build", json!({})),
+    ]);
+    assert!(!rs[2].is_error && !rs[2].text.contains("warning"), "{}", rs[2].text);
+}

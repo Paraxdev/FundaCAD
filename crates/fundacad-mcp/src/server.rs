@@ -178,6 +178,36 @@ fn feature_failure_lines(errors: &[Value]) -> Vec<String> {
         .collect()
 }
 
+/// A `match` selector the engine found no longer matching where it was
+/// picked. It still took an edge, so the build never goes silent about which.
+fn stale_match_line(d: &Value) -> Option<String> {
+    if d.get("stale") != Some(&json!(true)) {
+        return None;
+    }
+    let mm = |x: f64| {
+        let r = (x * 1000.0).round() / 1000.0;
+        format!("{}", if r == 0.0 { 0.0 } else { r })
+    };
+    let pt = |v: &Value| {
+        let c: Vec<String> = v.as_array()?.iter().map(|x| x.as_f64().map(mm)).collect::<Option<_>>()?;
+        Some(format!("({})", c.join(", ")))
+    };
+    let picked = pt(d.get("picked")?)?;
+    let now = d.get("now")?;
+    let through = pt(now.get("mid")?)?;
+    let curve = now.get("curve").and_then(Value::as_str).unwrap_or("edge");
+    let off = d.get("off").and_then(Value::as_f64).map_or(String::new(), |o| format!(", {} mm from its pick", mm(o)));
+    let tie = if d.get("reason").and_then(Value::as_str).is_some_and(|r| r.starts_with("tie")) {
+        ", tied with another edge"
+    } else {
+        ""
+    };
+    Some(format!(
+        "its edge selector picked at {picked} no longer matches an edge there, it now resolves to the {curve} \
+         through {through}{off}{tie}. Check it with inspect and re-pick it if that is the wrong edge."
+    ))
+}
+
 /// The engine's `skippedFeatures`: features of a type it does not know, which a
 /// file from a newer version can hold. Not built, and not lost either.
 fn skipped_lines(result: &Value) -> Vec<String> {
@@ -1915,7 +1945,9 @@ impl FundaCad {
             let note = d
                 .get("message")
                 .or_else(|| d.get("reason").filter(|_| advisory))
-                .and_then(Value::as_str);
+                .and_then(Value::as_str)
+                .map(str::to_string)
+                .or_else(|| stale_match_line(d));
             if let Some(m) = note {
                 let at = d.get("feature_id").and_then(Value::as_str).map_or(String::new(), |id| format!(" ({id})"));
                 lines.push(format!("warning{at}: {m}"));
