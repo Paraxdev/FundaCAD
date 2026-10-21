@@ -403,10 +403,12 @@ Writer rules:
   what it saves is in its own shapes. A newer reader therefore runs its newer
   migrations on such a file again, so every migration must be shape guarded:
   it rewrites only what still has the old shape, and leaves alone what already
-  has the new one. The app saves a newer file this way. MCP `doc_save` is the
-  exception: it writes the JSON back as it was read, edits included, so the
-  higher stamp stays, and an edit made through MCP must already use the shapes
-  of that stamp.
+  has the new one. The app saves a newer file this way, and so does MCP
+  `doc_save`: a stamp above its own is lowered to its own, the rest of the
+  file is written as it was. A stamp below its own stays, because MCP does not
+  run the app's migrations and a higher stamp would make the app skip them.
+  MCP cannot write a `.fundab`, so a section carried in one is not kept by an
+  MCP save.
 - A new reference to geometry is a lowercase hex BLAKE2b-128 string held as a
   string value, never as an object key, so an older writer finds it and keeps
   the blob. The older writer only scans values.

@@ -933,6 +933,7 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
             Err(e) => return Ok(e),
         };
         model::recompute_parameters(&mut st.doc);
+        model::stamp_for_save(&mut st.doc);
         if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
             if !parent.is_dir() {
                 return Ok(failure(format!("No such directory: {}", parent.display())));
