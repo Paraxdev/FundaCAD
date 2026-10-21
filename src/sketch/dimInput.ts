@@ -874,6 +874,11 @@ export class DimInput {
     this.root.style.top = `${Math.round(at.top)}px`;
   }
 
+  /** Let the fields wrap rather than run past the window edge. */
+  fitToWindow() {
+    this.root.classList.add("fits-window");
+  }
+
   /** The box's size at its natural width, which is what it has wherever there
    *  is room for it. */
   naturalSize(): { w: number; h: number } {

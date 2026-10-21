@@ -80,8 +80,11 @@ button.finish:hover {
   gap: var(--s-1);
   z-index: 200;
   pointer-events: auto;
-  /* A window narrower than the Hole box (about 560px) wraps its fields to a
-     second row instead of cutting the last of them off. */
+}
+/* A box that places itself in the free space (the Hole box, about 560px wide)
+   wraps its fields to a second row in a window narrower than it, instead of
+   cutting the last of them off. */
+.dim-input.fits-window {
   flex-wrap: wrap;
   max-width: calc(100vw - 2 * var(--s-3));
 }
