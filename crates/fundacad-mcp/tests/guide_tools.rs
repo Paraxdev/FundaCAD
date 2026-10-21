@@ -191,3 +191,10 @@ async fn a_stop_from_before_this_server_is_not_reported() {
     let (_mcp, out) = call(mcp, &mut window, "guide_highlight", json!({"ui": "#browser", "caption": "Items"})).await;
     assert_eq!((out.is_error, out.text.as_str()), (false, "the step is up on #browser"));
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_wait_with_no_step_on_screen_does_not_say_one_is_up() {
+    let (_engine, mut window, mcp) = attached(User::Watches).await;
+    let (_mcp, out) = call(mcp, &mut window, "guide_wait", json!({"until": "tool", "timeout_s": 1})).await;
+    assert_eq!((out.is_error, out.text.as_str()), (false, "nothing happened in 1 s, and no step is on screen"));
+}
