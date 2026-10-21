@@ -11,7 +11,7 @@ describe("diffSnapshot", () => {
       tool: "Fillet / Chamfer",
       features: [{ id: "f1", type: "box" }, { id: "fillet1", type: "fillet" }],
       selection: { faces: 0, edges: 1, bodies: 0 },
-      value: { field: "radius", text: "3" },
+      value: { field: "radius", text: "3", typed: true },
     });
     expect(diffSnapshot(before, after).map(describeEvent)).toEqual([
       "tool started: Fillet / Chamfer",
@@ -20,6 +20,8 @@ describe("diffSnapshot", () => {
       "value typed: radius = 3",
     ]);
     expect(diffSnapshot(after, after)).toEqual([]);
+    const shown = snap({ value: { field: "radius", text: "1", typed: false } });
+    expect(diffSnapshot(snap(), shown)).toEqual([]);
   });
 });
 

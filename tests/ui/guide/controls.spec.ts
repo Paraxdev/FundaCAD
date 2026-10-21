@@ -34,6 +34,11 @@ describe("resolveControl", () => {
     expect(m).toMatchObject({ via: "menu:File" });
   });
 
+  it("points at a panel by its id, though it is not a control", () => {
+    expect(resolve("#timeline").el?.id).toBe("timeline");
+    expect(resolve("#browser").el?.id).toBe("browser");
+  });
+
   it("names near misses and the id families when nothing matches", () => {
     const r = resolve("family:cat:MODIF");
     expect(r.el).toBeUndefined();

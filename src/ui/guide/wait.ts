@@ -8,8 +8,9 @@ export interface Snapshot {
   tool: string | null;
   features: { id: string; type: string }[];
   selection: { faces: number; edges: number; bodies: number };
-  /** The value box field in focus and its text. */
-  value: { field: string; text: string } | null;
+  /** The value box field being typed in and its text; `typed` is false while it
+   *  still shows the tool's own default. */
+  value: { field: string; text: string; typed: boolean } | null;
 }
 
 export type GuideEvent =
@@ -38,8 +39,9 @@ export function diffSnapshot(prev: Snapshot, next: Snapshot): GuideEvent[] {
   const a = prev.selection, b = next.selection;
   const picked = b.faces + b.edges + b.bodies;
   if (picked > 0 && (a.faces !== b.faces || a.edges !== b.edges || a.bodies !== b.bodies)) out.push({ kind: "selection", ...b });
-  if (next.value && next.value.text !== "" && (next.value.field !== prev.value?.field || next.value.text !== prev.value.text)) {
-    out.push({ kind: "value", ...next.value });
+  const v = next.value;
+  if (v?.typed && v.text !== "" && (v.field !== prev.value?.field || v.text !== prev.value.text || !prev.value.typed)) {
+    out.push({ kind: "value", field: v.field, text: v.text });
   }
   return out;
 }
