@@ -355,3 +355,15 @@ export function gapReport(entities: readonly ResolvedEntity[], constraints: read
   const kind = tieable ? "tieable" : open ? "open" : "none";
   return { kind, open, tieable, gapMm: 0, reach };
 }
+
+const mm = (v: number) => `${Number(v.toPrecision(2))} mm`;
+
+/** What Tie Loose Ends says when nothing is in its reach, never "no loose ends"
+ *  while red ends show. */
+export function nothingToTiePrompt(le: LooseEnds, gap: GapReport): string {
+  if (le.untied.length) return "These loose ends cannot be tied, draw a line to close them";
+  const n = le.open.length;
+  if (!n) return "No loose ends to tie";
+  const apart = gap.kind === "gap" ? ` ${mm(gap.gapMm)} apart` : "";
+  return `${n} open end${n === 1 ? "" : "s"}${apart}, too far apart to tie, draw a line to close ${n === 1 ? "it" : "them"}`;
+}
