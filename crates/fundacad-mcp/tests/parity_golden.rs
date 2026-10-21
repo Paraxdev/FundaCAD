@@ -72,7 +72,13 @@ fn the_parity_script_answers_as_the_python_server_did() {
 
     let cwd = std::env::temp_dir().join(format!("fundacad-mcp-parity-{}", std::process::id()));
     std::fs::create_dir_all(&cwd).expect("a working directory");
-    let mut mcp = Mcp::start(&env(&[("FUNDACAD_MCP_MODE", "standalone")]), &cwd);
+    // The Python server reached every file; the script's missing files under
+    // /no are allowed so their replies are still about the missing file.
+    let mut mcp = Mcp::start_with_args(
+        &env(&[("FUNDACAD_MCP_MODE", "standalone")]),
+        &cwd,
+        &["--allow-path", "/no"],
+    );
     let mut differences = Vec::new();
     for (i, (step, want)) in steps.iter().zip(cases).enumerate() {
         let tool = step["tool"].as_str().expect("a tool");

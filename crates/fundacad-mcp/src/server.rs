@@ -53,6 +53,7 @@ use crate::model::{self, Doc};
 use crate::mesh::MeshBody;
 use crate::render::{self, ViewRequest};
 use crate::schema;
+use crate::scope::PathScope;
 use crate::upload::{self, Upload, ASK_FOR_A_PATH, IMPORT_FORMATS, PIECES_WORTH_IT};
 
 /// Renders are returned inline as base64 PNG, so the size is a context cost
@@ -291,34 +292,14 @@ fn py_num(v: Option<&Value>) -> String {
     }
 }
 
-fn abspath(path: &str) -> PathBuf {
-    let p = Path::new(path);
-    if p.is_absolute() {
-        normalise(p)
-    } else {
-        normalise(
-            &std::env::current_dir()
-                .unwrap_or_else(|_| PathBuf::from("."))
-                .join(p),
-        )
+/// The file of the document being worked on: the app's when this is its
+/// live session, which shares its path as the title, else the one opened or
+/// saved here.
+fn doc_file(st: &State) -> Option<PathBuf> {
+    match &st.live {
+        Some(live) => live.title.as_deref().map(PathBuf::from).filter(|p| p.is_absolute()),
+        None => st.path.clone(),
     }
-}
-
-/// `.` and `..` folded out, as `os.path.abspath` does, without touching the
-/// filesystem: the path may not exist yet, which is the whole point of
-/// `doc_save`.
-fn normalise(p: &Path) -> PathBuf {
-    let mut out = PathBuf::new();
-    for part in p.components() {
-        match part {
-            std::path::Component::ParentDir => {
-                out.pop();
-            }
-            std::path::Component::CurDir => {}
-            other => out.push(other.as_os_str()),
-        }
-    }
-    out
 }
 
 struct State {
@@ -397,6 +378,7 @@ pub struct FundaCad {
     /// pull, the tool and the push one atomic edit.
     turn: Arc<Mutex<()>>,
     pub(crate) ui: Arc<Mutex<Option<crate::ui::UiBridge>>>,
+    scope: Arc<PathScope>,
 }
 
 impl FundaCad {
@@ -419,7 +401,18 @@ impl FundaCad {
             turn: Arc::new(Mutex::new(())),
             router: Arc::new(Self::tool_router()),
             ui: Arc::new(Mutex::new(None)),
+            scope: Arc::new(PathScope::for_server(std::env::args_os()).0),
         }
+    }
+
+    /// `raw` absolute if the tools may touch it, else the refusal to answer with.
+    pub(crate) async fn scoped(&self, raw: &str) -> Result<PathBuf, CallToolResult> {
+        let st = self.state.lock().await;
+        self.scoped_in(&st, raw)
+    }
+
+    fn scoped_in(&self, st: &State, raw: &str) -> Result<PathBuf, CallToolResult> {
+        self.scope.check(raw, doc_file(st).as_deref()).map_err(failure)
     }
 
     /// The ui tools as well, which standalone gets and nothing else does.
@@ -436,6 +429,17 @@ impl FundaCad {
     pub async fn attach(mode: Mode) -> Result<FundaCad, String> {
         let (link, app) = EngineLink::for_mode(mode, log).await?;
         let mut server = FundaCad::with_link(link);
+        let (scope, refused) = PathScope::for_server(std::env::args_os());
+        for line in refused {
+            log(&format!("[mcp] {line}"));
+        }
+        let folders: Vec<String> = scope.folders().iter().map(|p| p.display().to_string()).collect();
+        log(&format!(
+            "[mcp] files are reached in {} and the open document's folder; more with --allow-path or {}",
+            folders.join(", "),
+            crate::scope::ALLOW_ENV
+        ));
+        server.scope = Arc::new(scope);
         if mode == Mode::Standalone {
             server = server.with_ui();
         }
@@ -814,7 +818,10 @@ impl FundaCad {
         // rarely the one the caller has in mind, so echoing back what was typed
         // says nothing about where the file actually is. Say where it is.
         let path = match require_str(&args, "path") {
-            Ok(p) => abspath(&p),
+            Ok(p) => match self.scoped(&p).await {
+                Ok(p) => p,
+                Err(e) => return Ok(e),
+            },
             Err(e) => return Ok(e),
         };
         let (doc, blobs) = match docfile::read_document(&path) {
@@ -891,10 +898,14 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
             .and_then(Value::as_str)
             .filter(|p| !p.is_empty())
             .map(str::to_string);
-        let Some(path) = given.map(|p| abspath(&p)).or_else(|| st.path.clone()) else {
+        let Some(given) = given.or_else(|| st.path.as_ref().map(|p| p.to_string_lossy().into_owned())) else {
             return Ok(failure(
                 "No path given and this document has never been saved.",
             ));
+        };
+        let path = match self.scoped_in(&st, &given) {
+            Ok(p) => p,
+            Err(e) => return Ok(e),
         };
         model::recompute_parameters(&mut st.doc);
         if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
@@ -1281,7 +1292,10 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
     )]
     pub async fn t_export(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         let path = match require_str(&args, "path") {
-            Ok(p) => abspath(&p),
+            Ok(p) => match self.scoped(&p).await {
+                Ok(p) => p,
+                Err(e) => return Ok(e),
+            },
             Err(e) => return Ok(e),
         };
         let format = match require_str(&args, "format") {
@@ -2838,7 +2852,10 @@ impl FundaCad {
 
         let mut upload_id: Option<String> = None;
         let (path, fmt, source) = if has_path {
-            let path = abspath(args.get("path").and_then(Value::as_str).unwrap_or_default());
+            let path = match self.scoped(args.get("path").and_then(Value::as_str).unwrap_or_default()).await {
+                Ok(p) => p,
+                Err(e) => return e,
+            };
             if !path.is_file() {
                 return failure(format!(
                     "No such file: {}\n{ASK_FOR_A_PATH}",

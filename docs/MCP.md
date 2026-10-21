@@ -46,6 +46,48 @@ window: its worker serves a loopback WebSocket beside its stdio pipe, sharing
 the one engine and so the one live session, and the app writes that port and a
 per launch token to `session.json`.
 
+### Which files the server can reach
+
+`doc_open`, `doc_save`, `doc_import`, `export`, and the `record` of `ui_open`
+and the `open_file`, `import_file` and `save_as` steps of `ui_do`, take a path
+only inside these folders (`crates/fundacad-mcp/src/scope.rs`):
+
+- the open document's folder: the file opened or saved here, or in a live
+  session the file the window has open;
+- the app's own: the system temp folder, `<app data>/recovery` and the blob
+  dir (`FUNDACAD_BLOB_DIR`);
+- every folder given with `--allow-path <folder>` (repeatable, after `--mcp`
+  for `fundacad`) or listed in `FUNDACAD_MCP_ALLOW_PATHS`, separated the way
+  `PATH` is.
+
+Home and drive roots themselves are never one of them, nor a folder that holds
+home, so `--allow-path ~` is ignored with a line in the log. Hidden names (a
+leading dot) below the document's folder or an allowed one are refused, so
+`.git` and `.ssh` stay out of reach unless such a folder is allowed itself; the
+app's own folders are reached in full, as tempfile names its folders `.tmpXXXX`.
+UNC paths, `\\.\` and `\\?\` device and verbatim paths, `C:name`, a colon in a
+name (an NTFS alternate data stream) and device names such as `NUL` or `COM1`
+are refused on every platform. The path is made absolute, `..` folded and every
+part that exists resolved through links before it is compared, so neither `..`
+nor a link inside an allowed folder leads out of it. The refusal names the
+folder that would let it through and how to allow it. The check is made when the
+tool is called, so a folder swapped for a link after that, or a hard link, is not
+caught. The working folder is not one of them: a host started in home could
+otherwise write dotfiles there.
+
+```json
+{ "mcpServers": { "fundacad": {
+    "command": "<install dir>/fundacad.exe",
+    "args": ["--mcp", "--allow-path", "D:/parts"],
+    "env": {} } } }
+```
+
+Each tool also carries MCP's `readOnlyHint`, `destructiveHint`,
+`idempotentHint` and `openWorldHint`, so a host can run `inspect`, `measure`,
+`view` and the other checks without asking and ask before `doc_save` or
+`export` writes a file. None opens the network. `tests/tool_hints.rs` holds the
+table, and a new tool fails it until it is classified.
+
 ### An install that had the old MCP plugin
 
 Before 1.0 the MCP server was the `FundaCAD.MCP` plugin: the server
