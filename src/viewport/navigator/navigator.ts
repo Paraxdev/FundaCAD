@@ -20,7 +20,7 @@ import {
   rotateAbout, rotateWorldAbout, reseat, scaleAbout, truck, turntableAbout,
 } from "./motions";
 import {
-  boxOffScreen, clonePose, copyPose, depthOf, distanceOf, eyeOf, forwardOf, halfTan, makePose,
+  aspectOf, boxOffScreen, clonePose, copyPose, depthOf, distanceOf, eyeOf, forwardOf, halfTan, makePose,
   poseFinite, project, rightOf, setOrientation, setTurntable, upOf, worldPerPixel,
   type Frame, type Pose,
 } from "./pose";
@@ -787,12 +787,27 @@ export class Navigator {
     this.flyTo(p, { animate: opts.animate });
   }
 
-  /** The view a fresh window opens on. */
-  resetView(center: THREE.Vector3 | null, radius: number, animate: boolean) {
+  /** Frame a box, keeping the view direction, FIT_MARGIN clear on every side. */
+  fitBox(box: THREE.Box3, opts: { animate?: boolean } = {}) {
+    const p = this.destination();
+    if (!frameBox(p, this.frame, box)) {
+      this.fitSphere(new THREE.Vector3(), -1, opts);
+      return;
+    }
+    this.flyTo(p, { animate: opts.animate });
+  }
+
+  /** The view a fresh window opens on. Given the box, it frames the box itself
+   *  rather than its bounding ball. */
+  resetView(center: THREE.Vector3 | null, radius: number, animate: boolean, box?: THREE.Box3) {
     const p = clonePose(this.pose);
     const home = HOME_EYE.clone().normalize();
     const q = lookQuat(home, new THREE.Vector3());
     setOrientation(p, q);
+    if (box && frameBox(p, this.frame, box)) {
+      this.flyTo(p, { animate });
+      return;
+    }
     if (center) {
       p.target.copy(center);
       p.scale = frameScale(p, this.frame, radius * 1.15);
@@ -812,11 +827,7 @@ export class Navigator {
       this.reseatAndContain();
     }
     const p = this.poseWith(q);
-    if (this.box && boxOffScreen(p, this.frame, this.box)) {
-      const s = this.box.getBoundingSphere(new THREE.Sphere());
-      p.target.copy(s.center);
-      p.scale = frameScale(p, this.frame, s.radius * 1.15);
-    }
+    if (this.box && boxOffScreen(p, this.frame, this.box)) frameBox(p, this.frame, this.box);
     this.flyTo(p, { animate });
   }
 
@@ -843,6 +854,46 @@ export class Navigator {
 export const HOME_EYE = new THREE.Vector3(80, -120, 90);
 /** Half-extent framed when there is nothing to frame (an empty document), in mm. */
 export const EMPTY_VIEW_MM = 50;
+
+/** The share of the view's width and of its height left clear on each side of
+ *  a framed model. */
+export const FIT_MARGIN = 0.12;
+
+const corner = new THREE.Vector3();
+const axes = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()] as const;
+/** Aim p at the box centre with the scale that puts its silhouette `margin`
+ *  of the view in from every edge, keeping p's orientation, lens and mode.
+ *  False, p untouched, for an empty, non finite or zero size box. */
+export function frameBox(p: Pose, v: Frame, box: THREE.Box3, margin = FIT_MARGIN): boolean {
+  if (box.isEmpty()) return false;
+  const c = box.getCenter(new THREE.Vector3());
+  if (!Number.isFinite(c.x + c.y + c.z)) return false;
+  const a = aspectOf(v);
+  const k = 1 - 2 * margin;
+  const right = rightOf(p, axes[0]);
+  const up = upOf(p, axes[1]);
+  const fwd = forwardOf(p, axes[2]);
+  const t = halfTan(p.fov);
+  let need = 0;
+  for (let i = 0; i < 8; i++) {
+    corner.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).sub(c);
+    const x = Math.abs(corner.dot(right)) / (a * k);
+    const y = Math.abs(corner.dot(up)) / k;
+    if (p.ortho) {
+      need = Math.max(need, x, y);
+    } else {
+      // The eye distance from the target that holds this corner inside the
+      // shrunk frustum; z is its depth beyond the target.
+      const z = corner.dot(fwd);
+      need = Math.max(need, x / t - z, y / t - z);
+    }
+  }
+  const scale = p.ortho ? need : need * t;
+  if (!(Number.isFinite(scale) && scale > 1e-9)) return false;
+  p.target.copy(c);
+  p.scale = scale;
+  return true;
+}
 
 /** The half height at the target that fits a ball of radius r in both
  *  directions of the frame. */
