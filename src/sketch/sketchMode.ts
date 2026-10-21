@@ -49,7 +49,7 @@ import { boundaryAnchors, footprintAnchors, loopCentroid } from "./anchors";
 import { setPrompt } from "../ui/prompt";
 import { tooEdgeOn } from "./planeGraze";
 import { toast } from "../ui/toast";
-import { looseEnds, tieConstraints, type LooseEnds } from "./looseEnds";
+import { gapReport, looseEnds, nothingToTiePrompt, tieConstraints, type LooseEnds } from "./looseEnds";
 import { contextMenu, dismissContextMenu, type CtxItem } from "../ui/menu";
 import { dropSeparatedJoins } from "./joins";
 import { sketchToolKey } from "./toolKeys";
@@ -947,7 +947,13 @@ export class SketchMode {
       return { open: now.open.length, untied: now.untied.length };
     };
     if (!ties.length || this.solverDead) {
-      setPrompt(le.untied.length ? "These loose ends cannot be tied, draw a line to close them" : "No loose ends to tie");
+      const gap = gapReport(this.entities, this.constraints, snap);
+      setPrompt(nothingToTiePrompt(le, gap));
+      if (gap.kind === "gap" && !this.solverDead) {
+        toast(`Tie the ${gap.open} open ends across the ${Number(gap.gapMm.toPrecision(2))} mm gap?`, {
+          action: { label: "Close gap", onClick: () => { if (this.active) void this.tieLooseEnds(gap.reach); } },
+        });
+      }
       return { tied: 0, ...left() };
     }
     const ver = this.entityVersion;

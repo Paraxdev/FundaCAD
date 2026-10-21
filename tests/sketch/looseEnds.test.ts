@@ -5,7 +5,7 @@ vi.mock("@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url", () => ({
   default: process.cwd() + "/node_modules/@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm",
 }));
 
-import { defaultReach, gapReport, looseEnds, tieConstraints } from "../../src/sketch/looseEnds";
+import { defaultReach, gapReport, looseEnds, nothingToTiePrompt, tieConstraints } from "../../src/sketch/looseEnds";
 import { detectRegions } from "../../src/sketch/region";
 import { compileAndSolve } from "../../src/sketch/sketchSolve";
 import { SketchHistory, cloneSnapshot, type SketchSnapshot } from "../../src/sketch/history";
@@ -251,5 +251,25 @@ describe("gap report: a profile with a gap or an open sketch", () => {
 
   it("a closed square has nothing loose", () => {
     expect(report(square(0), [...corners, co("d", 1, "a", 0)]).kind).toBe("none");
+  });
+});
+
+describe("Tie Loose Ends with nothing in reach", () => {
+  it("never says there are no loose ends while red open ends show", () => {
+    const le = looseEnds(square(3), corners, 0.7);
+    const msg = nothingToTiePrompt(le, report(square(3), corners));
+    expect(msg).not.toMatch(/No loose ends/);
+    expect(msg).toMatch(/^2 open ends 3 mm apart, too far apart to tie/);
+  });
+
+  it("an open L says how many open ends and that they are too far apart", () => {
+    const ell = [L("a", 0, 0, 50, 0), L("b", 50, 0, 50, 50)];
+    const cs = [co("a", 1, "b", 0)];
+    expect(nothingToTiePrompt(looseEnds(ell, cs, 0.7), report(ell, cs))).toMatch(/^2 open ends, too far apart to tie/);
+  });
+
+  it("a closed sketch still says there is nothing to tie", () => {
+    const cs = [...corners, co("d", 1, "a", 0)];
+    expect(nothingToTiePrompt(looseEnds(square(0), cs, 0.7), report(square(0), cs))).toBe("No loose ends to tie");
   });
 });
