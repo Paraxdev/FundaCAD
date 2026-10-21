@@ -259,25 +259,49 @@ impl FundaCad {
     #[tool(
         name = "ui_open",
         description = "Open a private copy of the FundaCAD app in a browser, against its own engine, to use it the way a person does: real clicks, typing and drags. It is never the user's window, and its document is its own: doc_get and inspect do not see it, so to measure what you built, ui_do save_as a .funda file, then doc_open and inspect it. Takes about 10 s. A second call says what is open. Then ui_do to act, ui_read to see, ui_shot for a picture, ui_close when done.",
-        input_schema = crate::tools::ui_open()
+        input_schema = crate::tools::ui_open(),
+        annotations(read_only_hint = false, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
-    pub async fn t_ui_open(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
+    pub async fn t_ui_open(&self, mut args: JsonObject) -> Result<CallToolResult, McpError> {
+        if let Some(raw) = args.get("record").and_then(Value::as_str).filter(|r| !r.is_empty()) {
+            match self.scoped(raw).await {
+                Ok(p) => args.insert("record".into(), json!(p.to_string_lossy())),
+                Err(e) => return Ok(e),
+            };
+        }
         Ok(self.relay("open", args).await)
     }
 
     #[tool(
         name = "ui_do",
         description = "Do steps in the open app, as a person would. One line per step done and the status line come back; a failing step stops the rest and is an error. Read refs with ui_read screen first rather than guessing.",
-        input_schema = crate::tools::ui_do()
+        input_schema = crate::tools::ui_do(),
+        annotations(read_only_hint = false, destructive_hint = true, idempotent_hint = false, open_world_hint = false)
     )]
-    pub async fn t_ui_do(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
+    pub async fn t_ui_do(&self, mut args: JsonObject) -> Result<CallToolResult, McpError> {
+        if let Some(steps) = args.get_mut("steps").and_then(Value::as_array_mut) {
+            for step in steps.iter_mut().filter_map(Value::as_object_mut) {
+                let files = matches!(
+                    step.get("do").and_then(Value::as_str),
+                    Some("open_file" | "import_file" | "save_as")
+                );
+                let Some(raw) = step.get("path").and_then(Value::as_str).filter(|_| files) else {
+                    continue;
+                };
+                match self.scoped(raw).await {
+                    Ok(p) => step.insert("path".into(), json!(p.to_string_lossy())),
+                    Err(e) => return Ok(e),
+                };
+            }
+        }
         Ok(self.relay("do", args).await)
     }
 
     #[tool(
         name = "ui_read",
         description = "What the open app shows, as short text: screen (the visible controls with their refs), history, bodies, status, errors, selection, handles.",
-        input_schema = crate::tools::ui_read()
+        input_schema = crate::tools::ui_read(),
+        annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn t_ui_read(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         Ok(self.relay("read", args).await)
@@ -286,7 +310,8 @@ impl FundaCad {
     #[tool(
         name = "ui_shot",
         description = "A picture of the open app, or of one control. Costs far more context than ui_read, ask only when the look matters.",
-        input_schema = crate::tools::ui_shot()
+        input_schema = crate::tools::ui_shot(),
+        annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn t_ui_shot(&self, mut args: JsonObject) -> Result<CallToolResult, McpError> {
         if let Some(px) = args.get("max_px").and_then(Value::as_i64) {
@@ -298,7 +323,8 @@ impl FundaCad {
     #[tool(
         name = "ui_close",
         description = "Close the private app, its browser and its engine.",
-        input_schema = crate::tools::ui_close()
+        input_schema = crate::tools::ui_close(),
+        annotations(read_only_hint = false, destructive_hint = true, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn t_ui_close(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         if self.ui.lock().await.is_none() {

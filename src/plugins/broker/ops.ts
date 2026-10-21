@@ -57,6 +57,7 @@ export const OPS = [
   "sketch_tie",
   "build",
   "interference",
+  "measure",
   "section",
   "stress",
   "printability",
@@ -183,6 +184,11 @@ export const OP_TABLE: Record<Op, OpSpec> = {
   interference: {
     needs: ["document.read", "geometry.build"],
     why: "builds the open document and reports where its bodies overlap and how close they come, which is the document read back out",
+    writes: false,
+  },
+  measure: {
+    needs: ["document.read", "geometry.build"],
+    why: "builds the open document and reports exact distances, wall thicknesses, radii and angles between its faces, edges and bodies, the document's own shape read out",
     writes: false,
   },
   section: {

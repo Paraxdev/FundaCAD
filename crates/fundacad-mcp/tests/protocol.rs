@@ -50,6 +50,7 @@ fn the_server_initializes_and_lists_its_tools() {
         "schema",
         "build",
         "inspect",
+        "measure",
         "view",
         "feature_add",
         "param_set",
