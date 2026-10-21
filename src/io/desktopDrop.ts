@@ -1,7 +1,7 @@
 import type { Engine } from "../app/engine";
 import { mayDiscard } from "../app/documentActions";
 import { importFileBytes, importPath, openDocumentAtPath, openDocumentBytes, reportError, type OpenOutcome } from "./files";
-import { describeDropLeftovers, planDrop } from "./dropRouting";
+import { describeDropLeftovers, pathsFromUriList, planDrop } from "./dropRouting";
 import { closeHome } from "../ui/home";
 
 /** A file dropped on the window: a real path when the desktop app could find
@@ -85,10 +85,11 @@ async function askPaths(bridge: PathBridge, files: File[]): Promise<(string | nu
   }
 }
 
-async function collect(files: File[]): Promise<DroppedFile[]> {
+async function collect(files: File[], uriList: string): Promise<DroppedFile[]> {
   const bridge = pathBridge();
-  const paths = bridge ? await askPaths(bridge, files) : null;
-  return files.map((file, i) => ({ name: file.name, path: paths?.[i] ?? null, file }));
+  const asked = bridge ? await askPaths(bridge, files) : null;
+  const listed = pathsFromUriList(files.map((f) => f.name), uriList);
+  return files.map((file, i) => ({ name: file.name, path: asked?.[i] ?? listed[i] ?? null, file }));
 }
 
 /** Listen for files dragged onto the window from the desktop. `hint` is told
@@ -133,7 +134,10 @@ export function installDesktopDrop(e: DropEngine, hint: (shown: boolean) => void
     hide();
     const files = Array.from(ev.dataTransfer?.files ?? []);
     if (!files.length) return;
-    queue = queue.then(async () => takeDroppedFiles(e, await collect(files))).catch((err) => {
+    // Only readable during the event itself.
+    let uriList = "";
+    try { uriList = ev.dataTransfer?.getData("text/uri-list") ?? ""; } catch { /* no uri-list */ }
+    queue = queue.then(async () => takeDroppedFiles(e, await collect(files, uriList))).catch((err) => {
       void reportError(`Couldn't take the dropped files: ${err instanceof Error ? err.message : String(err)}`);
     });
   };
