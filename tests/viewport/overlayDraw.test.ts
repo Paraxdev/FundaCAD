@@ -28,4 +28,21 @@ describe("OverlayDraw", () => {
     expect(seen[0]!.body).toBe(draw.depthOnly);
     expect(scene.overrideMaterial).toBe(stale);
   });
+
+  it("draws no scene background, an HDR shown behind would cover the trace, and gives it back", () => {
+    const scene = new THREE.Scene();
+    const hdr = new THREE.Texture();
+    scene.background = hdr;
+    const seen: (THREE.Color | THREE.Texture | null)[] = [];
+    const renderer = {
+      shadowMap: { autoUpdate: true },
+      getClearColor: (c: THREE.Color) => c.set(0x000000),
+      getClearAlpha: () => 1,
+      setClearColor: () => {},
+      render: (s: THREE.Scene) => seen.push(s.background as THREE.Texture | null),
+    } as unknown as THREE.WebGLRenderer;
+    new OverlayDraw().render(renderer, scene, new THREE.PerspectiveCamera());
+    expect(seen).toEqual([null]);
+    expect(scene.background).toBe(hdr);
+  });
 });
