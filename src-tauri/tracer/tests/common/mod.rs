@@ -11,8 +11,9 @@ use std::time::{Duration, Instant};
 pub const REF_SCENES: [&str; 6] = ["golden", "studio", "hdr-sun", "emitter", "glass", "metal"];
 pub const REF_SPP: u32 = 16384;
 
-/// How long a test exe may go on after its last tracer was made.
-pub const HANG_LIMIT: Duration = Duration::from_secs(60);
+/// How long a test exe may go on after its last tracer was made. One test may run
+/// long on a single tracer: the environment NEE check takes about 77 s on lavapipe.
+pub const HANG_LIMIT: Duration = Duration::from_secs(300);
 
 /// Tracer::new with the hang watchdog armed first.
 pub fn tracer(opts: TracerOptions) -> Result<Tracer, Refusal> {
