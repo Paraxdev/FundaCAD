@@ -44,6 +44,13 @@ export function chooseTracer(pref: TracerPref, env: TracerEnv): TracerKind | nul
   return left.find((k) => !env.faulted?.has(k)) ?? left[0] ?? null;
 }
 
+/** Whether a start has to wait for the native probe. It takes 350 to 610 ms,
+ *  WebGPU's far less, so a trace started at boot would otherwise read
+ *  "checking" as no native tracer and keep WebGPU for the whole session. */
+export function waitsForNative(pref: TracerPref, webgpu: boolean, native: NativeProbe | null): boolean {
+  return !native && !(pref === "webgpu" && webgpu);
+}
+
 /** `prefer` "websocket" skips the native shared buffers. `call` stands in for
  *  Tauri's invoke, the dev tracer server's socket outside the app. */
 export async function createTracerOf(kind: TracerKind, prefer?: string, call?: Call): Promise<TracerBackend> {

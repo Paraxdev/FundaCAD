@@ -82,7 +82,7 @@ import { watchPower, type PowerState } from "./pathtrace/power";
 import type { SurfaceBaker } from "./pathtrace/mirror";
 import { createSurfaceBaker, webglSurfaceShade } from "./pathtrace/surfaceBake";
 import { describeNative, describeProbe, probeNative, probeWebGpu, type GpuProbe } from "./pathtrace/probe";
-import { chooseTracer, createTracerOf, type NativeProbe, type TracerKind } from "./pathtrace/choose";
+import { chooseTracer, createTracerOf, waitsForNative, type NativeProbe, type TracerKind } from "./pathtrace/choose";
 import { failedSelfCheck, refusedBySelfCheck } from "./pathtrace/selfCheck";
 import { wsCall, type DevCall } from "./pathtrace/devCall";
 import type { Call } from "./pathtrace/nativeScene";
@@ -1020,6 +1020,7 @@ export class Viewport {
   private traceBaker: SurfaceBaker | null = null;
   private gpu: GpuProbe | null = null;
   private native: NativeProbe | null = null;
+  private nativeProbe: Promise<void> | null = null;
   private tracerKind: TracerKind | null = null;
   private tracerFaults = new Set<TracerKind>();
   private tracerPref = renderPrefs().tracer;
@@ -1066,7 +1067,7 @@ export class Viewport {
   }
 
   private async bootPathTrace() {
-    const native = probeNative(devTracerSwitch()?.call).then((p) => {
+    const native = this.nativeProbe = probeNative(devTracerSwitch()?.call).then((p) => {
       this.native = p;
       crumb(describeNative(p));
       this.tierChanged();
@@ -1091,6 +1092,7 @@ export class Viewport {
   /** Read at every start, so a preference change or a fault picks again. */
   private async createTracer(): Promise<TracerBackend> {
     const dev = devTracerSwitch();
+    if (!dev && waitsForNative(renderPrefs().tracer, this.gpu?.webgpu ?? false, this.native)) await this.nativeProbe;
     const kind = dev?.kind ?? chooseTracer(renderPrefs().tracer, {
       webgpu: this.gpu?.webgpu ?? false,
       native: this.native ?? { available: false },
