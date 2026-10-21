@@ -192,7 +192,7 @@ fn reads_visibility(f: &Value) -> bool {
 
 /// Bump when a feature, a kernel patch or a default can change the shape a
 /// document builds to: every checkpoint written before then misses. Re-recording
-/// tests/golden is the usual sign, and `GOLDEN_DIGEST` in this file's tests
+/// tests/golden is the usual sign, and `GOLDEN_DIGESTS` in this file's tests
 /// fails until both move. A change shipped without a bump serves the old shapes
 /// from disk until an edit upstream of them; `FUNDACAD_DISK_CACHE=0` or
 /// `FUNDACAD_ENV_SIG` gets past that. A false bump costs one cold reopen, a
@@ -505,11 +505,21 @@ mod tests {
         assert_eq!(unvouched(None), Some(None));
     }
 
-    /// The hash of every tests/golden engine answer, CRLF read as LF. When it
-    /// moves the goldens were re-recorded, which usually means some document
-    /// builds to a new shape: bump `GEOMETRY_VERSION` too, then pin the new
-    /// digest here. The MCP transcript holds tool text, not shapes.
-    const GOLDEN_DIGEST: &str = "f6512ae1dbbc6e485eb4cd4252d480a1";
+    /// Each tests/golden digest (CRLF read as LF, the MCP transcript left out)
+    /// with the `GEOMETRY_VERSION` it was pinned at. A re-record adds a pair at
+    /// a bumped version; a version that has not shipped may take one in place.
+    const GOLDEN_DIGESTS: [(u32, &str); 2] =
+        [(1, "74269bcbe84820d4693f680ddbf76ecc"), (2, "f6512ae1dbbc6e485eb4cd4252d480a1")];
+
+    #[test]
+    fn each_golden_digest_came_with_a_version_bump() {
+        for pair in GOLDEN_DIGESTS.windows(2) {
+            assert!(pair[1].0 > pair[0].0, "{} follows {} without a bump", pair[1].1, pair[0].1);
+            assert_ne!(pair[1].1, pair[0].1, "version {} pins the same digest as {}", pair[1].0, pair[0].0);
+        }
+        let (version, _) = GOLDEN_DIGESTS[GOLDEN_DIGESTS.len() - 1];
+        assert_eq!(GEOMETRY_VERSION, version, "the last golden digest was pinned at version {version}");
+    }
 
     #[test]
     fn geometry_version_tracks_the_golden_answers() {
@@ -535,9 +545,10 @@ mod tests {
         }
         let refs: Vec<&[u8]> = parts.iter().map(Vec::as_slice).collect();
         let digest = hash_hex(&refs);
+        let (_, pinned) = GOLDEN_DIGESTS[GOLDEN_DIGESTS.len() - 1];
         assert_eq!(
-            digest, GOLDEN_DIGEST,
-            "tests/golden changed: bump GEOMETRY_VERSION (now {GEOMETRY_VERSION}) when any document builds to a new shape, then pin GOLDEN_DIGEST to {digest}"
+            digest, pinned,
+            "tests/golden changed: bump GEOMETRY_VERSION (now {GEOMETRY_VERSION}) when any document builds to a new shape, then add {digest} with it to GOLDEN_DIGESTS"
         );
     }
 

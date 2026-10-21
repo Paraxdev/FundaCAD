@@ -265,7 +265,9 @@ in the `rust-geom` job.
   an OCCT patch at the same version included, bumps `GEOMETRY_VERSION` in the
   same commit; a change to what a checkpoint holds bumps `CACHE_FORMAT`.
   Re-recording an engine golden fails `geometry_version_tracks_the_golden_answers`
-  until `GOLDEN_DIGEST` is pinned again, as the reminder. Plugins are keyed on
+  until the new digest is added to `GOLDEN_DIGESTS` with a higher version, and
+  `each_golden_digest_came_with_a_version_bump` holds `GEOMETRY_VERSION` to
+  the last of them, as the reminder. Plugins are keyed on
   their manifest and component bytes, and a build with uncommitted engine
   edits on those edits.
 - **A new corpus document** has no frozen answer. Add it to the corpus, look
