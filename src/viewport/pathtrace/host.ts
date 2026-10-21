@@ -111,6 +111,7 @@ export class PathTraceHost {
   /** The camera last sent, so a move made outside the rig's damped update
    *  (arrow key steps, reduced motion flights, a projection switch) restarts too. */
   private cameraSig = new Float64Array(33);
+  private cameraSeen: THREE.Camera | null = null;
   private polling = false;
   private traceSince = 0;
   private sawSample = false;
@@ -160,7 +161,9 @@ export class PathTraceHost {
   }
 
   tick(f: TraceFrame) {
-    if (this.cameraMoved(f.camera) || f.cameraChanged) this.cameraDirty = true;
+    // A projection change can also swap the rig's camera object.
+    if (this.cameraMoved(f.camera) || f.cameraChanged || f.camera !== this.cameraSeen) this.cameraDirty = true;
+    this.cameraSeen = f.camera;
     if (f.sceneMaybeChanged) this.sceneDirty = true;
     const editing = f.now - this.editedAt < STILL_MS;
     const s = this.disabled ? "off" : traceState({ ...f.inputs, editing, samples: this.samples, cap: this.cap });
