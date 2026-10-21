@@ -61,7 +61,7 @@ describe("ribbon tool tables", () => {
       "mirror-sketch", "move-sketch", "copy-sketch", "rotate-sketch", "scale-sketch", "dimension",
       "patternRect", "patternCircular", "boltCircle", "hexHoles", "honeycomb", "gridHoles",
       "horizontal", "vertical", "parallel", "perpendicular", "equal", "tangent",
-      "coincident", "concentric", "midpoint", "collinear", "symmetric", "fix",
+      "coincident", "concentric", "midpoint", "collinear", "symmetric", "fix", "tie-loose-ends",
     ]));
   });
 

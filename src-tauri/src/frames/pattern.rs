@@ -64,7 +64,7 @@ fn rank(b: wgpu::Backend) -> u8 {
 
 impl Gpu {
     fn new() -> Result<(Gpu, String), String> {
-        let backends = wgpu::Backends::VULKAN | wgpu::Backends::DX12 | wgpu::Backends::METAL | wgpu::Backends::GL;
+        let backends = fundacad_tracer::TracerOptions::default().backends;
         let mut desc = wgpu::InstanceDescriptor::new_without_display_handle();
         desc.backends = backends;
         let instance = wgpu::Instance::new(desc);
@@ -148,7 +148,7 @@ impl Gpu {
         let slice = t.staging.slice(..out.len() as u64);
         slice.map_async(wgpu::MapMode::Read, |_| {});
         self.device
-            .poll(wgpu::PollType::Wait { submission_index: None, timeout: None })
+            .poll(wgpu::PollType::Wait { submission_index: None, timeout: Some(fundacad_tracer::WAIT_LIMIT) })
             .map_err(|e| e.to_string())?;
         out.copy_from_slice(&slice.get_mapped_range().map_err(|e| e.to_string())?);
         t.staging.unmap();

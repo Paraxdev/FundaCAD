@@ -37,6 +37,8 @@ pub const FEATURE_NUM_FIELDS: &[(&str, &[(&str, FieldKind)])] = &[
             ("distance2", Length),
             ("taper2", Angle),
             ("endOffset2", Length),
+            ("thickness", Length),
+            ("thickness2", Length),
         ],
     ),
     ("fillet", &[("radius", Length), ("profile", Count)]),

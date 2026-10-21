@@ -206,6 +206,7 @@ impl FundaCad {
     #[tool(
         name = "guide_highlight",
         description = "Guide mode: show the user one step in their open FundaCAD window, a pulsing ring on a control (ui), a model area (model) or a part of the view (region), with your caption and Next and Stop buttons. Give exactly one of ui, model or region. Then guide_wait for the user. Needs the window to share its document; refuses in standalone mode.",
+        annotations(read_only_hint = false, destructive_hint = false, idempotent_hint = true, open_world_hint = false),
         input_schema = crate::guide::guide_highlight_schema()
     )]
     pub async fn t_guide_highlight(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
@@ -234,6 +235,7 @@ impl FundaCad {
     #[tool(
         name = "guide_wait",
         description = "Guide mode: wait for the user after guide_highlight, until they press Next, start a tool, add a feature, select something or type a value. One line says what happened, or that they pressed Stop, which clears the guide. Holds this conversation's tool calls for up to timeout_s (default 60, at most 120).",
+        annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = false, open_world_hint = false),
         input_schema = crate::guide::guide_wait_schema()
     )]
     pub async fn t_guide_wait(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
@@ -287,6 +289,7 @@ impl FundaCad {
     #[tool(
         name = "guide_clear",
         description = "Guide mode: take the ring and caption off the user's window, at the end of a guide.",
+        annotations(read_only_hint = false, destructive_hint = false, idempotent_hint = true, open_world_hint = false),
         input_schema = crate::guide::guide_clear_schema()
     )]
     pub async fn t_guide_clear(&self, _args: JsonObject) -> Result<CallToolResult, McpError> {

@@ -93,6 +93,16 @@ mod inner {
             fuzzy: f64,
             unwrap: bool,
         ) -> Result<UniquePtr<TopoDS_Shape>>;
+        pub fn bo_boolean_rung(
+            base: &TopoDS_Shape,
+            tools: &TopoDS_Shape,
+            kind: i32,
+            parallel: bool,
+            fuzzy: f64,
+            unwrap: bool,
+            out_rung: &mut i32,
+            out_fuzz: &mut f64,
+        ) -> Result<UniquePtr<TopoDS_Shape>>;
         pub fn bo_bool_build(
             base: &TopoDS_Shape,
             tools: &TopoDS_Shape,
@@ -109,6 +119,8 @@ mod inner {
             fuzzy: f64,
             vols: &[f64],
             out_vol: &mut f64,
+            out_rung: &mut i32,
+            out_fuzz: &mut f64,
         ) -> Result<UniquePtr<TopoDS_Shape>>;
         pub fn bo_clean(s: &TopoDS_Shape) -> Result<UniquePtr<TopoDS_Shape>>;
         pub fn bo_unwrap_compound(s: &TopoDS_Shape) -> UniquePtr<TopoDS_Shape>;

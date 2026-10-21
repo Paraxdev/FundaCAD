@@ -24,9 +24,15 @@ const engine = {
     faceMaterialId: () => undefined,
     faceMaterialEntries: () => [],
     buildState: { building: false, result: { bodies: [] } },
+    onReferenceImagesChange: () => () => {},
   },
   bridge: { buildVersion: ref(0) },
-  viewport: { getSelectedFaceIds: () => [], tracedPictureSize: () => null },
+  viewport: {
+    getSelectedFaceIds: () => [],
+    tracedPictureSize: () => null,
+    qualityTier: () => ({ lowPower: false, auto: false, software: false }),
+    onRenderTierChange: () => () => {},
+  },
   tools: {},
   canvas: { getBoundingClientRect: () => ({ width: 100, height: 100 }) },
 } as unknown as Engine;

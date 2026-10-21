@@ -158,6 +158,13 @@ feature_struct!(Extrude {
     #[serde(default, skip_serializing_if = "Option::is_none")] up_to_plane2: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")] up_to_point2: Option<PointRef>,
     #[serde(default, skip_serializing_if = "Option::is_none")] end_offset2: Option<Num>,
+    /// A wall `thickness` thick along `curves` (every curve when absent) instead of the closed areas.
+    #[serde(default, skip_serializing_if = "Option::is_none")] thin: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")] curves: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")] thickness: Option<Num>,
+    /// `center` (absent), `inside`, `outside` or `twoSides`, the last `thickness2` outside.
+    #[serde(default, skip_serializing_if = "Option::is_none")] side: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")] thickness2: Option<Num>,
 });
 
 /// A datum point's id, or a model vertex: the vertex of `body` nearest `point`.

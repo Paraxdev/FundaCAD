@@ -369,6 +369,7 @@ impl Jobs for GeomJobs {
             "migrateGeometry" => crate::import::migrate_result(req),
             "blobHas" | "blobRead" | "blobWrite" => crate::import::blob_result(op, req),
             "inspect" => crate::inspect::inspect_result(req, &EngineWatch(ctx)),
+            "measure" => crate::measure::measure_result(req, &EngineWatch(ctx)),
             "interference" => crate::inspect::interference_result(req, &EngineWatch(ctx)),
             "stress" => crate::stress::stress_result(req, &EngineWatch(ctx)),
             "printability" => crate::printcheck::op::printability_result(req, &EngineWatch(ctx)),

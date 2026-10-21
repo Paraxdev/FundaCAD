@@ -1,5 +1,7 @@
 //! The frame loop the app's transport drives, fed the way the page feeds it.
 
+mod common;
+
 mod t {
     use fundacad_tracer::*;
     use std::time::Duration;
@@ -18,7 +20,7 @@ mod t {
 
     #[test]
     fn a_page_scene_traces_to_the_cap_through_partial_bands_then_holds() {
-        let Ok(tracer) = Tracer::new(TracerOptions { software: true, ..Default::default() }) else {
+        let Ok(tracer) = super::common::tracer(TracerOptions { software: true, ..Default::default() }) else {
             eprintln!("skipped: no adapter");
             return;
         };
@@ -61,7 +63,7 @@ mod t {
     #[test]
     fn frames_before_the_scene_and_before_its_meshes_trace_the_sky() {
         for software in [true, false] {
-            let Ok(mut s) = Tracer::new(TracerOptions { software, ..Default::default() }) else {
+            let Ok(mut s) = super::common::tracer(TracerOptions { software, ..Default::default() }) else {
                 eprintln!("skipped: no adapter");
                 return;
             };
@@ -79,7 +81,7 @@ mod t {
         }
     }
     fn emitter(sky: f32, env: f32) -> Option<Tracer> {
-        let mut s = Tracer::new(TracerOptions { software: true, ..Default::default() }).ok()?;
+        let mut s = super::common::tracer(TracerOptions { software: true, ..Default::default() }).ok()?;
         let bodies: Vec<BodyDesc> = serde_json::from_str(
             r#"[{"id":"body1","key":"lamp","matrix":[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1],
                  "materials":[{"color":[0,0,0],"emissive":[1,1,1],"emissiveIntensity":4}]}]"#,
@@ -159,7 +161,7 @@ mod t {
     #[test]
     fn a_lost_device_leaves_a_fault_and_no_panic() {
         for software in [true, false] {
-            let Ok(mut t) = Tracer::new(TracerOptions { software, ..Default::default() }) else {
+            let Ok(mut t) = super::common::tracer(TracerOptions { software, ..Default::default() }) else {
                 eprintln!("skipped: no adapter");
                 return;
             };
@@ -182,7 +184,7 @@ mod t {
 
     #[test]
     fn a_ray_query_frame_traces_in_bands_under_the_budget() {
-        let Ok(mut t) = Tracer::new(TracerOptions::default()) else {
+        let Ok(mut t) = super::common::tracer(TracerOptions::default()) else {
             eprintln!("skipped: no adapter");
             return;
         };

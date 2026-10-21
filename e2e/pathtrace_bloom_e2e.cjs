@@ -5,7 +5,10 @@
 // samples, back to 0 must give the exact image it started from, the far
 // corner (the background, out of the halo) must stay as it was, and the traced
 // Picture must glow the same way. Realtime is measured on the same view as the
-// control the traced glow is held against.
+// control the traced glow is held against, over the halo pixels that are dark
+// background in both looks: bloom is added before the tone map, so a lit plate
+// near white gains almost nothing in 8 bits and would make the order check
+// measure the plate's lighting instead of the glow.
 //
 // Usage (from the repo root, vite + engine `fundacad-engine --ws` running):
 //   SC_TOKEN=<engine token> [SC_CHROME=<chrome exe>] [SC_URL=http://localhost:5173/] \
@@ -70,7 +73,8 @@ let serve = null;
   }
   const browser = await chromium.launch({
     ...(EXE ? { executablePath: EXE } : { channel: "chrome" }),
-    args: ["--no-sandbox", "--enable-gpu", "--ignore-gpu-blocklist", "--enable-unsafe-webgpu"],
+    // The native page still draws Realtime with WebGL, and a runner without a GPU has none unless ANGLE is told to use SwiftShader.
+    args: ["--no-sandbox", "--enable-gpu", "--ignore-gpu-blocklist", "--enable-unsafe-webgpu", ...(NATIVE ? ["--use-angle=swiftshader"] : [])],
   });
   try {
     const page = await browser.newPage({ viewport: { width: VW, height: VH } });
@@ -147,6 +151,30 @@ let serve = null;
       }
       return { max, meanGain: +(sum / Math.max(1, n) / 3).toFixed(3), pixels: n };
     }, [a, b, region]);
+    // Mean gain of both looks over the region's pixels darker than 48 in both bloom 0 images.
+    const darkGain = (a0, a1, b0, b1, region) => page.evaluate(async ([a0, a1, b0, b1, r]) => {
+      const px = async (s) => {
+        const bm = await createImageBitmap(await (await fetch(s)).blob());
+        const c = new OffscreenCanvas(bm.width, bm.height);
+        const g = c.getContext("2d");
+        g.drawImage(bm, 0, 0);
+        return { d: g.getImageData(0, 0, bm.width, bm.height).data, w: bm.width, h: bm.height };
+      };
+      const [A0, A1, B0, B1] = await Promise.all([a0, a1, b0, b1].map(px));
+      const sum = (P, i) => P.d[i] + P.d[i + 1] + P.d[i + 2];
+      const peak = (P, i) => Math.max(P.d[i], P.d[i + 1], P.d[i + 2]);
+      let sa = 0, sb = 0, n = 0;
+      for (let y = Math.max(0, r.y); y < Math.min(A0.h, r.y + r.h); y++) {
+        for (let x = Math.max(0, r.x); x < Math.min(A0.w, r.x + r.w); x++) {
+          const i = (y * A0.w + x) * 4;
+          if (peak(A0, i) >= 48 || peak(B0, i) >= 48) continue;
+          sa += sum(A1, i) - sum(A0, i);
+          sb += sum(B1, i) - sum(B0, i);
+          n++;
+        }
+      }
+      return { realtime: +(sa / Math.max(1, n) / 3).toFixed(3), traced: +(sb / Math.max(1, n) / 3).toFixed(3), pixels: n };
+    }, [a0, a1, b0, b1, region]);
     // The emitter's centre: the saturated green of #42e07a once tone mapped.
     const emitterAt = (a) => page.evaluate(async (a) => {
       const bm = await createImageBitmap(await (await fetch(a)).blob());
@@ -183,7 +211,10 @@ let serve = null;
 
     await setPref("bloom", 0);
     await settle();
-    await page.click('[data-view-mode="pathtraced"]');
+    // A software WebGL renderer reads as a low powered computer, which greys Path traced until a second click lifts it.
+    const pt = '[data-view-mode="pathtraced"]';
+    if ((await page.getAttribute(pt, "aria-disabled")) === "true") await page.click(pt, { force: true });
+    await page.click(pt, { force: true });
     const done = await waitDone();
     check(`the tracer runs on ${NATIVE ? "the native tracer" : "WebGPU"}`, BACKEND.test(done.backend), done.backend);
     await settle();
@@ -197,8 +228,9 @@ let serve = null;
     const ptHalo = await compare(pt0, pt6, halo);
     const ptCorner = await compare(pt0, pt6, corner);
     check("bloom 0.6 glows around the emitter in Path traced", ptHalo.meanGain > 1, JSON.stringify(ptHalo));
-    check("the glow is of Realtime's order", ptHalo.meanGain > rtHalo.meanGain * 0.25 && ptHalo.meanGain < rtHalo.meanGain * 4,
-      `traced ${ptHalo.meanGain}, realtime ${rtHalo.meanGain}`);
+    const dark = await darkGain(rt0, rt6, pt0, pt6, halo);
+    check("the glow is of Realtime's order", dark.pixels > 5000 && dark.traced > dark.realtime / 5 && dark.traced < dark.realtime * 4,
+      `traced ${dark.traced}, realtime ${dark.realtime} over ${dark.pixels} dark pixels`);
     check("the slider redraws without restarting the samples", st.samples === s0 && st.state === "done", `${s0} -> ${st.samples}`);
     check("the background out of the halo is unchanged", ptCorner.max <= Math.max(1, rtCorner.max), JSON.stringify(ptCorner));
 

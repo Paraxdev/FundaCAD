@@ -8,6 +8,7 @@ import { renderPrefs, setRenderPref } from "../ui/renderPrefs";
 import type { Engine } from "./engine";
 import { setLibrary } from "../io/library";
 import { fakeLibrary, type FakeFile, type FakeLibrary } from "../io/fakeLibrary";
+import { contribute } from "../plugins/contrib";
 
 /** Debug handles for console + headless frontend-logic tests. Gated to DEV so
  *  they're absent from production bundles, a post-XSS attacker shouldn't be
@@ -48,6 +49,7 @@ export function installDevGlobals(e: Engine): void {
   w.__fundacad = {
     store: e.store,
     viewport: e.viewport,
+    setRealtimeQuality: (q: "standard" | "high") => setRenderPref("realtimeQuality", q),
     sketch: e.sketch,
     handleAction: (a: string) => e.handleAction(a),
     // Home reads the library when it opens, so reopen it after this.
@@ -59,6 +61,8 @@ export function installDevGlobals(e: Engine): void {
     // after an HMR update gets a second copy whose listeners reach nothing.
     renderPrefs,
     setRenderPref,
+    // Contribute as a plugin would, for a capability no plugin offers yet.
+    contribute,
     // Which feature the panels are showing. A harness that wants to open a
     // feature's Properties has to say WHICH, and the timeline chip that normally
     // does it is a click on a scrolling strip.

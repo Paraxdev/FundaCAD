@@ -19,6 +19,8 @@ describe("extToFormat", () => {
     expect(extToFormat("/tmp/part.stl")).toBe("stl");
     expect(extToFormat("/tmp/part.3mf")).toBe("3mf");
     expect(extToFormat("/tmp/part.glb")).toBe("glb");
+    expect(extToFormat("/tmp/part.dxf")).toBe("dxf");
+    expect(extToFormat("/tmp/part.svg")).toBe("svg");
   });
 
   it("is case-insensitive and survives dots in the path", () => {
@@ -177,6 +179,7 @@ describe("export runs as a cancellable busy op", () => {
     vi.doUnmock("@tauri-apps/plugin-dialog");
     vi.doUnmock("../../src/ui/choice");
     vi.doUnmock("../../src/stores/exportDialog");
+    vi.unstubAllGlobals();
     vi.resetModules();
     delete (globalThis as unknown as Record<string, unknown>).window;
   });
@@ -300,6 +303,93 @@ describe("export runs as a cancellable busy op", () => {
     expect(sent).toEqual({ body: undefined, bodies: ["body1", "body3"], separate: undefined });
     expect(path).toBe(savePath);
     expect(saved[0]).toMatch(/^parts_\d{14}\.stl$/);
+  });
+
+  it("draws a sketch as DXF with its id and tolerance, and no body options", async () => {
+    let asked: { flat?: { label: string }; format?: string } = {};
+    vi.doMock("../../src/stores/exportDialog", async () => {
+      const { DEFAULT_SETTINGS } = await import("../../src/io/exportSettings");
+      return {
+        useExportDialogStore: () => ({
+          open: async (what: { flat?: { label: string }; format?: string; scope?: string }) => {
+            asked = what;
+            return { settings: { ...DEFAULT_SETTINGS, format: what.format, tolerance: 5 }, scope: "all" };
+          },
+        }),
+      };
+    });
+    let sent: Record<string, unknown> = {};
+    let format = "";
+    const { backend, store } = storeWith(async (_d, f, p, opts) => {
+      format = f;
+      sent = { ...opts };
+      return { ok: true, path: p };
+    });
+    const saved: string[] = [];
+    vi.doMock("@tauri-apps/plugin-dialog", () => ({
+      save: async (o: { defaultPath: string }) => { saved.push(o.defaultPath); return "/tmp/plate.dxf"; },
+      open: async () => null,
+      message: async (m: string) => void reported.push(m),
+    }));
+    const kept = new Map([["fundacad.exportSettings", JSON.stringify({ format: "3mf" })]]);
+    vi.stubGlobal("localStorage", { getItem: (k: string) => kept.get(k) ?? null, setItem: (k: string, v: string) => void kept.set(k, v) });
+    const { exportModel } = await import("../../src/io/files");
+    await exportModel(store, backend, ["body1"], { sketch: "sk1", label: "Plate" }, "dxf");
+    const { loadExportSettings } = await import("../../src/io/exportSettings");
+    expect(loadExportSettings()).toMatchObject({ format: "3mf", tolerance: 1 });
+    expect(asked).toMatchObject({ flat: { label: "Plate" }, format: "dxf" });
+    expect(format).toBe("dxf");
+    expect(sent).toMatchObject({ sketch: "sk1", tolerance: 1 });
+    expect(sent.body).toBeUndefined();
+    expect(sent.bodies).toBeUndefined();
+    expect(sent.separate).toBeUndefined();
+    expect(saved[0]).toMatch(/^Plate_\d{14}\.dxf$/);
+  });
+
+  it("draws a flat face as SVG with its selector and plane", async () => {
+    vi.doMock("../../src/stores/exportDialog", async () => {
+      const { DEFAULT_SETTINGS } = await import("../../src/io/exportSettings");
+      return {
+        useExportDialogStore: () => ({
+          open: async () => ({ settings: { ...DEFAULT_SETTINGS, format: "svg" }, scope: "all" }),
+        }),
+      };
+    });
+    let sent: Record<string, unknown> = {};
+    const { backend, store } = storeWith(async (_d, _f, p, opts) => {
+      sent = { ...opts };
+      return { ok: true, path: p };
+    });
+    const selector = { body: "body1", kind: "face", index: 3 };
+    const plane = { origin: [0, 0, 5], normal: [0, 0, 1], xDir: [1, 0, 0] };
+    const { exportModel } = await import("../../src/io/files");
+    await exportModel(store, backend, [], { face: selector, plane: plane as never, label: "Box face" });
+    expect(sent).toMatchObject({ face: selector, plane, tolerance: 0.01 });
+    expect(sent.sketch).toBeUndefined();
+  });
+
+  it("takes the selected sketch first, else the selected flat face", async () => {
+    const { backend } = storeWith(async () => ({ ok: true, path: "" }));
+    const store = new DocumentStore(backend, {
+      parameters: {},
+      features: [
+        { id: "sk1", type: "sketch", name: "Plate", entities: [], constraints: [] },
+        { id: "sk2", type: "sketch", entities: [], constraints: [] },
+        { id: "ex1", type: "extrude" },
+      ] as never,
+    });
+    const selector = { body: "body1", index: 3 };
+    const plane = { origin: [0, 0, 5], normal: [0, 0, 1], xDir: [1, 0, 0] };
+    const viewport = (face: boolean) => ({
+      selectionBodyIds: () => [],
+      selectedFaceSketchPlane: () => (face ? { plane: plane as never, faceId: 7, anchor: { selector } } : null),
+    });
+    const { flatSourceOf } = await import("../../src/io/files");
+    expect(flatSourceOf(store, viewport(true), "sk1")).toEqual({ sketch: "sk1", label: "Plate" });
+    expect(flatSourceOf(store, viewport(false), "sk2")).toEqual({ sketch: "sk2", label: "Sketch2" });
+    expect(flatSourceOf(store, viewport(true), "ex1")).toMatchObject({ face: selector, plane });
+    expect(flatSourceOf(store, viewport(false), "ex1")).toBeNull();
+    expect(flatSourceOf(store, viewport(false), null)).toBeNull();
   });
 
   it("clears busy even when the backend throws", async () => {

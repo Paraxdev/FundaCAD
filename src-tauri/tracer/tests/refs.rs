@@ -10,7 +10,7 @@ use fundacad_tracer::{Tracer, TracerOptions};
 const SPP: u32 = 64;
 
 fn tracer(software: bool) -> Option<Tracer> {
-    match Tracer::new(TracerOptions { software, ..Default::default() }) {
+    match common::tracer(TracerOptions { software, ..Default::default() }) {
         Ok(t) => Some(t),
         Err(e) => {
             println!("skipped, no GPU adapter: {e}");
@@ -70,12 +70,28 @@ fn a_short_render_sits_near_each_reference_on_every_path() {
     }
 }
 
-/// Measured at 64 spp: 2.6 to 3.8 on the lit scenes, 34.4 on the emitter, which
-/// only BSDF hits find until tracer-emissive-nee.
+/// 45.04 at 32 spp when only bounce rays found the lamp.
+#[test]
+fn glowing_faces_converge_four_times_faster() {
+    for software in [true, false] {
+        let Some(mut t) = tracer(software) else { return };
+        if !software && t.path() == fundacad_tracer::Path::Software {
+            continue;
+        }
+        build(&mut t, "emitter", None);
+        t.set_cap(32);
+        t.render_samples(32);
+        let rmse = rmse_to_ref(&t.resolve(), "emitter");
+        println!("emitter on {:?}: rmse {rmse:.3} of 255 at 32 spp", t.path());
+        assert!(rmse <= 45.042 / 4.0, "emitter on {:?}: rmse {rmse:.3}", t.path());
+    }
+}
+
+/// Measured at 64 spp: 1.5 to 4.0 on the lit scenes, 5.5 on the studio room
+/// (halving with every 4x the samples, so noise), 5.9 on the emitter.
 fn limit(name: &str) -> f64 {
-    if name == "emitter" {
-        45.0
-    } else {
-        5.0
+    match name {
+        "emitter" | "studio" => 8.0,
+        _ => 5.0,
     }
 }
