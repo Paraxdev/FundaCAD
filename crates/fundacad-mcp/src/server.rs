@@ -2250,7 +2250,7 @@ impl FundaCad {
         };
         let canvas = match render::render(&mesh[..], &request) {
             Ok(c) => c,
-            Err(e) => return failure(format!("ValueError: {e}")),
+            Err(e) => return failure(e),
         };
         let png = match crate::png::encode(&canvas) {
             Ok(p) => p,
@@ -2838,7 +2838,6 @@ impl FundaCad {
             ..ViewRequest::default()
         };
         let png = match render::render(std::slice::from_ref(&surface), &view)
-            .map_err(|e| format!("ValueError: {e}"))
             .and_then(|c| crate::png::encode(&c))
         {
             Ok(p) => p,

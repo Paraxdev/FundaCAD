@@ -326,7 +326,7 @@
     }
    },
    "isError": true,
-   "text": "ValueError: section keep='middle' is not a side of the plane. Use one of: +, -, above, below, bottom, far, high, low, max, min, near, over, top, under.",
+   "text": "section keep='middle' is not a side of the plane. Use one of: +, -, above, below, bottom, far, high, low, max, min, near, over, top, under.",
    "tool": "view"
   },
   {

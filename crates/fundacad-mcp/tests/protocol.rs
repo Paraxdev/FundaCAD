@@ -1000,3 +1000,10 @@ fn a_match_whose_edge_a_parameter_moved_far_says_that_can_be_right() {
     assert!(t.contains("warning (f):") && t.contains("(50, 20, 0)"), "{t}");
     assert!(t.contains("a parameter moved") && !t.contains("no longer matches"), "{t}");
 }
+
+#[test]
+fn a_view_with_a_wrong_section_side_answers_without_python_words() {
+    let rs = drive(&[box_60_40_20(), ("view", json!({"section": {"axis": "Y", "keep": "middle"}}))]);
+    assert!(rs[1].is_error && rs[1].text.contains("keep='middle'"), "{}", rs[1].text);
+    assert!(!rs[1].text.contains("ValueError"), "{}", rs[1].text);
+}
