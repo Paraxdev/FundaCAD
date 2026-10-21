@@ -32,26 +32,22 @@ const COLOUR_BASELINE: Record<string, number> = {
   "src/components/overlays/RadialMenuHost.vue": 2,
   "src/components/overlays/StressPanel.vue": 2,
   "src/components/shell/LiveSessionPill.vue": 4,
-  "src/components/shell/NormalToSketch.vue": 1,
   "src/components/shell/NumberBox.vue": 2,
-  "src/components/shell/RoundTripReadout.vue": 1,
-  "src/components/shell/SelectionReadout.vue": 1,
   "src/components/shell/SurfaceNodeEditor.vue": 12,
   "src/styles/_base.scss": 1,
-  "src/styles/_browser.scss": 18,
+  "src/styles/_browser.scss": 5,
   "src/styles/_console.scss": 4,
-  "src/styles/_float.scss": 10,
-  "src/styles/_glass.scss": 31,
+  "src/styles/_float.scss": 9,
+  "src/styles/_glass.scss": 30,
   "src/styles/_inspector.scss": 15,
-  "src/styles/_layout.scss": 6,
+  "src/styles/_layout.scss": 5,
   "src/styles/_modals.scss": 120,
   "src/styles/_notice.scss": 1,
-  "src/styles/_palette.scss": 4,
   "src/styles/_renderdock.scss": 5,
   "src/styles/_targetedit.scss": 2,
   "src/styles/_timeline.scss": 5,
   "src/styles/_titlebar.scss": 1,
-  "src/styles/_utilities.scss": 13,
+  "src/styles/_utilities.scss": 11,
 };
 
 // Declarations, outside a hover, press, focus or selected rule, that fill with
@@ -61,7 +57,7 @@ const COLOUR_BASELINE: Record<string, number> = {
 // goes on the _glass.scss lists instead of raising a number here.
 const FLAT_BASELINE: Record<string, number> = {
   "src/components/overlays/FilletMembers.vue": 1,
-  "src/styles/_browser.scss": 5,
+  "src/styles/_browser.scss": 3,
   "src/styles/_console.scss": 2,
   "src/styles/_float.scss": 2,
   "src/styles/_glass.scss": 2,
@@ -81,7 +77,6 @@ const FLAT_BASELINE: Record<string, number> = {
 // Blurs written by hand outside _glass.scss. Anything new uses var(--float-blur),
 // which html.no-glass-blur can switch off and the theme can tune in one place.
 const BLUR_ALLOWED: Record<string, { count: number; reason: string }> = {
-  "src/styles/_browser.scss": { count: 2, reason: "the small sketch dimension chip, a label on the model, not a panel" },
   "src/styles/_console.scss": { count: 2, reason: "base of .logcon, repainted by _glass.scss" },
   "src/styles/_modals.scss": { count: 3, reason: "base of .choice-backdrop and .cmdk-backdrop, repainted by _glass.scss" },
   "src/styles/_targetedit.scss": { count: 2, reason: "base of .tgt-panel, repainted by _glass.scss" },
