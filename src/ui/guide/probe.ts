@@ -10,13 +10,15 @@ import type { Snapshot } from "./wait";
 
 export interface ProbeHost {
   store: Pick<DocumentStore, "buildState" | "document">;
-  viewport: Pick<Viewport, "faceTriangles" | "projectToScreen" | "getSelectedFaceIds" | "getSelectedBodies" | "selectedEdgeLines" | "domElement">;
+  viewport: Pick<Viewport, "faceTriangles" | "bodyPose" | "projectToScreen" | "getSelectedFaceIds" | "getSelectedBodies" | "selectedEdgeLines" | "domElement">;
   /** Fillet and Chamfer keep their picked edges as members, not as the selection. */
   tools?: { edgeFeature: { readonly active: boolean; memberRows(): { resolved: boolean }[] } };
 }
 
-/** World space lines to outline, each a polyline. */
-export type ModelShape = { kind: "face" | "edge" | "body"; lines: THREE.Vector3[][]; name: string };
+/** Lines to outline, each a polyline, in `body`'s rest frame: apply its live pose to draw them. */
+export type ModelShape = { kind: "face" | "edge" | "body"; body: string | null; lines: THREE.Vector3[][]; name: string };
+
+type ShapeHost = SelectorHost & { store: ProbeHost["store"]; viewport: Partial<Pick<Viewport, "bodyPose">> };
 
 const EDGE_WORDS = /^(between\b|longest\b|shortest\b|edge\b)/;
 
@@ -37,27 +39,30 @@ function boundary(tris: THREE.Triangle[]): THREE.Vector3[][] {
 
 /** A model selector as the harness reads it: a face, or an edge for `between`,
  *  `longest`, `shortest` and `edge near=`, or a whole body. */
-export function modelShape(h: SelectorHost & { store: ProbeHost["store"] }, sel: string): ModelShape {
+export function modelShape(h: ShapeHost, sel: string): ModelShape {
   const text = sel.trim();
   const bodies = h.store.buildState.result?.bodies ?? [];
   const bodyId = text.replace(/^body:/, "");
   const body = bodies.find((b) => b.id === bodyId);
   if (body) {
     const edges = (h.store.buildState.result?.edges ?? []).filter((e) => e.body === body.id);
-    return { kind: "body", name: body.id, lines: edges.map(edgePts) };
+    return { kind: "body", body: body.id, name: body.id, lines: edges.map(edgePts) };
   }
   const words = text.replace(/^[\w-]+:/, "");
   if (EDGE_WORDS.test(words)) {
     const e = resolveEdge(h, text.replace(/(^|:)edge\s+/, "$1"));
-    return { kind: "edge", name: `edge ${e.id}`, lines: [edgePts(e)] };
+    return { kind: "edge", body: e.body ?? null, name: `edge ${e.id}`, lines: [edgePts(e)] };
   }
   try {
     const f = resolveFace(h, text);
-    return { kind: "face", name: `${f.body} face ${f.index}`, lines: boundary(f.tris) };
+    const pose = h.viewport.bodyPose?.(f.body);
+    const toRest = pose ? pose.clone().invert() : null;
+    const lines = boundary(f.tris).map((l) => (toRest ? l.map((v) => v.clone().applyMatrix4(toRest)) : l));
+    return { kind: "face", body: f.body, name: `${f.body} face ${f.index}`, lines };
   } catch (err) {
     if (!(err instanceof SelectorError) || !/near=/.test(text)) throw err;
     const e = resolveEdge(h, text);
-    return { kind: "edge", name: `edge ${e.id}`, lines: [edgePts(e)] };
+    return { kind: "edge", body: e.body ?? null, name: `edge ${e.id}`, lines: [edgePts(e)] };
   }
 }
 

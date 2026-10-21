@@ -45,11 +45,16 @@ const tick = () => new Promise((r) => setTimeout(r, 0));
 function setup() {
   let snap: Snapshot = emptySnapshot();
   let faceCalls = 0;
+  /** The body's live pose: the Move tool's ghost sets it on the mesh and never touches the store. */
+  const pose = new THREE.Matrix4();
   const canvas = document.createElement("canvas");
   const tri = new THREE.Triangle(new THREE.Vector3(0, 0, 0), new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0));
   const store = {
     buildState: {
-      result: { bodies: [{ id: "body1", name: "Box", faceStart: 0, faceCount: 6 }], edges: [] },
+      result: {
+        bodies: [{ id: "body1", name: "Box", faceStart: 0, faceCount: 6 }],
+        edges: [{ id: 1, body: "body1", points: [[0, 0, 0], [1, 0, 0]] }],
+      },
     } as unknown,
   };
   const guide = new GuideSession(() => ({ found: true }), () => snap);
@@ -61,8 +66,11 @@ function setup() {
       projectToScreen: (v: THREE.Vector3) => ({ x: v.x * 10, y: v.y * 10 }),
       faceTriangles: () => {
         faceCalls++;
-        return [tri.clone()];
+        const t = tri.clone();
+        for (const v of [t.a, t.b, t.c]) v.applyMatrix4(pose);
+        return [t];
       },
+      bodyPose: (id: string) => (id === "body1" ? pose : null),
     },
   } as unknown as Engine;
   const btn = document.createElement("button");
@@ -74,6 +82,7 @@ function setup() {
     store,
     setTool: (t: string) => (snap = { ...snap, tool: t }),
     faceCalls: () => faceCalls,
+    pose,
   };
 }
 
@@ -129,4 +138,28 @@ describe("GuideLayer frame loop", () => {
     frame();
     expect(g.faceCalls()).toBe(once * 2);
   });
+
+  for (const [kind, model] of [["a face", "body1:index=0"], ["a body", "body:body1"], ["an edge", "body1:longest"]]) {
+    it(`${kind} step's outline follows a body the Move tool drags, and goes back when the move is cancelled`, async () => {
+      const g = setup();
+      g.guide.apply([{ kind: "highlight", seq: 1, target: { model }, caption: "Here" }]);
+      await tick();
+      frame();
+      await tick();
+      const xs = () => [...document.querySelectorAll(".guide-model polyline")]
+        .flatMap((l) => (l.getAttribute("points") ?? "").split(" ").map((p) => Number(p.split(",")[0])));
+      const rest = xs();
+      expect(rest.length).toBeGreaterThan(0);
+      const once = g.faceCalls();
+      g.pose.makeTranslation(5, 0, 0);
+      for (let i = 0; i < 3; i++) frame();
+      await tick();
+      expect(xs()).toEqual(rest.map((x) => x + 50));
+      g.pose.identity();
+      for (let i = 0; i < 3; i++) frame();
+      await tick();
+      expect(xs()).toEqual(rest);
+      expect(g.faceCalls()).toBe(once);
+    });
+  }
 });
