@@ -1043,6 +1043,15 @@ jobs:
           workspaces: src-tauri -> target
           save-if: ${{ github.ref_type != 'tag' }}
 
+      # log_file.rs has no dependencies, so its macOS redirect builds and runs
+      # alone, without the app and its OpenCASCADE.
+      - name: macOS log file tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          rustc --edition 2021 --test -D warnings src-tauri/src/log_file.rs -o "$RUNNER_TEMP/log_file_test"
+          "$RUNNER_TEMP/log_file_test"
+
       - name: Native tracer tests on Metal
         shell: bash
         run: |
