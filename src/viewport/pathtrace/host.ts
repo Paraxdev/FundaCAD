@@ -4,7 +4,7 @@
 
 import type * as THREE from "three";
 import type { Denoise } from "../../ui/renderPrefs";
-import { SAMPLE_CAP, type TraceLook, type TracerBackend } from "./backend";
+import { SAMPLE_CAP, TracerRefused, type TraceLook, type TracerBackend } from "./backend";
 import { costProfile, FrameBudget, renderScaleFor, tracedPictureScale } from "./budget";
 import type { TraceLens } from "./camera";
 import type { FrameView } from "./frameCamera";
@@ -118,6 +118,7 @@ export class PathTraceHost {
   private sawSample = false;
   private size = { w: 0, h: 0, ratio: 0 };
   private refusedSig = "";
+  private faultText: string | null = null;
   private offSince = 0;
   /** At the cap the final denoise and its crossfade are drawn, then nothing. */
   private settled = false;
@@ -161,6 +162,11 @@ export class PathTraceHost {
    *  camera than the live one; the overlay is drawn from where it was traced. */
   get frameView(): FrameView | null {
     return this.shown && this.preview ? (this.backend?.shownView?.() ?? null) : null;
+  }
+
+  /** The newest fault this session, for the bug report. */
+  get lastFault(): string | null {
+    return this.faultText;
   }
 
   get denoised(): boolean {
@@ -402,7 +408,7 @@ export class PathTraceHost {
         this.hasScene = false;
         this.size = { w: 0, h: 0, ratio: 0 };
       } catch (e) {
-        this.fault(`Path tracing could not start: ${e instanceof Error ? e.message : String(e)}`);
+        this.fault(`Path tracing could not start: ${e instanceof Error ? e.message : String(e)}`, !(e instanceof TracerRefused));
       } finally {
         this.starting = false;
       }
@@ -516,8 +522,9 @@ export class PathTraceHost {
     else if (now - this.traceSince > FIRST_SAMPLE_TIMEOUT_MS) this.fault("Path tracing gathered no sample in 10 seconds");
   }
 
-  private fault(why: string) {
-    this.faults++;
+  private fault(why: string, counts = true) {
+    this.faultText = why;
+    if (counts) this.faults++;
     this.disabled = this.faults >= 2;
     const b = this.backend;
     this.backend = null;

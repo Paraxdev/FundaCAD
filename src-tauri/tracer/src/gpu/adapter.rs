@@ -71,6 +71,19 @@ impl std::fmt::Display for Refusal {
     }
 }
 
+/// The adapter as a report names it. The kind matters: a virtual machine's
+/// Metal device reads like a real GPU by its name alone.
+pub fn adapter_label(name: &str, backend: wgpu::Backend, kind: wgpu::DeviceType) -> String {
+    let kind = match kind {
+        wgpu::DeviceType::DiscreteGpu => "discrete GPU",
+        wgpu::DeviceType::IntegratedGpu => "integrated GPU",
+        wgpu::DeviceType::VirtualGpu => "virtual GPU",
+        wgpu::DeviceType::Cpu => "software",
+        wgpu::DeviceType::Other => "unknown kind",
+    };
+    format!("{name} ({backend:?}, {kind})")
+}
+
 /// The best adapter by backend, then discrete over integrated, CPU adapters
 /// last and only when allowed. A refusal names the best adapter refused, so
 /// a real GPU short of storage buffers is reported over a CPU one.
@@ -120,5 +133,11 @@ mod tests {
         assert_eq!(Refusal::Limits { name: "ANGLE".into(), storage: 8 }.storage_buffers(), Some(8));
         assert_eq!(Refusal::Cpu { name: warp.name }.class(), Some("cpu"));
         assert_eq!(Refusal::SelfCheck("drew wrong".into()).class(), Some("selfcheck"));
+    }
+
+    #[test]
+    fn an_adapter_is_named_with_its_backend_and_kind() {
+        assert_eq!(adapter_label("Apple Paravirtual device", Backend::Metal, DeviceType::IntegratedGpu), "Apple Paravirtual device (Metal, integrated GPU)");
+        assert_eq!(adapter_label("llvmpipe", Backend::Vulkan, DeviceType::Cpu), "llvmpipe (Vulkan, software)");
     }
 }

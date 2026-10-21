@@ -83,6 +83,7 @@ import type { SurfaceBaker } from "./pathtrace/mirror";
 import { createSurfaceBaker, webglSurfaceShade } from "./pathtrace/surfaceBake";
 import { describeNative, describeProbe, probeNative, probeWebGpu, type GpuProbe } from "./pathtrace/probe";
 import { chooseTracer, createTracerOf, type NativeProbe, type TracerKind } from "./pathtrace/choose";
+import { failedSelfCheck, refusedBySelfCheck } from "./pathtrace/selfCheck";
 import { wsCall, type DevCall } from "./pathtrace/devCall";
 import type { Call } from "./pathtrace/nativeScene";
 import type { TracerBackend } from "./pathtrace/backend";
@@ -381,6 +382,8 @@ export class Viewport {
     this.trace.onStateChange = (st) => this.onTraceStateChange?.(st);
     this.trace.onFault = (why, off) => {
       if (this.tracerKind) this.tracerFaults.add(this.tracerKind);
+      const check = failedSelfCheck();
+      if (check && this.tracerKind === "native" && this.native?.available) this.native = refusedBySelfCheck(this.native, check);
       this.dropTrace(why, off);
     };
     this.trace.onRefuse = (why) => {
@@ -4078,6 +4081,10 @@ export class Viewport {
       render: this.scene.renderer.info.render,
       passes: { ms: this.passTimes(), kind: this.scene.post.timer.kind },
       seam: { ms: this.seamMs, skipped: this.seamSkipped },
+      trace: {
+        state: this.trace.state, backend: this.trace.backendName, samples: this.trace.samples, denoised: this.trace.denoised,
+        fault: this.trace.lastFault, gpu: `${describeProbe(this.gpu)}; ${describeNative(this.native)}`,
+      },
     });
   }
 

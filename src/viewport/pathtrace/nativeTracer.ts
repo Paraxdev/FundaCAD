@@ -9,11 +9,11 @@
 import { invoke } from "@tauri-apps/api/core";
 import type * as THREE from "three";
 import type { Denoise } from "../../ui/renderPrefs";
-import type { PictureOptions, TraceLook, TraceScene, TracerBackend } from "./backend";
+import { TracerRefused, type PictureOptions, type TraceLook, type TraceScene, type TracerBackend } from "./backend";
 import type { TraceLens } from "./camera";
 import { FrameCameras, type FrameView } from "./frameCamera";
 import { NativeScene, type Call } from "./nativeScene";
-import { runSelfCheck } from "./selfCheck";
+import { runSelfCheck, selfCheckReason } from "./selfCheck";
 import { bloomKey, bloomSide, type TraceBloomSettings } from "./tracePost";
 
 export interface NativeFrame {
@@ -419,7 +419,8 @@ export class NativeTracer implements TracerBackend {
     // The native tracer outlives a page, so a bloom of the last one is cleared.
     this.syncBloom();
     // After the connect, which is what opens the native tracer the check borrows its path from.
-    await runSelfCheck((cmd, args) => this.call(cmd, args as Record<string, unknown>));
+    const check = await runSelfCheck((cmd, args) => this.call(cmd, args as Record<string, unknown>));
+    if (check && !check.passed) throw new TracerRefused(selfCheckReason(check));
   }
 
   setSize(cssWidth: number, cssHeight: number, pixelRatio: number) {
@@ -712,5 +713,11 @@ export class NativeTracer implements TracerBackend {
 
 export function createNativeTracer(o: NativeTracerOptions = {}): Promise<TracerBackend> {
   const t = new NativeTracer(o);
-  return t.init().then(() => t);
+  return t.init().then(
+    () => t,
+    (e: unknown) => {
+      t.dispose();
+      throw e;
+    },
+  );
 }

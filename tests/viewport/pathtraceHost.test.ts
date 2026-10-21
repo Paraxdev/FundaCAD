@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import type { TracerBackend } from "../../src/viewport/pathtrace/backend";
+import { TracerRefused, type TracerBackend } from "../../src/viewport/pathtrace/backend";
 import { FIRST_SAMPLE_TIMEOUT_MS, IDLE_DISPOSE_MS, PathTraceHost, type TraceFrame } from "../../src/viewport/pathtrace/host";
 import { TRIANGLE_BUDGET } from "../../src/viewport/pathtrace/mirror";
 import { STILL_MS } from "../../src/viewport/pathtrace/state";
@@ -424,8 +424,10 @@ describe("path trace host", () => {
     host.tick(frame());
     await flush();
     await flush();
+    expect(host.lastFault).toBeNull();
     t.faultCb!("GPU device lost");
     expect(faults).toEqual([["GPU device lost", false]]);
+    expect(host.lastFault).toBe("GPU device lost");
     expect(t.calls).toContain("dispose");
     host.tick(frame());
     await flush();
@@ -454,6 +456,27 @@ describe("path trace host", () => {
     await flush();
     await flush();
     expect(faults[0]).toMatch(/no adapter/);
+  });
+
+  it("drops to Realtime on a backend that refuses the device, without counting it toward turning off", async () => {
+    const faults: [string, boolean][] = [];
+    const t = new FakeTracer();
+    let n = 0;
+    const host = new PathTraceHost(glCanvas, async () => {
+      if (n++ === 0) throw new TracerRefused("the native tracer drew its test scene wrong");
+      return t;
+    });
+    host.onFault = (why, off) => faults.push([why, off]);
+    host.tick(frame());
+    await flush();
+    await flush();
+    expect(faults).toEqual([["Path tracing could not start: the native tracer drew its test scene wrong", false]]);
+    host.tick(frame());
+    await flush();
+    await flush();
+    t.faultCb!("GPU device lost");
+    expect(faults[1]).toEqual(["GPU device lost", false]);
+    expect(host.disabled).toBe(false);
   });
 
   it("refuses a model over the triangle budget with a note, never as a GPU fault", async () => {
