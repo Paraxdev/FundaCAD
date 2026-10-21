@@ -319,6 +319,35 @@ describe("native environment", () => {
     expect(hemiAt([1, 0, 0], hemi)[0]).toBeCloseTo(((0.654 + 0.0172) / 2) * 0.6 / Math.PI, 6);
   });
 
+  it("looks queued behind a slow pt_env collapse into the newest one", async () => {
+    let held: string | null = null;
+    const sent: string[] = [];
+    let looks = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    let entered!: () => void;
+    const first = new Promise<void>((r) => { entered = r; });
+    const call = async (cmd: string, args?: unknown) => {
+      if (cmd === "pt_look") { looks++; return held; }
+      if (cmd === "pt_env") {
+        const key = header(args as Uint8Array).head.key;
+        sent.push(key);
+        if (sent.length === 1) { entered(); await gate; }
+        held = key;
+      }
+      return null;
+    };
+    const scene = new NativeScene(call, (e) => { throw e; });
+    const done = [scene.look(roomLook("r1"))];
+    await first;
+    done.push(scene.look(roomLook("r2")), scene.look(roomLook("r3")));
+    release();
+    await Promise.all(done);
+    await scene.idle();
+    expect(sent).toEqual(["r1", "r3"]);
+    expect(looks).toBe(2);
+  });
+
   it("an HDR look sends the panorama's key with its pixels", async () => {
     registerHdr("abc", "sky.hdr", { width: 8, height: 4, data: new Float32Array(8 * 4 * 4).fill(1) });
     const look = { ...roomLook("room"), hdr: { hash: "abc", rotation: 0, exposure: 0, hemi: null, key: "hdr:abc|0.0|0.00|" } };
