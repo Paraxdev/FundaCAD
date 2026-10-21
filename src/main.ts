@@ -29,6 +29,7 @@ import { ENGINE } from "./app/engineKey";
 import { installDevGlobals } from "./app/devGlobals";
 import { invoke } from "@tauri-apps/api/core";
 import { harnessWanted } from "./harness/wanted";
+import { installGuidePressGuard } from "./ui/guide/pressGuard";
 
 // Installed before anything is constructed, so a failure inside createEngine
 // still reaches the user rather than leaving a blank viewport.
@@ -54,6 +55,7 @@ const canvas = document.createElement("canvas");
 canvas.id = "canvas"; // keeps the #canvas rule in styles/_layout.scss
 const engine = createEngine(canvas);
 
+installGuidePressGuard();
 const app = createApp(App);
 // markRaw: the engine is a graph of Three.js objects, the document store and
 // ten tool classes. Wrapping any of it in a reactive proxy would break

@@ -88,6 +88,8 @@ import { useUiStore } from "../stores/ui";
 import { createDocBridge, type DocBridge } from "./docBridge";
 import { wireDocumentSwap } from "./documentSwap";
 import { LiveSessionHost } from "../live/liveSession";
+import { GuideSession } from "../ui/guide/guideSession";
+import { resolveTarget, takeSnapshot } from "../ui/guide/probe";
 import { liveEditsAllowed, liveSharingEnabled, onLiveEditingChange } from "../ui/liveEditing";
 
 import type { Feature, PlaneDef, PlaneSpec, Vec3 } from "../types";
@@ -131,6 +133,8 @@ export interface Engine {
    *  edits it offers. Always constructed; running only while the live-editing
    *  setting is on. */
   live: LiveSessionHost;
+  /** Guide mode: the steps an attached assistant points at, carried by `live`. */
+  guide: GuideSession;
   overlay: SketchOverlay;
   sketch: SketchMode;
   tools: EngineTools;
@@ -315,6 +319,8 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   // the store, so leaving it running in "off" would keep counting revisions for
   // a session nobody is in.
   e.live = new LiveSessionHost(e.store, e.geometry, liveEditsAllowed);
+  e.guide = new GuideSession((t) => resolveTarget(e, t), () => takeSnapshot(e));
+  e.live.attachGuide(e.guide);
   const syncLive = () => {
     if (liveSharingEnabled()) e.live.start();
     else void e.live.stop();
