@@ -5,6 +5,7 @@ import { FIRST_SAMPLE_TIMEOUT_MS, IDLE_DISPOSE_MS, PathTraceHost, type TraceFram
 import { TRIANGLE_BUDGET } from "../../src/viewport/pathtrace/mirror";
 
 const ENV = new THREE.Texture();
+const CAMERA = new THREE.PerspectiveCamera();
 
 class FakeTracer implements TracerBackend {
   readonly name = "fake";
@@ -87,7 +88,7 @@ function frame(over: Partial<TraceFrame["inputs"]> = {}, now = 1000, extra: Part
   return {
     now,
     inputs: { mode: "pathtraced", visible: true, stillMs: 1000, sectioned: false, xray: false, wireframe: false, sketchOpen: false, ...over },
-    camera: new THREE.PerspectiveCamera(),
+    camera: CAMERA,
     cameraChanged: false,
     sceneMaybeChanged: false,
     root: extra.root ?? scene(),
@@ -385,6 +386,20 @@ describe("path trace host", () => {
     t.calls.length = 0;
     host.tick(frame({}, 1200, { sceneMaybeChanged: true, look: brighter }));
     expect(t.calls).not.toContain("look");
+  });
+
+  // The rig swaps a perspective and an orthographic camera object on a
+  // projection change and reports no move, so the swap alone has to count.
+  it("re-reads the camera when the projection swaps it without a camera move", async () => {
+    const { host, t } = await started();
+    host.tick(frame());
+    t.calls.length = 0;
+    const ortho = new THREE.OrthographicCamera();
+    host.tick(frame({}, 1100, { camera: ortho }));
+    expect(t.calls).toContain("camera");
+    t.calls.length = 0;
+    host.tick(frame({}, 1200, { camera: ortho }));
+    expect(t.calls).not.toContain("camera");
   });
 
   it("re-reads the camera when the lens changes without a camera move", async () => {

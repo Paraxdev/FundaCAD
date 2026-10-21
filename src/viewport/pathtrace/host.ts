@@ -108,6 +108,7 @@ export class PathTraceHost {
   private lens = "";
   private sceneDirty = true;
   private cameraDirty = true;
+  private cameraSeen: THREE.Camera | null = null;
   private polling = false;
   private traceSince = 0;
   private sawSample = false;
@@ -154,7 +155,9 @@ export class PathTraceHost {
   }
 
   tick(f: TraceFrame) {
-    if (f.cameraChanged) this.cameraDirty = true;
+    // A projection change swaps the rig's camera object and reports no move.
+    if (f.cameraChanged || f.camera !== this.cameraSeen) this.cameraDirty = true;
+    this.cameraSeen = f.camera;
     if (f.sceneMaybeChanged) this.sceneDirty = true;
     const s = this.disabled ? "off" : traceState({ ...f.inputs, samples: this.samples, cap: this.cap });
     if (s !== this.state) {
