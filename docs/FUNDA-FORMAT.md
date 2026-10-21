@@ -407,8 +407,9 @@ Writer rules:
   `doc_save`: a stamp above its own is lowered to its own, the rest of the
   file is written as it was. A stamp below its own stays, because MCP does not
   run the app's migrations and a higher stamp would make the app skip them.
-  MCP cannot write a `.fundab`, so a section carried in one is not kept by an
-  MCP save.
+  MCP cannot write a `.fundab`, and a JSON file has no sections, so a section
+  carried in a `.fundab` is dropped by an MCP save, as the app drops it when
+  it saves as `.funda`. Only the app keeps it, by saving as `.fundab`.
 - A new reference to geometry is a lowercase hex BLAKE2b-128 string held as a
   string value, never as an object key, so an older writer finds it and keeps
   the blob. The older writer only scans values.
