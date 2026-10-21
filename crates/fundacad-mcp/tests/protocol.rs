@@ -976,3 +976,15 @@ fn a_fillet_too_large_for_its_neighbours_is_refused_with_the_size_that_fits() {
     assert!(rs[2].is_error, "{t}");
     assert!(t.contains("neighbouring edge") && t.contains("fits up to 20"), "{t}");
 }
+
+#[test]
+fn a_lone_fillet_larger_than_its_face_warns_in_the_build_reply() {
+    let rs = drive(&[
+        box_60_40_20(),
+        ("feature_add", json!({"feature": {"id": "f", "type": "fillet", "radius": 45, "edges":
+            {"kind": "edge", "by": "nearest", "point": [30, 20, 0], "body": "body1"}}})),
+        ("build", json!({})),
+    ]);
+    let t = &rs[2].text;
+    assert!(t.contains("warning (f):") && t.contains("runs past") && t.contains("fits up to 39.99mm"), "{t}");
+}

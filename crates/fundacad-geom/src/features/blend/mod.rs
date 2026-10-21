@@ -881,6 +881,7 @@ fn blend_edges(
     }
     let groups = select::group_by_body(ctx, sels, label)?;
     let mut staged: Vec<(usize, Shape)> = Vec::new();
+    let overruns: std::cell::RefCell<Vec<String>> = std::cell::RefCell::new(Vec::new());
     for (index, group) in groups {
         checkpoint()?;
         let body_shape = ctx.bodies[index].shape().clone();
@@ -904,9 +905,20 @@ fn blend_edges(
         let edges = drop_slivers(edges, label)?;
         refuse_smooth_edges(&body_shape, &edges, label)?;
         let misfit: std::cell::Cell<Option<Fail>> = std::cell::Cell::new(None);
+        let note_overrun = || {
+            if let Some(o) = ops::take_overrun() {
+                overruns.borrow_mut().push(overrun_note(label, &body_name, blend_size, o));
+            }
+        };
         let try_section = |shape: &Shape, es: &[Shape]| -> Option<Shape> {
             match section?(shape, es) {
-                Ok(out) => Some(out).filter(|out| still_sharp(out, es).is_empty() && keeps_voids(shape, out)),
+                Ok(out) => {
+                    let kept = Some(out).filter(|out| still_sharp(out, es).is_empty() && keeps_voids(shape, out));
+                    if kept.is_some() {
+                        note_overrun();
+                    }
+                    kept
+                }
                 Err(SectionErr::TooLarge { why, fits, at }) => {
                     misfit.set(Some(misfit_error(label, &body_name, blend_size, why, fits, at)));
                     None
@@ -924,6 +936,7 @@ fn blend_edges(
                             sharp.len()
                         )));
                     }
+                    note_overrun();
                     staged.push((index, out));
                     continue;
                 }
@@ -1021,7 +1034,36 @@ fn blend_edges(
     for (index, shape) in staged {
         ctx.set_shape(index, shape);
     }
+    for message in overruns.into_inner() {
+        ctx.diagnostics.push(json!({
+            "feature_id": fid,
+            "kind": "edge",
+            "lossy": false,
+            "message": message,
+        }));
+    }
     Ok(())
+}
+
+/// A section round built though it runs past a face: no fillet rests on both
+/// faces at that size, it cuts the corner off, so the build says so.
+fn overrun_note(label: &str, body: &str, size: f64, o: ops::Overrun) -> String {
+    let [x, y, z] = o.at.map(|c| py_g(py_round(c, 3)));
+    let what = label.to_lowercase();
+    let head = format!(
+        "at {}mm the {what} runs past a face beside the edge through ({x}, {y}, {z}) on {body}, so it cuts that \
+         corner off instead of resting on both faces.",
+        py_g(size)
+    );
+    let fits = o.fits.map(|v| {
+        let v = v - 1e-4;
+        let step = if v >= 1.0 { 100.0 } else { 1000.0 };
+        (v * step).floor() / step
+    });
+    match fits {
+        Some(v) if v > 0.0 => format!("{head} A {what} that rests on both fits up to {}mm.", py_g(v)),
+        _ => head,
+    }
 }
 
 #[cfg(test)]
