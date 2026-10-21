@@ -3482,7 +3482,7 @@ export class Viewport {
   pickableEdgeCandidates(clientX: number, clientY: number, rect: DOMRect): EdgeCandidate[] {
     if (!this.model) return [];
     const cands = this.picker.pickEdgeCandidates(clientX, clientY, rect, this.rig.active, this.model);
-    return this.picker.visibleCandidates(cands, this.rig.active, this.model);
+    return this.picker.visibleCandidates(cands, this.rig.active, this.model, rect);
   }
 
   /** Emphasise the edge a menu row names, over everything; null clears it. */
