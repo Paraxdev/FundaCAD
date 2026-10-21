@@ -778,7 +778,8 @@ impl FundaCad {
     #[tool(
         name = "schema",
         description = "The document schema: every feature type, its fields, an example and the traps. Call it with no argument for the overview and the working order, or with a type name for that type's detail. READ THIS FIRST.",
-        input_schema = crate::tools::schema_tool()
+        input_schema = crate::tools::schema_tool(),
+        annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn t_schema(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         Ok(text(schema::schema_text(
@@ -789,7 +790,8 @@ impl FundaCad {
     #[tool(
         name = "doc_new",
         description = "Start an empty document, discarding the current one.",
-        input_schema = crate::tools::doc_new()
+        input_schema = crate::tools::doc_new(),
+        annotations(read_only_hint = false, destructive_hint = true, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn t_doc_new(&self, _args: JsonObject) -> Result<CallToolResult, McpError> {
         let mut st = self.state.lock().await;
@@ -803,7 +805,8 @@ impl FundaCad {
     #[tool(
         name = "doc_open",
         description = "Load a .funda document from disk.",
-        input_schema = crate::tools::doc_open()
+        input_schema = crate::tools::doc_open(),
+        annotations(read_only_hint = false, destructive_hint = true, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn t_doc_open(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         // Absolute from here down. A relative path resolves against the
@@ -868,7 +871,8 @@ impl FundaCad {
 `path` is a file the machine FundaCAD runs on can open, and is how anything of real size gets in. `content` is the file itself, for when you have no path to give: gzip it (`compression`, and a STEP shrinks about tenfold), and split it with `part` and `parts` if one message will not hold it.\n\
 But content is written by YOU, so the limit that binds is your own output and not this server's: roughly one message per piece, and a file needing more than a handful of pieces is one to ask for a path to instead. If you cannot reach the file from where you are, ask the person you are working with for its path on the machine FundaCAD runs on, or ask them to open it in FundaCAD themselves (File, Import Mesh), which puts it in the document for `inspect` to measure. Do not substitute a simplified stand-in for the real part: fitting to an approximation is the failure this tool exists to prevent.\n\
 The format comes from the extension unless given. A .gltf whose buffers sit in separate files needs `path`, its neighbours cannot come as `content`. A large STEP can take minutes: it is one read, so do it once and keep the document. A DXF drawing arrives as one sketch per layer on the XY plane, ready to extrude, and only its 3D faces as a body; a binary DXF goes as base64, an ASCII one may go as text. An SVG drawing arrives the same way, one sketch per top level group or Inkscape layer, Y up, healed into closed outlines that extrude with their holes; strokes come in as open curves.",
-        input_schema = crate::tools::doc_import()
+        input_schema = crate::tools::doc_import(),
+        annotations(read_only_hint = false, destructive_hint = false, idempotent_hint = false, open_world_hint = false)
     )]
     pub async fn t_doc_import(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         Ok(self.doc_import(&args).await)
@@ -877,7 +881,8 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
     #[tool(
         name = "doc_save",
         description = "Write the document to a .funda file, which the FundaCAD app opens directly. Saves to the path it was opened from if none is given.",
-        input_schema = crate::tools::doc_save()
+        input_schema = crate::tools::doc_save(),
+        annotations(read_only_hint = false, destructive_hint = true, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn t_doc_save(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         let mut st = self.state.lock().await;
@@ -940,7 +945,8 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
     #[tool(
         name = "doc_get",
         description = "The whole document as JSON: parameters, the feature timeline in order, and `bodyIds`, the record that keeps every body's id. Pass all of it back to `doc_set` and the same ids come out.",
-        input_schema = crate::tools::doc_get()
+        input_schema = crate::tools::doc_get(),
+        annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn t_doc_get(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         let st = self.state.lock().await;
@@ -974,7 +980,8 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
     #[tool(
         name = "doc_set",
         description = "Replace the whole document with the given JSON. For wholesale rewrites; prefer the feature_* tools for edits. Keep the `bodyIds` that `doc_get` gave; without it the document is numbered as a new one, where a join keeps the id of the body it merges into.",
-        input_schema = crate::tools::doc_set()
+        input_schema = crate::tools::doc_set(),
+        annotations(read_only_hint = false, destructive_hint = true, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn t_doc_set(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         let doc = match require(&args, "document") {
@@ -1017,7 +1024,8 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
     #[tool(
         name = "param_set",
         description = "Define or redefine a parameter. `expr` may be a number or an expression over other parameters (\"hub_d/2 - wall\"). Features reference it by NAME, which is what keeps the model parametric. Function arguments are separated by SEMICOLONS and trig is in degrees. Comparisons (< <= > >= == !=), && || ! yield 1 or 0, and if(cond; a; b) picks a branch: \"if(solid == 1; 0; innerX)\". Refused, changing nothing, if the expression does not resolve.",
-        input_schema = crate::tools::param_set()
+        input_schema = crate::tools::param_set(),
+        annotations(read_only_hint = false, destructive_hint = true, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn t_param_set(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         let name = match require_str(&args, "name") {
@@ -1055,7 +1063,8 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
     #[tool(
         name = "param_remove",
         description = "Delete a parameter. Refused if anything still uses it.",
-        input_schema = crate::tools::param_remove()
+        input_schema = crate::tools::param_remove(),
+        annotations(read_only_hint = false, destructive_hint = true, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn t_param_remove(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         let name = match require_str(&args, "name") {
@@ -1074,7 +1083,8 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
     #[tool(
         name = "feature_add",
         description = "Append a feature to the timeline (or insert it at `at`). Returns the id it was given. Call `schema` for the shape of one.",
-        input_schema = crate::tools::feature_add()
+        input_schema = crate::tools::feature_add(),
+        annotations(read_only_hint = false, destructive_hint = false, idempotent_hint = false, open_world_hint = false)
     )]
     pub async fn t_feature_add(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         let feature = match require(&args, "feature") {
@@ -1094,7 +1104,8 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
     #[tool(
         name = "feature_update",
         description = "Merge `patch` into a feature. A null value in the patch REMOVES that field. A new `type` is checked as that type, so send the fields it needs in the same patch. Pass replace=true to swap the whole body instead.",
-        input_schema = crate::tools::feature_update()
+        input_schema = crate::tools::feature_update(),
+        annotations(read_only_hint = false, destructive_hint = true, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn t_feature_update(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         let id = match require_str(&args, "id") {
@@ -1119,7 +1130,8 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
     #[tool(
         name = "feature_remove",
         description = "Delete a feature from the timeline.",
-        input_schema = crate::tools::feature_remove()
+        input_schema = crate::tools::feature_remove(),
+        annotations(read_only_hint = false, destructive_hint = true, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn t_feature_remove(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         let id = match require_str(&args, "id") {
@@ -1139,7 +1151,8 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
     #[tool(
         name = "feature_move",
         description = "Move a feature to another position in the timeline.",
-        input_schema = crate::tools::feature_move()
+        input_schema = crate::tools::feature_move(),
+        annotations(read_only_hint = false, destructive_hint = true, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn t_feature_move(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         let id = match require_str(&args, "id") {
@@ -1163,7 +1176,8 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
     #[tool(
         name = "edit",
         description = "Several feature and parameter edits in one call, applied in order and all or nothing: if one is refused, none is applied and the reply names it. Each entry of `ops` is {op, ...} with that tool's own arguments: add (feature_add), update (feature_update), remove, move, param (param_set), param_remove. Later entries may use ids that earlier ones gave. Pass build:true to build once at the end. Prefer this to a run of single feature_* calls.",
-        input_schema = crate::tools::edit()
+        input_schema = crate::tools::edit(),
+        annotations(read_only_hint = false, destructive_hint = true, idempotent_hint = false, open_world_hint = false)
     )]
     pub async fn t_edit(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         Ok(self.edit(&args).await)
@@ -1172,7 +1186,8 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
     #[tool(
         name = "interference",
         description = "Which bodies overlap, and by how much, without changing the document. Reports every overlapping pair with the overlap's volume and box, and pairs closer than `clearance` (default 1 mm) with their gap. `sweep` repeats the check at each value of a parameter, for a mechanism: {param:\"press\", from:0, to:12, steps:13} gives the clashes and the smallest gap at every step. A body that is not a closed solid (a surface, an open or badly joined shell, as some imports are) cannot be judged: it is listed under NOT CHECKED with why, and no pair with it is called clear. Use this, not an intersect feature, to check fits and clearances.",
-        input_schema = crate::tools::interference()
+        input_schema = crate::tools::interference(),
+        annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn t_interference(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         Ok(self.interference(&args).await)
@@ -1181,7 +1196,8 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
     #[tool(
         name = "section",
         description = "Cut the built bodies with a plane and get, per body, the outline in the plane as closed loops of points and the section properties: area, centroid, second moments of area about the centroid (and principal ones when they differ), furthest fibre, section modulus and polar moment. For quick beam and spring checks. `axis` and `at` cut across X, Y or Z; `origin` and `normal` cut at any angle. Changes nothing.",
-        input_schema = crate::tools::section()
+        input_schema = crate::tools::section(),
+        annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn t_section(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         Ok(self.section(&args).await)
@@ -1190,7 +1206,8 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
     #[tool(
         name = "stress",
         description = "Linear static stress analysis of one body, without changing the document. Hold faces still with `fixed`, or with `supports` that are fixed, pinned (a hole or a pin, free to turn about its axis) or slider (held across the face only), push on others with `loads` (a total force in N or a pressure in MPa), add the body's own weight with `gravity`, pick a `material` by name (PLA, PETG, ABS, ASA, PA12 nylon, PC, aluminium 6061-T6, steel S235) or as {E, nu, yield, density} in MPa and g/cm3. Faces are the per-face selectors `inspect` lists with detail:true and selectors:true. A load, or a fixed support, on a place with no face of its own takes `spots` instead, each {at: [x, y, z], radius}: the surface within the radius of a point on the body. Units are mm, N and MPa. Answers with the peak von Mises stress and where, the largest deflection and where, the safety factor against yield, applied load (with the weight) against reaction, the reaction at each support, the mesh, warnings to heed, and a PNG coloured blue (low) to red (high) by stress. Takes seconds to a minute.",
-        input_schema = crate::tools::stress()
+        input_schema = crate::tools::stress(),
+        annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn t_stress(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         Ok(self.stress(&args).await)
@@ -1199,7 +1216,8 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
     #[tool(
         name = "printability",
         description = "Check the built parts for FDM printing before they are printed: overhangs past the angle that prints unsupported (45 deg), walls under two nozzle widths, floors under two layers, gaps narrow enough to fuse, flat ceilings bridged further than 10 mm, and shells that are not closed solids. Each finding names the face (F index, for `inspect` and `view` highlight_faces) and ends in a `view` focus. As modelled with +Z up, or `layFlat` as `export` would lay the parts. Measured on a fine mesh, the triangles an STL export holds. A flat ceiling counts as a bridge when walls hold it on two opposite sides, otherwise it is an overhang. Changes nothing.",
-        input_schema = crate::tools::printability()
+        input_schema = crate::tools::printability(),
+        annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn t_printability(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         Ok(self.printability(&args).await)
@@ -1208,7 +1226,8 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
     #[tool(
         name = "sketch_merge",
         description = "Replace closed shapes of a sketch that overlap or touch (rectangles, circles, polygons, slots, loops of lines and arcs) with the lines, arcs and circles that bound their union, so the sketch has one area where the overlaps made several, and an extrude picks it with one `regions` point. Leave out a shape meant as a hole. Constraints on the merged shapes are dropped. The outline is fixed numbers: shapes sized by parameters are refused unless `bake` is true. Replies with a point inside each merged area.",
-        input_schema = crate::tools::sketch_merge()
+        input_schema = crate::tools::sketch_merge(),
+        annotations(read_only_hint = false, destructive_hint = true, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn t_sketch_merge(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         Ok(self.sketch_merge(&args).await)
@@ -1217,7 +1236,8 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
     #[tool(
         name = "build",
         description = "Rebuild the document and report what came out: the bodies, their sizes, and any feature that failed. Build often, an error names the feature that caused it. isError is true if ANY feature failed, even when other features still produced bodies; the text still lists everything that did build, so check isError rather than scanning for \"FEATURE FAILED\".",
-        input_schema = crate::tools::build()
+        input_schema = crate::tools::build(),
+        annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn t_build(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         Ok(self.build(truthy(args.get("full"))).await)
@@ -1226,7 +1246,8 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
     #[tool(
         name = "inspect",
         description = "Exact measurements of the built bodies. A bare call returns a one-line summary per body (volume, area, bounding box); pass detail:true and selectors:true to also list every face and edge with a ready-made SELECTOR you can paste into the next feature. Also flags seam edges and wrapping faces, which are what fillet and press/pull refuse.",
-        input_schema = crate::tools::inspect()
+        input_schema = crate::tools::inspect(),
+        annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn t_inspect(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         Ok(self.inspect(&args).await)
@@ -1235,7 +1256,8 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
     #[tool(
         name = "measure",
         description = "Exact measurements on the B-rep, without changing the document. With one thing (`a`): a face's surface, area, normal or radius and axis, an edge's length, direction or circle, a body's volume and size. With two (`a` and `b`): the minimum distance and both closest points, the gap between parallel planar faces (a wall), centre to centre or axis to axis distance (a hole pitch), and the angle between planes, lines and axes. Things are face or edge selectors from `inspect` (detail:true, selectors:true) with their body, {body, face: n} or {body, edge: n}, a body id, or {point: [x, y, z]}. Units mm and degrees, rounded to 3 places, the raw values follow on the `raw:` line.",
-        input_schema = crate::tools::measure()
+        input_schema = crate::tools::measure(),
+        annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn t_measure(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         Ok(self.measure(&args).await)
@@ -1244,7 +1266,8 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
     #[tool(
         name = "view",
         description = "Render the built model as a PNG. Orthographic, flat-shaded, with edges drawn. Use it to check what the numbers cannot tell you. `section` cuts it open, which is the only way to see a bore, a pocket or a thread; `bodies` draws one part of an assembly; `focus` zooms in on a point, which is the only way to see a small feature on a large part.",
-        input_schema = crate::tools::view()
+        input_schema = crate::tools::view(),
+        annotations(read_only_hint = true, destructive_hint = false, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn t_view(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         Ok(self.view(&args).await)
@@ -1253,7 +1276,8 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
     #[tool(
         name = "export",
         description = "Write the model to STEP, STL or 3MF. `separate` writes one file per body, named after the body; `body` writes one body, `bodies` a list of them, merged or with `separate`; `layFlat` turns the parts for printing. Refused if a feature failed to build, naming which, unless allowPartial:true is passed, in which case it writes the file anyway and still names the failures.",
-        input_schema = crate::tools::export()
+        input_schema = crate::tools::export(),
+        annotations(read_only_hint = false, destructive_hint = true, idempotent_hint = true, open_world_hint = false)
     )]
     pub async fn t_export(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
         let path = match require_str(&args, "path") {
