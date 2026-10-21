@@ -41,8 +41,8 @@ describe("a save that cannot hold the sections a .fundab carried", () => {
     await saveDocument(store("D:/parts/a.funda", carried) as any);
     await flush();
     expect(toast).toHaveBeenCalledTimes(1);
-    expect(toast.mock.calls[0][0]).toContain("futureIndex");
-    expect(toast.mock.calls[0][0]).toContain(".fundab");
+    expect(toast.mock.calls[0]?.[0]).toContain("futureIndex");
+    expect(toast.mock.calls[0]?.[0]).toContain(".fundab");
   });
 
   it("says nothing when the file is a .fundab, which keeps them", async () => {
