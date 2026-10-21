@@ -20,6 +20,8 @@ const bubbleAt = ref<Placed | null>(null);
 const paths = ref<string[]>([]);
 const ref_ = ref("");
 const hint = ref("");
+/** The target's own corner radius grown by the ring's inset, so the ring hugs its shape. */
+const radius = ref<string | null>(null);
 const bubble = ref<HTMLElement | null>(null);
 
 const step = computed<StepState | null>(() => {
@@ -41,6 +43,8 @@ function sameBox(a: Box | null, b: Box | null): boolean {
 function locateUi(s: StepState): void {
   const r = resolveControl(s.target.ui ?? "", document);
   target = r.el ?? null;
+  const own = target ? parseFloat(getComputedStyle(target).borderTopLeftRadius) : NaN;
+  radius.value = Number.isFinite(own) && own > 0 ? `${own + 4}px` : null;
   ref_.value = r.el ? (r.via ?? r.ref) : "";
   hint.value = r.el && r.via ? `Open ${labelOf(r.el) || r.via} first` : r.el ? "" : (r.missing ?? "");
   guide.updateResolution(r.el ? { found: true, via: r.via } : { found: false, missing: r.missing, near: r.near });
@@ -115,6 +119,7 @@ function restart(): void {
   paths.value = [];
   hint.value = "";
   ref_.value = "";
+  radius.value = null;
   if (step.value) void nextTick(() => { raf = requestAnimationFrame(follow); });
 }
 
@@ -137,7 +142,9 @@ onUnmounted(() => {
 
 const ringStyle = computed(() => {
   const r = ring.value;
-  return r ? { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` } : {};
+  if (!r) return {};
+  const box = { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` };
+  return radius.value ? { ...box, borderRadius: radius.value } : box;
 });
 const bubbleStyle = computed(() => {
   const b = bubbleAt.value;
@@ -148,11 +155,12 @@ const counter = computed(() => (step.value && step.value.of > 1 ? `Step ${step.v
 
 <template>
   <Teleport to="body">
-    <div v-if="step" class="guide-layer" data-testid="guide-layer">
+    <div v-if="step" class="guide-layer" data-testid="guide-layer" :data-ref="ref_">
       <svg v-if="paths.length" class="guide-model" aria-hidden="true">
         <polyline v-for="(p, i) in paths" :key="i" :points="p" />
       </svg>
-      <div v-if="ring" class="guide-ring" :class="{ 'guide-region': !!step.target.region }" :data-ref="ref_" :style="ringStyle" aria-hidden="true"></div>
+      <!-- A model area is its own outline; a box around it would ring empty space. -->
+      <div v-if="ring && step.target.model === undefined" class="guide-ring" :class="{ 'guide-region': !!step.target.region }" :style="ringStyle" aria-hidden="true"></div>
       <div
         ref="bubble"
         class="guide-bubble"

@@ -232,7 +232,7 @@ export function guide(doc: Document = document): GuideReadout | null {
     caption: text(doc, ".guide-caption"),
     count: text(doc, ".guide-count"),
     hint: text(doc, ".guide-hint"),
-    on: layer.querySelector<HTMLElement>(".guide-ring")?.dataset.ref ?? "",
+    on: (layer as HTMLElement).dataset.ref ?? "",
     ring: boxOf(layer.querySelector(".guide-ring")),
     bubble: boxOf(layer.querySelector(".guide-bubble")),
     outline,
