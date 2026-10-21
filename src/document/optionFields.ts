@@ -139,6 +139,15 @@ const EXTRUDE_ENDS: ChoiceOption[] = [
 
 const END_TITLE = "Up to a target ignores the distance and goes towards the target; the end offset runs past it, negative stops short";
 
+const THIN_SIDES: ChoiceOption[] = [
+  { value: "center", label: "Centered" },
+  { value: "inside", label: "Inside" },
+  { value: "outside", label: "Outside" },
+  { value: "twoSides", label: "Two sides" },
+];
+
+const THIN_SIDE_TITLE = "Inside is the enclosed side, of an open chain the side it bends toward, of a straight line its left as drawn; two sides puts Thickness inside and Thickness 2 outside";
+
 /** The planes and points a document offers a start or end row: the three base
  *  planes and every datum plane, or every datum point, as the row's options. */
 export function datumChoices(field: string, features: readonly Feature[]): ChoiceOption[] | null {
@@ -210,6 +219,8 @@ function extrudeFieldApplies(field: string, v: Record<string, unknown>): boolean
     case "upToPlane2": return two && end2 === "upToPlane";
     case "upToPoint2": return two && end2 === "upToPoint";
     case "endOffset2": return two && end2.startsWith("upTo");
+    case "thickness": case "side": return v.thin === true;
+    case "thickness2": return v.thin === true && v.side === "twoSides";
     default: return true;
   }
 }
@@ -231,6 +242,7 @@ export const FEATURE_CHOICE_FIELDS: Partial<Record<FeatureType, ChoiceField[]>> 
     { field: "endType2", label: "End 2", options: EXTRUDE_ENDS, fallback: "distance", title: END_TITLE },
     { field: "upToPlane2", label: "Up to plane 2", options: PLANES, fallback: "XY" },
     { field: "upToPoint2", label: "Up to point 2", options: [], fallback: "" },
+    { field: "side", label: "Wall side", options: THIN_SIDES, fallback: "center", title: THIN_SIDE_TITLE },
   ],
   revolve: [
     { field: "operation", label: "Operation", options: BOOLEAN_OPS, fallback: "new" },
@@ -341,6 +353,9 @@ export const FEATURE_TOGGLE_FIELDS: Partial<Record<FeatureType, ToggleField[]>> 
   extrude: [
     { field: "symmetric", label: "Symmetric", fallback: false },
     { field: "twoSided", label: "Two sided", fallback: false },
+    // A wall along the sketch's curves instead of its closed areas, which is also
+    // what an open sketch extrudes as.
+    { field: "thin", label: "Thin", fallback: false },
   ],
   thicken: [{ field: "symmetric", label: "Symmetric", fallback: false }],
   fillet: [{ field: "tangentEdges", label: "Include Tangent Edges", fallback: true }],

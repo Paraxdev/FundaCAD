@@ -150,7 +150,7 @@
   },
   "extrude": {
    "summary": "Push a sketch profile along the sketch plane normal.",
-   "notes": "A groove that leaves a 2 mm floor whatever the block's height: {\"id\": \"gr\", \"type\": \"extrude\", \"sketch\": \"sk2\", \"distance\": -1, \"operation\": \"cut\", \"targets\": [\"body1\"], \"endType\": \"upToFace\", \"upToFace\": {\"kind\": \"face\", \"by\": \"tracked\", \"point\": [0, 0, -5], \"normal\": [0, 0, -1], \"body\": \"body1\"}, \"endOffset\": -2}. Traps: `endOffset` is measured along the travel, so a floor is NEGATIVE. Up to and start targets must be flat and parallel to the sketch for now, anything else is refused. Always set `body` on a face selector, without it the newest body is searched. `symmetric` and `twoSided` are exclusive. A target lying on the start, or an offset reaching back past it, is an error, never an empty body.",
+   "notes": "A groove that leaves a 2 mm floor whatever the block's height: {\"id\": \"gr\", \"type\": \"extrude\", \"sketch\": \"sk2\", \"distance\": -1, \"operation\": \"cut\", \"targets\": [\"body1\"], \"endType\": \"upToFace\", \"upToFace\": {\"kind\": \"face\", \"by\": \"tracked\", \"point\": [0, 0, -5], \"normal\": [0, 0, -1], \"body\": \"body1\"}, \"endOffset\": -2}. Traps: `endOffset` is measured along the travel, so a floor is NEGATIVE. Up to and start targets must be flat and parallel to the sketch for now, anything else is refused. Always set `body` on a face selector, without it the newest body is searched. `symmetric` and `twoSided` are exclusive. A target lying on the start, or an offset reaching back past it, is an error, never an empty body. A wall along open lines: {\"id\": \"wall\", \"type\": \"extrude\", \"sketch\": \"sk\", \"distance\": 2400, \"operation\": \"new\", \"thin\": true, \"curves\": [\"l1\", \"l2\", \"l3\"], \"thickness\": 200, \"side\": \"inside\"}. Thin traps: the wall follows `curves`, never `regions` (they are kept for when thin is off). Corners are mitred, and walls that cross or touch fuse into one body. `side` \"inside\" of a straight line is its left as drawn, so reverse the line or use \"outside\" to flip it. Splines and ellipses are refused, and so is a corner sharper than 20 degrees or a wall thicker than its loop is wide.",
    "fields": {
     "sketch": "the id of a sketch feature",
     "distance": "Num, signed; negative goes the other way",
@@ -174,7 +174,12 @@
     "twoSided": "optional bool; adds a second side going the other way, with its own `distance2`, `taper2` and `endType2`. Cannot be combined with `symmetric`",
     "distance2": "Num, how far side two goes the other way (twoSided)",
     "taper2": "optional Num, degrees, side two's taper (twoSided)",
-    "endType2": "optional, side two's end, always the other way from side one, the same choices as `endType`, with `upToFace2`, `upToPlane2`, `upToPoint2` and `endOffset2`"
+    "endType2": "optional, side two's end, always the other way from side one, the same choices as `endType`, with `upToFace2`, `upToPlane2`, `upToPoint2` and `endOffset2`",
+    "thin": "optional bool; a WALL `thickness` thick along sketch curves instead of the closed areas, so an open sketch (lines and arcs that close nothing) extrudes too. Every end type, start type, operation and `targets` work as on any extrude",
+    "curves": "optional list of sketch entity ids the wall follows (thin); absent means every non-construction curve. Lines, arcs, circles, rectangles, polygons, slots and projected curves, in open or closed chains joined end to end",
+    "thickness": "Num, mm, the wall thickness (thin)",
+    "side": "optional, where the wall lies (thin): \"center\" (the default, half each side), \"inside\" (the enclosed side of a closed loop, the side an open chain bends toward, the LEFT of a straight line as drawn), \"outside\", or \"twoSides\" (`thickness` inside and `thickness2` outside)",
+    "thickness2": "Num, mm, the outside thickness when `side` is \"twoSides\""
    },
    "example": {
     "id": "ex1",

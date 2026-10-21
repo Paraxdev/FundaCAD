@@ -39,6 +39,7 @@ import { upgradeFace } from "./holeFace";
 import { findSelectorAt, repickedExtent, repickedSelector, replaceSelectorAt } from "./repickReference";
 import { awaitTreePick, treePickRefusal } from "../ui/treePick";
 import { deferPick } from "./deferPick";
+import { thinExtrudeOf } from "./thinExtrude";
 
 export interface FeatureStartersDeps {
   store: DocumentStore;
@@ -1872,17 +1873,39 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     }
     const chosen = hiddenChosenSketch();
     if (chosen) {
-      if (!extrude.start(committed, { sketch: chosen })) setStatus(`That sketch has no closed profile to extrude${offerTie(chosen)}`, "");
+      if (extrude.start(committed, { sketch: chosen })) return;
+      // Gaps that Tie Loose Ends can close mean a profile was meant, so the tie is offered instead of a wall.
+      if (tieableEnds(chosen) > 0) {
+        setStatus(`That sketch has no closed profile to extrude${offerTie(chosen)}`, "");
+        return;
+      }
+      // An open sketch, lines and arcs with no closed area, extrudes as a wall along them.
+      const wall = thinExtrudeOf(store.document.features, chosen, "");
+      if (!wall) {
+        setStatus(`That sketch has no closed profile or curve to extrude${offerTie(chosen)}`, "");
+        return;
+      }
+      const thin = { ...wall, id: store.nextId() } as Feature;
+      store.addFeature(thin);
+      committed(thin.id);
+      setStatus("Thin extrude: a 2 mm wall along the sketch's curves, set Thickness and Wall side in its rows", "");
       return;
     }
     if (overlay.regions.length === 0) {
-      setStatus("Extrude needs a face or a closed sketch profile", "");
+      setStatus("Extrude needs a face or a closed sketch profile, or an open sketch picked in the tree for a thin wall", "");
       return;
     }
     extrude.start(committed);
   }
 
   /** Why a sketch shows no profile, when loose ends are why, with a toast that ties them. */
+  function tieableEnds(sketchId: string): number {
+    const sk = asFeature(store.document.features.find((f) => f.id === sketchId), "sketch");
+    if (!sk?.entities) return 0;
+    const ents = resolveRealEntities(sk, store.document.parameters);
+    return looseEnds(ents, sk.constraints ?? [], defaultReach(ents)).untied.filter((u) => u.tieable).length;
+  }
+
   function offerTie(sketchId: string): string {
     const sk = asFeature(store.document.features.find((f) => f.id === sketchId), "sketch");
     if (!sk?.entities) return "";
