@@ -4078,6 +4078,10 @@ export class Viewport {
       render: this.scene.renderer.info.render,
       passes: { ms: this.passTimes(), kind: this.scene.post.timer.kind },
       seam: { ms: this.seamMs, skipped: this.seamSkipped },
+      trace: {
+        state: this.trace.state, backend: this.trace.backendName, samples: this.trace.samples, denoised: this.trace.denoised,
+        fault: this.trace.lastFault, gpu: `${describeProbe(this.gpu)}; ${describeNative(this.native)}`,
+      },
     });
   }
 

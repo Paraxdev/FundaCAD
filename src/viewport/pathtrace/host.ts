@@ -117,6 +117,7 @@ export class PathTraceHost {
   private sawSample = false;
   private size = { w: 0, h: 0, ratio: 0 };
   private refusedSig = "";
+  private faultText: string | null = null;
   private offSince = 0;
   /** At the cap the final denoise and its crossfade are drawn, then nothing. */
   private settled = false;
@@ -154,6 +155,11 @@ export class PathTraceHost {
 
   get backendName(): string {
     return this.backend?.name ?? "";
+  }
+
+  /** The newest fault this session, for the bug report. */
+  get lastFault(): string | null {
+    return this.faultText;
   }
 
   get denoised(): boolean {
@@ -510,6 +516,7 @@ export class PathTraceHost {
   }
 
   private fault(why: string) {
+    this.faultText = why;
     this.faults++;
     this.disabled = this.faults >= 2;
     const b = this.backend;
