@@ -5,7 +5,7 @@ vi.mock("@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url", () => ({
   default: process.cwd() + "/node_modules/@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm",
 }));
 
-import { looseEnds, tieConstraints } from "../../src/sketch/looseEnds";
+import { defaultReach, gapReport, looseEnds, tieConstraints } from "../../src/sketch/looseEnds";
 import { detectRegions } from "../../src/sketch/region";
 import { compileAndSolve } from "../../src/sketch/sketchSolve";
 import { SketchHistory, cloneSnapshot, type SketchSnapshot } from "../../src/sketch/history";
@@ -215,5 +215,41 @@ describe("tying loose ends closes the profile", () => {
     expect(h.depth).toBe(1);
     expect(h.undo(after)).toEqual(before);
     expect(h.canUndo).toBe(false);
+  });
+});
+
+// A 50 mm square whose last side stops `gap` short of the first corner, the
+// closed corners held as the sketcher's snaps hold them.
+const square = (gap: number) => [L("a", 0, 0, 50, 0), L("b", 50, 0, 50, 50), L("c", 50, 50, 0, 50), L("d", 0, 50, 0, gap)];
+const corners = [co("a", 1, "b", 0), co("b", 1, "c", 0), co("c", 1, "d", 0)];
+const report = (ents: ResolvedEntity[], cs: SketchConstraint[]) => gapReport(ents, cs, defaultReach(ents));
+
+describe("gap report: a profile with a gap or an open sketch", () => {
+  it("a gap within the snap reach is tieable as before", () => {
+    expect(report(square(0.05), corners).kind).toBe("tieable");
+  });
+
+  it("a 3 mm gap on a 50 mm square is a gap, beyond the 0.7 mm snap reach", () => {
+    const r = report(square(3), corners);
+    expect(r.kind).toBe("gap");
+    expect(r.open).toBe(2);
+    expect(r.gapMm).toBeCloseTo(3, 6);
+    expect(r.reach).toBeGreaterThanOrEqual(3);
+    const ties = tieConstraints(looseEnds(square(3), corners, r.reach), corners);
+    expect(ties).toEqual([co("a", 0, "d", 1)]);
+  });
+
+  it("an L with ends 70 mm apart is clearly open", () => {
+    const ell = [L("a", 0, 0, 50, 0), L("b", 50, 0, 50, 50)];
+    expect(report(ell, [co("a", 1, "b", 0)]).kind).toBe("open");
+  });
+
+  it("a U whose ends are a whole side apart is open", () => {
+    const u = [L("a", 0, 0, 50, 0), L("b", 50, 0, 50, 50), L("d", 0, 50, 0, 0)];
+    expect(report(u, [co("a", 1, "b", 0), co("d", 1, "a", 0)]).kind).toBe("open");
+  });
+
+  it("a closed square has nothing loose", () => {
+    expect(report(square(0), [...corners, co("d", 1, "a", 0)]).kind).toBe("none");
   });
 });

@@ -936,12 +936,14 @@ export class SketchMode {
   }
 
   /** Tie every amber end to what it touches as one undo step. A tie the solver would
-   *  reject is left out, so a tie never turns the sketch red. */
-  async tieLooseEnds(): Promise<{ tied: number; open: number; untied: number }> {
-    const le = looseEnds(this.entities, this.constraints, this.snapTolMm());
+   *  reject is left out, so a tie never turns the sketch red.
+   *  `reachMm` is a reach the person confirmed, wider than the snap's, to close a gap. */
+  async tieLooseEnds(reachMm?: number): Promise<{ tied: number; open: number; untied: number }> {
+    const snap = this.snapTolMm();
+    const le = looseEnds(this.entities, this.constraints, Math.max(snap, reachMm ?? 0));
     let ties = tieConstraints(le, this.constraints);
     const left = () => {
-      const now = looseEnds(this.entities, this.constraints, this.snapTolMm());
+      const now = looseEnds(this.entities, this.constraints, snap);
       return { open: now.open.length, untied: now.untied.length };
     };
     if (!ties.length || this.solverDead) {
@@ -971,7 +973,7 @@ export class SketchMode {
     setPrompt(
       ties.length
         ? `Tied ${ties.length} loose end${ties.length === 1 ? "" : "s"}${rest ? `, ${rest} left` : ""}`
-        : "Tying these ends would over constrain the sketch",
+        : `Tying these ends would over constrain the sketch${reachMm ? ", draw a line to close the gap" : ""}`,
     );
     return after;
   }
