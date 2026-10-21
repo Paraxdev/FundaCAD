@@ -439,6 +439,7 @@ export class HoleTool {
   /** Beside the model rather than over it: the face under the box is where the
    *  next click goes. */
   private positionDim(anchor: THREE.Vector3) {
+    this.dim.fitToWindow();
     const s = this.viewport.projectToScreen(anchor);
     const box = this.viewport.modelBox();
     if (!box) return this.dim.position(s.x + 24, s.y + 24);
