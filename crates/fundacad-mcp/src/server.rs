@@ -2062,6 +2062,14 @@ impl FundaCad {
             return failure(format!("Inspect failed: {}", error_message(&reply)));
         }
         let mut report = reply.get("result").cloned().unwrap_or_else(|| json!({}));
+        if let Some(wanted) = report.get("unknown").and_then(Value::as_array).and_then(|u| u.first()).and_then(Value::as_str) {
+            let have = report.get("have").and_then(Value::as_array).map_or(&[][..], Vec::as_slice);
+            return failure(if have.is_empty() {
+                format!("no body '{wanted}', this build made no bodies")
+            } else {
+                no_such_body(wanted, have)
+            });
+        }
         // `errors`, inspect's own name for the same thing `rebuild` calls
         // `featureErrors`: a feature that failed mid-build, reported beside
         // the bodies that did build rather than refusing the inspection.
