@@ -13,6 +13,7 @@ import type { DocumentStore } from "../document/store";
 import type { Feature, HoleType, Selector, Vec3 } from "../types";
 import { asFeature } from "../types";
 import { DimInput } from "../sketch/dimInput";
+import { clearOfCards } from "../ui/promptPlacement";
 import { setPrompt } from "../ui/prompt";
 import { CanvasGesture } from "./canvasGesture";
 import { hitPx } from "../input/pointerKind";
@@ -27,6 +28,7 @@ import { rebaseHole, trackedFace, upgradeFace, withExtent } from "./holeFace";
 type HoleFeature = Extract<Feature, { type: "hole" }>;
 
 const SETTLE_MS = 120;
+const FREE_GAP = 12; // --float-gap
 const TYPE_LABEL: Record<HoleType, string> = {
   simple: "Simple", counterbore: "Counterbore", countersink: "Countersink", insert: "Insert",
 };
@@ -440,15 +442,17 @@ export class HoleTool {
     const s = this.viewport.projectToScreen(anchor);
     const box = this.viewport.modelBox();
     if (!box) return this.dim.position(s.x + 24, s.y + 24);
-    let minX = Infinity;
-    let maxX = -Infinity;
+    const model = { left: Infinity, right: -Infinity, top: Infinity, bottom: -Infinity };
     for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) {
       const c = this.viewport.projectToScreen(new THREE.Vector3(x, y, z));
-      minX = Math.min(minX, c.x);
-      maxX = Math.max(maxX, c.x);
+      model.left = Math.min(model.left, c.x);
+      model.right = Math.max(model.right, c.x);
+      model.top = Math.min(model.top, c.y);
+      model.bottom = Math.max(model.bottom, c.y);
     }
-    const right = maxX + 8;
-    this.dim.position(right + 240 < window.innerWidth ? right : Math.max(0, minX - 280), s.y - 16);
+    const area = this.viewport.domElement.getBoundingClientRect();
+    const free = clearOfCards(area, { top: s.y - 24, bottom: s.y + 24 }, FREE_GAP, this.dim.naturalSize().w);
+    this.dim.positionBeside(model, s, free);
   }
 
   private valueChanged() {

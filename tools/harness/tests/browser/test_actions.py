@@ -150,6 +150,22 @@ def test_import_file_drops_a_mesh_and_counts_the_bodies(s, tmp_path):
     assert s.page.locator("input[data-harness-drop]").count() == 0
 
 
+def test_the_hole_value_box_fits_the_window_at_1400(plate):
+    plate.pick_face("top")
+    plate.tool("Hole")
+    box = plate.page.evaluate(
+        """() => {
+          const r = [...document.querySelectorAll('.dim-input')].map((b) => b.getBoundingClientRect()).find((b) => b.width > 0);
+          return r && { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: window.innerWidth, height: window.innerHeight };
+        }"""
+    )
+    assert box, "the Hole tool opened no value box"
+    assert box["width"] == 1400
+    assert box["left"] >= 0 and box["right"] <= box["width"], box
+    assert box["top"] >= 0 and box["bottom"] <= box["height"], box
+    plate.press("Escape")
+
+
 @pytest.mark.parametrize("label", ["Text", "Project", "Rect Pattern", "Circular Pat."])
 def test_a_sketch_tool_starts_with_a_prompt(s, label):
     s.tool("Sketch")
