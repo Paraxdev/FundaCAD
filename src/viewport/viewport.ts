@@ -4342,6 +4342,8 @@ export class Viewport {
       this.lingerFrames = Math.max(this.lingerFrames, 1);
     }
     if (!model || ((mode === "full" || !this.motionActive) && w >= 1)) {
+      // The last moving frame drew batches, the picture at rest is the full set.
+      if (this.edgeFrameNow) this.lingerFrames = Math.max(this.lingerFrames, 1);
       this.edgeFrameNow = null;
       if (post.edgesHeld && this.edgeBatchesOf !== model) post.releaseEdges();
       return;
