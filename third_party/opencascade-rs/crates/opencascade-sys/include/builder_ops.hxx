@@ -1061,10 +1061,18 @@ inline bool bo_cut_inside(const TopoDS_Shape &base, const TopoDS_Shape &result) 
 // volume), so an impossible result is redone with the operands swapped.
 // A cut that reaches outside its base is impossible whatever its volume.
 // `vols` is the base's signed volume then each tool's, when the caller has
-// them already; empty means measure here. `out_vol` gets the answer's.
+// them already; empty means measure here. `out_vol` gets the answer's,
+// `out_rung` the step that gave it (0 the result as handed in, 1 and 2 that
+// result taken by a looser volume check, 3 the operands swapped, 4 a coarser
+// fuzz) and `out_fuzz` the fuzz that step ran with.
 inline TopoDS_Shape bo_checked(const TopoDS_Shape &result, const TopoDS_Shape &base, const TopTools_ListOfShape &tools,
                                int kind, bool parallel, double fuzzy, const std::vector<double> &vols = {},
-                               double *out_vol = nullptr) {
+                               double *out_vol = nullptr, int32_t *out_rung = nullptr, double *out_fuzz = nullptr) {
+  auto rung = [&](int32_t n) {
+    if (out_rung) *out_rung = n;
+  };
+  rung(0);
+  if (out_fuzz) *out_fuzz = fuzzy;
   bool known = vols.size() == (size_t)tools.Extent() + 1;
   double a = known ? vols[0] : bo_volume(base);
   std::vector<double> tv;
@@ -1104,6 +1112,7 @@ inline TopoDS_Shape bo_checked(const TopoDS_Shape &result, const TopoDS_Shape &b
     double r2 = bo_volume(bop.Shape());
     if (good(r2) && contained(bop.Shape())) {
       if (out_vol) *out_vol = r2;
+      rung(3);
       return bop.Shape();
     }
   }
@@ -1115,7 +1124,10 @@ inline TopoDS_Shape bo_checked(const TopoDS_Shape &result, const TopoDS_Shape &b
   // body, so a result that misses by less than that is taken as it is, and an
   // inside out one is righted later by bo_unify_body.
   const double loose = 1e-3;
-  if (bo_volume_plausible(kind, a, tv, r, loose) || bo_volume_plausible(kind, a, tv, -r, loose)) return result;
+  if (bo_volume_plausible(kind, a, tv, r, loose) || bo_volume_plausible(kind, a, tv, -r, loose)) {
+    rung(1);
+    return result;
+  }
   // On a lofted freeform face the quick integration can miss by a percent, so
   // nothing is called impossible until every operand is measured closely.
   const double close = 1e-5;
@@ -1125,6 +1137,7 @@ inline TopoDS_Shape bo_checked(const TopoDS_Shape &result, const TopoDS_Shape &b
   double rp = bo_volume_precise(result);
   if (bo_volume_plausible(kind, a, tv, rp, close) || bo_volume_plausible(kind, a, tv, -rp, close)) {
     if (out_vol) *out_vol = rp;
+    rung(2);
     return result;
   }
   // Grossly impossible, as a chute cut into a scaled-sphere bowl that dropped
@@ -1138,6 +1151,8 @@ inline TopoDS_Shape bo_checked(const TopoDS_Shape &result, const TopoDS_Shape &b
       bool changed = kind != 1 || r3 < a * (1 - 1e-6);
       if (changed && bo_volume_plausible(kind, a, tv, r3, close) && !(kind == 0 && r3 <= rp) && contained(s)) {
         if (out_vol) *out_vol = r3;
+        rung(4);
+        if (out_fuzz) *out_fuzz = f;
         return s;
       }
     } catch (...) {
@@ -1172,14 +1187,23 @@ inline TopoDS_Shape bo_bool_run(const TopoDS_Shape &base, const TopTools_ListOfS
 // kind 0 fuse, 1 cut, 2 common. `tools` is a compound whose children are the
 // tool list. `parallel` true with no fuzz is build123d's operator; false with a
 // fuzz is booleans.py `_serial_bool`.
-inline BoShape bo_boolean(const TopoDS_Shape &base, const TopoDS_Shape &tools, int kind,
-                          bool parallel, double fuzzy, bool unwrap) {
+// `out_rung` and `out_fuzz` as `bo_checked` gives them.
+inline BoShape bo_boolean_rung(const TopoDS_Shape &base, const TopoDS_Shape &tools, int kind, bool parallel,
+                               double fuzzy, bool unwrap, int32_t &out_rung, double &out_fuzz) {
   BO_GUARD(
       TopTools_ListOfShape tl = bo_tool_list(tools);
-      TopoDS_Shape out = bo_checked(bo_bool_run(base, tl, kind, parallel, fuzzy), base, tl, kind, parallel, fuzzy);
+      TopoDS_Shape out = bo_checked(bo_bool_run(base, tl, kind, parallel, fuzzy), base, tl, kind, parallel, fuzzy, {},
+                                    nullptr, &out_rung, &out_fuzz);
       out = bo_unify(bo_drop_internal_edges(out, bo_internal_edges(base, tl)));
       if (unwrap) out = bo_unwrap(out);
       return bo_own(out);)
+}
+
+inline BoShape bo_boolean(const TopoDS_Shape &base, const TopoDS_Shape &tools, int kind, bool parallel, double fuzzy,
+                          bool unwrap) {
+  int32_t rung = 0;
+  double used = fuzzy;
+  return bo_boolean_rung(base, tools, kind, parallel, fuzzy, unwrap, rung, used);
 }
 
 // bo_boolean's steps one at a time, so each can be timed and a caller that
@@ -1191,9 +1215,9 @@ inline BoShape bo_bool_build(const TopoDS_Shape &base, const TopoDS_Shape &tools
 
 inline BoShape bo_bool_check(const TopoDS_Shape &result, const TopoDS_Shape &base, const TopoDS_Shape &tools,
                              int kind, bool parallel, double fuzzy, rust::Slice<const double> vols,
-                             double &out_vol) {
+                             double &out_vol, int32_t &out_rung, double &out_fuzz) {
   BO_GUARD(std::vector<double> v(vols.begin(), vols.end()); TopTools_ListOfShape tl = bo_tool_list(tools);
-           TopoDS_Shape out = bo_checked(result, base, tl, kind, parallel, fuzzy, v, &out_vol);
+           TopoDS_Shape out = bo_checked(result, base, tl, kind, parallel, fuzzy, v, &out_vol, &out_rung, &out_fuzz);
            return bo_own(bo_drop_internal_edges(out, bo_internal_edges(base, tl)));)
 }
 

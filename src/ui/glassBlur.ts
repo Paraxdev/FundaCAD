@@ -27,6 +27,10 @@ function apply() {
   document.documentElement.classList.toggle(NO_GLASS_BLUR_CLASS, glassBlurOff());
 }
 
+export function isSoftwareRenderer(): boolean {
+  return softwareRenderer;
+}
+
 /** Recorded by the viewport once it has a WebGL context and knows the renderer's name. */
 export function setSoftwareRenderer(v: boolean): void {
   if (v === softwareRenderer) return;

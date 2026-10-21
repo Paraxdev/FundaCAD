@@ -33,7 +33,7 @@
 import { onUnmounted, ref, watch } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useBuildValue, useDocValue } from "../../app/useDoc";
-import { featureNotes } from "../../ui/featureNotes";
+import { featureNotes, featurePlaceholders, placeholderNote } from "../../ui/featureNotes";
 import ValidatedRow from "./ValidatedRow.vue";
 import ChoiceRow from "./ChoiceRow.vue";
 import ToggleRow from "./ToggleRow.vue";
@@ -74,6 +74,7 @@ import { mechanismDriveChoice, mechanismDrivePatch } from "../../document/mechan
 import { targetsFor } from "../../features/selectionTargets";
 import { featureLabel } from "../../features/patternSources";
 import { holeChoicePatch } from "../../features/holeStandards";
+import { thinTogglePatch } from "../../features/thinExtrude";
 import { asFeature } from "../../types";
 import type { DimField, Feature, Num, ParamTarget } from "../../types";
 
@@ -92,12 +93,15 @@ const targetRows = useDocValue((doc) => {
   return f ? targetsFor(f) : [];
 });
 
-// The features a pattern repeats, by name. Read only: which features is chosen
-// by pointing at them before Pattern starts.
+// A feature of a type this version does not know shows no fields, so it stays
+// exactly as the newer version wrote it.
+const placeholder = useBuildValue((b) => featurePlaceholders({ skippedFeatures: b?.result?.skippedFeatures }).get(props.featureId) ?? null);
 // What the build had to say about this feature, the same note its history chip
 // carries, written out where the feature's values are read.
 const buildNote = useBuildValue((b) =>
-  b
+  placeholder.value !== null
+    ? placeholderNote(placeholder.value)
+    : b
     ? featureNotes({
         featureErrors: b.result?.featureErrors,
         errorFeatureId: b.errorFeatureId,
@@ -106,6 +110,8 @@ const buildNote = useBuildValue((b) =>
     : null,
 );
 
+// The features a pattern repeats, by name. Read only: which features is chosen
+// by pointing at them before Pattern starts.
 const repeatedLabels = useDocValue((doc) => {
   const f = doc.features.find((x) => x.id === props.featureId);
   const ids = (f as { features?: string[] } | undefined)?.features ?? [];
@@ -339,6 +345,7 @@ function setOption(field: string, value: string | boolean) {
   if (f?.type === "chamfer" && field === "chamferType" && value === "twoDistance" && f.distance2 == null) {
     patch.distance2 = f.distance;
   }
+  if (f?.type === "extrude" && field === "thin") patch = thinTogglePatch(f, value === true);
   store.updateFeature(props.featureId, patch as unknown as Partial<Feature>);
 }
 
@@ -545,64 +552,68 @@ function commitField(
 
 <template>
   <div v-if="buildNote" class="param-note" role="note">{{ buildNote }}</div>
-  <div v-if="repeatedLabels.length" class="param-row">
-    <label>Features</label>
-    <div class="param-value">{{ repeatedLabels.join(", ") }}</div>
-  </div>
-  <SelectionTargetRow
-    v-for="t in targetRows"
-    :key="`s:${t.field}`"
-    :feature-id="featureId"
-    :target="t"
-  />
-  <ChoiceRow
-    v-for="c in choiceRows"
-    :key="`c:${c.field}`"
-    :label="c.label"
-    :value="c.current"
-    :options="c.options"
-    :row-title="c.title"
-    :commit="(v) => setOption(c.field, v)"
-  />
-  <FileRow
-    v-for="r in fileRows"
-    :key="`f:${r.field}`"
-    :label="r.label"
-    :value="r.current"
-    :filters="r.filters"
-    :row-title="r.title"
-    :commit="(v) => setOption(r.field, v)"
-  />
-  <ToggleRow
-    v-for="t in toggleRows"
-    :key="`t:${t.field}`"
-    :label="t.label"
-    :value="t.current"
-    :commit="(v) => setOption(t.field, v)"
-  />
-  <ValidatedRow
-    v-for="r in sketchRows"
-    :key="r.key"
-    :label="r.label"
-    :value="r.value"
-    :unit="r.unit"
-    :pick-unit="(x, y) => pickUnit(r.key, 'length', x, y)"
-    hint="a value with any unit (2mm, 1 inch, 1/2&quot;)"
-    :commit="(raw) => commitSketchDim(r, raw)"
-  />
-  <ValidatedRow
-    v-for="r in featureRows"
-    :key="r.key"
-    :label="r.label"
-    :value="r.value"
-    :unit="r.unit"
-    :pick-unit="r.pickable ? (x, y) => pickUnit(r.key, r.kind, x, y) : undefined"
-    :row-class="r.rowClass"
-    :row-title="r.rowTitle"
-    hint="a value with any unit (2mm, 1 inch, 1/2&quot;), a parameter, or an expression"
-    :commit="(raw) => commitField(r, raw)"
-    :preview="(raw) => previewField(r, raw)"
-    :preview-end="endPreview"
-    :problem="rowProblem(r.key)"
-  />
+  <template v-if="placeholder === null">
+    <div v-if="repeatedLabels.length" class="param-row">
+      <label>Features</label>
+      <div class="param-value">{{ repeatedLabels.join(", ") }}</div>
+    </div>
+    <SelectionTargetRow
+      v-for="t in targetRows"
+      :key="`s:${t.field}`"
+      :feature-id="featureId"
+      :target="t"
+    />
+    <ChoiceRow
+      v-for="c in choiceRows"
+      :key="`c:${c.field}`"
+      :label="c.label"
+      :value="c.current"
+      :options="c.options"
+      :row-title="c.title"
+      :commit="(v) => setOption(c.field, v)"
+    />
+    <FileRow
+      v-for="r in fileRows"
+      :key="`f:${r.field}`"
+      :label="r.label"
+      :value="r.current"
+      :filters="r.filters"
+      :row-title="r.title"
+      :commit="(v) => setOption(r.field, v)"
+    />
+    <ToggleRow
+      v-for="t in toggleRows"
+      :key="`t:${t.field}`"
+      :label="t.label"
+      :value="t.current"
+      :commit="(v) => setOption(t.field, v)"
+    />
+    <ValidatedRow
+      v-for="r in sketchRows"
+      :key="r.key"
+      :field="r.key"
+      :label="r.label"
+      :value="r.value"
+      :unit="r.unit"
+      :pick-unit="(x, y) => pickUnit(r.key, 'length', x, y)"
+      hint="a value with any unit (2mm, 1 inch, 1/2&quot;)"
+      :commit="(raw) => commitSketchDim(r, raw)"
+    />
+    <ValidatedRow
+      v-for="r in featureRows"
+      :key="r.key"
+      :field="r.key"
+      :label="r.label"
+      :value="r.value"
+      :unit="r.unit"
+      :pick-unit="r.pickable ? (x, y) => pickUnit(r.key, r.kind, x, y) : undefined"
+      :row-class="r.rowClass"
+      :row-title="r.rowTitle"
+      hint="a value with any unit (2mm, 1 inch, 1/2&quot;), a parameter, or an expression"
+      :commit="(raw) => commitField(r, raw)"
+      :preview="(raw) => previewField(r, raw)"
+      :preview-end="endPreview"
+      :problem="rowProblem(r.key)"
+    />
+  </template>
 </template>

@@ -1,4 +1,4 @@
-# Cross-platform build + bundle for FundaCAD 1.0 beta: Tauri 2 around the Rust
+# Cross-platform build + bundle for FundaCAD 1.0: Tauri 2 around the Rust
 # geometry engine (docs/ENGINE.md), which runs as a worker process of the
 # same executable.
 #
@@ -6,8 +6,13 @@
 # the 7.8.1 sources and builds them statically into the binary. So this
 # workflow has no brew, vcpkg or apt OCCT step.
 #
-# `build-beta` + `release-beta` publish the rolling `beta` release and its
-# update feed from `main`. It is the only release. The retired Python engine is
+# `bundle` + `release` publish two rolling pre-releases, each with its own
+# update feed (docs/ENGINE.md section 7). A push to `main` publishes the
+# `beta`, once every gating job is green. A push to `dev`, where daily work
+# lands, publishes the bleeding edge `development` build even when its tests
+# are red, and the run still shows red. A
+# `v1.<minor>.<patch>` tag on a commit of `main` still publishes a stable
+# release, though nothing sends people there. The retired Python engine is
 # frozen on the `legacy` branch, which publishes nothing.
 #
 # Scope: x86_64 Linux, Apple Silicon macOS, x86_64 Windows. (No Intel-mac / linux-arm64.)
@@ -16,7 +21,8 @@ name: build
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
+    tags: ["v1.*.*"]
     paths-ignore:
       - "manual/**"
   pull_request:
@@ -28,9 +34,9 @@ permissions:
   contents: read
 
 jobs:
-  # Gates the build matrix with the frontend checks, BEFORE any installer is
-  # built. Runs once on Linux only. The engine's own tests are `rust-geom`,
-  # which gates the build too.
+  # Gates the beta and stable installers with the frontend checks, BEFORE any
+  # of them is built. Runs once on Linux only. The engine's own tests are
+  # `rust-geom`, which gates them too. On dev both only report.
   test:
     runs-on: ubuntu-22.04
     timeout-minutes: 30
@@ -56,6 +62,10 @@ jobs:
       - name: Frontend unit tests (vitest)
         run: npx vitest run
 
+      # The driver the bundle legs start each package with, against a fake server.
+      - name: Bundle smoke driver tests
+        run: python3 tests/build/test_bundle_smoke.py
+
       # The plugin sandbox is a worker ENTRY, so Rollup treats its exports as
       # unreachable and drops them. That produced a chunk with none of the
       # sandbox in it, past every unit test, and would have failed at the first
@@ -74,7 +84,72 @@ jobs:
       - name: The app ships no plugin code
         run: node scripts/check-no-plugin-code.mjs
 
-  # The beta build (docs/ENGINE.md section 6), on three platforms. The
+      # The spacenavd socket tests run only on unix. The crate is std only, so
+      # this builds in seconds, without Tauri or the kernel.
+      - name: 3D mouse spacenavd tests
+        env:
+          CARGO_TARGET_DIR: ${{ runner.temp }}/spnav-target
+        run: cargo test --manifest-path src-tauri/spnav/Cargo.toml -- --test-threads=4
+
+  # What this run builds and where it goes (docs/ENGINE.md section 7). `config`
+  # is empty on a ref that builds no installers. `gated` is false on dev, whose
+  # installers still start after `test` and `rust-geom` finish but do not need
+  # them green, and where a failed bundle leg only leaves its own files out.
+  channel:
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 5
+    outputs:
+      config: ${{ steps.pick.outputs.config }}
+      release: ${{ steps.pick.outputs.release }}
+      tag: ${{ steps.pick.outputs.tag }}
+      version: ${{ steps.pick.outputs.version }}
+      sha: ${{ steps.pick.outputs.sha }}
+      since: ${{ steps.pick.outputs.since }}
+      gated: ${{ steps.pick.outputs.gated }}
+    steps:
+      # Only a tag needs the history, to find main and the stable tags before it.
+      - uses: actions/checkout@v4
+        if: github.ref_type == 'tag'
+        with:
+          fetch-depth: 0
+          filter: tree:0
+
+      - id: pick
+        shell: bash
+        env:
+          REF: ${{ github.ref }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          config='' release='' tag='' since='' gated=true
+          version="1.0.${{ github.run_number }}"
+          sha='${{ github.sha }}'
+          # Minor 0 is the betas' 1.0.<run number>, which a stable 1.0.x
+          # would be older than.
+          stable='^v1\.([1-9][0-9]*)\.(0|[1-9][0-9]*)$'
+          case "$REF" in
+            refs/heads/dev)  config=dev release=development tag=development gated=false ;;
+            refs/heads/main) config=beta release=beta tag=beta ;;
+            refs/tags/*)
+              # Optional now, nothing sends people to a stable release, but
+              # the path still works for a tag pushed by hand or by
+              # scripts/promote.sh --stable.
+              [[ "$REF_NAME" =~ $stable ]] \
+                || { echo "::error::$REF_NAME is not a stable tag, those are v1.<minor>.<patch> with a minor of 1 or more"; exit 1; }
+              sha=$(git rev-parse HEAD)
+              git merge-base --is-ancestor "$sha" origin/main \
+                || { echo "::error::$REF_NAME points at ${sha:0:7}, which is not on main. Stable releases are cut from main only."; exit 1; }
+              config=stable release=stable tag="$REF_NAME" version="${REF_NAME#v}"
+              tags=$(git tag -l --merged origin/main 'v1.*' | grep -E "$stable" | sort -V)
+              prev=$(printf '%s\n' "$tags" | grep -xF -B1 "$REF_NAME" | grep -vxF "$REF_NAME" || true)
+              [ -z "$prev" ] || since=$(git rev-parse "$prev^{commit}")
+              ;;
+          esac
+          printf '%s=%s\n' config "$config" release "$release" tag "$tag" version "$version" \
+            sha "$sha" since "$since" gated "$gated" | tee -a "$GITHUB_OUTPUT"
+
+  # The installers (docs/ENGINE.md section 6), on three platforms. The
   # engine is a worker process of the same executable, and there is no Python
   # in the bundle at all.
   #
@@ -82,13 +157,14 @@ jobs:
   # compiled from source into the binary on each platform, twenty minutes cold,
   # and a pull request is already told whether the engine compiles by the
   # `rust-geom` job.
-  build-beta:
-    needs: [test, rust-geom]
+  bundle:
+    needs: [channel, test, rust-geom]
     permissions:
       contents: write # tauri-action may attach artifacts to a draft release
     if: >-
-      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-      && github.ref == 'refs/heads/main'
+      !cancelled() && needs.channel.outputs.config != ''
+      && (needs.channel.outputs.gated == 'false'
+          || (needs.test.result == 'success' && needs.rust-geom.result == 'success'))
     strategy:
       fail-fast: false
       matrix:
@@ -135,7 +211,8 @@ jobs:
         with:
           targets: wasm32-wasip2
 
-      # The root workspace too: fundacad-mcp is built there.
+      # The root workspace too: fundacad-mcp is built there. A cache saved on
+      # a tag is only ever read by that tag's re-runs, and the quota is shared.
       - name: Cache Cargo
         uses: swatinem/rust-cache@v2
         with:
@@ -143,6 +220,7 @@ jobs:
             src-tauri -> target
             . -> target
           key: alpha
+          save-if: ${{ github.ref_type != 'tag' }}
 
       # The kernel is installed into target/OCCT at the repo root (the root
       # .cargo/config.toml sets FUNDACAD_OCCT_ROOT, src-tauri reads it too),
@@ -181,30 +259,31 @@ jobs:
         shell: bash
         run: |
           node -e "
-            for (const f of ['./src-tauri/tauri.conf.json', './src-tauri/tauri.beta.conf.json']) {
+            for (const f of ['./src-tauri/tauri.conf.json', './src-tauri/tauri.beta.conf.json', './src-tauri/tauri.dev.conf.json', './src-tauri/tauri.stable.conf.json']) {
               if (require(f).bundle.resources) { console.error(f + ' bundles resources'); process.exit(1); }
             }
           "
 
-      # Rolling beta versioning, 1.0.<run_number>: the Rust engine is the
-      # major upgrade, against the retired Python engine's 0.2.
+      # Rolling versioning, 1.0.<run_number>, for the beta and the development
+      # build alike: the Rust engine is the major upgrade, against the retired
+      # Python engine's 0.2. A stable build takes its version from its tag.
       #
       # No `-beta` suffix: tauri's msi target refuses a version whose
       # pre-release identifier is not numeric ("optional pre-release identifier
       # in app version must be numeric-only"), so it fails the Windows leg
       # outright and NSIS silently rewrites it to 0 in VIProductVersion. The
-      # tag, the title and the update feed say beta instead.
-      - name: Stamp rolling version
+      # tag, the title and the update feed name the channel instead.
+      - name: Stamp the version
         shell: bash
         run: |
-          v="1.0.${{ github.run_number }}"
+          v="${{ needs.channel.outputs.version }}"
           node -e "const fs=require('fs');const f='src-tauri/tauri.conf.json';const j=JSON.parse(fs.readFileSync(f));j.version='$v';fs.writeFileSync(f,JSON.stringify(j,null,2)+'\n')"
           echo "stamped $v"
 
       - name: Disable updater artifacts when they could not be trusted
         uses: ./.github/actions/updater-artifacts
         with:
-          config: src-tauri/tauri.beta.conf.json
+          config: src-tauri/tauri.${{ needs.channel.outputs.config }}.conf.json
           signing-key: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
 
       # Plugin bundles for this release, built from the same commit as the
@@ -236,7 +315,7 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         uses: actions/upload-artifact@v4
         with:
-          name: fundacad-beta-plugins
+          name: fundacad-bundle-plugins
           retention-days: 7
           if-no-files-found: error
           path: dist-plugins/plugin-*.zip
@@ -253,8 +332,9 @@ jobs:
           # still shipping CMake 3, and the day one moves this is why it builds.
           CMAKE_POLICY_VERSION_MINIMUM: "3.5"
           NO_STRIP: true
+          VITE_FUNDACAD_RELEASE: ${{ needs.channel.outputs.tag || 'beta' }}
         with:
-          args: --verbose --config src-tauri/tauri.beta.conf.json
+          args: --verbose --config src-tauri/tauri.${{ needs.channel.outputs.config }}.conf.json
 
       # Checked against the bytes rather than the arguments: `engine_attach` is
       # the IPC command the webview reaches the engine through
@@ -296,13 +376,101 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         uses: ./.github/actions/deb-gtk-depends
 
+      # Started, not only grepped: each package runs its own MCP server, which
+      # starts the same binary as its engine, and builds a 30x20x10 box. After
+      # the two package rewrites above, so what starts is what ships, and before
+      # the upload, so a red smoke names the upload failed-bundle. On dev that
+      # is an annotation and the development build still ships, on main it
+      # fails the leg and holds the beta (docs/ENGINE.md section 7). This runner
+      # has every library linux-deps installs, so a wrong Depends still passes
+      # here; the Flatpak's clean runtime and a container job are what catch it.
+      - name: Start the AppImage and the .deb's binary and build a box
+        if: matrix.platform == 'ubuntu-22.04'
+        continue-on-error: ${{ needs.channel.outputs.gated == 'false' }}
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          set -euo pipefail
+          img=$(find src-tauri/target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' | head -1)
+          deb=$(find src-tauri/target/release/bundle/deb -maxdepth 1 -name '*.deb' | head -1)
+          if [ -z "$img" ] || [ -z "$deb" ]; then echo "::error::no AppImage or .deb to start"; exit 1; fi
+          chmod +x "$img"
+          fuse=()
+          if ! { [ -e /dev/fuse ] && { command -v fusermount3 || command -v fusermount; } >/dev/null; }; then
+            echo "No FUSE on this runner, the AppImage runs extracted"
+            fuse=(--appimage-extract-and-run)
+          fi
+          red=0
+          if ! python3 scripts/bundle-smoke.py --work "$RUNNER_TEMP/smoke-appimage" -- "$img" "${fuse[@]}" --mcp; then
+            # The runtime names FUSE when it cannot mount, which is this
+            # runner, not the package; anything else is the package.
+            if [ ${#fuse[@]} -eq 0 ] && grep -qi fuse "$RUNNER_TEMP/smoke-appimage/server.log"; then
+              echo "::warning::the AppImage could not mount here, it runs extracted"
+              python3 scripts/bundle-smoke.py --work "$RUNNER_TEMP/smoke-appimage-x" -- "$img" --appimage-extract-and-run --mcp || red=1
+            else
+              red=1
+            fi
+          fi
+          # The .deb as well when the AppImage was red, so one run names both.
+          dpkg-deb -x "$deb" "$RUNNER_TEMP/deb-root"
+          python3 scripts/bundle-smoke.py --work "$RUNNER_TEMP/smoke-deb" -- "$RUNNER_TEMP/deb-root/usr/bin/fundacad" --mcp || red=1
+          exit "$red"
+
+      # The window as well: the AppImage under Xvfb, and a box built through
+      # the server attached to it. An attached edit only returns once the
+      # page has adopted it, so this proves WebKit loaded the page and its
+      # scripts run. Not a gate until it has run green on the runner.
+      - name: Open the AppImage window under Xvfb and build a box in it
+        if: matrix.platform == 'ubuntu-22.04'
+        continue-on-error: true
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo timeout -k 10 300 apt-get install -y -qq xvfb
+          img=$(find src-tauri/target/release/bundle/appimage -maxdepth 1 -name '*.AppImage' | head -1)
+          fuse=()
+          if ! { [ -e /dev/fuse ] && { command -v fusermount3 || command -v fusermount; } >/dev/null; }; then
+            fuse=(--appimage-extract-and-run)
+          fi
+          export XDG_DATA_HOME="$RUNNER_TEMP/gui-data" WEBKIT_DISABLE_COMPOSITING_MODE=1 LIBGL_ALWAYS_SOFTWARE=1
+          session="$XDG_DATA_HOME/dev.fundacad.app/session.json"
+          mkdir -p "$XDG_DATA_HOME"
+          setsid xvfb-run -a "$img" "${fuse[@]}" > "$RUNNER_TEMP/gui.log" 2>&1 &
+          gui=$!
+          trap 'kill -- -"$gui" 2>/dev/null || true' EXIT
+          for _ in $(seq 120); do [ -f "$session" ] && break; sleep 1; done
+          if [ ! -f "$session" ]; then
+            echo "::error::the app wrote no session file in 120 s"; tail -n 50 "$RUNNER_TEMP/gui.log"; exit 1
+          fi
+          FUNDACAD_MCP_MODE=attach FUNDACAD_SESSION_FILE="$session" \
+            python3 scripts/bundle-smoke.py --work "$RUNNER_TEMP/smoke-gui" -- "$RUNNER_TEMP/deb-root/usr/bin/fundacad" --mcp
+
+      # The portable exe the release uploads, and the macOS app's binary, which
+      # Tauri names after the binary or the product depending on its version.
+      - name: Start the shipped executable and build a box
+        if: matrix.platform != 'ubuntu-22.04'
+        continue-on-error: ${{ needs.channel.outputs.gated == 'false' }}
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$RUNNER_OS" in
+            Windows) bin=src-tauri/target/release/fundacad.exe py=python ;;
+            macOS) bin=$(find src-tauri/target/release/bundle/macos -ipath '*.app/Contents/MacOS/fundacad' | head -1) py=python3 ;;
+          esac
+          if [ -z "${bin:-}" ] || [ ! -f "$bin" ]; then echo "::error::no executable to start"; exit 1; fi
+          "$py" scripts/bundle-smoke.py --work "$RUNNER_TEMP/smoke-exe" -- "$bin" --mcp
+
       # A week, the cap tests/build/artifactRetention.test.ts holds, so the
-      # beta release can be republished from them by hand.
+      # beta release can be republished from them by hand. A leg that failed
+      # after tauri-action still uploads, for debugging, but under a name the
+      # release and build-flatpak never download, so its files are not shipped.
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: fundacad-beta-${{ matrix.platform }}
+          name: ${{ job.status == 'success' && 'fundacad-bundle' || 'failed-bundle' }}-${{ matrix.platform }}
           retention-days: 7
           if-no-files-found: warn
           path: |
@@ -322,7 +490,12 @@ jobs:
   # (appimage-unbundle), so this is what runs on NixOS, rpm-ostree and other
   # read-only systems. Manifest: packaging/flatpak/dev.fundacad.app.yml.
   build-flatpak:
-    needs: build-beta
+    needs: [channel, bundle]
+    # On dev another leg's failure does not stop the Linux .deb's Flatpak.
+    if: >-
+      !cancelled() && (needs.bundle.result == 'success'
+        || (needs.channel.outputs.gated == 'false'
+            && (needs.bundle.result == 'failure' || needs.bundle.result == 'cancelled')))
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -330,7 +503,7 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: fundacad-beta-ubuntu-22.04
+          name: fundacad-bundle-ubuntu-22.04
           path: linux
 
       - name: Build the Flatpak
@@ -360,48 +533,74 @@ jobs:
           fi
           ls -lh "FundaCAD_${v}_x86_64.flatpak"
 
+      # The installed Flatpak as a user starts it. The sandbox holds only the
+      # GNOME runtime and /app, so a library the package lacks fails here.
+      - name: Start the Flatpak and build a box
+        continue-on-error: ${{ needs.channel.outputs.gated == 'false' }}
+        timeout-minutes: 10
+        shell: bash
+        run: |
+          python3 scripts/bundle-smoke.py --work "$RUNNER_TEMP/smoke-flatpak" -- \
+            flatpak run --env=FUNDACAD_MCP_MODE=standalone dev.fundacad.app --mcp
+
       - name: Upload the Flatpak
         uses: actions/upload-artifact@v4
         with:
-          name: fundacad-beta-flatpak
+          name: fundacad-bundle-flatpak
           retention-days: 7
           if-no-files-found: error
           path: FundaCAD_*.flatpak
 
-  # Rolling "beta" pre-release, the Rust engine.
+  # The rolling "beta" pre-release from main, the rolling "development"
+  # pre-release from dev, or a stable release from a tag.
   #
-  # Its own concurrency group and its own tag, moved in place, never deleted.
+  # Each rolling release has its own concurrency group and its own tag, moved
+  # in place, never deleted, so a development run never touches the beta's
+  # tag, release or feed. A stable release hangs off the tag that was pushed,
+  # and is only marked latest while no higher stable release exists, because
+  # stable installs read releases/latest (tauri.stable.conf.json).
   #
   # The updater endpoint is baked into the binary at build time
-  # (tauri.conf.json points at beta/latest.json). Installs of the retired Python
+  # (tauri.conf.json points at beta/latest.json, tauri.dev.conf.json at
+  # development/latest.json). Installs of the retired Python
   # engine read the same feed, and 1.0.x is newer than their 0.2.x, so they move
   # to this build too, which is intended. Section 6's own answer, publish no
   # manifest at all, was rejected because a rolling build that cannot roll is
   # one people install once and never update; tests/security/updater.test.ts
   # pins the endpoint.
   #
-  # Its own plugin bundles, built by build-beta from the same commit as the
+  # Its own plugin bundles, built by `bundle` from the same commit as the
   # engine whose plugin host runs their geometry components. The app installs
   # plugins from this release (RELEASE_TAG in src/plugins/index.ts).
 
-  release-beta:
-    needs: [build-beta, build-flatpak]
+  release:
+    needs: [channel, bundle, build-flatpak]
     # A failed Flatpak leaves it out of the release rather than holding the
     # release back: always() lets this run once build-flatpak has finished
-    # either way.
+    # either way. On dev a failed bundle leg does the same for its own files,
+    # unless the run itself was cancelled. A leg that hits its timeout can
+    # report as cancelled while the run is not.
     if: >-
-      always() && needs.build-beta.result == 'success'
-      && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-      && github.ref == 'refs/heads/main'
+      always() && needs.channel.outputs.release != ''
+      && (needs.bundle.result == 'success'
+          || (needs.channel.outputs.gated == 'false' && !cancelled()
+              && (needs.bundle.result == 'failure' || needs.bundle.result == 'cancelled')))
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     permissions:
       contents: write
     concurrency:
-      group: release-beta
+      # Per tag: a group keeps one pending job and cancels an older pending
+      # one, which would drop a stable release when three tags queue up.
+      group: release-${{ needs.channel.outputs.tag }}
       cancel-in-progress: false
     env:
       GH_TOKEN: ${{ github.token }}
+      RELEASE: ${{ needs.channel.outputs.release }}
+      TAG: ${{ needs.channel.outputs.tag }}
+      VERSION: ${{ needs.channel.outputs.version }}
+      SHA: ${{ needs.channel.outputs.sha }}
+      SINCE: ${{ needs.channel.outputs.since }}
     steps:
       # Before download-artifact: actions/checkout cleans the workspace by
       # default and would delete dist/.
@@ -410,7 +609,7 @@ jobs:
       # By pattern, so only this build's installers and bundles reach dist/.
       - uses: actions/download-artifact@v4
         with:
-          pattern: fundacad-beta-*
+          pattern: fundacad-bundle-*
           path: dist
 
       # One fixed name per platform and format, with no version in it, so every
@@ -424,10 +623,11 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p release
+          : > missing.txt
           put() { # $1 = find pattern under dist, $2 = published name
             local src
             src=$(find dist -type f -name "$1" | head -1)
-            [ -n "$src" ] || { echo "NOTE: no $1 in this build, $2 left out"; return 0; }
+            [ -n "$src" ] || { echo "NOTE: no $1 in this build, $2 left out"; echo "$2" >> missing.txt; return 0; }
             cp "$src" "release/$2"
             [ ! -f "$src.sig" ] || cp "$src.sig" "release/$2.sig"
             echo "$(basename "$src") -> $2"
@@ -442,16 +642,16 @@ jobs:
           put '*.dmg'         FundaCAD-macos-arm64.dmg
           put '*.app.tar.gz'  FundaCAD-macos-arm64.app.tar.gz
           find dist -type f -name 'plugin-*.zip' -exec cp {} release/ \;
+          ls release/plugin-*.zip >/dev/null 2>&1 || echo 'the plugin bundles' >> missing.txt
           ls -l release
 
       - name: Assemble latest.json
         shell: bash
         run: |
           set -euo pipefail
-          v="1.0.${{ github.run_number }}"
-          base="https://github.com/${{ github.repository }}/releases/download/beta"
+          base="https://github.com/${{ github.repository }}/releases/download/$TAG"
           d="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          jq -n --arg v "$v" --arg d "$d" '{version:$v, pub_date:$d, platforms:{}}' > latest.json
+          jq -n --arg v "$VERSION" --arg d "$d" '{version:$v, pub_date:$d, platforms:{}}' > latest.json
           add() { # $1 = updater platform key, $2 = updater bundle path
             [ -n "$2" ] && [ -f "$2" ] || { echo "NOTE: no bundle for $1"; return 0; }
             sig="$2.sig"
@@ -464,17 +664,26 @@ jobs:
           add darwin-aarch64 release/FundaCAD-macos-arm64.app.tar.gz  # macos-14 runners are arm64
           cat latest.json
 
-      - name: Publish rolling beta release
+      - name: Publish the release
         shell: bash
         run: |
           set -euo pipefail
           # Every name in release/ is fixed and has no spaces, so plain
           # word-splitting is safe here.
           files=$(find release -type f | sort)
+          grep -v '^release/plugin-' <<<"$files" | grep -q . \
+            || { echo "::error::no installers to publish"; exit 1; }
           # The plugin bundles this build installs from (RELEASE_TAG in
-          # src/plugins/index.ts). Without them every offered plugin is a 404.
-          grep -q 'plugin-' <<<"$files" \
-            || { echo "::error::no plugin bundles to publish"; exit 1; }
+          # src/plugins/index.ts). Without them every offered plugin is a 404,
+          # which on dev a failed Linux leg may leave to the previous build's.
+          if [ "$RELEASE" != development ]; then
+            grep -q 'plugin-' <<<"$files" \
+              || { echo "::error::no plugin bundles to publish"; exit 1; }
+          fi
+          partial=''
+          if [ "$RELEASE" = development ] && [ -s missing.txt ]; then
+            partial=$(paste -sd, missing.txt | sed 's/,/, /g')
+          fi
           # Updates in place, never delete and recreate: a release that was
           # recreated once stayed gone for two hours.
 
@@ -494,7 +703,6 @@ jobs:
           fi
 
           R='${{ github.repository }}'
-          SHA='${{ github.sha }}'
           MAX=25
 
           # The warning section 6 calls not optional, and it comes first
@@ -504,8 +712,7 @@ jobs:
           > ### Read this first
           >
           > **This is FundaCAD 1.0 on the Rust geometry engine.** It replaces
-          > the Python engine, which is retired, and this rolling beta is the
-          > only FundaCAD release.
+          > the Python engine, which is retired.
           >
           > - If a model builds differently here than it did on the Python
           >   engine, a missing or changed face, a fillet that refuses, a
@@ -525,12 +732,27 @@ jobs:
 
           WARN
 
-          printf 'Rolling FundaCAD 1.0 beta (1.0.%s), Rust engine, rebuilt from `main` at [`%s`](https://github.com/%s/commit/%s).\n' \
-            '${{ github.run_number }}' "${SHA:0:7}" "$R" "$SHA" >> notes.md
-
-          # The commit the rolling tag is on RIGHT NOW: the build this replaces.
-          # Read BEFORE the tag is moved, further down.
-          prev=$(gh api "repos/$R/git/ref/tags/beta" --jq .object.sha 2>/dev/null || true)
+          if [ "$RELEASE" = beta ]; then
+            printf 'Rolling FundaCAD 1.0 beta (%s), Rust engine, rebuilt from `main` at [`%s`](https://github.com/%s/commit/%s).\n' \
+              "$VERSION" "${SHA:0:7}" "$R" "$SHA" >> notes.md
+            branch=main
+          elif [ "$RELEASE" = development ]; then
+            printf 'FundaCAD development build (%s), bleeding edge, rebuilt from `dev` at [`%s`](https://github.com/%s/commit/%s).\n' \
+              "$VERSION" "${SHA:0:7}" "$R" "$SHA" >> notes.md
+            printf '\nIt has every change as soon as it lands, and it can be broken. The [beta](https://github.com/%s/releases/tag/beta) is the somewhat stable one.\n' "$R" >> notes.md
+            branch=dev
+          else
+            printf 'FundaCAD %s, the stable release, built from `main` at [`%s`](https://github.com/%s/commit/%s).\n' \
+              "$VERSION" "${SHA:0:7}" "$R" "$SHA" >> notes.md
+            printf '\nThe rolling beta, with the newest changes before they reach a stable release, is [here](https://github.com/%s/releases/tag/beta).\n' "$R" >> notes.md
+            prev="$SINCE"
+            branch=main
+          fi
+          if [ "$RELEASE" != stable ]; then
+            # The commit the rolling tag is on RIGHT NOW: the build this
+            # replaces. Read BEFORE the tag is moved, further down.
+            prev=$(gh api "repos/$R/git/ref/tags/$TAG" --jq .object.sha 2>/dev/null || true)
+          fi
           commits=''
           if [ -n "$prev" ] && [ "$prev" != "$SHA" ]; then
             commits=$(gh api "repos/$R/compare/$prev...$SHA" \
@@ -540,7 +762,7 @@ jobs:
           if [ -z "$commits" ] || [ "$(jq 'length' <<<"$commits")" -eq 0 ]; then
             commits=$(gh api "repos/$R/commits?sha=$SHA&per_page=$MAX" \
               --jq '[.[] | select((.parents | length) < 2)]')
-            span="the newest on \`main\`"
+            span="the newest on \`$branch\`"
           fi
           total=$(jq 'length' <<<"$commits")
 
@@ -568,32 +790,53 @@ jobs:
           printf '\n---\n\nUnsigned: Windows SmartScreen needs "More info", then "Run anyway"; macOS may call the app damaged, which `xattr -dr com.apple.quarantine /Applications/FundaCAD.app` clears. [Install notes](https://github.com/%s#install).\n' \
             "$R" >> notes.md
           printf '\nThis build carries no Python runtime, so it is a fraction of the size of the Python engine builds.\n' >> notes.md
+          if [ -n "$partial" ]; then
+            printf '\nNot rebuilt this time, so any copy here is from an earlier build: %s.\n' "$partial" >> notes.md
+          fi
           if [ "$SELF_UPDATES" = yes ]; then
-            printf '\nInstalled copies update themselves from this release.\n' >> notes.md
+            printf '\nInstalled copies update themselves from the newest %s release.\n' "$RELEASE" >> notes.md
           else
             printf '\nThis build does not update itself, so take a new installer from this page when you want a newer one.\n' >> notes.md
           fi
-          # The SourceForge mirror's download button, which a hand edit added
-          # once and every rebuild of the notes then dropped.
-          printf '\n[![Download FundaCAD](https://a.fsdn.com/con/app/sf-download-button)](https://sourceforge.net/projects/fundacad/files/beta/)\n' >> notes.md
+          if [ "$RELEASE" = beta ]; then
+            # The SourceForge mirror's download button, which a hand edit added
+            # once and every rebuild of the notes then dropped.
+            printf '\n[![Download FundaCAD](https://a.fsdn.com/con/app/sf-download-button)](https://sourceforge.net/projects/fundacad/files/beta/)\n' >> notes.md
+          fi
+          if [ "$RELEASE" != stable ]; then
+            # Move the rolling tag onto this commit (create it if it is missing),
+            # so the release attached to it never stops existing. GitHub refuses
+            # this token a tag move across a commit that changes a workflow file,
+            # so a refused move keeps the old tag and still publishes this build.
+            gh api -X PATCH "repos/$R/git/refs/tags/$TAG" -f sha="$SHA" -F force=true \
+              || gh api -X POST "repos/$R/git/refs" -f ref="refs/tags/$TAG" -f sha="$SHA" \
+              || { gh api "repos/$R/git/refs/tags/$TAG" >/dev/null 2>&1 \
+                     && echo "::warning::the $TAG tag could not move to $SHA (a workflow file changed), the installers are still this build"; } \
+              || { echo "::error::the $TAG tag is missing and could not be created. Push it once by hand with a token that may change workflow files: git push origin $SHA:refs/tags/$TAG"; exit 1; }
 
-          # Move the rolling tag onto this commit (create it if it is missing),
-          # so the release attached to it never stops existing. GitHub refuses
-          # this token a tag move across a commit that changes a workflow file,
-          # so a refused move keeps the old tag and still publishes this build.
-          gh api -X PATCH "repos/$R/git/refs/tags/beta" -f sha="$SHA" -F force=true \
-            || gh api -X POST "repos/$R/git/refs" -f ref=refs/tags/beta -f sha="$SHA" \
-            || { gh api "repos/$R/git/refs/tags/beta" >/dev/null 2>&1 \
-                   && echo "::warning::the beta tag could not move to $SHA (a workflow file changed), the installers are still this build"; } \
-            || { echo "::error::the beta tag is missing and could not be created"; exit 1; }
-
-          TITLE='FundaCAD 1.0 beta, Rust engine (rolling)'
-          if gh release view beta --repo "$R" >/dev/null 2>&1; then
-            gh release edit beta --repo "$R" --prerelease \
-              --title "$TITLE" --notes-file notes.md
+            if [ "$RELEASE" = beta ]; then
+              TITLE='FundaCAD 1.0 beta, Rust engine (rolling)'
+            else
+              TITLE='FundaCAD 1.0 development build, bleeding edge (rolling)'
+            fi
+            if gh release view "$TAG" --repo "$R" >/dev/null 2>&1; then
+              gh release edit "$TAG" --repo "$R" --prerelease \
+                --title "$TITLE" --notes-file notes.md
+            else
+              gh release create "$TAG" --repo "$R" --prerelease \
+                --title "$TITLE" --notes-file notes.md
+            fi
           else
-            gh release create beta --repo "$R" --prerelease \
-              --title "$TITLE" --notes-file notes.md
+            TITLE="FundaCAD $TAG"
+            # A new release starts as a draft and is published once its assets
+            # are up, so releases/latest never names one without installers or
+            # a feed.
+            if gh release view "$TAG" --repo "$R" >/dev/null 2>&1; then
+              gh release edit "$TAG" --repo "$R" --title "$TITLE" --notes-file notes.md
+            else
+              gh release create "$TAG" --repo "$R" --verify-tag --draft --latest=false \
+                --title "$TITLE" --notes-file notes.md
+            fi
           fi
 
           # Binaries first, latest.json LAST, so the manifest on the release
@@ -601,22 +844,42 @@ jobs:
           # the binaries replace the ones the old manifest names: take that
           # manifest down first, or an installed copy could fetch the new
           # bytes against the old signature and refuse the update.
-          gh release delete-asset beta latest.json --repo "$R" --yes 2>/dev/null || true
-          gh release upload beta --repo "$R" --clobber $files
+          gh release delete-asset "$TAG" latest.json --repo "$R" --yes 2>/dev/null || true
+          gh release upload "$TAG" --repo "$R" --clobber $files
           if [ "$SELF_UPDATES" = yes ]; then
-            gh release upload beta --repo "$R" --clobber latest.json
+            gh release upload "$TAG" --repo "$R" --clobber latest.json
           else
             echo "latest.json withheld (see the warning above); the installers above are complete"
           fi
 
           # Retire anything this build did not publish: a format dropped from
           # the build, and once, the versioned names from before the fixed ones.
+          # A partial development build keeps the earlier build's files instead.
           keep=$(for f in $files latest.json; do basename "$f"; done | sort -u)
-          gh release view beta --repo "$R" --json assets -q '.assets[].name' \
-            | while read -r asset; do
-                printf '%s\n' "$keep" | grep -qxF "$asset" \
-                  || gh release delete-asset beta "$asset" --repo "$R" --yes || true
-              done
+          if [ -n "$partial" ]; then
+            echo "not every file was rebuilt, so nothing is retired this time"
+          else
+            gh release view "$TAG" --repo "$R" --json assets -q '.assets[].name' \
+              | while read -r asset; do
+                  printf '%s\n' "$keep" | grep -qxF "$asset" \
+                    || gh release delete-asset "$TAG" "$asset" --repo "$R" --yes || true
+                done
+          fi
+
+          if [ "$RELEASE" = stable ]; then
+            # Worked out here, against the releases published by now, not in
+            # `channel`: re-running failed jobs keeps channel's outputs, and a
+            # release published since then would be missed. A hotfix to an
+            # older line must not become the release every stable install
+            # updates to.
+            published=$(gh release list --repo "$R" --exclude-drafts --exclude-pre-releases \
+              --limit 1000 --json tagName --jq '.[].tagName')
+            newest=$(printf '%s\n%s\n' "$published" "$TAG" \
+              | grep -E '^v1\.([1-9][0-9]*)\.(0|[1-9][0-9]*)$' | sort -V | tail -1)
+            latest=false
+            [ "$newest" != "$TAG" ] || latest=true
+            gh release edit "$TAG" --repo "$R" --draft=false --prerelease=false --latest="$latest"
+          fi
 
   # Browser end-to-end checks for the imported-assembly Browser tree.
   #
@@ -698,12 +961,60 @@ jobs:
           cargo build --release --example frames_serve --manifest-path src-tauri/frames/Cargo.toml
           node e2e/frames_ws_e2e.cjs
 
-      # The material mapping and scene tests always run; the image tests skip
-      # themselves when the runner has no adapter that fits.
+      # lavapipe is Mesa's CPU Vulkan driver, so the image tests trace on the
+      # runner instead of skipping. They still skip when no adapter fits.
+      - name: Install a software Vulkan driver
+        run: sudo timeout -k 10 600 apt-get install -y mesa-vulkan-drivers
+
       - name: Native tracer tests
         env:
           CARGO_TARGET_DIR: ${{ runner.temp }}/frames-target
+          FUNDACAD_TRACER_ALLOW_CPU: "1"
         run: cargo test --manifest-path src-tauri/tracer/Cargo.toml -- --test-threads=4
+
+      # The traced bloom checks on lavapipe, through tracer_serve outside the
+      # app. A smaller page keeps 256 software samples well inside the wait.
+      - name: Native tracer bloom end-to-end
+        env:
+          SC_TOKEN: citoken
+          SC_CHROME: /usr/bin/google-chrome
+          SC_TRACER: native-dev
+          SC_VIEWPORT: 800x560
+          CARGO_TARGET_DIR: ${{ runner.temp }}/frames-target
+          FUNDACAD_TRACER_ALLOW_CPU: "1"
+        run: |
+          cargo build --release --example tracer_serve --manifest-path src-tauri/tracer/Cargo.toml
+          node e2e/pathtrace_bloom_e2e.cjs /tmp/pathtrace_bloom_shots
+
+      # The agent harness starts its own engine, vite and Chrome on free ports,
+      # so the engine and vite above are left alone.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Agent harness unit tests
+        run: |
+          pip install -e "tools/harness[test]"
+          python -m pytest tools/harness/tests/unit -q
+
+      - name: Agent harness smoke set
+        env:
+          FUNDACAD_ENGINE_CMD: ${{ github.workspace }}/engine-bin/fundacad-engine
+          FUNDACAD_CHROME: /usr/bin/google-chrome
+          FUNDACAD_HARNESS_KEEP: "1"
+          TMPDIR: ${{ runner.temp }}/harness
+        run: |
+          mkdir -p "$TMPDIR"
+          python -m pytest tools/harness/tests -m smoke -q
+
+      - name: Agent harness logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: harness-logs
+          path: ${{ runner.temp }}/harness
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Engine log on failure
         if: failure()
@@ -713,7 +1024,8 @@ jobs:
   # it. It compiles OpenCASCADE 7.8.1 from source through the occt-sys crate,
   # which is long on a cold runner and short once target/OCCT is cached, so the
   # static kernel gets its own cache keyed on the crate that builds it. It gates
-  # the beta build: red here means the engine is broken.
+  # the beta and stable builds, not the development one: red here means the
+  # engine is broken.
   rust-geom:
     # The self hosted runner keeps its target dir between runs, so only what
     # changed recompiles. Only the owner's own pushes and manual runs go there,
@@ -762,9 +1074,10 @@ jobs:
           workspaces: |
             . -> target
             src-tauri -> target
+          save-if: ${{ github.ref_type != 'tag' }}
 
-      # The same kernel and key as build-beta's, so the two jobs share it. Keep
-      # it after rust-cache, see build-beta.
+      # The same kernel and key as bundle's, so the two jobs share it. Keep
+      # it after rust-cache, see bundle.
       - name: Cache the static OpenCASCADE build
         if: env.SELF_HOSTED != 'true'
         uses: actions/cache@v4

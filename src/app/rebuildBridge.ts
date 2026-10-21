@@ -2,7 +2,7 @@ import { toast } from "../ui/toast";
 import { featureFailureReport } from "../ui/errorReport";
 import { featureMeta } from "../ui/featureMeta";
 import { repairableDiagFor } from "../features/repickReference";
-import { contributedPaint, onContribChange } from "../plugins/contrib";
+import { contributedPaint, contributedRelief, onContribChange } from "../plugins/contrib";
 import { importedBodyColors, importedFacePaint } from "../document/faceColors";
 import { faceMaterialFinishes, faceMaterialPaint, resolveFaceMaterials } from "../document/faceMaterials";
 import type { Engine } from "./engine";
@@ -89,6 +89,7 @@ export function installRebuildBridge(e: Engine): void {
     e.viewport.setBodyPaint(p.bodies);
     e.viewport.setFacePaint(p.faces);
     e.viewport.setFaceFinish(p.faceFinish);
+    e.viewport.setRelief(contributedRelief());
     e.viewport.requestRender();
   });
 
@@ -121,6 +122,7 @@ export function installRebuildBridge(e: Engine): void {
       // when the build commits.
       e.viewport.setBodyPaint(paint().bodies);
       e.viewport.setBodyFinish(e.store.materialFinishes());
+      e.viewport.setRelief(contributedRelief());
       e.viewport.beginProgressiveModel(c.epoch, c.manifest, c.result, c.bbox, hidden, pendingFit);
       pendingFit = false;
       return;
@@ -149,6 +151,7 @@ export function installRebuildBridge(e: Engine): void {
         e.viewport.setFacePaint(p.faces); // + per-face inlay colours
         e.viewport.setFaceFinish(p.faceFinish); // + a material dropped on one face
         e.viewport.setBodyFinish(e.store.materialFinishes()); // + how each is finished
+        e.viewport.setRelief(contributedRelief());
         // setModel dropped the Stress panel's face marks with the old face ids.
         e.ui.panels.refreshStressMarks();
       } else {

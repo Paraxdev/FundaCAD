@@ -166,3 +166,15 @@ describe("ValidatedRow", () => {
     expect(w.find(".dim-unit").exists()).toBe(false);
   });
 });
+
+describe("ValidatedRow name", () => {
+  it("names its input with the row label", () => {
+    const w = mountRow({ value: "5" });
+    expect(w.get("input").attributes("aria-label")).toBe("Width");
+  });
+
+  it("carries its field key", () => {
+    const w = mount(ValidatedRow, { props: { label: "Width", field: "width", value: "5", commit: () => null } });
+    expect(w.get(".param-row").attributes("data-field")).toBe("width");
+  });
+});

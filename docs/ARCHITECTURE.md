@@ -121,6 +121,8 @@ locator and no container.
 - **Vue components** get the engine through `useEngine()` and talk to each other
   through Pinia stores, which carry primitives and ids, never engine objects.
 
+UI work, a plugin's included, follows [DESIGN.md](DESIGN.md): the glass, the tokens and the shared classes every screen is built from.
+
 Where state may live:
 
 | Kind of state | Where | Examples |

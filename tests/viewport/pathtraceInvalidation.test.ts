@@ -3,9 +3,11 @@ import { describe, expect, it } from "vitest";
 import type { TracerBackend } from "../../src/viewport/pathtrace/backend";
 import type { BlasBuilder, BlasJob, BlasTree } from "../../src/viewport/pathtrace/blasCache";
 import { buildBlas } from "../../src/viewport/pathtrace/blasCache";
+import { STILL_MS } from "../../src/viewport/pathtrace/state";
 import { PathTraceHost, type TraceFrame } from "../../src/viewport/pathtrace/host";
 
 const ENV = new THREE.Texture();
+const CAMERA = new THREE.PerspectiveCamera();
 
 class FakeTracer implements TracerBackend {
   readonly name = "fake";
@@ -67,11 +69,11 @@ function body(id: string, etag: string, x: number): THREE.Mesh {
   return m;
 }
 
-function frame(root: THREE.Object3D, over: Partial<TraceFrame["inputs"]> = {}, changed = true): TraceFrame {
+function frame(root: THREE.Object3D, over: Partial<TraceFrame["inputs"]> = {}, changed = true, now = 1000): TraceFrame {
   return {
-    now: 1000,
+    now,
     inputs: { mode: "pathtraced", visible: true, stillMs: 1000, sectioned: false, xray: false, wireframe: false, sketchOpen: false, ...over },
-    camera: new THREE.PerspectiveCamera(),
+    camera: CAMERA,
     cameraChanged: false,
     sceneMaybeChanged: changed,
     root,
@@ -189,7 +191,7 @@ describe("path tracer invalidation", () => {
     expect(t.work()).toEqual(["geometry", "reset"]);
     expect(t.meshes).toHaveLength(1);
     b.visible = true;
-    host.tick(frame(root));
+    host.tick(frame(root, {}, true, 1000 + STILL_MS));
     expect(t.work()).toEqual(["geometry", "reset", "geometry", "reset"]);
     expect(treeOf(t.meshes[1]!)).toBe(tree);
     expect(builder.jobs).toHaveLength(2);

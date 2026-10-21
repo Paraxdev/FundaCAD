@@ -12,6 +12,7 @@ A plugin adds something not everyone needs, such as screws, textures or a link t
 | [Node Bodies](organic.md) | Smooth solids built from sized points |
 | [3D Printing Toolbox](print-toolbox.md) | Holes and edges that print without supports |
 | [Printer connection](printing.md) | Open a part in your slicer and send jobs |
+| [Printed look](print-look.md) | Layer lines in the Realtime view |
 | [Multi-material](multicolor.md) | Filament slots, off by default |
 | [Game controller](gamepad.md) | Navigate with a gamepad |
 | [3D mouse](spacemouse.md) | Navigate with a 3D mouse |

@@ -6,15 +6,15 @@
 //! (`spacemouse:motion`, `spacemouse:button`); the frontend maps them onto the
 //! camera + actions.
 //!
-//! Linux permissions: hidapi opens the `/dev/hidrawN` node, so the udev rule
-//! MUST target `SUBSYSTEM=="hidraw"`, a `SUBSYSTEM=="usb"` rule changes the usb
-//! node, not hidraw, and will NOT grant access. See `packaging/99-spacemouse.rules`:
+//! Linux: when `spacenavd` is running its socket is read first (see `spnav`), the
+//! daemon owns the device and no udev rule is needed. Without the socket hidapi
+//! opens the `/dev/hidrawN` node, so the udev rule MUST target
+//! `SUBSYSTEM=="hidraw"`, a `SUBSYSTEM=="usb"` rule changes the usb node, not
+//! hidraw, and will NOT grant access. See `packaging/99-spacemouse.rules`:
 //!   KERNEL=="hidraw*", ATTRS{idVendor}=="046d", MODE="0660", GROUP="input", TAG+="uaccess"
 //!   KERNEL=="hidraw*", ATTRS{idVendor}=="256f", MODE="0660", GROUP="input", TAG+="uaccess"
 //! Install: copy to `/etc/udev/rules.d/`, then
-//! `sudo udevadm control --reload && sudo udevadm trigger`, then replug. If
-//! `spacenavd` or the 3Dconnexion driver is running it may already hold the
-//! device, stop it to let FundaCAD read it directly.
+//! `sudo udevadm control --reload && sudo udevadm trigger`, then replug.
 //!
 //! Set FUNDACAD_SPACEMOUSE_DEBUG=1 to log raw reports for tuning (the old
 //! SINDRICAD_ spelling still works).
@@ -27,6 +27,9 @@ use std::time::Duration;
 use hidapi::{DeviceInfo, HidApi};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
+
+#[cfg(target_os = "linux")]
+mod spnav;
 
 // 3Dconnexion vendor ids: 0x256f (current 3Dconnexion), 0x046d (older Logitech-branded)
 const VENDORS: [u16; 2] = [0x256f, 0x046d];
@@ -230,17 +233,23 @@ fn start(app: AppHandle) {
         // The HID inventory is published whenever it CHANGES, see stream().
         let mut last_inventory: Option<String> = None;
         while WANTED.load(Ordering::SeqCst) {
-            match stream(&app, &mut last_inventory) {
-                Ok(()) => warned = false, // clean disconnect: a later failure is news again
-                Err(Blocked::NoDevice) => {} // nothing plugged in, normal, stay quiet
-                Err(Blocked::Unreadable { name, detail }) => {
-                    eprintln!("[spacemouse] found \"{name}\" but could not open it: {detail}");
-                    if !warned {
-                        warned = true;
-                        let _ = app.emit("spacemouse:blocked", DeviceBlocked { name, detail });
+            // A connected spacenavd is never a reason to warn, it may be holding
+            // an idle device that is simply not readable directly.
+            match through_daemon(&app, &mut last_inventory) {
+                Ok(()) => warned = false,
+                Err(hint) => match stream(&app, &mut last_inventory) {
+                    Ok(()) => warned = false, // clean disconnect: a later failure is news again
+                    Err(Blocked::NoDevice) => {} // nothing plugged in, normal, stay quiet
+                    Err(Blocked::Unreadable { name, detail }) => {
+                        eprintln!("[spacemouse] found \"{name}\" but could not open it: {detail}");
+                        if !warned {
+                            warned = true;
+                            let hint = hint.map(str::to_string);
+                            let _ = app.emit("spacemouse:blocked", DeviceBlocked { name, detail, hint });
+                        }
                     }
-                }
-                Err(Blocked::Other(e)) => eprintln!("[spacemouse] {e}"),
+                    Err(Blocked::Other(e)) => eprintln!("[spacemouse] {e}"),
+                },
             }
             // The retry wait, in slices, so turning the capability off is felt
             // in a fraction of a second rather than after three of them.
@@ -266,6 +275,18 @@ fn start(app: AppHandle) {
     });
 }
 
+/// Reads through spacenavd while it is connected. `Err` when there is no daemon,
+/// with what to tell a user whose device cannot be read directly either.
+#[cfg(target_os = "linux")]
+fn through_daemon(app: &AppHandle, last: &mut Option<String>) -> Result<(), Option<&'static str>> {
+    spnav::through_daemon(app, last).map_err(|no_daemon| Some(no_daemon.hint()))
+}
+
+#[cfg(not(target_os = "linux"))]
+fn through_daemon(_app: &AppHandle, _last: &mut Option<String>) -> Result<(), Option<&'static str>> {
+    Err(None)
+}
+
 /// Why the reader isn't running. Only `Unreadable` is worth telling the user
 /// about: the device IS there and the fix is theirs to apply.
 enum Blocked {
@@ -278,6 +299,9 @@ enum Blocked {
 struct DeviceBlocked {
     name: String,
     detail: String,
+    /// What the user can do about it, when this platform knows better than the
+    /// page's own text.
+    hint: Option<String>,
 }
 
 /// Every HID interface we could see, plus which one we chose. Recorded SILENTLY
@@ -342,11 +366,25 @@ fn proves_multi_axis(dev: &hidapi::HidDevice) -> Proof {
     }
 }
 
-fn stream(app: &AppHandle, last: &mut Option<String>) -> Result<(), Blocked> {
-    let debug = std::env::var("FUNDACAD_SPACEMOUSE_DEBUG").is_ok()
-        || std::env::var("SINDRICAD_SPACEMOUSE_DEBUG").is_ok();
-    let api = HidApi::new().map_err(|e| Blocked::Other(e.to_string()))?;
+/// A device that opened and is a 3D mouse, ready to read.
+struct Opened {
+    dev: hidapi::HidDevice,
+    vid: u16,
+    pid: u16,
+    name: String,
+    #[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+    described: String,
+}
 
+fn stream(app: &AppHandle, last: &mut Option<String>) -> Result<(), Blocked> {
+    let api = HidApi::new().map_err(|e| Blocked::Other(e.to_string()))?;
+    let (inventory, opened) = open_best(&api);
+    publish_on_change(app, last, inventory);
+    read_device(app, opened?, None)
+}
+
+/// Picks and opens the best device, with the inventory of what was seen.
+fn open_best(api: &HidApi) -> (DeviceInventory, Result<Opened, Blocked>) {
     // Rank every interface and take the BEST, not the first vendor match. We do
     // NOT fall through to a lower-ranked device when the best one won't open: on
     // Linux "won't open" means the udev rule is missing, and quietly opening some
@@ -407,6 +445,21 @@ fn stream(app: &AppHandle, last: &mut Option<String>) -> Result<(), Blocked> {
         seen: api.device_list().map(describe).collect(),
         note,
     };
+    let opened = match (blocked, chosen) {
+        (Some(b), _) => Err(b),
+        (None, None) => Err(Blocked::NoDevice),
+        (None, Some((info, dev))) => Ok(Opened {
+            dev,
+            vid: info.vendor_id(),
+            pid: info.product_id(),
+            name: info.product_string().unwrap_or("SpaceMouse").to_string(),
+            described: describe(info),
+        }),
+    };
+    (inventory, opened)
+}
+
+fn publish_on_change(app: &AppHandle, last: &mut Option<String>, inventory: DeviceInventory) {
     // Publish on CHANGE, not once per run: a device plugged in later, or newly
     // rejected, is news, while the no-device case retries every 3s forever and
     // must not spam the log or the event channel.
@@ -423,13 +476,13 @@ fn stream(app: &AppHandle, last: &mut Option<String>) -> Result<(), Blocked> {
         }
         publish(app, inventory);
     }
+}
 
-    if let Some(b) = blocked {
-        return Err(b);
-    }
-    let (info, dev) = chosen.ok_or(Blocked::NoDevice)?;
-    let (vid, pid) = (info.vendor_id(), info.product_id());
-    let name = info.product_string().unwrap_or("SpaceMouse");
+/// Streams the device's reports to the page, `first` before any it reads.
+fn read_device(app: &AppHandle, opened: Opened, first: Option<Vec<u8>>) -> Result<(), Blocked> {
+    let debug = std::env::var("FUNDACAD_SPACEMOUSE_DEBUG").is_ok()
+        || std::env::var("SINDRICAD_SPACEMOUSE_DEBUG").is_ok();
+    let Opened { dev, vid, pid, name, .. } = opened;
     eprintln!("[spacemouse] connected {vid:04x}:{pid:04x} \"{name}\"");
 
     // keep the latest translation + rotation so a report carrying only one of
@@ -438,15 +491,23 @@ fn stream(app: &AppHandle, last: &mut Option<String>) -> Result<(), Blocked> {
     let mut t = [0f32; 3];
     let mut r = [0f32; 3];
     let mut buf = [0u8; 64];
+    let mut first = first;
     loop {
         if !WANTED.load(Ordering::SeqCst) {
             return Ok(()); // turned off: close the device and let the thread end
         }
-        // A read failure after a successful open is an unplug or a transport
-        // hiccup, not a permissions problem, reconnect quietly.
-        let n = dev
-            .read_timeout(&mut buf, 1000)
-            .map_err(|e| Blocked::Other(e.to_string()))?;
+        let n = match first.take() {
+            Some(report) => {
+                let n = report.len().min(buf.len());
+                buf[..n].copy_from_slice(&report[..n]);
+                n
+            }
+            // A read failure after a successful open is an unplug or a transport
+            // hiccup, not a permissions problem, reconnect quietly.
+            None => dev
+                .read_timeout(&mut buf, 1000)
+                .map_err(|e| Blocked::Other(e.to_string()))?,
+        };
         if n == 0 {
             continue; // timeout, device idle, loop and read again
         }

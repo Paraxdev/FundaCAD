@@ -13,8 +13,9 @@ engine compiled in:
   `fundacad --mcp` (docs/MCP.md).
 
 CI: [`.github/workflows/build.yml`](../.github/workflows/build.yml) builds
-Linux x86_64, macOS arm64 and Windows x64 and publishes the rolling `beta`
-release from `main`, the only release. The sidecar build on the `legacy`
+Linux x86_64, macOS arm64 and Windows x64, publishes the rolling `beta`
+release from `main` and the rolling `development` build from `dev`
+(docs/ENGINE.md section 7). The sidecar build on the `legacy`
 branch is retired and publishes nothing.
 
 ## Building a bundle
@@ -123,7 +124,7 @@ finds or builds the kernel like this:
   `.cargo/config.toml`) lets CMake 4 configure OCCT 7.8.1, whose declared
   minimum it otherwise refuses.
 - **CI** caches `target/OCCT` without its `build` directory, in `rust-geom`
-  and `build-beta` under one key.
+  and `bundle` under one key.
 - **The old location.** Builds from before this layout installed the kernel
   in `src-tauri/target/OCCT`. Nothing reads it any more, so it can be deleted.
 
@@ -135,7 +136,7 @@ carries WebKitGTK 4.1 and GTK 3, and checks that `ldd` resolves every library
 the binary links inside it. It runs on X11 like the AppImage, reads a
 SpaceMouse over hidraw (`--device=all`, the host still needs the udev rule),
 and has no in-app updates, since the updater only replaces AppImages
-(`src-tauri/src/lib.rs`). A failed Flatpak build leaves it out of the beta
+(`src-tauri/src/lib.rs`). A failed Flatpak build leaves it out of the
 release without holding the release back.
 
 ## Sizes

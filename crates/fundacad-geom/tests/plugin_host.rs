@@ -109,9 +109,11 @@ fn roof_bridge_and_ribs_and_errors() {
 }
 
 #[test]
-fn an_unknown_type_still_reads_unknown() {
+fn an_unknown_type_is_skipped_with_plugins_loaded() {
     let r = build(vec![json!({"id": "x", "type": "noSuchFeature"})]);
-    assert_eq!(r.errors[0].message, "unknown feature type: noSuchFeature");
+    assert!(r.errors.is_empty(), "{:?}", r.errors);
+    assert_eq!(r.skipped.len(), 1);
+    assert_eq!(r.skipped[0].message(), "unknown feature type: noSuchFeature");
 }
 
 fn built(name: &str) -> bool {

@@ -175,8 +175,8 @@ describe("the action dispatcher", () => {
     let stolen = 0;
     let opened = 0;
     const e = fakeEngine();
-    (e as unknown as { ui: { welcome: { open: () => void } } }).ui = {
-      welcome: { open: () => { opened++; } },
+    (e as unknown as { ui: { home: { open: () => void } } }).ui = {
+      home: { open: () => { opened++; } },
     };
     contribute("A.One", { actions: { welcome: () => { stolen++; } } });
     createActions(e)("welcome");

@@ -25,6 +25,78 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Added
 
+- **Filament materials get sheen, anisotropy, flakes and scatter.** A material's
+  Advanced section in the Render workspace has Sheen for a soft velvet rim,
+  Anisotropy for highlights that streak along the layer lines, Flakes and Flake
+  size for glitter, and Scatter for a milky see-through finish. A glowing
+  material can turn Lights other parts off, it still glows and blooms but lights
+  nothing around it. Realtime draws sheen, anisotropy and scatter on capable
+  machines; flakes are stored and drawn by a later update. A build older than the
+  one that keeps unknown material fields drops these fields when it saves the file.
+
+- **Saving keeps the geometry a newer feature refers to.** A feature this version
+  does not know can name stored geometry in any field, and the app and MCP
+  `doc_save` now write that geometry into the file instead of leaving it out.
+
+- **A .fundab keeps the parts a newer version added.** Sections of a kind this
+  version does not read are kept on open and written back when the file is saved
+  as .fundab again.
+
+- **MCP `doc_open` says when a file is from a newer version**, with a `note:`
+  line naming the feature types this build does not know, the same facts the
+  app's open notice gives. An older file with a feature type the app renames on
+  open is told apart, with a note to open and save it in the app first.
+
+- **Opening a file from a newer version says what it leaves out.** One notice
+  names the features this version does not know, says they are kept and saved
+  with the file, and that bodies after them may differ. It replaces the old
+  warning that unknown data may be lost, which is no longer true.
+
+- **Saving keeps what a newer version wrote.** Top level data, element fields
+  and a stress study, environment or saved versions this version cannot read
+  are written back unchanged, so opening a newer file here and saving it does
+  not take anything away from the newer version.
+
+- **History greys a feature this version does not know.** It keeps its place,
+  shows its type name, and says it is not included but kept and saved with the
+  file. Its values cannot be edited here, so it stays as the newer version wrote
+  it.
+
+- **A feature this version does not know no longer fails the build.** A file
+  from a newer FundaCAD can hold a feature type this build has never heard of.
+  It is now left out of the build and listed as skipped instead of raised as a
+  failure, and the features after it build on what exists. MCP `build` names it
+  as `SKIPPED`.
+
+- **Home.** The app starts on Home, a screen over the viewport with your recent
+  documents as cards, Blank to start a new document and Open… to find one on
+  disk. Escape or the close button goes back to the document, File > Home and
+  the home button in the title bar bring it back, and Show Home on startup
+  turns it off. A card says when the document was last edited. A document that
+  was moved or deleted stays on the list marked Not found until you remove it,
+  from its card or its right click menu, and the list keeps 50 documents.
+  Search by name or folder (Ctrl+F) and sort by last opened, last edited or
+  name.
+- **Templates.** Home starts a new document from a built-in template: a
+  plate with four holes sized by parameters, and the wall bracket and pinned
+  lever with their stress studies ready to run. The document starts untitled,
+  so Save asks where to keep it.
+- **Previews on Home.** A card shows a picture of the model, taken from the
+  front right corner when you save, or the first time you open a document that
+  has none. The pictures are kept on this computer and load as the cards scroll
+  into view, so a list of hundreds of documents stays quick. A document changed
+  by another program shows a plain card until you open it again.
+- **Project folders on Home.** Add folder puts a folder of your own under
+  Folders, and its view lists the documents in it and in its subfolders, four
+  levels deep, sorted by last edited or name. Blank or a template started from
+  a folder view saves into that folder by default. Remove from Home, on the
+  folder's right click menu, takes it off Home and leaves it on disk.
+- **Versions on Home.** Versions on a card lists the document's branches and
+  saved versions without opening it. Open on a branch opens the document on
+  that branch, Restore opens it at a version as one step Ctrl+Z undoes, and
+  Open copy does the same as a new untitled document, so the file stays as it
+  is. For the open document the list includes versions not saved to the file
+  yet.
 - **Mechanisms.** A `mechanism` feature joins bodies with revolute, slider and
   rigid joints, closed loops included, and poses them all at once: the ground
   stays put, one joint is driven to an `angle` or `offset`, and every other
@@ -325,6 +397,17 @@ This file starts on 2026-08-03. For anything before that, see the
 
 ### Changed
 
+- **Saving a .fundab with a big import is several times faster on a computer
+  with several cores.** A 69 MB imported STEP assembly saves in about 0.4
+  seconds instead of about 1.8, or 0.6 seconds on four cores. On one core it
+  takes as long as before. The file is the same size, and every FundaCAD that
+  reads .fundab opens it as before.
+
+- **A .fundab that was being opened when FundaCAD closed opens fine the next
+  time.** Its imported geometry, left half copied, made the next rebuild fail;
+  opening the file again now copies it whole. Opening a .fundab with a big
+  import for the first time on a computer is also a little faster.
+
 - **The Rust engine is the rolling beta now, and the Python engine is
   retired.** Builds of `main` publish to the
   [beta release](https://github.com/Paraxdev/fundacad/releases/tag/beta),
@@ -354,6 +437,33 @@ This file starts on 2026-08-03. For anything before that, see the
 - Each drag of the move gizmo is its own row in the timeline, so an undo takes back the last nudge instead of the whole sitting, and the next drag starts from the pose the last one produced.
 
 ### Fixed
+
+- **One Undo takes back an import and the colours its file carried.** Each
+  colour used to be an undo step of its own, so a coloured assembly took many
+  Undos, and one with more than 49 colours could not be undone at all. An
+  import undone while it was still building now gets its colours back on Redo.
+
+- **Undo waits while an import reads its file.** An Undo pressed then took
+  back the step before the import, and the import landing a moment later wiped
+  it from Redo, so that work was gone for good. Undo and Redo come back as soon
+  as the import is in the history.
+
+- **A hole takes the size or depth typed just before Enter.** An Enter pressed
+  within a moment of the last key could make the hole at the size it started
+  with, M3 where M6 was typed.
+
+- **Undo, Redo and the value box fields are named for screen readers.** The
+  icon buttons and the inputs on the canvas and in a feature's properties now
+  carry their names, not only a tooltip.
+
+- **A .fundab whose first few bytes are damaged opens again.** It was taken
+  for a text file and refused with "stream did not contain valid UTF-8". It now
+  opens from the copy of its header at the end, and says it was repaired.
+
+- **A document with a section this build cannot read still builds.** The
+  engine refused the whole job when, say, a newer `materials` row or `versions`
+  repo did not fit, which an MCP session could send. It now leaves that section
+  out and builds the features.
 
 - **A body is measured as large as it is after a slanted cut through a spline
   face.** A lofted or organic face that is cut off at a slant has surface left

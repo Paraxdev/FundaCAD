@@ -16,6 +16,7 @@
 
 import { computed, nextTick, ref, useTemplateRef, watch } from "vue";
 import Icon from "./Icon.vue";
+import { fmtKeys } from "../../input/platform";
 import InlineLabel from "./InlineLabel.vue";
 import { folderIndent } from "../../ui/browserTree";
 import { contextMenu, type CtxItem } from "../../ui/menu";
@@ -169,6 +170,7 @@ function onDrop(e: DragEvent) {
        icon, so its element carries no text to read it off. -->
   <div
     class="tree-folder"
+    :data-id="id"
     :class="{ 'drop-into': inside > 0, selected: selected }"
     :style="style"
     :aria-expanded="!collapsed"
@@ -195,7 +197,8 @@ function onDrop(e: DragEvent) {
     <span
       v-if="toggleVis || eyeDown"
       class="tree-eye"
-      title="Show/hide · drag across eyes to show or hide many · Alt+click to show only this"
+      :title="fmtKeys('Show/hide · drag across eyes to show or hide many · Alt+click to show only this')"
+      :data-visible="visible !== false"
       @pointerdown.stop="onEyeDown"
       @click.stop="onEyeClick"
     >

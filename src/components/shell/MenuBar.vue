@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, useTemplateRef } from "vue";
+import { fmtKeys } from "../../input/platform";
+import { computed, onMounted, onUnmounted, ref, useTemplateRef, watch } from "vue";
+import { claimEscape } from "../../ui/escapeClaim";
 import Icon from "./Icon.vue";
 import type { MenuDef, MenuItem } from "../../ui/menu";
 
@@ -63,11 +65,17 @@ function onDown(e: PointerEvent) {
 function onKey(e: KeyboardEvent) {
   if (e.key === "Escape") openIndex.value = null;
 }
+let releaseEscape: (() => void) | null = null;
+watch(openIndex, (i) => {
+  if (i !== null) releaseEscape ??= claimEscape();
+  else { releaseEscape?.(); releaseEscape = null; }
+});
 onMounted(() => {
   document.addEventListener("pointerdown", onDown);
   document.addEventListener("keydown", onKey);
 });
 onUnmounted(() => {
+  releaseEscape?.();
   document.removeEventListener("pointerdown", onDown);
   document.removeEventListener("keydown", onKey);
 });
@@ -87,7 +95,7 @@ onUnmounted(() => {
               <Icon v-if="r.checked" name="check" :size="12" />
             </span>
             <span>{{ r.item.label }}</span>
-            <span v-if="r.item.shortcut" class="menu-shortcut">{{ r.item.shortcut }}</span>
+            <span v-if="r.item.shortcut" class="menu-shortcut">{{ fmtKeys(r.item.shortcut) }}</span>
           </button>
         </template>
       </div>

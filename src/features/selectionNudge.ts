@@ -20,6 +20,7 @@ import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
 import {
   createDragHandle,
+  nameHandle,
   HANDLE_UP,
   handleScale,
   leanOutOfView,
@@ -148,7 +149,7 @@ export class SelectionNudge {
   }
 
   private mount() {
-    this.handle = createDragHandle();
+    this.handle = nameHandle(createDragHandle(), "nudge");
     this.handle.paint({ opacity: IDLE_OPACITY });
     this.viewport.addToScene(this.handle.group);
   }

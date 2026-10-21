@@ -42,6 +42,7 @@ import type { FeatureMeta } from "../ui/featureMeta";
 import type { FieldKind } from "../document/numFields";
 import type { TargetField } from "../features/selectionTargets";
 import type { PluginSettings } from "./settings";
+import type { MaterialDef } from "../document/materials";
 import { setPointerBindings, type PointerBinding, type PointerGesture } from "../viewport/navigator/bindings";
 import { setShortcutOverrides, type ShortcutOverride } from "../input/shortcuts";
 
@@ -91,6 +92,27 @@ export interface Paint {
   faces: Record<number, string>;
 }
 
+/** Fine parallel ridges drawn across a body, through its shading only. */
+export interface Relief {
+  /** The direction the ridges stack along, in world space. */
+  axis: [number, number, number];
+  /** Ridge spacing, mm. */
+  pitch: number;
+  /** Ridge depth as a fraction of the pitch: 0 is flat, 0.5 a half round. */
+  depth: number;
+  /** Shade variation from ridge to ridge, 0..1. */
+  tintJitter?: number;
+  /** Darkening in the seam between ridges, 0..1. */
+  cavity?: number;
+}
+
+/** Ridges a plugin puts on the model, resolved fresh on every read like Paint.
+ *  A body's entry is preferred over `all`, and a null takes `all` off it. */
+export interface ReliefMap {
+  all?: Relief;
+  bodies?: Record<string, Relief | null>;
+}
+
 /** A named colour a tool may offer. The core knows only the three fields it has
  *  to render; what a slot MEANS is the contributing plugin's business. */
 export interface PaletteEntry {
@@ -112,6 +134,23 @@ export interface BrowserSection {
   /** Which of the browser's own filter sections it is hidden with, if any. A
    *  section naming one the core does not have is always shown. */
   filter?: string;
+}
+
+export interface MaterialPresetGroup {
+  group: string;
+  materials: MaterialDef[];
+}
+
+/** The tabs of the Render dock. */
+export type RenderTab = "material" | "environment" | "camera";
+
+/** A block a plugin adds to the end of one Render dock tab, drawn as its own
+ *  component. `fundacad/ui` has the rows the dock itself is made of. */
+export interface RenderSection {
+  /** Stable within the contributing plugin; used as the render key. */
+  key: string;
+  component: Component;
+  tab: RenderTab;
 }
 
 /** Settings a plugin adds, drawn under its row in Preferences > Plugins.
@@ -259,6 +298,13 @@ export interface Contribution {
   /** Extra rows on a body's right-click menu, in the browser and the viewport. */
   bodyMenu?: (bodyId: string) => CtxItem[];
   browserSections?: BrowserSection[];
+  /** Blocks at the end of a Render dock tab. */
+  renderSections?: RenderSection[];
+  /** Starting points for the Render dock's New material menu, one submenu per
+   *  group. Picking one adds a plain copy to the document, so the file does not
+   *  need the plugin to open. Each entry goes through the same normalising as a
+   *  material read from a file, and one that is not a material is skipped. */
+  materialPresets?: () => MaterialPresetGroup[];
   /** Blocks in Preferences.
    *
    *  A settings block that outlives the thing it configures is worse than a
@@ -283,6 +329,7 @@ export interface Contribution {
    *  interpolated into it, here any more than there. */
   icons?: Record<string, string>;
   paint?: () => Paint;
+  relief?: () => ReliefMap;
   palette?: () => PaletteEntry[];
   /** A mesh import landed, and the file carried a colour of its own ("#rrggbb").
    *
@@ -445,6 +492,34 @@ export function contributedBrowserSections(): { key: string; section: BrowserSec
   return out;
 }
 
+export function contributedRenderSections(tab: RenderTab): { key: string; section: RenderSection }[] {
+  const out: { key: string; section: RenderSection }[] = [];
+  for (const e of entries) {
+    for (const section of e.c.renderSections ?? []) {
+      if (section.tab === tab) out.push({ key: `${e.plugin}:${section.key}`, section });
+    }
+  }
+  return out;
+}
+
+export function contributedMaterialPresets(): MaterialPresetGroup[] {
+  const out: MaterialPresetGroup[] = [];
+  for (const e of entries) {
+    let groups: MaterialPresetGroup[] = [];
+    try {
+      groups = e.c.materialPresets?.() ?? [];
+    } catch {
+      continue;
+    }
+    for (const g of groups) {
+      if (!g || typeof g.group !== "string" || !Array.isArray(g.materials)) continue;
+      const materials = g.materials.filter((m) => m && typeof m.name === "string" && typeof m.color === "string");
+      if (materials.length) out.push({ group: g.group, materials });
+    }
+  }
+  return out;
+}
+
 /** The handler for an action id, or null when nobody claimed it.
  *
  *  The first claim is used, and a second claim is not an error worth throwing over: two
@@ -551,6 +626,21 @@ export function contributedPaint(): Paint {
     Object.assign(faces, p.faces);
   }
   return { bodies, faces };
+}
+
+/** Every contributed relief, merged like paint: later contributions are preferred. */
+export function contributedRelief(): ReliefMap {
+  let base: Relief | undefined;
+  const bodies: Record<string, Relief | null> = {};
+  for (const fn of all("relief")) {
+    const r = fn();
+    if (r.all !== undefined) base = r.all;
+    Object.assign(bodies, r.bodies);
+  }
+  const out: ReliefMap = {};
+  if (base) out.all = base;
+  if (Object.keys(bodies).length) out.bodies = bodies;
+  return out;
 }
 
 /** The colours a tool may offer, or an empty list when nobody has any.

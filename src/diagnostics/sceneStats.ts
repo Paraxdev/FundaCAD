@@ -28,6 +28,9 @@ export interface SceneStatsSource {
    *  cheap in triangles and still be draw-call bound, which reads as "slow with
    *  a small model" and is otherwise invisible in a report. */
   render?: { calls: number; triangles: number };
+  /** Rolling median GPU time per pass in ms, and how it was measured. Empty
+   *  until the first results come back a few frames after drawing starts. */
+  passes?: { ms: Record<string, number>; kind: string };
 }
 
 /** One line per fact, short enough to survive the 300-char breadcrumb cap. */
@@ -62,6 +65,12 @@ export function sceneStats(s: SceneStatsSource): string[] {
     ? `[frame] ${s.frameMs.toFixed(1)}ms (${Math.round(1000 / s.frameMs)} fps) at report time`
     : "[frame] viewport idle at report time");
   if (s.render) out.push(`[draw] ${s.render.calls} calls · ${s.render.triangles} tris last frame`);
+  if (s.passes) {
+    const parts = Object.entries(s.passes.ms).map(([n, ms]) => `${n} ${ms.toFixed(2)}`);
+    out.push(parts.length
+      ? `[passes] ${parts.join(" · ")} ms (${s.passes.kind})`
+      : `[passes] no GPU timings yet (${s.passes.kind})`);
+  }
   if (s.seam) {
     out.push(s.seam.skipped
       ? "[seams] flush-seam hiding SKIPPED (model too large), seams left visible"

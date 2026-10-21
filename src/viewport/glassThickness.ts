@@ -13,6 +13,7 @@
 // outer body's front pixels see the inner body's back face, so they use the
 // outer body's mean thickness.
 import * as THREE from "three";
+import { getPatch, removePatch, setPatch, type ShaderPatch } from "./shaderPatches";
 
 export const FALLBACK_THICKNESS = 3;
 
@@ -149,16 +150,6 @@ const FRAGMENT = /* glsl */`
 #endif
 `;
 
-type Compile = (shader: THREE.WebGLProgramParametersWithUniforms, renderer: THREE.WebGLRenderer) => void;
-type KeyFn = () => string;
-interface Patched {
-  mesh: THREE.Mesh;
-  id: { value: number };
-  inner: Compile | undefined;
-  innerKey: KeyFn | undefined;
-  wrapper: Compile;
-}
-const patched = new WeakMap<THREE.Material, Patched>();
 const ids = new WeakMap<THREE.Mesh, number>();
 let nextId = 0;
 
@@ -172,53 +163,35 @@ function idOf(mesh: THREE.Mesh): number {
   return id;
 }
 
+function glassPatch(id: number): ShaderPatch {
+  return {
+    name: "glassAuto",
+    key: "glass-auto",
+    after: { transmission_pars_fragment: PARS },
+    replace: { transmission_fragment: FRAGMENT },
+    uniforms: { fcBodyId: { value: id } },
+    shared,
+  };
+}
+
 /** The transmission chunk, with the auto thickness copy swapped in. Exported for
  *  the tripwire test, which checks three still has the include this replaces. */
-export function patchGlassShader(shader: { fragmentShader: string; uniforms: Record<string, THREE.IUniform> }, id: { value: number }): void {
-  Object.assign(shader.uniforms, shared, { fcBodyId: id });
-  shader.fragmentShader = shader.fragmentShader
-    .replace("#include <transmission_pars_fragment>", "#include <transmission_pars_fragment>\n" + PARS)
-    .replace("#include <transmission_fragment>", FRAGMENT);
+export function patchGlassShader(shader: { vertexShader?: string; fragmentShader: string; uniforms: Record<string, THREE.IUniform> }, id: { value: number }): void {
+  const m = new THREE.MeshPhysicalMaterial();
+  setPatch(m, glassPatch(id.value));
+  const s = { ...shader, vertexShader: shader.vertexShader ?? "" };
+  m.onBeforeCompile(s as THREE.WebGLProgramParametersWithUniforms, null as never);
+  shader.fragmentShader = s.fragmentShader;
 }
 
-function own<K extends "onBeforeCompile" | "customProgramCacheKey">(m: THREE.Material, k: K): THREE.Material[K] | undefined {
-  return Object.prototype.hasOwnProperty.call(m, k) ? m[k] : undefined;
-}
-
-/** Turn the per pixel thickness on for `mat`, drawn on `mesh`, or off with null.
- *  Composes with a surface patch already on the material: proceduralSurface
- *  sets or deletes its own onBeforeCompile first, this wraps whatever is there. */
+/** Turn the per pixel thickness on for `mat`, drawn on `mesh`, or off with null. */
 export function setGlassAuto(mat: THREE.Material, mesh: THREE.Mesh | null): void {
-  const was = patched.get(mat);
-  const cur = own(mat, "onBeforeCompile") as Compile | undefined;
-  const stillOurs = !!was && cur === was.wrapper;
-  const inner = stillOurs ? was!.inner : cur;
-  const innerKey = stillOurs ? was!.innerKey : (own(mat, "customProgramCacheKey") as KeyFn | undefined);
-  if (!mesh) {
-    if (!was) return;
-    patched.delete(mat);
-    if (!stillOurs) return;
-    const m = mat as { onBeforeCompile?: unknown; customProgramCacheKey?: unknown };
-    if (inner) m.onBeforeCompile = inner; else delete m.onBeforeCompile;
-    if (innerKey) m.customProgramCacheKey = innerKey; else delete m.customProgramCacheKey;
-    mat.needsUpdate = true;
-    return;
-  }
-  if (stillOurs && was!.mesh === mesh) return;
-  const id = was?.id ?? { value: 0 };
-  id.value = idOf(mesh);
-  const wrapper: Compile = (shader, renderer) => {
-    inner?.(shader, renderer);
-    patchGlassShader(shader, id);
-  };
-  mat.onBeforeCompile = wrapper;
-  mat.customProgramCacheKey = () => (innerKey ? innerKey() : "") + "|glass-auto";
-  patched.set(mat, { mesh, id, inner, innerKey, wrapper });
-  if (!stillOurs) mat.needsUpdate = true;
+  if (mesh) setPatch(mat, glassPatch(idOf(mesh)));
+  else removePatch(mat, "glassAuto");
 }
 
 export function isGlassAuto(mat: THREE.Material): boolean {
-  return patched.has(mat);
+  return !!getPatch(mat, "glassAuto");
 }
 
 // Glass bodies with auto thickness, and which of their material slots are glass

@@ -1,0 +1,45 @@
+{
+  "parameters": {},
+  "features": [
+    {
+      "id": "b1",
+      "type": "box",
+      "length": 10,
+      "width": 10,
+      "height": 10
+    },
+    {
+      "id": "b2",
+      "type": "box",
+      "length": 4,
+      "width": 4,
+      "height": 20
+    },
+    {
+      "id": "c1",
+      "type": "boolean",
+      "operation": "subtract",
+      "target": "body1",
+      "tools": [
+        "body2"
+      ],
+      "keepOriginals": true
+    }
+  ],
+  "version": 10,
+  "suppressed": [
+    "b2"
+  ],
+  "bodyNames": {
+    "body1": "Block"
+  },
+  "bodyElement": {
+    "body1": "el1"
+  },
+  "elements": [
+    {
+      "id": "el1",
+      "name": "Frame"
+    }
+  ]
+}

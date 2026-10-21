@@ -23,7 +23,7 @@
 
 import * as THREE from "three";
 import { finishOf, type MaterialDef } from "../document/materials";
-import { applyClearcoat, applyGlassLook, applyThinFilm } from "./render";
+import { applyClearcoat, applyFinishFields, applyGlassLook, applyThinFilm } from "./render";
 import { finishKey } from "./bodyFinish";
 import { LruCache } from "../lib/lruCache";
 
@@ -164,6 +164,35 @@ export function onPreviewsChanged(fn: () => void): () => void {
 /** A data: URL of `m` rendered as a lit sphere, or null when this machine would
  *  not give us a context. Cached by appearance, so calling it per row per frame
  *  is a map lookup. */
+/** The camera sits on +Z, so a world Z tangent would point at the viewer and the
+ *  stretch would fade out of the swatch. Screen up shows it. */
+const SWATCH_AXIS = new THREE.Vector3(0, 1, 0);
+
+/** Puts `m` on the swatch ball's material. */
+export function dressPreview(mat: THREE.MeshStandardMaterial, m: MaterialDef): void {
+  const f = finishOf(m);
+  mat.color.set(m.color);
+  mat.metalness = f.metalness;
+  mat.roughness = f.roughness;
+  applyClearcoat(mat, f.clearcoat);
+  applyThinFilm(mat, f, false);
+  // A clear, non-metal finish previews as real glass too (refraction against the
+  // room environment), so the swatch matches what the body will look like.
+  if (!applyGlassLook(mat, f, false)) {
+    mat.opacity = f.opacity;
+    mat.transparent = f.opacity < 1;
+    mat.depthWrite = f.opacity >= 1;
+  }
+  applyFinishFields(mat, f, false, m.color, SWATCH_AXIS);
+  // The emissive tint is the material's OWN colour, as the viewport does it, so
+  // a lit indicator previews as a glowing ball of the right hue rather than a
+  // white one. There is no bloom out here, so the slider shows as a surface that
+  // does not go dark on its shaded side.
+  mat.emissive.set(f.emissive > 0 ? m.color : 0x000000);
+  mat.emissiveIntensity = f.emissive;
+  mat.needsUpdate = true;
+}
+
 export function materialPreview(m: MaterialDef): string | null {
   const k = previewKey(m);
   const hit = cache.get(k);
@@ -171,26 +200,7 @@ export function materialPreview(m: MaterialDef): string | null {
   const r = build();
   if (!r) return null;
 
-  const f = finishOf(m);
-  r.material.color.set(m.color);
-  r.material.metalness = f.metalness;
-  r.material.roughness = f.roughness;
-  applyClearcoat(r.material, f.clearcoat);
-  applyThinFilm(r.material, f, false);
-  // A clear, non-metal finish previews as real glass too (refraction against the
-  // room environment), so the swatch matches what the body will look like.
-  if (!applyGlassLook(r.material, f, false)) {
-    r.material.opacity = f.opacity;
-    r.material.transparent = f.opacity < 1;
-    r.material.depthWrite = f.opacity >= 1;
-  }
-  // The emissive tint is the material's OWN colour, as the viewport does it, so
-  // a lit indicator previews as a glowing ball of the right hue rather than a
-  // white one. There is no bloom out here, so the slider shows as a surface that
-  // does not go dark on its shaded side.
-  r.material.emissive.set(f.emissive > 0 ? m.color : 0x000000);
-  r.material.emissiveIntensity = f.emissive;
-  r.material.needsUpdate = true;
+  dressPreview(r.material, m);
 
   r.renderer.render(r.scene, r.camera);
   let url = "";

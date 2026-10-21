@@ -5,7 +5,10 @@
 //
 // Usage (from the repo root, vite + engine `fundacad-engine --ws` running):
 //   SC_TOKEN=<engine token> SC_CHROME=<chrome exe> [SC_URL=http://localhost:5173/] \
-//     [SC_ENGINE_PORT=8765] [SC_ANGLE=d3d11] node e2e/picture_matches_view_e2e.cjs [outDir]
+//     [SC_ENGINE_PORT=8765] [SC_ANGLE=d3d11] [SC_QUALITY=standard|high] node e2e/picture_matches_view_e2e.cjs [outDir]
+// SC_QUALITY picks the realtime quality through the Realtime quality row of the
+// Render dock (a dev build shows it), so the pictures are compared with the view
+// drawn by that tier.
 const { chromium } = require("playwright-core");
 const fs = require("fs");
 const path = require("path");
@@ -15,6 +18,7 @@ const EXE = process.env.SC_CHROME || "/usr/bin/chromium";
 const URL = process.env.SC_URL || "http://localhost:5173/";
 const PORT = process.env.SC_ENGINE_PORT || "8765";
 const ANGLE = process.env.SC_ANGLE || "d3d11";
+const QUALITY = process.env.SC_QUALITY || "";
 const OUT = path.resolve(process.argv[2] || "picture_shots");
 if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
 let failures = 0;
@@ -48,6 +52,16 @@ const check = (name, ok, detail) => {
     const modal = await page.$(".modal-close");
     if (modal) { await modal.click(); await page.waitForTimeout(300); }
 
+    if (QUALITY) {
+      await page.click('#workspace-toggle [data-workspace="render"]');
+      await page.waitForTimeout(500);
+      await page.click('.rd-tab[data-tab="environment"]');
+      await page.click(`[data-realtime-quality="${QUALITY}"]`);
+      await page.waitForTimeout(2500);
+      const now = await page.evaluate(() => window.viewport.scene.post.realtimeQuality);
+      check(`the row put the view at ${QUALITY}`, now === QUALITY, now);
+    }
+
     const bodies = await page.evaluate(async () => {
       const s = window.store;
       const box = (l, w, h, dx, dy, dz, b) => {
@@ -76,24 +90,31 @@ const check = (name, ok, detail) => {
     await page.evaluate(() => window.__fundacad.handleAction("fit"));
     await page.waitForTimeout(1500);
 
+    // The High stages each view and picture was drawn by, null for today's path.
+    const drawnBy = [];
     const save = (name, url) => fs.writeFileSync(path.join(OUT, `${name}.png`), Buffer.from(url.split(",")[1], "base64"));
     const still = async (name, k, edges) => {
-      const url = await page.evaluate(([k, edges]) => window.viewport.renderStill(k, { edges, realtime: true }), [k, edges]);
+      const { url, stages } = await page.evaluate(([k, edges]) => {
+        const url = window.viewport.renderStill(k, { edges, realtime: true });
+        return { url, stages: window.viewport.scene.post.highStages };
+      }, [k, edges]);
+      drawnBy.push([name, stages]);
       save(name, url);
       await page.waitForTimeout(300);
       return url;
     };
     // The view as drawn, with the furniture a picture never has switched off by hand.
     const bareView = async (name) => {
-      const url = await page.evaluate(() => {
+      const { url, stages } = await page.evaluate(() => {
         const sc = window.viewport.scene;
         const was = [sc.grid.group.visible, sc.triad.group.visible];
         sc.grid.group.visible = false;
         sc.triad.group.visible = false;
-        try { return window.viewport.screenshotPNG(); } finally {
+        try { return { url: window.viewport.screenshotPNG(), stages: sc.post.highStages }; } finally {
           [sc.grid.group.visible, sc.triad.group.visible] = was;
         }
       });
+      drawnBy.push([name, stages]);
       save(name, url);
       return url;
     };
@@ -191,16 +212,18 @@ const check = (name, ok, detail) => {
       sc.triad.group.visible = false;
       r.shadowMap.autoUpdate = redraw;
       try {
-        sc.post.render(v.rig.active, false, false);
-        return r.domElement.toDataURL("image/png");
+        sc.post.render(v.rig.active, false, false, { moving: false, ghosted: v.ghosted });
+        return { url: r.domElement.toDataURL("image/png"), stages: sc.post.highStages };
       } finally {
         [sc.grid.group.visible, sc.triad.group.visible, r.shadowMap.autoUpdate] = was;
         v.requestRender();
       }
     }, redraw);
-    const kept = await frame(false);
+    const { url: kept, stages: keptBy } = await frame(false);
+    drawnBy.push(["glass_view", keptBy]);
     save("glass_view", kept);
-    const redrawn = await frame(true);
+    const { url: redrawn, stages: redrawnBy } = await frame(true);
+    drawnBy.push(["glass_view_shadows_redrawn", redrawnBy]);
     save("glass_view_shadows_redrawn", redrawn);
     const dRedraw = await diff(kept, redrawn);
     check("glass looks the same on a frame that redraws the shadow maps", dRedraw < 1, dRedraw.toFixed(2));
@@ -210,6 +233,11 @@ const check = (name, ok, detail) => {
     const glass2 = await still("glass_2", 2, true);
     const dGlass2 = await diff(kept, glass2);
     check("and so does a 2x one", dGlass2 < 3, dGlass2.toFixed(2));
+    if (QUALITY === "high") {
+      const today = drawnBy.filter(([, stages]) => !stages).map(([name]) => name);
+      check("every view and picture compared was drawn by the High stages", drawnBy.length > 0 && today.length === 0,
+        today.length ? `today's path: ${today.join(", ")}` : `${drawnBy.length} drawn`);
+    }
   } finally {
     await browser.close();
   }

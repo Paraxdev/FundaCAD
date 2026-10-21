@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { fmtKeys } from "../../input/platform";
 import { markRaw, ref, onMounted, onUnmounted } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useUiStore } from "../../stores/ui";
+import { useHomeStore } from "../../stores/home";
 import { buildMenubar } from "../../app/menubarDef";
 import { onContribChange } from "../../plugins/contrib";
 import Icon from "./Icon.vue";
@@ -15,6 +17,7 @@ import brandLockupLight from "../../../assets/brand/fundacad-lockup-app-light.sv
 
 const engine = useEngine();
 const ui = useUiStore();
+const home = useHomeStore();
 
 // The wordmark is baked as light-on-dark text (fundacad-lockup-app.svg): fine
 // for FundaCAD Noir and Dracula, invisible against a light theme's panel. An
@@ -51,36 +54,50 @@ onUnmounted(() => { offPlugins?.(); offTheme?.(); });
 </script>
 
 <template>
-  <header id="titlebar">
-    <span class="brand"><img :src="brandLockup" alt="FundaCAD" /></span>
-    <MenuBar :menus="menus" />
+  <header id="titlebar" :class="{ 'home-up': home.shown }">
+    <span class="brand" :inert="home.shown"><img :src="brandLockup" alt="FundaCAD" /></span>
     <button
-      id="undo-btn"
+      id="home-btn"
       class="tb-btn"
-      title="Undo (Ctrl+Z)"
-      :disabled="!ui.canUndo"
-      @click="engine.doUndo()"
-    ><Icon name="undo" :size="15" /></button>
-    <button
-      id="redo-btn"
-      class="tb-btn"
-      title="Redo (Ctrl+Y)"
-      :disabled="!ui.canRedo"
-      @click="engine.doRedo()"
-    ><Icon name="redo" :size="15" /></button>
-    <span id="context-tab" class="context-tab" :class="{ sketch: ui.sketchActive }">
-      {{ ui.sketchActive ? "SKETCH" : "SOLID" }}
-    </span>
-    <span id="docname" class="docname" :class="{ dirty: ui.dirty }">
-      <!-- After the name, never before it: a prefix moved the whole filename
-           sideways the instant the document went dirty. -->
-      {{ ui.docName }}<span v-if="ui.dirty" class="dirty-mark" title="Unsaved changes">*</span>
-    </span>
-    <!-- Beside the document name, because what it is saying is about THIS
-         document: someone else is in it. It renders nothing at all unless an
-         assistant is actually attached. -->
-    <LiveSessionPill />
-    <ErrorNotice />
-    <WorkspaceToggle />
+      :class="{ active: home.shown }"
+      title="Home"
+      aria-label="Home"
+      :aria-pressed="home.shown"
+      @click="engine.ui.home.toggle()"
+    ><Icon name="home" :size="15" /></button>
+    <!-- display: contents, so the bar's flex row and its narrow window rules see the controls as before. -->
+    <div class="tb-rest" :inert="home.shown">
+      <MenuBar :menus="menus" />
+      <button
+        id="undo-btn"
+        class="tb-btn"
+        :title="fmtKeys('Undo (Ctrl+Z)')"
+        aria-label="Undo"
+        :disabled="!ui.canUndo"
+        @click="engine.doUndo()"
+      ><Icon name="undo" :size="15" /></button>
+      <button
+        id="redo-btn"
+        class="tb-btn"
+        :title="fmtKeys('Redo (Ctrl+Y)')"
+        aria-label="Redo"
+        :disabled="!ui.canRedo"
+        @click="engine.doRedo()"
+      ><Icon name="redo" :size="15" /></button>
+      <span id="context-tab" class="context-tab" :class="{ sketch: ui.sketchActive }">
+        {{ ui.sketchActive ? "SKETCH" : "SOLID" }}
+      </span>
+      <span id="docname" class="docname" :class="{ dirty: ui.dirty }">
+        <!-- After the name, never before it: a prefix moved the whole filename
+             sideways the instant the document went dirty. -->
+        {{ ui.docName }}<span v-if="ui.dirty" class="dirty-mark" title="Unsaved changes">*</span>
+      </span>
+      <!-- Beside the document name, because what it is saying is about THIS
+           document: someone else is in it. It renders nothing at all unless an
+           assistant is actually attached. -->
+      <LiveSessionPill />
+      <ErrorNotice />
+      <WorkspaceToggle />
+    </div>
   </header>
 </template>

@@ -1,0 +1,70 @@
+{
+  "version": 4,
+  "parameters": {},
+  "features": [
+    {
+      "id": "dp",
+      "type": "datumPlane",
+      "plane": "XY",
+      "offset": 12
+    },
+    {
+      "id": "f1",
+      "type": "sketch",
+      "planeId": "dp",
+      "plane": {
+        "origin": [
+          0,
+          0,
+          12
+        ],
+        "normal": [
+          0,
+          0,
+          1
+        ],
+        "xdir": [
+          1,
+          0,
+          0
+        ]
+      },
+      "entities": [
+        {
+          "type": "circle",
+          "id": "c1",
+          "radius": 5,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "type": "circle",
+          "id": "c2",
+          "radius": 7,
+          "x": 0,
+          "y": 0
+        }
+      ],
+      "constraints": [
+        {
+          "type": "offset",
+          "id": "k1",
+          "pairs": [
+            {
+              "src": "c1",
+              "cpy": "c2"
+            }
+          ],
+          "value": 2
+        }
+      ]
+    },
+    {
+      "id": "i1",
+      "type": "import",
+      "format": "brep",
+      "name": "pin",
+      "brep": "REJyZXBfRHJhd2FibGVTaGFwZQo="
+    }
+  ]
+}

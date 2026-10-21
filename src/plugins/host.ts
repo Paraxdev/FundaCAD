@@ -53,9 +53,14 @@ export type {
   BrowserSection,
   Contribution,
   FeatureTypeContribution,
+  MaterialPresetGroup,
   MenuContribution,
   Paint,
   PaletteEntry,
+  Relief,
+  ReliefMap,
+  RenderSection,
+  RenderTab,
   RibbonContribution,
   RibbonEntry,
   SettingsSection,
@@ -94,6 +99,8 @@ export type {
   PrintabilityUp,
 } from "../geometry/client";
 export type { Viewport } from "../viewport/viewport";
+// A sketch plane's frame, for a plugin that places things in plane coordinates.
+export { SketchPlane } from "../sketch/plane";
 export type { CtxItem, MenuDef, MenuItem } from "../ui/menu";
 
 // --- what the buttons and keys do (contributions need the input.remap grant) ---
@@ -180,6 +187,7 @@ export {
   trialConfiguration,
 } from "../params/extras";
 export type { CheckResult } from "../params/extras";
+export type { BodyFinish, MaterialDef, SurfaceGraph, SurfaceNode } from "../document/materials";
 export { evalExpr } from "../params/eval";
 export type { ParamCheck, ParamConfiguration, ParamControl, ParamDef, ParamExtras } from "../types";
 

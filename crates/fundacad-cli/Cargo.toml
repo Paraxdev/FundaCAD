@@ -21,3 +21,6 @@ fundacad-format = { path = "../fundacad-format" }
 fundacad-geom = { path = "../fundacad-geom", features = ["plugins"] }
 fundacad-protocol = { path = "../fundacad-protocol" }
 serde_json = { version = "1", features = ["preserve_order", "float_roundtrip"] }
+
+[dev-dependencies]
+fundacad-core = { path = "../fundacad-core" }

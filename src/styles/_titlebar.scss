@@ -152,6 +152,7 @@
 .tb-btn {
   width: 26px;
   height: 24px;
+  padding: 0;
   border: 1px solid var(--line);
   border-radius: var(--r-sm);
   background: var(--panel-2);
@@ -168,6 +169,22 @@
 .tb-btn:disabled {
   opacity: 0.3;
   cursor: default;
+}
+.tb-rest {
+  display: contents;
+}
+/* Under Home the controls for the hidden workspace read as switched off, inert
+   takes their clicks, hover and focus. A display: contents box paints nothing
+   of its own, so the dimming goes on its children. */
+#titlebar.home-up .brand,
+#titlebar.home-up .tb-rest > * {
+  opacity: 0.38;
+  filter: grayscale(1);
+}
+#home-btn.active {
+  border-color: var(--accent);
+  background: var(--accent-tint-2);
+  color: var(--accent-hot);
 }
 
 /* ---- "?" shortcut cheat-sheet HUD ---- */

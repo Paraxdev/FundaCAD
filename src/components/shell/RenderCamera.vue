@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import RenderSections from "./RenderSections.vue";
 // The lens, and the picture taken through it.
 //
 // Two things on one tab because they are the same job: everything above the
@@ -43,6 +44,11 @@ const saving = ref(false);
  *  because it is the single thing that most makes a render look like a
  *  screenshot of a CAD package; on for anybody who wants exactly that. */
 const edges = ref(false);
+/** Reference images are there to draw over, so a picture leaves them out unless asked. */
+const references = ref(false);
+const hasReferences = ref(false);
+const offReferences = engine.store.onReferenceImagesChange((l) => { hasReferences.value = l.length > 0; });
+onUnmounted(offReferences);
 
 /** Path traced pictures: samples per pixel, then the large denoise weights. */
 const SAMPLES = [64, 256, 1024];
@@ -100,7 +106,7 @@ async function render(): Promise<string | null> {
   // Rendered BEFORE the dialog, and read as a string, because the pixels are
   // only valid in the same task as the render that produced them. Awaiting a
   // file dialog first would hand the writer a blank canvas.
-  return engine.viewport.renderStill(scale.value, { edges: edges.value, realtime: true });
+  return engine.viewport.renderStill(scale.value, { edges: edges.value, realtime: true, references: references.value && hasReferences.value });
 }
 
 async function takePicture() {
@@ -211,6 +217,10 @@ async function takePicture() {
         <span class="prefs-label">Edge lines</span>
         <input id="rd-edges" type="checkbox" :checked="edges" @change="edges = !edges" />
       </label>
+      <label v-if="!traced && hasReferences" class="prefs-row">
+        <span class="prefs-label">Reference images</span>
+        <input id="rd-references" type="checkbox" :checked="references" @change="references = !references" />
+      </label>
       <div class="mats-actions">
         <button
           id="rd-take-picture"
@@ -221,7 +231,7 @@ async function takePicture() {
       </div>
       <div v-if="traced" class="sm-hint">
         Traced to the samples picked, then cleaned with the high quality denoise.
-        More samples take longer and keep finer detail. Edge lines are not traced.
+        More samples take longer and keep finer detail. Edge lines and reference images are not traced.
       </div>
       <div class="sm-hint">
         The grid, the origin arrows and the sketch planes are left out: they are
@@ -229,5 +239,6 @@ async function takePicture() {
         model. Everything else is exactly what you are looking at.
       </div>
     </section>
+    <RenderSections tab="camera" />
   </div>
 </template>

@@ -12,6 +12,14 @@ import { useBrowserStore } from "../../../src/stores/browser";
 import type { MaterialDef } from "../../../src/document/materials";
 import type { Engine } from "../../../src/app/engine";
 import { setEmissionProgress } from "../../../src/ui/emissionProgress";
+import { contribute, resetContributions } from "../../../src/plugins/contrib";
+import type { CtxItem } from "../../../src/ui/menu";
+
+const menus: CtxItem[][] = [];
+vi.mock("../../../src/ui/menu", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../src/ui/menu")>()),
+  contextMenu: (_x: number, _y: number, items: CtxItem[]) => { menus.push(items); },
+}));
 
 vi.mock("../../../src/viewport/materialPreview", () => ({
   materialPreview: () => null,
@@ -23,6 +31,7 @@ const LIBRARY: MaterialDef[] = [
   { id: "m-gold", name: "Gold", color: "#d4af37", metalness: 1, roughness: 0.3 },
   { id: "m-steel", name: "Steel", color: "#888888", metalness: 1, roughness: 0.4 },
   { id: "m-glass", name: "Glass", color: "#cfe4ee", metalness: 0, roughness: 0.05, opacity: 0.25 },
+  { id: "m-lamp", name: "Lamp", color: "#ffeeaa", emissive: 0.5, sheen: 0.4 },
 ];
 
 function makeEngine() {
@@ -50,6 +59,8 @@ function makeEngine() {
       buildVersion.value++;
     },
     updateMaterial: vi.fn(),
+    addMaterial: vi.fn(() => "m-new"),
+    addMaterialPreset: vi.fn((raw: { name: string }) => (raw ? "m-" + raw.name : null)),
     buildState: { building: false, result: { bodies: [{ id: "body1", name: "Body1" }] } },
   };
   return {
@@ -90,6 +101,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  resetContributions();
+  menus.length = 0;
   w.unmount();
   vi.useRealTimers();
 });
@@ -177,6 +190,45 @@ describe("RenderMaterials glass controls", () => {
   });
 });
 
+describe("RenderMaterials Advanced fields", () => {
+  it("keeps the filament fields under Advanced and writes each one", async () => {
+    await tile("m-lamp").trigger("click");
+    await poll();
+    const adv = w.get("[data-advanced]");
+    expect(adv.element.tagName).toBe("DETAILS");
+    expect((adv.get('[data-field="sheen"]').element as HTMLInputElement).value).toBe("0.4");
+    for (const [field, value, want] of [
+      ["sheen", "0.6", 0.6], ["anisotropy", "0.5", 0.5], ["flakes", "0.2", 0.2], ["flakeSize", "0.3", 0.3],
+    ] as const) {
+      const input = adv.get(`[data-field="${field}"]`);
+      (input.element as HTMLInputElement).value = value;
+      await input.trigger("input");
+      expect(fake.store.updateMaterial).toHaveBeenLastCalledWith("m-lamp", { [field]: want });
+    }
+    expect(w.find('[data-field="scatterDistance"]').exists()).toBe(false);
+    await tile("m-glass").trigger("click");
+    await poll();
+    const scatter = w.get('[data-field="scatterDistance"]');
+    (scatter.element as HTMLInputElement).value = "2";
+    await scatter.trigger("input");
+    expect(fake.store.updateMaterial).toHaveBeenLastCalledWith("m-glass", { scatterDistance: 2 });
+  });
+
+  it("offers Lights other parts only on a material that gives off light", async () => {
+    await tile("m-glass").trigger("click");
+    await poll();
+    expect(w.find('[data-field="castsLight"]').exists()).toBe(false);
+    await tile("m-lamp").trigger("click");
+    await poll();
+    const box = w.get('[data-field="castsLight"]');
+    expect((box.element as HTMLInputElement).checked).toBe(true);
+    await box.setValue(false);
+    expect(fake.store.updateMaterial).toHaveBeenLastCalledWith("m-lamp", { castsLight: false });
+    await box.setValue(true);
+    expect(fake.store.updateMaterial).toHaveBeenLastCalledWith("m-lamp", { castsLight: true });
+  });
+});
+
 describe("RenderMaterials Emission control", () => {
   it("is named Emission and warns that it is a heavy effect", async () => {
     await tile("m-glass").trigger("click");
@@ -218,5 +270,35 @@ describe("RenderMaterials Emission control", () => {
     setEmissionProgress(null);
     await nextTick();
     expect(w.find(".rd-emitting").exists()).toBe(false);
+  });
+});
+
+describe("RenderMaterials New menu", () => {
+  const newButton = () => w.get('button[title="New material"]');
+
+  it("adds a blank material straight away when no plugin offers presets", async () => {
+    await newButton().trigger("click");
+    expect(menus).toEqual([]);
+    expect(fake.store.addMaterial).toHaveBeenCalledTimes(1);
+  });
+
+  it("offers Blank and a submenu per group, and a pick adds that preset", async () => {
+    const red = { id: "r", name: "Red", color: "#ff0000" };
+    contribute("A.One", { materialPresets: () => [{ group: "Paints", materials: [red] }] });
+    await newButton().trigger("click");
+    expect(menus).toHaveLength(1);
+    expect(menus[0]!.map((i) => i.label)).toEqual(["Blank", "Paints"]);
+    expect(fake.store.addMaterial).not.toHaveBeenCalled();
+    menus[0]![1]!.children![0]!.onClick!();
+    expect(fake.store.addMaterialPreset).toHaveBeenCalledWith(red);
+    menus[0]![0]!.onClick!();
+    expect(fake.store.addMaterial).toHaveBeenCalledTimes(1);
+  });
+
+  it("still opens, with Blank, when a plugin lists a null or nameless entry", async () => {
+    const ok = { id: "r", name: "Red", color: "#ff0000" };
+    contribute("A.One", { materialPresets: () => [{ group: "Paints", materials: [null as never, {} as never, ok] }] });
+    await newButton().trigger("click");
+    expect(menus[0]![1]!.children!.map((i) => i.label)).toEqual(["Red"]);
   });
 });

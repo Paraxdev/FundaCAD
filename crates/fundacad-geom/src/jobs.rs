@@ -72,7 +72,7 @@ fn rebuild_with(
 ) -> JobResult {
     let _beat = crate::heartbeat::install(watch.heartbeat());
     let _cancel = crate::cancel::install(watch.cancel_token());
-    let typed: CadDocument = match serde_json::from_value(doc.clone()) {
+    let typed: CadDocument = match CadDocument::from_value_lenient(doc) {
         Ok(d) => d,
         Err(e) => return error_result(&format!("the document does not parse: {e}")),
     };
@@ -84,7 +84,7 @@ fn rebuild_with(
         return error_result("cancelled");
     };
     if r.bodies.is_empty() {
-        if let Some(first) = r.errors.first() {
+        if let Some(first) = r.errors.first().filter(|_| r.skipped.is_empty()) {
             let mut m = Map::new();
             m.insert("error".into(), first.wire());
             return JobResult::Json(m);
@@ -369,6 +369,7 @@ impl Jobs for GeomJobs {
             "migrateGeometry" => crate::import::migrate_result(req),
             "blobHas" | "blobRead" | "blobWrite" => crate::import::blob_result(op, req),
             "inspect" => crate::inspect::inspect_result(req, &EngineWatch(ctx)),
+            "measure" => crate::measure::measure_result(req, &EngineWatch(ctx)),
             "interference" => crate::inspect::interference_result(req, &EngineWatch(ctx)),
             "stress" => crate::stress::stress_result(req, &EngineWatch(ctx)),
             "printability" => crate::printcheck::op::printability_result(req, &EngineWatch(ctx)),

@@ -46,34 +46,46 @@ pub fn mesh_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(dir)
 }
 
-// ---------------------------------------------------------------------------
-// Tauri commands. Privileged IPC, the same pattern as `recovery_write`, the
-// webview holds only `fs:allow-read-text-file` / `fs:allow-write-text-file`, so
-// it could not read or write a ZIP itself even if we wanted it to. Widening that
-// to the binary APIs would reopen the post-XSS persistence channel the security
-// round deliberately closed.
+/// Sections of a `.fundab` this version does not read, copied out on open and
+/// written back on save, one file per section named by its hash.
+pub fn section_dir(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    use tauri::Manager;
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("sections");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    Ok(dir)
+}
 
-/// Write the document and the geometry it references to `path`, atomically.
-///
-/// `hashes` are the content hashes the document's import features carry; the
-/// frontend collects them because it owns the document. Deliberately does NOT
-/// consult the engine, so a save never waits on a worker that crashed or is
-/// restarting.
-#[tauri::command]
-pub async fn container_save(
-    app: tauri::AppHandle,
-    path: String,
-    document_json: String,
+/// The folders a save reads from.
+pub struct Stores {
+    pub blobs: PathBuf,
+    pub meshes: PathBuf,
+    pub sections: PathBuf,
+}
+
+fn is_hash(s: &str) -> bool {
+    s.len() == 32 && s.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
+
+/// `container_save` without the app handle.
+#[allow(clippy::too_many_arguments)]
+pub fn save_document(
+    stores: &Stores,
+    path: &std::path::Path,
+    document_json: &str,
     hashes: Vec<String>,
+    optional_hashes: Vec<String>,
     mesh_keys: Vec<String>,
+    carried: Vec<fundacad_format::fnda::Carried>,
+    app_version: &str,
 ) -> Result<(), String> {
-    let blobs_root = blob_dir(&app)?;
-    let meshes_root = mesh_dir(&app)?;
-
     let mut blobs = BTreeMap::new();
     let mut missing = Vec::new();
     for h in hashes {
-        let p = blobs_root.join(format!("{h}.bbrep"));
+        let p = stores.blobs.join(format!("{h}.bbrep"));
         if p.exists() {
             blobs.insert(h, p);
         } else {
@@ -92,21 +104,69 @@ pub async fn container_save(
             missing.len()
         ));
     }
+    // Hash shaped strings the document holds outside its imports, which a
+    // feature of a type this version does not know may use to name geometry.
+    for h in optional_hashes.into_iter().filter(|h| is_hash(h)) {
+        let p = stores.blobs.join(format!("{h}.bbrep"));
+        if p.exists() {
+            blobs.entry(h).or_insert(p);
+        }
+    }
 
     let mut meshes = BTreeMap::new();
     for k in mesh_keys {
-        let p = meshes_root.join(format!("{k}.bin"));
+        let p = stores.meshes.join(format!("{k}.bin"));
         if p.exists() {
             meshes.insert(k, p); // absent meshes are a cache miss, never an error
         }
     }
 
+    let carried: Vec<_> = carried
+        .into_iter()
+        .filter(|c| is_hash(&c.hash))
+        .map(|c| {
+            let p = stores.sections.join(format!("{}.bin", c.hash));
+            (c, p)
+        })
+        .collect();
+
+    write_document(path, document_json, &blobs, &meshes, &carried, app_version)
+}
+
+// ---------------------------------------------------------------------------
+// Tauri commands. Privileged IPC, the same pattern as `recovery_write`, the
+// webview holds only `fs:allow-read-text-file` / `fs:allow-write-text-file`, so
+// it could not read or write a ZIP itself even if we wanted it to. Widening that
+// to the binary APIs would reopen the post-XSS persistence channel the security
+// round deliberately closed.
+
+/// Write the document and the geometry it references to `path`, atomically.
+///
+/// `hashes` are the content hashes the document's import features carry; the
+/// frontend collects them because it owns the document. `optional_hashes` are
+/// the other hash shaped strings in it, embedded when the store has them. Deliberately does NOT
+/// consult the engine, so a save never waits on a worker that crashed or is
+/// restarting.
+#[tauri::command]
+pub async fn container_save(
+    app: tauri::AppHandle,
+    path: String,
+    document_json: String,
+    hashes: Vec<String>,
+    mesh_keys: Vec<String>,
+    optional_hashes: Option<Vec<String>>,
+    carried: Option<Vec<fundacad_format::fnda::Carried>>,
+) -> Result<(), String> {
+    let stores = Stores { blobs: blob_dir(&app)?, meshes: mesh_dir(&app)?, sections: section_dir(&app)? };
     let app_version = app.package_info().version.to_string();
-    write_document(
+    save_document(
+        &stores,
         std::path::Path::new(&path),
         &document_json,
-        &blobs,
-        &meshes,
+        hashes,
+        optional_hashes.unwrap_or_default(),
+        mesh_keys,
+        carried.unwrap_or_default(),
         &app_version,
     )
 }
@@ -127,6 +187,7 @@ pub struct OpenedDocument {
     pub document: String,
     pub repaired_shards: u64,
     pub used_backup_index: bool,
+    pub carried: Vec<fundacad_format::fnda::Carried>,
 }
 
 /// `container_open`, plus what the error correction had to repair. A file that
@@ -135,8 +196,14 @@ pub struct OpenedDocument {
 pub async fn container_open_checked(app: tauri::AppHandle, path: String) -> Result<OpenedDocument, String> {
     let blobs = blob_dir(&app)?;
     let meshes = mesh_dir(&app)?;
-    let (document, report) = open_document_checked(std::path::Path::new(&path), &blobs, Some(&meshes))?;
-    Ok(OpenedDocument { document, repaired_shards: report.repaired_shards, used_backup_index: report.used_backup_index })
+    let sections = section_dir(&app)?;
+    let o = open_document_full(std::path::Path::new(&path), &blobs, Some(&meshes), Some(&sections))?;
+    Ok(OpenedDocument {
+        document: o.document,
+        repaired_shards: o.report.repaired_shards,
+        used_backup_index: o.report.used_backup_index,
+        carried: o.carried,
+    })
 }
 
 #[derive(serde::Serialize)]
@@ -146,6 +213,7 @@ pub struct OpenedDroppedDocument {
     pub repaired_shards: u64,
     pub used_backup_index: bool,
     pub was_container: bool,
+    pub carried: Vec<fundacad_format::fnda::Carried>,
 }
 
 /// `container_open_checked` for a document dropped on a webview that does not
@@ -161,12 +229,14 @@ pub async fn container_open_bytes(
     };
     let blobs = blob_dir(&app)?;
     let meshes = mesh_dir(&app)?;
-    let opened = open_document_bytes(bytes, &blobs, Some(&meshes))?;
+    let sections = section_dir(&app)?;
+    let opened = open_document_bytes(bytes, &blobs, Some(&meshes), Some(&sections))?;
     Ok(OpenedDroppedDocument {
         document: opened.document,
         repaired_shards: opened.report.repaired_shards,
         used_backup_index: opened.report.used_backup_index,
         was_container: opened.was_container,
+        carried: opened.carried,
     })
 }
 

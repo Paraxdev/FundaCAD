@@ -27,12 +27,16 @@ pub struct PageMaterial {
     pub clearcoat_roughness: Option<f32>,
     pub opacity: Option<f32>,
     pub vertex_colors: bool,
+    /// Glows to the camera and is left out of the light table.
+    pub no_light: bool,
 }
 
 pub const FLAG_SOLID: u32 = 1;
 pub const FLAG_VERTEX_COLORS: u32 = 2;
+/// An emitter left out of the light table, the page's userData.noLight.
+pub const FLAG_NO_LIGHT: u32 = 4;
 
-/// Seven vec4s, the layout the shader's `Mat` struct reads.
+/// Nine vec4s, 144 bytes, the layout the shader's `Mat` struct reads.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct GpuMaterial {
@@ -50,6 +54,10 @@ pub struct GpuMaterial {
     pub specular: [f32; 4],
     /// sheen colour rgb, sheen roughness
     pub sheen: [f32; 4],
+    /// iridescence, iridescence ior, thickness min nm, thickness max nm
+    pub film: [f32; 4],
+    /// anisotropy, scatter distance mm, flakes, flake size mm
+    pub finish: [f32; 4],
 }
 
 impl GpuMaterial {
@@ -58,6 +66,13 @@ impl GpuMaterial {
     }
     pub fn emits(&self) -> bool {
         self.emission[..3].iter().any(|c| *c > 0.0)
+    }
+    /// The luminance its triangles enter the light table with, 0 for none.
+    pub fn light_power(&self) -> f32 {
+        if self.flags() & FLAG_NO_LIGHT != 0 {
+            return 0.0;
+        }
+        (0.2126 * self.emission[0] + 0.7152 * self.emission[1] + 0.0722 * self.emission[2]).max(0.0)
     }
     /// The shader's albedo: the base colour times the interpolated vertex
     /// colour when the body carries paint or a bake.
@@ -82,6 +97,9 @@ pub fn pack_material(m: &PageMaterial) -> GpuMaterial {
     if m.vertex_colors {
         flags |= FLAG_VERTEX_COLORS;
     }
+    if m.no_light {
+        flags |= FLAG_NO_LIGHT;
+    }
     let dist = match m.attenuation_distance {
         Some(d) if d > 0.0 => d,
         _ => f32::INFINITY,
@@ -102,6 +120,8 @@ pub fn pack_material(m: &PageMaterial) -> GpuMaterial {
         ],
         specular: [spec[0], spec[1], spec[2], m.sheen.unwrap_or(0.0)],
         sheen: [sheen[0], sheen[1], sheen[2], m.sheen_roughness.unwrap_or(1.0)],
+        film: [0.0; 4],
+        finish: [0.0; 4],
     }
 }
 
@@ -136,6 +156,15 @@ mod tests {
     }
 
     #[test]
+    fn the_pack_is_nine_vec4_with_film_and_finish_zero() {
+        assert_eq!(std::mem::size_of::<GpuMaterial>(), 144);
+        let m = parse(r#"{"color":[0.2,0.3,0.4],"transmission":1,"sheen":0.5}"#);
+        assert_eq!(m.film, [0.0; 4]);
+        assert_eq!(m.finish, [0.0; 4]);
+        assert_eq!(m.flags() & FLAG_NO_LIGHT, 0);
+    }
+
+    #[test]
     fn defaults_follow_trace_material_from() {
         let m = parse("{}");
         assert_eq!(m.base, [1.0, 1.0, 1.0, 1.0]);
@@ -162,6 +191,15 @@ mod tests {
         assert_eq!(&m.emission[..3], &[3.0, 1.5, 0.0]);
         assert!(m.emits());
         assert!(!parse(r#"{"emissive":[0,0,0],"emissiveIntensity":5}"#).emits());
+    }
+
+    #[test]
+    fn no_light_keeps_the_glow_out_of_the_light_table() {
+        let m = parse(r#"{"emissive":[1,1,1],"emissiveIntensity":2,"noLight":true}"#);
+        assert_eq!(m.flags() & FLAG_NO_LIGHT, FLAG_NO_LIGHT);
+        assert!(m.emits());
+        assert_eq!(m.light_power(), 0.0);
+        assert!((parse(r#"{"emissive":[1,1,1],"emissiveIntensity":2}"#).light_power() - 2.0).abs() < 1e-5);
     }
 
     #[test]

@@ -6,7 +6,7 @@
 // No Vue and no Three here, same as workspace.ts: the low power tier comes in
 // as an argument so the headless suite can drive every case.
 
-import { asViewMode, renderPrefs, setRenderPref, type ViewMode } from "./renderPrefs";
+import { asViewMode, groundKey, renderPrefs, setRenderPref, type Ground, type ViewMode } from "./renderPrefs";
 import { workspace, type Workspace } from "./workspace";
 import type { OverlayKind, OverlayState } from "../viewport/overlayKinds";
 
@@ -27,7 +27,13 @@ export interface RenderTier {
   lowPower: boolean;
   auto: boolean;
   webgpu?: boolean | undefined;
-  native?: { available: boolean; path?: "rayquery" | "software" | undefined } | undefined;
+  native?: {
+    available: boolean;
+    path?: "rayquery" | "software" | undefined;
+    /** Why the native tracer refused this computer; absent from an older app. */
+    class?: string | undefined;
+    storageBuffers?: number | undefined;
+  } | undefined;
   /** The tracer hit a second GPU fault this session. */
   traceFault?: boolean;
 }
@@ -37,6 +43,11 @@ export const PATH_TRACING_OFF =
 export const PATH_TRACING_AUTO =
   "This computer was detected as low powered, so turning off performance mode may not lift it.";
 export const PATH_TRACING_NO_GPU = "Path tracing needs a GPU tracer, which this system does not have";
+export const PATH_TRACING_NO_ADAPTER = "Path tracing needs a graphics card, and FundaCAD found none on this computer";
+export const PATH_TRACING_CPU = "This computer only offers software graphics, which is too slow to path trace";
+export const PATH_TRACING_SELF_CHECK = "This graphics card drew the path tracer's test scene wrong, so path tracing is off";
+export const pathTracingLimits = (storageBuffers: number): string =>
+  `This graphics card binds ${storageBuffers} storage buffers and path tracing needs 12`;
 export const PATH_TRACING_PROBING = "Checking whether this system can path trace";
 export const PATH_TRACING_FAULT = "Path tracing stopped after a GPU error and stays off until FundaCAD restarts";
 
@@ -62,10 +73,20 @@ export function pathTracedBlock(tier: RenderTier): { reason: PathTracedBlockReas
   }
   if (!tier.webgpu) {
     if (tier.webgpu === undefined || tier.native === undefined) return { reason: "probing", tooltip: PATH_TRACING_PROBING };
-    if (!tier.native.available) return { reason: "nogpu", tooltip: PATH_TRACING_NO_GPU };
+    if (!tier.native.available) return { reason: "nogpu", tooltip: refusalTooltip(tier.native) };
   }
   if (tier.traceFault) return { reason: "fault", tooltip: PATH_TRACING_FAULT };
   return null;
+}
+
+function refusalTooltip(n: { class?: string | undefined; storageBuffers?: number | undefined }): string {
+  switch (n.class) {
+    case "noadapter": return PATH_TRACING_NO_ADAPTER;
+    case "cpu": return PATH_TRACING_CPU;
+    case "limits": return n.storageBuffers === undefined ? PATH_TRACING_NO_GPU : pathTracingLimits(n.storageBuffers);
+    case "selfcheck": return PATH_TRACING_SELF_CHECK;
+    default: return PATH_TRACING_NO_GPU;
+  }
 }
 
 /** A click on a blocked Path traced. The performance block warns on the first
@@ -135,6 +156,14 @@ export function nextViewMode(cur: ViewMode, dir: 1 | -1, tier: RenderTier): View
     if (id !== "pathtraced" || !pathTracedBlock(tier)) return id;
   }
   return cur;
+}
+
+export function savedGround(w: Workspace = workspace()): Ground {
+  return renderPrefs()[groundKey(w)];
+}
+
+export function setGround(g: Ground, w: Workspace = workspace()): void {
+  setRenderPref(groundKey(w), g);
 }
 
 function overlayKey(w: Workspace): "overlaysModel" | "overlaysRender" {

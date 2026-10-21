@@ -24,7 +24,7 @@ export const FEATURE_NUM_FIELDS: Partial<Record<Feature["type"], [string, string
   extrude: [
     ["distance", "Distance", "length"], ["taper", "Taper", "angle"], ["startOffset", "Start offset", "length"],
     ["endOffset", "End offset", "length"], ["distance2", "Distance 2", "length"], ["taper2", "Taper 2", "angle"],
-    ["endOffset2", "End offset 2", "length"],
+    ["endOffset2", "End offset 2", "length"], ["thickness", "Thickness", "length"], ["thickness2", "Thickness 2", "length"],
   ],
   // profile is a dimensionless ratio in (-1, 1), "count" is this file's kind for
   // real-valued unitless fields (see scale.factor, texture.sharpness), not an

@@ -54,8 +54,10 @@ export const OPS = [
   "feature_move",
   "edit",
   "sketch_merge",
+  "sketch_tie",
   "build",
   "interference",
+  "measure",
   "section",
   "stress",
   "printability",
@@ -163,6 +165,11 @@ export const OP_TABLE: Record<Op, OpSpec> = {
     why: "has the engine unite overlapping shapes of a sketch and writes the outline back into it",
     writes: true,
   },
+  sketch_tie: {
+    needs: ["document.write"],
+    why: "adds constraints to a sketch and moves its loose ends onto what they touch",
+    writes: true,
+  },
 
   build: {
     needs: ["document.read", "geometry.build"],
@@ -177,6 +184,11 @@ export const OP_TABLE: Record<Op, OpSpec> = {
   interference: {
     needs: ["document.read", "geometry.build"],
     why: "builds the open document and reports where its bodies overlap and how close they come, which is the document read back out",
+    writes: false,
+  },
+  measure: {
+    needs: ["document.read", "geometry.build"],
+    why: "builds the open document and reports exact distances, wall thicknesses, radii and angles between its faces, edges and bodies, the document's own shape read out",
     writes: false,
   },
   section: {

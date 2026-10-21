@@ -18,6 +18,7 @@ import {
   bloomSettings,
   asBrightness,
   asEnvironment,
+  asRealtimeQuality,
   asRenderPrefs,
   asTangentEdges,
   onRenderPrefsChange,
@@ -75,10 +76,14 @@ describe("asRenderPrefs", () => {
       viewModeRender: DEFAULT_RENDER.viewModeRender,
       overlaysModel: DEFAULT_RENDER.overlaysModel,
       overlaysRender: DEFAULT_RENDER.overlaysRender,
+      groundModel: DEFAULT_RENDER.groundModel,
+      groundRender: DEFAULT_RENDER.groundRender,
       matcapStyle: DEFAULT_RENDER.matcapStyle,
       matcapTint: DEFAULT_RENDER.matcapTint,
       denoise: DEFAULT_RENDER.denoise,
       tracer: DEFAULT_RENDER.tracer,
+      realtimeQuality: DEFAULT_RENDER.realtimeQuality,
+      realtimeWhileMoving: DEFAULT_RENDER.realtimeWhileMoving,
     });
   });
 
@@ -241,6 +246,24 @@ describe("path traced denoise", () => {
   });
 });
 
+describe("path traced realtime while moving", () => {
+  it("defaults to on and keeps only a real boolean", () => {
+    expect(DEFAULT_RENDER.realtimeWhileMoving).toBe(true);
+    expect(asRenderPrefs({ realtimeWhileMoving: false }).realtimeWhileMoving).toBe(false);
+    expect(asRenderPrefs({ realtimeWhileMoving: "off" }).realtimeWhileMoving).toBe(true);
+    expect(asRenderPrefs({}).realtimeWhileMoving).toBe(true);
+  });
+
+  it("is remembered in the stored settings", () => {
+    setRenderPref("realtimeWhileMoving", false);
+    expect(renderPrefs().realtimeWhileMoving).toBe(false);
+    expect(asRenderPrefs(JSON.parse(JSON.stringify(renderPrefs()))).realtimeWhileMoving).toBe(false);
+    setRenderPref("realtimeWhileMoving", "no" as never);
+    expect(renderPrefs().realtimeWhileMoving).toBe(false);
+    setRenderPref("realtimeWhileMoving", DEFAULT_RENDER.realtimeWhileMoving);
+  });
+});
+
 describe("path traced backend", () => {
   it("defaults to Auto and keeps only Auto, Native or WebGPU", () => {
     expect(DEFAULT_RENDER.tracer).toBe("auto");
@@ -251,5 +274,55 @@ describe("path traced backend", () => {
     setRenderPref("tracer", "metal" as never);
     expect(renderPrefs().tracer).toBe("webgpu");
     setRenderPref("tracer", DEFAULT_RENDER.tracer);
+  });
+});
+
+describe("realtime quality", () => {
+  it("defaults to Auto and keeps only Auto, Standard or High", () => {
+    expect(DEFAULT_RENDER.realtimeQuality).toBe("auto");
+    expect(asRealtimeQuality("high")).toBe("high");
+    expect(asRealtimeQuality("standard")).toBe("standard");
+    expect(asRealtimeQuality("auto")).toBe("auto");
+    for (const v of ["ultra", "High", "", 1, true, null, undefined, {}, ["high"]]) expect(asRealtimeQuality(v)).toBeNull();
+  });
+
+  it("falls back to Auto for a saved object without it or with a wrong type", () => {
+    expect(asRenderPrefs({ bloom: 0.5 }).realtimeQuality).toBe("auto");
+    expect(asRenderPrefs({ realtimeQuality: 2 }).realtimeQuality).toBe("auto");
+    expect(asRenderPrefs({ realtimeQuality: "max" }).realtimeQuality).toBe("auto");
+    expect(asRenderPrefs({ realtimeQuality: "high" }).realtimeQuality).toBe("high");
+  });
+
+  it("is written through setRenderPref and refuses an unknown value", () => {
+    setRenderPref("realtimeQuality", "high");
+    expect(renderPrefs().realtimeQuality).toBe("high");
+    setRenderPref("realtimeQuality", "ultra" as never);
+    expect(renderPrefs().realtimeQuality).toBe("high");
+    setRenderPref("realtimeQuality", DEFAULT_RENDER.realtimeQuality);
+    expect(renderPrefs().realtimeQuality).toBe("auto");
+  });
+});
+
+describe("ground", () => {
+  it("is none in both workspaces by default, like shadows", () => {
+    expect(DEFAULT_RENDER.groundModel).toBe("none");
+    expect(DEFAULT_RENDER.groundRender).toBe("none");
+    expect(DEFAULT_RENDER.shadows).toBe(false);
+  });
+
+  it("keeps only none or shadow per field", () => {
+    expect(asRenderPrefs({ groundModel: "shadow", groundRender: 7 })).toMatchObject({ groundModel: "shadow", groundRender: "none" });
+    for (const bad of ["Shadow", null, {}, true, "reflection"]) {
+      expect(asRenderPrefs({ groundModel: bad, groundRender: bad })).toMatchObject({ groundModel: "none", groundRender: "none" });
+    }
+  });
+
+  it("saves a choice and refuses a bad one", () => {
+    setRenderPref("groundRender", "shadow");
+    expect(renderPrefs().groundRender).toBe("shadow");
+    expect(renderPrefs().groundModel).toBe("none");
+    setRenderPref("groundRender", "bogus" as never);
+    expect(renderPrefs().groundRender).toBe("shadow");
+    setRenderPref("groundRender", DEFAULT_RENDER.groundRender);
   });
 });

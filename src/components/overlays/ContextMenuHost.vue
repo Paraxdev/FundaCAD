@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { fmtKeys } from "../../input/platform";
 import { computed, nextTick, onUnmounted, ref, watch, useTemplateRef } from "vue";
 import Icon from "../shell/Icon.vue";
 import { useContextMenuStore, type CtxItem } from "../../stores/contextMenu";
@@ -211,7 +212,7 @@ onUnmounted(() => {
           <span v-if="it.swatch" class="ctx-swatch" :style="{ background: it.swatch }"></span>
           <Icon v-if="it.icon" :name="it.icon" :size="14" class="ctx-icon" />
           <span class="ctx-label">{{ it.label }}</span>
-          <span v-if="it.shortcut" class="ctx-key">{{ it.shortcut }}</span>
+          <span v-if="it.shortcut" class="ctx-key">{{ fmtKeys(it.shortcut) }}</span>
           <span v-if="it.children" class="ctx-caret"><Icon name="caretRight" :size="10" /></span>
         </div>
       </template>
@@ -239,7 +240,7 @@ onUnmounted(() => {
         >
           <span v-if="c.swatch" class="ctx-swatch" :style="{ background: c.swatch }"></span>
           <span class="ctx-label">{{ c.label }}</span>
-          <span v-if="c.shortcut" class="ctx-key">{{ c.shortcut }}</span>
+          <span v-if="c.shortcut" class="ctx-key">{{ fmtKeys(c.shortcut) }}</span>
         </div>
       </template>
     </div>

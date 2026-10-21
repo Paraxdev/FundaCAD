@@ -12,6 +12,7 @@ import type { Denoise } from "../../ui/renderPrefs";
 import type { PictureOptions, TraceLook, TraceScene, TracerBackend } from "./backend";
 import type { TraceLens } from "./camera";
 import { NativeScene, type Call } from "./nativeScene";
+import { runSelfCheck } from "./selfCheck";
 import { bloomKey, bloomSide, type TraceBloomSettings } from "./tracePost";
 
 export interface NativeFrame {
@@ -51,9 +52,11 @@ export interface NativeTracerOptions {
   connect?: (width: number, height: number, prefer?: string) => Promise<Connected>;
   blit?: (canvas: HTMLCanvasElement) => Blit;
   canvas?: HTMLCanvasElement;
-  /** The pt_* commands; Tauri's invoke unless a test stands in. */
+  /** The pt_* commands; Tauri's invoke unless a test or the dev tracer server stands in. */
   call?: Call;
 }
+
+const tauriCall: Call = (cmd, args) => invoke(cmd, args as never);
 
 const HEADER_BYTES = 16;
 const BUFFER_WAIT_MS = 2000;
@@ -193,6 +196,7 @@ export class WebSocketLink implements FrameLink {
   private constructor(
     private ws: WebSocket,
     private id: number,
+    private call: Call,
   ) {
     ws.onmessage = (e) => {
       const w = this.waiting.shift();
@@ -212,11 +216,12 @@ export class WebSocketLink implements FrameLink {
     };
   }
 
-  static open(port: number, token: string, id: number): Promise<WebSocketLink> {
+  /** `call` carries frames_resize and frames_close, Tauri's invoke in the app. */
+  static open(port: number, token: string, id: number, call: Call = tauriCall): Promise<WebSocketLink> {
     return new Promise((ok, fail) => {
       const ws = new WebSocket(`ws://127.0.0.1:${port}/?token=${encodeURIComponent(token)}`);
       ws.binaryType = "arraybuffer";
-      ws.onopen = () => ok(new WebSocketLink(ws, id));
+      ws.onopen = () => ok(new WebSocketLink(ws, id, call));
       ws.onerror = () => fail(new Error("the frame socket refused the page"));
     });
   }
@@ -235,22 +240,27 @@ export class WebSocketLink implements FrameLink {
   }
 
   resize(width: number, height: number): Promise<number> {
-    return invoke<number>("frames_resize", { width, height });
+    return this.call("frames_resize", { width, height }) as Promise<number>;
   }
 
   close() {
     this.ws.close();
-    void invoke("frames_close", { id: this.id }).catch(() => {});
+    void this.call("frames_close", { id: this.id }).catch(() => {});
   }
 }
 
 /** Shared buffers listen before frames_open, which posts the first three. */
-export async function connectNative(width: number, height: number, prefer?: string): Promise<Connected> {
+export async function connectNative(
+  width: number,
+  height: number,
+  prefer?: string,
+  call: Call = tauriCall,
+): Promise<Connected> {
   const wv = prefer === "websocket" ? null : webview2();
   const shared = wv ? new SharedBufferLink(wv) : null;
   let o: Opened;
   try {
-    o = await invoke<Opened>("frames_open", { width, height, prefer: prefer ?? null });
+    o = (await call("frames_open", { width, height, prefer: prefer ?? null })) as Opened;
   } catch (e) {
     shared?.detach();
     throw e;
@@ -262,9 +272,9 @@ export async function connectNative(width: number, height: number, prefer?: stri
   shared?.detach();
   if (o.port == null || o.token == null) throw new Error("the app opened no frame transport");
   try {
-    return { link: await WebSocketLink.open(o.port, o.token, o.id), generation: o.generation, source: o.source };
+    return { link: await WebSocketLink.open(o.port, o.token, o.id, call), generation: o.generation, source: o.source };
   } catch (e) {
-    void invoke("frames_close", { id: o.id }).catch(() => {});
+    void call("frames_close", { id: o.id }).catch(() => {});
     throw e;
   }
 }
@@ -333,6 +343,17 @@ interface Status {
   denoised: boolean;
   denoising: boolean;
   denoiseError: string | null;
+  picture?: { samples: number; total: number; denoising: boolean } | null;
+}
+
+const PICTURE_POLL_MS = 250;
+
+/** What a raw ipc::Response arrives as. */
+function base64(bytes: unknown): string {
+  const b = bytes instanceof ArrayBuffer ? new Uint8Array(bytes) : bytes instanceof Uint8Array ? bytes : Uint8Array.from(bytes as number[]);
+  let s = "";
+  for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000));
+  return btoa(s);
 }
 
 export class NativeTracer implements TracerBackend {
@@ -354,6 +375,10 @@ export class NativeTracer implements TracerBackend {
   private height = 1;
   private scale = 1;
   private resizeTimer: ReturnType<typeof setTimeout> | null = null;
+  private resizing = 0;
+  /** False from a size change until a frame of the new size lands: the app
+   *  counts the old size's samples till then, which can stand at the cap. */
+  private sized = true;
   private times: number[] = [];
   private source = "";
   private disposed = false;
@@ -365,7 +390,7 @@ export class NativeTracer implements TracerBackend {
 
   constructor(private o: NativeTracerOptions = {}) {
     this.canvas = o.canvas ?? document.createElement("canvas");
-    this.scene = new NativeScene(o.call ?? ((cmd, args) => invoke(cmd, args as never)), (e) =>
+    this.scene = new NativeScene(o.call ?? tauriCall, (e) =>
       this.fault(`The native tracer refused the scene: ${e instanceof Error ? e.message : String(e)}`),
     );
   }
@@ -390,6 +415,8 @@ export class NativeTracer implements TracerBackend {
     this.source = c.source;
     // The native tracer outlives a page, so a bloom of the last one is cleared.
     this.syncBloom();
+    // After the connect, which is what opens the native tracer the check borrows its path from.
+    await runSelfCheck((cmd, args) => this.call(cmd, args as Record<string, unknown>));
   }
 
   setSize(cssWidth: number, cssHeight: number, pixelRatio: number) {
@@ -407,17 +434,24 @@ export class NativeTracer implements TracerBackend {
 
   private queueResize() {
     if (this.resizeTimer) clearTimeout(this.resizeTimer);
+    this.sized = false;
     this.resizeTimer = setTimeout(() => {
       this.resizeTimer = null;
       this.syncBloom();
       const w = Math.max(1, Math.floor(this.width * this.scale));
       const h = Math.max(1, Math.floor(this.height * this.scale));
-      this.link?.resize(w, h).then(
+      if (!this.link) return;
+      this.resizing++;
+      this.link.resize(w, h).then(
         (g) => {
+          this.resizing--;
           this.generation = Math.max(this.generation, g);
           this.reset();
         },
-        (e) => this.fault(`The native frames could not resize: ${String(e)}`),
+        (e) => {
+          this.resizing--;
+          this.fault(`The native frames could not resize: ${String(e)}`);
+        },
       );
     }, RESIZE_SETTLE_MS);
   }
@@ -527,6 +561,7 @@ export class NativeTracer implements TracerBackend {
       if (frame.generation >= this.generation && whole && !this.disposed) {
         this.blit.upload(frame);
         this.count++;
+        if (!this.resizeTimer && !this.resizing) this.sized = true;
       }
     } finally {
       frame.release();
@@ -547,8 +582,37 @@ export class NativeTracer implements TracerBackend {
     if (this.link instanceof WebSocketLink) this.link.note(line);
   }
 
-  picture(_o: PictureOptions): Promise<string> {
-    return Promise.reject(new Error("The native tracer cannot save a picture yet"));
+  /** Traced on the native side into an accumulation of its own, so the
+   *  viewport's samples stay; the PNG comes back as bytes. */
+  async picture(o: PictureOptions): Promise<string> {
+    const cancelled = () => new DOMException("The picture was cancelled", "AbortError");
+    if (o.signal?.aborted) throw cancelled();
+    await this.scene.idle();
+    await this.bloomSent;
+    const abort = () => void this.call("pt_picture_cancel").catch(() => {});
+    o.signal?.addEventListener("abort", abort, { once: true });
+    let running = true;
+    void (async () => {
+      while (running) {
+        await new Promise((r) => setTimeout(r, PICTURE_POLL_MS));
+        if (!running) return;
+        const s = (await this.call("pt_status").catch(() => null)) as Status | null;
+        if (running && s?.picture) o.onProgress?.(Math.min(s.picture.samples, o.samples));
+      }
+    })();
+    try {
+      if (o.signal?.aborted) throw cancelled();
+      const png = await this.call("pt_picture", { width: o.width, height: o.height, samples: o.samples });
+      if (o.signal?.aborted) throw cancelled();
+      o.onProgress?.(o.samples);
+      return `data:image/png;base64,${base64(png)}`;
+    } catch (e) {
+      if (o.signal?.aborted) throw cancelled();
+      throw e instanceof Error ? e : new Error(String(e));
+    } finally {
+      running = false;
+      o.signal?.removeEventListener("abort", abort);
+    }
   }
 
   get denoised(): boolean {
@@ -592,7 +656,11 @@ export class NativeTracer implements TracerBackend {
     }
   }
 
+  /** The native side resets as each queued pt_* call lands, so a status taken
+   *  before they all landed counts samples of the scene before them. */
   async samples(): Promise<number> {
+    const epoch = this.epoch;
+    await this.scene.idle();
     let s: Status;
     try {
       s = (await this.call("pt_status")) as typeof s;
@@ -601,11 +669,12 @@ export class NativeTracer implements TracerBackend {
       throw e;
     }
     if (s.fault) this.fault(`The native tracer stopped: ${s.fault}`);
-    return s.samples;
+    if (epoch !== this.epoch) return 0;
+    return this.sized ? s.samples : 0;
   }
 
   private call(cmd: string, args?: Record<string, unknown>): Promise<unknown> {
-    return this.o.call ? this.o.call(cmd, args) : invoke(cmd, args as never);
+    return (this.o.call ?? tauriCall)(cmd, args);
   }
 
   onFault(cb: (why: string) => void) {

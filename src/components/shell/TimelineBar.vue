@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { fmtKeys } from "../../input/platform";
 // The history: a floating list of every feature in build order, with a draggable
 // rollback marker, transport buttons and an error badge that jumps to failing
 // features. A selected row opens its values in place under it.
@@ -13,7 +14,7 @@ import { featureMeta } from "../../ui/featureMeta";
 import Icon from "./Icon.vue";
 import { contextMenu } from "../../ui/menu";
 import { buildProgress, busyLine, CANCEL_DELAY_MS, historyShowsBusy, historyShowsEmpty } from "../../ui/buildProgress";
-import { featureFailures, featureNotes } from "../../ui/featureNotes";
+import { featureFailures, featureNotes, featurePlaceholders, placeholderNote } from "../../ui/featureNotes";
 import { gapIndexIn } from "../../ui/trackGaps";
 import { getUnit, onUnitChange } from "../../ui/units";
 import FeatureProperties from "./FeatureProperties.vue";
@@ -21,6 +22,7 @@ import { useSelectionOffers } from "../../composables/useSelectionOffers";
 import { relatedFeatureIds } from "../../ui/relatedFeatures";
 import { routeTreeClick, treePickWaiting } from "../../ui/treePick";
 import { featurePick } from "../../app/featurePick";
+import { closeOpenEdit } from "../../app/selection";
 import type { Feature } from "../../types";
 
 const engine = useEngine();
@@ -116,6 +118,8 @@ const notes = useBuildValue((b) =>
     diagnostics: b.result?.diagnostics,
   }),
 );
+/** Features the build left out because this version does not know their type. */
+const placeholders = useBuildValue((b) => featurePlaceholders({ skippedFeatures: b.result?.skippedFeatures }));
 const building = useBuildValue((b) => b.building);
 const progress = useBuildValue((b) => ({ progress: b.progress, meshed: b.meshed, meshTotal: b.meshTotal }));
 
@@ -184,9 +188,11 @@ function metaFor(f: { type: string; operation?: unknown }) {
 function chipTitle(f: { id: string; type: string; inactive?: boolean }, i: number) {
   const err = errors.value.get(f.id);
   const note = notes.value.get(f.id);
+  const placeholder = placeholders.value.get(f.id);
   return (
     `${i + 1} · ${metaFor(f).label}` +
     (f.inactive ? "\nSwitched off: its Active when condition is 0" : "") +
+    (placeholder !== undefined ? `\n${placeholderNote(placeholder)}` : "") +
     // A plain-text word, not a warning sign: this is a `title` attribute, and
     // the browser draws it in the OS tooltip font where a symbol lands as
     // whatever fallback glyph, or tofu, that font happens to carry.
@@ -195,7 +201,9 @@ function chipTitle(f: { id: string; type: string; inactive?: boolean }, i: numbe
     // that failed), so this reads as one line either way rather than as a
     // feature accused of two different things.
     (err ? `\nFailed: ${err}` : note ? `\nNote: ${note}` : "") +
-    "\nclick to select · double-click to edit, Esc to go back · right-click for more"
+    (placeholder !== undefined
+      ? "\nclick to select · right-click for more"
+      : "\nclick to select · double-click to edit, Esc to go back · right-click for more")
   );
 }
 
@@ -209,7 +217,8 @@ function chipTitle(f: { id: string; type: string; inactive?: boolean }, i: numbe
 //
 // Both are ignored while a tool already owns the screen (an edit in progress, a
 // sketch): a click that swapped the open feature out from under a running editor
-// is exactly the "clicking around bugs out" case. Finish or Escape first.
+// is exactly the "clicking around bugs out" case. A double-click is the one
+// gesture that switches: it closes another feature's open edit, then edits.
 function busyElsewhere(): boolean {
   return engine.toolBusy() || engine.sketch.active;
 }
@@ -224,7 +233,9 @@ function onChipClick(id: string) {
   timeline.select(id);
 }
 function onChipDblclick(id: string) {
-  if (busyElsewhere() || treePickWaiting()) return;
+  if (treePickWaiting()) return;
+  closeOpenEdit(engine, id);
+  if (busyElsewhere()) return;
   timeline.edit(id);
 }
 // --- renaming ------------------------------------------------------------
@@ -384,7 +395,7 @@ function openMenu(e: MouseEvent, id: string, i: number) {
     : [];
   contextMenu(e.clientX, e.clientY, [
     ...repick,
-    { label: "Edit", onClick: () => timeline.edit(id) },
+    ...(placeholders.value.has(id) ? [] : [{ label: "Edit", onClick: () => timeline.edit(id) }]),
     { label: "Rename", shortcut: "F2", onClick: () => startRename(id) },
     ...(linkedPath(id)
       ? [
@@ -441,7 +452,7 @@ function openMenu(e: MouseEvent, id: string, i: number) {
         title="Failing features, click to jump to the next one"
         @click="jumpToNextError()"
       ><Icon name="warning" :size="14" /> {{ errors.size }}</button>
-      <button class="float-card-close" title="Hide the history (Ctrl Alt H)" @click="shellStore.setHistory(false)"><Icon name="close" :size="14" /></button>
+      <button class="float-card-close" :title="fmtKeys('Hide the history (Ctrl+Alt+H)')" @click="shellStore.setHistory(false)"><Icon name="close" :size="14" /></button>
     </div>
     <!-- Transport moves the SAVED marker (docRollback), and stands down while a
          feature is being edited: the drawn marker is on the edited step then, and
@@ -479,6 +490,7 @@ function openMenu(e: MouseEvent, id: string, i: number) {
                   warn: !errors.has(f.id) && notes.has(f.id),
                   rolled: i >= rollback,
                   suppressed: suppressed.has(f.id) || f.inactive,
+                  placeholder: placeholders.has(f.id),
                   'drop-target': dropTarget === f.id,
                 }"
                 :title="chipTitle(f, i)"

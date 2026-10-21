@@ -34,7 +34,7 @@ pub fn rebuild_request(req: &Map<String, Value>, watch: &dyn Watch) -> Result<(V
     let Some(doc) = req.get("document") else {
         return Err(error_result("'document'"));
     };
-    let typed: CadDocument = serde_json::from_value(doc.clone())
+    let typed: CadDocument = CadDocument::from_value_lenient(doc)
         .map_err(|e| error_result(&format!("the document does not parse: {e}")))?;
     // Through the rebuild's own cache: an inspect right after a build of the
     // same document replays nothing, where a cold rebuild of an import is
@@ -57,7 +57,7 @@ fn vec3(v: &Value) -> [f64; 3] {
 }
 
 /// build123d `bounding_box()`: zeros when the box is void.
-fn bbox(shape: &Shape) -> [f64; 6] {
+pub(crate) fn bbox(shape: &Shape) -> [f64; 6] {
     let mut o = [0.0; 6];
     match fq::FQ_bbox(shape.raw(), true, &mut o) {
         Ok(true) => o,
@@ -74,7 +74,7 @@ fn mass(shape: &Shape, kind: i32) -> Option<(f64, [f64; 3])> {
 /// The quick integration is up to 3 percent low on lofted spline faces, so the
 /// precise one is preferred wherever the two disagree by more than its own
 /// millionth. Where they agree the quick figure stands, which is build123d's.
-fn volume(shape: &Shape) -> Option<(f64, [f64; 3])> {
+pub(crate) fn volume(shape: &Shape) -> Option<(f64, [f64; 3])> {
     let (quick, centre) = mass(shape, 3)?;
     let precise = crate::kernel::volume_precise(shape);
     let differs = (precise - quick).abs() > 1e-6 * quick.abs().max(1e-9);

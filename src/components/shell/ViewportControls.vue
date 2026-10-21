@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { fmtKeys } from "../../input/platform";
 // The floating column of view controls down the right edge: snapping, the grid
 // and units, standard views, display and analysis, a screenshot, and the
 // history panel toggle. Each opens a popover; only settings the app has are
@@ -137,9 +138,11 @@ function runAndRefresh(action: string) {
 const tier = ref(engine.viewport.renderTier);
 const matcap = ref({ style: renderPrefs().matcapStyle, tint: renderPrefs().matcapTint });
 const overlays = ref(savedOverlays());
+const realtimeWhileMoving = ref(renderPrefs().realtimeWhileMoving);
 const offTier = onRenderPrefsChange(() => {
   tier.value = engine.viewport.renderTier;
   matcap.value = { style: renderPrefs().matcapStyle, tint: renderPrefs().matcapTint };
+  realtimeWhileMoving.value = renderPrefs().realtimeWhileMoving;
   overlays.value = savedOverlays();
 });
 onUnmounted(offTier);
@@ -215,10 +218,10 @@ async function screenshot() {
     <!-- On a narrow stage Items and History are drawers, and their switches
          go first, where a short column cannot scroll them out of sight. -->
     <div v-if="shell.narrow" class="float-group">
-      <IconButton icon="items" title="Items (Ctrl Alt S)" :active="shell.itemsShown" @click="shell.toggleItems()" />
+      <IconButton icon="items" :title="fmtKeys('Items (Ctrl+Alt+S)')" :active="shell.itemsShown" @click="shell.toggleItems()" />
       <IconButton
         icon="history"
-        :title="ui.sketchActive ? 'Sketch options (Ctrl Alt H)' : 'History (Ctrl Alt H)'"
+        :title="fmtKeys(ui.sketchActive ? 'Sketch options (Ctrl+Alt+H)' : 'History (Ctrl+Alt+H)')"
         :active="shell.historyShown"
         :badge="errorCount || null"
         @click="shell.toggleHistory()"
@@ -234,7 +237,7 @@ async function screenshot() {
         @click="open('grid', $event)"
       >{{ gridLabel }}</button>
       <IconButton icon="views" title="Views" :active="isOpen('views')" @click="open('views', $event)" />
-      <IconButton icon="view-reset" title="Reset camera (Shift Home)" @click="engine.handleAction('reset-camera')" />
+      <IconButton icon="view-reset" title="Reset camera (Shift+Home)" @click="engine.handleAction('reset-camera')" />
     </div>
     <div class="float-group view-modes" role="group" aria-label="View mode">
       <IconButton
@@ -255,7 +258,7 @@ async function screenshot() {
       <IconButton
         v-if="!shell.narrow"
         icon="history"
-        title="History (Ctrl Alt H)"
+        :title="fmtKeys('History (Ctrl+Alt+H)')"
         :active="shell.historyOpen"
         :badge="errorCount || null"
         @click="shell.toggleHistory()"
@@ -364,6 +367,14 @@ async function screenshot() {
         </div>
         <Toggle :model-value="matcap.tint" label="Tint with body colors" @update:model-value="setRenderPref('matcapTint', $event)" />
       </template>
+      <Toggle
+        v-if="ui.viewMode === 'pathtraced'"
+        :model-value="realtimeWhileMoving"
+        label="Realtime while moving"
+        title="Off keeps the traced view up while the view moves, noisy until it rests"
+        data-pt-moving
+        @update:model-value="setRenderPref('realtimeWhileMoving', $event)"
+      />
       <div class="pop-rule"></div>
       <div class="pop-section">Overlays</div>
       <Toggle :model-value="overlays.on" label="Show overlays" data-overlay="all" @update:model-value="setOverlaysOn($event)" />

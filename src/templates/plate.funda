@@ -1,0 +1,190 @@
+{
+  "parameters": {
+    "width": 80,
+    "depth": 50,
+    "thickness": 6,
+    "holeDiameter": 5,
+    "holeInset": 8,
+    "halfWidth": 40,
+    "halfDepth": 25,
+    "holeRadius": 2.5,
+    "holeX": 32,
+    "holeY": 17,
+    "left": -40,
+    "bottom": -25,
+    "holeLeft": -32,
+    "holeBottom": -17
+  },
+  "paramDefs": {
+    "width": {
+      "expr": "80",
+      "value": 80,
+      "unit": "mm"
+    },
+    "depth": {
+      "expr": "50",
+      "value": 50,
+      "unit": "mm"
+    },
+    "thickness": {
+      "expr": "6",
+      "value": 6,
+      "unit": "mm"
+    },
+    "holeDiameter": {
+      "expr": "5",
+      "value": 5,
+      "unit": "mm"
+    },
+    "holeInset": {
+      "expr": "8",
+      "value": 8,
+      "unit": "mm"
+    },
+    "halfWidth": {
+      "expr": "width / 2",
+      "value": 40,
+      "unit": "mm"
+    },
+    "halfDepth": {
+      "expr": "depth / 2",
+      "value": 25,
+      "unit": "mm"
+    },
+    "holeRadius": {
+      "expr": "holeDiameter / 2",
+      "value": 2.5,
+      "unit": "mm"
+    },
+    "holeX": {
+      "expr": "width / 2 - holeInset",
+      "value": 32,
+      "unit": "mm"
+    },
+    "holeY": {
+      "expr": "depth / 2 - holeInset",
+      "value": 17,
+      "unit": "mm"
+    },
+    "left": {
+      "expr": "-width / 2",
+      "value": -40,
+      "unit": "mm"
+    },
+    "bottom": {
+      "expr": "-depth / 2",
+      "value": -25,
+      "unit": "mm"
+    },
+    "holeLeft": {
+      "expr": "-(width / 2 - holeInset)",
+      "value": -32,
+      "unit": "mm"
+    },
+    "holeBottom": {
+      "expr": "-(depth / 2 - holeInset)",
+      "value": -17,
+      "unit": "mm"
+    },
+    "d1": {
+      "expr": "thickness",
+      "value": 6,
+      "unit": "mm",
+      "target": {
+        "kind": "feature",
+        "feature": "plate",
+        "field": "distance"
+      }
+    }
+  },
+  "features": [
+    {
+      "id": "outline",
+      "type": "sketch",
+      "name": "Plate outline",
+      "plane": "XY",
+      "entities": [
+        {
+          "type": "line",
+          "id": "edge_1",
+          "x1": "left",
+          "y1": "bottom",
+          "x2": "halfWidth",
+          "y2": "bottom"
+        },
+        {
+          "type": "line",
+          "id": "edge_2",
+          "x1": "halfWidth",
+          "y1": "bottom",
+          "x2": "halfWidth",
+          "y2": "halfDepth"
+        },
+        {
+          "type": "line",
+          "id": "edge_3",
+          "x1": "halfWidth",
+          "y1": "halfDepth",
+          "x2": "left",
+          "y2": "halfDepth"
+        },
+        {
+          "type": "line",
+          "id": "edge_4",
+          "x1": "left",
+          "y1": "halfDepth",
+          "x2": "left",
+          "y2": "bottom"
+        },
+        {
+          "type": "circle",
+          "id": "hole_1",
+          "x": "holeLeft",
+          "y": "holeBottom",
+          "radius": "holeRadius"
+        },
+        {
+          "type": "circle",
+          "id": "hole_2",
+          "x": "holeX",
+          "y": "holeBottom",
+          "radius": "holeRadius"
+        },
+        {
+          "type": "circle",
+          "id": "hole_3",
+          "x": "holeX",
+          "y": "holeY",
+          "radius": "holeRadius"
+        },
+        {
+          "type": "circle",
+          "id": "hole_4",
+          "x": "holeLeft",
+          "y": "holeY",
+          "radius": "holeRadius"
+        }
+      ]
+    },
+    {
+      "id": "plate",
+      "type": "extrude",
+      "name": "Plate",
+      "sketch": "outline",
+      "distance": 6,
+      "operation": "new",
+      "regions": [
+        [
+          0,
+          0,
+          0
+        ]
+      ],
+      "hiddenBodies": []
+    }
+  ],
+  "bodyIds": {
+    "plate:0": "body1"
+  },
+  "version": 10
+}

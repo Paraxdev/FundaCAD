@@ -9,6 +9,7 @@
 
 import { computed, nextTick, ref, useTemplateRef, watch } from "vue";
 import Icon from "./Icon.vue";
+import { fmtKeys } from "../../input/platform";
 import InlineLabel from "./InlineLabel.vue";
 import { rowIndent } from "../../ui/browserTree";
 import { contextMenu, type CtxItem } from "../../ui/menu";
@@ -180,6 +181,7 @@ function onDrop(e: DragEvent) {
 <template>
   <div
     class="feature-row tree-child"
+    :data-id="id"
     :class="{ selected: selected, error: error, 'drop-into': inside > 0 }"
     :style="style"
     :title="title"
@@ -204,7 +206,8 @@ function onDrop(e: DragEvent) {
     <span
       v-if="toggleVis || eyeDown"
       class="tree-eye"
-      title="Show/hide · drag across eyes to show or hide many · Alt+click to show only this"
+      :title="fmtKeys('Show/hide · drag across eyes to show or hide many · Alt+click to show only this')"
+      :data-visible="visible !== false"
       @pointerdown.stop="onEyeDown"
       @click.stop="onEyeClick"
       @dblclick.stop

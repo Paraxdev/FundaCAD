@@ -442,6 +442,137 @@ describe("undo covers material, rename and colour too, not just visibility (FI-5
     expect(store.bodyColorSlot("body1")).toBe(1);
   });
 
+  const has = (id: string) => (d: CadDocument) => d.features.some((f) => f.id === id);
+  const added = (id: string) => (before: CadDocument) => !has(id)(before) && has(id)(store.document);
+  const box = (id: string) => ({ id, type: "box", length: 1, width: 1, height: 1 }) as Feature;
+
+  it("joins the materials put on a new feature's bodies to the step that added it", () => {
+    const before = store.document.features.length;
+    store.addFeature(box("nb8"));
+    store.undoAsOne(() => {
+      store.setBodiesMaterial(["body1"], "m-brass");
+      store.setBodyColorSlot("body1", 2);
+    }, added("nb8"));
+
+    store.undo();
+    expect(store.document.features.length).toBe(before);
+    expect(store.bodyMaterialId("body1")).toBeUndefined();
+    expect(store.bodyColorSlot("body1")).toBeUndefined();
+
+    store.redo();
+    expect(store.document.features.length).toBe(before + 1);
+    expect(store.bodyMaterialId("body1")).toBe("m-brass");
+    expect(store.bodyColorSlot("body1")).toBe(2);
+    expect(store.canRedo).toBe(false);
+    store.undo();
+    expect(store.document.features.length).toBe(before);
+  });
+
+  it("never joins steps that came before the feature, even when the user undid past it", () => {
+    store.addFeature(box("a0"));
+    store.addFeature(box("a1"));
+    store.setBodyName("body1", "Before");
+    store.addFeature(box("nb9"));
+    store.undo();
+    store.undo();
+    const ran = store.undoAsOne(() => store.setBodiesMaterial(["body1"], "m-brass"), added("nb9"), { only: true });
+    expect(ran).toBe(false);
+    expect(store.bodyMaterialId("body1")).toBeUndefined();
+    store.undo();
+    expect(store.document.features.some((f) => f.id === "a1")).toBe(false);
+    expect(store.document.features.some((f) => f.id === "a0")).toBe(true);
+  });
+
+  it("keeps an edit made after the feature its own step, and the materials one step of their own", () => {
+    store.addFeature(box("nb10"));
+    store.addFeature(box("edit"));
+    expect(store.undoAsOne(() => {
+      store.setBodiesMaterial(["body1"], "m-brass");
+      store.setBodiesMaterial(["body2"], "m-steel");
+    }, added("nb10"))).toBe(false);
+
+    store.undo();
+    expect(store.bodyMaterialId("body1")).toBeUndefined();
+    expect(store.bodyMaterialId("body2")).toBeUndefined();
+    expect(store.document.features.some((f) => f.id === "edit")).toBe(true);
+    store.undo();
+    expect(store.document.features.some((f) => f.id === "edit")).toBe(false);
+    expect(store.document.features.some((f) => f.id === "nb10")).toBe(true);
+    store.undo();
+    expect(store.document.features.some((f) => f.id === "nb10")).toBe(false);
+  });
+
+  it("joins the redo that brought the feature back, and keeps what is left to redo", () => {
+    store.addFeature(box("nb11"));
+    store.addFeature(box("later"));
+    store.undo();
+    store.undo();
+    store.redo();
+    expect(store.undoAsOne(() => store.setBodiesMaterial(["body1"], "m-brass"), added("nb11"), { only: true })).toBe(true);
+    expect(store.canRedo).toBe(true);
+    store.undo();
+    expect(store.bodyMaterialId("body1")).toBeUndefined();
+    expect(store.document.features.some((f) => f.id === "nb11")).toBe(false);
+  });
+
+  it("makes the steps it took its own step and drops what was left to redo", () => {
+    store.addFeature(box("r1"));
+    store.undo();
+    expect(store.undoAsOne(() => store.setBodiesMaterial(["body1"], "m-brass"))).toBe(false);
+    expect(store.canRedo).toBe(false);
+  });
+
+  it("takes back a group's steps newest first", () => {
+    store.undoAsOne(() => {
+      store.setBodiesMaterial(["body1"], "m-brass");
+      store.setBodiesMaterial(["body1"], "m-steel");
+    });
+    store.undo();
+    expect(store.bodyMaterialId("body1")).toBeUndefined();
+    store.redo();
+    expect(store.bodyMaterialId("body1")).toBe("m-steel");
+  });
+
+  it("holds undo and redo while a busy run that holds the history goes on", async () => {
+    store.addFeature(box("h1"));
+    store.addFeature(box("h2"));
+    store.undo();
+    let finish!: () => void;
+    const seen: boolean[] = [];
+    const off = store.onBusy(() => seen.push(store.canUndo));
+    const reading = store.runBusy("Importing a.step", () => new Promise<void>((r) => (finish = r)), { holdHistory: true });
+    expect([store.canUndo, store.canRedo]).toEqual([false, false]);
+    store.undo();
+    store.redo();
+    expect(store.document.features.some((f) => f.id === "h1")).toBe(true);
+    expect(store.document.features.some((f) => f.id === "h2")).toBe(false);
+    finish();
+    await reading;
+    off();
+    expect(seen.at(-1)).toBe(true);
+    expect([store.canUndo, store.canRedo]).toEqual([true, true]);
+    store.redo();
+    expect(store.document.features.some((f) => f.id === "h2")).toBe(true);
+  });
+
+  it("leaves undo alone during a busy run that does not hold the history", () => {
+    store.addFeature(box("h3"));
+    void store.runBusy("Rebuilding", () => new Promise<void>(() => {}));
+    store.undo();
+    expect(store.document.features.some((f) => f.id === "h3")).toBe(false);
+  });
+
+  it("makes sixty material writes one step, so the cap keeps the feature step under them", () => {
+    store.addFeature(box("nb12"));
+    store.undoAsOne(() => {
+      for (let i = 0; i < 60; i++) store.setBodiesMaterial([`b${i}`], "m-brass");
+    }, added("nb12"));
+    store.undo();
+    expect(store.bodyMaterialId("b0")).toBeUndefined();
+    expect(store.bodyMaterialId("b59")).toBeUndefined();
+    expect(store.document.features.some((f) => f.id === "nb12")).toBe(false);
+  });
+
   it("setFacesMaterial and clearFaceMaterials are undo steps too", () => {
     store.setFacesMaterial([{ body: "body1", face: 0 }], "m-brass");
     expect(store.faceMaterialId("body1", 0)).toBe("m-brass");
@@ -488,6 +619,59 @@ describe("materials (what a body is made of, on screen)", () => {
     const again = new DocumentStore(stubBackend([]), doc());
     again.load(reloaded.toJSON());
     expect(again.toJSON()).toBe(reloaded.toJSON());
+  });
+
+  it("keeps a material's fields this build does not know through add, update, save and load", () => {
+    const extra = { sheen: 0.4, glint: { amount: 0.2, angle: 90 }, grains: [1, 2], glowsAt: true };
+    const id = store.addMaterial({ name: "Pearl", color: "#eeeeff", ...extra } as never);
+    store.updateMaterial(id, { roughness: 0.2 });
+    const reloaded = new DocumentStore(stubBackend([]), doc());
+    reloaded.load(store.toJSON());
+    expect(reloaded.materialLibrary.find((m) => m.id === id)).toEqual({
+      id, name: "Pearl", color: "#eeeeff", roughness: 0.2, ...extra,
+    });
+    const again = new DocumentStore(stubBackend([]), doc());
+    again.load(reloaded.toJSON());
+    expect(again.toJSON()).toBe(reloaded.toJSON());
+  });
+
+  it("adds a picked preset as a plain copy that survives save and load, in one undo step", () => {
+    const preset = { id: "x", name: "Bronze glaze", color: "#B5A642", metalness: 0.9, surfaceGraph: { nodes: [{ id: "o", type: "output" }], output: "o" } };
+    const id = store.addMaterialPreset(preset)!;
+    const again = store.addMaterialPreset(preset)!;
+    expect(new Set([id, again]).size).toBe(2);
+    expect(store.materialLibrary.find((m) => m.id === again)!.name).toBe("Bronze glaze 2");
+    expect(store.materialLibrary.find((m) => m.id === id)).toMatchObject({ name: "Bronze glaze", color: "#b5a642", metalness: 0.9 });
+    const reloaded = new DocumentStore(stubBackend([]), doc());
+    reloaded.load(store.toJSON());
+    expect(reloaded.materialLibrary.find((m) => m.id === id)).toEqual(store.materialLibrary.find((m) => m.id === id));
+    store.undo();
+    expect(store.materialLibrary.some((m) => m.id === again)).toBe(false);
+    expect(store.materialLibrary.some((m) => m.id === id)).toBe(true);
+  });
+
+  it("undoing a preset add removes only that preset and keeps later library work", () => {
+    const id = store.addMaterialPreset({ name: "Bronze glaze", color: "#B5A642" })!;
+    const later = store.addMaterial({ name: "Later" });
+    const starter = store.materialLibrary.find((m) => m.id !== id && m.id !== later)!;
+    store.updateMaterial(starter.id, { color: "#123456" });
+    store.undo();
+    expect(store.materialLibrary.some((m) => m.id === id)).toBe(false);
+    expect(store.materialLibrary.some((m) => m.id === later)).toBe(true);
+    expect(store.materialLibrary.find((m) => m.id === starter.id)!.color).toBe("#123456");
+    store.redo();
+    expect(store.materialLibrary.some((m) => m.id === id)).toBe(true);
+    expect(store.materialLibrary.some((m) => m.id === later)).toBe(true);
+  });
+
+  it("drops a preset that is not a material and tidies one that half is", () => {
+    const before = store.materialLibrary.length;
+    expect(store.addMaterialPreset({ name: "No colour" })).toBeNull();
+    expect(store.addMaterialPreset(null)).toBeNull();
+    expect(store.addMaterialPreset("steel")).toBeNull();
+    expect(store.materialLibrary.length).toBe(before);
+    const id = store.addMaterialPreset({ name: "Loud", color: "#fff", metalness: 7 })!;
+    expect(store.materialLibrary.find((m) => m.id === id)!.metalness).toBeLessThanOrEqual(1);
   });
 
   it("a reopened untouched document still writes no materials block", () => {
@@ -863,5 +1047,72 @@ describe("opening a document starts a history of its own", () => {
     store.load(JSON.stringify(docB), { replace: true });
     store.undo();
     expect(store.document.features.map((f) => f.id)).toEqual(["a"]);
+  });
+});
+
+describe("suppress and unsuppress are undo steps", () => {
+  let store: DocumentStore;
+  beforeEach(() => {
+    vi.useFakeTimers();
+    store = new DocumentStore(stubBackend([]), doc());
+  });
+  afterEach(() => void vi.useRealTimers());
+
+  it("undo restores a suppressed feature and redo suppresses it again", () => {
+    store.toggleSuppress("f1");
+    expect(store.isSuppressed("f1")).toBe(true);
+    store.undo();
+    expect(store.isSuppressed("f1")).toBe(false);
+    expect(store.document.features.length).toBe(4);
+    store.redo();
+    expect(store.isSuppressed("f1")).toBe(true);
+  });
+
+  it("undo reverses an unsuppress, and the dirty flag follows", () => {
+    store.toggleSuppress("f1");
+    store.markSaved("a.funda");
+    store.toggleSuppress("f1");
+    expect(store.isSuppressed("f1")).toBe(false);
+    expect(store.dirty).toBe(true);
+    store.markSaved("a.funda");
+    store.undo();
+    expect(store.isSuppressed("f1")).toBe(true);
+    expect(store.dirty).toBe(true);
+    store.redo();
+    expect(store.isSuppressed("f1")).toBe(false);
+  });
+
+  it("sits in its chronological place among feature edits", () => {
+    store.addFeature({ id: "nb3", type: "box", length: 1, width: 1, height: 1 } as Feature);
+    store.toggleSuppress("f1");
+    store.undo();
+    expect(store.isSuppressed("f1")).toBe(false);
+    expect(store.document.features.length).toBe(5);
+    store.undo();
+    expect(store.document.features.length).toBe(4);
+  });
+
+  it("undoing a suppress after the feature was removed and restored leaves it unsuppressed", () => {
+    store.toggleSuppress("f1");
+    store.removeFeature("f1");
+    store.undo();
+    expect(store.isSuppressed("f1")).toBe(false);
+    store.undo();
+    expect(store.isSuppressed("f1")).toBe(false);
+    expect(store.document.features.map((f) => f.id)).toContain("f1");
+    store.redo();
+    expect(store.isSuppressed("f1")).toBe(true);
+  });
+
+  it("undo rebuilds without the suppression", async () => {
+    const rebuilds: CadDocument[] = [];
+    const s = new DocumentStore(stubBackend(rebuilds), doc());
+    s.toggleSuppress("f1");
+    await vi.runAllTimersAsync();
+    const n = rebuilds.length;
+    s.undo();
+    await vi.runAllTimersAsync();
+    expect(rebuilds.length).toBeGreaterThan(n);
+    expect(rebuilds[rebuilds.length - 1]!.features.map((f) => f.id)).toContain("f1");
   });
 });

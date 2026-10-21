@@ -29,6 +29,11 @@ export default defineConfig({
           include: ["tests/**/*.test.ts"],
           environment: "node",
           globals: false,
+          // The solver and label layout tests take about 2 s alone and pass 5 s
+          // when cargo builds share the cores, so the default timeout failed them.
+          testTimeout: 20_000,
+          // Without this vitest answers a ?raw import of a .scss file with an empty string.
+          css: { include: [/\.scss\?raw/] },
         },
       },
       {
@@ -39,6 +44,7 @@ export default defineConfig({
           include: ["tests/**/*.spec.ts"],
           environment: "happy-dom",
           globals: false,
+          testTimeout: 20_000,
         },
       },
     ],

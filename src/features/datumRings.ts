@@ -7,7 +7,7 @@ import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
 import type { DatumPose } from "../document/datumPose";
 import type { SketchPlane } from "../sketch/plane";
-import { createDragHandle, leanOutOfView, type DragHandle } from "./manipulator";
+import { createDragHandle, nameHandle, leanOutOfView, type DragHandle } from "./manipulator";
 import { createSlimRing, ringLook, type SlimRing } from "./slimRing";
 
 export type Turn = "tiltX" | "tiltY" | "spin";
@@ -21,6 +21,7 @@ const ARROW_MIN_SCREEN = 0.7;
 
 // The move gizmo's palette, so a plane's tilt about its x reads as the same red
 // as sliding along x.
+const RING_NAME: Record<Turn, string> = { tiltX: "tilt x", tiltY: "tilt y", spin: "spin" };
 const AXIS_COLOR: Record<Turn, number> = { tiltX: 0xff5a5a, tiltY: 0x5ad15a, spin: 0x5a9bff };
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -51,12 +52,13 @@ export class DatumRings {
 
   constructor(offers: (g: Grab) => boolean) {
     if (offers("offset")) {
-      this.arrow = createDragHandle();
+      this.arrow = nameHandle(createDragHandle(), "arrow");
       this.group.add(this.arrow.group);
     }
     for (const t of TURNS) {
       if (!offers(t)) continue;
       const r = createSlimRing(RING_PX);
+      nameHandle(r.group, RING_NAME[t]);
       this.rings.set(t, r);
       this.group.add(r.group);
     }
