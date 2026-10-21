@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  clampFaceting, DEFAULT_SETTINGS, exportFileName, meshWire, parseExportSettings, refinementOf, REFINEMENTS,
+  clampFaceting, DEFAULT_SETTINGS, exportFileName, isFlatFormat, isMeshFormat, meshWire, parseExportSettings, refinementOf,
+  REFINEMENTS, takesUnit,
 } from "../../src/io/exportSettings";
 
 describe("export settings", () => {
@@ -30,6 +31,22 @@ describe("export settings", () => {
     expect(back.refinement).toBe("low");
     expect(parseExportSettings("{nope")).toEqual(DEFAULT_SETTINGS);
     expect(parseExportSettings(JSON.stringify({ format: "dwg", unit: "parsec" }))).toEqual(DEFAULT_SETTINGS);
+  });
+});
+
+describe("DXF and SVG", () => {
+  it("are drawings, not meshes, and take no unit or faceting", () => {
+    for (const f of ["dxf", "svg"] as const) {
+      expect([isFlatFormat(f), isMeshFormat(f), takesUnit(f)]).toEqual([true, false, false]);
+    }
+    expect(["stl", "3mf", "glb", "step"].map((f) => isFlatFormat(f as "stl"))).toEqual([false, false, false, false]);
+    expect(["stl", "3mf", "glb", "step"].map((f) => isMeshFormat(f as "stl"))).toEqual([true, true, true, false]);
+  });
+
+  it("remember the tolerance, clamped to what the engine accepts", () => {
+    expect(parseExportSettings(JSON.stringify({ ...DEFAULT_SETTINGS, format: "svg", tolerance: 0.05 }))).toMatchObject({ format: "svg", tolerance: 0.05 });
+    expect(parseExportSettings(JSON.stringify({ ...DEFAULT_SETTINGS, tolerance: 50 })).tolerance).toBe(1);
+    expect(parseExportSettings(JSON.stringify({ ...DEFAULT_SETTINGS, tolerance: "x" })).tolerance).toBe(0.01);
   });
 });
 

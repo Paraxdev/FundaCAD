@@ -317,6 +317,7 @@ export const SKETCH: Group[] = [
           return { action, label, iconName: action, ...(key !== undefined ? { key } : {}) };
         }),
       },
+      { action: "tie-loose-ends", label: "Tie Loose Ends", iconName: "coincident" },
     ],
   },
 ];

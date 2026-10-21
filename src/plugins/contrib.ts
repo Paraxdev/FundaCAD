@@ -92,6 +92,27 @@ export interface Paint {
   faces: Record<number, string>;
 }
 
+/** Fine parallel ridges drawn across a body, through its shading only. */
+export interface Relief {
+  /** The direction the ridges stack along, in world space. */
+  axis: [number, number, number];
+  /** Ridge spacing, mm. */
+  pitch: number;
+  /** Ridge depth as a fraction of the pitch: 0 is flat, 0.5 a half round. */
+  depth: number;
+  /** Shade variation from ridge to ridge, 0..1. */
+  tintJitter?: number;
+  /** Darkening in the seam between ridges, 0..1. */
+  cavity?: number;
+}
+
+/** Ridges a plugin puts on the model, resolved fresh on every read like Paint.
+ *  A body's entry is preferred over `all`, and a null takes `all` off it. */
+export interface ReliefMap {
+  all?: Relief;
+  bodies?: Record<string, Relief | null>;
+}
+
 /** A named colour a tool may offer. The core knows only the three fields it has
  *  to render; what a slot MEANS is the contributing plugin's business. */
 export interface PaletteEntry {
@@ -308,6 +329,7 @@ export interface Contribution {
    *  interpolated into it, here any more than there. */
   icons?: Record<string, string>;
   paint?: () => Paint;
+  relief?: () => ReliefMap;
   palette?: () => PaletteEntry[];
   /** A mesh import landed, and the file carried a colour of its own ("#rrggbb").
    *
@@ -604,6 +626,21 @@ export function contributedPaint(): Paint {
     Object.assign(faces, p.faces);
   }
   return { bodies, faces };
+}
+
+/** Every contributed relief, merged like paint: later contributions are preferred. */
+export function contributedRelief(): ReliefMap {
+  let base: Relief | undefined;
+  const bodies: Record<string, Relief | null> = {};
+  for (const fn of all("relief")) {
+    const r = fn();
+    if (r.all !== undefined) base = r.all;
+    Object.assign(bodies, r.bodies);
+  }
+  const out: ReliefMap = {};
+  if (base) out.all = base;
+  if (Object.keys(bodies).length) out.bodies = bodies;
+  return out;
 }
 
 /** The colours a tool may offer, or an empty list when nobody has any.

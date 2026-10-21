@@ -14,6 +14,7 @@ import { POTATO_PIXEL_RATIO, PotatoDraw } from "./potato";
 import { MatcapDraw } from "./matcap";
 import { GpuTimer } from "./gpuTimer";
 import { OverlayDraw } from "./pathtrace/overlayDraw";
+import { ModelPrepass, OverlayCompose, highAsked, stagesFor, type FrameFacts, type FrameState, type RealtimeQuality, type Stage } from "./realtimePipeline";
 import type { ViewMode } from "../ui/renderPrefs";
 import { isSoftwareRendererName, setSoftwareRenderer } from "../ui/glassBlur";
 import { buildRoom, disposeRoom } from "./environments";
@@ -455,7 +456,7 @@ export class PostChain {
   private composer: import("three/examples/jsm/postprocessing/EffectComposer.js").EffectComposer | null = null;
   private bloom: import("three/examples/jsm/postprocessing/UnrealBloomPass.js").UnrealBloomPass | null = null;
   private bokeh: import("three/examples/jsm/postprocessing/BokehPass.js").BokehPass | null = null;
-  private loading = false;
+  private passesLoading: Promise<void> | null = null;
   private passes: {
     EffectComposer: typeof import("three/examples/jsm/postprocessing/EffectComposer.js").EffectComposer;
     RenderPass: typeof import("three/examples/jsm/postprocessing/RenderPass.js").RenderPass;
@@ -473,6 +474,8 @@ export class PostChain {
   /** Written by the viewport: the traced canvas under this one has an image to
    *  show, so this frame draws only what sits on top of it. */
   traceShown = false;
+  /** Frames drawn with the Realtime look in Realtime or Path traced, for the e2e. */
+  realtimeFrames = 0;
   private size = new THREE.Vector2(1, 1);
   private glowSize = new THREE.Vector2(1, 1);
   private composerRatio = 0;
@@ -488,6 +491,63 @@ export class PostChain {
    *  glows, or a shiny finish that throws a hot highlight. Written by the viewport
    *  with each finish pass. */
   bloomable = true;
+  private quality: RealtimeQuality = "standard";
+  private prepass: ModelPrepass | null = null;
+  private overlayCompose: OverlayCompose | null = null;
+  private lastStages: Stage[] | null = null;
+
+  /** Written by the viewport. High draws only for a frame of the viewport's own
+   *  loop, on a machine that is not on a low power tier, with nothing ghosted. */
+  get realtimeQuality(): RealtimeQuality {
+    return this.quality;
+  }
+
+  set realtimeQuality(q: RealtimeQuality) {
+    this.quality = q;
+    if (q === "high") return;
+    this.prepass?.dispose();
+    this.prepass = null;
+    this.overlayCompose?.dispose();
+    this.overlayCompose = null;
+  }
+
+  private switching: RealtimeQuality | null = null;
+
+  /** Moves to `q` once it can be drawn without a hitch: High first loads the passes
+   *  and links the programs of its prepass and overlay twins, and until that has
+   *  finished the frames keep the stages they had. A later call supersedes an
+   *  earlier one still waiting. */
+  async switchRealtimeQuality(q: RealtimeQuality, camera: THREE.Camera): Promise<void> {
+    if (q === this.switching || (this.switching === null && q === this.quality)) return;
+    this.switching = q;
+    if (q === "standard") {
+      this.realtimeQuality = q;
+      this.switching = null;
+      return;
+    }
+    try {
+      await Promise.all([
+        this.loadPasses(),
+        (this.prepass ??= new ModelPrepass()).warm(this.renderer, this.scene, camera),
+        (this.overlayCompose ??= new OverlayCompose()).warm(this.renderer, this.scene, camera),
+      ]);
+    } catch (e) {
+      console.warn("[viewport] the High realtime programs could not be linked ahead:", e);
+    }
+    if (this.switching !== q) return;
+    this.switching = null;
+    this.realtimeQuality = q;
+  }
+
+  /** The stages of the last frame drawn at High, or null when it was not, for reading back. */
+  get highStages(): readonly Stage[] | null {
+    return this.lastStages;
+  }
+
+  /** For reading back: the prepass of the last still High frame. */
+  get prepassTarget(): THREE.WebGLRenderTarget | null {
+    return this.prepass?.target ?? null;
+  }
 
   constructor(
     private renderer: THREE.WebGLRenderer,
@@ -580,12 +640,14 @@ export class PostChain {
   /** `motion` is a camera frame on a machine that cannot keep up. On a low power
    *  tier (performance mode included) it draws 1px edge lines and no passes until
    *  the view settles, otherwise the full look stays on while the camera moves. */
-  render(camera: THREE.Camera, motion = false, forceRealtime = false) {
+  render(camera: THREE.Camera, motion = false, forceRealtime = false, facts: FrameFacts | null = null) {
     if (this.matcap && (this.viewMode !== "matcap" || this.potatoOn())) {
       this.matcap.dispose();
       this.matcap = null;
     }
-    if (this.potatoOn()) {
+    const plan = stagesFor(this.frameState(camera, motion, forceRealtime, facts));
+    this.lastStages = plan.path === "high" ? plan.stages : null;
+    if (plan.path === "potato") {
       (this.potato ??= new PotatoDraw()).render(this.renderer, this.scene, camera, renderPrefs().brightness);
       // Only the modules, so a still taken in potato mode can build its passes at once.
       const want = this.wanted();
@@ -596,7 +658,7 @@ export class PostChain {
       this.potato.dispose();
       this.potato = null;
     }
-    if (this.viewMode === "matcap" && !forceRealtime) {
+    if (plan.path === "matcap") {
       (this.matcap ??= new MatcapDraw()).render(this.renderer, this.scene, camera, renderPrefs().brightness, {
         style: renderPrefs().matcapStyle,
         tint: renderPrefs().matcapTint,
@@ -607,11 +669,12 @@ export class PostChain {
       this.overlay.dispose();
       this.overlay = null;
     }
-    if (this.tracing && !forceRealtime) {
+    if (plan.path === "overlay") {
       (this.overlay ??= new OverlayDraw()).render(this.renderer, this.scene, camera);
       return;
     }
-    if (motion && this.lowPower()) {
+    this.realtimeFrames++;
+    if (plan.path === "motion") {
       (this.motionDraw ??= new PotatoDraw(true)).render(this.renderer, this.scene, camera);
       return;
     }
@@ -631,12 +694,33 @@ export class PostChain {
       this.glassPass = null;
     }
     try {
-      this.renderFull(camera);
+      if (plan.path === "high") this.renderHigh(camera, plan.stages);
+      else this.renderFull(camera);
     } finally {
       if (glass) this.glassPass!.end();
       untimeShadows();
       timer.endFrame();
     }
+  }
+
+  private frameState(camera: THREE.Camera, motion: boolean, forceRealtime: boolean, facts: FrameFacts | null): FrameState {
+    const want = this.wanted();
+    const s: FrameState = {
+      quality: this.quality,
+      potato: this.potatoOn(),
+      lowPower: this.lowPower(),
+      viewMode: this.viewMode,
+      tracing: this.tracing,
+      forceRealtime,
+      motion,
+      facts,
+      bloom: want.bloom,
+      blur: want.blur,
+      perspective: (camera as THREE.PerspectiveCamera).isPerspectiveCamera === true,
+      passesReady: this.passes !== null,
+    };
+    if (highAsked(s) && !s.passesReady) void this.loadPasses();
+    return s;
   }
 
   private renderFull(camera: THREE.Camera) {
@@ -654,6 +738,27 @@ export class PostChain {
       }
       composer = this.build();
     }
+    this.renderComposer(camera, composer, want, false);
+  }
+
+  /** The model alone through the passes, then the overlays drawn over it on the canvas. */
+  private renderHigh(camera: THREE.Camera, stages: readonly Stage[]) {
+    const composer = this.composer ?? this.build();
+    if (stages.includes("prepass")) {
+      const prepass = (this.prepass ??= new ModelPrepass());
+      this.timed("prepass", () => prepass.render(this.renderer, this.scene, camera));
+    }
+    this.renderComposer(camera, composer, this.wanted(), true);
+    const compose = (this.overlayCompose ??= new OverlayCompose());
+    this.timed("compose", () => compose.render(this.renderer, this.scene, camera));
+  }
+
+  private renderComposer(
+    camera: THREE.Camera,
+    composer: import("three/examples/jsm/postprocessing/EffectComposer.js").EffectComposer,
+    want: { bloom: boolean; blur: boolean },
+    modelOnly: boolean,
+  ) {
     // The pass chain is built once and re-aimed, rather than rebuilt whenever
     // the camera object changes (it does: perspective and orthographic are two
     // objects the rig swaps between).
@@ -722,9 +827,12 @@ export class PostChain {
         r.setClearColor(this.clearWas, alpha);
       };
     }
+    const mask = camera.layers.mask;
     try {
+      if (modelOnly) camera.layers.mask = mask & 1;
       this.timed("composer", () => composer.render());
     } finally {
+      camera.layers.mask = mask;
       // Note: BokehPass clears its depth override without a finally, so a throw mid
       // pass left every later frame, and the overlay over a trace, drawn as packed depth.
       this.scene.overrideMaterial = null;
@@ -745,9 +853,11 @@ export class PostChain {
     }
   }
 
-  private async loadPasses() {
-    if (this.loading) return;
-    this.loading = true;
+  private loadPasses(): Promise<void> {
+    return (this.passesLoading ??= this.fetchPasses());
+  }
+
+  private async fetchPasses() {
     const [
       { EffectComposer }, { RenderPass }, { UnrealBloomPass }, { BokehPass }, { OutputPass },
     ] = await Promise.all([

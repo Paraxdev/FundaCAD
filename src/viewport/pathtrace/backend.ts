@@ -4,8 +4,10 @@
 
 import type * as THREE from "three";
 import type { Denoise } from "../../ui/renderPrefs";
+import type { LightRig } from "../lightRig";
 import type { TraceLens } from "./camera";
 import type { TraceBloomSettings } from "./tracePost";
+import type { TraceHemi } from "./environment";
 
 export interface TraceLight {
   color: THREE.Color;
@@ -24,9 +26,15 @@ export interface TraceLook {
   environment: THREE.Texture;
   /** Draw `environment` behind the model instead of `background`. */
   environmentBehind?: boolean;
+  /** An imported panorama `environment` was captured from: the native tracer
+   *  takes its pixels instead, `key` naming panorama, turn, exposure and hemisphere. */
+  hdr?: { hash: string; rotation: number; exposure: number; hemi: TraceHemi | null; key: string };
   brightness: number;
   toneMapping: THREE.ToneMapping;
   exposure: number;
+  /** The rig `lights` were placed from. The native tracer lights from it,
+   *  the WebGPU tracer from `lights`. */
+  rig?: LightRig;
 }
 
 export interface TraceScene extends TraceLook {
@@ -67,6 +75,9 @@ export interface TracerBackend {
   setRenderScale(scale: number): void;
   /** Samples per pixel where tracing stops. */
   setCap(samples: number): void;
+  /** The trace is on screen through every restart, so each frame before its
+   *  first whole sample needs a picture of its own. */
+  setMotionPreview?(on: boolean): void;
   readonly maxTextureSize: number;
   /** Traces the current scene and camera at `width` x `height` until
    *  `samples`, denoises it with the large weights and returns a PNG data URL.

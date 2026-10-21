@@ -226,6 +226,10 @@ pub struct Mcp {
 
 impl Mcp {
     pub fn start(env: &BTreeMap<String, String>, cwd: &Path) -> Mcp {
+        Mcp::start_with_args(env, cwd, &[])
+    }
+
+    pub fn start_with_args(env: &BTreeMap<String, String>, cwd: &Path, args: &[&str]) -> Mcp {
         static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
         let stderr_path = std::env::temp_dir().join(format!(
             "fundacad-mcp-test-{}-{}.log",
@@ -234,7 +238,8 @@ impl Mcp {
         ));
         let log = std::fs::File::create(&stderr_path).expect("a log file");
         let mut cmd = Command::new(mcp_binary());
-        cmd.current_dir(cwd)
+        cmd.args(args)
+            .current_dir(cwd)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::from(log));
@@ -487,6 +492,8 @@ pub struct Host {
     pub doc: Value,
     pub applied: Vec<String>,
     pub can_edit: bool,
+    /// What the window shares as its title, the open file's path.
+    pub title: String,
     next: u64,
 }
 
@@ -497,6 +504,7 @@ impl Host {
             rev: 1,
             doc: a_document(1, "from-the-app"),
             applied: Vec::new(),
+            title: "part.funda".into(),
             can_edit: true,
             next: 0,
         }
@@ -517,7 +525,7 @@ impl Host {
         let reply = self
             .call(
                 "session_host",
-                json!({"document": self.doc, "revision": self.rev, "title": "part.funda",
+                json!({"document": self.doc, "revision": self.rev, "title": self.title,
                        "status": {"canEdit": self.can_edit, "applied": self.applied,
                                   "building": false}}),
             )

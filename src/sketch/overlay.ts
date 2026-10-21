@@ -32,6 +32,7 @@ import { getCachedText, warmText } from "./textCache";
 import type { TextFace } from "../geometry/client";
 import type { SnapKind } from "./snap";
 import type { ResolvedEntity } from "./snap";
+import type { LooseEnds } from "./looseEnds";
 
 export interface WorldRegion {
   sketchId: string;
@@ -142,6 +143,9 @@ export class SketchOverlay {
   private activeSketch = new THREE.Group(); // active sketch's committed curves
   private previewGroup = new THREE.Group(); // the rubber-band, rebuilt per move
   private guideGroup = new THREE.Group(); // alignment guides, rebuilt per move
+  private looseEndsGroup = new THREE.Group();
+  /** what the loose end dots show now, read by the e2e checks */
+  looseEndCounts = { open: 0, untied: 0 };
   private snapMarker: THREE.Mesh;
   private planeCache = new Map<string, SketchPlane>();
   regions: WorldRegion[] = []; // committed-sketch regions
@@ -159,6 +163,7 @@ export class SketchOverlay {
       this.activeSketch,
       this.previewGroup,
       this.guideGroup,
+      this.looseEndsGroup,
     );
     this.group.renderOrder = 10;
 
@@ -522,6 +527,23 @@ export class SketchOverlay {
     for (const o of objects) this.activeSketch.add(o);
   }
 
+  /** Red dots on open ends, amber on ends that meet another curve only by position.
+   *  Pass null to clear. */
+  setLooseEnds(plane: SketchPlane, le: LooseEnds | null) {
+    this.clearGroup(this.looseEndsGroup);
+    this.looseEndCounts = { open: le?.open.length ?? 0, untied: le?.untied.length ?? 0 };
+    if (!le) return;
+    const add = (pts: { x: number; y: number }[], color: number) => {
+      if (!pts.length) return;
+      const g = new THREE.BufferGeometry().setFromPoints(pts.map((q) => plane.to3D(q.x, q.y)));
+      const dots = new THREE.Points(g, looseEndMat(color));
+      dots.renderOrder = 15;
+      this.looseEndsGroup.add(dots);
+    };
+    add(le.open, LOOSE_OPEN_COLOR);
+    add(le.untied, LOOSE_UNTIED_COLOR);
+  }
+
   /** The in-progress rubber-band entity (rebuilt every pointer move). */
   setPreview(objects: THREE.Object3D[]) {
     this.clearGroup(this.previewGroup);
@@ -797,6 +819,22 @@ function dotMat(color: number): THREE.PointsMaterial {
       transparent: true, depthTest: true, depthWrite: false,
     });
     dotMats.set(color, m);
+  }
+  return m;
+}
+
+export const LOOSE_OPEN_COLOR = 0xe5484d;
+export const LOOSE_UNTIED_COLOR = 0xf5a524;
+const looseMats = new Map<number, THREE.PointsMaterial>();
+// Drawn over the curves, an end hidden under its own line is the one the user hunts for.
+function looseEndMat(color: number): THREE.PointsMaterial {
+  let m = looseMats.get(color);
+  if (!m) {
+    m = new THREE.PointsMaterial({
+      color, size: POINT_DOT_PX + 2, sizeAttenuation: false, map: pointDotTexture(),
+      transparent: true, depthTest: false, depthWrite: false,
+    });
+    looseMats.set(color, m);
   }
   return m;
 }

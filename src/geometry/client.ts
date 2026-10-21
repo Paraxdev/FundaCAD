@@ -2,10 +2,26 @@
 // One request/response per message, matched by `id`. Calls made before the
 // transport opens are queued and flushed on open; the transport reconnects.
 
-import type { CadDocument, EdgeFingerprint, ExportFormat, F32Wire, MeshExportOptions, Feature, ImportFormat, ImportReply, PlaneSpec, ProjectedCurve, ProjectedSource, RebuildReply, RebuildResult, Selector, SketchEntity, U32Wire, Vec3 } from "../types";
+import type { CadDocument, EdgeFingerprint, ExportFormat, F32Wire, MeshExportOptions, Feature, PlaneDef, ImportFormat, ImportReply, PlaneSpec, ProjectedCurve, ProjectedSource, RebuildReply, RebuildResult, Selector, SketchEntity, U32Wire, Vec3 } from "../types";
 import { RebuildAssembly, manifestFromBodies } from "./assembly";
 import { pipe, pipeFault } from "../diagnostics/pipelineLog";
 import { EngineTransport, type GeometryTransport } from "./transport";
+import { blake2b128Hex } from "../document/blake2b";
+
+const BLOB_PUT_CHUNK = 4 * 1024 * 1024;
+
+function bytesToBase64(bytes: Uint8Array): string {
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+
+function base64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
 import type {
   WireBody, WireBodyFull, WireEdgeList, WireManifestEntry, WireRebuildResult,
 } from "./assembly";
@@ -320,6 +336,11 @@ export interface GeometryBackend {
       palette?: { name: string; color: string; material?: string }[];
       bodyColors?: Record<string, number>;
       mesh?: MeshExportOptions;
+      /** DXF and SVG draw one sketch, or one flat face in `plane`. */
+      sketch?: string;
+      face?: unknown;
+      plane?: PlaneDef;
+      tolerance?: number;
     },
     // Same contract as importGeometry's: hands back the request id so a Cancel
     // targets THIS export rather than whatever ran most recently. The document
@@ -445,6 +466,11 @@ export interface GeometryBackend {
    *  Resolves to null when the backend cannot speak it or the call failed, so
    *  the caller's "no session" path and its "no backend" path are the same one. */
   session?(op: string, payload?: object): Promise<Record<string, unknown> | null>;
+  /** Put bytes in the engine's content addressed blob store, resolving to the
+   *  hash a document names them by. Rejects with the engine's message. */
+  blobPut?(bytes: Uint8Array): Promise<string>;
+  /** The bytes stored under `hash`, null when the store has none. */
+  blobGet?(hash: string): Promise<Uint8Array | null>;
   readonly connected: boolean;
   /** Requests not answered yet, where the backend counts them. */
   readonly inFlight?: number;
@@ -1271,6 +1297,11 @@ export class Geometry implements GeometryBackend {
       palette?: { name: string; color: string; material?: string }[];
       bodyColors?: Record<string, number>;
       mesh?: MeshExportOptions;
+      /** DXF and SVG draw one sketch, or one flat face in `plane`. */
+      sketch?: string;
+      face?: unknown;
+      plane?: PlaneDef;
+      tolerance?: number;
     } = {},
     onStarted?: (id: string) => void,
   ): Promise<{ ok: boolean; path?: string; paths?: string[]; message?: string; cancelled?: boolean; warnings?: { message: string; feature_id?: string }[] }> {
@@ -1281,6 +1312,7 @@ export class Geometry implements GeometryBackend {
         // GLB writes one material per body from these; the engine defaults both
         // to empty, so other formats are unaffected by sending them.
         palette: opts.palette, bodyColors: opts.bodyColors, mesh: opts.mesh,
+        sketch: opts.sketch, face: opts.face, plane: opts.plane, tolerance: opts.tolerance,
       },
       onStarted,
     );
@@ -1430,6 +1462,39 @@ export class Geometry implements GeometryBackend {
     if (msg.ok) return { ok: true, result: msg.result };
     if (msg.cancelled) return { ok: false, cancelled: true, message: "printability check cancelled" };
     return { ok: false, message: msg.error?.message ?? "printability check failed" };
+  }
+
+  async blobPut(bytes: Uint8Array): Promise<string> {
+    const hash = blake2b128Hex(bytes);
+    const total = bytes.length;
+    let offset = 0;
+    do {
+      const piece = bytes.subarray(offset, offset + BLOB_PUT_CHUNK);
+      const msg = await this.call<{ stored: boolean; received?: number }>("blobWrite", { hash, offset, total, data: bytesToBase64(piece) });
+      if (!msg.ok) throw new Error(msg.error?.message ?? "the engine refused the bytes");
+      if (msg.result.stored) return hash;
+      offset += piece.length;
+    } while (offset < total);
+    throw new Error("the engine did not store the bytes");
+  }
+
+  async blobGet(hash: string): Promise<Uint8Array | null> {
+    const parts: Uint8Array[] = [];
+    let offset = 0;
+    let size = 0;
+    do {
+      const msg = await this.call<{ missing?: boolean; size: number; data: string }>("blobRead", { hash, offset });
+      if (!msg.ok || msg.result.missing) return null;
+      const piece = base64ToBytes(msg.result.data);
+      if (!piece.length && offset < msg.result.size) return null;
+      parts.push(piece);
+      size = msg.result.size;
+      offset += piece.length;
+    } while (offset < size);
+    const out = new Uint8Array(size);
+    let at = 0;
+    for (const p of parts) { out.set(p, at); at += p.length; }
+    return out;
   }
 
   async faceAxis(doc: CadDocument, face: Selector, body: string | null): Promise<FaceAxisReply | null> {

@@ -656,7 +656,11 @@ export class NativeTracer implements TracerBackend {
     }
   }
 
+  /** The native side resets as each queued pt_* call lands, so a status taken
+   *  before they all landed counts samples of the scene before them. */
   async samples(): Promise<number> {
+    const epoch = this.epoch;
+    await this.scene.idle();
     let s: Status;
     try {
       s = (await this.call("pt_status")) as typeof s;
@@ -665,6 +669,7 @@ export class NativeTracer implements TracerBackend {
       throw e;
     }
     if (s.fault) this.fault(`The native tracer stopped: ${s.fault}`);
+    if (epoch !== this.epoch) return 0;
     return this.sized ? s.samples : 0;
   }
 

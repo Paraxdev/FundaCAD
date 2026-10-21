@@ -622,7 +622,7 @@ describe("materials (what a body is made of, on screen)", () => {
   });
 
   it("keeps a material's fields this build does not know through add, update, save and load", () => {
-    const extra = { sheen: 0.4, anisotropy: { amount: 0.2, angle: 90 }, flakes: [1, 2], castsLight: true };
+    const extra = { sheen: 0.4, glint: { amount: 0.2, angle: 90 }, grains: [1, 2], glowsAt: true };
     const id = store.addMaterial({ name: "Pearl", color: "#eeeeff", ...extra } as never);
     store.updateMaterial(id, { roughness: 0.2 });
     const reloaded = new DocumentStore(stubBackend([]), doc());

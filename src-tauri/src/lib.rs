@@ -403,6 +403,7 @@ pub fn run() {
         frames::frames_close,
         frames::tracer::pt_scene,
         frames::tracer::pt_mesh,
+        frames::tracer::pt_env,
         frames::tracer::pt_colors,
         frames::tracer::pt_camera,
         frames::tracer::pt_look,

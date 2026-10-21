@@ -50,6 +50,7 @@ fn the_server_initializes_and_lists_its_tools() {
         "schema",
         "build",
         "inspect",
+        "measure",
         "view",
         "feature_add",
         "param_set",
@@ -336,6 +337,30 @@ fn a_circular_pattern_about_a_placed_axis_cuts_every_copy() {
     assert!(!placed.is_error && !placed.text.contains("warning"), "{}", placed.text);
     let want = 36000.0 - 6.0 * std::f64::consts::PI * 4.0 * 10.0;
     assert!(placed.text.contains(&format!("vol {want:.0}")), "{}", placed.text);
+}
+
+/// A join that only merged once its tool was sliced says so in the build reply.
+#[test]
+fn a_join_that_needed_a_fallback_warns_in_the_build_reply() {
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../tests/golden/corpus/corpus_engines.json");
+    let corpus: Value = serde_json::from_str(&std::fs::read_to_string(path).expect("the corpus")).expect("json");
+    let mut doc = corpus["documents"]
+        .as_array()
+        .expect("documents")
+        .iter()
+        .find(|d| d["name"] == "sweep_join_tangent_tubes")
+        .map(|d| d["document"].clone())
+        .expect("the tangent tubes");
+    // The corpus holds the evaluated parameters, the server takes them as expressions.
+    doc["parameters"] = json!({});
+    let steps = [
+        ("doc_set", json!({"document": doc})),
+        ("param_set", json!({"name": "tube_r", "expr": 26})),
+        ("build", json!({})),
+    ];
+    let built = drive(&steps).pop().expect("the build");
+    assert!(!built.is_error, "{}", built.text);
+    assert!(built.text.contains("warning (sw_down): joined with the tool split into 2 pieces"), "{}", built.text);
 }
 
 #[test]
@@ -636,6 +661,29 @@ fn export_refuses_a_partial_build_unless_told_to_write_it_anyway() {
     assert!(rs2[2].text.contains("FEATURE FAILED"), "{}", rs2[2].text);
     assert!(rs2[2].text.contains("fil1"), "{}", rs2[2].text);
     assert!(path.exists(), "allowPartial:true did not write the file");
+}
+
+#[test]
+fn a_sketch_exports_to_svg_and_dxf_at_true_size() {
+    let tmp = tempfile::tempdir().expect("a temp dir");
+    let svg = tmp.path().join("plate.svg").to_string_lossy().replace('\\', "/");
+    let dxf = tmp.path().join("plate.dxf").to_string_lossy().replace('\\', "/");
+    let rs = drive(&[
+        (
+            "feature_add",
+            json!({"feature": {"id": "s1", "type": "sketch", "name": "Plate", "plane": "XY", "entities": [
+                {"id": "r", "type": "rectangle", "width": 40, "height": 20, "x": 20, "y": 10}]}}),
+        ),
+        ("export", json!({"path": svg, "format": "svg", "sketch": "Plate"})),
+        ("export", json!({"path": dxf, "format": "dxf", "sketch": "s1"})),
+        ("export", json!({"path": dxf, "format": "dxf", "body": "body1"})),
+    ]);
+    assert!(!rs[1].is_error, "{}", rs[1].text);
+    let text = std::fs::read_to_string(&svg).expect("the svg");
+    assert!(text.contains("width=\"41mm\" height=\"21mm\""), "{text}");
+    assert!(!rs[2].is_error, "{}", rs[2].text);
+    assert!(std::fs::read_to_string(&dxf).expect("the dxf").contains("AC1009"));
+    assert!(rs[3].is_error && rs[3].text.contains("`sketch` or"), "{}", rs[3].text);
 }
 
 #[test]

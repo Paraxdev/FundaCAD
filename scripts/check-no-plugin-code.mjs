@@ -35,6 +35,7 @@ const MARKERS = [
   ["FundaCAD.Gamepad", "Cursor on / off"],
   ["FundaCAD.Printing", "Send to printer, filament mapping"],
   ["FundaCAD.Printing", "print-status-pill"],
+  ["FundaCAD.PrintLook", "Draws layer lines in the Realtime view only"],
   ["FundaCAD.MultiColor", "nearestPaletteSlot"],
   ["FundaCAD.MultiColor", "pal-swatch"],
   // Two STRING LITERALS rather than two identifiers, for the plugin whose code
@@ -50,6 +51,8 @@ const MARKERS = [
   ["FundaCAD.Screws", "Make a custom one from this"],
   ["FundaCAD.Navigation", "Middle orbits, Shift+middle pans"],
   ["FundaCAD.Navigation", "fundacad.navigation.plugin"],
+  ["FundaCAD.ReferenceImages", "Click the first point on the image"],
+  ["FundaCAD.ReferenceImages", "ri-file-input"],
 ];
 
 if (!existsSync(dir)) {

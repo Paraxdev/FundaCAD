@@ -324,6 +324,7 @@ export interface MechanismJoint {
 
 export type ExtrudeStart = "sketch" | "offset" | "face" | "plane" | "point";
 export type ExtrudeEnd = "distance" | "upToFace" | "upToPlane" | "upToPoint" | "throughAll";
+export type ThinSide = "center" | "inside" | "outside" | "twoSides";
 /** A datum point's id, or the vertex of `body` nearest `point`. */
 export type PointRef = string | { point: [number, number, number]; body?: string };
 export type PressPullMode = "auto" | "join" | "cut" | "new" | "intersect";
@@ -376,6 +377,15 @@ export type CoreFeature =
       upToPlane2?: string;
       upToPoint2?: PointRef;
       endOffset2?: Num;
+      // A wall `thickness` thick along sketch curve ids (every curve when absent), open or
+      // closed, instead of the closed areas. `inside` is the enclosed side, of an open chain
+      // the side it bends toward, of a straight one the left as drawn. `twoSides` puts
+      // `thickness` inside and `thickness2` outside.
+      thin?: boolean;
+      curves?: string[];
+      thickness?: Num;
+      side?: ThinSide;
+      thickness2?: Num;
     }
   // `profile`: -1 chamfer, 0 circular, +1 sharp corner.
   // `sizeType` "chord" reads `radius` as the width across the round. `tangentEdges`
@@ -750,6 +760,9 @@ export interface CadDocument {
   /** body id → element id. A body with no entry is an ORPHAN: it shows where it
    *  always did, at the top level or under its import's own assembly node. */
   bodyElement?: Record<string, string>;
+  /** Pictures placed on planes to draw over, read by plugins/FundaCAD.ReferenceImages.
+   *  The store keeps each entry whole, so a field it does not know survives. */
+  referenceImages?: Record<string, unknown>[];
   /** The material library, display only. Absent is the untouched starter set. Not the
    *  filament `palette`, which is what a part is made from. */
   materials?: {
@@ -899,7 +912,7 @@ export type RebuildReply =
   | { ok: true; result: RebuildResult }
   | { ok: false; error: { feature_id?: string; message: string }; cancelled?: boolean };
 
-export type ExportFormat = "step" | "stl" | "3mf" | "glb";
+export type ExportFormat = "step" | "stl" | "3mf" | "glb" | "dxf" | "svg";
 
 /** Faceting and output options for a mesh export (STL, 3MF, GLB). */
 export interface MeshExportOptions {

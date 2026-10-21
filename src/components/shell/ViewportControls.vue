@@ -138,9 +138,11 @@ function runAndRefresh(action: string) {
 const tier = ref(engine.viewport.renderTier);
 const matcap = ref({ style: renderPrefs().matcapStyle, tint: renderPrefs().matcapTint });
 const overlays = ref(savedOverlays());
+const realtimeWhileMoving = ref(renderPrefs().realtimeWhileMoving);
 const offTier = onRenderPrefsChange(() => {
   tier.value = engine.viewport.renderTier;
   matcap.value = { style: renderPrefs().matcapStyle, tint: renderPrefs().matcapTint };
+  realtimeWhileMoving.value = renderPrefs().realtimeWhileMoving;
   overlays.value = savedOverlays();
 });
 onUnmounted(offTier);
@@ -365,6 +367,14 @@ async function screenshot() {
         </div>
         <Toggle :model-value="matcap.tint" label="Tint with body colors" @update:model-value="setRenderPref('matcapTint', $event)" />
       </template>
+      <Toggle
+        v-if="ui.viewMode === 'pathtraced'"
+        :model-value="realtimeWhileMoving"
+        label="Realtime while moving"
+        title="Off keeps the traced view up while the view moves, noisy until it rests"
+        data-pt-moving
+        @update:model-value="setRenderPref('realtimeWhileMoving', $event)"
+      />
       <div class="pop-rule"></div>
       <div class="pop-section">Overlays</div>
       <Toggle :model-value="overlays.on" label="Show overlays" data-overlay="all" @update:model-value="setOverlaysOn($event)" />

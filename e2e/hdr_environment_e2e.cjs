@@ -8,6 +8,13 @@
 // Usage (from the repo root, vite + engine `fundacad-engine --ws` running):
 //   SC_TOKEN=<engine token> [SC_CHROME=<chrome exe>] [SC_URL=http://localhost:5173/] \
 //     [SC_ENGINE_PORT=8765] node e2e/hdr_environment_e2e.cjs [outDir]
+//
+// SC_TRACER=native-dev traces through tracer_serve instead of WebGPU:
+//   cargo build --release --example tracer_serve --manifest-path src-tauri/tracer/Cargo.toml
+// SC_TRACER_SERVE points at the example if CARGO_TARGET_DIR moved it. Each
+// built in room and the HDR then have to come out within 15 percent of the
+// Realtime sphere's mean luminance.
+const { spawn } = require("child_process");
 const { chromium } = require("playwright-core");
 const fs = require("fs");
 const path = require("path");
@@ -17,6 +24,10 @@ const EXE = process.env.SC_CHROME || "";
 const URL = process.env.SC_URL || "http://localhost:5173/";
 const PORT = process.env.SC_ENGINE_PORT || "8765";
 const OUT = path.resolve(process.argv[2] || "hdr_environment_shots");
+const NATIVE = process.env.SC_TRACER === "native-dev";
+const target = process.env.CARGO_TARGET_DIR || path.join(__dirname, "..", "src-tauri", "target");
+const SERVE = process.env.SC_TRACER_SERVE
+  || path.join(target, "release", "examples", process.platform === "win32" ? "tracer_serve.exe" : "tracer_serve");
 if (!TOKEN) { console.error("set SC_TOKEN"); process.exit(1); }
 let failures = 0;
 const check = (name, ok, detail) => {
@@ -47,8 +58,29 @@ function panorama(w, h) {
   return Buffer.concat([head, px]);
 }
 
+// A piped stdin: tracer_serve exits when it closes, so it never outlives this script.
+function startTracerServe() {
+  const srv = spawn(SERVE, [TOKEN], { stdio: ["pipe", "pipe", "inherit"] });
+  return new Promise((ok, fail) => {
+    let buf = "";
+    srv.stdout.on("data", (d) => {
+      buf += d;
+      const m = /^LISTENING (\d+)/m.exec(buf);
+      if (m) ok(m[1]);
+    });
+    srv.on("error", fail);
+    srv.on("exit", (c) => fail(new Error(`tracer_serve exited with ${c}`)));
+    setTimeout(() => fail(new Error("tracer_serve printed no port")), 20000);
+  });
+}
+
 (async () => {
   fs.mkdirSync(OUT, { recursive: true });
+  let url = URL;
+  if (NATIVE) {
+    const port = await startTracerServe();
+    url += (url.includes("?") ? "&" : "?") + `token=${encodeURIComponent(TOKEN)}&tracer=native-dev&port=${port}`;
+  }
   const browser = await chromium.launch({
     ...(EXE ? { executablePath: EXE } : { channel: "chrome" }),
     args: ["--no-sandbox", "--enable-gpu", "--ignore-gpu-blocklist", "--enable-unsafe-webgpu"],
@@ -56,17 +88,20 @@ function panorama(w, h) {
   try {
     const page = await browser.newPage({ viewport: { width: 1400, height: 860 } });
     page.on("pageerror", (e) => { console.error("PAGE ERROR:", e.message); failures++; });
+    if (process.env.SC_DEBUG) page.on("console", (m) => { if (m.type() === "error" || m.type() === "warning") console.log("  console", m.type(), m.text().slice(0, 300)); });
     await page.addInitScript(([port, t]) => {
       const N = window.WebSocket;
       window.WebSocket = class extends N {
         constructor(u, p) {
+          // Only the engine's socket: the native frames carry their own token.
+          if (!String(u).includes(":8765/") && !String(u).endsWith(":8765")) { super(u, p); return; }
           let s = String(u).replace(":8765", ":" + port);
           s = s.replace(/([?&])token=[^&]*/, `$1token=${t}`);
           super(s.includes("token=") ? s : s + (s.includes("?") ? "&" : "?") + "token=" + t, p);
         }
       };
     }, [PORT, TOKEN]);
-    await page.goto(URL);
+    await page.goto(url);
     await page.waitForFunction(() => !!window.store && !!window.viewport, null, { timeout: 60000 });
     await page.waitForTimeout(1500);
     const modal = await page.$(".modal-close");
@@ -110,7 +145,17 @@ function panorama(w, h) {
     const settle = (ms = 1500) => page.evaluate(async (ms) => { window.viewport.requestRender(); await new Promise((r) => setTimeout(r, ms)); }, ms);
     // The sphere's pixels told from the ground by colour, then blue minus green
     // in its top and bottom thirds, and the corner's colour.
-    const measure = (img) => page.evaluate(async (img) => {
+    // The sphere (radius 20 at the origin) on screen, from the viewport's camera.
+    const disc = () => page.evaluate(() => {
+      const cam = window.viewport.camera;
+      const V = cam.position.constructor;
+      const r = window.viewport.canvas.getBoundingClientRect();
+      const px = (v) => { const p = v.project(cam); return [(p.x + 1) / 2 * r.width, (1 - p.y) / 2 * r.height]; };
+      const c = px(new V(0, 0, 0));
+      const e = px(new V(0, 1, 0).applyQuaternion(cam.quaternion).multiplyScalar(20));
+      return { x: c[0], y: c[1], r: Math.hypot(e[0] - c[0], e[1] - c[1]) };
+    });
+    const measure = (img, sphere = null) => page.evaluate(async ([img, sphere]) => {
       const bm = await createImageBitmap(await (await fetch(img)).blob());
       const c = new OffscreenCanvas(bm.width, bm.height);
       const g = c.getContext("2d");
@@ -130,12 +175,53 @@ function panorama(w, h) {
         return +(s / Math.max(1, n)).toFixed(1);
       };
       const third = Math.max(1, Math.round((bot - top) / 3));
-      return { top, bot, upper: band(top + 4, top + third), lower: band(bot - third, bot - 4), corner: at(cx + 300, cy + 250) };
-    }, img);
+      // Display luminance over the sphere's disc, inset from its edge.
+      const sx = sphere ? sphere.x : cx, r = sphere ? sphere.r * 0.9 : (bot - top) / 2 - 6, my = sphere ? sphere.y : (top + bot) / 2;
+      let ls = 0, ln = 0;
+      for (let y = Math.max(0, Math.ceil(my - r)); y < Math.min(h, my + r); y++) {
+        for (let x = Math.max(0, Math.ceil(sx - r)); x < Math.min(w, sx + r); x++) {
+          if ((x - sx) ** 2 + (y - my) ** 2 > r * r) continue;
+          const p = at(x, y);
+          ls += 0.2126 * p[0] + 0.7152 * p[1] + 0.0722 * p[2];
+          ln++;
+        }
+      }
+      return { top, bot, upper: band(top + 4, top + third), lower: band(bot - third, bot - 4), corner: at(cx + 300, cy + 250), lum: +(ls / Math.max(1, ln)).toFixed(1) };
+    }, [img, sphere]);
+
+    const traced = async (name, sphere = null) => {
+      await page.click('[data-view-mode="pathtraced"]');
+      if (process.env.SC_DEBUG) console.log("  entered", JSON.stringify(await page.evaluate(() => window.viewport.traceStatus)));
+      await page.waitForFunction(() => {
+        const s = window.viewport.traceStatus;
+        return s.state === "done" && s.samples >= 128 ? s : null;
+      }, null, { timeout: 240000, polling: 250 });
+      await settle();
+      const m = await measure(await shot(name), sphere);
+      await page.click('[data-view-mode="realtime"]');
+      return m;
+    };
+    const near = (a, b) => Math.abs(a / b - 1) <= 0.15;
 
     await settle();
     const rtStudio = await measure(await shot("rt-studio.png"));
     console.log("  realtime studio", JSON.stringify(rtStudio));
+    // A white plastic ball for the rooms: chrome mirrors the hemisphere the
+    // traced room carries, which Realtime's hemisphere light never reflects.
+    if (NATIVE) {
+      await page.evaluate(() => window.store.setBodiesMaterial(["body1"], "m-plastic-white"));
+      const sphere = await disc();
+      for (const room of ["studio", "softbox", "warm", "dusk", "bright"]) {
+        await prefs(`m.setRenderPref("environment", "${room}")`);
+        await settle();
+        const rt = await measure(await shot(`rt-${room}.png`), sphere);
+        const pt = await traced(`pt-${room}.png`, sphere);
+        check(`Path traced ${room} within 15 percent of Realtime`, near(pt.lum, rt.lum), `luminance ${pt.lum} against ${rt.lum}`);
+      }
+      await prefs(`m.setRenderPref("environment", "studio")`);
+      await page.evaluate(() => window.store.setBodiesMaterial(["body1"], "m-chrome"));
+      await settle();
+    }
 
     await page.setInputFiles("[data-env-file]", { name: "test-sky.hdr", mimeType: "image/vnd.radiance", buffer: panorama(1024, 512) });
     await page.waitForFunction(() => /^hdr:/.test(JSON.parse(localStorage.getItem("fundacad.render") || "{}").environment || ""), null, { timeout: 20000 });
@@ -176,15 +262,11 @@ function panorama(w, h) {
     const docEnv = await page.evaluate(() => { const e = window.store.documentEnvironment; return e && { name: e.name, sha: e.hdr?.sha256?.slice(0, 8), kb: Math.round((e.hdr?.data.length ?? 0) / 1024) }; });
     check("the document carries the environment", docEnv?.name === "Green field" && !!docEnv.sha, JSON.stringify(docEnv));
 
-    await page.click('[data-view-mode="pathtraced"]');
-    await page.waitForFunction(() => {
-      const s = window.viewport.traceStatus;
-      return s.state === "done" && s.samples >= 128 ? s : null;
-    }, null, { timeout: 240000, polling: 250 });
-    await settle();
-    const pt = await measure(await shot("pt-hdr.png"));
+    const rtSaved = await measure(await shot("rt-hdr-saved.png"), await disc());
+    const pt = await traced("pt-hdr.png", await disc());
     console.log("  path traced hdr", JSON.stringify(pt));
     check("Path traced: the sky is reflected above, the ground below", pt.upper > 20 && pt.lower < -20, JSON.stringify(pt));
+    if (NATIVE) check("Path traced HDR within 15 percent of Realtime", near(pt.lum, rtSaved.lum), `luminance ${pt.lum} against ${rtSaved.lum}`);
   } finally {
     await browser.close();
   }

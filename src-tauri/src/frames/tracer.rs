@@ -4,16 +4,21 @@
 //! builds the TLAS once.
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{mpsc, Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
 use fundacad_frames::{FrameSource, Reopen};
-use fundacad_tracer::{decode_colors, decode_mesh, denoise, encode_png, Bloom, BodyDesc, Camera, Denoiser, Look, Path, Picture, Quality, Refusal, SelfCheck, Tracer, TracerOptions};
+use fundacad_tracer::{decode_colors, decode_env, decode_mesh, denoise, encode_png, Bloom, BodyDesc, Camera, Denoiser, Look, Path, Picture, Quality, Refusal, SelfCheck, Tracer, TracerOptions};
 use serde::Serialize;
 use tauri::ipc::{InvokeBody, Request};
 
 /// GPU time per frame; the resolve and readback come on top.
 const TRACE_BUDGET: Duration = Duration::from_millis(12);
+
+/// The device and the pipeline compile together. A driver that never answers
+/// keeps its thread, and Path traced greys with the reason instead of the
+/// frames thread waiting on it for good.
+const CREATE_LIMIT: Duration = Duration::from_secs(60);
 
 /// GPU time a picture holds the tracer for at once, so pt_status and the
 /// scene commands get in between.
@@ -67,7 +72,8 @@ pub fn tracer() -> Result<Arc<TracerSource>, String> {
             return Err("the native tracer is off (FUNDACAD_TRACER=off)".into());
         }
         let opts = TracerOptions { software: mode == "software", ..Default::default() };
-        Tracer::new(opts)
+        within(CREATE_LIMIT, move || Tracer::new(opts))
+            .unwrap_or_else(Err)
             .map(|tracer| TracerSource(Mutex::new(State { tracer, fault: None, picture: None, cancel: false })))
             .map_err(|e| {
                 eprintln!("[frames] no native tracer: {e}");
@@ -75,6 +81,23 @@ pub fn tracer() -> Result<Arc<TracerSource>, String> {
                 *REFUSED.lock().unwrap_or_else(|p| p.into_inner()) = Some(e);
                 text
             })
+    })
+}
+
+/// `f` on its own thread, given up on after `limit`.
+fn within<T: Send + 'static>(limit: Duration, f: impl FnOnce() -> T + Send + 'static) -> Result<T, Refusal> {
+    let (tx, rx) = mpsc::channel();
+    std::thread::Builder::new()
+        .name("tracer start".into())
+        .spawn(move || {
+            let _ = tx.send(f());
+        })
+        .map_err(|e| Refusal::Device(format!("no thread to start the tracer on ({e})")))?;
+    rx.recv_timeout(limit).map_err(|e| match e {
+        mpsc::RecvTimeoutError::Timeout => {
+            Refusal::Device(format!("the graphics driver did not make a device within {} s", limit.as_secs()))
+        }
+        mpsc::RecvTimeoutError::Disconnected => Refusal::Device("the tracer panicked while starting".into()),
     })
 }
 
@@ -198,9 +221,25 @@ pub fn pt_camera(camera: Camera) -> Result<(), String> {
     with(|t| t.set_camera(camera))
 }
 
+/// Answers the environment key held, so the page sends pt_env when it is not its own.
 #[tauri::command]
-pub fn pt_look(look: Look) -> Result<(), String> {
-    with(|t| t.set_look(look))
+pub fn pt_look(look: Look) -> Result<Option<String>, String> {
+    with(|t| {
+        t.set_look(look);
+        t.environment_key().map(String::from)
+    })
+}
+
+/// The room or HDR equirect, or 0 x 0 for none.
+#[tauri::command]
+pub async fn pt_env(request: Request<'_>) -> Result<(), String> {
+    let bytes = raw(&request)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let e = decode_env(&bytes)?;
+        with(|t| t.set_environment(e))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -447,8 +486,47 @@ mod tests {
         with(|t| t.samples()).unwrap()
     }
 
+    /// The tracer is one per process, so its tests take turns.
+    fn one_at_a_time() -> MutexGuard<'static, ()> {
+        static TURN: Mutex<()> = Mutex::new(());
+        TURN.lock().unwrap_or_else(|p| p.into_inner())
+    }
+
+    #[test]
+    fn a_tracer_start_the_driver_never_answers_is_refused_with_the_reason() {
+        let start = std::time::Instant::now();
+        let slow = within(Duration::from_millis(100), || std::thread::sleep(Duration::from_secs(5)));
+        assert!(start.elapsed() < Duration::from_secs(2), "the start waited {:?}", start.elapsed());
+        let Err(Refusal::Device(why)) = slow else { panic!("a stuck start was not refused") };
+        assert!(why.contains("did not make a device within 0 s"), "{why}");
+        assert!(matches!(within(Duration::from_secs(5), || 7), Ok(7)));
+    }
+
+    #[test]
+    fn a_frame_the_gpu_does_not_finish_in_time_greys_path_traced_with_the_reason() {
+        let _turn = one_at_a_time();
+        let Ok(t) = tracer() else {
+            eprintln!("skipped: no native tracer");
+            return;
+        };
+        t.lock().tracer.set_wait_limit_for_test(Duration::ZERO);
+        let mut out = vec![1; 256 * 192 * 4];
+        t.render(&mut out, 256, 192, 0);
+        let fault = pt_status().unwrap().fault.expect("a frame past the wait limit left no fault");
+        assert!(fault.contains("did not finish a frame within 0 s"), "{fault}");
+        t.render(&mut out, 256, 192, 1);
+        assert!(out.iter().all(|&b| b == 0), "a faulted tracer drew a frame");
+        drop(t);
+        release();
+        let t = tracer().expect("the tracer did not come back after a release");
+        assert_eq!(pt_status().unwrap().fault, None, "a reopened tracer kept the old fault");
+        drop(t);
+        release();
+    }
+
     #[test]
     fn a_cancelled_picture_leaves_the_viewport_tracing_and_the_next_one_saves() {
+        let _turn = one_at_a_time();
         let Ok(t) = tracer() else {
             eprintln!("skipped: no native tracer");
             return;

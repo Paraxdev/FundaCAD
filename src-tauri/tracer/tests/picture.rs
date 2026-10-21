@@ -15,7 +15,7 @@ const SPP: u32 = 8;
 fn tracers() -> Vec<Tracer> {
     let mut out = Vec::new();
     for software in [true, false] {
-        match Tracer::new(TracerOptions { software, ..Default::default() }) {
+        match common::tracer(TracerOptions { software, ..Default::default() }) {
             Ok(t) if software || t.path() == fundacad_tracer::Path::RayQuery => out.push(t),
             Ok(_) => {}
             Err(e) => eprintln!("skipped, no GPU adapter: {e}"),
@@ -78,7 +78,7 @@ fn a_camera_change_mid_picture_goes_to_the_viewport() {
         let mut p = t.begin_picture(PIC.0, PIC.1, 64, Quality::Off).unwrap();
         t.trace_picture(&mut p, Duration::from_millis(1));
         let before = p.samples();
-        t.set_camera(fundacad_tracer::Camera { eye: [9.0, 0.0, 1.0], target: [0.0; 3], up: [0.0, 0.0, 1.0], fov: 30.0 });
+        t.set_camera(fundacad_tracer::Camera { eye: [9.0, 0.0, 1.0], target: [0.0; 3], up: [0.0, 0.0, 1.0], fov: 30.0, ..Default::default() });
         t.trace_picture(&mut p, Duration::from_millis(1));
         assert!(p.samples() >= before, "the picture restarted for a camera the viewport took");
         t.finish_picture(p);

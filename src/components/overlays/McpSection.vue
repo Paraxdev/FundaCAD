@@ -95,6 +95,10 @@ async function copy(text: string) {
       <pre id="prefs-mcp-config" class="mcp-config">{{ setup.text }}</pre>
       <button id="prefs-mcp-copy" type="button" class="btn" @click="copy(setup.text)">Copy</button>
     </div>
+    <div id="prefs-mcp-scope" class="sm-hint">
+      It reads and writes files only in the open document's folder and the app's own folders. To let it
+      reach another folder, add --allow-path and that folder after --mcp, once per folder.
+    </div>
   </template>
   <div v-else class="sm-hint">Looking for the MCP server…</div>
 </template>

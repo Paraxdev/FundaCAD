@@ -72,7 +72,13 @@ fn the_parity_script_answers_as_the_python_server_did() {
 
     let cwd = std::env::temp_dir().join(format!("fundacad-mcp-parity-{}", std::process::id()));
     std::fs::create_dir_all(&cwd).expect("a working directory");
-    let mut mcp = Mcp::start(&env(&[("FUNDACAD_MCP_MODE", "standalone")]), &cwd);
+    // The Python server reached every file; the script's missing files under
+    // /no are allowed so their replies are still about the missing file.
+    let mut mcp = Mcp::start_with_args(
+        &env(&[("FUNDACAD_MCP_MODE", "standalone")]),
+        &cwd,
+        &["--allow-path", "/no"],
+    );
     let mut differences = Vec::new();
     for (i, (step, want)) in steps.iter().zip(cases).enumerate() {
         let tool = step["tool"].as_str().expect("a tool");
@@ -97,14 +103,19 @@ fn the_parity_script_answers_as_the_python_server_did() {
             &format!("\"version\": {}", fundacad_core::schema::DOCUMENT_VERSION),
             "\"version\": 9",
         );
-        // The Python server had no ui or guide tools, so its list of tools lacks them.
+        // The Python server had no ui, guide or measure tools, so its list of tools lacks them.
         let text = if text.starts_with("No tool '") {
-            ["guide_clear", "guide_highlight", "guide_wait", "ui_close", "ui_do", "ui_open", "ui_read", "ui_shot"]
+            ["guide_clear", "guide_highlight", "guide_wait", "measure", "ui_close", "ui_do", "ui_open", "ui_read", "ui_shot"]
                 .iter()
                 .fold(text, |t, n| t.replace(&format!(", {n}"), ""))
         } else {
             text
         };
+        // Nor the measure line of the schema's working order.
+        let text = text.replace(
+            " `measure` gives an exact\n   distance, wall, clearance, radius or angle between two of them, rather than\n   working it out from inspect's numbers.",
+            "",
+        );
         let is_error = result["isError"].as_bool().unwrap_or(false);
         if text != want["text"].as_str().unwrap_or("")
             || Some(is_error) != want["isError"].as_bool()

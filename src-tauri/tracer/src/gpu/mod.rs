@@ -1,6 +1,7 @@
 mod accel;
 mod adapter;
 mod bindings;
+mod envmap;
 mod frame;
 mod picture;
 mod pipelines;
@@ -8,12 +9,14 @@ mod upload;
 
 use std::collections::HashMap;
 use std::sync::{mpsc, Arc, Mutex};
+use std::time::Duration;
 
 use crate::bloom::{Bloom, Chain};
 use crate::denoise::{self, Denoiser, Quality};
 use crate::scene::{BodyDesc, Commit, Mesh, Scene};
 
 use accel::{make_tlas, GpuAccel};
+use envmap::EnvMap;
 pub use adapter::{choose, Candidate, Refusal};
 pub use picture::{encode_png, picture_refusal, Picture};
 use pipelines::Pipelines;
@@ -35,9 +38,11 @@ pub struct TracerOptions {
 }
 
 impl Default for TracerOptions {
+    /// No GL: on Windows its WGL thread exits inside the NVIDIA driver under the
+    /// loader lock and deadlocks a vkCreateDevice running on another thread.
     fn default() -> Self {
         TracerOptions {
-            backends: wgpu::Backends::VULKAN | wgpu::Backends::DX12 | wgpu::Backends::METAL | wgpu::Backends::GL,
+            backends: wgpu::Backends::VULKAN | wgpu::Backends::DX12 | wgpu::Backends::METAL,
             software: false,
         }
     }
@@ -49,8 +54,86 @@ pub struct Camera {
     pub eye: [f32; 3],
     pub target: [f32; 3],
     pub up: [f32; 3],
-    /// Vertical field of view in degrees.
+    /// Vertical field of view in degrees, unused with `ortho`.
     pub fov: f32,
+    #[serde(default)]
+    pub ortho: Option<Ortho>,
+    /// Ignored with `ortho`.
+    #[serde(default)]
+    pub lens: Option<Lens>,
+}
+
+impl Default for Camera {
+    fn default() -> Self {
+        Camera { eye: [4.0, -6.0, 3.0], target: [0.0; 3], up: [0.0, 0.0, 1.0], fov: 50.0, ortho: None, lens: None }
+    }
+}
+
+/// Parallel rays, `half_height` world units from the view centre to the top.
+#[derive(Debug, Clone, Copy, PartialEq, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Ortho {
+    pub half_height: f32,
+}
+
+/// A thin lens: sharp at `focus_distance` along the view direction, rays from
+/// a disc of `aperture_radius`, both world units.
+#[derive(Debug, Clone, Copy, PartialEq, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Lens {
+    pub focus_distance: f32,
+    pub aperture_radius: f32,
+}
+
+/// A light at infinity, a disc of `angular_radius` degrees around `direction`.
+#[derive(Debug, Clone, Copy, PartialEq, Default, serde::Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct LightDesc {
+    /// Towards the light.
+    pub direction: [f32; 3],
+    /// Linear, the irradiance it gives a surface facing it.
+    pub color: [f32; 3],
+    /// Degrees, 0 for a delta light.
+    pub angular_radius: f32,
+}
+
+pub const MAX_LIGHTS: usize = 4;
+
+/// Windows resets a GPU that runs one dispatch past about 2 s, so a band that
+/// has not finished by this is stuck behind another process or a lost device.
+pub const WAIT_LIMIT: Duration = Duration::from_secs(10);
+
+/// Up to MAX_LIGHTS lights, held inline so a Look stays Copy. A longer list
+/// keeps its strongest; a dark light or one with no direction is left out,
+/// since a light sample picks by power.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct Lights {
+    len: usize,
+    list: [LightDesc; MAX_LIGHTS],
+}
+
+impl Lights {
+    pub fn new(lights: &[LightDesc]) -> Lights {
+        let lit = |l: &&LightDesc| crate::bloom::luma(l.color) > 0.0 && l.direction.iter().any(|x| *x != 0.0);
+        let mut v: Vec<LightDesc> = lights.iter().filter(lit).copied().collect();
+        v.sort_by(|a, b| crate::bloom::luma(b.color).total_cmp(&crate::bloom::luma(a.color)));
+        let mut out = Lights::default();
+        for l in v.into_iter().take(MAX_LIGHTS) {
+            out.list[out.len] = l;
+            out.len += 1;
+        }
+        out
+    }
+
+    pub fn as_slice(&self) -> &[LightDesc] {
+        &self.list[..self.len]
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for Lights {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        Ok(Lights::new(&Vec::<LightDesc>::deserialize(d)?))
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, serde::Deserialize)]
@@ -59,11 +142,70 @@ pub struct Look {
     pub sky_top: [f32; 3],
     pub sky_bottom: [f32; 3],
     pub env_intensity: f32,
-    /// Towards the light; a zero vector turns the sun off.
+    /// Towards the light; a zero vector turns the sun off. A delta light,
+    /// used only when `lights` is absent.
     pub sun_dir: [f32; 3],
     pub sun_color: [f32; 3],
     pub exposure: f32,
     pub bounces: u32,
+    pub lights: Option<Lights>,
+    /// What camera rays that miss show, linear. Absent, they show the sky.
+    pub background: Option<[f32; 3]>,
+    /// Camera misses show the environment map over the background.
+    pub environment_behind: bool,
+    pub ground: Option<Ground>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum GroundMode {
+    /// Camera rays show the background darkened by the light the scene
+    /// blocks from the plane; bounce and shadow rays pass through it.
+    Shadow,
+    /// Also any mode a later page sends.
+    #[default]
+    #[serde(other)]
+    None,
+}
+
+/// The rig's ground: a square of side `extent` around `centre` at height `z`,
+/// seen from above only.
+#[derive(Debug, Clone, Copy, PartialEq, Default, serde::Deserialize)]
+#[serde(rename_all = "camelCase", default)]
+pub struct Ground {
+    pub mode: GroundMode,
+    pub z: f32,
+    pub centre: [f32; 2],
+    pub extent: f32,
+    /// Sent for a lit ground, unused by the shadow mode.
+    pub albedo: f32,
+}
+
+impl Look {
+    /// The lights traced: `lights`, or else the sun as one delta light.
+    pub fn light_list(&self) -> Lights {
+        if let Some(l) = self.lights {
+            return l;
+        }
+        let on = self.sun_dir.iter().any(|x| *x != 0.0) && self.sun_color.iter().any(|x| *x > 0.0);
+        let sun = [LightDesc { direction: self.sun_dir, color: self.sun_color, angular_radius: 0.0 }];
+        Lights::new(if on { &sun } else { &[] })
+    }
+}
+
+/// How the light at a surface is estimated. Tests compare them; the app
+/// always traces with Mis and its firefly clamp.
+#[doc(hidden)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Estimator {
+    #[default]
+    Default,
+    /// Light samples only, bounce rays never see a light.
+    Nee,
+    /// Bounce rays only, no light samples.
+    Bsdf,
+    /// Both, weighted by the power heuristic, without the clamp.
+    Mis,
 }
 
 impl Default for Look {
@@ -76,6 +218,10 @@ impl Default for Look {
             sun_color: [0.0; 3],
             exposure: 1.0,
             bounces: 6,
+            lights: None,
+            background: None,
+            environment_behind: false,
+            ground: None,
         }
     }
 }
@@ -120,6 +266,11 @@ pub struct Tracer {
     shading: Shading,
     insts: wgpu::Buffer,
     mats: wgpu::Buffer,
+    env: EnvMap,
+    emitters: upload::Emitters,
+    /// World box of the visible bodies, min and max.
+    bounds: Option<[[f32; 3]; 2]>,
+    instance_uploads: u64,
     n_inst: u32,
     bind: Option<wgpu::BindGroup>,
     resolve_bind: Option<wgpu::BindGroup>,
@@ -136,12 +287,14 @@ pub struct Tracer {
     cap: u32,
     camera: Camera,
     look: Look,
+    estimator: Estimator,
     held: Option<Held>,
     quality: Quality,
     job: Option<Job>,
     denoise_error: Option<String>,
     fault: Arc<Mutex<Fault>>,
     buffer_limit: u64,
+    wait_limit: Duration,
 }
 
 /// The first loss and the first uncaptured error. Not behind the frames
@@ -234,7 +387,7 @@ impl Tracer {
 
         let uniform = device.create_buffer(&wgpu::BufferDescriptor {
             label: None,
-            size: 176,
+            size: frame::UNIFORM_SIZE,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -261,7 +414,9 @@ impl Tracer {
         if hw {
             accel.tlas = Some(make_tlas(&device, &queue, &[]));
         }
+        let env = EnvMap::new(&device, &queue, None);
         let mut t = Tracer {
+            env,
             insts: empty(&device),
             mats: empty(&device),
             accum: empty(&device),
@@ -277,6 +432,9 @@ impl Tracer {
             uniform,
             resolve_uniform,
             shading,
+            emitters: Default::default(),
+            bounds: None,
+            instance_uploads: 0,
             n_inst: 0,
             bind: None,
             resolve_bind: None,
@@ -289,14 +447,16 @@ impl Tracer {
             row0: 0,
             rows: 0,
             cap: 256,
-            camera: Camera { eye: [4.0, -6.0, 3.0], target: [0.0; 3], up: [0.0, 0.0, 1.0], fov: 50.0 },
+            camera: Camera::default(),
             look: Look::default(),
+            estimator: Estimator::Default,
             held: None,
             quality: Quality::default(),
             job: None,
             denoise_error: None,
             fault,
             buffer_limit,
+            wait_limit: WAIT_LIMIT,
         };
         t.resize(64, 64);
         Ok(t)
@@ -311,6 +471,17 @@ impl Tracer {
         let f = self.fault.lock().unwrap_or_else(|p| p.into_inner());
         f.lost.clone().or_else(|| f.error.clone())
     }
+    /// How many times the instance rows and the emitter table were uploaded.
+    #[doc(hidden)]
+    pub fn instance_uploads(&self) -> u64 {
+        self.instance_uploads
+    }
+
+    #[doc(hidden)]
+    pub fn set_wait_limit_for_test(&mut self, limit: Duration) {
+        self.wait_limit = limit;
+    }
+
     #[doc(hidden)]
     pub fn lose_device_for_test(&self) {
         self.device.destroy();
@@ -372,6 +543,14 @@ impl Tracer {
     pub fn set_look(&mut self, l: Look) {
         if l != self.look {
             self.look = l;
+            self.reset();
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn set_estimator(&mut self, e: Estimator) {
+        if e != self.estimator {
+            self.estimator = e;
             self.reset();
         }
     }
@@ -545,7 +724,55 @@ impl Tracer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::Duration;
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn the_tracer_never_asks_for_the_opengl_backend() {
+        assert!(!TracerOptions::default().backends.contains(wgpu::Backends::GL));
+    }
+
+    #[test]
+    fn a_poll_that_times_out_names_the_limit() {
+        let e = super::frame::settle(Err(wgpu::PollError::Timeout), WAIT_LIMIT).unwrap_err();
+        assert!(e.contains("did not finish a frame within 10 s"), "{e}");
+        assert!(super::frame::settle(Ok(wgpu::PollStatus::QueueEmpty), WAIT_LIMIT).is_ok());
+    }
+
+    fn impatient(w: u32, h: u32) -> Option<Tracer> {
+        let Ok(mut t) = Tracer::new(TracerOptions { software: true, ..Default::default() }) else {
+            eprintln!("skipped: no adapter");
+            return None;
+        };
+        t.resize(w, h);
+        t.set_cap(64);
+        t.set_wait_limit_for_test(Duration::ZERO);
+        Some(t)
+    }
+
+    #[test]
+    fn a_readback_the_gpu_never_finishes_returns_a_timeout_fault() {
+        let Some(mut t) = impatient(512, 512) else { return };
+        let start = Instant::now();
+        let px = t.resolve();
+        assert!(start.elapsed() < Duration::from_secs(1), "the readback waited {:?}", start.elapsed());
+        assert!(px.iter().all(|&b| b == 0));
+        let f = t.fault().expect("a readback past the limit is a fault");
+        assert!(f.contains("did not finish a frame within 0 s"), "{f}");
+        t.render_samples(64);
+        assert_eq!(t.samples(), 0, "a faulted tracer traced on");
+    }
+
+    #[test]
+    fn a_trace_the_gpu_does_not_finish_in_time_stops_with_the_reason() {
+        let Some(mut t) = impatient(512, 512) else { return };
+        let start = Instant::now();
+        t.render_samples(64);
+        assert!(start.elapsed() < Duration::from_secs(1), "the trace waited {:?}", start.elapsed());
+        assert!(t.samples() < 64, "the trace ran to the cap past its limit");
+        let f = t.fault().expect("a band past the limit is a fault");
+        assert!(f.contains("did not finish a frame"), "{f}");
+        assert_eq!(t.frame(512, 512, Duration::from_millis(50)), vec![0; 512 * 512 * 4]);
+    }
 
     #[test]
     fn a_denoised_frame_blooms_as_the_accumulation_it_came_from() {
@@ -568,7 +795,7 @@ mod tests {
                 ..Default::default()
             },
         );
-        t.set_camera(Camera { eye: [0.0, 0.0, 12.0], target: [0.0; 3], up: [0.0, 1.0, 0.0], fov: 50.0 });
+        t.set_camera(Camera { eye: [0.0, 0.0, 12.0], target: [0.0; 3], up: [0.0, 1.0, 0.0], fov: 50.0, ..Default::default() });
         t.set_look(Look { exposure: 1.7, sky_top: [0.1; 3], sky_bottom: [0.05; 3], ..Look::default() });
         t.set_denoise(Quality::Off);
         t.set_cap(1);

@@ -3,6 +3,7 @@
 // back so the tracer's own device can take it as plain data.
 
 import * as THREE from "three";
+import type { HdrImage } from "../hdrImage";
 
 /** The viewport's hemisphere light, which the tracer has no light for: folded
  *  into the environment, sky above `up`, ground below. */
@@ -115,6 +116,7 @@ export function traceEnvironment(
   for (let i = 0; i < pixels.length; i++) half[i] = THREE.DataUtils.toHalfFloat(pixels[i]!);
   held?.tex.dispose();
   held = { key: full, tex: halfEquirect(half, WIDTH, HEIGHT) };
+  held.tex.userData.envKey = full;
   return held.tex;
 }
 
@@ -151,4 +153,59 @@ export function backgroundTexture(c: THREE.Color): THREE.DataTexture {
   const t = halfEquirect(data, 4, 2);
   backgrounds.set(key, t);
   return t;
+}
+
+/** How an equirect's rows lie in the world, tests/fixtures/env_directions.json:
+ *  "y" the readback above, row 0 at -Y; "z" an HDR as hdrRoom places it, row 0
+ *  at +Z, azimuth -2 pi u. v counts rows from row 0. */
+export type EnvLayout = "y" | "z";
+
+export function equirectDirection(layout: EnvLayout, u: number, v: number): [number, number, number] {
+  if (layout === "y") {
+    const phi = (1 - v) * Math.PI;
+    const theta = (u - 0.5) * 2 * Math.PI;
+    return [Math.sin(phi) * Math.cos(theta), Math.cos(phi), Math.sin(phi) * Math.sin(theta)];
+  }
+  const th = v * Math.PI;
+  const az = -2 * Math.PI * u;
+  return [Math.sin(th) * Math.cos(az), Math.sin(th) * Math.sin(az), Math.cos(th)];
+}
+
+/** FRAGMENT's hemisphere term along `dir`. */
+export function hemiAt(dir: readonly number[], h: TraceHemi | null): [number, number, number] {
+  if (!h) return [0, 0, 0];
+  const up = h.up.clone().normalize();
+  const t = (dir[0]! * up.x + dir[1]! * up.y + dir[2]! * up.z) * 0.5 + 0.5;
+  const k = h.intensity / Math.PI;
+  return [
+    (h.ground.r + (h.sky.r - h.ground.r) * t) * k,
+    (h.ground.g + (h.sky.g - h.ground.g) * t) * k,
+    (h.ground.b + (h.sky.b - h.ground.b) * t) * k,
+  ];
+}
+
+/** An imported panorama in the "z" layout, half float RGBA top row first:
+ *  turned by `rotationDeg` as a column shift, times 2^exposure as hdrRoom
+ *  bakes it, with the hemisphere added as FRAGMENT adds it to a room. */
+export function hdrEnvironment(img: HdrImage, rotationDeg: number, exposure: number, hemi: TraceHemi | null): Uint16Array {
+  const { width: w, height: h, data } = img;
+  const gain = 2 ** exposure;
+  const shift = (((rotationDeg / 360) * w) % w + w) % w;
+  const c0 = Math.floor(shift);
+  const f = shift - c0;
+  const out = new Uint16Array(w * h * 4);
+  for (let r = 0; r < h; r++) {
+    for (let c = 0; c < w; c++) {
+      const a = (r * w + ((c + c0) % w)) * 4;
+      const b = (r * w + ((c + c0 + 1) % w)) * 4;
+      const hm = hemiAt(equirectDirection("z", (c + 0.5) / w, (r + 0.5) / h), hemi);
+      const o = (r * w + c) * 4;
+      for (let k = 0; k < 3; k++) {
+        const v = (data[a + k]! * (1 - f) + data[b + k]! * f) * gain + hm[k]!;
+        out[o + k] = THREE.DataUtils.toHalfFloat(Math.min(65504, v));
+      }
+      out[o + 3] = THREE.DataUtils.toHalfFloat(1);
+    }
+  }
+  return out;
 }
