@@ -952,6 +952,12 @@ jobs:
           SC_CHROME: /usr/bin/google-chrome
         run: node e2e/history_side_e2e.cjs
 
+      - name: Shell never scrolls end-to-end
+        env:
+          SC_TOKEN: citoken
+          SC_CHROME: /usr/bin/google-chrome
+        run: node e2e/shell_no_shift_e2e.cjs
+
       # Builds only the small frames crate and tungstenite, no Tauri, no kernel.
       - name: Native frames over WebSocket end-to-end
         env:
