@@ -83,6 +83,10 @@ zip = { version = "4", default-features = false, features = ["deflate-flate2"] }
 # zlib; feature unification is additive and cannot change updater behaviour.
 flate2 = "1"
 
+# The log file takes over stdout and stderr (log_file.rs).
+[target.'cfg(target_os = "macos")'.dependencies]
+libc = "0.2"
+
 # The 3D mouse through spacenavd (spnav/, spacemouse/spnav.rs).
 [target.'cfg(target_os = "linux")'.dependencies]
 fundacad-spnav = { path = "spnav" }

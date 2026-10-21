@@ -18,6 +18,8 @@ mod launch;
 pub mod frames;
 pub mod safe_mode;
 pub mod settings_files;
+#[cfg(any(target_os = "macos", test))]
+mod log_file;
 // WebKitGTK only exists on Linux; macOS and Windows use WKWebView and WebView2.
 #[cfg(target_os = "linux")]
 mod webkit;
@@ -429,6 +431,14 @@ pub fn run() {
         .manage(plugins::files::Handles::default())
         .manage(safe)
         .setup(|app| {
+            #[cfg(target_os = "macos")]
+            if let Ok(dir) = app.path().app_log_dir() {
+                match log_file::redirect(&dir) {
+                    Ok(Some(path)) => println!("[log] FundaCAD {} logs to {}", env!("CARGO_PKG_VERSION"), path.display()),
+                    Ok(None) => {}
+                    Err(e) => eprintln!("[log] no log file in {}: {e}", dir.display()),
+                }
+            }
             let (reason, dir) = {
                 let safe = app.state::<SafeMode>();
                 (safe.reason, safe.dir.clone())
