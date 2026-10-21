@@ -4,11 +4,13 @@
 #include <bindings_common.hxx>
 
 #include <BRepAdaptor_Curve.hxx>
+#include <BRepAdaptor_Curve2d.hxx>
 #include <BRepAdaptor_Surface.hxx>
 #include <BRepBuilderAPI_Copy.hxx>
 #include <BRepCheck_Analyzer.hxx>
 #include <BRepFilletAPI_MakeChamfer.hxx>
 #include <BRepFilletAPI_MakeFillet.hxx>
+#include <BRepGProp_Face.hxx>
 #include <BRepLib.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
 #include <BRepTools.hxx>
@@ -31,6 +33,7 @@
 #include <TopoDS_Iterator.hxx>
 #include <TopoDS_Vertex.hxx>
 #include <gp_Pnt.hxx>
+#include <gp_Pnt2d.hxx>
 #include <gp_Vec.hxx>
 
 #include <algorithm>
@@ -155,25 +158,74 @@ inline BlShape blend_fillet(const TopoDS_Shape &shape, const TopoDS_Shape &edges
   return BlShape(new TopoDS_Shape(out));
 }
 
-// d1 along the first face the ancestor map lists for each edge, d2 along the other.
+// Whether d1 goes on `f1`, not on `f0` the map lists first: mode 1 always, mode 2
+// on the face to one hand of the edge, so each side of a prism has d1 at one corner.
+const int BL_D1_MODES = 3;
+
+inline bool bl_d1_on_second(const TopoDS_Edge &e, const TopoDS_Face &f0, const TopoDS_Face &f1, int mode) {
+  if (mode != 2) return mode == 1;
+  BRepAdaptor_Curve crv(e);
+  double t = 0.5 * (crv.FirstParameter() + crv.LastParameter());
+  gp_Pnt p;
+  gp_Vec tan;
+  crv.D1(t, p, tan);
+  double ax = std::abs(tan.X()), ay = std::abs(tan.Y()), az = std::abs(tan.Z());
+  double lead = ax >= ay && ax >= az ? tan.X() : (ay >= az ? tan.Y() : tan.Z());
+  if (lead < 0) tan.Reverse();
+  auto normal = [&](const TopoDS_Face &f) {
+    gp_Pnt2d uv = BRepAdaptor_Curve2d(e, f).Value(t);
+    gp_Pnt q;
+    gp_Vec n;
+    BRepGProp_Face(f).Normal(uv.X(), uv.Y(), q, n);
+    return n;
+  };
+  return tan.Dot(normal(f0).Crossed(normal(f1))) < 0;
+}
+
+// d1 on the face the ancestor map lists first, and when that does not build an
+// uneven chamfer the other modes: 3 x 12 fits a 20 x 20 box only with mode 2.
 inline BlShape blend_chamfer(const TopoDS_Shape &shape, const TopoDS_Shape &edges,
                              rust::Slice<const double> d1, rust::Slice<const double> d2,
                              int32_t &status) {
   TopTools_IndexedDataMapOfShapeListOfShape map;
   TopExp::MapShapesAndAncestors(shape, TopAbs_EDGE, TopAbs_FACE, map);
-  BRepFilletAPI_MakeChamfer mk(shape);
   std::vector<TopoDS_Shape> es = bl_children(edges);
-  for (size_t i = 0; i < es.size() && i < d1.size() && i < d2.size(); ++i) {
-    const TopoDS_Edge &e = TopoDS::Edge(es[i]);
-    mk.Add(d1[i], d2[i], e, TopoDS::Face(map.FindFromKey(e).First()));
+  size_t n = std::min(es.size(), std::min(d1.size(), d2.size()));
+  bool uneven = false;
+  for (size_t i = 0; i < n; ++i) uneven = uneven || d1[i] != d2[i];
+  auto build = [&](int mode, int32_t &st) {
+    BRepFilletAPI_MakeChamfer mk(shape);
+    for (size_t i = 0; i < n; ++i) {
+      const TopoDS_Edge &e = TopoDS::Edge(es[i]);
+      const TopTools_ListOfShape &fs = map.FindFromKey(e);
+      TopoDS_Face face = TopoDS::Face(fs.First());
+      if (d1[i] != d2[i] && fs.Size() == 2 && bl_d1_on_second(e, face, TopoDS::Face(fs.Last()), mode))
+        face = TopoDS::Face(fs.Last());
+      mk.Add(d1[i], d2[i], e, face);
+    }
+    mk.Build();
+    if (!mk.IsDone()) {
+      st = 1;
+      return TopoDS_Shape();
+    }
+    TopoDS_Shape out = bl_split_false_degenerate(mk.Shape());
+    st = BRepCheck_Analyzer(out).IsValid() ? 0 : 2;
+    return out;
+  };
+  TopoDS_Shape out = build(0, status);
+  for (int mode = 1; uneven && status != 0 && mode < BL_D1_MODES; ++mode) {
+    int32_t again = 1;
+    TopoDS_Shape other;
+    try {
+      other = build(mode, again);
+    } catch (const Standard_Failure &) {
+      again = 1;
+    }
+    if (again == 0) {
+      status = 0;
+      out = other;
+    }
   }
-  mk.Build();
-  if (!mk.IsDone()) {
-    status = 1;
-    return BlShape(new TopoDS_Shape());
-  }
-  TopoDS_Shape out = bl_split_false_degenerate(mk.Shape());
-  status = BRepCheck_Analyzer(out).IsValid() ? 0 : 2;
   return BlShape(new TopoDS_Shape(out));
 }
 
