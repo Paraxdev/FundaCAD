@@ -16,6 +16,11 @@ export function installRebuildBridge(e: Engine): void {
   // FIRST frame, so the camera settles before any geometry exists and never moves
   // again while chunks land.
   let pendingFit = true;
+  // An import that fills an empty view is fitted as well: New homes the camera
+  // for a 20 mm part, so a big assembly would otherwise land off screen.
+  let viewEmpty = true;
+  e.store.onOpen(() => (viewEmpty = true));
+  const fitNow = () => pendingFit || (viewEmpty && e.store.document.features.some((f) => f.type === "import"));
 
   // Colour a plugin has put on the model, asked for fresh at every point the
   // model changes.
@@ -123,8 +128,8 @@ export function installRebuildBridge(e: Engine): void {
       e.viewport.setBodyPaint(paint().bodies);
       e.viewport.setBodyFinish(e.store.materialFinishes());
       e.viewport.setRelief(contributedRelief());
-      e.viewport.beginProgressiveModel(c.epoch, c.manifest, c.result, c.bbox, hidden, pendingFit);
-      pendingFit = false;
+      e.viewport.beginProgressiveModel(c.epoch, c.manifest, c.result, c.bbox, hidden, fitNow());
+      pendingFit = viewEmpty = false;
       return;
     }
     const hidden = c.bodies.filter((b) => !e.store.isBodyVisible(b.id)).map((b) => b.id);
@@ -144,8 +149,8 @@ export function installRebuildBridge(e: Engine): void {
         const hidden = (s.result.bodies ?? [])
           .filter((b) => !e.store.isBodyVisible(b.id))
           .map((b) => b.id);
-        e.viewport.setModel(s.result, pendingFit, hidden);
-        pendingFit = false;
+        e.viewport.setModel(s.result, fitNow(), hidden);
+        pendingFit = viewEmpty = false;
         const p = paint();
         e.viewport.setBodyPaint(p.bodies); // per-body colours
         e.viewport.setFacePaint(p.faces); // + per-face inlay colours
@@ -156,6 +161,7 @@ export function installRebuildBridge(e: Engine): void {
         e.ui.panels.refreshStressMarks();
       } else {
         e.viewport.clearModel();
+        viewEmpty = true;
         // Nothing left to analyse: the panel says the body is gone and takes
         // its arrows off the empty view.
         e.ui.panels.refreshStressMarks();

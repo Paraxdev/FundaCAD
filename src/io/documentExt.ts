@@ -53,3 +53,13 @@ export function stripDocumentExt(name: string): string {
   const alts = [BINARY_DOC_EXT, DOC_EXT, ...LEGACY_DOC_EXTS].join("|");
   return name.replace(new RegExp(`\\.(${alts})$`, "i"), "");
 }
+
+/** The notice for a save that cannot hold the sections a `.fundab` carried, or
+ *  null when nothing is lost. A JSON file has no sections, so only a `.fundab`
+ *  keeps them. */
+export function leftOutSectionsNotice(path: string, carried: readonly { name: string }[]): string | null {
+  if (carried.length === 0) return null;
+  if ((path.split(".").pop() ?? "").toLowerCase() === BINARY_DOC_EXT) return null;
+  const names = carried.map((c) => c.name).join(", ");
+  return `Saved without ${carried.length === 1 ? "a section" : `${carried.length} sections`} (${names}) that this version of FundaCAD does not read. Save as .${BINARY_DOC_EXT} to keep ${carried.length === 1 ? "it" : "them"}.`;
+}

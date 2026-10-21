@@ -52,7 +52,8 @@ describe("importPath with a unit", () => {
   function backend() {
     const calls: unknown[][] = [];
     const be = {
-      async rebuild() { return new Promise<never>(() => {}); },
+      // The import waits for its build, which is what says whether Cancel stopped it.
+      async rebuild() { return { ok: true, result: { mesh: { positions: [], indices: [], faceIds: [] }, edges: [], bodies: [] } }; },
       async init() {},
       onStatus() { return () => {}; },
       onProgress() { return () => {}; },
@@ -106,7 +107,8 @@ describe("importFileBytes with a unit", () => {
   function backend() {
     const calls: unknown[][] = [];
     const be = {
-      async rebuild() { return new Promise<never>(() => {}); },
+      // The import waits for its build, which is what says whether Cancel stopped it.
+      async rebuild() { return { ok: true, result: { mesh: { positions: [], indices: [], faceIds: [] }, edges: [], bodies: [] } }; },
       async init() {},
       onStatus() { return () => {}; },
       onProgress() { return () => {}; },

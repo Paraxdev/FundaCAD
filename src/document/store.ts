@@ -83,6 +83,8 @@ export interface RebuildState {
   /** Set when a held preview (setPreview's `hold`) was refused: `result` is then
    *  still the last model that built, and this carries what the refusal said. */
   heldRefusal?: PreviewRefusal | null;
+  /** The person pressed Cancel on this build: `result` is the model before it. */
+  cancelled?: boolean;
 }
 
 export interface PreviewRefusal {
@@ -380,7 +382,7 @@ export class DocumentStore {
    *  exactly this document, so it is shown again at once instead of rebuilt. */
   private committedShown: { key: string; state: RebuildState } | null = null;
   /** The rebuild on the wire, and the id a supersede cancels. */
-  private inflight: { gen: number; id: string | null; cancelled: boolean } | null = null;
+  private inflight: { gen: number; id: string | null; cancelled: boolean; byUser?: boolean } | null = null;
   private sendGen = 0;
   /** Replies to rebuilds sent at or before this are stale and never published. */
   private staleThrough = 0;
@@ -436,6 +438,9 @@ export class DocumentStore {
   // --- access ---
   get document(): CadDocument {
     return this.doc;
+  }
+  get backend(): GeometryBackend {
+    return this.geometry;
   }
   get buildState(): RebuildState {
     return this.build;
@@ -521,6 +526,7 @@ export class DocumentStore {
    *  covers both "nothing running" and "the engine had already finished". */
   async cancelBusy(): Promise<boolean> {
     if (!this.busy.active) return false;
+    if (this.busy.rebuild && this.inflight) this.inflight.byUser = true;
     if (this.busyAbort) {
       this.busyAbort.abort();
       return true;
@@ -617,6 +623,7 @@ export class DocumentStore {
       meshTotal: null,
       previewBuilt: null,
       heldRefusal: null,
+      cancelled: false,
     };
     this.emitBuild();
     this.committedShown = null;
@@ -2499,6 +2506,7 @@ export class DocumentStore {
     const done = {
       building: false, progress: null, meshed: null, meshTotal: null,
       streamed: null, streamTotal: null, previewBuilt: sent.features,
+      cancelled: !reply.ok && !!reply.cancelled,
     };
     const held = this.heldRefusalOf(reply, sent);
     if (held) {
@@ -2561,7 +2569,7 @@ export class DocumentStore {
             const sentPreview = this.previewSnapshot();
             const effective = this.effectiveDoc();
             const key = previewing ? null : buildKey(effective);
-            const flight = { gen: ++this.sendGen, id: null as string | null, cancelled: false };
+            const flight: NonNullable<typeof this.inflight> = { gen: ++this.sendGen, id: null, cancelled: false };
             this.inflight = flight;
             markSent();
             const reply = await this.geometry.rebuild(effective, undefined, (id) => {
@@ -2572,7 +2580,9 @@ export class DocumentStore {
             this.inflight = null;
             if (flight.gen <= this.staleThrough) continue;
             // Superseded and stopped, so there is nothing to show: the newer
-            // request queued behind it is what the user is waiting for.
+            // request queued behind it is what the user is waiting for. A Cancel
+            // the person pressed stops the queue too.
+            if (!reply.ok && reply.cancelled && flight.byUser) this.rebuildQueued = false;
             if (!reply.ok && reply.cancelled && this.rebuildQueued) continue;
             if (key !== null && this.refusedProvisional(reply, key)) continue;
             if (!previewing) this.keepBodyIds(sent, reply);
@@ -2602,6 +2612,33 @@ export class DocumentStore {
       this.rebuilding = false; // belt and braces if runBusy throws before the callback
       this.rebuildDrain = null;
     }
+  }
+
+  /** Resolves once the build in flight, or one an edit is waiting to start, has
+   *  settled. Unlike rebuildNow it never stops a build of the same document to
+   *  send it again. */
+  async whenBuilt(): Promise<void> {
+    if (this.rebuildTimer != null) {
+      clearTimeout(this.rebuildTimer);
+      this.rebuildTimer = null;
+      await this.rebuildNow();
+      return;
+    }
+    for (let d = this.rebuildDrain; d; ) {
+      await d;
+      d = this.rebuildDrain === d ? null : this.rebuildDrain;
+    }
+  }
+
+  /** Takes back the newest undo step when `added` holds for the document before
+   *  it, even while an import holds the history. The model built before that
+   *  step comes back without a rebuild. */
+  undoIfTop(added: (before: CadDocument) => boolean): boolean {
+    const top = this.undoStack.at(-1);
+    if (top?.kind !== "doc" || !added(top.doc)) return false;
+    this.restoreArmed = true;
+    this.undoStep();
+    return true;
   }
 
   /** Stop the rebuild on the wire, whose document nobody wants any more. Only

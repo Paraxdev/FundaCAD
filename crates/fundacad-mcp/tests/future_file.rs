@@ -1,10 +1,11 @@
 //! tests/fixtures/future/v99.funda through `doc_open` and `doc_save`: the note
 //! names what this version leaves out, and the saved file holds everything the
-//! newer version wrote, its geometry too.
+//! newer version wrote, its geometry too, under this build's own version stamp.
 
 mod common;
 
 use common::{is_error, text_of, FakeEngine};
+use fundacad_mcp::model::FORMAT_VERSION;
 use fundacad_mcp::server::FundaCad;
 use serde_json::{json, Value};
 
@@ -28,9 +29,19 @@ async fn a_newer_file_opens_with_a_note_and_saves_back_whole() {
         "{reply}"
     );
 
+    // A .fundab path is refused by the writer, after the document was stamped.
+    let refused = dir.path().join("saved.fundab");
+    let r = srv.t_doc_save(args(&refused)).await.unwrap();
+    assert!(is_error(&r), "{}", text_of(&r));
+    let got = srv.t_doc_get(json!({}).as_object().cloned().unwrap()).await.unwrap();
+    let got: Value = serde_json::from_str(&text_of(&got)).unwrap();
+    assert_eq!(got["version"], input["version"], "a save that fails leaves the document as it was");
+
     let out = dir.path().join("saved.funda");
     let r = srv.t_doc_save(args(&out)).await.unwrap();
     assert!(!is_error(&r), "{}", text_of(&r));
-    let saved: Value = serde_json::from_str(&std::fs::read_to_string(&out).unwrap()).unwrap();
-    assert_eq!(saved, input, "MCP edits the document as it came, so it keeps the newer stamp too");
+    let mut saved: Value = serde_json::from_str(&std::fs::read_to_string(&out).unwrap()).unwrap();
+    assert_eq!(saved["version"], json!(FORMAT_VERSION), "MCP writes the document, so it stamps its own version like the app");
+    saved["version"] = input["version"].clone();
+    assert_eq!(saved, input, "everything else the newer version wrote stays");
 }
