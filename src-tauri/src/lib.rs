@@ -434,7 +434,13 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             if let Ok(dir) = app.path().app_log_dir() {
                 match log_file::redirect(&dir) {
-                    Ok(Some(path)) => println!("[log] FundaCAD {} logs to {}", env!("CARGO_PKG_VERSION"), path.display()),
+                    Ok(Some(path)) => {
+                        println!("[log] FundaCAD {} started, logs to {}", env!("CARGO_PKG_VERSION"), path.display());
+                        // Printed before the log took over, so repeated where a report will find it.
+                        if let Some(r) = app.state::<SafeMode>().reason {
+                            println!("[safe-mode] starting in safe mode because {}", r.describe());
+                        }
+                    }
                     Ok(None) => {}
                     Err(e) => eprintln!("[log] no log file in {}: {e}", dir.display()),
                 }

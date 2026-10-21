@@ -48,4 +48,4 @@ You can also ask for safe mode yourself, by starting FundaCAD with `--safe-mode`
 
 A settings file that cannot be read is renamed to `<name>.bad-<time>` in the app data folder (`%APPDATA%\dev.fundacad.app` on Windows, `~/Library/Application Support/dev.fundacad.app` on macOS, `~/.local/share/dev.fundacad.app` on Linux, `~/.var/app/dev.fundacad.app/data/dev.fundacad.app` for the Flatpak) and the app starts without it. Attach that file when you report the problem.
 
-On macOS, FundaCAD started from Finder or the Dock writes its log to `~/Library/Logs/dev.fundacad.app/fundacad.log`, and keeps the run before as `fundacad.old.log`. Attach it when you report a problem on a Mac. Started from Terminal, it logs to the Terminal instead.
+On macOS, FundaCAD started from Finder or the Dock writes its log to `~/Library/Logs/dev.fundacad.app/fundacad.log`, each start added to the end, and moves a log past 4 MB to `fundacad.old.log`. Attach it when you report a problem on a Mac. Started from Terminal, it logs to the Terminal instead.
