@@ -108,6 +108,9 @@ export class PathTraceHost {
   private lens = "";
   private sceneDirty = true;
   private cameraDirty = true;
+  /** The camera last sent, so a move made outside the rig's damped update
+   *  (arrow key steps, reduced motion flights, a projection switch) restarts too. */
+  private cameraSig = new Float64Array(33);
   private polling = false;
   private traceSince = 0;
   private sawSample = false;
@@ -157,7 +160,7 @@ export class PathTraceHost {
   }
 
   tick(f: TraceFrame) {
-    if (f.cameraChanged) this.cameraDirty = true;
+    if (this.cameraMoved(f.camera) || f.cameraChanged) this.cameraDirty = true;
     if (f.sceneMaybeChanged) this.sceneDirty = true;
     const editing = f.now - this.editedAt < STILL_MS;
     const s = this.disabled ? "off" : traceState({ ...f.inputs, editing, samples: this.samples, cap: this.cap });
@@ -224,6 +227,21 @@ export class PathTraceHost {
       this.poll(b);
     } else if (!this.settled && this.samples >= this.cap) this.settled = !b.present(f.now);
     this.show(this.samples > 0 || (hold && this.shown));
+  }
+
+  private cameraMoved(c: THREE.Camera): boolean {
+    const sig = this.cameraSig;
+    const w = c.matrixWorld.elements;
+    const p = c.projectionMatrix.elements;
+    const ortho = (c as THREE.OrthographicCamera).isOrthographicCamera ? 1 : 0;
+    let moved = sig[32] !== ortho;
+    for (let i = 0; i < 16; i++) {
+      if (sig[i] !== w[i] || sig[16 + i] !== p[i]) moved = true;
+      sig[i] = w[i]!;
+      sig[16 + i] = p[i]!;
+    }
+    sig[32] = ortho;
+    return moved;
   }
 
   private syncBloom(b: TracerBackend, f: TraceFrame) {
