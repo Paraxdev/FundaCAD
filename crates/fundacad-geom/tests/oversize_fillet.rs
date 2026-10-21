@@ -177,3 +177,32 @@ fn a_two_distance_chamfer_takes_the_faces_it_fits_on_in_either_order() {
     }
     check_corners_cut([20.0, 20.0], 3.0, 12.0, json!({"tangentEdges": false}));
 }
+
+/// Each chamfer here runs past a side face, or two of its setbacks just meet:
+/// built one edge at a time, 40 x 20 at 3/30 or 30/3 came back 6002.65 with
+/// both 40 mm faces carved off and not a word said.
+#[test]
+fn a_two_distance_chamfer_that_runs_past_a_face_is_never_silent() {
+    let cases = [
+        ([40.0, 20.0], 3.0, 30.0),
+        ([40.0, 20.0], 30.0, 3.0),
+        ([20.0, 20.0], 1.0, 19.0),
+        ([30.0, 10.0], 1.0, 20.0),
+        ([25.0, 15.0], 14.0, 1.0),
+        ([40.0, 40.0], 38.0, 3.0),
+    ];
+    for (sides, d, d2) in cases {
+        let r = box_two_distance(sides, d, d2, json!({}));
+        if !r.errors.is_empty() || !warnings(&r, "c").is_empty() {
+            continue;
+        }
+        let want = sides[0] * sides[1] * 10.0 - 4.0 * d * d2 / 2.0 * 10.0;
+        assert!(
+            (volume(&r) - want).abs() < 0.01,
+            "{} x {}, {d}/{d2}: built {} with no warning, a clean cut is {want}",
+            sides[0],
+            sides[1],
+            volume(&r)
+        );
+    }
+}
