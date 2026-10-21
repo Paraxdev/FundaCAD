@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use crate::bloom::{self, Bloom, Chain};
 
-use super::{bytes, FrameKey, Held, Tracer};
+use super::{bytes, Estimator, FrameKey, GroundMode, Held, Tracer, MAX_LIGHTS};
 
 /// What one dispatch aims for, short enough that the compositor and
 /// the WebGPU viewport keep their frames, long enough to amortise a submit.
@@ -23,6 +23,15 @@ pub fn adapt_rows(rows: u32, width: u32, height: u32, took: Duration, target: Du
 
 pub const MIN_BAND_PATHS: u32 = 65_536;
 
+/// U in trace.wgsl: 8 words, 7 vec4s, 4 lights of 2 vec4s, the light count,
+/// the background, the emitter table and the ground's two.
+pub(super) const UNIFORM_SIZE: u64 = 32 + 7 * 16 + 8 * 16 + 5 * 16;
+
+/// What a light is picked by, its share of the lights' luminance.
+fn power(c: [f32; 3]) -> f32 {
+    bloom::luma(c).max(0.0)
+}
+
 impl Tracer {
     fn write_uniform(&self, rows: u32) {
         let c = &self.camera;
@@ -35,26 +44,93 @@ impl Tracer {
         let fwd = norm(sub(c.target, c.eye));
         let right = norm(cross(fwd, c.up));
         let up = cross(right, fwd);
-        let th = (c.fov.to_radians() * 0.5).tan();
         let aspect = self.w as f32 / self.h as f32;
+        let dot = |a: [f32; 3], b: [f32; 3]| a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+        let (th, ortho, pull) = match c.ortho {
+            Some(o) => {
+                // Behind every visible body, so none is clipped and the depth
+                // AOV stays small and positive for the denoiser's relative test.
+                let pull = self.bounds.map_or(0.0, |[lo, hi]| {
+                    let near = (0..8)
+                        .map(|k| [if k & 1 == 0 { lo[0] } else { hi[0] }, if k & 2 == 0 { lo[1] } else { hi[1] }, if k & 4 == 0 { lo[2] } else { hi[2] }])
+                        .map(|p| dot(sub(p, c.eye), fwd))
+                        .fold(f32::INFINITY, f32::min);
+                    (0.01 * dot(sub(hi, lo), sub(hi, lo)).sqrt() - near).max(0.0)
+                });
+                (o.half_height, 1.0, pull)
+            }
+            None => ((c.fov.to_radians() * 0.5).tan(), 0.0, 0.0),
+        };
+        let (aperture, focus) = match c.lens {
+            Some(l) if c.ortho.is_none() && l.aperture_radius > 0.0 && l.focus_distance > 0.0 => (l.aperture_radius, l.focus_distance),
+            _ => (0.0, 0.0),
+        };
         let l = &self.look;
-        let sun_on = (l.sun_dir.iter().any(|x| *x != 0.0) && l.sun_color.iter().any(|x| *x > 0.0)) as u32 as f32;
-        let ints = [self.w, self.h, self.sample, self.row0, rows, self.n_inst, l.bounces.max(1), (self.sample == 0) as u32];
+        let est = match self.estimator {
+            Estimator::Default => 0,
+            Estimator::Nee => 1,
+            Estimator::Bsdf => 2,
+            Estimator::Mis => 3,
+        };
+        let flags = (self.sample == 0) as u32 | est << 1;
+        let ints = [self.w, self.h, self.sample, self.row0, rows, self.n_inst, l.bounces.max(1), flags];
         let mut data: Vec<f32> = ints.map(f32::from_bits).to_vec();
         let v4 = |v: [f32; 3], w: f32| [v[0], v[1], v[2], w];
         for v in [
-            v4(c.eye, 0.0),
-            v4(fwd, 0.0),
+            v4(c.eye, aperture),
+            v4(fwd, focus),
             v4(right.map(|x| x * th * aspect), 0.0),
             v4(up.map(|x| x * th), 0.0),
             v4(l.sky_top, l.env_intensity),
             v4(l.sky_bottom, 0.0),
-            v4(norm(l.sun_dir), sun_on),
-            v4(l.sun_color, 0.0),
-            [l.exposure, 0.0, 0.0, 0.0],
+            [l.exposure, ortho, pull, 0.0],
         ] {
             data.extend(v);
         }
+        let lights = l.light_list();
+        let lights = lights.as_slice();
+        let total: f32 = lights.iter().map(|x| power(x.color)).sum();
+        for k in 0..MAX_LIGHTS {
+            let Some(x) = lights.get(k) else {
+                data.extend([0.0; 8]);
+                continue;
+            };
+            // 1 - cos r from f64: cos of a 1 degree radius is 1 - 1.5e-4 and
+            // the cone's solid angle is 2 pi times that difference.
+            let r = (x.angular_radius.clamp(0.0, 90.0) as f64).to_radians();
+            let one_minus_cos = (2.0 * (r / 2.0).sin().powi(2)) as f32;
+            data.extend(v4(norm(x.direction), one_minus_cos));
+            data.extend(v4(x.color, power(x.color) / total.max(1e-20)));
+        }
+        let bg = l.background.unwrap_or([0.0; 3]);
+        // The chance a light sample picks the environment, by its irradiance
+        // on a face against the discs' sum.
+        let env = self.env.held.as_ref().map_or(0, |e| e.up.code());
+        let env_power = std::f32::consts::PI * self.env.mean * l.env_intensity;
+        let p_env = if env == 0 || env_power <= 0.0 { 0.0 } else { env_power / (env_power + total) };
+        let behind = (env != 0 && l.environment_behind) as u32;
+        data.extend([lights.len() as u32, env, p_env.to_bits(), behind].map(f32::from_bits));
+        data.extend(v4(bg, l.background.is_some() as u32 as f32));
+        // Emitter power is flux and the discs' and the map's is irradiance,
+        // so with both an even split; a poor one costs noise, not bias.
+        let em = &self.emitters;
+        let others = !lights.is_empty() || p_env > 0.0;
+        let p_em: f32 = if em.count == 0 { 0.0 } else if others { 0.5 } else { 1.0 };
+        let em_base = self.env.tables.len() as u32;
+        data.extend([em_base, em.count, p_em.to_bits(), em.total.to_bits()].map(f32::from_bits));
+        let g = l.ground.filter(|g| g.mode == GroundMode::Shadow && g.extent > 0.0);
+        // The luminance irradiance on the plane, which its shadow is a share of.
+        let env_up = if env == 0 { 0.0 } else { (self.env.up * l.env_intensity).max(0.0) };
+        // With no map the gradient lights the scene; its irradiance on a face
+        // up is pi (5 top + bottom) / 6.
+        let sky_mix = [0, 1, 2].map(|i| (5.0 * l.sky_top[i] + l.sky_bottom[i]) / 6.0);
+        let sky_up = if env == 0 { (std::f32::consts::PI * power(sky_mix) * l.env_intensity).max(0.0) } else { 0.0 };
+        let up_light: f32 = lights.iter().map(|x| power(x.color) * norm(x.direction)[2].max(0.0)).sum::<f32>() + env_up + sky_up;
+        let ground_on = g.is_some() && up_light > 0.0;
+        let g = g.unwrap_or_default();
+        data.extend([g.centre[0], g.centre[1], g.z, g.extent * 0.5]);
+        data.extend([ground_on as u32 as f32, env_up, sky_up, 0.0]);
+        debug_assert_eq!(data.len() * 4, UNIFORM_SIZE as usize);
         self.queue.write_buffer(&self.uniform, 0, bytes(&data));
     }
 
@@ -171,12 +247,18 @@ impl Tracer {
         self.resolve_from(false)
     }
 
-    /// The threshold kept above the sky as the trace draws it, the background
-    /// times the brightness: the page raised it above the background alone,
-    /// so a brightness above 1 could bloom the whole sky.
+    /// The threshold kept above what camera misses draw: the background, or
+    /// else the sky or the map's mean times its intensity, so a bright sky
+    /// never blooms whole.
     fn bloom_threshold(&self, b: &Bloom) -> f32 {
         let l = &self.look;
-        let sky = bloom::luma(l.sky_top).max(bloom::luma(l.sky_bottom)) * l.env_intensity;
+        let map = self.env.held.is_some();
+        let sky = match l.background {
+            Some(_) if map && l.environment_behind => self.env.mean * l.env_intensity,
+            Some(bg) => bloom::luma(bg),
+            None if map => self.env.mean * l.env_intensity,
+            None => bloom::luma(l.sky_top).max(bloom::luma(l.sky_bottom)) * l.env_intensity,
+        };
         b.threshold.max(sky + 0.05)
     }
 

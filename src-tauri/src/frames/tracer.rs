@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
 use fundacad_frames::{FrameSource, Reopen};
-use fundacad_tracer::{decode_colors, decode_mesh, denoise, encode_png, Bloom, BodyDesc, Camera, Denoiser, Look, Path, Picture, Quality, Refusal, SelfCheck, Tracer, TracerOptions};
+use fundacad_tracer::{decode_colors, decode_env, decode_mesh, denoise, encode_png, Bloom, BodyDesc, Camera, Denoiser, Look, Path, Picture, Quality, Refusal, SelfCheck, Tracer, TracerOptions};
 use serde::Serialize;
 use tauri::ipc::{InvokeBody, Request};
 
@@ -198,9 +198,25 @@ pub fn pt_camera(camera: Camera) -> Result<(), String> {
     with(|t| t.set_camera(camera))
 }
 
+/// Answers the environment key held, so the page sends pt_env when it is not its own.
 #[tauri::command]
-pub fn pt_look(look: Look) -> Result<(), String> {
-    with(|t| t.set_look(look))
+pub fn pt_look(look: Look) -> Result<Option<String>, String> {
+    with(|t| {
+        t.set_look(look);
+        t.environment_key().map(String::from)
+    })
+}
+
+/// The room or HDR equirect, or 0 x 0 for none.
+#[tauri::command]
+pub async fn pt_env(request: Request<'_>) -> Result<(), String> {
+    let bytes = raw(&request)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        let e = decode_env(&bytes)?;
+        with(|t| t.set_environment(e))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
