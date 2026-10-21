@@ -88,7 +88,8 @@ async function askPaths(bridge: PathBridge, files: File[]): Promise<(string | nu
 async function collect(files: File[], uriList: string): Promise<DroppedFile[]> {
   const bridge = pathBridge();
   const asked = bridge ? await askPaths(bridge, files) : null;
-  const listed = pathsFromUriList(files.map((f) => f.name), uriList);
+  // A browser tab has no way to open a path, so a uri-list it fills is ignored.
+  const listed = "__TAURI_INTERNALS__" in window ? pathsFromUriList(files.map((f) => f.name), uriList) : [];
   return files.map((file, i) => ({ name: file.name, path: asked?.[i] ?? listed[i] ?? null, file }));
 }
 

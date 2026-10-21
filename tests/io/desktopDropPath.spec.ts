@@ -5,6 +5,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const opened: string[] = [];
+const win = window as unknown as Record<string, unknown>;
 vi.mock("../../src/app/documentActions", () => ({ mayDiscard: vi.fn(async () => true) }));
 vi.mock("../../src/io/files", async (importOriginal) => {
   const real = await importOriginal<typeof import("../../src/io/files")>();
@@ -12,6 +13,8 @@ vi.mock("../../src/io/files", async (importOriginal) => {
     ...real,
     openDocumentAtPath: vi.fn(async (_s: unknown, path: string) => { opened.push(`path ${path}`); return "ok"; }),
     openDocumentBytes: vi.fn(async (_s: unknown, file: File) => { opened.push(`bytes ${file.name}`); return "ok"; }),
+    importPath: vi.fn(async (_s: unknown, _g: unknown, path: string) => { opened.push(`import ${path}`); }),
+    importFileBytes: vi.fn(async (_s: unknown, _g: unknown, file: File) => { opened.push(`import bytes ${file.name}`); }),
     reportError: vi.fn(async () => {}),
   };
 });
@@ -28,8 +31,8 @@ function drop(file: File, uriList: string): void {
 
 describe("a file dropped where the webview gives no path", () => {
   let uninstall: () => void = () => {};
-  beforeEach(() => { opened.length = 0; });
-  afterEach(() => uninstall());
+  beforeEach(() => { opened.length = 0; win.__TAURI_INTERNALS__ = {}; });
+  afterEach(() => { uninstall(); delete win.__TAURI_INTERNALS__; });
 
   async function settled() {
     await vi.waitFor(() => expect(opened.length).toBeGreaterThan(0));
@@ -45,6 +48,21 @@ describe("a file dropped where the webview gives no path", () => {
   it("falls back to the bytes when the drop carries no uri-list", async () => {
     uninstall = installDesktopDrop({ store: {}, sketch: {}, geometry: {} } as never, () => {});
     drop(new File(["{}"], "part.funda"), "");
+    await settled();
+    expect(opened).toEqual(["bytes part.funda"]);
+  });
+
+  it("imports a non-document at the path its uri-list names", async () => {
+    uninstall = installDesktopDrop({ store: {}, sketch: {}, geometry: {} } as never, () => {});
+    drop(new File(["solid"], "part.stl"), "file:///home/me/part.stl");
+    await settled();
+    expect(opened).toEqual(["import /home/me/part.stl"]);
+  });
+
+  it("ignores the uri-list in a browser tab, where a path cannot be opened", async () => {
+    delete win.__TAURI_INTERNALS__;
+    uninstall = installDesktopDrop({ store: {}, sketch: {}, geometry: {} } as never, () => {});
+    drop(new File(["{}"], "part.funda"), "file:///home/me/part.funda");
     await settled();
     expect(opened).toEqual(["bytes part.funda"]);
   });
