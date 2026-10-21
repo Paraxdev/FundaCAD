@@ -25,3 +25,5 @@ For a cleaner picture, press High quality denoise (about 52 MB) under Denoise in
 - Path traced stopped twice after a graphics error. It stays off until FundaCAD restarts.
 
 Path traced pauses while a section view, x-ray, wireframe or an open sketch is showing, and carries on when they close. After a minute in another mode it lets go of the graphics memory it used.
+
+While you orbit, move a body or edit, Path traced shows the Realtime look and goes back to tracing once the view rests. Turn off Realtime while moving under Display to keep the traced picture up throughout, noisy and restarting with every move.

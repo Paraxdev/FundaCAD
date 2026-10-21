@@ -240,6 +240,9 @@ export interface RenderPrefs {
   denoise: Denoise;
   tracer: TracerPref;
   realtimeQuality: RealtimeQualityPref;
+  /** Path traced draws the Realtime look while the view moves or an edit lands,
+   *  and traces again once it rests. Off keeps the noisy trace up throughout. */
+  realtimeWhileMoving: boolean;
 }
 
 /** What the f-stop numbers mean to the blur pass, and the range the control
@@ -291,6 +294,8 @@ export const DEFAULT_RENDER: RenderPrefs = {
   denoise: "standard",
   tracer: "auto",
   realtimeQuality: "auto",
+  // On: a trace that restarts noisy on every frame of an orbit reads as broken.
+  realtimeWhileMoving: true,
 };
 
 export const MIN_BRIGHTNESS = 0.4;
@@ -440,6 +445,7 @@ export function asRenderPrefs(v: unknown): RenderPrefs {
     denoise: asDenoise(o["denoise"]) ?? DEFAULT_RENDER.denoise,
     tracer: asTracerPref(o["tracer"]) ?? DEFAULT_RENDER.tracer,
     realtimeQuality: asRealtimeQuality(o["realtimeQuality"]) ?? DEFAULT_RENDER.realtimeQuality,
+    realtimeWhileMoving: typeof o["realtimeWhileMoving"] === "boolean" ? o["realtimeWhileMoving"] : DEFAULT_RENDER.realtimeWhileMoving,
   };
 }
 
@@ -482,7 +488,7 @@ export function setRenderPref<K extends keyof RenderPrefs>(key: K, value: Render
                           : key === "overlaysModel" || key === "overlaysRender" ? asOverlays(value)
                           : key === "groundModel" || key === "groundRender" ? asGround(value)
                             : key === "matcapStyle" ? asMatcapStyle(value)
-                              : key === "matcapTint" ? (typeof value === "boolean" ? value : null)
+                              : key === "matcapTint" || key === "realtimeWhileMoving" ? (typeof value === "boolean" ? value : null)
                                 : key === "denoise" ? asDenoise(value)
                                   : key === "tracer" ? asTracerPref(value)
                                     : key === "realtimeQuality" ? asRealtimeQuality(value)

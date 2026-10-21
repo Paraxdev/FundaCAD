@@ -10,7 +10,7 @@ import { repackInPlace, type SwappableBvhData } from "./bvhSwap";
 import { traceCameraFor, type TraceLens } from "./camera";
 import { backgroundTexture } from "./environment";
 import { AtrousFilter, filterMix } from "./atrous";
-import { FinalDenoise } from "./denoise";
+import { CROSSFADE_MS, FinalDenoise } from "./denoise";
 import { OidnPass, type OidnLike } from "./oidnPass";
 import { TraceBloom, type FadeQuad, type TraceBloomDeps, type TraceBloomSettings } from "./tracePost";
 import smallWeights from "./weights/rt_hdr_calb_cnrm_small.tza?url";
@@ -21,6 +21,8 @@ type TracerModule = typeof import("three-gpu-pathtracer/webgpu");
 type TslModule = typeof import("three/tsl");
 
 const MAX_BOUNCES = 6;
+/** The preview's size against the trace's, the library's 0.1 is a mosaic. */
+const PREVIEW_SCALE = 0.25;
 
 interface GpuQueueDevice {
   limits: { maxStorageBufferBindingSize: number; maxBufferSize: number; maxTextureDimension2D: number };
@@ -66,6 +68,7 @@ export class WebGpuTracer implements TracerBackend {
   maxStorageBytes = DEFAULT_STORAGE_BINDING;
   maxTextureSize = 8192;
   private cap = SAMPLE_CAP;
+  private preview = false;
   private device: GpuQueueDevice | null = null;
   private picturing = false;
   private post: TraceBloom | null = null;
@@ -129,8 +132,9 @@ export class WebGpuTracer implements TracerBackend {
     t.maxSamples = this.cap;
     t.maxBounces = MAX_BOUNCES;
     t.renderDelay = 0;
-    t.minSamples = 0;
-    t.fadeDuration = 0;
+    t.minSamples = this.preview ? 1 : 0;
+    t.fadeDuration = this.preview ? CROSSFADE_MS : 0;
+    t.lowResScale = PREVIEW_SCALE;
     this.tracer = t;
     this.post = new TraceBloom({
       renderer: r as unknown as TraceBloomDeps["renderer"],
@@ -354,6 +358,16 @@ export class WebGpuTracer implements TracerBackend {
     if (this.tracer) this.tracer.renderScale = scale;
   }
 
+  /** The library's own preview: a restart's first frame traced small with
+   *  several bounces, shown until every pixel has a sample, then faded out.
+   *  Without it a restart shows black, a bounce traced per frame. */
+  setMotionPreview(on: boolean) {
+    this.preview = on;
+    if (!this.tracer) return;
+    this.tracer.minSamples = on ? 1 : 0;
+    this.tracer.fadeDuration = on ? CROSSFADE_MS : 0;
+  }
+
   setCap(samples: number) {
     this.cap = samples;
     if (this.tracer) this.tracer.maxSamples = samples;
@@ -377,6 +391,8 @@ export class WebGpuTracer implements TracerBackend {
     this.tracer.renderSample();
     this.showsDenoise = false;
     const raw = this.internals._pathTracer.outputTarget;
+    // The library drew its preview, a redraw of the raw target would be black.
+    if (this.preview && samples < 1) return this.post?.drewItself(raw);
     const mix = this.level === "off" || samples < 1 ? 0 : filterMix(samples, this.cap);
     if (mix <= 0 || !this.atrous) return this.drewItself(raw);
     const { width, height } = raw.image as { width: number; height: number };
