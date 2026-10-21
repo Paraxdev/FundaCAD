@@ -12,7 +12,7 @@ const H: u32 = 96;
 const SUN: [f32; 3] = [0.4, -0.3, 1.0];
 
 fn tracer() -> Option<Tracer> {
-    match Tracer::new(TracerOptions::default()) {
+    match common::tracer(TracerOptions::default()) {
         Ok(t) => Some(t),
         Err(e) => {
             println!("skipped, no GPU adapter: {e}");

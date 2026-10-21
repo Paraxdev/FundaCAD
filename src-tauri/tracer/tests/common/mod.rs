@@ -3,10 +3,51 @@
 #![allow(dead_code)]
 
 use fundacad_tracer::env::direction;
-use fundacad_tracer::{BodyDesc, Camera, Environment, Look, Mesh, PageMaterial, Tracer, Up};
+use fundacad_tracer::{BodyDesc, Camera, Environment, Look, Mesh, PageMaterial, Refusal, Tracer, TracerOptions, Up};
+use std::io::Write;
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 pub const REF_SCENES: [&str; 6] = ["golden", "studio", "hdr-sun", "emitter", "glass", "metal"];
 pub const REF_SPP: u32 = 16384;
+
+/// How long a test exe may go on after its last tracer was made.
+pub const HANG_LIMIT: Duration = Duration::from_secs(60);
+
+/// Tracer::new with the hang watchdog armed first.
+pub fn tracer(opts: TracerOptions) -> Result<Tracer, Refusal> {
+    watchdog();
+    Tracer::new(opts)
+}
+
+/// Aborts the exe with a message once HANG_LIMIT passes after the last call.
+/// A Vulkan driver stuck on the Windows loader lock blocks every thread start
+/// and exit, process::exit included, so the thread is started before the first
+/// device and ends the exe with abort. libtest captures eprintln! from it.
+pub fn watchdog() {
+    static ARMED: Mutex<Option<Instant>> = Mutex::new(None);
+    let mut armed = ARMED.lock().unwrap_or_else(|p| p.into_inner());
+    if armed.replace(Instant::now()).is_some() {
+        return;
+    }
+    std::thread::Builder::new()
+        .name("hang watchdog".into())
+        .spawn(|| loop {
+            std::thread::sleep(Duration::from_millis(500));
+            let at = *ARMED.lock().unwrap_or_else(|p| p.into_inner());
+            if at.is_some_and(|t| t.elapsed() > HANG_LIMIT) {
+                let msg = format!(
+                    "
+hang watchdog: nothing finished within {} s of the last tracer, a GPU or driver call never returned
+",
+                    HANG_LIMIT.as_secs()
+                );
+                let _ = std::io::stderr().write_all(msg.as_bytes());
+                std::process::abort();
+            }
+        })
+        .expect("the hang watchdog thread");
+}
 
 pub fn dims(name: &str) -> (u32, u32) {
     if name == "golden" {

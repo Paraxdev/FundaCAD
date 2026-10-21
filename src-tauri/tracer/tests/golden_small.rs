@@ -22,7 +22,7 @@ fn scene(t: &mut Tracer) {
 }
 
 fn trace(software: bool) -> Option<(Path, Vec<u8>, Tracer)> {
-    let mut t = match Tracer::new(TracerOptions { software, ..Default::default() }) {
+    let mut t = match common::tracer(TracerOptions { software, ..Default::default() }) {
         Ok(t) => t,
         Err(e) => {
             println!("skipped, no GPU adapter: {e}");
@@ -161,7 +161,7 @@ fn glass_metal_coat_and_emission_trace_alike_on_both_paths() {
 #[test]
 fn a_ray_query_sample_in_bands_equals_one_in_a_whole_frame() {
     let banded = |paths: u32| {
-        let mut t = Tracer::new(TracerOptions::default()).ok().filter(|t| t.path() == Path::RayQuery)?;
+        let mut t = common::tracer(TracerOptions::default()).ok().filter(|t| t.path() == Path::RayQuery)?;
         t.set_cap(4);
         common::build(&mut t, "golden", Some((W, H)));
         t.set_frame_budget(paths);
