@@ -37,9 +37,11 @@ pub struct TracerOptions {
 }
 
 impl Default for TracerOptions {
+    /// No GL: on Windows its WGL thread exits inside the NVIDIA driver under the
+    /// loader lock and deadlocks a vkCreateDevice running on another thread.
     fn default() -> Self {
         TracerOptions {
-            backends: wgpu::Backends::VULKAN | wgpu::Backends::DX12 | wgpu::Backends::METAL | wgpu::Backends::GL,
+            backends: wgpu::Backends::VULKAN | wgpu::Backends::DX12 | wgpu::Backends::METAL,
             software: false,
         }
     }
@@ -711,6 +713,11 @@ impl Tracer {
 mod tests {
     use super::*;
     use std::time::Duration;
+
+    #[test]
+    fn the_tracer_never_asks_for_the_opengl_backend() {
+        assert!(!TracerOptions::default().backends.contains(wgpu::Backends::GL));
+    }
 
     #[test]
     fn a_denoised_frame_blooms_as_the_accumulation_it_came_from() {
