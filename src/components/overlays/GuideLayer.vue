@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Guide mode on screen: a pulsing ring on the control or model area an assistant
-// points at, and a glass caption bubble with Next and Stop (docs/GUIDE.md).
+// points at, and a glass caption bubble with Next and Stop (manual/docs/ai/guide.md).
 // Model outlines are SVG, not three.js, so Clean view and the pick mask never see them.
 import { computed, nextTick, onUnmounted, ref, shallowRef } from "vue";
 import { useEngine } from "../../app/engineKey";
@@ -85,10 +85,7 @@ function modelBox(s: StepState): Box | null {
   return out.length ? { left: minX, top: minY, width: maxX - minX, height: maxY - minY } : null;
 }
 
-function follow(): void {
-  raf = 0;
-  const s = step.value;
-  if (!s) return;
+function follow(s: StepState): void {
   if (s.target.ui !== undefined) {
     if (frame % 15 === 0 || !target?.isConnected) locateUi(s);
   }
@@ -106,8 +103,20 @@ function follow(): void {
       : { side: "below" as const, left: view.width / 2 - size.width / 2, top: 72, ...size };
     if (!sameBox(at, bubbleAt.value)) bubbleAt.value = at;
   }
+}
+
+// The only loop: observe() emits, and the subscriber calls schedule(), so a
+// second loop started from in here would double every frame.
+function loop(): void {
+  raf = 0;
+  const s = step.value;
+  if (s) follow(s);
   guide.observe();
-  raf = requestAnimationFrame(follow);
+  schedule();
+}
+
+function schedule(): void {
+  if (!raf && guide.active) raf = requestAnimationFrame(loop);
 }
 
 function restart(): void {
@@ -120,20 +129,14 @@ function restart(): void {
   hint.value = "";
   ref_.value = "";
   radius.value = null;
-  if (step.value) void nextTick(() => { raf = requestAnimationFrame(follow); });
+  void nextTick(schedule);
 }
 
 const stopWatching = guide.subscribe((s) => {
   const before = state.value.step;
   state.value = s;
   if (s.step?.seq !== before?.seq || !!s.step?.next !== !!before?.next) restart();
-  // A wait with no step on screen still has to see the window change.
-  else if (!raf && s.wait && !s.wait.done) raf = requestAnimationFrame(function watchWait() {
-    raf = 0;
-    guide.observe();
-    const w = guide.state.wait;
-    if (!step.value && w && !w.done) raf = requestAnimationFrame(watchWait);
-  });
+  else schedule();
 });
 onUnmounted(() => {
   stopWatching();

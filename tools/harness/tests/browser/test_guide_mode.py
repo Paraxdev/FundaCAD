@@ -161,3 +161,31 @@ def test_next_in_the_window_answers_the_wait(guided):
     s.click("#guide-next")
     t.join(25)
     assert got["v"] == (False, "Next pressed"), got
+
+
+def frame_ms(s) -> float:
+    return s.page.evaluate(
+        "() => new Promise((r) => { const t = performance.now(); requestAnimationFrame(() => requestAnimationFrame(() => r(performance.now() - t))); })"
+    )
+
+
+def test_a_wait_open_after_next_keeps_the_window_responsive(guided):
+    s, mcp = guided
+    mcp.call("guide_highlight", ui="#browser", caption="Here are the bodies", step=1, of=2)
+    t, got = in_thread(lambda: mcp.call("guide_wait", until="tool", timeout_s=4))
+    time.sleep(0.6)
+    s.click("#guide-next")
+    worst = max(frame_ms(s) for _ in range(20))
+    t.join(10)
+    assert worst < 500, f"a frame took {worst:.0f} ms"
+    assert got["v"] == (False, "nothing happened in 4 s, and no step is on screen"), got
+
+
+def test_a_wait_with_no_step_keeps_the_window_responsive(guided):
+    s, mcp = guided
+    t, got = in_thread(lambda: mcp.call("guide_wait", until="tool", timeout_s=3))
+    time.sleep(0.6)
+    worst = max(frame_ms(s) for _ in range(20))
+    t.join(10)
+    assert worst < 500, f"a frame took {worst:.0f} ms"
+    assert got["v"] == (False, "nothing happened in 3 s, and no step is on screen"), got
