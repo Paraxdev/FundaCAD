@@ -941,3 +941,25 @@ fn a_missing_argument_is_named_in_plain_words() {
     assert!(r.is_error, "{}", r.text);
     assert!(!r.text.contains("KeyError") && r.text.contains("`id`"), "{}", r.text);
 }
+
+#[test]
+fn an_extrude_of_an_open_sketch_points_at_sketch_tie() {
+    let line = |id: &str, x1: f64, y1: f64, x2: f64, y2: f64| {
+        json!({"id": id, "type": "line", "x1": x1, "y1": y1, "x2": x2, "y2": y2})
+    };
+    let ents = [
+        line("o1", 0.0, 0.0, 30.0, 0.0),
+        line("o2", 30.001, 0.0, 30.0, 20.0),
+        line("o3", 30.0, 20.0, 0.0, 20.0),
+        line("o4", 0.0, 20.0, 0.0, 0.0),
+    ];
+    let rs = drive(&[
+        ("feature_add", json!({"feature": {"id": "sk", "type": "sketch", "plane": "XY", "entities": ents}})),
+        ("feature_add", json!({"feature": {"id": "ex", "type": "extrude", "sketch": "sk", "distance": 10,
+                                           "operation": "new"}})),
+        ("build", json!({})),
+    ]);
+    let t = &rs[2].text;
+    assert!(rs[2].is_error && t.contains("no closed profile"), "{t}");
+    assert!(t.contains("sketch_tie") && t.contains("inspect"), "{t}");
+}

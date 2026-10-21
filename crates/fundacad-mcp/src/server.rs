@@ -171,11 +171,22 @@ fn feature_failure_lines(errors: &[Value]) -> Vec<String> {
         .filter_map(|e| {
             let m = e.get("message").and_then(Value::as_str)?;
             Some(format!(
-                "FEATURE FAILED ({}): {m}",
-                e.get("feature_id").and_then(Value::as_str).unwrap_or("None")
+                "FEATURE FAILED ({}): {m}{}",
+                e.get("feature_id").and_then(Value::as_str).unwrap_or("None"),
+                open_profile_hint(m)
             ))
         })
         .collect()
+}
+
+/// The engine's "no closed profile" is also what the app shows, and the app
+/// has no `sketch_tie`, so the way out is added here.
+fn open_profile_hint(message: &str) -> &'static str {
+    if message.contains("no closed profile") {
+        ". `inspect` with `sketch` lists the sketch's loose ends, and `sketch_tie` ties the ones that only touch."
+    } else {
+        ""
+    }
 }
 
 /// A `match` selector the engine found no longer matching where it was
@@ -1817,7 +1828,7 @@ impl FundaCad {
                 .and_then(|e| e.get("message"))
                 .and_then(Value::as_str)
                 .unwrap_or("unknown error");
-            return Err(failure(format!("Build failed{where_}: {err}")));
+            return Err(failure(format!("Build failed{where_}: {err}{}", open_profile_hint(err))));
         }
         let result = reply.get("result").cloned().unwrap_or_else(|| json!({}));
         let mesh = Arc::new(if framed.is_empty() {
