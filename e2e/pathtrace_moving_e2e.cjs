@@ -194,6 +194,20 @@ let serve = null;
 
     // Ticked: Realtime while the view moves, the trace once it rests.
     await waitSamples(8);
+    // Watched from before the release: the Realtime copy over the trace, part faded.
+    const fading = page.evaluate(() => new Promise((ok) => {
+      const until = performance.now() + 4000;
+      const look = () => {
+        const mid = [...window.viewport.canvas.parentElement.querySelectorAll("canvas")].some((c) => {
+          const o = Number(c.style.opacity);
+          return c !== window.viewport.canvas && c.style.display !== "none" && c.style.opacity !== "" && o > 0 && o < 1;
+        });
+        if (mid) ok(true);
+        else if (performance.now() > until) ok(false);
+        else requestAnimationFrame(look);
+      };
+      look();
+    }));
     let reads = await orbit("on");
     const moving = reads.slice(2);
     check("ticked: every orbit frame shows Realtime", moving.every((r) => r.state === "moving" && !r.shown),
@@ -202,10 +216,14 @@ let serve = null;
       `${reads[0].realtimeFrames} to ${reads[reads.length - 1].realtimeFrames}`);
     const back = await waitSamples(1).catch(() => null);
     check("ticked: the trace is back after the view rests", !!back);
+    check("ticked: the Realtime picture fades out over the trace", await fading);
     const a = (await status()).samples;
     await page.waitForTimeout(700);
     const b = (await status()).samples;
     check("ticked: the samples count up after the rest", b > a, `${a} then ${b}`);
+    const fadeLeft = await page.evaluate(() => [...window.viewport.canvas.parentElement.querySelectorAll("canvas")]
+      .filter((c) => c !== window.viewport.canvas && c.style.opacity !== "" && c.style.display !== "none").length);
+    check("ticked: the Realtime fade is gone once the trace is up", fadeLeft === 0, `${fadeLeft} left`);
     await shot("rest-on.png");
 
     // Unticked from the popover: the trace stays up and restarts on every move.
