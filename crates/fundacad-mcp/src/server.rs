@@ -101,6 +101,7 @@ pub const INSTRUCTIONS: &str = "Rules that save most failed builds:
 - A numeric field takes a number or a parameter NAME, never an expression.
 - Never guess a selector: take it from `inspect`, and always set its `body`.
 - To fit something to a part in a file, `doc_import` the file. Never model against a stand-in you made up; if you cannot reach the file, ask for its path.
+- Files: `doc_save`, `export`, `doc_open` and `doc_import` take a local path in any ordinary folder, not home itself, a drive root, a hidden (dot) folder or a network path; a server started with --allow-path keeps to those folders, and a refusal says which.
 
 Working order: `param_set` the driving dimensions first, `feature_add` a few features, `build` often, `inspect`, `view`, then `doc_save` to a .funda file the app opens.
 
@@ -435,11 +436,15 @@ impl FundaCad {
             log(&format!("[mcp] {line}"));
         }
         let folders: Vec<String> = scope.folders().iter().map(|p| p.display().to_string()).collect();
-        log(&format!(
-            "[mcp] files are reached in {} and the open document's folder; more with --allow-path or {}",
-            folders.join(", "),
-            crate::scope::ALLOW_ENV
-        ));
+        if scope.is_strict() {
+            log(&format!(
+                "[mcp] files are reached in {} and the open document's folder; more with --allow-path or {}",
+                folders.join(", "),
+                crate::scope::ALLOW_ENV
+            ));
+        } else {
+            log("[mcp] files are reached in any plain folder except home itself, drive roots and hidden folders; --allow-path keeps to given folders");
+        }
         server.scope = Arc::new(scope);
         if mode == Mode::Standalone {
             server = server.with_ui();
@@ -888,7 +893,7 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
 
     #[tool(
         name = "doc_save",
-        description = "Write the document to a .funda file, which the FundaCAD app opens directly. Saves to the path it was opened from if none is given.",
+        description = "Write the document to a .funda file, which the FundaCAD app opens directly. Saves to the path it was opened from if none is given. Any ordinary folder works; home itself, a drive root, hidden (dot) folders and network paths are refused, and a server started with --allow-path keeps to those folders.",
         input_schema = crate::tools::doc_save(),
         annotations(read_only_hint = false, destructive_hint = true, idempotent_hint = true, open_world_hint = false)
     )]

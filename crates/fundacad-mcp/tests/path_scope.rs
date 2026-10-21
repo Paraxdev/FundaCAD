@@ -1,4 +1,5 @@
-//! The file tools reach only the folders the server was given, over stdio.
+//! Over stdio: by default the file tools reach any plain folder, and a server
+//! given folders keeps to them.
 
 mod common;
 
@@ -10,6 +11,10 @@ use serde_json::json;
 /// A server whose temp, blob dir and working folder are all inside `own`, so
 /// the system temp the test folders live in is not one of its folders.
 fn server(own: &Path, extra: &[(&str, &str)], args: &[&str]) -> Mcp {
+    server_in(own, &own.join("tmp"), extra, args)
+}
+
+fn server_in(own: &Path, cwd: &Path, extra: &[(&str, &str)], args: &[&str]) -> Mcp {
     let tmp = own.join("tmp");
     let blobs = own.join("blobs");
     std::fs::create_dir_all(&tmp).unwrap();
@@ -17,7 +22,7 @@ fn server(own: &Path, extra: &[(&str, &str)], args: &[&str]) -> Mcp {
     let (t, b) = (tmp.to_string_lossy().into_owned(), blobs.to_string_lossy().into_owned());
     let mut pairs = vec![("TMP", t.as_str()), ("TEMP", t.as_str()), ("TMPDIR", t.as_str()), ("FUNDACAD_BLOB_DIR", b.as_str())];
     pairs.extend_from_slice(extra);
-    Mcp::start_with_args(&env(&pairs), &tmp, args)
+    Mcp::start_with_args(&env(&pairs), cwd, args)
 }
 
 fn dirs() -> (tempfile::TempDir, tempfile::TempDir, PathBuf) {
@@ -35,7 +40,7 @@ fn slash(p: &Path) -> String {
 #[test]
 fn a_folder_not_given_is_refused_and_the_error_says_how_to_give_it() {
     let (own, _work, folder) = dirs();
-    let mut mcp = server(own.path(), &[], &[]);
+    let mut mcp = server(own.path(), &[("FUNDACAD_MCP_STRICT", "1")], &[]);
     let r = mcp.call("doc_save", json!({"path": slash(&folder.join("a.funda"))}));
     assert!(r.is_error, "{}", r.text);
     assert!(!folder.join("a.funda").exists());
@@ -44,13 +49,55 @@ fn a_folder_not_given_is_refused_and_the_error_says_how_to_give_it() {
     let canon = canon.trim_start_matches(r"\\?\");
     assert!(r.text.contains("outside the folders"), "{}", r.text);
     assert!(r.text.contains(&format!("Allowing {canon} would")), "{}", r.text);
-    assert!(r.text.contains("--allow-path") && r.text.contains("FUNDACAD_MCP_ALLOW_PATHS"), "{}", r.text);
+    assert!(r.text.contains("--mcp --allow-path") && r.text.contains("FUNDACAD_MCP_ALLOW_PATHS"), "{}", r.text);
+    assert!(!r.text.contains("copy the file"), "{}", r.text);
     let r = mcp.call("doc_open", json!({"path": slash(&folder.join("a.funda"))}));
     assert!(r.is_error && r.text.contains("outside the folders"), "{}", r.text);
     let r = mcp.call("doc_import", json!({"path": slash(&folder.join("a.step"))}));
     assert!(r.is_error && r.text.contains("outside the folders"), "{}", r.text);
     let r = mcp.call("export", json!({"path": slash(&folder.join("a.stl")), "format": "stl"}));
     assert!(r.is_error && r.text.contains("outside the folders"), "{}", r.text);
+}
+
+#[test]
+fn by_default_the_tools_reach_any_plain_folder() {
+    let (own, work, folder) = dirs();
+    let home = work.path().join("me");
+    let documents = home.join("Documents");
+    std::fs::create_dir_all(&documents).unwrap();
+    let h = home.to_string_lossy().into_owned();
+    let mut mcp = server_in(own.path(), &folder, &[("USERPROFILE", &h), ("HOME", &h)], &[]);
+    let file = folder.join("a.funda");
+    let r = mcp.call("doc_save", json!({"path": slash(&file)}));
+    assert!(!r.is_error, "{}", r.text);
+    assert!(file.exists());
+    let r = mcp.call("doc_save", json!({"path": "rel.funda"}));
+    assert!(!r.is_error, "{}", r.text);
+    assert!(folder.join("rel.funda").exists(), "a relative path lands in the working folder");
+    let r = mcp.call("export", json!({"path": slash(&documents.join("a.stl")), "format": "stl"}));
+    assert!(!r.text.contains("refused") && !r.text.contains("outside the folders"), "{}", r.text);
+    let r = mcp.call("doc_open", json!({"path": slash(&file)}));
+    assert!(!r.is_error, "{}", r.text);
+    std::fs::create_dir_all(folder.join(".git")).unwrap();
+    let r = mcp.call("doc_save", json!({"path": slash(&folder.join(".git").join("b.funda"))}));
+    assert!(r.is_error && r.text.contains("hidden"), "{}", r.text);
+    let r = mcp.call("doc_save", json!({"path": format!("{}/../.ssh/x.funda", slash(&folder))}));
+    assert!(r.is_error && r.text.contains("hidden"), "{}", r.text);
+    let r = mcp.call("doc_save", json!({"path": slash(&home.join("a.funda"))}));
+    assert!(r.is_error && r.text.contains("home folder itself"), "{}", r.text);
+    assert!(!home.join("a.funda").exists());
+}
+
+#[test]
+fn a_dropped_allow_path_is_said_in_the_refusal() {
+    let (own, work, folder) = dirs();
+    let home = work.path().join("me");
+    std::fs::create_dir_all(&home).unwrap();
+    let h = home.to_string_lossy().into_owned();
+    let mut mcp = server(own.path(), &[("USERPROFILE", &h), ("HOME", &h)], &["--mcp", "--allow-path", &h]);
+    let r = mcp.call("doc_save", json!({"path": slash(&folder.join("a.funda"))}));
+    assert!(r.is_error, "{}", r.text);
+    assert!(r.text.contains(&format!("{h} was ignored")) && r.text.contains("home folder itself"), "{}", r.text);
 }
 
 #[test]
