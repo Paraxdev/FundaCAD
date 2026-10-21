@@ -639,6 +639,29 @@ fn export_refuses_a_partial_build_unless_told_to_write_it_anyway() {
 }
 
 #[test]
+fn a_sketch_exports_to_svg_and_dxf_at_true_size() {
+    let tmp = tempfile::tempdir().expect("a temp dir");
+    let svg = tmp.path().join("plate.svg").to_string_lossy().replace('\\', "/");
+    let dxf = tmp.path().join("plate.dxf").to_string_lossy().replace('\\', "/");
+    let rs = drive(&[
+        (
+            "feature_add",
+            json!({"feature": {"id": "s1", "type": "sketch", "name": "Plate", "plane": "XY", "entities": [
+                {"id": "r", "type": "rectangle", "width": 40, "height": 20, "x": 20, "y": 10}]}}),
+        ),
+        ("export", json!({"path": svg, "format": "svg", "sketch": "Plate"})),
+        ("export", json!({"path": dxf, "format": "dxf", "sketch": "s1"})),
+        ("export", json!({"path": dxf, "format": "dxf", "body": "body1"})),
+    ]);
+    assert!(!rs[1].is_error, "{}", rs[1].text);
+    let text = std::fs::read_to_string(&svg).expect("the svg");
+    assert!(text.contains("width=\"41mm\" height=\"21mm\""), "{text}");
+    assert!(!rs[2].is_error, "{}", rs[2].text);
+    assert!(std::fs::read_to_string(&dxf).expect("the dxf").contains("AC1009"));
+    assert!(rs[3].is_error && rs[3].text.contains("`sketch` or"), "{}", rs[3].text);
+}
+
+#[test]
 fn a_refused_export_leaves_an_existing_file_untouched() {
     // export writes to a temporary sibling and only renames it over `path`
     // once accepted, so a refusal (which removes the temporary file) must

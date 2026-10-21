@@ -202,6 +202,18 @@ pub fn sketch_merge() -> JsonObject {
     )
 }
 
+pub fn sketch_tie() -> JsonObject {
+    object(
+        json!({
+            "sketch": {"type": "string", "description": "the sketch's feature id"},
+            "tolerance": {"type": "number",
+                          "description": "how far apart, in mm, an end and what it touches may be (default 1% of the sketch's size)"},
+            "build": {"type": "boolean", "description": "build after tying (default false)"}
+        }),
+        &["sketch"],
+    )
+}
+
 pub fn printability() -> JsonObject {
     object(
         json!({
@@ -351,6 +363,10 @@ pub fn inspect() -> JsonObject {
     object(
         json!({
             "body": {"type": "string", "description": "one body id; all of them if omitted"},
+            "sketch": {"type": "string",
+                       "description": "a sketch's feature id: report its loose ends instead of the bodies"},
+            "tolerance": {"type": "number",
+                          "description": "with `sketch`: the reach, in mm, of an end to another curve (default 1% of the sketch's size)"},
             "detail": {"type": "boolean",
                        "description": "list every face and edge (default: summary only)"},
             "selectors": {"type": "boolean",
@@ -401,7 +417,16 @@ pub fn export() -> JsonObject {
     object(
         json!({
             "path": {"type": "string"},
-            "format": {"type": "string", "enum": ["step", "stl", "3mf"]},
+            "format": {"type": "string", "enum": ["step", "stl", "3mf", "dxf", "svg"],
+                       "description": "dxf (R12) and svg draw one sketch or one flat face at true                                        size in mm, give `sketch` or `face`"},
+            "sketch": {"type": "string",
+                       "description": "dxf or svg: the sketch to draw, by id or name"},
+            "face": {"type": "object",
+                     "description": "dxf or svg: one flat face to draw with its holes, a face                                      selector from inspect, set its body"},
+            "tolerance": {"type": "number",
+                          "description": "dxf or svg: how far in mm a curve that is not a line,                                           arc or circle may stray when drawn as a polyline                                           (default 0.01)"},
+            "svg": {"type": "object",
+                    "description": "svg: {fill: true} fills the closed outlines (default strokes                                     only, as a laser cutter reads them)"},
             "separate": {"type": "boolean",
                          "description": "one file per body, named after the body, in a folder \
                                          named after `path` (parts.stl writes parts/<name>.stl)"},

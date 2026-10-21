@@ -76,6 +76,7 @@ pub const MUTATORS: &[&str] = &[
     "feature_move",
     "edit",
     "sketch_merge",
+    "sketch_tie",
 ];
 
 /// Tools that need no document at all, so they must not be made to wait for
@@ -1214,6 +1215,15 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
     }
 
     #[tool(
+        name = "sketch_tie",
+        description = "Tie a sketch's loose ends, the gaps that keep a profile from closing: every end that meets another curve only by position (within `tolerance`) gets a coincident or point on curve constraint and is moved onto what it touches, exactly, so the profile closes for the engine. `inspect` with `sketch` lists the loose ends first. An end that meets nothing within reach stays open: draw a line to close it. An end whose coordinates name a parameter is never moved.",
+        input_schema = crate::tools::sketch_tie()
+    )]
+    pub async fn t_sketch_tie(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
+        Ok(self.sketch_tie(&args).await)
+    }
+
+    #[tool(
         name = "build",
         description = "Rebuild the document and report what came out: the bodies, their sizes, and any feature that failed. Build often, an error names the feature that caused it. isError is true if ANY feature failed, even when other features still produced bodies; the text still lists everything that did build, so check isError rather than scanning for \"FEATURE FAILED\".",
         input_schema = crate::tools::build()
@@ -1224,7 +1234,7 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
 
     #[tool(
         name = "inspect",
-        description = "Exact measurements of the built bodies. A bare call returns a one-line summary per body (volume, area, bounding box); pass detail:true and selectors:true to also list every face and edge with a ready-made SELECTOR you can paste into the next feature. Also flags seam edges and wrapping faces, which are what fillet and press/pull refuse.",
+        description = "Exact measurements of the built bodies. A bare call returns a one-line summary per body (volume, area, bounding box); pass detail:true and selectors:true to also list every face and edge with a ready-made SELECTOR you can paste into the next feature. Also flags seam edges and wrapping faces, which are what fillet and press/pull refuse. With `sketch` it reports that sketch's loose ends instead, the usual reason a sketch shows no closed profile: looseEnds { open: [{entity, p, at}], untied: [{entity, p, at, touches, gap, tieable}] } in sketch mm; `sketch_tie` ties the untied ones.",
         input_schema = crate::tools::inspect()
     )]
     pub async fn t_inspect(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
@@ -1242,7 +1252,7 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
 
     #[tool(
         name = "export",
-        description = "Write the model to STEP, STL or 3MF. `separate` writes one file per body, named after the body; `body` writes one body, `bodies` a list of them, merged or with `separate`; `layFlat` turns the parts for printing. Refused if a feature failed to build, naming which, unless allowPartial:true is passed, in which case it writes the file anyway and still names the failures.",
+        description = "Write the model to STEP, STL or 3MF, or one sketch (`sketch`) or flat face (`face`) to DXF or SVG at true size in mm. `separate` writes one file per body, named after the body; `body` writes one body, `bodies` a list of them, merged or with `separate`; `layFlat` turns the parts for printing. Refused if a feature failed to build, naming which, unless allowPartial:true is passed, in which case it writes the file anyway and still names the failures.",
         input_schema = crate::tools::export()
     )]
     pub async fn t_export(&self, args: JsonObject) -> Result<CallToolResult, McpError> {
@@ -1290,6 +1300,23 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
             }
         }
         let lay_flat = args.get("layFlat").filter(|v| truthy(Some(v))).cloned();
+        let flat = matches!(format.to_ascii_lowercase().as_str(), "dxf" | "svg");
+        let flat_source: Vec<(&str, Value)> = ["sketch", "face", "tolerance", "svg"]
+            .into_iter()
+            .filter_map(|k| args.get(k).filter(|v| !v.is_null()).map(|v| (k, v.clone())))
+            .collect();
+        if flat {
+            if separate || wanted.is_some() || !listed.is_empty() || lay_flat.is_some() {
+                return Ok(failure(
+                    "A DXF or SVG export draws one sketch or one flat face, so it takes `sketch` or                      `face`, not `body`, `bodies`, `separate` or `layFlat`.",
+                ));
+            }
+            if !flat_source.iter().any(|(k, _)| *k == "sketch" || *k == "face") {
+                return Ok(failure(
+                    "A DXF or SVG export needs `sketch` (a sketch id or name) or `face` (a face                      selector from inspect, with its body).",
+                ));
+            }
+        }
         let (link, mut doc) = {
             let mut st = self.state.lock().await;
             model::recompute_parameters(&mut st.doc);
@@ -1349,6 +1376,9 @@ The format comes from the extension unless given. A .gltf whose buffers sit in s
             ("path", json!(tmp_path.to_string_lossy())),
         ]);
         if let Some(obj) = payload.as_object_mut() {
+            if flat {
+                obj.extend(flat_source.iter().map(|(k, v)| ((*k).to_string(), v.clone())));
+            }
             if separate {
                 obj.insert("separate".into(), json!(true));
             }
@@ -1550,6 +1580,8 @@ fn format_exts(format: &str) -> &'static [&'static str] {
         "step" | "stp" => &["step", "stp"],
         "stl" => &["stl"],
         "3mf" => &["3mf"],
+        "dxf" => &["dxf"],
+        "svg" => &["svg"],
         _ => &[],
     }
 }
@@ -1886,6 +1918,18 @@ impl FundaCad {
     }
 
     async fn inspect(&self, args: &JsonObject) -> CallToolResult {
+        if let Some(sketch) = args.get("sketch").and_then(Value::as_str) {
+            let tol = match tolerance_arg(args) {
+                Ok(t) => t,
+                Err(why) => return failure(why),
+            };
+            let mut st = self.state.lock().await;
+            model::recompute_parameters(&mut st.doc);
+            return match crate::looseends::find(&st.doc, sketch, tol) {
+                Ok(le) => text(crate::looseends::summary(sketch, &le)),
+                Err(why) => failure(why),
+            };
+        }
         let (link, doc) = {
             let st = self.state.lock().await;
             (st.link.clone(), st.doc.clone())
@@ -2206,6 +2250,17 @@ fn round3(v: f64) -> f64 {
     (v * 1000.0).round() / 1000.0
 }
 
+fn tolerance_arg(args: &JsonObject) -> Result<Option<f64>, String> {
+    match args.get("tolerance").filter(|v| !v.is_null()) {
+        None => Ok(None),
+        Some(v) => v
+            .as_f64()
+            .filter(|t| t.is_finite() && *t > 0.0)
+            .map(Some)
+            .ok_or_else(|| format!("`tolerance` is a distance in mm, more than 0, got {v}")),
+    }
+}
+
 fn index_set(v: Option<&Value>) -> Option<Vec<i64>> {
     v.and_then(Value::as_array)
         .map(|a| a.iter().filter_map(Value::as_i64).collect())
@@ -2300,6 +2355,35 @@ impl FundaCad {
             };
             st.invalidate();
             st.state_line(&crate::sketchmerge::reply(&plan, &merged))
+        };
+        self.then_build(head, args).await
+    }
+
+    async fn sketch_tie(&self, args: &JsonObject) -> CallToolResult {
+        let Some(sketch) = args.get("sketch").and_then(Value::as_str) else {
+            return failure("`sketch` is the id of the sketch whose loose ends to tie");
+        };
+        let tol = match tolerance_arg(args) {
+            Ok(t) => t,
+            Err(why) => return failure(why),
+        };
+        let head = {
+            let mut st = self.state.lock().await;
+            model::recompute_parameters(&mut st.doc);
+            let tied = match crate::looseends::tie(&mut st.doc, sketch, tol) {
+                Ok(t) => t,
+                Err(why) => return failure(why),
+            };
+            if !tied.added.is_empty() {
+                st.invalidate();
+            }
+            let mut line = format!("tied {} loose end{} in {sketch}", tied.added.len(), if tied.added.len() == 1 { "" } else { "s" });
+            if !tied.skipped.is_empty() {
+                line.push_str(&format!(", could not move {}", tied.skipped.join(", ")));
+            }
+            line.push('\n');
+            line.push_str(&crate::looseends::summary(sketch, &tied.left));
+            st.state_line(&line)
         };
         self.then_build(head, args).await
     }

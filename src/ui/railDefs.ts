@@ -115,6 +115,7 @@ const SKETCH_SLOTS: readonly SketchSlot[] = [
     label: "Constrain",
     actions: ["horizontal", "vertical", "parallel", "perpendicular", "equal", "tangent", "coincident", "concentric", "midpoint", "collinear", "symmetric", "fix"],
   },
+  "tie-loose-ends",
 ];
 
 /** Sketch tools the rail leaves to the Move/Rotate gizmo and the command

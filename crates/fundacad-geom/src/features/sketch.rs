@@ -852,14 +852,16 @@ fn fuse_all(faces: &[Shape]) -> FResult<Shape> {
 }
 
 /// `_build_sketch`.
-pub fn build(ctx: &Ctx, f: &SketchFeature, followed: Option<Placement>) -> FResult<SketchEntry> {
-    let plane_ref = match (&f.plane_id, followed) {
-        (_, Some(p)) => PlaneRef::Record(p.record()),
-        (Some(id), None) if !id.is_empty() => PlaneRef::Name(id),
-        _ => PlaneRef::from(&f.plane),
-    };
-    let plane = plane_of(plane_ref, &ctx.datums)?;
+struct Parts {
+    items: Vec<Item>,
+    faces: Vec<Shape>,
+    edges: Vec<Shape>,
+    all_edges: Vec<Shape>,
+    text_local: Vec<Shape>,
+}
 
+/// The sketch's resolved curves in its own XY, patterns expanded and construction left out.
+fn parts(ctx: &Ctx, f: &SketchFeature) -> FResult<Parts> {
     let mut items: Vec<Item> = Vec::with_capacity(f.entities.len());
     for e in &f.entities {
         items.push(resolve(ctx, e)?);
@@ -951,6 +953,25 @@ pub fn build(ctx: &Ctx, f: &SketchFeature, followed: Option<Placement>) -> FResu
             Ent::Point { .. } | Ent::Other => {}
         }
     }
+
+    Ok(Parts { items, faces, edges, all_edges, text_local })
+}
+
+/// The curves a sketch draws, and its text as faces, in the sketch's own XY.
+pub fn local_curves(ctx: &Ctx, f: &SketchFeature) -> FResult<(Vec<Shape>, Vec<Shape>)> {
+    let p = parts(ctx, f)?;
+    Ok((p.all_edges, p.text_local))
+}
+
+pub fn build(ctx: &Ctx, f: &SketchFeature, followed: Option<Placement>) -> FResult<SketchEntry> {
+    let plane_ref = match (&f.plane_id, followed) {
+        (_, Some(p)) => PlaneRef::Record(p.record()),
+        (Some(id), None) if !id.is_empty() => PlaneRef::Name(id),
+        _ => PlaneRef::from(&f.plane),
+    };
+    let plane = plane_of(plane_ref, &ctx.datums)?;
+
+    let Parts { items, mut faces, edges, all_edges, text_local } = parts(ctx, f)?;
 
     if !edges.is_empty() {
         faces.extend(faces_from_edges(&edges));

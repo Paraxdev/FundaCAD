@@ -24,6 +24,7 @@ import { keyHint } from "../input/shortcuts";
 import type { Feature, PlaneDef } from "../types";
 import type { EdgeHit, FaceHit } from "../viewport/picking";
 import type { FacePlanePick } from "../features/facePlanePick";
+import type { FlatSource } from "../io/exportSettings";
 
 export interface ContextMenusDeps {
   store: DocumentStore;
@@ -53,6 +54,7 @@ export interface ContextMenusDeps {
   startCutByPlane: (planeId: string) => void | Promise<void>;
   offsetPlaneFromFace: (face: PlaneDef, parentId?: string) => void;
   axisFromRoundFace: (face: FacePlanePick | null) => void;
+  exportFlat: (source: FlatSource, format: "dxf" | "svg") => void;
 }
 
 export function createContextMenus(deps: ContextMenusDeps) {
@@ -77,6 +79,7 @@ export function createContextMenus(deps: ContextMenusDeps) {
     startCutByPlane,
     offsetPlaneFromFace,
     axisFromRoundFace,
+    exportFlat,
   } = deps;
 
   /** Wrap a menu item that starts a tool or mutates the DOCUMENT: the click runs
@@ -140,6 +143,13 @@ export function createContextMenus(deps: ContextMenusDeps) {
     const anchor = facePick && facePick.kind === "planar"
       ? { selector: facePick.selector, at: facePick.at } : null;
     const bodyId = viewport.faceIdToBodyId(hit.faceId);
+    // The plane a sketch on this face takes, so the drawing lines up with one.
+    const flatFace = facePick && facePick.kind === "planar" ? facePick : null;
+    const exportFace = (format: "dxf" | "svg") => {
+      if (!flatFace) return;
+      const label = `${(bodyId && store.bodyName(bodyId)) || "part"} face`;
+      exportFlat({ face: flatFace.selector, plane: flatFace.def, label }, format);
+    };
     const ownerId = featureForFace(hit.faceId);
     const owner = ownerId ? store.document.features.find((f) => f.id === ownerId) : undefined;
     const ownerLabel = owner ? featureMeta(owner).label : "";
@@ -159,6 +169,9 @@ export function createContextMenus(deps: ContextMenusDeps) {
       ...(facePick?.kind === "tangent"
         ? [{ label: "Axis of cylinder", onClick: unlessBusy(() => axisFromRoundFace(facePick)) }]
         : []),
+      { separator: true, label: "" },
+      { label: "Export face as DXF…", disabled: !flatFace, onClick: unlessBusy(() => exportFace("dxf")) },
+      { label: "Export face as SVG…", disabled: !flatFace, onClick: unlessBusy(() => exportFace("svg")) },
       { separator: true, label: "" },
       ...(owner
         ? [{ label: `${isInspectorEditable(owner.type) ? "Edit" : "Select"} ${ownerLabel}`, onClick: unlessBusy(() => editFeature(owner.id)) }]

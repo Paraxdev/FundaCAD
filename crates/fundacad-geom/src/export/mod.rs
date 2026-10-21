@@ -5,6 +5,7 @@
 //! Not here yet: the export mesh cache tiers and plugin mesh passes, so the
 //! per face density cap has nothing to bound.
 
+pub mod flat;
 pub mod glb;
 pub mod names;
 pub mod pyfmt;
@@ -467,6 +468,9 @@ pub fn export_result(req: &Map<String, Value>, watch: &dyn Watch) -> JobResult {
         Ok(d) => d,
         Err(e) => return error_result(&format!("the document does not parse: {e}")),
     };
+    if flat::is_flat_format(&export_format(format)) {
+        return JobResult::Json(flat::export_flat(req, doc, &typed, &export_format(format), path, watch));
+    }
     let Ok(r) = builder::rebuild(&typed, doc, watch) else {
         return error_result("cancelled");
     };

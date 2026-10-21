@@ -1,6 +1,6 @@
 // What the Export dialog asks for, its presets, and the choices it remembers.
 
-import type { ExportFormat } from "../types";
+import type { ExportFormat, PlaneDef } from "../types";
 import type { TreeGroup } from "../ui/browserTree";
 
 export type ExportUnit = "mm" | "cm" | "m" | "in" | "ft";
@@ -61,7 +61,15 @@ export interface ExportSettings {
   refinement: Refinement;
   faceting: Faceting;
   showAdvanced: boolean;
+  /** How far a DXF or SVG polyline may stray from a curve that is not a line, arc or circle, mm. */
+  tolerance: number;
 }
+
+/** What a DXF or SVG export draws: one sketch, or one flat face in the plane a
+ *  sketch on that face would take, so the two drawings line up. */
+export type FlatSource =
+  | { sketch: string; label: string }
+  | { face: unknown; plane: PlaneDef; label: string };
 
 /** `exts` are what the save dialog offers, the first is the default name's. A
  *  typed name is kept as typed, the engine writes the path it is given. */
@@ -70,6 +78,8 @@ export const FORMATS: { value: ExportFormat; label: string; ext: string; exts: s
   { value: "3mf", label: "3MF (*.3mf)", ext: "3mf", exts: ["3mf"] },
   { value: "step", label: "STEP (*.step, *.stp)", ext: "step", exts: ["step", "stp"] },
   { value: "glb", label: "GLB glTF (*.glb)", ext: "glb", exts: ["glb"] },
+  { value: "dxf", label: "DXF R12 (*.dxf)", ext: "dxf", exts: ["dxf"] },
+  { value: "svg", label: "SVG (*.svg)", ext: "svg", exts: ["svg"] },
 ];
 
 export const UNITS: { value: ExportUnit; label: string }[] = [
@@ -93,10 +103,14 @@ export const DEFAULT_SETTINGS: ExportSettings = {
   refinement: "medium",
   faceting: { ...REFINEMENTS.medium },
   showAdvanced: false,
+  tolerance: 0.01,
 };
 
 /** Faceting and units only mean something to a format written as triangles. */
-export const isMeshFormat = (f: ExportFormat) => f !== "step";
+export const isMeshFormat = (f: ExportFormat) => f === "stl" || f === "3mf" || f === "glb";
+/** A drawing of one sketch or flat face rather than of bodies. */
+export const isFlatFormat = (f: ExportFormat) => f === "dxf" || f === "svg";
+export const clampTolerance = (t: number) => (Number.isFinite(t) ? Math.min(1, Math.max(0.0001, t)) : 0.01);
 /** GLB is metres by convention and viewers expect it, so it takes no unit. */
 export const takesUnit = (f: ExportFormat) => f === "stl" || f === "3mf";
 
@@ -140,6 +154,7 @@ export function parseExportSettings(raw: string | null): ExportSettings {
       refinement: refinementOf(faceting),
       faceting,
       showAdvanced: v.showAdvanced === true,
+      tolerance: clampTolerance(typeof v.tolerance === "number" ? v.tolerance : DEFAULT_SETTINGS.tolerance),
     };
   } catch {
     return structuredClone(DEFAULT_SETTINGS);
