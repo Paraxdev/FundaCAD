@@ -29,8 +29,9 @@ async fn a_newer_file_opens_with_a_note_and_saves_back_whole() {
         "{reply}"
     );
 
-    let missing = dir.path().join("missing").join("saved.funda");
-    let r = srv.t_doc_save(args(&missing)).await.unwrap();
+    // A .fundab path is refused by the writer, after the document was stamped.
+    let refused = dir.path().join("saved.fundab");
+    let r = srv.t_doc_save(args(&refused)).await.unwrap();
     assert!(is_error(&r), "{}", text_of(&r));
     let got = srv.t_doc_get(json!({}).as_object().cloned().unwrap()).await.unwrap();
     let got: Value = serde_json::from_str(&text_of(&got)).unwrap();
