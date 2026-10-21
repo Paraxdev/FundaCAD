@@ -699,10 +699,10 @@ export async function compileAndSolve(
   // "keep last good on conflict" path paints a red chip instead of a broken part.
   const badGeom = new Set<string>();
   for (const [eid, rad] of Object.entries(r.circles)) {
-    if (!(rad > 0) || !Number.isFinite(rad)) badGeom.add(eid);
+    if (!(rad > RIM_EPS) || !Number.isFinite(rad)) badGeom.add(eid);
   }
   for (const [eid, a] of Object.entries(r.arcs)) {
-    if (!(a.radius > 0) || !Number.isFinite(a.radius)) badGeom.add(eid);
+    if (!(a.radius > RIM_EPS) || !Number.isFinite(a.radius)) badGeom.add(eid);
   }
   const guardIds = new Set<string>();
   if (badGeom.size) {
