@@ -11,6 +11,8 @@ import type { Snapshot } from "./wait";
 export interface ProbeHost {
   store: Pick<DocumentStore, "buildState" | "document">;
   viewport: Pick<Viewport, "faceTriangles" | "projectToScreen" | "getSelectedFaceIds" | "getSelectedBodies" | "selectedEdgeLines" | "domElement">;
+  /** Fillet and Chamfer keep their picked edges as members, not as the selection. */
+  tools?: { edgeFeature: { readonly active: boolean; memberRows(): { resolved: boolean }[] } };
 }
 
 /** World space lines to outline, each a polyline. */
@@ -83,9 +85,9 @@ const runningName = (doc: Document) => {
 
 function valueBox(doc: Document): Snapshot["value"] {
   const focused = doc.activeElement?.closest?.<HTMLElement>(".dim-field[data-field]");
-  const field = focused ?? [...doc.querySelectorAll<HTMLElement>(".dim-field[data-field]")].find((f) => f.offsetParent !== null || f.getClientRects().length > 0);
+  const field = focused ?? doc.querySelector<HTMLElement>(".dim-field.typed[data-field]");
   const input = field?.querySelector("input");
-  return field && input ? { field: field.dataset.field ?? "", text: input.value.trim() } : null;
+  return field && input ? { field: field.dataset.field ?? "", text: input.value.trim(), typed: field.classList.contains("typed") } : null;
 }
 
 export function takeSnapshot(h: ProbeHost, doc: Document = document): Snapshot {
@@ -94,7 +96,10 @@ export function takeSnapshot(h: ProbeHost, doc: Document = document): Snapshot {
     features: h.store.document.features.map((f) => ({ id: f.id, type: f.type })),
     selection: {
       faces: h.viewport.getSelectedFaceIds().length,
-      edges: h.viewport.selectedEdgeLines().length,
+      edges: Math.max(
+        h.viewport.selectedEdgeLines().length,
+        h.tools?.edgeFeature.active ? h.tools.edgeFeature.memberRows().filter((r) => r.resolved).length : 0,
+      ),
       bodies: h.viewport.getSelectedBodies().length,
     },
     value: valueBox(doc),

@@ -65,6 +65,12 @@ export function resolveControl(ref: string, doc: Document = document, opts: Reso
     const opener = fam && byRef(fam.family.ref);
     if (opener) return { el: opener.el, ref, via: opener.ref };
   }
+  if (ref.startsWith("#")) {
+    // A panel such as #browser or #timeline is a place to point at, not a control.
+    const el = doc.getElementById(ref.slice(1));
+    const r = el && (opts.rect ?? ((e: Element) => e.getBoundingClientRect()))(el);
+    if (el && r && (r.width > 0 || r.height > 0) && !el.closest("[inert], .hidden")) return { el, ref };
+  }
   const menu = /^menu:([^/]+)\//.exec(ref);
   if (menu) {
     const opener = byRef(`menu:${menu[1]}`);
