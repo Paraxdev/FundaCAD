@@ -119,8 +119,11 @@ describe("what the harness relies on outside src/harness", () => {
 
   it("the picture is not idle on a frame the camera moved", () => {
     const idle = Object.getOwnPropertyDescriptor(Viewport.prototype, "renderIdle")!.get!;
-    expect(idle.call({ needsRender: false, lingerFrames: 0, frameMoved: false })).toBe(true);
-    expect(idle.call({ needsRender: false, lingerFrames: 0, frameMoved: true })).toBe(false);
+    const still = { pending: false };
+    expect(idle.call({ needsRender: false, lingerFrames: 0, frameMoved: false, edgeBlend: still })).toBe(true);
+    expect(idle.call({ needsRender: false, lingerFrames: 0, frameMoved: true, edgeBlend: still })).toBe(false);
+    // The full edges are still fading back in after a move.
+    expect(idle.call({ needsRender: false, lingerFrames: 0, frameMoved: false, edgeBlend: { pending: true } })).toBe(false);
     const src = source("src/viewport/viewport.ts");
     expect(src).toMatch(/const moved = this\.rig\.update\(dt\);\s*this\.frameMoved = moved;/);
   });
