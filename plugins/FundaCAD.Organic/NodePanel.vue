@@ -1,8 +1,6 @@
 <script setup lang="ts">
-// The node body panel: the nodes, the picked node's numbers, the chains, the
-// blend and the operation. Mounted for the life of the plugin and drawn only
-// while the tool runs. Inline styles on host tokens, as a plugin .vue may not
-// carry a <style> block.
+// Mounted for the life of the plugin and drawn only while the tool runs. Inline styles on host tokens, as a plugin
+// .vue may not carry a <style> block.
 
 import { computed, ref, type CSSProperties } from "vue";
 import * as panel from "./panel";
