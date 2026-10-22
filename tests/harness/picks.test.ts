@@ -267,7 +267,9 @@ describe("planes and free points", () => {
     h.viewport.scene.planes.XY.visible = false;
     const e = err(() => planePoint(h, "XY", all));
     expect(e.kind).toBe("Occluded");
-    expect(e.message).toContain("a plane shows while a tool asks for one, or with Origin and planes in the Display panel");
+    expect(e.message).toContain("XY");
+    expect(e.message).toContain("while a tool asks for a plane");
+    expect(e.message).not.toContain("Display panel");
   });
 
   it("says a sketch already open is why its planes are hidden", () => {
