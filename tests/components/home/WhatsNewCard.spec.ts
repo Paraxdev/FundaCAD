@@ -194,6 +194,28 @@ describe("What's new on Home", () => {
     expect(scopes.some((s) => RELEASES.startsWith(s))).toBe(true);
   });
 
+  it("fades the foot of the notes while more of them is below", async () => {
+    useWhatsNewStore().show("1.0.412", groups);
+    mount(WhatsNewCard, { attachTo: document.body });
+    await nextTick();
+    const body = $(".home-news-body")!;
+    const sized = (scrollHeight: number, clientHeight: number, scrollTop: number) => {
+      Object.defineProperties(body, {
+        scrollHeight: { value: scrollHeight, configurable: true },
+        clientHeight: { value: clientHeight, configurable: true },
+      });
+      body.scrollTop = scrollTop;
+      body.dispatchEvent(new Event("scroll"));
+      return nextTick().then(() => body.classList.contains("is-more"));
+    };
+    expect([
+      await sized(649, 240, 0),
+      await sized(649, 240, 407),
+      await sized(649, 240, 408),
+      await sized(180, 240, 0),
+    ]).toEqual([true, true, false, false]);
+  });
+
   it("leaves the version out of the title when the app cannot read it", async () => {
     useWhatsNewStore().show("unknown", [{ title: "Modeling", bullets: ["Extrude makes a thin wall."] }]);
     mount(WhatsNewCard, { attachTo: document.body });
