@@ -608,7 +608,8 @@ impl FundaCad {
             let Some(live) = st.live.as_mut() else {
                 return Err(LiveError::NoAppOpen("no live session".into()));
             };
-            // A window not sharing is a SETTING the user can turn on, not a lost engine; only a lost transport reconnects.
+            // A window not sharing is a SETTING the user can turn on, not a lost engine;
+            // only a lost transport reconnects.
             let pulled = match live.pull(&link).await {
                 Ok(pulled) => pulled,
                 Err(e) if e.is_lost() => return Err(e),
@@ -647,9 +648,10 @@ impl FundaCad {
                 Ok(Ok(CallToolResponse::Complete(append(result, &format!("\n(applied in FundaCAD, revision {rev})")))))
             }
             Err(e) => {
-                // The local document holds an edit the app never took, so put it back, or the next tool builds on a change
-                // nowhere else has. A lost engine retries privately from the pulled document so the edit is not applied
-                // twice; the mesh cache follows the restored signature, and the next build lists every body again.
+                // The local document holds an edit the app never took, so put it back, or the next tool builds
+                // on a change nowhere else has. A lost engine retries privately from the pulled document so the
+                // edit is not applied twice; the mesh cache follows the restored signature, and the next build
+                // lists every body again.
                 let mut st = self.state.lock().await;
                 st.doc = before;
                 st.reported = None;

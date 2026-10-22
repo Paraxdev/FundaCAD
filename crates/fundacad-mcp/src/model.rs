@@ -1100,7 +1100,8 @@ pub fn validate(doc: &mut Doc) -> Vec<String> {
     }
     problems.extend(press_pull_label_problems(doc, &feats));
 
-    // A string in a numeric field must name a parameter, or the engine refuses it as a red feature with no clue which field.
+    // A string in a numeric field must name a parameter, or the engine refuses it
+    // as a red feature with no clue which field.
     let params: BTreeSet<String> =
         doc.get("parameters").and_then(Value::as_object).map(|p| p.keys().cloned().collect()).unwrap_or_default();
     for f in &feats {
