@@ -3,6 +3,7 @@
 // Linux. The paths come from GTK through drop_paths_take instead.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { DocumentSession } from "../../src/document/session";
 
 const opened: string[] = [];
 const asked: unknown[] = [];
@@ -80,8 +81,17 @@ describe("a file dropped from a Linux file manager", () => {
 
   function install() {
     const shown: boolean[] = [];
-    uninstall = installDesktopDrop({ store: { onOpen: () => () => {} }, sketch: {}, geometry: {} } as never, (s) =>
-      shown.push(s),
+    uninstall = installDesktopDrop(
+      {
+        store: {
+          onOpen: () => () => {},
+          session: new DocumentSession(),
+          importing: (fn: () => Promise<unknown>) => fn(),
+        },
+        sketch: {},
+        geometry: {},
+      } as never,
+      (s) => shown.push(s),
     );
     return shown;
   }

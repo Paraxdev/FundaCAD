@@ -39,7 +39,7 @@ const plane = (extra: Record<string, unknown> = {}) =>
 const sketch = { id: "s", type: "sketch", plane: "XY", planeId: "p", entities: [] } as unknown as Feature;
 const field = (store: DocumentStore, k: string) =>
   (store.document.features.find((f) => f.id === "p") as unknown as Record<string, unknown>)[k];
-const settle = (store: DocumentStore) => (store as unknown as { paramChain: Promise<void> }).paramChain;
+const settle = (store: DocumentStore) => (store as unknown as { st: { paramChain: Promise<void> } }).st.paramChain;
 
 describe("writing a datum pose", () => {
   it("writes only what changed, and leaves a zero angle out", () => {

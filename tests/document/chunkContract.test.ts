@@ -32,7 +32,8 @@ function result(ids: string[]): RebuildResult {
 function backend(reply: RebuildReply) {
   const chunkFns: ((c: RebuildChunk) => void)[] = [];
   const be = {
-    async rebuild(): Promise<RebuildReply> {
+    async rebuild(_doc: unknown, _tol: unknown, onId?: (id: string) => void): Promise<RebuildReply> {
+      onId?.("rq-1");
       return reply;
     },
     async init() {},
@@ -50,6 +51,7 @@ function backend(reply: RebuildReply) {
   } as unknown as GeometryBackend;
   const emit = (c: Partial<RebuildChunk>) => {
     const full: RebuildChunk = {
+      id: "rq-1",
       phase: "bodies",
       result: result(["a"]),
       manifest: [],
@@ -95,7 +97,12 @@ describe("chunk channel vs completed build", () => {
     expect(store.buildState.result).toBe(first);
 
     const next = result(["a", "b"]);
-    (be as unknown as { rebuild: () => Promise<RebuildReply> }).rebuild = async () => ({ ok: true, result: next });
+    (
+      be as unknown as { rebuild: (d: unknown, t: unknown, onId?: (id: string) => void) => Promise<RebuildReply> }
+    ).rebuild = async (_d, _t, onId) => {
+      onId?.("rq-1");
+      return { ok: true, result: next };
+    };
     const done = store.rebuildNow();
     emit({ phase: "begin", done: 0, total: 2 });
     // mid-stream: the document still describes the OLD model, by identity
@@ -169,6 +176,20 @@ describe("chunk channel vs completed build", () => {
     store.onBuildAbort((e) => aborts.push(e));
     await store.rebuildNow();
     expect(aborts).toEqual([]);
+  });
+
+  it("drops an installment of any request other than the rebuild on the wire", async () => {
+    const { be, emit } = backend({ ok: true, result: result(["a", "b"]) });
+    const store = new DocumentStore(be, DOC);
+    const got: string[] = [];
+    store.onBuildChunk((c) => got.push(`${c.phase}:${c.done}`));
+    const done = store.rebuildNow();
+    emit({ id: "rq-old", phase: "begin", done: 0, total: 2 });
+    emit({ id: "rq-1", phase: "begin", done: 0, total: 2 });
+    emit({ id: "rq-old", phase: "bodies", done: 2, total: 2 });
+    emit({ id: "rq-1", phase: "bodies", done: 1, total: 2 });
+    await done;
+    expect({ got, streamed: store.buildState.streamed }).toEqual({ got: ["begin:0", "bodies:1"], streamed: null });
   });
 
   it("works with a backend that does not stream at all", async () => {

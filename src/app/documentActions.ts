@@ -25,7 +25,9 @@ export async function mayDiscard(e: Pick<Engine, "store" | "sketch">, question: 
     { value: "discard", label: "Discard", hint: "lose the unsaved changes" },
     { value: "cancel", label: "Cancel" },
   ]);
-  return pick === "discard";
+  if (pick !== "discard") return false;
+  e.store.markGivenUp();
+  return true;
 }
 
 export async function openPathGuarded(
@@ -176,7 +178,7 @@ async function importExample(e: ExampleEngine, info: TemplateInfo): Promise<void
   const opening = openingImport(e.store);
   const files: string[] = [];
   try {
-    const file = await templateFile(info.id);
+    const file = await e.store.importing(() => templateFile(info.id));
     files.push(file.name);
     // importFileBytes watches for an open only from here on, so one during the fetch is caught here.
     if (opening.replaced) await importDropped([file.name]);

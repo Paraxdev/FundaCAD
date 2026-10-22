@@ -39,10 +39,11 @@ export const useModalStore = defineStore("modals", () => {
   let nextId = 1;
 
   // markRaw: requests hold `resolve` closures, and choose() options come straight from caller code.
-  function enqueue(req: ChooseReq | MultiReq | ListReq) {
+  function enqueue(req: ChooseReq | MultiReq | ListReq): number {
     const full = markRaw({ ...req, id: nextId++ }) as ModalReq;
     if (current.value) queue.push(full);
     else current.value = full;
+    return full.id;
   }
 
   /** Finish the open modal and promote the next queued one. */
@@ -50,5 +51,17 @@ export const useModalStore = defineStore("modals", () => {
     current.value = queue.shift() ?? null;
   }
 
-  return { current, depth, enqueue, close };
+  /** Take the request off the screen or out of the queue, false when it was already answered. */
+  function withdraw(id: number): boolean {
+    if (current.value?.id === id) {
+      close();
+      return true;
+    }
+    const i = queue.findIndex((r) => r.id === id);
+    if (i < 0) return false;
+    queue.splice(i, 1);
+    return true;
+  }
+
+  return { current, depth, enqueue, close, withdraw };
 });

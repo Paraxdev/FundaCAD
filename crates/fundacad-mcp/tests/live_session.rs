@@ -174,3 +174,37 @@ async fn the_folder_of_the_file_the_app_has_open_is_one_the_agent_may_write() {
             .await;
     assert!(out.is_error && out.text.contains("outside the folders"), "{}", out.text);
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_new_document_is_refused_by_name_while_the_app_imports_and_an_edit_is_not() {
+    let engine = RealEngine::start();
+    let mut host = Host::new(engine.socket().await);
+    host.importing = true;
+    host.tick().await;
+
+    let mcp = Mcp::start(&engine.mcp_env("auto", true), &std::env::temp_dir());
+    let (mcp, replaced) = while_pumping(mcp, &mut host, "doc_new", json!({}), 5.0).await;
+    let kept = host.feature_names();
+    let (mcp, edited) = while_pumping(
+        mcp,
+        &mut host,
+        "feature_add",
+        json!({"feature": {"id": "s1", "type": "sphere", "radius": 4, "name": "during-the-import"}}),
+        5.0,
+    )
+    .await;
+    let after_edit = host.feature_names();
+
+    // The control: once the import has landed, the same doc_new goes through.
+    host.importing = false;
+    let (_mcp, later) = while_pumping(mcp, &mut host, "doc_new", json!({}), 5.0).await;
+
+    assert!(replaced.is_error, "a new document replaced the one an import is read into: {}", replaced.text);
+    assert!(replaced.text.contains("an import is still being read"), "{}", replaced.text);
+    assert!(!replaced.text.contains("did not apply"), "refused as a timeout: {}", replaced.text);
+    assert_eq!(kept, vec!["from-the-app".to_string()]);
+    assert!(!edited.is_error, "{}", edited.text);
+    assert_eq!(after_edit, vec!["from-the-app".to_string(), "during-the-import".to_string()]);
+    assert!(!later.is_error, "{}", later.text);
+    assert_eq!(host.feature_names(), Vec::<String>::new());
+}

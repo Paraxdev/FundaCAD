@@ -470,7 +470,13 @@ fn built_payloads(
     }
 
     let tick = std::sync::Mutex::new(on_body);
+    // The pool's threads do not carry this thread's token, and a big model meshes for many seconds after a cancel.
+    let token = crate::cancel::token();
+    let stopped = || token.as_ref().is_some_and(fundacad_protocol::CancelToken::is_cancelled);
     let mesh_one = |k: usize| {
+        if stopped() {
+            return None;
+        }
         let i = misses[k];
         let body = &bodies[i];
         let shape = body.shape.expect("a miss has a shape");
@@ -480,9 +486,9 @@ fn built_payloads(
         if let Ok(mut t) = tick.lock() {
             t(done, total);
         }
-        (full, began.elapsed())
+        Some((full, began.elapsed()))
     };
-    let made: Vec<(usize, (FullBody, std::time::Duration))> = if crate::par::worth_it(misses.len()) {
+    let made: Vec<(usize, Option<(FullBody, std::time::Duration)>)> = if crate::par::worth_it(misses.len()) {
         let shapes: Vec<&Shape> = misses.iter().filter_map(|&i| bodies[i].shape).collect();
         let groups = crate::bench::phase("share_groups", || crate::par::share_groups(&shapes));
         crate::bench::note("mesh_groups", groups.len());
@@ -492,10 +498,14 @@ fn built_payloads(
     } else {
         (0..misses.len()).map(|k| (k, mesh_one(k))).collect()
     };
-    for (k, (full, took)) in made {
+    for (k, (full, took)) in made.into_iter().filter_map(|(k, m)| Some((k, m?))) {
         let i = misses[k];
         cache.put(&bodies[i], tolerance, profile, &strip_envelope(&full), took);
         out[i] = Some(full);
+    }
+    // A pass stopped part way answers no body rather than some of them.
+    if stopped() {
+        out.iter_mut().for_each(|b| *b = None);
     }
     out
 }

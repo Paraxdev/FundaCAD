@@ -1206,7 +1206,7 @@ export class PressPullTool {
   private reselectAfterBuild(id: string, at: THREE.Vector3) {
     let started = false;
     // onBuild replays the current state at once, which is the model before the commit.
-    const off = this.store.onBuild((s) => {
+    const off = this.store.onSessionBuild((s) => {
       if (s.building) {
         started = true;
         return;
