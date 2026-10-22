@@ -216,6 +216,12 @@ fn log_tail(app: tauri::AppHandle) -> Option<String> {
     log_file::tail(&app.path().app_log_dir().ok()?, LOG_TAIL)
 }
 
+/// A crumb from the page, kept in the log where it outlives the window.
+#[tauri::command]
+fn log_line(line: String) {
+    println!("[crumb] {line}");
+}
+
 /// Why this session runs in safe mode, if it does (safe_mode.rs).
 struct SafeMode {
     reason: Option<safe_mode::Reason>,
@@ -365,6 +371,7 @@ pub fn run() {
         updates_supported,
         frontend_ready,
         log_tail,
+        log_line,
         safe_mode_exit,
         launch::take_launch_paths,
         drop_paths::drop_paths_take,

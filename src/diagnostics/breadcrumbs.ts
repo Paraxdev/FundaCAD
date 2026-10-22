@@ -2,7 +2,8 @@
 // the bug reporter. Fed automatically from window error events and from every
 // toast (toast.ts calls crumb(), toasts already are the app's "something
 // happened the user should know" channel, which makes them exactly the trail a
-// bug triager wants). Never persisted; read once when a report is assembled.
+// bug triager wants). Read once when a report is assembled, and in the app
+// each one is also written to its log file.
 
 const MAX = 20;
 const buf: string[] = [];
@@ -21,14 +22,27 @@ const buf: string[] = [];
 const STICKY_MAX = 24;
 const sticky: string[] = [];
 
+// The app's log file outlives the window, so a crumb written there is still
+// readable after a crash, a restart or a report filed later. One shared import
+// keeps the lines in the order they happened.
+let core: Promise<typeof import("@tauri-apps/api/core")> | null = null;
+function toAppLog(line: string) {
+  if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) return;
+  core ??= import("@tauri-apps/api/core");
+  core.then(({ invoke }) => invoke("log_line", { line })).catch(() => {});
+}
+
 export function stickyFact(message: string) {
+  toAppLog(message.slice(0, 300));
   if (sticky.length >= STICKY_MAX) return;
   sticky.push(message.slice(0, 300));
 }
 
 export function crumb(message: string) {
   const ts = new Date().toISOString().slice(11, 19); // HH:MM:SS
-  buf.push(`${ts} ${message}`.slice(0, 300));
+  const line = `${ts} ${message}`.slice(0, 300);
+  toAppLog(line);
+  buf.push(line);
   if (buf.length > MAX) buf.shift();
 }
 
