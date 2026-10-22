@@ -26,6 +26,7 @@ import type { MoveTool } from "./moveTool";
 import type { MoveTarget } from "./moveTarget";
 import { sketchFeatureTarget } from "./sketchMoveTarget";
 import type { PatternKind, PatternTool } from "./patternTool";
+import type { MirrorTool } from "./mirrorTool";
 import { featureOwnersOfFaces, patternStart, type PatternCandidates } from "./patternSources";
 import type { PlaneOffsetTool } from "./planeOffsetTool";
 import type { DatumPoseTool } from "./datumPoseTool";
@@ -71,6 +72,7 @@ export interface FeatureStartersDeps {
   loftTool: LoftTool;
   moveTool: MoveTool;
   patternTool: PatternTool;
+  mirrorTool: MirrorTool;
   planeOffset: PlaneOffsetTool;
   datumPose: DatumPoseTool;
   canvas: HTMLCanvasElement;
@@ -101,6 +103,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     loftTool,
     moveTool,
     patternTool,
+    mirrorTool,
     planeOffset,
     datumPose,
     canvas,
@@ -1000,8 +1003,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     moveTool.start(ids, committed);
   }
 
-  // Mirror: the targets are written into the feature, since the active body it would otherwise fall back to changes
-  // as the timeline grows.
+  // Mirror writes its bodies into the feature, since the active body it would otherwise fall back to changes as the
+  // timeline grows. A lone body needs no picking.
   function startMirror() {
     if (toolBusy()) return;
     if (!hasBody()) {
@@ -1009,24 +1012,9 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       return;
     }
     const bodies = store.buildState.result?.bodies ?? [];
-    const commit = async (ids: string[]) => {
-      const plane = await choose<"XY" | "XZ" | "YZ">("Mirror across plane", [
-        { value: "XY", label: "XY" },
-        { value: "XZ", label: "XZ" },
-        { value: "YZ", label: "YZ" },
-      ]);
-      if (!plane) return;
-      store.addFeature({
-        id: store.nextId(),
-        type: "mirror",
-        plane,
-        ...(ids.length ? { bodies: ids } : {}),
-      } as Feature);
-    };
-    const pre = viewport.getSelectedBodies().filter((id) => bodies.some((b) => b.id === id));
-    if (pre.length) return void commit(pre);
-    if (bodies.length <= 1) return void commit(bodies.map((b) => b.id));
-    pickBodyInteractive("Click the body to mirror · Esc cancels", [], (id) => void commit([id]));
+    const sel = viewport.getSelectedBodies().filter((id) => bodies.some((b) => b.id === id));
+    const pre = sel.length ? sel : bodies.length === 1 ? [bodies[0]!.id] : [];
+    mirrorTool.start(pre, committed);
   }
 
   /** One-shot sketch profile picker, so Revolve and Sweep ask in the viewport like Loft instead of requiring a

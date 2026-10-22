@@ -28,5 +28,6 @@ export function runningTool(t: EngineTools): RunningTool | null {
   if (t.hole.active) return entry("Hole", "hole", "hole", () => t.hole.cancel());
   if (t.loft.active) return entry("Loft", "loft", "loft", () => t.loft.cancel());
   if (t.pattern.active) return entry("Pattern", "patternLinear", "pattern-linear", () => t.pattern.cancel());
+  if (t.mirror.active) return entry("Mirror", "mirror", "mirror", () => t.mirror.cancel());
   return null;
 }

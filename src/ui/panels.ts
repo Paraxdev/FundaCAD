@@ -7,7 +7,17 @@ import type { Viewport } from "../viewport/viewport";
 import type { GeometryBackend } from "../geometry/client";
 import type { StressGlyphHandlers, StressGlyphModel } from "../viewport/stressGlyphs";
 import { getUnit, toDisplay, displayRound } from "./units";
-import { usePanelsStore, type PanelRow, type ClashRow, type ClearanceRow, type StressProbePin } from "../stores/panels";
+import {
+  usePanelsStore,
+  type PanelRow,
+  type ClashRow,
+  type ClearanceRow,
+  type StressData,
+  type StressProbePin,
+} from "../stores/panels";
+import { drawnCorner, engineHit, nearestVertex, refineLevel, refineSurface, type DrawnSurface } from "./stressSurface";
+import { weakSpotLabel } from "./stressVerdict";
+import { sentence } from "./stressWarnings";
 import {
   AXES,
   LOAD_MARK_COLOR,
@@ -32,6 +42,7 @@ import {
   setupFromStudy,
   studyFromSetup,
   swingScale,
+  SWING_PERIOD_MS,
   type ForceDirection,
   type StressFaceSet,
   type StressLoadSetup,
@@ -50,6 +61,8 @@ export interface StressGlyphsApi {
   setModel(m: StressGlyphModel): void;
   setProbe(on: boolean): void;
   setProbePins(pins: Pick<StressProbePin, "tri" | "weights" | "label">[]): void;
+  /** The result's weakest spot as a pin; optional so a test rig can leave it out. */
+  setWeakSpot?(p: Pick<StressProbePin, "tri" | "weights" | "label"> | null): void;
   /** Place mode with the orb a click would put down, or null to end it. */
   setPlacing?(p: { color: number; radius: number } | null): void;
   dispose(): void;
@@ -192,19 +205,38 @@ export function createPanels(deps: PanelsDeps) {
   // The build the face sets' display ids came from; on another build they are found again from their selector points.
   let facesFor: unknown = null;
   // The last result's colours, its document and probe surface, so "Show colours" restores them without a new Run.
-  let colours: { overlay: StressOverlay; epoch: number; surface: ProbeSurface } | null = null;
+  type Colours = { overlay: StressOverlay; epoch: number; surface: ProbeSurface; drawn: DrawnSurface };
+  let colours: Colours | null = null;
+  // The drawn corner nearest the engine's peak stress, pinned in the view while the colours show.
+  type WeakSpot = Pick<StressProbePin, "tri" | "weights" | "label">;
+  let weakSpot: WeakSpot | null = null;
   // The study as last written to (or read from) the document, so an edit is
   // saved once and a study the document gained some other way (a version put
   // back, an assistant's edit) is told apart from the panel's own.
   let persisted: string | null = null;
+  // The last result outlives a Close, so reopening shows it again without a Run. `same` when the setup at the close
+  // was the one it ran with, `study` that setup as saved, to tell an edit made while closed.
+  let kept: {
+    data: Pick<StressData, "result" | "deform" | "pins" | "colours" | "ranSetup">;
+    colours: Colours | null;
+    weakSpot: WeakSpot | null;
+    body: string | null;
+    same: boolean;
+    study: string;
+  } | null = null;
   // The arrows, axes and probe markers in the view, while the panel is open.
   let glyphs: StressGlyphsApi | null = null;
   // A load's force and direction from before a drag of its arrow, for Esc.
   const dragOrigin = new Map<number, Pick<StressLoadSetup, "direction" | "custom" | "force">>();
   // A spot's radius from before a drag of its rim, for Esc.
   let radiusOrigin: number | null = null;
-  // The Animate toggle's frame loop.
+  // The deformation's frame loop, and where its swing is in ms of a period. Play continues from the phase a pause held;
+  // REST_PHASE is the full pose, the still shape's, so Play from still never jumps.
   let animRaf = 0;
+  const REST_PHASE = SWING_PERIOD_MS / 2;
+  let animPhase = REST_PHASE;
+  let animFrom = REST_PHASE;
+  let animT0 = 0;
   // Where the gravity arrow stands, for the build it was measured on.
   let centre: { build: unknown; body: string; at: Vec3 | null } | null = null;
 
@@ -217,6 +249,7 @@ export function createPanels(deps: PanelsDeps) {
   // points mean nothing in it.
   store.onOpen(() => {
     if (panels.stress) closeStress();
+    kept = null;
   });
 
   // Every panel edit lands in the setup and the document saves it synchronously, so a save never trails its edit.
@@ -265,9 +298,27 @@ export function createPanels(deps: PanelsDeps) {
     if (panels.stress) panels.showStress(seed ?? null);
     else loadStudy(store.stressStudy, seed ?? null);
     glyphs ??= deps.stressGlyphs?.(glyphHandlers) ?? null;
-    // Before the marks, so a saved face that is gone has the last word.
-    setStatus("Stress: press Place on a support or a load and click the body, or select faces and set them", "");
     refreshStressMarks();
+    restoreKept();
+  }
+
+  function restoreKept() {
+    const k = kept;
+    kept = null;
+    const d = panels.stress;
+    if (!k?.data.result || !d || d.result || d.setup.body !== k.body) return;
+    panels.stressFinished({ result: k.data.result });
+    const study = JSON.stringify(store.stressStudy);
+    d.ranSetup = k.same && study === k.study ? JSON.stringify(d.setup) : k.data.ranSetup;
+    if (!k.colours || k.colours.epoch !== docEpoch || k.data.colours === "none") return;
+    colours = k.colours;
+    weakSpot = k.weakSpot;
+    if (k.data.deform) panels.setStressDeform({ ...k.data.deform, animate: false });
+    d.pins = k.data.pins;
+    glyphs?.setProbePins(d.pins);
+    panels.setStressColours("hidden");
+    if (k.data.colours === "shown") setStressColours(true);
+    else refreshStressMarks();
   }
 
   /** Faces are found on the build by the next relocation. Reading it back is not an edit, so the document stays
@@ -281,6 +332,8 @@ export function createPanels(deps: PanelsDeps) {
     viewport.setStressOverlay(null);
     panels.replaceStressSetup(setup);
     glyphs?.setProbePins([]);
+    weakSpot = null;
+    showWeakSpot();
   }
 
   /** The document's study changed under an open panel (a version put back, an
@@ -381,6 +434,7 @@ export function createPanels(deps: PanelsDeps) {
     else if (d.colours === "shown" && !viewport.hasStressOverlay()) {
       stopAnimation();
       panels.setStressColours("hidden");
+      showWeakSpot();
     }
     const missing = relocateStressFaces();
     if (missing && !bodyOnModel()) {
@@ -419,6 +473,13 @@ export function createPanels(deps: PanelsDeps) {
     if (panels.stress) panels.stress.pins = [];
     glyphs?.setProbe(false);
     glyphs?.setProbePins([]);
+    weakSpot = null;
+    showWeakSpot();
+  }
+
+  /** The weakest spot's pin, shown while the colours are. */
+  function showWeakSpot() {
+    glyphs?.setWeakSpot?.(panels.stress?.colours === "shown" ? weakSpot : null);
   }
 
   let glyphsPending = false;
@@ -568,7 +629,8 @@ export function createPanels(deps: PanelsDeps) {
       l.force = was.force;
     },
     probeLabel(hit) {
-      const v = colours ? probeValues(colours.surface, hit.tri, hit.weights) : null;
+      const at = colours ? engineHit(colours.drawn, hit.tri, hit.weights) : null;
+      const v = colours && at ? probeValues(colours.surface, at.tri, at.weights) : null;
       return v ? probeLabel(v, getUnit()) : null;
     },
     pinProbe(hit) {
@@ -597,7 +659,6 @@ export function createPanels(deps: PanelsDeps) {
       if (!d.setup.body) panels.setStressBody(hit.body);
       const radius = spotRadiusFor(hit.body);
       panels.addStressSpot(target, { at: hit.at.map(round4) as Vec3, radius, normal: hit.normal.map(round4) as Vec3 });
-      setStatus(`Stress: ${rowName(target)}: a spot of radius ${radius} mm, drag its rim to size it`, "");
       if (!more) stopPlacing();
     },
     leavePlacing() {
@@ -619,13 +680,6 @@ export function createPanels(deps: PanelsDeps) {
 
   function round4(v: number): number {
     return Math.round(v * 1e4) / 1e4 + 0;
-  }
-
-  /** A row as the panel names it, "Support 2" or "Load 1". */
-  function rowName(target: StressTarget): string {
-    const s = panels.stress?.setup;
-    if ("support" in target) return `Support ${(s?.supports.findIndex((x) => x.id === target.support) ?? 0) + 1}`;
-    return `Load ${(s?.loads.findIndex((l) => l.id === target.load) ?? 0) + 1}`;
   }
 
   /** The radius a new spot gets: the last one placed in this setup, as the
@@ -657,10 +711,6 @@ export function createPanels(deps: PanelsDeps) {
     const color = "support" in target ? SUPPORT_COLORS[(row as { type: StressSupportType }).type] : LOAD_MARK_COLOR;
     const radius = body ? spotRadiusFor(body) : defaultSpotRadius(NaN);
     glyphs?.setPlacing?.({ color, radius });
-    setStatus(
-      `Stress: click the body where ${rowName(target)} ${"support" in target ? "holds it" : "pushes"}, Shift click to place several, Esc to stop`,
-      "",
-    );
   }
 
   function stopPlacing() {
@@ -746,6 +796,8 @@ export function createPanels(deps: PanelsDeps) {
     viewport.setStressOverlay(null);
     glyphs?.setProbe(false);
     glyphs?.setProbePins([]);
+    weakSpot = null;
+    showWeakSpot();
   }
 
   function addStressSupport(type: StressSupportType = "fixed") {
@@ -780,7 +832,7 @@ export function createPanels(deps: PanelsDeps) {
   function overlayNow(): StressOverlay | null {
     if (!colours) return null;
     if (!colours.overlay.displacement) return colours.overlay;
-    return { ...colours.overlay, scale: panels.stress?.deform?.scale ?? 0 };
+    return { ...colours.overlay, scale: poseScale() };
   }
 
   /** Put the last result's colours on the body, or take them off so its faces
@@ -793,12 +845,13 @@ export function createPanels(deps: PanelsDeps) {
       return;
     }
     if (!on) {
-      stopAnimation();
+      pauseAnimation();
       if (d.probe) setStressProbe(false);
     }
     viewport.setStressOverlay(on ? overlayNow() : null);
     panels.setStressColours(on ? "shown" : "hidden");
     refreshStressMarks();
+    showWeakSpot();
     if (on && d.deform?.animate) startAnimation();
   }
 
@@ -808,42 +861,68 @@ export function createPanels(deps: PanelsDeps) {
     if (!def || !Number.isFinite(scale)) return;
     def.scale = Math.max(0, scale);
     if (def.scale > def.max) def.max = def.scale;
-    if (!def.animate) viewport.setStressDeformation(def.scale);
+    if (!def.animate) {
+      animPhase = REST_PHASE;
+      viewport.setStressDeformation(def.scale);
+    }
   }
 
-  /** Swing the deformation between none and the slider's scale, or stop it
-   *  there. */
+  /** Play the deformation's swing from the pose on screen, or pause it there. */
   function setStressAnimate(on: boolean) {
     const def = panels.stress?.deform;
     if (!def) return;
-    def.animate = on;
-    if (on && panels.stress?.colours !== "shown") setStressColours(true);
-    if (on) startAnimation();
-    else stopAnimation();
+    if (!on) {
+      pauseAnimation();
+      return;
+    }
+    def.animate = true;
+    if (panels.stress?.colours !== "shown") setStressColours(true);
+    startAnimation();
+  }
+
+  /** The deformation scale drawn now: the slider's, or the pose a pause holds. */
+  function poseScale(): number {
+    const scale = panels.stress?.deform?.scale ?? 0;
+    return animPhase === REST_PHASE ? scale : swingScale(animPhase, scale);
   }
 
   function startAnimation() {
     if (animRaf || typeof requestAnimationFrame !== "function") return;
-    const t0 = performance.now();
+    animT0 = performance.now();
+    animFrom = animPhase;
     const step = (now: number) => {
       animRaf = 0;
       const d = panels.stress;
-      if (!d?.deform?.animate || d.colours !== "shown") {
-        if (d?.deform) viewport.setStressDeformation(d.deform.scale);
-        return;
-      }
-      viewport.setStressDeformation(swingScale(now - t0, d.deform.scale));
+      if (!d?.deform?.animate || d.colours !== "shown") return;
+      animPhase = animFrom + (now - animT0);
+      viewport.setStressDeformation(swingScale(animPhase, d.deform.scale));
       animRaf = requestAnimationFrame(step);
     };
     animRaf = requestAnimationFrame(step);
   }
 
-  /** Stop the swing and leave the shape at the slider's scale. */
+  /** Hold the swing where it is now. */
+  function pauseAnimation() {
+    if (animRaf) {
+      cancelAnimationFrame(animRaf);
+      animRaf = 0;
+      animPhase = animFrom + (performance.now() - animT0);
+    }
+    const def = panels.stress?.deform;
+    if (def?.animate) {
+      def.animate = false;
+      viewport.setStressDeformation(poseScale());
+    }
+  }
+
+  /** End the swing for good and leave the shape at the slider's scale. */
   function stopAnimation() {
     if (animRaf) cancelAnimationFrame(animRaf);
     animRaf = 0;
+    const held = animPhase !== REST_PHASE;
+    animPhase = REST_PHASE;
     const def = panels.stress?.deform;
-    if (def?.animate) {
+    if (def && (def.animate || held)) {
       def.animate = false;
       viewport.setStressDeformation(def.scale);
     }
@@ -870,7 +949,6 @@ export function createPanels(deps: PanelsDeps) {
     }
     panels.setStressProbe(on);
     glyphs?.setProbe(on);
-    if (on) setStatus("Stress: hover the body to read it, click to pin a probe, Esc to stop", "");
   }
 
   function removeStressProbe(id: number) {
@@ -887,17 +965,16 @@ export function createPanels(deps: PanelsDeps) {
     }
     relocateStressFaces();
     if (d.setup.body && !bodyOnModel()) {
-      const message =
-        "the body analysed is not on the current model, pick another body or bring the model back to where it has it";
-      panels.stressFinished({ error: message });
-      setStatus(`Stress: ${message}`, "");
+      panels.stressFinished({
+        error:
+          "The body analysed is not on the current model. Pick another body, or bring the model back to where it has it.",
+      });
       return;
     }
     // Faces the model lacks are refused here, by the support or load they are in.
     const req = buildStressRequest(d.setup);
     if (!req.ok) {
-      panels.stressFinished({ error: req.message });
-      setStatus(`Stress: ${req.message}`, "");
+      panels.stressFinished({ error: sentence(req.message) });
       return;
     }
     const seq = ++runSeq;
@@ -906,14 +983,13 @@ export function createPanels(deps: PanelsDeps) {
     panels.stressStarted();
     clearResult();
     refreshStressMarks();
-    setStatus("Analysing stress…", "");
     const res = await geometry.stress(store.builtDocument(), req.body, req.options, (id) => {
       if (seq === runSeq) panels.stressSent(id);
     });
     if (seq !== runSeq || !panels.stress) return;
     if (!res.ok) {
       const message = panelMessage(res.message);
-      panels.stressFinished(res.cancelled ? {} : { error: message });
+      panels.stressFinished(res.cancelled ? {} : { error: sentence(message) });
       setStatus(
         res.cancelled ? "Stress analysis cancelled" : `Stress analysis failed: ${message}`,
         res.cancelled ? "" : "error",
@@ -940,18 +1016,24 @@ export function createPanels(deps: PanelsDeps) {
     if (r.surface) {
       const disp = r.surface.displacement;
       const moves = !!disp && disp.length === r.surface.positions.length;
+      // Drawn finer than the engine's mesh so the part bends smoothly; the numbers stay the engine's.
+      const drawn = refineSurface(r.surface, refineLevel(r.surface.indices.length / 3));
       colours = {
         overlay: {
           bodyId: r.body,
-          positions: r.surface.positions,
-          indices: r.surface.indices,
-          values: r.surface.vonMises,
+          positions: drawn.positions,
+          indices: drawn.indices,
+          values: drawn.values,
           range: view.legend,
-          ...(moves ? { displacement: disp } : {}),
+          ...(moves && drawn.displacement ? { displacement: drawn.displacement } : {}),
         },
         epoch,
         surface: r.surface,
+        drawn,
       };
+      const peak = nearestVertex(r.surface.positions, r.maxVonMises.at);
+      const corner = peak < 0 ? null : drawnCorner(drawn, peak);
+      weakSpot = corner && { ...corner, label: weakSpotLabel(r.safetyFactor) };
       if (moves) {
         const auto = autoDeformScale(r.surface.positions, disp!);
         panels.setStressDeform({ scale: auto, auto, max: deformSliderMax(auto), animate: false });
@@ -971,8 +1053,20 @@ export function createPanels(deps: PanelsDeps) {
   /** Close Stress, stopping a Run in flight, and drop its colours, marks and
    *  glyphs. The study stays in the document for the next time. */
   function closeStress() {
-    if (panels.stress?.running) void cancelStress();
+    const d = panels.stress;
+    if (d?.running) void cancelStress();
     stopAnimation();
+    kept =
+      d?.result && !d.running
+        ? {
+            data: { result: d.result, deform: d.deform, pins: d.pins, colours: d.colours, ranSetup: d.ranSetup },
+            colours,
+            weakSpot,
+            body: d.setup.body,
+            same: d.ranSetup === JSON.stringify(d.setup),
+            study: JSON.stringify(store.stressStudy),
+          }
+        : null;
     runSeq++;
     panels.stress = null;
     colours = null;
@@ -1017,6 +1111,7 @@ export function createPanels(deps: PanelsDeps) {
     refreshStressMarks,
     setStressDeformation,
     setStressAnimate,
+    pauseStressAnimation: pauseAnimation,
     setStressProbe,
     removeStressProbe,
   };

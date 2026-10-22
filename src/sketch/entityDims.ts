@@ -282,24 +282,13 @@ export function staggeredDefaults(ents: ResolvedEntity[]): Map<string, DimPlace>
 
 export function entityDims(e: ResolvedEntity, defaults?: DimPlace): EntityDim[] {
   if (e.type === "rectangle") {
-    const hw = e.width / 2;
-    const hh = e.height / 2;
-    const wDir = v(0, -1),
-      hDir = v(-1, 0);
-    const w = linear(
-      v(e.x - hw, e.y - hh),
-      v(e.x + hw, e.y - hh),
-      wDir,
-      e.width,
-      linearOverride(e, "width", wDir, defaults),
-    );
-    const h = linear(
-      v(e.x - hw, e.y - hh),
-      v(e.x - hw, e.y + hh),
-      hDir,
-      e.height,
-      linearOverride(e, "height", hDir, defaults),
-    );
+    const [c0, c1, , c3] = rectCorners(e.x, e.y, e.width, e.height, e.angle);
+    const t = ((e.angle ?? 0) * Math.PI) / 180;
+    // Outward normals of the bottom and left edges; angle 0 keeps the exact axis vectors.
+    const wDir = e.angle ? v(Math.sin(t), -Math.cos(t)) : v(0, -1);
+    const hDir = e.angle ? v(-Math.cos(t), -Math.sin(t)) : v(-1, 0);
+    const w = linear(c0!, c1!, wDir, e.width, linearOverride(e, "width", wDir, defaults));
+    const h = linear(c0!, c3!, hDir, e.height, linearOverride(e, "height", hDir, defaults));
     return [
       {
         field: "width",

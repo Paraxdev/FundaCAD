@@ -20,7 +20,7 @@ import {
   type TileState,
 } from "../../src/viewport/originTiles";
 import { AXIS_COLOR } from "../../src/viewport/originTriad";
-import { roundedSquare } from "../../src/viewport/cornerProfile";
+import { SQUIRCLE_EXPONENT, roundedSquare } from "../../src/viewport/cornerProfile";
 import { markOverlay, overlayLayer } from "../../src/viewport/overlayKinds";
 import type { Plane3 } from "../../src/types";
 
@@ -80,12 +80,28 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+describe("TILE_SHAPE", () => {
+  // A rail tile is 40 px with a 17 px squircle corner (--rail-tile, --float-tile-radius).
+  it("is clearly bigger than a rail tile and rounds like one, with the app's squircle", () => {
+    expect(TILE_SHAPE).toEqual({
+      sizePx: 68,
+      gapPx: 10,
+      radiusPx: 29,
+      exponent: SQUIRCLE_EXPONENT,
+      octant: { x: 1, y: -1, z: 1 },
+    });
+    expect(TILE_SHAPE.radiusPx / TILE_SHAPE.sizePx).toBeCloseTo(17 / 40, 2);
+    expect(TILE_SHAPE.gapPx / TILE_SHAPE.sizePx).toBeCloseTo(6 / 40, 1);
+    expect(TILE_SHAPE.sizePx * MIN_TILE_SCALE).toBeGreaterThanOrEqual(40);
+  });
+});
+
 describe("tilePose", () => {
   it("puts each default tile in its own quadrant of the home octant", () => {
     expect(PLANES.map((k) => tilePose(k, TILE_SHAPE))).toEqual([
-      { centre: [26, -26, 0], u: [1, 0, 0], v: [0, 1, 0], normal: [0, 0, 1] },
-      { centre: [26, 0, 26], u: [1, 0, 0], v: [0, 0, 1], normal: [0, -1, 0] },
-      { centre: [0, -26, 26], u: [0, 1, 0], v: [0, 0, 1], normal: [1, 0, 0] },
+      { centre: [44, -44, 0], u: [1, 0, 0], v: [0, 1, 0], normal: [0, 0, 1] },
+      { centre: [44, 0, 44], u: [1, 0, 0], v: [0, 0, 1], normal: [0, -1, 0] },
+      { centre: [0, -44, 44], u: [0, 1, 0], v: [0, 0, 1], normal: [1, 0, 0] },
     ]);
   });
 
@@ -276,8 +292,8 @@ describe("OriginTiles", () => {
     };
     t.update(0.37, null, eyeAt(12, -7, 300, [12, -7, 0]));
     expect(labelOpacity(t)).toEqual({ XY: TILE_LOOK.idle.label, XZ: 0, YZ: 0 });
-    // At scale 2 the XZ centre is (52, 0, 52) and the YZ centre (0, -52, 52): the eye is 67 and 63 away.
-    t.update(2, null, eyeAt(10, -15, 102, [30, -20, 15]));
+    // At scale 13/11 the XZ centre is (52, 0, 52) and the YZ centre (0, -52, 52): the eye is 67 and 63 away.
+    t.update(13 / 11, null, eyeAt(10, -15, 102, [30, -20, 15]));
     const ramp = (facing: number) => (TILE_LOOK.idle.label * (facing - 0.15)) / 0.2;
     expect(labelOpacity(t)).toEqual({
       XY: TILE_LOOK.idle.label,
@@ -387,7 +403,7 @@ describe("OriginTiles", () => {
     ]);
     const second = [...meshes, ...rims].map((m) => m.geometry);
     const again = second.map((g) => vi.spyOn(g, "dispose"));
-    t.reshape({ radiusPx: 4, rho: 0.6 });
+    t.reshape({ radiusPx: 4, exponent: 2.5 });
     expect(again.map((s) => s.mock.calls.length)).toEqual([1, 1, 1, 1, 1, 1]);
     expect(PLANES.map((k) => t.planes[k].position.toArray())).toEqual([
       [-23.5, 23.5, 0],
@@ -413,7 +429,7 @@ describe("OriginTiles", () => {
       return a;
     };
     const square = (size: number, leg: number) => {
-      const pts = roundedSquare(size, leg, TILE_SHAPE.rho, CORNER_SEGMENTS);
+      const pts = roundedSquare(size, leg, TILE_SHAPE.exponent, CORNER_SEGMENTS);
       let a = 0;
       pts.forEach((p, i) => {
         const q = pts[(i + 1) % pts.length]!;
@@ -438,9 +454,9 @@ describe("OriginTiles", () => {
         .toArray()
         .map((n) => Math.round(n * 1e9) / 1e9 + 0);
     expect(PLANES.map(corner)).toEqual([
-      [46 * 0.37, -6 * 0.37, 0].map((n) => Math.round(n * 1e9) / 1e9),
-      [46 * 0.37, 0, 46 * 0.37].map((n) => Math.round(n * 1e9) / 1e9),
-      [0, -6 * 0.37, 46 * 0.37].map((n) => Math.round(n * 1e9) / 1e9),
+      [64 * 0.37, -24 * 0.37, 0].map((n) => Math.round(n * 1e9) / 1e9),
+      [64 * 0.37, 0, 64 * 0.37].map((n) => Math.round(n * 1e9) / 1e9),
+      [0, -24 * 0.37, 64 * 0.37].map((n) => Math.round(n * 1e9) / 1e9),
     ]);
     t.dispose();
   });

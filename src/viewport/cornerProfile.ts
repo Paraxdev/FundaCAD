@@ -1,37 +1,35 @@
-// A corner is a rational quadratic Bezier (1, w, 1) through the sharp vertex, shaped by the fillet
-// profile rho: where its middle sits between the chord (0, a chamfer) and the vertex (1, sharp).
+// A corner is the superellipse |x|^n + |y|^n = 1 in the box between its tangent points and the
+// centre opposite its vertex: n 1 is a chamfer, 2 a circle, 4 the CSS `corner-shape: squircle`.
 
 export type Vec2 = readonly [number, number];
 
-/** The rho of an exact circular arc over a right angle, w = cos 45 deg. */
-export const CIRCLE_RHO = Math.SQRT2 - 1;
+export const CIRCLE_EXPONENT = 2;
+/** CSS `corner-shape: squircle` is `superellipse(2)`, the exponent 2^2. */
+export const SQUIRCLE_EXPONENT = 4;
+export const MAX_EXPONENT = 32;
 
-const MAX_RHO = 0.95;
-
-export function conicWeight(rho: number): number {
-  const r = Number.isNaN(rho) ? CIRCLE_RHO : Math.min(MAX_RHO, Math.max(0, rho));
-  return r / (1 - r);
-}
-
-export function conicCorner(p0: Vec2, vertex: Vec2, p2: Vec2, rho: number, segments: number): Vec2[] {
-  const w = conicWeight(rho);
+// Points go at even polar angles from the centre, an even parameter would leave gaps at the ends.
+export function superellipseCorner(p0: Vec2, vertex: Vec2, p2: Vec2, exponent: number, segments: number): Vec2[] {
+  const e = Number.isNaN(exponent) ? CIRCLE_EXPONENT : Math.min(MAX_EXPONENT, Math.max(1, exponent));
   const n = Math.max(1, Math.round(segments) || 1);
+  const c: Vec2 = [p0[0] + p2[0] - vertex[0], p0[1] + p2[1] - vertex[1]];
   const out: Vec2[] = [[p0[0], p0[1]]];
   for (let i = 1; i < n; i++) {
-    const t = i / n;
-    const a = (1 - t) * (1 - t);
-    const b = 2 * w * t * (1 - t);
-    const c = t * t;
-    const d = a + b + c;
-    out.push([(a * p0[0] + b * vertex[0] + c * p2[0]) / d, (a * p0[1] + b * vertex[1] + c * p2[1]) / d]);
+    const phi = ((i / n) * Math.PI) / 2;
+    const cs = Math.cos(phi);
+    const sn = Math.sin(phi);
+    const r = (cs ** e + sn ** e) ** (-1 / e);
+    const a = r * cs;
+    const b = r * sn;
+    out.push([c[0] + a * (p0[0] - c[0]) + b * (p2[0] - c[0]), c[1] + a * (p0[1] - c[1]) + b * (p2[1] - c[1])]);
   }
   out.push([p2[0], p2[1]]);
   return out;
 }
 
 /** A square centred on the origin, counter clockwise from its (+, -) corner,
- *  each corner cut back `leg` along both sides and bridged by a conic. */
-export function roundedSquare(size: number, leg: number, rho: number, segments: number): Vec2[] {
+ *  each corner cut back `leg` along both sides and bridged by a superellipse. */
+export function roundedSquare(size: number, leg: number, exponent: number, segments: number): Vec2[] {
   const h = size / 2;
   const l = Math.min(h, Math.max(0, leg));
   const corners: Vec2[] = [
@@ -46,7 +44,7 @@ export function roundedSquare(size: number, leg: number, rho: number, segments: 
     const prev = corners[(i + 3) % 4]!;
     const next = corners[(i + 1) % 4]!;
     const toward = (to: Vec2): Vec2 => [v[0] + Math.sign(to[0] - v[0]) * l, v[1] + Math.sign(to[1] - v[1]) * l];
-    const arc = conicCorner(toward(prev), v, toward(next), rho, segments);
+    const arc = superellipseCorner(toward(prev), v, toward(next), exponent, segments);
     // At a half size leg two neighbouring corners share their tangent point.
     out.push(...(l === h ? arc.slice(1) : arc));
   });

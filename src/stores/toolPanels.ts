@@ -3,9 +3,11 @@ import { markRaw, ref, shallowRef } from "vue";
 import type { TextValues } from "../sketch/textForm";
 import type { ProjectFilter } from "../sketch/projectPanel";
 import type { MeasureRow } from "../features/measureRows";
+import type { MirrorFieldKey } from "../features/mirrorFields";
 
-/** Floating overlays the app's own running tools own: sketch Text panel, Project filter chips, Measure readout. Plugin
- *  panels mount through `contributedOverlays()`. markRaw every request, its closures reach the Viewport. */
+/** Floating overlays the app's own running tools own: sketch Text panel, Project filter chips, Measure readout and
+ *  the Mirror fields. Plugin panels mount through `contributedOverlays()`. markRaw every request, its closures reach
+ *  the Viewport. */
 
 export interface TextReq {
   /** bumped per show() so the component remounts with fresh form state */
@@ -16,6 +18,30 @@ export interface TextReq {
   onCommit: (v: TextValues) => void;
   onCancel: () => void;
   onChange: (v: TextValues) => void;
+}
+
+export interface MirrorFieldView {
+  key: MirrorFieldKey;
+  label: string;
+  icon: string;
+  value: string;
+  filled: boolean;
+}
+
+/** Replaced whole on every change; `id` changes only when the tool starts again, so it keys the component. */
+export interface MirrorPanelView {
+  id: number;
+  fields: readonly [MirrorFieldView, MirrorFieldView];
+  active: MirrorFieldKey;
+  /** The base plane chips, empty in a sketch; `plane` is the one picked, if it is one of them. */
+  planes: readonly string[];
+  plane: string | null;
+  ready: boolean;
+  onActivate(k: MirrorFieldKey): void;
+  onClear(k: MirrorFieldKey): void;
+  onPlane(p: string): void;
+  onCommit(): void;
+  onCancel(): void;
 }
 
 export const useToolPanelStore = defineStore("toolPanels", () => {
@@ -50,6 +76,8 @@ export const useToolPanelStore = defineStore("toolPanels", () => {
   /** null = the tool is not running; [] would be an empty panel. */
   const measure = shallowRef<readonly MeasureRow[] | null>(null);
 
+  const mirror = shallowRef<MirrorPanelView | null>(null);
+
   return {
     text,
     openText,
@@ -59,5 +87,6 @@ export const useToolPanelStore = defineStore("toolPanels", () => {
     projectAnchor,
     projectChange,
     measure,
+    mirror,
   };
 });

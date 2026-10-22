@@ -684,21 +684,6 @@
 .properties-panel {
   min-width: 260px;
 }
-/* A fixed narrow column, clear of the model and arrows it analyses: hints wrap and a long
-   setup scrolls. */
-.stress-panel {
-  box-sizing: border-box;
-  width: 340px;
-  max-width: calc(100vw - 32px);
-  max-height: calc(100vh - 160px);
-  overflow-y: auto;
-  overflow-wrap: anywhere;
-}
-/* A button keeps its label whole; the row of them wraps instead. */
-.stress-panel .btn {
-  overflow-wrap: normal;
-  white-space: nowrap;
-}
 /* Stress labels in the view: the value by the cursor while dragging or probing, and each
    pinned probe's readout. */
 .stress-glyph-label {
@@ -716,6 +701,9 @@
 }
 .stress-probe-pin {
   opacity: 0.9;
+}
+.stress-pin-no {
+  font-weight: 700;
 }
 .measure-title {
   font-weight: 600;
@@ -739,6 +727,66 @@
   margin-top: var(--s-2);
   font-size: 10px;
   color: var(--text-mute, #6b7280);
+}
+/* Pick fields: the toggle makes its row the one the next clicks fill. */
+.mirror-panel {
+  box-sizing: border-box;
+  width: 280px;
+  max-width: calc(100vw - 32px);
+}
+.mirror-field {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  padding: var(--s-1);
+  border-radius: var(--float-chip-radius);
+  cursor: pointer;
+}
+.mirror-field:not(.active):hover {
+  background: var(--raised);
+}
+.mirror-field .icon-btn {
+  width: 28px;
+  height: 28px;
+  flex: none;
+}
+.mirror-field-k {
+  flex: none;
+  font-weight: 600;
+}
+.mirror-field-v {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+.mirror-field .float-card-close {
+  flex: none;
+}
+.mirror-chips {
+  display: flex;
+  gap: var(--s-2);
+  padding: var(--s-1) var(--s-1) 0 calc(28px + var(--s-3));
+}
+.mirror-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s-2);
+  margin-top: var(--s-3);
+}
+.mirror-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+}
+.mirror-actions .btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+  box-shadow: none;
 }
 .measure-divider {
   height: 1px;
