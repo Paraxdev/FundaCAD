@@ -1,6 +1,5 @@
-// The three origin planes as small rounded tiles beside the origin, one per
-// quadrant so they never cross, shown only while a tool asks for a plane. The
-// fill mesh is the pick target; its rim and name are children no pick visits.
+// The origin planes as small tiles, one per quadrant so they never cross. Only the
+// fill mesh is a pick target: its rim, ghost and name are children no pick visits.
 
 import * as THREE from "three";
 import { glyphScale, glyphWorldScale } from "./gizmoScale";

@@ -1,7 +1,5 @@
-// A rounded corner as a conic: the rational quadratic Bezier from one tangent
-// point through the sharp vertex to the other, weights (1, w, 1). Its shape is
-// rho, the CAD fillet "profile": where the corner's middle sits between the
-// chord (0, a chamfer) and the vertex (1, a sharp corner).
+// A corner is a rational quadratic Bezier (1, w, 1) through the sharp vertex, shaped by the fillet
+// profile rho: where its middle sits between the chord (0, a chamfer) and the vertex (1, sharp).
 
 export type Vec2 = readonly [number, number];
 
