@@ -1,8 +1,5 @@
-// Tool-starter functions: the ~20 "start a modeling tool" entry points (Sketch,
-// Extrude, Fillet, Chamfer, Split, the booleans, Revolve, Loft, Sweep, Primitive,
-// Shell, Draft, Pattern, Scale, Move, Press/Pull…) plus the interactive
-// plane/face pickers they share. Each closes over the same large set of
-// singletons/state owned by main.ts, passed in once via createFeatureStarters.
+// The tool starters (Sketch, Extrude, Fillet, the booleans, Revolve, Loft and the rest) and the plane and face pickers
+// they share, closing over main.ts's singletons passed in once via createFeatureStarters.
 import * as THREE from "three";
 import type { DocumentStore } from "../document/store";
 import type { Viewport } from "../viewport/viewport";
@@ -125,8 +122,6 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     if (id) selectFeature(id, false);
   };
 
-  // Interactive Fillet / Chamfer: pick an edge (or use a Ctrl-click pre-selection),
-  // then drag an arrow to scrub the radius/distance with a live engine preview.
   const startFillet = () => {
     if (toolBusy()) return;
     edgeFeature.start("fillet", committed);
@@ -135,48 +130,25 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     if (toolBusy()) return;
     edgeFeature.start("chamfer", committed);
   };
-  /** The selection handle (features/edgeNudge.ts) was pressed: arm the same
-   *  tool, from the same pre-selection, but already holding the arrow, the
-   *  press that summons the tool is the press that drags it.
-   *
-   *  It opens on FILLET, which also decides the drag's geometry: the tool reads
-   *  the arrow's own direction as a fillet and the far side of the origin as a
-   *  chamfer, so the more common answer is the one you get by dragging the way
-   *  the arrow points. Opening on a mode the user has to choose first would put
-   *  a decision back in front of the gesture, which is the thing this flow
-   *  exists to stop doing, and neither answer is a dead end, since the other is
-   *  one drag back through zero (or one Tab) away. */
+  /** The edge selection handle was pressed (features/edgeNudge.ts): arm the same tool already holding the arrow. It
+   *  opens on fillet, the arrow's own direction, since asking first would put a decision before the gesture; a
+   *  chamfer is one drag back through zero, or one Tab, away. */
   const grabEdgeHandle = (x: number, y: number, tangent: THREE.Vector3 | null, anchor?: THREE.Vector3) => {
     if (toolBusy()) return;
     edgeFeature.start("fillet", committed, { tangent, grabAt: { x, y }, ...(anchor ? { anchor } : {}) });
   };
-  // Interactive Press/Pull: pick a solid face, then drag an arrow along its normal
-  // to add/cut material (planar) or offset a curved face, with a live preview.
   const startPressPull = () => {
     if (toolBusy()) return;
     pressPull.start(committed);
   };
-  /** The same hand-off as grabEdgeHandle, for the arrow offered on a selected
-   *  FACE (features/faceNudge.ts). There is no treatment to choose here, a
-   *  face has exactly one thing you can do to it by dragging, so unlike the
-   *  edge handle this one has no default to defend. */
+  /** The same hand-off for a selected face's arrow (features/faceNudge.ts); a face has one drag, so no default. */
   const grabFaceHandle = (x: number, y: number) => {
     if (toolBusy()) return;
     pressPull.start(committed, { grabAt: { x, y } });
   };
 
-  /** `face` is the pick's face reference when a body face was taken, and null
-   *  for a construction quad. A datum plane keeps it so it can follow the face
-   *  across a rebuild; a sketch started directly on a face has no use for it,
-   *  since a sketch stores its own plane.
-   *
-   *  `datumId` is the other half of the same idea, for the other kind of quad. A
-   *  sketch that knows which datum feature it is on follows that datum when its
-   *  offset is edited later; one that only kept the resolved plane has the
-   *  placement frozen at pick time. The browser row's "Sketch on plane" has
-   *  always passed it, so without it here the same sketch would behave
-   *  differently depending on whether it was started from the tree or by
-   *  clicking the plane. */
+  /** `face` is the picked body face (null for a construction quad), kept by a datum plane to follow it. `datumId`
+   *  lets a sketch follow its datum when the offset is edited later, as the browser's "Sketch on plane" does. */
   function pickPlaneInteractive(
     promptText: string,
     onPick: (spec: PlaneSpec, face: FacePlanePick | null, datumId: string | null) => void,
@@ -186,17 +158,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     viewport.showAllPlanes(true);
     viewport.suspendPicking = true;
     setPrompt(promptText);
-    // Hover and click ask facePlanePick the SAME question, so the highlight is a
-    // promise: a face that lights up is a face the click will take. That matters
-    // now that a face can be refused, a fillet's blend implies no plane at all,
-    // and the old pair (hover anything, click takes the raw triangle's plane)
-    // both lit faces it had no plane for and answered, for the round ones it did
-    // take, with a plane through one tessellation triangle.
-    //
-    // A refused face gets no highlight, which on its own reads as "the app did
-    // not notice my cursor" rather than "this face has no plane", so say which,
-    // once, on the transition. Rewriting the prompt every pointermove would
-    // thrash a line the user is trying to read.
+    // Hover and click ask facePlanePick the same question, so a lit face is one the click will take. A refused face
+    // gets no highlight, so say why once on the transition rather than on every pointermove.
     let sayingWhy = false;
     const onMove = (e: PointerEvent) => {
       const target = pickPlaneTarget(viewport, e.clientX, e.clientY);
@@ -207,8 +170,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
       } else {
         viewport.clearHover();
         viewport.hoverPlane(target?.kind === "base" ? target.spec : null);
-        // A datum lights up the same way a base plane does, because the promise
-        // is the same one: what is lit is what the click will take.
+        // A datum lights up like a base plane: what is lit is what the click takes.
         viewport.hoverDatum(target?.kind === "datum" ? target.id : null);
       }
       const why = target?.kind === "unusable";
@@ -219,9 +181,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     };
     const onDown = (e: PointerEvent) => {
       if (e.button !== 0) return;
-      // Nothing usable under the cursor: stay in the pick rather than take a
-      // guess. A body face with no plane in it deliberately does NOT fall
-      // through to the construction quad behind the part.
+      // Nothing usable: stay in the pick. A body face with no plane deliberately does not fall through to the
+      // construction quad behind the part.
       const target = pickPlaneTarget(viewport, e.clientX, e.clientY);
       const spec = planeSpecOf(target);
       if (!spec) return;
@@ -262,27 +223,14 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     window.addEventListener("keydown", onEsc, true);
   }
 
-  /** Sketch. A SELECTED planar face is preferred outright: it is already an answer to
-   *  "which plane?", so asking again, with the whole model greyed out and the
-   *  base-plane quads back on screen, is a step that can only be got wrong.
-   *  Click the face, press S, draw. (Curved faces and empty selections fall
-   *  through to the picker, which is where base planes live anyway.)
-   *
-   *  The face selection is dropped on the way in. It has been CONSUMED: leaving
-   *  it lit would put a stale press/pull offer behind the sketch and leave the
-   *  face selected, and therefore re-consumable, when the sketch closes.
-   *
-   *  Dropped, but not forgotten: the face is lit for the session by its own
-   *  overlay (viewport.showSketchFace), so "which face am I drawing on?" has an
-   *  answer on screen without the selection being live behind it. */
+  /** A selected planar face is used outright, asking again could only go wrong. The selection is dropped so no stale
+   *  press/pull offer sits behind the sketch or re-consumes the face, and viewport.showSketchFace lights it instead. */
   function startSketch(tool?: SketchTool) {
     if (!toolBusy()) {
       const face = viewport.selectedFaceSketchPlane();
       if (face) {
         viewport.clearSelection();
-        // The anchor rides in on BOTH routes into a sketch, or a sketch started
-        // from a selected face would silently be the one kind that cannot follow
-        // its face.
+        // The anchor rides in on both routes, or a sketch from a selected face could not follow its face.
         sketch.enter(face.plane, store, undefined, undefined, face.anchor);
         viewport.showSketchFace(face.faceId);
         if (tool) sketch.setTool(tool);
@@ -292,12 +240,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     pickPlaneInteractive(
       "Select a plane or a face to sketch on · a round face gives its tangent plane",
       (spec, face, datumId) => {
-        // Only a PLANAR face can be followed: a tangent plane on a cylinder is a
-        // different plane at every point, and the pick's own point is what defines
-        // it, so there is nothing for a rebuild to re-derive.
-        //
-        // A datum is followed by ID rather than by face, which is what makes
-        // editing its offset afterwards move this sketch with it.
+        // Only a planar face can be followed, a tangent plane is defined by the pick's own point. A datum is followed
+        // by id, so editing its offset moves this sketch.
         sketch.enter(
           spec,
           store,
@@ -311,21 +255,11 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     );
   }
 
-  // Offset Plane: pick a plane/face, then drag an arrow (or type) to set the
-  // offset, with a live ghost of the resulting plane; then sketch on it.
-  //
-  // It used to BAKE the distance into the resulting plane's origin, the scalar
-  // was discarded, the source plane identity was lost, and nothing landed in the
-  // timeline, so an offset plane could never be adjusted after the fact. It now
-  // creates the same parametric `datumPlane` that the Datum Plane button and the
-  // right-click "Offset plane from face" already created (source plane + an
-  // editable scalar offset), and enters the sketch BY ID, so changing the offset
-  // in the value rows moves the sketch with it.
+  // Offset Plane: pick a plane or face, drag or type the offset, then sketch on it. It saves a parametric
+  // `datumPlane` (source plus editable offset) and enters the sketch by id, so editing the offset moves the sketch.
   function offsetPlane() {
-    // A face already selected is the reference: skip the pick and offset from
-    // its plane, the same shortcut startSketch takes. The face keeps following
-    // (its selector rides onto the datum), and clearing the selection stops a
-    // stale press/pull offer sitting behind the plane once the sketch opens.
+    // A selected face is the reference, as in startSketch; its selector rides onto the datum, and clearing the
+    // selection stops a stale press/pull offer sitting behind the plane.
     if (!toolBusy()) {
       const face = viewport.selectedFaceSketchPlane();
       if (face) {
@@ -339,9 +273,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     });
   }
 
-  /** Offset from a resolved source plane, save the parametric datum, sketch on
-   *  it. Shared by the pick route and the selected-face shortcut so both build
-   *  the same feature. */
+  /** Shared by the pick route and the selected face shortcut so both build the same feature. */
   function startOffsetFrom(spec: PlaneSpec, ref: DatumRef) {
     placeNewDatum(spec, ref, (id, def) => sketch.enter(def, store, undefined, id));
   }
@@ -349,8 +281,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
   /** Where a new datum hangs from: a face it follows, or a parent datum. */
   type DatumRef = { face?: Selector; at?: Vec3; planeId?: string };
 
-  /** Position a new datum off `spec` with the handles, then save it. The pose
-   *  is stored relative to the reference, so the plane stays parametric. */
+  /** The pose is stored relative to the reference, so the plane stays parametric. */
   function placeNewDatum(spec: PlaneSpec, ref: DatumRef, then: (id: string, def: PlaneDef) => void) {
     datumPose.start({ src: spec, pose: ZERO_POSE, ghost: true }, (pose: DatumPose | null) => {
       if (!pose) return;
@@ -367,17 +298,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     });
   }
 
-  // Datum Plane: pick a plane/face, position it (offset), then save a persistent
-  // datum plane feature, it lands in the timeline + Planes folder and can be
-  // reused as a sketch / split reference. We store the SOURCE plane + a scalar
-  // offset (not a baked plane) so the offset stays editable in the value rows.
-  //
-  // A ROUND face is a legitimate source and gives its TANGENT plane at the point
-  // you clicked (planeMath.tangentPlaneOnCylinder), a cylinder has no plane of
-  // its own, so the only two sensible answers are the tangent and something
-  // built off the axis, and the tangent is the one you can immediately sketch a
-  // flat on or offset away from the shaft. The offset then runs radially, which
-  // is what makes "a plane 5 mm off this boss" one gesture.
+  // Datum Plane: a source plane plus a scalar offset rather than a baked plane, so the offset stays editable. A round
+  // face gives its tangent plane at the click (planeMath.tangentPlaneOnCylinder) and the offset then runs radially.
   function createDatumPlane() {
     pickPlaneInteractive(
       "Select a plane or face for the datum plane · a round face gives its tangent plane",
@@ -389,9 +311,7 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     );
   }
 
-  /** A plane spec as the resolved triple every construction below works in.
-   *  `PlaneSpec` is either a named base plane or a def already; SketchPlane is
-   *  the one place that knows how to turn the first into the second. */
+  /** SketchPlane is the one place that turns a named base plane into a def. */
   function asDef(spec: PlaneSpec): PlaneDef {
     const sp = new SketchPlane(spec);
     return {
@@ -401,16 +321,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     };
   }
 
-  // Midplane: pick two planes or faces, get the plane between them.
-  //
-  // It is the plane symmetry is made of, and without it "halfway between these
-  // two walls" was a measurement, an offset plane at half of it, and no link
-  // back to either wall afterwards. See planeMath.midPlane for what "between"
-  // means when the two are not parallel.
-  //
-  // Both picks are kept as references when they have one (a flat face, a datum,
-  // a world plane), so the midplane follows either wall; a tangent plane on a
-  // round face has none and leaves the plane baked.
+  // Midplane: the plane between two picks (planeMath.midPlane says what that means when they are not parallel).
+  // Picks with a reference (flat face, datum, world plane) are kept so it follows either wall; a tangent plane bakes.
   function createMidplane() {
     pickPlaneInteractive("Select the first plane or face for the midplane", (a, fa, da) => {
       // Next frame, like the pick's own commit: the first pick's click must not
@@ -446,12 +358,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     return typeof spec === "string" ? { plane: spec } : null;
   }
 
-  // Plane through three points: the only way to reach a plane that no face of
-  // the part lies in, through three holes, three corners of a casting, a rib
-  // and two bosses. Points come from the same snap the gizmo's origin uses
-  // (viewport.pointAt), so a corner and the middle of an edge are aimable
-  // rather than approximate. Edge ends and middles are kept as references so
-  // the plane follows them; a bare surface spot leaves the plane baked.
+  // Plane through three points, for a plane no face lies in. Points use the gizmo origin's snap (viewport.pointAt);
+  // edge ends and middles are kept as references, a bare surface spot leaves the plane baked.
   function createPlaneThroughPoints() {
     pickPointsInteractive(3, "Select three points for the plane", (pts, refs) => {
       const [a, b, c] = pts;
@@ -473,11 +381,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     });
   }
 
-  // Datum Point: one click on the model, snapped to what it actually has (the
-  // same snap the gizmo origin and plane-through-points use), saved as a named
-  // reference point. It builds no geometry, it exists to be measured to, snapped
-  // to, and named. On an edge end or middle it follows that edge; on a bare
-  // surface spot the coordinate is baked.
+  // Datum Point: one snapped click saved as a named reference to measure and snap to; it builds no geometry. On an
+  // edge end or middle it follows that edge, on a bare surface spot the coordinate is baked.
   function createDatumPoint() {
     pickPointsInteractive(1, "Select a point for the datum point", (pts, refs) => {
       const [p] = pts;
@@ -489,10 +394,8 @@ export function createFeatureStarters(deps: FeatureStartersDeps) {
     });
   }
 
-  // Datum Axis: two clicks name the line through them, `origin` the first point
-  // and `dir` the second minus the first. It is the line a revolve, a circular
-  // pattern or a mirror can be aimed at by name. Follows its points like the
-  // datum point above.
+  // Datum Axis: the line through two clicks, `origin` the first and `dir` the second minus the first, for a revolve,
+  // circular pattern or mirror to aim at. Follows its points like the datum point.
   function createDatumAxis() {
     pickPointsInteractive(2, "Select two points for the datum axis", (pts, refs) => {
       const [a, b] = pts;

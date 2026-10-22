@@ -1,10 +1,5 @@
-// Pure math for the Properties panel's filament estimate: mass from a material
-// density, and filament length for a given spool diameter. No Vue, no Three,
-// no geometry backend, so a headless test can exercise it directly.
-//
-// The estimate is deliberately simple and says so in the UI: solid volume at
-// 100% infill, and for partial infill an approximate shell (surface area times
-// a wall thickness) plus the interior's infill fraction. It is an estimate, not a toolpath.
+// Filament estimate for the Properties panel: solid volume at 100% infill, otherwise an approximate shell (area
+// times wall thickness) plus the infill fraction of the rest. An estimate, not a toolpath.
 
 export interface MaterialPreset {
   id: string;
@@ -56,13 +51,8 @@ export interface FilamentEstimate {
   lengthM: number;
 }
 
-/** Shell + partial-infill volume estimate, mm3.
- *
- *  shellVolume = min(area * wallThickness, totalVolume): capped at the whole
- *  body so a thin-walled part (wall thickness bigger than the part is deep)
- *  never estimates a shell larger than the part itself.
- *  At 100% infill this collapses to the exact solid volume, no shell/infill
- *  split needed, that IS the solid. */
+/** mm3. The shell is capped at the whole volume so a thin part never gets a shell larger than itself; 100% infill
+ *  is the exact solid. */
 export function estimateEffectiveVolume(
   volumeMm3: number,
   areaMm2: number,
