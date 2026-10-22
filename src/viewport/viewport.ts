@@ -23,6 +23,7 @@ import {
   groupEdgesByBody,
   partitionMesh,
   resetBodyAppearance,
+  reuseUnchanged,
   setEdgeResolution,
   visibleBodyMeshes,
   BASE_COLOR,
@@ -99,7 +100,7 @@ import type { ViewCubeSide } from "../types";
 /** A selection captured before a rebuild replaces the Highlighter (selectionMemo.ts). */
 interface SelectionMemo {
   edges: { ref: EdgeRef; mid: [number, number, number] | null }[];
-  faces: { id: number; body: BodyMesh | null; point: [number, number, number] | null }[];
+  faces: { id: number; local: number; body: BodyMesh | null; point: [number, number, number] | null }[];
   bodies: string[];
 }
 
@@ -2686,10 +2687,11 @@ export class Viewport {
       const prev = prevBodies.get(meta.id);
       prevBodies.delete(meta.id);
       let body: BodyMesh;
-      if (prev && meta.etag !== undefined && prev.etag === meta.etag) {
+      const kept = reuseUnchanged(prev, meta);
+      if (kept) {
         // unchanged since the last reply, keep its GPU objects untouched, just
         // reset the transient display state a rebuild used to wipe for free.
-        body = prev;
+        body = kept;
         resetBodyAppearance(body);
       } else {
         body = buildBodyMesh(result, meta, byBody.get(meta.id) ?? [], this.resolution, meta.etag, partition);
@@ -2789,7 +2791,7 @@ export class Viewport {
       faces: selFaces.map((id) => {
         const body = bodyOfFace(model, id);
         const c = body && rebuilding.has(body.id) ? this.faceCentroidWorld(id) : null;
-        return { id, body: body ?? null, point: c ? ([c.x, c.y, c.z] as [number, number, number]) : null };
+        return { id, local: id - (body?.faceStart ?? 0), body: body ?? null, point: c ? ([c.x, c.y, c.z] as [number, number, number]) : null };
       }),
       bodies: selBodies,
     };
@@ -2812,7 +2814,7 @@ export class Viewport {
     );
     const faces = remapStreamedSelection(
       memo.faces,
-      (m) => (m.body && liveBodies.has(m.body) ? m.id : null),
+      (m) => (m.body && liveBodies.has(m.body) ? m.body.faceStart + m.local : null),
       (m) => (m.point ? this.faceIdNear(m.point) : null),
       (m) => !duringStream || (m.body !== null && liveBodyIds.has(m.body.id)),
     );

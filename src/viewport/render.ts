@@ -504,6 +504,23 @@ export function bodyOfFace(view: ModelView, faceId: number): BodyMesh | undefine
   return faceId < b.faceStart + b.faceCount ? b : undefined;
 }
 
+/** `prev` moved to this reply's global face ids when the reply repeats its etag,
+ *  else undefined. The etag hashes local ids, so a body after one that gained a
+ *  face comes back unchanged at a later faceStart. */
+export function reuseUnchanged(
+  prev: BodyMesh | undefined,
+  meta: { etag?: string | undefined; faceStart: number },
+): BodyMesh | undefined {
+  if (!prev || meta.etag === undefined || prev.etag !== meta.etag) return undefined;
+  const delta = meta.faceStart - prev.faceStart;
+  if (delta === 0) return prev;
+  const ids = prev.faceIds;
+  for (let t = 0; t < ids.length; t++) ids[t] = ids[t]! + delta;
+  prev.faceTriangles = new Map([...prev.faceTriangles].map(([fid, tris]) => [fid + delta, tris]));
+  prev.faceStart = meta.faceStart;
+  return prev;
+}
+
 /** Reset a REUSED body's transient per-model display state (clip plane, dimmed
  *  opacity, emphasized/hovered/selected edge styling) back to build-time
  *  defaults, i.e. make it look exactly like a freshly built body would. A
