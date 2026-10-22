@@ -665,6 +665,10 @@ export class DocumentStore {
   get busyState(): BusyState {
     return this.busy;
   }
+  /** Only an import's read holds history, so this is true while one is still read. */
+  get importRunning(): boolean {
+    return this.historyHeld > 0;
+  }
 
   /** An edit is waiting out the rebuild debounce. */
   get rebuildPending(): boolean {

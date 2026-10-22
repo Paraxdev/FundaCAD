@@ -19,6 +19,8 @@ const h = vi.hoisted(() => ({
   reading: null as null | ((store: DocumentStore) => void),
   building: null as null | ((store: DocumentStore) => void),
   land: true,
+  // Files that fail to read even when `land` is set.
+  fails: [] as string[],
   cancel: false,
   // The engine stops a read when cancelled, as an open does, unless the read had already finished.
   stopsOnCancel: true,
@@ -60,7 +62,7 @@ async function read(name: string) {
   await h.hold[name];
   reads.splice(reads.indexOf(pending), 1);
   if (pending.cancelled && h.stopsOnCancel) return { ok: false as const, cancelled: true, message: "cancelled" };
-  if (!h.land) return { ok: false as const, message: "the file has no solids" };
+  if (!h.land || h.fails.includes(name)) return { ok: false as const, message: "the file has no solids" };
   return { ok: true as const, name: "printer", geom: "brep", solid: true, color: "#c0392b" };
 }
 
@@ -153,6 +155,7 @@ beforeEach(() => {
     reading: null,
     building: null,
     land: true,
+    fails: [],
     cancel: false,
     stopsOnCancel: true,
     hold: {},
@@ -605,5 +608,64 @@ describe("the 3D printer example while its file is read", () => {
     expect(h.asked).toEqual(["Add motor.step to 3D printer, or start a new document with it?"]);
     expect(seen(store)).toEqual({ ...landed, path: null, dirty: true, home: false, reported: [] });
     expect(h.told).toEqual(told);
+  });
+});
+
+describe("an opening import that fails while a file added to its document is still read", () => {
+  const dropStep = (e: Engine, name: string) =>
+    importFromHome(e, [name], () => importFileBytes(e.store, geometry, new File([new Uint8Array([73])], name)));
+
+  const openings = [
+    ["the 3D printer example", "printer.stpz", (e: Engine) => newFromTemplate(e, "printer")],
+    ["a STEP dropped on a blank Home", "a.step", (e: Engine) => (e.store.newDocument(), dropStep(e, "a.step"))],
+  ] as const;
+
+  it.each(openings)("keeps the added file, in an untitled document, after %s fails", async (_what, first, open) => {
+    const { e, store } = rig();
+    h.fails = [first];
+    const releaseFirst = held(first);
+    const releaseAdded = held("b.step");
+    const opening = open(e);
+    await flush();
+    new Home({} as HomeCallbacks).open();
+    h.answers = ["add"];
+    const added = dropStep(e, "b.step");
+    await flush();
+    await releaseFirst();
+    await releaseAdded();
+    await Promise.all([opening, added]);
+    expect(seen(store)).toEqual({
+      features: ["import"],
+      name: "Untitled",
+      path: null,
+      dirty: true,
+      home: false,
+      imported: [first, "b.step"],
+      reported: [`Couldn't import ${first}: the file has no solids`],
+    });
+    expect(h.told).toEqual([]);
+  });
+
+  it.each(openings)("keeps the added file where it landed when %s fails after it", async (_what, first, open) => {
+    const { e, store } = rig();
+    h.fails = [first];
+    const releaseFirst = held(first);
+    const opening = open(e);
+    await flush();
+    new Home({} as HomeCallbacks).open();
+    h.answers = ["add"];
+    await dropStep(e, "b.step");
+    await releaseFirst();
+    await opening;
+    expect(seen(store)).toEqual({
+      features: ["import"],
+      name: first === "a.step" ? "a" : "3D printer",
+      path: null,
+      dirty: true,
+      home: false,
+      imported: [first, "b.step"],
+      reported: [`Couldn't import ${first}: the file has no solids`],
+    });
+    expect(h.told).toEqual([]);
   });
 });
