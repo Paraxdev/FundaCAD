@@ -1,9 +1,4 @@
-// Print-pipeline flows wired to ribbon actions:
-//   openInOrca, export a colored project 3MF to staging, open it in OrcaSlicer.
-//                  The user slices + Upload&Prints from Orca, whose U1 preset
-//                  already carries the printer host.
-//   sendToPrinter, pick a sliced .gcode, map its filaments to the U1's loaded
-//                  toolheads, upload + start, and monitor progress.
+// openInOrca leaves slicing and Upload&Print to OrcaSlicer, whose U1 preset already carries the printer host.
 
 import { exportPrintProject } from "./exportProject";
 import { filamentMappingDialog, type LogicalSlot } from "./printDialog";
@@ -42,16 +37,14 @@ export async function openInOrca(store: DocumentStore, geometry: GeometryBackend
     toast(`Couldn't prepare export: ${String(e)}`, { kind: "error" });
     return;
   }
-  // The user's active OrcaSlicer machine preset is flattened into the project so
-  // it OPENS on the U1 (with its print host), not on "-". Not fatal when it
-  // cannot be: the export still carries the colors.
+  // The user's active OrcaSlicer machine preset is flattened into the project so it OPENS on the U1 (with its print
+  // host), not on "-". Not fatal when it cannot be: the export still carries the colors.
   const written = await exportPrintProject(store, geometry, {
     path: stagingPath,
     presets: {
       datadir: setup.datadir,
-      // One filament when nothing offers a palette: the Orca preset is built for
-      // the machine the user actually has, and asking for four is what makes Orca
-      // open a toolchanger preset on a single-head printer.
+      // One filament when nothing offers a palette: asking for four makes Orca open a toolchanger preset on a
+      // single-head printer.
       filamentCount: contributedPalette().length || 1,
     },
   });
@@ -72,11 +65,8 @@ export async function openInOrca(store: DocumentStore, geometry: GeometryBackend
   }
 }
 
-/** the palette slots this document actually prints (logical gcode tools).
- *
- *  Exactly one when no palette is offered, whatever the document says: that is
- *  what a single-material print IS, and the alternative is asking someone with
- *  one toolhead which of their four toolheads each colour goes in. */
+/** The palette slots this document actually prints (logical gcode tools). Exactly one when no palette is offered,
+ *  since that is what a single-material print is. */
 function usedSlots(store: DocumentStore): LogicalSlot[] {
   const palette = contributedPalette();
   const used = new Set<number>();

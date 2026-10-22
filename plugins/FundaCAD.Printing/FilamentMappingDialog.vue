@@ -1,8 +1,6 @@
 <script setup lang="ts">
-// "Send to printer, filament mapping": one row per colored slot the sliced job
-// uses, each choosing which physical U1 toolhead is loaded with that filament,
-// plus the three U1 start flags. Pre-matched by printDialog.ts's autoMatch
-// (material first, then nearest color).
+// One row per colored slot the sliced job uses, choosing which physical U1 toolhead holds that filament, plus the
+// three U1 start flags.
 
 import { onMounted, onUnmounted, ref } from "vue";
 import type { FilamentReq } from "./state";
@@ -10,9 +8,8 @@ import { autoMatch, toolheadLabel } from "./printDialog";
 
 const props = defineProps<{ req: FilamentReq }>();
 
-// NOTE: no useModalGate(). This dialog never counted itself in the modal-depth
-// gate, and it opens from a flow that is already several native dialogs deep.
-// Changing that is behaviour, not layout, left as it was.
+// No useModalGate(): this dialog never counted itself in the modal-depth gate, and it opens from a flow that is
+// already several native dialogs deep.
 
 /** Physical toolhead chosen per logical slot, keyed by the slot's index (which
  *  is the logical gcode tool Tn). Seeded from autoMatch. */
