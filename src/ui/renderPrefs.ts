@@ -93,30 +93,17 @@ export const ENVIRONMENTS_LIST: readonly {
  *  rather than at the app. */
 export type Background = "theme" | "dark" | "grey" | "light";
 
-/** How much light spills off the bright parts of the image.
- *
- *  Tuned around a HIGH threshold rather than a low strength, which is what makes
- *  it safe to leave on: an ordinary matt part never gets bright enough to bloom
- *  at all, so the setting costs an unlit model nothing but a pass, and a lit
- *  indicator or a specular highlight on polished metal reads as light rather
- *  than as a pale patch. */
+/** How much light spills off glowing faces. Only a face with an emission
+ *  blooms (GlowMask in realtimePipeline.ts), whatever its brightness. */
 /** Bloom amount, 0 (off) to 1 (full). A continuous slider rather than named
  *  levels: "subtle" and "strong" were only two points on this line. */
 export type Bloom = number;
 
 export const DEFAULT_BLOOM = 0.4;
 
-/** What a given bloom AMOUNT asks the pass for. `threshold` is the luminance a
- *  pixel has to reach before it spills at all, and it is the number that decides
- *  whether this is a look or a haze.
- *
- *  Threshold runs HIGH to LOW as the slider rises, and that is the whole tuning.
- *  The pass runs on the LINEAR image before tone mapping, where an ordinary white
- *  part under a key light at intensity 2 sits well over 1 already: at 0.85 the
- *  white plastic test cylinder haloed as hard as the lit one and the viewport
- *  went pale. So the lower half of the slider keeps the threshold ABOVE 1, where
- *  only something actually emitting spills, and only the top of the slider reaches
- *  an ordinary highlight. That is what makes leaving it on by default defensible. */
+/** What a given bloom AMOUNT asks the pass for. `threshold` is the linear
+ *  luminance a glowing pixel has to reach before it spills, high to low as the
+ *  slider rises. Only pixels inside the glow mask are tested at all. */
 export function bloomSettings(amount: number): { strength: number; radius: number; threshold: number } {
   const a = Math.min(1, Math.max(0, amount));
   // Squared since three r186: its UnrealBloomPass glow grows linearly with strength,
@@ -124,9 +111,8 @@ export function bloomSettings(amount: number): { strength: number; radius: numbe
   return { strength: 0.7 * a * a, radius: 0.3 + a * 0.3, threshold: 2.0 - a * 1.2 };
 }
 
-/** A threshold above 1 only lets through what is brighter than a fully lit white
- *  surface, so with nothing glowing or shiny on screen the whole pass would draw
- *  the image unchanged. */
+/** Whether the frame goes through the composer. The bright pass itself is
+ *  skipped on a frame where nothing glows. */
 export function bloomWanted(amount: number, bloomable: boolean): boolean {
   if (!(amount > 0)) return false;
   return bloomable || bloomSettings(amount).threshold < 1;
