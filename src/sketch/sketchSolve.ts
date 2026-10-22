@@ -1,19 +1,6 @@
-// Compile the active sketch's geometry + its constraint list into the solver
-// model, solve, and write the solved positions back into the entities.
-//
-// Points: endpoints that should coincide (line/arc endpoints, rectangle corners,
-// spline end fit-points) are "mergeable", two at the same position become one
-// shared solver point, so constraints + drags move connected geometry together.
-// Non-endpoint points (circle/arc centers, interior spline points) get their own
-// identity so they never accidentally fuse with unrelated geometry.
-//
-// Entities are addressed by their stable id (solver primitive id === entity id),
-// so constraints, which reference entity ids, map straight through, and any
-// constraint pointing at a missing/wrong-type entity is simply skipped.
-//
-// A rectangle is expanded here into 4 corner points + 4 implicit edges with
-// horizontal/vertical rules, so a rectangle (drawn or loaded) stays rectangular
-// under dragging while remaining a single atomic entity in the document.
+// Compiles the active sketch and its constraints into the solver model and writes the solved positions back.
+// Endpoints at one position merge into one solver point (coincKey), centers and interior points never merge.
+// A rectangle expands into 4 corners and 4 implicit edges so it stays rectangular yet one entity in the document.
 
 import type { ResolvedEntity } from "./snap";
 import { solveSketch, type SConstraint, type SPoint, type SLine, type SCircle, type SArc } from "./solver";
@@ -31,47 +18,33 @@ export interface SolvePass {
   ok: boolean;
   conflicts: string[]; // inconsistent constraints (sketch can't solve)
   overDefined: string[]; // redundant + partially-redundant (removable / over-defining)
-  /** Set when a requested drag was refused because the grabbed point is fixed
-   *  (projected geometry vs a user `fix` constraint, distinct user messaging).
-   *  The caller must NOT advance its drag anchor on a refusal: a drifted anchor
-   *  re-runs the unbounded nearest-point search from the cursor and captures an
-   *  unrelated free point mid-gesture. */
+  /** The grabbed point is fixed (projected vs a user `fix`). The caller must not advance its drag anchor on a refusal,
+   *  or the nearest-point search re-runs from the cursor and grabs an unrelated free point. */
   dragRefused?: "projected" | "fix";
 }
 
 const TAU = Math.PI * 2;
 const ccwDelta = (from: number, to: number) => (((to - from) % TAU) + TAU) % TAU;
 
-/** THE position-coincidence key: two points merge into one solver point iff
- *  their keys match (0.001mm buckets). Anything else that needs "are these
- *  endpoints attached?" (e.g. the body drag's neighbor stretch) must use this
- *  same key, or its notion of attachment drifts from the solver's. */
+/** Two points merge iff their keys match (0.001mm buckets). Anything asking whether endpoints are attached must use
+ *  this key, or it drifts from the solver. */
 export const coincKey = (x: number, y: number) => `${Math.round(x * 1000)},${Math.round(y * 1000)}`;
 
-/** The solver id for the user constraint at index `i`. Composite constraints
- *  append a NON-numeric suffix (e.g. `${constraintKey(i)}a`), so the leading
- *  integer always decodes back to the index, see constraintIndexOf. This is the
- *  single source of the id⇄index convention (planegcs conflict reporting decodes it). */
+/** Composite constraints append a non-numeric suffix (`${constraintKey(i)}a`), so the leading integer decodes back to
+ *  the index. The single source of the id to index convention. */
 export const constraintKey = (i: number) => `k${i}`;
 
-/** Inverse of constraintKey: the constraint index a solver id belongs to, or
- *  null for implicit ids (rectangle edges `<id>~h0`, projected radius pins
- *  `<id>~r`, the drag pin, etc.). Any id containing `~` is implicit BY CONTRACT,
- *  conflict/redundancy reporting must never blame a user constraint for one. */
+/** null for implicit ids (`<id>~h0`, `<id>~r`, the drag pin). Any id with `~` is implicit by contract, reporting must
+ *  never blame a user constraint for one. */
 export function constraintIndexOf(id: string): number | null {
   if (id.includes("~")) return null;
   const m = /^k(\d+)/.exec(id);
   return m && m[1] !== undefined ? Number(m[1]) : null;
 }
 
-/** The solve after a dimension is typed or changed. Lines drawn exactly
- *  horizontal or vertical keep that direction where the constraints allow, and
- *  `anchor` (the start of a line whose length was typed) stays put, so
- *  lengthening one side of four lines drawn as a rectangle moves only the far
- *  side instead of skewing the two beside it. A held pass only places the
- *  geometry: a plain pass from there reports dof and diagnostics against the
- *  user's constraints alone, and whatever the holds cannot satisfy gets the
- *  plain solve it always had. */
+/** After a typed dimension: lines drawn horizontal or vertical keep that direction where allowed and `anchor` stays
+ *  put, so lengthening one side of a drawn rectangle moves only the far side. The held pass only places geometry, a
+ *  plain pass then reports dof and diagnostics against the user's constraints. */
 export async function solveKeepingAxes(
   entities: ResolvedEntity[],
   constraints: SketchConstraint[],
@@ -98,8 +71,7 @@ export async function compileAndSolve(
   const points: SPoint[] = [];
   const pointByKey = new Map<string, string>();
   const key = coincKey;
-  // mergeable points coincide by position (shared corners); unique points (centers,
-  // interior spline points) always get their own identity, see file header.
+  // Mergeable points coincide by position, unique points (centers, interior spline points) never merge.
   const getPoint = (x: number, y: number, mergeable = true): string => {
     if (mergeable) {
       const existing = pointByKey.get(key(x, y));
@@ -131,12 +103,10 @@ export async function compileAndSolve(
       projPts.add(id);
     }
   };
-  // projected circle/arc entity ids: their radius is pinned too (not just the
-  // points), which makes them fully rigid, the inert-constraint check needs this
+  // Projected circle and arc ids: their radius is pinned too, so they are fully rigid (the inert check needs it).
   const projRounds = new Set<string>();
 
-  // Compile a 3-point arc into a native solver arc (shared by user arcs and
-  // projected arcs). Returns the registered points, or null when degenerate.
+  // Shared by user and projected arcs, null when degenerate.
   const compileArc = (
     id: string,
     x1: number,
@@ -196,34 +166,14 @@ export async function compileAndSolve(
           b = cp[(k + 1) % 4];
         if (a === undefined || b === undefined) continue;
         lines.push({ id: `${e.id}~${k}`, p1: a, p2: b });
-        // A rectangle edge is a USER-REFERENCEABLE line operand
-        // ("<rectId>~<k>", see types.ts): registering it here is what makes
-        // isLine()/ends.get() accept it, so the existing distance / p2lDistance
-        // / angle compile branches take a rect edge with no further change.
-        // Side effect worth knowing: endpointPoint() now resolves `rect~k` too,
-        // so a future coincident-on-a-rect-edge would silently resolve to that
-        // edge's corner points.
+        // Registering rect edges ("<rectId>~<k>") makes isLine() and ends.get() accept them as line operands. Side effect:
+        // endpointPoint() resolves `rect~k` too, so a coincident on a rect edge would resolve to its corners.
         ends.set(`${e.id}~${k}`, [a, b]);
       }
       if (e.angle) {
-        // A ROTATED rectangle is RIGID, its corners are pinned, the same way a
-        // polygon's shape is not the solver's to change (see
-        // RIGID_ENTITY_NUM_FIELDS in document/numFields.ts).
-        //
-        // The axis rules below cannot be used on it: they would not fail, they
-        // would SUCCEED, quietly straightening a rectangle the user drew at an
-        // angle on the first solve after placing it. The obvious replacement,
-        // opposite sides parallel plus one square corner, keeps the shape but
-        // leaves the ANGLE free, and a free angle is one the solver moves:
-        // measured, dimensioning both edges of a 37.5-degree rectangle spun it
-        // to 33.8. A rectangle that rotates when you dimension it is worse than
-        // one that refuses to be dimensioned.
-        //
-        // Pinned rather than merely constrained, so the corners still register
-        // as solver points: snapping and coincidence against a rotated
-        // rectangle's corners and edges go on working, and a dimension that
-        // fights the pin is reported as over-constrained rather than silently
-        // reshaping the part.
+        // A rotated rectangle is pinned rigid like a polygon (RIGID_ENTITY_NUM_FIELDS). The axis rules would straighten it,
+        // and parallel sides plus a square corner leave the angle free (dimensioning a 37.5 degree rectangle spun it to 33.8).
+        // Pinned corners stay solver points, so snaps work and a fighting dimension reports over-constrained.
         for (const p of cp) if (p !== undefined) fixedPts.add(p);
       } else {
         cons.push({ id: `${e.id}~h0`, type: "horizontal", line: `${e.id}~0` }); // bottom
@@ -242,8 +192,7 @@ export async function compileAndSolve(
         e.points.map((p, k) => getPoint(p.x, p.y, k === 0 || k === last)),
       );
     } else if (e.type === "bspline") {
-      // an open curve's end poles are on the curve and chain like endpoints;
-      // every other pole is off it and keeps its own identity
+      // An open curve's end poles are on the curve and chain like endpoints, the others keep their own identity.
       const last = e.poles.length - 1;
       poleMap.set(
         e.id,
@@ -253,11 +202,8 @@ export async function compileAndSolve(
       // a sketch point is mergeable so it can snap onto / coincide with geometry
       pointMap.set(e.id, getPoint(e.x, e.y, true));
     } else if (e.type === "projected") {
-      // Fixed reference geometry (Fusion Project): compiles as pinned planegcs
-      // primitives so user constraints/dims can attach to it. Endpoints are
-      // MERGEABLE on purpose, a coincident user endpoint fuses with the fixed
-      // point and is thereby anchored (the sticks-to-reference behavior).
-      // Write-back never touches projected entities (they are already exact).
+      // Projected geometry compiles as pinned primitives so user constraints can attach. Endpoints are mergeable on
+      // purpose, a coincident user endpoint fuses with the fixed point and is anchored. Write-back skips projected entities.
       const cv = e.curve;
       if (cv.kind === "line") {
         const p1 = getPoint(cv.x1, cv.y1);
@@ -271,23 +217,18 @@ export async function compileAndSolve(
         centers.set(e.id, c);
         pinProjected(c);
         projRounds.add(e.id);
-        // a planegcs circle radius is a free variable, pin it with an implicit
-        // constraint. `~` ids decode to null in constraintIndexOf, so conflict
-        // reporting can never blame a user constraint for this pin.
+        // A planegcs circle radius is free, so pin it with an implicit `~` id that reporting never blames on the user.
         cons.push({ id: `${e.id}~r`, type: "circleRadius", circle: e.id, value: cv.r });
       } else if (cv.kind === "arc") {
-        // native arc with all three defining points fixed; arc_rules then holds
-        // radius + sweep angles, so no separate radius pin is needed
+        // arc_rules holds radius and sweep once all three points are fixed, so no radius pin is needed.
         const m = compileArc(e.id, cv.x1, cv.y1, cv.x2, cv.y2, cv.mx, cv.my);
         if (m) {
           pinProjected(m.ourS, m.ourE, m.center);
           projRounds.add(e.id);
         }
       } else {
-        // poly: only the first/last samples are real, addressable model points
-        // (ONE for a closed poly, projEndSamples). Register them like spline
-        // ends (splineMap drives endpointPoint 0/1); no curve primitive,
-        // interior samples never enter the solver.
+        // Only the first and last poly samples are real model points (one for a closed poly), registered like spline ends.
+        // Interior samples never enter the solver.
         const sampleIds = projEndSamples(cv).map(([x, y]) => getPoint(x, y));
         if (sampleIds.length) {
           splineMap.set(e.id, sampleIds);
@@ -298,13 +239,8 @@ export async function compileAndSolve(
   }
 
   const isLine = (id: string) => ends.has(id);
-  // resolve an entity endpoint (0 = start, 1 = end) to its solver point id.
-  // lines + arcs have two endpoints (arc center at index 2); a point entity has
-  // just one (index ignored); a rectangle's 4 corners by index; a circle's
-  // center regardless of index. Mirrors dimPoint's rect/center/arc-center
-  // checks, so coincident/symmetric/midpoint can target the same points
-  // fix/p2pDistance already can; without these, the constraint compiles away
-  // silently, entity + p both resolve fine, it's just never handed to the solver.
+  // 0 = start, 1 = end, arc center 2. Mirrors dimPoint's rect, center and arc-center checks, otherwise coincident,
+  // symmetric and midpoint on those targets silently compile away.
   const endpointPoint = (entId: string, idx: number): string | undefined => {
     const rc = rectMap.get(entId);
     if (rc) return rc[idx];
@@ -321,10 +257,8 @@ export async function compileAndSolve(
     if (poles) return poles[poleOfRef(idx, poles.length)];
     return undefined;
   };
-  // resolve a circle/arc center to its solver point id
   const centerPoint = (entId: string): string | undefined => centers.get(entId) ?? arcMap.get(entId)?.center;
-  // resolve a dimension pick: rectangle corners by index, circle centers
-  // regardless of index, arc center at index 2, else entity endpoints
+  // Rectangle corners by index, circle centers regardless of index, arc center at index 2, else endpoints.
   const dimPoint = (entId: string, idx: number): string | undefined => {
     const rc = rectMap.get(entId);
     if (rc) return rc[idx];
@@ -333,10 +267,8 @@ export async function compileAndSolve(
     return endpointPoint(entId, idx);
   };
   const isCircle = (id: string) => centers.has(id);
-  // a circle OR arc primitive, planegcs's Arc derives from Circle, so the rim
-  // (edge-to-edge) constraints accept either
+  // planegcs's Arc derives from Circle, so the rim constraints accept either.
   const isRound = (id: string) => centers.has(id) || arcMap.has(id);
-  // entity kind by id (line/circle/arc), one lookup for the tangent/equal ladders
   const kindOf = (id: string): "line" | "circle" | "arc" | undefined =>
     ends.has(id) ? "line" : centers.has(id) ? "circle" : arcMap.has(id) ? "arc" : undefined;
   constraints.forEach((c, i) => {
@@ -369,11 +301,10 @@ export async function compileAndSolve(
       if (p && isLine(c.line)) cons.push({ id, type: "p2lDistance", p, line: c.line, value: c.value });
     } else if (c.type === "diameter") {
       if (centers.has(c.circle)) cons.push({ id, type: "diameter", circle: c.circle, value: c.value });
-      // an ARC can carry a diameter dim too (the right-click Radius/Diameter
-      // override), planegcs has no arc_diameter, so halve it
+      // An arc can carry a diameter dim (Radius/Diameter override), planegcs has no arc_diameter so halve it.
       else if (arcMap.has(c.circle)) cons.push({ id, type: "arcRadius", arc: c.circle, value: c.value / 2 });
     }
-    // --- edge-to-edge (rim) dims: one planegcs constraint each ---------------
+    // Rim (edge-to-edge) dims: one planegcs constraint each.
     else if (c.type === "radialGap") {
       if (isRound(c.inner) && isRound(c.outer) && c.inner !== c.outer) {
         cons.push({ id, type: "radiusDifference", inner: c.inner, outer: c.outer, value: c.value });
@@ -466,18 +397,12 @@ export async function compileAndSolve(
       else if (ka === "circle" && kb === "arc") cons.push({ id, type: "tangentCA", circle: c.a, arc: c.b });
       else if (ka === "arc" && kb === "circle") cons.push({ id, type: "tangentCA", circle: c.b, arc: c.a });
     } else if (c.type === "offset") {
-      // One composite over N source→copy pairs, all governed by c.value.
-      // Sub-ids append a LETTER before the pair number so constraintKey's
-      // leading-integer decode still resolves them back to this constraint
-      // ("k12p3" → 12), that's what lets a planegcs conflict blame the offset
-      // dimension rather than nothing. A digit-first suffix would silently
-      // decode to a different constraint index ("k1" + "0" → index 10).
+      // Sub-ids put a LETTER before the pair number so constraintKey decodes them back to this constraint ("k12p3" is 12),
+      // a digit-first suffix would decode wrong ("k1" + "0" is 10).
       const mag = Math.abs(c.value); // p2l_distance is unsigned; rimBranch holds the side
       c.pairs.forEach((pr, n) => {
-        // A rect-EDGE operand ("<rectId>~<k>") is already direction-locked by the
-        // rectangle's implicit horizontal/vertical constraints, so it needs ONE
-        // distance and no parallel, 4 edges × 1 equation is exactly a
-        // rectangle's 4 DOF. Adding the line treatment there would triple-count.
+        // A rect-edge operand is already direction-locked by the rectangle's implicit rules, so one distance and no
+        // parallel: 4 edges by 1 equation is exactly its 4 DOF.
         const rectEdge = pr.src.includes("~") && pr.cpy.includes("~");
         if (isLine(pr.src) && isLine(pr.cpy)) {
           const e = ends.get(pr.cpy);
@@ -487,17 +412,13 @@ export async function compileAndSolve(
             return;
           }
           cons.push({ id: `${id}p${n}`, type: "parallel", l1: pr.src, l2: pr.cpy });
-          // ONE endpoint distance, not two: once the copy is parallel to the
-          // source, pinning either endpoint at `mag` pins the whole line, so a
-          // second p2l_distance is always redundant, measured as 11 redundants
-          // on a 4-line square before this was cut back.
+          // One endpoint distance: with the copy parallel a second p2l_distance is redundant (11 redundants on a 4-line square).
           cons.push({ id: `${id}a${n}`, type: "p2lDistance", p: e[0], line: pr.src, value: mag });
         } else if (isRound(pr.src) && isRound(pr.cpy) && pr.src !== pr.cpy) {
           const a = centerPoint(pr.src),
             b = centerPoint(pr.cpy);
           if (a && b) cons.push({ id: `${id}c${n}`, type: "coincident", a, b });
-          // cpy.r − src.r, SIGNED, so the copy cannot cross its source the way a
-          // p2l_distance can; flip is set per arc by offsetChain (see types.ts).
+          // cpy.r − src.r, SIGNED, so the copy cannot cross its source as a p2l_distance can. offsetChain sets flip per arc.
           cons.push({
             id: `${id}r${n}`,
             type: "radiusDifference",
@@ -530,10 +451,8 @@ export async function compileAndSolve(
         best = p;
       }
     }
-    // a FIXED nearest point (projected geometry, or a user endpoint merged onto
-    // it, or a `fix` constraint) cannot move: refuse the drag outright instead
-    // of pitting the temporary drag pin against the fixed flag, and REPORT the
-    // refusal so the caller keeps its anchor on the stationary point
+    // A fixed nearest point cannot move: refuse the drag rather than fight the fixed flag, and report it so the caller
+    // keeps its anchor.
     if (best && !best.fixed) dragInput = { point: best.id, x: drag.toX, y: drag.toY };
     else if (best) dragRefused = projPts.has(best.id) ? "projected" : "fix";
   }
@@ -547,23 +466,14 @@ export async function compileAndSolve(
     ...(dragInput ? { drag: dragInput } : {}),
   });
 
-  // planegcs never sees a constraint whose operands are ALL fixed, fixed
-  // params aren't solver variables, so such a constraint is silently accepted
-  // even when violated (e.g. a driving dim between two projected points).
-  // Classify these "inert" constraints ourselves: satisfied → redundant
-  // (amber), violated → conflict (red), through the same reporting channel
-  // the solver's own diagnosis uses.
+  // planegcs never sees a constraint whose operands are all fixed and accepts it even when violated, so classify these
+  // inert ones here: satisfied is redundant (amber), violated is a conflict (red).
   const conflicts = [...r.conflicts];
   const redundant = [...r.redundant];
-  // No fixed points (no projected geometry, no `fix`) ⇒ no constraint can be
-  // inert (every inertResidual arm requires fx/fxLine/fxRound operands, and
-  // projRounds is only ever populated alongside fixedPts), skip the whole
-  // classification pass on ordinary sketches, incl. every drag frame.
+  // No fixed points means nothing can be inert, so ordinary sketches and every drag frame skip this pass.
   if (fixedPts.size) {
-    // mm (radians for angles), comfortably above the residual floor left by the
-    // engine's 6-decimal curve rounding (a p2p distance between rounded points
-    // can be off by ~1.4e-6 even when nominally exact), and matching its 1e-4 mm
-    // change tolerance: a conceptually-satisfied inert dim must grade amber, not red
+    // mm (radians for angles). Above the engine's 6-decimal rounding floor (~1.4e-6) and matching its 1e-4 mm change
+    // tolerance, so a satisfied inert dim grades amber, not red.
     const INERT_TOL = 1e-4;
     const pos = new Map(points.map((p) => [p.id, p])); // fixed ⇒ input == solved
     const lineEnds = new Map(lines.map((l) => [l.id, l]));
@@ -617,9 +527,7 @@ export async function compileAndSolve(
     // residual of an inert constraint, or null when any operand is still free
     const inertResidual = (c: SConstraint): number | null => {
       switch (c.type) {
-        // self-coincident (both endpoints position-merged into one solver
-        // point, e.g. a user endpoint snapped ONTO the projected point it is
-        // constrained to) is absorbed by the merge, vacuous, not over-defining
+        // Self-coincident (both ends merged into one point) is absorbed by the merge, not over-defining.
         case "coincident":
           return c.a !== c.b && fx(c.a) && fx(c.b) ? dist(c.a, c.b) : null;
         case "horizontal": {
@@ -758,12 +666,8 @@ export async function compileAndSolve(
       const pts = cp?.map((id) => r.points[id]);
       if (!pts || pts.some((p) => !p)) return e;
       if (e.angle) {
-        // Read the rectangle back OUT of its solved corners, which is the same
-        // three-point recovery the tool commits with. The axis-aligned bounding
-        // box below cannot do it: for a 10x4 turned 37.5 degrees that box is
-        // 10.4 x 9.3, so every solve would inflate the shape while leaving the
-        // angle field saying 37.5.
-        // Its corners are pinned, re-deriving unmoved ones only adds float noise (200 degrees became -160.00000000000003).
+        // Read the rectangle back from its solved corners, the tool's three-point recovery: the bounding box of a 10x4 at
+        // 37.5 degrees is 10.4 x 9.3. Unmoved pinned corners are not re-derived (200 degrees became -160.00000000000003).
         const was = rectCorners(e.x, e.y, e.width, e.height, e.angle);
         if (pts.every((p, k) => p!.x === was[k]?.x && p!.y === was[k]?.y)) return e;
         const rec = rectFromThreePoints(pts[0]!, pts[1]!, pts[2]!);
@@ -784,8 +688,7 @@ export async function compileAndSolve(
         en = r.points[m.ourE],
         c = r.points[m.center];
       if (!s || !en || !c) return e;
-      // recompute the through-point as the arc's mid-sweep, from the solved
-      // endpoints + center (robust to angle normalisation in the solver)
+      // Through-point is the mid-sweep from solved endpoints and center, robust to the solver's angle normalisation.
       const rad = r.arcs[e.id]?.radius ?? Math.hypot(s.x - c.x, s.y - c.y);
       const [from, to] = m.startIsOurS ? [s, en] : [en, s];
       const aFrom = Math.atan2(from.y - c.y, from.x - c.x);
@@ -804,9 +707,7 @@ export async function compileAndSolve(
     if (e.type === "spline") {
       const ids = splineMap.get(e.id);
       if (!ids) return e;
-      // ids is 1:1 with e.points (built via e.points.map above), so iterate the
-      // originals: `orig` is always defined and is the fallback when the solver
-      // didn't return a position for that fit point.
+      // ids is 1:1 with e.points, so `orig` is the fallback when the solver returned no position.
       return {
         ...e,
         points: e.points.map((orig, k) => {
@@ -833,13 +734,9 @@ export async function compileAndSolve(
     return e;
   });
 
-  // THE solve guard. planegcs will happily report Success / dof 0 / no conflict
-  // for a solution that drives a radius through zero, or that satisfies an
-  // edge-to-edge distance by turning the configuration inside-out (its p2c/c2l
-  // measures are unsigned, and c2cdistance's nested branch is unsigned in
-  // |r1 - r2|). Neither may reach the document: blame the constraints involved
-  // and hand back the PRE-solve geometry, so the caller's existing
-  // "keep last good on conflict" path paints a red chip instead of a broken part.
+  // planegcs reports success for a radius through zero or an inside-out rim distance (p2c, c2l and nested c2cdistance
+  // are unsigned). Blame the constraints and return the pre-solve geometry, so the caller paints a red chip instead
+  // of a broken part.
   const badGeom = new Set<string>();
   for (const [eid, rad] of Object.entries(r.circles)) {
     if (!(rad > RIM_EPS) || !Number.isFinite(rad)) badGeom.add(eid);
@@ -887,8 +784,7 @@ export async function compileAndSolve(
   };
 }
 
-/** the round (circle/arc) entity ids a compiled constraint names, the blame
- *  list when one of them solves to a non-positive radius */
+/** The blame list when one of them solves to a non-positive radius. */
 function roundRefs(c: SConstraint): string[] {
   switch (c.type) {
     case "diameter":
@@ -921,17 +817,12 @@ function roundRefs(c: SConstraint): string[] {
   }
 }
 
-/** the rim dims whose configuration `rimBranch` classifies. `radialGap` is
- *  deliberately absent: `difference` is signed, so it cannot invert an annulus
- *  on its own (the negative-radius half of the guard covers the rest). */
+/** `radialGap` is absent on purpose: `difference` is signed, so it cannot invert an annulus by itself. */
 const isRimDim = (c: SketchConstraint): boolean =>
   c.type === "c2cDistance" || c.type === "p2cDistance" || c.type === "c2lDistance" || c.type === "offset";
 
-/** The configuration class a rim dimension describes, for the geometry in
- *  `byId`, null for anything that isn't a rim dim (or whose operands are gone,
- *  where there is nothing to compare). Comparing it before and after a solve is
- *  what stops an annulus inverting, a point crossing a rim, or a circle hopping
- *  to the other side of a line while the typed number stays "satisfied". */
+/** null for non-rim dims or gone operands. Comparing it across a solve stops an annulus inverting, a point crossing a
+ *  rim or a circle hopping sides of a line while the number stays satisfied. */
 function rimBranch(c: SketchConstraint, byId: Map<string, ResolvedEntity>): string | null {
   const round = (id: string): Round | null => {
     const e = byId.get(id);
@@ -960,11 +851,8 @@ function rimBranch(c: SketchConstraint, byId: Map<string, ResolvedEntity>): stri
     return `side:${side}:${Math.abs(dist) >= cc.r ? "out" : "in"}`;
   }
   if (c.type === "offset") {
-    // Which side of each SOURCE line its copy sits on. Only line pairs can flip:
-    // their p2l_distance is unsigned, so a solve could satisfy the number with
-    // the copy on the far side. Round pairs use the signed `difference` and are
-    // excluded by construction, they contribute a constant "." so the string
-    // still compares equal across the solve.
+    // Only line pairs can flip, their p2l_distance is unsigned. Round pairs use the signed `difference` and contribute a
+    // constant ".".
     const sides = c.pairs.map((pr) => {
       const s = lineOperand(byId, pr.src),
         t = lineOperand(byId, pr.cpy);
