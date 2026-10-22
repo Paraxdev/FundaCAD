@@ -60,22 +60,8 @@ onUnmounted(
   }),
 );
 
-// The overlays the running plugins add, mounted at the end of the stack.
-//
-// This file used to name four of them, each a capability's own window, and
-// carry three
-// mirrored capability flags to decide which to draw. That was the app knowing
-// what its capabilities ARE, spelled out in the one file that should be able to
-// say least about them, and it was four more edits for anybody adding a fifth.
-//
-// Now it draws what it was given and asks nothing about any of it. A component
-// arrives already knowing when it should be visible, because the plugin that
-// contributed it is the only thing that could know; a plugin that is off
-// contributed nothing and there is nothing to hide. `shallowRef`, because these
-// are component definitions and must not become reactive proxies.
-//
-// The registry is deliberately Vue-free, which is what lets the headless suite
-// import it, so its changes reach the template through this mirror.
+// Plugin overlays decide their own visibility. The registry is Vue free for the headless suite, so this mirrors it;
+// shallowRef because component definitions must not become reactive proxies.
 const overlays = shallowRef(contributedOverlays());
 let offContrib: (() => void) | null = null;
 onMounted(() => {
@@ -103,23 +89,16 @@ watch(
 </script>
 
 <template>
-  <!-- The application shell, formerly the static markup inside <div id="app">
-       in index.html. Element ids and class names are unchanged: every layout
-       rule in src/styles/_layout.scss is id-scoped to these, and the e2e suite
-       selects on them. -->
+  <!-- src/styles/_layout.scss and the e2e suite select on these element ids and class names. -->
   <TitleBar />
   <SafeModeBanner />
   <div id="main">
-    <!-- The viewport fills the stage and everything else floats over it. The
-         float layer takes no pointer events itself, only its cards do, so the
-         model can be picked through every gap between them. -->
+    <!-- The float layer takes no pointer events, only its cards do, so the model stays pickable between them. -->
     <div id="stage" ref="stage" :class="{ narrow: shell.narrow }">
       <!-- Inert under Home, so Tab and screen readers stay on what is on screen. -->
       <ViewportPane :inert="home.shown" />
       <div id="float-layer" :inert="home.shown">
         <div class="float-left">
-          <!-- Items on top, the blend's edge list docked under it (shrinking
-               Items while a fillet/chamfer is being edited), the rail beside. -->
           <div class="float-left-stack">
             <BrowserPane v-if="shell.itemsShown" />
             <FilletMembers />
@@ -136,14 +115,11 @@ watch(
       <!-- Covers the canvas rather than hiding it, so the viewport keeps its size. -->
       <HomeScreen v-if="home.shown" />
     </div>
-    <!-- Present only in the Render workspace; it mounts nothing in the other
-         one, so the grid track collapses. -->
+    <!-- Mounts nothing outside the Render workspace, so the grid track collapses. -->
     <RenderDock />
   </div>
 
-  <!-- Global overlays. Each Teleports to body, which is where the imperative
-       versions appended themselves, they must not inherit a stacking context
-       from #app's grid. -->
+  <!-- Each Teleports to body, so none inherits a stacking context from #app's grid. -->
   <ToastStack />
   <ModalHost />
   <GuideLayer />
@@ -155,8 +131,7 @@ watch(
   <DropHint />
   <CommandPalette />
 
-  <!-- Floating "measure-panel" popups. Independent of one another: Properties
-       and the Overhang settings are legitimately on screen together. -->
+  <!-- Independent popups: Properties and the Overhang settings can be on screen together. -->
   <PropertiesPanel />
   <InterferencePanel />
   <StressPanel />
@@ -164,28 +139,17 @@ watch(
   <ParamsDialog />
   <MeasureReadout />
 
-  <!-- In-canvas overlays, driven entirely by imperative tool code through the
-       facades in sketch/ and features/. The two annotation LAYERS are mounted
-       while their overlay is shown (they render nothing until a sketch is open)
-       and each owns a rAF reprojection loop it starts and stops itself; the tool PANELS
-       are v-if'd and keyed, so reopening a tool remounts one with fresh form
-       state instead of needing a reset path. -->
+  <!-- Tool panels are keyed, so reopening a tool remounts fresh form state with no reset path. -->
   <SketchDimLayer v-if="sketchLabelsShown" />
   <SketchGlyphLayer v-if="sketchLabelsShown" />
   <TextToolPanel v-if="toolPanels.text" :key="toolPanels.text.id" :req="toolPanels.text" />
   <ProjectFilterBar v-if="toolPanels.projectAnchor" />
 
-  <!-- Modal dialogs. v-if rather than an `open` prop on purpose: mount IS open
-       and unmount IS closed, which is what lets the ones that gate global
-       shortcuts push/pop the modal depth in onMounted/onUnmounted and never
-       leak a count (composables/useModalGate.ts). They are independent because
-       they genuinely stack. -->
+  <!-- v-if, not an open prop: mount is open, so useModalGate.ts can count modal depth in mount hooks without leaks. -->
   <PreferencesDialog v-if="dialogs.preferences" />
   <ExportDialog v-if="exportDialog.request" />
   <BugReportDialog v-if="dialogs.bugReport && dialogs.bugDeps" />
 
-  <!-- Whatever the running plugins add. Last, so a capability's window opens
-       over the app's own rather than under it, and keyed by contributor so
-       switching one off unmounts exactly its components. -->
+  <!-- Plugin overlays last, so they open above the app's own, keyed so turning one off unmounts exactly its parts. -->
   <component :is="o.component" v-for="o in overlays" :key="o.key" />
 </template>
