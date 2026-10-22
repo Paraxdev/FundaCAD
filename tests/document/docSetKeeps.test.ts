@@ -5,7 +5,7 @@ import { appHost } from "../../src/plugins/broker/appHost";
 import { createBroker } from "../../src/plugins/broker/broker";
 import { allOpGrants } from "../../src/plugins/broker/ops";
 import type { DocumentStore } from "../../src/document/store";
-import type { CadDocument } from "../../src/types";
+import type { CadDocument, SectionView } from "../../src/types";
 import { box, env, opened, saved, study } from "./storeKit";
 
 vi.stubGlobal("window", globalThis);
@@ -120,6 +120,24 @@ describe("a plugin's doc_get then doc_set", () => {
       expect(s.hasUnreadVersions()).toBe(false);
       expect(sections(s)).toEqual([]);
     }
+  });
+
+  it("leaves the section cut as the user has it now, and turns it off for an unrelated document", async () => {
+    const read: SectionView = { origin: [12.5, -4, 3], normal: [0.6, 0, 0.8], offset: -2.5, side: 1, ghost: "faint" };
+    const moved: SectionView = { origin: [-7, 9.25, 1.5], normal: [0, -0.8, 0.6], offset: 3.75, side: -1, ghost: "strong" };
+    for (const now of [moved, null]) {
+      const s = workedOn();
+      s.setSectionView(structuredClone(read));
+      const b = plugin(s);
+      const got = await b.callOrThrow<CadDocument>("doc_get");
+      s.setSectionView(now && structuredClone(now));
+      await b.callOrThrow("doc_set", { document: got });
+      expect(s.sectionView).toEqual(now);
+    }
+    const s = workedOn();
+    s.setSectionView(structuredClone(read));
+    await plugin(s).callOrThrow("doc_set", { document: { parameters: {}, features: [box("g1", 2)], sectionView: read } });
+    expect(s.sectionView).toBeNull();
   });
 });
 
