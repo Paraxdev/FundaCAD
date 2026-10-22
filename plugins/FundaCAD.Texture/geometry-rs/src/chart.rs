@@ -1,6 +1,5 @@
-//! texture_mesh.py's charts: the face's surface as the kernel describes it,
-//! (u, v) parameters to millimetres, the planar chart of a freeform face, the
-//! triplanar weights, the slope mask and the per vertex surface frame.
+//! texture_mesh.py's charts: (u, v) to millimetres, the planar chart of a freeform face, the triplanar weights, the
+//! slope mask and the per vertex surface frame.
 
 use std::f64::consts::PI;
 

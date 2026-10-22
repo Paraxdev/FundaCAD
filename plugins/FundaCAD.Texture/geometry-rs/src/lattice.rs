@@ -1,14 +1,6 @@
-//! texture_mesh.py's refinement: getting a triangulation fine enough, and
-//! aligned enough, to carry a texture. A lattice lays its sample lines on the
-//! pattern's own creases, a cellular kind brings its own vertices, a planar or
-//! revolved face is re-triangulated in its mm chart, and anything else is
-//! subdivided on the true surface.
-//!
-//! The Delaunay triangulations come from the engine's `delaunay-planar`, the same
-//! Qhull scipy runs, called the same way. Anything else would break the ties
-//! inside co-circular cells differently and hand back its triangles in another
-//! order with another first vertex, and the median first edge the wavelength
-//! clamp reads and the order the crease flips are tried in both follow those.
+//! texture_mesh.py's refinement. The Delaunay comes from the engine's `delaunay-planar`, the same Qhull scipy runs:
+//! another would break co-circular ties and order triangles differently, and the median first edge the wavelength
+//! clamp reads and the order of the crease flips both follow that.
 
 use std::collections::HashMap;
 
