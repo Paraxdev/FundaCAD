@@ -379,6 +379,9 @@ pub struct Host {
     pub doc: Value,
     pub applied: Vec<String>,
     pub can_edit: bool,
+    /// An import is being read into the open document, so a whole other document is refused as the app does.
+    pub importing: bool,
+    pub refused: Vec<Value>,
     /// What the window shares as its title, the open file's path.
     pub title: String,
     next: u64,
@@ -393,6 +396,8 @@ impl Host {
             applied: Vec::new(),
             title: "part.funda".into(),
             can_edit: true,
+            importing: false,
+            refused: Vec::new(),
             next: 0,
         }
     }
@@ -411,12 +416,17 @@ impl Host {
                 "session_host",
                 json!({"document": self.doc, "revision": self.rev, "title": self.title,
                        "status": {"canEdit": self.can_edit, "applied": self.applied,
-                                  "building": false}}),
+                                  "refused": self.refused, "building": false}}),
             )
             .await;
         let res = reply.get("result").cloned().unwrap_or_else(|| json!({}));
         for p in res.get("proposals").and_then(Value::as_array).cloned().unwrap_or_default() {
             if !self.can_edit {
+                continue;
+            }
+            if self.importing && p.get("replaces") == Some(&json!(true)) {
+                let id = p.get("id").cloned().unwrap_or(Value::Null);
+                self.refused.push(json!({"id": id, "message": "an import is still being read into the open document"}));
                 continue;
             }
             self.doc = p.get("document").cloned().unwrap_or(Value::Null);

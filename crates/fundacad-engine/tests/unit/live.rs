@@ -314,3 +314,38 @@ fn a_proposal_for_a_document_the_app_closed_never_reaches_the_next_one() {
     assert_eq!(features(&publish(&mut plain, APP, doc(1), 1)["proposals"][0]["document"]), 2);
     assert!(plain.state(Some(AGENT), None).get("doc").is_none());
 }
+
+#[test]
+fn a_whole_other_document_reaches_the_app_marked_so_it_can_refuse_it_during_an_import() {
+    let (mut s, _) = session();
+    s.publish_doc(APP, json!("doc-a"), doc(3), 7, Value::Null, Value::Null);
+    let replacing = wire(
+        &mut s,
+        AGENT,
+        "session_propose",
+        json!({"document": doc(0), "baseRevision": 7,
+        "doc": "doc-a", "replaces": true}),
+    );
+    let edit = wire(&mut s, AGENT, "session_propose", json!({"document": doc(4), "baseRevision": 7, "doc": "doc-a"}));
+    let unmarked = wire(
+        &mut s,
+        AGENT,
+        "session_propose",
+        json!({"document": doc(5), "baseRevision": 7,
+        "doc": "doc-a", "replaces": false}),
+    );
+    // A refused proposal leaves nothing marked behind.
+    let late = s.propose_replacing(AGENT, doc(0), 7, Some(&json!("doc-b")), None, None, true);
+    let handed = s.publish_doc(APP, json!("doc-a"), doc(3), 7, Value::Null, Value::Null);
+    let marks: Vec<(usize, Value)> = handed["proposals"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| (features(&p["document"]), p.get("replaces").cloned().unwrap_or(Value::Null)))
+        .collect();
+    assert_eq!(
+        (replacing["ok"].clone(), edit["ok"].clone(), unmarked["ok"].clone(), late["reason"].clone()),
+        (json!(true), json!(true), json!(true), json!("doc-changed"))
+    );
+    assert_eq!(marks, vec![(0, json!(true)), (4, Value::Null), (5, Value::Null)]);
+}

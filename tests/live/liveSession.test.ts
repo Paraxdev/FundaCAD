@@ -156,6 +156,75 @@ describe("the window's half of a live session", () => {
     await host.stop();
   });
 
+  it("refuses a whole new document while an import is read into the open one, and says so by proposal id", async () => {
+    const host = new LiveSessionHost(store, geo, () => true);
+    host.start();
+    await host.tick();
+    store.loadDocument(doc(2));
+    let finish!: () => void;
+    const reading = store.runBusy(
+      "Importing sv08.step",
+      (onStarted) => {
+        onStarted("rq-import");
+        return new Promise<void>((r) => (finish = r));
+      },
+      { holdHistory: true },
+    );
+    const lastStatus = () =>
+      geo.sent.filter((m) => m.op === "session_host").at(-1)!.payload["status"] as {
+        applied: string[];
+        refused: { id: string; message: string }[];
+      };
+
+    // doc_new or doc_open of the assistant: the import would land in that other document.
+    geo.reply = { ok: true, guests: ["an assistant"], proposals: [{ ...proposal("p1", 0), replaces: true }] };
+    await host.tick();
+    const whileReading = store.document.features.length;
+    // An edit of the open document goes in, the import was started for it.
+    geo.reply = { ok: true, guests: ["an assistant"], proposals: [proposal("p2", 3)] };
+    await host.tick();
+    const edited = store.document.features.length;
+    geo.reply = { ok: true, guests: ["an assistant"], proposals: [] };
+    await host.tick();
+    const told = lastStatus();
+
+    finish();
+    await reading;
+    geo.reply = { ok: true, guests: ["an assistant"], proposals: [{ ...proposal("p3", 1), replaces: true }] };
+    await host.tick();
+    const afterImport = store.document.features.length;
+    geo.reply = { ok: true, guests: ["an assistant"], proposals: [] };
+    await host.tick();
+
+    store.newDocument();
+    await host.tick();
+    expect({
+      whileReading,
+      edited,
+      told: { applied: told.applied, refused: told.refused },
+      afterImport,
+      after: lastStatus().applied,
+      next: store.document.features.length,
+    }).toEqual({
+      whileReading: 2,
+      edited: 3,
+      told: {
+        applied: ["p2"],
+        refused: [
+          {
+            id: "p1",
+            message:
+              "an import is still being read into the open document, so it was not replaced, nothing was applied; wait for the import or cancel it in History",
+          },
+        ],
+      },
+      afterImport: 1,
+      after: ["p2", "p3"],
+      next: 0,
+    });
+    await host.stop();
+  });
+
   it("applies an assistant's edit through the document store, so it is one undo", async () => {
     const host = new LiveSessionHost(store, geo, () => true);
     host.start();
