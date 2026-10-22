@@ -841,8 +841,10 @@ export function displacedPositions(
   return out;
 }
 
-/** The Animate toggle's swing: 0 to `scale` and back, eased at both ends. */
-export function swingScale(timeMs: number, scale: number, periodMs = 1600): number {
+export const SWING_PERIOD_MS = 1600;
+
+/** The deformation's swing: 0 to `scale` and back, eased at both ends, at `scale` half way through a period. */
+export function swingScale(timeMs: number, scale: number, periodMs = SWING_PERIOD_MS): number {
   return (scale * (1 - Math.cos((2 * Math.PI * timeMs) / periodMs))) / 2;
 }
 

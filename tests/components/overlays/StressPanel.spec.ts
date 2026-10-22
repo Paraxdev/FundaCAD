@@ -30,6 +30,7 @@ function makeEngine() {
     setStressColours: vi.fn(),
     setStressDeformation: vi.fn(),
     setStressAnimate: vi.fn(),
+    pauseStressAnimation: vi.fn(),
     setStressProbe: vi.fn(),
     removeStressProbe: vi.fn(),
   };
@@ -376,7 +377,7 @@ describe("StressPanel", () => {
     expect(p.stress!.setup.gravity).toEqual({ on: true, direction: "+Y" });
   });
 
-  it("shows the deformation with its factor, True size, Animate, Read a point and the pinned points", async () => {
+  it("shows the deformation with its factor, True size, Read a point and the pinned points", async () => {
     const { p, panels } = await withResult();
     p.setStressDeform({ scale: 120, auto: 120, max: 480, animate: false });
     p.addStressPin({ tri: 3, weights: [1, 0, 0], label: "12 MPa, 0.4 mm" });
@@ -389,13 +390,49 @@ describe("StressPanel", () => {
     expect(panels.setStressDeformation).toHaveBeenCalledWith(60);
     q(".stress-true-scale")!.click();
     expect(panels.setStressDeformation).toHaveBeenLastCalledWith(1);
-    q(".stress-animate")!.click();
-    expect(panels.setStressAnimate).toHaveBeenCalledWith(true);
     q(".stress-probe")!.click();
     expect(panels.setStressProbe).toHaveBeenCalledWith(true);
     expect(q(".stress-pin")?.textContent).toContain("12 MPa, 0.4 mm");
     q(".stress-remove-pin")!.click();
     expect(panels.removeStressProbe).toHaveBeenCalledWith(1);
+  });
+
+  it("plays and pauses the deformation from one button that says which it will do", async () => {
+    const { p, panels } = await withResult();
+    p.setStressDeform({ scale: 12.5, auto: 12.5, max: 50, animate: false });
+    await flushPromises();
+    const play = q(".stress-animate")!;
+    expect({ text: play.textContent?.trim(), pressed: play.getAttribute("aria-pressed") }).toEqual({
+      text: "Play",
+      pressed: "false",
+    });
+    play.click();
+    p.stress!.deform!.animate = true;
+    await flushPromises();
+    expect({ text: play.textContent?.trim(), pressed: play.getAttribute("aria-pressed") }).toEqual({
+      text: "Pause",
+      pressed: "true",
+    });
+    play.click();
+    expect(panels.setStressAnimate.mock.calls).toEqual([[true], [false]]);
+  });
+
+  it("pauses the swing on the way to Set up, and does not play it again back in Results", async () => {
+    const { p, panels } = await withResult();
+    p.setStressDeform({ scale: 12.5, auto: 12.5, max: 50, animate: false });
+    await flushPromises();
+    tab("setup").click();
+    await flushPromises();
+    expect(panels.pauseStressAnimation).not.toHaveBeenCalled();
+    tab("results").click();
+    p.stress!.deform!.animate = true;
+    await flushPromises();
+    tab("setup").click();
+    await flushPromises();
+    expect(panels.pauseStressAnimation).toHaveBeenCalledOnce();
+    tab("results").click();
+    await flushPromises();
+    expect(panels.setStressAnimate).not.toHaveBeenCalled();
   });
 
   it("lets the last load go, for a body under its own weight", async () => {
