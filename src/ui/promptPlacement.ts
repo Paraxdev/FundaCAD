@@ -45,6 +45,28 @@ export function promptInsets(
   return { left: Math.round(left), right: Math.round(right) };
 }
 
+export interface Row extends Insets {
+  top: number;
+}
+
+/** The highest row at or below `top` where a box of `size` fits between the columns' cards, `gap` from each, with
+ *  its top and its insets from `area`'s sides. Rows start at `top` and under each card. Null when none fits. */
+export function clearRow(
+  area: Box,
+  size: { width: number; height: number },
+  top: number,
+  cards: { left: readonly Box[]; right: readonly Box[] },
+  gap: number,
+): Row | null {
+  const under = [...cards.left, ...cards.right].map((o) => o.bottom + gap).filter((t) => t > top);
+  for (const t of [top, ...under].sort((a, b) => a - b)) {
+    if (t + size.height > area.bottom - gap) break;
+    const { left, right } = promptInsets(area, { top: t, bottom: t + size.height }, cards, gap, 0);
+    if (area.right - area.left - left - right >= size.width) return { top: t, left, right };
+  }
+  return null;
+}
+
 // The rail's buttons rather than the rail: its box runs the full height at the
 // width of its widest label, which sits at the top.
 export const LEFT_CARDS = "#float-layer .float-left-stack > *, #float-layer .tool-rail .rail-btn, #float-layer .tool-rail .rail-group";

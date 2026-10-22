@@ -1046,7 +1046,7 @@
 /* The Section chip and Normal to Sketch stack at the top middle, clear of the cards (useClearOfCards). */
 #viewport .vp-top {
   position: absolute;
-  top: var(--s-4);
+  top: var(--row-top, var(--s-4));
   left: var(--row-left, 0px);
   right: var(--row-right, 0px);
   margin-inline: auto;
@@ -1094,6 +1094,9 @@
 .section-chip-btn.disabled {
   opacity: 0.45;
   cursor: default;
+}
+#viewport .vp-top[data-narrow] .section-chip-text {
+  display: none;
 }
 @media (max-width: 560px) {
   .section-chip-text {
