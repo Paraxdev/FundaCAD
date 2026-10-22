@@ -1,7 +1,5 @@
 <script setup lang="ts">
-// The fastener library: the catalogue and your own, searched and filtered, a preview and the specs
-// of the one selected, and Insert. Mounted for the life of the plugin; `open` decides whether it
-// draws.
+// Mounted for the life of the plugin, `open` decides whether it draws.
 
 import { computed, ref, watch } from "vue";
 import { FloatingPanel } from "fundacad/ui";
@@ -173,8 +171,6 @@ function onDragStart(ev: DragEvent, e: ListEntry) {
 function onDragEnd() {
   dragging.value = null;
 }
-
-// --- your own ---
 
 const editing = ref<{ id: string | null; initial: FastenerSpec | null } | null>(null);
 

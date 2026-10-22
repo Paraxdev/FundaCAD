@@ -1,9 +1,5 @@
-// Fasteners: a standards catalogue of screws, bolts, nuts, washers and inserts, and the ones a
-// person defines, previewed, specified and dropped into the model.
-//
-// A fastener arrives the way an imported STEP part does. Its solid is generated once
-// (geometry/register.py) and stored as an `import` feature's blob (insert.ts), so a document with
-// fasteners in it opens and builds where this plugin was never installed.
+// Fasteners from a standards catalogue or defined by the person. Each is stored as an `import` feature's blob
+// (insert.ts), so a document with fasteners builds where this plugin was never installed.
 
 import { contribute } from "fundacad";
 import type { Engine } from "fundacad";

@@ -1,11 +1,6 @@
-//! scr_thread.py: modelled helical threads, cut with the kernel's helical
-//! sweep (a revolve that climbs).
-//!
-//! The groove is the 60 degree triangle src/features/threadMath.ts draws: ISO
-//! 68-1's basic depth of 0.6134 P, pushed past the cylinder it cuts so the
-//! boolean is never tangent. It is cut into a plain cylinder one turn per tool,
-//! all tools in one boolean: a long helical tool running nearly parallel to the
-//! cylinder defeats the kernel, the cut reports success and removes nothing.
+//! Port of scr_thread.py. The groove is ISO 68-1's 60 degree triangle, 0.6134 P deep, pushed past the cylinder so the
+//! boolean is never tangent. One turn per tool, all tools in one boolean: a long helical tool nearly parallel to the
+//! cylinder defeats the kernel, which reports success and removes nothing.
 
 use std::f64::consts::PI;
 
