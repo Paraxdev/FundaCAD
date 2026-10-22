@@ -188,6 +188,24 @@ describe("sketch Mirror inside SketchMode", () => {
     expect(values()).toEqual(["2 entities", "Nothing picked"]);
   });
 
+  it("undo mid run ends it on Select with the annotations clickable again", () => {
+    const { s, log } = makeSketch(["l1"]);
+    expect(log.interactive).toEqual([false]);
+    s.applyHistory({});
+    expect(s.mirrorFlow.running).toBe(false);
+    expect(panel()).toBeNull();
+    expect(s.tool).toBe("select");
+    expect(log.interactive).toEqual([false, true]);
+  });
+
+  it("undo in another tool leaves the annotations alone", () => {
+    const { s, log } = makeSketch([]);
+    s.setTool("line");
+    s.applyHistory({});
+    expect(s.tool).toBe("line");
+    expect(log.interactive).toEqual([false, false]);
+  });
+
   it("moving the pointer lights the line under it", () => {
     const { s, log } = makeSketch(["c1"]);
     s.onPointerMove({ clientX: ON_L1.x, clientY: ON_L1.y });

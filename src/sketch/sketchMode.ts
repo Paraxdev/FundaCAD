@@ -3818,10 +3818,7 @@ export class SketchMode {
     this.splinePts = [];
     this.clickPts = [];
     this.modifyFlow.reset();
-    if (this.mirrorFlow.running) {
-      this.mirrorFlow.reset();
-      this.tool = "select";
-    }
+    if (this.mirrorFlow.running) this.setTool("select");
     this.dim.hide();
     this.overlay.setPreview([]);
     this.refreshActive();
