@@ -46,6 +46,8 @@ interface Proposal {
   name: string;
   note: string | null;
   document: CadDocument;
+  /** The document session the assistant read, set by an engine that knows sessions. */
+  doc?: string;
 }
 
 export class LiveSessionHost {
@@ -181,13 +183,17 @@ export class LiveSessionHost {
       // The cut is the user's view, and an assistant's edit sends back the whole document it pulled: with the cut
       // in it, an edit made against an older publish would put back a cut the user has since moved or turned off.
       const { sectionView: _view, ...document } = this.store.toObject();
+      const session = this.store.session;
       const res = await this.geometry.session?.("session_host", {
+        doc: session.id,
         document,
         revision: this.revision,
         title: this.store.filePath ?? null,
         status: this.buildStatus(),
       });
-      if (res) await this.collect(res);
+      // Proposals collected for a document closed during the round trip are dropped, the assistant is told by the
+      // next publish naming another document.
+      if (res && session.alive) await this.collect(res);
       // Not awaited: an engine older than guide mode queues the op behind a build.
       void this.guideTick();
     } catch {
@@ -221,6 +227,7 @@ export class LiveSessionHost {
       // Skip a malformed proposal without bumping the revision, so the assistant's wait times out and says so.
       return;
     }
+    if (p.doc !== undefined && p.doc !== this.store.session.id) return;
     if (!this.allowEdits()) {
       // Sharing read-only. The assistant is told via `canEdit` and refuses first; this is the check at the point of
       // action, the one that must be right if they disagree.

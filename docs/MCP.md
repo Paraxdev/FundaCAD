@@ -240,7 +240,11 @@ The rules live in the engine (`crates/fundacad-engine/src/live.rs`): one HOST
 revision) and any number of GUESTS (which may read and PROPOSE, never write). A
 proposal names the revision it was written against and is refused if the
 document has moved on, so an agent cannot overwrite what a person did while it
-was thinking. The window's side is `src/live/liveSession.ts`.
+was thinking. A proposal also names the document session it read (`doc`):
+when the window opens, creates or discards a document before taking the edit,
+the engine drops it and the tool fails with "the document in the app changed,
+nothing was applied", so an edit never lands in the next document. The window's
+side is `src/live/liveSession.ts`.
 
 On Windows the engine a private session spawns is put in a job object with
 `KILL_ON_JOB_CLOSE`, so it dies with this process however this process dies.

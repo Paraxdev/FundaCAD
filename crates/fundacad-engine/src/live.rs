@@ -19,6 +19,8 @@ pub type Clock = Box<dyn Fn() -> f64 + Send>;
 pub struct LiveSession {
     clock: Clock,
     host_id: Option<String>,
+    /// The host's open document session, null for a host that names none. Proposals are only ever for it.
+    doc: Value,
     document: Value,
     revision: i64,
     title: Value,
@@ -61,6 +63,7 @@ impl LiveSession {
         LiveSession {
             clock,
             host_id: None,
+            doc: Value::Null,
             document: Value::Null,
             revision: 0,
             title: Value::Null,
@@ -83,6 +86,7 @@ impl LiveSession {
 
     fn reset(&mut self) {
         self.host_id = None;
+        self.doc = Value::Null;
         self.document = Value::Null;
         self.revision = 0;
         self.title = Value::Null;
@@ -111,10 +115,25 @@ impl LiveSession {
         }
     }
 
-    /// `publish`: the host says what it has and collects what guests asked for.
+    /// `publish`: the host says what it has and collects what guests asked for. Proposals and guide commands made
+    /// for another host or another of its documents are dropped, never handed to the document open now.
     pub fn publish(&mut self, host_id: &str, document: Value, revision: i64, title: Value, status: Value) -> Value {
-        if self.host_id.as_deref() != Some(host_id) {
+        self.publish_doc(host_id, Value::Null, document, revision, title, status)
+    }
+
+    /// [`Self::publish`] by a host that names its open document session.
+    pub fn publish_doc(
+        &mut self,
+        host_id: &str,
+        doc: Value,
+        document: Value,
+        revision: i64,
+        title: Value,
+        status: Value,
+    ) -> Value {
+        if self.host_id.as_deref() != Some(host_id) || self.doc != doc {
             self.host_id = Some(host_id.to_owned());
+            self.doc = doc;
             self.pending.clear();
             self.reset_guide();
         }
@@ -142,14 +161,18 @@ impl LiveSession {
         if let Some(g) = guest_id {
             self.touch(g, name);
         }
-        json!({
+        let mut st = json!({
             "attached": self.host_id.is_some(),
             "revision": self.revision,
             "title": self.title,
             "status": self.status,
             "document": self.document,
             "guests": self.guest_names(),
-        })
+        });
+        if !self.doc.is_null() {
+            st["doc"] = self.doc.clone();
+        }
+        st
     }
 
     /// `propose`: an offered replacement, or which of three things went wrong.
@@ -161,10 +184,27 @@ impl LiveSession {
         note: Option<&Value>,
         name: Option<&Value>,
     ) -> Value {
+        self.propose_doc(guest_id, document, base_revision, None, note, name)
+    }
+
+    /// [`Self::propose`] for the document session `doc` the guest read, refused once the host has another open.
+    pub fn propose_doc(
+        &mut self,
+        guest_id: &str,
+        document: Value,
+        base_revision: i64,
+        doc: Option<&Value>,
+        note: Option<&Value>,
+        name: Option<&Value>,
+    ) -> Value {
         self.touch(guest_id, name);
         if self.host_id.is_none() {
             return json!({"ok": false, "reason": "no-host",
                 "message": "no FundaCAD window is sharing a document"});
+        }
+        if doc.is_some_and(|d| !d.is_null() && *d != self.doc) {
+            return json!({"ok": false, "reason": "doc-changed",
+                "message": "the document in the app changed, nothing was applied"});
         }
         if base_revision != self.revision {
             return json!({"ok": false, "reason": "stale", "revision": self.revision,
@@ -190,6 +230,9 @@ impl LiveSession {
         p.insert("name".into(), shown);
         p.insert("note".into(), note);
         p.insert("baseRevision".into(), json!(base_revision));
+        if !self.doc.is_null() {
+            p.insert("doc".into(), self.doc.clone());
+        }
         p.insert("document".into(), document);
         p.insert("at".into(), json!((self.clock)()));
         self.pending.push(p);
@@ -290,12 +333,14 @@ pub fn session_reply(live: &mut LiveSession, who: &str, op: &str, req: &Map<Stri
         }
     };
     Ok(match op {
-        "session_host" => live.publish(who, get("document"), revision("revision")?, get("title"), get("status")),
+        "session_host" => {
+            live.publish_doc(who, get("doc"), get("document"), revision("revision")?, get("title"), get("status"))
+        }
         "session_release" => live.release(who),
         "session_state" => live.state(Some(who), req.get("name")),
         "session_propose" => {
             let base = revision("baseRevision")?;
-            live.propose(who, get("document"), base, req.get("note"), req.get("name"))
+            live.propose_doc(who, get("document"), base, req.get("doc"), req.get("note"), req.get("name"))
         }
         "session_leave" => live.leave(who),
         "session_guide" => {
