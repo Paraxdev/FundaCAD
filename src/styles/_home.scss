@@ -174,7 +174,7 @@
   font-weight: 600;
 }
 .home-news-body {
-  max-height: 240px;
+  max-height: clamp(120px, 30vh, 240px);
   overflow-y: auto;
   font-size: 12px;
 }
