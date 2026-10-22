@@ -1,6 +1,5 @@
-//! VRML 2.0 (.wrl) and X3D XML (.x3d) scenes: transforms, DEF and USE,
-//! shapes with a diffuse colour and indexed or plain triangle geometry. Each
-//! top level node is one body. Metres and Y up as in glTF.
+//! VRML 2.0 (.wrl) and X3D XML (.x3d) scenes, each top level node one body.
+//! Metres and Y up as in glTF.
 
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -61,8 +60,6 @@ impl Node {
 fn bad(what: &str, why: impl std::fmt::Display) -> String {
     format!("couldn't read this {what} file, {why}")
 }
-
-// --- VRML 2.0 text ---
 
 struct Tokens<'a> {
     s: &'a [u8],
@@ -278,8 +275,6 @@ fn parse_vrml(text: &str) -> Result<(Vec<Rc<Node>>, Vec<String>), String> {
     Ok((top, p.skipped))
 }
 
-// --- X3D XML ---
-
 fn attr_val(v: &str) -> Val {
     match v.trim() {
         "true" | "TRUE" => return Val::Bool(true),
@@ -368,8 +363,6 @@ fn parse_x3d(xml: &str) -> Result<Vec<Rc<Node>>, String> {
     }
     scene.ok_or_else(|| bad("X3D", "it has no <Scene>"))
 }
-
-// --- the scene to triangles ---
 
 /// Row major 3x4 affine.
 type Affine = [[f64; 4]; 3];
@@ -559,9 +552,8 @@ impl Walk {
     }
 }
 
-/// Each top level node of the scene as one object, Y up turned Z up
-/// millimetres. `mm_per_unit` is the file's unit when the importer was told,
-/// else metres by the glTF rule.
+/// Y up turned Z up millimetres. `mm_per_unit` is the file's unit when the importer was
+/// told, else metres by the glTF rule.
 fn objects(top: Vec<Rc<Node>>, mut notes: Vec<String>, mm_per_unit: Option<f64>) -> (Vec<MeshObject>, Vec<String>) {
     let mut out = Vec::new();
     let mut skipped: HashMap<String, usize> = HashMap::new();

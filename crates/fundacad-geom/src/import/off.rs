@@ -1,5 +1,4 @@
-//! Object File Format (OFF, COFF, NOFF, STOFF and the like, ascii only).
-//! Millimetres, as STL.
+//! Object File Format (OFF, COFF, NOFF, STOFF and the like), ascii only, millimetres as STL.
 
 use super::mesh::{dominant_color, unit_color, MeshObject};
 use super::scan::{too_dense_for_a_scan, MAX_SCAN_TRIANGLES};

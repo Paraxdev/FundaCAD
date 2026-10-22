@@ -1,8 +1,4 @@
-//! The `import` op, replaces `import_geometry`, `_assembly_payload` and
-//! `_import_size_cap` of the Python engine's `mesh_import.py`, with the product tree walk
-//! of `step_assembly.py` in the vendored bindings (`opencascade::xcaf`).
-//!
-//! Not here yet: the free memory guard.
+//! The `import` op, with the STEP product tree walk over `opencascade::xcaf`.
 
 pub mod amf;
 pub mod blobstore;
@@ -53,7 +49,7 @@ fn hex(c: [u8; 3]) -> String {
     format!("#{:02x}{:02x}{:02x}", c[0], c[1], c[2])
 }
 
-/// `step_assembly._clean`: control and format characters out, ends trimmed.
+/// Control and format characters out, ends trimmed.
 fn clean(name: &str) -> String {
     name.chars()
         .filter(|&c| {
@@ -68,15 +64,13 @@ fn clean(name: &str) -> String {
         .to_string()
 }
 
-/// The imported shape and the manifest fields that go beside it.
 pub struct Imported {
     pub shape: Shape,
     pub fields: Map<String, Value>,
 }
 
-/// What sewing loose faces left to say, each sentence led by the name the
-/// build gives the body it is about. `names` is empty for a file that is one
-/// body, which the feature names.
+/// Each sentence is led by the name the build gives its body. `names` is empty for a
+/// one body file, which the feature names.
 fn repair_notes(asm: &StepAssembly, names: &[String], turned: &[StepNote]) -> Vec<Value> {
     let mut owned: HashMap<usize, usize> = HashMap::new();
     for leaf in &asm.leaves {
@@ -103,7 +97,6 @@ fn repair_notes(asm: &StepAssembly, names: &[String], turned: &[StepNote]) -> Ve
     out
 }
 
-/// What turning `n` inside out solids outward says.
 fn turned_text(n: usize) -> String {
     if n == 1 {
         "1 solid was inside out, its faces pointed into the material, so it was turned outward".into()
@@ -112,10 +105,8 @@ fn turned_text(n: usize) -> String {
     }
 }
 
-/// A mesh or BREP file's shape with its inside out solids turned outward, and
-/// what that says. The STEP reader turns a solid outward itself, see
-/// `reader_turned`. A document that already holds a shape keeps it as stored,
-/// a face selector saved against it carries the normal it had.
+/// Mesh and BREP files only, the STEP reader turns solids outward itself in `reader_turned`.
+/// A shape a document already stores is kept, a face selector saved on it carries its normal.
 fn outward(imported: Imported) -> Imported {
     if imported.fields.get("scan").is_some_and(|v| v == true) {
         return imported;
@@ -133,15 +124,13 @@ fn outward(imported: Imported) -> Imported {
     Imported { shape, fields }
 }
 
-/// What the STEP reader turning the solids of `shape` outward says, about the
-/// body `node` and `leaf` name.
+/// The note for solids of `shape` the STEP reader turned outward, on the body `node` and `leaf` name.
 fn reader_turned(shape: &Shape, node: usize, leaf: Option<usize>) -> Option<StepNote> {
     let n = kernel::reader_turned_solids(shape);
     (n > 0).then(|| StepNote { node, leaf, text: turned_text(n) })
 }
 
-/// `_assembly_payload`: the leaves in order as one flat compound, their
-/// products as `nodes`, and one `parts` row per leaf.
+/// The leaves in order as one flat compound, their products as `nodes`, one `parts` row per leaf.
 pub fn assembly_payload(asm: &StepAssembly) -> Imported {
     let names: Vec<String> = asm
         .nodes
@@ -235,7 +224,6 @@ pub fn assembly_payload(asm: &StepAssembly) -> Imported {
     Imported { shape, fields }
 }
 
-/// The STEP half of `import_geometry`.
 pub fn read_step(path: &Path) -> Result<Imported, String> {
     let progress = crate::cancel::progress_beating();
     let asm = crate::bench::phase("step_read", || {
@@ -305,14 +293,13 @@ fn from_assembly(asm: StepAssembly) -> Imported {
     Imported { shape, fields }
 }
 
-/// A text file as read, or unpacked when it is gzip (.wrz, .x3dz), capped at
-/// the import size limit.
 fn is_gzip(p: &Path) -> bool {
     let mut magic = [0u8; 2];
     std::fs::File::open(p).and_then(|mut f| std::io::Read::read_exact(&mut f, &mut magic)).is_ok()
         && magic == [0x1f, 0x8b]
 }
 
+/// Unpacked when it is gzip (.wrz, .x3dz), capped at the import size limit.
 fn text_maybe_gzipped(data: Vec<u8>) -> Result<String, String> {
     use std::io::Read;
     if !data.starts_with(&[0x1f, 0x8b]) {
@@ -339,14 +326,13 @@ fn occt_message(e: &opencascade::Error) -> String {
     }
 }
 
-/// `import_geometry`: read the file, store its geometry and answer
-/// `{geom, solid, faces, name, color?, nodes?, parts?, notes?}`.
+/// Stores the geometry and answers `{geom, solid, faces, name, color?, nodes?, parts?, notes?}`.
 pub fn import_geometry(path: &str, fmt: &str, store: &BlobStore) -> Result<Map<String, Value>, String> {
     import_geometry_in(path, fmt, store, None)
 }
 
-/// `import_geometry` with the unit the user said a glTF, VRML or X3D file is
-/// in, `mm`, `cm`, `m` or `inch`. Without one those read as metres, the spec.
+/// `unit` is what the user said a glTF, VRML or X3D file is in: `mm`, `cm`, `m` or `inch`.
+/// Without one those read as metres, the spec.
 pub fn import_geometry_in(
     path: &str,
     fmt: &str,
@@ -577,9 +563,8 @@ fn body_name(p: &Path) -> String {
     }
 }
 
-/// The `import` op. A request carries a `path` the engine reads, or the file
-/// itself as base64 `data` with its `name`, for a client that has bytes and no
-/// path, like a file dropped on a browser tab.
+/// A request carries a `path` the engine reads, or the file as base64 `data` with its `name`
+/// for a client that has bytes and no path, like a file dropped on a browser tab.
 pub fn import_result(req: &Map<String, Value>) -> JobResult {
     let fmt = req.get("format").and_then(Value::as_str);
     let path = req.get("path").and_then(Value::as_str);

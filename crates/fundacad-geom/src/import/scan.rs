@@ -95,8 +95,7 @@ pub fn scan_shape(pos: &[f64], idx: &[u32]) -> Result<Shape, String> {
     occ::triangulation_face(&pos, &idx).map_err(|e| format!("could not keep the mesh as a scan ({e:?})"))
 }
 
-/// Every object of a scene file in one scan, with the colour most of its
-/// triangles carry.
+/// Every object of a scene file in one scan, with the colour most of its triangles carry.
 pub fn scan_objects(objs: Vec<MeshObject>) -> Result<super::Imported, String> {
     let color = super::mesh::dominant_color(objs.iter().flat_map(|o| std::iter::repeat_n(o.color, o.idx.len() / 3)));
     let mut pos = Vec::new();
