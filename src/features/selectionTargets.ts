@@ -1,93 +1,34 @@
-// What each feature is APPLIED TO: the inventory of every field that holds a
-// selection, and the two functions that read and write one.
-//
-// A modifier is a verb plus the geometry it acts on, and until now the second
-// half was write-only. You picked four edges, the fillet swallowed them, and
-// from then on the feature said "Fillet" and a radius. Which four edges was not
-// shown, could not be checked, and could only be changed by deleting the feature
-// and picking again, so a fillet that caught one edge too many was cheaper to
-// redo than to correct.
-//
-// The same shape as document/numFields.ts and document/optionFields.ts, and for
-// the same reason: one declaration, read by the row that shows the selection, by
-// the editor that changes it, and by the tests that hold the two together.
-// optionFields.ts deliberately leaves geometry references out of its tables and
-// says why, picking one is a viewport gesture, not a menu. This is that gesture,
-// declared where the menus are declared.
-//
-// SHAPES. Three of them, and the difference is real rather than historical:
-//
-//   * a SELECTOR (`edges`, `faces`, `face`) is a saved description of geometry
-//     that the engine re-resolves on every rebuild, so it survives the part
-//     changing underneath it.
-//   * a BODY ID (`tools`, `bodies`, `target`) is positional and does not
-//     survive much of anything, which is a fact about the document rather than
-//     about this module.
-//   * a PROFILE POINT (`extrude.regions`, `revolve.regions`) belongs to the
-//     sketch overlay rather than to the solid: an interior point on a plane,
-//     resolved against a sketch that has already been consumed and hidden. It is
-//     in the table but NOT editable by the generic editor, which picks on the
-//     solid and has nothing to offer here. Its Edit re-opens the feature's own
-//     tool, which already shows the sketch and already takes the picks.
-//
-// Pure. No store, no viewport, no Vue: everything here is a function of a
-// feature object, which is what lets the whole inventory be tested without a
-// scene.
+// What each feature is applied to: every field holding a selection, and how to read and write one. Selectors re-resolve
+// each rebuild, body ids are positional, profile points belong to the sketch and are edited through the feature's tool.
 
 import type { Feature, FeatureType, Selector } from "../types";
 import { contributedFeature } from "../plugins/contrib";
 import { fieldApplies } from "../document/optionFields";
 
-/** What a target holds, one entry at a time. "area" is a closed region of a
- *  sketch, the word the extrude prompts already use for the thing you click. */
+/** "area" is a closed sketch region, the word the extrude prompts already use. */
 export type TargetKind = "edge" | "face" | "body" | "area";
 
-/** How the entries are stored, which decides WHO can resolve them, and, for
- *  `regionPoint`, who cannot: the generic editor picks edges, faces and bodies
- *  off the solid, and a profile area is on neither. */
+/** Decides who can resolve the entries: the generic editor picks off the solid, where a profile area is not. */
 export type TargetShape = "selector" | "bodyId" | "regionPoint";
 
 export interface TargetField {
-  /** The document field. */
   field: string;
-  /** The row's label. Names the ROLE, not the type: a boolean's two body
-   *  targets are both bodies, and "Bodies" twice would be two rows nobody can
-   *  tell apart. */
+  /** Names the role, not the type, so a boolean's two body targets can be told apart. */
   label: string;
   kind: TargetKind;
   shape: TargetShape;
-  /** "one" fields hold a bare value; "many" hold an array. A "one" field whose
-   *  document value is an array is still read as one, see readTarget. */
+  /** A "one" field whose document value is an array is still read as one, see readTarget. */
   arity: "one" | "many";
-  /** What an EMPTY target means, when empty is legal and means something other
-   *  than "nothing". Shown in the row in place of a count, because "0 faces" and
-   *  "the whole body" are opposite answers and a count alone cannot tell them
-   *  apart. Absent = empty is simply empty. */
+  /** Shown instead of a count, since "0 faces" and "the whole body" are opposite answers. Absent: empty is just empty. */
   whenEmpty?: string;
-  /** A second field this target also reads, for the features that grew a plural
-   *  form beside a singular one. Normalised to `field` on write: both are live
-   *  in the builder, `field` is preferred there, and keeping the pair in step through an
-   *  edit is not worth the fifth reader it would need. */
+  /** The plural form some features grew beside the singular, normalised to `field` on write, which the builder prefers. */
   alsoReads?: string;
-  /** A face pick writes a tracked selector carrying its body, so the row keeps
-   *  naming that face when an edit above moves it, on whichever body it is. */
+  /** A face pick writes a tracked selector with its body, so the row keeps naming that face when an edit moves it. */
   tracked?: boolean;
 }
 
-/** The inventory, for the features the APPLICATION owns. A feature type absent
- *  from this table and undescribed by any plugin has no editable selection: a
- *  primitive, a scale, a datum plane. `targetsOf()` below asks the plugins too,
- *  and is what every consumer should call.
- *
- *  `texture` used to be in here, with "the whole body" for its empty case.
- *
- *  Declaration order is row order, and it is the order the feature reads in:
- *  what is kept before what is consumed, what is operated on before what it is
- *  operated with. */
-/** The bodies a join, cut or intersect acts on. Empty is the usual case and is
- *  not "none": the feature then acts on every shown body it reaches, so hiding
- *  a body changes what it builds. Naming the bodies here ends that, which is
- *  the remedy the engine's own refusal offers ("name it as the target"). */
+/** Empty is the usual case and means every shown body it reaches, so hiding a body changes what it builds. Naming
+ *  the bodies ends that, the remedy the engine's own refusal offers. */
 const ACTS_ON: TargetField = {
   field: "targets",
   label: "Bodies acted on",
@@ -97,10 +38,9 @@ const ACTS_ON: TargetField = {
   whenEmpty: "every shown body it reaches",
 };
 
+/** The app's own inventory; targetsOf() also asks the plugins and is what consumers call. Declaration order is row
+ *  order: what is kept before what is consumed, what is operated on before what it is operated with. */
 export const FEATURE_TARGETS: Partial<Record<FeatureType, readonly TargetField[]>> = {
-  // Fillet and chamfer are the case this exists for. A blend is a set of edges
-  // and a size, the size has been editable since the value rows, and the set has
-  // never been.
   fillet: [{ field: "edges", label: "Edges", kind: "edge", shape: "selector", arity: "many" }],
   chamfer: [{ field: "edges", label: "Edges", kind: "edge", shape: "selector", arity: "many" }],
   "press-pull": [
@@ -117,8 +57,7 @@ export const FEATURE_TARGETS: Partial<Record<FeatureType, readonly TargetField[]
     ACTS_ON,
   ],
   deleteFace: [{ field: "face", label: "Face", kind: "face", shape: "selector", arity: "one" }],
-  // Shell's empty set is not "no faces", it is a sealed hollow, a legitimate
-  // and quite different part.
+  // Shell's empty set is a sealed hollow, a legitimate and quite different part.
   shell: [
     {
       field: "faces",
@@ -144,9 +83,7 @@ export const FEATURE_TARGETS: Partial<Record<FeatureType, readonly TargetField[]
   draft: [{ field: "faces", label: "Faces", kind: "face", shape: "selector", arity: "many" }],
   hole: [{ field: "face", label: "Face", kind: "face", shape: "selector", arity: "one" }],
   textOnFace: [{ field: "face", label: "Face", kind: "face", shape: "selector", arity: "one" }],
-  // Two body targets with opposite fates, so they are labelled by fate. Which
-  // body is kept is the whole meaning of a Subtract, and it was previously
-  // decided by which one you happened to click first and then never shown.
+  // Two body targets with opposite fates, labelled by fate: which body is kept is the whole meaning of a Subtract.
   boolean: [
     { field: "target", label: "Body kept", kind: "body", shape: "bodyId", arity: "one" },
     { field: "tools", label: "Bodies used", kind: "body", shape: "bodyId", arity: "many" },
@@ -198,11 +135,7 @@ export const FEATURE_TARGETS: Partial<Record<FeatureType, readonly TargetField[]
       alsoReads: "body",
     },
   ],
-  // The half of an extrude that was never shown. It is the FIRST thing about the
-  // feature, which areas of the sketch became solid, and until now the panel
-  // opened on "Distance" as though the profile were settled at creation and
-  // beyond discussion. Empty is legal and means the whole sketch, which is a
-  // different statement from "no areas" and has to be spelled out.
+  // Empty is legal and means the whole sketch, a different statement from no areas.
   extrude: [
     {
       field: "regions",
@@ -233,30 +166,14 @@ export const FEATURE_TARGETS: Partial<Record<FeatureType, readonly TargetField[]
   loft: [ACTS_ON],
 };
 
-/** The targets this feature has, or an empty list.
- *
- *  The app's own inventory first, then whichever plugin owns the type. A type
- *  nobody describes gets nothing, and that is the right answer rather than a
- *  gap: a selection row is a viewport gesture against a named field, and
- *  guessing which field of an unknown feature holds a selector would offer to
- *  overwrite something the app cannot interpret. Its numbers still show (see
- *  document/numFields.ts), because those can be round-tripped safely and a
- *  selector cannot. */
+/** The app's inventory first, then the plugin that owns the type. An undescribed type gets nothing: guessing which
+ *  field holds a selector could overwrite something the app cannot interpret. */
 export function targetsOf(type: string): readonly TargetField[] {
   return FEATURE_TARGETS[type as FeatureType] ?? contributedFeature(type)?.targets ?? [];
 }
 
-/** One entry of a target: a selector, a body id, or a profile point. The three
- *  shapes, one per line. */
 export type TargetEntry = Selector | string | [number, number, number];
 
-/** Everything in the target, always as an array however it is stored.
- *
- *  Tolerant on the way in, because the document is not: `faces` is typed
- *  `Selector | Selector[]`, `face` is a bare selector that some old documents
- *  wrote as a one-element array, and `split` spells its target two ways. A
- *  reader that trusted the declared arity would silently show an empty target
- *  for a legal document, which reads as "this feature acts on nothing". */
 /** `targetsOf` for one feature: a pattern that repeats features has no bodies,
  *  and a feature that makes a body of its own acts on none. */
 export function targetsFor(f: Feature): readonly TargetField[] {
@@ -273,6 +190,8 @@ export function targetsFor(f: Feature): readonly TargetField[] {
   );
 }
 
+/** Tolerant on the way in: `face` was once written as a one-element array and `split` spells its target two ways,
+ *  and trusting the declared arity would show a legal target as empty. */
 export function readTarget(feature: Feature, t: TargetField): TargetEntry[] {
   const raw = (feature as unknown as Record<string, unknown>)[t.field];
   const fallback = t.alsoReads ? (feature as unknown as Record<string, unknown>)[t.alsoReads] : undefined;
@@ -282,26 +201,14 @@ export function readTarget(feature: Feature, t: TargetField): TargetEntry[] {
   return arr.filter((v): v is TargetEntry => v !== null && v !== undefined) as TargetEntry[];
 }
 
-/** Is this stored value ONE entry rather than a list of them?
- *
- *  Only ever true for a profile point, and that is the whole reason it exists: a
- *  point is itself an array, so `Array.isArray` cannot tell `[4, 4, 0]` (one
- *  area) from `[[4, 4, 0]]` (a list holding one). Read the wrong way, the
- *  legacy singular `extrude.region` came back as THREE areas, a row saying
- *  "3 areas" over an extrude with one. Look at what is inside instead: numbers
- *  mean the value is the point. */
+/** Only true for a profile point, which is itself an array, so `[4, 4, 0]` must not read as three areas: numbers
+ *  inside mean the value is the point. */
 function isOneEntry(val: unknown, t: TargetField): boolean {
   return t.shape === "regionPoint" && Array.isArray(val) && typeof val[0] === "number";
 }
 
-/** The patch that sets this target to `entries`, in the shape the field is
- *  declared with.
- *
- *  An "one" field takes the first entry and drops the rest rather than storing
- *  an array the builder would misread. Emptying a field DELETES it (undefined)
- *  instead of writing `[]`: several of these mean something specific when
- *  absent, and every writer in the document keeps the omit-when-empty
- *  discipline that makes two identical models compare identical. */
+/** A "one" field takes the first entry. Emptying deletes the field rather than writing `[]`, the omit-when-empty
+ *  discipline that keeps two identical models comparing identical. */
 export function writeTarget(t: TargetField, entries: readonly TargetEntry[]): Partial<Feature> {
   const patch: Record<string, unknown> = {};
   if (t.arity === "one") {
@@ -309,14 +216,12 @@ export function writeTarget(t: TargetField, entries: readonly TargetEntry[]): Pa
   } else {
     patch[t.field] = entries.length ? [...entries] : undefined;
   }
-  // Normalise the pair: `bodies` is preferred in the builder, so a split edited here
-  // must not leave a stale `body` behind to be resolved on some later read.
+  // `bodies` is preferred in the builder, so a split edited here must not leave a stale `body` behind.
   if (t.alsoReads) patch[t.alsoReads] = undefined;
   return patch as Partial<Feature>;
 }
 
-/** The plural of each kind, spelled rather than derived. Two of three take an
- *  "s" and the third does not, and "2 bodys" is the sort of thing that ships. */
+/** Spelled, not derived: "2 bodys" is the sort of thing that ships. */
 const PLURAL: Record<TargetKind, string> = {
   edge: "edges",
   face: "faces",
@@ -331,19 +236,11 @@ export function describeTarget(t: TargetField, count: number): string {
   return `${count} ${count === 1 ? t.kind : PLURAL[t.kind]}`;
 }
 
-/** Is this entry the same one? Identity for a target, so an entry can be
- *  removed and a click can toggle rather than pile up duplicates.
- *
- *  A body id compares by value. A selector compares by its POINT, because that
- *  is what a picked selector carries and what the engine resolves it by; two
- *  selectors naming the same edge from the same pick have the same point, and
- *  nothing else about them is stable across a rebuild. Selectors with no point
- *  (by:"all", by:"axis", a v2 fingerprint) compare by full value, they are not
- *  picked one at a time, so an exact match is the only honest test. */
+/** Identity, so a click toggles rather than duplicates. Body ids by value, picked selectors by point (all that is
+ *  stable across a rebuild), selectors with no point by full value. */
 export function sameEntry(a: TargetEntry, b: TargetEntry): boolean {
   if (typeof a === "string" || typeof b === "string") return a === b;
-  // A profile point IS its point, so it compares the same way a picked
-  // selector's does, same tolerance, same reason.
+  // A profile point is its point, so it compares as a picked selector does.
   if (Array.isArray(a) || Array.isArray(b)) {
     return Array.isArray(a) && Array.isArray(b) && samePoint(a, b);
   }
@@ -354,15 +251,12 @@ export function sameEntry(a: TargetEntry, b: TargetEntry): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-/** Two picked points naming the same thing. The tolerance is well below any
- *  real modelling distance and above the 6-decimal rounding the engine applies
- *  to a point it hands back. */
+/** Below any real modelling distance, above the engine's 6-decimal rounding. */
 function samePoint(a: readonly number[], b: readonly number[]): boolean {
   return a.every((v, i) => Math.abs(v - (b[i] ?? NaN)) <= 1e-4);
 }
 
-/** The world point a picked selector carries, or null for the forms that name
- *  geometry some other way. */
+/** Null for the forms that name geometry some other way. */
 export function pointOf(sel: Selector): [number, number, number] | null {
   const p = (sel as { point?: unknown }).point;
   if (!Array.isArray(p) || p.length !== 3) return null;
@@ -370,30 +264,6 @@ export function pointOf(sel: Selector): [number, number, number] | null {
   return p as [number, number, number];
 }
 
-// Two absences, both deliberate.
-//
-// REVOLVE'S AXIS EDGE is a selector like any other, and it is left out because
-// it does not stand alone: `revolve.axis` is written beside it as the RESOLVED
-// line, a cache the engine falls back to when the edge stops resolving and
-// older builds read instead of the reference. Writing a new `axisEdge` through
-// the generic editor would leave that cache describing the OLD edge, harmless
-// while the new one resolves, and quietly wrong the moment it stops. Keeping the
-// pair in step needs the edge's geometry, which is exactly what a pure module
-// does not have, so the axis stays with the pick flow that mints both together
-// (featureStarters.startRevolve).
-//
-// LOFT'S PROFILES are the one profile target still missing, and the reason is
-// the shape rather than the picking. `extrude.regions` and `revolve.regions` are
-// flat arrays of points, which readTarget can hand back and a count can be taken
-// of; `loft.profiles` is an array of {sketch, region} PAIRS, and a row that
-// reported "3 areas" while silently dropping which sketch each came from would
-// be a row that cannot be written back. Reading it needs a per-field accessor,
-// which is a change to the shape of this table rather than another entry in it.
-//
-// The two profile rows that ARE here do not use the generic editor. A profile
-// area is an interior point on a sketch plane, resolved against the overlay
-// rather than the solid, and editing one means showing a sketch that has already
-// been consumed and hidden, which the feature's own tool already does
-// (features/extrudeTool.startEdit rolls the model back, forces the sketch
-// visible and restores the saved areas). The row opens THAT, rather than an
-// editor that would have nothing to pick.
+// Left out on purpose: revolve's axisEdge, whose resolved `revolve.axis` cache only the pick flow keeps in step
+// (featureStarters.startRevolve), and loft's {sketch, region} profile pairs, which need a per-field accessor.
+// The two profile rows open the feature's own tool (extrudeTool.startEdit), which shows the consumed sketch.
