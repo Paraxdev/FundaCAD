@@ -47,3 +47,42 @@ describe("curveObjects, projected link colors", () => {
     expect(matColor(objs[0]!)).toBe(0xffffff);
   });
 });
+
+describe("curveObjects, construction geometry", () => {
+  const plane = new SketchPlane("XZ");
+  const ax: ResolvedEntity = { type: "line", id: "ax", x1: 3.5, y1: -2, x2: 9.5, y2: 6.25, construction: true };
+  const arc: ResolvedEntity = {
+    type: "arc",
+    id: "a1",
+    x1: 20,
+    y1: 1,
+    x2: 24,
+    y2: 5,
+    mx: 23.5,
+    my: 2.5,
+    construction: true,
+  };
+  const dashed = (o: THREE.Object3D) => {
+    const line = (o as THREE.Group).isGroup ? (o as THREE.Group).children[0] : o;
+    return (line as THREE.Line).material instanceof THREE.LineDashedMaterial;
+  };
+
+  it("keeps its dashed orange on a plain pass", () => {
+    const objs = curveObjects([ax, arc], plane, 0x5b9bff);
+    expect(objs.map((o) => [matColor(o), dashed(o)])).toEqual([
+      [0xffa64d, true],
+      [0xffa64d, true],
+    ]);
+  });
+
+  it("is drawn dashed in the asked colour on a highlight pass, one material per colour", () => {
+    const blue = curveObjects([ax, arc], plane, 0x33aaff, true);
+    const red = curveObjects([ax], plane, 0xff5555, true);
+    expect(blue.map((o) => [matColor(o), dashed(o)])).toEqual([
+      [0x33aaff, true],
+      [0x33aaff, true],
+    ]);
+    expect([matColor(red[0]!), dashed(red[0]!)]).toEqual([0xff5555, true]);
+    expect((blue[0] as THREE.Line).material).toBe(((blue[1] as THREE.Group).children[0] as THREE.Line).material);
+  });
+});

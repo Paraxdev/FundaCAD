@@ -10,6 +10,7 @@ import { cancelActiveTools } from "../../src/app/toolBusy";
 import type { EngineTools } from "../../src/app/engine";
 import { createPinia, setActivePinia } from "pinia";
 import { useBrowserStore } from "../../src/stores/browser";
+import { setWorkspace, workspace } from "../../src/ui/workspace";
 
 const RESULT: RebuildResult = {
   mesh: { positions: [0, 0, 0], indices: [0], faceIds: [0] },
@@ -260,5 +261,30 @@ describe("New and Open stand every tool down", () => {
     expect(() => cancelActiveTools(t)).not.toThrow();
     expect(calls).toContain("pressPull.cancel");
     err.mockRestore();
+  });
+});
+
+// Render, a discard and Home kept the Render dock up over Home and on the next document.
+describe("New and Open start the next document in Model", () => {
+  for (const how of ["New", "Open"] as const) {
+    it(`leaves Render on ${how}, and again for a second document after the first`, () => {
+      const { store } = harness();
+      const next = () =>
+        how === "New" ? store.newDocument() : store.load(JSON.stringify({ parameters: {}, features: [] }));
+      setWorkspace("render");
+      next();
+      expect(workspace()).toBe("model");
+      setWorkspace("render");
+      next();
+      expect(workspace()).toBe("model");
+    });
+  }
+
+  it("keeps Render through a replace, which is the same document", () => {
+    const { store } = harness();
+    setWorkspace("render");
+    store.load(JSON.stringify(DOC), { replace: true });
+    expect(workspace()).toBe("render");
+    setWorkspace("model");
   });
 });

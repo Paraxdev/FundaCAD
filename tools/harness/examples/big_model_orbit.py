@@ -11,14 +11,16 @@ so the motion level drops at once, and Matcap has to stay at full size anyway.
 The model is small for a GPU, since the software renderer spends seconds a
 frame on fat edge lines; the budgets are for it, numbers from a 12 M triangle
 assembly on a GPU are in the change that added this. Those fat lines are most of
-a software frame here, so once two windows of moving frames have measured them
-the edges draw as 1px lines while the camera moves, and the full set is back at
-rest (src/viewport/edgeMotion.ts). Run with
+a software frame on some renderers, so once two windows of moving frames have
+measured them the edges draw as 1px lines while the camera moves, and stay thin
+only where that saves the product's MIN_GAIN; the full set is back at rest
+(src/viewport/edgeMotion.ts). Run with
 `python tools/harness/examples/big_model_orbit.py`, it prints what it measured.
 """
 
 import json
 import math
+import re
 import time
 import tempfile
 from pathlib import Path
@@ -29,9 +31,8 @@ HOVER_BUDGET_MS = 250
 ORBIT_P95_BUDGET_MS = 2500
 HOVER_POINTS = 40
 ORBIT_STEPS = 40
-# CI's software renderer gained only 1.9x (1043 to 550 ms) where this PC measured 469 to 92 ms.
-THIN_GAIN = 1.5
-# The second orbit draws fat lines for at most its first frame, a window of 4, 3 ticks
+EDGE_MOTION = Path(__file__).resolve().parents[3] / "src" / "viewport" / "edgeMotion.ts"
+# Where the thin lines pay, the second orbit draws fat lines for at most its first frame, a window of 4, 3 ticks
 # back from free GPU queue slots, a double frame over MAX_SAMPLE_MS on CI and the fade
 # frame: 10 of CI's 39 moved frames. Measured 0.80 to 0.87 here, 0.78 at CI's frame cost.
 THIN_SHARE = 0.74
@@ -62,8 +63,6 @@ def document():
 
 
 BOXES = 512
-# MERGE_ON_DRAWS in src/viewport/edgeMotion.ts.
-MERGE_ON_DRAWS = 384
 # Of the canvas, over what two renders of the full edges differ by.
 MERGED_LOOK_SHARE = 0.0005
 
@@ -179,6 +178,18 @@ HOLD_MERGED = """() => {
 }"""
 
 
+def product_constant(name, source=EDGE_MOTION):
+    """A numeric constant of src/viewport/edgeMotion.ts, so the check follows the product's rule."""
+    m = re.search(rf"^\s*(?:export\s+)?const {name} = ([0-9.]+);", Path(source).read_text(encoding="utf-8"), re.M)
+    assert m, f"{name} is no longer a numeric constant in {source}"
+    return float(m.group(1))
+
+
+def thin_pays(full_ms, thin_ms, min_gain):
+    """EdgeMotionRule keeps thin lines whose median is at most (1 - MIN_GAIN) of the fat median that turned them on."""
+    return full_ms > 0 and thin_ms > 0 and thin_ms <= full_ms * (1 - min_gain)
+
+
 def quantile(xs, f):
     s = sorted(xs)
     return s[min(len(s) - 1, int(len(s) * f))] if s else 0
@@ -242,14 +253,16 @@ def run(s, tmp_path):
         "orbit_modes": ["".join(m[0] for _, m in d) for d in (drag1, drag2)],
         "at_rest": [rest1, rest2],
     }
+    got["thin_pays"] = thin_pays(got["full_edges_median_ms"], got["thin_edges_median_ms"], product_constant("MIN_GAIN"))
     print("big model orbit:", json.dumps(got))
     assert got["hover_max_ms"] < HOVER_BUDGET_MS, f"a hover held the main thread {got['hover_max_ms']} ms, {got}"
     assert set(ratios) == {base}, f"Matcap drew below its full pixel ratio {base} while orbiting, {got}"
     assert got["orbit_p95_ms"] < ORBIT_P95_BUDGET_MS, f"orbit frames too slow, {got}"
     assert full and thin, f"the first windows drew the full edges and the rest thin ones, {got}"
-    assert got["second_orbit_thin_share"] >= THIN_SHARE, f"the second orbit kept the fat edges, {got}"
-    assert not any("tf" in m for m in got["orbit_modes"]), f"an orbit went back to the fat edges mid drag, {got}"
-    assert got["thin_edges_median_ms"] * THIN_GAIN <= got["full_edges_median_ms"], f"the thin edges saved too little, {got}"
+    # Where thin lines save less, as on a renderer whose frames something else dominates, the fat ones rightly stay.
+    if got["thin_pays"]:
+        assert got["second_orbit_thin_share"] >= THIN_SHARE, f"the thin edges paid, yet the second orbit kept the fat ones, {got}"
+        assert not any("tf" in m for m in got["orbit_modes"]), f"the thin edges paid, yet an orbit went back to the fat ones mid drag, {got}"
     for rest in (rest1, rest2):
         assert rest["mode"] == "full" and rest["drawn"] is None and rest["hidden"] == 0, f"the full edges were not back at rest, {got}"
     got["merged"] = run_merged(s, tmp_path)
@@ -266,6 +279,7 @@ def run_merged(s, tmp_path):
     s.view("iso")
     s.page.evaluate(MATCAP)
     s.settle()
+    merge_on = product_constant("MERGE_ON_DRAWS")
     looks = [s.page.evaluate(MERGED_LOOK, look) for look in ("matcap", "realtime")]
     s.settle()
     s.page.evaluate("() => window.viewport.edgeRule.reset()")
@@ -286,10 +300,10 @@ def run_merged(s, tmp_path):
            "xray_modes": sorted({m for _, m in xray_drag}), "xray_at_rest": xray_rest}
     print("big model orbit, merged:", json.dumps(got))
     for look in looks:
-        assert look["members"] >= MERGE_ON_DRAWS, f"the batches did not take the bodies' edges, {got}"
+        assert look["members"] >= merge_on, f"the batches did not take the bodies' edges, {got}"
         assert look["merged"] <= look["noise"] + look["pixels"] * MERGED_LOOK_SHARE, f"the merged edges look different in {look['look']}, {got}"
     assert first and set(first) == {"merged"}, f"the first moving frames did not draw merged, {got}"
-    assert got["members_max"] >= MERGE_ON_DRAWS, f"the moving frames did not merge the bodies' edges, {got}"
+    assert got["members_max"] >= merge_on, f"the moving frames did not merge the bodies' edges, {got}"
     assert rest["mode"] == "full" and rest["drawn"] is None and rest["hidden"] == 0, f"the full edges were not back at rest, {got}"
     assert got["held_modes"] == ["merged"], f"the held drag did not draw merged to its end, {got}"
     assert held_rest["mode"] == "full" and held_rest["drawn"] is None and held_rest["hidden"] == 0, f"the full edges were not back at rest after a merged drag, {got}"

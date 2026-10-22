@@ -1,11 +1,12 @@
-// The origin planes as small tiles, one per quadrant so they never cross. Only the
-// fill mesh is a pick target: its rim, ghost and name are children no pick visits.
+// The origin planes as small tiles, one per quadrant so they never cross. A press is matched
+// on screen by planeHit.ts, so a tile seen edge on is still found by its pad or its name.
 
 import * as THREE from "three";
 import { glyphScale, glyphWorldScale } from "./gizmoScale";
 import { AXIS_COLOR } from "./originTriad";
 import { SQUIRCLE_EXPONENT, roundedSquare, type Vec2 } from "./cornerProfile";
 import { themeColor } from "./themeColors";
+import { pickPlaneOnScreen, placeLabels, type P2, type PlaneHit, type PlaneOnScreen } from "./planeHit";
 import type { Plane3 } from "../types";
 
 type Sign = 1 | -1;
@@ -52,9 +53,8 @@ export const TILE_LOOK: Record<TileState, { fill: number; rim: number; label: nu
 };
 export const LABEL_FONT_PX = 11;
 export const LABEL_BOX_PX = { w: 28, h: 16 } as const;
-/** A name fades out between these |normal . eye|, so a tile seen edge on names nothing. */
-export const NAME_FADE_FROM = 0.15;
-export const NAME_FADE_TO = 0.35;
+/** The hovered name grows by this much, so hover shows which plane a press takes even edge on. */
+export const LABEL_HOT_SCALE = 1.2;
 const LABEL_DPR = 4;
 const LABEL_FONT = `700 ${LABEL_FONT_PX * LABEL_DPR}px "Space Grotesk", Inter, system-ui, sans-serif`;
 /** What a body hides keeps this share of the fill. */
@@ -101,9 +101,17 @@ export function tileStates(hovered: Plane3 | null): Record<Plane3, TileState> {
   return { XY: s("XY"), XZ: s("XZ"), YZ: s("YZ") };
 }
 
-export function nameFade(facing: number): number {
-  const t = (Math.abs(facing) - NAME_FADE_FROM) / (NAME_FADE_TO - NAME_FADE_FROM);
-  return Math.min(1, Math.max(0, t));
+/** The canvas rectangle in client pixels and the camera drawing it. */
+export interface ScreenFrame {
+  camera: THREE.Camera;
+  rect: { left: number; top: number; width: number; height: number };
+}
+
+const PICK_SEGMENTS = 4;
+
+function toScreen(v: THREE.Vector3, f: ScreenFrame): P2 {
+  const n = v.clone().project(f.camera);
+  return { x: (n.x * 0.5 + 0.5) * f.rect.width + f.rect.left, y: (-n.y * 0.5 + 0.5) * f.rect.height + f.rect.top };
 }
 
 export function mixHex(a: number, b: number, t: number): number {
@@ -179,7 +187,8 @@ export class OriginTiles {
   private readonly tiles: Record<Plane3, Tile>;
   private states = tileStates(null);
   private labelsPainted = false;
-  private fade: Record<Plane3, number> = { XY: 1, XZ: 1, YZ: 1 };
+  private k = 1;
+  private ink = NOIR_TEXT;
 
   constructor(scene: THREE.Scene, shape: Partial<TileShape> = {}) {
     this.shape = { ...TILE_SHAPE, ...shape };
@@ -243,44 +252,85 @@ export class OriginTiles {
     this.paintLook();
   }
 
-  /** `pixelWorldSize` is the world size of one screen pixel at the origin. */
-  update(pixelWorldSize: number | null, modelDiagonal: number | null, camera: THREE.Camera) {
+  /** `pixelWorldSize` is the world size of one screen pixel at the origin. With `rect`, the canvas in client
+   *  pixels, each name is placed on screen where `placeLabels` puts it. */
+  update(
+    pixelWorldSize: number | null,
+    modelDiagonal: number | null,
+    camera: THREE.Camera,
+    rect?: ScreenFrame["rect"],
+  ) {
     const extent = this.shape.gapPx + this.shape.sizePx;
-    const k = glyphScale(extent, modelDiagonal, pixelWorldSize, MIN_TILE_SCALE);
-    const scale = glyphWorldScale(extent, modelDiagonal, pixelWorldSize, MIN_TILE_SCALE);
-    this.group.scale.setScalar(scale);
-    const ortho = (camera as THREE.OrthographicCamera).isOrthographicCamera === true;
-    const eye = ortho
-      ? camera.getWorldDirection(new THREE.Vector3()).negate()
-      : camera.getWorldPosition(new THREE.Vector3());
-    const toEye = new THREE.Vector3();
-    const centre = new THREE.Vector3();
-    for (const p of PLANES) {
-      this.tiles[p].label.scale.set(LABEL_BOX_PX.w / k, LABEL_BOX_PX.h / k, 1);
-      const pose = tilePose(p, this.shape);
-      if (ortho) toEye.copy(eye);
-      else
-        toEye
-          .subVectors(
-            eye,
-            centre
-              .set(...pose.centre)
-              .multiplyScalar(scale)
-              .add(this.group.position),
-          )
-          .normalize();
-      this.fade[p] = nameFade(toEye.dot(new THREE.Vector3(...pose.normal)));
-    }
+    this.k = glyphScale(extent, modelDiagonal, pixelWorldSize, MIN_TILE_SCALE);
+    this.group.scale.setScalar(glyphWorldScale(extent, modelDiagonal, pixelWorldSize, MIN_TILE_SCALE));
+    if (rect && rect.width > 0 && rect.height > 0 && this.group.scale.x > 0) this.placeNames({ camera, rect });
     this.paintLook();
+  }
+
+  /** Each tile as drawn, in client pixels. */
+  onScreen(frame: ScreenFrame): PlaneOnScreen[] {
+    frame.camera.updateMatrixWorld();
+    this.group.updateMatrixWorld(true);
+    const cam = frame.camera;
+    const ortho = (cam as THREE.OrthographicCamera).isOrthographicCamera === true;
+    const eyeDir = cam.getWorldDirection(new THREE.Vector3()).negate();
+    const eye = cam.getWorldPosition(new THREE.Vector3());
+    const ring = roundedSquare(this.shape.sizePx, this.shape.radiusPx, this.shape.exponent, PICK_SEGMENTS);
+    const h = this.shape.sizePx / 2;
+    return PLANES.map((plane) => {
+      const m = this.tiles[plane].fill.matrixWorld;
+      const at = (x: number, y: number) => toScreen(new THREE.Vector3(x, y, 0).applyMatrix4(m), frame);
+      const centreW = new THREE.Vector3().applyMatrix4(m);
+      const centre = toScreen(centreW, frame);
+      const u = at(h, 0);
+      const v = at(0, h);
+      const normal = new THREE.Vector3(...tilePose(plane, this.shape).normal);
+      const toEye = ortho ? eyeDir : eye.clone().sub(centreW).normalize();
+      return {
+        plane,
+        centre,
+        outline: ring.map(([x, y]) => at(x, y)),
+        su: { x: u.x - centre.x, y: u.y - centre.y },
+        sv: { x: v.x - centre.x, y: v.y - centre.y },
+        facing: Math.abs(toEye.dot(normal)),
+      };
+    });
+  }
+
+  /** Where each name is drawn, in client pixels. */
+  labelsOnScreen(frame: ScreenFrame, tiles = this.onScreen(frame)): Record<string, P2> {
+    return placeLabels(tiles, LABEL_BOX_PX);
+  }
+
+  /** The plane a press at client (`x`, `y`) takes, null while the tiles are hidden. */
+  pick(x: number, y: number, frame: ScreenFrame, minPx: number): PlaneHit | null {
+    if (!this.tiles.XY.fill.visible || this.group.scale.x <= 0) return null;
+    const tiles = this.onScreen(frame);
+    return pickPlaneOnScreen(tiles, this.labelsOnScreen(frame, tiles), { x, y }, minPx, LABEL_BOX_PX);
+  }
+
+  private placeNames(frame: ScreenFrame) {
+    const tiles = this.onScreen(frame);
+    const at = this.labelsOnScreen(frame, tiles);
+    const { left, top, width, height } = frame.rect;
+    for (const p of PLANES) {
+      const fill = this.tiles[p].fill;
+      const ndcZ = new THREE.Vector3().applyMatrix4(fill.matrixWorld).project(frame.camera).z;
+      const s = at[p]!;
+      const world = new THREE.Vector3(
+        ((s.x - left) / width) * 2 - 1,
+        -(((s.y - top) / height) * 2 - 1),
+        ndcZ,
+      ).unproject(frame.camera);
+      this.tiles[p].label.position.copy(fill.worldToLocal(world));
+    }
   }
 
   /** `ground` is the colour actually drawn behind the tiles. */
   applyTheme(ground: number) {
-    const ink = labelInk(ground, themeColor("--text", NOIR_TEXT), themeColor("--viewport-bg", NOIR_GROUND));
-    for (const k of PLANES) {
-      this.tiles[k].rim.material.color.setHex(mixHex(TILE_COLOR[k], ink, RIM_INK_MIX));
-      this.tiles[k].label.material.color.setHex(ink);
-    }
+    this.ink = labelInk(ground, themeColor("--text", NOIR_TEXT), themeColor("--viewport-bg", NOIR_GROUND));
+    for (const k of PLANES) this.tiles[k].rim.material.color.setHex(mixHex(TILE_COLOR[k], this.ink, RIM_INK_MIX));
+    this.paintLook();
   }
 
   dispose() {
@@ -315,7 +365,12 @@ export class OriginTiles {
       t.fill.material.opacity = look.fill;
       t.ghost.material.opacity = look.fill * GHOST_SHARE;
       t.rim.material.opacity = look.rim;
-      t.label.material.opacity = look.label * this.fade[k];
+      t.label.material.opacity = look.label;
+      const hot = this.states[k] === "hot";
+      // The hovered name takes its rim's colour, the only colour left of a tile seen edge on.
+      t.label.material.color.setHex(hot ? t.rim.material.color.getHex() : this.ink);
+      const grow = hot ? LABEL_HOT_SCALE : 1;
+      t.label.scale.set((LABEL_BOX_PX.w * grow) / this.k, (LABEL_BOX_PX.h * grow) / this.k, 1);
     }
   }
 

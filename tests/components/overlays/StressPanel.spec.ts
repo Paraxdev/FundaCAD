@@ -33,6 +33,7 @@ function makeEngine() {
     pauseStressAnimation: vi.fn(),
     setStressProbe: vi.fn(),
     removeStressProbe: vi.fn(),
+    placeStressSpot: vi.fn(),
   };
   const store = {
     onBuild: (fn: () => void) => {
@@ -661,5 +662,86 @@ describe("StressPanel", () => {
     expect(probe.disabled).toBe(false);
     probe.click();
     expect(panels.setStressProbe).toHaveBeenCalledWith(false);
+  });
+});
+
+describe("StressPanel Escape", () => {
+  const esc = (target: Element = document.body) =>
+    target.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }));
+
+  it("closes the panel on a plain Escape", async () => {
+    const { panels } = await mounted();
+    usePanelsStore().showStress("b1");
+    await flushPromises();
+    esc();
+    expect(panels.closeStress).toHaveBeenCalledOnce();
+    expect(panels.setStressProbe).not.toHaveBeenCalled();
+    expect(panels.placeStressSpot).not.toHaveBeenCalled();
+  });
+
+  it("closes from the Results step too", async () => {
+    const { panels } = await withResult();
+    esc(tab("results"));
+    expect(panels.closeStress).toHaveBeenCalledOnce();
+  });
+
+  it("ends probe mode first, and closes on the next press", async () => {
+    const { p, panels } = await withResult();
+    p.setStressProbe(true);
+    await flushPromises();
+    esc();
+    expect(panels.setStressProbe).toHaveBeenCalledWith(false);
+    expect(panels.closeStress).not.toHaveBeenCalled();
+    p.setStressProbe(false);
+    esc();
+    expect(panels.closeStress).toHaveBeenCalledOnce();
+  });
+
+  it("stops placing first, and closes on the next press", async () => {
+    const { panels } = await mounted();
+    const p = usePanelsStore();
+    p.showStress("b1");
+    p.setStressPlacing({ support: 1 });
+    await flushPromises();
+    esc();
+    expect(panels.placeStressSpot).toHaveBeenCalledWith({ support: 1 });
+    expect(panels.closeStress).not.toHaveBeenCalled();
+    p.setStressPlacing(null);
+    esc();
+    expect(panels.closeStress).toHaveBeenCalledOnce();
+  });
+
+  it("lets a focused field give up focus before the panel closes", async () => {
+    const { panels } = await mounted();
+    usePanelsStore().showStress("b1");
+    await flushPromises();
+    const field = q(".stress-panel input") as HTMLInputElement;
+    field.focus();
+    expect(document.activeElement).toBe(field);
+    esc(field);
+    expect(document.activeElement).not.toBe(field);
+    expect(panels.closeStress).not.toHaveBeenCalled();
+    esc();
+    expect(panels.closeStress).toHaveBeenCalledOnce();
+  });
+
+  it("leaves a key a layer in front already took", async () => {
+    const { panels } = await mounted();
+    usePanelsStore().showStress("b1");
+    await flushPromises();
+    const take = (e: Event) => e.stopImmediatePropagation();
+    window.addEventListener("keydown", take, true);
+    esc();
+    window.removeEventListener("keydown", take, true);
+    expect(panels.closeStress).not.toHaveBeenCalled();
+  });
+
+  it("ignores Escape while closed and other keys", async () => {
+    const { panels } = await mounted();
+    esc();
+    usePanelsStore().showStress("b1");
+    await flushPromises();
+    document.body.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    expect(panels.closeStress).not.toHaveBeenCalled();
   });
 });

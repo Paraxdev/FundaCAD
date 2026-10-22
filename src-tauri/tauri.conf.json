@@ -75,6 +75,11 @@
         }
       }
     ],
+    "windows": {
+      "nsis": {
+        "installerHooks": "windows/installer-hooks.nsh"
+      }
+    },
     "linux": {
       "deb": {
         "desktopTemplate": "../packaging/fundacad.desktop.hbs",
