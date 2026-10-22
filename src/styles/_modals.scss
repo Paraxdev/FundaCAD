@@ -393,6 +393,16 @@
   width: 100%;
   margin: var(--s-2) 0;
 }
+.plug-settings-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.plug-settings-btn.on {
+  background: var(--accent-tint);
+  border-color: var(--accent);
+  color: var(--accent);
+}
 /* A plugin's settings, set in under its row like an add-on's panel. */
 .plug-settings {
   padding: 0 0 var(--s-2) var(--s-3);
