@@ -506,7 +506,7 @@ export class SectionTool {
   private prompt() {
     this.editPrompt =
       "Drag the handle or type an offset · F flips the kept side · " +
-      `G changes the ghost (${ghostLabel(this.ghost)}) · Enter or Esc keeps the cut`;
+      `G changes how the cut half shows (${ghostLabel(this.ghost)}) · Enter or Esc keeps the cut`;
     setPrompt(this.editPrompt);
   }
 
