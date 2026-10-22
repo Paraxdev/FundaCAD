@@ -8,9 +8,8 @@ withDefaults(
     active?: boolean;
     size?: number;
     badge?: string | number | null;
-    /** Greyed with the title kept live. Not the native attribute: a disabled
-     *  button shows no tooltip in some webviews. The click still arrives, so
-     *  the handler has to refuse it. */
+    /** Greyed with the title kept live: some webviews show no tooltip on a native disabled button. The click still
+     *  arrives, so the handler must refuse it. */
     disabled?: boolean;
   }>(),
   { active: false, size: 20, badge: null, disabled: false },

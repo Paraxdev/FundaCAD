@@ -1,9 +1,6 @@
 <script setup lang="ts" generic="T extends string">
-// A themed stand-in for a native <select>: the browser draws that control's
-// OPEN popup itself (a separate OS-level surface on some platforms), so no
-// amount of CSS reaches the option list or its selected-row highlight, only
-// the closed box. This opens the same Popover/ChoiceList every other picker in
-// the app uses, so the list is themed like everything else that floats.
+// A themed stand-in for <select>: the browser draws the open popup itself, out of reach of CSS, so this opens the
+// shared Popover and ChoiceList instead.
 
 import { ref, useTemplateRef } from "vue";
 import Popover from "./Popover.vue";
