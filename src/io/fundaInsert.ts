@@ -112,7 +112,7 @@ export async function insertFundaDocument(
   tempPath: string,
 ): Promise<InsertOutcome> {
   // The bake runs on the engine for this document; its session ending rejects it before anything is written.
-  const baked = await store.session.step(bakeSource(store, geometry, source, tempPath));
+  const baked = await store.session.step(store.importing(() => bakeSource(store, geometry, source, tempPath)));
   if (!baked.ok) return baked;
   const id = store.nextId();
   store.addFeature({
@@ -142,7 +142,7 @@ export async function updateFundaLink(
   );
   if (!f?.link) return { ok: false, message: "that step is not linked to a file" };
   // The bake runs on the engine for this document; its session ending rejects it before anything is written.
-  const baked = await store.session.step(bakeSource(store, geometry, source, tempPath));
+  const baked = await store.session.step(store.importing(() => bakeSource(store, geometry, source, tempPath)));
   if (!baked.ok) return baked;
   store.updateFeature(featureId, {
     ...importFields(baked),

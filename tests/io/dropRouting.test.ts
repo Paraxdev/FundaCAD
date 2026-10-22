@@ -63,7 +63,7 @@ const confText = Object.values(
 )[0] as string;
 
 const engine = {
-  store: { onOpen: () => () => {}, session: new DocumentSession() },
+  store: { onOpen: () => () => {}, session: new DocumentSession(), importing: (fn: () => Promise<unknown>) => fn() },
   sketch: { hasUncommittedEdits: false },
   geometry: {},
 } as never;

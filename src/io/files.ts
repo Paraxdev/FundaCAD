@@ -861,18 +861,31 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(bin);
 }
 
-async function importWith(
+type ImportRead = (onStarted: (id: string) => void, unit?: ImportUnit) => ReturnType<GeometryBackend["importGeometry"]>;
+type ImportOpts = {
+  unit?: ImportUnit | undefined;
+  source?: string;
+  retryable?: boolean;
+  opening?: boolean;
+  batched?: boolean;
+};
+
+function importWith(
   store: DocumentStore,
   path: string,
   fmt: ImportFormat,
-  read: (onStarted: (id: string) => void, unit?: ImportUnit) => ReturnType<GeometryBackend["importGeometry"]>,
-  opts: {
-    unit?: ImportUnit | undefined;
-    source?: string;
-    retryable?: boolean;
-    opening?: boolean;
-    batched?: boolean;
-  } = {},
+  read: ImportRead,
+  opts: ImportOpts = {},
+): Promise<ImportEnd> {
+  return store.importing(() => importNow(store, path, fmt, read, opts));
+}
+
+async function importNow(
+  store: DocumentStore,
+  path: string,
+  fmt: ImportFormat,
+  read: ImportRead,
+  opts: ImportOpts,
 ): Promise<ImportEnd> {
   // Opening is not blocked while a file is read; the session's end rejects the read, so it never lands in the next.
   const session = store.session;
@@ -973,9 +986,11 @@ export async function importInTurn(
 ): Promise<void> {
   const session = store.session;
   const left: string[] = [];
-  for (const step of steps) {
-    if (!session.alive || (await step.run()) === "dropped") left.push(step.name);
-  }
+  await store.importing(async () => {
+    for (const step of steps) {
+      if (!session.alive || (await step.run()) === "dropped") left.push(step.name);
+    }
+  });
   await importDropped(left);
 }
 
