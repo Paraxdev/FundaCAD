@@ -328,6 +328,64 @@ function modelDoc() {
     await settle();
     s = await state();
     check("opening a document saved without a cut turns it off", s.phase === "off" && !s.sectioned && (await chip()) === null, s);
+
+    console.log("\n[part 4: picks reach only what the cut keeps]");
+    await page.evaluate(async (doc) => {
+      window.store.loadDocument(doc);
+      await window.store.rebuildNow();
+    }, modelDoc());
+    await settle();
+    const f4 = await makeCut();
+    await clickEmpty();
+    await page.keyboard.press("f");
+    await page.waitForTimeout(400);
+    s = await state();
+    check("Fillet runs with the cut on", s.fillet && s.phase === "on" && s.sectioned, s);
+    const picks = await page.evaluate(([face, h]) => {
+      const v = window.viewport;
+      const V = v.camera.position.constructor;
+      const plane = v.sectionPlane;
+      const vec = (p) => new V(p[0], p[1], p[2]);
+      const depth = (p) => Math.round(plane.distanceToPoint(vec(p)) * 1e3) / 1e3;
+      const at = (p) => v.projectToScreen(vec(p));
+      const mid = (e) => {
+        const a = e.points[0], b = e.points[e.points.length - 1];
+        return e.points.length > 2 ? e.points[e.points.length >> 1] : a.map((x, i) => (x + b[i]) / 2);
+      };
+      const edges = v.visibleEdgeLines();
+      // A removed edge the picker returns at its own midpoint once the cut is taken off the picker.
+      let gone = null;
+      v.picker.setClip(null);
+      for (const e of edges.filter((e) => e.points.every((p) => depth(p) < -0.5))) {
+        const s = at(mid(e));
+        if (v.pickEdgeAt(s.x, s.y)?.edge.id === e.id) { gone = { id: e.id, s }; break; }
+      }
+      v.picker.setClip(plane);
+      const goneNow = gone && v.pickEdgeAt(gone.s.x, gone.s.y);
+      let back = null;
+      for (const e of edges)
+        for (const p of e.points)
+          if (Math.abs(p[2] - h) < 0.05 && Math.abs(Math.hypot(p[0] - 70, p[1] - 9) - 11) < 0.05 && (!back || depth(p) > back.d))
+            back = { id: e.id, p, d: depth(p) };
+      const bs = back && at(back.p);
+      const fh = v.pickFaceForPressPull(face.x, face.y);
+      return {
+        gone: gone && { id: gone.id, now: goneNow ? { id: goneNow.edge.id, d: depth(goneNow.point.toArray()) } : null },
+        rim: back && { id: back.id, d: back.d, got: v.pickEdgeAt(bs.x, bs.y)?.edge.id ?? null },
+        face: { before: depth(face.point), now: fh && depth(fh.anchor.toArray()), sameAsHover: v.faceIdAt(face.x, face.y) === (fh?.faceId ?? null) },
+      };
+    }, [f4, HEIGHT]);
+    check("without the cut the picker takes an edge of the removed half", !!picks.gone, picks);
+    check("with the cut on Fillet does not reach that edge, only kept ones",
+      !!picks.gone && (picks.gone.now === null || (picks.gone.now.id !== picks.gone.id && picks.gone.now.d >= -0.01)), picks.gone);
+    check("a pocket rim edge the cut keeps still picks", !!picks.rim && picks.rim.d > 1 && picks.rim.got === picks.rim.id, picks.rim);
+    check("a pick on the removed half lands on what the cut keeps, or nothing",
+      picks.face.before < -1 && (picks.face.now === null || picks.face.now >= -0.01) && picks.face.sameAsHover, picks.face);
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
+    s = await state();
+    check("Esc ends Fillet and the cut stays on", !s.fillet && s.phase === "on" && s.sectioned, s);
+    await shot("04_picks");
   } catch (err) {
     console.error(err);
     failures++;
