@@ -1,20 +1,6 @@
 <script setup lang="ts">
-// The open selection editor: the list of things a feature acts on, one row each,
-// while the viewport is armed to add and remove them.
-//
-// The list is the point. Clicking geometry to toggle it is what every picking
-// tool in the app already does; what none of them has is a set you can READ,
-// point at the third entry and see which edge lights up, take that one off and
-// leave the other three. Without it, correcting a four-edge fillet that caught a
-// fifth means starting over.
-//
-// It reads the tool and calls back. No document state, no selection state, no
-// geometry: features/targetEditTool owns all of it, including the rollback that
-// puts the consumed geometry back on screen.
-//
-// Subscribed, not polled, unlike the selection toolbar next door, which watches
-// a selection nothing notifies it about. Every change here goes through the tool,
-// so the tool can say when it happened.
+// Reads the tool and calls back: features/targetEditTool owns the set, the selection and the rollback. Subscribed,
+// not polled, since every change goes through the tool.
 
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import Icon from "../shell/Icon.vue";
@@ -25,9 +11,7 @@ import { describeTarget } from "../../features/selectionTargets";
 const engine = useEngine();
 const tool = engine.tools.targetEdit;
 
-// Clicking a row pins the highlight on the geometry it names, so it stays lit
-// after the pointer moves on (hover lights it too, but only while hovered). The
-// pinned row is kept by index; a remove or a close clears it.
+// A clicked row pins its highlight so it stays lit after the pointer leaves, kept by index, cleared by remove or close.
 const held = ref<number | null>(null);
 function focus(i: number) {
   held.value = i;
@@ -74,8 +58,7 @@ const field = computed(() => {
   return tool.field;
 });
 
-/** The feature's own name, so the panel says WHICH fillet is being edited,
- *  there are usually several. */
+/** The feature's own name: there are usually several fillets. */
 const title = computed(() => {
   tick.value;
   const id = tool.editingId;
@@ -91,11 +74,7 @@ const summary = computed(() => {
 </script>
 
 <template>
-  <!-- Docked in the left column, under the Items browser (which shrinks) and
-       beside the tool rail, so the affected-geometry list sits where the
-       fillet's edge list does. It is PARKED, not floating: the geometry it names
-       is exactly what you are about to click, so a panel that followed the
-       geometry would eat the gesture it exists to collect. -->
+  <!-- Parked in the left column, not floating: a panel following the geometry would eat the clicks it collects. -->
   <aside v-if="open && field" class="tgt-panel" role="dialog" :aria-label="`${title} selection`">
     <div class="tgt-head">
       <span class="tgt-title">{{ title }}</span>
@@ -115,8 +94,7 @@ const summary = computed(() => {
       </button>
     </div>
 
-    <!-- The list scrolls rather than growing: a face set on an imported mesh
-         can be dozens, and a panel taller than the column has no Done button. -->
+    <!-- Scrolls rather than grows: a face set on an imported mesh can be dozens, and a taller panel loses Done. -->
     <ul class="tgt-list">
       <li
         v-for="(r, i) in rows"

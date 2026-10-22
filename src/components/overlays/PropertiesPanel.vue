@@ -1,10 +1,5 @@
 <script setup lang="ts">
-// Inspect → Properties: volume / area / centre of mass / bounding box, plus a
-// filament estimate (mass + length at 1.75mm and 2.85mm) from a material
-// density and infill %. The measurements are a one-shot readout of the
-// CURRENT selection (computed by ui/panels.ts at open time); the estimate
-// below is live, it recomputes from `raw` as material/infill/wall change,
-// no new geometry call needed for that.
+// The measurements are a one-shot readout of the selection at open (ui/panels.ts), the filament estimate is live.
 
 import { computed, reactive } from "vue";
 import { useEngine } from "../../app/engineKey";
@@ -23,8 +18,7 @@ import {
 const engine = useEngine();
 const panels = usePanelsStore();
 
-// A local reactive copy so the controls respond instantly; each edit also
-// persists through setPrintPref (module-level, shared across the app).
+// A local copy so the controls respond instantly, each edit also persists through the app-wide setPrintPref.
 const prefs = reactive({ ...printPrefs() });
 function commit<K extends "materialId" | "customDensity" | "infillPct" | "wallThicknessMm">(key: K) {
   setPrintPref(key, prefs[key]);
@@ -47,8 +41,7 @@ const estimates = computed(() => {
     }),
   }));
 });
-// Mass doesn't depend on filament diameter, any entry's massG is the same
-// number; pulled out so the template never indexes into the array.
+// Mass does not depend on filament diameter, so any entry's massG will do.
 const massG = computed(() => estimates.value?.[0]?.massG ?? null);
 
 function close() {

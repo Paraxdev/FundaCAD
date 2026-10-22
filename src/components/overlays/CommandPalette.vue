@@ -1,10 +1,5 @@
 <script setup lang="ts">
 import { fmtKeys } from "../../input/platform";
-// Cmd/Ctrl-K command palette: fuzzy-search every command and run it. The
-// discoverability safety net (mainstream MCAD's "S" key equivalent), so nothing
-// is lost when the ribbon collapses tools into overflow, and shortcut-less /
-// right-click-only commands become findable by name.
-
 import { computed, nextTick, onUnmounted, ref, useTemplateRef, watch } from "vue";
 import { claimEscape } from "../../ui/escapeClaim";
 import { useCommandPaletteStore } from "../../stores/commandPalette";
@@ -16,9 +11,7 @@ const input = useTemplateRef<HTMLInputElement>("input");
 const query = ref("");
 const active = ref(0);
 
-// Item elements for scrollIntoView only. A PLAIN array, deliberately not a ref:
-// these are write-only DOM handles, and making 40 of them reactive per keystroke
-// would buy nothing.
+// A plain array, not a ref: write-only DOM handles for scrollIntoView, reactivity per keystroke buys nothing.
 let itemEls: (HTMLElement | null)[] = [];
 function setItemEl(i: number, el: unknown) {
   itemEls[i] = (el as HTMLElement | null) ?? null;
@@ -36,17 +29,13 @@ const results = computed(() => {
     .map((x) => x.c);
 });
 
-// Every re-filter puts the highlight back on the best match, exactly as the
-// imperative refresh() did by rebuilding the list with `active = 0`.
 watch(results, () => {
   active.value = 0;
   itemEls = [];
 });
 
-// Reset and focus on open. The input is created in the same flush, so focus has
-// to wait for it; on close the query is cleared so the next Ctrl+K starts fresh
-// (the old implementation got this by destroying the DOM).
-// Claimed so a screen under the palette, such as Home, leaves its Escape to it.
+// Escape is claimed so a screen under the palette, such as Home, leaves it alone. The input mounts in the same flush
+// as the open, so focus waits for it.
 let releaseEscape: (() => void) | null = null;
 onUnmounted(() => releaseEscape?.());
 watch(
@@ -87,9 +76,7 @@ function onKey(e: KeyboardEvent) {
     e.preventDefault();
     runIndex(active.value);
   } else if (e.key === "Escape") {
-    // stopPropagation as well as preventDefault: Escape is also the global
-    // "clear selection / cancel tool" key, and dismissing the palette must not
-    // additionally cancel whatever is underneath it.
+    // Also stopPropagation: Escape is the global cancel key too, and closing the palette must not cancel what is under it.
     e.preventDefault();
     e.stopPropagation();
     cmdk.close();
@@ -99,8 +86,6 @@ function onKey(e: KeyboardEvent) {
 
 <template>
   <Teleport to="body">
-    <!-- .self: only a click on the backdrop itself dismisses, never one that
-         bubbled up out of the card. -->
     <div v-if="cmdk.open" class="cmdk-backdrop" @pointerdown.self="cmdk.close()">
       <div class="cmdk-card" role="dialog" aria-modal="true" aria-label="Command palette">
         <input
