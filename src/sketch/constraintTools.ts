@@ -1,9 +1,4 @@
-// The 9 constraint-tool click flows (horizontal/vertical/parallel/perpendicular/
-// equal/tangent/coincident/concentric/symmetric): each adds a persistent geometric
-// constraint that the solver maintains alongside every other constraint already on
-// the sketch. Operates purely through the ConstraintHost accessor SketchMode
-// provides, no state is copied, so this collaborator always sees SketchMode's
-// live entities/constraints.
+// Constraint tool click flows, each adding a persistent constraint, on SketchMode's live state via ConstraintHost.
 
 import * as THREE from "three";
 import type { ResolvedEntity } from "./snap";
@@ -28,18 +23,14 @@ export const CONSTRAINT_TOOLS = new Set<SketchTool>([
   "fix",
 ]);
 
-/** One operand of `ConstraintTools.applicable`: an entity or a rectangle side
- *  (`<rectId>~<k>`), with `p` a point
- *  index already resolved from a click position (dimRefPoints/resolvePoint)
- *  when the caller knows exactly which point was meant. Omitted when only the
- *  whole entity is known, e.g. a plain rail-selection with no click position. */
+/** An entity or a rectangle side (`<rectId>~<k>`). `p` is a point index resolved from a click, omitted when
+ *  only the whole entity is known, e.g. a rail selection with no click position. */
 export interface ConstraintPick {
   id: string;
   p?: number;
 }
 
-/** `tool` names the constraint tool the option stands for, so a shortcut can
- *  apply it to the selection instead of arming the tool. */
+/** `tool` lets a shortcut apply the option to the selection instead of arming the tool. */
 export interface ConstraintOption {
   label: string;
   tool?: SketchTool;
@@ -48,48 +39,36 @@ export interface ConstraintOption {
 
 /** The slice of SketchMode these click flows read/write, live accessors, not copies. */
 export interface ConstraintHost {
-  /** current active sketch tool (drives which constraint flow fires) */
   tool(): SketchTool;
-  /** live entity list, never copied */
   entities(): ResolvedEntity[];
-  /** live constraint list, never copied; constraint flows push onto it */
   constraints(): SketchConstraint[];
-  /** pick tolerance in plane units, scaled to current zoom */
+  /** in plane units, scaled to the current zoom */
   pickTol(): number;
-  /** shared "first pick" slot for two-step line/entity flows, also used by
-   *  SketchMode's own fillet tool (filletClick/modifyHover); reset to null on
-   *  every setTool() */
+  /** first-pick slot shared with SketchMode's own fillet tool, reset to null on every setTool() */
   getFilletFirst(): number | null;
   setFilletFirst(idx: number | null): void;
-  /** kick the solve pump after a constraint changes */
   requestSolve(): void;
-  /** surface a user-facing warning (SketchMode routes it to the toast layer,
-   *  kept an accessor so these flows stay DOM-free/unit-testable) */
+  /** routed to the toast layer by SketchMode; an accessor so these flows stay DOM free and unit testable */
   warn(msg: string): void;
 }
 
 export class ConstraintTools {
   constructor(private host: ConstraintHost) {}
 
-  // coincident/symmetric/midpoint all start from an endpoint pick. We stash the
-  // first pick (and, for symmetric, the second) on filletFirst-style state.
+  // coincident, symmetric and midpoint start from an endpoint pick; symmetric also stashes its second pick here.
   private pendingEndpoint: { id: string; idx: number } | null = null;
   private pendingEndpoint2: { id: string; idx: number } | null = null;
   private firstOperand: Operand | null = null;
 
-  /** whether an endpoint-based flow (coincident/symmetric/midpoint) is mid-pick */
   hasPending(): boolean {
     return this.pendingEndpoint != null || this.pendingEndpoint2 != null;
   }
-  /** abandon any in-progress endpoint pick (tool switch, Escape, session end) */
   resetPending() {
     this.pendingEndpoint = null;
     this.pendingEndpoint2 = null;
     this.firstOperand = null;
   }
 
-  /** add a persistent geometric constraint and re-solve (the solver maintains
-   *  all constraints together, not just the one you applied). */
   click(p: THREE.Vector2) {
     const t = this.host.tool();
     // point-based constraints pick the nearest endpoint, not an entity body
@@ -101,7 +80,6 @@ export class ConstraintTools {
     if (t === "equal") return this.equalClick(p);
     if (t === "concentric") return this.concentricClick(p);
 
-    // line-based constraints (horizontal/vertical/parallel/perpendicular/collinear)
     const op = this.operandAt(p);
     if (!op || op.kind !== "line") return;
     if (t === "horizontal" || t === "vertical") {
@@ -123,8 +101,7 @@ export class ConstraintTools {
     }
   }
 
-  /** The curve under p as a constraint operand. A rectangle answers with its
-   *  nearest side as a line operand (`<rectId>~<k>`, see entityDims.lineOperand). */
+  /** A rectangle answers with its nearest side as a line operand (`<rectId>~<k>`, see entityDims.lineOperand). */
   private operandAt(p: THREE.Vector2): Operand | null {
     const entities = this.host.entities();
     const idx = pickEntity(entities, p, this.host.pickTol());
@@ -138,9 +115,8 @@ export class ConstraintTools {
     return kind ? { idx, id: ent.id, kind, ent } : null;
   }
 
-  /** Two-pick flows: arms `op` as the first pick and returns null, or pairs it
-   *  with the armed one. The filletFirst slot keeps the first pick highlighted
-   *  and is the source of truth for whether one is armed (the host clears it). */
+  /** Arms `op` as the first pick and returns null, or pairs it with the armed one. The filletFirst slot keeps the
+   *  first pick highlighted and is the source of truth for whether one is armed (the host clears it). */
   private secondOperand(op: Operand): [Operand, Operand] | null {
     const armedIdx = this.host.getFilletFirst();
     const first = this.firstOperand;
@@ -156,12 +132,8 @@ export class ConstraintTools {
     return [armed, op];
   }
 
-  /** nearest addressable point (line/arc endpoint, a circle/arc centre, a
-   *  rectangle corner, a bspline pole, a point entity, or a projected anchor)
-   *  to p. Shares dimRefPoints with fixClick/pickDimTarget so every
-   *  point-picking flow in the app agrees on what counts as "a point" and how
-   *  it's indexed (public: SketchMode's constraint-menu also resolves a click
-   *  to a specific point through here, see sketchMode.ts's constraintOptions). */
+  /** Via dimRefPoints, shared with fixClick and pickDimTarget so every point picking flow agrees on what a point is
+   *  and how it is indexed. Public because sketchMode.ts constraintOptions resolves menu clicks through it. */
   resolvePoint(p: THREE.Vector2): { id: string; idx: number } | null {
     const tol = this.host.pickTol();
     let best: { id: string; idx: number } | null = null;
@@ -233,8 +205,7 @@ export class ConstraintTools {
       this.addConstraint({ type: "symmetric", e1: a.id, p1: a.idx, e2: b.id, p2: b.idx, line: op.id });
   }
 
-  /** tangent between two curves: line/circle/arc, in any mix except line+line.
-   *  Emits the general `tangent2`; the compiler picks the right planegcs variant. */
+  /** Any mix of line, circle and arc but line+line; emits `tangent2` and the compiler picks the planegcs variant. */
   private tangentClick(p: THREE.Vector2) {
     const op = this.operandAt(p);
     if (!op) return;
@@ -266,9 +237,7 @@ export class ConstraintTools {
     if (pair) this.addConstraint({ type: "concentric", c1: pair[0].id, c2: pair[1].id });
   }
 
-  /** fix/lock: pin the nearest addressable point of any entity. Reuses
-   *  dimRefPoints (line/arc endpoints, arc/circle centers, rect corners, spline
-   *  ends) so the `p`-index convention lives in exactly one place. */
+  /** Via dimRefPoints, so the `p` index convention lives in exactly one place. */
   private fixClick(p: THREE.Vector2) {
     const tol = this.host.pickTol();
     let best: { id: string; p: number } | null = null;
@@ -293,17 +262,9 @@ export class ConstraintTools {
     if (entities[idx]?.type === "projected") this.host.warn(PROJECTED_FIXED_MSG);
   }
 
-  /** The constraints that make sense for the picks, mirroring each click flow's
-   *  own eligibility check, so a selection-driven menu (the rail's Constrain
-   *  popup, the right-click menu, a shortcut, see sketchMode.ts's
-   *  constraintOptions) never offers something the matching tool would refuse.
-   *  Three or more picks of one kind offer a chain: every pick related to the
-   *  first, in one undo step.
-   *
-   *  A multi-point entity (rectangle corners, a line/arc's two endpoints)
-   *  without a resolved `p` is never a point operand: guessing which point the
-   *  user meant would produce a silently wrong constraint, worse than not
-   *  offering one. */
+  /** Mirrors each click flow's own eligibility check, so a selection menu never offers what the tool would refuse.
+   *  Three or more picks of one kind chain to the first in one undo step. A multi-point entity without a resolved `p`
+   *  is never a point operand: guessing which point was meant would make a silently wrong constraint. */
   applicable(picks: ConstraintPick[]): ConstraintOption[] {
     const byId = new Map(this.host.entities().map((e) => [e.id, e]));
     const ops: PickOp[] = [];
@@ -389,10 +350,8 @@ export class ConstraintTools {
       );
     }
 
-    // a point with a curve, either way round. A curve picked whole is preferred
-    // over Coincident so I on a point and a circle puts the point on the rim, not
-    // on the centre; a curve picked by a clicked end or centre is a point, so
-    // Coincident comes first for it
+    // A curve picked whole offers point on curve before Coincident, so a point and a circle land on the rim;
+    // a curve picked by a clicked end or centre is a point, so Coincident comes first for it.
     const curveOptions = (clicked: boolean) => {
       if (ops.length !== 2) return;
       for (const [pt, cv] of [
@@ -500,8 +459,7 @@ interface Operand {
   ent?: ResolvedEntity;
 }
 
-/** One pick of `applicable`, decoded: `id` may be a rectangle side, `point` is
- *  the point index it stands for when that is unambiguous. */
+/** One pick of `applicable`, decoded: `id` may be a rectangle side, `point` is set when unambiguous. */
 interface PickOp {
   id: string;
   kind: "line" | "circle" | "arc" | undefined;

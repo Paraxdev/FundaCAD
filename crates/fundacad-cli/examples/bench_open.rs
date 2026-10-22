@@ -1,15 +1,6 @@
-//! Open and save timings for documents with big imports, one JSON line per stage.
-//!
-//!   cargo run --release -p fundacad-cli --example bench_open -- scan scan2m.stl --triangles 2000000
-//!   cargo run --release -p fundacad-cli --example bench_open -- pack part.step out/part
-//!   cargo run --release -p fundacad-cli --example bench_open -- open out/part.fundab --repeat 5
-//!   cargo run --release -p fundacad-cli --example bench_open -- reopen out/part.fundab --repeat 5
-//!
-//! `pack` imports a file and saves it as `<stem>.fundab` and `<stem>.funda`.
-//! `open` reads a document into an empty blob store and rebuilds it cold,
-//! `reopen` reads it again with the store already filled, the common case.
-//! `--threads N` sets FUNDACAD_THREADS for the file layer, `--file-only` stops
-//! after it, before the engine stages.
+//! Open and save timings for documents with big imports, one JSON line per stage:
+//! `cargo run --release -p fundacad-cli --example bench_open -- scan|pack|open|reopen <path> [--repeat N]`.
+//! `open` rebuilds into an empty blob store, `reopen` into a filled one, the common case.
 
 use std::collections::BTreeMap;
 use std::io::Write;
@@ -207,7 +198,6 @@ fn stage_pack(args: &[String]) {
     let _ = std::fs::remove_dir_all(&root);
 }
 
-/// Read the document into `blob_dir`, timing the file layer stages apart.
 fn file_layer(path: &Path, blob_dir: &Path, repeat: usize, refill: bool) -> String {
     let size = std::fs::metadata(path).unwrap().len();
     let binary = fnda::looks_like_fnda(path);

@@ -1,10 +1,5 @@
-// Press/pull along a hole's axis: the engine's faceAxis answer read into what
-// the tool offers, which way it starts, and where its arrow stands.
-//
-// Pushing a drilled hole's cone ceiling along its normal widens the cone until
-// it breaks out of a thin wall; along the axis the hole just gets deeper. The
-// engine decides which faces have an axis (features/axis_push.rs), so the arrow
-// and the build cannot disagree about it.
+// Press/pull along a hole's axis deepens it, where along the normal the cone widens until it breaks out. The engine
+// decides which faces have an axis (features/axis_push.rs), so the arrow and the build cannot disagree.
 
 import type { FaceAxisReply, FaceResize } from "../geometry/client";
 import type { PressPullDirection, Vec3 } from "../types";
@@ -26,8 +21,7 @@ export const DIRECTION_LABEL: Record<PressPullDirection, string> = {
 const finite = (v: unknown): v is Vec3 =>
   Array.isArray(v) && v.length === 3 && v.every((c) => typeof c === "number" && Number.isFinite(c));
 
-/** The axis worth offering, or null: none, a malformed reply, or a flat face
- *  square to its axis, which moves the same along either. */
+/** Null also for a flat face square to its axis, which moves the same along either. */
 export function offeredAxis(reply: FaceAxisReply | null): HoleAxis | null {
   if (!reply || !("axis" in reply) || reply.sameAsNormal) return null;
   const { origin, dir } = reply.axis;
@@ -37,8 +31,7 @@ export function offeredAxis(reply: FaceAxisReply | null): HoleAxis | null {
   return { origin, dir: [dir[0] / n, dir[1] / n, dir[2] / n], hole: reply.hole === true };
 }
 
-/** A hole's round end starts on its axis, which is almost always what a push
- *  there means; every other face starts along its normal. */
+/** A hole's round end starts on its axis, almost always what a push there means; other faces start on the normal. */
 export function initialDirection(axis: HoleAxis | null): PressPullDirection {
   return axis?.hole ? "axis" : "normal";
 }
@@ -50,8 +43,7 @@ export function anchorOnAxis(point: Vec3, axis: HoleAxis): Vec3 {
   return [o[0] + d[0] * t, o[1] + d[1] * t, o[2] + d[2] * t];
 }
 
-/** What the engine says about resizing a curved face, exact where the mesh
- *  fit is not. */
+/** The engine's answer on resizing a curved face, exact where the mesh fit is not. */
 export interface OfferedResize {
   kind: FaceResize["kind"];
   /** the radius, the tube radius on a torus, 0 on a cone */
@@ -71,7 +63,6 @@ export interface ResizeAxis {
   dir: Vec3;
 }
 
-/** The exact axis of a resize in a faceAxis reply, or null. */
 export function resizeAxis(reply: FaceAxisReply | null): ResizeAxis | null {
   const a = reply?.resize?.axis;
   if (!a || !finite(a.origin) || !finite(a.dir)) return null;
@@ -82,8 +73,7 @@ export function resizeAxis(reply: FaceAxisReply | null): ResizeAxis | null {
 
 const LOST_WHEN = new Set([null, "shrink", "grow"]);
 
-/** The resize in a faceAxis reply, or null: none, a kind not asked for, or a
- *  malformed reply. */
+/** Null also for a kind not asked for or a malformed reply. */
 export function offeredResize(
   reply: FaceAxisReply | null,
   kinds: readonly FaceResize["kind"][] = ["cylinder"],

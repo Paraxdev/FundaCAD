@@ -1,15 +1,5 @@
-//! The engine's benchmark set, the Rust side of the Python engine's `bench_rebuild.py`
-//! and bench_import.py. One stage per invocation, one JSON line out.
-//!
-//!   cargo run --release -p fundacad-geom --example bench_suite -- \
-//!       corpus tests/golden/corpus/corpus_engines.json --runs 3
-//!   cargo run --release -p fundacad-geom --example bench_suite -- doc gt2_spool.funda
-//!   cargo run --release -p fundacad-geom --example bench_suite -- import big.step
-//!   cargo run --release -p fundacad-geom --example bench_suite -- export gt2_spool.funda 3mf
-//!   cargo run --release -p fundacad-geom --example bench_suite -- faces tests/golden/corpus/corpus_engines.json
-//!
-//! Stages measure whole-op work the way the worker runs it: `corpus` and `doc`
-//! rebuild AND mesh, `import` splits the phases the way bench_import.py does.
+//! The engine's benchmark set, the Rust side of `bench_rebuild.py` and bench_import.py: one stage per run
+//! (corpus, doc, import, export, faces, digest, smooth), one JSON line out, timed the way the worker runs it.
 
 use std::time::{Duration, Instant};
 
@@ -352,10 +342,7 @@ fn stage_faces(args: &[String]) {
     );
 }
 
-/// The batched smooth edge test against the per sample walk it replaced, over
-/// The whole reply frame of a document, as a digest. Run it once with
-/// `FUNDACAD_THREADS=1` and once without: the two digests must match, which is
-/// the promise the parallel passes make.
+/// The whole reply frame as a digest. Run it with `FUNDACAD_THREADS=1` and without, the digests must match.
 fn stage_digest(args: &[String]) {
     let path = args.first().expect("bench_suite digest <document|corpus.json|file.step>");
     let lower = path.to_lowercase();
@@ -400,8 +387,8 @@ fn digest(bytes: &[u8]) -> String {
     out.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-/// every edge of a real document. The flag rides in the payload and in a saved
-/// selector, so the two must never disagree.
+/// The batched smooth edge test against the per sample walk it replaced, over every edge of a real document.
+/// The flag rides in the payload and in a saved selector, so the two must never disagree.
 fn stage_smooth(args: &[String]) {
     let path = args.first().expect("bench_suite smooth <document|corpus.json|file.step>");
     let raw = if path.to_lowercase().ends_with(".step") || path.to_lowercase().ends_with(".stp") {

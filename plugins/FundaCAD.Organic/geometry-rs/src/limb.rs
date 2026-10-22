@@ -1,7 +1,5 @@
-//! One chain as a limb: a single smooth loft through an elliptical section at
-//! every node, each normal to the spine through the node centres, and through
-//! shrinking sections of the end nodes' own ellipsoids out to a point, so the
-//! limb ends round with no seam between the tube and its caps.
+//! One chain as a single smooth loft through an elliptical section at every node, normal to the spine, and through
+//! shrinking sections of the end nodes' own ellipsoids out to a point, so the caps meet the tube with no seam.
 
 use crate::fundacad::plugin::kernel::LoftOptions;
 use crate::kernel;
@@ -13,9 +11,8 @@ use crate::Shape;
 /// end node's ellipsoid, from the node's own section toward the tip.
 const CAP_LATITUDES: [f64; 4] = [30.0, 55.0, 72.0, 84.0];
 
-/// The spine direction at every node: the mean of the unit chords either
-/// side inside, the end chord mirrored about its neighbour's direction at
-/// the ends, so the spine leaves an end as a circle through three nodes would.
+/// The spine direction at every node: the mean of the unit chords either side, and at the ends the end chord mirrored
+/// about its neighbour's direction, so the spine leaves an end as a circle through three nodes would.
 pub fn tangents(p: &[V]) -> Vec<V> {
     let n = p.len();
     let chords: Vec<V> = p.windows(2).map(|w| math::unit(math::sub(w[1], w[0]))).collect();
@@ -40,9 +37,8 @@ pub fn tangents(p: &[V]) -> Vec<V> {
     t
 }
 
-/// A reference direction normal to the spine at every node, carried along
-/// without twisting (double reflection), so the sections' start points line
-/// up and the loft does not wring.
+/// A reference direction normal to the spine at every node, carried along without twisting (double reflection), so
+/// the sections' start points line up and the loft does not wring.
 pub fn seams(p: &[V], t: &[V]) -> Vec<V> {
     let up = if t[0][2].abs() < 0.9 { [0.0, 0.0, 1.0] } else { [1.0, 0.0, 0.0] };
     let mut r = vec![math::perp_pair(t[0], up).0];
@@ -71,9 +67,8 @@ fn ellipse(center: V, t: V, a: V, b: V, seam: V) -> Result<Shape, String> {
     kernel::ellipse_edge(math::tuple(center), math::tuple(t), math::tuple(x), ra, rb, start)
 }
 
-/// How a limb is lofted. Sections go between nodes about `step` times the
-/// mean section radius apart, at most `max_between` per span, so the surface
-/// follows the spine instead of swinging wide across a long gap.
+/// How a limb is lofted. Sections go about `step` mean section radii apart, at most `max_between` per span, so the
+/// surface follows the spine instead of swinging wide across a long gap.
 struct Plan {
     step: f64,
     max_between: usize,
@@ -81,11 +76,8 @@ struct Plan {
     degree: u32,
 }
 
-/// A few sections at degree 5 is preferred over the rest. Through many
-/// sections the kernel's own degree 8 surface meshes with a gap along a long
-/// span, and its smoothed loft, which meshes whole, loses pieces in later
-/// booleans. The smoothed loft stays as the fallback for a limb the first
-/// is refused on.
+/// A few sections at degree 5 come first: through many sections the kernel's degree 8 surface meshes with a gap along
+/// a long span, and its smoothed loft loses pieces in later booleans, so that one is only the fallback.
 const PLANS: [Plan; 2] = [
     Plan { step: 1.2, max_between: 3, smooth: false, degree: 5 },
     Plan { step: 0.5, max_between: 12, smooth: true, degree: 0 },

@@ -1,31 +1,16 @@
-// Cheaper edge lines while the camera moves, on a model where the edge pass is a
-// real share of the frame. Two levels, both chosen by cost, so a small or normal
-// part looks exactly as it does at rest:
-//
-// "merged": an assembly of many bodies draws its idle edges as a few merged
-// batches instead of one draw a body (EdgeBatches). On a GPU the edge pass is
-// paid per draw, not per segment: an 1310 body assembly measured 7.4 ms of CPU
-// and 5.3 ms of GPU for its edges, and merged costs what no edges cost. The
-// picture is the same, so there is nothing to blend.
-//
-// "thin": the moving frames still miss THIN_BUDGET_MS and the edges are a large
-// share of what is drawn, as under a software renderer, where the fat lines'
-// quads are the frame (1px GL lines measured 1/47 of their cost). The idle edges
-// draw as 1px lines while moving, and at rest the fat ones fade back in over
-// them (EdgeBlend), so the lines only widen.
-//
-// Fed by measurement only, like MotionQuality, and remembered the same way.
+// Cheaper edges while the camera moves, chosen by measured cost so a normal part looks the same: "merged" batches many
+// bodies' draws (1310 bodies measured 7.4 ms CPU, 5.3 ms GPU), "thin" draws 1px lines while frames stay slow.
 
 export type EdgeMode = "full" | "merged" | "thin";
 
 /** Visible edge draws at which a gesture draws merged, and under which it stops. */
 export const MERGE_ON_DRAWS = 384;
 export const MERGE_OFF_DRAWS = 256;
-/** A median moving frame above this, under 30 fps, draws the edges thin. */
+/** A median moving frame above this, under 30 fps, draws the edges thin. Under a software renderer the fat lines' quads
+ *  are the frame (1px lines measured 1/47 of their cost); at rest EdgeBlend fades the fat lines back in over them. */
 export const THIN_BUDGET_MS = 33;
-/** Thin only pays where the edges are this share of what is drawn, a fat
- *  segment counting as 6 triangles. 0.63 on a stack of holed plates, 0.3 on an
- *  imported assembly of 1310 bodies. */
+/** Thin only pays where edges are this share of what is drawn, a fat segment counting as 6 triangles (measured 0.63 on
+ *  holed plates, 0.3 on a 1310 body assembly). */
 export const THIN_MIN_SHARE = 0.25;
 const WINDOW = 4;
 /** A thin verdict is kept this long before a gesture tries the fat lines again,

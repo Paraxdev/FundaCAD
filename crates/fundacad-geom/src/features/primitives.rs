@@ -1,6 +1,5 @@
-//! Box, cylinder, sphere, cone and torus, the Python engine's `builder.py` `_handle_box` and
-//! its siblings with handler_util.py `_require_positive`. Every primitive is
-//! centred on the origin on all three axes.
+//! Box, cylinder, sphere, cone and torus, `_handle_box` and its siblings of builder.py with `_require_positive`.
+//! Every primitive is centred on the origin on all three axes.
 
 use fundacad_core::schema::{BoxFeature, Cone, Cylinder, Sphere, Torus};
 

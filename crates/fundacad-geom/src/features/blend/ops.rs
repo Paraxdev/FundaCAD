@@ -153,13 +153,9 @@ pub fn conic(shape: &Shape, edges: &[Shape], radius: f64, profile: f64) -> Resul
     }
 }
 
-/// section_blend.py `section_blend` through blends.py `section_fn`.
-///
-/// Cutting every tool at once can leave the tools' faces inside the result,
-/// lying on the faces that replaced them. BRepCheck passes such a solid, the
-/// viewport draws both layers and a section cap streaks. Which answer folds
-/// depends on how the body happens to be oriented, so a folded one is built
-/// again without the one-shot cut, and refused if that folds too.
+/// section_blend.py `section_blend` through blends.py `section_fn`. Cutting every tool at once can leave tool
+/// faces inside the result on the faces that replaced them, which BRepCheck passes. Which answer folds depends on
+/// the body's orientation, so a folded one is built again without the one-shot cut, and refused if that folds too.
 #[allow(clippy::too_many_arguments)]
 pub fn section(
     shape: &Shape,

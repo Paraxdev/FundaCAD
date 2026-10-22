@@ -1,19 +1,5 @@
-// Writing a driving length / diameter straight into the geometry, for machines
-// with no constraint solver.
-//
-// A line's length, a circle's diameter and a rectangle's width and height go
-// through a solver constraint rather than editing coordinates (see
-// SketchMode.editDimension; line angle is a direct write). So where the
-// solver's WASM will not start, those were the dimensions that silently did
-// NOTHING: the constraint was recorded, never solved, and the shape kept the
-// size it was drawn at. That is exactly how it reached us, from a
-// Windows user on 0.1.100 whose WebView2 refused to compile WebAssembly:
-// "when creating a circle I am unable to put in a new value for the dimension.
-// Other shapes seem to work fine."
-//
-// This is a stand-in, not a solver. The constraints are left in place, so once a
-// real solver is available it drives the geometry properly and a sketch authored
-// here is indistinguishable from one authored on a working machine.
+// Writes a driving length or diameter straight into the geometry where the solver's WASM will not start
+// (a WebView2 that refused WebAssembly). The constraints stay, so a real solver later drives them properly.
 
 import type { ResolvedEntity } from "./snap";
 import type { DimField, SketchConstraint } from "../types";
@@ -24,14 +10,8 @@ import { circumcenter } from "./arc";
 
 const EPS = 1e-9;
 
-/** Apply what can be applied without solving. Mutates `entities` in place and
- *  returns true if anything actually moved.
- *
- *  Only single-entity dimensions are handled. Anything relating two entities
- *  (point-to-point, radial gap, angle between lines) needs a solve to decide
- *  WHICH end moves, and guessing would put geometry somewhere the user never
- *  asked for. Those stay unapplied rather than applied wrongly, see
- *  waitsForSolver. */
+/** Mutates `entities` and returns true if anything moved. Only single-entity dims: two-entity ones need a solve
+ *  to decide which end moves, so they stay unapplied rather than applied wrongly (see waitsForSolver). */
 export function applyDrivingDimsDirect(entities: ResolvedEntity[], constraints: SketchConstraint[]): boolean {
   let changed = false;
   for (const c of constraints) {
@@ -99,9 +79,8 @@ export function applyDrivingDimsDirect(entities: ResolvedEntity[], constraints: 
   return changed;
 }
 
-/** Driving horizontal or vertical distances the no-solver path leaves alone (all
- *  but those along one line),
- *  so the user is told they wait for the solver instead of seeing nothing happen. */
+/** Driving horizontal or vertical distances the no-solver path leaves alone (all but those along one line),
+ *  so the user is told they wait for the solver. */
 export function waitsForSolver(entities: ResolvedEntity[], constraints: SketchConstraint[]): number {
   const lines = new Set(entities.filter((e) => e.type === "line").map((e) => e.id));
   return constraints.filter(
@@ -109,9 +88,7 @@ export function waitsForSolver(entities: ResolvedEntity[], constraints: SketchCo
   ).length;
 }
 
-/** The rectangle corner a no-solver resize keeps in place: one that is pinned
- *  (a fix on it, a fixed point on it or coincident with it, or the origin), else
- *  the second corner of the constraint's own pair. */
+/** A pinned corner (a fix on it, a fixed or coincident point, or the origin), else the constraint pair's second. */
 function heldCorner(
   e: Extract<ResolvedEntity, { type: "rectangle" }>,
   c: Extract<SketchConstraint, { type: "p2pDistance" }>,
@@ -141,9 +118,8 @@ function heldCorner(
   return found ?? c.p2;
 }
 
-/** Which side of its own rectangle a same-entity p2pDistance measures, by the
- *  corner pair (rectCorners order): 0-1 and 2-3 are the width, 1-2 and 3-0 the
- *  height. The caller checks that `e1` really is a rectangle. */
+/** By the corner pair (rectCorners order): 0-1 and 2-3 are the width, 1-2 and 3-0 the height.
+ *  The caller checks that `e1` really is a rectangle. */
 export function rectSideField(c: SketchConstraint): "width" | "height" | null {
   if (c.type !== "p2pDistance" || c.e1 !== c.e2) return null;
   const lo = Math.min(c.p1, c.p2),
@@ -155,13 +131,9 @@ export function rectSideField(c: SketchConstraint): "width" | "height" | null {
 
 export type DrivingDim = Extract<SketchConstraint, { type: "distance" | "diameter" | "p2pDistance" }>;
 
-/** The driving constraint a typed value on `entity`'s `field` badge becomes, or
- *  null when that field is a direct coordinate write (line angle, slot, polygon,
- *  and a rotated rectangle, which the solver pins rigid so a side dim would only
- *  fight the pins).
- *  A rectangle side is picked by the corner pair whose default label side is the
- *  badge's own (below for the width, left for the height), and a dragged badge
- *  hands its placement over, so the label stays put when it starts driving. */
+/** Null when the field is a direct coordinate write (line angle, slot, polygon, a rotated rectangle the solver pins
+ *  rigid). A rectangle side uses the corner pair whose default label side is the badge's, and a dragged badge hands
+ *  its placement over so the label stays put. */
 export function drivingDimFor(entity: ResolvedEntity, field: DimField, mm: number): DrivingDim | null {
   if (entity.type === "line" && field === "length") return { type: "distance", line: entity.id, value: mm };
   if (entity.type === "circle" && field === "diameter") return { type: "diameter", circle: entity.id, value: mm };
@@ -181,8 +153,7 @@ export function drivingDimFor(entity: ResolvedEntity, field: DimField, mm: numbe
   return null;
 }
 
-/** Where a typed dimension keeps its geometry still (see solveKeepingAxes): the
- *  held end of a line, so its length is taken up at the other one. */
+/** The held end of a line (see solveKeepingAxes), so a length change is taken up at the other end. */
 export function dimAnchor(
   entities: ResolvedEntity[],
   constraints: SketchConstraint[],
@@ -194,9 +165,8 @@ export function dimAnchor(
   return lineHeldEnd(e, entities, constraints) === 0 ? { x: e.x1, y: e.y1 } : { x: e.x2, y: e.y2 };
 }
 
-/** The end of a line a length change keeps still. The one on fixed geometry
- *  when exactly one is, else the one with the smaller x, then the smaller y, so
- *  a shape grows right and up whichever way its lines were drawn. */
+/** The end on fixed geometry when exactly one is, else the smaller x, then smaller y, so a shape grows right and up
+ *  whichever way its lines were drawn. */
 export function lineHeldEnd(
   e: Extract<ResolvedEntity, { type: "line" }>,
   entities: ResolvedEntity[],
@@ -220,8 +190,7 @@ export function lineHeldEnd(
   return a.y <= b.y ? 0 : 1;
 }
 
-/** Positions the solver holds still: the origin, every fixed point, projected
- *  reference geometry, and the corners of a rotated rectangle, which is rigid. */
+/** The origin, every fixed point, projected reference geometry, and the corners of a rotated (rigid) rectangle. */
 function fixedPositions(entities: ResolvedEntity[], constraints: SketchConstraint[]): { x: number; y: number }[] {
   const out: { x: number; y: number }[] = [{ x: 0, y: 0 }];
   for (const k of constraints) {
@@ -253,7 +222,7 @@ function isFixedOperand(id: string, p: number, entities: ResolvedEntity[], const
   );
 }
 
-/** An entity point by the `fix` constraint's index semantics (see types.ts). */
+/** By the `fix` constraint's index semantics (see types.ts). */
 function entityPoint(e: ResolvedEntity | undefined, p: number): { x: number; y: number } | null {
   if (!e) return null;
   switch (e.type) {
@@ -275,7 +244,6 @@ function entityPoint(e: ResolvedEntity | undefined, p: number): { x: number; y: 
   }
 }
 
-/** The driving constraint already holding `entity`'s `field`, if any. */
 export function findDrivingDim(
   constraints: SketchConstraint[],
   entity: ResolvedEntity,
@@ -293,9 +261,7 @@ export function findDrivingDim(
   return undefined;
 }
 
-/** `<entityId>:<field>` for every rectangle side a driving constraint holds. Its
- *  constraint label shows the value (editable, deletable, red on a conflict), so
- *  the entity badge for the same side is left out rather than drawn twice. */
+/** Sides whose constraint label already shows the value (editable, red on conflict), so no badge draws them twice. */
 export function drivenBadges(entities: ResolvedEntity[], constraints: SketchConstraint[]): Set<string> {
   const rects = new Set(entities.filter((e) => e.type === "rectangle").map((e) => e.id));
   const out = new Set<string>();
@@ -307,20 +273,9 @@ export function drivenBadges(entities: ResolvedEntity[], constraints: SketchCons
   return out;
 }
 
-/** The other end of the same rule: SketchMode.editDimension routes a typed
- *  line length, circle diameter or rectangle width/height through a driving
- *  constraint so the solver keeps whatever else is pinned to that entity (a
- *  coincident endpoint, a corner on the origin) intact, rather than sliding just
- *  that one coordinate. An editor with no live solve session (FeatureProperties,
- *  editing a feature that is not open) needs the same routing before it hands
- *  entities+constraints to a headless solve, or the field it exposes is the trap
- *  SK-7 was: it looks like every other dimension row but quietly breaks a
- *  closure the moment you type into it.
- *
- *  Returns the constraint list with the driving dim upserted (dedup by target,
- *  same id if one already drove it), or null when `field` is one of the ones
- *  that edit coordinates directly (line angle, slot, polygon), for the caller to
- *  fall back to entityDims' own write(). */
+/** For editors with no live solve session (FeatureProperties): routes length, diameter and rect sides through a
+ *  driving constraint before a headless solve, or the field breaks a closure when typed into (SK-7). Null for fields
+ *  that edit coordinates directly, where the caller falls back to entityDims' write(). */
 export function upsertDrivingDim(
   constraints: SketchConstraint[],
   entity: ResolvedEntity,

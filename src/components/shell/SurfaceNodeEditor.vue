@@ -1,18 +1,6 @@
 <script setup lang="ts">
-// A small node editor for a material's procedural surface graph. Nodes are cards
-// on a pannable, zoomable canvas; wire an output port to an input port (drag from
-// one dot to the other, or click one then the other), drag cards to arrange, tune
-// params inline. Every change writes the graph to the material, and the viewport
-// recompiles it (viewport/proceduralSurface.ts), so the part updates live.
-//
-// The editor is a bottom sheet, not a full-screen cover: the real viewport stays
-// visible above it and IS the live preview, showing the actual body under the
-// document's own lighting rather than a second little sphere that has to be kept
-// in step. Drag the top edge to trade graph room for preview room.
-//
-// The graph is held locally and synced to the store on each change: this is the
-// only editor of it open at a time, so a local copy is the source of truth and
-// avoids a round trip through the document on every keystroke.
+// A bottom sheet, so the real viewport above it is the live preview. The graph is held locally as the only editor of
+// it, and each change writes it to the material for viewport/proceduralSurface.ts to recompile.
 import Icon from "./Icon.vue";
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useEngine } from "../../app/engineKey";
@@ -86,9 +74,7 @@ const PORT_TYPE: Record<string, "float" | "vec3"> = {
   bump: "float",
   color: "vec3",
 };
-// A data type reads at a glance: a value (float) is a blue circle, a colour
-// (vec3) an amber square, on the ports AND on the wire between them, so "what
-// this outputs" and "what this input needs" are visible without reading a label.
+// A float is a blue circle and a vec3 colour an amber square, on ports and wires, so types read without a label.
 const outClass = (t: NodeType) => `t-${OUT_TYPE[t]}`;
 const inClass = (port: string) => `t-${PORT_TYPE[port] ?? "float"}`;
 // A small icon per node, so a card is recognised by shape not only by its name.
@@ -162,10 +148,8 @@ function addNode(type: NodeType, at?: { x: number; y: number }) {
     x = Math.round(at.x - NODE_W / 2);
     y = Math.round(at.y - 20);
   } else {
-    // middle of the current view. The view centre is element-relative (half the
-    // canvas), so unproject it directly rather than through toWorld, which
-    // expects page coordinates. Cascade off the centre so successive adds do not
-    // stack exactly on top of one another (which would bury the lower ports).
+    // The view centre is element-relative, so it is unprojected directly, not through toWorld (page coordinates).
+    // Successive adds cascade off it so they do not bury each other's ports.
     const cw = canvasEl.value?.clientWidth ?? 600,
       ch = canvasEl.value?.clientHeight ?? 300;
     const off = (g.value.nodes.length % 6) * 26;
@@ -176,7 +160,7 @@ function addNode(type: NodeType, at?: { x: number; y: number }) {
   sync();
 }
 
-// --- Shift+A add menu, grouped like Blender's -------------------------------
+// The Shift+A add menu, grouped like Blender's.
 const ADD_GROUPS: { label: string; items: NodeType[] }[] = [
   { label: "Texture", items: ["noise", "scratches", "brushed", "voronoi", "wave"] },
   { label: "Input", items: ["fresnel"] },
@@ -231,7 +215,7 @@ function clearGraph() {
   sync();
 }
 
-// --- wiring: drag a dot to a dot, or click one then the other ---------------
+// Wiring: drag a dot to a dot, or click one then the other.
 const armed = ref<string | null>(null);
 const wire = ref<{ from: string; moved: boolean } | null>(null);
 function startWire(id: string, e: PointerEvent) {
@@ -262,7 +246,6 @@ function disconnect(nodeId: string, port: string) {
   }
 }
 
-// --- params ----------------------------------------------------------------
 function setParam(id: string, key: string, raw: string, numeric: boolean) {
   const n = node(id);
   if (!n) return;
@@ -305,7 +288,7 @@ const pnum = (n: SurfaceNode, key: string, d = 0) =>
 const pcol = (n: SurfaceNode, key: string, d: string) =>
   typeof n.params?.[key] === "string" ? (n.params[key] as string) : d;
 
-// --- colorramp stops: "pos:hex;pos:hex" kept in edit order (the compiler sorts) -
+// Colorramp stops, "pos:hex;pos:hex" kept in edit order (the compiler sorts).
 type Stop = { pos: number; hex: string };
 function rampStops(n: SurfaceNode): Stop[] {
   const raw = typeof n.params?.["stops"] === "string" ? (n.params["stops"] as string) : "";
@@ -360,7 +343,6 @@ function rampGradient(n: SurfaceNode): string {
   return `linear-gradient(to right, ${s.map((x) => `${x.hex} ${(x.pos * 100).toFixed(1)}%`).join(", ")})`;
 }
 
-// --- pan / zoom ------------------------------------------------------------
 const canvasEl = ref<HTMLElement | null>(null);
 const pan = ref({ x: 20, y: 20 });
 const zoom = ref(1);
@@ -409,7 +391,6 @@ function fit() {
   pan.value = { x: cw / 2 - ((minX + maxX) / 2) * z, y: ch / 2 - ((minY + maxY) / 2) * z };
 }
 
-// --- drag nodes / pan background -------------------------------------------
 const drag = ref<{ id: string; ox: number; oy: number } | null>(null);
 const panning = ref<{ sx: number; sy: number; px: number; py: number } | null>(null);
 function startDrag(n: SurfaceNode, e: PointerEvent) {
@@ -470,7 +451,6 @@ function onUp(e: PointerEvent) {
   }
 }
 
-// --- resize the sheet ------------------------------------------------------
 const panelH = ref(Math.round(Math.min(Math.max(window.innerHeight * 0.5, 260), window.innerHeight * 0.85)));
 const resizing = ref<{ y: number; h: number } | null>(null);
 function startResize(e: PointerEvent) {
@@ -485,7 +465,7 @@ function onResizeUp() {
   resizing.value = null;
 }
 
-// --- wire geometry (from node x/y + fixed port offsets) --------------------
+// Wire geometry from node x, y and fixed port offsets.
 const outPos = (n: SurfaceNode) => ({ x: (n.x ?? 0) + NODE_W, y: (n.y ?? 0) + 16 });
 const inPos = (n: SurfaceNode, i: number) => ({ x: n.x ?? 0, y: (n.y ?? 0) + 37 + i * 20 });
 function bez(x1: number, y1: number, x2: number, y2: number) {
@@ -555,7 +535,6 @@ const pending = computed(() => {
               ><Icon name="close" :size="12"
             /></button>
           </div>
-          <!-- input ports (dot colour + shape says what type this port needs) -->
           <div
             v-for="(port, i) in INPUTS[n.type]"
             :key="port"
@@ -567,7 +546,6 @@ const pending = computed(() => {
             @click="n.in?.[port] ? disconnect(n.id, port) : clickInput(n.id, port)"
             ><span class="ne-dot" :class="inClass(port)"></span>{{ port }}</div
           >
-          <!-- output port (dot colour + shape says what type this node outputs) -->
           <div
             v-if="OUT_TYPE[n.type] !== 'none'"
             class="ne-port ne-out"
@@ -578,7 +556,6 @@ const pending = computed(() => {
             @click="armed = armed === n.id ? null : n.id"
             >out<span class="ne-dot" :class="outClass(n.type)"></span
           ></div>
-          <!-- params -->
           <div
             class="ne-params"
             :style="{ paddingTop: (INPUTS[n.type].length ? INPUTS[n.type].length * 20 + 8 : 6) + 'px' }"
@@ -658,7 +635,6 @@ const pending = computed(() => {
       </div>
       <div class="ne-zoom">{{ Math.round(zoom * 100) }}%</div>
     </div>
-    <!-- Shift+A add menu, grouped -->
     <template v-if="addMenu">
       <div class="ne-addbackdrop" @pointerdown="addMenu = null"></div>
       <div class="ne-addmenu" :style="{ left: addMenu.x + 'px', top: addMenu.y + 'px' }" @pointerdown.stop>
@@ -848,7 +824,6 @@ const pending = computed(() => {
 .ne-out.armed .ne-dot {
   background: var(--accent);
 }
-/* data type by colour AND shape: a value is a blue circle, a colour an amber square */
 .ne-dot.t-float {
   border-color: #5aa9f0;
 }

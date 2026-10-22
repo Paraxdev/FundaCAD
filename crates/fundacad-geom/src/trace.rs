@@ -1,11 +1,5 @@
-//! The OpenCASCADE calls the feature being built has made, so a failure can
-//! name the kernel operation that refused and what it was handed.
-//!
-//! Thread-local and per feature: the build loop clears it before each feature
-//! and takes it when one fails. Calls made on a `par` worker thread are not
-//! seen, the trail is a best effort report and never changes a result.
-//! Arguments are formatted only for a call that failed, so a passing build pays
-//! for a name and a timestamp per call.
+//! The OCCT calls of the feature being built, so a failure names the operation that refused and its
+//! input. Thread local and best effort: calls on `par` workers go unseen, and only failed calls format arguments.
 
 use std::cell::RefCell;
 use std::time::Instant;
@@ -82,9 +76,8 @@ fn push_with(call: Call, later: Option<Later>) {
     });
 }
 
-/// `failed`, with arguments worded only if the feature fails in the end: a
-/// blend that recovers from a refused kernel call never reads them, and
-/// describing a B-spline body costs a fifth of a second.
+/// Arguments are worded only if the feature fails in the end: a blend that recovers never reads them,
+/// and describing a B-spline body costs a fifth of a second.
 pub fn failed_later(
     op: &'static str,
     args: impl FnOnce() -> String + 'static,

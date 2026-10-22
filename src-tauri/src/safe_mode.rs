@@ -1,11 +1,6 @@
-//! Safe mode: a start that never reaches a mounted interface is counted, and
-//! after `THRESHOLD` of them in a row the app comes up with defaults instead of
-//! repeating the blank window forever (issues #3 and #6).
-//!
-//! The count is a small file in the app data directory. It is written once the
-//! single-instance check has passed and removed once the interface has mounted,
-//! so a file still there on the next launch is a start that did not finish.
-//! No Tauri types, so the state machine is tested alone.
+//! After `THRESHOLD` starts in a row that never mount the interface, the app comes up with defaults (issues #3 and #6).
+//! The count file is written after the single instance check and removed on mount, so a leftover is an unfinished
+//! start.
 
 use std::ffi::OsString;
 use std::path::Path;

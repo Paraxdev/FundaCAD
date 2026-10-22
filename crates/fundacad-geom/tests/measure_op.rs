@@ -52,7 +52,6 @@ fn near3(a: [f64; 3], b: [f64; 3]) -> bool {
     (0..3).all(|k| near(a[k], b[k]))
 }
 
-/// The face `inspect` lists in `body` with this outward normal, its selector.
 fn face_by_normal(ins: &Value, body: usize, n: [f64; 3]) -> Value {
     ins["bodies"][body]["faces"]
         .as_array()

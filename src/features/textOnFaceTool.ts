@@ -1,15 +1,3 @@
-// Interactive Text on Face: click a flat, round or conical face, type, and the
-// letters are embossed (or engraved) where the click was, wrapped onto a round
-// face at their true size.
-//
-// It writes one `textOnFace` feature. A round face is stored by its fingerprint
-// plus the anchor as fractions of the face's (u, v) range, both from the
-// engine's faceAnchor op, so the text stays at the same spot round the face
-// when its radius is edited later. A flat face is stored by the picked point.
-//
-// While the panel is open a click or drag on the model moves the anchor (the
-// yellow dot); the kernel builds the text again once the hand lets go.
-
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
 import type { DocumentStore } from "../document/store";
@@ -25,6 +13,8 @@ const SETTLE_MS = 350;
 
 type Phase = "pick" | "type";
 
+// A round face is kept by fingerprint plus `at`, the anchor as fractions of its (u, v) range,
+// so the text stays put when the radius is edited later. A flat face is kept by the point.
 interface Anchor {
   face: Selector;
   body: string;
@@ -41,8 +31,7 @@ export class TextOnFaceTool {
   private engrave = false;
   private dragging = false;
   private dragPoint: { point: THREE.Vector3; selector: Selector; bodyId: string | null } | null = null;
-  // Each faceAnchor ask gets a ticket, a reply that comes back after a newer
-  // ask (or after the tool closed) is dropped.
+  // A faceAnchor reply that arrives after a newer ask, or after the tool closed, is dropped.
   private ticket = 0;
   private marker: THREE.Points | null = null;
   private previewTimer = 0;
@@ -99,7 +88,8 @@ export class TextOnFaceTool {
   private onDown(e: PointerEvent) {
     if (e.button !== 0) return;
     const hit = this.viewport.pickFaceForPressPull(e.clientX, e.clientY);
-    if (!hit) return; // missed the body, let the click orbit
+    // A click that misses the body falls through and orbits.
+    if (!hit) return;
     e.preventDefault();
     e.stopImmediatePropagation();
     if (this.phase === "pick") {
@@ -119,8 +109,7 @@ export class TextOnFaceTool {
     if (d) void this.resolve(d.selector, d.bodyId, d.point, null);
   }
 
-  /** Ask the engine where the point sits on the face, and anchor the text
-   *  there. `screen` is set for the first pick, which opens the panels. */
+  /** `screen` is set only for the first pick, which opens the panels. */
   private async resolve(
     sel: Selector,
     bodyId: string | null,
@@ -250,7 +239,6 @@ export class TextOnFaceTool {
     this.viewport.requestRender();
   }
 
-  /** The feature as it would be committed, null while there is nothing to write. */
   buildFeatures(): Feature[] | null {
     const a = this.anchor;
     const v = this.values;

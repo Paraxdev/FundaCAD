@@ -1,6 +1,5 @@
-// The modal sketch environment: enter on a plane (camera squares to it, model
-// dims, grid appears), draw Line/Rectangle/Circle interactively with snapping
-// and on-canvas dimension input, then Finish to commit the sketch feature.
+// The modal sketch environment: enter on a plane, draw with snapping and on-canvas dimension input, then Finish
+// commits the sketch feature.
 
 import * as THREE from "three";
 import { asFeature } from "../types";
@@ -201,8 +200,6 @@ export type SketchTool =
   | "text"
   | "project";
 
-// PRESET_PATTERNS/ENTITY_PATTERNS/PATTERN_TOOLS live in patternFlow.ts (imported
-// above); CONSTRAINT_TOOLS lives in constraintTools.ts (also imported above).
 const MODIFY_TOOLS = new Set<SketchTool>([
   "trim",
   "fillet",
@@ -219,8 +216,7 @@ const MODIFY_TOOLS = new Set<SketchTool>([
   ...CONSTRAINT_TOOLS,
 ]);
 
-// Map planegcs conflict ids back to constraint indices. Implicit ids (rect
-// edges `<id>~h0`, the drag pin) decode to null and are skipped.
+// Implicit ids (rect edges `<id>~h0`, the drag pin) decode to null and are skipped.
 function parseConflictIdx(ids: string[]): Set<number> {
   const s = new Set<number>();
   for (const id of ids) {
@@ -230,24 +226,17 @@ function parseConflictIdx(ids: string[]): Set<number> {
   return s;
 }
 
-// Tools that operate on the current multi-selection, so setTool must keep it.
-// The entity patterns belong here for the same reason mirror does: they
-// replicate what is selected, and clearing it on the way in left them refusing
-// with "Select entities first" that no amount of selecting first could answer.
+// Tools that act on the current selection, so setTool keeps it. The entity patterns replicate the selection too.
 const KEEPS_SELECTION = new Set<SketchTool>(["mirror", "move", "copy", "rotate", "scale", ...ENTITY_PATTERNS]);
 
-// Sentinel id for the in-progress text tool's live-preview entity: it lives on the
-// active entity list (so it repaints through the normal render path) but is never
-// committed, filtered out at serialization and dropped on tool switch/cancel.
+// The text tool's live-preview entity lives on the active list so it repaints normally, but is never committed.
 const TEXT_PREVIEW_ID = "__textpreview__";
 
 // A dimmed curve blue: snappable, but never mistaken for drawn geometry.
 const FACE_ANCHOR_COLOR = 0x4a6a94;
-/** How far mm-per-pixel may drift before the annotation furniture is rebuilt at
- *  the new zoom. See updateAnnotationScale. */
+/** How far mm-per-pixel may drift before the annotation furniture is rebuilt, see updateAnnotationScale. */
 const DIM_SCALE_TOL = 1.05;
-/** Outer radius of the snap ring, in screen pixels. The mesh is a unit ring
- *  (overlay.ts), so this doubles as the scale factor per mm-per-pixel. */
+/** Screen px. The mesh is a unit ring (overlay.ts), so this doubles as the scale per mm-per-pixel. */
 const SNAP_MARKER_PX = 6;
 
 export class SketchMode {
@@ -268,13 +257,11 @@ export class SketchMode {
     return this.plane;
   }
 
-  /** The model's outline on this sketch's plane, in sketch 2D, for aiming the
-   *  view and snapping to the face. Areas split along the engine's cut lines
-   *  instead (overlay.footprintFor). Empty on a datum plane. */
+  /** The model's outline on this sketch's plane in sketch 2D, for aiming the view and snapping. Areas split along the
+   *  engine's cut lines instead (overlay.footprintFor). Empty on a datum plane. */
 
   private footprint: THREE.Vector2[][] = [];
-  /** The same edges, UN-chained, one polyline each, which is what tells a
-   *  corner from a point part way along an arc. See anchors.boundaryAnchors. */
+  /** Unchained, one polyline per edge, which tells a corner from a point along an arc (anchors.boundaryAnchors). */
   private footprintEdges: THREE.Vector2[][] = [];
   private viewFocus = new THREE.Vector3();
   /** The exact ones among them, with their source edge, for Offset to take. */
@@ -317,10 +304,8 @@ export class SketchMode {
     region: WorldRegion | null;
   } | null = null;
   private areaBox = new AreaBox();
-  /** The Relations list in the Sketch Palette. */
   private relations = new RelationsPanel();
-  /** Entity ids lit by the relations row under the cursor. Display only: it
-   *  never reaches the document, the solver or the undo history. */
+  /** Display only: never reaches the document, the solver or the undo history. */
   private relHover = new Set<string>();
   private constraints: SketchConstraint[] = []; // persistent constraints (solved)
   private patterns: SketchPattern[] = []; // associative pattern definitions
@@ -340,9 +325,7 @@ export class SketchMode {
   /** What a dragged point can land on, taken at the grab so nothing that moves with it is offered. */
   private dragAnchors: SnapCandidate[] = [];
 
-  // --- in-sketch undo -------------------------------------------------------
-  // Per session: the document undo would pop the whole sketch, which is not in
-  // the document until finish().
+  // Per-session undo: the document undo would pop the whole sketch, which is not in the document until finish().
   private history = new SketchHistory();
   private dragRefusedToast = false; // one fixed-point toast per refused drag gesture
   private pendingDrag: { fromX: number; fromY: number; toX: number; toY: number } | null = null;
@@ -359,8 +342,7 @@ export class SketchMode {
     region?: WorldRegion | null;
   } | null = null;
   private solveBusy = false; // a solve is in flight (drag or constraint)
-  // the solver WASM failed to come up: stop pumping and say so ONCE, rather
-  // than letting every stroke raise the same unhandled rejection
+  // The solver WASM failed: stop pumping and say so once, not as an unhandled rejection per stroke.
   private solverDead = false;
   private solverDeadToast = false;
   private directDimToast = false; // said once: dims are being written straight to geometry
@@ -371,22 +353,16 @@ export class SketchMode {
   private entityVersion = 0; // bumped on every entity change; guards stale solves
   private conflict = false; // last solve reported conflicting (over-)constraints
   private lastCursor = new THREE.Vector2();
-  // right-press bookkeeping for the canvas context menus: a right-DRAG is a
-  // camera pan and must not pop a menu on release (the viewport applies the
-  // same 5 px rule to its own right-click menus).
+  // A right-drag is a camera pan and must not pop a menu on release (the viewport uses the same 5 px rule).
   private rightDownAt: { x: number; y: number } | null = null;
   private rightDragged = false;
-  // Move/Copy tool: first (base) point picked; the second click sets the offset.
-  // distance-constraint dims, computed once per refreshActive() in activeCurves()
-  // and reused for the clickable labels (constraintDimExtras)
+  // Distance-constraint dims, computed once per refreshActive() and reused for the clickable labels.
   private cdims: ConstraintDim[] = [];
   private editingId: string | null = null;
   get editingSketchId(): string | null {
     return this.editingId;
   }
-  /** The datumPlane feature this sketch is placed ON, when it was created from
-   *  one. Round-tripped through finish() so re-editing a sketch never silently
-   *  downgrades it from a live datum link to a baked placement. */
+  /** Round-tripped through finish() so a re-edit never downgrades a live datum link to a baked placement. */
   private planeId: string | null = null;
   private store: DocumentStore | undefined;
   private grid: SketchPlaneGrid | null = null;
@@ -396,7 +372,6 @@ export class SketchMode {
   /** Scratch for planeMmPerPx(), which runs on the same per-frame path. */
   private scaleAt = new THREE.Vector3();
   private scaleAt2 = new THREE.Vector2();
-  // Sketch Palette options
   private gridVisible = true;
   private gridSnap = true;
   private constructionMode = false;
@@ -408,8 +383,6 @@ export class SketchMode {
   private conflictIdx = new Set<number>(); // constraint indices the solver flagged conflicting
   private overIdx = new Set<number>(); // indices flagged redundant / over-defining (removable)
   private readonly textPanel = new TextPanel();
-  // Project tool: filter chips (edges&faces / sketch curves) + a one-at-a-time
-  // in-flight gate so a double-click can't race two projectGeometry calls.
   private readonly projectPanel = new ProjectPanel();
   private fonts: string[] = []; // system fonts for the text tool (loaded on enter)
   // text tool: press-drag defines a box (wrap width); a plain click is a point anchor.
@@ -417,20 +390,13 @@ export class SketchMode {
   private textBoxEnd: THREE.Vector2 | null = null;
   private textBoxScreen: { x: number; y: number } | null = null;
   private viewLocked = false; // the palette's "Lock to Plane" preference (off by default)
-  // --- the sketch view's soft lock -------------------------------------------
-  // "Lock to Plane" lets go once you zoom out past the framing the sketch opened at
-  // (sketchView.sketchLockHolds). Placement raycasts onto the plane at any angle.
+  // "Lock to Plane" lets go once you zoom out past the entry framing (sketchView.sketchLockHolds).
   /** View half-height once the entry flight has landed. */
   private entryScale: number | null = null;
   private lockReleased = false;
   private releaseAnnounced = false; // say it once per session, not once per frame
-  // The view direction/up from just before entering, and whether the user
-  // orbited during the session. enterSketchView forces the camera square onto
-  // the plane and nothing ever turns it back afterwards, so a sketch drawn
-  // without touching the camera left it pinned there for good: Fit View can
-  // still frame the model, but only from that flat, close-up angle, which
-  // reads as broken. Restored on a normal exit, unless the user orbited their
-  // own way out already (an explicit choice, not left for us to override).
+  // The pre-sketch view, restored on a normal exit unless the user orbited their own way out: enterSketchView squares
+  // the camera and nothing else turns it back, so Fit View would frame only from that flat angle.
   private preSketchDir: THREE.Vector3 | null = null;
   private preSketchUp: THREE.Vector3 | null = null;
   private navigatedDuringSketch = false;
@@ -448,9 +414,7 @@ export class SketchMode {
   private boundContext: (e: MouseEvent) => void;
   private boundLeave: () => void;
   private boundTick: () => void;
-  // collaborators: the constraint-tool click flows and the pattern placement/edit
-  // flow, each operating on a live accessor into this SketchMode (see their
-  // Host interfaces) rather than a copy of its state.
+  // Collaborators work on a live accessor into this SketchMode (their Host interfaces), never a copy of its state.
   private constraintTools: ConstraintTools;
   private patternFlow: PatternFlow;
   private dimFlow: DimFlow;
@@ -472,9 +436,7 @@ export class SketchMode {
     this.dims.onPlanePoint = (cx, cy) => this.planePointAt(cx, cy);
     this.dims.onEntityPlace = (i, f, ox, oy, done) => this.commitEntityPlace(i, f, ox, oy, done);
     this.dims.onLabelMenu = (e, del) => {
-      // Disabled rather than absent on an entity dim: a circle's diameter is a
-      // property of the circle, so there is no constraint to remove, and saying
-      // so is preferred over a right-click that appears to do nothing.
+      // Disabled rather than absent on an entity dim: no constraint to remove, but a dead right-click looks broken.
       contextMenu(e.clientX, e.clientY, [
         { label: "Delete dimension", danger: true, disabled: !del, shortcut: "Del", onClick: () => del?.() },
       ]);
@@ -491,9 +453,7 @@ export class SketchMode {
     this.boundUp = (e) => this.endDrag(e.pointerId);
     this.boundKey = (e) => this.onKey(e);
     this.boundContext = (e) => this.onContextMenu(e);
-    // A snap marker is a statement about where the CURSOR is. With the cursor
-    // off the canvas there is no such place, and one left standing where the
-    // pointer happened to exit reads as a mark on the drawing.
+    // A snap marker left where the pointer exited the canvas reads as a mark on the drawing.
     this.boundLeave = () => this.showSnap(null);
     this.boundTick = () => this.tick();
     const constraintHost: ConstraintHost = {
@@ -597,8 +557,7 @@ export class SketchMode {
       emphasiseModelEdges: (edges) => this.viewport.emphasiseEdges(edges),
     };
     this.modifyFlow = new ModifyFlow(modifyHost);
-    // Filter chip clicks land on the panel, not the canvas, so projectHover
-    // doesn't run, clear the other mode's hover feedback explicitly.
+    // Chip clicks land on the panel, not the canvas, so clear the other mode's hover feedback here.
     this.projectPanel.onChange = () => {
       this.viewport.hoverEntity(null);
       this.overlay.setPreview([]);
@@ -606,7 +565,6 @@ export class SketchMode {
     };
   }
 
-  // --- lifecycle ---------------------------------------------------------
   /** `planeId` links the sketch to a datum plane so it moves with the datum; `plane`
    *  stays as the resolved cache every frontend reader uses. */
   enter(
@@ -620,9 +578,7 @@ export class SketchMode {
     this.editingId = editId ?? null;
     this.plane = this.overlay.planeFor(plane);
     this.planeId = planeId ?? null;
-    // The face this sketch is drawn on, so the engine can re-derive the plane
-    // every rebuild instead of the sketch recording where the face used to be.
-    // A sketch on a base plane or on a datum has none, and neither needs one.
+    // Lets the engine re-derive the plane every rebuild. Base planes and datums need none.
     this.face = face ?? null;
     this.store = store;
     // Once per session: the body under an open sketch cannot change.
@@ -642,7 +598,6 @@ export class SketchMode {
         this.fonts = f;
       });
 
-    // load existing entities if editing
     this.entities = [];
     this.constraints = [];
     this.patterns = [];
@@ -657,18 +612,13 @@ export class SketchMode {
       const sk = asFeature(f, "sketch");
       if (sk) {
         this.evenOdd = sk.fillRule === "evenodd";
-        // real entities only, derived pattern copies are NEVER stored in
-        // this.entities (see derivedEntities()); doing so would persist them
-        // as real geometry on the next finish() and bake in duplicates (§1.2).
+        // Real entities only: derived pattern copies stored here would persist as real geometry on finish() (§1.2).
         this.entities = resolveRealEntities(sk, store.document.parameters);
         this.constraints = sk.constraints ? sk.constraints.map((c) => ({ ...c })) : [];
         this.patterns = sk.patterns ? sk.patterns.map((p) => ({ ...p })) : [];
-        // keep an existing datum link across a re-edit (the caller only passes
-        // planeId when it just created the datum)
+        // Keep a datum link across a re-edit, the caller passes planeId only when it just created the datum.
         if (sk.planeId) this.planeId = sk.planeId;
-        // ...and the same for the face anchor: re-editing a sketch must not
-        // strip the reference that makes it follow. The caller passes one only
-        // when the sketch is being CREATED on a face.
+        // Same for the face anchor: the caller passes one only when the sketch is created on a face.
         if (sk.face) {
           this.face = { selector: sk.face, at: (sk.at ?? [0, 0, 0]) as [number, number, number] };
         }
@@ -678,11 +628,8 @@ export class SketchMode {
 
     this.viewport.suspendPicking = true;
     this.viewFocus = this.focusPoint();
-    // viewDirection() is the camera's look-along (eye toward target); setViewDir's
-    // `dir` is the opposite, eye = target + dir·d (see applyOverride's face normal
-    // for the same convention), so it has to be negated here or the restore below
-    // lands the camera on the far side of the model, upside-down-ish from where it
-    // was (round 2's PM-6: nav cube read BOTTOM after a plain sketch+extrude).
+    // viewDirection() looks eye to target, setViewDir's `dir` is the opposite (eye = target + dir·d), so negate it or
+    // the restore lands on the far side of the model (PM-6).
     this.preSketchDir = this.viewport.rig.viewDirection(new THREE.Vector3()).negate();
     this.preSketchUp = new THREE.Vector3().setFromMatrixColumn(this.viewport.rig.active.matrixWorld, 1);
     this.navigatedDuringSketch = false;
@@ -724,8 +671,7 @@ export class SketchMode {
     this.onState?.();
   }
 
-  /** The feature this session would commit, for the bug reporter: the store has no
-   *  copy until finish(). Shared with finish(). Null when nothing is drawn. */
+  /** For the bug reporter, the store has no copy until finish(). Null when nothing is drawn. */
   snapshotFeature(): Feature | null {
     if (!this.active || !this.store) return null;
     if (this.entities.length === 0 && this.patterns.length === 0) return null;
@@ -741,8 +687,7 @@ export class SketchMode {
     };
   }
 
-  /** Whether the camera looks straight at the plane, told on change so the UI can
-   *  offer to square it again only when it is not. */
+  /** Fired on change so the UI offers to square the view only when it is not. */
   onViewSquare: ((square: boolean) => void) | null = null;
   private viewSquare = true;
 
@@ -769,16 +714,14 @@ export class SketchMode {
     if (sketch) this.onCommitted?.(sketch.id);
   }
 
-  /** Append a Divide Face when the sketch sits on a body face and its curves close
-   *  no area of their own (a "+", a line across). Call before cleanup(). */
+  /** Adds a Divide Face when the sketch is on a body face and its curves close no area (a "+", a line across). Call
+   *  before cleanup(). */
   private maybeDivideFace(sketch: Feature) {
     if (sketch.type !== "sketch" || !this.face || !this.store) return;
     const ents = [...this.entities, ...this.derivedEntities()];
     const hasEdge = ents.some((e) => !e.construction && e.type !== "point" && e.type !== "text");
     if (!hasEdge) return;
-    // With NO footprint, so the question is whether the CURVES close an area,
-    // not whether they carve up the face they lie on (they do, and that is the
-    // whole point). A profile closes one here; an open cut closes none.
+    // No footprint: the question is whether the curves close an area, not whether they carve the face.
     if (detectRegions(sketch.id, ents, undefined).length > 0) return;
     this.store.addFeature({ id: this.store.nextId(), type: "imprint", sketch: sketch.id });
   }
@@ -815,10 +758,8 @@ export class SketchMode {
     this.snapWorld = null;
     this.removeGrid();
     this.viewport.exitSketchView();
-    // The camera is still exactly square-on to the plane enterSketchView put it
-    // on: turn back to how it looked before, unless the user already orbited
-    // their own way out (an explicit choice we leave alone). Direction only,
-    // turnTo keeps the current scale/target, so this doesn't fight a zoom.
+    // Still square-on from enterSketchView: turn back to the pre-sketch direction unless the user orbited away.
+    // turnTo keeps scale and target, so this does not fight a zoom.
     if (!this.navigatedDuringSketch && this.preSketchDir) {
       this.viewport.rig.setViewDir(this.preSketchDir, this.preSketchUp ?? new THREE.Vector3(0, 1, 0));
     }
@@ -850,7 +791,6 @@ export class SketchMode {
     this.onState?.();
   }
 
-  // --- tools -------------------------------------------------------------
   setTool(t: SketchTool) {
     if (this.gizmo?.active) this.gizmo.cancel();
     // With something selected, move, rotate and scale are one gizmo on it; the
@@ -864,9 +804,7 @@ export class SketchMode {
       }
     }
     const keepSelection = KEEPS_SELECTION.has(t);
-    // Read the selection BEFORE the clear below consumes it: arriving at the
-    // dimension tool with geometry already selected dimensions that geometry
-    // (Fusion: pick the line, then press D).
+    // Read before the clear below: entering the dimension tool with geometry selected dimensions it (Fusion: pick, then D).
     const preselected = t === "dimension" ? [...this.selected] : [];
     if (t !== this.tool && this.tangentArc) this.setTangentArc(false);
     this.tool = t;
@@ -915,8 +853,7 @@ export class SketchMode {
     this.onState?.();
   }
 
-  /** Text is picked through its glyph areas, so a text selected that way is the
-   *  text entity as far as a transform is concerned. */
+  /** Text is picked through its glyph areas, so such a selection is the text entity for a transform. */
   private adoptSelectedText() {
     const ids = this.overlay.selectedActiveTextIds();
     if (!ids.length) return;
@@ -971,33 +908,26 @@ export class SketchMode {
     };
   }
 
-  /** Public re-draw hook: e.g. async glyph outlines for a text entity just arrived,
-   *  so the active sketch's curves (incl. text + its live preview entity) need
-   *  repainting. No-op when inactive. */
+  /** For async glyph outlines that just arrived. No-op when inactive. */
   redraw(): void {
     if (this.active) this.refreshActive();
   }
 
-  /** Rebuild the active sketch's committed curves + snap candidates + editable
-   * dimension labels. Called when the entity list changes, and on drag end. */
+  /** Called when the entity list changes, and on drag end. */
   private refreshActive() {
     this.entityVersion++; // bump guards in-flight constraint solves against staleness
     for (const id of this.pickedAt.keys()) if (!this.selected.has(id)) this.pickedAt.delete(id);
-    // current zoom → mm-per-pixel, so dimension badges keep screen clearance
-    // from the geometry they label (they're click targets in the select tool)
+    // Dimension badges keep screen clearance from the geometry they label, they are click targets in the select tool.
     setDimPixelScale(this.planeMmPerPx());
     const derived = this.derivedEntities(); // computed once, shared below
     const regionFootprint = this.overlay.footprintFor(this.plane, profileBounds([...this.entities, ...derived]));
     this.overlay.setActiveSketch(this.activeCurves(derived));
-    // profile-area fills for the active sketch (hidden from overlay.update),
-    // so areas are visible + selectable while drawing
+    // Profile fills for the active sketch, hidden from overlay.update, so areas are selectable while drawing.
     this.overlay.setActiveRegions(
       detectRegions(
         this.editingId ?? "__active__",
         [...this.entities, ...derived],
-        // Empty means "no model in this plane", a datum-plane sketch, and must
-        // reach detectRegions as absent, not as an empty face, or every profile
-        // there would be marked unsupported.
+        // Empty means a datum-plane sketch and must reach detectRegions as absent, or every profile reads as unsupported.
         regionFootprint.length ? regionFootprint : undefined,
       ),
       this.plane,
@@ -1011,8 +941,7 @@ export class SketchMode {
       ...this.faceAnchorCandidates(),
       ...originCandidate(this.plane),
     ];
-    // an in-progress dimension holds entity REFERENCES, and a solve replaces
-    // every entity object, re-read the picks off the fresh list
+    // A solve replaces every entity object, so re-read the in-progress dimension's picks off the fresh list.
     if (this.dimFlow.picking) this.dimFlow.refreshDimPlan();
     if (this.dimsVisible)
       this.dims.show(
@@ -1024,14 +953,10 @@ export class SketchMode {
     else this.dims.hide();
     if (this.glyphsVisible) this.glyphs.show(this.allGlyphs(), this.plane, this.conflictIdx, this.overIdx);
     else this.glyphs.hide();
-    // The list, from the same four inputs the badges take. refreshActive is the
-    // choke point every constraint change and every finished solve passes
-    // through, which is why it goes here rather than at each of those sites.
+    // Here because refreshActive is the choke point every constraint change and finished solve passes through.
     this.relations.show(this.entities, this.constraints, this.conflictIdx, this.overIdx, this.lastDof, this.conflict);
     this.showLooseEnds();
-    // On-demand renderer: a keyboard-driven repaint (e.g. async text glyphs landing
-    // via redraw()) fires no pointer event, so force a frame or it won't draw until
-    // the next mouse move.
+    // On-demand renderer: a keyboard-driven repaint fires no pointer event, so force a frame.
     this.viewport.requestRender();
   }
 
@@ -1051,9 +976,8 @@ export class SketchMode {
     return this.looseNow;
   }
 
-  /** Tie every amber end to what it touches as one undo step. A tie the solver would
-   *  reject is left out, so a tie never turns the sketch red.
-   *  `reachMm` is a reach the person confirmed, wider than the snap's, to close a gap. */
+  /** One undo step. A tie the solver would reject is left out so the sketch never turns red. `reachMm` is a
+   *  person-confirmed reach, wider than the snap's, to close a gap. */
   async tieLooseEnds(reachMm?: number): Promise<{ tied: number; open: number; untied: number }> {
     const snap = this.snapTolMm();
     const le = looseEnds(this.entities, this.constraints, Math.max(snap, reachMm ?? 0));
@@ -1117,9 +1041,7 @@ export class SketchMode {
     ];
   }
 
-  /** Lightweight per-frame refresh for dragging: the curves and constraint glyphs
-   * move, the snap-candidate array (a drag snaps to dragAnchors) and the
-   * dimension labels wait for refreshActive() on end. */
+  /** Per-frame drag refresh: curves and glyphs move, snap candidates and dim labels wait for refreshActive() on end. */
   private refreshDragGeometry() {
     this.entityVersion++;
     this.overlay.setActiveSketch([
@@ -1130,9 +1052,7 @@ export class SketchMode {
     if (this.glyphsVisible) this.glyphs.show(this.allGlyphs(), this.plane, this.conflictIdx, this.overIdx);
   }
 
-  // --- per-frame reconcile (grid + view lock) --------------------------------
-  /** Follow the camera once a frame (zoom arrives from four input paths): the grid,
-   *  and how far the view has drifted from the plane. */
+  /** Once a frame, since zoom arrives from four input paths: the grid, and the view's drift from the plane. */
   private tick() {
     this.raf = requestAnimationFrame(this.boundTick);
     if (!this.active) return;
@@ -1162,7 +1082,6 @@ export class SketchMode {
   }
 
   private viewDirScratch = new THREE.Vector3();
-  /** Which way the camera is pointing, as a plain tuple for sketchView. */
   private viewDir(): [number, number, number] {
     const d = this.viewport.rig.viewDirection(this.viewDirScratch);
     return [d.x, d.y, d.z];
@@ -1182,17 +1101,14 @@ export class SketchMode {
     this.lockReleased = true;
     this.viewport.rig.setOrbitLocked(false);
     this.viewport.setSketchFlat(false);
-    // Only ANNOUNCE a release when something was actually holding the view. With
-    // the lock off, the default, turning away is the ordinary thing to do and
-    // being told about it every time would be noise.
+    // Announce only when something held the view: with the lock off, turning away is ordinary.
     if (!wasLocked || this.releaseAnnounced) return;
     this.releaseAnnounced = true;
     toast("View unlocked. Drawing still lands on the sketch plane; Look At re-squares it.");
   }
 
-  /** Re-arm the lock and re-baseline it. Called by anything that deliberately
-   *  puts the camera back on the plane, so a released session can be recovered
-   *  without leaving and re-entering the sketch. */
+  /** Called by anything that puts the camera back on the plane, so a released session recovers without
+   *  re-entering the sketch. */
   private squareToPlane() {
     this.viewport.enterSketchView(this.viewFocus, this.plane.n, this.plane.v);
     this.lockReleased = false;
@@ -1209,9 +1125,7 @@ export class SketchMode {
     if (last > 0 && mmPerPx > last / DIM_SCALE_TOL && mmPerPx < last * DIM_SCALE_TOL) return;
     this.dimScaleSeen = mmPerPx;
     setDimPixelScale(mmPerPx);
-    // Deliberately NOT refreshActive(): that bumps entityVersion (cancelling any
-    // in-flight constraint solve) and re-derives regions and snap candidates,
-    // none of which depend on the zoom. Only the annotation geometry does.
+    // Not refreshActive(): that bumps entityVersion, cancelling an in-flight solve, and re-derives zoom-independent state.
     this.overlay.setActiveSketch(this.activeCurves(this.derivedEntities()));
     if (this.dimsVisible)
       this.dims.show(
@@ -1224,13 +1138,11 @@ export class SketchMode {
     this.viewport.requestRender();
   }
 
-  /** mm per screen pixel at the camera target on the plane. Not at the plane origin:
-   *  in perspective the answer depends on the point, and was 2x wrong off-origin. */
+  /** At the camera target on the plane: in perspective the plane origin was 2x wrong off-origin. */
   private planeMmPerPx(): number {
     const at = this.plane.to2D(this.viewport.cameraTarget(this.scaleAt), this.scaleAt2);
     const mm = this.viewport.pixelWorldSize(this.plane.to3D(at.x, at.y, this.scaleAt));
-    // A camera target behind the eye, or a degenerate frustum, would poison
-    // every size on screen. The origin is the fallback it used to be.
+    // A target behind the eye or a degenerate frustum would poison every size, so fall back to the origin.
     return mm > 0 && Number.isFinite(mm) ? mm : this.viewport.pixelWorldSize(this.plane.origin);
   }
 
@@ -1255,7 +1167,6 @@ export class SketchMode {
     if (rebuilt) this.viewport.requestRender();
   }
 
-  // --- Sketch Palette options ---
   setGridVisible(on: boolean) {
     this.gridVisible = on;
     this.grid?.setVisible(on);
@@ -1313,7 +1224,6 @@ export class SketchMode {
     this.refreshActive();
     this.onState?.();
   }
-  /** Delete the constraint at `cIndex` (clicked its glyph) and re-solve. */
   private deleteConstraint(cIndex: number) {
     if (cIndex < 0 || cIndex >= this.constraints.length) return;
     this.constraints.splice(cIndex, 1);
@@ -1323,19 +1233,14 @@ export class SketchMode {
     this.refreshActive();
     this.onState?.();
   }
-  /** Lock the camera square to the sketch plane: re-square now and disable orbit
-   *  (mouse + SpaceMouse) so the view can't tilt off the plane. Unlock = free orbit. */
+  /** Disables orbit (mouse and SpaceMouse) so the view cannot tilt off the plane. */
   setViewLocked(on: boolean) {
     this.viewLocked = on;
-    // Through squareToPlane, not enterSketchView: re-locking has to re-baseline
-    // the release check too, or a session the zoom already released would come
-    // back square with the lock still disarmed and drift straight off again.
+    // Through squareToPlane so re-locking re-baselines the release check, or a zoom-released session drifts off again.
     if (on) this.squareToPlane();
     this.viewport.rig.setOrbitLocked(on);
   }
-  /** re-square the camera to the active sketch plane (palette "Look At").
-   *  This is the recovery the release toast points at, so it re-arms the lock
-   *  rather than only moving the camera. */
+  /** Palette Look At, the recovery the release toast points at, so it re-arms the lock too. */
   lookAt() {
     this.squareToPlane();
     if (this.viewLocked) {
@@ -1344,11 +1249,8 @@ export class SketchMode {
     // Flat comes back when the flight lands (enterSketchView's onArrive).
   }
 
-  /** Apply an edited dimension value (mm) to an entity. Line length, circle
-   *  diameter and rectangle width/height become driving solver constraints, the
-   *  same ones typing them while drawing makes (lockTypedDims), so the value
-   *  holds against a later drag and counts toward the degrees of freedom (MO-1).
-   *  The rest (slot, polygon) edits coordinates directly. */
+  /** Line length, circle diameter and rect W/H become driving constraints like typed ones (lockTypedDims), so they
+   *  hold against a drag and count toward dof (MO-1). Slot and polygon edit coordinates directly. */
   private editDimension(index: number, field: DimField, mm: number) {
     const e = this.entities[index];
     if (!e) return;
@@ -1363,9 +1265,8 @@ export class SketchMode {
     this.refreshActive();
   }
 
-  /** When the solver WASM will not start, write length and diameter dims straight into
-   *  the geometry; they otherwise did nothing. The constraint is kept for a real
-   *  solver, and two-entity dims are left alone since only a solve says which moves. */
+  /** Without the solver WASM, length and diameter dims are written straight into the geometry. Two-entity dims are
+   *  left alone, only a solve says which moves. */
   private applyDrivingDimsDirectly() {
     if (waitsForSolver(this.entities, this.constraints) > 0 && !this.axisDimToast) {
       this.axisDimToast = true;
@@ -1385,13 +1286,7 @@ export class SketchMode {
     this.onState?.();
   }
 
-  /** clickable labels for the distance constraints: editing one writes the
-   *  constraint's driving value and re-solves. Reads the cdims activeCurves()
-   *  computed earlier in the same refreshActive() pass. */
-
-  // --- dimension label placement (drag) ---------------------------------
-  // Placement lives on the constraint, or on the entity (`dimPlace`) for badges.
-  // It never changes geometry, so neither path re-solves.
+  // Dimension placement lives on the constraint, or on the entity (`dimPlace`) for badges, and never re-solves.
 
   /** Mid-drag stays cheap: refreshActive() would tear down the label being dragged. */
   private afterPlaceDrag(done: boolean, anchor: () => THREE.Vector2 | null): THREE.Vector2 | null {
@@ -1424,15 +1319,13 @@ export class SketchMode {
     return this.afterPlaceDrag(done, () => {
       const cur = this.entities[index];
       if (!cur) return null;
-      // recompute through the same neighbour-aware defaults the labels render
-      // with, so a mid-drag label tracks its dim's REAL anchor
+      // Same neighbour-aware defaults the labels render with, so a mid-drag label tracks its dim's real anchor.
       const def = staggeredDefaults(this.entities).get(cur.id);
       return entityDims(cur, def).find((d) => d.field === field)?.labelPos ?? null;
     });
   }
 
-  /** Persist a dragged CONSTRAINT dim placement (the placed dims, see
-   *  isPlacedDim, which is exactly the set that carries `place`). */
+  /** The placed dims (isPlacedDim) are exactly the set that carries `place`. */
   private commitConstraintPlace(cIndex: number, ox: number, oy: number, done: boolean): THREE.Vector2 | null {
     const c = this.constraints[cIndex];
     if (!c || !(isPlacedDim(c) || c.type === "diameter")) return null;
@@ -1455,8 +1348,7 @@ export class SketchMode {
         ...(d.driven ? { driven: true } : {}),
         ...(st === "conflict" ? { conflict: true } : st === "over" ? { over: true } : {}),
         ...(expr ? { expr } : {}),
-        // draggable only when this dim's constraint has a `place` slot to write
-        // to (constraintDims omits `place` for the ones that don't)
+        // Draggable only when the constraint has a `place` slot (constraintDims omits it otherwise).
         ...(d.place
           ? {
               place: d.place,
@@ -1489,9 +1381,7 @@ export class SketchMode {
     this.onState?.();
   }
 
-  /** Add/replace the driving dimension on an entity, then re-solve. A dim gets
-   *  its stable id at birth; a replacement inherits the replaced dim's id, so a
-   *  parameter binding survives retyping the dimension. */
+  /** A replacement inherits the replaced dim's id, so a parameter binding survives retyping. */
   private setDrivingDimension(c: SketchConstraint) {
     // radialGap and c2cDistance are one intent in two formulations, so one target.
     const rimPair = (k: SketchConstraint): string | null =>
@@ -1546,19 +1436,15 @@ export class SketchMode {
     if (this.solverDead) this.applyDrivingDimsDirectly();
   }
 
-  // --- parameter bindings on sketch dims -------------------------------------
-  // Held here while the sketch is open (keys `c:<constraintId>` and
-  // `e:<entityId>:<field>`) and applied in the same mutate as the commit.
+  // Parameter bindings held while the sketch is open (keys `c:<constraintId>`, `e:<entityId>:<field>`), applied in
+  // the same mutate as the commit.
   private pendingBindings = new Map<string, { expr: string; kind: FieldKind; name?: string }>();
 
-  /** the sketch feature id currently open for editing (null for a new sketch
-   *  or when the editor is closed), the store's cascade must not headlessly
-   *  overwrite it. */
+  /** null for a new sketch or a closed editor. The store's cascade must not headlessly overwrite it. */
   get openDocId(): string | null {
     return this.active ? this.editingId : null;
   }
 
-  /** binding key → ParamTarget once the owning sketch id is known. */
   private static targetOf(key: string, sketchId: string): ParamTarget {
     const [t, id, field] = key.split(":");
     return t === "c"
@@ -1566,7 +1452,7 @@ export class SketchMode {
       : { kind: "entity", sketch: sketchId, entity: id!, field: field! };
   }
 
-  /** SketchBinding list for the commit; targets get the final sketch id. */
+  /** Targets get the final sketch id. */
   private drainBindings(sketchId: string): SketchBinding[] {
     const out: SketchBinding[] = [];
     for (const [key, b] of this.pendingBindings) {
@@ -1581,13 +1467,12 @@ export class SketchMode {
     return out;
   }
 
-  /** the DOCUMENT-side binding for a pending key (editing an existing sketch). */
   private docBinding(key: string): { name: string; expr: string; value: number } | null {
     if (!this.editingId || !this.store) return null;
     return this.store.boundExpr(SketchMode.targetOf(key, this.editingId));
   }
 
-  /** the driving expression for a bound dim key, pending is preferred over the doc. */
+  /** Pending is preferred over the doc. */
   private exprFor(key: string): string | undefined {
     return this.pendingBindings.get(key)?.expr ?? this.docBinding(key)?.expr;
   }
@@ -1613,9 +1498,8 @@ export class SketchMode {
     return { value: c.value, expr: c.expr, ...(c.name ? { name: c.name } : {}) };
   }
 
-  /** Record/refresh the pending binding for a dim edit: formulas always bind
-   *  (a `name=expr` name overrides, else a previously chosen name survives);
-   *  a plain number keeps an EXISTING binding as its literal. */
+  /** Formulas always bind (a `name=expr` name overrides, else a chosen name survives), a plain number keeps an
+   *  existing binding as its literal. */
   private recordBinding(key: string, r: { value: number; expr: string | null; name?: string }, kind: FieldKind) {
     if (r.name) {
       this.pendingBindings.set(key, { expr: r.expr!, kind, name: r.name });
@@ -1627,7 +1511,6 @@ export class SketchMode {
     else if (prior || this.docBinding(key)) this.pendingBindings.set(key, { expr: String(r.value), kind, ...keepName });
   }
 
-  /** Shared raw-input commit for a bindable dim slot with a known key. */
   private commitExprInput(key: string, kind: FieldKind, raw: string, apply: (value: number) => void): string | null {
     const r = this.evalDimInput(raw, kind, key);
     if ("error" in r) return r.error;
@@ -1654,8 +1537,7 @@ export class SketchMode {
     });
   }
 
-  /** Entity input that must live on a driving constraint: evaluate first, place
-   *  the constraint (id carries over on replace), then bind. */
+  /** Evaluate first, place the constraint (id carries over on replace), then bind. */
   private commitConvertedDim(e: ResolvedEntity, field: DimField, base: DrivingDim, raw: string): string | null {
     const prior = findDrivingDim(this.constraints, e, field);
     const priorId = prior && isDimConstraint(prior) ? prior.id : undefined;
@@ -1668,7 +1550,6 @@ export class SketchMode {
     return null;
   }
 
-  /** the driving expression shown on an entity dim label, when bound. */
   private entityDimExpr(index: number, field: DimField): string | undefined {
     const e = this.entities[index];
     if (!e) return undefined;
@@ -1680,9 +1561,7 @@ export class SketchMode {
     return undefined;
   }
 
-  /** A parameter commit landed (store.onParamsApplied): refresh every bound
-   *  live dim value, document bindings read the table, pending ones
-   *  re-evaluate, then re-solve so the geometry follows. */
+  /** After store.onParamsApplied: document bindings read the table, pending ones re-evaluate, then re-solve. */
   syncParamValues() {
     if (!this.active || !this.store) return;
     const valueFor = (key: string): number | null => {
@@ -1775,17 +1654,14 @@ export class SketchMode {
   }
 
   private onPointerDown(e: PointerEvent) {
-    // A label stops propagation on its own pointerdown, so reaching here means
-    // the click landed away from every dimension: drop the label selection so a
-    // later Delete can't remove a dimension the user is no longer pointing at.
+    // Labels stop propagation on their own pointerdown, so drop the label selection or Delete removes an unpointed dim.
     this.dims.clearSelection();
     if (e.button === 2) {
       this.rightDownAt = { x: e.clientX, y: e.clientY };
       this.rightDragged = false;
     }
     if (e.button !== 0) return; // left only; middle/right still navigate
-    // Project picks 3D model geometry / committed sketch curves, it needs the
-    // raw client coords, so it branches BEFORE the plane-point conversion.
+    // Project picks 3D geometry with raw client coords, so it branches before the plane-point conversion.
     if (this.tool === "project") {
       e.preventDefault();
       void this.projectFlow.projectClick(e);
@@ -1810,15 +1686,8 @@ export class SketchMode {
     e.preventDefault();
     const p = hit.p;
 
-    // SK-6: a click that visibly snapped to the Origin marker while DRAWING
-    // (never select/modify/pattern, which have their own notions of what a
-    // click here means) is a claim the user is making about where this corner
-    // belongs, not a coincidence the solver should feel free to undo the next
-    // time something unrelated gets dimensioned. Pin it with the same real,
-    // fixed point the dimension tool would create picking the Origin by hand
-    // (snap.ts pinOriginPoint): any entity whose corner lands exactly here
-    // shares that point and inherits the fix. The pin is only made once the
-    // shape commits (requestSolve), so a cancelled shape leaves nothing (SK-10).
+    // SK-6: a click that snapped to the Origin while drawing pins it with the fixed point the dimension tool would
+    // create (snap.ts pinOriginPoint), so the solver cannot undo it. Made once the shape commits (SK-10).
     if (
       hit.kind === "center" &&
       hit.label === "Origin" &&
@@ -1866,9 +1735,7 @@ export class SketchMode {
         this.editPattern(de.id.split("#")[0] ?? de.id);
         return;
       }
-      // DOUBLE-click text → re-open the text panel to edit it in place. (Text isn't
-      // pickable as an entity, entitySegments is empty, so it's found via its glyph
-      // group's bounding box, a generous hit that lands even between letters.)
+      // Double-click text reopens its panel. Text has no segments for pickEntity, so it is found by its glyph bounding box.
       if (e.detail >= 2) {
         const te = this.textEntityAt(raw);
         if (te) {
@@ -1919,9 +1786,8 @@ export class SketchMode {
         }
         return;
       }
-      // Otherwise a profile AREA (patterned cells and sub-areas carved by a
-      // crossing curve included) or empty space. Either can start a selection
-      // box, so what the click means is settled on release.
+      // A profile area (patterned cells and carved sub-areas included) or empty space, both can start a selection box,
+      // so the click is settled on release.
       this.boxDown = {
         x: e.clientX,
         y: e.clientY,
@@ -2210,7 +2076,6 @@ export class SketchMode {
     this.afterModify();
   }
 
-  /** rubber-band preview for the multi-click primitive tools */
   private multiClickPreview(cursor: THREE.Vector2, e?: PointerEvent) {
     const pv: ResolvedEntity[] = [];
     let dims: Record<string, number> | null = null;
@@ -2295,8 +2160,7 @@ export class SketchMode {
     this.overlay.setPreview(pv.map((ent) => this.entityCurve(ent)));
   }
 
-  // --- typed dims for the multi-click tools: the same isUserDriven gating the
-  // single-drag tools use in computeGeometry(), shared by preview + commit ------
+  // Typed dims for the multi-click tools use the same isUserDriven gating as computeGeometry().
 
   /** dim fields per multi-click tool (and phase, for slot); Enter commits at the cursor */
   private showMultiDimFields() {
@@ -2392,7 +2256,6 @@ export class SketchMode {
     return this.slotHalfWidth(a, b, cursor);
   }
 
-  // --- point: a single click drops a reference/snap point ---------------
   private pointClick(p: THREE.Vector2) {
     const ent: ResolvedEntity = { type: "point", id: newEntityId(), x: p.x, y: p.y };
     this.overlay.setPreview([]);
@@ -2455,9 +2318,8 @@ export class SketchMode {
     editEntity?: Extract<ResolvedEntity, { type: "text" }>,
     viewPhi = 0,
   ) {
-    // Text advances along the view's screen-right; `phiDeg` is baked into the stored
-    // (plane-frame) angle so 0° in the panel = horizontal as the user sees it, and
-    // editing subtracts it back out to show the user-facing angle.
+    // Text advances along screen-right: `phiDeg` is baked into the stored plane-frame angle so 0 degrees in the panel is
+    // horizontal on screen, and editing subtracts it back out.
     const phiDeg = (viewPhi * 180) / Math.PI;
     const box = editEntity
       ? editEntity.boxWidth !== undefined
@@ -2509,8 +2371,7 @@ export class SketchMode {
     }
     this.textPanel.show(screen, this.fonts, initial, {
       onChange: (v) => {
-        // live preview via a temporary entity on the active list, reuses the proven
-        // committed-render path (setActiveSketch), which repaints when glyphs arrive.
+        // Live preview through a temporary entity on the active list, which repaints when glyphs arrive.
         this.dropTextPreview();
         this.entities.push({ ...build(v), id: TEXT_PREVIEW_ID });
         this.refreshActive();
@@ -2531,7 +2392,6 @@ export class SketchMode {
     });
   }
 
-  // --- patterns (patternFlow.ts) --------------------------------------------
   private patternClick(p: THREE.Vector2) {
     // entity patterns replicate the selection, drop projected reference
     // geometry from the sources BEFORE PatternFlow snapshots them
@@ -2541,9 +2401,8 @@ export class SketchMode {
     this.patternFlow.click(p);
   }
 
-  /** An entity pattern opened with nothing selected picks its sources in place:
-   *  a click on a curve toggles it, a click inside a closed profile takes the
-   *  curves around it. Anywhere else is the centre or start click. */
+  /** With nothing selected an entity pattern picks sources in place: a curve toggles, a closed profile takes its
+   *  curves, anywhere else is the centre or start click. */
   private pickPatternSources(raw: THREE.Vector2): boolean {
     if (!ENTITY_PATTERNS.has(this.tool) || this.patternFlow.hasPending()) return false;
     let ids: string[] = [];
@@ -2645,7 +2504,7 @@ export class SketchMode {
     this.onState?.();
   }
 
-  // --- slot: two center points, then a width point → rounded slot --------
+  // Two center points, then a width point.
   private slotClick(p: THREE.Vector2) {
     if (!this.clickPts.length) {
       this.clickPts = [p.clone()];
@@ -2681,7 +2540,7 @@ export class SketchMode {
     this.addDrawn(e);
   }
 
-  // --- circle by 2 points (diameter endpoints) --------------------------
+  // By the two diameter endpoints.
   private circle2Click(p: THREE.Vector2) {
     if (!this.clickPts.length) {
       this.clickPts = [p.clone()];
@@ -2700,7 +2559,6 @@ export class SketchMode {
     this.commitCircle(center, r, diameterTyped);
   }
 
-  // --- circle through 3 points ------------------------------------------
   private circle3Click(p: THREE.Vector2) {
     this.clickPts.push(p.clone());
     if (this.clickPts.length < 3) return;
@@ -2720,7 +2578,7 @@ export class SketchMode {
     this.lockTypedDims(ent, { diameter: diameterTyped });
   }
 
-  // --- center rectangle: click center, then a corner --------------------
+  // Click the center, then a corner.
   private centerRectClick(p: THREE.Vector2) {
     if (!this.clickPts.length) {
       this.clickPts = [p.clone()];
@@ -2740,7 +2598,7 @@ export class SketchMode {
     this.lockTypedDims(ent, typed);
   }
 
-  // --- three-point rectangle: click one full EDGE, then its thickness -----
+  // Three-point rectangle: one full edge, then its thickness.
 
   /** A typed width stretches along the drawn angle; a typed height keeps the cursor's side. */
   private rect3From(a: THREE.Vector2, b: THREE.Vector2, cursor: THREE.Vector2) {
@@ -2800,14 +2658,13 @@ export class SketchMode {
     this.lockTypedDims(ent, typed);
   }
 
-  // --- mirror: click a line; reflect the multi-selection across it -------
+  // Click a line, the selection is reflected across it.
   private mirrorClick(p: THREE.Vector2) {
     const idx = pickEntity(this.entities, p, this.pickTol());
     const axis = idx >= 0 ? this.entities[idx] : undefined;
     if (!axis || axis.type !== "line") return;
     const selectedSources = this.entities.filter((e) => this.selected.has(e.id) && e.id !== axis.id);
-    // projected geometry is a fixed reference, mirror the rest of the selection
-    // (it stays selected; the commit below clears the whole selection anyway)
+    // Projected geometry is a fixed reference, so mirror the rest (the commit clears the whole selection anyway).
     const projected = this.modifyFlow.warnSelectedProjected();
     const chosen = selectedSources.filter((e) => !projected.has(e.id));
     if (!chosen.length) return; // nothing selected to mirror
@@ -2817,7 +2674,6 @@ export class SketchMode {
     this.selected.clear();
     this.afterModify();
   }
-  /** reflect a 2D point across the infinite line through a→b */
   private reflectPoint(x: number, y: number, a: THREE.Vector2, b: THREE.Vector2): { x: number; y: number } {
     const dx = b.x - a.x,
       dy = b.y - a.y;
@@ -2827,7 +2683,7 @@ export class SketchMode {
       py = a.y + t * dy; // foot of perpendicular
     return { x: 2 * px - x, y: 2 * py - y };
   }
-  /** a reflected COPY of an entity (fresh id) across the line a→b */
+  /** A reflected copy with a fresh id. */
   private reflectEntity(e: ResolvedEntity, a: THREE.Vector2, b: THREE.Vector2): ResolvedEntity {
     const rp = (x: number, y: number) => this.reflectPoint(x, y, a, b);
     const id = newEntityId();
@@ -2862,7 +2718,6 @@ export class SketchMode {
       const at = rp(e.x, e.y); // reflect the anchor; keep the string/style (glyphs aren't mirrored)
       return { ...e, id, x: at.x, y: at.y };
     }
-    // point
     const q = rp(
       (e as Extract<ResolvedEntity, { type: "point" }>).x,
       (e as Extract<ResolvedEntity, { type: "point" }>).y,
@@ -2871,8 +2726,7 @@ export class SketchMode {
   }
 
   private onPointerMove(e: PointerEvent) {
-    // right-DRAG is camera pan (viewport TRUCK), not a menu gesture, the same
-    // 5 px rule the viewport's own context-click guard uses
+    // A right-drag is camera pan (viewport TRUCK), the same 5 px rule as the viewport's context-click guard.
     if (
       this.rightDownAt &&
       !this.rightDragged &&
@@ -3133,9 +2987,7 @@ export class SketchMode {
         this.modifyFlow.setFilletFirst(null);
         this.splinePts = [];
         this.clickPts = [];
-        // in-progress dimension: picks AND an open value box both die here (the
-        // old code listed only the first-point slot, which is why Escape could
-        // leave a dim box stranded on screen). The tool stays armed.
+        // An in-progress dimension: picks and an open value box both die here, the tool stays armed.
         this.dimFlow.resetDimPicks();
         this.constraintTools.resetPending();
         this.dim.hide();
@@ -3181,7 +3033,6 @@ export class SketchMode {
     else if (t) this.setTool(t);
   }
 
-  // --- geometry per tool -------------------------------------------------
   private computeGeometry(a: THREE.Vector2, cursor: THREE.Vector2) {
     if (this.tool === "rectangle") {
       let w = Math.abs(cursor.x - a.x);
@@ -3203,7 +3054,6 @@ export class SketchMode {
       const dims: Record<string, number> = { diameter: dia };
       return { dims, preview: this.entityCurve(ent), entity: ent };
     }
-    // line
     let len = a.distanceTo(cursor);
     let ang = (Math.atan2(cursor.y - a.y, cursor.x - a.x) * 180) / Math.PI;
     const typedLen = this.dim.isUserDriven("length");
@@ -3220,11 +3070,8 @@ export class SketchMode {
     return { dims, preview: this.entityCurve(ent), entity: ent };
   }
 
-  /** A same-spot second click (or a typed 0) leaves nothing to draw. Refused
-   *  rather than creating a hidden zero-size entity, which used to surface only
-   *  as an unexplained red badge in History (SK-5). The other click-built
-   *  shapes (circle2/3, slot, centerRectangle, rectangle3) already guard this
-   *  at their own commit point; this is the one the two-corner drag tools share. */
+  /** Refused rather than creating a hidden zero-size entity that surfaced only as a red History badge (SK-5). The
+   *  other click-built shapes guard this at their own commit, this is for the two-corner drag tools. */
   private isDegenerate(e: ResolvedEntity): boolean {
     if (e.type === "rectangle") return e.width < 1e-4 || e.height < 1e-4;
     if (e.type === "circle") return e.radius < 1e-4;
@@ -3275,9 +3122,8 @@ export class SketchMode {
     this.onState?.();
   }
 
-  /** What the line from `base` to `cursor` will be recorded with, judged from
-   *  what the cursor snapped to. The preview and the commit both ask this. The
-   *  closing segment of a chain was not aimed, so it gets exact axes only. */
+  /** Judged from what the cursor snapped to, for preview and commit. A chain's closing segment was not aimed, so it
+   *  gets exact axes only. */
   private inferLine(cursor: THREE.Vector2): InferResult | null {
     if (!this.base) return null;
     const closing = this.chainStart != null && cursor.distanceTo(this.chainStart) < 1e-3;
@@ -3314,19 +3160,9 @@ export class SketchMode {
     if (inf.hints.length) this.overlay.setGuides(inf.hints, this.plane, this.planeMmPerPx());
   }
 
-  /** A typed size during creation (the live W/H/⌀ fields) becomes the same
-   *  constraint the Dimension tool would create by picking that geometry, so it
-   *  is genuinely locked rather than a cosmetic label: a rectangle's typed width
-   *  is a p2pDistance across its edge, exactly what picking that edge with the
-   *  Dimension tool makes (see dimensionTool.ts resolveSingle's edge case), and
-   *  a typed diameter is a `diameter` constraint on the circle. Without this, a
-   *  later unrelated dimension elsewhere in the sketch could silently resize the
-   *  "50 mm" the user just typed, with no conflict warning (SK-2).
-   *
-   *  Slot and polygon have no such equivalent: the Dimension tool itself cannot
-   *  pick a slot's length/width or a polygon's radius (dimRefPoints/resolveSingle
-   *  expose no operand for them), so there is no real constraint to switch their
-   *  typed values to; they keep their existing cosmetic-only behaviour. */
+  /** A typed size during creation becomes the constraint the Dimension tool would make by picking that geometry, so a
+   *  later dimension cannot silently resize it (SK-2). Slot and polygon have no pickable operand, so their typed
+   *  values stay cosmetic. */
   private lockTypedDims(e: ResolvedEntity, typed: { width?: boolean; height?: boolean; diameter?: boolean }) {
     const lock = (field: DimField, mm: number) => {
       const c = drivingDimFor(e, field, mm);
@@ -3371,7 +3207,6 @@ export class SketchMode {
     this.dim.show(defs, () => this.commitFromCursor(this.lastCursor));
   }
 
-  // --- snapping + rendering ---------------------------------------------
   private snapAt(clientX: number, clientY: number, noSnap = false) {
     if (this.planeTooEdgeOn()) return null;
     const world = this.viewport.screenToPlane(clientX, clientY, this.plane.plane);
@@ -3424,9 +3259,7 @@ export class SketchMode {
       label?: string | undefined;
     } | null,
   ) {
-    // The guides go up or down with the snap itself: a line left standing after
-    // the cursor has moved off the row it named is a claim about where the next
-    // click will land, and it would be a false one.
+    // The guides go with the snap: one left standing after the cursor left its row would misstate the next click.
     this.overlay.setGuides(
       hit?.p && hit.guides?.length ? hit.guides.map((g) => [g.from, hit.p!] as const) : [],
       this.plane,
@@ -3462,9 +3295,7 @@ export class SketchMode {
     this.viewport.requestRender();
   }
 
-  /** MCAD-style state color: over-constrained/conflict = red, fully
-   * constrained (dof 0) = white ("fully defined"), under-constrained = blue.
-   * dof < 0 means no solve has run yet (treat as under-constrained). */
+  /** Red over-constrained or conflict, white fully defined (dof 0), blue under-constrained. dof < 0 means no solve yet. */
   private activeColor(): number {
     return this.conflict ? 0xff4444 : this.lastDof === 0 ? 0xffffff : CURVE_COLOR;
   }
@@ -3491,9 +3322,7 @@ export class SketchMode {
     const objs: THREE.Object3D[] = [];
     const lit = this.relHover;
     if (this.selected.size || lit.size) {
-      // Three layers, and the hover is on top: it is transient and answers a
-      // question being asked right now, so it is preferred over a selection that may
-      // have been sitting there since before the panel was opened.
+      // Three layers, hover on top: it answers a question being asked now, a selection may be stale.
       const normal = this.entities.filter((e) => !this.selected.has(e.id) && !lit.has(e.id));
       const chosen = this.entities.filter((e) => this.selected.has(e.id) && !lit.has(e.id));
       const hovered = this.entities.filter((e) => lit.has(e.id));
@@ -3557,7 +3386,6 @@ export class SketchMode {
     return obj;
   }
 
-  // --- modify tools: trim + fillet -------------------------------------
   private pickTol(): number {
     // Nine screen pixels on the plane, or a fingertip's worth on touch.
     return this.planeMmPerPx() * hitPx(9);
@@ -3574,7 +3402,6 @@ export class SketchMode {
     return w ? this.plane.to2D(w) : null;
   }
 
-  /** Has the view rolled the sketch plane too far edge-on to draw on? */
   patternPending(): boolean {
     return this.patternFlow.hasPending();
   }
@@ -3584,9 +3411,7 @@ export class SketchMode {
     const n = this.plane.plane.normal;
     return tooEdgeOn([d.x, d.y, d.z], [n.x, n.y, n.z]);
   }
-  // --- selection delete (select tool) -----------------------------------
-  /** Remove the selected entities, prune now-dangling constraints, then rebuild
-   *  + re-solve via the shared modify tail. */
+  /** Prunes dangling constraints and re-solves through the shared modify tail. */
   private deleteSelected() {
     if (!this.selected.size) return;
     this.entities = this.entities.filter((en) => !this.selected.has(en.id));
@@ -3630,14 +3455,8 @@ export class SketchMode {
       this.refreshActive();
     }
     if (!this.selected.size) {
-      // Nothing under the cursor and nothing already selected: a right-drag
-      // still orbits (the `dragged` check above), but a plain click has no
-      // curve to act on. Leaving the event unclaimed used to mean the next
-      // idle Escape (someone dismissing a menu they expected to see) fell
-      // straight through escapeLayers to "close": a miss by a few pixels on a
-      // curve's rim could exit the sketch with no warning. Offering Exit
-      // Sketching here, instead of nothing, gives the click a real answer and
-      // makes leaving that way a click, never an accident.
+      // Nothing under the cursor or selected: offer Exit Sketching, so a near miss followed by an idle Escape cannot fall
+      // through escapeLayers and close the sketch without warning.
       e.preventDefault();
       contextMenu(e.clientX, e.clientY, [{ label: "Exit Sketching", onClick: () => this.finish(true) }]);
       return;
@@ -3764,21 +3583,14 @@ export class SketchMode {
     const plan = this.dimFlow.plan;
     if (plan) setPrompt(plan.hint);
   }
-  /** add a persistent geometric constraint and re-solve (the solver maintains
-   *  all constraints together, not just the one you applied). Delegates to
-   *  ConstraintTools (see constraintTools.ts), which owns the 9 click flows. */
+  /** The solver maintains all constraints together. ConstraintTools owns the click flows. */
   private constraintClick(p: THREE.Vector2) {
     this.constraintTools.click(p);
   }
 
-  /** Constraint options for the CURRENT canvas selection (1-2 entities), each
-   *  already wired to add its constraint and re-solve. `at`, a click position,
-   *  resolves to the SPECIFIC point nearest it and pins that point to whichever
-   *  selected entity owns it, so a right-click on one corner of a selected
-   *  rectangle can offer Coincident for THAT corner instead of refusing for
-   *  ambiguity (see ConstraintTools.applicable). Shared by ToolRail's Constrain
-   *  popup (no `at`) and onContextMenu (`at` = the click), so the two lists can
-   *  never drift apart (SK-3). */
+  /** For the current selection (1 or 2 entities). `at` pins the nearest specific point to its owning entity, so a
+   *  right-click on a rectangle corner offers Coincident for that corner. Shared by ToolRail's Constrain popup and
+   *  onContextMenu so the two lists never drift (SK-3). */
   constraintOptions(at?: THREE.Vector2 | null): ConstraintOption[] {
     const ids = [...this.selected];
     if (!ids.length) return [];
@@ -3935,8 +3747,6 @@ export class SketchMode {
     this.requestSolve();
   }
 
-  // --- in-sketch undo -------------------------------------------------------
-
   private snapshot(): SketchSnapshot {
     return cloneSnapshot({
       entities: this.entities,
@@ -3952,16 +3762,13 @@ export class SketchMode {
     this.patterns = c.patterns;
   }
 
-  /** Re-arm the history baseline. Called when the state SETTLES after a solve,
-   *  and by the derived paths to make their own changes invisible to
-   *  bankIfChanged. */
+  /** Called when the state settles after a solve, and by derived paths to hide their own changes from bankIfChanged. */
   private armPreEdit() {
     if (this.active) this.history.arm(this.snapshot());
   }
 
-  /** Bank an undo step if the sketch changed. Called from requestSolve(), where every
-   *  user edit ends. Solver write-backs never call it, derived updates re-arm the
-   *  baseline first, and drags bank one step in endDrag. */
+  /** Called from requestSolve(), where every user edit ends. Solver write-backs never call it, derived updates re-arm
+   *  first, and drags bank one step in endDrag. */
   private bankIfChanged() {
     if (this.active) this.history.bankIfChanged(this.snapshot());
   }
@@ -4013,8 +3820,7 @@ export class SketchMode {
     return true;
   }
 
-  /** Restore a history state and settle. Any half-finished tool gesture is
-   *  dropped: its indices refer to the geometry we just replaced. */
+  /** Drops any half-finished gesture, its indices refer to the geometry just replaced. */
   private applyHistory(s: SketchSnapshot) {
     this.restore(s);
     this.selected.clear();
@@ -4034,9 +3840,8 @@ export class SketchMode {
     this.onState?.();
   }
 
-  /** Mark the sketch dirty and kick the solve pump. Coalesces many requests
-   *  into one in-flight solve so the (single, shared) WASM wrapper is never
-   *  re-entered, and stale results never clobber newer geometry. */
+  /** Coalesces requests into one in-flight solve so the shared WASM wrapper is never re-entered and stale results
+   *  never clobber newer geometry. */
   private requestSolve() {
     this.originPin = settleOriginPin(this.originPin, this.entities, this.constraints, newEntityId);
     this.bankIfChanged();
@@ -4044,16 +3849,14 @@ export class SketchMode {
     void this.pump();
   }
 
-  /** The one and only path that touches the solver. Serializes drag solves and
-   *  constraint/dimension solves through a single in-flight lock. */
+  /** The only path that touches the solver, drag and dimension solves serialized through one in-flight lock. */
   private async pump() {
     if (this.solveBusy || this.solverDead) return;
     this.solveBusy = true;
     try {
       while (this.active && (this.pendingDrag || this.solveDirty)) {
         if (this.pendingDrag) {
-          // no entityVersion guard here: a drag never adds/removes entities, so
-          // the entity list can't change underneath this solve (unlike a draw).
+          // No entityVersion guard: a drag never adds or removes entities.
           const d = this.pendingDrag;
           this.pendingDrag = null;
           const r = await compileAndSolve(this.entities, this.constraints, d);
@@ -4127,15 +3930,13 @@ export class SketchMode {
     } finally {
       this.solveBusy = false;
     }
-    // Settled: re-arm the pre-mutation snapshot so the NEXT edit is diffed
-    // against post-solve geometry. Without this, a later no-op requestSolve
-    // would see the solver's own movement and bank a phantom undo step.
+    // Re-arm the snapshot on post-solve geometry, or a later no-op requestSolve banks the solver's movement as a phantom
+    // undo step.
     if (!this.dragFrom && !this.moveDrag) this.armPreEdit();
     this.onState?.();
   }
 
-  // --- interactive drag: grab a point, geometry follows, constraints hold ---
-  /** the moved entity's attachment points: positions where neighbors may coincide */
+  /** Positions where neighbors may coincide. */
   private attachmentPoints(e: ResolvedEntity): THREE.Vector2[] {
     if (e.type === "line" || e.type === "arc") {
       return [new THREE.Vector2(e.x1, e.y1), new THREE.Vector2(e.x2, e.y2)];
@@ -4196,9 +3997,7 @@ export class SketchMode {
     return out;
   }
 
-  /** Find the nearest solver-controlled point (line endpoint or circle centre)
-   *  within pick tolerance of p. Rigid shapes (polygon/slot) are intentionally
-   *  excluded, they don't expand to solver points. */
+  /** Within pick tolerance. Rigid shapes (polygon, slot) are excluded, they do not expand to solver points. */
   private pickPoint(p: THREE.Vector2): { p: THREE.Vector2; idx: number; pole: number } | null {
     const tol = this.pickTol();
     let best: THREE.Vector2 | null = null;
@@ -4312,11 +4111,8 @@ export class SketchMode {
         return;
       }
       if (b.region) {
-        // A plain click on a profile with nothing else picked is the sketch, click,
-        // pull loop: finish and leave the profile selected, so the model view
-        // offers its extrude handle on it. With curves picked the click only
-        // swaps to the profile, so clicking inside a shape to drop a selection
-        // does not throw you out of the sketch.
+        // A plain click on a profile with nothing picked finishes and leaves it selected for the extrude handle (sketch,
+        // click, pull). With curves picked it only swaps to the profile, so the click does not exit the sketch.
         if (!b.additive && this.selected.size === 0) {
           this.overlay.clearRegionSelection();
           this.overlay.toggleRegionSelection(b.region, false);
@@ -4420,9 +4216,7 @@ export class SketchMode {
       }
     }
     if (!this.dragMoved) {
-      // never moved: a click on a vertex, (de)select the owning entity, same
-      // behavior as clicking its body (users click near endpoints constantly;
-      // this used to silently do nothing)
+      // Never moved: a click on a vertex selects the owning entity, like clicking its body.
       this.dragSnapshot = null;
       const ent = this.entities[this.dragEntIdx];
       this.dragEntIdx = -1;
@@ -4494,7 +4288,6 @@ export class SketchMode {
     }
   }
 
-  // --- grid --------------------------------------------------------------
   private addGrid() {
     this.removeGrid();
     const grid = new SketchPlaneGrid();

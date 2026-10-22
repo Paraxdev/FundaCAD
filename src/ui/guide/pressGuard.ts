@@ -1,7 +1,5 @@
-// A press on the guide bubble must not count as a press outside the popover,
-// menu or value box the step points into, or pressing Next would close it.
-// One window capture listener, registered before the app mounts, runs ahead of
-// every document listener that closes something on an outside press.
+// A press on the guide bubble must not count as an outside press, or Next would close what the step points into.
+// This window capture listener is registered before the app mounts, so it runs ahead of every document listener.
 
 export const GUIDE_BUBBLE = ".guide-bubble";
 

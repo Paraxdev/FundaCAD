@@ -1,13 +1,5 @@
-// One onBeforeCompile and one customProgramCacheKey per body material, shared by
-// every patch that edits the physical shader (procedural surface, auto glass
-// thickness, ...). Patches apply in a fixed rank order, so the order they are set
-// in never changes the source or the program key.
-//
-// three keeps one program per key per material and runs onBeforeCompile only the
-// first time the material meets a key; every later frame, whatever key it is on,
-// uploads from the uniforms object of the last such compile. So a patch's uniform
-// objects stay the same for the material's life (a new value is copied into them),
-// and every compile binds every uniform object the material ever held.
+// Patches apply in a fixed rank order, so the order they are set in never changes the source or the key. three runs
+// onBeforeCompile only at a key's first compile, so a patch's uniform objects live as long as the material.
 
 import * as THREE from "three";
 
@@ -179,9 +171,8 @@ export function getPatch(mat: THREE.Material, name: string): ShaderPatch | undef
   return stacks.get(mat)?.patches.find((p) => p.name === name);
 }
 
-/** The material keeps its hook after its last patch goes, with the stock key and
- *  source, so a compile on the stock key still binds the uniforms a key it
- *  returns to later needs. */
+/** The material keeps its hook after its last patch goes, so a compile on the stock key still binds the
+ *  uniforms a key it returns to later needs. */
 export function removePatch(mat: THREE.Material, name: string): void {
   const st = stacks.get(mat);
   if (!st || !st.patches.some((p) => p.name === name)) return;

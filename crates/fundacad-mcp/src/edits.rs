@@ -1,16 +1,11 @@
-//! `edit`: several timeline and parameter edits as one call.
-//!
-//! Each entry is one of the single-edit tools with its own arguments, so there
-//! is nothing new to learn, and the whole list is applied to a copy of the
-//! document first: one refusal leaves the real document as it was, rather than
-//! half an edit an agent then has to find and undo.
+//! `edit`: several timeline and parameter edits as one call, applied to a copy first so one refusal
+//! leaves the real document as it was rather than half edited.
 
 use serde_json::{Map, Value};
 
 use crate::model::{self, Doc};
 
-/// The arguments each op takes, beside `op` itself. Anything else is refused
-/// by name, the way `unknown_arguments` refuses it on the single tools.
+/// The arguments each op takes beside `op`. Anything else is refused by name, as on the single tools.
 fn takes(op: &str) -> Option<&'static [&'static str]> {
     Some(match op {
         "add" => &["feature", "at"],
@@ -61,8 +56,7 @@ pub enum Done {
     ParamRemoved(String),
 }
 
-/// Apply one entry of `ops` to `doc`, or say why not. A sketch shortcut it
-/// expanded adds a note to `notes`.
+/// A sketch shortcut it expanded adds a note to `notes`.
 pub fn apply(doc: &mut Doc, entry: &Value, notes: &mut Vec<String>) -> Result<Done, String> {
     let Some(entry) = entry.as_object() else {
         return Err("each edit is an object with an `op`".into());
@@ -147,8 +141,7 @@ pub fn apply(doc: &mut Doc, entry: &Value, notes: &mut Vec<String>) -> Result<Do
     }
 }
 
-/// One line for the lot: what was added, updated, removed and moved, grouped
-/// so fifty adds read as one list of ids.
+/// One line for the lot, grouped so fifty adds read as one list of ids.
 pub fn summary(done: &[Done]) -> String {
     let mut added = Vec::new();
     let mut updated = Vec::new();
@@ -179,7 +172,7 @@ pub fn summary(done: &[Done]) -> String {
     format!("Applied {} edit{}: {}.", done.len(), if done.len() == 1 { "" } else { "s" }, parts.join("; "))
 }
 
-/// The error for a refused entry, numbered from 1 the way a person counts.
+/// Entries are numbered from 1, the way a person counts.
 pub fn refused(n: usize, of: usize, entry: &Value, why: &str) -> String {
     let what = entry
         .get("op")

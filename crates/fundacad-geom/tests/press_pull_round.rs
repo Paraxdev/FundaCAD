@@ -1,9 +1,5 @@
-//! Press/pull and offset face on the round end of a slot: the end keeps its
-//! axis and changes radius, the slot's walls are trimmed or extended to meet
-//! it, and nothing is left behind as a step, a sliver or a stray face. The
-//! document is the c1 report: three pushes on the +Y end of the upper slot,
-//! which runs along Y at z = 20 with r 2 ends, cut through a box whose top
-//! edge at x = -25 is rounded with a conic profile.
+//! Press/pull and offset face on a slot's round end keep its axis and leave no step, sliver or stray face.
+//! The c1 report: three pushes on the +Y end of the upper slot, along Y at z = 20 with r 2 ends.
 
 use fundacad_core::CadDocument;
 use fundacad_geom::builder::{self, NoWatch, Rebuild};

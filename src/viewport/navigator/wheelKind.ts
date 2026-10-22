@@ -1,12 +1,5 @@
-// Telling a touchpad's two-finger scroll from a mouse wheel.
-//
-// Browsers deliver both as `wheel` events and say nothing about the device, so
-// the kind is read off the deltas: a wheel turns in notches (a whole line, or a
-// pixel count whose legacy `wheelDelta` is a multiple of 120), a touchpad
-// streams small, uneven pixel deltas that often carry a sideways part. The kind
-// is decided on the first event of a stream and held until the stream pauses,
-// so one swipe never turns from an orbit into a zoom halfway through. An event
-// that says nothing either way takes the kind the last telling event had.
+// Browsers send a touchpad scroll and a mouse wheel as the same `wheel` event, so the kind is read off the
+// deltas and held until the stream pauses, so one swipe never turns from an orbit into a zoom halfway.
 
 export type WheelKind = "mouse" | "touchpad";
 
@@ -55,26 +48,22 @@ export function wheelEvidence(e: WheelLike, mac = onMac()): WheelKind | null {
         : 0;
   const big = Math.max(Math.abs(dx), Math.abs(dy));
   if (big === 0) return null;
-  // A whole notch: the legacy delta is a multiple of 120 and the move is a
-  // notch's worth of pixels.
+  // A whole notch: a legacy delta that is a multiple of 120 and a notch's worth of pixels.
   if (wd !== 0 && Math.abs(wd) % 120 === 0 && big >= NOTCH_MIN_PX) return "mouse";
   // A slow notch on macOS comes as a few px and a fraction, like a touchpad's.
   if (mac && macWheelLine(dy !== 0 ? dy : dx, wd)) return "mouse";
-  // Less than a notch, or a fraction of a pixel: a touchpad's stream.
-  // (A high resolution wheel sends small steps too and reads as a touchpad,
-  // which the navigation setting can overrule.)
+  // Less than a notch, or a fraction of a pixel. A high resolution wheel reads as a touchpad
+  // too, which the navigation setting can overrule.
   if (big < NOTCH_MIN_PX || !Number.isInteger(dx) || !Number.isInteger(dy)) return "touchpad";
   return null;
 }
 
-/** The kind of each wheel event, held for a stream. */
 export class WheelClassifier {
   private kind: WheelKind = "mouse";
   /** The last kind an event decided, for the next stream's undecided start. */
   private seen: WheelKind | null = null;
   private last = -Infinity;
 
-  /** The kind of `e`, arriving at `nowMs`, and whether it starts a new stream. */
   classify(e: WheelLike, nowMs: number): { kind: WheelKind; fresh: boolean } {
     const fresh = nowMs - this.last > STREAM_GAP_MS || nowMs < this.last;
     this.last = nowMs;
@@ -84,7 +73,6 @@ export class WheelClassifier {
     return { kind: this.kind, fresh };
   }
 
-  /** The kind the last stream was read as, null before any wheel. */
   detected(): WheelKind | null {
     return this.seen;
   }

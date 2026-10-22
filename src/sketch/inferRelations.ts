@@ -1,6 +1,5 @@
-// What a line being drawn will be recorded with, worked out BEFORE the click so
-// the preview, the glyphs beside the cursor and the committed constraints are
-// the same answer. Pure: SketchMode feeds it the snap result and the sketch.
+// The relations a line being drawn will get, worked out BEFORE the click so preview, cursor glyphs and committed
+// constraints agree. Pure: SketchMode feeds it the snap result and the sketch.
 
 import * as THREE from "three";
 import type { SketchConstraint } from "../types";
@@ -23,8 +22,7 @@ export interface InferLineInput {
   /** Live grid lattice, 0 when grid snapping is off. */
   step: number;
   tolDeg: number;
-  /** How far, in mm, a line may be from the start or the cursor and still be
-   *  offered as a parallel or perpendicular reference. */
+  /** mm a line may be from the start or the cursor and still be offered as a parallel or perpendicular reference */
   nearMm: number;
   /** The Snap toggle: off leaves only the exact horizontal and vertical rules. */
   smart: boolean;
@@ -259,10 +257,8 @@ export function tangentArcMid(a: THREE.Vector2, dir: THREE.Vector2, b: THREE.Vec
   return new THREE.Vector2(c.x + r * Math.cos(tm), c.y + r * Math.sin(tm));
 }
 
-/** Relations for an arc a -> m -> b whose ends snapped to `refA`/`refB`: a point
- *  relation for a midpoint or on-curve end, and a tangent2 where the arc leaves
- *  an existing line or arc end within `tolDeg` of its direction. A tangent start
- *  bends the arc to be exactly tangent, so the first solve has nothing to move. */
+/** A point relation for a midpoint or on-curve end, and a tangent2 where the arc leaves a line or arc end within
+ *  `tolDeg`; a tangent start bends the arc exactly tangent so the first solve has nothing to move. */
 export function inferArcRelations(
   id: string,
   arc: { x1: number; y1: number; x2: number; y2: number; mx: number; my: number },

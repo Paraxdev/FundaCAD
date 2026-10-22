@@ -1,12 +1,11 @@
-//! STEP files that come gzip (.stpz, .step.gz, what FreeCAD and KiCad write)
-//! or zipped, unpacked to a temp file the STEP reader opens.
+//! Gzip (.stpz, .step.gz, as FreeCAD and KiCad write) or zipped STEP, unpacked to a temp file.
 
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-/// An unpacked STEP file, removed when this drops.
+/// Removed from disk when dropped.
 pub struct Unpacked {
     path: PathBuf,
 }
@@ -25,8 +24,7 @@ impl Drop for Unpacked {
 
 const PREFIX: &str = "fundacad-unpacked-";
 
-/// Unpacked files a killed engine left behind. An hour is far past any read,
-/// so a file that old is not one another engine is still reading.
+/// An hour is far past any read, so an unpacked file that old was left by a killed engine.
 fn sweep_stale(dir: &Path) {
     let Ok(entries) = std::fs::read_dir(dir) else { return };
     let hour = std::time::Duration::from_secs(3600);
@@ -77,9 +75,7 @@ fn is_step_name(name: &str) -> bool {
     lower.ends_with(".step") || lower.ends_with(".stp")
 }
 
-/// The STEP file inside `path` when it is gzip or zip, `None` when it is
-/// plain. A zip gives its one STEP entry, or its one file when no name says
-/// STEP.
+/// `None` for a plain file. A zip gives its one STEP entry, or its one file when no name says STEP.
 pub fn unpack_step(path: &Path, cap: u64) -> Result<Option<Unpacked>, String> {
     let mut file = File::open(path).map_err(|e| e.to_string())?;
     let mut magic = [0u8; 4];

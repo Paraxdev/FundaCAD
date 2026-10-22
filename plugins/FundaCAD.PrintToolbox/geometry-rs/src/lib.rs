@@ -1,7 +1,5 @@
-//! The 3D Printing Toolbox's feature geometry as a FundaCAD plugin component,
-//! the Rust twin of geometry/*.py. Every tool edits the body's exact B-rep
-//! through the engine's generic kernel, so a later fillet or boolean sees the
-//! reshaped hole.
+//! The 3D Printing Toolbox's feature geometry, the Rust twin of geometry/*.py. Every tool edits the body's exact
+//! B-rep through the engine's generic kernel, so a later fillet or boolean sees the reshaped hole.
 
 wit_bindgen::generate!({
     world: "plugin",

@@ -1,8 +1,5 @@
-// Single source of truth for "what dimensions does a sketch entity have, where
-// is each one's label/value, how do you read & write it, and how is it drawn as
-// a MCAD-style dimension (extension lines + dimension line + arrowheads)."
-// Drives the in-canvas dimension labels (SketchDimensions), the value rows, and
-// SketchMode.editDimension, one place for all per-entity dimension knowledge.
+// Per-entity sketch dimensions: each one's label, value read and write, and MCAD-style drawing (extension lines,
+// dimension line, arrowheads). Drives the canvas labels, the value rows and SketchMode.editDimension.
 
 import * as THREE from "three";
 import type { ResolvedEntity } from "./snap";
@@ -26,51 +23,29 @@ export interface EntityDim {
   valueMm: number;
   write: (mm: number) => void; // mutate the entity in place
   lines: [V, V][]; // extension lines + dimension line + arrowheads (2D)
-  /** The label's CURRENT offset from this dim's natural anchor, in sketch mm,
-   *  whether it came from `e.dimPlace[field]` or from the default layout. It's
-   *  the basis a label drag adds its cursor delta to, so the first drag starts
-   *  from where the label visibly is instead of jumping. */
+  /** The label's current offset from the natural anchor in sketch mm, stored or default; a label drag adds to it,
+   *  so the first drag starts where the label visibly is. */
   place: V;
 }
 
 const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
 
-// Screen-space clearance for dimension offsets: the world-mm floor alone lets a
-// badge sit ON the geometry it labels at low zoom (3 mm can project to 2 px),
-// and the labels are click-targets in the select tool, a badge over a line
-// swallows the click meant to select the line. SketchMode feeds the current
-// mm-per-pixel each refresh; 0 (the default, e.g. value-row usage, which never
-// renders labels) keeps the pure world-space behavior.
+// The world mm floor alone lets a badge sit ON its geometry at low zoom and swallow the click meant for the line.
+// SketchMode feeds mm per pixel each refresh; 0 (value rows, which never render) keeps pure world space.
 let mmPerPx = 0;
 export function setDimPixelScale(scale: number) {
   mmPerPx = scale;
 }
 const LABEL_CLEAR_PX = 18; // ≳ the rendered badge height
 
-// The rest of a dimension's FURNITURE, how far the dimension line stands off,
-// how long an arrowhead is, is also a screen quantity, and used not to be.
-//
-// It was written in millimetres with a floor: a 3mm minimum stand-off and a
-// 1.4mm minimum arrowhead. On anything hand-sized those read fine. On a 0.2mm
-// slot they are the drawing: the stand-off is fifteen times the feature, the two
-// arrowheads are seven times it each and meet somewhere past the extension
-// lines, and what you see is a huge annotation with a speck in the middle of it.
-// The floors were there for the opposite case, a dimension whose furniture had
-// shrunk to nothing, so both ends of the problem are the same missing idea,
-// which is that furniture is drawn for the EYE and the eye reads pixels.
-//
-// So both are constants on screen. A dimension then looks the same at every
-// zoom, which is the point of it, and the only thing left that can vary with the
-// model is the one bound below that stops an arrowhead eating its own line.
+// Stand-off and arrowhead are drawn for the eye, so they are constant on screen: mm floors made a 0.2mm slot's
+// dimension a huge annotation with a speck in it. Only the ARROW_SHARE bound varies with the model.
 const OFFSET_PX = 20; // stand-off of the dimension line from what it measures
 const ARROW_PX = 7; // arrowhead length
-/** No arrowhead may take more than this share of the span it points along.
- *  Two of them plus a readable stub of dimension line is the whole budget, and
- *  past about a third each they meet in the middle and there is no line left. */
+/** Past about a third each, two arrowheads meet in the middle and leave no dimension line. */
 const ARROW_SHARE = 0.3;
 
-/** `n` screen pixels in sketch mm, or `fallback` when nothing has told us the
- *  scale, the value rows call into here too and never draw a line. */
+/** `fallback` when nothing has set the scale: the value rows call in here too and never draw. */
 function px(n: number, fallback: number): number {
   return mmPerPx > 0 ? n * mmPerPx : fallback;
 }
@@ -79,13 +54,11 @@ function dimOffset(worldOff: number): number {
   return Math.max(worldOff, LABEL_CLEAR_PX * mmPerPx);
 }
 
-/** Where a dimension line sits when the user has not placed it. */
 function defaultOffset(value: number): number {
   return px(OFFSET_PX, clamp(value * 0.16, 3, 12));
 }
 
-/** Arrowhead length for a dimension spanning `span` mm: a constant on screen,
- *  shortened when the span itself is the smaller number. */
+/** Constant on screen, shortened when the span itself is the smaller number. */
 function arrowSize(span: number): number {
   return Math.min(px(ARROW_PX, clamp(span * 0.08, 1.4, 4)), Math.max(span, 0) * ARROW_SHARE);
 }
@@ -100,13 +73,8 @@ function arrow(tip: V, dir: V, size: number): [V, V][] {
   ];
 }
 
-/** a linear dimension measuring a..b, offset perpendicular by `offDir`*off.
- *  `offOverride` (the placement offset a user froze with the dimension tool's
- *  placement click, or dragged the label to, projected onto `offDir`)
- *  replaces the computed offset: its magnitude sets the distance, its sign picks
- *  the side. `place` reports the offset actually applied, as a vector: the label
- *  sits exactly at midpoint(a,b) + place, which is what makes a drag delta
- *  composable with it. */
+/** Offset perpendicular by `offDir`*off. `offOverride`, a frozen or dragged placement projected onto `offDir`, sets
+ *  distance and side. The label sits at midpoint(a,b) + `place`, which makes a drag delta composable with it. */
 export function linearDim(
   a: V,
   b: V,
@@ -119,9 +87,7 @@ export function linearDim(
   const da = a.clone().add(dirOff.clone().multiplyScalar(off));
   const db = b.clone().add(dirOff.clone().multiplyScalar(off));
   const dir = db.clone().sub(da).normalize();
-  // Measured along the DIMENSION LINE, not from `value`: an angled dimension of
-  // an angled segment reads its length off the projection, and it is the drawn
-  // line the arrowheads have to fit inside.
+  // Measured along the drawn dimension line, not `value`: the arrowheads have to fit inside it.
   const aSize = arrowSize(da.distanceTo(db));
   const lines: [V, V][] = [
     [a.clone(), da.clone()], // extension lines
@@ -138,9 +104,8 @@ export function linearDim(
 }
 const linear = linearDim;
 
-/** A horizontal (axis x) or vertical (axis y) dimension of a..b. The dimension line
- *  runs along the axis and `offOverride` sets how far it sits from the pair's middle
- *  across it; the label is at midpoint(a,b) + place, as with linearDim. */
+/** Horizontal (axis x) or vertical (axis y): the line runs along the axis and `offOverride` sets its distance from
+ *  the pair's middle; the label is at midpoint(a,b) + place, as with linearDim. */
 export function axisLinearDim(
   a: V,
   b: V,
@@ -245,32 +210,22 @@ function cross(u: V, s: LineSeg): number {
   return (u.x * dy - u.y * dx) / l;
 }
 
-/** A badge dim's stored placement, as a vector, `null` when the user hasn't
- *  placed this one and there's no staggered default to fall back on. THE one
- *  reader of `entity.dimPlace`; an explicit user placement is always preferred. */
+/** The one reader of `entity.dimPlace`; a user placement beats the staggered default, null when neither exists. */
 function placeOf(e: ResolvedEntity, field: DimField, defaults?: DimPlace): V | null {
   const p = dimPlaceOf(e)?.[field] ?? defaults?.[field];
   return p ? v(p.ox, p.oy) : null;
 }
 
-/** A linear badge's offset override: the stored placement projected onto the
- *  dim's own offset direction. Linear dims only move PERPENDICULAR to what they
- *  measure (the along-segment component would just slide the text off its own
- *  dimension line), so one signed scalar is the whole degree of freedom. */
+/** Linear dims only move perpendicular to what they measure, so the stored placement projected onto `offDir`
+ *  is the whole degree of freedom. */
 function linearOverride(e: ResolvedEntity, field: DimField, offDir: V, defaults?: DimPlace): number | undefined {
   const p = placeOf(e, field, defaults);
   return p ? p.x * offDir.x + p.y * offDir.y : undefined;
 }
 
-/** THE diameter annotation, shared by a circle's badge and an arc's diameter
- *  constraint. `place` is a free 2D offset from the CENTRE and carries two
- *  meanings at once (this is the mainstream-MCAD behaviour, and it's what lets two
- *  concentric circles be read at a glance, dimension one up-left, the other
- *  down-right): its DIRECTION rotates the diameter line through the centre, and
- *  its LENGTH puts the label along that line. Unplaced keeps the historical
- *  layout, a horizontal chord with the label just above the centre.
- *  A label dragged past the rim pulls a leader out to itself; the arrowheads
- *  stay on the rim, because that's what the dimension actually measures. */
+/** Shared by a circle's badge and an arc's diameter constraint. `place` is an offset from the CENTRE: its direction
+ *  rotates the diameter line, its length puts the label on it; unplaced is a horizontal chord with the label above.
+ *  A label past the rim pulls a leader out, the arrowheads stay on the rim. */
 export function diameterDim(
   cx: number,
   cy: number,
@@ -280,8 +235,7 @@ export function diameterDim(
   const c = v(cx, cy);
   const len = place ? place.length() : 0;
   const off = place && len > 1e-9 ? place.clone() : v(0, dimOffset(px(OFFSET_PX, clamp(r * 0.25, 2, 6))));
-  // unplaced: the chord stays horizontal (the label floats above it); placed:
-  // the chord follows the placement direction
+  // Unplaced the chord stays horizontal with the label above it; placed it follows the placement direction.
   const u = place && len > 1e-9 ? off.clone().divideScalar(len) : v(1, 0);
   const aSize = arrowSize(2 * r); // the two heads share the diameter between them
   const tail = c.clone().addScaledVector(u, -r);
@@ -295,23 +249,9 @@ export function diameterDim(
   };
 }
 
-/** Default badge placements a single entity can't work out alone, because they
- *  depend on its NEIGHBOURS.
- *
- *  The case that matters is concentric circles: each puts its diameter badge above
- *  the shared centre, so a 60mm and a 34mm circle land their labels ~9px apart,
- *  neither readable, and the top one swallows the other's click. Groups of 2+ fan
- *  out 90 degrees apart, each label MIDWAY BETWEEN ITS OWN RIM AND THE NEXT ONE IN
- *  (the centre, for the innermost), so every label sits in the annular band its own
- *  circle owns and none can land on another circle's rim, which matters because a
- *  badge on geometry hands its clicks to that geometry. A lone circle keeps the
- *  historical straight-above default.
- *
- *  These are DEFAULTS; a user placement (entity.dimPlace) is always preferred, see placeOf.
- *
- *  "Concentric" is judged with the same screen-space clearance the badges use, so
- *  near-concentric circles fan out too; with no zoom context it falls back to
- *  exact. */
+/** Defaults that depend on neighbours: concentric circles (judged with the badge screen clearance) fan out 90 deg
+ *  apart, each label midway between its rim and the next one in, so no badge lands on another rim and takes its
+ *  clicks. A user placement (entity.dimPlace) always wins, see placeOf. */
 export function staggeredDefaults(ents: ResolvedEntity[]): Map<string, DimPlace> {
   const tol = Math.max(dimOffset(0), 1e-9);
   const groups: ResolvedEntity[][] = [];
@@ -411,10 +351,8 @@ export function entityDims(e: ResolvedEntity, defaults?: DimPlace): EntityDim[] 
     const rr = e.radius;
     const a = (e.angle * Math.PI) / 180; // stored degrees
     const c = v(Math.cos(a), Math.sin(a));
-    // a radius label only has one degree of freedom: how far OUT along its own
-    // radial line it sits (a sideways drag would take it off the line it labels).
-    // Unplaced keeps the historical 0.6r; a placement gets the pixel-clearance
-    // floor so it can't be dropped onto the centre.
+    // A radius label only slides along its own radial line. Unplaced it sits at 0.6r; a placement gets the pixel
+    // clearance floor so it cannot be dropped onto the centre.
     const p = placeOf(e, "radius", defaults);
     const dist = p ? Math.max(p.x * c.x + p.y * c.y, dimOffset(0)) : rr * 0.6;
     const end = Math.max(rr, dist); // a label past the vertex pulls the line out to it
@@ -495,8 +433,7 @@ export function entityDims(e: ResolvedEntity, defaults?: DimPlace): EntityDim[] 
   ];
 }
 
-/** every dimension's annotation segments for a set of entities (skips
- *  construction, and the `<id>:<field>` badges in `skip`) */
+/** skips construction and the `<id>:<field>` badges in `skip` */
 export function dimensionSegments(ents: ResolvedEntity[], skip?: ReadonlySet<string>): [V, V][] {
   const out: [V, V][] = [];
   const defaults = staggeredDefaults(ents); // labels and their lines must agree
@@ -509,34 +446,23 @@ export function dimensionSegments(ents: ResolvedEntity[], skip?: ReadonlySet<str
   return out;
 }
 
-// --- constraint-based dimensions (p2pDistance / p2lDistance) -----------------
-
-/** Effective curve kind for constraint/dimension operands: native line/circle/
- *  arc, and projected reference curves by their cached shape (a projected line
- *  IS a line operand, that's the point of projecting). Projected polys are
- *  samples, not a curve, so they stay unaddressable as a curve operand.
- *  SketchMode's pruneConstraints and the constraint click flows share this rule. */
+/** Native line, circle, arc, and projected curves by their cached shape. Projected polys are samples, not a curve,
+ *  so they are no curve operand. Shared with SketchMode's pruneConstraints and the constraint click flows. */
 export const curveKind = (e: ResolvedEntity): "line" | "circle" | "arc" | undefined => {
   if (e.type === "line" || e.type === "circle" || e.type === "arc") return e.type;
   if (e.type === "projected" && e.curve.kind !== "poly") return e.curve.kind;
   return undefined;
 };
 
-/** The line segment an entity presents to line-based constraint/dimension
- *  flows: native lines, and projected lines (fixed reference operands). One
- *  predicate so the pickers, the solver seeds, and the label renderers agree. */
+/** Native and projected lines; one predicate so the pickers, solver seeds and label renderers agree. */
 export function asLineSeg(e: ResolvedEntity): { x1: number; y1: number; x2: number; y2: number } | null {
   if (curveKind(e) !== "line") return null;
   if (e.type === "line") return e;
   return e.type === "projected" && e.curve.kind === "line" ? e.curve : null;
 }
 
-/** THE decoder for a line OPERAND id: either a plain entity id (native or
- *  projected line, via asLineSeg) or the compound rectangle-edge form
- *  `"<rectId>~<k>"`, k = 0..3 in rectCorners CCW order, see types.ts. The one
- *  place that knows the compound form; every renderer/validator of a line
- *  operand goes through it (SketchMode.pruneConstraints mirrors the id shape
- *  check, since it validates ids without resolving geometry). */
+/** THE decoder for a line operand id: a plain entity id or a rectangle edge `<rectId>~<k>`, k = 0..3 in rectCorners
+ *  CCW order (see types.ts). SketchMode.pruneConstraints mirrors the id shape check without resolving geometry. */
 export function lineOperand(
   byId: Map<string, ResolvedEntity>,
   id: string,
@@ -555,11 +481,8 @@ export function lineOperand(
   return a && b ? { x1: a.x, y1: a.y, x2: b.x, y2: b.y } : null;
 }
 
-/** The center + radius a round entity presents to snap/marker/dimension flows:
- *  native circles/arcs and projected circle/arc curves. THE one
- *  circumcenter-for-projected-arc rule (arcCenterRadius reconstructs both arc
- *  forms, they share field names); null for everything else (incl. a
- *  degenerate collinear arc). */
+/** Native and projected circles and arcs, the one circumcenter rule for projected arcs. Null for everything else,
+ *  including a degenerate collinear arc. */
 export function asRound(e: ResolvedEntity): { x: number; y: number; r: number } | null {
   if (e.type === "circle") return { x: e.x, y: e.y, r: e.radius };
   if (e.type === "projected" && e.curve.kind === "circle") {
@@ -571,13 +494,9 @@ export function asRound(e: ResolvedEntity): { x: number; y: number; r: number } 
   return cr ? { x: cr.c.x, y: cr.c.y, r: cr.r } : null;
 }
 
-// --- rim (edge-to-edge) geometry ---------------------------------------------
-// The one place that knows what an EDGE-to-edge distance measures, shared by the
-// dimension tool's plans, the label renderer, and the solve guard, so the
-// number the user sees, the number planegcs drives, and the invariant the guard
-// re-checks can never drift apart.
+// The one definition of edge-to-edge distance, shared by the tool's plans, the label renderer and the solve guard,
+// so the number shown, the number planegcs drives and the guard's invariant cannot drift apart.
 
-/** a circle/arc reduced to the circle its rim lies on */
 export interface Round {
   x: number;
   y: number;
@@ -586,14 +505,10 @@ export interface Round {
 
 export const RIM_EPS = 1e-9;
 
-/** The SIGNED edge-to-edge clearance planegcs's `c2cdistance` measures, verified
- *  against the installed wasm:
- *    nested  (d < |r1 - r2|) → |r1 - r2| - d   (annular minimum gap, always ≥ 0)
- *    otherwise               → d - r1 - r2     (external clearance; < 0 when the
- *                                               rims cross)
- *  The two branches meet with a JUMP at internal tangency, and the nested branch
- *  is unsigned in |r1 - r2|, which is why `rimNesting` is an invariant the solve
- *  guard re-checks instead of trusting the solver to stay in its branch. */
+/** The SIGNED clearance planegcs `c2cdistance` measures, verified against the installed wasm:
+ *    nested  (d < |r1 - r2|) gives |r1 - r2| - d   (annular minimum gap, always >= 0)
+ *    otherwise               gives d - r1 - r2     (negative when the rims cross)
+ *  The branches JUMP at internal tangency, so the solve guard re-checks `rimNesting` instead of trusting the solver. */
 export function rimGap(c1: Round, c2: Round): number {
   const d = Math.hypot(c2.x - c1.x, c2.y - c1.y);
   const rd = Math.abs(c1.r - c2.r);
@@ -606,8 +521,7 @@ export function rimNesting(c1: Round, c2: Round): "c1" | "c2" | null {
   return c1.r > c2.r ? "c2" : "c1";
 }
 
-/** the two rim points realising `rimGap`, the annotation's endpoints. `fallback`
- *  supplies the direction when the centres coincide (concentric). */
+/** The two rim points realising `rimGap`; `fallback` supplies the direction when the centres coincide. */
 export function rimGapPoints(c1: Round, c2: Round, fallback: V): { a: V; b: V } {
   const dx = c2.x - c1.x,
     dy = c2.y - c1.y;
@@ -630,8 +544,7 @@ export function rimGapPoints(c1: Round, c2: Round, fallback: V): { a: V; b: V } 
   };
 }
 
-/** the radial-gap annotation: the two rims sampled along ONE direction. Used for
- *  the concentric wall-thickness dim, where the centre line gives no direction. */
+/** The two rims sampled along ONE direction, for the concentric wall thickness dim where the centre line gives none. */
 export function radialGapPoints(inner: Round, outer: Round, dir: V): { a: V; b: V } {
   const u = dir.lengthSq() > 1e-12 ? dir.clone().normalize() : v(1, 0);
   return {
@@ -640,8 +553,7 @@ export function radialGapPoints(inner: Round, outer: Round, dir: V): { a: V; b: 
   };
 }
 
-/** point → nearest rim point (planegcs `p2cdistance` = |dist(p, centre) - r|,
- *  UNSIGNED, the point may sit inside). Null when the point is at the centre. */
+/** planegcs `p2cdistance` = |dist(p, centre) - r|, UNSIGNED, the point may sit inside. Null at the centre. */
 export function pointRimPoints(p: V, c: Round): { a: V; b: V } | null {
   const dx = p.x - c.x,
     dy = p.y - c.y,
@@ -650,10 +562,8 @@ export function pointRimPoints(p: V, c: Round): { a: V; b: V } | null {
   return { a: p.clone(), b: v(c.x + (dx / d) * c.r, c.y + (dy / d) * c.r) };
 }
 
-/** rim → line (planegcs `c2ldistance` = |perpDist(centre, line)| - r, signed in r
- *  but blind to which SIDE of the line the centre is on). `a` is the rim point
- *  facing the line, `b` the foot of the perpendicular. Null when the centre lies
- *  ON the line (no facing rim point). */
+/** planegcs `c2ldistance` = |perpDist(centre, line)| - r, blind to which side the centre is on. `a` is the rim point
+ *  facing the line, `b` the foot of the perpendicular. Null when the centre lies on the line. */
 export function lineRimPoints(
   seg: { x1: number; y1: number; x2: number; y2: number },
   c: Round,
@@ -667,11 +577,8 @@ export function lineRimPoints(
   return { a: v(c.x - (nx / d) * c.r, c.y - (ny / d) * c.r), b: foot };
 }
 
-/** THE enumeration of an entity's dimensionable reference points, with each
- *  one's pick index `p` (the SketchConstraint p2p/p2l semantics: 0/1 =
- *  endpoints, 0..3 = rectangle corners, 2 = arc center; circles and sketch
- *  points expose their single point at 0). The picker, the label renderer, and
- *  the docs in types.ts all hang off this one list. */
+/** THE list of an entity's dimensionable points with pick index `p` (p2p and p2l semantics: 0/1 endpoints, 0..3
+ *  rectangle corners, 2 arc centre, 0 for a circle or point). The picker, labels and types.ts docs hang off it. */
 export function dimRefPoints(e: ResolvedEntity): { p: number; pos: V }[] {
   if (e.type === "line")
     return [
@@ -701,9 +608,8 @@ export function dimRefPoints(e: ResolvedEntity): { p: number; pos: V }[] {
   }
   if (e.type === "bspline") return e.poles.map((q, k) => ({ p: poleRef(k, e.poles.length), pos: v(q.x, q.y) }));
   if (e.type === "projected") {
-    // fixed reference points user dims/constraints can target, same indices
-    // the solver registers (sketchSolve projected branch): line/arc endpoints
-    // 0/1, arc center 2, circle center 0, poly first/last samples 0/1
+    // Same indices the solver registers (sketchSolve projected branch): line or arc ends 0/1, arc centre 2,
+    // circle centre 0, poly first and last samples 0/1.
     const cv = e.curve;
     if (cv.kind === "line")
       return [
@@ -725,7 +631,6 @@ export function dimRefPoints(e: ResolvedEntity): { p: number; pos: V }[] {
   return [];
 }
 
-/** resolve a dimension pick (entity + p index) to its current 2D position */
 export function refPoint(e: ResolvedEntity, p: number): V | null {
   return dimRefPoints(e).find((r) => r.p === p)?.pos ?? null;
 }
@@ -737,16 +642,12 @@ export interface ConstraintDim {
   lines: [V, V][];
   kind?: "length" | "angle"; // default length; angle → value shown in degrees
   driven?: boolean; // reference dim: shown in brackets, measured live, read-only
-  /** the label's CURRENT offset from this dim's natural anchor, in sketch mm,
-   *  the basis a label drag adds its delta to (see EntityDim.place). Absent =
-   *  this dim's constraint has no `place` slot, so its label can't be dragged. */
+  /** Offset from the natural anchor in sketch mm (see EntityDim.place); absent when the constraint has no `place`
+   *  slot, so its label cannot be dragged. */
   place?: V;
 }
 
-/** annotation + label geometry for the distance constraints (the driving dims
- *  the dimension tool places between two points, or a point and a line).
- *  `place` (when the dimension tool froze a placement) offsets the label from
- *  the dim's natural anchor, see types.ts. */
+/** Driving dims between two points or a point and a line; `place` offsets the label from its anchor (types.ts). */
 export function constraintDims(ents: ResolvedEntity[], constraints: SketchConstraint[]): ConstraintDim[] {
   const byId = new Map(ents.map((e) => [e.id, e]));
   const out: ConstraintDim[] = [];
@@ -762,8 +663,7 @@ export function constraintDims(ents: ResolvedEntity[], constraints: SketchConstr
       const cx = cr.x,
         cy = cr.y,
         r = cr.r;
-      // the label sits at centre + place, inside or outside the rim; the radial line
-      // runs out to whichever is further, the label or the rim
+      // The label sits at centre + place, inside or outside the rim; the radial line runs to the further of the two.
       const pv = place ? v(place.ox, place.oy) : null;
       const placed = pv !== null && pv.lengthSq() > 1e-12;
       const d = placed ? pv.clone().normalize() : v(Math.SQRT1_2, Math.SQRT1_2); // 45° radial
@@ -784,9 +684,7 @@ export function constraintDims(ents: ResolvedEntity[], constraints: SketchConstr
       });
       return;
     }
-    // diameter on an ARC (the dimension tool's Radius/Diameter override): a
-    // circle's diameter renders through its own entityDims badge, an arc has
-    // none, so only arcs are drawn here, and only ever once.
+    // Only an ARC's diameter is drawn here: a circle's renders through its own entityDims badge.
     if (c.type === "diameter") {
       const e = byId.get(c.circle);
       if (!e || e.type !== "arc") return;
@@ -845,9 +743,8 @@ export function constraintDims(ents: ResolvedEntity[], constraints: SketchConstr
       });
       return;
     }
-    // each branch yields the measured pair (a, b); the shared tail draws it.
-    // (distance/diameter aren't handled here, their measurement always shows via
-    // the entity's own length/diameter badge, so reference mode doesn't apply.)
+    // Each branch yields the measured pair (a, b) and the shared tail draws it. Distance and diameter always show
+    // through the entity's own badge, so reference mode does not apply to them.
     let a: V | null = null;
     let b: V | null = null;
     let value = 0;
@@ -898,11 +795,8 @@ export function constraintDims(ents: ResolvedEntity[], constraints: SketchConstr
       if (pts) ({ a, b } = pts);
       value = c.value;
     } else if (c.type === "offset") {
-      // ONE dim for the whole operation, anchored on the FIRST pair: the chain
-      // shares a single value, so a label per member would be N copies of the
-      // same number (and Fusion shows one). Displayed as |value|, the stored
-      // value is signed because the sign IS the side; see writeDimValue for why
-      // the write-back has to put that sign back.
+      // ONE dim per operation, on the first pair: the chain shares a value (Fusion shows one too). Shown as |value|;
+      // the stored sign is the side, see writeDimValue.
       const pr = c.pairs[0];
       const so = pr ? lineOperand(byId, pr.src) : null;
       const co = pr ? lineOperand(byId, pr.cpy) : null;
@@ -917,8 +811,7 @@ export function constraintDims(ents: ResolvedEntity[], constraints: SketchConstr
       } else if (pr) {
         const s = round(pr.src),
           q = round(pr.cpy);
-        // radialGapPoints wants inner-then-outer; an inward offset makes the
-        // COPY the inner one, so order by radius rather than by pair role
+        // radialGapPoints wants inner then outer; an inward offset makes the COPY the inner one, so order by radius.
         if (s && q) ({ a, b } = radialGapPoints(s.r <= q.r ? s : q, s.r <= q.r ? q : s, placeDir));
       }
       value = Math.abs(c.value);
@@ -928,8 +821,7 @@ export function constraintDims(ents: ResolvedEntity[], constraints: SketchConstr
     if (meas < 1e-6) return;
     const dir = b.clone().sub(a).normalize();
     const nrm = v(-dir.y, dir.x);
-    // the frozen placement, projected onto the dim's own left normal: magnitude
-    // = how far off the geometry, sign = which side
+    // The frozen placement on the dim's left normal: magnitude is distance off the geometry, sign is the side.
     const off = place ? place.ox * nrm.x + place.oy * nrm.y : undefined;
     const lin = linear(a, b, nrm, meas, off);
     out.push({

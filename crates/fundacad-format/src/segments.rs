@@ -1,10 +1,6 @@
-//! Segmented deflate (docs/FUNDA-FORMAT.md, "Segmented sections").
-//!
-//! A big section is cut into segments of the same raw size, each compressed by
-//! a fresh compressor and ended with a sync flush, the last one with a final
-//! block. The concatenation is one ordinary raw deflate stream, so every reader
-//! decodes it as before, while a reader that has the segment index can inflate
-//! the segments apart, on all cores.
+//! Segmented deflate (docs/FUNDA-FORMAT.md, "Segmented sections"). Equal raw size segments, each from a fresh
+//! compressor ended by a sync flush, concatenate into one ordinary raw deflate stream that every reader decodes,
+//! while a reader with the segment index inflates the segments apart on all cores.
 
 use std::io::Write;
 
@@ -132,9 +128,8 @@ fn decode_inner(b: &[u8]) -> Option<Vec<Row>> {
     Some(rows)
 }
 
-/// Whether a row describes this very section: an older writer may have carried
-/// the index over a section it encoded again, so a row that does not fit is
-/// ignored and the section is read as one stream.
+/// Whether a row describes this very section: an older writer may have carried the index over a section it encoded
+/// again, so a row that does not fit is ignored and the section read as one stream.
 pub fn matches(
     row: &Row,
     kind: u8,

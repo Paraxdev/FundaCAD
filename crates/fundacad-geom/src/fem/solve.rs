@@ -1,19 +1,7 @@
-//! Linear static analysis on quadratic tetrahedra (TET10), in mm, N and MPa.
-//!
-//! The linear mesh is promoted to TET10 by adding one node halfway along every edge, so the
-//! geometry map stays affine and the shape function gradients of an element are exact from
-//! its four corners. The stiffness is integrated with the 4-point Gauss rule, exact for TET10.
-//! Nodes on fixed faces are held in all three directions and eliminated; the rest form a
-//! sparse symmetric positive definite system, assembled straight into its lower triangle in
-//! element order and factorised by faer's sparse Cholesky on one thread, so the same mesh
-//! gives the same bits every run. Stress is evaluated at element corners (exact for the linear
-//! strain of TET10), averaged per corner node, and a mid-edge node takes the mean of its ends.
-//!
-//! A node a slider or a pin holds in only one or two directions keeps its three unknowns, but
-//! in a frame of its own whose first axes are the held directions: its block of the matrix is
-//! rotated into that frame and the held unknowns become decoupled rows `1 * u = 0`. That is an
-//! exact elimination that leaves the system symmetric positive definite and its block layout
-//! untouched, so a problem held only by fixed faces assembles exactly as before.
+//! Linear static analysis on quadratic tetrahedra (TET10) in mm, N and MPa: mid-edge nodes keep the geometry map
+//! affine, 4-point Gauss stiffness, faer's sparse Cholesky on one thread so a mesh gives the same bits every run.
+//! A slider or pin node keeps its three unknowns in a frame whose first axes are the held directions, held ones
+//! becoming decoupled rows `1 * u = 0`, so the system stays symmetric positive definite and its layout untouched.
 
 use std::fmt;
 
@@ -86,10 +74,8 @@ impl Axis {
     }
 }
 
-/// The surface of one face of a slider, which gives the direction it holds each node in. A
-/// surface with a normal in closed form gives its exact normal at the node, so the slides and
-/// turns that the surface allows (along and about a cylinder's axis, about a sphere's centre)
-/// stay exactly free; the faceted mesh's own normals lean off the surface and would hold them.
+/// The surface of one face of a slider, giving the direction it holds each node in. A closed form normal keeps
+/// the slides and turns the surface allows exactly free, the faceted mesh's own normals lean and would hold them.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SlideFace {
     /// A plane with this normal.
@@ -136,10 +122,8 @@ impl SlideFace {
         }
     }
 
-    /// The exact normal, either way round, at `x`: the surface's normal at the point of it
-    /// nearest `x`, which for a surface of revolution lies in the plane through the axis and
-    /// `x`. None for a normal read off the mesh, and at a point on the axis or the centre,
-    /// where there is no one normal.
+    /// The exact normal, either way round, at the surface point nearest `x`. None for a mesh read normal, and on
+    /// the axis or centre, where there is no one normal.
     fn normal_at(&self, x: V3) -> Option<V3> {
         let radial = |a: &Axis| {
             let r = a.radial(x);
@@ -176,9 +160,8 @@ impl SlideFace {
 pub enum Hold {
     /// Held in every direction.
     Fixed,
-    /// Held along the normal only, free to slide in the surface. One entry per face, each
-    /// face holding its nodes along its own normal, so a node where two of them meet at an
-    /// angle is held along both.
+    /// Held along the normal only, free to slide in the surface. Each face holds its nodes along its own normal, so
+    /// a node where two meet at an angle is held along both.
     Slider(Vec<SlideFace>),
     /// Held towards the axis and along it, free to turn about it (a bolt or a pin). One axis
     /// per face, as each face may be a different hole.
@@ -257,9 +240,8 @@ impl Solution {
     }
 }
 
-/// Why a problem could not be solved. The messages are written for the person running the
-/// analysis and leave out face ids, which mean nothing to them; the variants keep the ids so
-/// the caller can name the face its own way.
+/// Why a problem could not be solved. The messages leave out face ids, which mean nothing to the person running
+/// the analysis, while the variants keep them so the caller can name the face its own way.
 #[derive(Debug, Clone, PartialEq)]
 pub enum SolveError {
     InvalidMaterial(Material),
@@ -501,9 +483,8 @@ pub fn solve(p: &Problem, tick: &mut dyn FnMut() -> bool) -> Result<Solution, So
     solve_with(p, tick, &mut |f| f())
 }
 
-/// [`solve`], running the factorisation, one long call that cannot tick, inside `long`
-/// (the engine passes a closure that keeps its heartbeat going meanwhile). A cancel during
-/// the factorisation takes effect when it returns.
+/// [`solve`] with the factorisation, one long call that cannot tick, run inside `long` (the engine keeps its
+/// heartbeat going there). A cancel during the factorisation takes effect when it returns.
 pub fn solve_with(
     p: &Problem,
     tick: &mut dyn FnMut() -> bool,
@@ -804,13 +785,9 @@ impl Holds {
 
 const AXES: [V3; 3] = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
 
-/// The directions each support holds each TET10 node in. A support holds the nodes lying on
-/// its faces: a corner node the mesher found on the face, a mid-edge node when both ends of
-/// its edge are. A node on any face of a fixed support is fixed by the first such support. A
-/// slider holds a node along the normal of each of its faces the node lies on, the surface's
-/// exact normal when it has one, else the area weighted normal of the boundary triangles
-/// lying wholly on that face around the node. A pin holds its nodes towards its axis and
-/// along it.
+/// The directions each support holds each TET10 node in: corner nodes the mesher found on its faces, mid-edge
+/// nodes when both ends are. Fixed wins, a slider holds along each face normal (exact, else the area weighted
+/// normal of triangles wholly on that face), and a pin holds towards and along its axis.
 fn holds_of(q: &Quadratic, on: &OnFaces, supports: &[Support]) -> Holds {
     let nn = q.nodes.len();
     let mut fixed_by = vec![u32::MAX; nn];
@@ -935,10 +912,8 @@ fn holds_of(q: &Quadratic, on: &OnFaces, supports: &[Support]) -> Holds {
     holds
 }
 
-/// The area weighted normal at each node of each of a slider's faces whose normal comes from
-/// the mesh, as (node, index of the face in `ids`, summed area vector) sorted by node and face.
-/// Only the boundary triangles lying wholly on a face count towards its normal, so those that
-/// round an edge over do not tilt it towards the face beside it.
+/// The area weighted normal at each node of each mesh normal slider face, as (node, face index in `ids`, area
+/// vector) sorted. Only triangles wholly on a face count, so those rounding an edge do not tilt it.
 fn mesh_normals(q: &Quadratic, on: &OnFaces, ids: &[u32], faces: &[SlideFace]) -> Vec<(u32, usize, V3)> {
     let mut each: Vec<(u32, usize, V3)> = Vec::new();
     if faces.iter().all(SlideFace::exact) {
@@ -1085,11 +1060,9 @@ fn gauss_solve(g: &mut [[f64; 4]; 3], k: usize) -> [f64; 3] {
     x
 }
 
-/// Fails when a piece of the mesh can still move. Elements sharing a face move as one rigid
-/// piece. Each direction d a node at x is held in rules out the rigid motions (t, w) with
-/// d . (t + w x (x - c)) = 0, a row [d, (x - c) x d] of a 6 by 6 system, and a piece is held
-/// when its rows have rank 6. A node shared with a held piece is held in every direction,
-/// which catches loose lumps and pieces hinged on an edge or a corner.
+/// Fails when a piece of the mesh can still move, elements sharing a face being one rigid piece. A node at x held
+/// along d rules out motions (t, w) with d . (t + w x (x - c)) = 0, a row [d, (x - c) x d], and a piece is held
+/// when its rows have rank 6. A node shared with a held piece is held every way, catching hinged pieces.
 fn check_held(mesh: &TetMesh, holds: &Holds, turnings: &[Turning]) -> Result<(), SolveError> {
     let nt = mesh.tets.len();
     let mut parent: Vec<u32> = (0..nt as u32).collect();
@@ -1333,10 +1306,8 @@ fn jacobi<const N: usize>(mut a: [[f64; N]; N]) -> ([f64; N], [[f64; N]; N]) {
     (std::array::from_fn(|i| a[i][i]), v)
 }
 
-/// Adds the consistent nodal forces of the body force `b` (N per cubic mm), integrated over
-/// each element with the 4-point rule, exact for the quadratic shape functions, and returns
-/// their sum. A corner of an element takes minus a twentieth of its share and a mid-edge
-/// node a fifth, so the weight goes mostly to the mid-edge nodes.
+/// Adds the consistent nodal forces of body force `b` (N per cubic mm) by the 4-point rule and returns their sum.
+/// A corner takes minus a twentieth of its element share and a mid-edge node a fifth.
 fn body_force(q: &Quadratic, geo: &[Geometry], b: V3, f: &mut [V3]) -> V3 {
     let mut total = [0.0; 3];
     for (t, g) in q.tets.iter().zip(geo) {
@@ -1519,9 +1490,8 @@ struct Fields {
     dofs: usize,
 }
 
-/// Solves K u = f with the displacements of `prescribed` nodes given and those `holds` holds
-/// in one or two directions kept from moving that way, then recovers the smoothed stress,
-/// the reactions and the strain energy.
+/// Solves K u = f with `prescribed` displacements given and the partial `holds` kept from moving that way, then
+/// recovers the smoothed stress, the reactions and the strain energy.
 #[allow(clippy::too_many_arguments)]
 fn analyse(
     q: &Quadratic,
@@ -1809,11 +1779,8 @@ const LEAF: usize = 8;
 /// A cut may leave between these fractions of the elements on one side.
 const BALANCE: (f64, f64) = (0.35, 0.65);
 
-/// The nodes `keep` accepts, in nested dissection order. The elements are sorted along each
-/// axis by centroid; of the cuts that keep the halves balanced, the one whose two sides share
-/// the fewest nodes wins, and those nodes come after both halves, recursively. Eliminating in
-/// this order fills far less of the Cholesky factor than minimum degree, which tends to sweep
-/// a solid part like a band.
+/// The nodes `keep` accepts in nested dissection order: the balanced cut along a centroid axis sharing the fewest
+/// nodes goes last, recursively. This fills far less of the Cholesky factor than minimum degree, which bands a solid.
 fn dissect(q: &Quadratic, keep: impl Fn(usize) -> bool) -> Vec<u32> {
     const OPEN: u8 = 0;
     const RESERVED: u8 = 1;
@@ -2100,10 +2067,8 @@ fn unit(a: V3) -> V3 {
 mod tests {
     use super::*;
 
-    /// A box [0, size] split into n cells per axis, each cell into the six tetrahedra around
-    /// its main diagonal (conforming across cells). Boundary triangles are tagged 0 to 5 for
-    /// the -x, +x, -y, +y, -z, +z sides. `jitter` moves interior nodes by up to that fraction
-    /// of a cell, deterministically, for a distorted mesh.
+    /// A box [0, size] of n cells per axis, six tetrahedra per cell, boundary triangles tagged 0 to 5 for -x, +x, -y,
+    /// +y, -z, +z. `jitter` moves interior nodes by up to that fraction of a cell, deterministically.
     fn box_mesh(size: V3, n: [usize; 3], jitter: f64) -> TetMesh {
         let id = |i: usize, j: usize, k: usize| (i + (n[0] + 1) * (j + (n[1] + 1) * k)) as u32;
         let h = [0, 1, 2].map(|a| size[a] / n[a] as f64);
@@ -2716,10 +2681,8 @@ mod tests {
 
     #[test]
     fn one_slider_on_three_faces_holds_a_corner_as_three_sliders_do() {
-        // A cube in a corner, its weight and a push into the x = 0 wall. One slider over the
-        // floor and both walls holds each node along the normal of every face it lies on, as
-        // three separate sliders do; one direction averaged over the faces would let the
-        // corner node sink into one wall and lift off the floor.
+        // A cube in a corner under its weight and a push into the x = 0 wall. One slider over three faces must hold each
+        // node along every face normal, as three sliders do, or the corner node sinks into one wall.
         let m = box_mesh([20.0, 20.0, 20.0], [4, 4, 4], 0.0);
         let p = |supports: Vec<Support>| Problem {
             mesh: &m,
@@ -2772,10 +2735,8 @@ mod tests {
 
     #[test]
     fn a_support_holds_only_the_nodes_on_its_faces() {
-        // The lattice starts at the box's low corner, so its +x, +y and +z sides fall between
-        // lattice planes, where the mesher rounds the edges over and some triangles tagged
-        // with the top have a corner down the side beside it. The top's slider and the +x
-        // wall's fixed support hold the nodes on their own planes and no others.
+        // The lattice starts at the box's low corner, so the mesher rounds the +x, +y and +z edges over and some top
+        // triangles have a corner on the side. The top slider and +x fixed support must hold only their own planes' nodes.
         let (size, off) = ([30.0, 8.0, 6.0], [0.37, 0.21, 0.13]);
         let (m, _) = super::super::tetmesh::tetrahedralize(
             &box_surface(size, off),

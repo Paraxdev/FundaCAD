@@ -171,9 +171,7 @@ mod socket {
         assert!(UnixStream::connect(&path).is_err());
     }
 
-    // The bug: an idle puck at launch, spacenavd running, no udev rule. The old
-    // reader gave the daemon up after 5 s of silence, fell to the device, found it
-    // unreadable and told the user to run spacenavd, which was running.
+    // Regression: an idle puck at launch with spacenavd running and no udev rule must not give up on the daemon.
     #[test]
     fn a_connected_daemon_silent_past_the_old_grace_is_kept_and_its_record_arrives() {
         let path = socket_path("silent");

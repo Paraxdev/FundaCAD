@@ -1,8 +1,4 @@
-/* ============================================================================
-   ERROR NOTICE, the middle of the title bar (ErrorNotice.vue)
-   ============================================================================ */
-/* The grow curve: full speed, then a steep brake, then a short settle. The
-   cubic-bezier is the fallback for an engine without linear(). */
+/* The error notice in the middle of the title bar (ErrorNotice.vue). */
 .notice-slot {
   flex: 1;
   min-width: 0;
@@ -38,6 +34,8 @@
   cursor: pointer;
   transition-property: width, opacity, transform, border-color, background;
   transition-duration: 720ms, 240ms, 240ms, var(--t-fast), var(--t-fast);
+  /* Grow curve: full speed, a steep brake, a short settle. The cubic-bezier is the
+     fallback for an engine without linear(). */
   transition-timing-function: cubic-bezier(0.3, 0.95, 0.35, 1), var(--ease), var(--ease), var(--ease), var(--ease);
   transition-timing-function:
     linear(0, 0.174 10%, 0.348 20%, 0.521 30%, 0.695 40%, 0.828 48%, 0.924 56%, 0.971 64%, 0.983 72%, 0.991 86%, 1),
@@ -159,7 +157,6 @@
   border-color: var(--line-strong);
 }
 
-/* The console entry the notice was clicked open on. */
 .logcon-row.is-revealed {
   animation: logcon-flash 1.6s var(--ease);
 }

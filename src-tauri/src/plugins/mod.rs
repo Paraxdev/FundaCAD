@@ -1,49 +1,5 @@
-//! Installing plugins: download a bundle, prove it is the one the user agreed
-//! to, and unpack it somewhere it can only be itself.
-//!
-//! Rust owns this rather than the webview for two reasons. The first is the
-//! content security policy: `connect-src` names the loopback engine and nothing
-//! else, and widening it to the releases host so a fetch() could run would open
-//! that host to every script in the window for the sake of one download. The
-//! second is that the interesting work here is bytes on disk, and the webview
-//! has no business doing that.
-//!
-//! WHAT THIS MODULE KNOWS ABOUT PERMISSIONS: nothing. It does not know what
-//! `document.write` means and must not learn. The vocabulary lives in
-//! src/plugins/manifest.ts, which is also what renders the screen the user
-//! answers. All this side does is hold the two ends together: the grants the
-//! user was shown, and the grants that actually arrived in the bundle, compared
-//! as sets. Teaching both sides the meaning of a grant would give them two
-//! chances to disagree about it.
-//!
-//! THE CHAIN, end to end, because no single link is worth much alone:
-//!
-//!   what was shown  =  the bundle's own manifest
-//!
-//! There is no index served over the wire and nothing to keep in step with one.
-//! A file whose only job is to be trusted is a file that can lie; not having one
-//! is cheaper than defending it.
-//!
-//! A bundle may come from any HTTPS URL, or from a zip the user picked off
-//! their own disk. That is a deliberate widening of what used to be a check
-//! that only ever admitted this repository's releases. The origin was never the
-//! thing that made a plugin safe, the grants it declared and the sandbox its
-//! kind runs in are, and an allowlist containing only ourselves is not a
-//! permission model, it is a distribution monopoly wearing one. What survives
-//! of the old check is the part that was always doing the work:
-//! `allowed_bundle_url` still insists on HTTPS and on an authority that means
-//! what it reads, and `is_official_url` now answers the separate and purely
-//! descriptive question of whether we published it.
-//!
-//! WHERE AUTHENTICITY COMES FROM, therefore, is the transport and the consent
-//! screen together: TLS makes the host in the URL the host that answered, and
-//! the origin is put in front of the user before anything is fetched. A caller
-//! may pin the bytes with a sha256 and it is enforced when it is given, but a
-//! build cannot carry the digest of an asset republished after it shipped, so
-//! what arrived is recorded rather than demanded. The link that is never
-//! optional is the last one: the permissions in the unpacked bundle must be the
-//! permissions that were on the screen the user answered. Signatures, and with
-//! them revocation, are a later phase.
+//! Installing plugins from any HTTPS URL or a local zip: check the bundle is the one the user agreed to and unpack it
+//! where it can only be itself. Grants are opaque strings here; signatures and revocation are a later phase.
 
 pub mod bundle;
 pub mod data;
@@ -62,13 +18,8 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager};
 
-/// What is written beside an installed plugin, and what the app reads back to
-/// decide whether it is installed at all.
-///
-/// The record lives IN the plugin's directory rather than in a settings key, so
-/// that deleting the directory really does uninstall the plugin. A record kept
-/// somewhere else can disagree with the files, and when it does, the app
-/// believes the record.
+/// Written beside an installed plugin, in its directory rather than a settings key, so deleting the directory really
+/// uninstalls it.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct Installed {
@@ -82,18 +33,8 @@ pub struct Installed {
     pub installed_at: u64,
     pub dir: String,
     pub consented: Consented,
-    /// Whether `source` is one of this repository's own release assets.
-    ///
-    /// Decided once, here, at install, rather than by the list re-deriving it
-    /// from the URL every time it renders: the frontend would need its own copy
-    /// of the prefix to do that, and a label that two places compute is a label
-    /// two places can disagree about. Carries NO permission with it.
-    ///
-    /// Defaulted, so a record written before this field existed reads back as
-    /// not-official rather than failing to parse. That is the right way round:
-    /// the older records are all MCP from our own releases, so the default is
-    /// wrong for them, and a plugin wrongly labelled as someone else's is a
-    /// smaller problem than one wrongly labelled as ours.
+    /// Decided once at install, so the frontend needs no copy of the prefix. Carries no permission. Defaults to false
+    /// for older records, the safer wrong label.
     #[serde(default)]
     pub official: bool,
     /// Whether the files on disk hold the geometry component the manifest
@@ -110,16 +51,8 @@ const MANIFEST: &str = "manifest.json";
 /// which puts it in the zip.
 const CODE: &str = "main.js";
 
-// ---------------------------------------------------------------------------
-// on disk
-// ---------------------------------------------------------------------------
-
-/// Where installed plugins live, one directory each.
-///
-/// `pub(crate)` because the engine worker needs it too: a plugin may ship geometry
-/// the engine runs, and the app tells it this path rather than letting it guess,
-/// for the same reason it does for the blob store. The two must agree exactly, and
-/// only one of them installs anything.
+/// `pub(crate)` because the engine worker is told this path too, as for the blob store: the two must agree, and only
+/// one installs.
 pub(crate) fn plugins_root(app: &AppHandle) -> Result<PathBuf, String> {
     let dir = app.path().app_data_dir().map_err(|e| format!("no app data directory: {e}"))?.join("plugins");
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
@@ -149,9 +82,7 @@ fn has_component(dir: &Path) -> bool {
         .is_some_and(|rel| rel.split('/').fold(dir.to_path_buf(), |p, part| p.join(part)).is_file())
 }
 
-/// Every plugin currently installed. A directory with no readable record is not
-/// reported as installed: whatever is in there, nobody has a record of agreeing
-/// to it, and the honest answer to "is this installed" is no.
+/// A directory with no readable record is not reported as installed: nobody has a record of agreeing to it.
 #[tauri::command]
 pub fn plugin_list(app: AppHandle) -> Result<Vec<Installed>, String> {
     let root = plugins_root(&app)?;
@@ -170,26 +101,16 @@ pub fn plugin_list(app: AppHandle) -> Result<Vec<Installed>, String> {
     Ok(out)
 }
 
-/// Verify, unpack, and only then let the result be called installed.
-///
-/// Everything after "we have the bytes" is identical whether they were
-/// downloaded or read off the user's disk, so it lives here once. The two
-/// commands below differ only in how they get the bytes and in what they record
-/// as the source, which is the whole of the difference between installing from
-/// a URL and installing from a file.
-///
-/// The order is the point. Nothing is written into the plugin's own directory
-/// until the unpacked manifest has matched what the user was shown; a failure
-/// at any step leaves whatever was installed before exactly as it was, rather
-/// than half-replaced.
+/// Shared by the URL and file installs. Nothing is written into the plugin's directory until the unpacked manifest
+/// matches what the user was shown, so a failure leaves the previous install intact.
 fn install_bytes(
     app: &AppHandle,
     id: &str,
     source: String,
     official: bool,
     bytes: &[u8],
-    // Optional, and enforced when present. See the chain in the module docs:
-    // this pins bytes, it does not establish who published them.
+    // Optional: a build cannot carry the digest of an asset republished after it shipped, so what arrived is
+    // recorded, not demanded. Authenticity comes from TLS plus the consent screen.
     sha256: Option<String>,
     promise: String,
     expect: Consented,
@@ -222,7 +143,8 @@ fn install_bytes(
         return finish(Err(e), &staging);
     }
 
-    // The bundle's own account of itself, which is what will actually run.
+    // The bundle's own account of itself, which is what will actually run. No index is served over the wire, so
+    // there is nothing to keep in step with one.
     let manifest_text = match std::fs::read_to_string(staging.join(MANIFEST)) {
         Ok(t) => t,
         Err(e) => return finish(Err(format!("the bundle has no {MANIFEST}: {e}")), &staging),
@@ -231,6 +153,7 @@ fn install_bytes(
         Ok(m) => m,
         Err(e) => return finish(Err(format!("unreadable {MANIFEST}: {e}")), &staging),
     };
+    // The link that is never optional: the unpacked grants equal the ones on the consent screen.
     if let Err(e) = grants_match(&expect, &found) {
         return finish(Err(e), &staging);
     }
@@ -268,38 +191,14 @@ fn install_bytes(
     Ok(record)
 }
 
-/// What a bundle says about itself, read before anything is installed.
-///
-/// THE ORDER PROBLEM this solves. The consent screen shows what a plugin asks
-/// for, and it has to show that before the plugin is installed. For the set
-/// compiled into the app that is easy: the entry is already here. For a bundle
-/// at a URL nobody has seen before, the only account of what it wants is inside
-/// the bundle, so it has to be fetched and unpacked before there is anything to
-/// put on a screen.
-///
-/// FETCHING IS NOT RUNNING, which is what makes that acceptable. This
-/// downloads, unpacks into a scratch directory, reads one file, and deletes the
-/// directory again. Nothing is executed, nothing is left behind, and nothing is
-/// recorded as installed. The extractor's refusals, traversal, absolute paths,
-/// symlinks, entry counts, unpacked size, all apply here exactly as they do on
-/// the real thing, because it is the same function.
-///
-/// WHY THE DIGEST COMES BACK. The install that follows is a second fetch, and
-/// between the two the asset could change: the screen would have described one
-/// bundle and the install would have taken another. Passing this digest back in
-/// as the pin closes that, and closes it in the direction that matters, a
-/// bundle whose bytes moved is refused rather than silently accepted under the
-/// old description.
+/// Read before anything is installed, since for an unseen URL the consent screen's only source is the bundle. Fetching
+/// is not running: it unpacks to scratch with the same refusals, reads one file and deletes it. The digest comes back
+/// as the install's pin, so bytes that moved in between are refused.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Inspected {
-    /// The bundle's `manifest.json`, verbatim and unparsed.
-    ///
-    /// Handed over as-is for the frontend to run through `parseManifest`, the
-    /// same function that will validate it at install and the same one that
-    /// renders the screen. This side must not pre-digest it: a manifest that
-    /// two parsers understand differently is a screen that describes something
-    /// other than what gets enforced.
+    /// Verbatim and unparsed, for the frontend's `parseManifest`, the same function that validates at install and
+    /// renders the screen, so two parsers never disagree.
     pub manifest: serde_json::Value,
     pub sha256: String,
     pub source: String,
@@ -312,9 +211,8 @@ fn inspect_bytes(app: &AppHandle, bytes: &[u8], source: String, official: bool) 
     }
     let sha256 = sha256_hex(bytes);
 
-    // Named after the digest so two inspections cannot tread on each other, and
-    // kept under the plugins root so it is on the same filesystem as the real
-    // thing rather than somewhere with different rules about links.
+    // Named after the digest so two inspections cannot collide, under the plugins root so it shares the real install's
+    // filesystem and link rules.
     let root = plugins_root(app)?;
     let scratch = root.join(format!(".inspect-{}", &sha256[..16]));
     let _ = std::fs::remove_dir_all(&scratch);
@@ -349,7 +247,8 @@ pub fn plugin_inspect_file(app: AppHandle, path: String) -> Result<Inspected, St
     inspect_bytes(&app, &bytes, path, false)
 }
 
-/// Get a bundle's bytes over HTTPS, refusing to reach anywhere it may not.
+/// Get a bundle's bytes over HTTPS, refusing to reach anywhere it may not. In Rust, since widening `connect-src` for a
+/// fetch() would open the releases host to every script in the window.
 async fn fetch_bundle(url: &str) -> Result<Vec<u8>, String> {
     if !allowed_bundle_url(url) {
         return Err(format!(
@@ -357,13 +256,8 @@ async fn fetch_bundle(url: &str) -> Result<Vec<u8>, String> {
         ));
     }
 
-    // EVERY HOP IS CHECKED, not just the one that was typed. reqwest follows
-    // redirects by default, so without this the check above secures the first
-    // request and nothing else: a URL on a host the user approved could answer
-    // 302 to plain HTTP, and the bytes that arrived would be whatever the
-    // network chose while the consent screen still said https. The hop limit is
-    // reqwest's own default, restated here because setting a custom policy
-    // replaces it rather than extending it.
+    // Every hop is checked: reqwest follows redirects, so an approved host could 302 to plain HTTP. The hop limit
+    // restates reqwest's default, since a custom policy replaces it.
     let client = reqwest::Client::builder()
         .timeout(std::time::Duration::from_secs(120))
         .redirect(reqwest::redirect::Policy::custom(|attempt| {
@@ -416,19 +310,8 @@ pub async fn plugin_install(
     install_bytes(&app, &id, url, official, &bytes, sha256, promise, expect)
 }
 
-/// Install a bundle the user already has: a zip they downloaded themselves, or
-/// one they built.
-///
-/// The same pipeline, and deliberately not a shortcut through it. A local file
-/// has no origin to show and no transport to trust, so the ONLY thing standing
-/// between it and the app is the comparison every bundle gets: the permissions
-/// inside it must be the permissions that were on the screen. Skipping that for
-/// a file because the user picked it would make "pick a file" the way around
-/// the consent screen.
-///
-/// Never official, whatever it contains. A file on disk cannot demonstrate
-/// where it came from, and a bundle that claims to be ours is exactly the one
-/// that must not be believed for saying so.
+/// Install a zip the user has. The same pipeline: the grant comparison is the only gate a local file has, so skipping
+/// it would make picking a file the way around consent. Never official, a file cannot prove where it came from.
 #[tauri::command]
 pub fn plugin_install_file(
     app: AppHandle,
@@ -442,15 +325,8 @@ pub fn plugin_install_file(
     install_bytes(&app, &id, path, false, &bytes, sha256, promise, expect)
 }
 
-/// The entry point of an installed plugin, as text.
-///
-/// One file, named by the plugin's kind, from inside the plugin's own
-/// directory. NOT an arbitrary read: the caller does not choose the name, the
-/// installed record does, so this cannot be turned into a file reader by asking
-/// it nicely. The id is checked the same way it is everywhere else, and the
-/// path is joined onto the plugins root rather than taken from the record's own
-/// `dir`, because a record is a file inside the directory it describes and a
-/// directory that can rewrite its own path is not a boundary.
+/// One file, named by the plugin's kind, not by the caller. The path is joined onto the plugins root rather than taken
+/// from the record's own `dir`, since a directory that can rewrite its own path is not a boundary.
 #[tauri::command]
 pub fn plugin_entry(app: AppHandle, id: String) -> Result<String, String> {
     let id = safe_id(&id)?;
@@ -471,55 +347,17 @@ pub fn plugin_entry(app: AppHandle, id: String) -> Result<String, String> {
     Ok(text)
 }
 
-/// The app-side module of an installed plugin, for the window to evaluate.
-///
-/// THE ONE COMMAND IN THIS FILE THAT HANDS BACK CODE TO BE RUN, and every
-/// condition on it is load-bearing.
-///
-/// A plugin that draws, a menu row, a component, paint on the model, runs in
-/// the application's own JavaScript context, because none of those is
-/// expressible from a Worker or from a separate process. There is no sandbox to
-/// put such a plugin in. So the only defensible rule is about WHERE THE CODE
-/// CAME FROM, and it is enforced here rather than in the window: the frontend
-/// cannot check the provenance of a string handed to it by the same call it is
-/// trusting.
-///
-/// Three gates, and each refuses in its own words so that a person filing a bug
-/// can say which one stopped them:
-///
-///   1. The kind. Only a `builtin` runs in the app's context; that is what the
-///      word means on the consent screen, and `sandboxNote("builtin")` already
-///      says "the list above is what it uses, not a limit on it".
-///   2. The origin. Only a bundle from this project's own releases. `official`
-///      was decided once, at install, from the URL it actually came from, and
-///      is stored beside the plugin rather than re-derived from a string the
-///      caller supplies.
-///   3. The size. The same cap the bundle got, re-checked at read time, because
-///      a file can grow after it is installed.
-///
-/// What is deliberately NOT here yet is a signature over the bundle. The origin
-/// gate anchors on GitHub's TLS and this repository's path, which is the same
-/// anchor the updater has before ITS signature check; adding the second anchor
-/// needs a signing key, and generating one is not this file's decision to make.
-/// `verify_plugin_signature` below is where it goes, and it fails closed the
-/// moment a public key exists.
+/// The one command that hands back code to run, in the app's own JS context where no sandbox exists. Three gates, each
+/// refusing in its own words: the kind, the origin (`official`, decided at install), and the size, checked again at
+/// read. A signature is the missing second anchor, see `verify_plugin_signature`.
 #[tauri::command]
 pub fn plugin_code(app: AppHandle, id: String) -> Result<String, String> {
     let id = safe_id(&id)?;
     let dir = plugins_root(&app)?.join(id);
     let record = read_record(&dir).ok_or("that plugin is not installed")?;
 
-    // WHICH KINDS MAY CARRY APP-SIDE CODE, and the rule is the consent screen's
-    // own words rather than a taste. `builtin` and `process` are the two whose
-    // note already says nothing contains them: "the list above is what it uses,
-    // not a limit on it", and "runs as a normal program on your computer... not
-    // a cage around it". A bundle of either kind that also runs code in the
-    // window tells the person nothing new.
-    //
-    // `compute` and `panel` promise the opposite -- "no network and no access to
-    // your files, so the list above is all it can do" -- and app-side code would
-    // make that sentence false. So they are refused here, and build-plugins.py
-    // refuses to package one, which is the same rule at the other end.
+    // Only `builtin` and `process`, whose consent notes already promise no containment. `compute` and `panel` promise
+    // no network or files, which app side code would make false; build-plugins.py refuses to package one too.
     if !matches!(record.consented.kind.as_str(), "builtin" | "process") {
         return Err(format!(
             "a {} plugin is described to the person as contained, so it may not run code in              the app's own context",
@@ -535,9 +373,7 @@ pub fn plugin_code(app: AppHandle, id: String) -> Result<String, String> {
     verify_plugin_signature(&dir, &record)?;
 
     let path = dir.join(CODE);
-    // A bundle with no app-side module at all is the ordinary case, not a
-    // failure: most process plugins have no face in the window. The caller gets
-    // an empty string and starts nothing.
+    // No app side module is the ordinary case: the caller gets an empty string and starts nothing.
     if !path.is_file() {
         return Ok(String::new());
     }
@@ -548,14 +384,8 @@ pub fn plugin_code(app: AppHandle, id: String) -> Result<String, String> {
     Ok(text)
 }
 
-/// The second anchor, when there is one to check against.
-///
-/// FAILS CLOSED, and that is the whole design: with no public key compiled in,
-/// there is nothing to verify against and the origin gate above is what stands.
-/// The moment a key exists, a bundle without a good signature over it is
-/// refused, including every bundle installed before the key existed, which is
-/// the correct and slightly annoying outcome rather than a grandfather clause
-/// that would make the key decorative.
+/// Fails closed: with no public key compiled in, the origin gate stands. Once a key exists every unsigned bundle is
+/// refused, installed ones included, so the key is never decorative.
 fn verify_plugin_signature(_dir: &Path, _record: &Installed) -> Result<(), String> {
     match PLUGIN_PUBLIC_KEY {
         None => Ok(()),
@@ -566,12 +396,8 @@ fn verify_plugin_signature(_dir: &Path, _record: &Installed) -> Result<(), Strin
     }
 }
 
-/// The public key app-side plugin code is verified against, once there is one.
-///
-/// `None` until somebody generates a key pair, which is a decision with a
-/// key-custody consequence and is not one to take on anybody's behalf. Written
-/// as a constant rather than read from a file so that it cannot be swapped by
-/// anything that can write next to the executable.
+/// `None` until somebody generates a key pair, a key custody decision. A constant, so nothing that can write next to
+/// the executable can swap it.
 const PLUGIN_PUBLIC_KEY: Option<&str> = None;
 
 #[tauri::command]
@@ -583,5 +409,3 @@ pub fn plugin_remove(app: AppHandle, id: String) -> Result<(), String> {
     }
     std::fs::remove_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))
 }
-
-// ---------------------------------------------------------------------------

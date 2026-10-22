@@ -1,15 +1,5 @@
-//! `stress`: a linear static analysis of one body, read out for an agent.
-//!
-//! The engine's `stress` op does the meshing and the solve. What lives here is
-//! checking the arguments before anything is sent, so a malformed load costs
-//! no rebuild, the reading of the reply as a short report, and the boundary of
-//! the volume mesh it hands back, coloured by von Mises stress for the picture.
-//!
-//! Faces are held by `fixed` and by `supports` (fixed, pinned on a round face,
-//! or a slider held only across its face), and `gravity` adds the body's
-//! weight from the material's density. A support or a load may name `spots`
-//! in place of faces, each a point on the body with a radius, for a place that
-//! has no face of its own.
+//! `stress`: the arguments are checked before anything is sent, so a malformed load costs no rebuild. The engine
+//! meshes and solves; its reply becomes a short report and a stress coloured boundary for the picture.
 
 use std::collections::HashMap;
 
@@ -18,8 +8,7 @@ use serde_json::{json, Map, Value};
 use crate::describe::g_format;
 use crate::render::{stress_color, Drawable, Rgb, Vec3};
 
-/// The keys a load takes. Anything else is a typo that would otherwise be
-/// dropped on the way to the engine.
+/// Anything else is a typo that would otherwise be dropped on the way to the engine.
 const LOAD_KEYS: [&str; 4] = ["faces", "spots", "force", "pressure"];
 const MATERIAL_KEYS: [&str; 5] = ["E", "nu", "yield", "density", "name"];
 const SUPPORT_KEYS: [&str; 3] = ["type", "faces", "spots"];
@@ -30,8 +19,7 @@ const SELECTOR_HINT: &str = "take each face's selector from `inspect` with detai
 pub struct Request {
     pub payload: Map<String, Value>,
     pub image: bool,
-    /// What each support is called in the report, in the order of the
-    /// reply's `reactions`: `fixed` first when given, then each of `supports`.
+    /// Support names in the order of the reply's `reactions`: `fixed` first when given, then each of `supports`.
     pub supports: Vec<String>,
 }
 
@@ -58,8 +46,7 @@ fn selectors(v: Option<&Value>, what: &str) -> Result<(), String> {
     Ok(())
 }
 
-/// A spot or a list of them, each a point on the body and a radius. Whether
-/// there is one, as a support or a load with spots may leave its faces out.
+/// Whether there is one, since a support or a load with spots may leave its faces out.
 fn spots(v: Option<&Value>, what: &str) -> Result<bool, String> {
     let list: Vec<&Value> = match v {
         None | Some(Value::Null) => return Ok(false),
@@ -198,10 +185,8 @@ fn material(v: &Value) -> Result<(), String> {
     }
 }
 
-/// The arguments, checked and turned into the engine's request. Everything
-/// the engine would refuse for its shape alone is refused here, before a
-/// rebuild; what needs the model (a selector that picks nothing, a material
-/// name) is left to the engine, which names it.
+/// Refuses before a rebuild what the engine would refuse for its shape alone; what needs the model
+/// (a selector that picks nothing, a material name) is left to the engine, which names it.
 pub fn request_of(args: &Map<String, Value>) -> Result<Request, String> {
     let body = match args.get("body") {
         Some(Value::String(b)) if !b.trim().is_empty() => b.clone(),
@@ -345,11 +330,8 @@ fn who(r: &Value) -> String {
     }
 }
 
-/// The engine's reply as a few lines: what was analysed, the peaks and where,
-/// the safety factor, the balance of load and reaction (the weight among the
-/// loads, and each support's share when there is more than one), the mesh,
-/// and the engine's warnings word for word. `supports` names the supports in
-/// the order of the reply's `reactions`.
+/// The reply as a few lines, with the engine's warnings word for word.
+/// `supports` names the supports in the order of the reply's `reactions`.
 pub fn report(r: &Value, supports: &[String]) -> String {
     let empty = json!({});
     let mat = r.get("material").unwrap_or(&empty);
@@ -452,8 +434,7 @@ fn numbers(v: Option<&Value>) -> Vec<f64> {
     v.and_then(Value::as_array).map(|a| a.iter().map(|x| x.as_f64().unwrap_or(0.0)).collect()).unwrap_or_default()
 }
 
-/// The reply's `surface`, or None when it has nothing to draw. The scale runs
-/// from the least to the most stress on the surface.
+/// None when there is nothing to draw. The scale runs from the least to the most stress on the surface.
 pub fn surface_of(r: &Value) -> Option<Surface> {
     let s = r.get("surface")?;
     let positions = numbers(s.get("positions"));
@@ -752,7 +733,7 @@ mod tests {
             text.contains("reaction at each support:\n- fixed: (0, 0, 60) N\n- supports[0] (slider): (0, 0, 40.12) N"),
             "{text}"
         );
-        // One support and no gravity read as before.
+        // One support and no gravity add no weight and no per support lines.
         let one = json!({"applied": [0.0, 0.0, -1.0], "reaction": [0.0, 0.0, 1.0], "weight": null,
                          "reactions": [[0.0, 0.0, 1.0]]});
         let text = report(&one, &["supports[0] (pinned)".to_string()]);

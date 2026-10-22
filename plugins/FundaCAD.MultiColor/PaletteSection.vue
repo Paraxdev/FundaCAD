@@ -1,19 +1,6 @@
 <script setup lang="ts">
-// The filament palette, as a section of the browser.
-//
-// This was ~120 lines spread through components/shell/BrowserPane.vue: two node
-// kinds in the panel's own union type, a branch in the node builder, two blocks
-// of template, a connection dot, a staleness poll, a one-shot printer probe and
-// a sync flow, all of it behind a check on this capability, and a second check
-// on the one that talks to printers. The browser is a tree of what is in the
-// document; none of that was.
-//
-// It renders nothing at all unless there are bodies AND something answered when
-// asked about filament. The palette is a list of what is loaded in a machine's
-// toolheads, not a document colour scheme, so with no machine it was four fixed
-// rows of nothing permanently at the top of the browser. That is the same rule
-// the Images filter follows: a control that cannot do its job is worse present
-// than absent.
+// Renders nothing unless there are bodies and a machine answered about filament: the palette is what a machine's
+// toolheads hold, not a colour scheme, and a control that cannot do its job is worse present than absent.
 
 import { computed, onUnmounted, ref, watch } from "vue";
 import { FILAMENTS, staleSlots, type FilamentSource } from "./palette";
@@ -24,12 +11,8 @@ const engine = useEngine();
 const store = engine.store;
 const browser = useBrowserStore();
 
-/** Whoever can talk to a machine, or null in a build where nobody can.
- *
- *  Read once per mount rather than held: this component is contributed by a
- *  capability and unmounted when that capability stops, and the provider's own
- *  capability starting or stopping is a change to the app's contributions, which
- *  is a remount of the browser's contributed sections either way. */
+/** Whoever can talk to a machine, or null in a build where nobody can. Read once per mount, since the provider's
+ *  capability starting or stopping remounts the browser's contributed sections anyway. */
 const filaments = service<FilamentSource>(FILAMENTS);
 
 const hasBodies = useBuildValue(() => (store.buildState.result?.bodies ?? []).length > 0);
@@ -58,13 +41,8 @@ const dotTitle = computed(() =>
     : "Printer connection",
 );
 
-// Passive checks, armed ONCE the first time bodies (and so the palette) appear:
-// a one-shot probe that lights the dot without a sync click, and a single 30s
-// staleness poll that re-diffs against the palette WITHOUT applying anything.
-// Both guarded, because the old version armed them from inside a render, where
-// an unguarded re-arm probed the LAN per keystroke. The watcher is a transition,
-// so that hazard is structural now, but the guards stay: hasBodies flips on
-// every New and every Open too.
+// Passive checks, armed once when bodies first appear: a one-shot probe that lights the dot and a single 30s
+// staleness poll that re-diffs WITHOUT applying. Guarded, since hasBodies flips on every New and Open.
 let probedOnce = false;
 let pollTimer: number | null = null;
 
@@ -113,10 +91,8 @@ onUnmounted(() => {
 
 <template>
   <template v-if="shown">
-    <!-- The head keeps its own markup rather than reusing TreeFolder: a
-         connection dot and the sync button sit where a folder's eye would, and
-         the label deliberately has no .tree-label class (the e2e panel dump
-         reads that). -->
+    <!-- Own markup rather than TreeFolder: the dot and sync button sit where a folder's eye would, and the label has
+         no .tree-label class on purpose (the e2e panel dump reads that). -->
     <div class="tree-folder" :aria-expanded="!collapsed" @click="browser.toggle('Palette')">
       <span class="tree-caret"><Icon :name="collapsed ? 'caretRight' : 'caretDown'" :size="11" /></span>
       <span class="feature-icon"><Icon name="filament" :size="14" /></span>

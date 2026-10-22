@@ -1,6 +1,4 @@
 // 2D constraint solver bridge over planegcs (FreeCAD's PlaneGCS, WASM).
-// Translates our point/line/circle + constraint model into planegcs primitives,
-// solves, and reads the solved point positions back.
 
 import { init_planegcs_module, GcsWrapper, SolveStatus } from "@salusoft89/planegcs";
 import wasmUrl from "@salusoft89/planegcs/dist/planegcs_dist/planegcs.wasm?url";
@@ -22,9 +20,7 @@ export interface SCircle {
   center: PointId;
   radius: number;
 }
-// An arc references three points (center, start, end) plus radius + sweep
-// angles. arc_rules keeps the endpoints on the circle at those angles, so the
-// endpoints can be shared with lines (coincidence) and the arc stays circular.
+// arc_rules keeps the endpoints on the circle at the sweep angles, so lines can share them.
 export interface SArc {
   id: string;
   center: PointId;
@@ -63,19 +59,13 @@ export type SConstraint =
   | { id: string; type: "pointOnCircle"; p: PointId; circle: string }
   | { id: string; type: "pointOnArc"; p: PointId; arc: string }
   | { id: string; type: "symmetric"; a: PointId; b: PointId; line: string }
-  // --- edge-to-edge (rim) distances -----------------------------------------
-  // `round1`/`round2`/`round` name a CIRCLE OR ARC primitive: planegcs's Arc
-  // derives from Circle, so the same three constraints take either (verified
-  // against the installed wasm). See entityDims.rimGap / lineRimPoints /
-  // pointRimPoints for the exact measures, they are not all signed, and
-  // sketchSolve's solve guard re-checks the branch each one was created in.
+  // round1, round2 and round name a circle OR arc (planegcs's Arc derives from Circle). Not all are signed, see
+  // entityDims.rimGap, and sketchSolve's guard re-checks the branch each was created in.
   | { id: string; type: "rimGap"; round1: string; round2: string; value: number }
   | { id: string; type: "rimLine"; round: string; line: string; value: number }
   | { id: string; type: "rimPoint"; p: PointId; round: string; value: number }
-  // radiusDifference: `outer.radius - inner.radius = value`, SIGNED, touching
-  // only the two radius params (planegcs `difference` over ObjectParams). The
-  // concentric wall-thickness dim, c2cdistance's nested branch is unsigned and
-  // will happily converge to an inverted annulus, so it must NOT be used here.
+  // outer.radius - inner.radius = value, SIGNED. c2cdistance's nested branch is unsigned and converges to an inverted
+  // annulus, so it must not be used for wall thickness.
   | { id: string; type: "radiusDifference"; inner: string; outer: string; value: number };
 
 export interface SolveInput {
@@ -131,24 +121,9 @@ function getWrapper(): Promise<Solver> {
   return wrapperPromise;
 }
 
-/** The constraint solver's WASM could not be instantiated.
- *
- *  This was misdiagnosed for a long time, so it is worth stating plainly.
- *  planegcs is an emscripten/embind module, and embind builds each invoker by
- *  handing SOURCE TEXT to the `Function` constructor. In the shipped 1.1.7 glue
- *  the minifier specialised that helper to `function qb(b){var a=Function; ...
- *  b=a.apply(c,b); ...}`. `'wasm-unsafe-eval'` permits WebAssembly COMPILATION
- *  only; it does not permit the `Function` constructor, which needs
- *  `'unsafe-eval'`.
- *
- *  So this was never about WebAssembly and never about the user's webview: it
- *  was our own Content-Security-Policy, in every packaged build. `tauri dev`
- *  serves from vite WITHOUT the CSP, which is why it never reproduced in
- *  development, and vitest runs in Node, which has no CSP, so no unit test can
- *  see it either. e2e/solver_csp.cjs is the one that can.
- *
- *  Keep the message blaming the build, not the machine. If this fires again it
- *  means the policy regressed, not that anyone needs a driver update. */
+/** planegcs's embind glue builds invokers with the `Function` constructor, which 'wasm-unsafe-eval' does not allow,
+ *  so this means our own CSP regressed, not the user's machine. tauri dev and vitest have no CSP, e2e/solver_csp.cjs
+ *  catches it. Keep the message blaming the build. */
 export class SolverUnavailable extends Error {
   constructor(readonly cause: unknown) {
     const detail = cause instanceof Error ? cause.message : String(cause);
@@ -164,15 +139,8 @@ export class SolverUnavailable extends Error {
   }
 }
 
-/** Warm up the WASM module ahead of first use (call at startup).
- *
- *  A warm-up is OPTIONAL by definition: the caller must not let a failure here
- *  reach the user as an app-level error. It used to be called as a bare
- *  `void initSolver()`, so when the solver could not start the rejection hit the
- *  global unhandledrejection net and greeted the user with "Something went
- *  wrong, check the console for details" at every startup, naming nothing.
- *  Resolves to false instead of rejecting; the real error is raised at the
- *  point of USE, where it can say what is actually unavailable. */
+/** Resolves to false instead of rejecting, a warm-up failure must not reach the global unhandledrejection net. The
+ *  real error is raised at the point of use. */
 export async function initSolver(): Promise<boolean> {
   try {
     await getWrapper();

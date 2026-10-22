@@ -1,10 +1,5 @@
-//! A blend that folded back over itself, the Python engine's `blend_overlap.py`.
-//!
-//! BRepCheck calls such a solid valid; what is wrong is that faces the blend
-//! made lie on top of each other and the depth buffer flickers between them.
-//! The faces it made are meshed coarsely and a triangle counts as doubled when
-//! its centre lies within a micron of a near parallel triangle of another of
-//! those faces that really is that close to its own surface.
+//! A blend that folded back over itself, blend_overlap.py. BRepCheck passes it, but faces the blend made lie on
+//! each other: a coarse triangle counts as doubled within a micron of a near parallel one of another such face.
 
 use std::collections::HashMap;
 
@@ -26,12 +21,8 @@ pub fn new_faces(before: &Shape, after: &Shape) -> Vec<Shape> {
     kernel::subshapes(after, Kind::Face).into_iter().filter(|f| old.index_of(f) == 0).collect()
 }
 
-/// Anything that cannot be measured is not a fold.
-///
-/// The allowance grows with the blend: a fold runs along an edge, so what it
-/// doubles is at least about `size` squared. A fixed 0.01 mm2 refused a
-/// 1.13 mm rim round for 0.12 mm2 where it meets two notch rounds, a junction
-/// the reference CAD model has too.
+/// Anything that cannot be measured is not a fold. The allowance grows with `size` squared, since a fixed
+/// 0.01 mm2 refused a 1.13 mm rim round for 0.12 mm2 at a junction the reference CAD model has too.
 pub fn folds_over_itself(before: &Shape, after: &Shape, size: f64) -> bool {
     let fresh = crate::bench::phase("blend_new_faces", || new_faces(before, after));
     if fresh.is_empty() {

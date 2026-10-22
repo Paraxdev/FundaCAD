@@ -1,10 +1,5 @@
-// Frames rendered on the native side (src-tauri/frames), drawn into a canvas
-// under the viewport's overlays. Windows reads WebView2 shared buffers the app
-// posts, pulled with one tiny invoke per frame; elsewhere frames stream over a
-// loopback WebSocket. Pixels never cross Tauri IPC.
-//
-// Until the native tracer lands the frames are a moving test pattern, so the
-// tracing calls only restart the sample count.
+// Windows reads WebView2 shared buffers the app posts, pulled with one tiny invoke per frame; elsewhere
+// frames stream over a loopback WebSocket. Pixels never cross Tauri IPC.
 
 import { invoke } from "@tauri-apps/api/core";
 import type * as THREE from "three";
@@ -638,10 +633,8 @@ export class NativeTracer implements TracerBackend {
     return this.shownDenoised;
   }
 
-  /** At the cap the native side denoises on its own thread; this asks after
-   *  it and pulls the denoised frame once it is held. The frame prefetched
-   *  before it landed is still the raw one, so two are pulled. A new denoise
-   *  level at the cap starts no denoise until a frame is asked for. */
+  /** The native side denoises the cap on its own thread. The frame prefetched before that landed is still
+   *  raw, so two are pulled. A new denoise level at the cap starts nothing until a frame is asked for. */
   present(): boolean {
     if (this.settle === "done" || this.disposed) return false;
     this.polling ??= this.pollDenoise().finally(() => (this.polling = null));

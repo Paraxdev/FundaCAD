@@ -38,11 +38,9 @@ pub struct Environment {
     pub rgba: Vec<u16>,
 }
 
-/// Two header vec4s, then the marginal CDF over rows, then each row's
-/// conditional CDF, 4 floats per vec4. Header 0: width, height, marginal
-/// offset, conditional offset, in floats. Header 1: the mean radiance's
-/// luminance over the sphere, the first free vec4 (where a later table
-/// starts), the luminance irradiance on a face looking up +Z.
+/// Two header vec4s, then the marginal CDF over rows, then each row's conditional CDF, 4 floats per vec4. Header 0:
+/// width, height, marginal offset, conditional offset, in floats. Header 1: the mean radiance's luminance over the
+/// sphere, the first free vec4 (where a later table starts), the luminance irradiance on a face looking up +Z.
 pub const HEADER_VEC4S: usize = 2;
 
 pub fn f16_to_f32(h: u16) -> f32 {

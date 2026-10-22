@@ -1,17 +1,5 @@
-// The Dimension tool's pick layer and its pair matrix, the pure, DOM-free core
-// SketchMode drives (mirroring constraintTools.ts). Two facts shape it:
-//
-//  1. The dimension TYPE is decided by the pair, not by the first pick. A rim
-//     click is a diameter *or* the start of a centre-to-centre distance; which
-//     one it becomes is only known once the second pick (or the placement
-//     click) arrives. So picking accumulates DimTargets and `resolveDim` maps
-//     0-2 of them onto a DimPlan.
-//  2. Every degenerate pick returns a NAMED error with the user-facing message
-//     attached, so SketchMode can toast it. Nothing here fails silently.
-//
-// A rectangle edge is a first-class line operand (`"<rectId>~<k>"`, see
-// types.ts), which is what makes rect-edge lengths, rect-edge-to-circle
-// distances and rect-edge angles fall out of the same three pair rules.
+// The Dimension tool's DOM-free pick layer and pair matrix. The dimension TYPE is decided by the pair, not the first
+// pick, and every degenerate pick returns a NAMED error with its toast text. A rect edge is a line operand.
 
 import * as THREE from "three";
 import type { ResolvedEntity } from "./snap";
@@ -38,24 +26,16 @@ const v = (x: number, y: number) => new THREE.Vector2(x, y);
 
 export type Seg = { x1: number; y1: number; x2: number; y2: number };
 
-/** One dimension pick. `entity` is a whole-curve pick (a line body, a circle
- *  rim); `point` is a dimensionable reference point (dimRefPoints); `edge` is
- *  one side of a rectangle.
- *
- *  `rim` is Fusion's "Pick Circle/Arc Tangent": it arms ONE pick (right-click
- *  menu, before the pick) so a circle/arc contributes its EDGE rather than its
- *  centre to a pair distance. It is meaningless on a lone pick and on anything
- *  that isn't round, where it is simply ignored. */
+/** `entity` is a whole-curve pick, `point` a reference point (dimRefPoints), `edge` one side of a rectangle.
+ *  `rim` is Fusion's Pick Circle/Arc Tangent: it arms ONE pick so a round gives its edge, not its centre. */
 export type DimTarget =
   | { kind: "point"; e: ResolvedEntity; p: number; pos: V; rim?: true }
   | { kind: "entity"; e: ResolvedEntity; rim?: true }
   | { kind: "edge"; e: ResolvedEntity; k: number; a: V; b: V };
 
-/** How the pair matrix should resolve things the picks alone don't decide,
- *  the right-click overrides on the in-progress dimension. */
+/** The right-click overrides on the in-progress dimension, for what the picks alone do not decide. */
 export interface DimOptions {
-  /** force a lone circle/arc to radius or diameter (default: circle ⇒ diameter,
-   *  arc ⇒ radius, exactly like Fusion) */
+  /** force a lone round to radius or diameter (default circle diameter, arc radius, like Fusion) */
   roundPref?: "radius" | "diameter";
   /** an angle measures the outside of the wedge the cursor is in */
   reflex?: boolean;
@@ -73,9 +53,8 @@ export type DimErrorCode =
   | "need-second"
   | "projected-single";
 
-/** A pick combination that yields no dimension. `message` is the toast text
- *  ("" = deliberately silent); `keepPicks` marks the "not an error, just not
- *  finished" cases where the pick stays armed as a pair operand. */
+/** `message` is the toast text ("" = deliberately silent); `keepPicks` marks the not finished yet cases where
+ *  the pick stays armed as a pair operand. */
 export interface DimError {
   error: DimErrorCode;
   message: string;
@@ -84,36 +63,26 @@ export interface DimError {
 
 export interface DimPlan {
   kind: "length" | "distance" | "diameter" | "radius" | "angle";
-  /** the single DimInput field this plan reads its value from */
   field: string;
   fields: DimFieldDef[];
-  /** identity of the field set, SketchMode re-show()s the box only when this
-   *  changes (show() destroys whatever the user already typed) */
+  /** SketchMode re-show()s the box only when this changes, since show() destroys what the user typed */
   fieldKey: string;
-  /** live measured value, mm (degrees for an angle). `cursor` is the cursor's offset
-   *  from labelAnchor, it picks the mode of a dim that has several (aligned,
-   *  horizontal or vertical; the angle's wedge). */
+  /** mm, or degrees for an angle. `cursor` is the offset from labelAnchor and picks the mode of a dim that has
+   *  several (aligned, horizontal or vertical; the angle's wedge). */
   measure(cursor?: PlaceOffset): number;
-  /** the two ends of the dimension line, for the placement preview */
   anchors(): { a: V; b: V } | null;
-  /** the point `place` is measured FROM (null = this dim can't hold a placement) */
+  /** what `place` is measured FROM; null when this dim cannot hold a placement */
   labelAnchor(): V | null;
   /** `place` (the frozen label) picks the mode when given, else `cursor` does */
   make(value: number, place?: PlaceOffset, cursor?: PlaceOffset): SketchConstraint;
-  /** The two line operands this plan's value only MEANS something between when
-   *  they are held parallel (the parallel-lines distance: one p2lDistance pins
-   *  a single endpoint, so without this the solver satisfies the number by
-   *  rotating the pair and the typed gap is the gap nowhere else). SketchMode
-   *  adds the `parallel` constraint unless the pair is already held parallel. */
+  /** Lines whose distance only means something while held parallel: one p2lDistance pins one endpoint, so the solver
+   *  could rotate the pair instead. SketchMode adds `parallel` unless one already holds them. */
   parallelPair?: { l1: string; l2: string };
-  /** The two rounds a radial-gap (wall-thickness) value only MEANS something
-   *  between while their centres coincide, `difference` ties the two radii and
-   *  nothing else (see types.ts). SketchMode adds the `concentric` constraint
-   *  unless one already holds them together. */
+  /** Rounds whose radial gap only means something while concentric: `difference` ties the radii and nothing else
+   *  (see types.ts). SketchMode adds `concentric` unless one already holds them. */
   implyConcentric?: { c1: string; c2: string };
-  /** every operand is fixed reference geometry → create a driven (reference) dim */
+  /** every operand is fixed reference geometry, so the dim is driven */
   forceDriven?: boolean;
-  /** status/toast text once this plan is armed */
   hint: string;
 }
 
@@ -121,18 +90,14 @@ export type DimResolution = DimPlan | DimError;
 
 export const isDimError = (r: DimResolution): r is DimError => (r as DimError).error !== undefined;
 
-/** Two lines closer than this to parallel get a DISTANCE, not an angle. sin(0.1°):
- *  looser than Fusion (which calls 179.998° non-parallel) so "two parallel lines
- *  must give a distance" holds robustly; a deliberate 0.2° angle dim still resolves
- *  as an angle. Load-bearing, there is no right-click override in v1. */
+/** Closer to parallel than sin(0.1 deg) gives a DISTANCE, not an angle; looser than Fusion so parallel lines robustly
+ *  give a distance, while a deliberate 0.2 deg angle still resolves as one. There is no override in v1. */
 export const PARALLEL_EPS = Math.sin((0.1 * Math.PI) / 180);
 
 /** below this a measured distance/length/radius is "zero", nothing to drive */
 export const MEASURE_EPS = 1e-6;
 
-/** Screen-space bounds on a frozen label placement: the floor keeps a label from
- *  burying itself in the geometry it annotates, the ceiling from flying off-screen
- *  at extreme zoom. */
+/** Screen bounds on a frozen label: the floor keeps it out of the geometry, the ceiling on screen at extreme zoom. */
 export const MIN_PLACE_PX = 18;
 export const MAX_PLACE_PX = 600;
 
@@ -141,24 +106,21 @@ const CONCENTRIC_MSG =
   "These circles are concentric, centre distance is 0. Dimension each diameter, or " +
   "right-click → Pick Circle/Arc Tangent before each pick for the radial gap (wall thickness).";
 
-// --- small geometry helpers (kept local; all take plain {x,y}) ---------------
-
 const segLen = (s: Seg) => Math.hypot(s.x2 - s.x1, s.y2 - s.y1);
 
-/** unit direction of a segment, or null when degenerate */
 function dirOf(s: Seg): { x: number; y: number } | null {
   const len = segLen(s);
   if (len < MEASURE_EPS) return null;
   return { x: (s.x2 - s.x1) / len, y: (s.y2 - s.y1) / len };
 }
 
-/** perpendicular distance from a point to the INFINITE line through `s` */
+/** distance to the INFINITE line through `s` */
 function perpDist(p: { x: number; y: number }, s: Seg): number {
   const len = segLen(s) || 1;
   return Math.abs((p.x - s.x1) * (s.y2 - s.y1) - (p.y - s.y1) * (s.x2 - s.x1)) / len;
 }
 
-/** foot of the perpendicular from `p` onto the infinite line through `s` */
+/** foot of the perpendicular onto the INFINITE line through `s` */
 function footOf(p: { x: number; y: number }, s: Seg): V {
   const dx = s.x2 - s.x1,
     dy = s.y2 - s.y1;
@@ -169,8 +131,7 @@ function footOf(p: { x: number; y: number }, s: Seg): V {
 
 const mid = (a: V, b: V) => a.clone().add(b).multiplyScalar(0.5);
 
-/** the dimRefPoints index of an entity's CENTRE, or null if it has none.
- *  (circles expose their centre at 0, arcs at 2, native and projected alike) */
+/** circles expose their centre at dimRefPoints index 0, arcs at 2, native and projected alike */
 function centreIndex(e: ResolvedEntity): number | null {
   if (e.type === "circle") return 0;
   if (e.type === "arc") return 2;
@@ -181,38 +142,25 @@ function centreIndex(e: ResolvedEntity): number | null {
   return null;
 }
 
-/** stable identity of a pick, used to reject picking the same thing twice */
+/** rejects picking the same thing twice */
 export function targetKey(t: DimTarget): string {
   if (t.kind === "point") return `point:${t.e.id}:${t.p}`;
   if (t.kind === "edge") return `edge:${t.e.id}~${t.k}`;
   return `entity:${t.e.id}`;
 }
 
-/** targetKey plus the rim/tangent MODE. Deliberately separate: the mode must not
- *  make a re-pick of the same geometry look like a new operand (targetKey drives
- *  the "already picked ⇒ this click places" rule), but it DOES change which
- *  dimension the open value box belongs to. */
+/** targetKey plus the rim or tangent mode: the mode must not make a re-pick look like a new operand (targetKey
+ *  drives "already picked, so this click places"), but it does change which dimension the value box belongs to. */
 export function targetIdentity(t: DimTarget): string {
   return t.kind !== "edge" && t.rim ? `${targetKey(t)}~rim` : targetKey(t);
 }
 
-/** whether a pick can carry the rim/tangent mode at all (a circle or an arc) */
 export function isRoundTarget(t: DimTarget): boolean {
   return t.kind !== "edge" && asRound(t.e) !== null && centreIndex(t.e) !== null;
 }
 
-// --- picking -----------------------------------------------------------------
-
-/** THE dimension-tool pick. Reference points are preferred over curve bodies, EXCEPT that
- *  a circle/arc RIM is preferred over its own centre when the cursor is within tolerance of
- *  both (a small circle would otherwise always resolve to its centre and lose
- *  its diameter dim, and for a pair dim the outcome is identical, since an
- *  entity pick reduces to the centre anyway).
- *
- *  Deliberately has NO "clicked inside a circle ⇒ that circle's centre"
- *  fallback: it is what made a small circle drawn inside a big one resolve to
- *  the BIG circle. A rim click is now itself a valid distance operand, which
- *  serves the same need better. */
+/** Points beat curve bodies, except a round's rim beats its own centre when both are in tolerance, or a small circle
+ *  would lose its diameter. No "click inside a circle means its centre" fallback: it picked the BIG circle of two. */
 export function pickDimTarget(ents: ResolvedEntity[], p: V, tol: number): DimTarget | null {
   let best: { e: ResolvedEntity; p: number; pos: V } | null = null;
   let bestD = tol * tol;
@@ -260,9 +208,7 @@ export function pickDimTarget(ents: ResolvedEntity[], p: V, tol: number): DimTar
   return { kind: "entity", e };
 }
 
-/** Re-resolve a pick against a fresh entity list (the solver hands back NEW
- *  entity objects, so a held reference goes stale). Null = the picked geometry
- *  is gone and the pick must be dropped. */
+/** The solver hands back NEW entity objects, so a held pick goes stale. Null means the geometry is gone. */
 export function rebindTarget(t: DimTarget, ents: ResolvedEntity[]): DimTarget | null {
   const e = ents.find((x) => x.id === t.e.id);
   if (!e) return null;
@@ -279,14 +225,8 @@ export function rebindTarget(t: DimTarget, ents: ResolvedEntity[]): DimTarget | 
   return a && b ? { kind: "edge", e, k: t.k, a: a.clone(), b: b.clone() } : null;
 }
 
-/** Clamp a frozen label placement into the sane screen-space band. `mmPerPx <= 0`
- *  (no zoom context, e.g. unit tests) leaves it untouched.
- *
- *  Null = "don't freeze a placement at all": the offset is stored in sketch MM
- *  but the floor is a SCREEN distance, so forcing a sub-floor click up to the
- *  floor would, at a zoomed-out mm/px, turn a 1 px click into a 300 mm offset
- *  and throw the label off-screen at every other zoom. Below the floor the
- *  renderer's own pixel-aware offset (entityDims.dimOffset) is the right answer. */
+/** `mmPerPx <= 0` (no zoom context, tests) leaves it untouched. Null means no frozen placement: the offset is in mm
+ *  but the floor is in px, so forcing a tiny click up to it could throw the label off screen at other zooms. */
 export function clampPlace(dx: number, dy: number, mmPerPx: number): PlaceOffset | null {
   const r4 = (x: number) => Math.round(x * 1e4) / 1e4;
   if (!(mmPerPx > 0)) return { ox: r4(dx), oy: r4(dy) };
@@ -297,8 +237,6 @@ export function clampPlace(dx: number, dy: number, mmPerPx: number): PlaceOffset
   const s = Math.min(len, hi) / len;
   return { ox: r4(dx * s), oy: r4(dy * s) };
 }
-
-// --- operand reduction -------------------------------------------------------
 
 interface PointOp {
   kind: "point";
@@ -317,7 +255,6 @@ interface LineOp {
   seg: Seg;
   fixed: boolean;
 }
-/** a circle/arc contributing its RIM (tangent mode) rather than its centre */
 interface RoundOp {
   kind: "round";
   eid: string;
@@ -326,9 +263,7 @@ interface RoundOp {
 }
 type Operand = PointOp | LineOp | RoundOp;
 
-/** The "this kind of geometry has no dimension yet" message. Exported because
- *  SketchMode raises it for TEXT, which `pickEntity` can never return (text has
- *  no entitySegments, it is hit-tested through its glyph bounding box). */
+/** Exported because SketchMode raises it for TEXT, which `pickEntity` never returns (no entitySegments). */
 export const unsupportedMessage = (kind: string): string =>
   `A ${kind} can't be dimensioned yet, pick a line, arc, circle or rectangle edge.`;
 
@@ -342,16 +277,11 @@ const degenerate = (what: string): DimError => ({
   message: `That ${what} measures 0, nothing to drive.`,
 });
 
-/** A pick reduced to what the constraint schema can actually reference: a
- *  point (entity id + `p` index) or a line operand (possibly a rect edge).
- *  `p0` is the line's start point as a point operand, for a rect edge that is
- *  corner k, which is exactly what makes a parallel-lines distance work on
- *  rectangle sides. */
+/** A pick reduced to a point (id and `p` index) or a line operand. `p0` is the line's start point, corner k for a
+ *  rect edge, which makes a parallel-lines distance work on rectangle sides. */
 function reduce(t: DimTarget): Operand | DimError {
   const fixed = t.e.type === "projected";
-  // rim/tangent mode: the pick contributes its EDGE. Silently inert on anything
-  // that isn't a circle/arc, the arm stays live in SketchMode until a round
-  // consumes it, so a stray line pick must not be an error.
+  // Rim mode is silently inert on anything not round: the arm stays live until a round consumes it.
   if (t.kind !== "edge" && t.rim) {
     const rd = asRound(t.e);
     if (rd && centreIndex(t.e) !== null) {
@@ -360,12 +290,10 @@ function reduce(t: DimTarget): Operand | DimError {
     }
   }
   if (t.kind === "point") {
-    // a picked circle/arc CENTRE is a round operand, otherwise picking the
-    // shared centre of two concentric circles reports "coincident points"
-    // instead of the concentric message that names the real situation
+    // A picked round CENTRE is a round operand, or the shared centre of two concentric circles would report
+    // coincident points instead of the concentric message.
     const round = centreIndex(t.e) === t.p;
-    // carry the circle/arc itself: two concentric circles have NO meaningful
-    // centre distance, so the pair resolves to their radial gap instead
+    // Carry the round itself: two concentric circles have no centre distance, so the pair resolves to the radial gap.
     const rd0 = round ? asRound(t.e) : null;
     return { kind: "point", eid: t.e.id, p: t.p, pos: t.pos.clone(), round, fixed, ...(rd0 ? { roundOf: rd0 } : {}) };
   }
@@ -382,8 +310,7 @@ function reduce(t: DimTarget): Operand | DimError {
   const e = t.e;
   const ls = asLineSeg(e);
   if (ls) {
-    // asLineSeg hands back the entity itself for a native line, copy only the
-    // 4 coordinates so a Seg never carries an entity's id/type along
+    // asLineSeg returns the entity itself for a native line; copy the 4 coordinates so a Seg carries no id or type.
     const seg: Seg = { x1: ls.x1, y1: ls.y1, x2: ls.x2, y2: ls.y2 };
     return { kind: "line", opId: e.id, eid: e.id, p0: 0, seg, fixed };
   }
@@ -394,8 +321,6 @@ function reduce(t: DimTarget): Operand | DimError {
   }
   return unsupported(e);
 }
-
-// --- plan builders -----------------------------------------------------------
 
 function buildPlan(spec: {
   kind: DimPlan["kind"];
@@ -434,8 +359,7 @@ function buildPlan(spec: {
   };
 }
 
-/** the shared distance plan: point-to-point, centre-to-centre, and the
- *  edge-length special case all land here */
+/** point to point, centre to centre and the edge length special case all land here */
 function p2pPlan(a: PointOp, b: PointOp, forceDriven: boolean, hint: string): DimPlan {
   const anchor = mid(a.pos, b.pos);
   const modeOf = (off?: PlaceOffset) =>
@@ -469,9 +393,8 @@ function p2pPlan(a: PointOp, b: PointOp, forceDriven: boolean, hint: string): Di
 
 export type AxisMode = "aligned" | "h" | "v";
 
-/** Like mainstream CAD: a cursor beside the pair (outside its x range, inside its y
- *  range) measures vertically, one above or below measures horizontally, anywhere else
- *  along the pair. A mode that would read 0, or the same as aligned, stays aligned. */
+/** Beside the pair (outside its x range, inside its y range) measures vertically, above or below horizontally,
+ *  anywhere else aligned. A mode that would read 0, or the same as aligned, stays aligned. */
 export function axisModeAt(a: V, b: V, cursor: V): AxisMode {
   const outX = cursor.x < Math.min(a.x, b.x) || cursor.x > Math.max(a.x, b.x);
   const outY = cursor.y < Math.min(a.y, b.y) || cursor.y > Math.max(a.y, b.y);
@@ -500,7 +423,6 @@ function axisDim(mode: "h" | "v", a: PointOp, b: PointOp, value: number, place?:
   };
 }
 
-/** point (or a line's start point) to a line operand: the perpendicular distance */
 function p2lPlan(
   pt: PointOp,
   ln: LineOp,
@@ -531,18 +453,12 @@ function p2lPlan(
   });
 }
 
-// --- rim (edge-to-edge) plans ------------------------------------------------
-// Every measure and every annotation pair comes from entityDims, which is also
-// what the solve guard re-checks, one definition of "what the edge distance is".
+// Every rim measure and annotation comes from entityDims, which the solve guard re-checks too.
 
-/** Two rims. Concentric ⇒ the SIGNED radial gap (wall thickness) on planegcs
- *  `difference`, which is the only formulation that cannot solve an annulus
- *  inside-out. Otherwise the minimum edge-to-edge clearance on `c2cdistance`;
- *  overlapping rims have no clearance to drive and are refused. */
+/** Concentric gives the SIGNED radial gap on planegcs `difference`, the only form that cannot solve an annulus
+ *  inside out. Otherwise the minimum clearance on `c2cdistance`; overlapping rims are refused. */
 function roundRoundPlan(a: RoundOp, b: RoundOp, forceDriven: boolean, drivenHint: string): DimResolution {
-  // Two picks can name the same circle by different routes (its rim and its
-  // centre), without this they read as two coincident, equal rims and the
-  // radial-gap branch would report "the same circle" instead of the truth.
+  // Two picks can name one circle (its rim and its centre); without this the radial gap branch reports the wrong thing.
   if (a.eid === b.eid) {
     return { error: "same-entity", message: "That is one circle picked twice, pick a second entity to measure to." };
   }
@@ -580,9 +496,7 @@ function roundRoundPlan(a: RoundOp, b: RoundOp, forceDriven: boolean, drivenHint
   const gap = rimGap(a.c, b.c);
   const sum = a.c.r + b.c.r;
   const diff = Math.abs(a.c.r - b.c.r);
-  // classify from the GEOMETRY, not from rimGap's sign: its two branches meet
-  // with a jump at internal tangency, so the sign alone would call a pair of
-  // internally-tangent rims "overlapping"
+  // Classify from the geometry, not rimGap's sign: its branches jump at internal tangency.
   if (Math.abs(d - sum) < MEASURE_EPS || Math.abs(d - diff) < MEASURE_EPS) {
     return {
       error: "degenerate",
@@ -598,9 +512,7 @@ function roundRoundPlan(a: RoundOp, b: RoundOp, forceDriven: boolean, drivenHint
     };
   }
   const nested = d < diff;
-  // normalised by operand id, not pick order, so dimensioning the same pair the
-  // other way round REPLACES the dim (setDrivingDimension's dedup) instead of
-  // creating a second one
+  // Ordered by operand id, not pick order, so dimensioning the pair the other way round REPLACES the dim.
   const [o1, o2] = a.eid <= b.eid ? [a, b] : [b, a];
   const pts = rimGapPoints(a.c, b.c, v(1, 0));
   const id1 = o1.eid,
@@ -625,9 +537,8 @@ function roundRoundPlan(a: RoundOp, b: RoundOp, forceDriven: boolean, drivenHint
   });
 }
 
-/** A rim and a line operand: planegcs `c2ldistance` = |perp(centre, line)| - r.
- *  A line that CROSSES the circle has no edge-to-edge distance, refused rather
- *  than driven to a negative number the solver would satisfy by flipping. */
+/** planegcs `c2ldistance` = |perp(centre, line)| - r. A line crossing the circle is refused rather than driven
+ *  negative, which the solver would satisfy by flipping. */
 function roundLinePlan(rd: RoundOp, ln: LineOp, forceDriven: boolean, drivenHint: string): DimResolution {
   if (segLen(ln.seg) < MEASURE_EPS) return degenerate("line");
   const pts = lineRimPoints(ln.seg, rd.c);
@@ -674,9 +585,7 @@ function roundLinePlan(rd: RoundOp, ln: LineOp, forceDriven: boolean, drivenHint
   });
 }
 
-/** A point and a rim: planegcs `p2cdistance` = |dist(p, centre) - r|. Works from
- *  either side of the rim; the solve guard keeps the point on the side it was
- *  dimensioned from. */
+/** planegcs `p2cdistance` = |dist(p, centre) - r|, from either side; the solve guard keeps the point on its side. */
 function pointRoundPlan(pt: PointOp, rd: RoundOp, forceDriven: boolean, drivenHint: string): DimResolution {
   const d = Math.hypot(pt.pos.x - rd.c.x, pt.pos.y - rd.c.y);
   if (d < MEASURE_EPS) {
@@ -720,10 +629,7 @@ function pointRoundPlan(pt: PointOp, rd: RoundOp, forceDriven: boolean, drivenHi
   });
 }
 
-// --- resolution --------------------------------------------------------------
-
-/** Map 0-2 picks onto the dimension they describe. Pure: every input is in the
- *  targets, every failure is a named DimError carrying its own toast text. */
+/** Pure: every input is in the targets, every failure a named DimError with its own toast text. */
 export function resolveDim(picks: DimTarget[], opts: DimOptions = {}): DimResolution {
   const [t1, t2] = picks;
   if (!t1) return { error: "need-second", message: "", keepPicks: true };
@@ -752,8 +658,7 @@ function resolveSingle(t: DimTarget, opts: DimOptions): DimResolution {
   }
   // whole-entity pick
   if (e.type === "projected") {
-    // fixed reference geometry has no driving dim of its own, but IS a valid
-    // pair operand, stay armed
+    // fixed reference geometry has no driving dim of its own but is a valid pair operand, so stay armed
     return { error: "projected-single", keepPicks: true, message: PROJECTED_PAIR_MSG };
   }
   const ls = asLineSeg(e);
@@ -825,8 +730,7 @@ function resolveSingle(t: DimTarget, opts: DimOptions): DimResolution {
   return unsupported(e);
 }
 
-/** the radius plan, shared by an arc (its default) and a circle whose
- *  right-click override asked for a radius instead of a diameter */
+/** shared by an arc (its default) and a circle whose override asked for a radius */
 function roundValuePlan(eid: string, r: number, c: V, what: string): DimPlan {
   return buildPlan({
     kind: "radius",
@@ -848,11 +752,10 @@ function resolvePair(t1: DimTarget, t2: DimTarget, reflex = false): DimResolutio
   if ("error" in o2) return o2;
   const a = o1,
     b = o2;
-  // both operands fixed ⇒ nothing can move to satisfy a driving dim: make it a
-  // reference (driven) dim instead of an unsatisfiable one
+  // Both operands fixed means nothing can move, so make a driven dim instead of an unsatisfiable one.
   const forceDriven = a.fixed && b.fixed;
   const drivenHint = forceDriven ? " · reference geometry, created as a driven dimension" : "";
-  // --- rim (tangent) rows: at least one operand contributes its EDGE ---------
+  // rim (tangent) rows: at least one operand contributes its edge
   if (a.kind === "round" || b.kind === "round") {
     const rd = a.kind === "round" ? a : (b as RoundOp);
     const other = a.kind === "round" ? b : a;
@@ -871,12 +774,7 @@ function resolvePair(t1: DimTarget, t2: DimTarget, reflex = false): DimResolutio
     if (a.eid === b.eid && a.p === b.p) return { error: "same-entity", message: "" };
     const d = a.pos.distanceTo(b.pos);
     if (d < MEASURE_EPS) {
-      // Two CONCENTRIC circles/arcs: their centre distance is 0 and always will
-      // be, so there is nothing to disambiguate, the only dimension that means
-      // anything here is the radial gap (wall thickness). Resolve straight to
-      // it rather than making the user arm tangent mode for the one possible
-      // answer. Tangent mode still matters for circles that are NOT concentric,
-      // where centre-to-centre and rim-to-rim are both meaningful.
+      // Two CONCENTRIC rounds have a centre distance of 0 forever, so the radial gap is the only meaningful dimension.
       if (a.roundOf && b.roundOf && a.eid !== b.eid) {
         return roundRoundPlan(
           { kind: "round", eid: a.eid, c: a.roundOf, fixed: a.fixed },
@@ -951,20 +849,9 @@ function lineLine(l1: LineOp, l2: LineOp, forceDriven: boolean, drivenHint: stri
       },
     });
   }
-  // Parallel: an angle dim here would read "0°" and drive nothing. Measure the
-  // perpendicular distance instead, anchored at one line's OWN start point.
-  //
-  // Which line supplies that point is normalised by operand id, NOT by pick
-  // order: setDrivingDimension's p2lDistance dedup matches on (e, p, line), so
-  // a cursor- or order-dependent choice would let the SAME pair dimensioned the
-  // other way round create a SECOND constraint instead of replacing the first.
-  //
-  // One p2lDistance is one equation, it pins one endpoint's distance and
-  // leaves the pair free to rotate, so the typed gap would be the real gap
-  // nowhere else. `parallelPair` is the second equation ("these two are
-  // parallel"), which is exactly what "distance between two parallel lines"
-  // means. Same-entity edges (two sides of one rectangle) are already held
-  // parallel by the rectangle itself, so they don't ask for it.
+  // Parallel lines get the perpendicular distance, not a 0 deg angle. The anchor line is chosen by operand id so the
+  // p2lDistance dedup replaces a dim made the other way round; `parallelPair` stops the pair rotating to meet it.
+  // Two sides of one rectangle are already held parallel.
   const [pl, ll] = l1.opId <= l2.opId ? [l1, l2] : [l2, l1];
   const pt: PointOp = {
     kind: "point",

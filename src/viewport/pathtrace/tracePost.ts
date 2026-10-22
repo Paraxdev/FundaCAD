@@ -1,6 +1,4 @@
-// Bloom on the traced image, the Realtime composer's UnrealBloomPass rebuilt for
-// a tracer's linear HDR frame. Any backend that can hand over its frame as a
-// texture draws it through TraceBloom.
+// The Realtime composer's UnrealBloomPass rebuilt for a tracer's linear HDR frame.
 
 import type * as THREE from "three";
 import { bloomSettings, bloomWanted } from "../../ui/renderPrefs";
@@ -121,9 +119,8 @@ export class TraceBloom {
     this.last = { from: tex, to: tex, mix: 0 };
   }
 
-  /** Draws the crossfade of `from` to `to` on the canvas, with bloom when on.
-   *  Tone mapping and the output encoding come after the bloom, from the
-   *  renderer's output transform, exactly as for the plain blit. */
+  /** Tone mapping and the output encoding come after the bloom, from the renderer's output transform,
+   *  exactly as for the plain blit. */
   draw(from: THREE.Texture, to: THREE.Texture, mix: number) {
     this.last = { from, to, mix };
     const r = this.deps.renderer;

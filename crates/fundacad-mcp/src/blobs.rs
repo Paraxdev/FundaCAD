@@ -1,10 +1,5 @@
-//! Imported geometry moved through the engine's socket rather than its disk.
-//!
-//! An `import` feature's `geom` is a hash into the blob store of the engine
-//! that read the file, and that store is wherever THAT process resolved it.
-//! This process may resolve a different one (another APPDATA, a sandbox, an
-//! engine started by someone else), so saving and opening ask the engine for
-//! the bytes, or hand them to it, instead of trusting a shared directory.
+//! Imported geometry moves through the engine's socket, not its disk: the blob store is wherever the
+//! engine process resolved it, and this process may resolve another (another APPDATA, a sandbox).
 
 use base64::Engine as _;
 use serde_json::{json, Value};
@@ -24,8 +19,7 @@ fn reply_result(reply: &Value, op: &str) -> Result<Value, String> {
     Err(format!("{op}: {why}"))
 }
 
-/// What a failed blob transfer means for the person reading the reply. An
-/// engine that does not know the op is an older build than this server.
+/// An engine that does not know the op is an older build than this server.
 pub fn engine_problem(e: &str) -> String {
     if e.contains("unknown op") {
         format!(
@@ -38,9 +32,8 @@ pub fn engine_problem(e: &str) -> String {
     }
 }
 
-/// The blob's bytes from the engine, None when it has no such blob. Checked
-/// against the hash before it is trusted, so a torn or stale file on the
-/// engine's side is never written into a document.
+/// None when the engine has no such blob. Checked against the hash, so a torn or stale
+/// file on the engine's side is never written into a document.
 pub async fn fetch(link: &EngineLink, hash: &str) -> Result<Option<Vec<u8>>, String> {
     let b64 = base64::engine::general_purpose::STANDARD;
     let mut data: Vec<u8> = Vec::new();
@@ -71,8 +64,7 @@ pub async fn fetch(link: &EngineLink, hash: &str) -> Result<Option<Vec<u8>>, Str
     Ok(Some(data))
 }
 
-/// Make sure the engine holds every one of `blobs`, sending only the ones it
-/// says it lacks.
+/// Sends only the blobs the engine says it lacks.
 pub async fn push(link: &EngineLink, blobs: &[(String, Vec<u8>)]) -> Result<usize, String> {
     if blobs.is_empty() {
         return Ok(0);

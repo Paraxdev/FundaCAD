@@ -1,6 +1,4 @@
-// Node bodies: rounded, organic solids from sized nodes. The feature type, its
-// rows, its tool and its geometry (geometry-rs/) all live here; the app only
-// carries a node body it cannot build when this plugin is gone.
+// Node bodies: the feature type, its rows, its tool and its geometry (geometry-rs/) all live here.
 
 import { contribute } from "fundacad";
 import type { Engine } from "fundacad";

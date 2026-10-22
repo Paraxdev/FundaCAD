@@ -1,19 +1,6 @@
-//! One HTTP request to a device on the local network, for a plugin that talks
-//! to one. The native half of the `network.local` grant.
-//!
-//! Rust rather than fetch() because the window's `connect-src` names the
-//! loopback engine and nothing else, and widening it would open the network to
-//! every script in the window.
-//!
-//! What this can reach is narrower than "the network" on purpose. The host is
-//! resolved here, every address it resolves to must be private or link-local,
-//! and the request is pinned to those addresses, so a name that resolves to a
-//! public address, or re-resolves to one between the check and the connect,
-//! cannot turn this into a general web client. Redirects are not followed for
-//! the same reason. Loopback is refused, which keeps the geometry engine and
-//! every other service on this machine out of reach.
-//!
-//! What the bytes mean is the plugin's business. Nothing here knows a protocol.
+//! The native half of the `network.local` grant: one HTTP request to a local device, in Rust because widening the
+//! window's `connect-src` would open the network to every script. Every resolved address must be private or link local
+//! and the request is pinned to them, with no redirects and no loopback, so this never becomes a general web client.
 
 use base64::Engine;
 use serde::{Deserialize, Serialize};

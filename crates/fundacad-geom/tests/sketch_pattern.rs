@@ -68,9 +68,8 @@ fn assert_close(got: (f64, [f64; 6]), want: (f64, [f64; 6]), what: &str) {
     }
 }
 
-/// `entities` patterned twice, once in a row of two 100 apart, once four
-/// times round (200, 0), each copy the same shape as the original moved or
-/// turned with it.
+/// `entities` patterned in a row of two 100 apart and four times round (200, 0), each copy the original's shape
+/// moved or turned with it.
 fn keeps_its_shape(entities: Value, what: &str) {
     let sources: Vec<Value> = entities.as_array().expect("a list").iter().map(|e| e["id"].clone()).collect();
     let one = extruded(&entities, None);

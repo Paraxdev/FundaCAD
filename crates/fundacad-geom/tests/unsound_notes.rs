@@ -1,7 +1,5 @@
-//! What a build says of a solid body that is not closed and facing outward:
-//! a note on the feature that brought it in, once, worded for a person. No
-//! volume check sees such a body, and every cut, join and measurement after
-//! it can come out wrong without failing.
+//! A solid body that is not closed and facing outward gets one note, worded for a person, on the feature that brought
+//! it in: no volume check sees it, and every later cut, join and measurement can come out wrong without failing.
 
 mod unsound;
 

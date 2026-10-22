@@ -1,10 +1,5 @@
-// The node body feature as the document stores it, and the rows the app draws
-// for it. Pure, so it is tested without a window.
-//
-// A node is a point with three radii and a turn; a chain is an ordered list of
-// node ids. Every number is a Num, so any of them may carry a parameter. The
-// rows address a node by its id (`nodes.n3.sx`), never by its place in the
-// list, so a binding follows the node through a reorder or a delete.
+// Rows address a node by its id (`nodes.n3.sx`), never its place in the list, so a binding follows the node through
+// a reorder or a delete. Pure, so it is tested without a window.
 
 import type { ChoiceField, FieldKind, TargetField } from "fundacad";
 

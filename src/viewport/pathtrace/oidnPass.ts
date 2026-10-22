@@ -1,6 +1,5 @@
-// One Open Image Denoise pass (oidn-web through the tracer's OIDNDenoiser) on
-// the tracer's own device, driven by FinalDenoise instead of by the tracer, so
-// the app decides when it starts and when its result is shown.
+// Driven by FinalDenoise instead of by the tracer, so the app decides when the pass starts and when
+// its result is shown.
 
 import type * as THREE from "three";
 import type { DenoisePass } from "./denoise";

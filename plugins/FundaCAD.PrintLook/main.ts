@@ -12,7 +12,6 @@ const ICON =
 const current = () => reliefFrom(settings.all() as unknown as Partial<LookValues>);
 const toggle = () => void settings.set("layerLines", !settings.get("layerLines"));
 
-/** Start the capability. Returns the teardown that stops it. */
 export async function activate(_e: Engine): Promise<() => void> {
   const off = contribute(PLUGIN_ID, {
     materialPresets: () => [{ group: FILAMENT_GROUP, materials: FILAMENT_PRESETS.map((m) => ({ ...m })) }],
@@ -33,10 +32,8 @@ export async function activate(_e: Engine): Promise<() => void> {
     icons: { layerLines: ICON },
   });
 
-  // The viewport re-asks `relief` when the contributions change and a setting
-  // is not a contribution, so an empty one is added and taken away again. The
-  // real entry stays where it is, which keeps the dock's slider mounted while
-  // it is being dragged.
+  // The viewport re-asks `relief` only when the contributions change, so an empty one is added and taken away. The
+  // real entry stays where it is, which keeps the dock's slider mounted while it is dragged.
   const stop = settings.onChange(() => contribute(PLUGIN_ID, {})());
 
   return () => {

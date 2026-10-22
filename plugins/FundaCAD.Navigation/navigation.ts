@@ -1,5 +1,4 @@
-// The presets, the radial menu's items and the moved keys, and how they are
-// kept. Pure apart from storage, so the tests can read every rule here.
+// Pure apart from storage, so the tests can read every rule here.
 
 import { readSetting, type CtxItem, type PointerBinding, type SettingsSchema, type ShortcutOverride } from "fundacad";
 

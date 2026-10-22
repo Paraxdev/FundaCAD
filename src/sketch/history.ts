@@ -1,20 +1,10 @@
-// In-sketch undo/redo history: the pure state machine, kept out of SketchMode so
-// it can be tested headlessly (SketchMode itself needs a viewport and a WebGL
-// overlay). SketchMode owns one of these and feeds it snapshots.
-//
-// The design problem this solves: a sketch has ~59 sites that mutate its
-// geometry, and hand-listing them is how an undo feature ends up silently
-// missing one. Instead of instrumenting each, SketchMode diffs against a rolling
-// `preEdit` snapshot at the single choke point every user mutation passes
-// through (requestSolve). Anything that must NOT be undoable, the solver's own
-// write-back, parameter sync, projection refresh, either never reaches that
-// point or re-arms `preEdit` first so it compares equal.
+// In-sketch undo/redo as a pure, headlessly testable state machine. SketchMode diffs against a rolling `preEdit`
+// snapshot at requestSolve, the one choke point every user edit passes, instead of instrumenting ~59 mutation sites.
 
 import type { SketchConstraint, SketchPattern } from "../types";
 import type { ResolvedEntity } from "./snap";
 
-/** The editable state one undo step restores, the whole of what a sketch edit
- *  can change. */
+/** The whole of what a sketch edit can change, which one undo step restores. */
 export type SketchSnapshot = {
   entities: ResolvedEntity[];
   constraints: SketchConstraint[];
@@ -35,7 +25,6 @@ export class SketchHistory {
 
   constructor(private readonly cap = 100) {}
 
-  /** Start (or restart) a session with `now` as the baseline. */
   reset(now?: SketchSnapshot) {
     this.undoStack = [];
     this.redoStack = [];
@@ -48,7 +37,6 @@ export class SketchHistory {
     this.preEdit = cloneSnapshot(now);
   }
 
-  /** Bank one step if `now` differs from the baseline. Returns whether it did. */
   bankIfChanged(now: SketchSnapshot): boolean {
     if (!this.preEdit || same(now, this.preEdit)) return false;
     this.push(this.preEdit);
@@ -56,9 +44,7 @@ export class SketchHistory {
     return true;
   }
 
-  /** Bank an explicit before-state, for a gesture that mutated continuously and
-   *  should collapse to ONE step (a drag), whose frames never reached
-   *  bankIfChanged. No-ops when nothing actually changed. */
+  /** For a continuous gesture (a drag) that collapses to ONE step; its frames never reached bankIfChanged. */
   bankBefore(before: SketchSnapshot, now: SketchSnapshot): boolean {
     if (same(before, now)) return false;
     this.push(cloneSnapshot(before));
@@ -72,8 +58,7 @@ export class SketchHistory {
     this.redoStack.length = 0;
   }
 
-  /** The state to restore, or null when there is nothing to undo. Re-arms the
-   *  baseline to the restored state so the undo itself is never banked. */
+  /** Re-arms the baseline to the restored state so the undo itself is never banked. */
   undo(now: SketchSnapshot): SketchSnapshot | null {
     const prev = this.undoStack.pop();
     if (!prev) return null;
@@ -96,7 +81,6 @@ export class SketchHistory {
   get canRedo(): boolean {
     return this.redoStack.length > 0;
   }
-  /** depth, for tests and diagnostics */
   get depth(): number {
     return this.undoStack.length;
   }

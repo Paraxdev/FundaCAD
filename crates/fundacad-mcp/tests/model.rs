@@ -1,9 +1,4 @@
-//! The document an agent edits: ids, the timeline, and the parameter table.
-//! A port of the Python MCP server's `test_model.py`.
-//!
-//! The property worth the most here is that a REFUSED edit changes nothing. An
-//! agent works by trying things, and a tool that half-applies a bad edit leaves
-//! it debugging a document it did not write.
+//! The document model. Above all, a REFUSED edit changes nothing, or an agent debugs a document it did not write.
 
 use fundacad_mcp::model as m;
 use serde_json::{json, Value};
@@ -19,8 +14,6 @@ fn doc_with(features: &[Value]) -> m::Doc {
 fn params(d: &m::Doc) -> Value {
     d.get("parameters").cloned().unwrap_or(Value::Null)
 }
-
-// --- the timeline ------------------------------------------------------------
 
 #[test]
 fn ids_are_assigned_by_type_and_are_unique() {
@@ -201,8 +194,6 @@ fn a_mirror_that_names_bodies_writes_its_plane_as_a_name_object() {
     assert_eq!(f(&d, "m1")["plane"], json!({"name": "XY"}));
 }
 
-// --- parameters --------------------------------------------------------------
-
 #[test]
 fn a_parameter_table_evaluates_in_dependency_order() {
     let mut d = m::new_document();
@@ -270,9 +261,8 @@ fn a_parameter_still_in_use_cannot_be_removed() {
 
 #[test]
 fn redefining_a_parameter_keeps_how_the_panel_shows_it() {
-    // The app's parameters panel stores a control, a group and a hidden flag on
-    // the definition. An agent changing the VALUE must not strip them, the
-    // slider would quietly turn back into a text box.
+    // The app's parameters panel stores a control, a group and a hidden flag on the definition;
+    // changing the VALUE must not strip them, or the slider turns back into a text box.
     let mut d = m::new_document();
     m::set_parameter(&mut d, "rings", &json!(22), "count", None).unwrap();
     {
@@ -329,9 +319,8 @@ fn field(d: &m::Doc, fid: &str, key: &str) -> Value {
 
 #[test]
 fn a_joint_the_app_bound_to_a_parameter_moves_when_the_parameter_does() {
-    // The app turns `angle: "press"` into a number plus a model parameter that
-    // targets the field, so after it has saved the document the field only
-    // moves when the parameter's value is written back into it.
+    // The app turns `angle: "press"` into a number plus a model parameter targeting the field, so once saved
+    // the field only moves when the parameter's value is written back into it.
     let mut d = doc_with(&[
         json!({"id": "a", "type": "box", "length": 20, "width": 20, "height": 20}),
         json!({"id": "b", "type": "box", "length": 6, "width": 6, "height": 6}),
@@ -482,8 +471,6 @@ fn a_bad_expression_for_a_bound_field_is_refused_and_changes_nothing() {
     assert_eq!(d, before);
 }
 
-// --- validation --------------------------------------------------------------
-
 #[test]
 fn a_reference_to_a_missing_sketch_is_reported() {
     let mut d = doc_with(&[json!({"id": "ex1", "type": "extrude", "sketch": "nope",
@@ -562,10 +549,8 @@ fn a_plugin_features_text_options_are_not_mistaken_for_parameters() {
 
 #[test]
 fn a_joints_body_id_and_mode_are_not_mistaken_for_parameters() {
-    // `moving` names a body and `mode` is an enum, neither is a numeric field,
-    // so a healthy joint reports nothing. The control: `offset` IS numeric, so
-    // a string there that names no parameter still flags, the rule is not
-    // switched off for the whole feature.
+    // `moving` and `mode` are not numeric, so a healthy joint reports nothing; the control is that a string
+    // in the numeric `offset` naming no parameter still flags.
     fn face(p: [f64; 3], body: &str) -> Value {
         json!({"kind": "face", "by": "nearest", "point": p, "body": body})
     }
@@ -593,8 +578,7 @@ fn a_joints_body_id_and_mode_are_not_mistaken_for_parameters() {
 
 #[test]
 fn text_fields_are_not_mistaken_for_parameters() {
-    // A STEP import carries its colour and a G2 fillet its continuity as text;
-    // both built fine and were reported as problems that WILL fail a build.
+    // A STEP import's colour and a G2 fillet's continuity are text, and must not be reported as problems.
     let mut d = m::new_document();
     m::add_feature(
         &mut d,
@@ -759,8 +743,7 @@ fn a_revolve_about_a_name_that_is_not_an_axis_is_reported() {
 
 #[test]
 fn a_press_pull_takes_the_targets_its_schema_documents() {
-    // The build combines a non-auto press-pull's prism with `targets`; the
-    // feature used to have no such field, so feature_add refused it.
+    // The build combines a non-auto press-pull's prism with `targets`, so feature_add must accept it.
     let face = json!({"kind": "face", "by": "normal", "dir": [0, 0, 1], "body": "body1"});
     let d = doc_with(&[
         json!({"id": "bx1", "type": "box", "length": 20, "width": 20, "height": 20}),
@@ -801,11 +784,8 @@ fn press_pull_and_offset_face_take_the_follow_tangent_their_schema_documents() {
 
 #[test]
 fn a_document_set_over_this_one_forgets_the_records_of_a_feature_that_became_a_join() {
-    // doc_get, edit, doc_set is an edit too. A revolve built as a new body was
-    // recorded as body3; made a join into body1 by editing the document, it has
-    // to merge as body1, so its old record must go. Features the old document
-    // does not have keep theirs: a file numbered before the map existed may
-    // rely on a join's fresh id.
+    // doc_get, edit, doc_set is an edit too: a revolve recorded as body3 and made a join into body1 must merge as
+    // body1. Features the old document lacks keep their record, since an older file may rely on a fresh join id.
     let mut before = m::new_document();
     before.insert(
         "features".into(),

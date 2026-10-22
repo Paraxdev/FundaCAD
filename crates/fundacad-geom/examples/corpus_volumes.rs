@@ -1,11 +1,5 @@
-//! Kernel volume, face count and solid count per body for one corpus document.
-//!
-//!   cargo run -p fundacad-geom --example corpus_volumes -- <corpus.json> <name>
-//!
-//! diff_engines.py compares the MESH volume, which is the same number a body of
-//! two glued solids and a body of one merged solid report. The solid count is
-//! what tells those two apart, so this is the first thing to run when the
-//! harness says a volume is wrong and the picture looks nearly right.
+//! Kernel volume, face and solid count per body for one corpus document. diff_engines.py compares only mesh
+//! volume, which cannot tell two glued solids from one merged solid, so run this when a volume looks wrong.
 
 use fundacad_core::CadDocument;
 use fundacad_geom::builder::{self, NoWatch};

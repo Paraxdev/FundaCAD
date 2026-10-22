@@ -1,7 +1,5 @@
-// One mirror mesh per traced body, kept across edits and across the tracer's
-// idle disposal. The key changes exactly when the body's triangles do, so an
-// edit to one body builds one SAH tree, off the main thread, while every other
-// body keeps the tree it has.
+// One mirror mesh per traced body, kept across edits and idle disposal. The key changes exactly when the
+// body's triangles do, so an edit builds one SAH tree off the main thread and every other body keeps its own.
 
 import * as THREE from "three";
 import { MeshBVH, SAH } from "three-mesh-bvh";
@@ -122,7 +120,6 @@ export class BlasCache {
     return { meshes: pending ? null : meshes, key: keys.join("|") };
   }
 
-  /** Copies each body's placement onto its mirror. */
   syncTransforms() {
     for (const e of this.entries.values()) {
       e.src.updateWorldMatrix(true, false);

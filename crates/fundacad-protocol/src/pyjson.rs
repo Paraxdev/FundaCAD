@@ -1,10 +1,5 @@
-//! JSON text exactly as Python's `json.dumps` writes it with default arguments.
-//!
-//! Replaces the implicit dependency of the Python engine's `wire.py` on the stdlib encoder.
-//! The defaults differ from serde_json in three visible ways: `", "` and `": "`
-//! separators, `ensure_ascii` (every non-ASCII character and DEL as `\uXXXX`),
-//! and floats in `repr` form (`1e-05`, `1e+16`, `1.0`). Matching them is what
-//! lets a Rust reply be compared byte for byte against the Python one.
+//! JSON text exactly as Python's default `json.dumps` writes it, so a reply compares byte for byte with the Python one:
+//! `", "` and `": "` separators, `ensure_ascii` (non-ASCII and DEL as `\uXXXX`) and `repr` floats (`1e-05`, `1.0`).
 
 use serde_json::{Map, Number, Value};
 use std::fmt::Write as _;
@@ -59,9 +54,8 @@ fn write_number(out: &mut String, n: &Number) {
     }
 }
 
-/// `float.__repr__`: the shortest digits that round-trip, in positional form
-/// when the decimal exponent is in [-4, 16), otherwise scientific with a signed,
-/// at least two digit exponent.
+/// `float.__repr__`: the shortest round-trip digits, positional when the decimal exponent is in [-4, 16), else
+/// scientific with a signed exponent of at least two digits.
 pub fn write_float(out: &mut String, f: f64) {
     if f.is_nan() {
         out.push_str("NaN");
@@ -71,10 +65,8 @@ pub fn write_float(out: &mut String, f: f64) {
         out.push_str(if f > 0.0 { "Infinity" } else { "-Infinity" });
         return;
     }
-    // Rust's `{:e}` gives the shortest round-trip digit COUNT, but when two
-    // candidates of that length are equally close it rounds the tie up where
-    // Python rounds it to even (-137.79507446289062, an f32 widened). Exact
-    // formatting at that precision rounds ties to even, so it is redone that way.
+    // `{:e}` has the shortest round-trip digit count but rounds a tie up where Python rounds it to even
+    // (-137.79507446289062, an f32 widened), so the digits are redone with exact formatting at that precision.
     let shortest = format!("{f:e}");
     let n_digits = shortest.split('e').next().map_or(1, |m| m.bytes().filter(u8::is_ascii_digit).count());
     let sci = format!("{f:.prec$e}", prec = n_digits.saturating_sub(1));

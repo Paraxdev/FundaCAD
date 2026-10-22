@@ -1,16 +1,6 @@
-// Bringing one FundaCAD document into another.
-//
-// What arrives is the source's GEOMETRY, as an import body, not its features. A
-// feature copied across keeps its selectors, and those name bodies by the order
-// the SOURCE built them in ("body1"), which in the host is a different body. The
-// build numbers bodies with one counter over the whole history, so no remapping
-// done here could know what the host will call them. Geometry has no such
-// references: the source is built on its own, written out, and read back in.
-//
-// Two ways in:
-//  - append: the geometry is copied in once and is the host's from then on;
-//  - link: the same, plus where it came from and a fingerprint of the source, so
-//    the body can be refreshed when that file changes.
+// Bringing one FundaCAD document into another as geometry, not features: the source's selectors name bodies by
+// its own build order, which the host numbers differently. Append copies once; link also keeps the source path
+// and a fingerprint so the body can refresh when that file changes.
 
 import type { DocumentStore } from "../document/store";
 import { prefixFeatures } from "../document/store";

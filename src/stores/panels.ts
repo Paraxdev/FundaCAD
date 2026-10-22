@@ -22,18 +22,14 @@ export interface PanelRow {
 export interface PropertiesData {
   title: string;
   rows: PanelRow[];
-  /** Unrounded mm/mm2/mm3 values, for the filament estimate to compute from
-   *  live as the user changes material/infill, without a unit-display round
-   *  trip through the formatted rows above. Null when a measured body is not a
-   *  sound solid, it has no volume to estimate from. */
+  /** Unrounded, so the filament estimate recomputes live without a display round trip. Null when a measured body is not
+   *  a sound solid, having no volume to estimate from. */
   raw: { volumeMm3: number; areaMm2: number } | null;
   /** Each measured body that is not a sound solid, its name and the engine's reason. */
   faults: string[];
 }
 
-/** One overlapping pair, keeping the body ids so clicking the row can select
- *  them. Volume is pre-formatted in display units by the facade, unit
- *  conversion stays next to the geometry that produced the number. */
+/** Keeps the body ids so a row click can select them. Volume is pre-formatted in display units by the facade. */
 export interface ClashRow extends PanelRow {
   a: string;
   b: string;
@@ -65,8 +61,7 @@ export interface StressDeform {
   animate: boolean;
 }
 
-/** A point pinned on the coloured body: where it is on the result's surface
- *  (a triangle and barycentric weights, so it rides the deformed shape) and the
+/** A point pinned on the coloured body, as a triangle and barycentric weights so it rides the deformed shape, and the
  *  readout taken there. */
 export interface StressProbePin {
   id: number;
@@ -85,9 +80,8 @@ export interface StressData {
   result: StressResultView | null;
   /** Why the last Run did not produce a result, cleared by the next. */
   error: string | null;
-  /** The result's colours: on the body in the view, taken off so the body's
-   *  faces can be picked again (the rows stay), or none to show, before a Run
-   *  or once the model has changed under them. */
+  /** "hidden" takes the colours off so faces can be picked again while the rows stay; "none" before a Run or after the
+   *  model changed under them. */
   colours: "shown" | "hidden" | "none";
   /** Null until a result with displacements arrives. */
   deform: StressDeform | null;
@@ -98,9 +92,8 @@ export interface StressData {
   placing: StressTarget | null;
 }
 
-/** The floating "measure-panel" popups. Each is independent, Properties and
- *  the Overhang settings can legitimately be on screen together, which is why
- *  this is separate fields rather than one `activePanel` discriminant. */
+/** The floating measure-panel popups. Independent fields, since Properties and Overhang settings can be open
+ *  together. */
 export const usePanelsStore = defineStore("panels", () => {
   const properties = ref<PropertiesData | null>(null);
   const interference = ref<InterferenceData | null>(null);
@@ -241,8 +234,7 @@ export const usePanelsStore = defineStore("panels", () => {
     stress.value.error = outcome.error ?? null;
   }
 
-  /** Drop the result and everything drawn from it: the deformed shape and
-   *  the probes. */
+  /** Drop the result and everything drawn from it: the deformed shape and the probes. */
   function clearStressResult() {
     if (!stress.value) return;
     stress.value.result = null;

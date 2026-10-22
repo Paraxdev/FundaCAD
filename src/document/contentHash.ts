@@ -1,5 +1,4 @@
-/** A fingerprint of a string: two independent 32-bit mixes and the length. It
- *  tells versions and linked files apart; it is not a security digest. */
+// Two independent 32-bit mixes and the length: tells versions apart, not a security digest.
 export function contentHash(text: string): string {
   let a = 0x811c9dc5;
   let b = 0x01000193;

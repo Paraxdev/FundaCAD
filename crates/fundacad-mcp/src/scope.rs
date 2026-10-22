@@ -1,18 +1,8 @@
-//! Which files the tools may read and write.
-//!
-//! A path is judged after it is made absolute, `..` folded and every existing
-//! part resolved through symlinks. The app's own folders (temp, recovery, the
-//! blob dir) are reached in full, since tempfile names its folders `.tmpXXXX`.
-//! Past those, by default any path is reached unless its folder is home
-//! itself, a drive root or a folder holding home, or a part of it is hidden
-//! (a dot name such as `.git` or `.ssh`). In strict mode, chosen by
-//! `--allow-path`, `FUNDACAD_MCP_ALLOW_PATHS` or `FUNDACAD_MCP_STRICT=1`, only
-//! the given folders and the open document's are reached, hidden names below
-//! them excepted. Home and drive roots are never a given folder.
-//!
-//! The check happens at the tool's entry, so a folder swapped for a symlink
-//! between the check and the write, or a hard link inside an allowed folder,
-//! is not caught.
+//! Which files the tools may touch, judged on the absolute path with `..` folded and symlinks resolved.
+//! The app's folders are reached in full, since tempfile names its folders `.tmpXXXX`. By default so is any
+//! path but home, a drive root, a folder holding home or a hidden part; strict mode (`--allow-path`,
+//! FUNDACAD_MCP_ALLOW_PATHS, FUNDACAD_MCP_STRICT=1) keeps to the given folders and the document's.
+//! Checked at the tool's entry, so a symlink swapped in before the write, or a hard link, is not caught.
 
 use std::ffi::OsString;
 use std::path::{Component, Path, PathBuf};
@@ -41,8 +31,7 @@ pub struct PathScope {
 pub const ALLOW_ENV: &str = "FUNDACAD_MCP_ALLOW_PATHS";
 
 impl PathScope {
-    /// The app's folders, `--allow-path` from `args` and the env list. The
-    /// second half is one line per folder that was refused, for the log.
+    /// The second half is one line per refused folder, for the log.
     pub fn for_server(args: impl IntoIterator<Item = OsString>) -> (PathScope, Vec<String>) {
         let app =
             vec![std::env::temp_dir(), crate::app_session::app_data_dir().join("recovery"), crate::docfile::blob_dir()];
@@ -108,9 +97,7 @@ impl PathScope {
         self.roots.iter().map(|r| r.path.clone()).collect()
     }
 
-    /// `raw` made absolute if it is inside the scope, else why not. `doc` is
-    /// the open document's file; its folder joins the scope when it is one a
-    /// person would pick.
+    /// `doc` is the open document's file; its folder joins the scope when it is one a person would pick.
     pub fn check(&self, raw: &str, doc: Option<&Path>) -> Result<PathBuf, String> {
         if let Some(why) = spelling_refusal(raw) {
             return Err(format!("{raw} is refused: it is {why}. Give a plain path on a local drive."));
@@ -235,8 +222,7 @@ impl PathScope {
     }
 }
 
-/// Whether the server keeps to a folder list: one was given, or
-/// `FUNDACAD_MCP_STRICT` is on.
+/// A folder was given, or `FUNDACAD_MCP_STRICT` is on.
 pub fn strict(allowed: &[PathBuf], env: Option<String>) -> bool {
     !allowed.is_empty()
         || env.is_some_and(|v| matches!(v.trim().to_ascii_lowercase().as_str(), "1" | "true" | "yes" | "on"))
@@ -265,9 +251,7 @@ pub fn allowed_paths(args: impl IntoIterator<Item = OsString>, env: Option<OsStr
     out
 }
 
-/// Why a path is refused for how it is written, before the filesystem is
-/// asked anything. Judged the same on every platform, so a file written on
-/// one opens on the other.
+/// Judged on the spelling alone, the same on every platform, so a file written on one opens on the other.
 pub fn spelling_refusal(raw: &str) -> Option<&'static str> {
     if raw.is_empty() {
         return Some("empty");
@@ -323,10 +307,8 @@ fn dot_path(p: &Path) -> bool {
     p.components().any(|c| dot_name(c).is_some())
 }
 
-/// `path` with every part that exists resolved, links included, and the parts
-/// that do not exist yet appended as written. None for a link whose target is
-/// missing, which would otherwise be judged by its own name and written
-/// through to wherever it points.
+/// Existing parts resolved, links included, the rest appended as written. None for a link to a missing
+/// target, which would otherwise be judged by its own name and written through.
 pub fn canonical(path: &Path) -> Option<PathBuf> {
     let mut rest: Vec<OsString> = Vec::new();
     let mut cur = path.to_path_buf();
@@ -370,9 +352,8 @@ pub fn abspath(path: &str) -> PathBuf {
     }
 }
 
-/// `.` and `..` folded out, as `os.path.abspath` does, without touching the
-/// filesystem: the path may not exist yet, which is the whole point of
-/// `doc_save`.
+/// Without touching the filesystem, as `os.path.abspath` does: the path may not exist yet,
+/// which is the point of `doc_save`.
 fn normalise(p: &Path) -> PathBuf {
     let mut out = PathBuf::new();
     for part in p.components() {

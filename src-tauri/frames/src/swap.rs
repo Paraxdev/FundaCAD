@@ -2,9 +2,8 @@ use std::sync::{Arc, Mutex};
 
 use crate::ring::FrameRing;
 
-/// A ring and the memory behind its slots, replaced one resize at a time.
-/// Posting new memory frees the previous one, so two overlapping resizes
-/// could otherwise leave the older memory installed after it was freed.
+/// A ring and its slot memory, replaced one resize at a time, since posting new memory frees the old one and two
+/// overlapping resizes could otherwise leave freed memory installed.
 pub struct Buffers<M> {
     pub ring: FrameRing,
     mem: Mutex<M>,

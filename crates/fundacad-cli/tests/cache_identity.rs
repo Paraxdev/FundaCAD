@@ -1,6 +1,5 @@
-//! The disk checkpoints outlive the executable that wrote them: an app update
-//! installs a new binary with a new mtime, and the first reopen of a long
-//! document after it should still resume from disk.
+//! The disk checkpoints outlive the executable that wrote them: after an app update installs a binary with a new
+//! mtime, the first reopen of a long document should still resume from disk.
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};

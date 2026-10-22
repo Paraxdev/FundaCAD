@@ -1,20 +1,9 @@
-// Assembling one rebuild reply's per-body payloads into the single flat
-// RebuildResult the rest of the app consumes.
-//
-// Split out of client.ts because a CHUNKED reply (the Python engine's `server.py`'s
-// _stream_binary_reply) needs the same arithmetic applied incrementally: the
-// head frame's manifest names every body up front, so every array offset and
-// every body's global faceStart can be planned BEFORE any payload arrives.
-// Planning up front is what makes chunk writes order-independent and provably
-// identical to the single-shot path, the plan is the same cumulative walk the
-// old single pass did, just hoisted out of the copy loop.
+// Assembles a rebuild reply's per-body payloads into one flat RebuildResult. A chunked reply's head frame
+// lists every body, so all offsets are planned before any payload arrives and chunks may land in any order.
 
 import type { FaceColorRuns, F32Wire, RebuildResult, U32Wire } from "../types";
 
-// --- Protocol-v2 wire shapes (see the Python engine's `server.py`'s _rebuild_job / _body_payload) ---
-// One body's per-body payload: either the full mesh (positions/indices/faceIds
-// etc.) or an "unchanged" stub referencing an etag the client already caches
-// locally. `unchanged` is the discriminant.
+// Protocol v2 wire shapes (server.py _rebuild_job / _body_payload). `unchanged` marks a stub for a cached etag.
 export interface WireBodyFull {
   id: string;
   name: string;
@@ -22,36 +11,24 @@ export interface WireBodyFull {
   unchanged?: false;
   /** "<importFeatureId>/<nodeIndex>" for a body from an imported assembly tree. */
   nodeRef?: string;
-  /** Packed per-face colours the imported file carried (document/faceColors.ts).
-   *  In the ENVELOPE, beside nodeRef, not in the payload: the payload is
-   *  etag-cached on geometry, and these can change while geometry does not. */
+  /** Packed per-face colours from the imported file. In the envelope, not the etag-cached payload,
+   *  because they can change while the geometry does not. */
   faceColors?: FaceColorRuns;
-  /** The colour the imported file styled on this body's solid. Envelope, same
-   *  reason as faceColors. */
+  /** The colour the imported file gave this body's solid. In the envelope, like faceColors. */
   partColor?: string;
   /** A read-only reference scan: one surfaceless face, never in a boolean. */
   scan?: true;
   positions: F32Wire;
   indices: U32Wire;
   faceIds: U32Wire;
-  // true surface normals per vertex, sent at shipping quality and for any body a
-  // plugin's mesh pass displaced (a displaced face carries the plugin's normals);
-  // absent on a large document's coarsened tier
+  // Sent at shipping quality and for bodies a plugin mesh pass displaced, absent on a large document's coarse tier.
   normals?: F32Wire;
   faceOwners?: (string | null)[];
   /** Runs of LOCAL face indices that are pieces of one surface (face_bands.py).
    *  Absent on the ordinary body, which has no run. */
   faceBands?: number[][];
-  /** Per-face palette slot, dense over the body's faces, from whichever mesh
-   *  pass covers each face. The core carries the number and never looks up what
-   *  colour it means; the capability that owns a palette does that.
-   *
-   *  THE NAME IS A CONTRACT with crates/fundacad-geom/src/mesh/mod.rs, which writes this key
-   *  into the payload. It was `textureColorSlots` on both sides until the surface
-   *  texture became a plugin and the engine half was renamed, at which point
-   *  this half went on reading a key nothing sent and every two-tone inlay
-   *  silently stopped being painted. tests/geometry/wireKeys.test.ts is what now
-   *  fails if the two halves drift apart again. */
+  /** Per-face palette slot; the capability that owns the palette resolves the colour.
+   *  The key is a contract with crates/fundacad-geom/src/mesh/mod.rs, guarded by tests/geometry/wireKeys.test.ts. */
   faceColorSlots?: (number | null)[];
   edges?: WireEdgeList;
   faceCount?: number;
@@ -72,16 +49,11 @@ export interface WireBodyStub {
 }
 export type WireBody = WireBodyFull | WireBodyStub;
 
-/** Edge polylines, the form every consumer sees. The binary reply carries them
- *  packed instead; decodeBinaryFrame expands them before the body reaches
- *  anything else, so this stays the single downstream contract. */
+/** Edge polylines as every consumer sees them; decodeBinaryFrame expands the packed binary form first. */
 export type WireEdgeList = { points: [number, number, number][]; body?: string; smooth?: boolean }[];
 
-// The engine's raw rebuild/computeAll result before local reassembly: a
-// resync request, a protocol-v2 per-body result, or (defensively) the legacy
-// single-mesh shape a backend could still return directly. Modeled as one flat
-// shape with everything optional (rather than a discriminated union) so the ad
-// hoc `?.resync` / `?.protocol` checks type-check without narrowing first.
+// The engine's raw rebuild result: a resync request, a protocol v2 per-body result, or the legacy single mesh.
+// One flat all-optional shape so the `?.resync` / `?.protocol` checks need no narrowing.
 export interface WireRebuildResult {
   resync?: true;
   protocol?: 2;
@@ -90,36 +62,23 @@ export interface WireRebuildResult {
   diagnostics?: RebuildResult["diagnostics"];
   featureError?: RebuildResult["featureError"];
   featureErrors?: RebuildResult["featureErrors"];
-  // projection refresh entries ride the top-level header as plain JSON (never
-  // inside per-body payloads, so "unchanged" stubs can't drop them)
+  // projectionUpdates to trackedFaces ride the header, not per-body payloads: stubs would drop them, datums have no body.
   projectionUpdates?: RebuildResult["projectionUpdates"];
-  // where each datum plane resolved to, same header, same reason: a datum that
-  // follows a face belongs to no body at all
   datumPlanes?: RebuildResult["datumPlanes"];
   sketchPlanes?: RebuildResult["sketchPlanes"];
-  // where each datum axis/point that follows geometry resolved to, same header,
-  // same reason: a datum that follows an edge belongs to no single body
   datumMarks?: RebuildResult["datumMarks"];
-  // where each tracked face and its positions went, same header, same reason
   trackedFaces?: RebuildResult["trackedFaces"];
   bodyIds?: RebuildResult["bodyIds"];
   skippedFeatures?: RebuildResult["skippedFeatures"];
   // legacy direct-mesh shape (only when `protocol` is absent)
   mesh?: RebuildResult["mesh"];
   edges?: RebuildResult["edges"];
-  /** Set only by the CHUNKED path, which assembles as frames arrive rather than
-   *  at the end. Carries the finished result straight through so assemble() does
-   *  not redo work that is already done. */
+  /** Set only by the chunked path, which assembles as frames arrive, so assemble() does not redo it. */
   assembled?: RebuildResult;
 }
 
-/** One row of a chunked reply's manifest (server.py's _manifest_entry): every
- *  body of the reply, in final order, in the head frame.
- *
- *  Sizes are absent on stubs BY DESIGN, the engine does not have them,
- *  because those arrays live in this client's own per-body cache. That is not a
- *  gap: resolving a stub against the cache is something begin() has to do
- *  anyway, to decide whether it can still back that etag at all. */
+/** One row of a chunked reply's manifest (server.py _manifest_entry), every body in final order.
+ *  Stubs carry no sizes by design: their arrays live in this client's cache, which begin() checks anyway. */
 export interface WireManifestEntry {
   id: string;
   name: string;
@@ -139,9 +98,7 @@ export interface WireManifestEntry {
 
 type RebuildBody = NonNullable<RebuildResult["bodies"]>[number];
 
-/** Where one body's data goes in the flat arrays. Every field is derived from
- *  the manifest before a single byte is copied, so a body can be written the
- *  moment it arrives, in any order. */
+/** Where one body's data goes in the flat arrays, planned from the manifest so bodies may arrive in any order. */
 interface BodyPlan {
   id: string;
   vOff: number; // into positions/normals
@@ -156,10 +113,7 @@ interface BodyPlan {
   nEdges: number;
 }
 
-/** Build manifest entries from a non-chunked reply's own bodies, so the single
- *  frame path and the chunked path run the same code. Sizes come off the
- *  payloads that are already in hand; stubs get none, exactly as the engine
- *  would have sent them. */
+/** Manifest entries from a non-chunked reply, so the single frame and chunked paths share code. */
 export function manifestFromBodies(bodies: WireBody[]): WireManifestEntry[] {
   return bodies.map((b) => {
     const e: WireManifestEntry = { id: b.id, name: b.name, etag: b.etag };
@@ -182,25 +136,20 @@ export function manifestFromBodies(bodies: WireBody[]): WireManifestEntry[] {
 }
 
 export type BeginOutcome =
-  /** A stub referenced an etag we no longer hold, the caller must resync with
-   *  one full request. Deliberately decided BEFORE any array is allocated. */
+  /** A stub named an etag no longer cached. Decided before any allocation, so a resync costs one round trip. */
   | { kind: "resync" }
   /** Nothing changed: the previous result, BY REFERENCE. */
   | { kind: "noop"; result: RebuildResult }
   | { kind: "stream"; assembly: RebuildAssembly };
 
 export class RebuildAssembly {
-  /** The result being filled. Its arrays are allocated at full size up front,
-   *  so a body that has arrived can be read out of them immediately, but the
-   *  regions of bodies that have NOT arrived are still zeros. Anything reading
-   *  this before complete() must restrict itself to written bodies. */
+  /** Allocated at full size up front. Regions of bodies that have not arrived are still zeros,
+   *  so readers before complete() must stick to written bodies. */
   readonly result: RebuildResult;
   readonly plan: BodyPlan[];
   readonly sig: string | null;
-  // The concrete typed arrays behind result.mesh. RebuildResult declares those
-  // fields as the looser F32Wire/U32Wire (a backend may hand back plain
-  // arrays), but the ones allocated here are always typed, held separately so
-  // the copy path can use .set() without casting on every write.
+  // Typed arrays behind result.mesh, held separately so writes use .set() without casts
+  // (RebuildResult also allows plain arrays).
   private readonly positions: Float32Array;
   private readonly normals: Float32Array | undefined;
   private readonly indices: Uint32Array;
@@ -234,10 +183,7 @@ export class RebuildAssembly {
     lastAssembled: RebuildResult | null,
     lastSig: string | null,
   ): BeginOutcome {
-    // Resolve every entry FIRST. A stub whose etag the cache cannot back means
-    // the whole reply is unusable, and finding that out here, before any
-    // allocation and, for a chunked reply, before any partial display, makes
-    // a resync cost one round trip and nothing else.
+    // Resolve every entry first: an uncached stub etag means resync, found before allocation or partial display.
     const sizes: WireManifestEntry[] = [];
     for (const m of manifest) {
       if (!m.unchanged) {
@@ -257,19 +203,9 @@ export class RebuildAssembly {
       });
     }
 
-    // NO-OP FAST PATH, decidable from the manifest alone. When every body
-    // arrived as an `unchanged` stub and the id/etag/order/bbox signature
-    // matches the previous reply, the arrays below are provably identical to
-    // the ones built last time. Rebuilding them allocated ~98 MiB of fresh
-    // typed arrays and cost 0.171 s on EVERY rebuild, including ones that
-    // changed nothing at all.
-    //
-    // Returning the previous object BY REFERENCE (not a copy) is deliberate:
-    // the viewport's setModel keys its own visibility-only fast path on result
-    // identity, so this is what lets a no-op rebuild skip the scene rebuild
-    // too. The signature includes the non-geometry extras precisely because
-    // they CAN change while geometry does not, a new diagnostic or
-    // featureError must still produce a fresh object.
+    // No-op fast path: all stubs with a matching signature means identical arrays. Rebuilding them cost ~98 MiB
+    // and 0.171 s per rebuild. The previous object is returned by reference because setModel's fast path keys on
+    // identity; the signature includes non-geometry extras since they can change while geometry does not.
     const sig =
       manifest.length === 0
         ? null
@@ -280,19 +216,9 @@ export class RebuildAssembly {
             head.featureError,
             head.featureErrors,
             head.projectionUpdates,
-            // Datum planes belong to no body, so nothing about them reaches the etags
-            // above: a datum's own offset can change with every body unchanged, and
-            // without this the cached result would be handed back with the previous
-            // rebuild's planes in it.
+            // Datums and face-anchored sketches belong to no body, so they can move with every etag unchanged.
             head.datumPlanes,
-            // Same reasoning as datumPlanes: a face-anchored sketch can move with
-            // every body etag unchanged (the body it follows was not the one that
-            // changed), so without this the cached result would come back carrying
-            // the previous rebuild's sketch placements.
             head.sketchPlanes,
-            // Same reasoning again: a datum axis following an edge can move with every
-            // body etag unchanged, so it joins the signature so a no-op rebuild does
-            // not hand back the previous rebuild's datum placement.
             head.datumMarks,
             head.trackedFaces,
             head.bodyIds,
@@ -302,9 +228,7 @@ export class RebuildAssembly {
       return { kind: "noop", result: lastAssembled };
     }
 
-    // Plan every offset in one cumulative walk, the same arithmetic the old
-    // single copy loop did inline, which is what keeps faceStart and the global
-    // faceId rebasing byte-identical to the single-shot path.
+    // One cumulative walk plans every offset, keeping faceStart and faceId rebasing identical to the single-shot path.
     const plan: BodyPlan[] = [];
     let vOff = 0,
       iOff = 0,
@@ -325,9 +249,7 @@ export class RebuildAssembly {
       edgeBase += nEdges;
     }
 
-    // the engine sends explicit normals at shipping quality and for textured
-    // bodies; a body without them keeps its zero-initialized slice, and render.ts
-    // falls back to computeVertexNormals for an all-zero slice.
+    // A body without normals keeps a zeroed slice, and render.ts falls back to computeVertexNormals for it.
     const anyNormals = sizes.some((m) => m.hasNormals);
     const arrays = {
       positions: new Float32Array(vOff),
@@ -337,11 +259,8 @@ export class RebuildAssembly {
     };
     const mesh: RebuildResult["mesh"] = { ...arrays };
     const meta: RebuildBody[] = sizes.map((m, i) => ({
-      // identity from the ENVELOPE, geometry from the payload: for an
-      // "unchanged" stub the cached mesh's id/name/nodeRef are whatever they
-      // were when the geometry last changed. `name` was already read from the
-      // wrong side once; it only looked right because a rename happens to
-      // change the etag and so never arrives as a stub.
+      // Identity from the envelope, geometry from the payload: a stub's cached mesh keeps the id, name and
+      // nodeRef from its last geometry change.
       id: m.id,
       name: m.name,
       faceStart: plan[i]!.faceBase,
@@ -355,8 +274,7 @@ export class RebuildAssembly {
     const out: RebuildResult = {
       mesh,
       edges: new Array(edgeBase),
-      // the wire can supply `bbox: null` when nothing has built yet (no
-      // bodies); preserved as-is, RebuildResult models bbox as always-present.
+      // The wire sends bbox null before anything has built; RebuildResult types it as always present.
       bbox: head.bbox as RebuildResult["bbox"],
       bodies: meta,
     };
@@ -372,21 +290,15 @@ export class RebuildAssembly {
     if (head.skippedFeatures) out.skippedFeatures = head.skippedFeatures;
 
     const asm = new RebuildAssembly(out, arrays, plan, sig);
-    // Stubs are backed by the cache, so they can be filled right now; only full
-    // payloads have to wait for their chunk.
+    // Stubs are backed by the cache and fill now; full payloads wait for their chunk.
     for (const m of manifest) {
       if (m.unchanged) asm.writeBody(cache.get(m.id)!);
     }
     return { kind: "stream", assembly: asm };
   }
 
-  /** Copy one body's payload into its planned slice. Returns false if the
-   *  payload disagrees with what the manifest promised.
-   *
-   *  That check is load-bearing, not defensive: an over-long payload would
-   *  otherwise run past its slice and overwrite the NEXT body's triangles,
-   *  producing a model that is wrong but entirely believable. A false return
-   *  must fail the whole rebuild, never render. */
+  /** Copy one body's payload into its planned slice, false if it disagrees with the manifest. Load-bearing:
+   *  an over-long payload would overwrite the next body believably, so false must fail the whole rebuild. */
   writeBody(p: WireBodyFull): boolean {
     const i = this.index.get(p.id);
     if (i === undefined) return false;
@@ -404,12 +316,8 @@ export class RebuildAssembly {
     if (this.normals && p.normals !== undefined) {
       this.normals.set(p.normals as ArrayLike<number>, q.vOff);
     }
-    // indices/faceIds need per-element offsets, indexed reads work on both
-    // union members, and writes into a preallocated Uint32Array are cheap.
-    // NOTE the two different arities: `indices` is 3 entries per triangle,
-    // `faceIds` is ONE. Conflating them scatters body N>1's faceIds past the
-    // end of the triangle range, which renders every body after the first as
-    // edges with no surface.
+    // `indices` has 3 entries per triangle, `faceIds` has one. Mixing them up scatters later bodies' faceIds past
+    // the triangle range and renders every body after the first as bare edges.
     const vbase = q.vOff / 3;
     const pi = p.indices,
       pf = p.faceIds;
@@ -439,16 +347,13 @@ export class RebuildAssembly {
     return true;
   }
 
-  /** True once this body's slice holds real data. */
   has(id: string): boolean {
     const i = this.index.get(id);
     return i !== undefined && this.written[i]!;
   }
 
-  /** The half-open TRIANGLE range covering the given bodies, for a ranged
-   *  partitionMesh. Triangle indices, not face ids: a consumer reading the
-   *  in-progress arrays must restrict its scan to what has actually been
-   *  written, because the rest is still zeros and zero is a valid faceId. */
+  /** Half-open triangle range (not face ids) of the given bodies. Readers of in-progress arrays must stay
+   *  inside written ranges, since unwritten zeros are valid faceIds. */
   triRange(ids: string[]): { triStart: number; triEnd: number } {
     let triStart = Infinity;
     let triEnd = 0;
@@ -462,7 +367,6 @@ export class RebuildAssembly {
     return { triStart: Number.isFinite(triStart) ? triStart : 0, triEnd };
   }
 
-  /** One body's slice of the flat edge array. */
   edgesOf(id: string): RebuildResult["edges"] {
     const i = this.index.get(id);
     if (i === undefined) return [];
@@ -470,7 +374,6 @@ export class RebuildAssembly {
     return this.result.edges.slice(q.edgeBase, q.edgeBase + q.nEdges);
   }
 
-  /** The metadata entry for one body (id/name/faceStart/faceCount/etag). */
   metaOf(id: string): RebuildBody | undefined {
     const i = this.index.get(id);
     return i === undefined ? undefined : this.result.bodies![i];
@@ -480,9 +383,7 @@ export class RebuildAssembly {
     return this.left;
   }
 
-  /** The finished result, or null if any body is still missing. Returning a
-   *  partially-filled result would hand on zeroed slices, which render as
-   *  plausible-looking degenerate geometry rather than as an error. */
+  /** Null while any body is missing: zeroed slices would render as plausible degenerate geometry, not an error. */
   complete(): RebuildResult | null {
     return this.left === 0 ? this.result : null;
   }

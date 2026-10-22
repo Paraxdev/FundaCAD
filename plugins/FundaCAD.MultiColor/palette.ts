@@ -1,19 +1,8 @@
-// The pure half of this capability: what a palette slot means, and how a colour
-// finds one.
-//
-// No DOM, no Vue, no Tauri. Both functions used to live in src/, the body
-// colour menu in ui/browserTree.ts beside the assembly-tree shaping, and the
-// nearest-slot match in io/files.ts beside the import path that called it, and
-// both are only about a palette, which is this capability's whole subject.
+// The pure half of this capability: no DOM, no Vue, no Tauri.
 
 import type { CtxItem, DocumentStore } from "fundacad";
 
-/** The "Color" entry for a body's right-click menu.
- *
- *  A list to be spread rather than an item to be placed, so that "no entry at
- *  all" is expressible: an entry whose submenu happened to be empty would open
- *  onto nothing. This capability only contributes it while it is running, so
- *  the empty case now falls out of not being asked. */
+/** The "Color" entry for a body's right-click menu, as a list to spread so that "no entry at all" is expressible. */
 export function bodyColorMenu(store: DocumentStore, bodyId: string): CtxItem[] {
   return [{ label: "Color", children: bodyColorMenuItems(store, bodyId) }];
 }
@@ -33,13 +22,9 @@ export function bodyColorMenuItems(store: DocumentStore, bodyId: string): CtxIte
   ];
 }
 
-/** Nearest palette slot to a '#RRGGBB' colour, by squared RGB distance, or null
- *  when the palette is empty or the colour is unparseable.
- *
- *  Deliberately MATCHES rather than extends. The palette is a filament list,
- *  four physical slots, not a display palette, so a slot means "print this in
- *  filament N". Auto-adding an imported model's colour would claim a filament
- *  the printer doesn't have loaded. */
+/** Nearest palette slot to a '#RRGGBB' colour by squared RGB distance, null when the palette is empty or the colour
+ *  unparseable. It matches rather than extends: a slot is a loaded filament, and adding an imported colour would
+ *  claim one the printer does not have. */
 export function nearestPaletteSlot(hex: string, palette: { name: string; color: string }[]): number | null {
   const rgb = (s: string): [number, number, number] | null => {
     const t = s.trim().replace(/^#/, "");
@@ -62,14 +47,8 @@ export function nearestPaletteSlot(hex: string, palette: { name: string; color: 
   return best;
 }
 
-/** Every colour this document puts on the model: bodies by their slot
- *  assignment, and the per-face inlays a two-tone texture produced.
- *
- *  Both maps used to be built inside app/rebuildBridge.ts, which is the one
- *  place in the app whose job is turning a build result into pixels and which
- *  therefore had to know what a palette was, what a slot meant, and which
- *  capability decided whether either counted. It reads a contribution now, and
- *  this is what is behind it. */
+/** Every colour this document puts on the model: bodies by slot assignment, and the per-face inlays of a two-tone
+ *  texture. */
 export function paintFrom(store: DocumentStore): {
   bodies: Record<string, string>;
   faces: Record<number, string>;
@@ -92,16 +71,8 @@ export function paintFrom(store: DocumentStore): {
   return { bodies, faces };
 }
 
-/** What a machine says is loaded in each of its toolheads.
- *
- *  The contract between this capability and whichever one can talk to a printer,
- *  looked up by name through the core's `service()` and satisfied by nobody in a
- *  build that has no printer support. The core never looks inside it: it stores
- *  the value and hands it back, exactly as it compares grant strings without
- *  knowing what a grant means.
- *
- *  Named on THIS side because this is the side that cannot work without it. A
- *  palette with no machine behind it is four fixed rows of nothing. */
+/** What a machine says is loaded in each toolhead. The contract with whichever capability talks to a printer, looked
+ *  up through `service()` and satisfied by nobody in a build without printer support; the core only stores it. */
 export interface FilamentSource {
   /** Whether a machine answered. Never throws; false is "did not answer". */
   probe(): Promise<boolean>;

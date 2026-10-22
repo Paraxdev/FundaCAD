@@ -1,6 +1,4 @@
-// Where on the canvas a face, an edge or a plane can be clicked. Every point is
-// checked with the app's own picker before it is handed out, so a click there
-// lands on what was asked for.
+// Where on the canvas a face, edge or plane can be clicked, each point checked with the app's own picker first.
 
 import * as THREE from "three";
 import type { DocumentStore } from "../document/store";

@@ -1,6 +1,5 @@
-//! A built body's triangles as flat arrays. A 666 part assembly is millions
-//! of coordinates, and as one JSON number each the reply of one `build` took
-//! most of 17 GB.
+//! A built body's triangles as flat arrays: with one JSON number per coordinate,
+//! one `build` reply of a 666 part assembly took most of 17 GB.
 
 use fundacad_protocol::frame::Buf;
 use serde_json::{Map, Value};
@@ -37,7 +36,6 @@ fn numbers<T>(v: Option<&Value>, cast: impl Fn(f64) -> T) -> Vec<T> {
 }
 
 impl MeshBody {
-    /// A body of a JSON reply, the arrays inline.
     pub fn from_value(v: &Value) -> MeshBody {
         let mut info = v.as_object().cloned().unwrap_or_default();
         let positions = numbers(info.get("positions"), |x| x as f32);

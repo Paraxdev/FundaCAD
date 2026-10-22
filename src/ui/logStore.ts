@@ -1,17 +1,5 @@
-// The app's own log, every error, warning and notice, kept whole.
-//
-// Every other place an error surfaces shortens it. A toast is one line with
-// text-overflow: ellipsis and the status pill is narrower still, so "Fillet failed
-// on Body1: Failed creating a chamfer, try a smaller length value(s)" arrives as
-// "Fillet failed on Body1: Failed cr...", the part that got cut is the part that
-// says what to do, and for a geometry kernel that sentence is often the only
-// diagnosis anyone gets. Nothing here ever truncates, the panel wraps rather than
-// clips, and an entry can be copied verbatim.
-//
-// Module-level rather than Pinia, same shape as ui/theme.ts and ui/icons.ts:
-// logging has to work from places with no component and no active pinia (a window
-// error handler, a worker callback, module initialisation), and a store would make
-// the earliest and most interesting failures the ones it could not record.
+// The app's log, kept whole: toasts and the status pill truncate, and the cut part of a kernel error is often the only
+// diagnosis. Module-level, not Pinia, so a window error handler, a worker or module init can log too.
 
 export type LogLevel = "error" | "warning" | "info";
 
@@ -19,8 +7,7 @@ export interface LogEntry {
   /** Monotonic within a session; the key a list renders by. */
   id: number;
   level: LogLevel;
-  /** Wall-clock ms. Rendered as a time, kept as a number so it can be sorted
-   *  and diffed without reparsing. */
+  /** Wall-clock ms. */
   at: number;
   /** The whole message. Never shortened, here or downstream. */
   message: string;
@@ -32,13 +19,8 @@ export interface LogEntry {
   detail?: string;
 }
 
-/** How many entries to keep.
- *
- *  A rebuild that fails on every frame of a drag can emit a message per frame,
- *  so this is a ring rather than a list, an unbounded log would turn a
- *  misbehaving preview into a memory leak, and the oldest entries are the least
- *  useful ones anyway. 500 is far more than a session's worth of real errors and
- *  still small enough to render without virtualising. */
+/** A ring, since a rebuild failing on every drag frame logs once per frame. 500 is far more than a session's real
+ *  errors and renders without virtualising. */
 export const LOG_LIMIT = 500;
 
 let entries: LogEntry[] = [];
@@ -59,13 +41,7 @@ export function onLogChange(fn: () => void): () => void {
   return () => listeners.delete(fn);
 }
 
-/** Coerce whatever a caller has to a string worth reading.
- *
- *  Error objects are the common case and `String(err)` on one gives
- *  "Error: ...", which is fine; a bare object gives "[object Object]", which is
- *  not, so those are JSON'd. A logger that can turn a real failure into
- *  "[object Object]" is worse than no logger, because it destroys the evidence
- *  while looking like it captured it. */
+/** Plain objects are JSON'd: "[object Object]" would destroy the evidence while looking like it captured it. */
 export function describe(value: unknown): string {
   if (typeof value === "string") return value;
   if (value instanceof Error) return value.stack ? `${value.message}\n${value.stack}` : value.message;
@@ -123,9 +99,7 @@ export function formatLog(list: readonly LogEntry[] = entries): string {
   return list.map(formatEntry).join("\n\n");
 }
 
-// --- the panel's own open/closed state -------------------------------------
-// Kept here rather than in a UI store so that the code which decides to OPEN the
-// console (a window error handler, say) can do so without reaching for pinia.
+// The console's open state lives here so code without pinia, such as a window error handler, can open it.
 
 let open = false;
 

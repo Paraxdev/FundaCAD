@@ -1,10 +1,5 @@
-//! `interference`: which bodies overlap and how close the rest come, once or
-//! at every step of a parameter.
-//!
-//! The engine's `interference` op does the geometry. What lives here is the
-//! sweep's arithmetic and the reading of the reply, kept to a line per pair
-//! and a line per step: the op also returns each overlap as a mesh for the
-//! app to draw, which is no use to an agent and is dropped.
+//! `interference`, once or at every step of a parameter. The engine does the geometry; this is the sweep's
+//! arithmetic and a line per pair and per step, dropping the overlap meshes the op returns for the app.
 
 use serde_json::Value;
 
@@ -13,11 +8,9 @@ use crate::describe::g_format;
 /// Pairs closer than this are reported when the caller does not say.
 pub const DEFAULT_CLEARANCE: f64 = 1.0;
 
-/// More steps than this is a sweep nobody needs in one reply, and each one is
-/// a full rebuild.
+/// More steps is a sweep nobody needs in one reply, and each one is a full rebuild.
 pub const MAX_STEPS: usize = 100;
 
-/// The parameter a sweep steps and the values it takes.
 pub struct Sweep {
     pub param: String,
     pub values: Vec<f64>,
@@ -167,8 +160,7 @@ pub fn missing(r: &Value, asked: &[String]) -> Vec<String> {
         .collect()
 }
 
-/// The bodies the engine could not judge, each with why: a pair with one of
-/// them was tested for neither overlap nor clearance.
+/// Bodies the engine could not judge, with why: a pair with one was tested for neither overlap nor clearance.
 pub fn unjudged(r: &Value) -> Vec<String> {
     list(r, "unchecked").iter().map(|u| format!("{} {}", who(s(u, "id"), s(u, "name")), s(u, "reason"))).collect()
 }
@@ -180,8 +172,6 @@ fn gaps(r: &Value) -> Vec<&Value> {
     g
 }
 
-/// One check, in full: every overlap with its volume and where it is, every
-/// near pair with its gap and the two closest points.
 pub fn report(r: &Value, clearance: f64) -> String {
     let pairs = list(r, "pairs");
     let near = gaps(r);
@@ -233,17 +223,12 @@ pub fn report(r: &Value, clearance: f64) -> String {
     out.join("\n")
 }
 
-/// What a sweep keeps of each step.
 pub struct Step {
     pub value: f64,
-    /// The engine's reply, or why there was none.
     pub reply: Result<Value, String>,
 }
 
-/// A line per step and a summary, which is what replaces a stack of check
-/// features: where it clashes, and how close it gets where it does not.
-/// `asked` is the `bodies` filter; a step where one of them was not built
-/// says so on its line.
+/// `asked` is the `bodies` filter; a step where one of them was not built says so on its line.
 pub fn sweep_report(param: &str, unit: &str, steps: &[Step], clearance: f64, asked: &[String]) -> String {
     let at = |v: f64| format!("{param} = {}", g_format(v));
     let mut lines = Vec::new();
@@ -253,9 +238,7 @@ pub fn sweep_report(param: &str, unit: &str, steps: &[Step], clearance: f64, ask
     let mut failed_steps = 0;
     let mut cut_short: Option<String> = None;
     let mut cut_steps = 0;
-    // Asked-for bodies that were not there, and at which steps.
     let mut absent_at: Vec<(String, Vec<String>)> = Vec::new();
-    // Bodies that could not be judged, with why, and at which steps.
     let mut unjudged_at: Vec<(String, Vec<String>)> = Vec::new();
     for st in steps {
         let r = match &st.reply {

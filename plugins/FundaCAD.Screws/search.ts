@@ -1,5 +1,4 @@
-// The library list: one entry per catalogue family and size, and one per user fastener, with the
-// search and the filters over them.
+// One list entry per catalogue family and size and one per user fastener, with the search and filters over them.
 
 import { CATEGORY_ORDER, FAMILIES, drivesOf, headLabel, lengthsFor, unitsOf, type Family } from "./catalogue";
 import { PARTS, type FastenerSpec } from "./spec";
@@ -123,8 +122,7 @@ export interface ParsedQuery {
   length?: number;
 }
 
-/** "m3x10 socket" -> size M3, length 10, words ["socket"]. A size is matched exactly, so M2 is
- *  not M20. */
+/** "m3x10 socket" -> size M3, length 10, words ["socket"]. A size is matched exactly, so M2 is not M20. */
 export function parseQuery(query: string): ParsedQuery {
   const out: ParsedQuery = { words: [] };
   for (const token of query.trim().split(/\s+/).filter(Boolean)) {

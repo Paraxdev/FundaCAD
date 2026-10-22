@@ -1,6 +1,5 @@
-//! FBX (Maya, 3ds Max, Blender), binary and ASCII, 6.x and 7.x, read with
-//! ufbx. Every node that carries a mesh becomes one object with its world
-//! transform baked in, converted to millimetres and Z up by the loader.
+//! FBX, binary and ASCII, 6.x and 7.x, read with ufbx. Every node that carries a mesh becomes one object with its
+//! world transform baked in, converted to millimetres and Z up by the loader.
 
 use ufbx::{CoordinateAxes, CoordinateAxis, LoadOpts, Material, Mesh, Node, SpaceConversion};
 

@@ -1,36 +1,5 @@
-// The broker's host, backed by the document the window actually has open.
-//
-// This is the other implementation of `BrokerHost`; ./testing.ts is the one a
-// plugin's tests get. They serve the same op table, which is what makes a
-// plugin that passed its tests mean something here.
-//
-// EDITS GO THROUGH THE STORE, never around it. Every op below calls the same
-// methods the app's own tools call, so a plugin's change is one undo step, it
-// re-evaluates the parameter cascade, it triggers the rebuild, and the person
-// watching sees it happen. A host that reached into `document` and mutated it
-// would produce a document the store did not know had changed, which is a class
-// of bug with no good failure mode.
-//
-// FILES GO THROUGH RUST, when there is a Rust to go through. `file_pick`,
-// `file_read`, `file_write` and `app_info` are handed to a `NativeBridge`; see
-// ./native.ts for why they are ops on the same table rather than a channel of
-// their own. Without a bridge, a browser session, a test that did not pass one,
-// they refuse by name, because "the desktop app is not here" and "you did not
-// ask for this" are different things a plugin author has to be able to tell
-// apart.
-//
-// WHAT IS STILL NOT SERVED, and refuses by name rather than pretending:
-// `build`, `inspect`, `view` and `export` want the geometry engine, which a
-// plugin cannot reach yet. `doc_open`, `doc_import` and `doc_save` are a
-// different case and will keep refusing: they take a PATH, which is the one
-// thing a plugin may not have, so their refusals name the ops to compose
-// instead. A plugin holding
-// `geometry.build` gets past the broker and then gets a refusal from here that
-// says which of the two stopped it. Two refusals with two reasons is worth more
-// than one that could mean either.
-//
-// The store is injected rather than imported. The alternative is a module-level
-// singleton, which is the same coupling with a worse test story.
+// The broker's host for the open document. Edits go through the store, so a plugin's change is one undo step and
+// reruns the parameter cascade and rebuild. File ops need a NativeBridge and refuse by name without one.
 
 import { storedSettings } from "../settings";
 import type { CadDocument, Feature } from "../../types";
@@ -40,8 +9,7 @@ import type { BrokerHost } from "./broker";
 import type { NativeBridge } from "./native";
 import type { Op } from "./ops";
 
-/** Refused by the host, as opposed to refused by the broker. Caught by the
- *  broker and handed to the plugin as `{ ok: false, code: "failed" }`. */
+/** Refused by the host, not the broker. The broker hands it to the plugin as `{ ok: false, code: "failed" }`. */
 export class HostRefused extends Error {}
 
 const clone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
@@ -58,18 +26,10 @@ const obj = (v: unknown, what: string): Record<string, unknown> => {
   return v as Record<string, unknown>;
 };
 
-/** Ops this host cannot serve, and the reason, which is the whole value of the
- *  entry. "not implemented" tells a plugin author nothing about whether to wait
- *  or to do something else.
- *
- *  Exported so ./testing.ts can refuse the same ops in the same words rather
- *  than keeping its own copy. A test double that served something the app
- *  refuses would be a lie in the one direction that costs the most: a plugin
- *  whose tests passed and which fails the first time anybody runs it. */
+/** The reason tells a plugin author whether to wait or do something else. Shared with ./testing.ts so a test
+ *  double never serves something the app refuses. */
 export const UNSERVED: Partial<Record<Op, string>> = {
-  // These two name a path, and a plugin has no paths. The refusal names what to
-  // do instead, because "not supported" would send somebody looking for a
-  // version where it is, and there will not be one.
+  // These name a path, and a plugin has no paths, so the refusal names what to do instead.
   doc_open: "a plugin cannot name a file. Use file_pick, then file_read, then doc_set",
   doc_import: "a plugin cannot name a file. Use file_pick, then file_read, then doc_set",
   doc_save: "a plugin cannot name a file. Use doc_get, then file_write",
@@ -90,24 +50,18 @@ export const UNSERVED: Partial<Record<Op, string>> = {
 
 export interface AppHostOptions {
   store: DocumentStore;
-  /** Whose host this is. Every file a plugin is handed is recorded against this
-   *  id on the Rust side, so one plugin cannot read another's file even if it
-   *  somehow learned the handle. A host built without it serves the file ops to
-   *  nobody. */
+  /** Files a plugin is handed are recorded against this id in Rust, so one plugin cannot read another's file.
+   *  Without it no file op is served. */
   plugin?: string;
-  /** The feature types this build knows, for `schema`. Passed in because the
-   *  list belongs to whatever renders the tool palette, not here. */
+  /** For `schema`. Passed in because the list belongs to whatever renders the tool palette. */
   featureTypes?: () => string[];
-  /** The way out to the operating system. Absent in a browser session and in
-   *  any test that did not ask for one, and the file ops then refuse rather
-   *  than pretending to have opened a dialog nobody saw. */
+  /** Absent in a browser session and in tests that did not ask for one; the file ops then refuse. */
   native?: NativeBridge;
 }
 
 export function appHost(opts: AppHostOptions): BrokerHost {
   const { store } = opts;
 
-  /** The bridge, or a refusal that says which half is missing. */
   const bridge = (op: Op): { native: NativeBridge; plugin: string } => {
     if (!opts.native) {
       throw new HostRefused(`${op}: files are handled by the desktop app, and this is not running in it`);
@@ -120,9 +74,7 @@ export function appHost(opts: AppHostOptions): BrokerHost {
     return { native: opts.native, plugin: opts.plugin };
   };
 
-  /** Text a plugin sent, for a dialog title or a suggested name. Bounded here
-   *  as well as in Rust: the two caps are for different things, this one so a
-   *  megabyte of "purpose" is not put on an IPC message at all. */
+  /** Capped here as well as in Rust, so a megabyte of "purpose" never goes on an IPC message. */
   const words = (v: unknown, fallback: string): string => {
     const t = typeof v === "string" ? v.trim() : "";
     return (t || fallback).slice(0, 200);
@@ -158,9 +110,7 @@ export function appHost(opts: AppHostOptions): BrokerHost {
           const extensions = Array.isArray(raw)
             ? raw.filter((e): e is string => typeof e === "string").slice(0, 16)
             : [];
-          // null, not an error. A dismissed dialog is a complete answer, and a
-          // plugin that reported it as a failure would show somebody an error
-          // for having changed their mind.
+          // null, not an error: a dismissed dialog is a complete answer, not a failure to report.
           return await native.pick({
             plugin,
             purpose: words(args.purpose, "choose a file"),
@@ -298,9 +248,8 @@ export function appHost(opts: AppHostOptions): BrokerHost {
           return { ok: true };
         }
 
-        // Listed so this switch is exhaustive over Op and adding one to the
-        // table does not compile until it is decided here. Unreachable: every
-        // one of them is in UNSERVED above.
+        // Listed so the switch stays exhaustive over Op and a new op does not compile until decided here.
+        // Unreachable, since all of them are in UNSERVED.
         case "doc_open":
         case "doc_import":
         case "doc_save":

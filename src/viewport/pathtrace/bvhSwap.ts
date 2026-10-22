@@ -1,10 +1,5 @@
-// Repacks three-gpu-pathtracer's buffers for a new set of meshes without a
-// kernel recompile. Its setScene makes a new PathtracerBVHComputeData and calls
-// setBVHData, which recompiles three WGSL kernels (1.6 to 2.6 s). The kernels
-// read the storage through proxy nodes, and three r186 rebinds a node whose
-// value is swapped (Bindings.js), so the new buffers are moved into the nodes
-// the kernels were built with, the way upstream's own updateMaterials does.
-// Leans on 0.0.27 internals; drop it for an upstream incremental update.
+// three-gpu-pathtracer's setScene recompiles three WGSL kernels (1.6 to 2.6 s). three r186 rebinds a swapped
+// proxy node, so new buffers go into the kernels' own nodes as upstream's updateMaterials does (0.0.27 internals).
 
 interface Disposable {
   dispose(): void;

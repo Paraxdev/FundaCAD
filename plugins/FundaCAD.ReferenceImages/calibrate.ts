@@ -1,6 +1,5 @@
-// Where an image sits on its plane, and the moves that change it. Plane
-// coordinates are millimetres in the plane's own frame (SketchPlane.to2D),
-// image coordinates run 0 to 1 from the left edge and the top edge.
+// Plane coordinates are millimetres in the plane's own frame (SketchPlane.to2D), image coordinates run 0 to 1 from the
+// left edge and the top edge.
 
 export type V2 = readonly [number, number];
 
@@ -46,8 +45,7 @@ export function onImage(p: Placement, xy: V2): boolean {
   return u >= 0 && u <= 1 && v >= 0 && v <= 1;
 }
 
-/** Scale about `a` so the two picked points end up `distance` apart. Null when
- *  the points coincide or the distance is not a length. */
+/** Scales about `a` so the points end up `distance` apart, null when they coincide or the distance is not a length. */
 export function calibrate<P extends Placement>(p: P, a: V2, b: V2, distance: number): P | null {
   const d = Math.hypot(b[0] - a[0], b[1] - a[1]);
   if (!(d > 1e-9) || !Number.isFinite(distance) || !(distance > 0)) return null;

@@ -1,29 +1,16 @@
 <script setup lang="ts">
-// A tree label that can be edited in place: contentEditable, select-all on
-// entry, commit on Enter/blur, cancel on Escape.
-//
-// The editing label is a SEPARATE vnode from the display label, not one element
-// with a toggled contenteditable attribute. That is load-bearing rather than
-// tidy: with a single element, any prop change arriving mid-edit, a rebuild
-// finishing, a sibling being renamed, an eye toggled, patches the label's text
-// node, and the caret jumps to the start or disappears outright. As two
-// branches of a v-if, Vue owns no binding inside the editing node at all, so it
-// never touches it.
-//
-// The text is written by hand in start() for the same reason.
+// The editing label is a separate v-if branch from the display label, so a prop change mid-edit never patches its text
+// node and moves the caret. start() writes the text by hand for the same reason.
 
 import { nextTick, ref, useTemplateRef } from "vue";
 
 const props = defineProps<{
-  /** The committed value. Shown when not editing; seeded into the editor. */
   text: string;
   /** Omit to make the label read-only. */
   rename?: ((name: string) => void) | undefined;
   /** Inline style for the DISPLAY label only (dimming a hidden row, margins). */
   labelStyle?: Record<string, string> | undefined;
-  /** Start editing on a double-click of the label itself. Off by default: a tree
-   *  row owns that gesture (double-click means Edit on a sketch), and only the
-   *  palette slots, whose row has no other double-click meaning, want it. */
+  /** Start editing on a double-click of the label. Off by default, a tree row owns that gesture (Edit on a sketch). */
   renameOnDblclick?: boolean | undefined;
 }>();
 
@@ -46,9 +33,7 @@ function start() {
   });
 }
 
-/** Clearing `renaming` before committing is what makes this idempotent: Enter
- *  finishes and unmounts the editor, whose blur then arrives second and falls
- *  straight back out. */
+/** Clearing `renaming` first makes this idempotent: Enter unmounts the editor, whose blur then arrives and falls out. */
 function finish(save: boolean) {
   if (!renaming.value) return;
   const name = (editEl.value?.textContent ?? "").trim();

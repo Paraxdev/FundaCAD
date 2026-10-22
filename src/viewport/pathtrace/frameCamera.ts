@@ -1,7 +1,5 @@
-// Which camera a native frame was traced with. The native side draws a frame
-// as it is asked for, with the camera it holds then, and answers pt_camera with
-// the seq of the last frame it drew before taking the camera. A frame of a
-// later seq was traced with that camera or a newer one.
+// The native side answers pt_camera with the seq of the last frame it drew before taking the camera,
+// so a frame of a later seq was traced with that camera or a newer one.
 
 import type * as THREE from "three";
 

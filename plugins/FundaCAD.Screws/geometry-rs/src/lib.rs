@@ -1,8 +1,5 @@
-//! The fastener library's geometry as a FundaCAD plugin component, the Rust
-//! twin of geometry/*.py: one shape generator, `fastener`, and no feature
-//! type. A fastener is generated once, when it is inserted, and stored in the
-//! document as an `import` feature's blob, so nothing here is needed to open or
-//! rebuild a document that has fasteners in it.
+//! The Rust twin of geometry/*.py, one shape generator `fastener`. A fastener is stored as an `import` feature's blob
+//! when inserted, so nothing here is needed to open or rebuild a document.
 
 wit_bindgen::generate!({
     world: "plugin",

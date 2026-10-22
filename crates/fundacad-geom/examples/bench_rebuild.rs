@@ -1,18 +1,5 @@
-//! Cold against warm rebuild timing, the Rust side of
-//! the Python engine's `bench_rebuild.py`. Every phase rebuilds and meshes.
-//!
-//!   cargo run --release -p fundacad-geom --example bench_rebuild -- \
-//!       tests/golden/corpus/corpus_engines.json fillet_g2_corners [--runs 5]
-//!   cargo run --release -p fundacad-geom --example bench_rebuild -- --synth 60
-//!
-//! `--synth <holes>` builds a plate drilled that many times, a long timeline
-//! where the tip edit is cheap and the prefix is not, the shape of document
-//! the prefix cache exists for.
-//!
-//! Phases: `cold` (no cache), `ram_last_edit` (the last feature's first number
-//! nudged, resumed from the snapshot ring), `ram_unchanged` (nothing to
-//! replay or mesh), `disk_reopen` (a new cache on a store an earlier build
-//! filled, as a restarted worker sees it).
+//! Cold against warm rebuild timing, the Rust side of `bench_rebuild.py`: `-- <corpus.json> <name> [--runs 5]`,
+//! or `-- --synth <holes>` for a long drilled plate, the timeline the prefix cache exists for.
 
 use std::time::{Duration, Instant};
 
@@ -23,8 +10,7 @@ use fundacad_geom::cache::RebuildCache;
 use fundacad_geom::reply;
 use serde_json::{json, Map, Value};
 
-/// The last feature's first number, nudged, standing in for the edit a user
-/// makes at the tip of the timeline.
+/// Stands in for the edit a user makes at the tip of the timeline.
 fn nudge_last(doc: &Value) -> Value {
     let mut d = doc.clone();
     let nudged = d["features"].as_array_mut().and_then(|a| a.last_mut()).is_some_and(nudge);

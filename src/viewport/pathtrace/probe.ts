@@ -1,6 +1,4 @@
-// Whether this web view can path trace: a real WebGPU adapter, not a software
-// fallback, and whether the app has a native tracer. Asked once per session
-// and kept.
+// A real WebGPU adapter, not a software fallback, and the app's native tracer. Asked once per session.
 
 import type { NativeProbe } from "./choose";
 
@@ -80,7 +78,6 @@ export function describeProbe(p: GpuProbe | null): string {
 /** Tracer::new takes 350 to 610 ms; a probe far past that is a stuck driver. */
 const NATIVE_PROBE_TIMEOUT_MS = 8000;
 
-/** Whether the app has a native tracer. Outside the app there is none. */
 export function probeNative(
   call?: (cmd: string) => Promise<unknown>,
   timeoutMs = NATIVE_PROBE_TIMEOUT_MS,

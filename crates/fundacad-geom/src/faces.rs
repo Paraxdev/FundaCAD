@@ -1,10 +1,5 @@
-//! Which faces of a body are pieces of ONE surface that B-rep cannot store as
-//! one, the Python engine's `face_bands.py`.
-//!
-//! Two faces join only when they touch (a shared edge, or a gap no wider than
-//! the clearance the kernel inserts between screw turns) and sit on the same
-//! analytic surface seen from the same side. Splines and surfaces of
-//! revolution are never joined.
+//! Which faces of a body are pieces of one surface B-rep cannot store as one, face_bands.py. Two faces join
+//! only when they touch, within the screw turn clearance, on the same analytic surface seen from the same side.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 
@@ -258,10 +253,8 @@ fn near_pairs(
         return HashSet::new();
     }
     let screen = GAP_ABS.max(GAP_REL * diag(bbox(shape, false)));
-    // The exact tolerance needs the OPTIMAL box, which costs more than the
-    // whole pass on a body no pair ever reaches. Still computed on demand, and
-    // shared: it is a pure function of the shape, so whichever thread gets
-    // there first computes the number they all then read.
+    // The exact tolerance needs the optimal box, which costs more than the whole pass on a body no pair reaches.
+    // It is computed on demand, once, and shared across threads, being a pure function of the shape.
     let exact: std::sync::OnceLock<f64> = std::sync::OnceLock::new();
     let work = crate::par::Shared((&groups, faces, surf, already, &exact, shape));
     let found = crate::par::flat_map_indexed(groups.len(), move |g| {
@@ -319,10 +312,8 @@ fn near_pairs(
 /// distance costs minutes on a pair of long spline edges, the samples do not.
 const BOUNDARY_DEFLECTION: f64 = 0.02;
 
-/// Whether faces `i` and `j` could still be within `screen`, false only when
-/// their sampled boundaries prove they are not. Pieces of one plane,
-/// cylinder, cone or sphere are nearest along their boundaries; a torus can
-/// be nearest across its hole, so it is always left to the exact distance.
+/// False only when the sampled boundaries prove faces `i` and `j` are farther apart than `screen`. A torus
+/// can be nearest across its hole, so it is always left to the exact distance.
 fn apart_at_boundary(
     lines: &mut HashMap<usize, Option<Vec<Vec<V3>>>>,
     faces: &[Shape],

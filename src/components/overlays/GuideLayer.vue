@@ -1,6 +1,5 @@
 <script setup lang="ts">
-// Guide mode on screen: a pulsing ring on the control or model area an assistant
-// points at, and a glass caption bubble with Next and Stop (manual/docs/ai/guide.md).
+// Guide mode overlay: a ring on what an assistant points at and a caption bubble (manual/docs/ai/guide.md).
 // Model outlines are SVG, not three.js, so Clean view and the pick mask never see them.
 import * as THREE from "three";
 import { computed, nextTick, onUnmounted, ref, shallowRef } from "vue";

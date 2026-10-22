@@ -1,14 +1,6 @@
-//! Tokenizer and parser for parameter expressions, a port of `src/params/parse.ts`
-//! (twinned in Python by the Python MCP server's expr.py).
-//!
-//! Grammar, loosest first:
-//! `or := and ('||' and)*`, `and := cmp ('&&' cmp)*`,
-//! `cmp := add (('<'|'<='|'>'|'>='|'=='|'!=') add)?` (does not chain),
-//! `add := mul (('+'|'-') mul)*`, `mul := unary (('*'|'/') unary)*`,
-//! `unary := '-' unary | '!' unary | pow`, `pow := primary ('^' unary)?`,
-//! `primary := NUMBER unit? | IDENT '(' expr (';' expr)* ')' | IDENT | '(' expr ')'`.
-//! So `^` is right associative and `-2^2` is `-(2^2)`. Arguments are separated
-//! by semicolons because a comma is a decimal separator in many locales.
+//! Tokenizer and parser for parameter expressions, a port of `src/params/parse.ts`. Loosest first: `||`, `&&`, one
+//! non-chaining comparison, `+ -`, `* /`, unary `- !`, then right associative `^`, so `-2^2` is `-(2^2)`.
+//! Arguments are separated by `;` because a comma is a decimal separator in many locales.
 
 use std::fmt;
 

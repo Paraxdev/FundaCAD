@@ -1,6 +1,5 @@
-//! A thread's helical edges draw on the surface they lie on. A whole turn the
-//! deflection sampler took as one chord was drawn as a square across the bore,
-//! in front of the thread, and took the picks meant for it.
+//! A thread's helical edges draw on the surface they lie on: a whole turn sampled as one chord draws as a square
+//! across the bore, in front of the thread, and takes the picks meant for it.
 
 use fundacad_core::CadDocument;
 use fundacad_geom::builder::{self, NoWatch};
@@ -59,9 +58,8 @@ fn to_segment(p: [f64; 3], a: [f64; 3], b: [f64; 3]) -> f64 {
     (0..3).map(|k| (ap[k] - t * ab[k]).powi(2)).sum::<f64>().sqrt()
 }
 
-/// Edge count, volume and how far the curve of any drawn edge strays from its
-/// polyline, the curve sampled densely at a prime count so no whole number of
-/// turns hides it. A polyline is matched to its edge by its middle point.
+/// Edge count, volume and how far any drawn edge's curve strays from its polyline (matched by its middle point),
+/// the curve sampled densely at a prime count so no whole number of turns hides it.
 fn drawn(doc: &Value) -> (usize, f64, f64) {
     let typed: CadDocument = serde_json::from_value(doc.clone()).expect("document parses");
     let r = builder::rebuild(&typed, doc, &NoWatch).expect("not cancelled");

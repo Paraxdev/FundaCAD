@@ -1,9 +1,5 @@
-//! One document, an app and an agent both working on it, the Python engine's `live_session.py`.
-//!
-//! Exactly one HOST (the running app) owns the document and is the only thing
-//! that may raise its revision. Any number of GUESTS read it and PROPOSE a
-//! replacement, which the host collects on its next publish. A state machine
-//! with the clock injected, answered on the read path.
+//! One document an app and an agent both work on. Exactly one host (the running app) owns it and alone raises its
+//! revision; guests read it and propose replacements, which the host collects on its next publish.
 
 use std::collections::HashMap;
 
@@ -284,8 +280,7 @@ impl LiveSession {
     }
 }
 
-/// The six `session_*` ops, server.py `_session_reply`, answered for the
-/// connection `who`. `Err` is the error message for the reply envelope.
+/// The six `session_*` ops for the connection `who`. `Err` is the error message for the reply envelope.
 pub fn session_reply(live: &mut LiveSession, who: &str, op: &str, req: &Map<String, Value>) -> Result<Value, String> {
     let get = |k: &str| req.get(k).cloned().unwrap_or(Value::Null);
     let revision = |k: &str| -> Result<i64, String> {

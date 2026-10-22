@@ -57,9 +57,8 @@ pub fn of_xcaf_read(position: f64, checks: u64) -> (i64, i64, i64) {
     (WALK, -1, -1)
 }
 
-/// Run an XCAF read, sampling `progress` from a side thread every quarter
-/// second into the stage hook. The sampler only reads the indicator, which
-/// OCCT allows from another thread.
+/// Samples `progress` every quarter second from a side thread. It only reads the indicator,
+/// which OCCT allows from another thread.
 pub fn sampling_xcaf_read<T>(progress: &Progress, read: impl FnOnce() -> T) -> T {
     let Some(hook) = current() else {
         return read();

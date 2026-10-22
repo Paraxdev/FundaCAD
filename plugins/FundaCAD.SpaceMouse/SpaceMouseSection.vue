@@ -1,22 +1,6 @@
 <script setup lang="ts">
-// Below the 3D mouse's declared settings (mode, sensitivities): calibrate it
-// without guessing the hardware. A LIVE raw-axis readout (push/twist the puck,
-// see which axis moves), each camera action bound to any axis with an invert,
-// and a TEST CUBE driven by the puck with the current mapping so you can
-// confirm the feel. Mounted only while the plugin's row is expanded.
-//
-// Two halves, deliberately kept apart:
-//
-//   * the FORM (mappings) is ordinary reactive state, mirrored out of the
-//     stored config and written straight back;
-//   * the READOUT (six axis bars + the WebGL test cube) is imperative. It runs
-//     at device report rate and at 60 fps respectively, writes styles directly
-//     through plain element handles, and never touches a ref. Pushing that
-//     through reactivity would be a per-frame render for no benefit.
-//
-// The renderer, its scene resources and the rAF are all torn down in
-// onUnmounted, geometries and materials included, so collapsing the row frees
-// the GPU side too.
+// The axis bars and the test cube are imperative, written at device report rate and at 60 fps through plain element
+// handles and never a ref. onUnmounted frees the renderer, its geometries and materials and the rAF.
 
 import * as THREE from "three";
 import { onMounted, onUnmounted, shallowRef, useTemplateRef, type ComponentPublicInstance } from "vue";
@@ -38,9 +22,8 @@ import {
 
 const ACTIONS = Object.keys(ACTION_LABELS) as ActionName[];
 
-// shallowRef and replace-wholesale: the bindings are handed straight back to
-// setSpaceMouseConfig, which merges them into the module-level CONFIG object.
-// A deep ref would put reactive proxies in there.
+// shallowRef replaced wholesale: setSpaceMouseConfig merges the bindings into its module CONFIG, and a deep ref would
+// put reactive proxies there.
 const binds = shallowRef<Record<ActionName, AxisBinding>>(structuredClone(getSpaceMouseConfig().bind));
 
 const offSettings = settings.onChange(() => {
@@ -50,24 +33,19 @@ const offSettings = settings.onChange(() => {
 function applyBind(action: ActionName, patch: Partial<AxisBinding>) {
   const next: AxisBinding = { ...binds.value[action], ...patch };
   binds.value = { ...binds.value, [action]: next };
-  // A one-action patch. setSpaceMouseConfig merges `bind` per action rather
-  // than replacing it, which is why this partial is safe (and why the cast is).
+  // Safe as a partial, and so is the cast: setSpaceMouseConfig merges `bind` per action.
   setSpaceMouseConfig({ bind: { [action]: next } as unknown as Record<ActionName, AxisBinding> });
 }
 
-// --- live axis bars (imperative: written at device report rate) ---
-// A plain object, NOT a ref: these handles exist only so updateBars can write
-// three style properties per axis without a render.
+// Not a ref, so updateBars can write three style properties per axis at device report rate without a render.
 const bars: Partial<Record<AxisName, HTMLDivElement>> = {};
 function setBar(a: AxisName, el: Element | ComponentPublicInstance | null) {
   if (el instanceof HTMLDivElement) bars[a] = el;
   else delete bars[a];
 }
 
-// The bar always shows the RAW count the device sent (the Rust side conditions
-// nothing), and its colour says what the app then did with it: muted = under the
-// deadzone, dimmed = the cross-axis filter dropped it because another axis is
-// much stronger, full accent = it is driving the camera.
+// The bar shows the RAW count (the Rust side conditions nothing), its colour what the app did with it: muted under the
+// deadzone, dimmed when the cross-axis filter dropped it, full accent when it drives the camera.
 function updateBars(m: Motion) {
   const SCALE = 350; // raw axis range is roughly +/-350
   const cfg = getSpaceMouseConfig();
@@ -93,7 +71,6 @@ function updateBars(m: Motion) {
   }
 }
 
-// --- test cube (imperative: THREE.WebGLRenderer + its own rAF) ---
 const testCanvas = useTemplateRef<HTMLCanvasElement>("testCanvas");
 
 let three: {
@@ -158,9 +135,8 @@ function disposeTest() {
     o.geometry.dispose();
     for (const m of Array.isArray(o.material) ? o.material : [o.material]) m.dispose();
   });
-  // dispose() alone does not release the WebGL context, and a browser only
-  // grants a handful of them. The dialog is reopenable, and the real viewport
-  // holds one of those slots permanently.
+  // dispose() alone does not release the WebGL context, a browser grants only a handful and the real viewport holds one
+  // for good.
   three.renderer.forceContextLoss();
   three.renderer.dispose();
   three = null;
@@ -175,24 +151,16 @@ function tickTest() {
   const cfg = getSpaceMouseConfig();
   const stale = now - clock > cfg.staleMs;
   const m = stale ? { tx: 0, ty: 0, tz: 0, rx: 0, ry: 0, rz: 0 } : lastMotion;
-  // the SAME conditioning the viewport loop runs, so the preview and the real
-  // view can never disagree about what the puck is saying
+  // The same conditioning the viewport loop runs, so the preview and the real view cannot disagree.
   const f = filterMotion(m, cfg);
   const val = (a: ActionName) => {
     const b = cfg.bind[a];
-    if (!b) return 0; // tolerate a missing binding instead of crashing the loop
+    if (!b) return 0;
     return (b.invert ? -1 : 1) * f[b.src];
   };
 
-  // Drive the cube with EVERY mapped action so any gesture gives feedback:
-  // rotate accumulates (the thing being tested); pan/zoom nudge then spring
-  // back so they read as "live while held". Gains are scaled up from the
-  // camera sensitivities so motion is visible at this small size.
-  // Rotate, sign mirrors object mode (the cube IS the object).
-  // The cube shows what the MODEL appears to do = the inverse of the camera
-  // motion the real loop applies (which carries modeSign). So the cube
-  // coefficient is -modeSign: +1 in object mode, -1 in camera mode. Verified
-  // against the real viewport so the cube and model move the same screen way.
+  // Every mapped action drives the cube: rotate accumulates, pan and zoom nudge then spring back. The cube shows what the
+  // model appears to do, the inverse of the camera motion, so its sign is -modeSign, checked against the real viewport.
   const ms = cfg.mode === "object" ? 1 : -1;
   const kr = cfg.orbitSens * dt * 50;
   const az = ms * val("orbitAz") * kr;
@@ -205,9 +173,7 @@ function tickTest() {
   const rollc = ms * val("roll") * kr;
   if (rollc) t.cube.rotateOnWorldAxis(fwd, rollc); // bank around the view axis
 
-  // Pan, nudge in the screen plane, then spring back. Gentle gain + a hard
-  // clamp so the cube can never leave the little preview (this is a feel test,
-  // not a 1:1 move).
+  // A gentle gain and a hard clamp keep the cube inside the preview, this is a feel test and not a 1:1 move.
   const kp = cfg.panSens * dt * 30; // v2 sens are ~100× smaller (view-proportional)
   t.cube.position
     .addScaledVector(right, ms * val("panX") * kp)
@@ -215,12 +181,10 @@ function tickTest() {
     .addScaledVector(screenUp, -ms * val("panY") * kp);
   const PAN_LIMIT = 1.3;
   if (t.cube.position.length() > PAN_LIMIT) t.cube.position.setLength(PAN_LIMIT);
-  // Zoom, scale gently; bound the per-frame step so a hard push can't invert
-  // the cube (negative scale).
+  // The per-frame step is bounded so a hard push cannot invert the cube to a negative scale.
   const zd = THREE.MathUtils.clamp(val("zoom") * cfg.zoomSens * dt * 430, -0.08, 0.08);
   if (zd) t.cube.scale.multiplyScalar(1 + zd); // +zoom dollies in on the model → cube grows
 
-  // Spring pan + zoom back toward home so they read as "live while held".
   const decay = Math.min(1, 0.07 * (dt / 16));
   t.cube.position.multiplyScalar(1 - decay);
   const s = THREE.MathUtils.clamp(t.cube.scale.x + (1 - t.cube.scale.x) * decay, 0.6, 1.6);

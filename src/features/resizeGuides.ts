@@ -1,6 +1,4 @@
-// The guides a round face resize draws on the model: a thin line down the
-// face's axis, and a dashed one from the axis out to the handle, across the
-// whole diameter on a full round, so the size being set reads on the model.
+// The axis line and dashed size line a round face resize draws, so the size being set reads on the model.
 
 import * as THREE from "three";
 import type { Vec3 } from "../types";

@@ -1,6 +1,4 @@
-// Recent-files list for the Home screen. Display concern → localStorage
-// (same convention as the other fundacad.* keys); paths are not secrets. Newest
-// first, deduped by path, capped.
+// Recent files for Home, in localStorage since paths are not secrets. Newest first, deduped by path, capped.
 
 import { readSetting } from "../ui/storedSetting";
 

@@ -1,15 +1,9 @@
-// What re-editing a committed fillet or chamfer writes back.
-//
-// The edge tool rebuilds its feature from its own state for the live preview,
-// and that object only knows what the tool manages: no name, no fields another
-// panel set, and selectors re-derived from the ghosts. Committing it as is
-// renamed the feature and could rewrite its edges. So the commit starts from the
-// feature as it was and takes from the tool only what actually changed while it
-// was open.
+// Re-editing a committed fillet or chamfer. The tool's preview feature lacks the name, other panels' fields and the
+// original selectors, so the commit starts from the original and takes only what changed while the tool was open.
 
 import type { Feature, Selector } from "../types";
 
-/** Every field the edge tool reads or writes on a fillet or chamfer. */
+/** Fields the edge tool reads or writes on a fillet or chamfer. */
 const MANAGED = [
   "type",
   "radius",
@@ -27,27 +21,25 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 const asList = (edges: unknown): Selector[] =>
   edges === undefined ? [] : Array.isArray(edges) ? (edges as Selector[]) : [edges as Selector];
 
-/** True when both hold the same selectors, in any order. */
+/** Order insensitive. */
 export function sameMembers(a: unknown, b: unknown): boolean {
   const key = (xs: Selector[]) => xs.map((x) => JSON.stringify(x)).sort();
   return same(key(asList(a)), key(asList(b)));
 }
 
 export interface BlendEdit {
-  /** the committed feature, before the edit */
   original: Feature;
-  /** what the tool built from its state the moment it opened, before any input */
+  /** built from the tool state when it opened, before any input */
   opened: Feature;
-  /** what the tool builds from its state now */
   built: Feature;
   /** the parameter the size field is a bare reference to, see store.bareParamRef */
   paramRef: string | null;
 }
 
 export interface BlendEditCommit {
-  /** the replacement feature, null when nothing but a bound size changed */
+  /** null when nothing but a bound size changed */
   feature: Feature | null;
-  /** the parameter to set, null when the size is not bound or did not move */
+  /** null when the size is not bound or did not move */
   param: { name: string; value: number } | null;
   /** why nothing is written, when the edit cannot be committed as asked */
   refused?: string;
@@ -55,10 +47,8 @@ export interface BlendEditCommit {
 
 const sizeField = (f: Feature) => (f.type === "chamfer" ? "distance" : "radius");
 
-/** The original feature with each tool-managed field that moved since the tool
- *  opened taken from `built`, and every other field (name, id, anything the tool
- *  does not know) left exactly as it was. Edges are only replaced when the
- *  member set itself changed, never re-derived just because the tool saw them. */
+/** Fields the tool does not manage stay exactly as they were. Edges are replaced only when the member set itself
+ *  changed, never re-derived just because the tool saw them. */
 export function editedBlend(original: Feature, opened: Feature, built: Feature): Feature {
   const out = { ...original } as Record<string, unknown>;
   const o = opened as unknown as Record<string, unknown>;
@@ -72,9 +62,8 @@ export function editedBlend(original: Feature, opened: Feature, built: Feature):
   return out as unknown as Feature;
 }
 
-/** Split an edit into the feature write and the parameter write. A size bound
- *  to a parameter is written to the parameter only, and the field keeps its
- *  binding; a plain size is part of the feature. */
+/** A size bound to a parameter is written to the parameter only and the field keeps its binding; a plain size
+ *  goes in the feature. */
 export function blendEditCommit(e: BlendEdit): BlendEditCommit {
   if (!e.paramRef) {
     const feature = editedBlend(e.original, e.opened, e.built);

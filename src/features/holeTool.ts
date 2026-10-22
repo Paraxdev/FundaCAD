@@ -1,11 +1,5 @@
-// Interactive Hole: click a flat face, then click more spots on the same face
-// to add holes (click a hole again to take it away). The box sets the size, a
-// standard name ("M3") or a plain diameter, and the depth or "through"; its
-// switch steps the hole type. Everything else, fit, tap drill, counterbore and
-// countersink dimensions, drill point, is a row under the feature afterwards.
-//
-// The preview is the real cut from the engine, so a hole that cannot be built
-// says why in the box instead of committing a red history entry.
+// Interactive Hole: click a flat face, then spots on it to add holes (click one again to remove it). The box sets the
+// size and depth and steps the type, the rest are rows. The preview is the engine's real cut, so a bad hole says why.
 
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
@@ -53,9 +47,8 @@ export class HoleTool {
   private bodyId: string | null = null;
   private origin = new THREE.Vector3();
   private normal = new THREE.Vector3(0, 0, 1);
-  /** The face's true geometric centre (viewport.faceAreaCentroidWorld), the
-   *  origin for the X/Y offset fields and what Center snaps to. Distinct from
-   *  `origin`, an arbitrary in-plane point only used for the pick plane. */
+  /** The face's true centre (viewport.faceAreaCentroidWorld), origin of the X/Y fields and what Center snaps to.
+   *  `origin` is only an in-plane point for the pick plane. */
   private center = new THREE.Vector3();
   // In-plane axes for the X/Y offset fields.
   private xdir = new THREE.Vector3(1, 0, 0);
@@ -63,8 +56,7 @@ export class HoleTool {
   private lastXText = "";
   private lastYText = "";
   private points: Vec3[] = [];
-  // Set while a placed hole's marker is being dragged (index into `points`);
-  // null the rest of the time, including for a plain click that adds one.
+  // Index into `points` while a placed marker is dragged; null otherwise, a plain click that adds one included.
   private dragIndex: number | null = null;
   private dragMoved = false;
   // Kept across uses, the next hole is usually the same as the last one.
@@ -276,9 +268,8 @@ export class HoleTool {
     this.normal.copy(normal).normalize();
     this.origin.copy(origin);
     this.bodyId = bodyId;
-    // The true geometric middle, not faceCentroidWorld's by:"nearest" anchor
-    // (origin, above): that one snaps onto a single triangle's centroid, which
-    // for a two-triangle quad sits well off the middle a person means.
+    // The true middle, not faceCentroidWorld's by:"nearest" anchor, which snaps to one triangle's centroid and sits
+    // well off the middle of a two triangle quad.
     this.center.copy(faceId != null ? this.viewport.faceAreaCentroidWorld(faceId) : origin);
     const xd = planeXDir([this.normal.x, this.normal.y, this.normal.z]) ?? [1, 0, 0];
     this.xdir.set(xd[0], xd[1], xd[2]);
@@ -372,9 +363,8 @@ export class HoleTool {
     this.valueChanged();
   }
 
-  /** Size and depth are read by this tool rather than the box, a size name
-   *  and "through" not being numbers, so it is this tool that has to refuse
-   *  what it could not read instead of building the last value it could. */
+  /** A size name and "through" are not numbers, so this tool reads them and must refuse what it could not read
+   *  rather than build the last value it could. */
   private typedProblem(): string | null {
     if (this.dim.isUserDriven("size") && !parseHoleSize(this.dim.getRaw("size"))) {
       return badHoleSizeText(this.dim.getRaw("size"));

@@ -1,7 +1,5 @@
-// What each body looks like it is made of: its finish, the per-face materials
-// dropped on single faces, and the lights that glowing surfaces throw. One writer
-// for every material a body draws with, so x-ray, the stale ghost and an assigned
-// material cannot undo each other depending on which ran last.
+// The one writer for every material a body draws with (finish, per-face materials, glow lights), so x-ray, the stale
+// ghost and an assigned material cannot undo each other depending on which ran last.
 
 import * as THREE from "three";
 import { isGlassAuto, registerGlass } from "./glassThickness";
@@ -45,9 +43,8 @@ import type { ReliefMap } from "../plugins/contrib";
 /** Every rectangle light is evaluated for every lit pixel, so this is the budget. */
 const MAX_AREA_LIGHTS = 12;
 const MAX_AREA_LIGHTS_LOW_POWER = 4;
-/** The light count is padded up to this or to the cap. The count is part of every
- *  lit program, so changing it relinks them all; two sizes keep that rare while a
- *  single glowing panel does not pay for twelve lights. */
+/** The light count is part of every lit program, so changing it relinks them all. Padding to this or to the cap keeps
+ *  that rare while a single glowing panel does not pay for twelve lights. */
 const SMALL_AREA_BUCKET = 4;
 /** A point-light shadow is a cube map, six renders each. */
 const MAX_SHADOW_EMITTERS = 2;
@@ -100,9 +97,8 @@ export function sameStringMap(
   return true;
 }
 
-/** Every field of a finish that changes how it is drawn, as one string. The
- *  finish map comparison, the per-face material slots and the swatch cache all
- *  key on it, so a new field added here reaches all three at once. */
+/** The finish map comparison, the per-face material slots and the swatch cache all key on this, so every field that
+ *  changes how a finish is drawn belongs in it. */
 export function finishKey(f: BodyFinish): string {
   return [
     f.metalness,
@@ -233,9 +229,8 @@ export class BodyFinishLayer {
 
   constructor(private host: FinishHost) {}
 
-  /** Opacity takes the faintest of what applies, and stale is preferred over x-ray
-   *  because stale carries a warning. Runs again after every rebuild, which
-   *  hands back materials wearing the default finish. */
+  /** Opacity takes the faintest that applies, stale over x-ray because stale is a warning. Runs again after every rebuild,
+   *  which hands back materials in the default finish. */
   apply(o: FinishOverlays) {
     const model = this.host.model();
     if (!model) return;
@@ -268,9 +263,8 @@ export class BodyFinishLayer {
       mat.metalness = f ? f.metalness : unset.metalness;
       mat.roughness = f ? f.roughness : unset.roughness;
       if (!ghost && f && isShiny(f)) shiny = true;
-      // Colour is baked per vertex, so the emissive tint comes off the paint map.
-      // White for an unpainted body: emissive black would make the glow do nothing.
-      // A ghost never glows, or x-ray would light the model up instead of fading it.
+      // Colour is baked per vertex, so the glow tint comes off the paint map, white when unpainted since black would not glow.
+      // A ghost never glows, or x-ray would light the model up.
       const glow = ghost ? 0 : (f?.emissive ?? FINISH.emissive);
       if (glow > 0) glows = true;
       const paint = this.bodyPaint[b.id] ?? 0xffffff;
@@ -456,10 +450,8 @@ export class BodyFinishLayer {
     return isRenderLowPower() ? MAX_AREA_LIGHTS_LOW_POWER : MAX_AREA_LIGHTS;
   }
 
-  /** Bodies go brightest bound first, so a pass stops as soon as no body left
-   *  could outshine the dimmest light kept. Cached bodies cost a re-weighting;
-   *  cold ones are fitted within `fitBudgetMs` and the rest wait for a later
-   *  frame, the lights found so far showing meanwhile. */
+  /** Brightest bound first, so a pass stops once no body left could outshine the dimmest light kept. Cold bodies are
+   *  fitted within `fitBudgetMs` and the rest wait a frame, the lights found so far showing meanwhile. */
   private startEmitters(model: ModelView, glowing: GlowingBody[]) {
     for (const g of glowing) g.bound = this.boundOf(g);
     glowing.sort((x, y) => y.bound - x.bound);
@@ -598,12 +590,8 @@ export class BodyFinishLayer {
     this.host.onEmitterProgress?.(p);
   }
 
-  /** Each glowing patch becomes a rectangle light its own shape, and the
-   *  brightest few pair with a zero-intensity point light for a shadow
-   *  (areaLightShadows.ts, which is why lights are added in rank order). The
-   *  count of lights and of shadow casters is part of every lit program, so it
-   *  is padded to a fixed size, and a new size is linked off to the side while
-   *  the old lights keep drawing. */
+  /** The brightest patches pair with a zero intensity point light for a shadow (areaLightShadows.ts, hence rank order).
+   *  The light counts are part of every lit program, so they are padded and a new size links aside while the old draws. */
   private syncEmitterLights(patches: EmitterPatch[]) {
     const cap = this.areaCap();
     this.ranked = patches.sort((a, b) => b.power - a.power).slice(0, cap);
@@ -722,11 +710,9 @@ export class BodyFinishLayer {
     });
   }
 
-  /** Per-face materials as geometry GROUPS over the body's one mesh, not a second
-   *  mesh: that would double vertices, break the per-vertex colour buffer hover
-   *  and selection paint into, and give the picker two objects per face. The
-   *  tessellator emits a face's triangles together, so nothing is reordered,
-   *  which would invalidate `faceTriangles`. */
+  /** Face materials are geometry groups over the body's one mesh: a second mesh would double vertices, break the hover
+   *  and selection colour buffer and give the picker two objects per face. Groups rely on the tessellator emitting a
+   *  face's triangles together, so nothing is reordered, which would invalidate `faceTriangles`. */
   private syncFaceMaterials(b: BodyMesh, base: THREE.MeshStandardMaterial, fids: number[] | undefined) {
     const held = this.faceMatState.get(b.id);
     if (!fids?.length) {

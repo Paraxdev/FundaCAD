@@ -1,20 +1,5 @@
-//! The `stress` op: a linear static analysis of one body. The document is rebuilt through the
-//! warm cache, a copy of the body is meshed (never the live shape, whose stored triangulation
-//! the viewport shares), welded into one closed surface that keeps each triangle's face index,
-//! filled with tetrahedra (`fem::tetmesh`) and solved on TET10 elements (`fem::solve`). Fixed
-//! faces and loaded faces are selectors resolved on that same copy, so their indices are the
-//! mesh's face ids. The reply carries the peaks, the balance of applied load and reaction, and
-//! the boundary of the volume mesh coloured by von Mises stress for the viewport.
-//!
-//! Besides fixed faces, a support may be a slider (held along the face normal only) or a pin
-//! (a cylindrical face held towards its axis and along it, free to turn), and gravity may pull
-//! on the whole body with the material's density.
-//!
-//! A support or a load may also name `spots`, each a point with a radius: the part of the
-//! body's surface within the radius of the point. A spot needs no face of its own, so a load
-//! in the crook of a hook or a screw's patch on a wall plate is placed without splitting a
-//! face for it first. Spots are found on the volume mesh's boundary and given face ids of
-//! their own past the body's, so the solver takes them as it takes faces.
+//! The `stress` op: a linear static TET10 analysis of one body, meshed from a copy since the viewport
+//! shares the live triangulation. Spots get face ids past the body's, so the solver takes them as faces.
 
 use std::collections::{HashMap, VecDeque};
 use std::time::Duration;
@@ -37,9 +22,8 @@ use crate::select::Resolver;
 
 /// Elements a mesh may have when the request names no limit.
 pub const DEFAULT_MAX_ELEMENTS: usize = 30_000;
-/// The most elements any request gets. The solver needs about 2 GB at 50000 elements and
-/// its factorisation may take 3 GB, so a compact part rarely fits above about 50000, while
-/// a slender or thin walled one can go further.
+/// The solver needs about 2 GB at 50000 elements and its factorisation may take 3 GB, so a compact
+/// part rarely fits above about 50000, while a slender or thin walled one can go further.
 pub const MAX_ELEMENTS: usize = 80_000;
 /// The default element size aims at this share of the element limit, so the mesh lands near
 /// it without the mesher having to coarsen.
@@ -165,9 +149,8 @@ fn positive(req: &Map<String, Value>, key: &str) -> Result<Option<f64>, String> 
 /// Below this, in m/s2 along every axis, a gravity vector pulls on nothing.
 const NO_GRAVITY: f64 = 1e-9;
 
-/// What `gravity` asks for, in m/s2: true is standard gravity along -Z. A vector of no length
-/// is no gravity, so a request with no load is refused as it is without gravity, rather than
-/// solved for nothing.
+/// True is standard gravity along -Z. A vector of no length is no gravity, so a request with no load
+/// is refused rather than solved for nothing.
 fn gravity_of(v: Option<&Value>) -> Result<Option<[f64; 3]>, String> {
     match v {
         None | Some(Value::Null) | Some(Value::Bool(false)) => Ok(None),
@@ -205,9 +188,8 @@ impl SupportKind {
     }
 }
 
-/// The exact surface of face `face` of `shape`, as a slider holds it: a plane, a cylinder,
-/// a cone, a sphere, a torus or another surface turned about an axis, with its axis or centre,
-/// else a free-form face whose normal the mesh gives.
+/// As a slider holds it: a plane, cylinder, cone, sphere, torus or surface of revolution with its axis
+/// or centre, else a free-form face whose normal the mesh gives.
 fn slide_face(shape: &Shape, face: u32) -> SlideFace {
     let Some((kind, o)) = surface_kind(shape, face) else {
         return SlideFace::Mesh;
@@ -356,7 +338,6 @@ fn supports_of(shape: &Shape, body_id: &str, v: Option<&Value>) -> Result<Vec<Su
     Ok(out)
 }
 
-/// A selector or a list of them, as a list.
 fn selector_list(v: &Value) -> Vec<&Value> {
     match v {
         Value::Array(a) => a.iter().collect(),
@@ -373,9 +354,8 @@ fn fail_text(f: &Fail) -> String {
     }
 }
 
-/// The error reply. A feature that failed may be why the body or a face is not there, so the
-/// first failure is named in the message and its feature id goes with it, as the wire carries
-/// an error's message and feature id only.
+/// A failed feature may be why a body or face is missing, so the first failure is named in the message
+/// with its feature id, as the wire carries only an error's message and feature id.
 pub(crate) fn refuse(message: &str, errors: &[FeatureError]) -> JobResult {
     match errors.first() {
         None => error_result(message),
@@ -397,9 +377,8 @@ pub(crate) fn refuse(message: &str, errors: &[FeatureError]) -> JobResult {
     }
 }
 
-/// What the face selectors at `path` in the request pick on `shape` (the copy that was meshed),
-/// as its mesh face ids. A refusal names them by `words` first when there are any (the panel's
-/// "support 1"), then by `path`. A selector that picks nothing is refused rather than ignored.
+/// As mesh face ids of `shape`, the meshed copy. A refusal names them by `words` (the panel's
+/// "support 1") then by `path`, and a selector that picks nothing is refused rather than ignored.
 fn face_ids(shape: &Shape, body_id: &str, sels: &Value, words: &str, path: &str) -> Result<Vec<u32>, String> {
     let label = |path: String| {
         if words.is_empty() {
@@ -557,10 +536,8 @@ fn triangle_distance(p: [f64; 3], [a, b, c]: [[f64; 3]; 3]) -> f64 {
     at(vb / sum, vc / sum)
 }
 
-/// Find each spot on the boundary of `mesh`: the triangle its point lies on, and from there
-/// every triangle reached across shared edges whose centre is within the radius. Growing it
-/// from the point keeps a spot on one side of a thin wall off the other side. `labels` name
-/// the spots in a refusal, `size` is the element size.
+/// Each spot grown from the triangle its point lies on across shared edges within the radius, which
+/// keeps it off the far side of a thin wall. `labels` name spots in a refusal, `size` is the element size.
 fn spotted(mesh: &TetMesh, spots: &[Spot], labels: &[String], body_id: &str, size: f64) -> Result<Spotted, String> {
     let centres: Vec<[f64; 3]> = mesh
         .boundary
@@ -664,9 +641,8 @@ fn spotted(mesh: &TetMesh, spots: &[Spot], labels: &[String], body_id: &str, siz
     Ok(Spotted { mesh: out, of_spot, of_face, origin, first, small })
 }
 
-/// One vertex per position, so the faces that meet share the nodes along their common edge,
-/// keeping each triangle's face id. Triangles the weld collapses are dropped with their ids.
-/// The export's weld, carrying the face ids along.
+/// The export's weld carrying face ids: one vertex per position so faces share nodes along common
+/// edges. Triangles the weld collapses are dropped with their ids.
 pub fn weld(positions: &[f64], indices: &[u32], face_ids: &[u32]) -> SurfaceMesh {
     let (welded, remap) = export::weld_vertices(positions);
     let mut out = SurfaceMesh {
@@ -726,9 +702,8 @@ struct PeakPlace {
     support_edge: Option<&'static str>,
 }
 
-/// The boundary triangles touching TET10 node `node`: a corner node by being one of their
-/// corners, a mid-edge node by holding both ends of its edge. `held` lists the faces the
-/// supports hold, sorted, each with how it is held.
+/// A corner node by being a corner, a mid-edge node by holding both ends of its edge. `held` lists the
+/// faces the supports hold, sorted, each with how it is held.
 fn peak_place(mesh: &TetMesh, sol: &Solution, node: u32, held: &[(u32, &'static str)]) -> PeakPlace {
     let ends: Vec<u32> =
         if (node as usize) < sol.corners { vec![node] } else { sol.edges[node as usize - sol.corners].to_vec() };
@@ -753,9 +728,8 @@ fn peak_place(mesh: &TetMesh, sol: &Solution, node: u32, held: &[(u32, &'static 
     PeakPlace { face: areas.first().map(|a| a.0), support_edge: ways.first().copied().filter(|_| free) }
 }
 
-/// The edges where two faces meet folding inward by more than `SHARP_FOLD_DEG`, as segments.
-/// Read on the welded surface, whose triangles follow the exact faces, not on the volume
-/// mesh, which rounds and kinks every edge within about an element.
+/// Read on the welded surface, which follows the exact faces, not the volume mesh, which rounds and
+/// kinks every edge within about an element.
 fn inside_corners(surface: &SurfaceMesh) -> Vec<[[f64; 3]; 2]> {
     let mut by_edge: HashMap<(u32, u32), Vec<usize>> = HashMap::new();
     for (i, t) in surface.triangles.iter().enumerate() {
@@ -786,7 +760,6 @@ fn inside_corners(surface: &SurfaceMesh) -> Vec<[[f64; 3]; 2]> {
     out
 }
 
-/// The distance from `q` to the segment `s`.
 fn segment_distance(q: [f64; 3], s: &[[f64; 3]; 2]) -> f64 {
     let d = sub(s[1], s[0]);
     let len2 = dot(d, d);
@@ -860,13 +833,8 @@ fn triangle_area(p: &[[f64; 3]], t: &[u32; 3]) -> [f64; 3] {
     cross(sub(b, a), sub(c, a)).map(|x| x / 2.0)
 }
 
-/// Pressures that load the faces they name with the force the real faces would take.
-/// Isosurface stuffing rounds a sharp edge over within about an element, and each boundary
-/// triangle of the rounding goes to one of the two faces, so the elements tagged with a face
-/// cover a little more or less than it, at a slant. A pressure on a planar face is the
-/// uniform traction `-p n` over its true area, so it becomes that face's own force, exact in
-/// size and direction. A pressure on curved faces keeps following the surface, scaled so its
-/// size matches their true area. The second list gives the request's load index of each one.
+/// Isosurface stuffing rounds sharp edges within about an element, so tagged elements miss a face's true
+/// area. A planar pressure becomes its face's exact force, a curved one is scaled to the true area.
 fn exact_pressures(
     loads: Vec<Load>,
     surface: &SurfaceMesh,
@@ -923,9 +891,8 @@ fn renumber_load(e: SolveError, origin: &[usize]) -> SolveError {
     }
 }
 
-/// A solver error in words. Too large for the memory names the element limit that would fit
-/// a mesh like this one, `elements` being its count: the factor of a solid's mesh grows about
-/// as the count to the power 4/3, so the count that fits goes as the memory to the 3/4.
+/// Too large for memory names the element limit that would fit: a solid mesh's factor grows about as the
+/// count to the 4/3, so the count that fits goes as the memory to the 3/4.
 fn solve_error_text(e: &SolveError, elements: usize) -> String {
     match e {
         SolveError::Cancelled => "cancelled".into(),
@@ -949,7 +916,6 @@ fn mesh_error_text(e: &MeshError) -> String {
     }
 }
 
-/// The `stress` op.
 pub fn stress_result(req: &Map<String, Value>, watch: &dyn Watch) -> JobResult {
     let _beat = crate::heartbeat::install(watch.heartbeat());
     let _cancel = crate::cancel::install(watch.cancel_token());
@@ -1095,9 +1061,8 @@ fn analyse(
     }
 
     let requested = size.unwrap_or_else(|| default_size(volume, area, max_elements));
-    // The mesher would grow a size below the floor anyway, and the surface it fills is
-    // triangulated for the size used: a curved part tessellated for a far smaller one takes
-    // minutes and gigabytes for nothing.
+    // The mesher grows a size below the floor anyway, and the surface is triangulated for the size used,
+    // so a curved part tessellated far finer takes minutes and gigabytes for nothing.
     let effective = requested.max(size_floor(volume, max_elements));
     let deflection = (effective * SURFACE_DEFLECTION).clamp(1e-3, 0.2);
     let (surface, planar) = crate::heartbeat::while_running(Duration::from_secs(120), || {
@@ -1217,9 +1182,8 @@ fn analyse(
         fixed: given_fixed,
         supports,
         loads,
-        // Scaled by the body's true volume over the mesh's, which rounds its edges over
-        // within about an element, so the weight is what the real body weighs, as the
-        // pressures above are what the real faces take.
+        // Scaled by true volume over mesh volume, as the mesh rounds edges within about an element, so the
+        // weight is the real body's, as the pressures above are the real faces' loads.
         body_force: gravity.zip(density).map(|(g, d)| {
             let scale = if stats.volume > 0.0 { volume / stats.volume } else { 1.0 };
             body_force(d, g).map(|c| c * scale)

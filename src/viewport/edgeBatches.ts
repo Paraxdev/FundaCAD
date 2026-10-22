@@ -1,12 +1,5 @@
-// The idle bodies' edges drawn as a few merged batches for the length of one
-// render (see edgeMotion.ts for when). The real BodyEdges objects are hidden and
-// put back, like PotatoDraw does, so picking, the edge colours, highlighting and
-// every other reader keep working on them unchanged.
-//
-// A batch holds bodies close together in space, so a view zoomed into one part
-// still culls the rest of the assembly. Its arrays are the members' own instance
-// arrays (6 floats a segment, start then end) laid end to end, which is also the
-// layout a plain 1px LineSegments reads, so the thin twin shares them.
+// Idle bodies' edges drawn as a few merged batches for one render (edgeMotion.ts says when), grouped in space so a
+// zoomed view still culls. The real BodyEdges are hidden and put back, so picking and highlighting keep using them.
 
 import * as THREE from "three";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";

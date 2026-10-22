@@ -9,7 +9,6 @@ use serde_json::{Map, Value};
 
 use super::{fold_crlf, sha256_hex, Ctx};
 
-/// Record the named corpus documents into the golden file and rewrite it.
 pub fn record(ctx: &mut Ctx, golden_path: &Path, corpus_path: &Path, names: &[String]) -> Result<(), String> {
     let kind = ctx.header()["kind"].as_str().unwrap_or("").to_owned();
     for name in names {

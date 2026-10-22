@@ -2,8 +2,7 @@ import { defineStore } from "pinia";
 import { markRaw, ref, shallowRef } from "vue";
 import type { RelationRow } from "../sketch/relations";
 
-/** What the list calls back into. Assigned by SketchMode on sketch entry, in
- *  the same late-bound way the two badge layers get theirs. */
+/** Assigned by SketchMode on sketch entry, late bound like the badge layers' hooks. */
 export interface RelationHooks {
   /** remove the constraint at this index; never called for an implied row */
   del(index: number): void;
@@ -13,22 +12,15 @@ export interface RelationHooks {
   select(entities: string[]): void;
 }
 
-/** The relations list in the Sketch Palette: what is holding the open sketch,
- *  and how much freedom is left.
- *
- *  shallowRef + markRaw on the rows for the same reason the annotation store
- *  does it: they are rebuilt wholesale on every constraint change and every
- *  solve, and there is nothing in them a deep Proxy would earn. They are plain
- *  data though, no closures, no THREE objects, so unlike the badge layers
- *  this one has no per-frame path and no rAF loop. Position is not its problem. */
+/** The Sketch Palette's relations list. Rows are rebuilt wholesale on every constraint change and solve, so shallowRef
+ *  and markRaw; they are plain data with no per-frame path. */
 export const useSketchRelationsStore = defineStore("sketchRelations", () => {
   const rows = shallowRef<readonly RelationRow[]>([]);
   /** dofSummary()'s sentence: "Fully defined", "6 degrees of freedom", ... */
   const summary = ref("");
   /** true when the solver could not satisfy the set, colours the summary. */
   const conflict = ref(false);
-  /** mirrors the palette's Show Constraints toggle, which governs the canvas
-   *  glyphs; the list is the same information and follows the same switch. */
+  /** Mirrors the palette's Show Constraints toggle, which governs the canvas glyphs this list repeats. */
   const visible = ref(true);
   const hooks = shallowRef<RelationHooks | null>(null);
   /** the row the pointer is on, so the highlight can be cleared on leave */

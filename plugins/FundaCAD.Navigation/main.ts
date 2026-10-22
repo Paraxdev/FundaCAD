@@ -1,6 +1,5 @@
-// Mouse button presets, an opt-in radial menu and a shortcut rebinding panel.
-// Everything here goes through the core's binding table, keymap overrides and
-// menu at the cursor; removing the plugin puts the default mouse and keys back.
+// Everything goes through the core's binding table, keymap overrides and menu at the cursor, so removing the plugin
+// puts the default mouse and keys back.
 
 import { SHORTCUTS, allCommands, contribute, keyHint, openMenuAt, radialMenuOpen } from "fundacad";
 import type { Engine, PointerGesture, RadialTrigger } from "fundacad";

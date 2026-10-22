@@ -1,8 +1,5 @@
-//! The printer connection's geometry half as a FundaCAD plugin component, the
-//! Rust twin of geometry/*.py: the slicer project 3MF exporter. The engine
-//! rebuilds, meshes and budgets; this decides what the file looks like. The
-//! LAN device talk and the native commands are not engine geometry and stay in
-//! the window half.
+//! The slicer project 3MF exporter as a FundaCAD plugin component, the Rust twin of geometry/*.py. The engine
+//! rebuilds, meshes and budgets; this decides what the file looks like.
 
 wit_bindgen::generate!({
     world: "plugin",
@@ -28,9 +25,8 @@ fn base_settings() -> Map<String, Value> {
     m
 }
 
-/// register.py `export_project`: options {palette, bodyColors, bodyNames,
-/// settings?, presets?: {datadir, filamentCount}}. Failing to read the presets
-/// is not an error, the project still carries the colours, and `info.presets`
+/// register.py `export_project`: options {palette, bodyColors, bodyNames, settings?, presets?: {datadir,
+/// filamentCount}}. Unreadable presets are not an error, the project still carries the colours and `info.presets`
 /// says which happened.
 fn export_project(bodies: &[ExportBody], options: &Value) -> Result<Value, String> {
     let (palette, colors, names) =

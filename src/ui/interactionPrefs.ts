@@ -42,8 +42,6 @@ export function onHoverDwellChange(fn: () => void): () => void {
   return () => listeners.delete(fn);
 }
 
-// --- navigation ----------------------------------------------------------------
-
 /** Which camera rig the viewport runs: the navigator (the default), or the camera-controls
  *  one kept for a release behind `?nav=legacy` or this setting. */
 export type NavigatorChoice = "v2" | "legacy";
@@ -148,8 +146,6 @@ export function onNavPrefsChange(fn: () => void): () => void {
   navListeners.add(fn);
   return () => navListeners.delete(fn);
 }
-
-// --- the wheel device seen --------------------------------------------------------
 
 /** What the last scroll was read as, for the setting's "Automatic" readout. */
 let detectedWheel: "touchpad" | "mouse" | null = null;

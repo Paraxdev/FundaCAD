@@ -1,26 +1,11 @@
-// Narrowing the browser panel to one kind of thing.
-//
-// The panel renders a FLAT list of nodes (see BrowserPane.vue for why), so
-// filtering is a question about which SECTION each node came from rather than a
-// tree walk. The panel tags them; this decides what each filter shows.
-//
-// The house shape for a user setting (ui/theme.ts, icons.ts, units.ts): module
-// state, a validating gate over the untrusted stored value, one `fundacad.*`
-// key read at load, a listener set. No Vue import, so the headless suite reaches
-// it.
-//
-// There is deliberately no "Images" filter. This app has no reference-image or
-// canvas feature, so that row would filter to nothing every time it was picked,
-// a control that appears broken is worse than a control that is absent. It goes
-// in when there is something for it to find.
+// The panel renders a flat node list, so a filter picks which sections show rather than walking a tree.
+// No "Images" filter: the app has no reference image feature, and a filter that always shows nothing looks broken.
 
 import { readSetting } from "./storedSetting";
 
 export type BrowserFilter = "all" | "bodies" | "planes" | "sketches";
 
-/** Which part of the tree a node belongs to. Assigned as the panel builds its
- *  flat node list; `origin` and `planes` are separate sections that one filter
- *  happens to show together, because Origin is not a construction plane. */
+/** `origin` and `planes` are separate sections one filter shows together, since Origin is not a construction plane. */
 export type BrowserSection = "origin" | "planes" | "palette" | "bodies" | "sketches";
 
 export const BROWSER_FILTERS: { id: BrowserFilter; label: string }[] = [
@@ -30,13 +15,10 @@ export const BROWSER_FILTERS: { id: BrowserFilter; label: string }[] = [
   { id: "sketches", label: "Sketches" },
 ];
 
-/** null = show every section. Listing the sections a filter DOES show, rather
- *  than the ones it hides, is what makes a new section default to hidden under a
- *  narrow filter instead of leaking into all of them. */
+/** null shows every section. Listing what a filter shows, not what it hides, keeps a new section hidden by default. */
 const SHOWS: Record<BrowserFilter, BrowserSection[] | null> = {
   all: null,
-  // The palette rides with the bodies: it only renders when bodies exist, and
-  // it is the surface for their colours.
+  // The palette only renders with bodies and colours them, so it rides with them.
   bodies: ["palette", "bodies"],
   planes: ["origin", "planes"],
   sketches: ["sketches"],
@@ -50,13 +32,7 @@ export function sectionVisible(filter: BrowserFilter, section: BrowserSection): 
 const KEY = "fundacad.browserFilter";
 const LEGACY_KEYS = ["neocad.browserFilter", "sindricad.browserFilter"];
 
-/** Whether a string names one of the panel's sections.
- *
- *  For a section contributed from outside, which arrives as an unchecked string:
- *  a plugin may say which of these it should be hidden with, and one naming
- *  something this build does not have is always shown rather than never. A
- *  section that vanished under a filter nobody told it about would be worse than
- *  one that stays. */
+/** For a plugin section, which arrives unchecked: a name this build lacks is always shown, never hidden. */
 export function isBrowserSection(v: string): v is BrowserSection {
   return v === "origin" || v === "planes" || v === "palette" || v === "bodies" || v === "sketches";
 }
@@ -89,7 +65,6 @@ export function setBrowserFilter(id: BrowserFilter): void {
   for (const fn of listeners) fn();
 }
 
-/** Subscribe to changes; returns the unsubscribe. */
 export function onBrowserFilterChange(fn: () => void): () => void {
   listeners.add(fn);
   return () => listeners.delete(fn);

@@ -1,7 +1,5 @@
-//! Guide mode over the real wire: a real engine, `fundacad-mcp` over stdio, and a
-//! host loop that answers `session_guide` the way `src/ui/guide/guideSession.ts` does.
-//! The window's own rules are in tests/ui/guide; this holds the tools' replies
-//! and the refusals, which are what an assistant reads.
+//! Guide mode over the real wire, with a host loop answering `session_guide` as `src/ui/guide/guideSession.ts`
+//! does. The window's rules are tested in tests/ui/guide; this holds the replies and refusals an assistant reads.
 
 mod common;
 

@@ -1,22 +1,5 @@
-//! Does the server notice FundaCAD opening after it started? A port of
-//! the Python MCP server's `test_reattach.py`.
-//!
-//! `attach` asks "is the app open?" exactly once, at start-up, and start-up is
-//! not a moment the user controls: an MCP host launches its servers when the
-//! HOST launches, not when a conversation begins. So the question was asked
-//! before the person had any reason to have opened the app, and answering no
-//! meant a private engine for the rest of the host's session. Opening the app
-//! afterwards changed nothing, which reads as the connector refusing to use the
-//! app that is right there in front of them.
-//!
-//! So the question gets asked again. Every test here is one of the ways that
-//! could go wrong, and the controls matter more than the happy path: re-probing
-//! REPLACES the document in hand, so the cases where it must not happen are the
-//! ones that make it safe to have at all.
-//!
-//! The Python suite patched module names. Here the probe is a real session file
-//! and a real socket, so the stub is an engine that answers, which puts
-//! discovery itself under test as well.
+//! The server re-probes for an app opened after start-up, since hosts launch servers with the HOST. Re-probing
+//! REPLACES the document in hand, so the controls, the cases where it must not happen, matter most.
 
 mod common;
 
@@ -136,9 +119,8 @@ async fn nothing_happens_when_no_app_is_open() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn work_already_done_here_is_not_thrown_away() {
-    // THE control. Adopting replaces the document, so a server that has built
-    // something privately must stay where it is: a user who opens the app to
-    // look at something else has not asked for the agent's work to be discarded.
+    // THE control: adopting replaces the document, so a server that built something privately stays put;
+    // opening the app to look at something else is no request to discard the agent's work.
     let _serial = serial();
     let app = sharing_engine();
     let _session = Session::published(&app);
@@ -166,9 +148,8 @@ async fn standalone_is_left_alone() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_window_that_is_not_sharing_leaves_a_working_session() {
-    // The engine is the app's but live editing is off in its settings. Half a
-    // switch is worse than none: the server must not end up with a live session
-    // it cannot pull from, nor with its private engine already stopped.
+    // Live editing is off in the app's settings: the server must end with neither a live session it cannot
+    // pull from nor its private engine already stopped.
     let _serial = serial();
     let app = silent_engine();
     let _session = Session::published(&app);
@@ -183,9 +164,7 @@ async fn a_window_that_is_not_sharing_leaves_a_working_session() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_closed_app_is_not_re_probed_on_every_call() {
-    // A probe is a file read when there is no session file, and a connect that
-    // waits out its timeout when there is a STALE one. The second is the case
-    // this bounds: without it, every tool call in a session pays that timeout.
+    // With a STALE session file a probe waits out a connect timeout; without this bound every tool call would pay it.
     let _serial = serial();
     let app = silent_engine();
     let _session = Session::published(&app);
@@ -215,11 +194,7 @@ async fn an_attached_server_stops_asking() {
     assert_eq!(pings(&app), before, "kept probing after it was already attached");
 }
 
-// --- the app going away under a live session ---------------------------------
-//
-// These drive the real binary, because the fall-back lives in `call_tool`: it
-// is the thing that runs a tool against the app's document, notices the engine
-// has gone, and runs it again privately.
+// These drive the real binary, since the fall-back to a private engine lives in `call_tool`.
 
 fn attached_process(session: &std::path::Path) -> common::Mcp {
     let mut env = std::collections::BTreeMap::new();
@@ -229,8 +204,7 @@ fn attached_process(session: &std::path::Path) -> common::Mcp {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_closed_app_falls_back_to_a_private_engine() {
-    // The window closed under a live session. Every call used to fail the same
-    // way until the host restarted this server.
+    // The window closed under a live session; calls must not keep failing until the host restarts this server.
     let _serial = serial();
     let app = sharing_engine();
     let session = Session::published(&app);
@@ -271,9 +245,8 @@ async fn the_app_coming_back_is_found_again() {
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_private_engine_of_another_build_says_so() {
-    // Last week a document built differently here than in the app because the
-    // engine this server started was three days older than the app's, and
-    // nothing said so. This app's engine is a build no checkout has.
+    // A private engine of another build than the app's can build a document differently, so it is said.
+    // This app's engine is a build no checkout has.
     let _serial = serial();
     let app = FakeEngine::start(|op, _req| match op {
         "ping" => json!({"ok": true, "result": {"pong": true, "build": {
@@ -373,9 +346,8 @@ fn the_session_file_is_read_and_a_broken_one_is_not_believed() {
 
 #[test]
 fn the_app_data_directory_is_the_one_tauri_derives() {
-    // Tauri joins the bundle identifier onto the platform data directory, and
-    // this re-derives it. Getting it wrong means never finding a running app on
-    // that platform, silently.
+    // Tauri joins the bundle identifier onto the platform data directory and this re-derives it;
+    // getting it wrong means silently never finding a running app.
     let _serial = serial();
     let dir = fundacad_mcp::app_session::app_data_dir();
     assert!(dir.ends_with(fundacad_mcp::app_session::APP_IDENTIFIER), "{}", dir.display());

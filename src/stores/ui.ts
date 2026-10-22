@@ -3,52 +3,37 @@ import { ref } from "vue";
 import type { SelectPolicy } from "../viewport/clickIntent";
 import type { ViewMode } from "../ui/renderPrefs";
 
-/** Chrome state that used to live as imperative writes to element ids in
- *  index.html, `statusEl.textContent`, `docnameEl.classList.toggle("dirty")`,
- *  `projBtn.textContent`, `selBtn.classList.toggle("active")` and so on.
- *
- *  Everything here is a primitive. Nothing from the document, the build result
- *  or Three.js may be put in a Pinia store: Pinia deep-reactive()s its state,
- *  and a Proxy inside the document breaks structuredClone in the undo snapshot
- *  (store.ts:434) and the reference-identity checks the delta wire protocol
- *  relies on (store.ts:625-636). */
+/** Chrome state, primitives only. Pinia deep-reactive()s state, and a Proxy in the document breaks structuredClone in
+ *  the undo snapshot and the delta wire protocol's reference identity checks (document/store.ts). */
 export const useUiStore = defineStore("ui", () => {
-  // --- document name + dirty marker ---
   const docName = ref("Untitled");
   const dirty = ref(false);
 
-  // --- undo/redo button enablement ---
   const canUndo = ref(false);
   const canRedo = ref(false);
 
-  // --- SOLID / SKETCH context tab ---
   const sketchActive = ref(false);
 
-  // --- what one grid square is worth at the current zoom, in mm ---
-  // The grid rescales as you zoom, which means the lines are a ruler whose
-  // markings keep changing, and a ruler with no number on it is decoration.
-  // Written by the viewport (ground grid) and by sketch mode (sketch lattice,
-  // which is also where the cursor snaps); only one of the two is ever drawn.
+  // In mm. The grid rescales with zoom, so its lines need a number to be a ruler. Written by the viewport (ground grid)
+  // or sketch mode (sketch lattice, where the cursor snaps); only one of the two is ever drawn.
   const gridStepMm = ref(0);
 
-  // --- view-control pill labels ---
-  // Projection cycles Auto -> Persp -> Ortho; the label is the CURRENT mode.
+  // Projection cycles Auto, Persp, Ortho; the label is the CURRENT mode.
   const projLabel = ref("Auto");
   const selMode = ref<SelectPolicy>("auto");
-  /** See-through is on: the model is translucent and an area box reaches what
-   *  is behind it. A mode with no control on screen is a mode people turn on by
-   *  accident and cannot find again, so the view bar carries a lit button. */
+  /** See-through: the model is translucent and an area box reaches what is behind it. A lit view bar button keeps it
+   *  findable. */
   const xray = ref(false);
   const wireframe = ref(false);
   const viewMode = ref<ViewMode>("realtime");
   /** What the path tracer is doing, for the paused hint on the view switch. */
   const traceState = ref("off");
 
-  // --- the viewport stutters under the full render (viewport/stutterWatch.ts) ---
+  // The viewport stutters under the full render (viewport/stutterWatch.ts).
   const lowPerformance = ref(false);
   const lowPerformanceDismissed = ref(false);
 
-  // --- the `?` keyboard cheat sheet ---
+  // The `?` keyboard cheat sheet.
   const shortcutHudOpen = ref(false);
 
   return {

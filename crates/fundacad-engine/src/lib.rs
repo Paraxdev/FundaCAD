@@ -1,10 +1,6 @@
-//! The engine worker: one request loop shared by every transport.
-//!
-//! Replaces the request handling of the Python engine's `server.py` (`handle`,
-//! `_serialized`, `_dispatch`, `_cancel_running`, `_apply_doc_ops`). Heavy ops
-//! run one at a time on a job thread; `cancel` and `ping` answer on the read
-//! path so they are heard while a job runs. The geometry itself is behind
-//! [`Jobs`], so this crate builds and tests without OpenCASCADE.
+//! The engine worker: one request loop shared by every transport. Heavy ops run one at a time on a job thread, while
+//! `cancel` and `ping` answer on the read path so they are heard during a job. Geometry sits behind [`Jobs`], so this
+//! crate builds and tests without OpenCASCADE.
 
 mod doc_state;
 pub mod live;
@@ -28,18 +24,14 @@ use std::time::Duration;
 
 static BUILD: std::sync::OnceLock<Value> = std::sync::OnceLock::new();
 
-/// The source this executable was built from, as `build_identity.rs` writes it
-/// into `FUNDACAD_BUILD`, answered in `ping` so a client holding two engines can
-/// tell whether they build a document the same way. Set by the executable, not
-/// this crate: a build script here would recompile fundacad-geom, which
-/// depends on this crate, on every commit.
+/// The source this executable was built from, answered in `ping` so a client holding two engines can tell whether they
+/// build alike. Set by the executable: a build script here would recompile fundacad-geom on every commit.
 pub fn set_build(json: &str) {
     if let Ok(build @ Value::Object(_)) = serde_json::from_str(json) {
         let _ = BUILD.set(build);
     }
 }
 
-/// What `set_build` stored, `None` until a host calls it.
 pub fn build() -> Option<&'static Value> {
     BUILD.get()
 }
@@ -129,8 +121,7 @@ pub trait Jobs: Send + 'static {
         ctx: &JobContext,
     ) -> JobResult;
 
-    /// Any other heavy op. The default refuses it the way server.py refuses an
-    /// op it does not know.
+    /// Any other heavy op. The default refuses it as an unknown op.
     fn run(&mut self, op: &str, _req: &Map<String, Value>, _ctx: &JobContext) -> JobResult {
         error_result(&format!("unknown op: {op}"))
     }
@@ -177,10 +168,8 @@ pub struct EngineOptions {
     pub clocks: Clocks,
     /// Answer `testSleep`, see [`supervise::test_sleep`].
     pub test_ops: bool,
-    /// End the process with [`EXIT_BREACH`] after answering a job that
-    /// stalled or overstayed, rather than abandoning its thread. For a worker
-    /// whose supervisor restarts it: a kernel call that never returns keeps
-    /// OpenCASCADE's shared thread pool, and every job after it stalled too.
+    /// End the process with [`EXIT_BREACH`] after answering a stalled or overstaying job, instead of abandoning its
+    /// thread: a kernel call that never returns keeps OpenCASCADE's shared thread pool, and every later job stalls too.
     pub exit_on_breach: bool,
 }
 
@@ -234,8 +223,8 @@ fn spawn_job_thread<J: Jobs>(pool: Arc<Pool<J>>, mut jobs: J) {
     }
 }
 
-/// Answers job `serial` between freeing its slot and starting a fresh job thread,
-/// so a later cancel misses it and no queued reply overtakes it (`_kill_pool`, `_new_pool`).
+/// Answers job `serial` between freeing its slot and starting a fresh job thread, so a later cancel misses it and no
+/// queued reply overtakes it.
 fn abandon<J: Jobs>(pool: &Arc<Pool<J>>, abandoned: &AtomicBool, serial: u64, answer: impl FnOnce()) {
     let Some(make) = pool.respawn.clone() else { return answer() };
     abandoned.store(true, Ordering::SeqCst);
@@ -265,10 +254,8 @@ struct Queued {
 /// document another client sent under the same revision number.
 type Docs = HashMap<u64, (DocState, Arc<AtomicBool>)>;
 
-/// One engine: a job thread and the read path in front of it. Every client of
-/// an engine shares its job thread and caches, so the jobs of all connections
-/// run one at a time, as under server.py's `_JOB_LOCK`. Progress, cancel and
-/// the held document stay with the client that sent the request.
+/// One engine: a job thread and the read path in front of it. All clients share the job thread and caches, so every
+/// connection's jobs run one at a time; progress, cancel and the held document stay with the requesting client.
 pub struct Engine {
     jobs: mpsc::Sender<Queued>,
     running: Arc<Mutex<Option<Running>>>,
@@ -281,7 +268,7 @@ pub struct Engine {
     live: Mutex<live::LiveSession>,
 }
 
-/// server.py `_conn_id`: the connection is the live session identity.
+/// The connection is the live session identity.
 fn conn_id(client: u64) -> String {
     format!("c{client:x}")
 }
@@ -327,9 +314,8 @@ impl Engine {
         }
     }
 
-    /// A client whose replies go to `out`. Its cancel reaches only its own
-    /// jobs, and dropping it drops its queued jobs and cancels its running one,
-    /// as closing a connection does in server.py's `handle`.
+    /// A client whose replies go to `out`. Its cancel reaches only its own jobs, and dropping it drops its queued jobs
+    /// and cancels its running one, as closing a connection does.
     pub fn client(self: &Arc<Self>, out: Arc<dyn Outbox>) -> Client {
         Client {
             engine: self.clone(),
@@ -425,9 +411,8 @@ impl Engine {
         Some(who)
     }
 
-    /// Cancels `client`'s running job, only if it is `target` when one is
-    /// given, or withdraws its queued request `target` and answers it cancelled.
-    /// Another client's job is never touched.
+    /// Cancels `client`'s running job (only if it is `target`, when given), or withdraws its queued request `target`
+    /// and answers it cancelled. Another client's job is never touched.
     fn cancel(&self, client: u64, target: Option<&Value>) -> bool {
         let target = target.filter(|t| !t.is_null());
         let mut waiting = lock(&self.waiting);
@@ -538,8 +523,7 @@ fn run_one<J: Jobs>(pool: &Arc<Pool<J>>, jobs: &mut J, docs: &mut Docs, q: Queue
             let tolerance = req.get("tolerance").and_then(Value::as_f64).unwrap_or(0.1);
             let empty = Map::new();
             let fresh = op == "computeAll";
-            // server.py never hands computeAll the client's etags: it resends
-            // every body.
+            // computeAll resends every body, so the client's etags are ignored.
             let known = req.get("known").and_then(Value::as_object).filter(|_| !fresh).unwrap_or(&empty);
             docs.retain(|_, (_, gone)| !gone.load(Ordering::SeqCst));
             let (held, _) = docs.entry(client).or_insert_with(|| (DocState::default(), closed.clone()));
@@ -613,8 +597,7 @@ struct WatchedJob {
     watchdog: supervise::Watchdog,
 }
 
-/// Streams a rebuild's progress and ends a job that stalls, overstays its wall
-/// clock or ignores a cancel past its grace, server.py `_run_stall` and `_run`.
+/// Streams a rebuild's progress and ends a job that stalls, overruns its wall clock or ignores a cancel past grace.
 fn spawn_watchdog(
     mut job: WatchedJob,
     on_breach: impl FnOnce(Message) + Send + 'static,

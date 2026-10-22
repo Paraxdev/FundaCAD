@@ -1,16 +1,5 @@
-//! The server over a real pipe, spoken to by a real client. A port of
-//! the Python MCP server's `test_protocol.py`.
-//!
-//! Everything else here tests a function. This tests the PROTOCOL, which is
-//! where the failures nothing else can see live: a stray write to stdout
-//! corrupts the stream, a reply to a notification is a protocol error the host
-//! may hang up over, and a tool that fails instead of returning isError takes
-//! the whole session down instead of telling the model what went wrong.
-//!
-//! The last group builds real geometry, so it spawns the engine and is the
-//! slowest thing in this directory. It is here anyway: "can an agent go from an
-//! empty document to a solid" is the only question this whole server exists to
-//! answer.
+//! The server over a real pipe to a real client, since stray stdout writes, replies to notifications and tools
+//! that fail instead of returning isError only show at the protocol. The geometry group spawns the engine.
 
 mod common;
 
@@ -33,8 +22,6 @@ fn one(name: &str, args: Value) -> ToolReply {
     drive(&[(name, args)]).remove(0)
 }
 
-// --- the handshake -----------------------------------------------------------
-
 #[test]
 fn the_server_initializes_and_lists_its_tools() {
     let mut mcp = Mcp::start(&BTreeMap::new(), &std::env::temp_dir());
@@ -56,10 +43,8 @@ fn the_server_initializes_and_lists_its_tools() {
 
 #[test]
 fn a_notification_gets_no_reply() {
-    // MCP notifications carry no id, and answering one desynchronises every
-    // reply after it: the client would match the next request against a stale
-    // message and hang. `Mcp::start` sends `initialized` and then the first
-    // tool call has to come back correctly, which is the assertion.
+    // Answering a notification desynchronises every reply after it. `Mcp::start` sends `initialized`,
+    // so the first tool call coming back right is the assertion.
     let r = one("schema", json!({"type": "box"}));
     assert!(!r.is_error && r.text.contains("box"));
 }
@@ -98,8 +83,6 @@ fn an_argument_the_tool_does_not_take_is_refused_by_name() {
     assert!(!rs[1].is_error, "{}", rs[1].text);
 }
 
-// --- documents ---------------------------------------------------------------
-
 #[test]
 fn a_document_round_trips_through_a_file() {
     let tmp = tempfile::tempdir().expect("a temp dir");
@@ -130,12 +113,8 @@ fn a_document_round_trips_through_a_file() {
 
 #[test]
 fn a_relative_path_lands_where_the_caller_is_standing() {
-    // A relative path resolves against the SERVER process's working directory.
-    // An agent that ran the client from its own scratch directory and saved a
-    // part watched that directory stay empty while the file appeared inside the
-    // repository, which it had been told not to write to. Nothing said so: the
-    // reply echoed back the relative path it had been given, which is true from
-    // every directory and useful from none.
+    // A relative path resolves against the SERVER's working directory, so a part saved from an agent's scratch
+    // directory once landed in the repository while the reply echoed the relative path.
     let tmp = tempfile::tempdir().expect("a temp dir");
     let rs = drive_in(
         tmp.path(),
@@ -243,8 +222,6 @@ fn a_circular_pattern_axis_an_older_build_would_misread_is_reported() {
     assert!(rs[1].text.contains(r#"a datum axis is {"datum": "ax1"}"#), "{}", rs[1].text);
     assert!(rs[2].text.contains("with axisRef, axis must be the line"), "{}", rs[2].text);
 }
-
-// --- geometry (spawns the engine) --------------------------------------------
 
 /// A box drawn from its corner: turned about world Z most copies of its hole
 /// land off it, which the build says, and turned about a line through its
@@ -397,15 +374,8 @@ fn an_empty_document_can_be_taken_all_the_way_to_a_solid() {
 
 #[test]
 fn a_failed_feature_is_reported_and_not_passed_off_as_a_no_op() {
-    // The one that bit hardest while this was being written: a rebuild whose
-    // feature fails carries the failure in `featureErrors` beside the geometry
-    // that did build, not under `errors`. Reading the wrong key made a refused
-    // press/pull look like a press/pull that did nothing at all.
-    //
-    // isError is also true here, on purpose: a body that built beside a
-    // feature that failed is still a wrong document, and an agent gating on
-    // isError alone (rather than string-matching "FEATURE FAILED") has to see
-    // that. The full text, bodies included, still comes back.
+    // A failed feature is in `featureErrors` beside the geometry that built, not under `errors`, and isError is
+    // true so an agent gating on it sees the wrong document; the full text still comes back.
     let rs = drive(&[
         (
             "feature_add",
@@ -453,12 +423,8 @@ fn a_feature_of_a_type_this_version_does_not_know_is_reported_as_skipped() {
 
 #[test]
 fn view_still_draws_a_partial_build() {
-    // build's isError going true on a partial build (the test above) must not
-    // make `view` refuse the whole picture: looking at what DID build is the
-    // main way an agent checks its work, and a model whose fillet failed
-    // (the debowler's chute_blend, in the field) is exactly when a picture
-    // matters most. `view` triggers its own rebuild when stale, so this never
-    // calls `build` directly.
+    // A partial build's isError must not make `view` refuse: a picture of what DID build matters most when
+    // a fillet failed. `view` rebuilds by itself when stale, so `build` is never called.
     let rs = drive(&[
         (
             "feature_add",
@@ -704,9 +670,8 @@ fn a_cut_that_splits_a_body_is_reported() {
 
 #[test]
 fn inspect_hands_back_a_selector_that_addresses_the_face_it_names() {
-    // The whole point of inspect: an agent that has never clicked on anything
-    // can still write the next feature. The proof is using one of the selectors
-    // it returns to press/pull that face, and getting a body that changed.
+    // The point of inspect: an agent that never clicked can write the next feature, proven by press/pulling
+    // a face through a returned selector.
     let rs = drive(&[
         (
             "feature_add",
@@ -790,8 +755,6 @@ fn the_schema_is_also_a_resource() {
     let missing = mcp.rpc("resources/read", json!({"uri": "fundacad://nope"}));
     assert!(missing.get("error").is_some(), "{missing}");
 }
-
-// --- never silently wrong ----------------------------------------------------
 
 fn box_60_40_20() -> (&'static str, Value) {
     ("feature_add", json!({"feature": {"id": "bx", "type": "box", "length": 60, "width": 40, "height": 20}}))

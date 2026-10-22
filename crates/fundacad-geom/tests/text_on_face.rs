@@ -1,7 +1,5 @@
-//! Text on a face: embossed or engraved, wrapped onto round faces without
-//! stretching. A glyph of planar area A thickened by d on a surface of normal
-//! curvature k (across the text) adds A*d*(1 + d*k/2), negative k on the
-//! concave side, so the volumes below pin both the size and the side.
+//! Text on a face, embossed or engraved, wraps onto round faces unstretched. A glyph of area A thickened by d on
+//! normal curvature k across the text (negative when concave) adds A*d*(1 + d*k/2), so volumes pin size and side.
 
 use fundacad_core::CadDocument;
 use fundacad_geom::builder::{self, NoWatch};

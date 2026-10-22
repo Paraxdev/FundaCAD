@@ -1,12 +1,5 @@
-// Animations on or off, an accessibility setting.
-//
-// Off puts data-motion="off" on <html>, and _motion.scss collapses every CSS
-// transition and animation to zero there, so each component needs no switch of
-// its own. Script-driven motion (the camera flight, the error notice) reads
-// motionOn() and snaps instead.
-//
-// Never set means follow the OS "reduce motion" preference, so someone who
-// already asked their system for less motion is not shown it first.
+// Animations on or off. Off sets data-motion="off" on <html> for _motion.scss; script motion reads motionOn() and
+// snaps. Never set follows the OS reduce motion preference.
 
 import { readSetting } from "./storedSetting";
 import { renderPrefs } from "./renderPrefs";

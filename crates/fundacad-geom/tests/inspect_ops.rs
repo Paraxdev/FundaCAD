@@ -249,7 +249,7 @@ fn both_ops_answer_over_the_protocol() {
         json!({"id": 4, "op": "rebuild", "document": doc, "revision": 2, "known": known}).to_string(),
     ));
     assert_eq!(result(4)["bodies"][0]["unchanged"], json!(true));
-    // server.py `_compute_all_job` never answers with a stub, whatever the client holds.
+    // `computeAll` never answers with a stub, whatever the client holds.
     engine.handle(Message::Text(
         json!({"id": 5, "op": "computeAll", "document": doc, "revision": 3, "known": known}).to_string(),
     ));

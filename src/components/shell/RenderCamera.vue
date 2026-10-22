@@ -1,12 +1,5 @@
 <script setup lang="ts">
 import RenderSections from "./RenderSections.vue";
-// The lens, and the picture taken through it.
-//
-// Two things on one tab because they are the same job: everything above the
-// button changes what the frame looks like, and the button writes that frame to
-// a file. Putting the export anywhere else would mean tuning a shot in one place
-// and taking it in another.
-
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { useEngine } from "../../app/engineKey";
 import { useUiStore } from "../../stores/ui";
@@ -40,16 +33,12 @@ onUnmounted(() => {
   abort?.abort();
 });
 
-/** How many times the viewport's own size the saved picture is. Not a pixel
- *  count, because the frame is whatever shape the window is and a fixed width
- *  would either crop it or letterbox it; a multiple keeps the composition on
- *  screen exactly the composition in the file. */
+/** A multiple of the viewport size, not a pixel count: the frame is the window's shape, so the file keeps the
+ *  on-screen composition. */
 const scale = ref(2);
 const SCALES = [1, 2, 3, 4];
 const saving = ref(false);
-/** Whether the black outline on every silhouette goes in the picture. Off,
- *  because it is the single thing that most makes a render look like a
- *  screenshot of a CAD package; on for anybody who wants exactly that. */
+/** The silhouette outline is off by default, it is what most makes a render look like a CAD screenshot. */
 const edges = ref(false);
 /** Reference images are there to draw over, so a picture leaves them out unless asked. */
 const references = ref(false);
@@ -114,9 +103,8 @@ async function render(): Promise<string | null> {
       tracing.value = false;
     }
   }
-  // Rendered BEFORE the dialog, and read as a string, because the pixels are
-  // only valid in the same task as the render that produced them. Awaiting a
-  // file dialog first would hand the writer a blank canvas.
+  // Rendered before the dialog and read as a string: the pixels are valid only in the task that rendered them, so
+  // awaiting a file dialog first would hand the writer a blank canvas.
   return engine.viewport.renderStill(scale.value, {
     edges: edges.value,
     realtime: true,

@@ -112,11 +112,8 @@ fn u64_arg(req: &serde_json::Map<String, serde_json::Value>, key: &str) -> u64 {
     req.get(key).and_then(serde_json::Value::as_u64).unwrap_or(0)
 }
 
-/// The blob ops, so a client that cannot see this process's disk (an MCP server
-/// with a different profile, a sandbox, another user) can still save and open
-/// imported geometry. `blobHas` sorts hashes into have and missing, `blobRead`
-/// hands back one range of a blob, and `blobWrite` takes a blob in order, range
-/// by range, publishing it only once the whole of it hashes to its name.
+/// The blob ops, for a client that cannot see this process's disk: `blobHas` sorts hashes into have and missing,
+/// `blobRead` returns one range, and `blobWrite` takes ranges in order, publishing once the whole hashes to its name.
 pub fn blob_op(
     op: &str,
     req: &serde_json::Map<String, serde_json::Value>,

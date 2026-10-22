@@ -1,14 +1,6 @@
-//! Supervises the Rust geometry engine worker and relays it to the webview.
-//!
-//! The worker is this executable started with `--engine` (docs/ENGINE.md,
-//! section 2.1). It speaks framed messages on its stdin and stdout; every
-//! message it sends goes to the one channel the webview attached, prefixed
-//! with its kind byte. A worker that dies is restarted, and a job that does not
-//! stop within a grace period after Cancel is ended by restarting the worker,
-//! the only way to stop a kernel call that does not check for cancellation.
-//!
-//! The worker exits by itself when its stdin closes, which covers this process
-//! crashing without a chance to kill it.
+//! Supervises the engine worker, this exe with `--engine` (docs/ENGINE.md 2.1), and relays its messages to the webview.
+//! A job that ignores Cancel past a grace period is stopped by restarting the worker, which exits by itself when stdin
+//! closes.
 
 use fundacad_protocol::stdio::{read_message, write_message, Message};
 use fundacad_protocol::{envelope, message_id};
@@ -24,10 +16,8 @@ use tauri::ipc::{Channel, InvokeResponseBody, Request};
 use tauri::{AppHandle, Emitter, Manager};
 
 const CANCEL_GRACE: Duration = Duration::from_secs(3);
-/// A soft cancel stops a superseded preview at the job's next checkpoint, and
-/// the section blend and its booleans check often. A job still running this
-/// long after one is inside a single kernel call that may never return, and
-/// every request behind it waits, so the worker is restarted after all.
+/// A soft cancel stops a superseded preview at its next checkpoint. A job still running this long after is stuck in one
+/// kernel call that may never return, with every request behind it waiting, so the worker is restarted.
 const SOFT_CANCEL_GRACE: Duration = Duration::from_secs(10);
 const RESTART_FLOOR: Duration = Duration::from_millis(500);
 const RESTART_CEILING: Duration = Duration::from_secs(10);
@@ -127,11 +117,8 @@ struct Worker {
     generation: u64,
 }
 
-/// The worker entry point, called from `main` before Tauri starts.
-///
-/// `--engine --ws` is the same engine on its own WebSocket, what the shipped
-/// `fundacad-mcp` starts as its private engine, so a packaged app needs no
-/// second copy of the kernel for it.
+/// Called from `main` before Tauri starts. `--engine --ws` is the same engine on its own WebSocket, which the shipped
+/// `fundacad-mcp` starts as its private engine, so a packaged app needs no second copy of the kernel.
 pub fn run_worker() -> ! {
     fundacad_engine::set_build(env!("FUNDACAD_BUILD"));
     fundacad_geom::plugins::load();
@@ -144,9 +131,8 @@ pub fn run_worker() -> ! {
 /// The app's token for the live session port, handed to the worker it spawns.
 const LIVE_TOKEN_ENV: &str = "FUNDACAD_LIVE_TOKEN";
 
-/// A loopback WebSocket on the app's own engine, so an assistant attached
-/// through `session.json` shares the document on screen. The port goes to the
-/// app on stderr, since stdout carries the frames.
+/// A loopback WebSocket on the app's own engine, so an assistant attached through `session.json` shares the document on
+/// screen. The port goes to the app on stderr, since stdout carries the frames.
 fn live_door(engine: &Arc<fundacad_engine::Engine>) {
     let Some(token) = std::env::var(LIVE_TOKEN_ENV).ok().filter(|t| !t.is_empty()) else {
         return;
@@ -270,12 +256,8 @@ fn random_token() -> String {
     buf.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-/// The worker's environment, split out so a test can assert it.
-///
-/// The blob store is told rather than left to the engine's default because the
-/// app's container (container.rs) reads and writes the same directory: an
-/// import the engine stored anywhere else is geometry a save cannot find.
-/// The plugin root is told because Rust is what unpacks a bundle into it.
+/// The blob store is passed because container.rs reads and writes the same directory, and the plugin root because Rust
+/// unpacks bundles into it.
 pub fn configure_env(cmd: &mut Command, blobs: Option<&Path>, plugins: Option<&Path>, live_token: &str) {
     if let Some(dir) = blobs {
         cmd.env("FUNDACAD_BLOB_DIR", dir);
@@ -327,9 +309,8 @@ fn spawn(inner: &Inner) -> std::io::Result<std::process::ChildStdout> {
                         eprintln!("[engine] no session file: {e}");
                     }
                 }
-                // Never eprintln: with no one reading our stderr it panics, this
-                // thread stops draining the worker's, and the worker blocks on
-                // its next log line in the middle of a job.
+                // Never eprintln: with no reader on our stderr it panics, this thread stops draining the worker's, and
+                // the worker blocks on its next log line mid job.
                 let _ = writeln!(std::io::stderr(), "[engine] {line}");
                 remember(&tail, line, STDERR_KEEP);
             }
@@ -511,9 +492,8 @@ struct Head {
     soft: bool,
 }
 
-/// The head of a request without parsing a multi-megabyte document: the
-/// client writes it first, so a prefix almost always holds it, and a full
-/// parse is the fallback.
+/// The head of a request without parsing a multi megabyte document: the client writes it first, so a prefix almost
+/// always holds it, and a full parse is the fallback.
 fn head(text: &str) -> Head {
     #[derive(serde::Deserialize)]
     struct Raw {

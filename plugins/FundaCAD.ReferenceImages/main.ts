@@ -1,6 +1,5 @@
-// Reference images: a photo or a drawing on a plane to sketch over. The app
-// carries the list and its blobs through save and reopen; what an entry means,
-// the quads that draw it and every tool that changes it live here.
+// Reference images: a photo or a drawing on a plane to sketch over. The app only carries the list and its blobs through
+// save and reopen, everything else lives here.
 
 import { contribute } from "fundacad";
 import type { Engine } from "fundacad";

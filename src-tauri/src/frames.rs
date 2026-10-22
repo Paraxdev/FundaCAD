@@ -1,8 +1,6 @@
-//! Native frames into the page, behind src/viewport/pathtrace/nativeTracer.ts.
-//! Windows posts three WebView2 shared buffers and the page pulls one tiny
-//! invoke per frame (index, generation, seq), so no pixel crosses Tauri IPC;
-//! a runtime without shared buffers (before 114), and every other platform,
-//! uses the loopback WebSocket of fundacad-frames.
+//! Native frames into the page, behind src/viewport/pathtrace/nativeTracer.ts. Windows posts three WebView2 shared
+//! buffers and the page pulls one tiny invoke per frame; runtimes before 114 and other platforms use fundacad-frames'
+//! WebSocket.
 
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -133,9 +131,8 @@ fn install(open: Open) -> u64 {
     id
 }
 
-/// The one invoke per frame on the shared buffer path. Releases the slots the
-/// page finished with, as (index, generation), renders into a free one and
-/// names it.
+/// The one invoke per frame on the shared buffer path: releases the (index, generation) slots the page finished with,
+/// renders into a free one and names it.
 #[tauri::command]
 pub async fn frames_next(release: Vec<(usize, u32)>) -> Result<Next, String> {
     #[cfg(windows)]
@@ -179,9 +176,8 @@ pub async fn frames_resize(width: u32, height: u32) -> Result<u32, String> {
     .map_err(|e| e.to_string())?
 }
 
-/// Closes the transport `id` names, unless a newer one replaced it already,
-/// and releases the tracer with it: the page closes its frames when Path
-/// traced has been off a while or the backend restarts after a fault.
+/// Closes the transport `id` names unless a newer one replaced it, and releases the tracer with it. The page closes its
+/// frames when Path traced has been off a while or the backend restarts after a fault.
 #[tauri::command]
 pub async fn frames_close(id: u64) {
     let _ = tauri::async_runtime::spawn_blocking(move || {

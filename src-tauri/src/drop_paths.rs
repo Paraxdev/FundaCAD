@@ -1,15 +1,6 @@
-//! The paths of files dropped on the window, on Windows and Linux.
-//!
-//! `dragDropEnabled` stays false in tauri.conf.json: turning it on makes wry
-//! replace the webview's own drop handling with its own, and every in-page
-//! HTML5 drag dies. On Windows the page gets the drop as File objects, which
-//! carry no path, so it hands them back through
-//! `chrome.webview.postMessageWithAdditionalObjects` and WebView2 says here
-//! where each one lives. WebKitGTK gives the page no files at all
-//! (webkit.org/b/271957), only an empty text/uri-list, so on Linux the uri
-//! list is read from GTK as the drag enters and the page asks for it with
-//! `drop_paths_take`. Either way the reply goes out as the `files-dropped`
-//! event.
+//! Paths of files dropped on the window. `dragDropEnabled` stays off, since wry would replace in page HTML5 drag. On
+//! Windows WebView2 resolves the page's File objects; WebKitGTK gives the page none (webkit.org/b/271957), so on Linux
+//! GTK's uri list is held for `drop_paths_take`. Either way the reply is the `files-dropped` event.
 
 #![cfg_attr(not(windows), allow(dead_code, unused_imports))]
 

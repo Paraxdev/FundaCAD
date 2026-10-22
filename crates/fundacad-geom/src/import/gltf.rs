@@ -1,6 +1,5 @@
-//! glTF triangles, binary or text,, world placed, in Z up millimetres: what
-//! `mesh_import._read_glb` gets from `RWGltf_CafReader`, which the static
-//! kernel is built without (it needs RapidJSON).
+//! glTF triangles, binary or text, world placed, in Z up millimetres: what mesh_import's `_read_glb` gets from
+//! `RWGltf_CafReader`, which the static kernel is built without (it needs RapidJSON).
 
 use std::borrow::Cow;
 use std::path::{Component, Path, PathBuf};

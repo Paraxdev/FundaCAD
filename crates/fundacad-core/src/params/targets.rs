@@ -1,20 +1,6 @@
-//! Writing evaluated parameters into the fields they drive, the Rust twin of
-//! `fieldHolder`, `resolveTarget` and `writeTarget` in
-//! `src/document/numFields.ts` for `{kind: "feature"}` targets.
-//!
-//! The app turns a bare parameter name in a numeric field into a number plus a
-//! model parameter `dN = {expr, target}` the first time it opens a document,
-//! so from then on the field only moves when something writes the parameter's
-//! value back into it. A headless editor that skipped this would rebuild the
-//! same pose whatever the parameter said.
-//!
-//! Only feature targets are written. A constraint, entity or pattern target
-//! lives in a sketch that the app re-solves after the write; written here
-//! without that solve, a dimension would change while its geometry stayed put,
-//! and the app, finding the value already in place, would never re-solve it.
-//!
-//! The document is untyped JSON, as the MCP server holds it: a path may reach
-//! into a plugin's feature, whose fields no schema here describes.
+//! Writes evaluated parameters into the feature fields they drive, the twin of `src/document/numFields.ts`. The app
+//! binds a field to a model parameter on first open, so the field only moves when its value is written back.
+//! Sketch targets are left out: the app re-solves a sketch after the write, which a headless edit would skip.
 
 use serde_json::{Map, Value};
 
@@ -23,9 +9,7 @@ use super::FieldKind;
 
 use FieldKind::{Angle, Count, Length};
 
-/// `FEATURE_NUM_FIELDS`: the numeric fields of each feature type the app owns.
-/// tests/vectors/params.json holds the app's table, and both sides are checked
-/// against it.
+/// The numeric fields of each feature type the app owns, checked on both sides against tests/vectors/params.json.
 pub const FEATURE_NUM_FIELDS: &[(&str, &[(&str, FieldKind)])] = &[
     (
         "extrude",
@@ -106,9 +90,8 @@ pub const INT_FIELDS: &[(&str, f64)] = &[
     ("seed", f64::NEG_INFINITY),
 ];
 
-/// `featureNumFields`: the field paths of a feature a parameter may drive. A
-/// type the app does not describe lists its own numbers, as the app does for a
-/// plugin that is not loaded, which is always the case here.
+/// `featureNumFields`: the field paths a parameter may drive. A type the app does not describe lists its own numbers,
+/// as the app does for a plugin that is not loaded, always the case here.
 pub fn feature_num_fields(kind: &str, values: &Map<String, Value>) -> Vec<(String, FieldKind)> {
     let mut rows: Vec<(String, FieldKind)> = match FEATURE_NUM_FIELDS.iter().find(|(k, _)| *k == kind) {
         Some((_, own)) => own.iter().map(|(f, k)| ((*f).to_owned(), *k)).collect(),
@@ -149,9 +132,8 @@ fn raw_num_fields(values: &Map<String, Value>) -> Vec<(String, FieldKind)> {
     out
 }
 
-/// `fieldHolder`: the object a field path lands in and the key within it. A
-/// segment after a list names the list's entry by its `id`, so `nodes.n3.sx`
-/// stays the same node however the list is reordered.
+/// `fieldHolder`: the object a field path lands in and its key. A segment after a list names the entry by its `id`,
+/// so `nodes.n3.sx` stays the same node however the list is reordered.
 pub fn field_holder<'a, 'p>(root: &'a Map<String, Value>, path: &'p str) -> Option<(&'a Map<String, Value>, &'p str)> {
     let parts: Vec<&str> = path.split('.').collect();
     let n = parts.len();
@@ -175,7 +157,6 @@ pub fn field_holder<'a, 'p>(root: &'a Map<String, Value>, path: &'p str) -> Opti
     Some((holder, parts[n - 1]))
 }
 
-/// `field_holder`, for writing.
 pub fn field_holder_mut<'a, 'p>(
     root: &'a mut Map<String, Value>,
     path: &'p str,
@@ -204,15 +185,13 @@ pub fn field_holder_mut<'a, 'p>(
     Some((holder, parts[n - 1]))
 }
 
-/// `readField`: the value at a field path, see `field_holder`.
 pub fn read_field<'a>(root: &'a Map<String, Value>, path: &str) -> Option<&'a Value> {
     let (holder, key) = field_holder(root, path)?;
     holder.get(key)
 }
 
-/// `resolveTarget` for `{kind: "feature", feature, field}`: the feature is
-/// there, its type lists `field`, and the path lands. A parameter whose target
-/// stops resolving has lost its dimension, and `recompute` drops it.
+/// `resolveTarget` for a feature target: the feature exists, its type lists `field`, and the path lands. A parameter
+/// whose target stops resolving has lost its dimension, and `recompute` drops it.
 pub fn feature_target_resolves(features: &[Value], feature: &str, field: &str) -> bool {
     let Some(f) =
         features.iter().find(|f| f.get("id").and_then(Value::as_str) == Some(feature)).and_then(Value::as_object)
@@ -232,9 +211,8 @@ pub fn coerce_for_field(field: &str, value: f64) -> f64 {
     }
 }
 
-/// `writeTarget` for `{kind: "feature", feature, field}`. False when the
-/// target does not resolve, the value is not finite, or the field already
-/// holds it.
+/// `writeTarget` for a feature target. False when the target does not resolve, the value is not finite, or the field
+/// already holds it.
 pub fn write_feature_target(features: &mut [Value], feature: &str, field: &str, value: f64) -> bool {
     if !value.is_finite() || !feature_target_resolves(features, feature, field) {
         return false;
@@ -266,9 +244,8 @@ fn number(v: f64) -> Value {
     }
 }
 
-/// Every `{kind: "feature"}` target in the document's `paramDefs` given its
-/// parameter's cached `value`, in table order, as `recompute` does after it
-/// evaluates the table.
+/// Writes every feature target in `paramDefs` from its parameter's cached `value`, in table order, as `recompute`
+/// does after evaluating the table.
 pub fn write_targets(doc: &mut Map<String, Value>) {
     let writes: Vec<(String, String, f64)> = doc
         .get("paramDefs")

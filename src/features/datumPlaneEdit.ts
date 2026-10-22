@@ -1,7 +1,5 @@
-// Editing a datum plane's pose after the fact, by either of the two handles:
-// its own arcs (DatumPoseTool) or the Move gizmo. Both write the same relative
-// fields, never a baked plane, so the datum keeps following its reference and a
-// parameter bound to a field keeps driving it.
+// Editing a datum plane's pose by its own arcs (DatumPoseTool) or the Move gizmo. Both write the relative pose
+// fields, never a baked plane, so the datum keeps following its reference and bound parameters keep driving it.
 
 import * as THREE from "three";
 import type { DocumentStore } from "../document/store";
@@ -29,16 +27,14 @@ function datum(store: DocumentStore, id: string): Datum | null {
   );
 }
 
-/** Fields an expression drives: a handle must not write them, the parameter would
- *  put them straight back. */
+/** A handle must not write these, the parameter would put them straight back. */
 export function lockedPoseFields(store: DocumentStore, id: string): Set<PoseField> {
   return new Set(POSE_FIELDS.filter((field) => store.isParamBound({ kind: "feature", feature: id, field })));
 }
 
 const kindOf = (field: PoseField) => FEATURE_NUM_FIELDS.datumPlane?.find(([f]) => f === field)?.[2] ?? "length";
 
-/** Write the fields that changed. A field bound to a plain parameter updates that
- *  parameter, so the binding survives the drag. */
+/** A field bound to a plain parameter updates that parameter, so the binding survives the drag. */
 export function writeDatumPose(
   store: DocumentStore,
   id: string,
@@ -67,8 +63,7 @@ export function writeDatumPose(
   return { written, refused };
 }
 
-/** The preview a drag shows downstream: the datum rebuilt in place, so the
- *  sketches and bodies placed on it move with the hand. */
+/** Rebuilds the datum in place so the sketches and bodies on it move with the hand. */
 function livePreview(store: DocumentStore, id: string) {
   let open = false;
   return {
@@ -89,8 +84,7 @@ function livePreview(store: DocumentStore, id: string) {
   };
 }
 
-/** Open the datum's own arcs on it. False when there is nothing to drag, every
- *  field an expression drives. */
+/** False when every field is expression driven and there is nothing to drag. */
 export function startDatumPoseEdit(
   deps: DatumEditDeps & { tool: DatumPoseTool },
   id: string,
@@ -124,8 +118,7 @@ export function startDatumPoseEdit(
 
 const QUAD_HALF = 40;
 
-/** The Move gizmo on a datum plane: its arrows and rings sit on the plane's own
- *  axes, and a finished drag is read back into the pose relative to the
+/** Arrows and rings sit on the plane's own axes, and a finished drag is read back into the pose relative to the
  *  reference rather than written as a new absolute plane. */
 export function datumMoveTarget(deps: DatumEditDeps, id: string): MoveTarget | null {
   const f = datum(deps.store, id);
@@ -138,8 +131,7 @@ export function datumMoveTarget(deps: DatumEditDeps, id: string): MoveTarget | n
   const u = new THREE.Vector3(...def.xdir).normalize();
   const v = n.clone().cross(u);
   const preview = livePreview(deps.store, id);
-  // Unrounded, unlike a sketch's planeAfter: the pose is read back out of this and
-  // a millionth of a millimetre there is a 44.99999 degree tilt here.
+  // Unrounded, unlike a sketch's planeAfter: a millionth of a mm here reads back as a 44.99999 degree tilt.
   const poseAfter = (m: THREE.Matrix4) => {
     const rot = new THREE.Matrix3().setFromMatrix4(m);
     const o = origin.clone().applyMatrix4(m);

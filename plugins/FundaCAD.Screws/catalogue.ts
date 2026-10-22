@@ -1,8 +1,5 @@
-// The standard catalogue: families read from catalogue/*.json and expanded into complete specs.
-//
-// Adding a family or a size is an edit to metric.json or inch.json: `fixed` sets the values every
-// member shares, `columns` maps a row's columns onto spec fields, `threadLength` says how long the
-// thread is, and `lengths` names a series in threads.json that each row's `L` range filters.
+// Families from catalogue/*.json expanded into complete specs. In metric.json and inch.json `fixed` holds what every
+// member shares, `columns` maps a row onto spec fields and `lengths` names a threads.json series the row's `L` filters.
 
 import METRIC from "./catalogue/metric.json";
 import INCH from "./catalogue/inch.json";

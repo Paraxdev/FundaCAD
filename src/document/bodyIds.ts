@@ -1,15 +1,7 @@
-// The app's half of stable body ids: the engine assigns them (fundacad-core
-// body_ids.rs) and the document keeps the `bodyIds` map it returns.
-//
-// A join's own record is preferred over the id it inherits from its target, so a file
-// numbered before the map existed keeps the fresh id its join was given. The
-// same rule would keep the id a feature had as a new body after it became a
-// join, so an edit that makes a feature join, or join other targets, forgets
-// that feature's records. The Rust twin is `join_went_stale` and
-// `forget_feature`, held to the same answers by tests/vectors/join_edits.json.
+// The engine assigns body ids (fundacad-core body_ids.rs), the document keeps the `bodyIds` map. A join's own record
+// beats the id it inherits, so making a feature join forgets its records. Rust twin: `join_went_stale`, `forget_feature`.
 import type { CadDocument, Feature } from "../types";
 
-/** The join's targets as a comparable string, null when it does not join. */
 export function joinSignature(f: Feature | undefined): string | null {
   const o = f as { operation?: unknown; targets?: unknown } | undefined;
   return o?.operation === "join" ? JSON.stringify(o.targets ?? null) : null;
@@ -20,15 +12,14 @@ export function joinWentStale(before: string | null | undefined, after: Feature)
   return now !== null && before !== now;
 }
 
-/** Whether `key` is one the engine gave a body of `featureId`: `<id>:<n>`, `#` suffixed on a repeat. */
+// Engine keys are `<id>:<n>`, `#` suffixed on a repeat.
 export function isFeatureKey(key: string, featureId: string): boolean {
   if (!key.startsWith(`${featureId}:`)) return false;
   return /^\d+#*$/.test(key.slice(featureId.length + 1));
 }
 
-/** A document handed over whole, not opened from a file, gets an empty map when it has
- *  none, or it would be numbered like a file saved before the map existed, where a join
- *  took a fresh id. The Rust twin is `ensure_map`, held to tests/vectors/handed_over.json. */
+// A document handed over whole gets an empty map, or it would be numbered like a pre-map file where a join took a
+// fresh id. Rust twin `ensure_map`, held to tests/vectors/handed_over.json.
 export function ensureBodyIds(doc: { bodyIds?: unknown }): boolean {
   const m = doc.bodyIds;
   if (m && typeof m === "object" && !Array.isArray(m)) return false;
@@ -47,7 +38,7 @@ export function forgetFeature(map: Record<string, string>, featureId: string): b
   return gone;
 }
 
-/** Every feature's join signature, taken before an edit that may change it in place. */
+// Taken before an edit that may change the signatures in place.
 export function joinSignatures(doc: CadDocument): Map<string, string | null> {
   return new Map(doc.features.map((f) => [f.id, joinSignature(f)]));
 }

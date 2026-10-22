@@ -1,20 +1,5 @@
-//! The agent's side of a live session: read the open document, offer an edit.
-//! A port of the Python MCP server's `live_link.py`.
-//!
-//! `fundacad-engine`'s `live` module holds the rules. This is the half that
-//! lives with the agent, and it exists to make one awkward thing invisible to
-//! the tools: a guest may not write the document, only propose a replacement
-//! that the app applies.
-//!
-//! So the shape is a mirror. Before a tool runs, `pull` replaces the local
-//! document with the app's and remembers the revision it came from. After a
-//! tool that changed it, `push` offers the result against that revision and
-//! waits for the app to adopt it.
-//!
-//! WAITING IS THE POINT. `push` does not return until the app has adopted the
-//! edit or refused it. An agent that fired and forgot would report "added the
-//! hole" and then read a document without one on its next call, with no way to
-//! tell that from the app having rejected it.
+//! The agent's side of a live session. A guest may only propose a replacement document, so `pull`
+//! mirrors the app's before a tool and `push` waits until the app adopts or refuses the result.
 
 use std::time::{Duration, Instant};
 
@@ -23,26 +8,21 @@ use serde_json::{json, Value};
 use crate::link::{args, EngineLink};
 use crate::model::Doc;
 
-/// How long to wait for the app to adopt a proposal. The app collects on its
-/// own publish loop, so this is measured in polls, not in build time.
+/// The app collects on its own publish loop, so this is measured in polls, not in build time.
 pub const ADOPT_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// How often to ask. Loopback and a map lookup on the other end; the cost is
-/// the message, not the work.
+/// Loopback and a map lookup on the other end: the cost is the message, not the work.
 pub const POLL_INTERVAL: Duration = Duration::from_millis(150);
 
-/// Why a live edit did not land. Each variant is a different answer for the
-/// user, which is why they are not one error.
+/// Each variant is a different answer for the user, which is why they are not one error.
 #[derive(Debug, Clone)]
 pub enum LiveError {
-    /// There is no window sharing a document. Distinct from a transport
-    /// failure: what the caller should do next is different.
+    /// No window shares a document. Unlike a transport failure, the caller does something else next.
     NoAppOpen(String),
     /// The window is sharing, but not accepting edits.
     ReadOnly(String),
     /// The document moved while the edit was in flight.
     Stale(String),
-    /// The app never took it.
     Timeout(String),
     /// The engine refused, or something else went wrong that is not transport.
     Refused(String),
@@ -62,8 +42,7 @@ impl LiveError {
         }
     }
 
-    /// True when the engine itself went away, which is what makes the server
-    /// fall back to a private copy rather than report a refusal.
+    /// The engine itself went away, so the server falls back to a private copy instead of reporting a refusal.
     pub fn is_lost(&self) -> bool {
         matches!(self, LiveError::Lost(_))
     }
@@ -81,11 +60,9 @@ fn lost(e: std::io::Error) -> LiveError {
 
 /// One agent's view of the document a running app has open.
 pub struct LiveLink {
-    /// Shown to the user in the app, beside the indicator that says someone is
-    /// attached. It is why it is a readable phrase and not a uuid.
+    /// Shown to the user beside the attached indicator, which is why it is a readable phrase and not a uuid.
     pub name: String,
-    /// The revision the local document was pulled from. None means nothing has
-    /// been pulled yet, which is not the same as revision 0.
+    /// None means nothing has been pulled yet, which is not the same as revision 0.
     pub base: Option<i64>,
     pub title: Option<String>,
     pub status: Value,
@@ -111,9 +88,8 @@ impl LiveLink {
         }
     }
 
-    /// The app's document, and the revision it is at. This refuses rather than
-    /// returning nothing when no app is hosting: every caller would otherwise
-    /// write the same three lines, and forgetting them means editing nothing.
+    /// Refuses rather than returning nothing when no app is hosting,
+    /// since a caller that forgot to check would edit nothing.
     pub async fn pull(&mut self, link: &EngineLink) -> Result<Option<Doc>, LiveError> {
         let st = self.state(link).await?;
         if st.get("attached") != Some(&json!(true)) {
@@ -129,16 +105,14 @@ impl LiveLink {
         Ok(st.get("document").and_then(Value::as_object).cloned())
     }
 
-    /// Offer `document` and wait for the app to take it. Returns the revision
-    /// the app landed on.
+    /// Waits for the app to take `document` and returns the revision it landed on.
     pub async fn push(&mut self, link: &EngineLink, document: &Doc, note: &str) -> Result<i64, LiveError> {
         if self.base.is_none() {
             self.pull(link).await?;
         }
         if self.status.get("canEdit") == Some(&json!(false)) {
-            // Said here rather than discovered by offering an edit and waiting
-            // out the adoption timeout, because the two look identical from
-            // this side and only one of them has an answer the user can act on.
+            // Said here, not found by waiting out the adoption timeout, which looks the same from this side
+            // but leaves the user nothing to act on.
             return Err(LiveError::ReadOnly(
                 "that FundaCAD window is sharing its document read-only, set live editing to \
                  \"Read and edit\" in its preferences to let an assistant change it"
@@ -177,9 +151,7 @@ impl LiveLink {
             } else {
                 message
             })),
-            // Its own kind, because the caller's answer to it is different from
-            // every other refusal: re-read and decide again, rather than report
-            // a failure.
+            // Its own kind: the caller re-reads and decides again rather than reporting a failure.
             Some("stale") => {
                 Err(LiveError::Stale(if message.is_empty() { "the document moved on".into() } else { message }))
             }
@@ -191,13 +163,8 @@ impl LiveLink {
         }
     }
 
-    /// Block until the app has actually taken THIS edit.
-    ///
-    /// The app publishes the ids of the proposals it applied, and that is the
-    /// acknowledgement. Neither of the two things that look like one will do:
-    /// the revision moves for the user's own edits too, and the published
-    /// document is never byte-identical to what was offered because the app
-    /// migrates and normalises it on the way in.
+    /// Blocks until the app has taken THIS edit, acknowledged by the proposal ids it publishes. The revision
+    /// moves for the user's edits too, and the app normalises what it adopts, so neither can stand in.
     async fn await_adoption(&mut self, link: &EngineLink, proposal: &str) -> Result<i64, LiveError> {
         let deadline = Instant::now() + ADOPT_TIMEOUT;
         while Instant::now() < deadline {

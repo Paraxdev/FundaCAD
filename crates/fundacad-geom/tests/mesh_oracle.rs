@@ -1,6 +1,5 @@
-//! Differential test of the viewport mesh against the Python engine's payload,
-//! summarised by tests/mesh_oracle/gen.py on the legacy branch on OCCT 7.9.3. The engine runs 7.8.1,
-//! so triangle counts are compared loosely and the topology exactly.
+//! The viewport mesh against the Python engine's payload from tests/mesh_oracle/gen.py (legacy branch, OCCT 7.9.3).
+//! The engine runs OCCT 7.8.1, so triangle counts are compared loosely and the topology exactly.
 
 use fundacad_geom::mesh;
 use opencascade::mesh_access;

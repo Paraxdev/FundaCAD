@@ -20,13 +20,8 @@ function writeOpen(key: string, on: boolean) {
 
 export type Drawer = "items" | "history";
 
-/** The floating shell's own state: which cards are open and which popover or
- *  flyout is showing. Only one popover is open at a time, opening another
- *  closes the first.
- *
- *  On a narrow stage the Items and History cards no longer fit beside the rail
- *  and the view controls, so they turn into drawers: closed until asked for,
- *  one at a time, and never written over the remembered wide-layout choice. */
+/** The floating shell's cards and its one open popover or flyout. On a narrow stage the Items and History cards become
+ *  drawers: closed until asked for, one at a time, and never written over the remembered wide layout choice. */
 export const useShellStore = defineStore("shell", () => {
   const itemsOpen = ref(readOpen(ITEMS_KEY, true));
   const historyOpen = ref(readOpen(HISTORY_KEY, true));

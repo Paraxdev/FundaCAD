@@ -1,9 +1,5 @@
-//! texture_height.py: the height fields a printed texture is made of. (u, v)
-//! in millimetres in, a [0, 1] field out, and nothing here knows what a face or
-//! a triangulation is.
-//!
-//! The default profile is hard surface: triangle and trapezoid waves, terraced
-//! plateaus, a sharpness that shapes the facet rather than bending it.
+//! texture_height.py: (u, v) millimetres in, a [0, 1] field out. The default profile is hard surface: triangle and
+//! trapezoid waves, terraced plateaus, a sharpness that shapes the facet rather than bending it.
 
 use std::f64::consts::PI;
 

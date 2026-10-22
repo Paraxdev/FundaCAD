@@ -1,6 +1,5 @@
-//! Node bodies as a FundaCAD plugin component. A node is a sized, turned
-//! ellipsoid at a point; a chain of nodes is a limb lofted smoothly through
-//! them; every limb and every node on no chain fuse into one solid.
+//! Node bodies as a FundaCAD plugin component: a node is a sized, turned ellipsoid at a point, a chain of nodes a
+//! limb lofted smoothly through them, and every limb and lone node fuse into one solid.
 
 wit_bindgen::generate!({
     world: "plugin",

@@ -1,10 +1,6 @@
 <script setup lang="ts">
-// The error notice in the middle of the title bar. A warning triangle pops in,
-// the chip grows to fit the sentence (fast, then settling, the --notice-grow
-// curve), the triangle gives way to the red text, and after a while it folds
-// away. Clicking it opens the console on the full report.
-//
-// With animations off (ui/motion.ts) it appears and leaves in one frame.
+// A triangle pops in, the chip grows to the sentence (the --notice-grow curve), then folds away. With animations off
+// (ui/motion.ts) it appears and leaves in one frame.
 
 import { nextTick, onMounted, onUnmounted, ref } from "vue";
 import { dismissErrorNotice, errorNotice, onErrorNotice, type ErrorNotice } from "../../ui/errorNotice";

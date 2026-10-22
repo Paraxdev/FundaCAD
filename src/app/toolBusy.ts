@@ -26,8 +26,7 @@ function modalTools(t: EngineTools) {
   ];
 }
 
-/** Stand down every tool busy() counts, for a document that is going away. A
- *  section ends its aim or keeps its edited cut on. A plane or point pick ends through the store's rewind. */
+/** For a document going away. A plane or point pick ends through the store's rewind instead. */
 export function cancelActiveTools(t: EngineTools) {
   for (const tool of modalTools(t)) if (tool.active) standDown(() => tool.cancel());
   // Also when idle: it drops a reopen still pending from the last commit.
@@ -46,16 +45,8 @@ function standDown(cancel: () => void) {
   }
 }
 
-/** Guard predicates checked at the top of every start* tool and interactive helper:
- *  they can't fire mid-sketch / mid-drag.
- *
- *  Plain functions rather than reactive state, deliberately. `toolBusy` is only read
- *  at event time and nothing in the UI is disabled by it, so making it reactive
- *  would mean polling eleven `.active` fields every frame or bolting
- *  change-notification onto ten tool classes for no present gain.
- *
- *  A section counts only while aiming: a cut that is on, or being edited, leaves every command free, and
- *  another tool starting confirms the edit by reading this predicate back. */
+/** Plain functions, not reactive state: they are only read at event time. A section counts only while aiming, and
+ *  another tool starting confirms a section edit by reading this back. */
 export function createToolBusy(
   e: Engine,
 ): Pick<
@@ -69,9 +60,7 @@ export function createToolBusy(
   | "hasBody"
   | "altLeftOwned"
 > {
-  // ONE predicate, read two ways. The only difference is whether the Move
-  // gizmo counts, and it is spelled as a parameter rather than as a second list
-  // so the other fifteen entries can never drift apart.
+  // One predicate with flags rather than a second list, so the entries can never drift apart.
   const busy = (moveCounts: boolean, modalCounts = true) => {
     const t = e.tools;
     return (
@@ -82,11 +71,6 @@ export function createToolBusy(
       t.section.picking ||
       e.planePick ||
       (modalCounts && isChoiceOpen()) ||
-      // A plugin's tool holds the window exactly as one of the above does.
-      // Without this the app believes it is idle while a contributed tool
-      // owns the pick: every Escape handler here is gated off, a second tool
-      // starts over the top of the first, and the user has two prompts and
-      // one key that answers neither.
       anyToolBusy()
     );
   };
@@ -100,15 +84,10 @@ export function createToolBusy(
   let stopRestore: (() => void) | null = null;
   return {
     toolBusy: () => busy(true),
-    // See the note on Engine.toolOwnsScreen: a body selection RAISES the Move
-    // gizmo by itself (app/viewportWiring.onBodySelectionChange), so counting
-    // it here would mean no ambient affordance could ever show for a body.
+    // A body selection raises Move by itself, so counting it would hide every ambient affordance for a body.
     toolOwnsScreen: () => busy(false),
     toolAtWork: () => busy(false, false),
-    // See the note on Engine.dropBodyGizmo. Deliberately unconditional about
-    // WHY the gizmo is up: an explicitly started Move over a body selection is
-    // the same gizmo on the same bodies, so there is nothing for a caller to
-    // tell apart, and a Move started over anything else is not in bodies mode.
+    // Unconditional about why the gizmo is up: a Move started by hand over a body selection is the same gizmo.
     dropBodyGizmo: () => {
       if (e.tools.move.active && e.viewport.selecting === "bodies") e.tools.move.cancel();
     },
@@ -124,7 +103,6 @@ export function createToolBusy(
         raise: raiseBodyGizmo,
       });
     },
-    // True when the current rebuild produced a solid body (something to modify).
     hasBody: () => (e.store.buildState.result?.mesh.positions.length ?? 0) > 0,
     // The datum pose and light aim dials take Alt on the grab as "no snapping",
     // and a pattern being placed takes it as a free sweep.
@@ -133,12 +111,8 @@ export function createToolBusy(
   };
 }
 
-/** Wait out a command started over a body selection, then raise the Move gizmo
- *  on that selection again, as if the command had never been reached for. Gives
- *  up when the selection or the document changes: a commit is not a cancel.
- *
- *  Idle has to hold for two frames, because a picker stands down in the frame
- *  it takes its click and hands the pick on in the next one. */
+/** Raises Move again on the body selection once a command is done, unless the selection or document changed. Idle must
+ *  hold two frames, since a picker stands down in the frame of its click and hands the pick on in the next. */
 export function restoreWhenIdle(o: {
   busy: () => boolean;
   selection: () => readonly string[];

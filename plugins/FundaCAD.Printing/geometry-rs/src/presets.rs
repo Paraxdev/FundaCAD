@@ -1,10 +1,5 @@
-//! print_presets.py: the person's active OrcaSlicer machine preset flattened
-//! (its `inherits` chain resolved the way Orca does) with a compatible process
-//! and filament, so a handed off project opens on their own machine. The
-//! palette still owns the colours.
-//!
-//! The slicer's files are read through the host's `files` interface, which the
-//! manifest's "files.read" grant opens.
+//! print_presets.py: the active OrcaSlicer machine preset flattened along its `inherits` chain as Orca does, with a
+//! compatible process and filament. The slicer's files are read through the host's `files` interface ("files.read").
 
 use serde_json::{Map, Value};
 

@@ -1,6 +1,4 @@
-/** True when a keyboard event targets a text-entry field, inputs, textareas,
- *  selects, or contentEditable, so global/tool keyboard shortcuts must NOT fire
- *  (otherwise typing "T" in a field would trigger the Text tool, etc.). */
+/** Inputs, textareas, selects and contentEditable, so typing "T" in a field does not start the Text tool. */
 export function isEditableTarget(t: EventTarget | null): boolean {
   return (
     t instanceof HTMLInputElement ||
@@ -10,10 +8,8 @@ export function isEditableTarget(t: EventTarget | null): boolean {
   );
 }
 
-/** False for a field that no longer holds the typing: removed, hidden, or no
- *  longer document.activeElement because a key handler put it away while the
- *  key was still on its way to the window (sketch/dimInput.ts does, for undo
- *  and redo). The keymap lets the shortcut through for one of those. */
+/** False for a field removed, hidden, or put away by a key handler while the key was still on its way to the window
+ *  (sketch/dimInput.ts does for undo and redo); the keymap lets the shortcut through then. */
 export function isLiveFocusTarget(el: Element): boolean {
   if (!el.isConnected || document.activeElement !== el) return false;
   const s = getComputedStyle(el);
@@ -27,9 +23,8 @@ export function isHistoryKey(e: KeyboardEvent): boolean {
   return k === "z" || k === "y";
 }
 
-/** Ctrl or Cmd with A outside a text field. Left to the browser it selects every
- *  label and button in the app, which reads as the whole UI turning blue (PH-2);
- *  inside a field it stays the field's own select all. */
+/** Ctrl or Cmd with A outside a text field. Left to the browser it selects every label and button, turning the whole
+ *  UI blue (PH-2). */
 export function isPageSelectAll(e: KeyboardEvent): boolean {
   if (!(e.ctrlKey || e.metaKey) || e.altKey) return false;
   if (e.key.toLowerCase() !== "a") return false;

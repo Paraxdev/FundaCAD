@@ -1,9 +1,5 @@
-// The crash guard: a flag set before the tracer starts and cleared at its first
-// sample. Found set at launch, the app died while starting path tracing.
-//
-// Note: Chromium writes localStorage to disk seconds late, so a hard kill
-// right after setting it can lose it. The IndexedDB copy is committed with
-// durability "strict", which resolves only once the write is on disk.
+// Set before the tracer starts and cleared at its first sample. Note: Chromium writes localStorage to disk
+// seconds late, so the IndexedDB copy is committed with durability "strict", which waits for the disk.
 
 const KEY = "fundacad.ptStarting";
 const DB = "fundacad-pathtrace";

@@ -1,11 +1,5 @@
-// The pure half of the Stress panel: the material presets the engine knows by
-// name, turning the panel's setup into the `stress` op's options and into the
-// study the document saves, turning its reply into display rows in the user's
-// units, the blue to red colour map the viewport overlay and the panel's legend
-// share, and the arithmetic behind the view's handles: dragging a force arrow,
-// scaling the deformed shape, and reading a value off the coloured surface.
-// Nothing here touches the viewport or the store, so all of it is testable in
-// node.
+// The Stress panel's pure half: material presets, setup to `stress` op options and saved study, reply to display
+// rows, the colour map, and the arithmetic behind the force arrow, deformation and probe. Testable in node.
 
 import type { AxisDirection, Selector, StressSpot, StressStudy, StressSupportType, Vec3 } from "../types";
 import type { StressMaterial, StressOptions, StressReply, StressSpotArea } from "../geometry/client";
@@ -14,10 +8,8 @@ import { STUDY_DEFAULTS } from "../document/stressStudy";
 import { cylinderFromFace } from "../features/planeMath";
 import { displayRound, toDisplay, type Unit } from "./units";
 
-/** E and yield in MPa, density in g/cm3. Mirrors the engine's presets, names
- *  and values both: a preset goes over the wire by name, and the engine's table
- *  is what it uses, so these numbers are only what the panel shows next to the
- *  name. */
+/** E and yield in MPa, density in g/cm3. Mirrors the engine's presets: a preset goes over the wire by name, so these
+ *  numbers are only what the panel shows. */
 export interface MaterialPreset {
   name: string;
   E: number;
@@ -93,25 +85,18 @@ export const AXES: Record<AxisDirection, Vec3> = {
 /** Standard gravity, m/s2, what the gravity checkbox applies. */
 export const GRAVITY = 9.81;
 
-/** Faces taken from the selection: body-stamped selectors for the engine, the
- *  display face ids for marking them, and the faces' summed area-weighted
- *  outward normal with their area, which "into the face" reads. A selector the
- *  view cannot place (one written by hand or over MCP that names a face by
- *  something other than a point) is kept for the engine with no face id. */
+/** Body-stamped selectors for the engine, display face ids for marking, and the summed area-weighted outward normal
+ *  for "into the face". A selector the view cannot place (hand or MCP written) is kept with no face id. */
 export interface StressFaceSet {
   selectors: Selector[];
   faceIds: number[];
   normalSum: Vec3;
   area: number;
-  /** How many of the selectors name a face the current model does not have
-   *  (an edit took it away, or the timeline is rolled back before it). They
-   *  stay in the set, and so in the saved study, for a model that has them
-   *  again; until then a Run is refused. Absent means none. */
+  /** Selectors naming a face the current model lacks. Kept, and saved, for a model that has them again; until then a
+   *  Run is refused. Absent means none. */
   missing?: number;
-  /** How many of the selectors the view cannot place but the engine still
-   *  resolves (a fingerprint whose old centre the face has moved off, a face
-   *  named by its normal). Absent means every selector without a face id that
-   *  is not missing. */
+  /** Selectors the view cannot place but the engine resolves (a moved fingerprint, a face named by its normal). Absent
+   *  means every selector without a face id that is not missing. */
   unshown?: number;
 }
 
@@ -221,12 +206,9 @@ export function newSetup(body: string | null): StressSetup {
   };
 }
 
-/** The next free id in a list of rows. */
 export function nextId(rows: readonly { id: number }[]): number {
   return rows.reduce((m, r) => Math.max(m, r.id), 0) + 1;
 }
-
-// --- the study the document saves ---------------------------------------------
 
 function num(v: unknown, fallback: number): number {
   return typeof v === "number" && Number.isFinite(v) ? v : fallback;
@@ -238,11 +220,8 @@ function copy<T>(v: T): T {
   return JSON.parse(JSON.stringify(v)) as T;
 }
 
-/** The setup as the document stores it: selectors only, and every number a
- *  number. The study saves numbers only, so a field the user has just cleared
- *  keeps the value `prev` (the study saved before) has for it, the last one the
- *  user had there, and a Run refuses the blank field by name meanwhile. Only a
- *  row `prev` has not seen falls back to the default it was shown with. */
+/** Selectors and numbers only. A just-cleared field keeps the value `prev` saved, and a Run refuses the blank field
+ *  by name meanwhile; only a row `prev` has not seen falls back to its shown default. */
 export function studyFromSetup(s: StressSetup, prev?: Readonly<StressStudy> | null): StressStudy {
   const d = STUDY_DEFAULTS;
   const pc = prev?.custom;
@@ -280,9 +259,7 @@ export function studyFromSetup(s: StressSetup, prev?: Readonly<StressStudy> | nu
   };
 }
 
-/** A row's spots as the study saves them: the key only when there are any, and
- *  a radius the user has just cleared left out with its spot's old one unknown,
- *  so the study never holds a spot without a size. */
+/** The key only when there are spots; a just-cleared radius is left out, so no saved spot lacks a size. */
 function savedSpots(spots: readonly StressSpot[] | undefined): { spots?: StressSpot[] } {
   const kept = (spots ?? []).filter((s) => isNum(s.radius) && s.radius > 0);
   return kept.length ? { spots: copy(kept) } : {};
@@ -316,12 +293,8 @@ export function setupFromStudy(study: StressStudy, faces: (selectors: Selector[]
   };
 }
 
-// --- the request ----------------------------------------------------------------
-
-/** The unit direction "into the face" means: minus the mean outward normal of
- *  the faces and the spots, a spot counting as a disc of its radius. Null when
- *  they point too many ways to have one, a whole cylinder or a set of opposite
- *  faces, where it would be a guess. */
+/** Minus the mean outward normal of the faces and spots, a spot counting as a disc of its radius. Null when they point
+ *  too many ways (a whole cylinder, opposite faces). */
 export function intoDirection(faces: StressFaceSet, spots: readonly StressSpot[] = []): Vec3 | null {
   let [x, y, z] = faces.normalSum;
   let area = faces.area;
@@ -342,9 +315,7 @@ export function intoDirection(faces: StressFaceSet, spots: readonly StressSpot[]
 /** One load's unit direction, or why it has none. */
 export function forceDirection(load: StressLoadSetup): Vec3 | string {
   if (load.direction === "into") {
-    // "Into the face" is read off the faces drawn in the view. With one of them
-    // not there, the faces it has would give a direction the load may not
-    // have, and none at all would read as faces pointing every way.
+    // "Into the face" is read off the faces drawn in the view, so with any unplaced the direction would be a guess.
     const unplaced = unshownFaces(load.faces) + (load.faces.missing ?? 0);
     if (unplaced > 0) {
       return (
@@ -427,9 +398,7 @@ function areaOf(
   };
 }
 
-/** The radius a spot is placed with on a body whose bounding box has this
- *  diagonal, mm: a twentieth of it, to two figures, so it is in proportion to
- *  the part and never a point. */
+/** A twentieth of the bounding box diagonal, mm, to two figures, so a spot is in proportion to the part. */
 export function defaultSpotRadius(diagonal: number): number {
   if (!Number.isFinite(diagonal) || !(diagonal > 0)) return STUDY_DEFAULTS.radius;
   return Math.max(0.5, roundSig(diagonal / 20, 2));
@@ -509,8 +478,6 @@ function roundForce(v: number): number {
   return v === 0 ? 0 : Number(v.toPrecision(12)) + 0;
 }
 
-// --- the result -------------------------------------------------------------------
-
 /** The result as panel rows, lengths in the display unit. */
 export interface StressResultView {
   rows: PanelRow[];
@@ -580,8 +547,6 @@ function fmtForce(f: Vec3): string {
   return `${displayRound(f[0])}, ${displayRound(f[1])}, ${displayRound(f[2])} N`;
 }
 
-// --- the colour map -------------------------------------------------------------
-
 // Blue, cyan, green, yellow, red, in sRGB, evenly spaced: the usual FEA ramp,
 // low stress cold and the peak hot.
 const STOPS: readonly Vec3[] = [
@@ -627,12 +592,8 @@ export function legendGradient(): string {
   return `linear-gradient(to right, ${parts.join(", ")})`;
 }
 
-// --- the force arrow -------------------------------------------------------------
-// The arrow's length on screen grows with the cube root of the force, so twice
-// as long is eight times the force at any size: a hand that doubles an arrow
-// gets a bigger load, not a thousandfold one. Pixels, not mm, because the arrow
-// is a constant size on screen like every other handle, and a drag is
-// measured in what the hand moved.
+// Arrow length grows with the cube root of the force, so doubling an arrow is eight times the force. In screen pixels,
+// since the arrow is a constant size handle and a drag measures what the hand moved.
 
 /** Length goes with the force to the power 1 / ARROW_EXPONENT. */
 export const ARROW_EXPONENT = 3;
@@ -673,11 +634,8 @@ export function arrowPxToForce(px: number): number {
   return roundSig(pxToForce(px), 2);
 }
 
-/** Where a drag of an arrow started: the load's force, the arrow's drawn
- *  length, and how far behind the tip the press landed. A drag is measured
- *  from there, so pressing anywhere on the tip and letting go changes nothing,
- *  and an arrow drawn at its longest for a force past the scale still grows
- *  and shrinks from what the load is. */
+/** A drag is measured from where it started, so pressing the tip and letting go changes nothing, and an arrow capped
+ *  at its longest still grows and shrinks from the real force. */
 export interface ForceDragStart {
   force: number;
   px: number;
@@ -706,13 +664,8 @@ export interface SnapCandidate {
   dir: Vec3;
 }
 
-/** Where a drag of the arrow's tip lands. `v` is the tip's offset from the
- *  arrow's root in world units, in the plane facing the camera; `view` is the
- *  camera's unit forward direction. A candidate whose screen image lies within
- *  `degrees` of the drag takes it over, and the length is then measured along
- *  that candidate, so a drag along an arrow that leans into the screen changes
- *  its size and nothing else. A candidate pointing at the camera has no screen
- *  direction to aim at and is passed over. Null for a drag back onto the root. */
+/** `v` is the tip offset from the root in world units, in the camera-facing plane. A candidate within `degrees` on
+ *  screen takes over and the length is measured along it; one facing the camera is skipped. Null back on the root. */
 export function snapDrag(
   v: Vec3,
   view: Vec3,
@@ -736,10 +689,8 @@ export function snapDrag(
   return { key: "custom", dir: [v[0] / vl, v[1] / vl, v[2] / vl], length: vl };
 }
 
-/** What a drag of a force arrow writes into its load: the direction by name
- *  (a custom one rounded to three decimals, which is all a hand can aim) and
- *  the force from the arrow's length on screen against where the drag began.
- *  The force is always positive: the direction carries the sign. */
+/** A custom direction is rounded to three decimals, all a hand can aim. The force is always positive, the direction
+ *  carries the sign. */
 export function forceDragPatch(
   snapped: { key: ForceDirection; dir: Vec3; length: number },
   worldPerPx: number,
@@ -767,8 +718,6 @@ function round3(v: number): number {
 function dot(a: Vec3, b: Vec3): number {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 }
-
-// --- where the glyphs stand --------------------------------------------------------
 
 export type Tri = [Vec3, Vec3, Vec3];
 
@@ -798,10 +747,8 @@ export function areaCentre(tris: readonly Tri[]): Vec3 | null {
   return a > 0 ? [c[0] / a, c[1] / a, c[2] / a] : null;
 }
 
-/** Up to `max` spots spread over a pressure's faces, each with the direction
- *  into the face there (`normals` are the triangles' outward normals). Every
- *  k-th triangle by area order would bunch them on the big ones, so they are
- *  taken in the faces' own order, which runs across the surface. */
+/** Up to `max` spots over a pressure's faces, with the direction into the face there. Taken in the faces' own order,
+ *  since area order would bunch them on the big triangles. */
 export function pressureSites(tris: readonly Tri[], normals: readonly Vec3[], max = 16): { at: Vec3; dir: Vec3 }[] {
   const out: { at: Vec3; dir: Vec3 }[] = [];
   if (!tris.length || max <= 0) return out;
@@ -814,9 +761,8 @@ export function pressureSites(tris: readonly Tri[], normals: readonly Vec3[], ma
   return out;
 }
 
-/** The axis a pinned support turns about, as a segment through its face and a
- *  little past both ends, from the face's own tessellation. Null when the face
- *  is not a cylinder (the engine refuses those, and says so). */
+/** The pin axis as a segment through the face and a little past both ends. Null when the face is not a cylinder,
+ *  which the engine refuses. */
 export function pinAxisSegment(points: readonly Vec3[], normals: readonly Vec3[]): { from: Vec3; to: Vec3 } | null {
   const cyl = cylinderFromFace([...points], [...normals]);
   if (!cyl) return null;
@@ -837,8 +783,6 @@ export function pinAxisSegment(points: readonly Vec3[], normals: readonly Vec3[]
   ];
   return { from: at(lo - margin), to: at(hi + margin) };
 }
-
-// --- the deformed shape -----------------------------------------------------------
 
 /** The scale that draws the largest deflection at `share` of the body's size
  *  (its bounding box diagonal), to two significant figures. 1, true scale, when
@@ -889,8 +833,6 @@ export function swingScale(timeMs: number, scale: number, periodMs = 1600): numb
   return (scale * (1 - Math.cos((2 * Math.PI * timeMs) / periodMs))) / 2;
 }
 
-// --- the probe ---------------------------------------------------------------------
-
 /** Barycentric weights of `p` in triangle abc, the point projected onto the
  *  triangle's plane and pulled back inside it, so a hit a hair off the edge
  *  never extrapolates the field. Equal thirds for a degenerate triangle. */
@@ -915,10 +857,8 @@ export function barycentric(a: Vec3, b: Vec3, c: Vec3, p: Vec3): Vec3 {
   return [u / s, v / s, w / s];
 }
 
-/** Von Mises (MPa) and the deflection (mm, its size, and its vector) at a
- *  point of surface triangle `tri` with barycentric `weights`, interpolated
- *  from the triangle's corners. Deflection is null when the reply carried no
- *  displacement. Null for a triangle the surface does not have. */
+/** Von Mises (MPa) and deflection (mm, its size and vector) interpolated at `weights` in surface triangle `tri`.
+ *  Deflection is null without displacement data; null for a triangle the surface lacks. */
 export function probeValues(
   surface: { indices: ArrayLike<number>; vonMises: ArrayLike<number>; displacement?: ArrayLike<number> },
   tri: number,

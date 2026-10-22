@@ -1,8 +1,5 @@
-// No right-click anywhere in the app opens the webview's own menu. A handler
-// that opens one of ours prevents the default first; whatever reaches the window
-// unclaimed is stopped here. Text fields and selected text get our own
-// Cut / Copy / Paste / Select all, since the native menu was the only way to
-// paste into them with the mouse.
+// No right-click opens the webview's own menu: whatever reaches the window unclaimed stops here. Text fields and
+// selections get our own Cut, Copy, Paste and Select all, since the native menu was the only mouse paste.
 
 import { contextMenu, type CtxItem } from "./menu";
 
@@ -134,7 +131,6 @@ function editableMenu(host: HTMLElement): CtxItem[] {
   ];
 }
 
-/** The menu a right-click nobody else claimed gets, or null for none at all. */
 export function fallbackMenu(target: EventTarget | null): CtxItem[] | null {
   const field = textField(target);
   if (field) return fieldMenu(field);

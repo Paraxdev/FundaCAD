@@ -1,6 +1,5 @@
-//! Longest facet edge cap, replaces the Python engine's `mesh_refine.py`. Every long edge
-//! is split at its midpoint on both of its triangles, so the mesh stays
-//! conforming.
+//! Longest facet edge cap, mesh_refine.py. Every long edge is split at its midpoint on both of its
+//! triangles, so the mesh stays conforming.
 
 use std::collections::HashMap;
 

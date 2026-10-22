@@ -1,12 +1,5 @@
-//! Sketch shortcuts an agent may write that the document never holds, and
-//! the checks a sketch's entities get when they are sent.
-//!
-//! A `polyline` becomes `line` entities whose shared ends are written with
-//! the very same values, which is how the app chains lines it draws one click
-//! after another. A `rectangle` given by two corners becomes the centre form
-//! the app stores. Both happen when the feature is added or its entities are
-//! sent, so the app, the engine and a saved file only ever see entities they
-//! already know.
+//! Sketch shortcuts the document never holds: a `polyline` becomes `line`s whose shared ends carry the same
+//! values, a two corner `rectangle` the stored centre form. Expanded when sent, so nothing else sees them.
 
 use std::collections::BTreeSet;
 
@@ -46,8 +39,7 @@ fn fresh_id(base: &str, k: &mut usize, taken: &mut BTreeSet<String>) -> String {
     }
 }
 
-/// Whether two point coordinates are the same: equal numbers, however
-/// written, or the same parameter name.
+/// Equal numbers however written, or the same parameter name.
 fn same(a: &Value, b: &Value) -> bool {
     match (a.as_f64(), b.as_f64()) {
         (Some(x), Some(y)) => x == y,
@@ -55,7 +47,6 @@ fn same(a: &Value, b: &Value) -> bool {
     }
 }
 
-/// What a polyline became: its id and the lines it was written as.
 struct Expanded {
     base: String,
     lines: Vec<String>,
@@ -129,9 +120,8 @@ fn polyline(
     let mut k = 0;
     let mut made = Vec::new();
     for s in 0..segments {
-        // Each end written with the values of the point it is, so a line's
-        // end and the next one's start are the same numbers, or the same
-        // parameter, and join.
+        // Each end carries its point's values, so one line's end and the next one's start
+        // are the same numbers or parameter, and join.
         let (a, b) = (&pts[s], &pts[(s + 1) % n]);
         let id = fresh_id(&base, &mut k, taken);
         let mut line = Map::new();
@@ -157,9 +147,8 @@ fn polyline(
     Ok((note, Expanded { base, lines: made }))
 }
 
-/// Patterns that repeat a polyline now repeat its lines. A constraint or a
-/// text path that names one is refused: a line of it is what it means, and
-/// which line is not for this to guess.
+/// Patterns of a polyline now repeat its lines. A constraint or text path naming one is refused,
+/// since which line it means is not for this to guess.
 fn follow(sid: &str, f: &mut Map<String, Value>, done: &[Expanded], entities: &[Value]) -> Result<(), String> {
     let named = |v: &Value| -> Option<&Expanded> {
         let s = v.as_str()?;
@@ -275,13 +264,9 @@ pub fn noted(line: &str, notes: &[String]) -> String {
     out
 }
 
-/// Expand the shortcuts in a sketch feature's entities and, when `check`
-/// holds the entities the sketch already had, refuse any other the build
-/// would not draw: an unknown type, a missing field, a field nothing reads.
-/// Entities sent back as they were pass, so one the app keeps from a newer
-/// build does not stop an edit. Two entities with one id are always refused.
-/// Returns a note per shortcut expanded. Anything but a sketch passes
-/// untouched.
+/// With `check` holding the sketch's old entities, refuses any other the build would not draw. Entities sent
+/// back unchanged pass, so one kept from a newer build does not stop an edit. Duplicate ids are always refused.
+/// Returns a note per shortcut expanded; anything but a sketch passes untouched.
 pub fn expand(f: &mut Map<String, Value>, check: Option<&[Value]>) -> Result<Vec<String>, String> {
     if f.get("type").and_then(Value::as_str) != Some("sketch") {
         return Ok(Vec::new());

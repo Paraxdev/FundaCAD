@@ -8,27 +8,10 @@ import { openExternal } from "../ui/welcome";
 import type { MenuDef } from "../ui/menu";
 import type { Engine } from "./engine";
 
-/** Where a bug report goes. The reporter puts the report on the clipboard and
- *  says to paste it into a new issue, so the app has to be able to say where. */
 const ISSUES_URL = "https://github.com/Paraxdev/fundacad/issues";
 
-/** Fold what the running plugins add into the app's own tree.
- *
- *  Two shapes, both wanted, and both arrived at from real cases rather than
- *  imagined ones. A contribution naming a menu that EXISTS appends its rows to
- *  it, which is how a capability adds two lines to File. A contribution naming
- *  one that does not CREATES it, placed before whatever `before` names, which is
- *  how a capability owns the whole of View, and why View disappears when that
- *  capability is off, without anything here knowing that View is its.
- *
- *  Rows are appended in the order the plugins started, and a contribution
- *  brings its own leading separator if it wants one. Neither is a policy this
- *  file is in a position to have: it cannot tell a row that belongs at the top
- *  of File from one that belongs at the bottom.
- *
- *  A copy, never a mutation: `menus` is rebuilt on every open, but the ITEM
- *  arrays inside a contribution are the plugin's own and pushing into them would
- *  grow them once per menu render. */
+/** A contribution naming an existing menu appends to it, otherwise it creates one before `before`. Copies the item
+ *  arrays, which are the plugin's own and would grow once per render if pushed into. */
 function withContributions(menus: MenuDef[]): MenuDef[] {
   const out = menus.map((m) => ({ ...m, items: [...m.items] }));
   for (const c of contributedMenus()) {
@@ -45,13 +28,7 @@ function withContributions(menus: MenuDef[]): MenuDef[] {
   return out;
 }
 
-/** The File / Edit / Help tree, plus whatever the running plugins add.
- *
- *  `disabled` and `checked` are THUNKS, not values: Menubar re-evaluates them
- *  every time a menu opens, so "Undo" greys out correctly without anything
- *  having to push state at it. A contributed row's thunks are the plugin's own
- *  and are called the same way, which is what lets a capability tick its own
- *  mode without this file holding a handle on the module that knows it. */
+/** `disabled` and `checked` are thunks, re-evaluated every time a menu opens. */
 export function buildMenubar(e: Engine): MenuDef[] {
   return withContributions([
     {
@@ -89,11 +66,7 @@ export function buildMenubar(e: Engine): MenuDef[] {
         {
           label: "Delete",
           shortcut: "Del",
-          // A selected FACE is deletable too (defeature), onClick has always
-          // tried that first, but the predicate only asked about features, so
-          // the menu greyed out the one case the Del key still handled.
-          // getSelectedFaceIds, not selectedFacesForPressPull: this runs on
-          // every menu render and the full call walks every triangle.
+          // A selected face is deletable too. getSelectedFaceIds, since selectedFacesForPressPull walks every triangle.
           disabled: () => !e.selectedFeature && e.viewport.getSelectedFaceIds().length === 0,
           onClick: () => {
             if (e.deleteSelectedFace()) return;
@@ -109,8 +82,7 @@ export function buildMenubar(e: Engine): MenuDef[] {
           onClick: () => e.selectedFeature && e.store.toggleSuppress(e.selectedFeature),
         },
         { separator: true, label: "" },
-        // No ellipsis any more: it opens a workspace, not a window, and the
-        // three dots are a promise that something will come up over this.
+        // No ellipsis: it opens a workspace, not a window.
         { label: "Materials", onClick: () => setWorkspace("render") },
         {
           label: "Preferences…",

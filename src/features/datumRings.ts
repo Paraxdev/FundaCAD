@@ -1,7 +1,5 @@
-// What a datum plane's pose looks like on the canvas: the offset arrow at the
-// pivot and three slim rings round it, one about each axis a turn acts about
-// (tiltX about the reference x, tiltY about the y that leaves, spin about the
-// plane's normal). Only draws and hit-tests; the pose tool owns the drag.
+// Draws and hit tests a datum plane's pose handles: the offset arrow and rings about the reference x (tiltX), the y
+// that leaves (tiltY) and the plane's normal (spin). The pose tool owns the drag.
 
 import * as THREE from "three";
 import type { Viewport } from "../viewport/viewport";
@@ -15,17 +13,15 @@ export type Grab = "offset" | Turn;
 export const TURNS: readonly Turn[] = ["tiltX", "tiltY", "spin"];
 
 export const RING_PX = 62;
-/** How much of the offset arrow must still show when the normal points at the
- *  camera, so it keeps a length to aim at from the top. */
+/** Share of the offset arrow still shown with the normal at the camera, so it keeps a length to aim at from the top. */
 const ARROW_MIN_SCREEN = 0.7;
 
-// The move gizmo's palette, so a plane's tilt about its x reads as the same red
-// as sliding along x.
+// The move gizmo's palette, so a tilt about x reads as the same red as sliding along x.
 const RING_NAME: Record<Turn, string> = { tiltX: "tilt x", tiltY: "tilt y", spin: "spin" };
 const AXIS_COLOR: Record<Turn, number> = { tiltX: 0xff5a5a, tiltY: 0x5ad15a, spin: 0x5a9bff };
 const UP = new THREE.Vector3(0, 1, 0);
 
-/** The frame the rings are drawn in, rebuilt by the tool every frame. */
+/** Rebuilt by the tool every frame. */
 export interface RingScene {
   viewport: Viewport;
   pivot: THREE.Vector3;
@@ -132,9 +128,8 @@ export class DatumRings {
     return at.normalize();
   }
 
-  /** For measuring: where a hand presses `g`, the point of it that a press
-   *  takes and that stands farthest on screen from the other rings, and what it
-   *  draws. */
+  /** For measuring: the point of `g` a press takes that stands farthest on screen from the other rings, and what
+   *  it draws. */
   probe(g: Grab, s: RingScene): { grabAt: THREE.Vector3; drawn: THREE.Object3D[] } | null {
     this.group.updateMatrixWorld(true);
     if (g === "offset") {

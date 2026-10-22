@@ -1,6 +1,5 @@
-//! The denoise at the sample cap, on a worker thread, tone mapped with
-//! resolve.wgsl's curve: Open Image Denoise when it is installed, the edge
-//! aware a-trous filter otherwise.
+//! The denoise at the sample cap on a worker thread, tone mapped with resolve.wgsl's curve: Open Image Denoise when it
+//! is installed, the edge aware a-trous filter otherwise.
 
 use serde::{Deserialize, Serialize};
 

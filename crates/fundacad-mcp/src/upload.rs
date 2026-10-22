@@ -1,18 +1,5 @@
-//! A file arriving inline, in one piece or in several. The upload half of
-//! the Python MCP server's `server.py`.
-//!
-//! `doc_import` takes a `path`, which assumes the file is on the machine
-//! FundaCAD runs on. Often it is not: a host that hands its model an upload
-//! gives it the bytes and nothing else. So the file can be sent inline instead,
-//! and three things make that practical for a real part rather than a toy one:
-//! an encoding that does not re-encode text formats, compression (a STEP is
-//! text and gzips about tenfold), and pieces, because the ceiling on one
-//! message is the model's output and not this process's memory.
-//!
-//! The pieces are appended to a spool on disk rather than joined in memory:
-//! what arrives may be four times the size of the file once decoded and
-//! unpacked, and holding the payload, the bytes and the write at once is three
-//! copies of something already at the edge of what a message can carry.
+//! A file arriving inline, in one piece or several, for a host that hands its model bytes but no path.
+//! Pieces append to a spool on disk, since decoded and unpacked they may be four times the file's size.
 
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -21,16 +8,14 @@ use std::time::Instant;
 use base64::Engine as _;
 use serde_json::{Map, Value};
 
-/// What `doc_import` will read. The same set the app's file pickers offer, and
-/// the same names the engine's importer switches on.
+/// The set the app's file pickers offer, under the names the engine's importer switches on.
 pub const IMPORT_FORMATS: &[&str] = &[
     "step", "stl", "3mf", "obj", "brep", "glb", "gltf", "iges", "fcstd", "ply", "off", "amf", "vrml", "x3d", "xbf",
     "3dm", "ifc", "dxf", "fbx", "3ds", "svg",
 ];
 
-/// How much file may arrive inline, summed over every piece of one upload. A
-/// TRANSPORT limit, not the reader's: the engine keeps its own per-format cap
-/// and applies it to the file on disk. `path` has no ceiling at all.
+/// Summed over every piece of one upload. A TRANSPORT limit: the engine keeps its own per-format cap,
+/// and `path` has none.
 pub const MAX_INLINE_BYTES: usize = 64 * 1024 * 1024;
 
 static INLINE_CAP: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(MAX_INLINE_BYTES);
@@ -39,11 +24,8 @@ pub fn max_inline_bytes() -> usize {
     INLINE_CAP.load(std::sync::atomic::Ordering::Relaxed)
 }
 
-/// How much may be WRITTEN once an archive is opened. Deliberately above the
-/// engine's own 400 MiB STEP cap, so nothing is refused here that the reader
-/// would have accepted, and finite because the ratio between an archive and its
-/// contents has no upper bound: a few hundred bytes of gzip expands to a
-/// gigabyte of zeroes, and a limit only on what arrives is not a limit at all.
+/// Above the engine's 400 MiB STEP cap so nothing the reader would take is refused here, and finite
+/// because a few hundred bytes of gzip can expand to a gigabyte of zeroes.
 pub const MAX_UNPACKED_BYTES: usize = 512 * 1024 * 1024;
 
 static UNPACKED_CAP: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(MAX_UNPACKED_BYTES);
@@ -52,28 +34,22 @@ pub fn max_unpacked_bytes() -> usize {
     UNPACKED_CAP.load(std::sync::atomic::Ordering::Relaxed)
 }
 
-/// Move the two caps, and give back what they were. The only caller is a test
-/// that has to provoke the refusal: the assertion is about what is said when a
-/// file is too large, not about writing half a gigabyte to find out.
+/// Moves the two caps and returns the old ones, for a test that provokes the refusal
+/// without writing half a gigabyte.
 pub fn set_caps(inline: usize, unpacked: usize) -> (usize, usize) {
     use std::sync::atomic::Ordering::Relaxed;
     (INLINE_CAP.swap(inline, Relaxed), UNPACKED_CAP.swap(unpacked, Relaxed))
 }
 
-/// Past this many pieces, say so. Inline content is written by the model, so
-/// every piece costs a whole message of its output whatever this server's own
-/// limit is.
+/// Past this many pieces, say so: each piece costs a whole message of the model's output.
 pub const PIECES_WORTH_IT: i64 = 5;
 
-/// When pieces nobody came back for are dropped. This process outlives any one
-/// conversation, so an upload abandoned halfway would otherwise hold its
-/// directory for as long as the host runs.
+/// This process outlives any one conversation, so an abandoned upload would otherwise
+/// hold its directory as long as the host runs.
 pub const UPLOAD_IDLE_SECONDS: u64 = 30 * 60;
 
-/// Extensions that wrap a file rather than being one, and what is inside when
-/// the name is all there is to go on. `.stpZ` is ISO 10303-21's own spelling
-/// for a zipped STEP and carries no inner extension to read, though FreeCAD
-/// and KiCad write it gzip, which the sniff in `unpack` catches.
+/// Extensions that wrap a file, and what is inside when the name is all there is. `.stpZ` is ISO 10303-21's
+/// zipped STEP, though FreeCAD and KiCad write it gzip, which the sniff in `unpack` catches.
 const ARCHIVE_SUFFIXES: &[(&str, &str, Option<&str>)] =
     &[("gz", "gzip", None), ("gzip", "gzip", None), ("zip", "zip", None), ("stpz", "zip", Some("step"))];
 
@@ -81,16 +57,12 @@ const ARCHIVE_SUFFIXES: &[(&str, &str, Option<&str>)] =
 const FORMAT_ALIASES: &[(&str, &str)] =
     &[("stp", "step"), ("igs", "iges"), ("wrl", "vrml"), ("wrz", "vrml"), ("x3dz", "x3d")];
 
-/// Read and written in multiples of 4, so that a base64 spool splits at
-/// character boundaries the decoder can take one block at a time. Padding only
-/// ever appears at the very end, which is what makes that legal.
+/// A multiple of 4, so a base64 spool splits where the decoder can take one block at a time;
+/// padding only ever ends the stream.
 const BLOCK: usize = 4 * 1024 * 1024;
 
-/// What to do when the file cannot come this way. Written out in full wherever
-/// the question arises, because the wrong answer to it is expensive and quiet:
-/// an agent that decides the part cannot be sent will model against something
-/// it made up, and everything it measures afterwards will be self-consistent
-/// and wrong.
+/// Written out in full wherever it applies: an agent that decides the part cannot be sent
+/// models against something it made up, and every measurement after is wrong.
 pub const ASK_FOR_A_PATH: &str = "If you cannot reach the file from where you are, ask the person \
 you are working with for its path on the machine FundaCAD runs on, or ask them to open it in \
 FundaCAD themselves (File, Import Mesh), which puts it in the document for `inspect` to measure. \
@@ -111,9 +83,7 @@ fn fail<T>(message: impl Into<String>) -> Result<T, UploadError> {
     Err(UploadError(message.into()))
 }
 
-/// A size in the unit it is actually in. The progress line on an upload reads a
-/// few hundred kilobytes as "0.0 MiB", which is the one number the caller is
-/// watching and the one that has to look like it moved.
+/// In the unit it is actually in, so an upload's progress never reads a few hundred kilobytes as "0.0 MiB".
 pub fn size_text(n: usize) -> String {
     if n < 1024 {
         return format!("{n} bytes");
@@ -134,12 +104,8 @@ fn too_large(size: usize) -> String {
     )
 }
 
-/// The format an extension NAMES, or None when it names nothing we read.
-///
-/// Kept apart from the guess below because the difference matters in one place:
-/// what to do about a plain `.zip`, whose own extension says nothing about its
-/// contents. Knowing that the name was silent is what makes reading the answer
-/// off the file inside it correct rather than a second guess.
+/// The format an extension NAMES, kept apart from the guess below: a plain `.zip` names nothing,
+/// which is what lets the file inside decide.
 pub fn format_of(name: &str) -> Option<&'static str> {
     named_format(&extension(name))
 }
@@ -157,11 +123,8 @@ pub fn format_told_as(told: &str) -> String {
     named_format(told).map_or_else(|| told.to_ascii_lowercase(), str::to_string)
 }
 
-/// The format an extension implies. STEP is the fallback rather than an error,
-/// mirroring `extToImportFormat` in src/io/files.ts and for its reason: a STEP
-/// file is spelled .step, .stp, .STP and occasionally nothing recognisable, so
-/// a lookup table that refused what it did not know would turn the commonest
-/// import into the one that needs an argument.
+/// STEP is the fallback, as in `extToImportFormat` in src/io/files.ts: STEP files come spelled many ways,
+/// and refusing the unknown would make the commonest import need an argument.
 pub fn import_format(path: &str) -> &'static str {
     format_of(path).unwrap_or("step")
 }
@@ -181,9 +144,8 @@ fn without_extension(name: &str) -> String {
     }
 }
 
-/// (the name of the file inside, how it is wrapped) for a name that may be an
-/// archive. "asm.step.gz" is a STEP called asm.step; "asm.stpz" is one too, and
-/// has to be told so, because the zip took its extension away.
+/// (inner name, wrapping) for a name that may be an archive: "asm.step.gz" is a STEP called asm.step,
+/// and "asm.stpz" has to be told so, because the zip took its extension away.
 pub fn unwrap_name(name: &str) -> (String, Option<&'static str>) {
     let ext = extension(name);
     let Some((_, compression, inside)) = ARCHIVE_SUFFIXES.iter().find(|(e, _, _)| *e == ext) else {
@@ -199,14 +161,8 @@ pub fn unwrap_name(name: &str) -> (String, Option<&'static str>) {
     (inner, Some(compression))
 }
 
-/// A filename for inline content, built rather than trusted.
-///
-/// `name` is whatever the agent called the file and it is about to become a
-/// path on this machine, so taking the basename is the least of it: ".."
-/// survives that, and a colon or a wildcard is simply unwritable on Windows,
-/// which would turn an ordinary import into an error raised from the wrong
-/// layer entirely. Only the extension is cosmetic here anyway, the format is
-/// decided before this.
+/// Built rather than trusted: ".." survives a basename, and a colon or wildcard cannot be written
+/// on Windows. Only the extension is cosmetic, the format is decided before this.
 pub fn safe_filename(name: &str, fmt: &str) -> String {
     let base = name.trim().rsplit(['/', '\\']).next().unwrap_or("");
     let cleaned: String = base
@@ -220,18 +176,12 @@ pub fn safe_filename(name: &str, fmt: &str) -> String {
     }
 }
 
-/// A file arriving inline, in one piece or in several.
-///
-/// Everything about the file (its name, its format, how it is compressed) is
-/// settled by the FIRST piece and is not revisited. A later piece that
-/// contradicts it is refused rather than reconciled: the pieces are a transport
-/// detail, and a file whose format changed halfway through is not one file.
+/// The first piece settles the name, format and compression; a later piece that contradicts it
+/// is refused, since a file whose format changed halfway is not one file.
 pub struct Upload {
     pub id: String,
     pub compression: Option<String>,
-    /// Whether to look at the bytes at all. Saying "none" is the escape hatch
-    /// for a file that really is called .gz and really is not compressed, so it
-    /// overrules what the bytes look like too.
+    /// "none" is the escape hatch for a file really called .gz that is not compressed, so it overrules the bytes too.
     pub sniff: bool,
     pub encoding: String,
     pub told_format: bool,
@@ -309,8 +259,7 @@ impl Upload {
         std::fs::metadata(&self.spool).map_or(0, |m| m.len() as usize)
     }
 
-    /// Append one piece, refusing by name and saying which argument would have
-    /// avoided it, because this is the one layer that knows both.
+    /// Refuses by name and says which argument would have avoided it, since this is the one layer that knows both.
     pub fn write(&mut self, content: Option<&Value>, part: i64) -> Result<(), UploadError> {
         let Some(Value::String(content)) = content else {
             return fail("content must be a string: base64, or the file's own text with encoding \"text\".");
@@ -318,10 +267,7 @@ impl Upload {
         let data: Vec<u8> = if self.encoding == "text" {
             content.as_bytes().to_vec()
         } else {
-            // Whitespace goes first because base64 is routinely wrapped at 76
-            // columns, and a strict decode refuses a newline: validating what
-            // arrived verbatim would reject the well-formed payload far more
-            // often than the malformed one.
+            // Whitespace first: base64 is routinely wrapped at 76 columns and a strict decode refuses a newline.
             let packed: String = content.split_whitespace().collect();
             if part < self.parts && packed.ends_with('=') {
                 return fail(format!(
@@ -341,9 +287,8 @@ impl Upload {
             packed.into_bytes()
         };
 
-        // A spool bound, not the real one: the exact limit is on the DECODED
-        // bytes and is checked as they are written. This exists only so that a
-        // caller ignoring the limit cannot spool without bound before finding out.
+        // A spool bound only, so a caller ignoring the limit cannot spool without end;
+        // the exact limit is on the decoded bytes as they are written.
         if self.spooled() + data.len() > max_inline_bytes() / 3 * 4 + 64 {
             return fail(too_large(self.spooled() * 3 / 4));
         }
@@ -376,9 +321,7 @@ fn token_hex(bytes: usize) -> String {
     buf.iter().map(|b| format!("{b:02x}")).collect()
 }
 
-/// The spool, as the bytes that were sent. Streamed a block at a time, and the
-/// block is a multiple of 4, so each read is a whole number of base64 groups
-/// and decodes on its own.
+/// Streamed a block at a time; the block is a multiple of 4, so each read is whole base64 groups.
 fn decode_spool(up: &Upload, out_path: &Path) -> Result<usize, UploadError> {
     let Ok(mut src) = std::fs::File::open(&up.spool) else {
         return fail("content is empty.");
@@ -431,12 +374,8 @@ fn decode_spool(up: &Upload, out_path: &Path) -> Result<usize, UploadError> {
     Ok(total)
 }
 
-/// gzip, from its first two bytes, and gzip alone.
-///
-/// A 3MF IS a zip archive and the engine reads it as one, so unpacking anything
-/// that merely looked like a zip would quietly turn a 3MF import into whatever
-/// happened to sit inside it. A zip has to be declared, by the argument or by
-/// the name; nothing we read begins 1f 8b, so gzip can be recognised on sight.
+/// gzip alone, from its first two bytes: a 3MF IS a zip the engine reads as one, so a zip
+/// has to be declared, while nothing we read begins 1f 8b.
 fn sniff_compression(path: &Path) -> Option<&'static str> {
     let mut head = [0u8; 2];
     let mut fh = std::fs::File::open(path).ok()?;
@@ -486,11 +425,8 @@ fn gunzip(src_path: &Path, dst_path: &Path) -> Result<usize, UploadError> {
     }
 }
 
-/// Take the one file out of a zip, and say what it was called.
-///
-/// An archive holding several is refused rather than guessed at: which one was
-/// meant is a question with a right answer that this process does not have, and
-/// importing the wrong one looks like success until the measurements are wrong.
+/// An archive holding several files is refused rather than guessed at, since importing the wrong one
+/// looks like success until the measurements are wrong.
 fn unzip_one(src_path: &Path, dst_path: &Path, fmt: &str, told_format: bool) -> Result<String, UploadError> {
     let Ok(file) = std::fs::File::open(src_path) else {
         return fail("the zip archive could not be read. If the file is not compressed, leave compression out.");
@@ -518,9 +454,7 @@ fn unzip_one(src_path: &Path, dst_path: &Path, fmt: &str, told_format: bool) -> 
     let chosen = if entries.len() == 1 {
         entries[0].clone()
     } else {
-        // Only a format somebody actually stated may choose. `fmt` falls back
-        // to step whenever the name was silent, and letting that pick would
-        // answer the question with a default.
+        // Only a format somebody stated may choose: `fmt` falls back to step whenever the name was silent.
         let want: Vec<&(usize, String, u64)> = if told_format {
             entries.iter().filter(|(_, name, _)| format_of(name) == Some(fmt)).collect()
         } else {
@@ -554,16 +488,13 @@ fn unzip_one(src_path: &Path, dst_path: &Path, fmt: &str, told_format: bool) -> 
         return fail("the file could not be written to disk.");
     };
     let total = copy_capped(&mut entry, &mut dst, &name)?;
-    // Declared against actual. A zip states each entry's size in its own
-    // directory, so the two disagreeing means the archive is damaged, and a
-    // short read would otherwise import as a truncated file.
+    // A zip states each entry's size, so a mismatch means damage, and a short read would import a truncated file.
     if total as u64 != declared {
         return fail(format!("{name} says it is {declared} bytes but {total} came out, so the archive is damaged."));
     }
     Ok(name)
 }
 
-/// Everything spooled, as one file the engine can open. Returns its path.
 pub fn unpack(up: &mut Upload) -> Result<PathBuf, UploadError> {
     let payload = up.dir.join("payload");
     decode_spool(up, &payload)?;

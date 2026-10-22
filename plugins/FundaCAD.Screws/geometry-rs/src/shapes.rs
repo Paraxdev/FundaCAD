@@ -1,12 +1,6 @@
-//! scr_shapes.py: solids for fastener parts, in millimetres, on the Z axis,
-//! through the engine's kernel with build123d's own boolean semantics
-//! (parallel, merged faces, a lone solid unwrapped).
-//!
-//! Screws hang from the XY plane: the head's bearing face is at z = 0 with the
-//! head above it, the shank runs down to z = -length. A countersunk head is
-//! the exception, its top is at z = 0 so the screw sits flush. Nuts and
-//! washers stand on z = 0. An insert's top is at z = 0 and it goes down into
-//! the part.
+//! Port of scr_shapes.py, millimetres on the Z axis, booleans with build123d's semantics (parallel, merged faces, a lone
+//! solid unwrapped). A screw's bearing face is at z = 0 with the shank down to -length, a countersunk head's top is at
+//! z = 0. Nuts and washers stand on z = 0, an insert's top is at z = 0 and it goes down into the part.
 
 use std::f64::consts::PI;
 
@@ -125,11 +119,8 @@ pub fn chamfered_hex(across_flats: f64, z0: f64, z1: f64, top: bool, bottom: boo
     intersect(&body, &revolve_rz(&pts)?)
 }
 
-// --- the axisymmetric outline of a screw -------------------------------------
-
-/// `head_outline`: (r, z) from the top of the axis outward and down to the
-/// shank at z = 0, or none when the head is not a solid of revolution; and the
-/// z of the head's top face, where a drive recess starts.
+/// (r, z) from the axis top outward and down to the shank at z = 0, None when the head is not a solid of revolution,
+/// and the z of the head's top face, where a drive recess starts.
 pub fn head_outline(head: &crate::P, shank_r: f64) -> (Option<Vec<(f64, f64)>>, f64) {
     let t = head.s("type");
     match t {
@@ -210,7 +201,7 @@ pub fn point_outline(point: &crate::P, r: f64, z_end: f64, pitch: f64, length: f
     }
 }
 
-// --- drive recesses, as tools to cut, from z_top downward ---------------------
+// Drive recesses are tools to cut, from z_top downward.
 
 fn cone_tip(r: f64, z_top_of_cone: f64) -> R<Shape> {
     let h = r / (118f64 / 2.0).to_radians().tan();

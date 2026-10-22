@@ -1,8 +1,4 @@
-//! The kernel calls a ported plugin needed beyond the first set: surface
-//! frames and samples, a face's stored triangulation, edges and wires, a
-//! rotation, a helical sweep, a boolean with options and face selectors, and
-//! the smooth-surface set: ellipse edges, lofts, interpolated edges and an
-//! affine map.
+//! The kernel calls plugins need beyond the first set in `kernel_api`.
 
 use opencascade::primitives::Shape;
 use opencascade_sys::plugin_ops as ffi;

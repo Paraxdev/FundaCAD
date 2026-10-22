@@ -1,59 +1,21 @@
-// Deciding whether a freshly drawn line was meant to be horizontal or vertical.
-//
-// The rule was a 3 degree tolerance: draw a line within 3 degrees of an axis and
-// it is snapped exactly onto it and the constraint recorded. That is the right
-// guess when there is nothing better to go on, and it is the WRONG one when
-// there is, because it silently destroys a deliberate offset.
-//
-// With grid snapping on, both endpoints land on the lattice, and the lattice is
-// a statement of intent. A line from (0, 0) to (200, 5) with a 5mm grid was
-// drawn one cell up: it is 1.43 degrees off horizontal, well inside the
-// tolerance, so the guess flattened it and the 5mm rise the user had deliberately
-// snapped to was gone. Nothing said so.
-//
-// So when the grid has already answered, the guess does not run:
-//
-//   both endpoints on the lattice, same y   ->  horizontal, exactly, no guessing
-//   both endpoints on the lattice, same x   ->  vertical
-//   both endpoints on the lattice, neither  ->  NOTHING. The user placed those
-//                                               two cells on purpose.
-//   anything else                           ->  the 3 degree guess, as before
-//
-// This can only ever record FEWER constraints than the old rule, never more: a
-// line whose endpoints share a y is exactly 0 degrees and the tolerance would
-// have caught it anyway. So it cannot introduce a constraint that fights an
-// existing one, which is the hazard in this area.
+// Whether a fresh line was meant horizontal or vertical. With grid snap on the lattice is intent: endpoints sharing
+// y or x are exact, a deliberate one-cell offset gets nothing; otherwise the 3 degree guess runs. This only ever
+// records fewer constraints than the guess alone, so it cannot fight an existing one.
 
-/** Angular tolerance, in degrees, for the guess that runs when the grid has not
- *  already answered. Mainstream MCAD auto-constrain behaves the same way. */
+/** Degrees, for the guess that runs when the grid has not answered; mainstream MCAD behaves the same. */
 export const INFER_TOL_DEG = 3;
 
 export type InferredDirection = "horizontal" | "vertical" | null;
 
-/** Is `v` on a lattice of spacing `step`?
- *
- *  The tolerance is relative to the step, not absolute: the lattice is 0.01mm at
- *  one zoom and 50mm at another, and a fixed epsilon is either uselessly tight
- *  at one end or meaninglessly loose at the other. */
+/** Tolerance relative to `step`: the lattice is 0.01mm at one zoom and 50mm at another. */
 export function onLattice(v: number, step: number): boolean {
   if (!(step > 0) || !Number.isFinite(step) || !Number.isFinite(v)) return false;
   const k = v / step;
   return Math.abs(k - Math.round(k)) <= 1e-6;
 }
 
-/** Which axis constraint a line should carry, if any.
- *
- *  `step` is the live snap lattice, or 0 when grid snapping is off, in which
- *  case the angular guess is the only rule available.
- *
- *  `tolDeg` of 0 switches the GUESS off while leaving both exact rules on: the
- *  lattice branch above, and a line that is precisely on an axis. That is the
- *  right setting for a line whose direction the user did not choose, the
- *  closing segment of a chain, which is whatever is left between two ends
- *  already placed. Reading intent into a nearly-vertical one would be inventing
- *  it; refusing to record an exactly vertical one leaves a closed profile
- *  carrying nothing at all.
- */
+/** `step` is the snap lattice, 0 with grid snap off. `tolDeg` 0 turns the guess off but keeps the exact rules, for
+ *  a closing segment whose direction the user did not choose. */
 export function inferLineDirection(
   x1: number,
   y1: number,

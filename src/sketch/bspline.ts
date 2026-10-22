@@ -1,13 +1,4 @@
-// Control-point B-spline math, the same curve the engine builds
-// (crates/fundacad-geom kernel::edge_bspline), checked against it through
-// tests/vectors/bspline.json.
-//
-// Knots: `knots` holds the DISTINCT knot values. An open curve has n - p + 1 of
-// them, the two ends repeated p + 1 times and every interior knot once; a closed
-// (periodic) curve has n + 1, each once, the period being last - first. Absent or
-// malformed knots mean uniform 0, 1, 2, ..., which is what a freshly drawn curve
-// has. Only pole insertion writes knots, because inserting a pole without moving
-// the curve is only possible on a non-uniform knot vector.
+// Control-point B-spline math, the same curve as the engine's kernel::edge_bspline (tests/vectors/bspline.json).
 
 export type Pt = { x: number; y: number };
 export interface BsplineDef {
@@ -25,18 +16,17 @@ function requestedDegree(def: BsplineDef): number {
   return Number.isFinite(want) ? Math.max(1, Math.round(want)) : DEFAULT_BSPLINE_DEGREE;
 }
 
-/** The degree the curve is built with: the requested one, lowered to fit the
- *  pole count, as the engine's kernel::bspline_knots does. */
+/** The requested degree lowered to fit the pole count, as the engine's kernel::bspline_knots does. */
 export function bsplineDegree(def: BsplineDef): number {
   return Math.max(1, Math.min(requestedDegree(def), def.poles.length - 1));
 }
 
-/** Whether the definition builds a curve at all. */
 export function bsplineValid(def: BsplineDef): boolean {
   return def.poles.length >= (def.closed ? 3 : 2);
 }
 
-/** The distinct knots the curve is built with, see the file header. */
+/** Distinct knots: open n - p + 1 with the ends repeated p + 1 times, closed n + 1 with period last - first.
+ *  Missing or malformed means uniform 0, 1, 2, ...; only pole insertion writes knots, as it needs non-uniform ones. */
 export function bsplineKnots(def: BsplineDef): number[] {
   const n = def.poles.length;
   const p = bsplineDegree(def);
@@ -46,7 +36,7 @@ export function bsplineKnots(def: BsplineDef): number[] {
   return Array.from({ length: Math.max(m, 0) }, (_, i) => i);
 }
 
-/** The full knot sequence and the pole list it indexes (poles wrapped for a closed curve). */
+/** The full knot sequence and the pole list it indexes, poles wrapped for a closed curve. */
 function flat(def: BsplineDef): { t: number[]; P: Pt[]; p: number } {
   const p = bsplineDegree(def);
   const u = bsplineKnots(def);
@@ -64,7 +54,6 @@ function flat(def: BsplineDef): { t: number[]; P: Pt[]; p: number } {
   return { t, P, p };
 }
 
-/** The parameter range [start, end] of the curve. */
 export function bsplineRange(def: BsplineDef): [number, number] {
   const u = bsplineKnots(def);
   return [u[0] ?? 0, u[u.length - 1] ?? 0];
@@ -85,7 +74,7 @@ function span(t: number[], p: number, nP: number, x: number): number {
   return lo;
 }
 
-/** de Boor evaluation at parameter `x` (clamped to the range). */
+/** de Boor evaluation, `x` clamped to the range. */
 export function bsplinePoint(def: BsplineDef, x: number): Pt {
   const { t, P, p } = flat(def);
   const m = span(t, p, P.length, x);
@@ -107,8 +96,7 @@ export function bsplinePoint(def: BsplineDef, x: number): Pt {
   return d[p]!;
 }
 
-/** The curve as a polyline, at least `segsPerSpan` samples per knot span and per
- *  control polygon leg; a closed curve repeats its first point at the end. */
+/** At least `segsPerSpan` samples per knot span and per polygon leg; a closed curve repeats its first point. */
 export function bsplinePolyline(def: BsplineDef, segsPerSpan = 16): Pt[] {
   if (!bsplineValid(def)) return def.poles.map((q) => ({ x: q.x, y: q.y }));
   const u = bsplineKnots(def);
@@ -126,8 +114,7 @@ export function bsplinePolyline(def: BsplineDef, segsPerSpan = 16): Pt[] {
   return out;
 }
 
-/** The parameter of the point on the curve nearest `q`: a sampled search refined by
- *  golden-section in the bracketing samples. */
+/** A sampled search refined by golden section in the bracketing samples. */
 export function bsplineNearestParam(def: BsplineDef, q: Pt): number {
   const [a, b] = bsplineRange(def);
   const N = Math.max(64, (bsplineKnots(def).length - 1) * 24);
@@ -157,8 +144,7 @@ export function bsplineNearestParam(def: BsplineDef, q: Pt): number {
   return (lo + hi) / 2;
 }
 
-/** Boehm knot insertion: one more pole, the same curve. Null when `x` is outside
- *  the range or on an existing knot (a knot is stored once, see the file header). */
+/** Boehm knot insertion: one more pole, the same curve. Null outside the range or on an existing knot. */
 export function bsplineInsertKnot(def: BsplineDef, x: number): BsplineDef | null {
   if (!bsplineValid(def)) return null;
   const u = bsplineKnots(def);
@@ -202,19 +188,16 @@ export function bsplineInsertKnot(def: BsplineDef, x: number): BsplineDef | null
   return { ...base, poles: Q };
 }
 
-/** The fewest poles the curve keeps at the degree it is built with, what pole
- *  deletion stops at. */
+/** The fewest poles at the built degree, where pole deletion stops. */
 export function bsplineMinPoles(def: BsplineDef): number {
   return Math.max(def.closed ? 3 : 2, bsplineDegree(def) + 1);
 }
 
-/** The highest degree the pole count carries. */
 export function bsplineMaxDegree(def: BsplineDef): number {
   return Math.max(1, def.poles.length - 1);
 }
 
-/** Remove pole `k`. Stored knots lose the interior knot nearest that pole's
- *  influence, so the rest of the curve keeps its spacing. Null at the minimum. */
+/** Stored knots lose the interior knot nearest the pole's influence, so the rest keeps its spacing. */
 export function bsplineRemovePole(def: BsplineDef, k: number): BsplineDef | null {
   const n = def.poles.length;
   if (k < 0 || k >= n || n - 1 < bsplineMinPoles(def)) return null;
@@ -251,7 +234,7 @@ export function poleRef(k: number, n: number): number {
   return k + 1;
 }
 
-/** Inverse of poleRef, -1 for an index that names no pole. */
+/** Inverse of poleRef, -1 when the index names no pole. */
 export function poleOfRef(p: number, n: number): number {
   if (n < 1) return -1;
   if (p === 0) return 0;
@@ -287,10 +270,8 @@ function solveLinear(A: number[][], b: number[][]): number[][] | null {
   return x;
 }
 
-/** Least-squares control polygon, uniform knots, for a curve sampled as `samples`
- *  (in order; a closed curve's samples do not repeat the first point). An open
- *  fit keeps both ends exactly. This is an approximation of the sampled shape,
- *  close but not exact, which is what converting a fit-point spline needs. */
+/** Least-squares poles on uniform knots for ordered samples (a closed curve's do not repeat the first point).
+ *  An open fit keeps both ends exactly; the rest is close, not exact. */
 export function bsplineFit(
   samples: Pt[],
   nPoles: number,

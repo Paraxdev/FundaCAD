@@ -1,7 +1,5 @@
-//! The engine executable opts into the Windows Segment Heap. Meshing a big
-//! document on the default NT heap spends most of its kernel time faulting in
-//! the 1 MiB blocks OCCT's BRepMesh allocates and frees per face, which keeps
-//! the mesh threads from scaling.
+//! The engine executable opts into the Windows Segment Heap. On the NT heap, faulting in the 1 MiB blocks BRepMesh
+//! allocates per face takes most of the kernel time and keeps the mesh threads from scaling.
 
 #[cfg(windows)]
 #[test]

@@ -1,36 +1,17 @@
-// Shadows for rectangle lights.
-//
-// three.js draws a RectAreaLight (the soft, shaped light a glowing panel gives
-// off) but has no shadows for it, so a lit face would light straight through
-// the part in front of it. What three DOES shadow is a point light, and it
-// renders a point light's shadow map whatever the light's brightness. So each
-// shadowed area light is paired with a point light of intensity zero at the
-// patch's centre: it adds no light, only its shadow map, and the area light
-// loop below reads that map for its own light.
-//
-// The pairing is by index, and it holds because of how three orders lights:
-// shadow casting lights sort first (WebGLLights, a stable sort), the companion
-// point lights are the only point lights in the scene, and the viewport adds
-// the shadowed area lights first and their companions in the same order. So
-// area light i and point shadow i are one emitter for every i below
-// NUM_POINT_LIGHT_SHADOWS, and area lights past that are unshadowed.
-//
-// The shadow is cast from the patch's centre, so it is the shadow of a small
-// light softened by the shadow map's filter, not a true penumbra from the whole
-// rectangle. That is the rasterised trade: the light's SHAPE is exact, its
-// occlusion is approximate.
+// Shadows for RectAreaLight, which three.js lights but never shadows. three renders a point light's shadow map at any
+// brightness, so each area light pairs with a zero intensity point light at its centre whose map the loop below reads.
 
 import * as THREE from "three";
 import { RectAreaLightUniformsLib } from "three/examples/jsm/lights/RectAreaLightUniformsLib.js";
 
-/** The stock rectangle light loop, matched loosely on whitespace: the built
- *  three.js strips the blank lines its source has. */
+/** Matched loosely on whitespace: the built three.js strips the blank lines its source has. */
 const STOCK =
   /#pragma unroll_loop_start\s*for \( int i = 0; i < NUM_RECT_AREA_LIGHTS; i \+\+ \) \{\s*rectAreaLight = rectAreaLights\[ i \];\s*RE_Direct_RectArea\( rectAreaLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight \);\s*\}\s*#pragma unroll_loop_end/;
 
-// The body is wrapped in its own braces: three unrolls this loop into one copy
-// per light, and the locals would otherwise be declared once per copy in the
-// same scope.
+// Area light i pairs with point shadow i: shadow casters sort first in WebGLLights, and the companions are the only
+// point lights, added in the area lights' order. Area lights past NUM_POINT_LIGHT_SHADOWS are unshadowed.
+// The shadow is cast from the patch centre and softened by the map filter, not a true penumbra of the rectangle.
+// The inner braces scope each unrolled copy's locals.
 const SHADOWED = `#pragma unroll_loop_start
 	for ( int i = 0; i < NUM_RECT_AREA_LIGHTS; i ++ ) {
 		{
@@ -50,10 +31,8 @@ const SHADOWED = `#pragma unroll_loop_start
 
 let installed: boolean | null = null;
 
-/** Patch the shader chunk and load the rectangle light lookup tables, once,
- *  before any material compiles against a rectangle light. Returns whether the
- *  shadow patch is in: false means this three.js has a different chunk, and the
- *  area lights still light, only unshadowed. */
+/** Call before any material compiles against a rectangle light. False means this three.js has another chunk, so
+ *  area lights still light but cast no shadow. */
 export function installAreaLights(): boolean {
   if (installed !== null) return installed;
   RectAreaLightUniformsLib.init();

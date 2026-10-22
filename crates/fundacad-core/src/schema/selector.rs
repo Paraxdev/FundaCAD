@@ -106,11 +106,9 @@ pub enum SelectorBy {
     FaceNearest {
         point: Vec3,
     },
-    /// A flat face kept by its outward normal, which follows it wherever a
-    /// change upstream moves it. `extent` is its outline's `[umin, umax, vmin,
-    /// vmax]` in the face frame when this was written: a point placed on it
-    /// keeps its offset from the nearest of each axis's min, middle and max.
-    /// `center`, the older form, moves every point with the outline's centre.
+    /// A flat face kept by its outward normal. `extent` is its outline's `[umin, umax, vmin, vmax]` in the face frame
+    /// when written: a point on it keeps its offset from the nearest of each axis's min, middle and max. The older
+    /// `center` form moves every point with the outline's centre.
     FaceTracked {
         point: Vec3,
         normal: Vec3,
