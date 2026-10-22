@@ -1,6 +1,5 @@
-// Onshape's API key signature, as its reference client builds it:
-// HMAC-SHA256 over method, nonce, date, content type, path and query, one per
-// line with a trailing newline, all lowercased. The secret is not lowercased.
+// Onshape's API key signature as its reference client builds it: HMAC-SHA256 over method, nonce, date, content type,
+// path and query, one per line with a trailing newline, all lowercased except the secret.
 
 export interface SignInput {
   method: string;
