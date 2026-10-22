@@ -893,7 +893,7 @@ async function importNow(
   let res: Awaited<ReturnType<typeof read>>;
   try {
     if (asksForUnit(fmt) && !unit) {
-      const picked = await session.step(askImportUnit(fmt));
+      const picked = await session.step(askImportUnit(fmt, session.signal));
       if (!picked) return;
       unit = picked;
     }
