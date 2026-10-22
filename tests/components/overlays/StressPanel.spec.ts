@@ -83,7 +83,7 @@ function view(over: Partial<StressResultView> = {}): StressResultView {
     warnings: [],
     legend: { min: 0.5, max: 15 },
     yields: false,
-    verdict: { level: "holds", headline: "Holds, about 3.3x safe.", detail: "Weakest at the marked spot." },
+    verdict: { safetyFactor: 3.32, peakPlace: null },
     peakAt: [13.5, -7.25, 4.1],
     maxDeflection: 0.47,
     ...over,
@@ -403,7 +403,7 @@ describe("StressPanel", () => {
   it("opens Results with the verdict, marked by how it went, and the bend at the drawn scale", async () => {
     const { p } = await withResult({
       yields: true,
-      verdict: { level: "fails", headline: "Likely to fail at the marked spot.", detail: "The load is about 1.7x." },
+      verdict: { safetyFactor: 0.62, peakPlace: null },
     });
     p.setStressDeform({ scale: 12.5, auto: 12.5, max: 50, animate: false });
     await flushPromises();
@@ -418,6 +418,17 @@ describe("StressPanel", () => {
     await flushPromises();
     expect([...q(".stress-verdict")!.classList]).toEqual(["stress-verdict", "holds"]);
     expect(q(".stress-verdict-bend")).toBeNull();
+  });
+
+  it("points at the marked spot only while the colours, and so the pin, are shown", async () => {
+    const { p } = await withResult({ verdict: { safetyFactor: 2.94, peakPlace: "corner" } });
+    const text = () => q(".stress-verdict")!.textContent;
+    expect(q(".stress-verdict-head")!.textContent).toBe("Holds by a rough reading, about 2.9x safe.");
+    expect(text()).toContain("Weakest at the marked sharp corner.");
+    p.setStressColours("hidden");
+    await flushPromises();
+    expect(text()).toContain("Weakest at a sharp inside corner.");
+    expect(text()).not.toContain("marked");
   });
 
   it("plays and pauses the deformation from one button that says which it will do", async () => {

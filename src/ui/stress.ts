@@ -7,7 +7,7 @@ import type { PanelRow } from "../stores/panels";
 import { STUDY_DEFAULTS } from "../document/stressStudy";
 import { cylinderFromFace } from "../features/planeMath";
 import { displayRound, toDisplay, type Unit } from "./units";
-import { verdictView, type StressVerdictView } from "./stressVerdict";
+import { peakPlaceOf, type VerdictInput } from "./stressVerdict";
 
 /** E and yield in MPa, density in g/cm3. Mirrors the engine's presets: a preset goes over the wire by name, so these
  *  numbers are only what the panel shows. */
@@ -489,7 +489,8 @@ export interface StressResultView {
   legend: { min: number; max: number };
   /** Below 1, or no yield at all, the part is expected to yield. */
   yields: boolean;
-  verdict: StressVerdictView;
+  /** What the verdict is worded from, as the view shows it: marked or not. */
+  verdict: VerdictInput;
   /** Where the peak stress is, for the weakest spot's pin. */
   peakAt: Vec3 | null;
   /** The largest deflection, mm. */
@@ -556,7 +557,7 @@ export function formatStressResult(
     warnings,
     legend,
     yields: sf !== null && sf < 1,
-    verdict: verdictView(r),
+    verdict: { safetyFactor: sf, peakPlace: peakPlaceOf(r.warnings ?? []) },
     peakAt: r.maxVonMises.at,
     maxDeflection: r.maxDisplacement.value,
   };

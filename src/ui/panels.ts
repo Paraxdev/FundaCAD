@@ -16,7 +16,7 @@ import {
   type StressProbePin,
 } from "../stores/panels";
 import { drawnCorner, engineHit, nearestVertex, refineLevel, refineSurface, type DrawnSurface } from "./stressSurface";
-import { aboutFactor } from "./stressVerdict";
+import { weakSpotLabel } from "./stressVerdict";
 import {
   AXES,
   LOAD_MARK_COLOR,
@@ -1049,11 +1049,7 @@ export function createPanels(deps: PanelsDeps) {
       };
       const peak = nearestVertex(r.surface.positions, r.maxVonMises.at);
       const corner = peak < 0 ? null : drawnCorner(drawn, peak);
-      const sf = r.safetyFactor;
-      weakSpot = corner && {
-        ...corner,
-        label: sf !== null && Number.isFinite(sf) ? `Weakest, ${aboutFactor(sf, "down")}x` : "Weakest",
-      };
+      weakSpot = corner && { ...corner, label: weakSpotLabel(r.safetyFactor) };
       if (moves) {
         const auto = autoDeformScale(r.surface.positions, disp!);
         panels.setStressDeform({ scale: auto, auto, max: deformSliderMax(auto), animate: false });

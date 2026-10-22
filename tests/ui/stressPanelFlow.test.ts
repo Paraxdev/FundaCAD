@@ -1321,7 +1321,7 @@ describe("the weakest spot", () => {
     setUp(r);
     await ran(r, bent);
     const corner = drawnCorner(refineSurface(bent.surface!, 2), 1)!;
-    expect(r.weakSpots.at(-1)).toEqual({ ...corner, label: "Weakest, 3.3x" });
+    expect(r.weakSpots.at(-1)).toEqual({ ...corner, label: "Weakest, 3.3x safe" });
   });
 
   it("goes with the colours, on a new Run and when the model changes, and moves with a new peak", async () => {

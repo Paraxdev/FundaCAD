@@ -40,7 +40,8 @@ function onDeform(e: Event) {
 <template>
   <div class="stress-step stress-results">
     <StressVerdict
-      :view="result.verdict"
+      :input="result.verdict"
+      :marked="stress.colours === 'shown'"
       :scale="deform?.scale ?? null"
       :max-deflection="result.maxDeflection"
       :unit="unit"
